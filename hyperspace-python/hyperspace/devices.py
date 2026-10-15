@@ -1,0 +1,864 @@
+"""The device registry (plan 27 B1): every input or output the rig has,
+listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
+polled in order each frame, and closed in one list.
+
+A *device* is anything that satisfies the `Device` protocol below:
+`open()`, `poll(dt, now)`, `close()`, a `status` for the SYSTEM page, a
+`role`, its `sources` (the ports it publishes), `feed(router)` and
+`learn(learn)`. Today's adapters — `midi.MidiIO`, `gamepad.Pad`,
+`hands.HandsIO`, `bridge.Bridge` — are wrapped by the thin shims here
+(`MidiDevice`, `PadDevice`, `HandsDevice`, `BridgeDevice`), which own the
+adapter object and satisfy the protocol by delegating to it; B2 turns
+them into full devices. This module is the one importer of every adapter
+module, each imported lazily inside its device's `open`, so importing
+`app` imports none of them (tests/test_app_boundary.py).
+
+**Roles, not serials** (decision 11): an entry has a `role` — `apc40`,
+`pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and (from
+B2) a MIDI row's qualifier use. A role contains no ``:``. **For today's
+devices the role is not the scheme:** a preset names a *scheme*
+(`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
+`schemes` tuple says which schemes its role publishes, so every existing
+row is unchanged whatever the entry is called. A new device (B4's OSC)
+publishes under its role. Two enabled devices may not **feed** one
+scheme: the Router holds one vector per fed scheme (`feeds`), so a second
+pad (`axis`) or a second hands device (`hand`) is refused with a note
+naming both roles (`RefusedDevice`); two MIDI desks of different roles
+feed nothing (their messages are rows) and are both accepted — B2
+qualifies their rows by role. One role, one entry (config drops a
+duplicate role).
+
+**Two signal kinds** (decision 13): a port is a *value* (an axis, a
+fader, a lane) or a *trigger* (a hit, a button, a pad — with a velocity
+when the device sends one). Discrete controls stay scene-setters: a
+device delivers them as rows through the table (`Router.pad`,
+`MidiIO._handle`), never as a feed. A device may expose `layers`
+(decision 14: the APC40 as two nodes in plan 28); B2 fills them.
+
+**The frame.** `DeviceRegistry.poll` runs in the scene-setter slot
+(after the key rows, before the macros and undo): each device is polled,
+offered to an armed Learn, then delivers its rows. `feed` runs in the
+feed slot (after the analyzer's lanes, before the LFOs and the pass):
+each device publishes its vectors. `send` runs after `reg.apply`: the
+sinks (B3). One device's exception never stops the frame: it is recorded
+on the device (`status = "error: …"`) and on the registry (`error`, the
+hot-reload toast), and the next device runs.
+
+**Coming and going — whose job reconnect is.** The registry retries a
+device whose `open()` *raised*: `error: …`, said once (stderr and the
+config notes), opened again on the `Ports` schedule (midi.py: every 2 s
+five times, then every 10 s). A device whose `open()` returned but whose
+hardware is not there reports `lost` and **reconnects itself** on its own
+schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
+and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
+device must too; the registry never closes or reopens a `lost` device
+(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
+mtime every `WATCH_FRAMES` frames and re-reads only the device list,
+closing what left and opening what arrived; a bad edit is a note and the
+old list stands.
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Protocol, runtime_checkable
+
+# the open-retry schedule — midi.Ports' (RECONNECT_S, RECONNECT_FAST,
+# RECONNECT_SLOW_S), restated here because midi is imported only behind
+# a device's entry; tests/test_devices.py holds the two equal
+RETRY_S = 2.0
+RETRY_FAST = 5
+RETRY_SLOW_S = 10.0
+WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
+STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
+BUILTIN_SCHEMES = ("lane", "lfo")           # fed by the analyzer and the LFOs, not a device
+
+
+def retry_after(misses: int) -> float:
+    """Seconds until the next try to open a device, after `misses` tries
+    in a row that failed — midi.retry_after's schedule."""
+    return RETRY_S if misses <= RETRY_FAST else RETRY_SLOW_S
+
+
+@dataclass(frozen=True)
+class Port:
+    """One source (or, from B3, one sink) a device publishes — what the
+    node editor (plan 28) draws a device from, so there is no second
+    description of it. `scheme` is the Router scheme the port lives under
+    (`hand`, `axis`, `cc`), `name` the address after it (``right.roll``,
+    ``LX``, ``0:48``), and `address` the row's source string,
+    ``scheme:name`` — a cable can be built from a port. `kind` is
+    ``value`` or ``trigger``; `rest` where a value idles; `bipolar` a
+    value centred on its rest; `velocity` a trigger that carries one;
+    `group` folds a long list (the APC40's hundred controls); `layer` the
+    device layer the port belongs to ("" = every layer)."""
+
+    name: str
+    label: str
+    kind: str = "value"
+    rest: float = 0.0
+    bipolar: bool = False
+    velocity: bool = False
+    group: str = ""
+    layer: str = ""
+    scheme: str = ""
+
+    @property
+    def address(self) -> str:
+        """The source string a row names: ``scheme:name``."""
+        return f"{self.scheme}:{self.name}" if self.scheme else self.name
+
+
+@runtime_checkable
+class Device(Protocol):
+    """What the registry asks of a device. `role` names it on the SYSTEM
+    page and in the notes; `kind` is its `[[devices]]` kind; `schemes`
+    the Router keys it publishes under (a new device's is its role;
+    today's keep the schemes their rows use) and `feeds` the subset it
+    feeds continuous vectors under (the pad's `axis`, not its `pad` /
+    `hat` rows; MIDI feeds nothing); `status` one of `connected`, `lost`,
+    `off` or ``error: <why>``; `last` the last thing seen, for the status
+    line. Reconnecting is the device's own job once `open` returned: a
+    `lost` device looks for its hardware itself (as `midi.Ports` does);
+    the registry retries only an `open` that raised. `poll` reads the
+    hardware and, for a scene-setting device, applies its rows; `learn`
+    offers a moved axis or a pressed button to an armed Learn and says
+    whether a press was the learn's; `act` delivers the rest of this
+    frame's discrete controls as rows; `feed` publishes the continuous
+    vectors, labels, rests, gates and names; `send` is the sink half
+    (B3). `targets` are the live objects the hot reloader re-classes."""
+
+    role: str
+    kind: str
+    schemes: tuple[str, ...]
+    feeds: tuple[str, ...]
+    layers: tuple[str, ...]
+
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def last(self) -> str: ...
+
+    @property
+    def sources(self) -> tuple[Port, ...]: ...
+
+    def open(self) -> None: ...
+
+    def poll(self, dt: float, now: float) -> None: ...
+
+    def learn(self, learn) -> bool: ...
+
+    def act(self, router) -> None: ...
+
+    def feed(self, router) -> None: ...
+
+    def send(self, reg, analyzer) -> None: ...
+
+    def close(self) -> None: ...
+
+    def targets(self) -> list[tuple]: ...
+
+
+@dataclass
+class Context:
+    """What the device factories need from the host, handed in once:
+    the registry and the binding table (MIDI), the shared Learn, the
+    audio engine (the bridge sends the analyzer's lanes), the hands setup,
+    the config's notes list (an open that fails is said there) and the
+    home (relative paths)."""
+
+    reg: object | None = None
+    table: object | None = None
+    learn: object | None = None
+    audio: object | None = None
+    hand_settings: object | None = None
+    notes: list[str] = field(default_factory=list)
+    home: Path | None = None
+
+
+class Base:
+    """The protocol's defaults: a device that does nothing until a
+    subclass says otherwise. `entry` is its checked `[[devices]]` table,
+    `ctx` the host's `Context`; a shim built in a test over an adapter of
+    its own passes `io` and needs neither."""
+
+    kind = ""
+    schemes: tuple[str, ...] = ()
+    feeds: tuple[str, ...] = ()
+    layers: tuple[str, ...] = ()
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None):
+        self.role = role
+        self.entry = dict(entry or {})
+        self.ctx = ctx if ctx is not None else Context()
+        self.io = io
+        self.error = ""          # the last exception, as `status` says it
+
+    @property
+    def status(self) -> str:
+        if self.error:
+            return f"error: {self.error}"
+        return "connected" if self.io is not None else "lost"
+
+    @property
+    def last(self) -> str:
+        return ""
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        return ()
+
+    def open(self) -> None:
+        pass
+
+    def poll(self, dt: float, now: float) -> None:
+        pass
+
+    def learn(self, learn) -> bool:
+        return False
+
+    def act(self, router) -> None:
+        pass
+
+    def feed(self, router) -> None:
+        pass
+
+    def send(self, reg, analyzer) -> None:
+        pass
+
+    def close(self) -> None:
+        io, self.io = self.io, None
+        if io is not None and hasattr(io, "close"):
+            io.close()
+
+    def targets(self) -> list[tuple]:
+        return []
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.role} {self.status}>"
+
+
+class OffDevice(Base):
+    """A listed device whose entry says ``enabled = false``: on the SYSTEM
+    page as `off`, never opened, its module never imported."""
+
+    def __init__(self, role: str, kind: str, entry: dict | None = None,
+                 ctx: Context | None = None):
+        super().__init__(role, entry, ctx)
+        self.kind = kind
+        cls = KINDS.get(kind)       # its kind's schemes, so a row naming it stays dormant, not unknown
+        if cls is not None:
+            self.schemes, self.feeds = cls.schemes, cls.feeds
+
+    @property
+    def status(self) -> str:
+        return "off"
+
+
+class UnknownDevice(Base):
+    """An entry whose kind the registry does not know: an error line, so
+    a typo in config.toml is seen, not silently ignored."""
+
+    def __init__(self, role: str, kind: str, entry: dict | None = None,
+                 ctx: Context | None = None):
+        super().__init__(role, entry, ctx)
+        self.kind = kind
+        self.error = f"unknown kind {kind!r}"
+
+
+class RefusedDevice(Base):
+    """An enabled entry that would feed a scheme an earlier enabled entry
+    already feeds: never opened (two devices feeding one Router key would
+    overwrite each other every frame), an error line naming the other
+    role, as if ``enabled = false``."""
+
+    def __init__(self, role: str, kind: str, scheme: str, other: str,
+                 entry: dict | None = None, ctx: Context | None = None):
+        super().__init__(role, entry, ctx)
+        self.kind = kind
+        self.error = f"feeds {scheme!r}, which {other} already feeds — not opened"
+
+
+# ---- the four shims over today's adapters ----
+
+class MidiDevice(Base):
+    """`midi.MidiIO` as a device: one controller with one profile, its
+    rows applied inside `poll` (a scene-setter), an armed desk Learn
+    completed there too. Its ports are the profile's layout (the APC40's
+    controls); the role carries no identity in rows yet (B2)."""
+
+    kind = "midi"
+    schemes = ("cc", "note", "pitch")
+    feeds = ()                  # MIDI is never a feed source: every message is a row
+
+    def open(self) -> None:
+        from . import midi
+        e, c = self.entry, self.ctx
+        self.io = midi.MidiIO(c.reg, c.table, port=e.get("port"),
+                              profile=e.get("profile", "apc40"), learner=c.learn)
+
+    @property
+    def status(self) -> str:
+        io = self.io
+        if self.error or io is None:
+            return super().status
+        if io.error:
+            return f"error: {io.error}"
+        return "connected" if io.on else "lost"
+
+    @property
+    def last(self) -> str:
+        """The port's name and the table's binding count (what the old
+        MIDI line showed), then the last message when one has come."""
+        io = self.io
+        if io is None or io.error or not io.on:
+            return ""
+        n = len(getattr(io, "bindings", ()) or ())
+        head = f"{io.name}  ·  {n} binding{'' if n == 1 else 's'}"
+        return f"{head}  ·  {io.last}" if io.last else head
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        io = self.io
+        layout = getattr(getattr(io, "profile", None), "LAYOUT", None) if io is not None else None
+        if not layout:
+            return ()
+        name = getattr(io.profile, "control_name", lambda s: None)
+        out = []
+        for c in layout:
+            button = c.kind in ("button", "grid")
+            scheme, _, rest = c.source.partition(":")
+            out.append(Port(rest, name(c.source) or c.source,
+                            kind="trigger" if button else "value",
+                            velocity=button, group=c.kind, scheme=scheme))
+        return tuple(out)
+
+    def poll(self, dt: float, now: float) -> None:
+        if self.io is not None:
+            self.io.poll()
+
+    def targets(self) -> list[tuple]:
+        return [(self.io, "midi", "MidiIO")] if self.io is not None else []
+
+
+class PadDevice(Base):
+    """`gamepad.Pad` as a device: polled, offered to an armed Learn pad
+    (`gamepad.learn_from`), then its axis lanes fed and its button rows
+    delivered by `Router.pad` — all in the scene-setter slot, as today.
+    The sticks' camera job stays in `app.frame` until B2."""
+
+    kind = "gamepad"
+    schemes = ("axis", "pad", "hat")
+    feeds = ("axis",)
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None):
+        super().__init__(role, entry, ctx, io=io)
+        self._taken = False      # this frame's press completed a learn
+
+    def open(self) -> None:
+        from .gamepad import Pad
+        self.io = Pad(usb=bool(self.entry.get("usb", True)))
+
+    @property
+    def status(self) -> str:
+        io = self.io
+        if self.error or io is None:
+            return super().status
+        return "connected" if io.on else "lost"
+
+    @property
+    def last(self) -> str:
+        io = self.io
+        if io is None:
+            return ""
+        if io.on:
+            usb = getattr(io, "usb_pad", None)
+            name = getattr(usb, "name", "") if io.source == "usb" else ""
+            return f"{io.source}: {name}" if name else str(io.source)
+        return getattr(getattr(io, "usb_pad", None), "note", "") or ""
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        from . import gamepad as g
+        axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
+                     group="sticks" if n in g.STICKS else "triggers", scheme="axis")
+                for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True)]
+        buttons = [Port(n, n, kind="trigger", group="buttons", scheme="pad") for n in g.BUTTONS]
+        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme="hat")
+                for n in g.HATS]
+        return tuple(axes + buttons + hats)
+
+    def poll(self, dt: float, now: float) -> None:
+        self._taken = False
+        if self.io is not None:
+            self.io.poll()
+
+    def learn(self, learn) -> bool:
+        if self.io is None:
+            return False
+        from . import gamepad
+        self._taken = bool(gamepad.learn_from(self.io, learn))
+        return self._taken
+
+    def act(self, router) -> None:
+        if self.io is not None:
+            router.pad(self.io, buttons=not self._taken)
+
+    def targets(self) -> list[tuple]:
+        return [(self.io, "gamepad", "Pad")] if self.io is not None else []
+
+
+class HandsDevice(Base):
+    """`hands.HandsIO` as a device. The instrument's one call,
+    ``poll(dt, learn, router)``, reads the tracker, sends the DAW MIDI,
+    feeds ``hand`` and completes a hand Learn at once, so the shim makes it
+    from the feed slot — where the hands ran before the registry — with
+    the frame's `dt` and the Learn it was offered. `hands/core.py` stays
+    liftable: nothing here is imported by it (B2 moves this shim to
+    `hands/device.py`)."""
+
+    kind = "hands"
+    schemes = ("hand",)
+    feeds = ("hand",)
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None):
+        super().__init__(role, entry, ctx, io=io)
+        self._dt = 0.0
+        self._learn = None
+
+    def open(self) -> None:
+        if self.ctx.hand_settings is None:
+            raise RuntimeError("no hands setup ([hands] would not read)")
+        from . import hands
+        e = self.entry
+        cal = e.get("calibration")
+        self.io = hands.HandsIO(self.ctx.hand_settings, e, cal_path=Path(cal) if cal else None)
+
+    @property
+    def status(self) -> str:
+        io = self.io
+        if self.error or io is None:
+            return super().status
+        s = io.status or ""
+        if getattr(io.source, "on", True) or s in ("tracking", "connected"):
+            return "connected"
+        if s in ("", "connecting") or s.startswith("tape"):
+            return "lost"
+        return f"error: {s}"
+
+    @property
+    def last(self) -> str:
+        io = self.io
+        return (io.last or io.status or "") if io is not None else ""
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        io = self.io
+        if io is None:
+            return ()
+        lay, axes, rests = io.layout, io.axes, io.rests()
+        gates = dict(lay.gates)
+        out = []
+        for i, (addr, label) in enumerate(zip(lay.addresses, lay.names, strict=True)):
+            if i < lay.n_axes:
+                out.append(Port(addr, label, rest=rests[i], bipolar=bool(axes[i].bipolar),
+                                group="axes", scheme="hand"))
+            elif i in gates:
+                out.append(Port(addr, label, group="pinches", scheme="hand"))
+            elif addr.endswith(".present"):
+                out.append(Port(addr, label, group="presence", scheme="hand"))
+            else:   # plan 24 C4's dance sources (curl, spread, energy, flick)
+                out.append(Port(addr, label, rest=rests[i], group="dance", scheme="hand"))
+        return tuple(out)
+
+    def poll(self, dt: float, now: float) -> None:
+        self._dt = dt
+
+    def learn(self, learn) -> bool:
+        self._learn = learn
+        return False
+
+    def feed(self, router) -> None:
+        if self.io is not None:
+            self.io.poll(self._dt, self._learn, router)
+
+    def targets(self) -> list[tuple]:
+        return [(self.io, "hands.core", "HandsIO")] if self.io is not None else []
+
+
+class BridgeDevice(Base):
+    """`bridge.Bridge` as a device: its one `step` — the inbound lanes fed
+    as ``ext``, the analyzer's lanes sent out — from the feed slot with
+    the live analyzer, as today. B3 makes the outbound half a sink."""
+
+    kind = "bridge"
+    schemes = ("ext",)
+    feeds = ("ext",)
+
+    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
+                 io=None, audio=None):
+        super().__init__(role, entry, ctx, io=io)
+        self.audio = audio if audio is not None else self.ctx.audio
+
+    def open(self) -> None:
+        from . import bridge
+        self.io = bridge.Bridge(self.ctx.reg, self.entry)
+
+    @property
+    def status(self) -> str:
+        io = self.io
+        if self.error or io is None:
+            return super().status
+        if io.error:
+            return f"error: {io.error}"
+        return "connected" if io.on else "lost"
+
+    @property
+    def last(self) -> str:
+        io = self.io
+        if io is None or io.error or not io.on:
+            return ""
+        return f"{io.name}  ·  {io.encoding}, {io.room} lanes  ·  {io.sent} sent"
+
+    @property
+    def sources(self) -> tuple[Port, ...]:
+        io = self.io
+        n = int(io.decoder.n) if io is not None else int(self.entry.get("in_lanes", 0) or 0)
+        return tuple(Port(str(i), f"ext {i}", group="ext", scheme="ext") for i in range(n))
+
+    def feed(self, router) -> None:
+        if self.io is None:
+            return
+        audio = self.audio
+        chain = audio.chain if audio is not None and getattr(audio, "on", False) else None
+        self.io.step(chain, router)
+
+    def targets(self) -> list[tuple]:
+        return [(self.io, "bridge", "Bridge")] if self.io is not None else []
+
+
+# the kinds the registry knows: `[[devices]] kind` → the device class.
+# B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else
+KINDS: dict[str, type[Base]] = {
+    "midi": MidiDevice,
+    "gamepad": PadDevice,
+    "hands": HandsDevice,
+    "bridge": BridgeDevice,
+}
+
+
+def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None) -> Base:
+    """A device for one checked `[[devices]]` entry (config.devices):
+    `OffDevice` when it is not enabled, `UnknownDevice` for a kind the
+    table lacks, `RefusedDevice` when an earlier enabled entry already
+    **feeds** one of its `feeds` (`claimed`: fed scheme → role, filled
+    here for the next entry) — a kind that feeds nothing (MIDI: rows,
+    not vectors) is never refused, so two desks of different roles both
+    open. Nothing is opened here."""
+    role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
+    if not entry.get("enabled", True):
+        return OffDevice(role, kind, entry, ctx)
+    cls = KINDS.get(kind)
+    if cls is None:
+        return UnknownDevice(role, kind, entry, ctx)
+    if claimed is not None:
+        for scheme in cls.feeds:
+            if scheme in claimed and claimed[scheme] != role:
+                return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
+        for scheme in cls.feeds:
+            claimed[scheme] = role
+    return cls(role, entry, ctx)
+
+
+def make_all(entries: list[dict], ctx: Context | None = None) -> list[Base]:
+    """One device per entry, in order, each later entry refused the fed
+    schemes an earlier enabled one claims (roles are unique already:
+    config drops a duplicate role at load and on a re-read)."""
+    claimed: dict[str, str] = {}
+    return [make(e, ctx, claimed) for e in entries]
+
+
+def _err(where: str, e: Exception) -> str:
+    return f"{where}: {type(e).__name__}: {e}"[:160]
+
+
+class DeviceRegistry:
+    """The list of devices, in `[[devices]]` order: opened each behind its
+    own entry (`open_all`), polled in order each frame, closed in one
+    list (reverse order). `entries` are checked entries (config.devices);
+    `devices` may be given ready-made (tests, the frame-order stubs).
+    `path` is the config.toml to watch, `clock` the retry clock
+    (monotonic, as midi.Ports'). `listeners` are called after any open
+    or close, so the host can re-point what holds an adapter (the panel,
+    the ghost renderer)."""
+
+    def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
+                 devices: list | None = None, path: Path | None = None,
+                 clock=time.monotonic, notes: list[str] | None = None):
+        self.ctx = ctx if ctx is not None else Context()
+        self.notes = notes if notes is not None else self.ctx.notes
+        self.path = Path(path) if path is not None else None
+        self.clock = clock
+        self.entries: list[dict] = [dict(e) for e in (entries or [])]
+        self.devices: list = list(devices) if devices is not None else make_all(
+            self.entries, self.ctx)
+        self.listeners: list = []
+        self.error = ""              # this frame's first device error (the toast)
+        # a device handed in with its adapter (tests, the frame-order stubs) is open
+        self._opened: set[str] = {d.role for d in self.devices if getattr(d, "io", None) is not None}
+        self._retry: dict[str, tuple[int, float]] = {}   # role → (misses, next try)
+        self._frames = 0
+        self._mtime: float | None = self._stat()
+
+    # ---- the list ----
+
+    def __iter__(self):
+        return iter(self.devices)
+
+    def __len__(self) -> int:
+        return len(self.devices)
+
+    def get(self, role: str):
+        """The device of `role`, or None."""
+        return next((d for d in self.devices if d.role == role), None)
+
+    def first(self, kind: str):
+        """The first listed device of `kind` (off or not), or None."""
+        return next((d for d in self.devices if d.kind == kind), None)
+
+    def adapter(self, kind: str):
+        """The first open adapter object of `kind` — the `MidiIO`, `Pad`,
+        `HandsIO` or `Bridge` the panel and the ghost renderer hold — or
+        None when none is open."""
+        return next((d.io for d in self.devices
+                     if d.kind == kind and getattr(d, "io", None) is not None), None)
+
+    def schemes(self) -> tuple[str, ...]:
+        """Every scheme the listed devices publish under, in list order."""
+        out: list[str] = []
+        for d in self.devices:
+            for s in getattr(d, "schemes", ()):
+                if s not in out:
+                    out.append(s)
+        return tuple(out)
+
+    def continuous_schemes(self) -> tuple[str, ...]:
+        """The schemes a route can read as a lane, in offer order: the
+        built-in `lane` (the analyzer) and `lfo` first, then each listed
+        device's `feeds` in list order (an `off` device's too, so a preset
+        row naming it stays a dormant route, not an unknown one). What B2
+        hands the Router in place of `LANE_SCHEMES` / `SOURCE_ORDER`."""
+        out = list(BUILTIN_SCHEMES)
+        for d in self.devices:
+            for s in getattr(d, "feeds", ()):
+                if s not in out:
+                    out.append(s)
+        return tuple(out)
+
+    def lines(self) -> list[tuple[str, str, str, int, str]]:
+        """One (role, kind, status, n sources, last) per device — the
+        SYSTEM page's lines."""
+        out = []
+        for d in self.devices:
+            try:
+                out.append((d.role, d.kind, d.status, len(d.sources), d.last))
+            except Exception as e:  # noqa: BLE001 — a status line never takes the page down
+                out.append((d.role, d.kind, _err("status", e), 0, ""))
+        return out
+
+    def targets(self) -> list[tuple]:
+        """The hot reloader's swap targets: each device's adapter object,
+        the shims and the registry itself."""
+        out: list[tuple] = [(self, "devices", "DeviceRegistry")]
+        for d in self.devices:
+            out.append((d, "devices", type(d).__name__))
+            out += d.targets()
+        return out
+
+    def _changed(self) -> None:
+        for fn in list(self.listeners):
+            try:
+                fn()
+            except Exception as e:  # noqa: BLE001
+                self._note(_err("devices", e))
+
+    def _note(self, note: str) -> None:
+        note = note[:200]
+        if note not in self.notes:
+            self.notes.append(note)
+        print(note, file=sys.stderr)
+
+    # ---- opening and closing ----
+
+    def _open(self, d) -> bool:
+        """Open one device: True when it is open now. A failure is its
+        `error`, said once, and the next try is scheduled (`retry_after`)."""
+        if d.role in self._opened:
+            return True
+        if d.status == "off" or isinstance(d, UnknownDevice | RefusedDevice):
+            if d.role not in self._retry and not isinstance(d, OffDevice):
+                self._retry[d.role] = (0, float("inf"))
+                self._note(f"config: [[devices]] {d.role}: {d.error}"
+                           + ("" if isinstance(d, RefusedDevice) else " — not opened"))
+            return False
+        try:
+            d.open()
+        except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
+            misses = self._retry.get(d.role, (0, 0.0))[0] + 1
+            self._retry[d.role] = (misses, self.clock() + retry_after(misses))
+            d.error = f"{type(e).__name__}: {e}"[:120]
+            if misses == 1:
+                self._note(f"{d.kind}: {e}")
+            return False
+        d.error = ""
+        self._opened.add(d.role)
+        self._retry.pop(d.role, None)
+        return True
+
+    def open_all(self) -> None:
+        """Open every listed device, each behind its own entry; one that
+        fails is a note and `error: …`, the rest open."""
+        for d in self.devices:
+            self._open(d)
+        self._changed()
+
+    def _close(self, d) -> None:
+        self._opened.discard(d.role)
+        self._retry.pop(d.role, None)
+        try:
+            d.close()
+        except Exception as e:  # noqa: BLE001 — teardown is best-effort
+            self._note(_err(d.kind, e))
+            if hasattr(d, "io"):
+                d.io = None             # a port that would not close is still let go of
+
+    def close(self) -> None:
+        """Every device closed, last listed first, best-effort — the one
+        close list for a quit and a restart (the pad included)."""
+        for d in reversed(self.devices):
+            self._close(d)
+
+    # ---- the frame ----
+
+    def _guard(self, d, fn, *, clear: bool = False) -> bool:
+        """Run one device's step; its exception is the device's `error`
+        and the registry's (the first one this frame), never the frame's.
+        True when the step ran clean. `clear`: a clean run clears the
+        device's error — the frame's first step (`poll`) does, so an error
+        stands until the next frame runs clean."""
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001 — one device never stops the frame
+            d.error = f"{type(e).__name__}: {e}"[:120]
+            if not self.error:
+                self.error = _err(d.kind, e)
+            return False
+        if clear and d.role in self._opened and d.error:
+            d.error = ""
+        return True
+
+    def poll(self, dt: float, now: float, *, router=None, learn=None) -> None:
+        """The scene-setter slot: each open device polled, offered to the
+        armed Learn, then its rows delivered (`act`). A device that would
+        not open is tried again when its schedule says; the config list is
+        re-read when the file changed (`watch`)."""
+        self.error = ""
+        self._frames += 1
+        if self._frames % WATCH_FRAMES == 0:
+            self.watch()
+        for d in list(self.devices):
+            if d.role not in self._opened:
+                misses, at = self._retry.get(d.role, (0, 0.0))
+                if not (misses and self.clock() >= at and self._open(d)):
+                    continue
+                self._changed()         # back: polled from this very frame
+            if not self._guard(d, lambda d=d: d.poll(dt, now), clear=True):
+                continue                # a poll that raised delivers no rows this frame
+            if learn is not None:
+                self._guard(d, lambda d=d: d.learn(learn))
+            if router is not None:
+                self._guard(d, lambda d=d: d.act(router))
+
+    def feed(self, router) -> None:
+        """The feed slot: every open device publishes its vectors."""
+        for d in list(self.devices):
+            if d.role in self._opened:
+                self._guard(d, lambda d=d: d.feed(router))
+
+    def send(self, reg, analyzer=None) -> None:
+        """After `reg.apply`: the sinks (B3) read effective values out."""
+        for d in list(self.devices):
+            if d.role in self._opened:
+                self._guard(d, lambda d=d: d.send(reg, analyzer))
+
+    # ---- config.toml, watched ----
+
+    def _stat(self) -> float | None:
+        if self.path is None:
+            return None
+        try:
+            return self.path.stat().st_mtime
+        except OSError:
+            return None
+
+    def watch(self) -> bool:
+        """Re-read the `[[devices]]` list when config.toml's mtime moved;
+        True when the list changed. A file that will not parse, or a list
+        with a bad entry, is a note and the old list stands."""
+        if self.path is None:
+            return False
+        mtime = self._stat()
+        if mtime == self._mtime:
+            return False
+        self._mtime = mtime
+        from . import config
+        entries, problems = config.read_devices(self.path)
+        if problems:
+            self._note(f"config: [[devices]] not applied — {problems[0]} — the old list stands")
+            return False
+        return self.apply(entries)
+
+    def apply(self, entries: list[dict]) -> bool:
+        """A new device list: what left is closed, what arrived is opened,
+        an entry that changed is closed and opened again, the rest stay;
+        the order becomes the list's. True when anything changed."""
+        new = [dict(e) for e in entries]
+        old = {e["role"]: e for e in self.entries}
+        have = {d.role: d for d in self.devices}
+        fresh = {d.role: d for d in make_all(new, self.ctx)}
+        changed = False
+        devices = []
+        for e in new:
+            role = e["role"]
+            kept = have.get(role)
+            # unchanged, and refused or not exactly as before: the device stays
+            if kept is not None and old.get(role) == e and (
+                    isinstance(kept, RefusedDevice) == isinstance(fresh[role], RefusedDevice)):
+                devices.append(have.pop(role))
+                continue
+            if kept is not None:
+                self._close(have.pop(role))
+                self._note(f"devices: {role} changed — reopened")
+            else:
+                self._note(f"devices: {role} added")
+            devices.append(fresh[role])
+            changed = True
+        for role, d in have.items():
+            self._close(d)
+            self._note(f"devices: {role} removed")
+            changed = True
+        changed = changed or [d.role for d in devices] != [d.role for d in self.devices]
+        self.entries, self.devices = new, devices
+        if changed:
+            for d in devices:
+                if d.role not in self._opened:
+                    self._open(d)
+            self._changed()
+        return changed

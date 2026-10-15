@@ -152,33 +152,54 @@ def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
     assert not any(s.startswith("config:") for s in drawn)
 
 
-def test_system_page_shows_the_bridge(rig, monkeypatch):
-    """The DAW bridge's state — off, a port error, no port, or the ports and
-    what went out — is on the SYSTEM page (audit P3), where before its only
-    sign of life was a stderr line."""
+def test_system_page_shows_one_line_per_device(rig, monkeypatch):
+    """Plan 27 B1: every listed device — the pad, MIDI, the hands, the
+    bridge — is one line on the SYSTEM page, `role · kind · status · n
+    sources · last`, in the list's order; an `error: …` line is in the
+    warning colour. (Replaces the MIDI and bridge lines of audit P3; the
+    HANDS page keeps its own status.)"""
     import hyperspace.ui as ui_mod
+    from hyperspace import devices
 
-    drawn: list[str] = []
+    drawn: list[tuple[str, bool]] = []
     real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
     monkeypatch.setattr(ui_mod.imgui, "text_colored",
-                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+                        lambda col, s: (drawn.append((s, True)), real_colored(col, s)))
     monkeypatch.setattr(ui_mod.imgui, "text_disabled",
-                        lambda s: (drawn.append(s), real_disabled(s)))
+                        lambda s: (drawn.append((s, False)), real_disabled(s)))
 
-    def shown() -> list[str]:
+    def shown() -> list[tuple[str, bool]]:
         drawn.clear()
         frame(rig.panel, "system")
         imgui.end_frame()
-        return [s for s in drawn if s.startswith(("bridge", "no bridge"))]
+        return [(s, warn) for s, warn in drawn
+                if s.startswith(("no device", "pad  ·", "apc40  ·", "leap  ·", "bridge  ·"))]
 
-    assert shown() == ["no bridge — [bridge] enabled = false"]
-    b = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0)
-    rig.panel.bridge = b
-    assert shown() == ["bridge: no port"]
-    b.on, b.name, b.sent = True, "out IAC Bus 1", 42
-    assert shown() == ["bridge: out IAC Bus 1  ·  pitch, 16 lanes  ·  42 sent"]
-    b.error = "no such port"
-    assert shown() == ["bridge: no such port"]
+    assert shown() == [("no device registry", False)]
+    bridge = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0,
+                             decoder=SimpleNamespace(n=16), close=lambda: None)
+    midi = SimpleNamespace(on=False, name="", error="", last="", profile=None, bindings=[],
+                           close=lambda: None)
+    reg = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", io=SimpleNamespace(on=False, usb_pad=None, close=lambda: None)),
+        devices.MidiDevice("apc40", io=midi),
+        devices.OffDevice("leap", "hands"),
+        devices.BridgeDevice("bridge", io=bridge, audio=None)])
+    rig.panel.devices = reg
+    assert shown() == [("pad  ·  gamepad  ·  lost  ·  21 sources", False),
+                       ("apc40  ·  midi  ·  lost  ·  0 sources", False),
+                       ("leap  ·  hands  ·  off  ·  0 sources", False),
+                       ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]
+    bridge.on, bridge.name, bridge.sent = True, "out IAC Bus 1", 42
+    midi.on, midi.name, midi.last = True, "Akai APC40", "cc 0 48 = 64"
+    assert shown()[1] == (("apc40  ·  midi  ·  connected  ·  0 sources  ·  Akai APC40  ·  "
+                           "0 bindings  ·  cc 0 48 = 64"), False)
+    assert shown()[3] == (("bridge  ·  bridge  ·  connected  ·  16 sources  ·  out IAC Bus 1  ·  "
+                           "pitch, 16 lanes  ·  42 sent"), False)
+    bridge.error = "no such port"
+    assert shown()[3] == ("bridge  ·  bridge  ·  error: no such port  ·  16 sources", True)
+    rig.panel.devices = devices.DeviceRegistry([])
+    assert shown() == [("no devices — [[devices]] in config.toml", False)]
 
 
 def _drawn(monkeypatch) -> list[str]:

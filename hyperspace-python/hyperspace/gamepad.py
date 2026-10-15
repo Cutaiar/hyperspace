@@ -284,6 +284,21 @@ class Pad:
         elif new == "usb":
             self.buttons, self.hat, self.axes = state
 
+    def close(self) -> None:
+        """Stop the USB reader thread, when one was started (plan 27 B1:
+        the pad is on the one close list, so a restart's new image finds
+        the device free), and forget the pad: a later `poll` would find
+        it again. Never raises."""
+        usb = getattr(self, "usb_pad", None)
+        self.usb_pad = None
+        self.jid, self.source = None, None
+        self.buttons, self.prev_buttons, self.hat, self.prev_hat = [], [], 0, 0
+        if usb is not None:
+            usb.close()
+            thread = getattr(usb, "_thread", None)
+            if thread is not None and thread.is_alive():
+                thread.join(0.5)        # (a read in flight ends within its 100 ms timeout)
+
     def _usb_state(self):
         """The USB pad's latest report; starts its reader the first time
         GLFW has nothing. Kept on the instance, so a hot reload of this

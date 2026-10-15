@@ -307,6 +307,19 @@ def button_w(*labels: str) -> float:
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
 
 
+def device_lines(registry) -> list[str]:
+    """The SYSTEM page's device lines, one per listed device, in the
+    list's order: ``role  ·  kind  ·  status  ·  n sources  ·  last``
+    (the last part only when the device has one)."""
+    out = []
+    for role, kind, status, n, last in registry.lines():
+        line = f"{role}  ·  {kind}  ·  {status}  ·  {n} source{'' if n == 1 else 's'}"
+        if last:
+            line += f"  ·  {last}"
+        out.append(line)
+    return out
+
+
 def apply_style() -> None:
     s = imgui.get_style()
     s.window_rounding = 12.0
@@ -474,7 +487,7 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
-        self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
+        self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -1938,10 +1951,12 @@ class Panel:
         self._stall_status()
         self._gpu_timing()
         imgui.spacing()
+        self._section("devices")
+        self._device_lines()
+        imgui.spacing()
         self._section("midi")
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
             self._row("desk.slew")
-        self._midi_status()
         self._desk_log()
         self._learn_status()
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
@@ -1951,9 +1966,6 @@ class Panel:
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
                 self._row(f"desk.pad.{k}")
-        imgui.spacing()
-        self._section("bridge")
-        self._bridge_status()
 
     def alerts(self) -> list[str]:
         """What the red banner says: a live render error or render stall
@@ -2022,37 +2034,24 @@ class Panel:
                 imgui.set_tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
                                   "every thread's stack, newest at the end")
 
-    def _bridge_status(self) -> None:
-        """The DAW bridge's one sign of life (audit P3): off, a port error,
-        no port yet, or the ports, the encoding and what has gone out."""
-        b = self.bridge
-        if b is None:
-            imgui.text_disabled("no bridge — [bridge] enabled = false")
+    def _device_lines(self) -> None:
+        """One line per listed device (plan 27 B1): `role · kind · status ·
+        n sources · last` — `connected`, `lost` (the hardware is not there;
+        it reconnects itself), `off` (its entry says so) or `error: …`
+        (in the warning colour; the registry tries again). Replaces the
+        MIDI and bridge lines; the HANDS page keeps its own status."""
+        regs = self.devices
+        if regs is None:
+            imgui.text_disabled("no device registry")
             return
-        if b.error:
-            imgui.text_colored(WARN, f"bridge: {b.error}")
-            return
-        if not b.on:
-            imgui.text_disabled("bridge: no port")
-            return
-        imgui.text_disabled(f"bridge: {b.name}  ·  {b.encoding}, {b.room} lanes"
-                            f"  ·  {b.sent} sent")
-
-    def _midi_status(self) -> None:
-        m = self.midi
-        if m is None:
-            imgui.text_disabled("no MIDI adapter")
-            return
-        if m.error:
-            imgui.text_colored(WARN, f"MIDI: {m.error}")
-            return
-        if not m.on:
-            imgui.text_disabled("MIDI: no device")
-            return
-        imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.bindings)} bindings")
-        if m.last:
-            imgui.same_line()
-            imgui.text_disabled(f"·  {m.last}")
+        for line in device_lines(regs):
+            parts = line.split("  ·  ")
+            if len(parts) > 2 and parts[2].startswith("error"):
+                imgui.text_colored(WARN, line)
+            else:
+                imgui.text_disabled(line)
+        if not len(regs):
+            imgui.text_disabled("no devices — [[devices]] in config.toml")
 
     def _desk_log(self) -> None:
         """The desk event log (plan 24 C1): the last twenty presses on the

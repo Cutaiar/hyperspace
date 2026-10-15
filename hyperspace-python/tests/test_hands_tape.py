@@ -116,24 +116,30 @@ def test_a_tape_that_does_not_loop_goes_stale_after_its_end(leap, tmp_path):
 @pytest.mark.parametrize("bad", ["missing", "not a tape"])
 def test_a_bad_tape_path_is_a_note_the_pages_show(tmp_path, capsys, bad):
     """Plan 21 WP5 R10: a `[hands] tape` that is missing or is not a tape
-    leaves no tracker, as before, and now says why in `cfg["notes"]` —
-    which the SYSTEM page lists and the HANDS page shows in place of
-    "tracker off" (test_ui_shell) — not on stderr alone."""
-    from hyperspace import app
+    leaves no tracker, as before, and says why in `cfg["notes"]` — which
+    the SYSTEM page lists and the HANDS page shows in place of "tracker
+    off" (test_ui_shell) — not on stderr alone. Plan 27 B1: the hands
+    device's `open` fails, the registry notes it the same way and its line
+    reads `error: …`."""
+    from hyperspace import devices
 
     path = tmp_path / "tape.json"
     if bad == "not a tape":
         path.write_text('{"schema": "something else"}')
-    cfg = {"hands": {"enabled": True, "out": "", "tape": str(path)},
-           "notes": ["config: an earlier note"]}
-    assert app._open_hands(cfg, HandSettings.from_config({})) is None
+    entry = {"role": "leap", "kind": "hands", "enabled": True, "out": "", "tape": str(path)}
+    cfg = {"notes": ["config: an earlier note"]}
+    reg = devices.DeviceRegistry([entry], devices.Context(hand_settings=HandSettings.from_config({}),
+                                                         notes=cfg["notes"]))
+    reg.open_all()
+    assert reg.adapter("hands") is None and reg.get("leap").status.startswith("error: ")
     assert cfg["notes"][0] == "config: an earlier note" and len(cfg["notes"]) == 2
     note = cfg["notes"][1]
     assert note.startswith("hands: ") and str(path) in note
     assert note in capsys.readouterr().err
-    fresh = {"hands": {"enabled": True, "out": "", "tape": str(path)}}   # no notes yet
-    app._open_hands(fresh, HandSettings.from_config({}))
-    assert fresh["notes"] == [note]
+    fresh: list[str] = []                                              # no notes yet
+    devices.DeviceRegistry([entry], devices.Context(hand_settings=HandSettings.from_config({}),
+                                                    notes=fresh)).open_all()
+    assert fresh == [note]
 
 
 def test_the_stale_time_and_the_palm_width_are_defined_once(monkeypatch):
