@@ -1,0 +1,25 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "OLD DESK",
+ "note": "plan 24 C1 fixture: a preset saved before the render toggles became invariant. Its desk holds the four factory toggle rows on scene launch 1-4 (dropped quietly at load: the session's rows do the same job) and an owner's row on track 8's clip stop, now the desk's SAVE (dropped with a note)",
+ "values": {
+  "view.points": true,
+  "view.lines": false,
+  "view.faces": true,
+  "view.rotate": false,
+  "camera.zoom": 1.1
+ },
+ "routes": [],
+ "desk": [
+  {"source": "cc:0:48", "target": "view.bright", "op": "abs", "feedback": "ring"},
+  {"source": "cc:0:55", "target": "camera.zoom", "op": "abs", "feedback": "ring"},
+  {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:83", "target": "view.lines", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:84", "target": "view.faces", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:85", "target": "view.rotate", "op": "toggle", "feedback": "led"},
+  {"source": "note:0:86", "target": "camera.reset", "op": "toggle", "feedback": "led"},
+  {"source": "note:7:52", "target": "camera.reset", "op": "toggle", "feedback": "led"}
+ ],
+ "macros": {},
+ "modules": {}
+}

@@ -399,7 +399,8 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     put(tmp_path, "SHOW",
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
         desk=[{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-              {"source": "note:0:82", "target": "view.points", "op": "toggle",
+              # (scene launch 5: 1–4 are the invariant render toggles, plan 24 C1)
+              {"source": "note:0:86", "target": "view.points", "op": "toggle",
                "feedback": "led"},
               {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],   # a fader: dropped
         macros={"macro.1": {"label": "Heat", "subs": [
@@ -421,9 +422,9 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes, with the macro's chip
     assert "view.bright" in previews and "× macro.1" in texts
-    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G1·9
-    # scene launch 1), and the controls it leaves dark
-    assert {"DESK  ·  PRESET LAYER", "D1", "G1·9"} <= set(texts)
+    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
+    # scene launch 5), and the controls it leaves dark
+    assert {"DESK  ·  PRESET LAYER", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
@@ -1257,3 +1258,20 @@ def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
     frame(panel)
     assert "desk.pad.hz" in drawn and "desk.pad.damp" in drawn
     assert "desk.pad.release" not in drawn
+
+
+def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
+    """`desk_target`: the one rule for the desk rows' target combo, "Learn
+    desk" and "Learn pad". SHIFT's param is not one, and neither is the
+    desk's SAVE (plan 24 C1, review of PR #175): a learned toggle or key on
+    `desk.save` would latch it, and every bank pad's tap would then make a
+    new preset."""
+    router = _with_router(rig, tmp_path)
+    routing.register_desk(rig.reg, router.table)
+    reg = rig.reg
+    assert not ui_routing.desk_target(reg[routing.SHIFT_PARAM])
+    assert not ui_routing.desk_target(reg[routing.SAVE_PARAM])
+    assert ui_routing.desk_target(reg["view.points"])
+    targets = {p.id for p in ui_routing._desk_targets(rig.panel)}
+    assert routing.SAVE_PARAM not in targets and routing.SHIFT_PARAM not in targets
+    assert not rig.panel._desk_target(reg[routing.SAVE_PARAM])

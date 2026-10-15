@@ -121,7 +121,17 @@ from .bands import CEIL
 from .library import PRESETS
 from .motion import Motion
 from .params import Kind, Param, part_of
-from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, base_refusal, factory_desk
+from .routing import (
+    SAVE_PARAM,
+    SHIFT_PARAM,
+    Binding,
+    Macro,
+    Owned,
+    Router,
+    Sub,
+    base_refusal,
+    factory_desk,
+)
 
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
@@ -1053,9 +1063,11 @@ def unmapped(table) -> list[Binding]:
 
 def desk_target(p: Param) -> bool:
     """Can a desk control be put on this param? Not on a file path (a knob
-    cannot set one) and not on SHIFT's own param. One rule for the desk
-    rows' target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
-    return p.kind is not Kind.TEXT and p.id != SHIFT_PARAM
+    cannot set one), not on SHIFT's own param, and not on the desk's SAVE
+    (plan 24 C1: a learned toggle or key would latch it on, and every bank
+    pad's tap would then make a new preset). One rule for the desk rows'
+    target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
+    return p.kind is not Kind.TEXT and p.id not in (SHIFT_PARAM, SAVE_PARAM)
 
 
 def _desk_targets(panel) -> list[Param]:

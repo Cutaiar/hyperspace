@@ -74,7 +74,12 @@ from __future__ import annotations
 
 from . import undo
 from .params import Kind, Param, Registry
-from .routing import MIDI_SCHEMES, MOD_OPS, Binding, Bindings, Owned
+from .routing import MIDI_SCHEMES, MOD_OPS, SAVE_PARAM, Binding, Bindings, Owned
+
+# plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
+# button row would leave it on, and every bank pad's tap would then save
+SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it takes no "
+                "learned control")
 
 # what an armed learn may wait for (`Learn.want`): the desk — a knob, a
 # button, a click on the on-screen desk — one hand, by name, or the
@@ -227,6 +232,9 @@ class Learn:
         if p is None:
             self.take()                  # an id the registry lacks can never land
             return False
+        if pid == SAVE_PARAM:
+            self.refuse(SAVE_REFUSAL)
+            return False
         table = self.table
         b = Binding(source, pid, "abs", layer="preset")
 
@@ -317,6 +325,9 @@ class Learn:
         p = self.reg.get(pid) if pid is not None else None
         if p is None:
             self.take()
+            return False
+        if pid == SAVE_PARAM:
+            self.refuse(SAVE_REFUSAL)
             return False
         if p.kind is Kind.TRIGGER:
             op, value = "fire", 0.0

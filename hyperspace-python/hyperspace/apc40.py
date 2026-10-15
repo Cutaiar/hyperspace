@@ -47,7 +47,10 @@ Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 meaning on both layers — the faders, the crossfader as the master dim,
 the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
 and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
-save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
+save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons,
+and since plan 24 C1 the render toggles on scene launch 1–4 and SAVE on
+track 8's clip stop, which held turns a pad's tap into a save into its
+slot), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
 1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
@@ -413,6 +416,17 @@ BANK_PADS: list[tuple[int, int]] = [
 # (preset.knob_desk)
 SCENE = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
 
+# The render toggles on scene launch 1–4 (plan 24 C1): invariant rows, so
+# points, lines, faces and rotate do the same on both layers and their
+# LEDs always show the live state. They were the preset layer's until
+# then, and every preset saved before carries those four rows in its desk
+# (routing.RETIRED_DESK_ROWS drops them quietly at load)
+TOGGLES = ("view.points", "view.lines", "view.faces", "view.rotate")
+
+# The desk's SAVE button (plan 24 C1, the owner's choice of 2026-10-14):
+# (note, channel) of track 8's clip stop, free since PR #158
+SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
+
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
@@ -458,16 +472,23 @@ DEFAULT_MAP: list[dict] = [
     # state there as a new preset — the same row: `preset.select` carries
     # the hold (`Param.held`, midi.py). A filled slot is never written
     # over: the press loads it. This replaced plan 15's clip-stop SAVE AS
-    # bar (2026-10-09), and the clip-stop row is free: dark, for Learn
+    # bar (2026-10-09), and the clip-stop row was freed.
+    # SAVE (plan 24 C1, the two-handed save): track 8's clip stop, held,
+    # turns a bank pad's tap into a save into that pad's slot — an empty
+    # one as the hold does, a filled one as a NEW preset the slot then
+    # points at (`Param.save_into`, midi.py `_save_tap`). Invariant: the
+    # same on both layers, as the pads are. Clip stops 1–7 stay free
+    _note("desk.save", *SAVE, op="momentary"),
     *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW, layer=G)
       for k in range(8)],
     *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW, layer=G)
       for k in range(3)],
     *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED, layer=P)
       for k in range(4)],
-    # scene launch column (preset): render toggles and the view reset
-    _note("view.points", N_SCENE[0], layer=P), _note("view.lines", N_SCENE[1], layer=P),
-    _note("view.faces", N_SCENE[2], layer=P), _note("view.rotate", N_SCENE[3], layer=P),
+    # scene launch column: the render toggles, invariant since plan 24 C1
+    # (decision 18: the same on both layers, their LEDs the live state;
+    # D6's list grows by four), and the view reset on the preset layer
+    *[_note(pid, n) for pid, n in zip(TOGGLES, N_SCENE)],
     _note("camera.reset", N_SCENE[4], layer=P),
     _note("scene.reset_all", N_STOP_ALL),
     # transport and the rest

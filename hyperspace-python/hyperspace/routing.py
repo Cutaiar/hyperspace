@@ -289,6 +289,9 @@ OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hol
 LAYERS = ("preset", "global")
 SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
 SHIFT_PARAM = "desk.shift"
+# the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
+# (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
+SAVE_PARAM = "desk.save"
 # knob smoothing (plan 18 WP2): how long a value from one of the desk's
 # absolute knobs or faders takes to arrive (midi.py's glide). One session
 # param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
@@ -353,19 +356,31 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
     **BANK_REMAP,
 }
+# Plan 24 C1 made the render toggles on scene launch 1–4 invariant
+# (apc40.TOGGLES): every preset saved before holds their four factory rows
+# in its desk, and every factory file still does (decision 23: no library
+# file is rewritten; `preset.file_desk`). The session's invariant rows do
+# the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
+TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
-                  **{source: "plan 19" for _k, source in _FAR_PADS}}
+                  **{source: "plan 19" for _k, source in _FAR_PADS},
+                  **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
+                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
 # without a note (plan 19 fork 4 — a note means something the owner mapped
 # was dropped), while any other row on those pads keeps the note. Emptying
 # this set brings the note back for all of them.
-RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(BANK_REMAP)
+#
+# …and the four render toggles plan 24 C1 made invariant (TOGGLE_DESK_ROWS).
+RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = \
+    frozenset(BANK_REMAP) | TOGGLE_DESK_ROWS
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
@@ -374,6 +389,10 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
     # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
     *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
+    # plan 24 C1: the render toggles, invariant now (a session file never
+    # held them: they were the preset layer's), and SAVE on track 8's clip stop
+    *[(source, pid, op, value, False) for source, pid, op, value in sorted(TOGGLE_DESK_ROWS)],
+    (f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary", 1.0, False),
 )
 # plan 15 WP4's clip-stop SAVE AS bar, retired 2026-10-09: an empty bank
 # pad held saves into its own slot (`Param.held` on `preset.select`), and
@@ -762,6 +781,45 @@ def legacy6_routes() -> list[Binding]:
     rows += [Binding(f"lane:{i}", f"pattern.mod.{i}", "push", PATTERN_DEPTH)
              for i in range(len(BANDS))]
     return rows
+
+
+def save_refusal(b: Binding) -> str | None:
+    """Why `b` may not drive the desk's SAVE (plan 24 C1), or None: only a
+    `momentary` row may — anything that could leave `desk.save` on (a
+    toggle, a set, a key or pad row that fires) would turn every bank pad's
+    tap into a new preset until something turned it off."""
+    if b.target == SAVE_PARAM and b.op != "momentary":
+        return f"{SAVE_PARAM} takes only a momentary row (held, never latched)"
+    return None
+
+
+def _drop_save_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """`rows` less any row `save_refusal` refuses, with a note for each."""
+    kept, notes = [], []
+    for b in rows:
+        why = save_refusal(b)
+        if why is None:
+            kept.append(b)
+        else:
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
+    return kept, notes
+
+
+def save_missing(rows: Iterable[Binding]) -> str | None:
+    """Plan 24 C1: a table with no row on the desk's SAVE because the owner's
+    own row holds its control (track 8's clip stop: `remap_factory` adds
+    SAVE only where nothing uses the note) — the line that says so on the
+    SYSTEM page, so SAVE's absence is never silent. None when SAVE is there
+    or its control is free (a table with no APC40 rows)."""
+    rows = list(rows)
+    if any(b.target == SAVE_PARAM for b in rows):
+        return None
+    save = Binding(f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary")
+    mine = next((b for b in rows if b.is_midi and b.overlaps(save)), None)
+    if mine is None:
+        return None
+    return (f"SAVE not added: {save.source} is yours ({mine.target}) — the two-handed "
+            "save needs track 8's clip stop free")
 
 
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
@@ -1163,9 +1221,12 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
     toggles it, its LED reads it) and a page or key row can reach it too.
-    Never saved, never performed. And `desk.slew`: the table's knob
-    smoothing (plan 18 WP2), a session param a show keeps and no preset
-    may name. The first table a registry meets keeps each."""
+    Never saved, never performed. `desk.save`: the desk's SAVE held (plan
+    24 C1) — a momentary row sets it, and while it is on a bank pad's tap
+    saves instead of loading (midi.py); never saved, never performed. And
+    `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
+    a show keeps and no preset may name. The first table a registry meets
+    keeps each."""
     if SHIFT_PARAM not in reg:
         reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
                    lambda v: table.set_layer("global" if v else "preset"), group="desk",
@@ -1173,6 +1234,18 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
                        "(the band strip, the hand feel, BPM, the band scenes); off, the "
                        "loaded preset's. Loading a preset turns it off.")
+    if SAVE_PARAM not in reg:
+        # held by the hand on SAVE, never saved: a reconnect lets go of it
+        # (midi.MidiIO._enter), so a lost note-off cannot leave it down
+        held = [False]
+        reg.toggle(SAVE_PARAM, "Save", lambda: held[0],
+                   lambda v: held.__setitem__(0, bool(v)), group="desk",
+                   persist=False, modulatable=False,
+                   tip="The APC40's SAVE (track 8's clip stop): hold it and tap a bank "
+                       "pad to save the live state into that slot. An empty slot gets a "
+                       "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
+                       "and the old one stays in the preset list. Nothing is ever "
+                       "overwritten. SAVE alone does nothing.")
     if SLEW_PARAM not in reg:
         reg.continuous(SLEW_PARAM, "Knob smoothing",
                        lambda: getattr(table, "slew", 0.0),
@@ -1404,6 +1477,10 @@ class Bindings:
                 else:
                     t.announce(path, kept=bak)
                     t.write()
+            missing = save_missing(t.bindings)
+            if missing is not None:          # said every launch, never written: the row is yours
+                print(f"bindings: {path}: {missing}", file=sys.stderr)
+                t.said = f"{t.said} · {missing}" if t.said else missing
             return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
@@ -1493,6 +1570,11 @@ class Bindings:
         moved = migrate_scales(rows, macros)
         notes += moved
         changed = changed or bool(moved)
+        # a hand-edited row that would latch SAVE on (plan 24 C1): dropped,
+        # said, and the file written back once without it
+        rows, latched = _drop_save_latches(rows)
+        notes += latched
+        changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
         t.macros = macros
         t.bindings, t.dropped = referee(t.bindings)
@@ -1671,6 +1753,8 @@ class Bindings:
             b.layer = "preset"
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
+            elif save_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {save_refusal(b)}")
             elif self.is_invariant(b, inv):
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
@@ -1748,6 +1832,9 @@ class Bindings:
         if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS:
             raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
                              f"one of {', '.join(MOD_OPS)}")
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_performer:
             return
         cur = next((x for x in self.bindings
@@ -1771,6 +1858,9 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_midi:
             self.add(b)
             if write:

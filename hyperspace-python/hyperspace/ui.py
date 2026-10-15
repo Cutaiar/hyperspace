@@ -284,6 +284,14 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, st
     return words, ""
 
 
+def desk_log_lines(midi) -> list[str]:
+    """The SYSTEM page's desk log (plan 24 C1): the MIDI adapter's last
+    twenty desk events, newest first (`midi.DeskLog.lines`); none with no
+    adapter, or one from before a hot reload that has no log yet."""
+    log = getattr(midi, "desk_log", None) if midi is not None else None
+    return log.lines() if log is not None else []
+
+
 def chip_w(*labels: str) -> float:
     """Width of chips in a row at the default spacing — flush a group of
     them right with same_line(avail - chip_w(...))."""
@@ -1934,6 +1942,7 @@ class Panel:
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
             self._row("desk.slew")
         self._midi_status()
+        self._desk_log()
         self._learn_status()
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
@@ -2044,6 +2053,22 @@ class Panel:
         if m.last:
             imgui.same_line()
             imgui.text_disabled(f"·  {m.last}")
+
+    def _desk_log(self) -> None:
+        """The desk event log (plan 24 C1): the last twenty presses on the
+        APC40 — the control, what it did, the layer it was read on —
+        newest first, under a fold so the page stays short."""
+        lines = desk_log_lines(self.midi)
+        if not lines:
+            return
+        opened = imgui.tree_node(f"desk log — the last {len(lines)} presses##desklog")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("each press on the desk: the control, what it did, and the "
+                              "layer it was read on (both: the same on either layer)")
+        if opened:
+            for line in lines:
+                imgui.text_disabled(line)
+            imgui.tree_pop()
 
     def _learn_status(self) -> None:
         """The armed param and what the last learn did — a knob's or a

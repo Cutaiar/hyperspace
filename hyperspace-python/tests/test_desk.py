@@ -82,7 +82,7 @@ def test_shift_release_never_reevaluates_a_held_button(rig):
     across a SHIFT press releases on the row it pressed, and the global
     row on the same button never hears the release."""
     t, view = rig.midi.table, rig.view
-    n = apc40.N_SCENE[0]
+    n = apc40.N_SCENE[4]            # scene launch 1–4 are invariant since plan 24 C1
     t.set_desk([Binding(f"note:0:{n}", "view.points", "momentary", feedback="led")])
     t.bindings.append(Binding(f"note:0:{n}", "view.lines", "momentary", feedback="led",
                               layer="global"))
@@ -247,21 +247,23 @@ def test_a_control_that_loses_its_row_goes_dark(rig):
     from hyperspace import ui_routing
 
     t, view = rig.midi.table, rig.view
-    points, knob6 = apc40.N_SCENE[0], 0x35         # view.points, view.inst_rate: preset-only
-    view.points = True
+    # view.plane.ZW (activator 1) and view.inst_rate: preset-only (the
+    # render toggles on scene launch 1–4 are invariant since plan 24 C1)
+    points, knob6 = apc40.N_ACTIVATOR, 0x35
+    rig.reg["view.plane.ZW"].set(True)
     rig.midi.poll()
     assert sent_notes(rig, points)[-1] > 0                           # lit
     assert sent_cc(rig, knob6 + 8)[-1] != apc40.RING_OFF             # a ring style
     # a preset load whose desk leaves both unmapped
     rig.out.sent.clear()
-    t.set_desk([{"source": f"note:0:{apc40.N_SCENE[2]}", "target": "view.faces",
+    t.set_desk([{"source": f"note:0:{apc40.N_SCENE[4]}", "target": "view.faces",
                  "op": "toggle", "feedback": "led", "on": 1}])
     rig.midi.poll()
     assert sent_notes(rig, points) == [0]
     assert sent_cc(rig, knob6 + 8) == [apc40.RING_OFF]
     view.faces = True
     rig.midi.poll()
-    faces = apc40.N_SCENE[2]
+    faces = apc40.N_SCENE[4]
     assert sent_notes(rig, faces)[-1] == 1
     # the page's × on the one row left
     rig.out.sent.clear()
@@ -306,10 +308,12 @@ def test_an_unmapped_control_is_dark_and_does_nothing(rig):
     push(rig, cc(0x35, 3), cc(0x35, 125))
     assert reg["view.inst_rate"].norm == pytest.approx(rate)
     # and the preset's buttons: dark under SHIFT, and a press does nothing
-    assert sent_notes(rig, apc40.N_SCENE[2])[-1] == 0
-    faces = rig.view.faces
-    push(rig, note(apc40.N_SCENE[2]), note(apc40.N_SCENE[2], 0))
-    assert rig.view.faces == faces
+    # (activator 1, view.plane.ZW: the render toggles on scene launch 1–4
+    # are invariant since plan 24 C1)
+    assert sent_notes(rig, apc40.N_ACTIVATOR)[-1] == 0
+    plane = rig.reg["view.plane.ZW"].value
+    push(rig, note(apc40.N_ACTIVATOR), note(apc40.N_ACTIVATOR, 0))
+    assert rig.reg["view.plane.ZW"].value == plane
 
 
 def test_invariant_controls_mean_one_thing_on_both_layers(rig):
@@ -408,6 +412,8 @@ def _layer_by_plan(source: str) -> str | None:
             return "preset"
         return None                                        # faders, MASTER, crossfader
     ch = int(ch)
+    if num in a.N_SCENE[:4]:
+        return None             # the render toggles: invariant since plan 24 C1 (decision 18)
     if num == a.N_CLIP[1] or (num == a.N_CLIP[2] and ch < 3):
         return "global"                                    # the band scenes
     if (num in (a.N_ACTIVATOR, *a.N_SCENE, a.N_UP, a.N_DOWN)
@@ -444,6 +450,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         (routing.SHIFT_SOURCE, routing.SHIFT_PARAM, None),
         # clip rows 4 and 5: the bank's slots 9–24, invariant (plan 19 WP2)
         *[(s, "preset.select", None) for s in far],
+        # SAVE on track 8's clip stop, invariant (plan 24 C1, decision 18)
+        (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM, None),
         (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
@@ -634,14 +642,19 @@ def test_overdub_is_home_on_both_layers_and_is_lit(rig):
 
 def test_the_clip_stop_row_is_free(rig):
     """2026-10-09: the clip-stop SAVE AS bar is retired — an empty bank pad
-    held saves into its own slot — so the eight clip-stop buttons have no
-    row on either layer: dark, doing nothing, and open to Learn (not
-    invariant) for toggles and the like."""
+    held saves into its own slot — so the clip-stop buttons have no row on
+    either layer: dark, doing nothing, and open to Learn (not invariant)
+    for toggles and the like. Since plan 24 C1 (decision 18) track 8's is
+    the desk's SAVE, invariant (tests/test_desk_trust.py); the other seven
+    stay free."""
     t, n = rig.midi.table, apc40.N_CLIPSTOP
+    assert apc40.SAVE == (n, 7)
+    (save,) = t.route("note", 7, n)
+    assert (save.target, save.layer) == (routing.SAVE_PARAM, None)
     for under_shift in (False, True):
         if under_shift:
             shift(rig)
-        for k in range(8):
+        for k in range(7):
             assert t.route("note", k, n) == [] and t.dispatch("note", k, n) == []
             assert not t.is_invariant(Binding(f"note:{k}:{n}", "view.points", "toggle",
                                               layer="preset"))

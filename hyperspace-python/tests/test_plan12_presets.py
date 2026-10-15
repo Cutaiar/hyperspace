@@ -34,7 +34,7 @@ from hyperspace.preset import (
     hand,
     pinch,
 )
-from hyperspace.routing import Bindings, Router
+from hyperspace.routing import TOGGLE_DESK_ROWS, Bindings, Router
 
 DT = 1 / 60
 HOLD = 90                # frames: the One Euro and the return spring both settle
@@ -148,6 +148,10 @@ def test_the_party_presets_load_by_f_key_as_presets(tmp_path):
         assert [b.to_json() for b in router.table.routes()] == \
             [b.to_json() for b in FACTORY_PRESETS[slug].routes()], slug
         want = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["desk"]
+        # less the four render toggle rows the files keep and a load drops
+        # quietly: invariant since plan 24 C1 (decisions 18 and 23)
+        want = [d for d in want if (d["source"], d["target"], d["op"], 1.0)
+                not in TOGGLE_DESK_ROWS]
         got = [{k2: v for k2, v in b.to_json().items() if k2 != "layer"}
                for b in router.table.desk()]
         assert got == want, slug
