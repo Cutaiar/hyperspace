@@ -1660,7 +1660,7 @@ class Renderer:
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * zoom
         draw_w = np.maximum(width, 1.0)
-        alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
+        alpha = alpha * np.minimum(width, 1.0) * s.lines_alpha  # sub-px width; C2's opacity
 
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
@@ -1763,7 +1763,7 @@ class Renderer:
             order_p = np.argsort(pd, kind="stable")
             r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * zoom
             PB = s.bright * clamp(dens * 1.5, 0.55, 1)
-            pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1)
+            pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1) * s.points_alpha  # C2's opacity
             pverts = np.empty((g["n"], 4), dtype=np.float32)
             pverts[:, 0] = px[order_p]
             pverts[:, 1] = py[order_p]

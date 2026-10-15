@@ -1676,6 +1676,11 @@ class Panel:
         self._check("view.rotate")
         imgui.same_line()
         self._check("view.faces")
+        # the two layers' opacities (plan 24 C2), side by side
+        half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+        self._slider("view.points_alpha", half)
+        imgui.same_line()
+        self._slider("view.lines_alpha", half)
         self._slider("view.instances")
         if v.instances > 1:
             # the field's one row: how the copies are laid out, how they
