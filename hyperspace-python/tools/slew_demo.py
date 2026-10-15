@@ -128,7 +128,7 @@ def build(seconds: float) -> SimpleNamespace:
     give_knobs(r)
     reg["desk.slew"].set(seconds)
     for pid in (PAN, RATE):
-        reg[pid].set_norm(64 / 127)         # the knob at its middle: 0 px, 0×
+        reg[pid].set_norm(64 / 127)         # the knob at its middle: 0 units, 0×
     frames(r, 40)                           # the rings re-base the knobs; the undo settles
     u.clear()
     out.sent.clear()
@@ -222,7 +222,7 @@ def flick() -> None:
         name = "off" if not seconds else f"{seconds * 1000:.0f} ms"
         say(f"   {name:>6}: moves on {n:2d} frames, largest frame-to-frame move "
             f"{big / span * 100:4.1f} % of the throw, at rest from frame {landed[seconds]} "
-            f"({landed[seconds] * DT * 1000:.0f} ms) at {got[seconds][-1]:.0f} px")
+            f"({landed[seconds] * DT * 1000:.0f} ms) at {got[seconds][-1]:.2f} units")
     assert got[0.0][-1] == got[ON][-1] and sent[0.0] == sent[ON]
     say(f"   the last message arrives on frame 4 ({4 * DT * 1000:.0f} ms); the glide lands "
         f"{(landed[ON] - 4) * DT * 1000:.0f} ms after it (the first frame at or after "
@@ -240,17 +240,17 @@ def load_mid_glide() -> None:
     frames(r, 10)
     r.inp.queue += [cc(K_PAN, 127), cc(apc40.CC_XFADE, 0)]
     frames(r, 2)
-    say(f"   2 frames into a turn to the end and a fade to black: pan {pan.base:.0f} px, "
+    say(f"   2 frames into a turn to the end and a fade to black: pan {pan.base:.2f} units, "
         f"dim {dim.base:.3f}; gliding: {sorted(r.midi._slews)}")
     r.presets.load("TRIP")
     loaded = pan.base
-    say(f"   load TRIP: pan is {loaded:.0f} px (the preset's)")
+    say(f"   load TRIP: pan is {loaded:.2f} units (the preset's)")
     frames(r)
-    say(f"   next frame: pan {pan.base:.0f} px, dim {dim.base:.3f}; gliding: "
+    say(f"   next frame: pan {pan.base:.2f} units, dim {dim.base:.3f}; gliding: "
         f"{sorted(r.midi._slews)}")
     frames(r, 20)
     xfade = next(b for b in r.table.midi() if b.target == "output.dim")
-    say(f"   20 frames on: pan {pan.base:.0f} px (the load's value stands), dim "
+    say(f"   20 frames on: pan {pan.base:.2f} units (the load's value stands), dim "
         f"{dim.base:.3f} (the session's: it arrived), the crossfader still caught: "
         f"{xfade.caught}")
     assert pan.base == loaded and dim.base == 0.0 and xfade.caught
@@ -270,7 +270,7 @@ def one_step() -> None:
     assert len(r.undo.stack) == 1
     r.undo.undo()
     frames(r, 20)
-    say(f"   undo: pan back at {p.base:.0f} px (was {was:.0f}); nothing glides on: "
+    say(f"   undo: pan back at {p.base:.2f} units (was {was:.2f}); nothing glides on: "
         f"{not r.midi._slews}")
     assert abs(p.base - was) < 1e-6
     say()
@@ -299,7 +299,7 @@ def plot(path: Path, got: dict[float, list[float]]) -> None:
     t_max = n * DT * 1000
     lo = min(min(v[:n]) for v in got.values())
     hi = max(max(v[:n]) for v in got.values())
-    lo, hi = min(lo, 0.0), (int(hi / 400) + 1) * 400
+    lo, hi = min(lo, 0.0), (int(hi / 2) + 1) * 2
 
     def x(ms):
         return left + (w - left - right) * ms / t_max
@@ -311,12 +311,12 @@ def plot(path: Path, got: dict[float, list[float]]) -> None:
            font=font(17), fill=ink)
     d.text((left, 38 * s), "one CC step every 50 ms; both rest on the same detents",
            font=font(12), fill=soft)
-    for v in range(0, int(hi) + 1, 400):
+    for v in range(0, int(hi) + 1, 2):
         d.line([(left, y(v)), (w - right, y(v))], fill=grid, width=s)
         d.text((left - 8 * s, y(v)), f"{v}", font=font(12), fill=soft, anchor="rm")
     for ms in range(0, int(t_max) + 1, 200):
         d.text((x(ms), h - bottom + 8 * s), f"{ms}", font=font(12), fill=soft, anchor="ma")
-    d.text((left - 8 * s, top - 16 * s), "px", font=font(12), fill=soft, anchor="rm")
+    d.text((left - 8 * s, top - 16 * s), "units", font=font(12), fill=soft, anchor="rm")
     d.text((w - right, h - bottom + 26 * s), "ms", font=font(12), fill=soft, anchor="ra")
     d.line([(left, h - bottom), (w - right, h - bottom)], fill=soft, width=s)
     for seconds, vals in got.items():
@@ -356,7 +356,7 @@ def main(argv: list[str]) -> None:
         f"{ON * 1000:.0f} ms (the app's default). 60 frames a second.")
     say()
     say("1. A slow turn: one CC step every 50 ms for 2 s (CC 64 → 104), the base per frame")
-    pan = slow_turn(PAN, K_PAN, "px", ".1f")
+    pan = slow_turn(PAN, K_PAN, "units", ".3f")
     slow_turn(RATE, K_RATE, "×", ".3f")
     say("2. A fast flick on camera.pan.x: 50 CC steps in 5 frames (CC 64 → 114)")
     flick()
