@@ -624,8 +624,9 @@ def test_a_preset_round_trips(rig):
 
 # ---------------------------------------------------------------- the desk and the macros
 
+# (scene launch 5: 1–4 are the invariant render toggles since plan 24 C1)
 DESK = [{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-        {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"}]
+        {"source": "note:0:86", "target": "view.points", "op": "toggle", "feedback": "led"}]
 MACROS = {"macro.1": {"label": "Heat", "subs": [
     {"base": "view.depth4", "from": 0.2, "to": 0.8},
     {"depth": {"source": "hand:7", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}}
@@ -739,9 +740,9 @@ def boot_registry():
 
 def expected_desk(slug: str) -> list[dict] | None:
     """What the generator gives a factory preset's `desk`: its entry's
-    (None: no key), else the factory preset layer."""
+    (None: no key), else the factory files' layer (`file_desk`, plan 24 C1)."""
     spec = preset.FACTORY_PRESETS.get(slug)
-    desk = preset.fresh_desk if spec is None else spec.desk
+    desk = preset.file_desk if spec is None else spec.desk
     return None if desk is None else preset.desk_json(desk())
 
 
@@ -793,7 +794,10 @@ def test_every_factory_presets_desk_is_the_generators():
     macro on lfo-breathe's device knob 1; the presets made from routes-only
     files other than lfo-breathe carry no `desk` key (a load gives them the
     factory layer)."""
-    desk = preset.desk_json(preset.fresh_desk())
+    # plan 24 C1: the generator writes `file_desk` — the fresh desk plus
+    # the four render toggles, invariant now, which the factory files keep
+    # (decision 23: no library file is rewritten) and a load drops quietly
+    desk = preset.desk_json(preset.file_desk())
     assert desk and all("layer" not in d for d in desk)
     # plan 19 WP2: the sixteen shape pads left the fresh desk (42 rows → 26)
     # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's;
@@ -801,11 +805,13 @@ def test_every_factory_presets_desk_is_the_generators():
     assert len(desk) == 30 and not _on_bank_rows(desk)
     from_map = []
     for d in apc40.DEFAULT_MAP:
-        if d.get("layer") == "preset":
+        if d.get("layer") == "preset" or d["target"] in apc40.TOGGLES:
             row = Binding.from_json(d).to_json()
-            row.pop("layer")
+            row.pop("layer", None)
             from_map.append(row)
     assert desk == from_map
+    fresh = preset.desk_json(preset.fresh_desk())
+    assert fresh == [d for d in desk if d["target"] not in apc40.TOGGLES] and len(fresh) == 26
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
     # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit
     assert len(paths) == 23
@@ -853,10 +859,12 @@ def test_every_factory_presets_desk_is_the_generators():
         assert tuple(dial.values()) == tuple(table[path.stem]), path.name
         # the rest is the fresh layer's, in its order, the knobs after it
         assert [d for d in rows if d["source"] not in knobs] == rest, path.name
-        # one row per control, and none on an invariant one
+        # one row per control, and none on an invariant one but the four
+        # render toggles a load drops quietly (plan 24 C1, decision 23)
         assert len({d["source"] for d in rows}) == len(rows), path.name
-        assert not [d for d in rows
-                    if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))], path.name
+        assert [(d["source"], d["target"], d["op"], 1.0) for d in rows
+                if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))] \
+            == sorted(routing.TOGGLE_DESK_ROWS), path.name
     for slug in ("party-tumble", "party-faces", "party-field"):
         assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
 

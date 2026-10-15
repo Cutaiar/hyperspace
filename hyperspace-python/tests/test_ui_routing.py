@@ -399,7 +399,8 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     put(tmp_path, "SHOW",
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
         desk=[{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-              {"source": "note:0:82", "target": "view.points", "op": "toggle",
+              # (scene launch 5: 1–4 are the invariant render toggles, plan 24 C1)
+              {"source": "note:0:86", "target": "view.points", "op": "toggle",
                "feedback": "led"},
               {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],   # a fader: dropped
         macros={"macro.1": {"label": "Heat", "subs": [
@@ -421,9 +422,9 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes, with the macro's chip
     assert "view.bright" in previews and "× macro.1" in texts
-    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G1·9
-    # scene launch 1), and the controls it leaves dark
-    assert {"DESK  ·  PRESET LAYER", "D1", "G1·9"} <= set(texts)
+    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
+    # scene launch 5), and the controls it leaves dark
+    assert {"DESK  ·  PRESET LAYER", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
