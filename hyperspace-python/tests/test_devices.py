@@ -77,7 +77,7 @@ def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
     entry that is not enabled is `off`, a kind the table lacks an error
     line — never a crash, never an import."""
     # plan 27 B4 adds the recorded cloud (and the OSC device): new kinds, one line each
-    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "cloud"}
+    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "osc", "cloud"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     assert devices.PadDevice.schemes == ("axis", "pad", "hat")
     assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too

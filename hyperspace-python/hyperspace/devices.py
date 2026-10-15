@@ -268,6 +268,25 @@ class Base:
         B2); today's devices name theirs as a class tuple."""
         return (self.role,) if self.feeds else ()
 
+    @property
+    def rows(self) -> tuple[str, ...]:
+        """The schemes this device delivers discrete rows under (the
+        referee's `row_schemes`): its `schemes` less its `feeds` — the
+        pad's `pad` / `hat`, MIDI's three. A device whose role is its
+        scheme and which has both lanes and hits under it (B4's OSC) says
+        so itself."""
+        return tuple(s for s in self.schemes if s not in self.feeds)
+
+    @classmethod
+    def publishes(cls, role: str, entry: dict | None = None
+                  ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+        """(schemes, feeds, rows) an entry of this kind under `role` would
+        publish, before any device is made: what `make` checks a second
+        feeder against and what an `off` entry still lists. Today's kinds
+        keep their class tuples; a kind whose role is its scheme (plan 27
+        B4: OSC) overrides this."""
+        return cls.schemes, cls.feeds, tuple(s for s in cls.schemes if s not in cls.feeds)
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.role} {self.status}>"
 
@@ -285,16 +304,23 @@ class OffDevice(Base):
         self.kind = kind
         cls = kind_class(kind)      # its kind's schemes, so a row naming it stays dormant, not unknown
         self._wants: tuple[str, ...] = ()
+        self._rows: tuple[str, ...] = ()
         if cls is not None:
-            self.schemes, self.feeds = cls.schemes, cls.feeds
+            self.schemes, self.feeds, self._rows = cls.publishes(role, self.entry)
             w = cls.__dict__.get("wants")
-            self._wants = w if isinstance(w, tuple) else ((role,) if cls.feeds else ())
+            self._wants = w if isinstance(w, tuple) else ((role,) if self.feeds else ())
 
     @property
     def wants(self) -> tuple[str, ...]:
         """Its kind's: a rig that lists a device, off or not, can arm a
         learn for it (it completes once the device is on)."""
         return self._wants
+
+    @property
+    def rows(self) -> tuple[str, ...]:
+        """Its kind's, so a hit row in a preset is not refused while the
+        device is off."""
+        return self._rows
 
     @property
     def status(self) -> str:
@@ -806,11 +832,13 @@ def kinds() -> dict[str, type[Base]]:
     B2), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
+    from .osc import OscDevice  # (osc.py imports pythonosc only when a server opens)
     return {
         "midi": MidiDevice,
         "gamepad": PadDevice,
         "hands": HandsDevice,
         "bridge": BridgeDevice,
+        "osc": OscDevice,
         "cloud": CloudDevice,
     }
 
@@ -844,10 +872,11 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
     if claimed is not None:
-        for scheme in cls.feeds:
+        feeds = cls.publishes(role, entry)[1]       # an OSC role feeds its own name (B4)
+        for scheme in feeds:
             if scheme in claimed and claimed[scheme] != role:
                 return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
-        for scheme in cls.feeds:
+        for scheme in feeds:
             claimed[scheme] = role
     return cls(role, entry, ctx)
 
@@ -939,15 +968,19 @@ class DeviceRegistry:
         return tuple(out)
 
     def row_schemes(self) -> tuple[str, ...]:
-        """The schemes the listed devices deliver as rows, never as lanes
-        (each device's `schemes` less its `feeds`: the pad's `pad` / `hat`,
-        MIDI's `cc` / `note` / `pitch`), in list order — the referee's
+        """The schemes the listed devices deliver as rows (each device's
+        `rows`: its `schemes` less its `feeds` — the pad's `pad` / `hat`,
+        MIDI's `cc` / `note` / `pitch` — or, for an OSC device with hits,
+        its role, which is fed as well), in list order — the referee's
         `Bindings.row_schemes` (`Router.use`)."""
         out: list[str] = []
         for d in self.devices:
-            fed = getattr(d, "feeds", ())
-            for s in getattr(d, "schemes", ()):
-                if s not in fed and s not in out:
+            rows = getattr(d, "rows", None)
+            if rows is None:
+                fed = getattr(d, "feeds", ())
+                rows = tuple(s for s in getattr(d, "schemes", ()) if s not in fed)
+            for s in rows:          # an OSC role's hits are rows under its fed scheme (B4)
+                if s not in out:
                     out.append(s)
         return tuple(out)
 
