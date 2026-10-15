@@ -118,7 +118,8 @@ def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(r
     lib.load("presets", "TRIP")
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
-    assert "⇧" in inv and "S1" in inv
+    assert "⇧" in inv and "SM" in inv
+    assert "S1" not in inv          # the track faders are layered since plan 24 C2 (decision 17)
     frame(panel, "routing")
     lit = ui_desk.lit_cached(panel, table)
     assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv
@@ -603,7 +604,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     lrn = _learn_over(rig)
     assert panel.midi is None
     pushes = _pushes(monkeypatch)
-    d5, s3 = _control("D5"), _control("S3")
+    d5, s3 = _control("D5"), _control("SM")       # MASTER: S1–S8 are layered (C2)
     for _ in range(3):
         frame(panel, "view")
     lrn.arm("view.depth4", "desk")
@@ -623,7 +624,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     # the refusals are the knob learn's, and leave it armed
     lrn.arm("view.speed", "desk")
     _click(panel, ui_desk.rect(panel, s3))
-    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
     assert lrn.learning == "view.speed" and lrn.control is None
     table.set_layer("global")
     frame(panel)
@@ -680,12 +681,12 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
     assert lrn.control is None
     # an invariant pick (framed, dimming nothing) lets go the same way
     panel.reg["ui.desk"].set(True)
-    lrn.pick(_control("S3").source)
+    lrn.pick(_control("SM").source)
     frame(panel)
     assert ui_desk.picking(panel) is None and ui_desk.picked(panel) is not None
-    does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["S3"])
+    does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["SM"])
     assert ui_desk.footer_line(panel) == (
-        f"S3 (track fader 3) is invariant (the session's): {does} (20 s)", False)
+        f"SM (MASTER fader) is invariant (the session's): {does} (20 s)", False)
     clock[0] += ui_desk.PICK_S + 0.1
     frame(panel)
     assert lrn.control is None

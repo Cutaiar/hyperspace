@@ -28,6 +28,11 @@ class ViewState:
     bright: float = 1.0
     points: bool = True
     lines: bool = True
+    # the layers' opacities (plan 24 C2): 1 is the picture as it was before
+    # them, 0 draws the layer fully transparent; each multiplies the alpha
+    # draw_scene already gives an edge or a point
+    lines_alpha: float = 1.0
+    points_alpha: float = 1.0
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)

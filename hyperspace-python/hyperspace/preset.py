@@ -139,7 +139,11 @@ def desk_json(rows) -> list[dict]:
 def fresh_desk(profile: str = "apc40") -> list[Binding]:
     """A fresh preset's desk: the factory map's preset layer (plan 13 §3.2)
     — what a file with no ``desk`` key gets, and what a factory preset's
-    desk is once loaded (`file_desk` less the rows a load drops)."""
+    desk is once loaded (`file_desk` less the rows a load drops). It holds
+    no track fader (plan 24 C2: the faders are a preset's own targets, with
+    no inherited default), so a fresh preset leaves S1–S8 dark; a fader row
+    a preset's desk holds (`track_fader`) loads, saves and lights like a
+    knob's."""
     return [b for b in routing.factory_desk(profile) if b.layer == "preset"]
 
 
@@ -152,7 +156,9 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
     writes them byte for byte; a load drops them quietly
     (`routing.RETIRED_DESK_ROWS`) and the session's rows do the same job.
     The creative pass that next regenerates the files can switch the
-    generator to `fresh_desk` and the rows leave the files."""
+    generator to `fresh_desk` and the rows leave the files. Like the fresh
+    desk it binds no track fader (plan 24 C2); a factory preset given
+    faders gets them through `knob_desk(…, faders=…)`."""
     keep = routing.TOGGLE_DESK_ROWS
     return [b if b.layer == "preset" else replace(b, layer="preset")
             for b in routing.factory_desk(profile)
@@ -892,6 +898,18 @@ def device_knob(k: int, target: str) -> Binding:
     return Binding.from_json(apc40._cc(target, apc40.DEVICE_KNOBS[k - 1], layer="preset"))
 
 
+def track_fader(k: int, target: str) -> Binding:
+    """Track fader `k` (S1–S8) on the preset layer (plan 24 C2): absolute,
+    soft pickup, no light — the row the factory map gives a fader under
+    SHIFT (apc40._cc with ring 0), on this preset's target."""
+    return Binding.from_json(apc40._cc(target, apc40.CC_FADER, apc40.TRACK_FADERS[k - 1],
+                                       ring=0, layer="preset"))
+
+
+def _is_track_fader(b: Binding) -> bool:
+    return b.kind == "cc" and b.number == apc40.CC_FADER
+
+
 # plan 12 §6: the eight device knobs WAKE and TRIP put their bases on, on
 # top of the factory preset layer (the band strip stays behind SHIFT)
 WAKE_KNOBS = ("dream.echo_mix", "dream.fade", "dream.darken", "dream.contrast",
@@ -934,12 +952,22 @@ def _is_device_knob(b: Binding) -> bool:
     return b.kind == "cc" and b.number in apc40.DEVICE_KNOBS
 
 
-def knob_desk(targets: tuple[str | None, ...]) -> Callable[[], list[Binding]]:
+def knob_desk(targets: tuple[str | None, ...],
+              faders: tuple[str | None, ...] = ()) -> Callable[[], list[Binding]]:
     """A preset layer with device knobs of its own: the factory files' desk
     (`file_desk`) **less its device knobs** (apc40.SCENE), plus device knob k + 1 on
-    `targets[k]` — so no knob is mapped twice. A None leaves that knob dark."""
-    return lambda: [*(b for b in file_desk() if not _is_device_knob(b)),
-                    *(device_knob(k + 1, t) for k, t in enumerate(targets) if t)]
+    `targets[k]` — so no knob is mapped twice. A None leaves that knob dark.
+
+    `faders` (plan 24 C2) is the same for the track faders: track fader
+    k + 1 on `faders[k]`, a None or a missing entry dark. The factory map
+    gives the faders nothing on the preset layer, so the default () adds
+    no row and every factory desk is as it was (decision 23: no factory
+    preset gets fader rows in this run; the sets are the owner's)."""
+    # (the fader filter guards a future file_desk with fader rows; today's has none)
+    return lambda: [*(b for b in file_desk() if not _is_device_knob(b)
+                      and not (faders and _is_track_fader(b))),
+                    *(device_knob(k + 1, t) for k, t in enumerate(targets) if t),
+                    *(track_fader(k + 1, t) for k, t in enumerate(faders) if t)]
 
 
 # ---------------------------------------------------------------- the generator
