@@ -963,6 +963,7 @@ def knob_desk(targets: tuple[str | None, ...],
     gives the faders nothing on the preset layer, so the default () adds
     no row and every factory desk is as it was (decision 23: no factory
     preset gets fader rows in this run; the sets are the owner's)."""
+    # (the fader filter guards a future file_desk with fader rows; today's has none)
     return lambda: [*(b for b in file_desk() if not _is_device_knob(b)
                       and not (faders and _is_track_fader(b))),
                     *(device_knob(k + 1, t) for k, t in enumerate(targets) if t),

@@ -411,6 +411,8 @@ class MidiIO:
         for b in self.bindings:
             b.last_out = None
             b.caught = False
+            if b.kind in ("cc", "pitch"):
+                b.last_hw = None    # and each row's own last position (review of PR #180)
         if self.out is not None:
             for msg in self.profile.enter():
                 self._send(msg)
@@ -1002,9 +1004,11 @@ class MidiIO:
                 b.last_hw = hw.get(b.control)        # a fresh row: where its control is
             if (switch and b.layer is not None and b.kind in ("cc", "pitch")
                     and b.op == "abs" and b.feedback != "ring" and b.pickup):
+                # where the fader is, moved on any layer — or None when no
+                # position is known (never moved since power-up): then only
+                # an on-value catch counts, never a crossing from a stale one
                 p, pos = self.reg.get(b.target), hw.get(b.control)
-                if pos is not None:
-                    b.last_hw = pos                  # where the fader is, moved on any layer
+                b.last_hw = pos
                 b.caught = (p is not None and pos is not None
                             and abs(self._ring_norm(p) - pos) <= PICKUP_TOL)
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":

@@ -410,13 +410,13 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
                 "macro.2": {"subs": [{"base": "view.depth4", "from": 1.0, "to": 0.0}]}})
     lib.load("presets", "SHOW")
     panel.learn = Learn(reg, table)
-    panel.learn.refuse("track fader 3 is invariant (the session's) — not learned")
+    panel.learn.refuse("MASTER fader is invariant (the session's) — not learned")
     texts, previews = _drawn(monkeypatch)
     frame(panel, "routing")
     frame(panel)
     # the head
     assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
-    assert "learn: track fader 3 is invariant (the session's) — not learned" in texts
+    assert "learn: MASTER fader is invariant (the session's) — not learned" in texts
     assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip

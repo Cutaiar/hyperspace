@@ -143,6 +143,8 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
     """What feedback a learned control can show, if any."""
     if kind == "cc" and (number in DEVICE_KNOBS or number in TRACK_KNOBS):
         return {"feedback": "ring", "ring": RING_VOLUME}
+    if kind == "cc" and number in (CC_FADER, CC_MASTER, CC_XFADE):
+        return {"feedback": None, "ring": 0}      # a pot: no light, the map's fader row
     if kind == "note":
         grid = N_CLIP[0] <= number <= N_CLIP[-1]
         return {"feedback": "led", "on": GREEN if grid else 1, "off": 0}

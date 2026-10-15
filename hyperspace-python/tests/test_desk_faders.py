@@ -195,6 +195,52 @@ def test_a_fader_on_its_value_when_the_layer_switches_is_caught_at_once(rig):
         (band + 2 if band < 120 else band - 2) / 127, abs=0.02)
 
 
+def test_a_power_up_forgets_where_a_fader_was_on_every_layer(rig):
+    """Review of PR #180: a fader moved while the cable was out must not
+    read as a crossing. S1 caught under SHIFT at 110; the band set back to
+    0.5 from the panel; a power-up; the fader pulled to ~10 while unplugged;
+    SHIFT latched: the first move to 12 leaves the band alone (no position
+    is known, so only an on-value catch counts). The same for MASTER, an
+    invariant fader, through the power-up alone."""
+    reg = rig.reg
+    band, gain = reg["band.0.post"], reg["master.gain"]
+    shift(rig)
+    band.set_norm(0.5)
+    gain.set_norm(0.5)
+    rig.midi.poll()
+    push(rig, cc(FADER, 64), cc(FADER, 110), cc(apc40.CC_MASTER, 64),
+         cc(apc40.CC_MASTER, 110))
+    assert band.norm == pytest.approx(110 / 127, abs=0.01)
+    assert gain.norm == pytest.approx(110 / 127, abs=0.01)
+    shift(rig)                                             # back to the preset layer
+    band.set_norm(0.5)
+    gain.set_norm(0.5)
+    rig.midi.poll()
+    rig.midi._enter()                                      # a power-up (a reconnect)
+    shift(rig)
+    push(rig, cc(FADER, 12), cc(apc40.CC_MASTER, 12))      # moved while unplugged
+    assert band.norm == pytest.approx(0.5)
+    assert gain.norm == pytest.approx(0.5)
+    push(rig, cc(FADER, 64), cc(FADER, 70))                # brought to the value: caught
+    assert band.norm == pytest.approx(70 / 127, abs=0.01)
+
+
+def test_a_track_fader_is_learnable_on_the_preset_layer(rig):
+    """Decision 17: S1 is the preset's, so the on-screen desk offers it and
+    a desk learn on CC 7 lands a preset-layer pickup row with no ring."""
+    t, m = rig.midi.table, rig.midi
+    s1 = next(c for c in apc40.LAYOUT if c.glyph == "S1")
+    assert t.layer == "preset" and ui_desk.mappable(t, s1) is None
+    m.learner.arm("view.lines_alpha", "desk")
+    push(rig, cc(FADER, 40))
+    (b,) = [x for x in t.desk() if x.target == "view.lines_alpha"]
+    assert (b.source, b.op, b.layer, b.pickup) == (f"cc:0:{FADER}", "abs", "preset", True)
+    assert (b.feedback, b.ring) == (None, 0)               # no light: the map's fader row
+    assert faders_lit(t)["S1"] is not None
+    shift(rig)
+    assert ui_desk.mappable(t, s1) is not None             # SHIFT up: the session's layer
+
+
 # ------------------------------------------------------------- the migration
 
 def test_an_older_session_file_moves_the_fader_rows_to_shift_once(tmp_path):
