@@ -282,9 +282,12 @@ def test_a_generic_desk_maps_on_the_desks_learn_with_no_code(build):
     lib.load("presets", lib.list("presets")[0])
     assert not lib.is_dirty("presets")
     before = r.path.read_bytes() if r.path.exists() else None
+    knob = Binding(f"cc:0:{apc40.DEVICE_KNOBS[7]}", "view.inst_amp", "abs", layer="preset")
+    t.bind(knob, write=False)                      # the param's knob on the APC40…
     r.learn.arm("view.inst_amp", "desk")
     push(r, LAUNCH, cc(21, 90))
-    (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.is_midi]
+    assert any(x is knob for x in t.bindings)      # …stays: one knob per param per desk
+    (b,) = [b for b in t.bindings if b.target == "view.inst_amp" and b.device]
     assert (b.source, b.op, b.layer, b.feedback, b.pickup) == (
         "cc@launch:0:21", "abs", "preset", None, True)
     assert r.learn.learning is None and "learned view.inst_amp" in r.learn.last

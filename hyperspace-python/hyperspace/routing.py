@@ -2002,7 +2002,9 @@ class Bindings:
             return []
 
         def same_role(x: Binding) -> bool:
-            if x.target != b.target or not x.is_midi:
+            # one control per param *per desk* (plan 27 B2): a knob learned
+            # on a second desk leaves the param's knob on the APC40 alone
+            if x.target != b.target or not x.is_midi or self.role_of(x) != self.role_of(b):
                 return False
             if b.scheme == "note":
                 return x.scheme == "note" and x.op == b.op and x.value == b.value

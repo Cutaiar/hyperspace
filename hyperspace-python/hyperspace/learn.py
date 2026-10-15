@@ -269,7 +269,7 @@ class Learn:
 
         def named(x: Binding) -> str:
             name = getattr(profile, "named", None) or getattr(profile, "control_name", None)
-            return (name(x.source) if name is not None else None) or x.describe()
+            return (name(x.bare) if name is not None else None) or x.describe()
         why = blocked(table, source)
         if why == "invariant":
             self.refuse(f"{named(b)} is invariant (the session's) — not learned")
@@ -296,7 +296,7 @@ class Learn:
         table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
         glyph = getattr(profile, "glyph", None)
         let_go = list(dict.fromkeys(
-            (glyph(x.source) if glyph is not None else None) or named(x)
+            (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
         self.said(f"learned {pid} ← {named(b)} (into the preset)"
                   + (f"; {', '.join(let_go)} let go" if let_go else ""))
