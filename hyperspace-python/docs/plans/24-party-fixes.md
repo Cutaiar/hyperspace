@@ -328,6 +328,11 @@ synthetic tape or an offscreen frame. In particular:
 - The grab mapping uses `position`, which is absolute: a closing fist
   snaps the shape to the hand's pose rather than catching it where it
   is (that needs a relative op, plan 28).
+- A closed grab holds while the skeleton is missing: a palm-only frame
+  leaves `fist` None, so the gate holds rather than opening
+  (`hands/core.py`, the grab step).
+- `ghost.routed_rows` gives the new dance rows no tether on the ghost:
+  cosmetic, no wrong value.
 - The palette's `mode` is a whole-number 0/1 param, the other mode's
   strip rows are hidden until it flips, and "on" at mix 0 can look
   broken (the tip says why). The FX page fits with 7 px to spare at

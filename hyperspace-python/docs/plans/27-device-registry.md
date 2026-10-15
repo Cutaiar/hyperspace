@@ -420,13 +420,6 @@ particular:
 
 ## Known rough edges
 
-- **"Learn bridge" is offered and never completes.** The bridge feeds
-  `ext`, so it inherits the default `wants` (its role) and every
-  modulatable param's menu offers **Learn bridge** whenever a bridge is
-  listed — on or off, which includes every un-renamed config (the old
-  `[bridge]` table is always translated). The bridge has no `learn`, so
-  an armed "Learn bridge" waits until cancelled. A fix is one line
-  (`wants = ()` on `BridgeDevice`); not made in this docs pass.
 - **A missing hand camera reads `error: no camera`, not `lost`.** The
   hands device passes the tracker's own words through
   (`HandsDevice.status`): an unplugged camera is `error: no camera` and a

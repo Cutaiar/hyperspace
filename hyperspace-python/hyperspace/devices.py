@@ -594,6 +594,9 @@ class BridgeDevice(Base):
     kind = "bridge"
     schemes = ("ext",)
     feeds = ("ext",)
+    # it feeds `ext` but cannot complete a Learn (no `learn`), so it arms
+    # none, as `MidiOutDevice`; an off bridge offers nothing either
+    wants: tuple[str, ...] = ()
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None, audio=None):

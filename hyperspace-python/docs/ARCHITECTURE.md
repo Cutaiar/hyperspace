@@ -772,10 +772,6 @@ Behaviour the code has today that the model does not guard:
   non-invariant control until SHIFT is unlatched or the learn cancelled.
 - An `abs` knob learned onto `preset.select` spreads over all twenty-four
   slots and can rest on an empty one (audit R14).
-- A device that feeds inherits its role as a Learn want
-  (`devices.Base.wants`), whether or not it can complete one: the bridge
-  does, so "Learn bridge" is offered while a bridge is listed and nothing
-  completes it (register row 151).
 - `routing.is_continuous` is open-ended: a typo'd scheme in a preset
   route is a dormant performer, not a refused row. A hand-written
   `cc@<owner>:…` (the owning desk named) dispatches as that desk's but is

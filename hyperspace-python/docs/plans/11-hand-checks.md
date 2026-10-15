@@ -9,8 +9,8 @@ numbers.
 
 ## Before you start
 
-On `main` (`git pull`, `uv sync`); group R needs plan 22, on
-`plan-22-integration` until it is merged, and groups U (plan 24), W
+On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
+`main` (#151), and groups U (plan 24), W
 (plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
 merged. (V follows W in this file: plan 27's docs landed first.) Before
 any launch of this build:
@@ -688,34 +688,21 @@ last (`Renderer._draw_frame`); line under Master dim, no dimming →
 driver refused program (`Renderer.dim_error`); preset moves it →
 preset/show lands a rig param.
 
-**56. A hold on the clip-stop row saves a new preset; a tap does not.** (APC40, copy)
-Headless: `tests/test_midi.py::{test_a_hold_fires_once_at_the_hold_time_while_held,test_a_tap_fires_nothing,test_the_bar_is_one_control,test_the_bar_lights_while_held_and_the_new_slots_pad_blinks} tests/test_presets.py::{test_save_new_never_overwrites,test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset,test_save_new_on_a_full_bank_saves_to_the_list_and_says_so,test_the_new_slot_loads_from_the_preset_row,test_put_and_clear_slot_write_the_show_and_delete_no_file} tests/test_library.py::test_next_name_counts_on_from_a_trailing_number tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear tests/test_desk.py::test_the_clip_stop_row_is_invariant`.
-PRESETS: right-click F8 → **clear slot**: F8 "—", footer "F8: cleared —
-NOITA is still in the preset list" (it is). F5 (TRIP); change the
-look. (a) Tap a clip-stop button. *Pass:* row lit while held, nothing
-else: no preset, no file in `<home>/presets`. (b) Hold one. *Pass:* at
-0.6 s row and clip row 1 pad 8 blink 1.5 s, TRIP's pad off; release:
-row dark, pad 8 green; F8 **TRIP 2**, lit; PRESETS strip TRIP 2, no
-dot; footer "saved TRIP 2 → F8"; `<home>/presets/trip-2.json` exists.
-(c) Pad 1 (TUMBLE), pad 8: your look. (d) Change look, hold another
-button: factory party (TRACER slot 9) → slot 10, row 4 pad 2 blinks,
-"saved TRIP 3 → slot 10"; own show, slot 9 free → row 4 pad 1, "→ slot
-9". TRIP 2 unchanged. All twenty-four full: "saved … — the bank is
-full: it is in the preset list" (row blinks, no pad). (e) Two fingers,
-5 s: one preset. (f) SHIFT latched: same, stays latched. (g)
-Right-click F8 → **put preset here…** (all presets, 12 rows then
-scroll) → NOITA: F8 NOITA, footer "F8: NOITA", TRIP 2/3 listed; **clear
-slot** greyed when empty; panel **save** still overwrites loaded
-preset. (h) Right-click param → **Learn desk**, hold row: saves, silent,
-learn armed. Not fails: on-screen bar lights but doesn't blink; cheat
-sheet omits the bar. *Fail:* tap saves → `midi.HOLD_S`,
-`MidiIO._handle`; taken slot/file overwritten → `Project.next_empty`,
-`library.next_name`; no blink → `apc40.blink_of`, blink in
-`MidiIO.feedback` (if clip-stop LEDs never light/blink, note behaviour:
-Akai-table velocities, unseen on mk1; footer line is the sign); dark at
-0.6 s, no blink or preset → save failed (`Project.save_new`; reason on
-PRESETS, `bank_error`); two presets per hold → `MidiIO._fire_holds`; row
-dead → its rows (`apc40.DEFAULT_MAP`; your `bindings.json`, check 57).
+**56. (Retired 2026-10-09: the clip-stop save bar.)** The save is check 148; the hold on an empty pad is #158's. (APC40, copy)
+Headless: `tests/test_midi.py::{test_a_hold_fires_once_at_the_hold_time_while_held,test_a_tap_fires_nothing,test_the_bar_is_one_control,test_the_bar_lights_while_held_and_the_new_slots_pad_blinks} tests/test_presets.py::{test_save_new_never_overwrites,test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset,test_save_new_on_a_full_bank_saves_to_the_list_and_says_so,test_the_new_slot_loads_from_the_preset_row,test_put_and_clear_slot_write_the_show_and_delete_no_file} tests/test_library.py::test_next_name_counts_on_from_a_trailing_number tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear`.
+What still applies — the slot menu: (g) Right-click F8 → **put preset
+here…** (all presets, 12 rows then scroll) → NOITA: F8 NOITA, footer
+"F8: NOITA", the other presets still listed; **clear slot** greyed when
+empty; panel **save** still overwrites the loaded preset. (h) Right-click
+a param → **Learn desk**, then hold an empty bank pad (#158's hold): it
+saves, silently, and the learn stays armed. *Fail:* a taken slot or file
+overwritten → `Project.next_empty`, `library.next_name`; the slot menu
+missing → `ui_presets`.
+*Historical (the clip-stop bar, retired):* steps (a)–(f) tapped and held
+a clip-stop button to save a new preset (the row lit while held, the new
+slot's pad blinked at 0.6 s, a full bank saved to the list, two fingers
+made one preset, SHIFT stayed latched). That row no longer saves; do not
+run them.
 
 **57. The first launch brings `bindings.json` up to date, with a backup.** (copy, first launch)
 Headless: `uv run pytest -q tests/test_routing.py -k "older_file or old_crossfader"`, `tests/test_routing.py::test_old_midi_map_migrates_into_bindings_json`.
@@ -2462,10 +2449,7 @@ menu, with and without a bridge entry in the list. *Pass:* the combo
 lists the analyzer's lanes, then LFO 1–4, then the pad's axes, the
 hands, then `ext` (when the bridge is listed or a route names it), in
 the `[[devices]]` order; the menu offers Learn desk, Learn hand ▸ (a
-tracker on) and Learn pad (a pad connected), as before. **Known:** with
-a bridge listed (on or off, which includes every un-renamed config) the
-menu also offers **Learn bridge**, and no move completes it — cancel it
-(register row 151). *Fail:* a scheme missing → its device's `feeds`,
+tracker on) and Learn pad (a pad connected), as before. *Fail:* a scheme missing → its device's `feeds`,
 `DeviceRegistry.continuous_schemes`.
 
 **179. The sticks still steer; a routed stick does not.** (pad)

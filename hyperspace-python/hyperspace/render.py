@@ -918,6 +918,9 @@ class Renderer:
         # first use (`ghost_of`)
         self.ghost_states: dict[str, GhostState] = {}
         self._ghosts: dict[str, Ghost] = {}
+        # plan 26 A4b: the cloud nodes' GL (`graph._CloudGL`), made on first
+        # draw; the getattr guards stay for a hot-reloaded renderer
+        self._cloud_gl = None
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)

@@ -24,7 +24,7 @@ from test_outputs import H, W, fbo, px, rig, scene_view, views
 
 from hyperspace import ghost as G
 from hyperspace import outputs as O
-from hyperspace.graph import Wiring
+from hyperspace.graph import HandsAt, Wiring
 from hyperspace.hands import core as hc
 
 S = O.Switches
@@ -308,6 +308,25 @@ def test_the_presenter_carries_the_hands_the_readout_and_the_dim_in_every_wiring
         pv = O.View(S(), (W, H), presenter=object())
         _draw(ctx, r, [views(ctx, S())[0], pv], frames=2)
         assert pv.handoff.hands is r.ghost.tex and pv.handoff.blend == want
+
+
+def test_a_second_hands_node_on_a_presenter_glass_matches_the_target(ctx):
+    """A graph with a second hands node (``ghost.2``, its own state) laid
+    on the glass: a presenter output shows what a target view shows, byte
+    for byte, in each output's switches, and the glass is lit (review
+    pass, Minor 4)."""
+    from test_outputs import _presented
+
+    r = rig(ctx, effects=(), guide=1, dim=0.8)
+    r.ghost_states = {"ghost.2": G.GhostState(on=True, alpha=0.25, guide=1)}
+    r.wiring = Wiring(hands="scene", extra=(HandsAt(2),))
+    pairs = [(S(dim=0.5), (640, 400)), (S(scene=False), (640, 400)),
+             (S(scene=False, through=True), (640, 300))]
+    got = _presented(ctx, r, pairs)
+    assert r.ghost_of("ghost.2") is not r.ghost
+    for (sw, size), (want, shown) in zip(pairs, got, strict=True):
+        assert np.array_equal(want, shown), (sw, size)
+    assert any(p[1][..., :3].max() > 50 for p in got[1:])     # the glass is lit
 
 
 def test_the_mirror_and_an_output_flip_each_flip_the_hands_once(ctx):

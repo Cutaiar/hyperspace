@@ -1632,11 +1632,6 @@ the pad's sticks, the hands and `ext` lanes, in the order the device
 list gives them. The menu has Learn desk, Learn hand (with a tracker on)
 and Learn pad (with a pad connected), as before.
 
-**Known:** while a bridge is listed (on or off — an un-renamed config
-always lists one) the menu also offers **Learn bridge**, which nothing
-completes: click the footer to cancel it. Note it if you see it; it is
-a known fault.
-
 **Wrong if:** a device's sources missing from the list.
 
 *(check 178)*

@@ -844,8 +844,9 @@ class _CloudGL:
             slot = self.slots[name] = {"pbuf": pbuf, "cbuf": cbuf, "vao": vao, "uploads": 0}
         for buf, data in ((slot["pbuf"], pts), (slot["cbuf"], cols)):
             if n:
-                buf.orphan(max(data.nbytes, 12))
-                buf.write(np.ascontiguousarray(data, dtype=np.float32))
+                arr = np.ascontiguousarray(data, dtype=np.float32)   # sized as written
+                buf.orphan(max(arr.nbytes, 12))
+                buf.write(arr)
         slot["n"], slot["key"] = n, key
         slot["uploads"] += 1
         return slot
