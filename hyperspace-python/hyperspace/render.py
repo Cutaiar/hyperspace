@@ -44,8 +44,10 @@ space, in place of computing the pattern and the bitmap per fragment. So
 the faces' effects are *in* the scene texture: the echoes and the dream
 carry them, and the frame's effects run over them. With nothing aimed at
 the faces none of it runs, nothing is allocated and the frame is
-bit-identical. The ghost hands (ghost.py) go over the finished frame in their
-own pass and camera; off, the frame is untouched. Last of all the master
+bit-identical. The ghost hands (ghost.py) are a geometry in the same
+camera (plan 26 A3): by default their own layer, laid over the finished
+frame (or onto it before the effects); wired into the scene, solid,
+before the shape; off, the frame is untouched. Last of all the master
 dim (`Renderer.dim`, the crossfader's `output.dim`; plan 15 WP3)
 multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
@@ -83,6 +85,7 @@ import numpy as np
 from .fx import FACES, SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
+    EYE_FAR,
     EYE_FOV,
     EYE_NEAR,
     SCALE,
@@ -98,7 +101,7 @@ from .geometry import (
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
-from .graph import Frame, Graph, default_graph, graph_key
+from .graph import Frame, Graph, Wiring, default_graph, graph_key
 from .lookback import DreamState, Lookback
 from .outputs import Handoff, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -131,6 +134,13 @@ EYE_W = f"{EYE_NEAR * 1.2:.6f}"     # the nearest clip w a stroke end is kept at
 # writes depth only above this alpha (`Renderer._depth_pass`). Faint
 # fills and far edges stay see-through to depth as they are to the eye
 DEPTH_ALPHA = 0.25
+
+# plan 26 A3, the depth-aware composite (`LAYER_FS`, `Renderer.lay`): a
+# layer's texel is hidden where the scene's visible surface is nearer the
+# eye by more than this, in world units (shape radii; the default
+# calibration puts about 170 mm of the Leap's box in one) — about 8 mm, so
+# a fingertip touching a face is not cut by the depth buffers' rounding
+LAYER_DEPTH_BIAS = 0.05
 
 LINE_VS = """
 #version 330
@@ -222,6 +232,46 @@ void main() {
         c = texelFetch(u_src, q, 0);
     }
     if (u_opaque != 0) c.a = 1.0;
+    f_color = c;
+}
+"""
+
+# a layer laid onto a picture (plan 26 A3, `Renderer.lay`: the graph's
+# Composite node, and an output's hands over when its wiring is not plain
+# over): premultiplied × its opacity — `ghost.COMPOSITE_FS`'s arithmetic,
+# so plain over is the same bytes — mirrored by `u_flip` like the frame;
+# depth-aware (`u_depth_on`), a texel is dropped where the scene's visible
+# surface is nearer the eye than the layer's by more than `u_bias` (world
+# units, both depths linearised through the eye's clip planes). Where the
+# scene wrote no depth (the far plane) the layer always shows, and so does
+# a texel whose resolved depth is the far plane: at a multisampled
+# silhouette the colour is the samples' mean and the depth one sample
+LAYER_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_layer;
+uniform float u_alpha;
+uniform ivec2 u_flip;
+uniform int u_depth_on;
+uniform sampler2D u_layer_depth;
+uniform sampler2D u_scene_depth;
+uniform vec2 u_clip;         // the eye's near and far planes
+uniform float u_bias;
+out vec4 f_color;
+float lin(float d) {
+    float z = d * 2.0 - 1.0;
+    return 2.0 * u_clip.x * u_clip.y / (u_clip.y + u_clip.x - z * (u_clip.y - u_clip.x));
+}
+void main() {
+    vec2 uv = v_uv;
+    if (u_flip.x != 0) uv.x = 1.0 - uv.x;
+    if (u_flip.y != 0) uv.y = 1.0 - uv.y;
+    vec4 c = texture(u_layer, uv) * u_alpha;
+    if (u_depth_on != 0) {
+        float ds = texture(u_scene_depth, uv).r;
+        float dl = texture(u_layer_depth, uv).r;
+        if (ds < 1.0 && dl < 1.0 && lin(dl) > lin(ds) + u_bias) c = vec4(0.0);
+    }
     f_color = c;
 }
 """
@@ -519,6 +569,16 @@ def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
     return int(fbo.samples or 0)
 
 
+def _readable_depth(ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Texture:
+    """A depth texture a shader can read as a value: no comparison,
+    nearest-sampled (attached, it is an ordinary depth buffer)."""
+    t = ctx.depth_texture(size)
+    t.compare_func = ""
+    t.filter = (moderngl.NEAREST, moderngl.NEAREST)
+    t.repeat_x = t.repeat_y = False
+    return t
+
+
 class SceneTarget:
     """The texture the scene is drawn into: RGBA8 at the output's pixel
     size, through an MSAA renderbuffer that resolves into it when the
@@ -541,6 +601,13 @@ class SceneTarget:
         self._msaa: moderngl.Framebuffer | None = None    # on the renderbuffer, if any
         self.depth: moderngl.Texture | None = None        # single-sampled: the depth
         self._depth_rb = None                             # multisampled: its renderbuffer
+        # plan 26 A3: multisampled, the depth resolved for a node that reads
+        # it (`depth_texture`), made on first ask: a depth texture and the
+        # framebuffer the blit lands in (a colour renderbuffer beside it,
+        # as a blit wants one)
+        self._rdepth: moderngl.Texture | None = None
+        self._rfbo: moderngl.Framebuffer | None = None
+        self._rcol = None
 
     def ensure(self, size: tuple[int, int], samples: int) -> None:
         if size == self.size and samples == self.samples and self.tex is not None:
@@ -556,7 +623,7 @@ class SceneTarget:
             self._msaa = self.ctx.framebuffer(color_attachments=[rb],
                                               depth_attachment=self._depth_rb)
         else:
-            self.depth = self.ctx.depth_texture(size)
+            self.depth = _readable_depth(self.ctx, size)
             self.fbo = self.ctx.framebuffer(color_attachments=[self.tex],
                                             depth_attachment=self.depth)
 
@@ -569,13 +636,33 @@ class SceneTarget:
         if self._msaa is not None:
             self.ctx.copy_framebuffer(self.fbo, self._msaa)
 
+    def depth_texture(self) -> moderngl.Texture | None:
+        """The scene's depth as a texture a shader reads (plan 26 A3, a
+        depth-aware composite): the depth attachment itself when single-
+        sampled; multisampled, resolved now (one sample per pixel) into a
+        texture made on first ask. Call it after the scene pass."""
+        if self.tex is None:
+            return None
+        if self._msaa is None:
+            return self.depth
+        if getattr(self, "_rdepth", None) is None:
+            self._rcol = self.ctx.renderbuffer(self.size, 4)
+            self._rdepth = _readable_depth(self.ctx, self.size)
+            self._rfbo = self.ctx.framebuffer(color_attachments=[self._rcol],
+                                              depth_attachment=self._rdepth)
+        self.ctx.copy_framebuffer(self._rfbo, self._msaa)
+        return self._rdepth
+
     def release(self) -> None:
-        # getattr: a target from before A2 has no depth
+        # getattr: a target from before A2 has no depth, from before A3 no
+        # resolved one
         for res in (self._msaa, self.fbo, self.tex, getattr(self, "depth", None),
-                    getattr(self, "_depth_rb", None)):
+                    getattr(self, "_depth_rb", None), getattr(self, "_rfbo", None),
+                    getattr(self, "_rdepth", None), getattr(self, "_rcol", None)):
             if res is not None:
                 res.release()
         self._msaa = self.fbo = self.tex = self.depth = self._depth_rb = None
+        self._rfbo = self._rdepth = self._rcol = None
         self.size, self.samples = (0, 0), -1
 
 
@@ -812,6 +899,13 @@ class Renderer:
         self._frames: dict[int, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
+        # plan 26 A3: the program a Composite node lays a layer with, on
+        # first use; and the wiring the default graph is built from (where
+        # the hands are drawn, how their layer is laid on, what the history
+        # captures) — today's frame until A4 reads one from a preset
+        self._lay_prog: moderngl.Program | None = None
+        self._lay_vao: moderngl.VertexArray | None = None
+        self.wiring = Wiring()
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
@@ -932,10 +1026,11 @@ class Renderer:
         # old `PassTimer`, with an `end_frame` of another shape
         self._graph = None
         self._drop_timer()
-        for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None)):
+        for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
+                    getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
                 res.release()
-        self._show_prog = self._show_vao = None
+        self._show_prog = self._show_vao = self._lay_prog = self._lay_vao = None
         # the tiles' and swatches' program: its head and tail are this
         # module's strings, so it is made again from them on next use
         # (patterns.glsl's own saves rebuild it by mtime)
@@ -1168,7 +1263,8 @@ class Renderer:
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
         stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
-                 "layer": False, "readout": False}
+                 "layer": False, "readout": False,
+                 "routes": [(None, False)] * len(views)}
         self.stats = stats
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx.active(),
@@ -1184,21 +1280,29 @@ class Renderer:
 
     def _graph_for(self, views: list[View]) -> Graph:
         """The render graph for these views: the last one while their
-        switches have not changed (`graph.graph_key`), else the default
-        graph built from them (`graph.default_graph`). getattr: a renderer
-        from before the graph has none."""
+        switches and the wiring have not changed (`graph.graph_key`,
+        `Renderer.wiring`), else the default graph built from them
+        (`graph.default_graph`). getattr: a renderer from before the graph
+        (or the wiring) has none."""
         key = graph_key(views)
+        wiring = getattr(self, "wiring", None) or Wiring()
         graph = getattr(self, "_graph", None)
-        if graph is None or graph.key != key:
-            graph = self._graph = default_graph(views)
+        if graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring:
+            graph = self._graph = default_graph(views, wiring)
         return graph
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
-                 size: tuple[int, int], readout: moderngl.Texture | None = None) -> None:
-        """One view's picture: the pipeline's frame (already there when it
-        was drawn direct), the hands over it in the same rect, the readout
-        layer over that when there is one, its dim."""
+                 size: tuple[int, int], readout: moderngl.Texture | None = None,
+                 lay=None, blend: str = "over") -> None:
+        """One view's picture: the pipeline's frame (`key`, the pipeline its
+        end node closes, `outputs.SCENE` …; already there when it was drawn
+        direct), the hands over it in the same rect, the readout layer over
+        that when there is one, its dim. `lay(target, rect, opaque, flip)`
+        lays the hands when the output's wiring is not plain over (plan 26
+        A3: add, depth-aware); a presenter's hand-off carries `blend` and
+        honours add, and lays a depth-aware layer plain over (the depths
+        stay in this context)."""
         ctx, gh = self.ctx, self.ghost
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
         # plan 23 WP1: this output's mirror, its last step — the frame, the
@@ -1215,7 +1319,8 @@ class Renderer:
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
                                 hands=gh.tex if after else None, readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
-                                bg_alpha=float(v.bg_alpha), flip=flip)
+                                bg_alpha=float(v.bg_alpha), flip=flip,
+                                blend="add" if blend == "add" else "over")
             return
         tgt, rect = v.target, v.rect
         opaque = v.bg_alpha >= 1.0
@@ -1231,7 +1336,9 @@ class Renderer:
         # them and the history (captured from the scene) never holds them
         if after or readout is not None:
             try:
-                if after:
+                if after and lay is not None:
+                    lay(tgt, inner, opaque, flip)
+                elif after:
                     gh.composite(tgt, inner, opaque=opaque, flip=flip)
                 if readout is not None:      # the guide and its labels, never bent
                     gh.composite_readout(tgt, inner, opaque=opaque, flip=flip)
@@ -1284,7 +1391,71 @@ class Renderer:
         self._show_prog, self._show_vao = prog, vao
         return prog, vao
 
-    def _frame_target(self, key: int, size: tuple[int, int]
+    def lay(self, tex: moderngl.Texture | None, target: moderngl.Framebuffer, rect: tuple,
+            blend: str = "over", alpha: float = 1.0, opaque: bool = True,
+            flip: tuple[bool, bool] = (False, False), depth: moderngl.Texture | None = None,
+            scene_depth: moderngl.Texture | None = None) -> bool:
+        """A layer (`tex`, premultiplied, frame-sized) into `target`'s
+        `rect` at `alpha` (plan 26 A3, the Composite node's blend): "over"
+        — `Ghost.composite`'s blend and arithmetic, the same bytes — "add",
+        or "depth": over, hidden where `scene_depth` is nearer than the
+        layer's own `depth` (`LAYER_FS`, `LAYER_DEPTH_BIAS`; plain over when
+        either depth is missing). On an opaque ground the target's alpha is
+        left as it is; on a see-through one the layer adds its coverage
+        (add: its colour only). Leaves `target` bound with `rect` and the
+        frame's blend on, a raise included. False when there is no layer."""
+        if tex is None:
+            return False
+        prog, vao = self._lay_program()
+        ctx = self.ctx
+        aware = blend == "depth" and depth is not None and scene_depth is not None
+        try:
+            target.use()
+            ctx.viewport = tuple(rect)
+            ctx.enable(moderngl.BLEND)
+            one, inv = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+            if blend == "add":
+                ctx.blend_func = ((one, one, moderngl.ZERO, one) if opaque else
+                                  (one, one, one, inv))
+            else:
+                ctx.blend_func = ((one, inv, moderngl.ZERO, one) if opaque else
+                                  (one, inv, one, inv))
+            tex.use(location=0)
+            prog["u_layer"].value = 0
+            prog["u_alpha"].value = float(alpha)
+            prog["u_flip"].value = (int(bool(flip[0])), int(bool(flip[1])))
+            prog["u_depth_on"].value = int(aware)
+            if aware:
+                depth.use(location=1)
+                scene_depth.use(location=2)
+                prog["u_layer_depth"].value = 1
+                prog["u_scene_depth"].value = 2
+                prog["u_clip"].value = (float(EYE_NEAR), float(EYE_FAR))
+                prog["u_bias"].value = float(LAYER_DEPTH_BIAS)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+            target.use()
+            ctx.viewport = tuple(rect)
+        return True
+
+    def _lay_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
+        """`lay`'s program, built on first use (getattr: a renderer from
+        before A3 has none)."""
+        prog, vao = getattr(self, "_lay_prog", None), getattr(self, "_lay_vao", None)
+        if prog is not None and vao is not None:
+            return prog, vao
+        prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=LAYER_FS)
+        try:
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception:
+            prog.release()
+            raise
+        self._lay_prog, self._lay_vao = prog, vao
+        return prog, vao
+
+    def _frame_target(self, key, size: tuple[int, int]
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
         """The frame texture for a pipeline: RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
@@ -1621,9 +1792,16 @@ class Renderer:
             ctx.enable(moderngl.BLEND)
         return self.cover.tex
 
+    def clear_scene(self) -> None:
+        """The scene's clear, into whatever is bound: the premultiplied
+        ground (black at `bg_alpha`) and the depth to the far plane. The
+        scene node clears before its solid geometry (plan 26 A3); a scene
+        of the shape alone clears inside `draw_scene`, as it always did."""
+        self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
+
     def draw_scene(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
-        t_now: float | None = None,
+        t_now: float | None = None, clear: bool = True,
     ) -> None:
         """The scene pass alone, into whatever is bound: clear, faces, edges,
         points. The pattern uniforms come from `s.pattern_mod`; `t_now` pins
@@ -1642,7 +1820,11 @@ class Renderer:
         as before and drawn with the depth test on but no depth written
         (whatever solid geometry is already in the depth buffer hides it;
         A3's hands), then `_depth_pass` writes its nearest visible
-        surface for what comes after."""
+        surface for what comes after.
+
+        Plan 26 A3: `clear` False draws over what is bound — the scene node
+        cleared it and drew the solid geometry (the hands) first, whose
+        depth hides the shape behind them."""
         g = geom(s.shape)
         # a shape whose W planes are masked is drawn at its own angles
         # (geometry.view_angles); every other shape at the view's
@@ -1726,7 +1908,8 @@ class Renderer:
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a)). The
         # clear clears the depth too (to the far plane)
         bg_alpha = getattr(self, "bg_alpha", 1.0)
-        self.ctx.clear(*BG, bg_alpha)
+        if clear:
+            self.ctx.clear(*BG, bg_alpha)
         # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
         # so a faint fill lowers the ground's alpha and a transparent window
         # shows the desktop through it. Off: alpha composites over the ground

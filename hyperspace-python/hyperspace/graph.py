@@ -1,28 +1,39 @@
-"""The render graph (plan 26 A1): the frame as nodes, evaluated in
+"""The render graph (plan 26 A1, A3): the frame as nodes, evaluated in
 dependency order.
 
 `Renderer._draw_frame` (render.py) used to be a fixed list of passes.
 It is now "build or reuse the graph for this frame's views, evaluate
-it": `default_graph` builds today's three pipelines (`outputs.SCENE`,
-`SCENE_HANDS`, `HANDS`) as nodes from each output's `Switches`, and
-`Graph.evaluate` runs the nodes once each, in an order computed when the
-graph is built, never per frame. The default graphs draw every golden
-frame of A0 byte for byte: this module moves no pixel.
+it": `default_graph` builds the frame as nodes from each output's
+`Switches` and the renderer's `Wiring`, and `Graph.evaluate` runs the
+nodes once each, in an order computed when the graph is built, never per
+frame. With the default wiring the graph is today's three pipelines
+(`outputs.SCENE`, `SCENE_HANDS`, `HANDS`) and draws every golden frame
+without hands byte for byte.
 
 Seven node kinds. The owner's four (wishlist, "Render graph design
 decisions"):
 
-- **Geometry** (`Shape`): draw calls in the shared camera, no framebuffer
-  of its own. A3 adds the hands; A4 a point cloud.
-- **Scene** (`Scene`): any number of geometries into one colour target
-  (`render.SceneTarget`; depth arrives with A2).
-- **Layer** (`HandsLayer`, `Cover`): one geometry into its own target.
-  In A1 the hands' layer wraps `Ghost.layer` — the hands keep their own
-  camera until A3 — and the cover is the faces' coverage mask the
+- **Geometry** (`Shape`, `Hands`): draw calls in the shared camera (the
+  eye, `eye.*`), no framebuffer of its own. The shape is the see-through
+  4D shape; the hands (`ghost.py`'s parts and styles, plan 26 A3) are
+  solid geometry, settled once a frame (`Hands.run`) and drawn by
+  whatever holds them — the scene, the hands' layer, or both. A4 adds a
+  point cloud.
+- **Scene** (`Scene`): any number of geometries into one colour + depth
+  target (`render.SceneTarget`): the solid geometry first (the hands,
+  depth written), then the sorted see-through shape, depth-tested against
+  them and writing its own visible surface after (`render.DEPTH_ALPHA`).
+- **Layer** (`HandsLayer`, `Readout`, `Cover`): one geometry into its own
+  target. The hands' layer is the hands alone in the shared camera with
+  their own colour and depth (`Ghost.layer`); the readout is the guide and
+  the tethers' labels, a texture laid on at the outputs, never through an
+  effect (register row 80); the cover is the faces' coverage mask the
   look-back's occlusion reads.
-- **Composite** (`Composite`): two images, over — the hands laid onto the
-  look-back's picture (or the ground) before the effects, today's
-  "through". Add and depth-aware come with A3.
+- **Composite** (`Composite`): `over` laid on `under` — over, add, or
+  depth-aware (hidden where the scene's visible surface is nearer,
+  `render.LAYER_DEPTH_BIAS`): the hands onto the look-back's picture before
+  the effects (today's "through"), or the hands onto the scene for the
+  history.
 
 And the three that wrap what exists (A1's call, registered):
 
@@ -32,8 +43,9 @@ And the three that wrap what exists (A1's call, registered):
 - **History** (`History`, `Capture`): the look-back (`lookback.Lookback`)
   as two nodes, because its composite must read the ring before the
   frame's capture changes it: `history` lays the echoes and the dream
-  over its input; `capture` puts its input into the ring after every
-  composite of the frame has run.
+  over its input; `capture` puts its input — whatever it is wired to: the
+  scene, or the scene with the hands' layer (A3) — into the ring after
+  every composite of the frame has run.
 - **Output** (`Output`): one render output — `fit`, flip, the hands over,
   the readout, the dim — exactly `Renderer._compose`, so an output in
   another context gets the same five-step `outputs.Handoff`.
@@ -48,22 +60,25 @@ quantise the picture, so the painted nodes are pulled by their consumer
 and the pipeline's last node (`Fx`) decides where the picture lands:
 **a pipeline with one consumer at the frame size, unflipped, paints
 straight into that output; otherwise once into a frame texture that each
-of its outputs shows** (`Renderer._frame_target`, `_show`), as
-`Renderer._pipeline` did.
+of its outputs shows** (`Renderer._frame_target`, `_show`). A consumer
+that needs a texture of a painted node (the capture of a composite) gets
+it materialised once a frame (`Composite.image`).
 
-**What is static and what is per frame.** The node set and the order are
-a function of the views' switches alone (`graph_key`): the renderer
-keeps the last graph and builds a new one only when that key changes.
-Which pipelines *run* in a frame is `outputs.route` per view, resolved
-after the hands' layer has drawn (whether a hand shows this frame is only
-known then, exactly as before) — a pipeline with no output this frame is
-skipped and its nodes read 0 ms. A3 turns the route into wiring.
+**What is static and what is per frame.** The node set, the wiring and
+the order are a function of the views' switches and the renderer's
+`Wiring` (`graph_key`, `Graph.wiring`): the renderer keeps the last graph
+and builds a new one only when either changes. Each output is wired to
+its pipeline's end; per frame a through pipeline whose layer is not bent
+— no effect on, or no hand drawn — stands down for the pipeline it was
+laid onto, with the layer laid over at the output instead (`Fx.fallback`,
+`Output.settle`): `outputs.route`'s table, as wiring. A pipeline with no
+output this frame is skipped and its nodes read 0 ms.
 
 Render stack (ARCHITECTURE §3): this module reads params through the
 objects it is handed and never writes one; it imports moderngl and its
 sibling render modules only, never params, routing, library, preset,
-undo or control. Node methods are `run`, `paint`, `draw`, `image` —
-never `apply`.
+undo or control. Node methods are `run`, `paint`, `draw`, `image`,
+`depth` — never `apply`.
 """
 
 from __future__ import annotations
@@ -73,11 +88,46 @@ from typing import Any, ClassVar
 
 import moderngl
 
-from .outputs import HANDS, NAMES, PIPELINES, SCENE, SCENE_HANDS, Switches, View, route
+from .outputs import HANDS, NAMES, PIPELINES, SCENE, SCENE_HANDS, Switches, View
 
 # port types: a colour picture at the frame's size, a one-channel mask at
 # the frame's size, or draw calls (a geometry, drawn by its scene or layer)
 IMAGE, MASK, GEOMETRY = "image", "mask", "geometry"
+
+# ---------------------------------------------------------------- the wiring
+
+# where the hands geometry is drawn: its own layer, laid on at the outputs
+# or before the effects (today), or inside the scene (A3) — then an output
+# without the scene still gets the layer, so the same hands can be in the
+# scene on the projector and a clean layer on the glass
+HANDS_IN = ("layer", "scene")
+# how a layer is laid on: premultiplied over (today), added, or over but
+# hidden where the scene's visible surface is nearer (depth-aware)
+BLENDS = ("over", "add", "depth")
+# what the history captures: the scene (today), or the scene with the
+# hands' layer laid on (with the hands inside the scene, the scene holds
+# them already)
+HISTORY_OF = ("scene", "scene+hands")
+
+
+@dataclass(frozen=True)
+class Wiring:
+    """The choices the default graph is built from besides the outputs'
+    switches (plan 26 A3): where the hands are drawn, how their layer is
+    laid on, what the history captures. The defaults are today's frame.
+    The renderer holds one (`Renderer.wiring`); A4 reads it from a
+    preset's `graph` section."""
+
+    hands: str = "layer"
+    blend: str = "over"
+    history: str = "scene"
+
+    def __post_init__(self) -> None:
+        for name, value, allowed in (("hands", self.hands, HANDS_IN),
+                                     ("blend", self.blend, BLENDS),
+                                     ("history", self.history, HISTORY_OF)):
+            if value not in allowed:
+                raise ValueError(f"wiring {name} {value!r}: one of {', '.join(allowed)}")
 
 
 @dataclass
@@ -86,8 +136,8 @@ class Frame:
     `Renderer._draw_frame` settled before evaluation (the frame's size
     under the cap, the first output's target to bind again after a
     failure, the chain's state), and what the nodes fill in as they run
-    (the cover, the hands' layer, the routes, each pipeline's frame
-    texture, the failures, `stats`)."""
+    (the cover, the hands' layer, the readout, each pipeline's frame
+    texture, the failures, `stats`, each node's per-frame `data`)."""
 
     r: Any                                   # the Renderer (duck-typed: graph.py never imports render)
     ctx: moderngl.Context
@@ -108,31 +158,26 @@ class Frame:
     cover: moderngl.Texture | None = None
     hands: bool = False                      # the hands' layer drew (a hand shows)
     readout: moderngl.Texture | None = None
-    frames: dict[int, moderngl.Texture | None] = field(default_factory=dict)  # key → texture; None: direct
+    frames: dict[int, moderngl.Texture | None] = field(default_factory=dict)  # end → texture; None: direct
     failed: set[int] = field(default_factory=set)
-    _routes: list[tuple[int | None, bool]] | None = None
-    _users: dict[int, list[int]] | None = None
+    data: dict[str, Any] = field(default_factory=dict)    # a node's per-frame values, by name
+    graph: Graph | None = None
+    _users: dict[str, list[int]] | None = None
 
-    def routes(self) -> list[tuple[int | None, bool]]:
-        """Each view's (pipeline, hands after), `outputs.route` — settled
-        once, the first time a node asks, which is after the hands' layer
-        (A1: the route is per frame; A3 makes it wiring)."""
-        if self._routes is None:
-            # right only once `hands` is settled: every caller runs after
-            # the hands' layer — `Fx` through `after=gate`, `Output` through
-            # its `layer` port (default_graph)
-            self._routes = [route(v.switches, self.fx_on, self.hands) for v in self.views]
-            users: dict[int, list[int]] = {}
-            for i, (key, _) in enumerate(self._routes):
-                if key is not None:
-                    users.setdefault(key, []).append(i)
+    def users(self, end: Node) -> list[int]:
+        """The views pipeline end `end` feeds this frame (indexes into
+        `views`): each output's wired end, settled (`Output.settle`).
+        Asked by the pipeline ends, which run after the hands' layer —
+        whether a hand shows decides where a through output's picture
+        comes from."""
+        if self._users is None:
+            users: dict[str, list[int]] = {}
+            for out in self.graph.outputs if self.graph is not None else ():
+                got, _ = out.settle(self)
+                if got is not None:
+                    users.setdefault(got.name, []).append(out.index)
             self._users = users
-        return self._routes
-
-    def users(self, key: int) -> list[int]:
-        """The views pipeline `key` feeds this frame (indexes into `views`)."""
-        self.routes()
-        return self._users.get(key, [])
+        return self._users.get(end.name, [])
 
     def timed(self, name: str):
         """``with frame.timed(node.name):`` — the node's GPU time this frame."""
@@ -146,15 +191,16 @@ class Node:
     dependencies that carry no image (the capture after every pipeline).
 
     `run(frame)` is called once a frame, in the graph's order. A node
-    whose picture is a texture overrides `image(frame)`; one that paints
-    into its consumer's framebuffer overrides `paint(frame, dst)`. The
-    default `paint` shows the texture 1:1, so any image can feed any
-    image port."""
+    whose picture is a texture overrides `image(frame)` (and `depth` when
+    it has one); one that paints into its consumer's framebuffer
+    overrides `paint(frame, dst)`. The default `paint` shows the texture
+    1:1, so any image can feed any image port."""
 
     KIND = "node"
     INPUTS: ClassVar[dict[str, str]] = {}      # port → type
     OUTPUT: str | None = None
     TIMED = True              # a line on the SYSTEM page; a geometry's time is its scene's
+    SOLID = False             # a geometry drawn opaque, before the see-through shape
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -180,6 +226,25 @@ class Node:
         """The texture this node made this frame, or None when it paints."""
         return None
 
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        """The depth beside `image` (the shared camera's), or None."""
+        return None
+
+    def alpha(self, frame: Frame) -> float:
+        """The opacity this node's picture is laid on at (a layer's)."""
+        return 1.0
+
+    def lay(self, frame: Frame, dst: moderngl.Framebuffer, rect: tuple, blend: str,
+            opaque: bool, flip: tuple[bool, bool] = (False, False),
+            scene_depth: moderngl.Texture | None = None) -> None:
+        """This node's picture laid into `dst`'s `rect` with `blend`, at its
+        opacity (`Renderer.lay`), depth-aware against `scene_depth` — what
+        a Composite or an Output asks of the layer on its `over` port."""
+        frame.r.lay(self.image(frame), dst, rect, blend=blend, alpha=self.alpha(frame),
+                    opaque=opaque, flip=flip,
+                    depth=self.depth(frame) if scene_depth is not None else None,
+                    scene_depth=scene_depth)
+
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         """This node's picture into `dst`'s viewport: the texture 1:1 when
         it made one (nothing when it made none this frame)."""
@@ -198,11 +263,13 @@ class Node:
 
 class Shape(Node):
     """The 4D shape (`Renderer.draw_scene`): the faces, the edges, the
-    points, instanced, painter-sorted, in the CPU camera. `prepare`
-    makes the faces' picture while an effect is aimed at them
-    (`Renderer._face_picture`, before the scene's target is bound);
-    `draw` draws into whatever is bound. A1 keeps the scene's clear inside
-    `draw_scene`, so a scene holds one shape; A3 moves it to the scene."""
+    points, instanced, painter-sorted, in the shared camera — see-through:
+    depth-tested against the solid geometry already drawn, its visible
+    surface written after. `prepare` makes the faces' picture while an
+    effect is aimed at them (`Renderer._face_picture`, before the scene's
+    target is bound); `draw` draws into whatever is bound — clearing it
+    first when it is the scene's only geometry (`clear`), as it always
+    did."""
 
     KIND = "geometry"
     OUTPUT = GEOMETRY
@@ -211,42 +278,147 @@ class Shape(Node):
     def prepare(self, frame: Frame) -> None:
         frame.r._pic = frame.r._face_picture(frame.s, frame.t)
 
-    def draw(self, frame: Frame) -> None:
+    def draw(self, frame: Frame, clear: bool = True) -> None:
         try:
-            frame.r.draw_scene(frame.s, frame.w, frame.h, frame.dpr, frame.t)
+            frame.r.draw_scene(frame.s, frame.w, frame.h, frame.dpr, frame.t, clear=clear)
         finally:
             frame.r._pic = None          # handed to that one scene pass only
 
 
+class Hands(Node):
+    """The hands as geometry (plan 26 A3): `Ghost`'s styles (`ghost.style`:
+    `hands_parts` … `marionette_parts`) in the shared camera
+    (`ghost.shared_camera`: the eye and the Leap calibration). `run`
+    settles the frame's poses once (`Ghost.settle`: the fades stepped, the
+    camera fitted) for every draw of them; `draw` puts them into the bound
+    framebuffer as solid geometry — the scene's, before the see-through
+    shape (`Ghost.draw_solid`). The hands' layer and the readout draw the
+    same settled poses into their own targets. The `ghost.*` params are
+    this node's (the naming rule: the first hands node keeps today's ids).
+
+    Its time is its own SYSTEM line while a scene draws it (`TIMED`), and
+    the layer's otherwise. A draw that raises costs the scene nothing:
+    the frame goes on without the hands and `Ghost.error` says why."""
+
+    KIND = "geometry"
+    OUTPUT = GEOMETRY
+    SOLID = True
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        self.in_scene = False         # a Scene holds it: its draws there are its own line
+
+    @property
+    def TIMED(self) -> bool:     # the class attribute, per instance
+        return self.in_scene
+
+    def run(self, frame: Frame) -> None:
+        w, h = frame.size
+        s, r = frame.s, frame.r
+        frame.data[self.name] = None
+        try:
+            frame.data[self.name] = r.ghost.settle(
+                frame.t, max(w, 1) / max(h, 1), getattr(s, "eye_fov", None),
+                getattr(s, "eye_distance", None))
+        except Exception as e:  # noqa: BLE001 — a malformed skeleton costs the hands only
+            r._hands_failed(e, frame.target, frame.vp)
+
+    def now(self, frame: Frame):
+        """This frame's settled (poses, view_proj, eye), or None."""
+        return frame.data.get(self.name)
+
+    def prepare(self, frame: Frame) -> None:
+        """Nothing before the scene's target is bound."""
+
+    def draw(self, frame: Frame) -> None:
+        r = frame.r
+        try:
+            frame.stats["in_scene"] = bool(r.ghost.draw_solid(self.now(frame)))
+        except Exception as e:  # noqa: BLE001 — the hands must not take the scene down
+            if not r.ghost.error:
+                r.ghost.error = f"ghost hands in the scene: {type(e).__name__}: {e}"[:160]
+            r._rebind(r.scene.draw_fbo, (0, 0, *frame.size))
+
+
 # ---------------------------------------------------------------- scene
 
+def _geometry_port(i: int) -> str:
+    """A scene's i-th geometry port: `geometry`, `geometry.2`, … (the
+    naming rule's marker form)."""
+    return "geometry" if i == 0 else f"geometry.{i + 1}"
+
+
 class Scene(Node):
-    """The scene: its geometries into the renderer's `SceneTarget` (colour,
-    at the frame's size and output 1's sample count), resolved into its
-    texture. The blank texture takes the sampler units first, so the
-    scene texture is never bound while it is the target."""
+    """The scene: its geometries into the renderer's `SceneTarget` (colour
+    and depth, at the frame's size and output 1's sample count), resolved
+    into its texture. Any number of geometries, one port each
+    (`geometry`, `geometry.2`, …): the solid ones first (the hands, depth
+    written), then the see-through shape, painter-sorted and depth-tested
+    against them (A2's depth pass then writes its visible surface). With
+    no solid geometry the pass is exactly A2's — the shape clears and
+    draws. The blank texture takes the sampler units first, so the scene
+    texture is never bound while it is the target."""
 
     KIND = "scene"
-    INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
     OUTPUT = IMAGE
+
+    def __init__(self, name: str, geometries: tuple[Node, ...] | list[Node] = (),
+                 after: tuple[Node, ...] = (), **inputs: Node | None):
+        geoms = list(geometries)
+        if "geometry" in inputs:
+            geoms.insert(0, inputs.pop("geometry"))
+        self.INPUTS = {_geometry_port(i): GEOMETRY for i in range(max(len(geoms), 1))}
+        super().__init__(name, after, **{_geometry_port(i): g for i, g in enumerate(geoms)},
+                         **inputs)
+        for g in geoms:
+            if g is not None and g.SOLID and hasattr(g, "in_scene"):
+                g.in_scene = True
+
+    def geometries(self) -> list[Node]:
+        return [g for g in self.inputs.values() if g is not None]
 
     def run(self, frame: Frame) -> None:
         r, ctx = frame.r, frame.ctx
         r.scene.ensure(frame.size, frame.samples)
         for unit in range(4):
             r._blank.use(location=unit)
-        geometries = [g for g in self.inputs.values() if g is not None]
+        geometries = self.geometries()
+        solids = [g for g in geometries if g.SOLID]
+        if not solids:                    # A2's scene pass, byte for byte
+            with frame.timed(self.name):
+                for g in geometries:
+                    g.prepare(frame)
+                r.scene.draw_fbo.use()
+                ctx.viewport = (0, 0, *frame.size)
+                for g in geometries:
+                    g.draw(frame)
+                r.scene.resolve()
+            return
+        rest = [g for g in geometries if not g.SOLID]
         with frame.timed(self.name):
-            for g in geometries:
+            for g in rest:
                 g.prepare(frame)
             r.scene.draw_fbo.use()
             ctx.viewport = (0, 0, *frame.size)
-            for g in geometries:
+            r.clear_scene()
+        for g in solids:                  # solid first, depth written
+            with frame.timed(g.name):
                 g.draw(frame)
+        with frame.timed(self.name):
+            for g in rest:                # then the see-through shape
+                g.draw(frame, clear=False)
             r.scene.resolve()
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         return frame.r.scene.tex
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        """The scene's depth at the frame's size, resolved out of the
+        multisampled target on the first ask of a frame."""
+        key = self.name + "#depth"
+        if key not in frame.data:
+            frame.data[key] = frame.r.scene.depth_texture()
+        return frame.data[key]
 
 
 # ---------------------------------------------------------------- layers
@@ -272,32 +444,95 @@ class Cover(Node):
 
 
 class HandsLayer(Node):
-    """The hands' layer (`Ghost.layer`): the hands in their own camera,
-    opaque with depth and their own MSAA, into their own texture — and,
-    while some output puts them through the effects, the guide and the
-    tethers' labels into a second one (`Ghost.readout`) that no effect
-    bends. Runs only while some view shows hands; a pass that raises is
+    """The hands' layer (`Ghost.layer`): its geometry — the hands, settled
+    once a frame by the `Hands` node — drawn alone in the shared camera,
+    opaque with depth and their own MSAA, into their own colour and depth
+    textures; and the guide and the tethers' labels into a second one
+    (`Ghost.readout`) that no effect bends — while some output puts the
+    hands through the effects (`readout` "through", today's rule), or
+    always (`readout` "always": the hands are also inside the scene, so
+    the guide may never be in a picture the effects bend). With no
+    geometry wired it settles the hands itself. A pass that raises is
     caught (`Renderer._hands_failed`): the frame goes on without the
-    hands and `Ghost.error` says why. A3 makes the hands a geometry."""
+    hands and `Ghost.error` says why."""
 
     KIND = "layer"
+    INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
     OUTPUT = IMAGE
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), readout: str = "through",
+                 **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        self.readout = readout
 
     def run(self, frame: Frame) -> None:
         r, views = frame.r, frame.views
         frame.hands, frame.readout = False, None
-        if any(v.switches.hands for v in views):
-            through = frame.fx_on and any(v.switches.hands and v.switches.through for v in views)
-            try:
-                with frame.timed(self.name):
-                    frame.hands = bool(r.ghost.layer(frame.size, frame.t, readout=through))
-            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
-                r._hands_failed(e, frame.target, frame.vp)
+        if self.readout == "always":
+            split = True
+        else:
+            split = frame.fx_on and any(v.switches.hands and v.switches.through for v in views)
+        geo = self.inputs["geometry"]
+        try:
+            with frame.timed(self.name):
+                if geo is not None:
+                    drew = r.ghost.layer(frame.size, frame.t, readout=split,
+                                         now=geo.now(frame), settled=True)
+                else:
+                    drew = r.ghost.layer(frame.size, frame.t, readout=split)
+            frame.hands = bool(drew)
+        except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
+            r._hands_failed(e, frame.target, frame.vp)
         frame.readout = r.ghost.readout if frame.hands else None
         frame.stats["layer"], frame.stats["readout"] = frame.hands, frame.readout is not None
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         return frame.r.ghost.tex if frame.hands else None
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        return frame.r.ghost.depth if frame.hands else None
+
+    def alpha(self, frame: Frame) -> float:
+        return float(frame.r.ghost.state.alpha)
+
+    def lay(self, frame: Frame, dst: moderngl.Framebuffer, rect: tuple, blend: str,
+            opaque: bool, flip: tuple[bool, bool] = (False, False),
+            scene_depth: moderngl.Texture | None = None) -> None:
+        """Plain over is `Ghost.composite`'s blend, as it always was; add
+        and depth-aware are `Renderer.lay`'s."""
+        if blend == "over" or (blend == "depth" and scene_depth is None):
+            frame.r.ghost.composite(dst, rect, opaque=opaque, flip=flip)
+            return
+        super().lay(frame, dst, rect, blend, opaque, flip, scene_depth)
+
+
+class Readout(Node):
+    """The readout alone (plan 26 A3): the guide and the tethers' labels
+    of the hands its geometry settled, into `Ghost.readout`, for the
+    outputs that show the hands — when the hands are drawn inside the
+    scene and no hands' layer runs to draw it (`Ghost.layer(…,
+    hands=False)`). Its own SYSTEM line."""
+
+    KIND = "layer"
+    INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
+    OUTPUT = IMAGE
+
+    def run(self, frame: Frame) -> None:
+        r, geo = frame.r, self.inputs["geometry"]
+        frame.readout = None
+        if geo is None:
+            return
+        try:
+            with frame.timed(self.name):
+                drew = r.ghost.layer(frame.size, frame.t, readout=True, now=geo.now(frame),
+                                     settled=True, hands=False)
+            frame.readout = r.ghost.readout if drew else None
+        except Exception as e:  # noqa: BLE001 — the guide must not take the frame down
+            r._hands_failed(e, frame.target, frame.vp)
+        frame.stats["readout"] = frame.readout is not None
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        return frame.readout
 
 
 # ---------------------------------------------------------------- history
@@ -327,8 +562,10 @@ class History(Node):
 
 
 class Capture(Node):
-    """The look-back's capture (`Lookback.capture`): its input into the
-    ring on the echoes' cadence, and out to the dream worker. Exactly
+    """The look-back's capture (`Lookback.capture`): its input — what it
+    is wired to: the scene by default, or the scene with the hands' layer
+    laid on (`Wiring.history`, a `Composite` materialised for it) — into
+    the ring on the echoes' cadence, and out to the dream worker. Exactly
     once a frame, after every pipeline has composited the history (a
     capture changes the echoes' weights, ages and tint, so one between
     two pipelines would give two outputs different echoes), whatever the
@@ -342,8 +579,9 @@ class Capture(Node):
     def run(self, frame: Frame) -> None:
         r = frame.r
         frame.stats["captures"] = 1
+        src = self.inputs["image"].image(frame)
         with frame.timed(self.name):
-            r.lookback.capture(self.inputs["image"].image(frame), r.scene.fbo)
+            r.lookback.capture(src, r.scene.fbo)
         if frame.fx_on and not frame.stats["chain_runs"]:
             r.fx.state.advance_to(frame.t)
 
@@ -351,16 +589,28 @@ class Capture(Node):
 # ---------------------------------------------------------------- composite
 
 class Composite(Node):
-    """`over` laid on `under`: the hands' layer onto the look-back's
-    picture (SCENE+HANDS) or onto the ground (HANDS, `under` None: the
-    clear at the renderer's `bg_alpha`), premultiplied at `ghost.alpha`
-    (`Ghost.composite`'s blend), before the effects. The hands failing
-    here is caught: the chain still runs on `under` alone and
-    `Ghost.error` says why."""
+    """`over` laid on `under` (`Renderer.lay`), premultiplied at `over`'s
+    opacity (`ghost.alpha` for the hands' layer): `blend` "over" (today's
+    `Ghost.composite`), "add", or "depth" — over, but hidden where the
+    image on the `depth` port (the scene) has a visible surface nearer the
+    eye (`render.LAYER_DEPTH_BIAS`), so a separate hands layer can still
+    go behind the shape. `under` None is the ground (the clear at the
+    renderer's `bg_alpha`). Painted into its consumer's framebuffer (the
+    chain's input, before the effects: today's "through"), or made once a
+    frame into a texture of its own for a consumer that needs one (the
+    capture: the history with the hands). The layer failing here is
+    caught: the picture is `under` alone and `Ghost.error` says why."""
 
     KIND = "composite"
-    INPUTS: ClassVar[dict[str, str]] = {"under": IMAGE, "over": IMAGE}
+    INPUTS: ClassVar[dict[str, str]] = {"under": IMAGE, "over": IMAGE, "depth": IMAGE}
     OUTPUT = IMAGE
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), blend: str = "over",
+                 **inputs: Node | None):
+        if blend not in BLENDS:
+            raise ValueError(f"composite {name!r}: blend {blend!r}, one of {', '.join(BLENDS)}")
+        super().__init__(name, after, **inputs)
+        self.blend = blend
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         r, ctx, size = frame.r, frame.ctx, frame.size
@@ -371,11 +621,39 @@ class Composite(Node):
             ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
         else:
             under.paint(frame, dst)
+        over = self.inputs["over"]
+        if over is None:
+            return
         try:
+            tex = over.image(frame)
+            if tex is None:
+                return
             with frame.timed(self.name):
-                r.ghost.composite(dst, (0, 0, *size), opaque=r.fx.opaque)
+                lay(frame, self.blend, over, self.inputs["depth"], dst, (0, 0, *size),
+                    r.fx.opaque)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             r._hands_failed(e, frame.target, frame.vp)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Painted once a frame into a texture of its own (the renderer's
+        frame texture under this node's name) for a consumer that needs a
+        texture — the capture."""
+        if self.name not in frame.data:
+            tex, fbo = frame.r._frame_target(self.name, frame.size)
+            fbo.viewport = (0, 0, *frame.size)
+            self.paint(frame, fbo)
+            frame.data[self.name] = tex
+        return frame.data[self.name]
+
+
+def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
+        dst: moderngl.Framebuffer, rect: tuple, opaque: bool,
+        flip: tuple[bool, bool] = (False, False)) -> None:
+    """`over`'s picture into `dst`'s `rect` with `blend` (`Node.lay`): at
+    its opacity; depth-aware against `depth_of`'s depth when the blend is
+    "depth" and both have one (else plain over)."""
+    scene_depth = depth_of.depth(frame) if (blend == "depth" and depth_of is not None) else None
+    over.lay(frame, dst, rect, blend, opaque, flip, scene_depth)
 
 
 # ---------------------------------------------------------------- fx
@@ -391,21 +669,40 @@ class Fx(Node):
     straight into the one output that takes it when that output is at
     the frame's size, unflipped and on this context, else into the
     pipeline's frame texture, once, for every output that takes it. A
-    pipeline no view routes to this frame does not run. A pipeline that
+    pipeline no view takes this frame does not run. A pipeline that
     raises marks its views (`View.error`, named after the pipeline) and
-    they show their ground."""
+    they show their ground.
+
+    A pipeline whose input lays a layer on before the effects (a
+    `Composite` with an `over`: today's "through") is only itself while
+    the layer is bent: an effect on and the layer drawn. Otherwise its
+    outputs take `fallback` — the pipeline it was laid onto, or the
+    ground (None) — with the layer laid over at the output instead
+    (`Output.settle`): the effects have nothing to bend."""
 
     KIND = "fx"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
     OUTPUT = IMAGE
 
     def __init__(self, name: str, key: int, after: tuple[Node, ...] = (),
-                 **inputs: Node | None):
+                 fallback: Fx | None = None, **inputs: Node | None):
         super().__init__(name, after, **inputs)
         self.key = key                # the pipeline this node ends (outputs.SCENE …)
+        self.fallback = fallback
+
+    @property
+    def layer(self) -> Node | None:
+        """The layer this pipeline lays on before the effects, if any."""
+        src = self.inputs["image"]
+        return src.inputs["over"] if isinstance(src, Composite) else None
+
+    def bent(self, frame: Frame) -> bool:
+        """Whether this pipeline is itself this frame (see the class)."""
+        layer = self.layer
+        return layer is None or (frame.fx_on and layer.image(frame) is not None)
 
     def run(self, frame: Frame) -> None:
-        users = frame.users(self.key)
+        users = frame.users(self)
         if not users:
             return
         r, views, stats = frame.r, frame.views, frame.stats
@@ -448,33 +745,65 @@ class Fx(Node):
 # ---------------------------------------------------------------- output
 
 class Output(Node):
-    """One render output (`Renderer._compose`): its pipeline's picture
-    (already there when painted direct; else shown 1:1 or scaled into
-    `outputs.fit`'s rect with the rest the view's ground), the hands over
-    it, the readout, its mirror, its dim (master × its own) — or, for a
-    view with a presenter, the `Handoff` that says the same five steps.
-    In A1 the pipeline it shows is `outputs.route`'s for its switches
-    this frame (A3 wires it); the `pipelines` ports hold the graph's
-    pipeline ends so the wiring is in the graph."""
+    """One render output (`Renderer._compose`): the picture on its `image`
+    port (a pipeline's end; already there when painted direct, else shown
+    1:1 or scaled into `outputs.fit`'s rect with the rest the view's
+    ground), the layer on its `hands` port over it (`blend`, depth-aware
+    against the `depth` port's scene), the readout, its mirror, its dim
+    (master × its own) — or, for a view with a presenter, the `Handoff`
+    that says the same five steps (a presenter lays the hands plain over:
+    the depth stays in this context). Which end it shows this frame is
+    `settle`'s: its wired end, or that end's fallback with the layer over
+    while the end is not bent."""
 
     KIND = "output"
-    INPUTS: ClassVar[dict[str, str]] = {"scene": IMAGE, "scene+hands": IMAGE, "hands": IMAGE, "layer": IMAGE}
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "hands": IMAGE, "readout": IMAGE,
+                                        "depth": IMAGE}
     OUTPUT = None
 
     def __init__(self, name: str, index: int, after: tuple[Node, ...] = (),
-                 **inputs: Node | None):
+                 blend: str = "over", **inputs: Node | None):
         super().__init__(name, after, **inputs)
         self.index = index            # the view it draws, in Frame.views
+        self.blend = blend
+
+    def settle(self, frame: Frame) -> tuple[Node | None, tuple[Node, str] | None]:
+        """(the end it shows this frame or None for its ground, (the layer
+        laid over after it, its blend) or None) — `outputs.route`'s table
+        as wiring: a through end that is not bent stands down for its
+        fallback and its layer goes over here."""
+        key = self.name + "#settle"
+        if key in frame.data:
+            return frame.data[key]
+        end = self.inputs["image"]
+        over, blend = self.inputs["hands"], self.blend
+        if isinstance(end, Fx) and not end.bent(frame):
+            over, blend = end.layer, end.inputs["image"].blend
+            end = end.fallback
+        laid = (over, blend) if over is not None and over.image(frame) is not None else None
+        frame.data[key] = got = (end, laid)
+        return got
 
     def run(self, frame: Frame) -> None:
         r, v = frame.r, frame.views[self.index]
-        key, after = frame.routes()[self.index]
-        # the readout goes on every output that shows the hands, over or
-        # through: in its own layer the guide is in neither
-        ro = frame.readout if v.switches.hands else None
+        # the readout goes on every output that shows the hands, over,
+        # through or in the scene: in its own layer the guide is in none
+        ro = frame.readout if self.inputs["readout"] is not None else None
         try:
+            end, laid = self.settle(frame)
+            if "routes" in frame.stats:          # what this output shows: (end, hands over)
+                frame.stats["routes"][self.index] = (
+                    end.key if end is not None else None, laid is not None)
+            put = None
+            if laid is not None and laid[1] != "over":
+                over, blend = laid
+
+                def put(tgt, rect, opaque, flip, over=over, blend=blend):
+                    lay(frame, blend, over, self.inputs["depth"], tgt, rect, opaque, flip)
             with frame.timed(self.name):
-                r._compose(v, key, after, frame.frames, frame.failed, frame.size, ro)
+                r._compose(v, end.key if end is not None else None, laid is not None,
+                           frame.frames, frame.failed, frame.size, ro, lay=put,
+                           blend=laid[1] if laid is not None else "over")
         except Exception as e:  # noqa: BLE001 — one view must not take the others down
             r._view_failed(v, "output", e)
             r._rebind(frame.target, frame.vp)
@@ -489,8 +818,9 @@ class Graph:
     they were added, dependencies first, so ties fall in insertion order
     (today's frame order). `evaluate` runs every node once."""
 
-    def __init__(self, key: tuple = ()):
+    def __init__(self, key: tuple = (), wiring: Wiring | None = None):
         self.key = key
+        self.wiring = wiring if wiring is not None else Wiring()
         self.nodes: dict[str, Node] = {}
         self.order: list[Node] = []
 
@@ -525,7 +855,12 @@ class Graph:
         """The names the GPU timer reports, one per node, in order."""
         return [n.name for n in self.order if n.TIMED]
 
+    @property
+    def outputs(self) -> list[Output]:
+        return [n for n in self.order if isinstance(n, Output)]
+
     def evaluate(self, frame: Frame) -> None:
+        frame.graph = self
         for node in self.order:
             node.run(frame)
 
@@ -534,23 +869,24 @@ class Graph:
 
 
 def graph_key(views: list[View]) -> tuple:
-    """What selects the default graph: each view's scene, hands and
-    through switches. Everything else about a view (its size, its
-    flips, a presenter) is read when its nodes run."""
+    """What selects the default graph besides the wiring: each view's
+    scene, hands and through switches. Everything else about a view (its
+    size, its flips, a presenter) is read when its nodes run."""
     return tuple((bool(v.switches.scene), bool(v.switches.hands), bool(v.switches.through))
                  for v in views)
 
 
-def pipelines_of(switches: list[Switches]) -> list[int]:
-    """The pipelines the switches can route to (`outputs.route`), in run
+def pipelines_of(switches: list[Switches], in_scene: bool = False) -> list[int]:
+    """The pipelines the switches can reach (`outputs.route`), in run
     order: SCENE for any view showing the scene; SCENE+HANDS for a view
-    with the scene and the hands through; HANDS for one with the scene
-    off and the hands through. Whether a hand shows, and whether an
+    with the scene and the hands through (never while the hands are in the
+    scene: the effects bend them there already); HANDS for one with the
+    scene off and the hands through. Whether a hand shows, and whether an
     effect is on, decide per frame which of them run."""
     keys = []
     if any(sw.scene for sw in switches):
         keys.append(SCENE)
-    if any(sw.scene and sw.hands and sw.through for sw in switches):
+    if not in_scene and any(sw.scene and sw.hands and sw.through for sw in switches):
         keys.append(SCENE_HANDS)
     if any(not sw.scene and sw.hands and sw.through for sw in switches):
         keys.append(HANDS)
@@ -561,37 +897,81 @@ def pipelines_of(switches: list[Switches]) -> list[int]:
 # on before the chain, and the chain itself
 COMPOSITE_NAMES = {SCENE_HANDS: "composite(scene+hands)", HANDS: "composite(hands)"}
 FX_NAMES = {SCENE: "fx", SCENE_HANDS: "fx(scene+hands)", HANDS: "fx(hands)"}
-PORTS = {SCENE: "scene", SCENE_HANDS: "scene+hands", HANDS: "hands"}
+HISTORY_COMPOSITE = "composite(history)"
 
 
-def default_graph(views: list[View]) -> Graph:
-    """Today's frame as a graph, from the views' switches: the shape into
-    the scene; the cover; the hands' layer while some view shows hands;
-    the history; per reachable pipeline a composite (the hands onto the
-    history, or onto the ground) and the chain; the capture after every
-    pipeline; one output per view, after the capture."""
+def default_graph(views: list[View], wiring: Wiring | None = None) -> Graph:
+    """The frame as a graph, from the views' switches and the wiring
+    (`Wiring`; the default is today's frame). Each output's three
+    switches are its wiring:
+
+    - **scene** on: its picture is the scene's pipeline (the history, the
+      effects); off, its ground;
+    - **hands** on: the hands' layer laid over its picture at the output
+      ("over") — or, with **through**, laid onto the history before the
+      effects ("through": SCENE+HANDS, or the layer alone through them,
+      HANDS, with the scene off) — and the readout on it;
+    - with the hands **in the scene** (`Wiring.hands`), an output showing
+      the scene shows them there (its hands switch then wires only the
+      readout); one without the scene still gets the layer, over or
+      through.
+
+    The nodes: the shape, and the hands while anything draws them; the
+    scene (the hands first when they are in it); the cover; the hands'
+    layer while an output lays it on or the history holds it; the
+    readout on its own when only the scene holds the hands; the history;
+    per reachable pipeline a composite and the chain; the capture after
+    every pipeline, from the scene or the scene with the hands' layer
+    (`Wiring.history`); one output per view, after the capture."""
+    wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
-    g = Graph(graph_key(views))
+    in_scene = wiring.hands == "scene"
+    depth_aware = wiring.blend == "depth"
+
+    def layered(sw: Switches) -> bool:
+        return bool(sw.hands) and (not in_scene or not sw.scene)
+
+    want_layer = any(layered(sw) for sw in switches) or (
+        wiring.history == "scene+hands" and not in_scene)
+    g = Graph(graph_key(views), wiring)
     shape = g.add(Shape("shape"))
-    scene = g.add(Scene("scene", geometry=shape))
+    hands = g.add(Hands("ghost")) if (in_scene or want_layer) else None
+    scene = g.add(Scene("scene", geometries=[hands, shape] if in_scene else [shape]))
     cover = g.add(Cover("cover", scene=scene))
-    hands = g.add(HandsLayer("hands")) if any(sw.hands for sw in switches) else None
+    layer = (g.add(HandsLayer("hands", readout="always" if in_scene else "through",
+                              geometry=hands)) if want_layer else None)
+    readout = layer
+    if in_scene and layer is None and any(sw.scene and sw.hands for sw in switches):
+        readout = g.add(Readout("readout", geometry=hands))
     history = g.add(History("history", image=scene, cover=cover))
-    ends: dict[int, Node] = {}
+    depth = scene if depth_aware else None
+    ends: dict[int, Fx] = {}
     # every pipeline end runs after the hands' layer: whether a hand shows
-    # this frame decides which pipelines the views route to (A1)
-    gate = (hands,) if hands is not None else ()
-    for key in pipelines_of(switches):
+    # this frame decides which pipelines the views take
+    gate = (layer,) if layer is not None else ()
+    for key in pipelines_of(switches, in_scene):
         if key == SCENE:
-            src = history
-        elif key == SCENE_HANDS:
-            src = g.add(Composite(COMPOSITE_NAMES[key], under=history, over=hands))
-        else:
-            src = g.add(Composite(COMPOSITE_NAMES[key], under=None, over=hands))
-        ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=src))
-    capture = g.add(Capture("capture", image=scene, after=tuple(ends[k] for k in PIPELINES
-                                                                 if k in ends)))
-    for i in range(len(views)):
-        wired = {PORTS[k]: n for k, n in ends.items()}
-        g.add(Output(f"output.{i + 1}", i, after=(capture,), layer=hands, **wired))
+            ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=history))
+            continue
+        src = g.add(Composite(COMPOSITE_NAMES[key], blend=wiring.blend, depth=depth,
+                              under=history if key == SCENE_HANDS else None, over=layer))
+        ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=src,
+                             fallback=ends.get(SCENE) if key == SCENE_HANDS else None))
+    held = scene
+    if wiring.history == "scene+hands" and layer is not None and not in_scene:
+        held = g.add(Composite(HISTORY_COMPOSITE, blend=wiring.blend, depth=depth,
+                               under=scene, over=layer))
+    capture = g.add(Capture("capture", image=held, after=tuple(ends[k] for k in PIPELINES
+                                                                if k in ends)))
+    for i, sw in enumerate(switches):
+        image = None
+        if sw.scene:
+            through = sw.hands and sw.through and not in_scene
+            image = ends[SCENE_HANDS if through else SCENE]
+        elif sw.hands and sw.through:
+            image = ends[HANDS]
+        over = layer if layered(sw) and not sw.through else None
+        g.add(Output(f"output.{i + 1}", i, after=(capture,), blend=wiring.blend, image=image,
+                     hands=over, readout=readout if sw.hands else None,
+                     depth=depth if layered(sw) else None))
     return g

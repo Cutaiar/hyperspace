@@ -451,8 +451,14 @@ def test_the_echoes_carry_on_with_the_scene_off_everywhere(ctx):
     assert np.array_equal(a, b)
 
 
-def test_the_history_never_holds_the_hands_in_any_state(ctx):
+def test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today(ctx):
+    """Plan 26 A3: the history captures the image it is wired to. The
+    default graph wires it to the bare scene, so in every switch state
+    its echoes hold no hands, as before A3; wired to the scene with the
+    hands' layer (`Wiring.history`) they hold the hands."""
     import numpy as np
+
+    from hyperspace.graph import Wiring
 
     S = O.Switches
     bare = rig(ctx, echoes=True, hands=False)
@@ -464,7 +470,15 @@ def test_the_history_never_holds_the_hands_in_any_state(ctx):
         r = rig(ctx, echoes=True)
         run(ctx, r, views(ctx, *combo), frames=6)
         assert r.stats["layer"]
+        assert r._graph.nodes["capture"].inputs["image"] is r._graph.nodes["scene"]
         assert np.array_equal(np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8), want)
+    for combo in ((S(),), (S(hands=False),), (S(scene=False, through=True),)):
+        r = rig(ctx, echoes=True)
+        r.wiring = Wiring(history="scene+hands")
+        run(ctx, r, views(ctx, *combo), frames=6)
+        held = np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8)
+        assert r._graph.nodes["capture"].inputs["image"].name == "composite(history)"
+        assert not np.array_equal(held, want), combo
 
 
 def test_each_output_dims_by_master_times_its_own(ctx):

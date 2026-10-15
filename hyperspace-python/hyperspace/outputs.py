@@ -121,7 +121,9 @@ class Handoff:
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
        same `rect` at `alpha`: colour ONE / ONE_MINUS_SRC_ALPHA, and alpha
        ZERO / ONE on an opaque ground (`bg_alpha` 1) — `Ghost.composite`'s
-       blend. None: no hands after the effects on this output;
+       blend; with `blend` "add" (plan 26 A3) colour ONE / ONE instead, and
+       alpha ONE / ONE_MINUS_SRC_ALPHA on a see-through ground. None: no
+       hands after the effects on this output;
     4. lays `readout` (the guide and the tethers' labels when they are a
        layer of their own, WP2 — on every output that shows the hands,
        over or through) into `rect` the same way. None: nothing;
@@ -142,6 +144,7 @@ class Handoff:
     factor: float = 1.0
     bg_alpha: float = 1.0
     flip: tuple[bool, bool] = (False, False)   # plan 23 WP1: steps 2–4 mirrored in `rect`
+    blend: str = "over"                        # plan 26 A3: step 3's blend, "over" or "add"
 
     @staticmethod
     def name(tex: moderngl.Texture | None) -> int | None:
@@ -343,14 +346,15 @@ class Presenter:
                 prog["u_k"].value = 1.0
                 prog["u_opaque"].value = int(opaque)
                 vao.render(moderngl.TRIANGLES, vertices=3)
-            for layer in (ho.hands, ho.readout):                                # 3, 4
+            add = getattr(ho, "blend", "over") == "add"
+            for layer, plus in ((ho.hands, add), (ho.readout, False)):          # 3, 4
                 if layer is None or rect[2] <= 0 or rect[3] <= 0:
                     continue
                 ctx.viewport = rect
                 ctx.enable(moderngl.BLEND)
-                ctx.blend_func = ((moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ZERO,
-                                   moderngl.ONE) if opaque else
-                                  (moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA, moderngl.ONE,
+                rgb = moderngl.ONE if plus else moderngl.ONE_MINUS_SRC_ALPHA
+                ctx.blend_func = ((moderngl.ONE, rgb, moderngl.ZERO, moderngl.ONE) if opaque else
+                                  (moderngl.ONE, rgb, moderngl.ONE,
                                    moderngl.ONE_MINUS_SRC_ALPHA))
                 self._wrap(layer).use(location=0)
                 prog["u_scaled"].value = 1          # as Ghost.composite samples it
