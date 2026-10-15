@@ -644,12 +644,13 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     table.set_layer("global")
     put(rig.home, "DESKED", values={"macro.1": 0.5, "view.depth4": 1.0},
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
-        desk=[*DESK, {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],
+        # MASTER: invariant (the track faders are layered since plan 24 C2)
+        desk=[*DESK, {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],
         macros=MACROS)
     rig.presets.load("DESKED")
     assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
-    assert any("cc:0:7 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
-    assert rig.presets.desk_notes and "cc:0:7" in rig.presets.desk_notes[0]
+    assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
+    assert rig.presets.desk_notes and "cc:0:14" in rig.presets.desk_notes[0]
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
     assert table.macros_doc() == MACROS
     depth4 = reg["view.depth4"]
@@ -760,7 +761,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
             assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
         for row in doc["routes"]:
             b = Binding.from_json(row)
-            assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
+            assert routing.is_continuous(b.scheme) and b.op in routing.MOD_OPS, (path.name, row)
     assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
     for name in ("house", "party"):
         proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())

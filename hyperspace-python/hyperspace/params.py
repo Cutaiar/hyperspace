@@ -876,6 +876,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip=f"Rotate in the {name} plane")
     r.toggle("view.points", "Points", *_attr(view, "points"), group=g)
     r.toggle("view.lines", "Lines", *_attr(view, "lines"), group=g)
+    # plan 24 C2: a mix on the two layers that had none (decision 17), at 1
+    # — the picture as it was (decision 24); performance params, modulatable
+    r.continuous("view.points_alpha", "Points opacity", *_attr(view, "points_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"points {v:.2f}", group=g,
+                 tip="The points' opacity: 1 draws them as they always were, 0 not at all.")
+    r.continuous("view.lines_alpha", "Lines opacity", *_attr(view, "lines_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"lines {v:.2f}", group=g,
+                 tip="The lines' opacity: 1 draws them as they always were, 0 not at all.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")

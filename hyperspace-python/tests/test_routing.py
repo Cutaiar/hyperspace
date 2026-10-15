@@ -1342,7 +1342,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
     # + the four invariant render toggles and SAVE (plan 24 C1)
     assert f"added note:7:{apc40.N_CLIPSTOP} → desk.save (the APC40 map of plan 24)" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 77 rows changed)" in err
+    # + the track faders' audio strip, eight global rows since plan 24 C2 (decision 17)
+    assert f"added cc:0:{apc40.CC_FADER} → band.0.post (the global layer, plan 13 §3.2)" in err
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 85 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1359,8 +1361,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
     # OVERDUB and the Home key (plan 15 WP2) (the clip-stop row of plan 15
     # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2),
-    # the four invariant render toggles and SAVE (plan 24 C1)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 5
+    # the four invariant render toggles and SAVE (plan 24 C1), the track
+    # faders' audio strip on the global layer (plan 24 C2: the sort adds 8)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 5 + 8
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows

@@ -151,6 +151,7 @@ def test_a_desk_learn_ignores_the_pad(rig):
 def test_a_routed_axis_drives_its_param_and_is_claimed(rig):
     pad, r = ScriptedPad(), rig.router
     rig.table.add(Binding("axis:RT", "view.inst_amp", "position", 1.0))
+    gp.publish(r)                       # the pad names its axes (plan 27 B2: not the router)
     assert r.claimed("axis") == {gp.AX_RT}
     pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
     r.pad(pad)

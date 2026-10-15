@@ -284,7 +284,8 @@ def test_bindings_json_performer_rows_move_into_the_startup_preset(home):
     assert any(b.source == "key:RIGHT" for b in rows) and any(b.scheme == "pad" for b in rows)
     strip = {b.source: b.layer for b in rows if b.target.startswith("band.sel.")}
     assert strip and set(strip.values()) == {"global"}
-    assert any(b.target == "band.0.post" and b.layer is None for b in rows)     # a fader
+    assert any(b.target == "master.gain" and b.layer is None for b in rows)     # MASTER
+    assert any(b.target == "band.0.post" and b.layer == "global" for b in rows)  # S1, C2
     assert any(b.target == routing.SHIFT_PARAM for b in rows)
     assert not any(b.source == KNOB["source"] for b in rows)
     # the startup preset holds them, and opening the show puts them live

@@ -74,17 +74,22 @@ from __future__ import annotations
 
 from . import undo
 from .params import Kind, Param, Registry
-from .routing import MIDI_SCHEMES, MOD_OPS, SAVE_PARAM, Binding, Bindings, Owned
+from .routing import MOD_OPS, SAVE_PARAM, Binding, Bindings, Owned
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
 # button row would leave it on, and every bank pad's tap would then save
 SAVE_REFUSAL = ("Save is the desk's SAVE (track 8's clip stop, held) — it takes no "
                 "learned control")
 
-# what an armed learn may wait for (`Learn.want`): the desk — a knob, a
-# button, a click on the on-screen desk — one hand, by name, or the
-# gamepad — a button, the D-pad, a stick or a trigger
-WANTS = ("desk", "hand:left", "hand:right", "pad")
+# what an armed learn may wait for (`Learn.want`, `Learn.wants`) is the
+# device registry's to say (plan 27 B2: each device's `wants` — "desk" for
+# every MIDI role, "hand:left" / "hand:right" for the hands, "pad" for the
+# gamepad, a new device's role for it), and "desk" always: a click on the
+# on-screen desk completes a desk learn with no device at all. A Learn the
+# registry has not been handed (a bare test rig, the probe) offers what
+# today's rig offers
+DESK = "desk"
+BARE_WANTS = (DESK, "hand:left", "hand:right", "pad")
 PAD_SCHEMES = ("pad", "hat", "axis")    # what can complete a "pad" learn
 
 # a push learn's depth when the adapter names none (plan 18 WP3). The hands
@@ -109,9 +114,14 @@ def blocked(table: Bindings, source: str) -> str | None:
     — ``"global"`` — nothing is learned while the global layer is up (D5)
     — or None when it can. The one rule `Learn.learn_control` refuses by
     and the on-screen desk asks before a click (`ui_desk.mappable`)."""
-    if table.is_invariant(Binding(source, "", "abs", layer="preset")):
+    b = Binding(source, "", "abs", layer="preset")
+    if table.is_invariant(b):
         return "invariant"
-    if table.layer == "global":
+    # the layer up on the device the control is on (plan 27 B2: each MIDI
+    # role has its own latch; a table from before a hot reload has one)
+    layer_of = getattr(table, "layer_of", None)
+    layer = layer_of(b.device or None) if layer_of is not None else table.layer
+    if layer == "global":
         return "global"
     return None
 
@@ -119,16 +129,19 @@ def blocked(table: Bindings, source: str) -> str | None:
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
-    def __init__(self, reg: Registry, table: Bindings, lane=None):
+    def __init__(self, reg: Registry, table: Bindings, lane=None, devices=None):
         self.reg = reg
         self.table = table
+        # the device registry (devices.DeviceRegistry, plan 27 B2), asked
+        # what can be armed (`wants`); None: today's rig (BARE_WANTS)
+        self.devices = devices
         # the router's `lane` (source → (scheme, index)), so one hand axis
         # named two ways — `hand:7` in an older preset, `hand:right.y` from
         # a learn — is one axis here too (decision register row 20); None:
         # sources compare as strings
         self.lane = lane
         self.learning: str | None = None
-        self.want: str | None = None   # what may complete `learning` (WANTS); None: anything
+        self.want: str | None = None   # what may complete `learning` (`wants`); None: anything
         self.control: str | None = None    # the picked desk control's source; None: none
         self.pending: tuple[Binding, Binding] | None = None
         self.last = ""          # what the last learn did, for the status lines
@@ -146,6 +159,17 @@ class Learn:
         la = lane(a)
         return la[1] >= 0 and la == lane(b)
 
+    def wants(self) -> tuple[str, ...]:
+        """What a learn may wait for on this rig, in offer order: "desk"
+        (the on-screen desk, and every MIDI role), then each listed
+        device's (`DeviceRegistry.wants`: the pad's "pad", the hands'
+        "hand:left" / "hand:right", a new device's role). With no registry,
+        BARE_WANTS."""
+        devs = getattr(self, "devices", None)
+        if devs is None:
+            return BARE_WANTS
+        return tuple(dict.fromkeys((DESK, *devs.wants())))
+
     def said(self, text: str) -> None:
         """What a learn that landed (or was kept) did, for the status lines."""
         self.last, self.refused = text, False
@@ -160,15 +184,16 @@ class Learn:
 
     def arm(self, pid: str | None, want: str | None = None) -> None:
         """Arm (or cancel with None). `want` is what may complete it — one
-        of `WANTS`, or None for anything. A learn the prompt hasn't
+        of `wants()`, or None for anything. A learn the prompt hasn't
         answered yet is forgotten: the new one is what the performer means
         now. Arming starts clean: an earlier refusal is no longer this
         learn's (`refused` while armed means *this* learn was refused and
         still waits), and `armed_n` counts the arms, so an adapter that
         keeps something per learn (the hands' baseline) can tell a re-arm
         of the same param from the learn it already knew."""
-        if want is not None and want not in WANTS:
-            raise ValueError(f"no such want {want!r}; one of {', '.join(WANTS)}")
+        wants = self.wants()
+        if want is not None and want not in wants:
+            raise ValueError(f"no such want {want!r}; one of {', '.join(wants)}")
         self.learning = pid
         self.want = want if pid is not None else None
         self.pending = None
@@ -187,18 +212,22 @@ class Learn:
     def accepts(self, source: str) -> bool:
         """May this source complete the armed learn? False when nothing
         is armed. want None: any source. "desk": a cc / note / pitch
-        source. "hand:left": a source that starts "hand:left." (an axis
-        or a switch of that hand, by name). "pad": a gamepad button, the
-        D-pad or an axis (PAD_SCHEMES)."""
+        source, from any MIDI device (a qualified ``cc@launch:0:7`` too:
+        plan 27 B2). "hand:left": a source that starts "hand:left." (an
+        axis or a switch of that hand, by name). "pad": a gamepad button,
+        the D-pad or an axis (PAD_SCHEMES). A device's role (a want with no
+        ``:``): a source under that scheme."""
         if getattr(self, "learning", None) is None:
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
         if want is None:
             return True
-        if want == "desk":
-            return source.partition(":")[0] in MIDI_SCHEMES
+        if want == DESK:
+            return Binding(source, "").is_midi
         if want == "pad":
             return source.partition(":")[0] in PAD_SCHEMES
+        if ":" not in want:
+            return source.partition(":")[0] == want
         return source.startswith(f"{want}.")
 
     # ---- a desk control completes it ----
@@ -240,7 +269,7 @@ class Learn:
 
         def named(x: Binding) -> str:
             name = getattr(profile, "named", None) or getattr(profile, "control_name", None)
-            return (name(x.source) if name is not None else None) or x.describe()
+            return (name(x.bare) if name is not None else None) or x.describe()
         why = blocked(table, source)
         if why == "invariant":
             self.refuse(f"{named(b)} is invariant (the session's) — not learned")
@@ -267,7 +296,7 @@ class Learn:
         table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
         glyph = getattr(profile, "glyph", None)
         let_go = list(dict.fromkeys(
-            (glyph(x.source) if glyph is not None else None) or named(x)
+            (glyph(x.bare) if glyph is not None else None) or named(x)
             for x in gone if not x.overlaps(b)))
         self.said(f"learned {pid} ← {named(b)} (into the preset)"
                   + (f"; {', '.join(let_go)} let go" if let_go else ""))

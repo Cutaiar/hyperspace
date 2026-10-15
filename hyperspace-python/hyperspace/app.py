@@ -50,7 +50,6 @@ it calls.
 from __future__ import annotations
 
 import importlib.util
-import math
 import os
 import shutil
 import subprocess
@@ -104,10 +103,6 @@ CONTROL_SIZE = (960, 900)
 D4_RATE0 = 0.45   # octaves/s at the instant of the press
 D4_RATE1 = 3.6    # octaves/s once the ramp completes
 D4_RAMP = 1.8     # seconds of hold to reach full rate
-
-# the pad's right stick, sideways: the W planes' rate multipliers (rot.rate.*W)
-W_PLANES = ("XW", "YW", "ZW")
-W_RATE_PER_S = 2.0    # rate units a second at full throw (a plane's default is 1×)
 
 # the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
 # these are the keys the loop still handles itself (the cheat-sheet test reads
@@ -775,9 +770,9 @@ def _px_per_unit(view, w: float, h: float) -> float:
 
 
 def _ride_depth(p, octaves: float) -> None:
-    """Move 4D depth by a number of octaves of (depth − 1) — the taper's own space."""
-    u = math.log2(max(p.base - 1.0, 1e-6) / 0.05)
-    p.nudge(1.0 + 0.05 * 2.0 ** (u + octaves) - p.base)
+    """Move 4D depth by a number of octaves of (depth − 1) — the taper's
+    own space (gamepad.ride_depth: the triggers ride it the same way)."""
+    gamepad.ride_depth(p, octaves)
 
 
 @dataclass
@@ -824,8 +819,8 @@ class Host:
 
     @property
     def pad(self):
-        """The open `gamepad.Pad`, or None: the sticks' camera job reads it
-        (the job moves into the pad device in B2)."""
+        """The open `gamepad.Pad`, or None (the pad device runs the
+        sticks' camera job itself, plan 27 B2)."""
         return self.devices.adapter("gamepad") if self.devices is not None else None
 
 
@@ -864,11 +859,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
             _ride_depth(reg["view.depth4"], sgn * rate * dt)
 
-    # ---- the devices, polled (devices.py, plan 27 B1): the pad (a second
+    # ---- the devices, polled (devices.py, plan 27): the pad (a second
     # hand on the same controls — imgui never claims it, so it works even
     # while the panel has keyboard focus; a press that completes an armed
-    # learn does not also fire its old row) and MIDI, each delivering its
-    # rows; the hands and the bridge feed below. A device that raises
+    # learn does not also fire its old row) delivers its rows, then runs
+    # the sticks' default camera job (gamepad.steer, plan 27 B2: each axis
+    # no route names, a relative move on the base); each MIDI desk applies
+    # its rows; the hands and the bridge feed below. A device that raises
     # records itself on the registry; the frame goes on and `ok` keeps the
     # note alive until a clean frame ----
     ok = True
@@ -877,48 +874,6 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         devs.poll(dt, now, router=router, learn=h.learn)
         if devs.error:
             ok, reloader.runtime_error = False, devs.error
-    # ---- the sticks' camera job: each axis while no route names it ----
-    pad = h.pad
-    if pad is not None and pad.on:     # (B2 moves this job into the pad device)
-        # analog, each axis while no route names it (`axis:LX` …): left
-        # stick orbits, right-stick Y zooms about centre and its X rides
-        # the W planes' rates, triggers ride
-        # depth4 in its own log space (LT out, RT in). The pad's feel
-        # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
-        # off, they are read as they are
-        routed = router.claimed("axis") or ()
-        felt = router.felt("axis", pad.lanes(), dt)
-        if felt is None:
-            axis, trigger = pad.axis, pad.trigger
-        else:
-            def axis(ax: int) -> float:   # a lane back to the stick's ±1, up negative
-                u = felt[ax] - 0.5
-                return 2 * u if ax in (gamepad.AX_LX, gamepad.AX_RX) else -2 * u
-
-            def trigger(ax: int) -> float:
-                return felt[ax]
-
-        def free(ax: int, v: float) -> float:
-            return 0.0 if ax in routed else v
-        lx = free(gamepad.AX_LX, axis(gamepad.AX_LX))
-        ly = free(gamepad.AX_LY, axis(gamepad.AX_LY))
-        if lx:
-            reg["camera.yaw"].nudge(lx * 2.2 * dt)
-        if ly:
-            reg["camera.pitch"].nudge(ly * 2.2 * dt)
-        zoom_v = free(gamepad.AX_RY, axis(gamepad.AX_RY))
-        if zoom_v:
-            reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
-        # right-stick X rides the three W planes' rates together (the 4D
-        # spin): right speeds them up, left slows them through 0 into reverse
-        w_v = free(gamepad.AX_RX, axis(gamepad.AX_RX))
-        if w_v:
-            for plane in W_PLANES:
-                reg[f"rot.rate.{plane}"].nudge(w_v * W_RATE_PER_S * dt)
-        d4 = (free(gamepad.AX_RT, trigger(gamepad.AX_RT))
-              - free(gamepad.AX_LT, trigger(gamepad.AX_LT)))
-        if d4:
-            _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
 
     # ---- the macros' base subscribers: the last scene-setter — a macro
     # whose base moved (a knob just now, the panel last frame, a restore)
@@ -1152,10 +1107,16 @@ def main() -> None:
                         home)
 
     def point_at_devices() -> None:
-        panel.midi = rig.adapter("midi")
+        panel.midi = rig.adapter("midi")         # the first desk listed: the APC40's page
         panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
         panel.hands = rig.adapter("hands")
         renderer.ghost.source = panel.hands      # no tracker, nothing draws
+        router.follow_devices()                  # the MIDI roles and row schemes, again
+    # schemes from the registry (plan 27 B2): the router asks it which
+    # sources are lanes and in what order the pages offer them, the learn
+    # what can be armed — each handed the registry, importing nothing
+    router.use(rig)
+    learn.devices = rig
     rig.listeners.append(point_at_devices)
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines

@@ -1707,8 +1707,6 @@ class Renderer:
         t = (edepth[order] - near) / span
         dens = clamp(340 / max(g["m"], 1), 0.42, 1)
         heavy = g["m"] > 500
-        # the edges' alpha: depth × brightness × density — the one place
-        # it is derived (a lines-opacity param multiplies in here)
         B = s.bright * dens
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
@@ -1718,7 +1716,11 @@ class Renderer:
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
         draw_w = np.maximum(width, 1.0)
-        alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
+        # the edges' alpha, final: depth × brightness × density (floored
+        # above), sub-pixel width folded in, × the lines opacity (plan 24
+        # C2) — after the floor and before the vertex fill, so the depth
+        # pass's skip test (`draws`) sees the faded alpha
+        alpha = alpha * np.minimum(width, 1.0) * s.lines_alpha
 
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
@@ -1829,10 +1831,10 @@ class Renderer:
                 # sprites' frame byte for byte, without it every dot grows)
                 r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr
                 r = np.floor(2.0 * r + 0.5) / 2.0
-                # the points' alpha — the one place it is derived (a
-                # points-opacity param multiplies in here)
+                # the points' alpha: depth × brightness, floored, × the points
+                # opacity (plan 24 C2) after the floor — the one place it is derived
                 PB = s.bright * clamp(dens * 1.5, 0.55, 1)
-                pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1)
+                pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1) * s.points_alpha
                 n = g["n"]
                 pverts = np.empty((n * 6, 7), dtype=np.float32)
                 for k in range(6):

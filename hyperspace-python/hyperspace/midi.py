@@ -108,7 +108,7 @@ from pathlib import Path
 
 import mido
 
-from . import apc40
+from . import apc40, generic
 from .learn import Learn
 from .params import Kind, Param, Registry
 from .routing import (
@@ -124,7 +124,10 @@ from .routing import (
     register_desk,
 )
 
-PROFILES = {"apc40": apc40}          # config's `[midi] profile` names one of these
+# a `[[devices]]` MIDI entry's `profile` names one of these (plan 27 B2:
+# the entry's, never bindings.json's "profile" field, which says only
+# which profile the file's unqualified rows were written for)
+PROFILES = {"apc40": apc40, "generic": generic}
 RECONNECT_S = 2.0
 RECONNECT_FAST = 5        # looks at RECONNECT_S after a port goes missing, then
 RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
@@ -309,11 +312,21 @@ class MidiIO:
     `inp`/`out` may be injected (tests hand in fakes with iter_pending()
     and send()); otherwise the ports are found by substring and reopened
     on their own if the device disappears (`Ports`).
+
+    Several at once (plan 27 B2): each is one `[[devices]]` MIDI entry,
+    with its own `role` and `profile`. It reads and draws only its own
+    rows of the shared table (`Bindings.serves`): an unqualified row is the
+    first MIDI role's, any other device's rows carry its role
+    (``cc@launch:0:7``), and a learn on it writes that form (`qualifier`).
+    Each role has its own layer (`Bindings.layer_of`); SHIFT's latch,
+    `desk.shift`, is the first role's. `role` None is the first role —
+    a bare adapter (the tests', the probe's) is today's one desk.
     """
 
     def __init__(self, registry: Registry, table: Bindings | None = None, *,
                  path: Path | None = None, port: str | None = None, profile: str = "apc40",
-                 inp=None, out=None, clock=time.monotonic, learner: Learn | None = None):
+                 inp=None, out=None, clock=time.monotonic, learner: Learn | None = None,
+                 role: str | None = None):
         self.reg = registry
         # the binding table — the app's shared one, or one loaded from
         # `path` (a bindings.json; an old midi_map.json beside it is
@@ -322,8 +335,14 @@ class MidiIO:
         if table is None:
             table = Bindings.load(bindings_path() if path is None else path, profile)
         self.table = table
-        self.profile = PROFILES.get(self.table.profile) or PROFILES[profile]
+        self.role = role
+        if profile not in PROFILES:
+            raise ValueError(f"no MIDI profile {profile!r}; one of {', '.join(PROFILES)}")
+        self.profile = PROFILES[profile]
         self.port_match = port or self.profile.PORT_MATCH
+        if not self.port_match and inp is None and out is None:
+            raise ValueError(f"the {profile} profile matches no port by itself — "
+                             "give the entry a `port` (a substring of its name)")
         self.ports = Ports(self.port_match, self.port_match, inp=inp, out=out, clock=clock)
         self.clock = clock      # times a `hold` row's press and the blink after it
         self.last = ""          # last message seen, for the status line
@@ -411,6 +430,8 @@ class MidiIO:
         for b in self.bindings:
             b.last_out = None
             b.caught = False
+            if b.kind in ("cc", "pitch"):
+                b.last_hw = None    # and each row's own last position (review of PR #180)
         if self.out is not None:
             for msg in self.profile.enter():
                 self._send(msg)
@@ -427,15 +448,38 @@ class MidiIO:
         self.ports.close()
 
     def _send(self, msg) -> None:
-        self.ports.send(msg)
+        if getattr(self.profile, "FEEDBACK", True):      # a generic desk: no lights, nothing sent
+            self.ports.send(msg)
 
     # ---- the table's MIDI rows ----
 
     @property
     def bindings(self) -> list[Binding]:
-        """The MIDI rows of the shared table (`Bindings.midi`); the edits
-        (`bind`, `route`, `for_param`, `write`) are the table's own."""
-        return self.table.midi()
+        """This device's MIDI rows of the shared table (`Bindings.midi`,
+        those `Bindings.serves` says are this role's); the edits (`bind`,
+        `route`, `for_param`, `write`) are the table's own."""
+        role, t = self._role(), self.table
+        return [b for b in t.midi() if t.serves(role, b)]
+
+    def _role(self) -> str | None:
+        """This device's role (None: the first MIDI role) — read here for
+        an adapter from before a hot reload, which has none."""
+        return self.__dict__.get("role")
+
+    @property
+    def qualifier(self) -> str:
+        """What this device's sources carry (plan 27 B2): "" for the first
+        MIDI role — every row before plan 27 is unqualified — else its role
+        (``cc@launch:0:7``)."""
+        role = self._role()
+        return "" if self.table.is_primary(role) else (role or "")
+
+    def _source(self, kind: str, channel: int | None, number: int = 0) -> str:
+        return Binding.midi_source(kind, channel, number, self.qualifier)
+
+    def _active(self) -> list[Binding]:
+        """The rows that show on this device now (`Bindings.active`)."""
+        return self.table.active(self._role())
 
     # ---- learn / bindings ----
 
@@ -454,9 +498,12 @@ class MidiIO:
     def control_name(self, b: Binding) -> str:
         """The control a row names, in the device's words where the
         profile has them — its glyph, then Akai's name ("D3 (device knob 3)",
-        plan 14 WP7) — else the row's own."""
+        plan 14 WP7) — else the row's own. Another desk's row (plan 27 B2)
+        is never named in this desk's words: it describes itself."""
+        if not self.table.serves(self._role(), b):
+            return b.describe()
         name = getattr(self.profile, "named", None) or getattr(self.profile, "control_name", None)
-        return (name(b.source) if name is not None else None) or b.describe()
+        return (name(b.bare) if name is not None else None) or b.describe()
 
     def _learned(self, kind: str, channel: int, number: int, value: int) -> None:
         """A desk message completes the armed learn: `Learn.learn_control`
@@ -465,7 +512,7 @@ class MidiIO:
         with no adapter). When it lands, the table's `redraw_serial` tells
         this adapter to redraw; a refusal (the global layer, D5) changes
         nothing and leaves the learn armed."""
-        self.learner.learn_control(Binding.midi_source(kind, channel, number), self.profile)
+        self.learner.learn_control(self._source(kind, channel, number), self.profile)
 
     # ---- per frame ----
 
@@ -496,12 +543,18 @@ class MidiIO:
         seen = self._serials()
         if seen != self._seen:
             load = seen[1] != self._seen[1]
+            switch = seen[0] != self._seen[0]
             self._seen = seen
-            self.redraw(load=load)
+            self.redraw(load=load, switch=switch)
 
     def _serials(self) -> tuple[int, int, int]:
+        """(this desk's layer serial, the desk serial, the redraw serial):
+        the layer serial is this role's own (plan 27 B2), so SHIFT on the
+        APC40 never re-arms a second desk's faders."""
         t = self.table
-        return t.layer_serial, t.desk_serial, getattr(t, "redraw_serial", 0)
+        of = getattr(t, "layer_serial_of", None)
+        layer = of(self._role()) if of is not None else t.layer_serial
+        return layer, t.desk_serial, getattr(t, "redraw_serial", 0)
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
@@ -539,35 +592,36 @@ class MidiIO:
         # fader, TAP do their own job while a learn is armed). A candidate
         # is not dispatched, landed or refused; everything else is, as if
         # no learn were armed — a note-off included (never a candidate)
-        lrn = self.learner
+        lrn, t, role = self.learner, self.table, self._role()
         if lrn.learning is not None and (kind != "note" or value > 0):
-            source = Binding.midi_source(kind, ch, number)
-            if lrn.accepts(source) and not self.table.is_invariant(Binding(source, lrn.learning)):
-                for b in self.table.dispatch(kind, ch, number):
+            source = self._source(kind, ch, number)
+            if lrn.accepts(source) and not t.is_invariant(Binding(source, lrn.learning)):
+                for b in t.dispatch(kind, ch, number, role):
                     self._passed_over(b, value)
                 self._learned(kind, ch, number, value)
                 if kind == "note":
-                    self._log_press(source, f"learn: {lrn.last}", self.table.layer)
+                    self._log_press(source, f"learn: {lrn.last}", t.layer_of(role))
                 return
         # the layer is read at the press (D12): a note-off goes to the rows
-        # its note-on went to, whatever is up by now
+        # its note-on went to, whatever is up by now — on this device's
+        # own latch (plan 27 B2)
         if kind == "note" and value > 0:
-            rows = self._held[(ch, number)] = self.table.dispatch(kind, ch, number)
+            rows = self._held[(ch, number)] = t.dispatch(kind, ch, number, role)
         elif kind == "note":
             rows = self._held.pop((ch, number), None)
             if rows is None:
-                rows = self.table.dispatch(kind, ch, number)
+                rows = t.dispatch(kind, ch, number, role)
         else:
-            rows = self.table.dispatch(kind, ch, number)
-            for b in self.table.route(kind, ch, number):    # (dispatch leaves these out)
-                if not b.enabled:
+            rows = t.dispatch(kind, ch, number, role)
+            for b in t.route(kind, ch, number):    # (dispatch leaves these out)
+                if not b.enabled and t.serves(role, b):
                     self._passed_over(b, value)
         pressed = kind == "note" and value > 0
         # the layer the press was read on, for the log: "both" when only
         # invariant rows took it
         layer = ("both" if rows and all(b.layer is None for b in rows)
-                 else self.table.layer)
-        source = Binding.midi_source(kind, ch, number)
+                 else t.layer_of(role))
+        source = self._source(kind, ch, number)
         if pressed and self._save_tap(rows, source, layer):
             return                  # SAVE held: the pad saved; it neither loads nor holds
         timed = []
@@ -633,7 +687,8 @@ class MidiIO:
 
     def _log_press(self, source: str, what: str, layer: str) -> None:
         name = getattr(self.profile, "named", None)
-        self._log().add((name(source) if name is not None else None) or source, what, layer)
+        bare = Binding(source, "").bare        # the profile names its own controls
+        self._log().add((name(bare) if name is not None else None) or source, what, layer)
 
     @staticmethod
     def _passed_over(b: Binding, value: int) -> None:
@@ -668,7 +723,7 @@ class MidiIO:
     def _leds_on(self) -> set[tuple]:
         """The controls whose LED an active row lights now."""
         on = set()
-        for b in self.table.active():
+        for b in self._active():
             p = self.reg.get(b.target) if b.feedback == "led" else None
             if p is not None and self._lit(b, p):
                 on.add(b.control)
@@ -709,7 +764,7 @@ class MidiIO:
                     continue
                 self._log_press(b.source, f"held: {p.label}" if b.op == "hold" else
                                 f"held: saved into slot {int(b.value) + 1}: {p.text()}", layer)
-                bar = {x.control for x in self.table.active()
+                bar = {x.control for x in self._active()
                        if x.op == "hold" and x.target == b.target and x.feedback == "led"}
                 for c in (self._leds_on() - before) | bar:
                     blinks[c] = now + BLINK_S
@@ -903,7 +958,7 @@ class MidiIO:
         # an adapter made before `_shown` existed (a hot reload keeps the
         # object and never re-runs __init__) gets it here
         shown = self.__dict__.setdefault("_shown", {})
-        for b in self.table.active():        # the up layer's rows and the invariant ones
+        for b in self._active():        # the up layer's rows and the invariant ones
             if not b.feedback:
                 continue
             p = self.reg.get(b.target)
@@ -947,7 +1002,8 @@ class MidiIO:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
 
-    def redraw(self, *, load: bool = False, whole: bool = False) -> None:
+    def redraw(self, *, load: bool = False, whole: bool = False,
+               switch: bool = False) -> None:
         """Every ring and LED for the layer that is up (plan 13 §3.1): each
         control some row names, or feedback drew since the last redraw
         (`_shown` — a row since removed lit it: a preset load's smaller
@@ -960,8 +1016,8 @@ class MidiIO:
         (`_writes` is per param: another control on the same param may
         have made the last write): a fader whose base the load moved
         picks up, and one whose param the load left alone (the
-        crossfader's dim, S1–S8 and SM: a preset never moves a session
-        param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
+        crossfader's dim, SM, and the audio strip on S1–S8 under SHIFT: a
+        preset never moves a session param, D9) keeps its hold (plan 15 WP3, fork 19). A load also ends
         every glide (knob smoothing) but a session param's, before anything
         else: the load's value stands, even where it equals the glide's
         last write; a session param the load never moves goes on arriving,
@@ -978,18 +1034,35 @@ class MidiIO:
         starts from where its control physically is (`_hw`), so a fader
         already on the value catches on its first move. The session's
         faders (invariant or global: a preset never moves their params,
-        D9) keep the rule above."""
+        D9) keep the rule above.
+
+        **A layer switch re-arms every layered fader** (`switch`; plan 24
+        C2, D7): since the track faders carry the preset's targets on one
+        layer and the audio strip under SHIFT, one physical fader serves
+        two params. Each layered fader row starts from where the fader
+        physically is (`_hw`) and is caught only when its param is already
+        there, so a fader moved on the other layer picks up its own param
+        instead of jumping it. A load's rule above wins over this one."""
         if load:
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_session_id(pid)]:
                 del slews[pid]
-        active = self.table.active()
+        active = self._active()
         drawn = {b.control for b in active if b.feedback}
         hw = self.__dict__.setdefault("_hw", {})
         for b in self.bindings:
             b.last_out = None
             if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
                 b.last_hw = hw.get(b.control)        # a fresh row: where its control is
+            if (switch and b.layer is not None and b.kind in ("cc", "pitch")
+                    and b.op == "abs" and b.feedback != "ring" and b.pickup):
+                # where the fader is, moved on any layer — or None when no
+                # position is known (never moved since power-up): then only
+                # an on-value catch counts, never a crossing from a stale one
+                p, pos = self.reg.get(b.target), hw.get(b.control)
+                b.last_hw = pos
+                b.caught = (p is not None and pos is not None
+                            and abs(self._ring_norm(p) - pos) <= PICKUP_TOL)
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
                 if (b.layer == "preset" or p is None or seen is None or b.last_hw is None

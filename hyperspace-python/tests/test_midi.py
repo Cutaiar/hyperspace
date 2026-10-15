@@ -184,6 +184,7 @@ def test_relative_encoder_steps_shape(rig):
 def test_faders_on_channels_pick_their_band(rig):
     for x in rig.midi.bindings:
         x.pickup = False
+    shift(rig)                  # the audio strip is the SHIFT layer's (plan 24 C2, decision 17)
     push(rig, cc(apc40.CC_FADER, 0, channel=2))
     assert rig.audio.chain.params[2].post == 0.0
     assert rig.audio.chain.params[1].post == 1.0
@@ -446,7 +447,8 @@ def test_unbind_removes_only_preset_layer_rows_and_writes_no_file(rig):
     assert rig.view.bright == pytest.approx(lib.read("presets", "BIG BLUE WAVE")["values"]
                                             .get("view.bright", 1.0))
     # the session's rows: refused, kept
-    for pid, why in (("band.0.post", "invariant"), ("band.sel.trim", "global layer")):
+    for pid, why in (("master.gain", "invariant"), ("band.0.post", "global layer"),
+                     ("band.sel.trim", "global layer")):
         m.unbind(pid)
         assert m.learner.refused and why in m.learner.last, pid
         assert m.table.for_param(pid) is not None, pid
@@ -518,10 +520,10 @@ def test_an_invariant_control_works_through_a_desk_learn(rig):
         x.pickup = False
     rows = [(b.to_json(), b.layer) for b in m.table.bindings]
     lrn.arm("view.depth4", "desk")
-    post = reg["band.2.post"]
-    push(rig, cc(apc40.CC_FADER, 0, channel=2))              # S3: a fader's jitter
+    post = reg["master.gain"]                                # MASTER (S1–S8 are layered, C2)
+    push(rig, cc(apc40.CC_MASTER, 0))                        # a fader's jitter
     low = post.norm
-    push(rig, cc(apc40.CC_FADER, 127, channel=2))
+    push(rig, cc(apc40.CC_MASTER, 127))
     assert post.norm > low
     assert lrn.learning == "view.depth4" and not lrn.refused and lrn.last == ""
     shift(rig)                                               # SHIFT latches through it

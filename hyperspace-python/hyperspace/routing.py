@@ -115,7 +115,9 @@ One performer per parameter — the model (plan 09)::
               lane:0 ──push──▶ macro.2   hand:left.y ──position──▶ fx.mix  × macro.2 (depth sub)
 
 A *performer* is an enabled row whose source is a continuous scheme
-(LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
+(`is_continuous`: anything but a key, pad, D-pad or MIDI row — which
+continuous schemes this rig has is the device registry's, `Router.schemes`)
+and whose op is in MOD_OPS. A target has at most one:
 `Bindings.add` / `bind` raise `Owned(existing, new)` when another enabled
 performer already has it (`Bindings.owner`), and the caller asks — the
 panel's Replace / Keep prompt (ui_routing.py), which a hand learn reaches
@@ -275,7 +277,37 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
-LANE_SCHEMES = ("lane", "ext", "lfo", "hand", "hands", "axis")  # continuous, read by the Router
+# the row kinds the table dispatches itself (plan 27 B2): the keys
+# (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI
+# (midi.MidiIO). Every other scheme is a **continuous** source — a lane
+# some device feeds (`lane`, `lfo`, `hand`, `axis`, a new device's role) —
+# so a preset row naming a device this rig lacks is still a performer,
+# dormant until its device feeds (decision 11). Which continuous schemes
+# exist, and in what order a page offers them, is the device registry's
+# (`Router.schemes`, devices.DeviceRegistry.continuous_schemes): there is
+# no fixed list of them here
+ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
+# a MIDI source's device qualifier (plan 27 B2): ``cc@<role>:<ch>:<n>``,
+# ``note@<role>:<ch>:<n>``, ``pitch@<role>:<ch>`` — the row of a MIDI device
+# other than the first one listed. An unqualified source is the first MIDI
+# role's (`Bindings.midi_roles`), so every row written before plan 27 means
+# what it meant. The qualifier adds no ``:`` (a role has none)
+QUALIFIER = "@"
+
+
+def base_scheme(scheme: str) -> str:
+    """A scheme without its device qualifier: ``cc@launch`` → ``cc``. Only
+    a MIDI scheme takes one; any other scheme is returned as it is."""
+    head, at, _ = scheme.partition(QUALIFIER)
+    return head if at and head in MIDI_SCHEMES else scheme
+
+
+def is_continuous(scheme: str) -> bool:
+    """Is `scheme` a continuous source — read by the Router as a lane,
+    driven through a performer row — rather than a row kind the table
+    dispatches (`ROW_SCHEMES`)? Open-ended: a scheme no device of this rig
+    publishes is continuous too, its rows dormant (decision 11)."""
+    return base_scheme(scheme) not in ROW_SCHEMES
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
@@ -363,6 +395,17 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
 # the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
 TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
+# Plan 24 C2 (decision 17, amending D6) frees the track faders S1–S8 for
+# the presets: the audio strip that was invariant on them (the bands'
+# post-drive on 1–6, master.dyn and master.trim on 7–8) moves to the SHIFT
+# layer. A session file from before holds those eight rows with no layer;
+# `remap_factory` gives each exact row the global layer, with a note (the
+# file is backed up and written back once). A fader row the owner changed
+# matches no key and stays invariant: that fader is the owner's on both
+# layers, and a preset's row on it drops with D6's note.
+FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"cc:{ch}:{apc40.CC_FADER}", pid, "abs", 1.0)
+    for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
@@ -370,6 +413,7 @@ APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
                   **{source: "plan 19" for _k, source in _FAR_PADS},
                   **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
+                  **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
                   f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
@@ -532,11 +576,30 @@ class Binding:
 
     @property
     def scheme(self) -> str:
-        return self.source.split(":", 1)[0]
+        """The source's scheme — a MIDI row's without its device qualifier
+        (``cc@launch:0:7`` → ``cc``; `device` holds the role)."""
+        return base_scheme(self.source.split(":", 1)[0])
+
+    @property
+    def device(self) -> str:
+        """A MIDI row's device qualifier — the role after ``@`` — or ""
+        for an unqualified row, the first MIDI role's (`Bindings.role_of`)."""
+        head = self.source.split(":", 1)[0]
+        base, at, role = head.partition(QUALIFIER)
+        return role if at and base in MIDI_SCHEMES else ""
 
     @property
     def parts(self) -> list[str]:
         return self.source.split(":")[1:]
+
+    @property
+    def bare(self) -> str:
+        """The source without its device qualifier (``cc@launch:0:7`` →
+        ``cc:0:7``): the control as a device's own profile names it."""
+        if not self.device:
+            return self.source
+        _, _, rest = self.source.partition(":")
+        return f"{self.scheme}:{rest}"
 
     @property
     def key(self) -> str:
@@ -591,12 +654,15 @@ class Binding:
     def is_performer(self) -> bool:
         """An enabled push / position row from a continuous source — what
         owns a target. A disabled row keeps its settings and owns nothing."""
-        return self.enabled and self.scheme in LANE_SCHEMES and self.op in MOD_OPS
+        return self.enabled and is_continuous(self.scheme) and self.op in MOD_OPS
 
     @staticmethod
-    def midi_source(kind: str, channel: int | None, number: int = 0) -> str:
+    def midi_source(kind: str, channel: int | None, number: int = 0, role: str = "") -> str:
+        """A MIDI row's source; `role` qualifies it for a MIDI device other
+        than the first listed (``cc@launch:0:7``, plan 27 B2)."""
         ch = "*" if channel is None else str(int(channel))
-        return f"pitch:{ch}" if kind == "pitch" else f"{kind}:{ch}:{int(number)}"
+        head = f"{kind}{QUALIFIER}{role}" if role else kind
+        return f"{head}:{ch}" if kind == "pitch" else f"{head}:{ch}:{int(number)}"
 
     def matches(self, kind: str, channel: int, number: int) -> bool:
         if self.kind != kind:
@@ -606,9 +672,10 @@ class Binding:
         return kind == "pitch" or self.number == number
 
     def overlaps(self, other: Binding) -> bool:
-        """Two MIDI rows on one physical control: the same kind and number
-        on the same channel, or either one on any channel."""
-        if not (self.is_midi and other.kind == self.kind):
+        """Two MIDI rows on one physical control: the same device (the same
+        qualifier, plan 27 B2), the same kind and number on the same
+        channel, or either one on any channel."""
+        if not (self.is_midi and other.kind == self.kind and other.device == self.device):
             return False
         if None not in (self.channel, other.channel) and self.channel != other.channel:
             return False
@@ -635,7 +702,7 @@ class Binding:
             d["motion"] = self.motion.to_json()
         # a performer never picks up (plan 09 d.4: hands grab, they never
         # yield) — the field rides on the dataclass but never on the file
-        if self.scheme in LANE_SCHEMES:
+        if is_continuous(self.scheme):
             d.pop("pickup", None)
         return d
 
@@ -664,16 +731,18 @@ class Binding:
         s = self.scheme
         if self.is_midi:
             ch = "any ch" if self.channel is None else f"ch{self.channel + 1}"
+            on = f" on {self.device}" if self.device else ""
             if s == "pitch":
-                return f"MIDI pitch bend {ch}"
+                return f"MIDI pitch bend {ch}{on}"
             what = "CC" if s == "cc" else "note"
             extra = "" if self.op in ("abs", "toggle") else f" {self.op}"
-            return f"MIDI {what} {self.number} {ch}{extra}"
+            return f"MIDI {what} {self.number} {ch}{on}{extra}"
         addr = ":".join(self.parts)
         if s == "hat":
             return f"d-pad {addr}"
-        who = name if name and s in LANE_SCHEMES else f"{s} {addr}"
-        if s in LANE_SCHEMES and self.op in MOD_OPS:
+        lane = is_continuous(s)
+        who = name if name and lane else f"{s} {addr}"
+        if lane and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
             when = f" while {gate or self.when}" if self.when else ""
             if self.op == "push":
@@ -851,7 +920,7 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     out: list[Binding] = []
     notes: list[str] = []
     for b in rows:
-        if b.scheme not in LANE_SCHEMES:
+        if not is_continuous(b.scheme):
             out.append(b)
             continue
         op = V1_TO_OP.get(b.op)
@@ -917,7 +986,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14 (PAD_REMAP).
+    2026-10-14 (PAD_REMAP); the track faders' eight invariant audio rows
+    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
@@ -945,6 +1015,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target, op=op, value=value)
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
+        elif ((b.source, b.target, b.op, float(b.value)) in FADER_SHIFT_ROWS
+              and b.layer is None):
+            notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
+                         "map of plan 24: the track faders are the presets')")
+            b = replace(b, layer="global")
         elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
             hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
             if hit is None:
@@ -1383,6 +1458,16 @@ class Bindings:
     # is an edit (`set_routes`), so they are gone before the first frame;
     # this line stays for the session. "" when the load wrote nothing
     said: str = ""
+    # the MIDI devices' roles (plan 27 B2; the device registry sets them,
+    # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
+    # then `[[devices]]` order): an unqualified MIDI row is the first
+    # one's, another device's rows carry its role (``cc@launch:0:7``).
+    # Empty — a bare table, the tests' — every unqualified row is the
+    # one desk's, as before
+    midi_roles: tuple[str, ...] = ()
+    # the schemes delivered as rows, never read as lanes (`_check`): the
+    # table's own kinds, and any a device of this rig adds (`Router.use`)
+    row_schemes: tuple[str, ...] = ROW_SCHEMES
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -1416,6 +1501,10 @@ class Bindings:
         # adapter watches: a layer change or a desk replacement redraws
         # every ring and LED, and a replacement clears the faders' catch
         self.layer = "preset"
+        # the other MIDI roles' layers (plan 27 B2: the latch is per role —
+        # `layer` is the first role's, SHIFT's, `desk.shift`); a role with
+        # no latch of its own stays on the preset layer
+        self.layers: dict[str, str] = {}
         self.layer_serial = 0
         self.desk_serial = 0
         # an edit of a desk row in place (the ROUTING page): a redraw only,
@@ -1645,6 +1734,34 @@ class Bindings:
     def routes_to(self, pid: str) -> list[Binding]:
         return [b for b in self.bindings if b.op in MOD_OPS and b.target == pid]
 
+    # ---- the desk's devices (plan 27 B2) ----
+
+    def primary_role(self) -> str:
+        """The first MIDI role listed — whose rows are unqualified — or ""
+        when the table has been told none."""
+        roles = getattr(self, "midi_roles", ())
+        return roles[0] if roles else ""
+
+    def is_primary(self, role: str | None) -> bool:
+        """Is `role` the first MIDI role (None, "" and any role of a table
+        told none are)?"""
+        roles = getattr(self, "midi_roles", ())
+        return not role or not roles or role == roles[0]
+
+    def role_of(self, b: Binding) -> str:
+        """The MIDI role a row belongs to: its qualifier, else the first
+        role's."""
+        return b.device or self.primary_role()
+
+    def serves(self, role: str | None, b: Binding) -> bool:
+        """Is MIDI row `b` the device of `role`'s? An unqualified row is the
+        first role's (and so is one qualified with that role's name); any
+        other qualified row is its qualifier's only."""
+        q = b.device
+        if self.is_primary(role):
+            return not q or q == role or q == self.primary_role()
+        return q == role
+
     # ---- the desk: two layers under a latched SHIFT (plan 13 §3) ----
 
     def invariant_rows(self) -> list[Binding]:
@@ -1652,25 +1769,27 @@ class Bindings:
         return [b for b in self.bindings if b.is_midi and b.layer is None and b.enabled]
 
     def is_invariant(self, b: Binding, rows: list[Binding] | None = None) -> bool:
-        """Is `b`'s control invariant — SHIFT, or the control of an enabled
-        layer-None row (`rows`, when the caller has them)? A layered row
-        on such a control never acts and never lights (D6)."""
+        """Is `b`'s control invariant — SHIFT (the first role's latch), or
+        the control of an enabled layer-None row on the same device
+        (`rows`, when the caller has them)? A layered row on such a control
+        never acts and never lights (D6)."""
         if not b.is_midi:
             return False
-        if b.overlaps(_SHIFT):
+        if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
             return True
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
 
     @staticmethod
-    def _controls(rows: Iterable[Binding]) -> tuple[set, set, set]:
+    def _controls(rows: Iterable[Binding], shift: bool = True) -> tuple[set, set, set]:
         """An index of `rows`' controls for `_on`: (kind, channel, number)
         of the one-channel rows, (kind, number) of the any-channel rows,
-        (kind, number) of every row."""
+        (kind, number) of every row — SHIFT's with them for the first
+        role's desk. `rows` are one device's (the qualifier is not in it)."""
         exact: set = set()
         wild: set = set()
         every: set = set()
-        for x in (*rows, _SHIFT):
+        for x in (*rows, *((_SHIFT,) if shift else ())):
             k = (x.kind, x.number)
             every.add(k)
             if x.channel is None:
@@ -1688,41 +1807,78 @@ class Bindings:
             return k in every
         return k in wild or (b.kind, b.channel, b.number) in exact
 
-    def dispatch(self, kind: str, channel: int, number: int) -> list[Binding]:
-        """The rows a MIDI message goes to now: the invariant rows on its
-        control, else the enabled rows of the layer that is up on it —
-        nothing else (D8: no fall-through; a control the up layer does not
-        map does nothing)."""
-        rows = [b for b in self.route(kind, channel, number) if b.enabled]
+    def dispatch(self, kind: str, channel: int, number: int,
+                 role: str | None = None) -> list[Binding]:
+        """The rows a MIDI message from the device of `role` (None: the
+        first MIDI role) goes to now: the invariant rows on its control,
+        else the enabled rows of the layer that is up **on that device**
+        (plan 27 B2: the latch is per role) — nothing else (D8: no
+        fall-through; a control the up layer does not map does nothing)."""
+        rows = [b for b in self.route(kind, channel, number)
+                if b.enabled and self.serves(role, b)]
         inv = [b for b in rows if b.layer is None]
         if inv:
             return inv
-        if kind == "note" and channel == 0 and number == _SHIFT.number:
+        if (self.is_primary(role) and kind == "note" and channel == 0
+                and number == _SHIFT.number):
             return []
-        return [b for b in rows if b.layer == self.layer]
+        layer = self.layer_of(role)
+        return [b for b in rows if b.layer == layer]
 
-    def active(self) -> list[Binding]:
-        """The MIDI rows that show on the desk now: every invariant row, and
-        the up layer's rows on controls that are not invariant."""
-        index = self._controls(self.invariant_rows())      # once a frame: an index,
-        return [b for b in self.midi()                      # not a pairwise scan
-                if b.layer is None or (b.layer == self.layer and not self._on(b, index))]
+    def active(self, role: str | None = None) -> list[Binding]:
+        """The MIDI rows of the device of `role` (None: the first MIDI
+        role) that show on it now: every invariant row, and the up layer's
+        rows on controls that are not invariant."""
+        rows = [b for b in self.midi() if self.serves(role, b)]
+        index = self._controls([b for b in rows if b.layer is None and b.enabled],
+                               shift=self.is_primary(role))     # once a frame: an index,
+        layer = self.layer_of(role)                             # not a pairwise scan
+        return [b for b in rows
+                if b.layer is None or (b.layer == layer and not self._on(b, index))]
 
-    def set_layer(self, layer: str) -> None:
+    def layer_of(self, role: str | None = None) -> str:
+        """The layer up on the device of `role`: the first role's is
+        `layer` (SHIFT's, `desk.shift`); another role's is its own, the
+        preset layer until something latches it."""
+        if self.is_primary(role):
+            return self.layer
+        return self.__dict__.setdefault("layers", {}).get(role, "preset")
+
+    def set_layer(self, layer: str, role: str | None = None) -> None:
         if layer not in LAYERS:
             raise ValueError(f"no layer {layer!r}; one of {', '.join(LAYERS)}")
-        if layer != self.layer:
-            self.layer = layer
-            self.layer_serial += 1
+        if self.is_primary(role):
+            if layer != self.layer:
+                self.layer = layer
+                self.layer_serial += 1
+            return
+        layers = self.__dict__.setdefault("layers", {})
+        if layers.get(role, "preset") != layer:
+            layers[role] = layer
+            serials = self.__dict__.setdefault("layer_serials", {})
+            serials[role] = serials.get(role, 0) + 1
 
-    def toggle_layer(self) -> str:
-        """SHIFT's press: the other layer. Returns the one now up."""
-        self.set_layer("global" if self.layer == "preset" else "preset")
-        return self.layer
+    def layer_serial_of(self, role: str | None = None) -> int:
+        """How many times the layer up on the device of `role` has changed:
+        the first role's is `layer_serial` (SHIFT's), another role's its
+        own count — so a desk redraws and re-arms its faders' pickup only
+        when **its** latch flips (D7, per desk), never on another's."""
+        if self.is_primary(role):
+            return self.layer_serial
+        return self.__dict__.setdefault("layer_serials", {}).get(role, 0)
+
+    def toggle_layer(self, role: str | None = None) -> str:
+        """SHIFT's press: the other layer on that device. Returns the one
+        now up."""
+        self.set_layer("global" if self.layer_of(role) == "preset" else "preset", role)
+        return self.layer_of(role)
 
     def drop_layer(self) -> None:
-        """Back to the preset layer (D4) — what a preset load does."""
+        """Back to the preset layer (D4) on every device — what a preset
+        load does."""
         self.set_layer("preset")
+        for role in list(self.__dict__.setdefault("layers", {})):
+            self.set_layer("preset", role)
 
     def desk(self) -> list[Binding]:
         """The preset layer's rows — what a preset's `desk` holds."""
@@ -1825,11 +1981,18 @@ class Bindings:
 
     # ---- edits ----
 
+    def _lane_only(self, b: Binding) -> bool:
+        """Is `b`'s source read only as a lane — continuous, and not a
+        scheme some device of this rig delivers as rows (`row_schemes`)?"""
+        return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
+
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
         find its target free, or held by itself. A continuous source has
-        no other op — `abs` is MIDI's, the one path is Router.modulate."""
-        if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS:
+        no other op — `abs` is MIDI's, the one path is Router.modulate. (A
+        scheme a device delivers as rows — `row_schemes`, which the device
+        registry extends through `Router.use` — is not continuous here.)"""
+        if self._lane_only(b) and b.op not in MOD_OPS:
             raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
                              f"one of {', '.join(MOD_OPS)}")
         why = save_refusal(b)
@@ -1868,7 +2031,9 @@ class Bindings:
             return []
 
         def same_role(x: Binding) -> bool:
-            if x.target != b.target or not x.is_midi:
+            # one control per param *per desk* (plan 27 B2): a knob learned
+            # on a second desk leaves the param's knob on the APC40 alone
+            if x.target != b.target or not x.is_midi or self.role_of(x) != self.role_of(b):
                 return False
             if b.scheme == "note":
                 return x.scheme == "note" and x.op == b.op and x.value == b.value
@@ -1921,7 +2086,7 @@ class Bindings:
         op on a continuous source (`ValueError`), or a second owner still
         standing after the swap (`Owned`)."""
         pid = new.target if target is None else target
-        if new.scheme in LANE_SCHEMES and new.op not in MOD_OPS:
+        if self._lane_only(new) and new.op not in MOD_OPS:
             self._check(new)                     # says why, before anything moves
         cur = self.owner(pid)
         if cur is new:
@@ -1975,11 +2140,20 @@ _NO_LANES: dict = {}      # `Router.lane`'s cache before its first miss; never w
 
 
 class Router:
-    """The adapters' lookup and the per-frame modulation pass over one table."""
+    """The adapters' lookup and the per-frame modulation pass over one table.
 
-    def __init__(self, reg: Registry, table: Bindings):
+    `devices` is the rig's device registry (devices.DeviceRegistry, plan 27
+    B2), handed in as an argument — this module imports nothing above it —
+    and asked which continuous schemes there are and in what order a page
+    offers them (`schemes`); None (a bare router, the tests') offers what
+    has been fed or labelled."""
+
+    def __init__(self, reg: Registry, table: Bindings, devices=None):
         self.reg = reg
         self.table = table
+        self.devices = None
+        if devices is not None:
+            self.use(devices)
         self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
         self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
         # scheme → the lanes an adapter offers as gates, [(index, label)]:
@@ -2002,6 +2176,45 @@ class Router:
         self._macro_bases: dict[str, float] = {}
         self._macros_seen = table.macros_serial
         self._note_macro_bases()
+
+    # ---- the device registry (plan 27 B2) ----
+
+    def use(self, devices) -> None:
+        """Ask `devices` (anything with `continuous_schemes()`, and
+        optionally `row_schemes()` and `midi_roles()`) from now on: which
+        schemes are lanes and in what order (`schemes`), which a device
+        delivers as rows (the referee's `row_schemes`), which MIDI role an
+        unqualified row means (`Bindings.midi_roles`). Called again
+        whenever the device list changes."""
+        self.devices = devices
+        self.follow_devices()
+
+    def follow_devices(self) -> None:
+        """Re-read the registry's row schemes and MIDI roles into the table
+        (the registry's listener calls it when the list changes)."""
+        devs = self.__dict__.get("devices")
+        if devs is None:
+            return
+        rows = getattr(devs, "row_schemes", None)
+        if rows is not None:
+            self.table.row_schemes = tuple(dict.fromkeys((*ROW_SCHEMES, *rows())))
+        roles = getattr(devs, "midi_roles", None)
+        if roles is not None:
+            self.table.midi_roles = tuple(roles())
+
+    def schemes(self) -> tuple[str, ...]:
+        """The continuous schemes a route can read, in the order a page
+        offers them: the registry's (`continuous_schemes`: the analyzer's
+        `lane` and the LFOs' `lfo` first, then each listed device's feeds
+        in list order), then any other scheme that has been fed or
+        labelled this run. With no registry, `lane` and `lfo` and then
+        whatever has been fed or labelled."""
+        devs = self.__dict__.get("devices")
+        out = list(devs.continuous_schemes()) if devs is not None else ["lane", "lfo"]
+        for s in (*self.labels, *self.feeds):
+            if s not in out and is_continuous(s):
+                out.append(s)
+        return tuple(out)
 
     @property
     def names(self) -> dict[str, dict[str, int]]:
@@ -2164,8 +2377,12 @@ class Router:
         press completed a learn). A press acts as a note-on does
         (`act`); a `momentary` row lets its toggle go on the release; a
         `hold` row fires once its button has been down HOLD_S (`now`, a
-        monotonic clock; a shorter press does nothing)."""
-        self._publish_axes()
+        monotonic clock; a shorter press does nothing). The axes' names,
+        labels and rests are the pad's to publish (`pad.publish`, plan 27
+        B2: gamepad.publish), not this table's."""
+        publish = getattr(pad, "publish", None)
+        if publish is not None:
+            publish(self)
         self.feed("axis", pad.lanes() if pad.on else None)
         holds = self.__dict__.setdefault("_pad_holds", {})   # source → press time; None once fired
         if not pad.on:
@@ -2205,20 +2422,10 @@ class Router:
             if pressed and buttons:
                 act(self.reg, b)
 
-    def _publish_axes(self) -> None:
-        """The pad axes' names, labels and rests (gamepad.AXES …), once."""
-        if "axis" in self.names:
-            return
-        from . import gamepad
-        self.labels["axis"] = list(gamepad.AXIS_LABELS)
-        self.rests["axis"] = list(gamepad.AXIS_RESTS)
-        self.names["axis"] = {n: i for i, n in enumerate(gamepad.AXES)}
-
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
-        one is off its default camera job (app.py)."""
-        if scheme == "axis":
-            self._publish_axes()
+        one is off its default camera job (gamepad.steer). A named address
+        resolves through what the scheme's device has published."""
         return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
                 if s == scheme and i >= 0}
 
