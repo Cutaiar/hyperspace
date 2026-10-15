@@ -129,6 +129,7 @@ from .params import (
     UNITS,
     UNITS_KEY,
     Registry,
+    is_instance_id,
     pan_world,
 )
 
@@ -670,6 +671,10 @@ class Project:
         # the file's own name, which a launch finds the show by (`stem`)
         self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
         self.session = dict(doc.get("session") or {})
+        # how many shows this project object has taken: a hands node of a
+        # preset's graph is seeded from a show's session once per show
+        # opened (plan 26 A4, preset.GraphSection)
+        self.opened = getattr(self, "opened", 0) + 1
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
                 for s in list(doc.get("bank") or [])[:SLOTS]]
@@ -760,6 +765,10 @@ class Project:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.session) if self.session else []
+        # an extra hands node's settings (`ghost.2.*`, plan 26 A4) wait for
+        # the preset whose graph declares the node (`GraphSection` seeds it
+        # from this session): held back, not unknown
+        missing = [pid for pid in missing if not is_instance_id(pid)]
         # ids the file lacks (a param added since) take the state this load
         # left, so an untouched project is not dirty the moment it opens
         for pid, v in (lib.reg.snapshot(part="session") if lib.reg is not None else {}).items():
@@ -1160,7 +1169,7 @@ class Project:
             self.path = self.path_for(name)
         elif self.path is None:
             self.path = self.path_for(self.name)
-        self.session = lib.reg.snapshot(part="session")
+        self.session = {**self._held_back(), **lib.reg.snapshot(part="session")}
         self.modules = {}
         for group, cur in lib._current.items():
             if cur is None or group in lib._kinds or group not in SESSION_GROUPS:
@@ -1228,8 +1237,17 @@ class Project:
         if reg is None:
             return False
         return ((self.path is None and not self.factory)
-                or not undo.alike(self.session, reg.snapshot(part="session"))
+                or not undo.alike(self.session, {**self._held_back(),
+                                                 **reg.snapshot(part="session")})
                 or (self.bank, self.startup) != self._saved)
+
+    def _held_back(self) -> dict:
+        """The session's settings of node instances the registry lacks now
+        (`ghost.2.*` while no preset's graph holds the second hands node,
+        plan 26 A4): kept by a save and never counted as an edit."""
+        reg = self.lib.reg
+        return {pid: v for pid, v in (self.session or {}).items()
+                if is_instance_id(pid) and (reg is None or pid not in reg)}
 
 
 def _kept(path: Path) -> bool:

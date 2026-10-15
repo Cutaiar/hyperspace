@@ -133,6 +133,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     SESSION_GROUPS,
     UNITS,
     UNITS_KEY,
+    is_instance_id,
     pan_world,
     part_of,
 )
@@ -216,8 +217,9 @@ class GraphSection:
     Owned by `Presets` (`Presets.graph`); the app and the tools attach the
     renderer."""
 
-    def __init__(self, reg, fx=None, renderer=None):
+    def __init__(self, reg, fx=None, renderer=None, lib=None):
         self.reg = reg
+        self.lib = lib                          # the open show's session seeds a new hands node
         self.fx = fx if fx is not None else getattr(reg, "fx_state", None)
         self.renderer = None
         self.spec: GraphSpec | None = None      # None: the default graph
@@ -248,26 +250,26 @@ class GraphSection:
             return None, copy.deepcopy(section), [f"graph: {e}; the default graph"]
         return spec, spec.to_json(), []
 
-    def will_declare(self, spec: GraphSpec | None, pid: str) -> bool:
-        """Would landing `spec` declare `pid`? (an instance's param a file
-        names before its graph has landed: `fx.acid.2.mix`, `ghost.2.on`)"""
-        if spec is None:
-            return False
-        heads = [f"fx.{e.file}.{e.n}." for e in spec.effects]
-        heads += [ghost_prefix(h.n) + "." for h in spec.wiring().extra]
-        return any(pid.startswith(h) for h in heads)
-
     def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:
         """Make `spec` the graph (None: the default): declare and drop the
         instances' params, and hand the renderer its wiring. `doc` is the
-        section a save writes back."""
+        section a save writes back.
+
+        An extra hands node declared for the first time this run starts
+        from what the open show holds for it (`ghost.2.*` in its session —
+        the show restored before the startup preset brought the node), so
+        its settings survive a reopen and the show stays clean; after
+        that its kept state is the live one."""
         wiring = spec.wiring() if spec is not None else Wiring()
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
         for name in sorted(self.declared - set(want)):
             reg.remove_prefix(name + ".")
         for name, n in want.items():
+            was = name in self.declared
             declare_ghost(reg, self.states.setdefault(name, GhostState()), n)
+            if not was:
+                self._seed(name)
         self.declared = set(want)
         if self.fx is not None:
             changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
@@ -275,6 +277,30 @@ class GraphSection:
                 declare_fx(reg, self.fx, changed)
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self._push()
+
+    def _seed(self, name: str) -> None:
+        """A newly declared hands node's params from the open show's
+        session, where it holds them (`library.Project.session`) — once
+        per show opened (`Project.opened`): after that the node's kept
+        state is the live one, so a setting changed in this show is not
+        put back when a later preset brings the node again."""
+        project = getattr(getattr(self, "lib", None), "project", None)
+        seeded = self.__dict__.setdefault("_seeded", {})
+        show = getattr(project, "opened", None)
+        if name in seeded and seeded[name] == show:
+            return
+        seeded[name] = show
+        session = getattr(project, "session", None) or {}
+        held = {pid: v for pid, v in session.items()
+                if pid.startswith(name + ".") and pid in self.reg}
+        if held:
+            self.reg.restore(held)
+        if project is not None and isinstance(getattr(project, "session", None), dict):
+            # an id the show lacks takes the state this landing left, as a
+            # show's `_apply` does for a param added since: the show stays clean
+            for pid, v in self.reg.snapshot(part="session").items():
+                if pid.startswith(name + "."):
+                    project.session.setdefault(pid, v)
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`)."""
@@ -474,7 +500,7 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
-        self.graph = GraphSection(reg)
+        self.graph = GraphSection(reg, lib=lib)
         lib.kind(GROUP, SCHEMA.rpartition("/")[0],
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
@@ -528,14 +554,15 @@ class Presets:
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
         #    before anything lands, so a bad row leaves the state alone. An
-        #    id of an instance the graph will declare (`fx.acid.2.mix`) is
-        #    looked at once the graph has landed
+        #    id of a node instance (`fx.acid.2.mix`, `ghost.2.on`) is looked
+        #    at once this file's graph has landed — against the params that
+        #    graph holds, never the ones the last preset's graph left
         values: dict[str, Any] = {}
         unknown: list[str] = []
         later: dict[str, Any] = {}
         for pid, v in dict(doc.get("values") or {}).items():
             p = reg.get(pid)
-            if p is None and gs.will_declare(spec, pid):
+            if is_instance_id(pid):
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)
@@ -605,42 +632,47 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
-        gs.land(spec, section)
-        late: list[str] = []
-        for pid, v in later.items():
-            p = reg.get(pid)
-            if p is None:
-                late.append(pid)
-            elif part_of(p) == "session":
-                notes.append(f"{pid} is the session's, ignored")
-            elif part_of(p) is None or not p.persist:
-                notes.append(f"{pid} is not part of a preset, ignored")
-            else:
-                values[pid] = v
-        if late:
-            unknown += late
-            notes.append(f"{len(late)} unknown id(s): " + ", ".join(late[:4])
-                         + ("…" if len(late) > 4 else ""))
-        # 2. every performance param: the file's value, else its group default
-        by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
-        for pid, v in values.items():
-            by_group[reg[pid].group][pid] = v
-        landed: dict[str, Any] = {}
-        for group in PERFORMANCE_GROUPS:
-            landed.update(lib.resolved(group, by_group[group]))
-        # a value that will not take (a hand-edited "fast" on a number) must
-        # not leave half the look on this preset and half on the last: the
-        # state as it was goes back and the load is refused whole — the
-        # graph that was landed too
-        before = reg.snapshot(part="performance")
+        # from here to the values landing, anything that raises puts the
+        # graph that was there back, with its instances' values: a load is
+        # refused whole, never half a graph
         try:
-            lib.restore(landed)
-        except (ValueError, TypeError) as e:
-            lib.restore(before)
+            gs.land(spec, section)
+            late: list[str] = []
+            for pid, v in later.items():
+                p = reg.get(pid)
+                if p is None:
+                    late.append(pid)
+                elif part_of(p) == "session":
+                    notes.append(f"{pid} is the session's, ignored")
+                elif part_of(p) is None or not p.persist:
+                    notes.append(f"{pid} is not part of a preset, ignored")
+                else:
+                    values[pid] = v
+            if late:
+                unknown += late
+                notes.append(f"{len(late)} unknown id(s): " + ", ".join(late[:4])
+                             + ("…" if len(late) > 4 else ""))
+            # 2. every performance param: the file's value, else its group default
+            by_group: dict[str, dict[str, Any]] = {g: {} for g in PERFORMANCE_GROUPS}
+            for pid, v in values.items():
+                by_group[reg[pid].group][pid] = v
+            landed: dict[str, Any] = {}
+            for group in PERFORMANCE_GROUPS:
+                landed.update(lib.resolved(group, by_group[group]))
+            # a value that will not take (a hand-edited "fast" on a number)
+            # must not leave half the look on this preset and half on the
+            # last: the state as it was goes back and the load is refused whole
+            before = reg.snapshot(part="performance")
+            try:
+                lib.restore(landed)
+            except (ValueError, TypeError) as e:
+                lib.restore(before)
+                raise ValueError(f"a value would not land ({e}); nothing loaded") from e
+        except BaseException:
             if gs.mark() != held_graph:          # the graph as it was, and its instances'
                 gs.put(held_graph)               # values as they were
                 lib.restore({k: v for k, v in held_values.items() if k in reg})
-            raise ValueError(f"a value would not land ({e}); nothing loaded") from e
+            raise
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
         notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in table.dropped]
@@ -691,7 +723,7 @@ class Presets:
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
         gs = self.__dict__.get("graph")
         if gs is None:
-            gs = self.graph = GraphSection(self.reg)
+            gs = self.graph = GraphSection(self.reg, lib=self.lib)
         return gs
 
     def template_of_loaded(self) -> str | None:

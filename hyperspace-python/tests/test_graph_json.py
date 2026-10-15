@@ -243,6 +243,13 @@ def test_the_output_pages_shows_line_says_the_wiring():
     two = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
     assert output_shows(S(scene=False, through=True), True, True, 0.5, two) == (
         "hands through the effects (2) · 50%", "")
+    # the scene holds the hands whatever the output's hands switch says
+    # (the golden hands-lines|present|scene is the scene+hands picture):
+    # the words never say "off" for hands that are in the picture
+    assert output_shows(S(hands=False), True, False, 1.0, lines) == (
+        "scene + hands: in the scene as lines", "")
+    assert G.hands_words(lines, S(hands=False)) == "hands: in the scene as lines"
+    assert G.hands_words(lines, S(scene=False, hands=False)) == "hands: off"
 
 
 def test_the_lookback_page_says_what_the_history_holds():
@@ -256,6 +263,24 @@ def test_the_lookback_page_says_what_the_history_holds():
 
 
 # ---------------------------------------------------------------- effect instances
+
+
+def test_an_effect_file_whose_name_would_read_as_an_instance_is_refused(tmp_path):
+    """`acid.2.glsl` (or any stem with a dot, or `2.glsl`) would read as an
+    instance of the naming rule: refused before parsing, with the reason,
+    never taken for an instance and never dropped by `set_instances`."""
+    from hyperspace.fx import FX_DIR
+
+    (tmp_path / "acid.glsl").write_text((FX_DIR / "acid.glsl").read_text())
+    (tmp_path / "acid.2.glsl").write_text((FX_DIR / "acid.glsl").read_text())
+    (tmp_path / "2.glsl").write_text((FX_DIR / "acid.glsl").read_text())
+    fx = FxState(tmp_path)
+    assert set(fx.specs) == {"acid"}
+    assert "instance" in fx.errors["acid.2"] and "instance" in fx.errors["2"]
+    assert fx.set_instances({"acid": 2}) == {"acid.2"}
+    assert fx.specs["acid.2"].label.endswith(" 2") and fx.specs["acid.2"].name == "acid"
+    fx.load()                                  # a re-scan: the instance stays the instance
+    assert set(fx.specs) == {"acid", "acid.2"} and "instance" in fx.errors["acid.2"]
 
 
 def test_a_purely_decimal_param_key_is_refused_at_the_source():
@@ -477,6 +502,92 @@ def test_a_load_refused_for_a_value_puts_the_graph_back(tmp_path):
     assert stub.wiring == before and "fx.acid.2.twist" not in rig.reg
 
 
+def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
+    """Review fix: with a second acid landed, a preset whose graph does not
+    hold it (no section, or one that fell back) and whose values name
+    `fx.acid.2.*` loads, the ids unknown — never a KeyError after the old
+    graph was dropped. And anything that raises after the graph landed
+    puts the old graph back with its instances' values."""
+    from hyperspace.library import LibraryError
+
+    rig = boot(tmp_path)
+    stub = Stub()
+    rig.presets.graph.attach(stub)
+    reg = rig.reg
+    twice = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}]}
+    put(rig.home, "Twice", graph=twice, values={"fx.acid.2.twist": 1.9})
+    put(rig.home, "Plain", values={"fx.acid.2.twist": 0.5, "view.bright": 3.0})
+    put(rig.home, "Newer", graph={"nodes": [{"kind": "cloud", "role": "kinect"}]},
+        values={"fx.acid.2.twist": 0.5})
+    for other in ("Plain", "Newer"):
+        rig.lib.load(PRESETS, "Twice")
+        assert reg["fx.acid.2.twist"].value == 1.9
+        missing = rig.lib.load(PRESETS, other)
+        assert missing == ["fx.acid.2.twist"] and rig.lib.current(PRESETS) == other
+        assert "fx.acid.2.twist" not in reg and rig.presets.graph.spec is None
+        assert any("unknown id(s): fx.acid.2.twist" in n for n in rig.presets.notes)
+    # a raise after the graph landed (not a value error): the graph that
+    # was there comes back, with its instances' values, and the load stops
+    rig.lib.load(PRESETS, "Twice")
+    real = rig.lib.resolved
+
+    def boom(group, values):
+        raise KeyError("boom")
+    rig.lib.resolved = boom
+    try:
+        with pytest.raises((KeyError, LibraryError)):
+            rig.lib.load(PRESETS, "Plain")
+    finally:
+        rig.lib.resolved = real
+    assert reg["fx.acid.2.twist"].value == 1.9 and rig.presets.graph.spec is not None
+    assert rig.reg.fx_state.instances == {"acid": 2} and rig.lib.current(PRESETS) == "Twice"
+
+
+def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
+    """Review fix: a show restores its session before its startup preset
+    declares `ghost.2`; the node is seeded from the show's session when it
+    is first declared, so its settings come back, no unknown id is said,
+    and the show is clean. A preset without the node then keeps them in
+    the show (a save does not drop them, nor counts them as an edit)."""
+    from hyperspace.library import PROJECT_SUFFIX, PROJECTS
+
+    rig = boot(tmp_path)
+    put(rig.home, "Glass", graph={"nodes": [{"kind": "hands", "into": "scene"},
+                                            {"kind": "hands", "instance": 2}]})
+    session = {"ghost.2.on": True, "ghost.2.mirror": True, "ghost.2.alpha": 0.3,
+               "ghost.2.style": 3}
+    show = rig.home / PROJECTS / f"rig{PROJECT_SUFFIX}"
+    show.parent.mkdir(parents=True, exist_ok=True)
+    show.write_text(json.dumps({"schema": "hyperspace.project/2", "name": "rig",
+                                "startup": "Glass", "bank": ["Glass"],
+                                "session": session, "modules": {}}))
+    rig.lib.warning = ""
+    missing = rig.lib.project.load("rig")
+    reg = rig.reg
+    assert missing == [] and "unknown" not in rig.lib.warning
+    assert rig.lib.current(PRESETS) == "Glass"
+    assert {pid: reg[pid].value for pid in session} == session
+    state = rig.presets.graph.states["ghost.2"]
+    assert state.on and state.mirror and state.style == 3
+    assert not rig.lib.project.is_dirty()
+    # a preset without the node: the show still holds its settings, clean
+    rig.lib.load(PRESETS, "party-tumble")
+    assert "ghost.2.on" not in reg and not rig.lib.project.is_dirty()
+    rig.lib.project.save()
+    saved = json.loads(show.read_text())["session"]
+    assert {pid: saved[pid] for pid in session} == session
+    # a change made live is the live one when the node comes back in this run
+    rig.lib.load(PRESETS, "Glass")
+    reg["ghost.2.alpha"].set(0.8)
+    rig.lib.load(PRESETS, "party-tumble")
+    rig.lib.load(PRESETS, "Glass")
+    assert reg["ghost.2.alpha"].value == 0.8
+    # opening the show again brings its own settings back
+    rig.lib.load(PRESETS, "party-tumble")
+    rig.lib.project.load("rig")
+    assert reg["ghost.2.alpha"].value == 0.3 and not rig.lib.project.is_dirty()
+
+
 def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
     """The marks carry the graph (`library.Marks`): undoing a load of a
     preset with a second acid takes its params away again, and redoing it
@@ -532,6 +643,22 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
     b = run(ctx, two, views(ctx, S()))[0]
     assert two.stats["chain_runs"] == 1 and not np.array_equal(a, b)
     assert list(two.fx._progs) == ["acid"] and fx.chain() == ["acid", "acid.2"]
+    # the second acid's own params act: the same rig twice, only
+    # acid.2's twist changed (acid's values untouched) — another frame
+    first = dict(fx.values["acid"])
+
+    def frame(twist):
+        r = rig(ctx, effects=("acid",), hands=False)
+        st = r.fx.state
+        st.set_instances({"acid": 2})
+        st.values["acid"].update(first)
+        st.values["acid.2"].update(on=True, twist=twist)
+        return run(ctx, r, views(ctx, S()))[0], st
+
+    c, st_c = frame(0.2)
+    d, st_d = frame(1.8)
+    assert st_c.values["acid"] == st_d.values["acid"] == first
+    assert not np.array_equal(c, d)
 
 
 def test_a_second_hands_node_is_its_own_ghost_on_the_glass(ctx):

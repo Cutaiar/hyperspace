@@ -469,7 +469,19 @@
     "notes": [],
     "effects_on": true,
     "hands_shown": true,
-    "wiring": "Wiring(hands='scene', blend='over', history='scene+hands', draw='lines', extra=())",
+    "graph": {
+     "nodes": [
+      {
+       "kind": "hands",
+       "into": "scene",
+       "draw": "lines"
+      },
+      {
+       "kind": "history",
+       "holds": "scene+hands"
+      }
+     ]
+    },
     "nodes": [
      "ghost",
      "scene",

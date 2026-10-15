@@ -271,8 +271,8 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     is not plainly over."""
     key, after = route(sw, fx_on, visible)
     wired = wiring is not None and wiring != Wiring()
-    inside = wired and bool(wiring.in_scene()) and sw.scene and sw.hands
-    if inside:                      # the scene holds the hands: no layer, no SCENE+HANDS
+    inside = wired and bool(wiring.in_scene()) and sw.scene
+    if inside:                      # the scene holds the hands, whatever its hands switch
         key, after = SCENE, False
     own = float(sw.dim)
     if key is None and not after:

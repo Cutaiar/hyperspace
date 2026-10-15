@@ -252,7 +252,7 @@ class Rig:
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
-        presets = Presets(lib, reg, self.router)
+        presets = self.presets = Presets(lib, reg, self.router)
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
         reg["ghost.on"].set(True)
@@ -354,7 +354,7 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
-            said["wiring"] = repr(rig.renderer.wiring)
+            said["graph"] = rig.presets.graph.doc     # the section as it landed, not a repr
             said["nodes"] = list(rig.renderer._graph.timed)
         return shots, said
     finally:

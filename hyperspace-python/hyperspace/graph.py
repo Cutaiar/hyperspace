@@ -450,12 +450,15 @@ def hands_words(wiring: Wiring, sw: Switches) -> str:
     scene`, `hands: through FX` or `hands: over` — with the hands node's
     number when the graph has more than one, `as lines` for a node drawn
     as lines, and how a layer is laid on when it is not plainly over
-    (`· depth-aware`, `· added`). `hands: off` with the hands switch off."""
-    if not sw.hands:
-        return "hands: off"
+    (`· depth-aware`, `· added`). `hands: off` with the hands switch off — but an
+    output whose scene holds the hands says so whatever its switch."""
     inside = wiring.in_scene()
     if inside and sw.scene:
+        # the scene holds the hands whatever this output's hands switch
+        # says (that switch then wires only the readout)
         return "hands: " + " · ".join(f"in the scene{_node_words(wiring, h)}" for h in inside)
+    if not sw.hands:
+        return "hands: off"
     return f"hands: {'through FX' if sw.through else 'over'}{layer_words(wiring)}"
 
 

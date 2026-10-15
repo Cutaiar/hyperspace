@@ -131,8 +131,10 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
         assert said["missing"] == [] and said["notes"] == [] and said["hands_shown"]
-        assert said["wiring"] != "Wiring(hands='layer', blend='over', history='scene', " \
-                                 "draw='solid', extra=())"
+        # the graph landed as the file says it (the section, not a repr of
+        # the Wiring: a field added later moves no golden)
+        assert said["graph"] == json.loads((ROOT / f["file"]).read_text())["graph"]
+        assert said["graph"]["nodes"]
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 

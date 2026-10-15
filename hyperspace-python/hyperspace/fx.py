@@ -270,6 +270,14 @@ class FxState:
             if fname.startswith("_"):
                 continue
             name = fname[:-5]
+            if not _NAME.match(name):
+                # the naming rule (plan 26 A4): `acid.2` is the second acid
+                # instance, so a file stem with a dot or of digits would read
+                # as one — refused before parsing, and never kept as last good
+                self.errors[name] = (f"{fname}: file names are lower_snake_case, no dot and "
+                                     "not digits alone (acid.2 would read as the second "
+                                     "acid instance)")
+                continue
             try:
                 found[name] = parse(name, (self.dir / fname).read_text())
             except (OSError, SpecError) as e:
