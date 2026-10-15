@@ -1897,7 +1897,12 @@ class Renderer:
         # Plan 26 A2b (view.screen_strokes): in world space (the default)
         # the width is × the zoom, so a stroke grows and shrinks with the
         # shape as it did before A2; in screen space it keeps its weight
-        # whatever the shape's size in the world (A2)
+        # whatever the shape's size in the world (A2). The shape's strokes
+        # only: the hands are not drawn here — A3's tubes are world-sized
+        # geometry (ghost.py WIRE_R / BONE_R) that never follows
+        # camera.zoom (the zoom is the shape's scale, not the hands'), and
+        # A4's hand lines are 1 px edges drawn by ghost.Geometry, not by
+        # this width, in both modes
         sz = 1.0 if getattr(s, "screen_strokes", False) else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * sz

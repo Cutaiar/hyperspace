@@ -147,6 +147,7 @@ def blocked(table: Bindings, source: str) -> str | None:
 #   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
 #   view.bmp_*                                   the faces are off, or no bitmap file
 #   view.points_alpha / view.lines_alpha         points / lines off
+#   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
 #   fx.<effect>.<key> (not .on)                  fx.on off, or that effect off
 #   dream.* (not dream.on)                       the look-back is off (dream.on)
@@ -180,6 +181,12 @@ def cannot_show(pid: str, values) -> str | None:
         return "points off" if off("view.points") else None
     if pid == "view.lines_alpha":
         return "lines off" if off("view.lines") else None
+    if pid == "view.screen_strokes":
+        # the stroke space (plan 26 A2b) moves the edges and the dots only.
+        # At camera.zoom 1 it shows nothing either, but that is no rule: a
+        # routed zoom makes it live
+        both = off("view.points") and off("view.lines")
+        return "points and lines off" if both else None
     if pid == "fx.mix":
         return "effects off" if off("fx.on") else None
     if pid.startswith("fx."):
@@ -263,6 +270,8 @@ def _switched_on(pid: str, values) -> bool:
         return bool(values.get("view.points"))
     if pid == "view.lines_alpha":
         return bool(values.get("view.lines"))
+    if pid == "view.screen_strokes":
+        return bool(values.get("view.points")) or bool(values.get("view.lines"))
     if pid.startswith("fx.") and pid.count(".") >= 2 and not pid.endswith(".on"):
         name = pid.split(".", 1)[1].rsplit(".", 1)[0]
         return bool(values.get("fx.on")) and bool(values.get(f"fx.{name}.on"))

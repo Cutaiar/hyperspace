@@ -134,6 +134,12 @@ def test_cannot_show_is_the_rule_by_group():
                                           "view.bmp_file": "a.png"}) is None
     assert cannot_show("view.points_alpha", v) is None
     assert cannot_show("view.lines_alpha", v) == "lines off"
+    # the stroke space (plan 26 A2b): dead only with the points and the lines off
+    assert cannot_show("view.screen_strokes", v) is None
+    assert cannot_show("view.screen_strokes", {**v, "view.points": False}) == \
+        "points and lines off"
+    assert cannot_show("view.screen_strokes", {**v, "view.lines": True,
+                                               "view.points": False}) is None
     assert cannot_show("fx.kaleido.segments", v) == "kaleido off"
     assert cannot_show("fx.kaleido.mix", v) == "kaleido off"
     assert cannot_show("fx.kaleido.on", v) is None          # the switch itself shows
