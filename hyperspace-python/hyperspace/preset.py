@@ -8,6 +8,10 @@
    "macros": {"macro.1": {…}, …},      the macros' labels and subscribers
    "modules": {"fx": "trip", …}}       module-preset labels (D3)
 
+(plan 24 C3: a file may also name a desk template, ``"desk_template":
+"<name>"`` before ``desk``, and then ``desk`` holds only its overrides —
+"desk templates" below.)
+
 One file per preset, ``<root>/presets/<slug>.json``: the factory ones in
 ``hyperspace/library/presets/``, the user's in ``<home>/presets/``
 shadowing by name. `Presets` registers the folder with the library as a
@@ -92,6 +96,7 @@ from . import apc40, routing, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
+    DESK_SCHEMA,
     F_KEYS,
     FACTORY,
     HOUSE_PROJECT,
@@ -163,6 +168,86 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
     return [b if b.layer == "preset" else replace(b, layer="preset")
             for b in routing.factory_desk(profile)
             if b.layer == "preset" or (b.source, b.target, b.op, float(b.value)) in keep]
+
+
+# ---- desk templates (plan 24 C3) ----
+#
+# A preset's desk may start from a named template — a file in the library's
+# `desk` group (`Library.desk_template`, ``hyperspace.desk/1``) — and add
+# its own overrides:
+#
+#   {"schema": "hyperspace.preset/2", …,
+#    "desk_template": "shape",                       the template's name
+#    "desk": [row, …,                                 the overrides: each row
+#             {"source": "cc:*:21", "dark": true}],    replaces every template
+#                                                     row on its control; a
+#                                                     dark row leaves that
+#                                                     control unmapped
+#
+# A load expands it (`expand_desk`): the template's rows, less every one an
+# override's control covers, then the override rows. A save writes the
+# name and the overrides again, not the expanded rows (`compact_desk`), so
+# a fix to the template lands in every preset that names it. A preset with
+# no ``desk_template`` key is exactly as before: its ``desk`` is the whole
+# preset layer. A template the library lacks is a note, and the overrides
+# alone are the desk.
+TEMPLATE_KEY = "desk_template"
+DARK = "dark"
+
+
+def is_dark_row(row) -> bool:
+    """An override row that leaves its control unmapped: ``{"source", "dark": true}``."""
+    return isinstance(row, dict) and row.get(DARK) is True and isinstance(row.get("source"), str)
+
+
+def template_doc(name: str, rows, note: str = "") -> dict:
+    """A desk template's file: its name, an optional note, and the rows (a
+    preset's ``desk`` form, `desk_json`). Written with `dumps`, a row a line."""
+    doc: dict[str, Any] = {"schema": DESK_SCHEMA, "name": name}
+    if note:
+        doc["note"] = note
+    doc["desk"] = desk_json(rows)
+    return doc
+
+
+def expand_desk(template: list[dict], overrides: list[dict]) -> list[Binding]:
+    """The preset layer a template and a preset's overrides make: every
+    template row whose control no override names (an override row, or a
+    dark row, on an overlapping control — `Binding.overlaps`), in the
+    template's order, then the override rows in theirs."""
+    rows = [r for r in overrides if not is_dark_row(r)]
+    own = [Binding.from_json(r) for r in rows]
+    cover = own + [Binding(str(r["source"]), "") for r in overrides if is_dark_row(r)]
+    kept = [t for t in (Binding.from_json(r) for r in template)
+            if not any(c.overlaps(t) for c in cover)]
+    return kept + own
+
+
+def compact_desk(template: list[dict], live, keeps=None) -> list[dict]:
+    """The overrides a save writes for a preset that names a template: the
+    live preset layer's rows on every control where they differ from the
+    template's (in the live order), then a dark row for each template
+    control the live desk leaves unmapped (in the template's order).
+    `keeps(row)` says whether a load keeps a template row (not on an
+    invariant control, say): one it would drop is no difference.
+    `expand_desk(template, compact_desk(template, live))` is `live` again,
+    row for row, up to order."""
+    tmpl = [b for b in (Binding.from_json(r) for r in template)
+            if keeps is None or keeps(b)]
+    by_t: dict[str, list[dict]] = {}
+    for b, d in zip(tmpl, desk_json(tmpl)):
+        by_t.setdefault(b.source, []).append(d)
+    live = list(live)
+    by_live: dict[str, list[dict]] = {}
+    for d in desk_json(live):
+        by_live.setdefault(d["source"], []).append(d)
+    out = [d for src, ds in by_live.items() if by_t.get(src) != ds for d in ds]
+    dark: list[str] = []
+    for b in tmpl:
+        if b.source in by_live or b.source in dark or any(x.overlaps(b) for x in live):
+            continue
+        dark.append(b.source)
+    return out + [{"source": s, DARK: True} for s in dark]
 
 
 def dumps(doc: dict) -> str:
@@ -330,8 +415,20 @@ class Presets:
                 continue
             routes.append(b)
         # no `desk` key: a fresh preset's, the factory preset layer; an
-        # explicit [] is an empty one (every preset control dark, D8)
-        if "desk" in doc:
+        # explicit [] is an empty one (every preset control dark, D8). A
+        # `desk_template` (plan 24 C3): the template's rows with `desk` as
+        # its overrides; a template the library lacks is a note, and the
+        # overrides alone are the desk
+        if doc.get(TEMPLATE_KEY):
+            name = str(doc[TEMPLATE_KEY])
+            try:
+                template = lib.desk_template(name)["desk"]
+            except LibraryError as e:
+                notes.append(f"desk template {name!r} not loaded ({e}): this preset's own "
+                             "desk rows only")
+                template = []
+            desk = expand_desk(template, list(doc.get("desk") or []))
+        elif "desk" in doc:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
             desk = fresh_desk(table.profile)
@@ -402,9 +499,43 @@ class Presets:
         table = self.router.table
         doc.update(values=self.reg.snapshot(part="performance"),
                    routes=[b.to_json() for b in table.routes()],
-                   desk=desk_json(table.desk()), macros=table.macros_doc(),
+                   **self._desk_part(), macros=table.macros_doc(),
                    modules=modules)
         return doc
+
+    def template_of_loaded(self) -> str | None:
+        """The desk template the loaded preset's file names (plan 24 C3),
+        or None: read from the file, so an undo that puts an earlier preset
+        back puts its template back too."""
+        cur = self.lib.current(GROUP)
+        if not cur:
+            return None
+        try:
+            ref = self.lib.read(GROUP, cur).get(TEMPLATE_KEY)
+        except LibraryError:
+            return None
+        return str(ref) if ref else None
+
+    def _desk_part(self) -> dict:
+        """What a save writes for the desk: ``{"desk": rows}``, the whole
+        preset layer — or, when the loaded preset names a desk template,
+        ``{"desk_template": name, "desk": overrides}`` (`compact_desk`),
+        the reference and not the expanded rows. A template the library
+        lacks counts as empty: every live row is an override."""
+        table = self.router.table
+        ref = self.template_of_loaded()
+        if ref is None:
+            return {"desk": desk_json(table.desk())}
+        try:
+            template = self.lib.desk_template(ref)["desk"]
+        except LibraryError:
+            template = []
+        inv = table.invariant_rows()
+
+        def keeps(b: Binding) -> bool:          # what `set_desk` keeps of a template row
+            return (b.is_midi and routing.save_refusal(b) is None
+                    and not table.is_invariant(b, inv))
+        return {TEMPLATE_KEY: ref, "desk": compact_desk(template, table.desk(), keeps)}
 
     def signature(self) -> tuple:
         """What the strip's dirty dot compares: the performance bases, the
