@@ -117,9 +117,9 @@ def test_the_new_lanes_follow_the_switches_and_no_older_lane_moves():
     """`hand:<i>` from an older preset still reads the lane it did: the
     twenty-two come first, unchanged, then each hand's eight dance lanes."""
     names = hands.default_addresses()
-    assert names[:22] == OLD and names[22:] == NEW
+    assert names[:22] == OLD and names[22:38] == NEW
     lay = hands.Layout(HandSettings.from_config({}).axes)
-    assert lay.n == 38 == len(lay.names) and lay.addresses == names
+    assert lay.n == 40 == len(lay.names) and lay.addresses == names
     assert lay.names[22:30] == ["L curl thu", "L curl ind", "L curl mid", "L curl rin",
                                 "L curl pin", "L spread", "L energy", "L flick"]
     assert all(lay.dance[(s, k)] == names.index(f"{s}.{k}")
@@ -144,8 +144,8 @@ def test_the_hands_scheme_is_published_like_the_hand_one():
     assert router.labels["hands"] is lay.pair_names and router.names["hands"] is lay.pair_index
     assert router.gates["hands"] == []                    # no switches among them
     assert router.rests["hands"] == [0.0, 0.5]            # gap closed, twist level
-    assert router.rests["hand"][22:] == [0.0] * 16        # the dance lanes rest at 0
-    assert len(router.fed["hand"]) == 38 and len(router.fed["hands"]) == 2
+    assert router.rests["hand"][22:38] == [0.0] * 16      # the dance lanes rest at 0
+    assert len(router.fed["hand"]) == 40 and len(router.fed["hands"]) == 2
     # a source that is not live: both schemes let go
     r.io.source = NS(on=False, status="lost", latest=lambda: (0, 0.0, {}))
     _play(r, 2, router)
@@ -400,8 +400,8 @@ def test_a_palm_only_source_reads_nan_curls_but_still_has_energy():
 
 
 def test_the_hands_page_shows_every_new_source(monkeypatch, tmp_path):
-    """The HANDS page draws a bar per dance source, live, beside the box,
-    inside the window — and still does not scroll."""
+    """The HANDS page draws a bar per dance source, live, in the column
+    beside the axis rows, and every bar ends inside the window's width."""
     from imgui_bundle import imgui
     from test_ui_shell import build_rig, frame
 
@@ -429,3 +429,19 @@ def test_the_hands_page_shows_every_new_source(monkeypatch, tmp_path):
         assert set(got) == {f"hand:{n}" for n in NEW} | {"hands:gap", "hands:twist"}
         assert got["hand:right.curl.index"] == pytest.approx(1.0, abs=1e-3)
         assert max(x for *_, x in drawn) <= CONTROL_SIZE[0]
+
+
+def test_a_frame_that_measures_no_speed_lets_the_energy_fall():
+    """A fresh frame too far after the last (`SPEED_GAP_S`) measures no
+    speed: the energy's target drops to 0 and it decays, rather than
+    holding the last move's level (plan 24 C5, a C4 review item)."""
+    d = hc.Dance()
+    at = lambda x: features(hand("right", at=(x, 200.0, 0.0)))
+    d.step(1 / FPS, 0.0, True, at(0.0), None)
+    d.step(1 / FPS, 1 / FPS, True, at(10.0), None)          # 900 mm/s
+    high = d.energy.y
+    assert high > 0.0
+    t = 1 / FPS + 2 * hc.SPEED_GAP_S                        # a gap: no speed measured
+    d.step(1 / FPS, t, True, at(10.0), None)
+    assert d.raw["energy"] is None and d._target == 0.0
+    assert d.energy.y < high
