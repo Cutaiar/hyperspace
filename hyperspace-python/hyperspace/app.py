@@ -133,7 +133,25 @@ def close_all(audio, *adapters) -> None:
     _quiet(audio.stop)
 
 
-def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
+def _destroy_windows(windows) -> None:
+    """Destroy every window one by one, before `glfw.terminate()` — never
+    terminate with a window still open (the exit crash, macOS's "Python
+    closed unexpectedly"). pyGLFW's `terminate()` frees every window's
+    Python callbacks (their ctypes closures) *before* `glfwTerminate`
+    destroys the windows, and on macOS destroying a window pumps the
+    event queue: a key, click, mouse move or scroll still queued for a
+    window not yet destroyed (the quit key, the hand on the mouse) then
+    calls a freed closure — SIGSEGV in `ffi_closure_SYSV_inner`.
+    `destroy_window` clears that window's callbacks in C before it pumps
+    and frees its closures only after, so the windows go one at a time
+    safely and `terminate` finds none left. `None` (a window never
+    opened) is skipped; each is best-effort, so one bad handle stops none."""
+    for w in windows:
+        if w:
+            _quiet(lambda w=w: glfw.destroy_window(w))
+
+
+def _restart(audio, adapters, impl, ctrl_win, save=None, windows=()) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
     # owning the child. The OS reclaims the GL contexts and audio device
@@ -147,6 +165,7 @@ def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     close_all(audio, *adapters)
     _quiet(lambda: glfw.make_context_current(ctrl_win))  # imgui's GL objects live there
     _quiet(impl.shutdown)
+    _destroy_windows(windows)        # every window before terminate: the exit crash
     _quiet(glfw.terminate)
     os.execv(sys.executable, [sys.executable, *sys.argv])
 
@@ -1240,6 +1259,9 @@ def main() -> None:
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 
+    def all_windows() -> list:            # both exits destroy these before terminate
+        return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
+
     def save_windows() -> None:           # both exits: quit below, ⌘R in _restart
         _save_windows(home, render_win, ctrl_win, output, [sl.output for sl in slots[1:]])
 
@@ -1248,7 +1270,7 @@ def main() -> None:
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
                 restart=lambda: _restart(audio, (watchdog, awake, *host.adapters), impl, ctrl_win,
-                                         save=save_windows),
+                                         save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
                 undo=undo_obj,
@@ -1297,6 +1319,7 @@ def main() -> None:
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     close_all(audio, watchdog, awake, *host.adapters)   # the watchdog first: teardown is no stall
     impl.shutdown()
+    _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()
 
 

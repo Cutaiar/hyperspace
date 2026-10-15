@@ -846,6 +846,48 @@ def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
     assert app.library_home is library.home
 
 
+# ---- the exit: every window destroyed before glfw.terminate (the exit crash) ----
+
+def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
+    """pyGLFW's terminate() frees the windows' callback closures before
+    glfwTerminate destroys the windows, and destroying one pumps macOS's
+    event queue into the others: an input event queued at quit then calls
+    a freed closure (SIGSEGV, "Python closed unexpectedly"). Both exits
+    destroy each window themselves first, `None` skipped, one that raises
+    stopping none."""
+    import inspect
+
+    log: list[str] = []
+
+    def destroy(w):
+        log.append(f"destroy {w}")
+        if w == "bad":
+            raise RuntimeError("gone")
+
+    monkeypatch.setattr(app, "glfw", SimpleNamespace(
+        destroy_window=destroy, terminate=lambda: log.append("terminate"),
+        make_context_current=lambda w: None))
+    app._destroy_windows(["w2", None, "bad", "ctrl", "render"])
+    assert log == ["destroy w2", "destroy bad", "destroy ctrl", "destroy render"]
+
+    # ⌘R: the windows go after imgui's shutdown and before terminate and execv
+    log.clear()
+    monkeypatch.setattr(app.os, "execv", lambda *a: log.append("execv"))
+    audio = SimpleNamespace(stop=lambda: log.append("audio"))
+    impl = SimpleNamespace(shutdown=lambda: log.append("shutdown"))
+    app._restart(audio, (), impl, "ctrl", windows=["ctrl", "render"])
+    assert log == ["audio", "shutdown", "destroy ctrl", "destroy render", "terminate", "execv"]
+
+    # main: the quit destroys every window (the later outputs', the control
+    # window, output 1's) after imgui's shutdown, before terminate; the
+    # restart is handed the same list
+    src = inspect.getsource(app.main)
+    tail = src[src.index("impl.shutdown()"):]
+    assert tail.index("_destroy_windows(all_windows())") < tail.index("glfw.terminate()")
+    assert "windows=all_windows()" in src
+    assert "return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]" in src
+
+
 # ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----
 
 def _launch(home):
