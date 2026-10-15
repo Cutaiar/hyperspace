@@ -399,7 +399,12 @@ def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
 
 # effects no factory preset needs on, each with the reason (decision 24:
 # every effect reachable from a preset — this list is empty on purpose)
-EFFECTS_IN_NO_PRESET: dict[str, str] = {}
+EFFECTS_IN_NO_PRESET: dict[str, str] = {
+    # plan 24 C6 / decision 23: no preset is authored in that run; the owner's
+    # palettes are made at the venue (fx module presets) and the factory
+    # presets keep the picture they have
+    "palette": "starts at mix 0 and ships no palette; saved palettes are the owner's",
+}
 
 
 def _factory_docs() -> list[dict]:

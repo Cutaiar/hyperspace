@@ -309,6 +309,8 @@ def test_each_effect_changes_the_frame(ctx, name):
     st.values[name]["on"] = True
     if name == "glimmer":
         st.values[name]["density"] = 1.0
+    if name == "palette":                  # it starts at mix 0 (today's picture): turn it up
+        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
@@ -841,9 +843,23 @@ class PageRig:
         self.imgui.destroy_context(self.ictx)
 
 
+def without_palette(st, reg) -> None:
+    """The twelve effects the page was sized for. The palette (plan 24 C6)
+    is the thirteenth chip, which wraps onto a fifth row, and a strip of
+    twenty-one faders: the page scrolls for it, which
+    test_the_page_scrolls_for_the_palette_and_still_draws pins. These
+    tests are about the stack's chips, drags and orders, so they run with
+    the file's effect taken out of the state and the registry."""
+    st.specs.pop("palette", None)
+    st.values.pop("palette", None)
+    st.phase.pop("palette", None)
+    declare(reg, st, {"palette"})
+
+
 @pytest.fixture()
 def fxpage(tmp_path, monkeypatch):
     rig = PageRig(tmp_path, monkeypatch)
+    without_palette(rig.st, rig.reg)
     yield rig
     rig.close()
 
@@ -1124,6 +1140,25 @@ def test_the_page_fits_with_the_tightest_strip_idle(fxpage, monkeypatch):
             assert ("faces  (Faces is off)" in fxpage.texts) == (reason == "faces off")
             assert over[-1] == 0, f"the fx page scrolls with {name} open and {reason}"
         reg[f"fx.{name}.target"].set(0)
+
+
+def test_the_page_scrolls_for_the_palette_and_still_draws(fxpage):
+    """Plan 24 C6: the palette is the thirteenth chip and has twenty-one
+    faders, more than the page was sized for (the tests above run without
+    it). It scrolls; nothing is cut off, and it draws without error."""
+    from hyperspace.ui import PAGE_KEYS
+    st, reg, imgui, panel = fxpage.st, fxpage.reg, fxpage.imgui, fxpage.panel
+    spec = FxState().specs["palette"]
+    st.specs["palette"] = spec
+    st._adopt(spec)
+    declare(reg, st, {"palette"})
+    st.select("palette")
+    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    for _ in range(3):
+        imgui.new_frame()
+        panel.draw(1 / 60, 60.0)
+        imgui.end_frame()
+    assert st.selected() == "palette"
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -1416,6 +1451,8 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     st.values[name].update(on=True, target=FACES)
     if name == "glimmer":
         st.values[name]["density"] = 1.0
+    if name == "palette":                  # it starts at mix 0, which the chain skips
+        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
     img, r = face_frame(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()
@@ -1900,7 +1937,7 @@ def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
 
 FACTORY_ORDERS = {"plasma": 5, "acid": 10, "kaleido": 15, "zoomblur": 17, "warp": 20,
                   "wobble": 25, "doublevision": 30, "deconverge": 40, "fractals": 60,
-                  "glimmer": 70, "tripcolour": 80, "huecycle": 85}
+                  "glimmer": 70, "tripcolour": 80, "huecycle": 85, "palette": 95}
 
 
 def _moved_to(names: list[str], moved: str, place: int) -> list[str]:
@@ -2076,10 +2113,12 @@ def test_a_drop_reorders_selects_and_is_one_undo_step(tmp_path, monkeypatch):
     real_push = undo.push
     monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
     rig = PageRig(tmp_path, monkeypatch, r)
+    without_palette(st, r.reg)
     bars = _bars(rig, monkeypatch)
     try:
         for n, o in FACTORY_ORDERS.items():          # whatever the startup preset left
-            r.reg[f"fx.{n}.order"].set_value(o)
+            if n in st.specs:
+                r.reg[f"fx.{n}.order"].set_value(o)
         st.select("acid")
         settle(r)
         start, names = labels(r), st.names()
