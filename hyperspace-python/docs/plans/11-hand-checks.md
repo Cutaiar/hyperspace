@@ -55,11 +55,11 @@ number and what you saw.
 8. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
    113 from the audience, 129; 111, 112 last.
 9. The render graph (group V): 191 and 192 on the gate Mac first (the
-   goldens, then every factory preset by eye), then 193–198 on the
-   laptop; (copy) 211, 212, 215 on the laptop; 199–201 on the 1080p
+   goldens, then every factory preset by eye), then 193, 194 and
+   196–198 on the laptop; (copy) 211, 212, 215 on the laptop; 199–201 on the 1080p
    projector, 201 and 202 on the copy; with the hand camera (or the
    synthetic tape) 200, 203–205, 207, 209, 210, 214; 206 and 213 with the
-   glass and the projector as two outputs (after 101); 216–218 (copy) with
+   glass and the projector as two outputs (after 101), with 195 and 208; 216–218 (copy) with
    the recorded cloud (after 190).
 
 ## A. Laptop alone
@@ -1482,8 +1482,9 @@ the eight, then output 2:
 *Pass:* that output only changes; "shows:" matches. All effects off:
 through changes nothing; Ghost hands off: hands leave every output.
 *Fail:* `outputs.route`; other output changes → pipelines not keyed
-per output (`Renderer._draw_frame`); echoes with hands alone through
-effects → `Renderer._pipeline`.
+per output (`graph.default_graph`, `Output.settle`); echoes with hands
+alone through effects → what the capture is wired to (`graph.Capture`,
+`Wiring.history`).
 
 **103. Hands over or through the effects; the guide never bent.**
 Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,test_through_with_no_effect_on_is_hands_over,test_the_guide_is_never_distorted,test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today,test_two_pipelines_show_the_same_echoes} tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
@@ -1492,8 +1493,10 @@ glass hands bend and recolour with the shape, projector's clean; no
 hand echoes or dream feed on either; same echoes on both. All effects
 off: alike, glass block "through: no effect on". HANDS: Guide
 BESIDE, then ON HAND, Tethers (**more ▸**) on: gauges, labels sharp, same on
-both, never warped. *Fail:* hand echoes → `Renderer._pipeline` (hands
-enter after look-back composite, before first effect); warped labels →
+both, never warped. *Fail:* hand echoes → `graph.default_graph` /
+`graph.Capture` (the hands' layer is composited after the look-back
+composite, before the first effect, and the capture takes the scene);
+warped labels →
 `Ghost.layer(…, readout=True)` / `Ghost.composite_readout`; echoes
 differ → capture's place (`Renderer._draw_frame`).
 
@@ -2653,8 +2656,9 @@ The hands checks need the hand camera, or the synthetic tape
 (`uv run python tools/hands_tape.py synth /tmp/hands.json`, then `enabled
 = true` and `tape = "/tmp/hands.json"` on the hands entry, as in
 TESTING-GUIDE L44), with **Ghost hands** ticked on the HANDS page.
-191–196 and 211, 212, 215 run on the laptop alone; 199–201 want the 1080p
-projector; 206 and 213 the glass and the projector as two outputs (101).
+191–194, 196 and 211, 212, 215 run on the laptop alone; 199–201 want the
+1080p projector; 195, 206, 208 and 213 the glass and the projector as two
+outputs (101).
 
 **191. The golden frames match on the gate Mac.**
 Headless: `tests/test_golden_frames.py::{test_every_golden_frame_is_drawn_byte_for_byte,test_every_factory_preset_has_every_state_recorded_and_nothing_else}`.

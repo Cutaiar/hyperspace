@@ -467,9 +467,10 @@ black ground.
 
 **What moved, and why.** Only three WPs re-recorded existing frames,
 each for one named reason; every other merge after A0's recording — A1,
-A4, A4b, and stream B's and C's (C2's opacities, B4 among them; C6's
-palette was in before A0 recorded and is at mix 0) — drew every golden
-byte for byte.
+A4, A4b, and stream B's and C's (C2's opacities, B4 among them) — drew
+every golden byte for byte. (C6's palette merged into the integration
+branch just before A0 did, and A0's goldens held there: at mix 0 it moves
+none.)
 
 - **A2: 184 of 427** — `camera.zoom` as the shape's world scale (its own
   perspective), copies in the world (ember-orbit, hex-engine,

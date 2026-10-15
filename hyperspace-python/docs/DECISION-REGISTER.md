@@ -2809,7 +2809,7 @@ among them. No preset was edited or added: no factory preset carries a
 - **Other options.** An output of exactly 1920×1080 (the cap does
   nothing there); a preset without effects.
 - **To reverse.** `CAP` in the tool and a re-record.
-- **Rough edge.** One preset and one state at the cap; a 33 MB hash.
+- **Rough edge.** One preset and one state at the cap; hashing one 33 MB frame.
 - **Judge it.** Check 191.
 
 ### 174. GPU time per node: one query each, read 3 frames late, a median over 60 frames

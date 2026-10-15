@@ -26,8 +26,7 @@ explained in the [glossary](#glossary) at the end.
 2. **Launch the app:** on branch `main` (`git checkout main`, `git pull`),
    run `cd hyperspace-python && uv sync && uv run hyperspace`. The shape
    entries (L48–L54, A19, D14) and the pattern entries (L55–L68, A20–A23,
-   D15) need plan 22: until it is merged, use
-   branch `plan-22-integration` instead. The party-fix entries (L69–L71,
+   D15) are plan 22's, which is on `main`. The party-fix entries (L69–L71,
    A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
    A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,

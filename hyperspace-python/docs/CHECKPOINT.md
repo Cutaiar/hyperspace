@@ -75,7 +75,9 @@ the current state (PR #189, the exit crash, is open beside it).
   projector or the glass — the registry's devices, the hands through the
   shared camera and the golden presets by eye among them. No real hand
   has been tracked: every hands picture comes from a synthetic pose or
-  tape.
+  tape. No person has watched the lifted shapes or the Klein bottle
+  turn, or seen the FACES page or the seventeen patterns on the Mac: its
+  fit and Apple's shader compiler are unverified (hand checks 120, 121).
 - **Plan 22's choices for the owner:** which new 4-polytopes to build
   ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)) and
   the macro candidates' listening session
