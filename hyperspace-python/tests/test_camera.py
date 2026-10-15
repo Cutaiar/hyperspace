@@ -211,8 +211,10 @@ def test_each_point_is_drawn_where_project_h_puts_it(ctx):
 
 
 def test_strokes_keep_their_weight_whatever_the_zoom(ctx, monkeypatch):
-    """Line width and point radius no longer scale with camera.zoom (plan 26
-    A2): the shape grows in the world, its strokes stay as heavy."""
+    """In screen space (`view.screen_strokes` on, plan 26 A2b) the line width
+    and the point radius do not scale with camera.zoom (plan 26 A2): the
+    shape grows in the world, its strokes stay as heavy. World space, the
+    default, is tests/test_stroke_space.py."""
     from hyperspace.render import Renderer
 
     widths = {}
@@ -224,7 +226,7 @@ def test_strokes_keep_their_weight_whatever_the_zoom(ctx, monkeypatch):
 
     monkeypatch.setattr(Renderer, "_tile", staticmethod(spy))
     for zoom in (1.0, 2.5):
-        _draw(ctx, _view(lines=True, zoom=zoom))
+        _draw(ctx, _view(lines=True, zoom=zoom, screen_strokes=True))
     (l1, l2), (p1, p2) = widths[10], widths[7]
     assert np.array_equal(l1[:, 8], l2[:, 8])        # the edges' widths
     assert np.array_equal(p1[:, 5], p2[:, 5])        # the points' radii

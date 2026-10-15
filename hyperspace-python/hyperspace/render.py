@@ -23,7 +23,9 @@ of the look. Widths below 1 px fold into alpha, the standard thin-line
 trick, so far edges render correctly without MSAA. Since A2 the quads —
 and the points', once point sprites — are expanded in the vertex shader
 from the edge's two 3D ends, so they carry a real depth; their widths
-are pixels and no longer scale with the zoom. The scene's depth buffer
+are pixels × the zoom in world space (the default, the pre-A2 feel) or
+pixels whatever the zoom in screen space (`view.screen_strokes`, plan 26
+A2b). The scene's depth buffer
 holds the shape's nearest visible surface (`DEPTH_ALPHA`), written after
 its colour; the see-through shape itself is still painter-sorted.
 
@@ -1892,10 +1894,13 @@ class Renderer:
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
         # the reference's depth- and brightness-scaled line width (CSS px).
-        # Plan 26 A2: no longer × the zoom — a stroke keeps its weight
-        # whatever the shape's size in the world
+        # Plan 26 A2b (view.screen_strokes): in world space (the default)
+        # the width is × the zoom, so a stroke grows and shrinks with the
+        # shape as it did before A2; in screen space it keeps its weight
+        # whatever the shape's size in the world (A2)
+        sz = 1.0 if getattr(s, "screen_strokes", False) else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
-        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
+        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * sz
         draw_w = np.maximum(width, 1.0)
         # the edges' alpha, final: depth × brightness × density (floored
         # above), sub-pixel width folded in, × the lines opacity (plan 24
@@ -2010,12 +2015,13 @@ class Renderer:
             if s.points:
                 tp = (pd - near) / span
                 order_p = np.argsort(pd, kind="stable")
-                # radius in framebuffer px (× dpr). Plan 26 A2: no longer × the
-                # zoom; and the diameter is a whole number of pixels, as the
+                # radius in framebuffer px (× dpr), × the zoom in world space
+                # (plan 26 A2b, `sz` above; 1 in screen space) — before the
+                # rounding: the diameter is a whole number of pixels, as the
                 # point sprites the quads replace were rasterised (the driver
                 # rounded gl_PointSize — measured: with it the quads draw the
                 # sprites' frame byte for byte, without it every dot grows)
-                r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr
+                r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * sz
                 r = np.floor(2.0 * r + 0.5) / 2.0
                 # the points' alpha: depth × brightness, floored, × the points
                 # opacity (plan 24 C2) after the floor — the one place it is derived
