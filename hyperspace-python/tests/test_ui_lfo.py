@@ -109,7 +109,9 @@ def test_the_page_has_no_conflicting_ids(rig, monkeypatch):
 
 def test_the_lfos_are_offered_as_routing_sources(rig):
     """The ROUTING page's source combo lists whatever the router has labels
-    for — lanes, then hand, lfo, ext — so LFO 1–4 can be routed."""
+    for — lanes, then lfo, then the rest in the order they spoke (plan 27
+    B2: `lane` and `lfo` are the built-ins, listed first; the registry
+    orders the devices' schemes) — so LFO 1–4 can be routed."""
     from hyperspace import ui_routing
     from hyperspace.routing import Binding, Bindings, Router
 
@@ -122,7 +124,7 @@ def test_the_lfos_are_offered_as_routing_sources(rig):
     router.feed("ext", [0.0] * 3)
     srcs = ui_routing._sources(rig.panel, router)
     order = [s.split(":")[0] for s, _ in srcs]
-    assert order == sorted(order, key=("lane", "hand", "lfo", "ext").index)
+    assert order == sorted(order, key=("lane", "lfo", "hand", "ext").index)
     assert [(s, lb) for s, lb in srcs if s.startswith("lfo:")] == [
         (f"lfo:{i}", f"lfo LFO {i + 1}") for i in range(4)]
     assert ("hand:1", "hand R x") in srcs and ("ext:2", "ext 2") in srcs

@@ -329,7 +329,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     midi = Stub("midi", log, on=True, error="", last="", bindings=[])
     midi.name = ""
     rig = devices.DeviceRegistry(devices=[
-        devices.PadDevice("pad", io=pad),
+        devices.PadDevice("pad", None, devices.Context(reg=reg), io=pad),   # its camera job's reg
         devices.MidiDevice("apc40", io=midi),
         devices.HandsDevice("leap", io=Stub("hands", log, status="tracking", last="",
                                             source=SimpleNamespace(on=True))),
@@ -352,14 +352,16 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
 # the draw. Plan 27 B1: the devices poll in the scene-setter slot (the
 # registry, in list order — the pad's rows, then MIDI's), the sources feed
 # in the feed slot (the hands feed `hand`, the bridge feeds `ext`), and the
-# sinks run after `reg.apply` (`devices.send` — none until B3)
+# sinks run after `reg.apply` (`devices.send` — none until B3). Plan 27
+# B2: the sticks' camera job is the pad device's own (`gamepad.steer`, in
+# its `act`), so it runs right after the pad's rows, before MIDI's
 ORDER = [
     "clock.tick", "reloader.poll",
     "router.keys",                                   # key rows (and the loop keys)
     "pad.poll", "router.pad",                        # devices.poll: the pad — axis lanes, pad and hat rows
+    "router.claimed",                                #   …its sticks no route names, to the base
+    "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
-    "router.claimed",                                # sticks no route names, to the base
-    "pad.lanes", "router.felt",                      # through the pad's feel (motion.py)
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
     "output.apply",                                  # reads last frame's objects
@@ -444,22 +446,23 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
 def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     """↑/↓ held and the pad's sticks are relative writers on the base
     (`nudge` / `scale`), and they run in the scene-setter block — after the
-    key rows and the devices' rows (the pad's, then MIDI's: plan 27 B1
-    polls every device before the sticks' camera job), before the macros
-    and before any source feeds."""
+    key rows and the pad's rows (plan 27 B2: the camera job is the pad
+    device's, `gamepad.steer`, right after its rows and before MIDI's),
+    before the macros and before any source feeds."""
     g = app.glfw
     log: list[str] = []
     h = _host(log, held={g.KEY_UP}, stick=0.5)
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     i = log.index
     assert i("router.keys") < i("view.depth4.nudge") < i("pad.poll") < i("router.pad")
-    assert i("router.pad") < i("midi.poll") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
-    assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("router.follow_macros")
+    assert i("router.pad") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
+    assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("midi.poll")
+    assert i("midi.poll") < i("router.follow_macros")
     assert log.count("view.depth4.nudge") == 1     # the triggers rest, so no second ride
     # the right stick's X rides the three W planes' rates, after the zoom
-    w = [f"rot.rate.{p}.nudge" for p in app.W_PLANES]
-    assert app.W_PLANES == ("XW", "YW", "ZW")
-    assert i("camera.zoom.scale") < i(w[0]) < i(w[1]) < i(w[2]) < i("router.follow_macros")
+    w = [f"rot.rate.{p}.nudge" for p in app.gamepad.W_PLANES]
+    assert app.gamepad.W_PLANES == ("XW", "YW", "ZW")
+    assert i("camera.zoom.scale") < i(w[0]) < i(w[1]) < i(w[2]) < i("midi.poll")
 
 
 def test_a_routed_right_stick_leaves_the_w_rates_alone():

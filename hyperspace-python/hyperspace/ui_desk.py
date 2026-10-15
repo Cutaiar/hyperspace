@@ -1,5 +1,11 @@
 """The APC40 drawn on screen (plan 14 WP7, decision 25 (a); plan 17 WP4).
 
+**APC40-only** (plan 27 B2): with several MIDI desks listed, this draws
+the first MIDI role's rows (`Bindings.active()` with no role) over
+`apc40.LAYOUT` — the APC40 in every rig that lists it first. A second
+desk (a `generic` profile) has no layout to draw; plan 29's generic
+on-screen desk is what replaces this module for any profile.
+
 A picture of the desk in the control window: every control of
 `apc40.LAYOUT` at its place on the device, with its glyph — the same
 glyph the ROUTING page prints first on a desk or session row and Learn

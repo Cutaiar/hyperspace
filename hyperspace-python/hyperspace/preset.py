@@ -117,7 +117,7 @@ from .lookback import (
     migrate_values,
 )
 from .params import PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, part_of
-from .routing import LANE_SCHEMES, MOD_OPS, Binding, Macro, Sub
+from .routing import MOD_OPS, Binding, Macro, Sub, is_continuous
 
 SCHEMA = PERFORMANCE_SCHEMA
 GROUP = PRESETS                   # the library folder, and the strip's group
@@ -317,7 +317,7 @@ class Presets:
         routes: list[Binding] = []
         for row in doc.get("routes") or []:
             b = Binding.from_json(row)
-            if b.scheme not in LANE_SCHEMES or b.op not in MOD_OPS:
+            if not is_continuous(b.scheme) or b.op not in MOD_OPS:
                 notes.append(f"dropped {b.source} → {b.target} ({b.op}): not a performer row")
                 continue
             # a route on a param no performer may drive — one saved before

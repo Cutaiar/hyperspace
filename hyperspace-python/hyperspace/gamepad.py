@@ -23,6 +23,7 @@ it has a pad.
 from __future__ import annotations
 
 import atexit
+import math
 import sys
 import threading
 
@@ -62,6 +63,16 @@ STICKS = frozenset(AXES[:4])      # centred: a learn on one lands a push
 
 # how far from rest an axis must travel to complete a learn
 LEARN_TRAVEL = 0.4
+
+# the sticks' default camera job (`steer`, plan 27 B2: moved here from
+# app.frame), each axis while no route names it: the left stick orbits,
+# the right stick's Y zooms, its X rides the W planes' rate multipliers
+# (rot.rate.*W, the 4D spin) and the triggers ride depth4
+ORBIT_PER_S = 2.2     # camera.yaw / pitch, radians a second at full throw
+ZOOM_OCTAVES_PER_S = 1.2
+W_PLANES = ("XW", "YW", "ZW")
+W_RATE_PER_S = 2.0    # rate units a second at full throw (a plane's default is 1×)
+DEPTH_OCTAVES_PER_S = 2.4
 
 
 def _unwrap(ret) -> list:
@@ -260,6 +271,22 @@ class Pad:
     def on(self) -> bool:
         return getattr(self, "source", None) is not None
 
+    @property
+    def status(self) -> str:
+        """The device line's word (plan 27 B2): `connected` while a pad is
+        read (GLFW or USB), `lost` while none is — the pad looks for one
+        itself on every poll, so it is never an error."""
+        return "connected" if self.on else "lost"
+
+    def open(self) -> None:
+        """Nothing to open: a pad is looked for on every `poll` (GLFW's
+        joysticks, then libusb when `usb` is on). Here so the pad answers
+        the device protocol's `open` / `poll` / `close` itself."""
+
+    def publish(self, router) -> None:
+        """The axes' names, labels and rests on the router (`publish`)."""
+        publish(router)
+
     def poll(self) -> None:
         source = getattr(self, "source", None)
         if self.jid is None or not glfw.joystick_present(self.jid):
@@ -375,3 +402,70 @@ def learn_from(pad: Pad, learn) -> bool:
             learn.learn_source(f"axis:{name}", centred=name in STICKS)
             return False        # an axis has no button row to hold back
     return False
+
+
+def publish(router) -> None:
+    """The `axis` lanes' names, labels and rests on `router` (its `names`,
+    `labels`, `rests` dicts, duck-typed) — the pad's to say, not the
+    table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
+    map is published as one new dict, so the router's address cache keeps."""
+    if "axis" in router.names:
+        return
+    router.labels["axis"] = list(AXIS_LABELS)
+    router.rests["axis"] = list(AXIS_RESTS)
+    router.names["axis"] = {n: i for i, n in enumerate(AXES)}
+
+
+def ride_depth(p, octaves: float) -> None:
+    """Move 4D depth by a number of octaves of (depth − 1) — the taper's
+    own space (the triggers here, ↑/↓ in app.py)."""
+    u = math.log2(max(p.base - 1.0, 1e-6) / 0.05)
+    p.nudge(1.0 + 0.05 * 2.0 ** (u + octaves) - p.base)
+
+
+def steer(pad, router, reg, dt: float) -> None:
+    """The sticks' default camera job (moved from app.frame, plan 27 B2):
+    each axis **while no route names it** (`router.claimed("axis")`, an
+    `axis:LX` row takes its stick off the job) writes a relative move on
+    the base — the left stick orbits (`camera.yaw` / `pitch`), the right
+    stick's Y zooms about centre (`camera.zoom`), its X rides the three W
+    planes' rates together (the 4D spin), the triggers ride depth4 in its
+    own log space (LT out, RT in). The pad's feel (`desk.pad.feel`,
+    motion.py, `router.felt`) runs on the axis lanes first; off, they are
+    read as they are. `reg` is the parameter registry (`reg["camera.yaw"]`,
+    duck-typed); nothing here imports the package. Nothing while no pad
+    is on."""
+    if pad is None or not pad.on:
+        return
+    routed = router.claimed("axis") or ()
+    felt = router.felt("axis", pad.lanes(), dt)
+    if felt is None:
+        axis, trigger = pad.axis, pad.trigger
+    else:
+        def axis(ax: int) -> float:   # a lane back to the stick's ±1, up negative
+            u = felt[ax] - 0.5
+            return 2 * u if ax in (AX_LX, AX_RX) else -2 * u
+
+        def trigger(ax: int) -> float:
+            return felt[ax]
+
+    def free(ax: int, v: float) -> float:
+        return 0.0 if ax in routed else v
+    lx = free(AX_LX, axis(AX_LX))
+    ly = free(AX_LY, axis(AX_LY))
+    if lx:
+        reg["camera.yaw"].nudge(lx * ORBIT_PER_S * dt)
+    if ly:
+        reg["camera.pitch"].nudge(ly * ORBIT_PER_S * dt)
+    zoom_v = free(AX_RY, axis(AX_RY))
+    if zoom_v:
+        reg["camera.zoom"].scale(2.0 ** (-zoom_v * ZOOM_OCTAVES_PER_S * dt))
+    # right-stick X rides the three W planes' rates together (the 4D
+    # spin): right speeds them up, left slows them through 0 into reverse
+    w_v = free(AX_RX, axis(AX_RX))
+    if w_v:
+        for plane in W_PLANES:
+            reg[f"rot.rate.{plane}"].nudge(w_v * W_RATE_PER_S * dt)
+    d4 = free(AX_RT, trigger(AX_RT)) - free(AX_LT, trigger(AX_LT))
+    if d4:
+        ride_depth(reg["view.depth4"], d4 * DEPTH_OCTAVES_PER_S * dt)
