@@ -18,8 +18,9 @@ decisions"):
   4D shape; the hands (`ghost.py`'s parts and styles, plan 26 A3) are
   solid geometry, settled once a frame (`Hands.run`) and drawn by
   whatever holds them — the scene, the hands' layer, or both; one node
-  per instance (`ghost`, `ghost.2`, A4), solid or as lines. A4b adds a
-  point cloud.
+  per instance (`ghost`, `ghost.2`, A4), solid or as lines. The point
+  cloud (`PointCloud`, kind `cloud`, plan 26 A4b) draws a cloud device's
+  points, solid, in the scene of any graph built while one is listed.
 - **Scene** (`Scene`): any number of geometries into one colour + depth
   target (`render.SceneTarget`): the solid geometry first (the hands,
   depth written), then the sorted see-through shape, depth-tested against
@@ -99,12 +100,15 @@ undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar
 
 import moderngl
+import numpy as np
 
+from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .outputs import HANDS, NAMES, PIPELINES, SCENE, SCENE_HANDS, Switches, View
 
 # port types: a colour picture at the frame's size, a one-channel mask at
@@ -732,6 +736,221 @@ class Hands(Node):
             r._rebind(r.scene.draw_fbo, (0, 0, *frame.size))
 
 
+# ---------------------------------------------------------------- point cloud (plan 26 A4b)
+#
+# A point-cloud source (plan 27 B4's contract, `devices.PointCloud`: N×3
+# float32 points, read-only and C-contiguous, a frame id, a timestamp,
+# optional N×3 colours) drawn as points in the shared camera, each a
+# screen-space quad with a real depth (A2's point-quad expansion, one
+# instance per point). The renderer is handed the device registry
+# (`Renderer.cloud_source`, by `app`, as the hands' tracker is handed to
+# `renderer.ghost.source`); this module never imports `devices`: the
+# source is duck-typed — iterable of devices with `kind` and `role`, and
+# a `clouds` mapping ``cloud:<role>`` → the latest cloud with `points`,
+# `colors`, `frame`, `t`, `n`. The look is the `cloud.*` session params
+# (`ViewState.cloud_*`). A role with no device, a device not open, or a
+# frame not yet published draws nothing and raises nothing.
+
+# the device kind a point-cloud node is made for (the ruling of this run:
+# clouds follow the device list; A4's graph JSON has no `cloud` node kind)
+CLOUD_KIND = "cloud"
+
+CLOUD_EYE_W = f"{EYE_NEAR * 1.2:.6f}"    # render.EYE_W: a point behind the eye is dropped
+
+CLOUD_VS = """
+#version 330
+in vec2 in_corner;   // per vertex: the quad's corner, (±1, ±1)
+in vec3 in_pos;      // per instance: the point, in the cloud's units
+in vec3 in_color;    // per instance: its RGB (white when the cloud has none)
+uniform mat4 u_vp;   // the eye (geometry.eye_matrix)
+uniform mat4 u_model;   // the cloud's units → the world (cloud.scale)
+uniform vec2 u_px;   // the target's size, px
+uniform float u_size;   // radius, framebuffer px
+uniform float u_bright;
+uniform float u_colors;  // 1 the cloud's colours, 0 white
+out vec2 v_corner;
+out vec3 v_color;
+void main() {
+    vec4 c = u_vp * (u_model * vec4(in_pos, 1.0));
+    v_corner = in_corner;
+    v_color = mix(vec3(1.0), in_color, u_colors) * u_bright;
+    if (c.w < """ + CLOUD_EYE_W + """) {        // behind the eye: nothing
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        return;
+    }
+    gl_Position = vec4(c.xy + in_corner * u_size / (0.5 * u_px) * c.w, c.z, c.w);
+}
+"""
+
+# solid round dots: opaque inside the radius (depth written), nothing outside
+CLOUD_FS = """
+#version 330
+in vec2 v_corner;
+in vec3 v_color;
+out vec4 f_color;
+void main() {
+    if (dot(v_corner, v_corner) > 1.0) discard;
+    f_color = vec4(clamp(v_color, 0.0, 1.0), 1.0);
+}
+"""
+
+# a point's quad: two triangles over its corners (render._POINT_CORNERS)
+_CLOUD_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)],
+                          dtype=np.float32)
+
+
+def cloud_roles(source) -> tuple[str, ...]:
+    """The roles of the `cloud` devices `source` lists (a device registry,
+    duck-typed), in list order — listed, open or not: what the default
+    graph gains a point-cloud node for. None (no registry) is none."""
+    if source is None:
+        return ()
+    try:
+        return tuple(str(d.role) for d in source if getattr(d, "kind", "") == CLOUD_KIND)
+    except Exception:  # noqa: BLE001 — a registry mid-change costs the clouds, never the frame
+        return ()
+
+
+class _CloudGL:
+    """One renderer's GL objects for its clouds: the program and the
+    quad's corners, shared, and per node the points' and colours'
+    buffers, their vertex array and the (frame, t) they hold — uploaded
+    only when that moves. Kept on the renderer (`_cloud_gl`), so a graph
+    rebuilt for new switches re-uploads nothing."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.prog = ctx.program(vertex_shader=CLOUD_VS, fragment_shader=CLOUD_FS)
+        self.corners = ctx.buffer(_CLOUD_CORNERS.tobytes())
+        self.slots: dict[str, dict] = {}
+
+    def upload(self, name: str, cloud) -> dict:
+        """`cloud` into node `name`'s buffers when its (frame, t) moved;
+        the slot: `vao`, `n`, `key`, `uploads` (a count, for the tests)."""
+        slot = self.slots.get(name)
+        key = (int(cloud.frame), float(cloud.t))
+        if slot is not None and slot["key"] == key:
+            return slot
+        pts = cloud.points
+        n = int(pts.shape[0])
+        cols = cloud.colors if cloud.colors is not None else np.ones((n, 3), np.float32)
+        if slot is None:
+            pbuf = self.ctx.buffer(reserve=max(pts.nbytes, 12), dynamic=True)
+            cbuf = self.ctx.buffer(reserve=max(pts.nbytes, 12), dynamic=True)
+            vao = self.ctx.vertex_array(self.prog, [
+                (self.corners, "2f", "in_corner"),
+                (pbuf, "3f/i", "in_pos"),
+                (cbuf, "3f/i", "in_color")])
+            slot = self.slots[name] = {"pbuf": pbuf, "cbuf": cbuf, "vao": vao, "uploads": 0}
+        for buf, data in ((slot["pbuf"], pts), (slot["cbuf"], cols)):
+            if n:
+                buf.orphan(max(data.nbytes, 12))
+                buf.write(np.ascontiguousarray(data, dtype=np.float32))
+        slot["n"], slot["key"] = n, key
+        slot["uploads"] += 1
+        return slot
+
+    def release(self) -> None:
+        """Every GL object (`Renderer.on_reload`: a shader edit lands)."""
+        for slot in self.slots.values():
+            for k in ("vao", "pbuf", "cbuf"):
+                slot[k].release()
+        self.slots = {}
+        self.corners.release()
+        self.prog.release()
+
+
+class PointCloud(Node):
+    """A point-cloud geometry (plan 26 A4b): the latest frame of
+    ``cloud:<role>`` (`Renderer.cloud_source.clouds`, plan 27 B4) as
+    round points in the shared camera — the eye (`eye.*`) and the cloud's
+    own world transform, a uniform scale about the world origin
+    (`cloud.scale`): the shape's `camera.*` and `rot.*` are the shape's,
+    not the cloud's. Solid, like the hands: drawn into the scene before
+    the see-through shape, depth tested and depth written, so the shape's
+    strokes in front of a point draw over it and a point in front of them
+    hides them. `cloud.size` is each point's radius in logical px (a
+    whole number of framebuffer pixels across, as A2's points),
+    `cloud.bright` and `cloud.colors` its colour. The buffer is uploaded
+    only when the cloud's frame id (or its publish time, for a device
+    re-opened) moves. Its draw is its own SYSTEM line (the node's name);
+    a cloud that is missing draws nothing and costs nothing else."""
+
+    KIND = CLOUD_KIND
+    OUTPUT = GEOMETRY
+    SOLID = True
+
+    def __init__(self, name: str, role: str, after: tuple[Node, ...] = (),
+                 **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        self.role = role
+
+    @property
+    def source(self) -> str:
+        """The registry's key for this node's cloud: ``cloud:<role>``."""
+        return f"{CLOUD_KIND}:{self.role}"
+
+    def cloud(self, frame: Frame):
+        """This frame's cloud, or None (no registry, no device, nothing
+        published yet)."""
+        src = getattr(frame.r, "cloud_source", None)
+        if src is None:
+            return None
+        try:
+            return (getattr(src, "clouds", None) or {}).get(self.source)
+        except Exception:  # noqa: BLE001 — a source that raises is a cloud not there
+            return None
+
+    def prepare(self, frame: Frame) -> None:
+        """Nothing before the scene's target is bound."""
+
+    def draw(self, frame: Frame) -> None:
+        drawn = frame.stats.setdefault("clouds", {})
+        drawn[self.name] = 0
+        cloud = self.cloud(frame)
+        if cloud is None or not getattr(cloud, "n", 0):
+            return
+        r, ctx, s = frame.r, frame.ctx, frame.s
+        try:
+            gl = getattr(r, "_cloud_gl", None)
+            if gl is None:
+                gl = r._cloud_gl = _CloudGL(ctx)
+            slot = gl.upload(self.name, cloud)
+            vp = eye_matrix(frame.w, frame.h, getattr(s, "eye_fov", EYE_FOV),
+                            getattr(s, "eye_distance", EYE_DISTANCE))
+            k = float(getattr(s, "cloud_scale", 0.3))
+            p = gl.prog
+            p["u_vp"].write(np.asarray(vp, dtype="f4").T.tobytes())
+            p["u_model"].write(np.diag([k, k, k, 1.0]).astype("f4").T.tobytes())
+            w, h = frame.size
+            p["u_px"].value = (float(max(w, 1)), float(max(h, 1)))
+            # radius in framebuffer px (× dpr), the diameter a whole number
+            # of pixels — draw_scene's points (A2's rounding)
+            rad = max(float(getattr(s, "cloud_size", 2.0)), 0.0) * frame.dpr
+            p["u_size"].value = math.floor(2.0 * rad + 0.5) / 2.0
+            p["u_bright"].value = max(float(getattr(s, "cloud_bright", 1.0)), 0.0)
+            p["u_colors"].value = 1.0 if getattr(s, "cloud_colors", True) else 0.0
+            ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
+            ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+            slot["vao"].render(moderngl.TRIANGLES, vertices=6, instances=slot["n"])
+            drawn[self.name] = slot["n"]
+        except Exception as e:  # noqa: BLE001 — a cloud must not take the scene down
+            frame.stats["cloud_error"] = f"{self.name}: {type(e).__name__}: {e}"[:160]
+        finally:
+            ctx.disable(moderngl.DEPTH_TEST)
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+
+
+def cloud_nodes(g: Graph, roles: tuple[str, ...] | list[str]) -> list[PointCloud]:
+    """One point-cloud node per listed role, added to `g`: the first is
+    `cloud`, the next `cloud.2`, … (the naming rule's marker form). Each
+    reads the `cloud.*` params (a second instance's own params are A4's)."""
+    return [g.add(PointCloud(CLOUD_KIND if i == 0 else f"{CLOUD_KIND}.{i + 1}", role))
+            for i, role in enumerate(roles)]
+
+
+# ---------------------------------------------------------------- end point cloud
 def ghost_of(r, name: str):
     """The `Ghost` that draws hands node `name` (`Renderer.ghost_of`); the
     renderer's one ghost for a renderer from before A4 (or a stand-in)."""
@@ -1264,6 +1483,7 @@ class Graph:
         self.wiring = wiring if wiring is not None else Wiring()
         self.nodes: dict[str, Node] = {}
         self.order: list[Node] = []
+        self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
 
     def add(self, node: Node) -> Node:
         if node.name in self.nodes:
@@ -1351,7 +1571,8 @@ FX_NAMES = {SCENE: "fx", SCENE_HANDS: "fx(scene+hands)", HANDS: "fx(hands)"}
 HISTORY_COMPOSITE = "composite(history)"
 
 
-def default_graph(views: list[View], wiring: Wiring | None = None) -> Graph:
+def default_graph(views: list[View], wiring: Wiring | None = None,
+                  clouds: tuple[str, ...] = ()) -> Graph:
     """The frame as a graph, from the views' switches and the wiring
     (`Wiring`; the default is today's frame). Each output's three
     switches are its wiring:
@@ -1382,7 +1603,11 @@ def default_graph(views: list[View], wiring: Wiring | None = None) -> Graph:
     node `into` "layer", else from the first (`Wiring.layer_node`), and
     named after it (`hands`, `hands.2`). An output showing the scene with
     hands in it takes the first in-scene node's readout; one taking the
-    layer, the layer's."""
+    layer, the layer's.
+
+    Plan 26 A4b: `clouds`, the roles of the listed `cloud` devices
+    (`cloud_roles`), each a point-cloud geometry in the scene, solid,
+    before the hands; none listed, the graph is the one above."""
     wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
     inside = wiring.in_scene()
@@ -1396,12 +1621,14 @@ def default_graph(views: list[View], wiring: Wiring | None = None) -> Graph:
     want_layer = any(layered(sw) for sw in switches) or (
         wiring.history == "scene+hands" and not in_scene)
     g = Graph(graph_key(views), wiring)
+    g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
+    points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
     for h in wiring.nodes():
         if h.into == "scene" or (want_layer and h == from_layer):
             geo[h.n] = g.add(Hands(hands_name(h.n), draw=h.draw))
-    scene = g.add(Scene("scene", geometries=[*(geo[h.n] for h in inside), shape]))
+    scene = g.add(Scene("scene", geometries=[*points, *(geo[h.n] for h in inside), shape]))
     cover = g.add(Cover("cover", scene=scene))
     layer = (g.add(HandsLayer(layer_name(from_layer.n),
                               readout="always" if from_layer.into == "scene" else "through",

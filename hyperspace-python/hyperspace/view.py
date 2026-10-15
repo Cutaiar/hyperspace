@@ -49,6 +49,13 @@ class ViewState:
     # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
     eye_fov: float = EYE_FOV           # degrees across the shorter side
     eye_distance: float = EYE_DISTANCE  # world units from the origin
+    # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
+    # how a recorded or live cloud is drawn in the shared camera. Nothing
+    # reads them until a `cloud` device is listed
+    cloud_size: float = 2.0      # a point's radius, logical px
+    cloud_scale: float = 0.3     # the cloud's units → world units (shape radii)
+    cloud_bright: float = 1.0    # × the point's colour
+    cloud_colors: bool = True    # the cloud's own colours; off (or none): white
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
     inst_layout: int = 0         # 0 grid, 1 hex (a honeycomb spiral), 2 ring (render.inst_positions)
     inst_motion: int = 0         # field motion: 0 still, 1 orbit, 2 wave, 3 ripple

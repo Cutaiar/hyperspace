@@ -101,7 +101,7 @@ from .geometry import (
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
-from .graph import Frame, Graph, Wiring, default_graph, graph_key
+from .graph import Frame, Graph, Wiring, cloud_roles, default_graph, graph_key
 from .lookback import DreamState, Lookback
 from .outputs import Handoff, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -906,6 +906,10 @@ class Renderer:
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
         self.wiring = Wiring()
+        # plan 26 A4b: what the point-cloud nodes read — the device
+        # registry (app hands it over; duck-typed: `clouds` and its
+        # devices' kinds). None: no cloud is drawn
+        self.cloud_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the preset's
         # graph section, `preset.GraphSection`); their Ghosts, made on
@@ -1032,6 +1036,11 @@ class Renderer:
         # old `PassTimer`, with an `end_frame` of another shape
         self._graph = None
         self._drop_timer()
+        # plan 26 A4b: the point clouds' program and buffers, made again
+        # from graph.py's source on the next frame that draws a cloud
+        if getattr(self, "_cloud_gl", None) is not None:
+            self._cloud_gl.release()
+        self._cloud_gl = None
         # plan 26 A4: an extra hands node's Ghost is not a reload target
         # (the reloader re-classes the renderer's own): released, and made
         # again from ghost.py as it is now on next use, over the same state
@@ -1293,12 +1302,16 @@ class Renderer:
         switches and the wiring have not changed (`graph.graph_key`,
         `Renderer.wiring`), else the default graph built from them
         (`graph.default_graph`). getattr: a renderer from before the graph
-        (or the wiring) has none."""
+        (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
+        registry lists (`cloud_source`) are part of the key, so listing
+        one adds its point-cloud node to the scene."""
         key = graph_key(views)
         wiring = getattr(self, "wiring", None) or Wiring()
+        clouds = cloud_roles(getattr(self, "cloud_source", None))
         graph = getattr(self, "_graph", None)
-        if graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring:
-            graph = self._graph = default_graph(views, wiring)
+        if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "clouds", ()) != clouds):
+            graph = self._graph = default_graph(views, wiring, clouds)
             # plan 26 A4: a second hands node's Ghost the new graph does
             # not hold goes with the old graph
             self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})

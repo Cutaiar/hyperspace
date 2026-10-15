@@ -108,7 +108,7 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk", "eye")
+                  "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -1078,6 +1078,28 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip="How far the eye stands from the centre of the world, in shape "
                      "radii. Nearer: a stronger perspective and a bigger shape. "
                      f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
+
+    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
+    # drawn in the shared camera (graph.PointCloud). Session, like the
+    # hands' look: a cloud is the room's sensor, and a preset load never
+    # changes how it is shown. Nothing reads them until a `cloud` device
+    # is listed, so they move no picture of today's
+    g = "cloud"
+    r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
+                 lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
+                 tip="Each point's radius on screen, in pixels, whatever its depth.")
+    r.continuous("cloud.scale", "Cloud scale", *_attr(view, "cloud_scale"),
+                 lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="The cloud's own units in the world's (the shape's radius is 1), "
+                     "about the world's centre.")
+    r.continuous("cloud.bright", "Cloud brightness", *_attr(view, "cloud_bright"),
+                 lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="The points' colour × this; 0 draws them black (they still hide "
+                     "what is behind them).")
+    r.toggle("cloud.colors", "Cloud colours", *_attr(view, "cloud_colors"), group=g,
+             modulatable=False,
+             tip="The cloud's own colours, when its source has them; off, every point "
+                 "is white.")
 
     # ---- look-back: the frame history composited over the scene ----
     # lookback.py reads these every frame; the dream worker (WP6b) reads
