@@ -1123,6 +1123,7 @@ def main() -> None:
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
     renderer.ghost.router = router           # the guide lights what the table routes
+    renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot

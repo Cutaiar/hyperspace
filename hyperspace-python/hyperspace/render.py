@@ -101,7 +101,7 @@ from .geometry import (
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
-from .graph import Frame, Graph, Wiring, default_graph, graph_key
+from .graph import Frame, Graph, Wiring, cloud_roles, default_graph, graph_key
 from .lookback import DreamState, Lookback
 from .outputs import Handoff, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -906,6 +906,10 @@ class Renderer:
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
         self.wiring = Wiring()
+        # plan 26 A4b: what the point-cloud nodes read — the device
+        # registry (app hands it over; duck-typed: `clouds` and its
+        # devices' kinds). None: no cloud is drawn
+        self.cloud_source = None
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
@@ -1026,6 +1030,11 @@ class Renderer:
         # old `PassTimer`, with an `end_frame` of another shape
         self._graph = None
         self._drop_timer()
+        # plan 26 A4b: the point clouds' program and buffers, made again
+        # from graph.py's source on the next frame that draws a cloud
+        if getattr(self, "_cloud_gl", None) is not None:
+            self._cloud_gl.release()
+        self._cloud_gl = None
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
                     getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
@@ -1283,12 +1292,16 @@ class Renderer:
         switches and the wiring have not changed (`graph.graph_key`,
         `Renderer.wiring`), else the default graph built from them
         (`graph.default_graph`). getattr: a renderer from before the graph
-        (or the wiring) has none."""
+        (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
+        registry lists (`cloud_source`) are part of the key, so listing
+        one adds its point-cloud node to the scene."""
         key = graph_key(views)
         wiring = getattr(self, "wiring", None) or Wiring()
+        clouds = cloud_roles(getattr(self, "cloud_source", None))
         graph = getattr(self, "_graph", None)
-        if graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring:
-            graph = self._graph = default_graph(views, wiring)
+        if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
+                or getattr(graph, "clouds", ()) != clouds):
+            graph = self._graph = default_graph(views, wiring, clouds)
         return graph
 
     def _compose(self, v: View, key: int | None, after: bool,
