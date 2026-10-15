@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .geometry import RATE
+from .geometry import EYE_DISTANCE, EYE_FOV, RATE
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -35,8 +35,15 @@ class ViewState:
     pitch: float = 0.0
     faces: bool = False          # translucent face fills under the wireframe
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
-    zoom: float = 1.0            # camera magnification about the view centre
-    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
+    # plan 26 A2: camera.zoom / camera.pan are the shape's world transform
+    # (geometry.model_matrix): its scale about the world origin and its
+    # position in world units (the unit circumradius; pan.y positive down)
+    zoom: float = 1.0
+    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    # the eye (eye.* — session): the one fixed camera, framed on the Leap
+    # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
+    eye_fov: float = EYE_FOV           # degrees across the shorter side
+    eye_distance: float = EYE_DISTANCE  # world units from the origin
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
     inst_layout: int = 0         # 0 grid, 1 hex (a honeycomb spiral), 2 ring (render.inst_positions)
     inst_motion: int = 0         # field motion: 0 still, 1 orbit, 2 wave, 3 ripple

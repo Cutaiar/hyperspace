@@ -181,11 +181,14 @@ def test_bitmap_path_oscillates(ctx, tmp_path):
 
 def test_zoom_and_pan(ctx):
     base = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"])), 600, 400, ctx=ctx)
+    # plan 26 A2: pan is in world units — 150 px at 600×400 through the
+    # default eye (min(w, h)·SCALE = 120 px a unit at the origin)
     panned = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), pan=[150.0, 0.0]), 600, 400, ctx=ctx
+        ViewState(shape=3, ang=list(VIEW["ang"]), pan=[150.0 / 120.0, 0.0]), 600, 400, ctx=ctx
     )
     import numpy as np
-    # panning right moves the lit centroid right by ~the pan distance
+    # panning right moves the lit centroid right by ~the pan distance (the
+    # shape seen a little from the side now: its centre lands exactly)
     ys, xs = np.nonzero(base.max(axis=2) > 8)
     ys2, xs2 = np.nonzero(panned.max(axis=2) > 8)
     assert abs((xs2.mean() - xs.mean()) - 150) < 4
@@ -962,7 +965,7 @@ class _FrozenProgram:
 def _freeze_faces(ctx, r):
     """Swap `r`'s face program for one built from the frozen source."""
     from hyperspace import glsl
-    from hyperspace.render import FACE_VS, PATTERNS_GLSL
+    from hyperspace.render import FACE_FORMAT, FACE_VS, PATTERNS_GLSL
     from hyperspace.view import N_MOD
 
     prog = ctx.program(
@@ -971,7 +974,7 @@ def _freeze_faces(ctx, r):
                          + "\n#line 1 2\n" + PATTERNS_GLSL.read_text() + OLD_FACE_FS_TAIL))
     r._face_prog = _FrozenProgram(prog)
     r._fvao = ctx.vertex_array(
-        prog, [(r._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")])
+        prog, [(r._fbuf, FACE_FORMAT, "in_pos", "in_w4", "in_uv", "in_alpha", "in_fid")])
     r._seed_prog = r._seed_vao = None
     return r
 
@@ -1783,7 +1786,9 @@ def test_every_motion_moves_every_layout(ctx):
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
-    cell = min(LW, LH) * 0.72 * 0.3
+    # plan 26 A2: the offsets are in the world, before the zoom (render.CELL
+    # shape radii a cell; 0.72·min(w, h)·zoom px on screen before)
+    from hyperspace.render import CELL as cell
     for layout in (0, 1, 2):
         for n in (7, 12):
             still, (o_still, *_) = _scene(ctx, r, _layout_view(n, layout, 0))
@@ -1801,7 +1806,7 @@ def test_every_motion_moves_every_layout(ctx):
     _, (o_still, *_) = _scene(ctx, r, _layout_view(12, 2, 0))
     _, (o, *_) = _scene(ctx, r, _layout_view(12, 2, 3))
     radial = np.hypot(*o.T) - np.hypot(*o_still.T)
-    assert np.allclose(radial, radial[0], atol=1e-2) and abs(radial[0]) > 0.5
+    assert np.allclose(radial, radial[0], atol=1e-3) and abs(radial[0]) > 0.02 * cell
 
 
 def test_every_layout_and_motion_draws_any_count(ctx):
