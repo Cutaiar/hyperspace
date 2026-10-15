@@ -114,6 +114,21 @@ its hand is away (the pair: either hand), so a row lets go like an
 axis's; the curls and the spread need the skeleton and read NaN without
 one. The constants (ranges, time constants, the flick's thresholds) are
 under `DANCE`.
+
+The grab (plan 24 C5, H1) is a fifth switch per hand, beside the pinches:
+
+  hand:<side>.grab          a closed fist: 1 while the hand is closed, 0
+                            open — the four fingers' curls (`fist`)
+                            through a `Gate`, Schmitt + debounce like a
+                            pinch (`GRAB_CLOSE`, `GRAB_OPEN`, `GRAB_HOLD_S`)
+
+It is a lane after the dance sources (so no older lane moves) and a gate
+the routing UI offers beside the pinches (`Layout.gates`), so a row can
+act only while that hand is closed: the owner's "close a hand near the
+shape and it follows the hand; open it to let go" is `position` rows from
+the hand's roll / pitch / yaw, each `when` ``hand:right.grab``. Like the
+dance sources it has no setup params and no DAW note; it needs the
+skeleton, so with none it never closes.
 """
 
 from __future__ import annotations
@@ -324,6 +339,16 @@ SPEED_GAP_S = 0.1              # frames further apart than this measure no speed
 GAP_RANGE = (60.0, 600.0)
 TWIST_FULL = 90.0
 PAIR_S = 0.05                  # s, the pair's smoothing
+# the grab switch (plan 24 C5): a fist is the mean raw curl of the four
+# fingers (the thumb tucks or not — a fist either way). Closes past
+# GRAB_CLOSE, lets go only under GRAB_OPEN (the Schmitt gap: a hand
+# hovering half-closed does not chatter), and an edge must hold
+# GRAB_HOLD_S before it counts. Low enough that a real fist, which may
+# not bend as far as the curl range's top, still closes it
+GRAB_FINGERS = ("index", "middle", "ring", "pinky")
+GRAB_CLOSE = 0.65
+GRAB_OPEN = 0.45
+GRAB_HOLD_S = 0.05
 
 
 def _v3(v) -> tuple[float, float, float]:
@@ -485,6 +510,27 @@ def gap(left: dict, right: dict) -> float | None:
     return None if a is None or b is None else unit(math.dist(a, b), *GAP_RANGE)
 
 
+def fist(c: dict | None) -> float | None:
+    """How closed the hand is, 0 open … 1 a fist: the mean of the four
+    fingers' curls (`curls`, raw), the thumb left out. None unless all
+    four were read (no skeleton): the grab switch then holds where it is."""
+    try:
+        v = [float(c[f]) for f in GRAB_FINGERS]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return sum(v) / len(v) if all(math.isfinite(x) for x in v) else None
+
+
+def step_grab(gate: Gate, c: dict | None, t: float) -> bool:
+    """Step one hand's grab switch from its raw curls. `Gate` closes
+    *under* its threshold (a pinch's distance), so it is fed how open
+    the hand is, 1 − `fist`: it closes when the fist passes GRAB_CLOSE
+    and lets go when it falls under GRAB_OPEN."""
+    f = fist(c)
+    return gate.step(None if f is None else 1.0 - f, t, close=1.0 - GRAB_CLOSE,
+                     open_=1.0 - GRAB_OPEN, hold=GRAB_HOLD_S)
+
+
 class Dance:
     """One hand's dance sources at run time — never saved. `curl` is per
     digit (DIGITS); `raw` the last unsmoothed readings (the curls by
@@ -518,7 +564,10 @@ class Dance:
             return
         top = None
         if fresh or not self.raw:
-            speed = None
+            # no speed measured this frame (the first after a gap, or the
+            # point count changed): the energy falls toward 0 at its decay
+            # rather than holding its last target
+            speed, self._target = None, 0.0
             pts = points(feats, skel)
             prev, self._prev = self._prev, (t, pts)
             if (pts and prev is not None and len(prev[1]) == len(pts)
@@ -1148,16 +1197,23 @@ def pinch_name(side: str, finger: str) -> str:
     return f"{side}.pinch.{finger}"
 
 
+def grab_name(side: str) -> str:
+    """A grab switch's address name: "right.grab"."""
+    return f"{side}.grab"
+
+
 def addresses(axes: list[AxisSettings]) -> list[str]:
     """Every hand lane's address name, in lane order: the axes as
     `[hands] dofs` spells them (`AxisSettings.name`, "left.roll"), then
     "left.present" / "right.present", then the pinch switches
     ("left.pinch.index" … "right.pinch.pinky"), then each hand's dance
-    sources ("left.curl.thumb" … "left.flick", then the right's: `DANCE`).
+    sources ("left.curl.thumb" … "left.flick", then the right's: `DANCE`),
+    then the grab switches ("left.grab", "right.grab": `grab_name`).
     The two-hand sources are a scheme of their own: `pair_addresses`."""
     return ([a.name for a in axes] + [f"{s}.present" for s in SIDES]
             + [pinch_name(s, f) for s in SIDES for f in PINCHES]
-            + [f"{s}.{k}" for s in SIDES for k in DANCE])
+            + [f"{s}.{k}" for s in SIDES for k in DANCE]
+            + [grab_name(s) for s in SIDES])
 
 
 def _dance_label(kind: str) -> str:
@@ -1189,18 +1245,20 @@ class Layout:
     so a row keeps its axis whatever order or subset `dofs` lists, and a
     name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
     still reads, which is why every lane added since goes after the
-    switches (the dance sources, plan 24 C4): no older lane moves. The
-    labels and the gate list are published beside it (`labels["hand"]`,
-    `gates["hand"]`); `presence`, `gate` and `dance` are the index maps
-    `lanes()` and `rests()` fill by.
+    switches (the dance sources, plan 24 C4; then the grab switches, C5):
+    no older lane moves. The labels and the gate list are published beside
+    it (`labels["hand"]`, `gates["hand"]`: the eight pinches, then the two
+    grabs); `presence`, `gate`, `dance` and `grab` are the index maps
+    `lanes()` and `rests()` fill by. Every count here is derived — a
+    caller reads `n`, never a number of its own.
 
     The two-hand ``hands`` scheme is laid out here too — `pair_names`,
     `pair_addresses`, `pair_index` (``hands:gap``, ``hands:twist``) — a
     vector of its own, fed beside the ``hand`` one (`pair_lanes`).
     """
 
-    __slots__ = ("addresses", "dance", "gate", "gates", "index", "n", "n_axes", "names",
-                 "pair_addresses", "pair_index", "pair_names", "presence")
+    __slots__ = ("addresses", "dance", "gate", "gates", "grab", "index", "n", "n_axes",
+                 "names", "pair_addresses", "pair_index", "pair_names", "presence")
 
     def __init__(self, axes: list[AxisSettings]):
         self.n_axes = len(axes)
@@ -1210,15 +1268,19 @@ class Layout:
         base = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
         self.dance = {(s, k): base + i * len(DANCE) + j
                       for i, s in enumerate(SIDES) for j, k in enumerate(DANCE)}
-        self.n = base + len(SIDES) * len(DANCE)
+        base += len(SIDES) * len(DANCE)
+        self.grab = {s: base + i for i, s in enumerate(SIDES)}
+        self.n = base + len(SIDES)
         self.names = ([a.label for a in axes]
                       + [f"{s[0].upper()} in" for s in SIDES]
                       + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES]
-                      + [f"{s[0].upper()} {_dance_label(k)}" for s in SIDES for k in DANCE])
+                      + [f"{s[0].upper()} {_dance_label(k)}" for s in SIDES for k in DANCE]
+                      + [f"{s[0].upper()} grab" for s in SIDES])
         self.addresses = addresses(axes)
         self.index = {name: i for i, name in enumerate(self.addresses)}
-        self.gates =[(self.gate[(s, f)], self.names[self.gate[(s, f)]])
-                      for s in SIDES for f in PINCHES]
+        self.gates = ([(self.gate[(s, f)], self.names[self.gate[(s, f)]])
+                       for s in SIDES for f in PINCHES]
+                      + [(self.grab[s], self.names[self.grab[s]]) for s in SIDES])
         self.pair_names = list(PAIR)
         self.pair_addresses = pair_addresses()
         self.pair_index = {name: i for i, name in enumerate(self.pair_addresses)}
@@ -1272,6 +1334,8 @@ class HandsIO:
         # the dance sources (plan 24 C4): each hand's, and the pair's
         self.dance = {s: Dance() for s in SIDES}
         self.pair = {k: Smooth() for k in PAIR}
+        # the grab switches (plan 24 C5): a closed fist, from the curls
+        self.grab = {s: Gate() for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         # side → the features of a hand the tracker sees but the box keeps
         # out: absent to everything, drawn hollow on the HANDS page
@@ -1345,8 +1409,9 @@ class HandsIO:
         leaves; the spring and `hold` shape only the DAW output
         (`Follower.live`; the catch glide on a returning hand is live).
         Then presence (1 in view, 0 not), the pinch switches (1 closed),
-        and each hand's dance sources (`DANCE`: NaN while the hand is away,
-        or for a reading its source cannot give — no skeleton, no curls)."""
+        each hand's dance sources (`DANCE`: NaN while the hand is away,
+        or for a reading its source cannot give — no skeleton, no curls),
+        and the grab switches (1 a closed fist, 0 open or away)."""
         lay = self._layout()
         out = [math.nan] * lay.n
         out[:lay.n_axes] = [st.y if st.follow.live else math.nan for st in self.state]
@@ -1357,13 +1422,14 @@ class HandsIO:
             if self.present[s]:
                 for k, v in zip(DANCE, self.dance[s].values()):
                     out[lay.dance[(s, k)]] = v
+            out[lay.grab[s]] = 1.0 if self._grabs()[s].on else 0.0
         return out
 
     def rests(self) -> list[float]:
         """Where each lane idles — the axis's own configured rest, so a
         push row centred on it pushes nothing from an absent hand whatever
-        the setup says `rest` is; presence, pinches and the dance sources 0
-        (an open, still hand)."""
+        the setup says `rest` is; presence, pinches, the dance sources and
+        the grabs 0 (an open, still hand)."""
         lay = self._layout()
         out = [0.0] * lay.n
         out[:lay.n_axes] = [float(a.rest_value) for a in self.axes]
@@ -1388,15 +1454,28 @@ class HandsIO:
             self.pair = {k: Smooth() for k in PAIR}
         for s in SIDES:
             self.dance[s].step(dt, t, fresh, self.frame[s], self.skeleton.get(s))
+            # the grab: from this hand's raw curls; a hand that left drops it
+            gate = self._grabs()[s]
+            if self.frame[s] is None:
+                gate.reset()
+            else:
+                step_grab(gate, self.dance[s].raw.get("curl"), t)
         left, right = self.frame["left"], self.frame["right"]
         both = left is not None and right is not None
         for k, fn in (("gap", gap), ("twist", twist)):
             self.pair[k].step(dt, fn(left, right) if both else None, PAIR_S, PAIR_S)
 
+    def _grabs(self) -> dict[str, Gate]:
+        """The grab switches, made for a HandsIO from before a hot reload."""
+        if getattr(self, "grab", None) is None:
+            self.grab = {s: Gate() for s in SIDES}
+        return self.grab
+
     def _layout(self) -> Layout:
         """The layout, rebuilt when it is one from before a hot reload
-        (no address map, no dance or pair lanes)."""
-        if getattr(self.layout, "pair_index", None) is None:
+        (no address map, no dance, pair or grab lanes)."""
+        if (getattr(self.layout, "pair_index", None) is None
+                or getattr(self.layout, "grab", None) is None):
             self.layout = Layout(self.axes)
         return self.layout
 

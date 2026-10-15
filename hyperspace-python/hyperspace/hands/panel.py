@@ -24,10 +24,11 @@ Top to bottom:
                            where the hand is (the shaped target) as a
                            hairline, the rest value as a dim tick, the
                            MIDI out on the right. Click a row to edit it.
-  the dance sources        a line per hand: five curls, spread, energy,
-                           flick; a line for both: gap, twist — small
-                           bars, hollow while they read nothing; hover
-                           one for its address (plan 24 C4)
+  the dance sources        a line per hand: five curls and the grab
+                           switch (● closed, a fist; plan 24 C5), then
+                           spread, energy, flick; a line for both: gap,
+                           twist — small bars, hollow while they read
+                           nothing; hover one for its address (plan 24 C4)
   the selected axis        its transfer (dead zone and curve over the
                            calibrated range) with the live point on it,
                            then invert · centred · dead zone · curve ·
@@ -60,10 +61,14 @@ from .core import (
     BOX_MARGIN,
     DIGITS,
     FEATURES,
+    GRAB_CLOSE,
+    GRAB_OPEN,
     GROUP,
     PINCHES,
     SIDES,
     conflicts,
+    fist,
+    grab_name,
     mirror,
 )
 from .signal import shape
@@ -509,7 +514,14 @@ def _axes(panel, io, settings) -> int:
         end = imgui.get_cursor_screen_pos()
         imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + avail - DANCE_W + DANCE_GAP, top.y))
         _dance(io, h)
-        imgui.set_cursor_screen_pos(end)
+        # back under both: the column (five lines) is taller than a short
+        # `dofs` list, and what follows must not run into it. Then an
+        # empty item, so the window's content size takes the cursor; it
+        # adds one item spacing, which the cursor is set that much short of
+        gap = imgui.get_style().item_spacing.y
+        y = max(end.y, imgui.get_item_rect_max().y + gap)
+        imgui.set_cursor_screen_pos(imgui.ImVec2(end.x, y - gap))
+        imgui.dummy(imgui.ImVec2(0.0, 0.0))
     imgui.pop_style_var()
     return k
 
@@ -566,8 +578,9 @@ DANCE_GAP = 14.0       # … this much of it a gap
 
 def _dance(io, h: float) -> None:
     """The dance sources (plan 24 C4), live, in a column beside the axes:
-    per hand a row of the five curls (thumb … pinky) and a row of spread,
-    energy and flick; then a row for the two hands together — gap, twist.
+    per hand a row of the five curls (thumb … pinky) and the grab switch
+    (C5: ● while the hand is a closed fist), and a row of spread, energy
+    and flick; then a row for the two hands together — gap, twist.
     Each a small bar like an axis's output, hollow while it reads nothing
     (the hand away, no skeleton). Hover a bar for its address and value:
     what a ROUTING row names."""
@@ -587,6 +600,9 @@ def _dance(io, h: float) -> None:
                     imgui.text_disabled(tag)
                 imgui.same_line(0.0, 3.0)
                 _dance_bar(f"hand:{s}.{kind}", lanes[lay.dance[(s, kind)]], h)
+            if label.endswith("curl"):
+                imgui.same_line(0.0, 6.0)
+                _grab(io, s, lanes[lay.grab[s]])
     for k, name in enumerate(lay.pair_names):
         if k:
             imgui.same_line(0.0, 6.0)
@@ -594,6 +610,21 @@ def _dance(io, h: float) -> None:
         imgui.same_line(0.0, 3.0)
         _dance_bar(f"hands:{lay.pair_addresses[k]}", pair[k], h, centred=name == "twist")
     imgui.end_group()
+
+
+def _grab(io, side: str, v: float) -> None:
+    """One hand's grab switch: ● lit while closed, ○ open. Hover: the
+    address, and how closed the hand is (`fist`, what the switch reads)
+    against where it closes and lets go — the number to watch."""
+    on = v >= 0.5
+    imgui.text_colored(ui.RED if on else (ui.TEXT if io.present[side] else ui.FAINT),
+                       f"grab {'●' if on else '○'}")
+    if imgui.is_item_hovered():
+        f = fist(io.dance[side].raw.get("curl"))
+        level = "—" if f is None else f"{f:.2f}"
+        imgui.set_tooltip(f"hand:{grab_name(side)}: {'closed' if on else 'open'}  ·  "
+                          f"fist {level} (closes ≥ {GRAB_CLOSE:.2f}, "
+                          f"lets go < {GRAB_OPEN:.2f})")
 
 
 def _dance_bar(address: str, v: float, h: float, *, centred: bool = False) -> None:

@@ -1,0 +1,26 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "GRAB FOLLOW",
+ "note": "Test fixture (plan 24 C5), not a show: the owner's intended grab mapping — the right hand's yaw, pitch and roll position the camera's yaw and pitch and the XY plane's phase, each only while the right hand is a closed fist.",
+ "values": {},
+ "routes": [
+  {
+   "source": "hand:right.yaw",
+   "target": "camera.yaw",
+   "op": "position",
+   "when": "hand:right.grab"
+  },
+  {
+   "source": "hand:right.pitch",
+   "target": "camera.pitch",
+   "op": "position",
+   "when": "hand:right.grab"
+  },
+  {
+   "source": "hand:right.roll",
+   "target": "rot.phase.XY",
+   "op": "position",
+   "when": "hand:right.grab"
+  }
+ ]
+}

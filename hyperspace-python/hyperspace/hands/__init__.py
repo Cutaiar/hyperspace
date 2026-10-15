@@ -18,7 +18,7 @@ argument, duck-typed, never imported:
                               (and, to resolve ``hand:right.roll``, .names)
                               dicts that poll fills — for two schemes: ``hand``
                               (each hand: axes, presence, pinches, the dance
-                              sources) and ``hands`` (the two together: gap,
+                              sources, the grab) and ``hands`` (the two together: gap,
                               twist). Pass neither and the hands still run.
 
 panel.py is the one piece that knows this host: it draws the HANDS page
@@ -54,6 +54,8 @@ from .core import (
     curls,
     default_addresses,
     features,
+    fist,
+    grab_name,
     mirror,
     pair_addresses,
     pinch_name,
@@ -68,6 +70,6 @@ from .core import (
 __all__ = [
     "DANCE", "DEFAULTS", "FEATURES", "GROUP", "PAIR", "PALM_W", "PINCHES", "SIDES",
     "AxisSettings", "Dance", "Gate", "HandSettings", "HandsIO", "Layout", "addresses",
-    "conflicts", "curls", "default_addresses", "features", "mirror", "pair_addresses",
-    "pinch_name", "pinches", "register", "skeleton", "spread",
+    "conflicts", "curls", "default_addresses", "features", "fist", "grab_name", "mirror",
+    "pair_addresses", "pinch_name", "pinches", "register", "skeleton", "spread",
 ]
