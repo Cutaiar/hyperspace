@@ -20,9 +20,13 @@ devices the role is not the scheme:** a preset names a *scheme*
 (`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
-publishes under its role. Two enabled devices may not claim one scheme:
-the Router holds one vector per scheme, so the later entry is refused
-with a note naming both roles (`RefusedDevice`).
+publishes under its role. Two enabled devices may not **feed** one
+scheme: the Router holds one vector per fed scheme (`feeds`), so a second
+pad (`axis`) or a second hands device (`hand`) is refused with a note
+naming both roles (`RefusedDevice`); two MIDI desks of different roles
+feed nothing (their messages are rows) and are both accepted — B2
+qualifies their rows by role. One role, one entry (config drops a
+duplicate role).
 
 **Two signal kinds** (decision 13): a port is a *value* (an axis, a
 fader, a lane) or a *trigger* (a hit, a button, a pad — with a velocity
@@ -268,16 +272,16 @@ class UnknownDevice(Base):
 
 
 class RefusedDevice(Base):
-    """An enabled entry that claims a scheme an earlier enabled entry
-    already publishes: never opened (two devices feeding one Router key
-    would overwrite each other every frame), an error line naming the
-    other role, as if ``enabled = false``."""
+    """An enabled entry that would feed a scheme an earlier enabled entry
+    already feeds: never opened (two devices feeding one Router key would
+    overwrite each other every frame), an error line naming the other
+    role, as if ``enabled = false``."""
 
     def __init__(self, role: str, kind: str, scheme: str, other: str,
                  entry: dict | None = None, ctx: Context | None = None):
         super().__init__(role, entry, ctx)
         self.kind = kind
-        self.error = f"claims {scheme!r}, which {other} already publishes — not opened"
+        self.error = f"feeds {scheme!r}, which {other} already feeds — not opened"
 
 
 # ---- the four shims over today's adapters ----
@@ -552,8 +556,10 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     """A device for one checked `[[devices]]` entry (config.devices):
     `OffDevice` when it is not enabled, `UnknownDevice` for a kind the
     table lacks, `RefusedDevice` when an earlier enabled entry already
-    publishes one of its schemes (`claimed`: scheme → role, filled here
-    for the next entry). Nothing is opened here."""
+    **feeds** one of its `feeds` (`claimed`: fed scheme → role, filled
+    here for the next entry) — a kind that feeds nothing (MIDI: rows,
+    not vectors) is never refused, so two desks of different roles both
+    open. Nothing is opened here."""
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
     if not entry.get("enabled", True):
         return OffDevice(role, kind, entry, ctx)
@@ -561,17 +567,18 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
     if claimed is not None:
-        for scheme in cls.schemes:
+        for scheme in cls.feeds:
             if scheme in claimed and claimed[scheme] != role:
                 return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
-        for scheme in cls.schemes:
+        for scheme in cls.feeds:
             claimed[scheme] = role
     return cls(role, entry, ctx)
 
 
 def make_all(entries: list[dict], ctx: Context | None = None) -> list[Base]:
-    """One device per entry, in order, each later entry refused the
-    schemes an earlier enabled one claims."""
+    """One device per entry, in order, each later entry refused the fed
+    schemes an earlier enabled one claims (roles are unique already:
+    config drops a duplicate role at load and on a re-read)."""
     claimed: dict[str, str] = {}
     return [make(e, ctx, claimed) for e in entries]
 

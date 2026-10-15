@@ -101,11 +101,13 @@ def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
 
 
 def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkeypatch):
-    """Roles are not schemes for today's devices (`pad` publishes `axis`,
-    `leap` publishes `hand`), and the Router holds one vector per scheme:
-    a second enabled entry of a kind whose scheme is already claimed is
-    refused — an error line naming both roles, never opened, as if
-    `enabled = false` — and comes up when the first leaves the list."""
+    """Roles are not schemes for today's devices (`pad` feeds `axis`,
+    `leap` feeds `hand`), and the Router holds one vector per fed scheme:
+    a second enabled entry of a kind that would feed a scheme already fed
+    is refused — an error line naming both roles, never opened, as if
+    `enabled = false` — and comes up when the first leaves the list. MIDI
+    feeds nothing (its messages are rows), so a second desk of another
+    role is accepted: the configuration B2 builds."""
     entries = [
         {"role": "pad", "kind": "gamepad", "enabled": True},
         {"role": "pad2", "kind": "gamepad", "enabled": True},
@@ -117,20 +119,21 @@ def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkey
     notes: list[str] = []
     reg = devices.DeviceRegistry(entries, devices.Context(hand_settings=None), notes=notes)
     pad2, leap2, lp = reg.get("pad2"), reg.get("leap2"), reg.get("launchpad")
-    assert isinstance(pad2, devices.RefusedDevice) and isinstance(lp, devices.RefusedDevice)
-    assert pad2.status == "error: claims 'axis', which pad already publishes — not opened"
-    assert lp.status == "error: claims 'cc', which apc40 already publishes — not opened"
+    assert isinstance(pad2, devices.RefusedDevice)
+    assert pad2.status == "error: feeds 'axis', which pad already feeds — not opened"
+    assert isinstance(lp, devices.MidiDevice) and lp.status == "lost"    # a second desk: fine
     assert isinstance(leap2, devices.OffDevice) and leap2.status == "off"   # off claims nothing
     for cls in (devices.PadDevice, devices.MidiDevice):
         monkeypatch.setattr(cls, "open", lambda self: None)      # no port, no pad asked for
     reg.open_all()
     for _ in range(3):
         reg.poll(1 / 60, 0.0, router=object())
-    assert pad2.io is None and lp.io is None and reg.adapter("gamepad") is None
+    assert pad2.io is None and reg.adapter("gamepad") is None
     assert [n for n in notes if "pad2" in n] == [
-        "config: [[devices]] pad2: claims 'axis', which pad already publishes — not opened"]
-    assert [n for n in notes if "launchpad" in n] == [
-        "config: [[devices]] launchpad: claims 'cc', which apc40 already publishes — not opened"]
+        "config: [[devices]] pad2: feeds 'axis', which pad already feeds — not opened"]
+    assert not any("launchpad" in n for n in notes)
+    assert [r for r, _, st, _, _ in reg.lines() if r in ("apc40", "launchpad")] == [
+        "apc40", "launchpad"]                               # both desks on the SYSTEM page
     assert reg.schemes() == ("axis", "pad", "hat", "hand", "cc", "note", "pitch")
     # the first pad leaves the list: pad2 is no longer refused and opens
     monkeypatch.undo()                                    # the real Pad opens (never raises)
