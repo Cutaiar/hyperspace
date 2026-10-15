@@ -10,10 +10,11 @@ hash exactly; it runs only on the renderer they were recorded on
 that moves in A1 means A1 is wrong; in A2–A4 a moved golden needs its
 reason in the PR (re-record with `--only`).
 
-The timing half: `render.PassTimer` keeps a rolling median in ms per pass
-of `Renderer._draw_frame` in `Renderer.stats["gpu_ms"]`, shown on the
-SYSTEM page (`Panel.gpu_lines`), off with a note on a context with no
-timer queries — and timing never changes a pixel.
+The timing half: `render.PassTimer` keeps a rolling median in ms per
+node of the render graph (A1; per pass before it) in
+`Renderer.stats["gpu_ms"]`, shown on the SYSTEM page (`Panel.gpu_lines`),
+off with a note on a context with no timer queries — and timing never
+changes a pixel.
 """
 
 from __future__ import annotations
@@ -108,16 +109,16 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
 
 
 def test_the_gpu_lines_on_the_system_page():
-    """One line per pass, its median in ms, under a heading; the note
+    """One line per node, its median in ms, under a heading; the note
     alone with no timer queries; nothing before a frame was timed."""
     from hyperspace.ui import Panel
 
     def lines(stats):
         return Panel.gpu_lines(SimpleNamespace(renderer=SimpleNamespace(stats=stats)))
 
-    got = lines({"gpu_ms": {"scene": 1.234, "compose": 0.2}, "gpu_note": ""})
-    assert got[0].startswith("gpu per pass")
-    assert [ln.split() for ln in got[1:]] == [["scene", "1.23"], ["compose", "0.20"]]
+    got = lines({"gpu_ms": {"scene": 1.234, "output.1": 0.2}, "gpu_note": ""})
+    assert got[0].startswith("gpu per node")
+    assert [ln.split() for ln in got[1:]] == [["scene", "1.23"], ["output.1", "0.20"]]
     assert lines({"gpu_ms": {}, "gpu_note": "no GPU timer queries on this context (Error)"}) \
         == ["gpu: no GPU timer queries on this context (Error)"]
     assert lines({}) == [] and Panel.gpu_lines(SimpleNamespace(renderer=None)) == []
@@ -193,8 +194,10 @@ def _frames(ctx, r, f, n):
     return np.frombuffer(f.read(components=4), dtype=np.uint8)
 
 
-def test_each_pass_has_a_rolling_median_in_ms(ctx):
-    from hyperspace.render import GPU_PASSES, PassTimer
+def test_each_node_has_a_rolling_median_in_ms(ctx):
+    """A1: one median per node of the frame's graph, in the graph's order
+    (`Graph.timed`); a node that did not run counts 0."""
+    from hyperspace.render import PassTimer
 
     r, f = _rig(ctx)
     if not r.timer.on:
@@ -203,7 +206,8 @@ def test_each_pass_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    assert list(ms) == list(GPU_PASSES)            # every pass, in frame order
+    assert list(ms) == r._graph.timed == ["scene", "cover", "hands", "history", "fx",
+                                          "capture", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""
