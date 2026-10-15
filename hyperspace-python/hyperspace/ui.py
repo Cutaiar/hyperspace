@@ -320,6 +320,18 @@ def device_lines(registry) -> list[str]:
     return out
 
 
+# the wants the menu offers by their own items (desk, the hands, the pad)
+_OWN_WANTS = frozenset(("desk", "hand:left", "hand:right", "pad"))
+
+
+def learn_wants(lrn) -> list[str]:
+    """What else the param menu offers to learn (plan 27 B2): every want
+    the registry lists (`Learn.wants`) beyond the desk, the hands and the
+    pad, which have their own items — a new device's role."""
+    wants = getattr(lrn, "wants", None)
+    return [w for w in (wants() if callable(wants) else ()) if w not in _OWN_WANTS]
+
+
 def apply_style() -> None:
     s = imgui.get_style()
     s.window_rounding = 12.0
@@ -716,6 +728,13 @@ class Panel:
         if (pad is not None and pad.on and self._desk_target(a)
                 and imgui.menu_item_simple("Learn pad")):
             lrn.arm(a.id, "pad")
+        # any other device the registry lists can be armed for by its role
+        # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
+        # can drive; the device completes it from its own `learn`
+        if p.modulatable:
+            for want in learn_wants(lrn):
+                if imgui.menu_item_simple(f"Learn {want}"):
+                    lrn.arm(a.id, want)
 
     def _hand_sides(self) -> list[str]:
         """The hands this rig's axes belong to, left first; none without a

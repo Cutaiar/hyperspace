@@ -42,7 +42,7 @@ def test_the_panel_is_the_only_piece_that_knows_the_host():
     reaching = [f.name for f in PKG.glob("*.py")
                 if any(lv > 1 or m.startswith("hyperspace")
                        for m, lv in _imports(f))]
-    assert reaching == ["panel.py"]
+    assert reaching == ["device.py", "panel.py"]
 
 
 def test_the_instrument_runs_with_no_host_at_all():

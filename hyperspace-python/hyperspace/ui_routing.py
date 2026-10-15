@@ -497,14 +497,25 @@ def ctx_item(panel, p: Param) -> None:
 
 # ---- the rows ----
 
-SOURCE_ORDER = ("hand", "hands", "axis", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
+def source_schemes(router: Router) -> list[str]:
+    """The continuous schemes the combo offers after the analyzer's lanes,
+    in order (plan 27 B2: no fixed list here): the router's — the device
+    registry's `continuous_schemes`, `lfo` then each listed device's feeds
+    — then any other scheme a performer row names, so a preset's row on a
+    device this rig lacks still shows its source."""
+    out = [sc for sc in router.schemes() if sc != "lane"]
+    for b in router.table.routes():
+        if b.scheme != "lane" and b.scheme not in out:
+            out.append(b.scheme)
+    return out
 
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
     """(source, label) the combo offers: every analyzer lane as "i NAME"
     (the names the audio engine publishes each frame, `AudioEngine.publish`),
-    then each fed scheme (SOURCE_ORDER) that is around — its adapter has
-    published labels, it is being fed this frame, or a row names it — one
+    then each continuous scheme the registry lists (`source_schemes`) that
+    is around — its device has published labels, it is being fed this
+    frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index, and addressed by name where the adapter publishes names
     (`Router.address`: ``hand:right.roll``, decision register row 20).
@@ -516,7 +527,7 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     # chain's own names, so the combo always offers the lanes
     lanes = labels.get("lane") or panel.audio.chain.band_names
     out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(lanes)]
-    for scheme in SOURCE_ORDER:
+    for scheme in source_schemes(router):
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)
         used = any(b.scheme == scheme for b in router.table.bindings)

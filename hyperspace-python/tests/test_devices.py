@@ -79,7 +79,7 @@ def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
     assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     assert devices.PadDevice.schemes == ("axis", "pad", "hat")
-    assert devices.HandsDevice.schemes == ("hand",)
+    assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too
     assert devices.BridgeDevice.schemes == ("ext",)
     for kind, cls in devices.KINDS.items():
         d = devices.make({"role": "r", "kind": kind, "enabled": True})
@@ -134,7 +134,7 @@ def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkey
     assert not any("launchpad" in n for n in notes)
     assert [r for r, _, st, _, _ in reg.lines() if r in ("apc40", "launchpad")] == [
         "apc40", "launchpad"]                               # both desks on the SYSTEM page
-    assert reg.schemes() == ("axis", "pad", "hat", "hand", "cc", "note", "pitch")
+    assert reg.schemes() == ("axis", "pad", "hat", "hand", "hands", "cc", "note", "pitch")
     # the first pad leaves the list: pad2 is no longer refused and opens
     monkeypatch.undo()                                    # the real Pad opens (never raises)
     reg.apply([e for e in entries if e["role"] != "pad"])
@@ -276,8 +276,8 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
         devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
     assert devices.BUILTIN_SCHEMES == ("lane", "lfo")
-    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "hand", "ext")
-    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "ext")
+    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "hand", "hands", "ext")
+    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "hands", "ext")
     assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo")
 
 
@@ -369,7 +369,7 @@ def test_every_swap_target_the_registry_hands_the_reloader_is_watched_and_define
         devices.OffDevice("x", "osc")])
     pairs = {(m, c) for _, m, c in reg.targets()}
     assert pairs == {("devices", "DeviceRegistry"), ("devices", "MidiDevice"), ("midi", "MidiIO"),
-                     ("devices", "PadDevice"), ("gamepad", "Pad"), ("devices", "HandsDevice"),
+                     ("devices", "PadDevice"), ("gamepad", "Pad"), ("hands.device", "HandsDevice"),
                      ("hands.core", "HandsIO"), ("devices", "BridgeDevice"), ("bridge", "Bridge"),
                      ("devices", "OffDevice")}
     assert "devices" in hotreload.MODULES
@@ -454,15 +454,20 @@ def test_the_hands_shims_ports_are_the_layout():
     io = HandsIO(HandSettings.from_config({}), {"out": ""}, source=Source(), out=None)
     d = devices.HandsDevice("leap", io=io)
     ports = d.sources
-    assert len(ports) == io.layout.n >= 22      # C4 appends dance lanes; the count is the layout's
-    assert [p.name for p in ports] == io.layout.addresses
-    assert [p.address for p in ports] == [f"hand:{a}" for a in io.layout.addresses]
+    # B2: the `hand` lanes, then the pair's `hands` lanes (C4's gap, twist)
+    pair = io.layout.pair_addresses
+    assert len(ports) == io.layout.n + len(pair) and io.layout.n >= 22   # the layout's counts
+    assert [p.name for p in ports] == io.layout.addresses + pair
+    assert [p.address for p in ports] == ([f"hand:{a}" for a in io.layout.addresses]
+                                          + [f"hands:{a}" for a in pair])
+    assert [p.rest for p in ports if p.scheme == "hands"] == io.pair_rests()
     assert [p.group for p in ports].count("axes") == io.layout.n_axes
     assert [p.group for p in ports].count("presence") == 2
     n_gates = len(io.layout.gates)        # the pinches, and plan 24 C5's grabs
     assert n_gates >= 8
     assert [p.group for p in ports].count("switches") == n_gates
-    assert [p.group for p in ports].count("dance") == io.layout.n - io.layout.n_axes - 2 - n_gates
+    assert [p.group for p in ports].count("dance") == (
+        io.layout.n - io.layout.n_axes - 2 - n_gates + len(pair))
     assert all(p.kind == "value" for p in ports)
     roll = next(p for p in ports if p.name == "right.roll")
     assert roll.bipolar is True and roll.rest == 0.5 and roll.label == "R roll"

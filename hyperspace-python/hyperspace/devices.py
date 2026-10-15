@@ -1,22 +1,26 @@
-"""The device registry (plan 27 B1): every input or output the rig has,
+"""The device registry (plan 27): every input or output the rig has,
 listed in ``config.toml`` as ``[[devices]]``, opened behind its own entry,
 polled in order each frame, and closed in one list.
 
 A *device* is anything that satisfies the `Device` protocol below:
 `open()`, `poll(dt, now)`, `close()`, a `status` for the SYSTEM page, a
-`role`, its `sources` (the ports it publishes), `feed(router)` and
-`learn(learn)`. Today's adapters — `midi.MidiIO`, `gamepad.Pad`,
-`hands.HandsIO`, `bridge.Bridge` — are wrapped by the thin shims here
-(`MidiDevice`, `PadDevice`, `HandsDevice`, `BridgeDevice`), which own the
-adapter object and satisfy the protocol by delegating to it; B2 turns
-them into full devices. This module is the one importer of every adapter
+`role`, its `sources` (the ports it publishes), `feed(router)`,
+`learn(learn)` and `wants` (what a Learn can arm it for). Today's inputs
+are devices since B2: `MidiDevice` — one per MIDI entry, each with its own
+`profile` (`apc40`, `generic`) and its own rows (`cc@<role>:…` for every
+MIDI role but the first) —, `PadDevice` (the gamepad: its rows, its axis
+lanes and the sticks' default camera job) and the hands'
+`hands.device.HandsDevice` (a thin wrapper over the liftable `HandsIO`);
+`BridgeDevice` is still B1's shim (B3 makes its out half a sink). Each owns
+its adapter object (`io`: `midi.MidiIO`, `gamepad.Pad`, `hands.HandsIO`,
+`bridge.Bridge`). This module is the one importer of every adapter
 module, each imported lazily inside its device's `open`, so importing
 `app` imports none of them (tests/test_app_boundary.py).
 
 **Roles, not serials** (decision 11): an entry has a `role` — `apc40`,
-`pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and (from
-B2) a MIDI row's qualifier use. A role contains no ``:``. **For today's
-devices the role is not the scheme:** a preset names a *scheme*
+`pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and a MIDI
+row's qualifier (``cc@launch:0:7``) use. A role contains no ``:``. **For
+today's devices the role is not the scheme:** a preset names a *scheme*
 (`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
 `schemes` tuple says which schemes its role publishes, so every existing
 row is unchanged whatever the entry is called. A new device (B4's OSC)
@@ -24,16 +28,26 @@ publishes under its role. Two enabled devices may not **feed** one
 scheme: the Router holds one vector per fed scheme (`feeds`), so a second
 pad (`axis`) or a second hands device (`hand`) is refused with a note
 naming both roles (`RefusedDevice`); two MIDI desks of different roles
-feed nothing (their messages are rows) and are both accepted — B2
-qualifies their rows by role. One role, one entry (config drops a
+feed nothing (their messages are rows) and are both accepted — an
+unqualified MIDI row is the first MIDI role's (`midi_roles`), the second
+desk's rows carry its role. One role, one entry (config drops a
 duplicate role).
+
+**Schemes from the registry** (B2): which schemes are continuous, and in
+what order a page offers them, is `continuous_schemes` (the analyzer's
+`lane` and the LFOs' `lfo` first, then each device's `feeds`); which a
+device delivers as rows is `row_schemes`; what a Learn can be armed for is
+`wants`. The Router and the Learn are handed this object as an argument
+(`Router.use`, `Learn.devices`): routing and learn import nothing from
+here.
 
 **Two signal kinds** (decision 13): a port is a *value* (an axis, a
 fader, a lane) or a *trigger* (a hit, a button, a pad — with a velocity
 when the device sends one). Discrete controls stay scene-setters: a
 device delivers them as rows through the table (`Router.pad`,
 `MidiIO._handle`), never as a feed. A device may expose `layers`
-(decision 14: the APC40 as two nodes in plan 28); B2 fills them.
+(decision 14: the APC40 as two nodes in plan 28): the first MIDI role's
+desk has two, the preset layer and SHIFT's global one.
 
 **The frame.** `DeviceRegistry.poll` runs in the scene-setter slot
 (after the key rows, before the macros and undo): each device is polled,
@@ -129,13 +143,17 @@ class Device(Protocol):
     whether a press was the learn's; `act` delivers the rest of this
     frame's discrete controls as rows; `feed` publishes the continuous
     vectors, labels, rests, gates and names; `send` is the sink half
-    (B3). `targets` are the live objects the hot reloader re-classes."""
+    (B3). `targets` are the live objects the hot reloader re-classes.
+    `wants` are what a Learn can be armed for and this device completes
+    (plan 27 B2: ``desk`` for MIDI, ``pad``, ``hand:left`` /
+    ``hand:right``; a new device's role by default)."""
 
     role: str
     kind: str
     schemes: tuple[str, ...]
     feeds: tuple[str, ...]
     layers: tuple[str, ...]
+    wants: tuple[str, ...]
 
     @property
     def status(self) -> str: ...
@@ -239,6 +257,12 @@ class Base:
     def targets(self) -> list[tuple]:
         return []
 
+    @property
+    def wants(self) -> tuple[str, ...]:
+        """A new device that feeds can be armed for by its role (plan 27
+        B2); today's devices name theirs as a class tuple."""
+        return (self.role,) if self.feeds else ()
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.role} {self.status}>"
 
@@ -251,9 +275,18 @@ class OffDevice(Base):
                  ctx: Context | None = None):
         super().__init__(role, entry, ctx)
         self.kind = kind
-        cls = KINDS.get(kind)       # its kind's schemes, so a row naming it stays dormant, not unknown
+        cls = kind_class(kind)      # its kind's schemes, so a row naming it stays dormant, not unknown
+        self._wants: tuple[str, ...] = ()
         if cls is not None:
             self.schemes, self.feeds = cls.schemes, cls.feeds
+            w = cls.__dict__.get("wants")
+            self._wants = w if isinstance(w, tuple) else ((role,) if cls.feeds else ())
+
+    @property
+    def wants(self) -> tuple[str, ...]:
+        """Its kind's: a rig that lists a device, off or not, can arm a
+        learn for it (it completes once the device is on)."""
+        return self._wants
 
     @property
     def status(self) -> str:
@@ -270,6 +303,10 @@ class UnknownDevice(Base):
         self.kind = kind
         self.error = f"unknown kind {kind!r}"
 
+    @property
+    def wants(self) -> tuple[str, ...]:
+        return ()
+
 
 class RefusedDevice(Base):
     """An enabled entry that would feed a scheme an earlier enabled entry
@@ -283,24 +320,65 @@ class RefusedDevice(Base):
         self.kind = kind
         self.error = f"feeds {scheme!r}, which {other} already feeds — not opened"
 
+    @property
+    def wants(self) -> tuple[str, ...]:
+        return ()
 
-# ---- the four shims over today's adapters ----
+
+# ---- today's inputs as devices (plan 27 B2) ----
+
+MIDI_PROFILES = ("apc40", "generic")    # midi.PROFILES' names (midi is imported lazily)
+
 
 class MidiDevice(Base):
-    """`midi.MidiIO` as a device: one controller with one profile, its
-    rows applied inside `poll` (a scene-setter), an armed desk Learn
-    completed there too. Its ports are the profile's layout (the APC40's
-    controls); the role carries no identity in rows yet (B2)."""
+    """One MIDI controller (plan 27 B2): a `midi.MidiIO` with the entry's
+    `port` and `profile` (`apc40`, or `generic`: plain CC / note / pitch,
+    no feedback) under this entry's role. Several may be listed: the first
+    MIDI role's rows are unqualified (every row written before plan 27),
+    any other's carry its role (``cc@launch:0:7``) — `MidiIO.qualifier` —
+    and each role has its own layer; the first role's desk has two, the
+    preset layer and SHIFT's global one (`desk.shift`). Its rows are
+    applied inside `poll` (a scene-setter), an armed desk Learn completed
+    there too. A desk that is not plugged in is `lost` and reconnects
+    itself (`midi.Ports.retry`), redrawing every light when it comes."""
 
     kind = "midi"
     schemes = ("cc", "note", "pitch")
     feeds = ()                  # MIDI is never a feed source: every message is a row
+    wants = ("desk",)           # a knob or a button completes a desk learn
+
+    @property
+    def profile(self) -> str:
+        return str(self.entry.get("profile") or "apc40")
 
     def open(self) -> None:
+        if self.profile not in MIDI_PROFILES:
+            raise ValueError(f"no MIDI profile {self.profile!r}; one of "
+                             f"{', '.join(MIDI_PROFILES)}")
         from . import midi
         e, c = self.entry, self.ctx
-        self.io = midi.MidiIO(c.reg, c.table, port=e.get("port"),
-                              profile=e.get("profile", "apc40"), learner=c.learn)
+        self.io = midi.MidiIO(c.reg, c.table, port=e.get("port"), profile=self.profile,
+                              learner=c.learn, role=self.role)
+
+    def _primary(self) -> bool:
+        table = self.ctx.table
+        return table is None or table.is_primary(self.role)
+
+    @property
+    def qualifier(self) -> str:
+        """What this desk's rows carry: "" for the first MIDI role, else
+        its role (`Binding.midi_source`)."""
+        return "" if self._primary() else self.role
+
+    @property
+    def layers(self) -> tuple[str, ...]:
+        """The desk's layers (decision 14, for plan 28's one node per
+        mode): the first MIDI role's APC40 has the preset layer and SHIFT's
+        global one; any other desk has the preset layer only — no latch of
+        its own in this plan."""
+        if self.profile == "apc40" and self._primary():
+            return ("preset", "global")
+        return ("preset",)
 
     @property
     def status(self) -> str:
@@ -313,7 +391,7 @@ class MidiDevice(Base):
 
     @property
     def last(self) -> str:
-        """The port's name and the table's binding count (what the old
+        """The port's name and this desk's binding count (what the old
         MIDI line showed), then the last message when one has come."""
         io = self.io
         if io is None or io.error or not io.on:
@@ -324,18 +402,23 @@ class MidiDevice(Base):
 
     @property
     def sources(self) -> tuple[Port, ...]:
+        """The profile's layout as ports (the APC40's controls; a generic
+        desk knows none in advance), each addressed as this desk's rows
+        name it — qualified for every MIDI role but the first."""
         io = self.io
         layout = getattr(getattr(io, "profile", None), "LAYOUT", None) if io is not None else None
         if not layout:
             return ()
         name = getattr(io.profile, "control_name", lambda s: None)
+        q = self.qualifier
         out = []
         for c in layout:
             button = c.kind in ("button", "grid")
             scheme, _, rest = c.source.partition(":")
             out.append(Port(rest, name(c.source) or c.source,
                             kind="trigger" if button else "value",
-                            velocity=button, group=c.kind, scheme=scheme))
+                            velocity=button, group=c.kind,
+                            scheme=f"{scheme}@{q}" if q else scheme))
         return tuple(out)
 
     def poll(self, dt: float, now: float) -> None:
@@ -347,23 +430,31 @@ class MidiDevice(Base):
 
 
 class PadDevice(Base):
-    """`gamepad.Pad` as a device: polled, offered to an armed Learn pad
-    (`gamepad.learn_from`), then its axis lanes fed and its button rows
-    delivered by `Router.pad` — all in the scene-setter slot, as today.
-    The sticks' camera job stays in `app.frame` until B2."""
+    """The gamepad as a device (plan 27 B2): a `gamepad.Pad` polled each
+    frame (it finds a pad itself — GLFW, then USB — so absent it is `lost`,
+    never an error), offered to an armed Learn pad (`gamepad.learn_from`),
+    then in `act` its rows delivered (`Router.pad`: the axis lanes fed —
+    their names, labels and rests published by the pad, `gamepad.publish`
+    — and the button and D-pad rows) and **the sticks' default camera
+    job** run (`gamepad.steer`, moved here from `app.frame`: each axis no
+    route names, a relative move on the base, through the pad's feel).
+    All in the scene-setter slot."""
 
     kind = "gamepad"
     schemes = ("axis", "pad", "hat")
     feeds = ("axis",)
+    wants = ("pad",)
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
         super().__init__(role, entry, ctx, io=io)
         self._taken = False      # this frame's press completed a learn
+        self._dt = 0.0
 
     def open(self) -> None:
         from .gamepad import Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
+        self.io.open()
 
     @property
     def status(self) -> str:
@@ -396,6 +487,7 @@ class PadDevice(Base):
 
     def poll(self, dt: float, now: float) -> None:
         self._taken = False
+        self._dt = dt
         if self.io is not None:
             self.io.poll()
 
@@ -407,90 +499,20 @@ class PadDevice(Base):
         return self._taken
 
     def act(self, router) -> None:
-        if self.io is not None:
-            router.pad(self.io, buttons=not self._taken)
+        """The pad's rows, then the sticks' camera job — on the registry
+        the context carries (`Context.reg`), else the router's."""
+        io = self.io
+        if io is None:
+            return
+        router.pad(io, buttons=not self._taken)
+        if io.on:
+            from . import gamepad
+            reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
+            if reg is not None:
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0))
 
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []
-
-
-class HandsDevice(Base):
-    """`hands.HandsIO` as a device. The instrument's one call,
-    ``poll(dt, learn, router)``, reads the tracker, sends the DAW MIDI,
-    feeds ``hand`` and completes a hand Learn at once, so the shim makes it
-    from the feed slot — where the hands ran before the registry — with
-    the frame's `dt` and the Learn it was offered. `hands/core.py` stays
-    liftable: nothing here is imported by it (B2 moves this shim to
-    `hands/device.py`)."""
-
-    kind = "hands"
-    schemes = ("hand",)
-    feeds = ("hand",)
-
-    def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
-                 io=None):
-        super().__init__(role, entry, ctx, io=io)
-        self._dt = 0.0
-        self._learn = None
-
-    def open(self) -> None:
-        if self.ctx.hand_settings is None:
-            raise RuntimeError("no hands setup ([hands] would not read)")
-        from . import hands
-        e = self.entry
-        cal = e.get("calibration")
-        self.io = hands.HandsIO(self.ctx.hand_settings, e, cal_path=Path(cal) if cal else None)
-
-    @property
-    def status(self) -> str:
-        io = self.io
-        if self.error or io is None:
-            return super().status
-        s = io.status or ""
-        if getattr(io.source, "on", True) or s in ("tracking", "connected"):
-            return "connected"
-        if s in ("", "connecting") or s.startswith("tape"):
-            return "lost"
-        return f"error: {s}"
-
-    @property
-    def last(self) -> str:
-        io = self.io
-        return (io.last or io.status or "") if io is not None else ""
-
-    @property
-    def sources(self) -> tuple[Port, ...]:
-        io = self.io
-        if io is None:
-            return ()
-        lay, axes, rests = io.layout, io.axes, io.rests()
-        gates = dict(lay.gates)
-        out = []
-        for i, (addr, label) in enumerate(zip(lay.addresses, lay.names, strict=True)):
-            if i < lay.n_axes:
-                out.append(Port(addr, label, rest=rests[i], bipolar=bool(axes[i].bipolar),
-                                group="axes", scheme="hand"))
-            elif i in gates:
-                out.append(Port(addr, label, group="switches", scheme="hand"))   # pinches, grabs
-            elif addr.endswith(".present"):
-                out.append(Port(addr, label, group="presence", scheme="hand"))
-            else:   # plan 24 C4's dance sources (curl, spread, energy, flick)
-                out.append(Port(addr, label, rest=rests[i], group="dance", scheme="hand"))
-        return tuple(out)
-
-    def poll(self, dt: float, now: float) -> None:
-        self._dt = dt
-
-    def learn(self, learn) -> bool:
-        self._learn = learn
-        return False
-
-    def feed(self, router) -> None:
-        if self.io is not None:
-            self.io.poll(self._dt, self._learn, router)
-
-    def targets(self) -> list[tuple]:
-        return [(self.io, "hands.core", "HandsIO")] if self.io is not None else []
 
 
 class BridgeDevice(Base):
@@ -544,14 +566,33 @@ class BridgeDevice(Base):
         return [(self.io, "bridge", "Bridge")] if self.io is not None else []
 
 
-# the kinds the registry knows: `[[devices]] kind` → the device class.
-# B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else
-KINDS: dict[str, type[Base]] = {
-    "midi": MidiDevice,
-    "gamepad": PadDevice,
-    "hands": HandsDevice,
-    "bridge": BridgeDevice,
-}
+def kinds() -> dict[str, type[Base]]:
+    """The kinds the registry knows: `[[devices]] kind` → the device class.
+    B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else.
+    The hands' device lives in its own package (`hands/device.py`, plan 27
+    B2), which imports this module, so it is looked up when asked for —
+    `devices.KINDS` and `devices.HandsDevice` read through here too."""
+    from .hands.device import HandsDevice
+    return {
+        "midi": MidiDevice,
+        "gamepad": PadDevice,
+        "hands": HandsDevice,
+        "bridge": BridgeDevice,
+    }
+
+
+def kind_class(kind: str) -> type[Base] | None:
+    """The device class of `kind`, or None for a kind the registry lacks."""
+    return kinds().get(kind)
+
+
+def __getattr__(name: str):
+    """`KINDS` and `HandsDevice`, read lazily (`kinds`)."""
+    if name == "KINDS":
+        return kinds()
+    if name == "HandsDevice":
+        return kinds()["hands"]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None) -> Base:
@@ -565,7 +606,7 @@ def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
     if not entry.get("enabled", True):
         return OffDevice(role, kind, entry, ctx)
-    cls = KINDS.get(kind)
+    cls = kind_class(kind)
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
     if claimed is not None:
@@ -609,6 +650,7 @@ class DeviceRegistry:
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
         self.devices: list = list(devices) if devices is not None else make_all(
             self.entries, self.ctx)
+        self._tell_table()           # which MIDI role an unqualified row means, before any opens
         self.listeners: list = []
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
@@ -653,14 +695,51 @@ class DeviceRegistry:
         """The schemes a route can read as a lane, in offer order: the
         built-in `lane` (the analyzer) and `lfo` first, then each listed
         device's `feeds` in list order (an `off` device's too, so a preset
-        row naming it stays a dormant route, not an unknown one). What B2
-        hands the Router in place of `LANE_SCHEMES` / `SOURCE_ORDER`."""
+        row naming it stays a dormant route, not an unknown one). What the
+        Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
         out = list(BUILTIN_SCHEMES)
         for d in self.devices:
             for s in getattr(d, "feeds", ()):
                 if s not in out:
                     out.append(s)
         return tuple(out)
+
+    def row_schemes(self) -> tuple[str, ...]:
+        """The schemes the listed devices deliver as rows, never as lanes
+        (each device's `schemes` less its `feeds`: the pad's `pad` / `hat`,
+        MIDI's `cc` / `note` / `pitch`), in list order — the referee's
+        `Bindings.row_schemes` (`Router.use`)."""
+        out: list[str] = []
+        for d in self.devices:
+            fed = getattr(d, "feeds", ())
+            for s in getattr(d, "schemes", ()):
+                if s not in fed and s not in out:
+                    out.append(s)
+        return tuple(out)
+
+    def midi_roles(self) -> tuple[str, ...]:
+        """Every MIDI entry's role, in list order, off or not: the first is
+        the one whose rows are unqualified (`Bindings.midi_roles`)."""
+        return tuple(d.role for d in self.devices if d.kind == "midi")
+
+    def wants(self) -> tuple[str, ...]:
+        """What a Learn can be armed for on this rig (`Learn.wants`), in
+        list order, off devices' included (the learn completes once the
+        device is on): each device's `wants` — ``desk`` for every MIDI
+        role, ``pad``, ``hand:left`` / ``hand:right``, a new device's role."""
+        out: list[str] = []
+        for d in self.devices:
+            for w in getattr(d, "wants", ()):
+                if w not in out:
+                    out.append(w)
+        return tuple(out)
+
+    def _tell_table(self) -> None:
+        """The shared binding table learns the MIDI roles in list order
+        (plan 27 B2), so a desk opened next reads and writes its own rows."""
+        table = getattr(self.ctx, "table", None)
+        if table is not None:
+            table.midi_roles = self.midi_roles()
 
     def lines(self) -> list[tuple[str, str, str, int, str]]:
         """One (role, kind, status, n sources, last) per device — the
@@ -678,7 +757,8 @@ class DeviceRegistry:
         the shims and the registry itself."""
         out: list[tuple] = [(self, "devices", "DeviceRegistry")]
         for d in self.devices:
-            out.append((d, "devices", type(d).__name__))
+            mod = type(d).__module__.removeprefix(f"{__package__}.")
+            out.append((d, mod, type(d).__name__))
             out += d.targets()
         return out
 
@@ -856,6 +936,7 @@ class DeviceRegistry:
             changed = True
         changed = changed or [d.role for d in devices] != [d.role for d in self.devices]
         self.entries, self.devices = new, devices
+        self._tell_table()
         if changed:
             for d in devices:
                 if d.role not in self._opened:

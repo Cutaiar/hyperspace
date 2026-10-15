@@ -117,6 +117,16 @@ like the rename above. The SYSTEM page shows both.
                             #   [[devices]]  role = "apc40"   kind = "midi"
                             #   [[devices]]  role = "leap"    kind = "hands"   enabled = false
                             #   [[devices]]  role = "bridge"  kind = "bridge"  enabled = false
+                            # Several MIDI desks (plan 27 B2): one entry each, its
+                            # own `profile` — "apc40", or "generic" (plain CC /
+                            # note / pitch, no feedback; it needs a `port`). The
+                            # first MIDI entry's rows are unqualified (cc:0:7, as
+                            # every row before plan 27); another's carry its role
+                            # (cc@launch:0:7), which Learn desk writes for you:
+                            #   [[devices]]  role = "launch"  kind = "midi"
+                            #                profile = "generic"  port = "Launch Control"
+                            # SHIFT (desk.shift) is the first MIDI role's latch;
+                            # bindings.json's "profile" never overrides an entry's.
                             # The app watches this file: an edit to the list lands
                             # without a relaunch (a bad edit is a note; the old list
                             # stands). [dream] is a worker, not a device: it stays a table

@@ -760,7 +760,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
             assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
         for row in doc["routes"]:
             b = Binding.from_json(row)
-            assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
+            assert routing.is_continuous(b.scheme) and b.op in routing.MOD_OPS, (path.name, row)
     assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
     for name in ("house", "party"):
         proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
