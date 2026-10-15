@@ -184,27 +184,8 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
             if b.layer == "preset" or (b.source, b.target, b.op, float(b.value)) in keep]
 
 
-# ---- desk templates (plan 24 C3) ----
-#
-# A preset's desk may start from a named template — a file in the library's
-# `desk` group (`Library.desk_template`, ``hyperspace.desk/1``) — and add
-# its own overrides:
-#
-#   {"schema": "hyperspace.preset/2", …,
-#    "desk_template": "shape",                       the template's name
-#    "desk": [row, …,                                 the overrides: each row
-#             {"source": "cc:*:21", "dark": true}],    replaces every template
-#                                                     row on its control; a
-#                                                     dark row leaves that
-#                                                     control unmapped
-#
-# A load expands it (`expand_desk`): the template's rows, less every one an
-# override's control covers, then the override rows. A save writes the
-# name and the overrides again, not the expanded rows (`compact_desk`), so
-# a fix to the template lands in every preset that names it. A preset with
-# no ``desk_template`` key is exactly as before: its ``desk`` is the whole
-# preset layer. A template the library lacks is a note, and the overrides
-# alone are the desk.
+# ---- the render graph (plan 26 A4) ----
+
 GRAPH_KEY = "graph"
 
 
@@ -313,6 +294,27 @@ class GraphSection:
         r.ghost_states = {name: self.states[name] for name in sorted(self.declared)}
 
 
+# ---- desk templates (plan 24 C3) ----
+#
+# A preset's desk may start from a named template — a file in the library's
+# `desk` group (`Library.desk_template`, ``hyperspace.desk/1``) — and add
+# its own overrides:
+#
+#   {"schema": "hyperspace.preset/2", …,
+#    "desk_template": "shape",                       the template's name
+#    "desk": [row, …,                                 the overrides: each row
+#             {"source": "cc:*:21", "dark": true}],    replaces every template
+#                                                     row on its control; a
+#                                                     dark row leaves that
+#                                                     control unmapped
+#
+# A load expands it (`expand_desk`): the template's rows, less every one an
+# override's control covers, then the override rows. A save writes the
+# name and the overrides again, not the expanded rows (`compact_desk`), so
+# a fix to the template lands in every preset that names it. A preset with
+# no ``desk_template`` key is exactly as before: its ``desk`` is the whole
+# preset layer. A template the library lacks is a note, and the overrides
+# alone are the desk.
 TEMPLATE_KEY = "desk_template"
 DARK = "dark"
 
