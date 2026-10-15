@@ -52,7 +52,9 @@ def _manifest() -> dict:
 def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     """No preset or state is skipped silently: each factory preset has a
     golden for each of the eight `Switches` states, hands absent and
-    present, and the one cap frame is there; each names its pipeline and
+    present; the window's own frame alone (`solo`, the default state) for
+    each, and alone through (`solo-scene+hands+through`) for each preset
+    with an effect on; and the one cap frame. Each names its pipeline and
     a PNG that exists; every preset loaded with nothing missing."""
     from hyperspace.outputs import NAMES
     from hyperspace.preset import FACTORY_PRESETS
@@ -60,16 +62,34 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     doc = _manifest()
     eight = [(a, b, c) for a in (True, False) for b in (True, False) for c in (False, True)]
     assert [tuple(sw.values()) for sw in doc["states"].values()] == eight
+    assert doc["solo_states"] == {
+        "solo": {"scene": True, "hands": True, "through": False},
+        "solo-scene+hands+through": {"scene": True, "hands": True, "through": True}}
+    assert doc["solo_fx_only"] == ["solo-scene+hands+through"]
     assert doc["size"] == [960, 600] and doc["dpr"] == 1.0 and doc["frames"] == 8
     assert abs(doc["dt"] - 1 / 60) < 1e-12
+    assert doc["gl_version"]
     keys = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]}
     assert len(keys) == len(doc["goldens"])
+    fx_on = {p for p, said in doc["presets"].items() if said["absent"]["effects_on"]}
+    assert fx_on == {"party-trip", "party-acid", "party-mandala", "party-noita",
+                     "lfo-breathe", "hands-fx"}
     want = {(p, h, s) for p in FACTORY_PRESETS for h in ("absent", "present")
-            for s in doc["states"]}
+            for s in [*doc["states"], "solo"]
+            + (["solo-scene+hands+through"] if p in fx_on else [])}
     cap = doc["cap"]
     capped = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]
-              if e["state"] not in doc["states"]}
+              if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]}
     assert keys - capped == want
+    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1
+    # alone, the window's frame is drawn direct: the default state over a
+    # shown hand is the scene with the hands over; through an effect, the
+    # hands go into the chain
+    for e in doc["goldens"]:
+        if e["state"] == "solo":
+            assert e["route"] == "SCENE" and e["hands_over"] is (e["hands"] == "present")
+        if e["state"] == "solo-scene+hands+through" and e["hands"] == "present":
+            assert e["route"] == "SCENE+HANDS" and not e["hands_over"]
     assert len(capped) == 1
     (p, h, s), = capped
     assert (p, h) == (cap["preset"], cap["hands"]) and s.startswith(cap["state"] + "@")
@@ -112,11 +132,16 @@ moderngl = pytest.importorskip("moderngl")
 def ctx():
     """The tool's one context (kept for the process: a released context
     would leave none current for the tests after it)."""
+    import gc
+
     try:
         c = _tool().context()
     except Exception as e:  # noqa: BLE001 — any GL failure means skip
         pytest.skip(f"no standalone GL context available: {e}")
-    return c
+    yield c
+    # its objects (gc_mode auto) are freed now, while it is still the
+    # current context — never later, on some other module's
+    gc.collect()
 
 
 def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
@@ -125,16 +150,18 @@ def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
     its golden's. Skips (never passes) on another renderer."""
     doc = _manifest()
     tool = _tool()
-    here = tool.renderer_name(ctx)
+    here, version = tool.renderer_name(ctx), tool.gl_version(ctx)
+    recorded = f"{doc['renderer']!r} (GL_VERSION {doc['gl_version']!r})"
     if here != doc["renderer"]:
-        pytest.skip(f"the golden frames expect GL_RENDERER {doc['renderer']!r}; "
-                    f"this context is {here!r} (re-record there with "
-                    "tools/golden_frames.py --record)")
+        pytest.skip(f"the golden frames expect GL_RENDERER {recorded}; "
+                    f"this context is {here!r} (GL_VERSION {version!r}); re-record there "
+                    "with tools/golden_frames.py --record")
     shots, said = tool.render_all()
     assert len(shots) == len(doc["goldens"])
     moved = tool.diff(shots, doc)
-    assert not moved, ("frames moved (run tools/golden_frames.py for a contact sheet): "
-                       + ", ".join(s.key for s, _ in moved))
+    assert not moved, (f"frames moved, recorded on {recorded}, drawn on {here!r} "
+                       f"(GL_VERSION {version!r}) — run tools/golden_frames.py for a "
+                       "contact sheet: " + ", ".join(s.key for s, _ in moved))
     for slug, info in said.items():
         for hands, got in info.items():
             assert got == doc["presets"][slug][hands], (slug, hands)

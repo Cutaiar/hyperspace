@@ -602,6 +602,8 @@ def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
     assert instance_id("fx.acid", "mix", 2) == "fx.acid.2.mix"
     assert instance_id("ghost", "alpha", 2) == "ghost.2.alpha"
     assert instance_of("fx.acid.mix", "fx.warp") is None
+    # an explicit `.1.` is never written, so it reads as a key, by design
+    assert instance_of("fx.acid.1.mix", "fx.acid") == (1, "1.mix")
     with pytest.raises(ValueError):
         instance_id("fx.acid", "mix", 0)
 

@@ -601,6 +601,8 @@ def instance_of(pid: str, node: str) -> tuple[int, str] | None:
     mark, dot, key = rest.partition(".")
     if dot and mark.isdecimal() and key and int(mark) >= 2 and str(int(mark)) == mark:
         return int(mark), key
+    # by design an explicit `.1.` (or `.02.`) is no marker: `instance_id`
+    # never writes one, so `fx.acid.1.mix` reads as instance 1, key `1.mix`
     return (1, rest) if rest else None
 
 

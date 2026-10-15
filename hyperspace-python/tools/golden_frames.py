@@ -14,8 +14,11 @@ Output 1 is multisampled like the window; the others are plain targets.
 The LFOs and the analyzer are at rest (never stepped, never fed), the
 dream is off (no worker attached), the preset's own look-back is kept,
 the ghost hands are on (`ghost.on`, a session param no preset sets) and
-the render cap is the app's default (1080p). Once more, for one preset,
-a 2× HiDPI 1080p screen (3840×2160) under that cap.
+the render cap is the app's default (1080p). Then the window's own frame,
+output 1 alone (`SOLO`: the default state, and with an effect on also
+through), so the pipeline is drawn direct into the multisampled target.
+Once more, for one preset, a 2× HiDPI 1080p screen (3840×2160) under
+that cap.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -74,6 +77,14 @@ STATES: tuple[tuple[str, dict], ...] = tuple(
      {"scene": a, "hands": b, "through": c})
     for a in (True, False) for b in (True, False) for c in (False, True))
 HANDS = ("absent", "present")
+# single-output goldens (output 1 alone, 4× MSAA, like the window): every
+# preset × hands in the default state (`Switches()` = scene + hands, no
+# through), and for a preset with an effect on also through. Alone, a
+# pipeline has one consumer and is drawn direct into output 1 — the path
+# the eight-output frame never takes — and the hands' readout split
+# (`_frame_passes`: `through` over all views) is this output's alone
+SOLO = (("solo", {"scene": True, "hands": True, "through": False}),)
+SOLO_FX = (("solo-scene+hands+through", {"scene": True, "hands": True, "through": True}),)
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
@@ -118,6 +129,12 @@ from hyperspace.view import ViewState
 
 def renderer_name(ctx: moderngl.Context) -> str:
     return str(ctx.info.get("GL_RENDERER", "?"))
+
+
+def gl_version(ctx: moderngl.Context) -> str:
+    """The driver's GL_VERSION, kept beside the renderer so a driver
+    update on the same GPU is plain when a golden moves."""
+    return str(ctx.info.get("GL_VERSION", "?"))
 
 
 class FakeHands:
@@ -176,8 +193,9 @@ class Shot:
 
 
 class Rig:
-    """One preset, hands present or absent, on its own GL context: the
-    registry, the router, the hands chain, the renderer."""
+    """One preset, hands present or absent, on the tool's one context
+    (`context()`), with a renderer of its own: the registry, the router,
+    the hands chain, the renderer."""
 
     def __init__(self, slug: str, hands: str, ctx: moderngl.Context):
         self.t = T0
@@ -303,6 +321,14 @@ def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[
             gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
             shots += got
             said.setdefault(slug, {})[hands] = info
+            # the window's own frame: output 1 alone, so its pipeline is
+            # drawn direct into the multisampled target and the hands'
+            # readout is decided by this one output (see SOLO)
+            solo = SOLO + (SOLO_FX if info["effects_on"] else ())
+            for one in solo:
+                got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR)
+                gc.collect()
+                shots += got
     if cap and (not only or CAP["preset"] in only):
         state = dict(STATES)[CAP["state"]]
         got, _ = _shoot(CAP["preset"], CAP["hands"], ((CAP["state"], state),), CAP["size"],
@@ -331,7 +357,8 @@ def load_manifest() -> dict:
     return json.loads(MANIFEST.read_text())
 
 
-def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None) -> dict:
+def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
+           version: str = "?") -> dict:
     """Write the manifest (merged with the presets not re-recorded under
     `only`) and a PNG per distinct picture; drop PNGs nothing names."""
     GOLDEN.mkdir(parents=True, exist_ok=True)
@@ -350,13 +377,20 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None) 
     presets.update(said)
     doc = {
         "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; "
-                 "tests/test_golden_frames.py compares every sha256 exactly",
+                 "tests/test_golden_frames.py compares every sha256 exactly. Far fewer "
+                 "pictures than goldens are distinct, by design: with hands absent the "
+                 "hands switch and through change nothing, with no effect on through is "
+                 "hands over, and every state with no scene and no hand shown is the "
+                 "same black ground",
         "renderer": renderer,
+        "gl_version": version,
         "size": [W, H], "dpr": DPR, "frames": FRAMES, "dt": DT, "t0": T0,
         "samples_output_1": SAMPLES, "render_cap": list(RENDER_CAP),
         "hands_present": "tests/fake_hands.py: left open at (-90, 210, 0), right fist at "
                          "(90, 200, 10) mm; ghost.on true",
         "states": {name: sw for name, sw in STATES},
+        "solo_states": {name: sw for name, sw in SOLO + SOLO_FX},
+        "solo_fx_only": [name for name, _ in SOLO_FX],
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
         "presets": {k: presets[k] for k in sorted(presets, key=order.__getitem__)},
         "goldens": entries,
@@ -414,8 +448,10 @@ def summary(doc: dict) -> str:
     for e in doc["goldens"]:
         by.setdefault((e["preset"], e["hands"]), {})[e["state"]] = (
             e["route"] + ("+over" if e["hands_over"] else ""))
-    lines = [(f"renderer: {doc['renderer']}; {len(doc['goldens'])} goldens, "
-              f"{len({e['sha256'] for e in doc['goldens']})} distinct pictures")]
+    lines = [(f"renderer: {doc['renderer']} ({doc.get('gl_version', '?')}); "
+              f"{len(doc['goldens'])} goldens, "
+              f"{len({e['sha256'] for e in doc['goldens']})} distinct pictures "
+              "(hands absent, no effect on and no scene collapse states onto one picture)")]
     for (slug, hands), states in by.items():
         lines.append(f"  {slug:<14} hands {hands:<7} " + "  ".join(
             f"{k}={v}" for k, v in states.items()))
@@ -430,21 +466,24 @@ def main() -> None:
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
     if only and (unknown := only - set(FACTORY_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
-    renderer = renderer_name(context())
+    renderer, version = renderer_name(context()), gl_version(context())
     shots, said = render_all(only)
     if a.record:
-        doc = record(shots, said, renderer, only)
+        doc = record(shots, said, renderer, only, version)
         print(f"recorded {len(shots)} goldens under {GOLDEN.relative_to(ROOT)}")
         print(summary(doc))
         return
     doc = load_manifest()
     if doc["renderer"] != renderer:
-        raise SystemExit(f"the goldens were recorded on {doc['renderer']!r}; this context is "
-                         f"{renderer!r}: a diff here means nothing")
+        raise SystemExit(f"the goldens were recorded on {doc['renderer']!r} "
+                         f"({doc.get('gl_version', '?')}); this context is {renderer!r} "
+                         f"({version}): a diff here means nothing")
     moved = diff(shots, doc)
     if not moved:
-        print(f"all {len(shots)} frames match their goldens ({renderer})")
+        print(f"all {len(shots)} frames match their goldens ({renderer}, {version})")
         return
+    if doc.get("gl_version") != version:
+        print(f"note: recorded on GL_VERSION {doc.get('gl_version')!r}, this is {version!r}")
     tag = "-".join(sorted(only)) if only else "all"
     path = contact_sheet(moved, SHEETS / f"golden-diff-{tag}.png")
     for s, e in moved:

@@ -1,6 +1,7 @@
 {
- "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; tests/test_golden_frames.py compares every sha256 exactly",
+ "about": "plan 26 A0 golden frames: tools/golden_frames.py --record writes this; tests/test_golden_frames.py compares every sha256 exactly. Far fewer pictures than goldens are distinct, by design: with hands absent the hands switch and through change nothing, with no effect on through is hands over, and every state with no scene and no hand shown is the same black ground",
  "renderer": "Apple M3 Max",
+ "gl_version": "4.1 Metal - 90.5",
  "size": [
   960,
   600
@@ -57,6 +58,21 @@
    "through": true
   }
  },
+ "solo_states": {
+  "solo": {
+   "scene": true,
+   "hands": true,
+   "through": false
+  },
+  "solo-scene+hands+through": {
+   "scene": true,
+   "hands": true,
+   "through": true
+  }
+ },
+ "solo_fx_only": [
+  "solo-scene+hands+through"
+ ],
  "cap": {
   "preset": "party-trip",
   "hands": "present",
@@ -502,6 +518,19 @@
   },
   {
    "preset": "big-blue-wave",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "bd5ce2f70a8d1c70d547a71b19c710e349952775a1bf8991be6e5d2ced54960e",
+   "png": "png/bd5ce2f70a8d1c70.png"
+  },
+  {
+   "preset": "big-blue-wave",
    "hands": "present",
    "state": "scene+hands",
    "route": "SCENE",
@@ -605,6 +634,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "big-blue-wave",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "3a8b66d86b9ea17542dea05805b714e93becdb6556d5125abe2b720531097a12",
+   "png": "png/3a8b66d86b9ea175.png"
+  },
+  {
    "preset": "ember-orbit",
    "hands": "absent",
    "state": "scene+hands",
@@ -707,6 +749,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "ember-orbit",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "d3d64fa6bd91e42cb4df37394470c10322cdfe3cc91beaedf96b3682ae91ab4c",
+   "png": "png/d3d64fa6bd91e42c.png"
   },
   {
    "preset": "ember-orbit",
@@ -813,6 +868,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "ember-orbit",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cba78567582192ce3bbf88cc6cf95c2262c42b5be501a5f8f54db307813217e4",
+   "png": "png/cba78567582192ce.png"
+  },
+  {
    "preset": "hex-engine",
    "hands": "absent",
    "state": "scene+hands",
@@ -915,6 +983,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "hex-engine",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cadb739213f3c969763e47d5ec802c55a8d7f0a3cd04c4f86832969ab9e13c7a",
+   "png": "png/cadb739213f3c969.png"
   },
   {
    "preset": "hex-engine",
@@ -1021,6 +1102,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "hex-engine",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "7fd99781afc3e676dbbdea65a31d95fa63f26bfbcf1732d21f1f44086345d9ad",
+   "png": "png/7fd99781afc3e676.png"
+  },
+  {
    "preset": "inverse-halo",
    "hands": "absent",
    "state": "scene+hands",
@@ -1123,6 +1217,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "inverse-halo",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "2f230f5d8b97e0c96d963f3d39f543a60e5be57c57d283492c5517c392e24ca0",
+   "png": "png/2f230f5d8b97e0c9.png"
   },
   {
    "preset": "inverse-halo",
@@ -1229,6 +1336,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "inverse-halo",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "2decb56e59fcf8cf0e9dafbca968075ac8c9b342eb2624a8136e84210b06ebee",
+   "png": "png/2decb56e59fcf8cf.png"
+  },
+  {
    "preset": "plasma-heart",
    "hands": "absent",
    "state": "scene+hands",
@@ -1331,6 +1451,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "plasma-heart",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "201907b83fecbb60866897059a4b16b1e86a59b3a2e0e36e52820e0b0c95955a",
+   "png": "png/201907b83fecbb60.png"
   },
   {
    "preset": "plasma-heart",
@@ -1437,6 +1570,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "plasma-heart",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "e049bf1aa2adb66228e4ebbd4cc32610cfff71cb8d34c5a9d0fae7ce0501e0c0",
+   "png": "png/e049bf1aa2adb662.png"
+  },
+  {
    "preset": "spiral-silk",
    "hands": "absent",
    "state": "scene+hands",
@@ -1539,6 +1685,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "spiral-silk",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe2159d635606fc65d01545c72e673de5259626b9a0bca038dd182431f8da2b9",
+   "png": "png/fe2159d635606fc6.png"
   },
   {
    "preset": "spiral-silk",
@@ -1645,6 +1804,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "spiral-silk",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "148d59025a62b2bf4109e8f3fcf2e134aa600bf9daeffeed3ed77ec955289767",
+   "png": "png/148d59025a62b2bf.png"
+  },
+  {
    "preset": "strobe-cage",
    "hands": "absent",
    "state": "scene+hands",
@@ -1747,6 +1919,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "strobe-cage",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "bbc44b0608000db3cd295ce9fd624a683a9b418848f09d25faaf1b3b32a8e664",
+   "png": "png/bbc44b0608000db3.png"
   },
   {
    "preset": "strobe-cage",
@@ -1853,6 +2038,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "strobe-cage",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "10dea2ca46cadb8a6a7a6a8ed83bec64aa0a9359142e876d883c7502ffa0d764",
+   "png": "png/10dea2ca46cadb8a.png"
+  },
+  {
    "preset": "woven-lattice",
    "hands": "absent",
    "state": "scene+hands",
@@ -1955,6 +2153,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "woven-lattice",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0bf06930353ba980bc5e9900fd572ae881428f1dac4740b881931e405e1cf001",
+   "png": "png/0bf06930353ba980.png"
   },
   {
    "preset": "woven-lattice",
@@ -2061,6 +2272,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "woven-lattice",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "3030c4f9cd0407b88d8c86907af213423a17b8282f00337667b109822276370c",
+   "png": "png/3030c4f9cd0407b8.png"
+  },
+  {
    "preset": "party-tumble",
    "hands": "absent",
    "state": "scene+hands",
@@ -2163,6 +2387,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-tumble",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b02d2cec5c531106c508422e3e9162b84cfad980c7ca2f8eaa702d418275cd16",
+   "png": "png/b02d2cec5c531106.png"
   },
   {
    "preset": "party-tumble",
@@ -2269,6 +2506,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-tumble",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "44bbc9220d398f0df06b00e0387de556120c4997a1a21c6b7620eb8577a6cf2f",
+   "png": "png/44bbc9220d398f0d.png"
+  },
+  {
    "preset": "party-faces",
    "hands": "absent",
    "state": "scene+hands",
@@ -2371,6 +2621,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-faces",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "36b52c18e8675bdea4d21be9d88bdec6efe5eb46ef07ae24f29880cf30f1a1e1",
+   "png": "png/36b52c18e8675bde.png"
   },
   {
    "preset": "party-faces",
@@ -2477,6 +2740,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-faces",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "47af3157079ace9928d18d4f57da7ca387c33ac81599e3877113ebc2dbd37ad9",
+   "png": "png/47af3157079ace99.png"
+  },
+  {
    "preset": "party-field",
    "hands": "absent",
    "state": "scene+hands",
@@ -2579,6 +2855,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-field",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "7de9467191e2de01e6eda5eccba0b0af78be607a4d4f77146e3164255cd7a155",
+   "png": "png/7de9467191e2de01.png"
   },
   {
    "preset": "party-field",
@@ -2685,6 +2974,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-field",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "abccfacf9bd2e98fbdd6c5732c014d29ee1229544d3587cf90600f500e78a621",
+   "png": "png/abccfacf9bd2e98f.png"
+  },
+  {
    "preset": "party-wake",
    "hands": "absent",
    "state": "scene+hands",
@@ -2787,6 +3089,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-wake",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "4bae6b7b83be1b449f97c6deac72a0bc938342752c66a49a6b2b707190e29df4",
+   "png": "png/4bae6b7b83be1b44.png"
   },
   {
    "preset": "party-wake",
@@ -2893,6 +3208,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-wake",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f92e17a39429acc4625c0b62dbfebd6e7c205e01218e93dd8279fa2ced7bfa98",
+   "png": "png/f92e17a39429acc4.png"
+  },
+  {
    "preset": "party-trip",
    "hands": "absent",
    "state": "scene+hands",
@@ -2995,6 +3323,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-trip",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cd2900ecc9540d6a09ed5ca1abd32de1f34aac24f2aa8d17fb363c631684afff",
+   "png": "png/cd2900ecc9540d6a.png"
+  },
+  {
+   "preset": "party-trip",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cd2900ecc9540d6a09ed5ca1abd32de1f34aac24f2aa8d17fb363c631684afff",
+   "png": "png/cd2900ecc9540d6a.png"
   },
   {
    "preset": "party-trip",
@@ -3114,6 +3468,32 @@
    "png": "png/3b4900a62a8e796f.png"
   },
   {
+   "preset": "party-trip",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "681208f001ca8204c34295a445aca50f6702e9421331239390eb747719e9192e",
+   "png": "png/681208f001ca8204.png"
+  },
+  {
+   "preset": "party-trip",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "61b9787bad1f7aefbd3e029d2cfcf3c3de8be1026a1643d60b5ee6f80b536eeb",
+   "png": "png/61b9787bad1f7aef.png"
+  },
+  {
    "preset": "party-acid",
    "hands": "absent",
    "state": "scene+hands",
@@ -3216,6 +3596,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-acid",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "e66382054a1de0eee45daa587f13010cea18ea14f505b961223d85eb8a7253f7",
+   "png": "png/e66382054a1de0ee.png"
+  },
+  {
+   "preset": "party-acid",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "e66382054a1de0eee45daa587f13010cea18ea14f505b961223d85eb8a7253f7",
+   "png": "png/e66382054a1de0ee.png"
   },
   {
    "preset": "party-acid",
@@ -3322,6 +3728,32 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-acid",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f9c25ad4fc7441f091f27f356429b1692449adf600fda73c6e6d245199ba743e",
+   "png": "png/f9c25ad4fc7441f0.png"
+  },
+  {
+   "preset": "party-acid",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "2282df888c76e3e002d9da5a4b5a5bbf1d534a6570b4a3de8229a632450b76b2",
+   "png": "png/2282df888c76e3e0.png"
+  },
+  {
    "preset": "party-mandala",
    "hands": "absent",
    "state": "scene+hands",
@@ -3424,6 +3856,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-mandala",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "72cc93e1b10df5fd68ed8a13aa4e939f51f6e8bafc30ffdfa1763604bc21b9f8",
+   "png": "png/72cc93e1b10df5fd.png"
+  },
+  {
+   "preset": "party-mandala",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "72cc93e1b10df5fd68ed8a13aa4e939f51f6e8bafc30ffdfa1763604bc21b9f8",
+   "png": "png/72cc93e1b10df5fd.png"
   },
   {
    "preset": "party-mandala",
@@ -3530,6 +3988,32 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-mandala",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b95bbaae122570d108be1fca56978dc0f30638b245f9af8d871849147553659b",
+   "png": "png/b95bbaae122570d1.png"
+  },
+  {
+   "preset": "party-mandala",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "739c69dff0219e4d9193756a169cbf57c7e2e9f5f7c5f807d42f214cc4f1d016",
+   "png": "png/739c69dff0219e4d.png"
+  },
+  {
    "preset": "party-noita",
    "hands": "absent",
    "state": "scene+hands",
@@ -3632,6 +4116,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-noita",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ea5d6c1158662143cf2821dba89fa5f0ff122e87fad4d75ec814d278611a4c8f",
+   "png": "png/ea5d6c1158662143.png"
+  },
+  {
+   "preset": "party-noita",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ea5d6c1158662143cf2821dba89fa5f0ff122e87fad4d75ec814d278611a4c8f",
+   "png": "png/ea5d6c1158662143.png"
   },
   {
    "preset": "party-noita",
@@ -3738,6 +4248,32 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-noita",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "bb07f282fc7c41ed31263298152240da16e2c012956db6ad85b817addd72ac1f",
+   "png": "png/bb07f282fc7c41ed.png"
+  },
+  {
+   "preset": "party-noita",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "da1c2211bfa7858defd70f1bdbe207a8d56a7927071fa72734195523ae877d2d",
+   "png": "png/da1c2211bfa7858d.png"
+  },
+  {
    "preset": "party-tracer",
    "hands": "absent",
    "state": "scene+hands",
@@ -3840,6 +4376,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "party-tracer",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "991f73dd78cd2375d9fe9522b593bf6265ded7e61ed07f13466f740e7f9b9dfb",
+   "png": "png/991f73dd78cd2375.png"
   },
   {
    "preset": "party-tracer",
@@ -3946,6 +4495,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "party-tracer",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "d669f6b843403710e62c026896b41491e285725d3882f18033e80c9bdda6dcf1",
+   "png": "png/d669f6b843403710.png"
+  },
+  {
    "preset": "legacy6",
    "hands": "absent",
    "state": "scene+hands",
@@ -4048,6 +4610,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "legacy6",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "931a82a5336efd9bbff78a932fe82c85976edf2237cd2a3e6cb6b129484ef232",
+   "png": "png/931a82a5336efd9b.png"
   },
   {
    "preset": "legacy6",
@@ -4154,6 +4729,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "legacy6",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "e14edefb02bc1eb83f7298607e4a98b85af1eed4c6ffabdee515d7d24318918c",
+   "png": "png/e14edefb02bc1eb8.png"
+  },
+  {
    "preset": "lfo-breathe",
    "hands": "absent",
    "state": "scene+hands",
@@ -4256,6 +4844,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "lfo-breathe",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "a030b7cbb8c932b35b366317163e673eecb49fc462b98e1ef323272f345558ba",
+   "png": "png/a030b7cbb8c932b3.png"
+  },
+  {
+   "preset": "lfo-breathe",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "a030b7cbb8c932b35b366317163e673eecb49fc462b98e1ef323272f345558ba",
+   "png": "png/a030b7cbb8c932b3.png"
   },
   {
    "preset": "lfo-breathe",
@@ -4362,6 +4976,32 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "lfo-breathe",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "241fc702664b70cead1901055a47e2f2598336aac1cd2b74987c124140042d28",
+   "png": "png/241fc702664b70ce.png"
+  },
+  {
+   "preset": "lfo-breathe",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "af4b6dbd7d7cbcd80a96a14a8a7a58326a680165e661951990d3486e6a6ac269",
+   "png": "png/af4b6dbd7d7cbcd8.png"
+  },
+  {
    "preset": "hands-fx",
    "hands": "absent",
    "state": "scene+hands",
@@ -4464,6 +5104,32 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "hands-fx",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "69a44a9c068efb4053f44e05725cb546baeeb474d4bff97d8a20ec73f9ad8674",
+   "png": "png/69a44a9c068efb40.png"
+  },
+  {
+   "preset": "hands-fx",
+   "hands": "absent",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "69a44a9c068efb4053f44e05725cb546baeeb474d4bff97d8a20ec73f9ad8674",
+   "png": "png/69a44a9c068efb40.png"
   },
   {
    "preset": "hands-fx",
@@ -4570,6 +5236,32 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "hands-fx",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "934c7a1012af551248348e713f51db1b2847a72f334927c854fcb0bd7bf492b0",
+   "png": "png/934c7a1012af5512.png"
+  },
+  {
+   "preset": "hands-fx",
+   "hands": "present",
+   "state": "solo-scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "de9fe943259ef90a3f631a9c4b4333062befcc25118ef011080f1af268ea2e43",
+   "png": "png/de9fe943259ef90a.png"
+  },
+  {
    "preset": "hands-pinch",
    "hands": "absent",
    "state": "scene+hands",
@@ -4672,6 +5364,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "hands-pinch",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "54bc99f9ce79b2f8a181e34c7775cf7c0b57e672a2de7ac64757c58b86a91bc6",
+   "png": "png/54bc99f9ce79b2f8.png"
   },
   {
    "preset": "hands-pinch",
@@ -4778,6 +5483,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "hands-pinch",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "2a672bb1839f92b6c8be1470c1e86bca99a9e029b88fdf331522f6f4c2bd10c4",
+   "png": "png/2a672bb1839f92b6.png"
+  },
+  {
    "preset": "hands-play",
    "hands": "absent",
    "state": "scene+hands",
@@ -4880,6 +5598,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "hands-play",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "54bc99f9ce79b2f8a181e34c7775cf7c0b57e672a2de7ac64757c58b86a91bc6",
+   "png": "png/54bc99f9ce79b2f8.png"
   },
   {
    "preset": "hands-play",
@@ -4986,6 +5717,19 @@
    "png": "png/b6783b14bd504ef1.png"
   },
   {
+   "preset": "hands-play",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "3e6781b14fd14adfebe3de154fbf24f3b3a36887db7ce56a7f7882014a16ca00",
+   "png": "png/3e6781b14fd14adf.png"
+  },
+  {
    "preset": "hands-orbit",
    "hands": "absent",
    "state": "scene+hands",
@@ -5091,6 +5835,19 @@
   },
   {
    "preset": "hands-orbit",
+   "hands": "absent",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "54bc99f9ce79b2f8a181e34c7775cf7c0b57e672a2de7ac64757c58b86a91bc6",
+   "png": "png/54bc99f9ce79b2f8.png"
+  },
+  {
+   "preset": "hands-orbit",
    "hands": "present",
    "state": "scene+hands",
    "route": "SCENE",
@@ -5192,6 +5949,19 @@
    ],
    "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
    "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "hands-orbit",
+   "hands": "present",
+   "state": "solo",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "9c0188cc4818190f7449c7f6dbf3e579f00033842dce0ed48b83240584143022",
+   "png": "png/9c0188cc4818190f.png"
   }
  ]
 }

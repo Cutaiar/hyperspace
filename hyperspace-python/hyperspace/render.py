@@ -554,6 +554,8 @@ class PassTimer:
             q = ctx.query(time=True)
             with q:
                 pass
+            # reading it back syncs with the GPU once, per Renderer: the
+            # price of knowing the context really has timer queries
             _ = q.elapsed
             self._free.append(q)
             self.on = True
@@ -561,9 +563,19 @@ class PassTimer:
             self.note = f"no GPU timer queries on this context ({type(e).__name__})"
 
     def _off(self, e: Exception) -> None:
+        """Timing off for good: the note, and every query freed. A query
+        still active (begun, its pass running) is ended by its `_Timed`
+        first, so only the rest are released here."""
         self.on = False
         self.note = f"GPU timing off: {type(e).__name__}: {e}"[:120]
+        held = [q for _, q in self._frame] + [q for f in self._pending for _, q in f]
         self._frame, self._pending = [], []
+        for q in held + self._free:
+            try:
+                q.release()
+            except Exception:  # noqa: BLE001, S110 — a stand-in or a lost context: nothing to free
+                pass
+        self._free = []
 
     def time(self, name: str) -> _Timed:
         """``with timer.time("scene"):`` — the pass's GPU time, this frame."""
@@ -589,6 +601,8 @@ class PassTimer:
             totals = dict.fromkeys(GPU_PASSES, 0.0)
             try:
                 for name, q in done:
+                    # blocks if the result is still not there LAG frames on
+                    # (moderngl has no availability query to ask first)
                     totals[name] = totals.get(name, 0.0) + q.elapsed / 1e6
                     self._free.append(q)
             except Exception as e:  # noqa: BLE001 — a read that fails: timing off
