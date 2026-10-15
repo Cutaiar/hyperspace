@@ -96,6 +96,31 @@ A file that will not parse is not fatal: the defaults stand and
 ``cfg["error"]`` carries the message; ``cfg["notes"]`` carries requests
 like the rename above. The SYSTEM page shows both.
 
+    [[devices]]             # the rig's devices (plan 27, devices.py): one table per
+                            # device, polled in this order. No list: the four tables
+                            # below ([midi], [gamepad], [hands], [bridge]) are read
+                            # as before and become the equivalent entries at load,
+                            # with one note per table that asks for the rename.
+                            # With a list, the list says and those tables are
+                            # ignored (one note each)
+    role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
+    kind = "midi"           # "midi", "gamepad", "hands", "bridge" (B2–B4 add
+                            # "midi-out", "osc", "cloud"); an unknown kind is an
+                            # error line on the SYSTEM page, never a dead launch
+    enabled = true          # false lists it as `off`: nothing opened, nothing imported
+                            # …then the kind's own keys: [midi]'s port / profile /
+                            # map, [gamepad]'s usb, [hands]'s whole table,
+                            # [bridge]'s out / in / encoding / channel / cc / rate /
+                            # send / in_lanes — each with the defaults below.
+                            # Today's rig, as a list:
+                            #   [[devices]]  role = "pad"     kind = "gamepad"
+                            #   [[devices]]  role = "apc40"   kind = "midi"
+                            #   [[devices]]  role = "leap"    kind = "hands"   enabled = false
+                            #   [[devices]]  role = "bridge"  kind = "bridge"  enabled = false
+                            # The app watches this file: an edit to the list lands
+                            # without a relaunch (a bad edit is a note; the old list
+                            # stands). [dream] is a worker, not a device: it stays a table
+
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
@@ -201,6 +226,14 @@ SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
                 "scene": True, "hands": True, "through": False, "dim": 1.0,
                 "flip_x": False, "flip_y": False}
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
+
+# `[[devices]]` (plan 27 B1): the old per-adapter tables, in today's poll
+# order, each with the kind and the role its entry gets (None: the MIDI
+# profile's name); the keys an entry of that kind carries beyond role /
+# kind / enabled are the table's own
+DEVICE_TABLES = (("gamepad", "gamepad", "pad"), ("midi", "midi", None),
+                 ("hands", "hands", "leap"), ("bridge", "bridge", "bridge"))
+DEVICE_KEYS = ("role", "kind", "enabled")
 
 
 def _note(cfg: dict, note: str) -> None:
@@ -312,6 +345,134 @@ def screens(cfg: dict) -> list[dict]:
              "flip_y": oc.get("flip_y", False) is True}]
 
 
+def _kind_defaults(kind: str, cfg: dict) -> dict:
+    """The keys an entry of `kind` carries beyond role / kind / enabled,
+    with their defaults: the old table's, less `enabled`."""
+    for section, k, _ in DEVICE_TABLES:
+        if k == kind:
+            return {key: v for key, v in cfg[section].items() if key != "enabled"}
+    return {}
+
+
+def _midi_role(mc: dict) -> str:
+    """The MIDI table's role: its profile's name (`apc40`), which is what
+    the rows and the desk page already mean by it."""
+    prof = mc.get("profile")
+    return prof if isinstance(prof, str) and prof and ":" not in prof else "midi"
+
+
+def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) -> dict | None:
+    """One `[[devices]]` entry, checked like `_screen`: a missing or bad
+    role or kind drops the entry (a note, never a dead launch); `enabled`
+    that is not true or false is true; a known kind's own keys are filled
+    from its defaults. `problems` collects what was dropped, so a re-read
+    while the app runs can refuse the whole edit."""
+    where = f"config: [[devices]] entry {n}:"
+    role, kind = e.get("role"), e.get("kind")
+    if not isinstance(role, str) or not role.strip() or ":" in role:
+        problems.append(f"{where} role = {role!r} is not a name without ':' — dropped")
+        return None
+    role = role.strip()
+    if role in roles:
+        problems.append(f"{where} role {role!r} is listed twice — the second dropped")
+        return None
+    if not isinstance(kind, str) or not kind.strip():
+        problems.append(f"{where} ({role}) kind = {kind!r} is not a kind — dropped")
+        return None
+    kind = kind.strip()
+    enabled = e.get("enabled", True)
+    if not isinstance(enabled, bool):
+        _note(cfg, f"{where} ({role}) enabled = {enabled!r} is not true or false — true")
+        enabled = True
+    roles.add(role)
+    own = {k: v for k, v in e.items() if k not in DEVICE_KEYS}
+    return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind, cfg), **own}
+
+
+def _translate(cfg: dict, data: dict) -> list[dict]:
+    """No `[[devices]]`: the old tables — the defaults, and what the file
+    says — become the equivalent entries in today's poll order, with one
+    note per table the file holds, asking for the rename."""
+    out = []
+    for section, kind, role in DEVICE_TABLES:
+        t = cfg[section]
+        role = role or _midi_role(t)
+        entry = {"role": role, "kind": kind, "enabled": bool(t.get("enabled", True)),
+                 **{k: v for k, v in t.items() if k != "enabled"}}
+        out.append(entry)
+        if isinstance(data.get(section), dict):
+            _note(cfg, f"config: [{section}] is now a [[devices]] entry (role = {role!r}, "
+                       f"kind = {kind!r}) — see config.py")
+    return out
+
+
+def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
+    """The device list (plan 27 B1), read in place as ``cfg["devices"]``:
+    the checked `[[devices]]` entries when the file lists them (the old
+    tables then ignored, one note each), else the old tables translated
+    (`_translate`). The first entry of each old kind is folded back into
+    its table, so everything that still reads ``cfg["midi"]`` /
+    ``cfg["hands"]`` (the binding file's profile, the hands setup) reads
+    what the entry says; a relative `map`, `calibration` or `tape` is
+    resolved against the file's folder in both."""
+    raw = data.get("devices")
+    if raw is None:
+        entries = _translate(cfg, data)
+    else:
+        if not isinstance(raw, list):
+            problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
+            raw = []
+        entries, roles = [], set()
+        for i, e in enumerate(raw):
+            if not isinstance(e, dict):
+                problems.append(f"config: [[devices]] entry {i + 1} is not a table ({e!r}) "
+                                "— dropped")
+                continue
+            got = _device(i + 1, e, cfg, roles, problems)
+            if got is not None:
+                entries.append(got)
+        for section, kind, _ in DEVICE_TABLES:
+            if isinstance(data.get(section), dict):
+                _note(cfg, f"config: [[devices]] is listed, so [{section}] is ignored — "
+                           f"its {kind} entry says")
+    for e in entries:
+        for key in ("map", "calibration", "tape"):
+            v = e.get(key)
+            if isinstance(v, str) and v and not Path(v).is_absolute():
+                e[key] = str(path.parent / v)
+    for section, kind, _ in DEVICE_TABLES:
+        first = next((e for e in entries if e["kind"] == kind), None)
+        if first is None:
+            cfg[section]["enabled"] = False
+            continue
+        cfg[section] = {**cfg[section], **{k: v for k, v in first.items() if k not in DEVICE_KEYS},
+                        "enabled": first["enabled"]}
+    cfg["devices"] = entries
+
+
+def devices(cfg: dict) -> list[dict]:
+    """The checked device entries `load` put in the config, each with
+    `role`, `kind`, `enabled` and the kind's own keys; never raises."""
+    lst = cfg.get("devices") if isinstance(cfg, dict) else None
+    return [dict(e) for e in lst if isinstance(e, dict)] if isinstance(lst, list) else []
+
+
+def read_devices(path: Path) -> tuple[list[dict], list[str]]:
+    """The device list of `path` as it is now, for the registry's watch:
+    (entries, problems) — a file that will not parse, or an entry that
+    had to be dropped, is a problem, and the registry keeps its old list.
+    Nothing is printed: the notes `load` would make are its own."""
+    import contextlib
+    import io
+
+    with contextlib.redirect_stderr(io.StringIO()):
+        cfg = load(path)
+    problems = list(cfg.get("problems", []))
+    if cfg.get("error"):
+        problems.insert(0, cfg["error"])
+    return devices(cfg), problems
+
+
 def load(path: Path | None = None) -> dict:
     """The config, defaults filled in; `path` defaults to the library home's."""
     if path is None:
@@ -329,11 +490,13 @@ def load(path: Path | None = None) -> dict:
             data = {}
         bad = []
         for section, values in data.items():
+            if section == "devices":
+                continue                  # the list of tables: `_devices` reads it
             if isinstance(values, dict):
                 cfg.setdefault(section, {}).update(values)
             else:
                 # `midi = true` in place of [midi]: the defaults stand and the
-                # SYSTEM page says so — the _open_* gates expect a table
+                # SYSTEM page says so — the device entries expect a table
                 bad.append(f"[{section}] must be a table, not {values!r}")
         if bad:
             cfg["error"] = "config: " + "; ".join(bad)
@@ -351,6 +514,15 @@ def load(path: Path | None = None) -> dict:
     # the render outputs (plan 21 WP3): with a list, output 1's entry
     # becomes the scalar monitor / fullscreen read below
     _screens(cfg, data.get("output"))
+    # the devices (plan 27 B1): `[[devices]]`, or the old tables translated;
+    # an entry that had to be dropped is a note here and, for the registry's
+    # re-read, a reason to keep the old list (`cfg["problems"]`)
+    problems: list[str] = []
+    _devices(cfg, data, path, problems)
+    for note in problems:
+        _note(cfg, note)
+    if problems:
+        cfg["problems"] = problems
     # the ground and the opacity are numbers: `bg = "x"` stopped the launch
     # in app._make_output; now it is the default, and the SYSTEM page says so
     for key in ("bg", "alpha"):
