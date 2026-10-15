@@ -86,3 +86,21 @@ uv run python tools/golden_frames.py      → all 548 frames match their goldens
 
 ## Decisions file
 `/Users/dallman/.claude/jobs/91c58534/tmp/sdd/decisions/A4b.md`: six register-row drafts, hand checks V.A4b.1–3, the as-built notes, and where the code differs from the dispatch (`cloud_source` rather than `clouds`, the params' location, no UI row).
+
+## Merge round (origin/plan-24-26-27-integration into plan-26-a4b-points)
+
+Merge commit a47d795 (pushed to plan-26-a4b-points; the local branch name was held by A4b's original worktree, so the merge was made on the session branch and pushed as HEAD:plan-26-a4b-points).
+
+Conflicted files and resolution:
+- hyperspace/graph.py: module docstring merged (A4's per-instance hands + A4b's point cloud); imports are the union (`math`, `re`, `replace`); A4b's whole point-cloud block and A4's `ghost_of` both kept; `default_graph` docstring keeps A4's paragraph then A4b's; scene line rewritten in A4's terms: `[*points, *(geo[h.n] for h in inside), shape]`. `Graph.clouds` and `CLOUD_KIND` kept. A4's JSON graph section reaches the graph only as a `Wiring` passed to `default_graph`, so `Graph.clouds` is set on every graph (no other builder exists). No `cloud` kind added to `NODE_KINDS` (ruling); the `CLOUD_KIND` comment that said "A4's graph JSON names it" was reworded to state the ruling.
+- hyperspace/render.py: `__init__` keeps `cloud_source` and A4's `ghost_states`/`_ghosts`; `on_reload` releases `_cloud_gl` then calls `drop_ghosts()`; `_graph_for` keys on `clouds` and calls `default_graph(views, wiring, clouds)` then A4's `drop_ghosts({...ghost.*})`. `cloud_roles` import kept.
+- tests/test_golden_frames.py: completeness subtracts both `clouded` and `fixture`; count `... + 2 + 2 * 2 + 8` = 556.
+- tools/golden_frames.py: docstring, `CLOUDED` and `FIXTURES`/`FIXTURE_PRESETS`, the per-preset `CLOUDED` loop and A4's outer fixture loop, and the manifest's `cloud_states` + `fixture_states`/`fixtures` all kept. tests/golden/frames/frames.json auto-merged: 556 unique goldens, both `cloud_states` and A4's `fixture_states`/`fixtures`/graph text present. Nothing re-recorded.
+
+Gates (from hyperspace-python/):
+- uv run pytest -q → 2183 passed, 2 skipped
+- uv run ruff check . → All checks passed!
+- uv run pytest tests/test_golden_frames.py -q → 7 passed; uv run python tools/golden_frames.py → all 556 frames match their goldens (Apple M3 Max)
+- hyperspace/library/ byte-identical to both parents.
+
+Rough edge for plan 28: a second listed cloud role gets node `cloud.2` (A4's naming rule) but still reads the shared `cloud.*` params; its own params are not declared.
