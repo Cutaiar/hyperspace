@@ -74,11 +74,10 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, gamepad, lfo, placement, tempo, undo
+from . import config, devices, gamepad, lfo, placement, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
-from .gamepad import Pad
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
@@ -127,10 +126,11 @@ def _quiet(fn) -> None:
 
 
 def close_all(audio, *adapters) -> None:
-    """Every optional adapter's `close()` — MIDI, the bridge, the hands
-    tracker, the dream worker — then the audio stream, best-effort, so a
-    broken port never blocks a quit or a restart. The one list for both
-    exits (audit P1); `None` for an adapter that was never opened."""
+    """Every optional adapter's `close()` — the device registry (every
+    device, the pad included; plan 27 B1), the dream worker — then the
+    audio stream, best-effort, so a broken port never blocks a quit or a
+    restart. The one list for both exits (audit P1); `None` for an
+    adapter that was never opened."""
     for a in adapters:
         if a is not None:
             _quiet(a.close)
@@ -516,36 +516,6 @@ def _desk_table(reg: Registry, table: Bindings) -> Bindings:
     return table
 
 
-def _open_midi(reg: Registry, cfg: dict, table: Bindings, learn):
-    """The adapter, only when configured — the core never imports it."""
-    mc = cfg.get("midi", {})
-    if not mc.get("enabled", True):
-        return None
-    try:
-        from . import midi
-    except ImportError as e:
-        print(f"midi: adapter unavailable ({e})", file=sys.stderr)
-        return None
-    try:
-        return midi.MidiIO(reg, table, port=mc.get("port"), profile=mc.get("profile", "apc40"),
-                           learner=learn)
-    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
-        print(f"midi: {e}", file=sys.stderr)
-        return None
-
-
-def _open_bridge(reg: Registry, cfg: dict):
-    """The lanes bridge (bridge.py), only when [bridge] enabled — the same rule."""
-    if not cfg.get("bridge", {}).get("enabled", False):
-        return None
-    try:
-        from . import bridge
-        return bridge.Bridge(reg, cfg["bridge"])
-    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
-        print(f"bridge: {e}", file=sys.stderr)
-        return None
-
-
 def _hand_settings(reg: Registry, cfg: dict):
     """The hands setup as `hands.*` params — registered whether or not the
     tracker is on, so a project or preset carries it either way. hands/core.py
@@ -560,24 +530,22 @@ def _hand_settings(reg: Registry, cfg: dict):
         return None
 
 
-def _open_hands(cfg: dict, settings):
-    """Ultraleap hands (hands/), only when [hands] enabled — the same rule.
-    One that would not open — no `leap` package, a `[hands] tape` that is
-    missing or not a tape — is said on stderr and in `cfg["notes"]`, which
-    the SYSTEM page lists and the HANDS page shows in place of "tracker
-    off" (plan 21 WP5 R10)."""
-    hc = cfg.get("hands", {})
-    if settings is None or not hc.get("enabled", False):
-        return None
-    try:
-        from . import hands
-        cal = hc.get("calibration")
-        return hands.HandsIO(settings, hc, cal_path=Path(cal) if cal else None)
-    except Exception as e:  # noqa: BLE001 — a broken adapter must not stop the show
-        note = f"hands: {e}"[:200]
-        print(note, file=sys.stderr)
-        cfg.setdefault("notes", []).append(note)
-        return None
+def _open_devices(cfg: dict, ctx: devices.Context, home: Path | None,
+                  clock=time.monotonic) -> devices.DeviceRegistry:
+    """The device registry (devices.py, plan 27 B1) over the config's
+    `[[devices]]` list — the old `[midi]` / `[gamepad]` / `[hands]` /
+    `[bridge]` tables translated when there is none — every device opened
+    behind its own entry. One that would not open (no `leap` package, a
+    `[hands] tape` that is missing) is said on stderr and in
+    `cfg["notes"]`, which the SYSTEM page lists and the HANDS page shows
+    in place of "tracker off" (plan 21 WP5 R10), and is tried again on
+    the Ports schedule. The registry watches `<home>/config.toml` for
+    edits to the list."""
+    path = (home / config.FILE) if home is not None else None
+    reg = devices.DeviceRegistry(config.devices(cfg), ctx, path=path, clock=clock,
+                                 notes=cfg.setdefault("notes", []))
+    reg.open_all()
+    return reg
 
 
 # torch is an ordinary dependency (decision register row 23 (a)): `uv sync`
@@ -606,15 +574,6 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
     except Exception as e:  # noqa: BLE001 — no torch, no GPU: the plain tracer runs
         print(f"dream: {e}", file=sys.stderr)
         return None, dream_error(e)
-
-
-def _open_pad(cfg: dict):
-    """The Xbox pad (gamepad.py), unless [gamepad] enabled = false. On by
-    default: the pad never raises when absent, so there is nothing to lose
-    by polling for one (audit P2)."""
-    if not cfg.get("gamepad", {}).get("enabled", True):
-        return None
-    return Pad(usb=bool(cfg.get("gamepad", {}).get("usb", True)))
 
 
 class Awake:
@@ -831,11 +790,10 @@ class Host:
     draw_panel: Callable[[float, float], None]
     restart: Callable[[], None]
     quit: Callable[[], None]
-    pad: Pad | None = None
-    midi_io: object | None = None
-    hands_io: object | None = None
-    bridge_io: object | None = None
-    dream_io: object | None = None
+    # the device registry (devices.py, plan 27 B1): the pad, MIDI, the
+    # hands, the bridge — every input and output the config lists
+    devices: devices.DeviceRegistry | None = None
+    dream_io: object | None = None    # the look-back's worker: not a device
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
     undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
@@ -845,21 +803,28 @@ class Host:
 
     @property
     def adapters(self) -> tuple:
-        """What `close_all` closes, in shutdown order."""
-        return (self.midi_io, self.bridge_io, self.hands_io, self.dream_io)
+        """What `close_all` closes, in shutdown order: the registry (every
+        device, last listed first — the pad included) and the dream worker."""
+        return (self.devices, self.dream_io)
+
+    @property
+    def pad(self):
+        """The open `gamepad.Pad`, or None: the sticks' camera job reads it
+        (the job moves into the pad device in B2)."""
+        return self.devices.adapter("gamepad") if self.devices is not None else None
 
 
 def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     """One frame, in the order ARCHITECTURE §2 states: the scene-setters
-    (keys, loop keys, pad, MIDI, the macros' base subscribers) write
-    bases, and the undo watcher compares them (`undo.tick`, plan 15);
-    the sources feed the table
-    (hands, output, mouse, audio, bridge, LFOs); the pass lands offsets
-    (`router.modulate`, `reg.apply`, `integrate`); then the two windows
-    draw. Returns False when a guarded block raised — the error is on
-    `reloader.runtime_error` and the loop goes on, so the next save can
-    fix it. `imgui.new_frame()` has already run (main): `keys.typing` is
-    this frame's value."""
+    (keys, loop keys, the devices polled — pad, MIDI — the macros' base
+    subscribers) write bases, and the undo watcher compares them
+    (`undo.tick`, plan 15); the sources feed the table (output, mouse,
+    audio, the devices' feeds — hands, bridge — LFOs); the pass lands
+    offsets (`router.modulate`, `reg.apply`), the sinks send (`devices.send`,
+    plan 27 B3), `integrate`; then the two windows draw. Returns False
+    when a guarded block raised — the error is on `reloader.runtime_error`
+    and the loop goes on, so the next save can fix it. `imgui.new_frame()`
+    has already run (main): `keys.typing` is this frame's value."""
     reg, keys, router, reloader = h.reg, h.keys, h.router, h.reloader
     h.clock.tick(now)   # the clock's "now" for the frame: a trigger and the LFO step agree
 
@@ -884,64 +849,61 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             rate = D4_RATE0 + (D4_RATE1 - D4_RATE0) * ramp * ramp
             _ride_depth(reg["view.depth4"], sgn * rate * dt)
 
-    # ---- gamepad: a second hand on the same controls (imgui never
-    # claims it, so it works even while the panel has keyboard focus) ----
-    pad = h.pad
-    if pad is not None:
-        pad.poll()
-        # a press that completes an armed learn does not also fire its old row
-        learned = gamepad.learn_from(pad, h.learn)
-        router.pad(pad, buttons=not learned)     # the axis lanes, then the button rows
-        if pad.on:
-            # analog, each axis while no route names it (`axis:LX` …): left
-            # stick orbits, right-stick Y zooms about centre and its X rides
-            # the W planes' rates, triggers ride
-            # depth4 in its own log space (LT out, RT in). The pad's feel
-            # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
-            # off, they are read as they are
-            routed = router.claimed("axis") or ()
-            felt = router.felt("axis", pad.lanes(), dt)
-            if felt is None:
-                axis, trigger = pad.axis, pad.trigger
-            else:
-                def axis(ax: int) -> float:   # a lane back to the stick's ±1, up negative
-                    u = felt[ax] - 0.5
-                    return 2 * u if ax in (gamepad.AX_LX, gamepad.AX_RX) else -2 * u
-
-                def trigger(ax: int) -> float:
-                    return felt[ax]
-
-            def free(ax: int, v: float) -> float:
-                return 0.0 if ax in routed else v
-            lx = free(gamepad.AX_LX, axis(gamepad.AX_LX))
-            ly = free(gamepad.AX_LY, axis(gamepad.AX_LY))
-            if lx:
-                reg["camera.yaw"].nudge(lx * 2.2 * dt)
-            if ly:
-                reg["camera.pitch"].nudge(ly * 2.2 * dt)
-            zoom_v = free(gamepad.AX_RY, axis(gamepad.AX_RY))
-            if zoom_v:
-                reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
-            # right-stick X rides the three W planes' rates together (the 4D
-            # spin): right speeds them up, left slows them through 0 into reverse
-            w_v = free(gamepad.AX_RX, axis(gamepad.AX_RX))
-            if w_v:
-                for plane in W_PLANES:
-                    reg[f"rot.rate.{plane}"].nudge(w_v * W_RATE_PER_S * dt)
-            d4 = (free(gamepad.AX_RT, trigger(gamepad.AX_RT))
-                  - free(gamepad.AX_LT, trigger(gamepad.AX_LT)))
-            if d4:
-                _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
-
-    # ---- MIDI controller: routed through the same registry. From here
-    # on a raising block records itself on the reloader and the frame goes
-    # on; `ok` keeps the note alive until a clean frame ----
+    # ---- the devices, polled (devices.py, plan 27 B1): the pad (a second
+    # hand on the same controls — imgui never claims it, so it works even
+    # while the panel has keyboard focus; a press that completes an armed
+    # learn does not also fire its old row) and MIDI, each delivering its
+    # rows; the hands and the bridge feed below. A device that raises
+    # records itself on the registry; the frame goes on and `ok` keeps the
+    # note alive until a clean frame ----
     ok = True
-    if h.midi_io is not None:
-        try:
-            h.midi_io.poll()
-        except Exception as e:  # noqa: BLE001 — hot-reloaded code may raise
-            ok, reloader.runtime_error = False, _err("midi", e)
+    devs = h.devices
+    if devs is not None:
+        devs.poll(dt, now, router=router, learn=h.learn)
+        if devs.error:
+            ok, reloader.runtime_error = False, devs.error
+    # ---- the sticks' camera job: each axis while no route names it ----
+    pad = h.pad
+    if pad is not None and pad.on:     # (B2 moves this job into the pad device)
+        # analog, each axis while no route names it (`axis:LX` …): left
+        # stick orbits, right-stick Y zooms about centre and its X rides
+        # the W planes' rates, triggers ride
+        # depth4 in its own log space (LT out, RT in). The pad's feel
+        # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
+        # off, they are read as they are
+        routed = router.claimed("axis") or ()
+        felt = router.felt("axis", pad.lanes(), dt)
+        if felt is None:
+            axis, trigger = pad.axis, pad.trigger
+        else:
+            def axis(ax: int) -> float:   # a lane back to the stick's ±1, up negative
+                u = felt[ax] - 0.5
+                return 2 * u if ax in (gamepad.AX_LX, gamepad.AX_RX) else -2 * u
+
+            def trigger(ax: int) -> float:
+                return felt[ax]
+
+        def free(ax: int, v: float) -> float:
+            return 0.0 if ax in routed else v
+        lx = free(gamepad.AX_LX, axis(gamepad.AX_LX))
+        ly = free(gamepad.AX_LY, axis(gamepad.AX_LY))
+        if lx:
+            reg["camera.yaw"].nudge(lx * 2.2 * dt)
+        if ly:
+            reg["camera.pitch"].nudge(ly * 2.2 * dt)
+        zoom_v = free(gamepad.AX_RY, axis(gamepad.AX_RY))
+        if zoom_v:
+            reg["camera.zoom"].scale(2.0 ** (-zoom_v * 1.2 * dt))
+        # right-stick X rides the three W planes' rates together (the 4D
+        # spin): right speeds them up, left slows them through 0 into reverse
+        w_v = free(gamepad.AX_RX, axis(gamepad.AX_RX))
+        if w_v:
+            for plane in W_PLANES:
+                reg[f"rot.rate.{plane}"].nudge(w_v * W_RATE_PER_S * dt)
+        d4 = (free(gamepad.AX_RT, trigger(gamepad.AX_RT))
+              - free(gamepad.AX_LT, trigger(gamepad.AX_LT)))
+        if d4:
+            _ride_depth(reg["view.depth4"], d4 * 2.4 * dt)
 
     # ---- the macros' base subscribers: the last scene-setter — a macro
     # whose base moved (a knob just now, the panel last frame, a restore)
@@ -961,13 +923,6 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             h.undo.tick(now)
         except Exception as e:  # noqa: BLE001
             ok, reloader.runtime_error = False, _err("undo", e)
-
-    # ---- Ultraleap hands: hand lanes into the table, MIDI out to a DAW ----
-    if h.hands_io is not None:
-        try:
-            h.hands_io.poll(dt, h.learn, router)
-        except Exception as e:  # noqa: BLE001
-            ok, reloader.runtime_error = False, _err("hands", e)
 
     # ---- output: the render window follows the output.* params; a later
     # render output follows its config entry (plan 21 WP3) ----
@@ -991,8 +946,14 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         audio = h.audio
         audio.step(dt)
         audio.publish(router)       # the lanes' names, like every source (R8)
-        if h.bridge_io is not None:   # lanes out, external lanes in (bridge.py)
-            h.bridge_io.step(audio.chain if audio.on else None, router)
+        chain = audio.chain if audio.on else None
+        if devs is not None:
+            # the devices' feeds: the hands feed `hand` (and complete a
+            # hand Learn), the bridge feeds `ext` and sends lanes out —
+            # each guarded by the registry, the first error the toast's
+            devs.feed(router)
+            if devs.error and ok:
+                ok, reloader.runtime_error = False, devs.error
         # the LFOs are a source like any other: stepped on the frame's
         # clock, fed to the table as `lfo` before the modulation pass
         h.lfos.step(dt, now, h.clock)
@@ -1000,8 +961,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         # the lanes are a modulation source like any other (routing.py);
         # once every source has spoken for this frame, land base +
         # offsets on the objects before the integrator reads them
-        router.modulate(audio.chain if audio.on else None, dt)   # dt: the rows' motion
+        router.modulate(chain, dt)   # dt: the rows' motion
         reg.apply()
+        if devs is not None:        # the sinks read effective values out (B3)
+            devs.send(reg, chain)
         h.view.integrate(dt)
     except Exception as e:  # noqa: BLE001
         ok, reloader.runtime_error = False, _err("step", e)
@@ -1161,22 +1124,31 @@ def main() -> None:
     # refused (learn.py; the band.sel.* rule is the registry's `real`)
     learn = Learn(reg, router.table, lane=router.lane)   # hand:7 and hand:right.y: one axis
     panel.learn = learn
-    midi_io = _open_midi(reg, cfg, router.table, learn)
-    panel.midi = midi_io
     panel.router = router                  # the ROUTING page edits the live table
-    bridge_io = _open_bridge(reg, cfg)
-    hands_io = _open_hands(cfg, hand_settings)
-    panel.hands = hands_io
-    # the ghost hands draw the tracker's skeletons; no tracker, nothing draws
-    renderer.ghost.source = hands_io
+    # the devices (devices.py, plan 27 B1): the pad, MIDI, the hands and
+    # the bridge, each opened behind its `[[devices]]` entry (the old
+    # tables translated), polled by `frame` through the registry. What
+    # holds an adapter — the panel (Learn's hints, the desk page, the HANDS
+    # page, the Learn pad menu) and the ghost renderer (the tracker's
+    # skeletons) — is pointed at it now and again whenever the list changes
+    rig = _open_devices(cfg, devices.Context(reg=reg, table=router.table, learn=learn,
+                                             audio=audio, hand_settings=hand_settings,
+                                             notes=cfg.setdefault("notes", []), home=home),
+                        home)
+
+    def point_at_devices() -> None:
+        panel.midi = rig.adapter("midi")
+        panel.pad = rig.adapter("gamepad")       # the menu's "Learn pad"
+        panel.hands = rig.adapter("hands")
+        renderer.ghost.source = panel.hands      # no tracker, nothing draws
+    rig.listeners.append(point_at_devices)
+    point_at_devices()
+    panel.devices = rig                        # the SYSTEM page's device lines
     renderer.ghost.router = router           # the guide lights what the table routes
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
-    panel.bridge = bridge_io               # the SYSTEM page's bridge line
-    pad = _open_pad(cfg)
-    panel.pad = pad                        # the menu's "Learn pad"
     awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
@@ -1231,18 +1203,19 @@ def main() -> None:
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
-        *([(midi_io, "midi", "MidiIO")] if midi_io else []),
-        *([(bridge_io, "bridge", "Bridge")] if bridge_io else []),
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
-        *([(hands_io, "hands.core", "HandsIO")] if hands_io else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
-        *([(pad, "gamepad", "Pad")] if pad else []),
+        # the devices' adapters, the shims and the registry (devices.py):
+        # re-evaluated each swap, so a device the list brought in counts
+        *rig.targets(),
     ], watchers=[library])
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
-    panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     if router.table.said:                       # what the launch did to bindings.json
-        panel.config_notes = [*panel.config_notes, router.table.said]
+        cfg["notes"].append(router.table.said)
+    # …or that wants a section renamed, and what the device list did since
+    # (the registry appends to this very list, so the page follows)
+    panel.config_notes = cfg["notes"]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window
     mouse = Mouse(render_win, reg, s, slots[0].switches)          # the mouse: output 1 only
 
@@ -1294,8 +1267,7 @@ def main() -> None:
                 restart=lambda: _restart(audio, (watchdog, awake, *host.adapters), impl, ctrl_win,
                                          save=save_windows),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
-                pad=pad, midi_io=midi_io, hands_io=hands_io, bridge_io=bridge_io,
-                dream_io=dream_io, learn=learn, render_watch=render_watch,
+                devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
                 undo=undo_obj,
                 outputs=[sl.output for sl in slots if sl.output is not None])
 
