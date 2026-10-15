@@ -48,11 +48,11 @@ merge commits say how overlaps were resolved):
 Open, not merged (check `gh pr list --base plan-24-26-27-integration`):
 
 - **#188 B5** (`plan-27-b5-docs`): plan 27's docs, register rows 140–168,
-  group W checks 168–190. Reviewed; a docs-only fix round was sent (the
+  group W checks 168–190. Reviewed; the docs-only fix round (the
   point-cloud node written as existing in three places; check 190's loop
-  speed; four one-line slips). The agent may have pushed the fix after the
-  session ended: read the PR's last commit and its "Review round 1"
-  section; if the fixes are in, do one scoped re-read and merge.
+  speed; four one-line slips) is **pushed as 1e33e36** with the PR's
+  "Review round 1" section. Do one scoped re-read of that commit (Sonnet)
+  and merge; it is docs only, so the gates cannot move.
 - **#190 A4b** (`plan-26-a4b-points`): the point-cloud geometry node
   (kind name `cloud`, `graph.CLOUD_KIND`; 4 new goldens, 548 total).
   **Reviewed and approved**, minors only (size the colour buffer from the
