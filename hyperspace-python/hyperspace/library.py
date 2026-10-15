@@ -838,16 +838,30 @@ class Project:
         return next((k for k in range(len(self.bank)) if self.bank[k] is None), None)
 
     def save_into(self, k: int) -> bool:
-        """The desk's save (2026-10-09, replacing the clip-stop SAVE AS bar):
-        hold an empty bank pad and the live state is a **new** preset in
-        that pad's slot — `save_new`'s preset, its name and its show write,
-        in slot k rather than the next empty one. A filled slot is never
-        written over: nothing happens and False is returned, so a long
-        press that loaded a preset blinks nothing and says nothing (the
-        `preset.save_empty.k` triggers, one per pad)."""
-        if not 0 <= k < len(self.bank) or self.bank[k] is not None:
+        """The desk's two-handed save (plan 24 C1, decision 18: SAVE held, a
+        bank pad tapped — `Param.save_into`, midi.py `_save_tap`): the live
+        state as a **new** preset in slot k — `save_new`'s preset, its name
+        (`next_name`, from the loaded one: TRIP → TRIP 2) and its show
+        write, in slot k rather than the next empty one. **A filled slot
+        takes the new preset too**: the slot points at it, and the preset
+        it named keeps its file, untouched, and stays in the list, unpadded
+        — exactly as "free this pad (keeps the preset)" leaves it. Nothing
+        is overwritten and nothing goes to the trash (owner, 2026-10-09 and
+        2026-10-14). True when a preset was saved; False for a slot the
+        bank does not have, or a save that failed (`bank_error`)."""
+        if not 0 <= k < len(self.bank):
             return False
         return self._save_new(k)
+
+    def save_empty(self, k: int) -> bool:
+        """#158's hold (2026-10-09): an **empty** bank pad held midi.HOLD_S
+        saves into its slot (`save_into`); a filled pad held only loads —
+        nothing happens here and False is returned, so a long press that
+        loaded a preset blinks nothing (`Param.held` on `preset.select`).
+        Saving onto a filled slot is the two-handed save's alone."""
+        if not 0 <= k < len(self.bank) or self.bank[k] is not None:
+            return False
+        return self.save_into(k)
 
     def save_new(self) -> bool:
         """The live state as a **new** preset, named from the loaded one
@@ -886,6 +900,7 @@ class Project:
         if k is None:
             lib.say(warning=f"saved {name} — {BANK_FULL}")
             return True
+        was = self.bank[k]          # a filled slot (`save_into`): its preset stays listed
         self.bank[k] = name
         self.active = k
         try:
@@ -893,14 +908,15 @@ class Project:
         except (LibraryError, OSError) as e:
             # the preset is saved and loaded, but the show could not take
             # it: the bank stays as the show's file has it, and it is said
-            self.bank[k] = None
+            self.bank[k] = was
             self.active = -1
             self.bank_error = f"presets: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
                             f"the preset list ({e})")
             return True
         self._room()
-        lib.say(f"saved {name} → {slot_key(k)}")
+        kept = f" ({was} is still in the preset list)" if was is not None else ""
+        lib.say(f"saved {name} → {slot_key(k)}{kept}")
         return True
 
     def put_slot(self, k: int, name: str) -> None:

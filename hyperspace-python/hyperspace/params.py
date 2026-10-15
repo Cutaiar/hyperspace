@@ -164,6 +164,11 @@ class Param:
     # (a bank pad: save the live state into an empty slot) — True when it
     # did something, so the new light blinks; None: a hold is a press
     held: Callable[[int], bool] | None = field(repr=False, default=None)
+    # ENUM: what a desk `set` button tapped while the desk's SAVE is held
+    # does with its choice (plan 24 C1: a bank pad saves the live state into
+    # its slot, filled or empty) — True when it saved, so the pad blinks;
+    # None: under SAVE the press is an ordinary press
+    save_into: Callable[[int], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
@@ -718,15 +723,18 @@ class Registry:
     def enum(self, pid, label, get, set, choices, *, group="", tip="",
              persist=True, modulatable=True, alias=False,
              has: Callable[[int], bool] | None = None,
-             held: Callable[[int], bool] | None = None) -> Param:
+             held: Callable[[int], bool] | None = None,
+             save_into: Callable[[int], bool] | None = None) -> Param:
         """`has`, if given, says which choices hold something — the enum's
         counterpart of `trigger(lit=)`: the param carries what its lights
         need (a filled bank slot), so an adapter learns nothing about what
         the choices are. Stored as `Param.has`. `held`, likewise, is what a
-        `set` button held midi.HOLD_S does with its choice (`Param.held`)."""
+        `set` button held midi.HOLD_S does with its choice (`Param.held`),
+        and `save_into` what its tap does while the desk's SAVE is held
+        (`Param.save_into`, plan 24 C1)."""
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
                               choices=choices, persist=persist, modulatable=modulatable,
-                              alias=alias, has=has, held=held))
+                              alias=alias, has=has, held=held, save_into=save_into))
 
     def toggle(self, pid, label, get, set, *, group="", tip="",
                persist=True, modulatable=True, alias=False) -> Param:
@@ -1203,12 +1211,16 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
                # (2026-10-09, replacing the clip-stop SAVE AS bar); a filled
-               # slot is never written over — the press loaded it
-               held=bank.save_into,
+               # slot held only loads — the press loaded it
+               held=bank.save_empty,
+               # SAVE held and a pad tapped (plan 24 C1): a new preset into
+               # that slot, filled or empty; the old preset stays listed
+               save_into=bank.save_into,
                tip="The show's twenty-four presets: F1–F8, then the desk's clip rows "
                    "1, 4 and 5. Each one is the whole performance — the look, its "
                    "routes, its LFOs and macros. Never the tempo, the hands or the "
-                   "analyzer. Hold an empty pad to save the live state into it.")
+                   "analyzer. Hold SAVE (track 8's clip stop) and tap a pad to save the "
+                   "live state into it as a new preset, or hold an empty pad.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -1223,8 +1235,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "
                       "one (TRIP → TRIP 2), into the next empty slot. It never "
-                      "overwrites a preset. On the desk, hold an empty pad instead "
-                      "to choose the slot.")
+                      "overwrites a preset. On the desk, hold SAVE (track 8's clip "
+                      "stop) and tap a pad instead to choose the slot.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # the preset list, not the bank (2026-10-14): the pad's B / X step

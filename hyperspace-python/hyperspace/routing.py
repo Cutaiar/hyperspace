@@ -289,6 +289,9 @@ OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hol
 LAYERS = ("preset", "global")
 SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
 SHIFT_PARAM = "desk.shift"
+# the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
+# (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
+SAVE_PARAM = "desk.save"
 # knob smoothing (plan 18 WP2): how long a value from one of the desk's
 # absolute knobs or faders takes to arrive (midi.py's glide). One session
 # param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
@@ -353,19 +356,31 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
     **BANK_REMAP,
 }
+# Plan 24 C1 made the render toggles on scene launch 1–4 invariant
+# (apc40.TOGGLES): every preset saved before holds their four factory rows
+# in its desk, and every factory file still does (decision 23: no library
+# file is rewritten; `preset.file_desk`). The session's invariant rows do
+# the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
+TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
-                  **{source: "plan 19" for _k, source in _FAR_PADS}}
+                  **{source: "plan 19" for _k, source in _FAR_PADS},
+                  **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
+                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
 # without a note (plan 19 fork 4 — a note means something the owner mapped
 # was dropped), while any other row on those pads keeps the note. Emptying
 # this set brings the note back for all of them.
-RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(BANK_REMAP)
+#
+# …and the four render toggles plan 24 C1 made invariant (TOGGLE_DESK_ROWS).
+RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = \
+    frozenset(BANK_REMAP) | TOGGLE_DESK_ROWS
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
@@ -374,6 +389,10 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
     # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
     *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
+    # plan 24 C1: the render toggles, invariant now (a session file never
+    # held them: they were the preset layer's), and SAVE on track 8's clip stop
+    *[(source, pid, op, value, False) for source, pid, op, value in sorted(TOGGLE_DESK_ROWS)],
+    (f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary", 1.0, False),
 )
 # plan 15 WP4's clip-stop SAVE AS bar, retired 2026-10-09: an empty bank
 # pad held saves into its own slot (`Param.held` on `preset.select`), and
@@ -1163,9 +1182,12 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
     toggles it, its LED reads it) and a page or key row can reach it too.
-    Never saved, never performed. And `desk.slew`: the table's knob
-    smoothing (plan 18 WP2), a session param a show keeps and no preset
-    may name. The first table a registry meets keeps each."""
+    Never saved, never performed. `desk.save`: the desk's SAVE held (plan
+    24 C1) — a momentary row sets it, and while it is on a bank pad's tap
+    saves instead of loading (midi.py); never saved, never performed. And
+    `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
+    a show keeps and no preset may name. The first table a registry meets
+    keeps each."""
     if SHIFT_PARAM not in reg:
         reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
                    lambda v: table.set_layer("global" if v else "preset"), group="desk",
@@ -1173,6 +1195,18 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
                        "(the band strip, the hand feel, BPM, the band scenes); off, the "
                        "loaded preset's. Loading a preset turns it off.")
+    if SAVE_PARAM not in reg:
+        # held by the hand on SAVE, never saved: a reconnect lets go of it
+        # (midi.MidiIO._enter), so a lost note-off cannot leave it down
+        held = [False]
+        reg.toggle(SAVE_PARAM, "Save", lambda: held[0],
+                   lambda v: held.__setitem__(0, bool(v)), group="desk",
+                   persist=False, modulatable=False,
+                   tip="The APC40's SAVE (track 8's clip stop): hold it and tap a bank "
+                       "pad to save the live state into that slot. An empty slot gets a "
+                       "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
+                       "and the old one stays in the preset list. Nothing is ever "
+                       "overwritten. SAVE alone does nothing.")
     if SLEW_PARAM not in reg:
         reg.continuous(SLEW_PARAM, "Knob smoothing",
                        lambda: getattr(table, "slew", 0.0),

@@ -102,6 +102,7 @@ from __future__ import annotations
 
 import sys
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -112,6 +113,7 @@ from .learn import Learn
 from .params import Kind, Param, Registry
 from .routing import (
     PICKUP_TOL,
+    SAVE_PARAM,
     Binding,
     Bindings,
     act,
@@ -140,8 +142,50 @@ def _hold_key(b) -> object:
 BLINK_S = 1.5       # how long the LEDs blink after a hold fires
 SLEW_TOL = 1e-6     # norm: further than this from our last write, someone else set it
 SLEW_BACK_S = 0.05  # a new glide starts at the previous poll, no further back than this
+DESK_LOG_SIZE = 20  # the desk event log keeps this many events (plan 24 C1)
 
-__all__ = ["PICKUP_TOL", "Binding", "MidiIO", "Ports", "Slew", "find_port", "retry_after"]
+__all__ = ["PICKUP_TOL", "Binding", "DeskEvent", "DeskLog", "MidiIO", "Ports", "Slew",
+           "find_port", "retry_after"]
+
+
+@dataclass(frozen=True)
+class DeskEvent:
+    """One desk event (plan 24 C1): a press, a hold that fired or a
+    two-handed save — the control in the device's words, what it did, and
+    the layer it was read on: "preset", "global" (SHIFT up), or "both" (an
+    invariant control, the same on either)."""
+
+    when: str           # the wall clock, HH:MM:SS
+    control: str
+    what: str
+    layer: str
+
+    def line(self) -> str:
+        return f"{self.when}  {self.control}  {self.what}  [{self.layer}]"
+
+
+class DeskLog:
+    """The last `size` desk events, oldest first in `events` (plan 24 C1,
+    decision 18: so the owner can see what a press did). The SYSTEM page
+    prints `lines()`, newest first. Its own small class, so a device that
+    takes the adapter over (plan 27 B2) carries it whole."""
+
+    def __init__(self, size: int = DESK_LOG_SIZE, wall=None):
+        self.size = size
+        self.events: deque[DeskEvent] = deque(maxlen=size)
+        self._wall = wall if wall is not None else (lambda: time.strftime("%H:%M:%S"))
+
+    def add(self, control: str, what: str, layer: str) -> DeskEvent:
+        e = DeskEvent(self._wall(), control, what, layer)
+        self.events.append(e)
+        return e
+
+    def lines(self) -> list[str]:
+        """Newest first, one line an event."""
+        return [e.line() for e in reversed(self.events)]
+
+    def __len__(self) -> int:
+        return len(self.events)
 
 
 @dataclass
@@ -310,6 +354,12 @@ class MidiIO:
         self._polled: float | None = None
         # params seen to move on their own (`_glide`): written at once
         self._restless: set[str] = set()
+        # the last position each fader or knob sent, by control (plan 24
+        # C1): a load's fresh rows start from where the control is, so a
+        # fader's first move after a load can pick up by crossing
+        self._hw: dict[tuple, float] = {}
+        # the last twenty desk events, for the SYSTEM page (plan 24 C1)
+        self.desk_log = DeskLog()
         # SHIFT's param and the smoothing's, for a bare adapter too
         register_desk(registry, self.table)
         if self.ports.injected:
@@ -350,13 +400,18 @@ class MidiIO:
         self._hold_state()[0].clear()
         self._hold_state()[1].clear()
         self._light_bars()
+        # a SAVE whose note-off was lost (plan 24 C1) must not turn the next
+        # pad press into a save: power-up lets go of it
+        save = self.reg.get(SAVE_PARAM)
+        if save is not None and save.value:
+            save.set(False)
         for b in self.bindings:
             b.last_out = None
             b.caught = False
         if self.out is not None:
             for msg in self.profile.enter():
                 self._send(msg)
-            self.redraw()
+            self.redraw(whole=True)     # every control: lit by a row, else dark
 
     def close(self) -> None:
         self._land_all()        # knob smoothing: no value is left between detents at exit
@@ -470,6 +525,9 @@ class MidiIO:
             return
         ch = msg.channel
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
+        if kind != "note":          # where the control is now (plan 24 C1, `redraw`)
+            full = 16383.0 if kind == "pitch" else 127.0
+            self.__dict__.setdefault("_hw", {})[(kind, ch, number)] = value / full
         if kind == "note" and value == 0 and self._hold_state()[0].pop((ch, number), None):
             self._light_bars()      # let go before HOLD_S: a tap, nothing fires
         # an armed learn (plan 17 WP2): a CC or a press is a candidate only
@@ -485,6 +543,8 @@ class MidiIO:
                 for b in self.table.dispatch(kind, ch, number):
                     self._passed_over(b, value)
                 self._learned(kind, ch, number, value)
+                if kind == "note":
+                    self._log_press(source, f"learn: {lrn.last}", self.table.layer)
                 return
         # the layer is read at the press (D12): a note-off goes to the rows
         # its note-on went to, whatever is up by now
@@ -499,7 +559,16 @@ class MidiIO:
             for b in self.table.route(kind, ch, number):    # (dispatch leaves these out)
                 if not b.enabled:
                     self._passed_over(b, value)
+        pressed = kind == "note" and value > 0
+        # the layer the press was read on, for the log: "both" when only
+        # invariant rows took it
+        layer = ("both" if rows and all(b.layer is None for b in rows)
+                 else self.table.layer)
+        source = Binding.midi_source(kind, ch, number)
+        if pressed and self._save_tap(rows, source, layer):
+            return                  # SAVE held: the pad saved; it neither loads nor holds
         timed = []
+        did: list[str] = []
         for b in rows:
             p = self.reg.get(b.target)
             if p is None or not b.enabled:
@@ -507,13 +576,61 @@ class MidiIO:
                 continue
             if b.op == "hold":      # timed, never applied; only a note has a press
                 timed.append(b)
+                did.append(f"{p.label}: held {HOLD_S:g} s fires it")
             else:
                 self._apply(b, p, value)
+                did.append(p.label if p.kind is Kind.TRIGGER else f"{p.label} → {p.text()}")
                 if b.op == "set" and getattr(p, "held", None) is not None:
                     timed.append(b)     # a press that is a hold as well (a bank pad)
-        if timed and kind == "note" and value > 0:
+        if pressed:
+            what = ("; ".join(did) if did
+                    else "nothing (its row is off)" if rows
+                    else f"nothing (no row on the {layer} layer)")
+            self._log_press(source, what, layer)
+        if timed and pressed:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
             self._light_bars()
+
+    # ---- the two-handed save and the desk log (plan 24 C1) ----
+
+    def _save_tap(self, rows: list[Binding], source: str, layer: str) -> bool:
+        """The two-handed save (plan 24 C1, decision 18): while the desk's
+        SAVE is held (`desk.save`, track 8's clip stop), a press on a `set`
+        row whose param saves into its choice (`Param.save_into`: a bank
+        pad) saves the live state into that slot — an empty slot as #158's
+        hold does, a filled one as a **new** preset the slot then points
+        at (`library.Project.save_into`: nothing is overwritten or
+        trashed) — instead of loading it, and starts no hold. The pad
+        blinks for BLINK_S when the save worked. SAVE and the pads are
+        invariant, so this is the same under SHIFT. True when the press was
+        a save tap, whether or not the save worked; False leaves it an
+        ordinary press (SAVE up, or a control that is not a bank pad)."""
+        save = self.reg.get(SAVE_PARAM)
+        if save is None or not save.value:
+            return False
+        taps = [(b, p) for b in rows if b.op == "set" and b.enabled
+                for p in (self.reg.get(b.target),)
+                if p is not None and getattr(p, "save_into", None) is not None]
+        if not taps:
+            return False
+        blinks = self._hold_state()[1]
+        for b, p in taps:
+            k = int(b.value)
+            if p.save_into(k) is False:
+                self._log_press(source, f"save into slot {k + 1}: nothing saved", layer)
+                continue
+            blinks[b.control] = self._now() + BLINK_S
+            self._log_press(source, f"saved into slot {k + 1}: {p.text()}", layer)
+        return True
+
+    def _log(self) -> DeskLog:
+        """The desk log — made here for an adapter from before a hot
+        reload, which keeps the object and never re-runs __init__."""
+        return self.__dict__.setdefault("desk_log", DeskLog())
+
+    def _log_press(self, source: str, what: str, layer: str) -> None:
+        name = getattr(self.profile, "named", None)
+        self._log().add((name(source) if name is not None else None) or source, what, layer)
 
     @staticmethod
     def _passed_over(b: Binding, value: int) -> None:
@@ -577,11 +694,18 @@ class MidiIO:
                     continue
                 fired.add(_hold_key(b))
                 before = self._leds_on()
+                has = getattr(p, "has", None)
+                filled = b.op != "hold" and has is not None and has(int(b.value))
                 # a `hold` row fires its trigger; a `set` row held (a bank
                 # pad) hands its choice to the param's `held` (Param.held)
                 done = p.fire() if b.op == "hold" else p.held(int(b.value))
+                layer = "both" if b.layer is None else b.layer
                 if done is False:
+                    self._log_press(b.source, "held: nothing saved" + (
+                        " (a filled pad only loads)" if filled else ""), layer)
                     continue
+                self._log_press(b.source, f"held: {p.label}" if b.op == "hold" else
+                                f"held: saved into slot {int(b.value) + 1}: {p.text()}", layer)
                 bar = {x.control for x in self.table.active()
                        if x.op == "hold" and x.target == b.target and x.feedback == "led"}
                 for c in (self._leds_on() - before) | bar:
@@ -820,7 +944,7 @@ class MidiIO:
         if p.kind is not Kind.TRIGGER:
             self._writes[p.id] = p.norm
 
-    def redraw(self, *, load: bool = False) -> None:
+    def redraw(self, *, load: bool = False, whole: bool = False) -> None:
         """Every ring and LED for the layer that is up (plan 13 §3.1): each
         control some row names, or feedback drew since the last redraw
         (`_shown` — a row since removed lit it: a preset load's smaller
@@ -839,18 +963,33 @@ class MidiIO:
         else: the load's value stands, even where it equals the glide's
         last write; a session param the load never moves goes on arriving,
         and its fader is compared with where the glide is taking the param
-        (the fader's own position), so it keeps its hold too."""
+        (the fader's own position), so it keeps its hold too.
+
+        **Every load relights the whole desk** (plan 24 C1, decision 18;
+        this changes register row 44): `load` — and `whole`, the power-up —
+        also sends dark every control of the profile's layout that no
+        active row draws, not only those a row has named (`_dark_desk`: a
+        light another program left on goes out), and **every fader the new
+        preset binds** (a preset-layer row) lets go, moved or not, so each
+        picks up from the new preset the same way every time. A fresh row
+        starts from where its control physically is (`_hw`), so a fader
+        already on the value catches on its first move. The session's
+        faders (invariant or global: a preset never moves their params,
+        D9) keep the rule above."""
         if load:
             slews = self._slew_state()
             for pid in [pid for pid in slews if not is_session_id(pid)]:
                 del slews[pid]
         active = self.table.active()
         drawn = {b.control for b in active if b.feedback}
+        hw = self.__dict__.setdefault("_hw", {})
         for b in self.bindings:
             b.last_out = None
+            if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
+                b.last_hw = hw.get(b.control)        # a fresh row: where its control is
             if load and b.kind in ("cc", "pitch") and b.op == "abs" and b.feedback != "ring":
                 p, seen = self.reg.get(b.target), self._writes.get(b.target)
-                if (p is None or seen is None or b.last_hw is None
+                if (b.layer == "preset" or p is None or seen is None or b.last_hw is None
                         or abs(p.norm - seen) > PICKUP_TOL
                         or abs(self._ring_norm(p) - b.last_hw) > PICKUP_TOL):
                     b.caught = False
@@ -863,7 +1002,25 @@ class MidiIO:
             if b.feedback and c not in drawn and c not in dark:
                 dark.add(c)
                 self._dark(b, velocity=0)
+        if load or whole:
+            self._dark_desk(drawn, dark)
         self.feedback()
+
+    def _dark_desk(self, drawn: set, dark: set) -> None:
+        """Every control of the profile's layout (`apc40.LAYOUT`) that no
+        active row draws, and that the redraw has not darkened already,
+        goes dark: a button's LED off, a knob's ring off (plan 24 C1: a
+        load relights the whole desk). A fader has no light; a profile
+        with no layout darkens nothing more."""
+        for c in getattr(self.profile, "LAYOUT", ()):
+            kind = c.source.partition(":")[0]
+            feedback = "led" if kind == "note" else "ring" if c.kind == "knob" else None
+            if feedback is None:
+                continue
+            b = Binding(c.source, "", "toggle", feedback=feedback)
+            if b.control not in drawn and b.control not in dark:
+                dark.add(b.control)
+                self._dark(b, velocity=0)
 
     @staticmethod
     def _lit(b: Binding, p: Param) -> bool:

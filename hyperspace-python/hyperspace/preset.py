@@ -138,8 +138,25 @@ def desk_json(rows) -> list[dict]:
 
 def fresh_desk(profile: str = "apc40") -> list[Binding]:
     """A fresh preset's desk: the factory map's preset layer (plan 13 §3.2)
-    — what a file with no ``desk`` key gets, and every factory preset's."""
+    — what a file with no ``desk`` key gets, and what a factory preset's
+    desk is once loaded (`file_desk` less the rows a load drops)."""
     return [b for b in routing.factory_desk(profile) if b.layer == "preset"]
+
+
+def file_desk(profile: str = "apc40") -> list[Binding]:
+    """The desk the generator writes into the factory files: the fresh desk
+    plus the four render toggles in their old place on the scene-launch
+    column (`routing.TOGGLE_DESK_ROWS`). Plan 24 C1 made those controls
+    invariant, but no file under hyperspace/library/ is rewritten in this
+    run (decision 23), so the files keep the rows and the generator still
+    writes them byte for byte; a load drops them quietly
+    (`routing.RETIRED_DESK_ROWS`) and the session's rows do the same job.
+    The creative pass that next regenerates the files can switch the
+    generator to `fresh_desk` and the rows leave the files."""
+    keep = routing.TOGGLE_DESK_ROWS
+    return [b if b.layer == "preset" else replace(b, layer="preset")
+            for b in routing.factory_desk(profile)
+            if b.layer == "preset" or (b.source, b.target, b.op, float(b.value)) in keep]
 
 
 def dumps(doc: dict) -> str:
@@ -918,10 +935,10 @@ def _is_device_knob(b: Binding) -> bool:
 
 
 def knob_desk(targets: tuple[str | None, ...]) -> Callable[[], list[Binding]]:
-    """A preset layer with device knobs of its own: the fresh desk **less
-    its device knobs** (apc40.SCENE), plus device knob k + 1 on
+    """A preset layer with device knobs of its own: the factory files' desk
+    (`file_desk`) **less its device knobs** (apc40.SCENE), plus device knob k + 1 on
     `targets[k]` — so no knob is mapped twice. A None leaves that knob dark."""
-    return lambda: [*(b for b in fresh_desk() if not _is_device_knob(b)),
+    return lambda: [*(b for b in file_desk() if not _is_device_knob(b)),
                     *(device_knob(k + 1, t) for k, t in enumerate(targets) if t)]
 
 
@@ -938,7 +955,7 @@ class Factory:
     name: str = ""
     note: str = ""
     macros: Callable[[], dict[str, Macro]] = dict
-    desk: Callable[[], list[Binding]] | None = fresh_desk
+    desk: Callable[[], list[Binding]] | None = file_desk
 
 
 def _lanes() -> list[Binding]:
@@ -1043,7 +1060,7 @@ def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
     (`python -m hyperspace.preset`): the presets `FACTORY_PRESETS` gives
     values whole (`generated`); the party presets' routes, desk and
     macros; every other preset's ``desk``, the factory preset layer
-    (`fresh_desk`). Every other key in a file — the values, the note, the
+    (`file_desk`). Every other key in a file — the values, the note, the
     modules — is data and stays as it is."""
     out = []
     for key, spec in FACTORY_PRESETS.items():
@@ -1062,7 +1079,7 @@ def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
         if spec is not None:
             doc["routes"] = [b.to_json() for b in spec.routes()]
             doc["macros"] = {k: m.to_json() for k, m in spec.macros().items()}
-        desk = fresh_desk if spec is None else spec.desk
+        desk = file_desk if spec is None else spec.desk
         if desk is None:
             doc.pop("desk", None)
         else:
