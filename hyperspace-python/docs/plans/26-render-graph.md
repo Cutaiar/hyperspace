@@ -606,6 +606,12 @@ possible (macOS refused screen recording to the shell). In particular:
   golden is its bases (the LFOs at rest); one synthetic pose per preset.
   Tiny nodes can read 0.00 ms on Apple's driver; the times are GPU time,
   not the CPU's.
+- **A presenter lays the readout at the laid ghost's alpha**
+  (`Handoff.alpha` is `gh.state.alpha`, outputs.py) where the local path
+  uses the readout ghost's own; they differ only when a JSON graph makes
+  a node other than ghost 1 the first in-scene hands node. Registered in
+  the review pass, not built: plan 28 (which lets a graph say it) should
+  add `readout_alpha` to `Handoff`.
 - **The modulation graph is not evaluated in dependency order**: the
   one-frame lag of ARCHITECTURE §2 stands, untouched by this plan (plan
   28's).
