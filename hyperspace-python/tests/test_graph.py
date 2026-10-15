@@ -273,6 +273,12 @@ def test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands():
     # with the hands in the scene the scene holds them already
     g = G.default_graph([_view()], G.Wiring(hands="scene", history="scene+hands"))
     assert g.nodes["capture"].inputs["image"] is g.nodes["scene"]
+    # …even when a glass (scene off, hands on) makes the hands' layer: it
+    # is never laid over a scene that holds the hands (no doubled echoes)
+    g = G.default_graph([_view(), _view(scene=False)],
+                        G.Wiring(hands="scene", history="scene+hands"))
+    assert "hands" in g.nodes and "composite(history)" not in g.nodes
+    assert g.nodes["capture"].inputs["image"] is g.nodes["scene"]
 
 
 def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():

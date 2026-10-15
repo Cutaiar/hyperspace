@@ -46,6 +46,10 @@ def _joints() -> np.ndarray:
     return np.concatenate(pts)
 
 
+# the measured offsets of the hands' extent (4.3, 8.4 and 2.4 px), with a little margin
+PX = {(960, 600): 5.0, (1920, 1080): 10.0, (1512, 982): 5.0}
+
+
 @pytest.mark.parametrize("size", [(960, 600), (1920, 1080), (1512, 982)])
 def test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did(size):
     """The hands now draw through the shape's eye (47.6° across the
@@ -53,15 +57,16 @@ def test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did(size)
     each output): a calibration of scale and offset cannot match it
     exactly. The default ("from the box") fits the padded box into a
     16:9 picture (`ghost.CAL_ASPECT`), so on a landscape output the
-    hands' extent lands within 1% of the frame of where it was."""
+    hands' extent lands within 5 px of where it was at 16:10 and 10 px
+    at 1080p."""
     w, h = size
     m, box = G.basis("desktop"), G.box_of(None)
     q = _joints()
     old = _screen(G.camera(box, m, w / h)[0], q, w, h)
     new = _screen(G.shared_camera(box, m, w / h)[0], q, w, h)
-    for k, side in ((0, w), (1, h)):
-        assert abs(old[:, k].min() - new[:, k].min()) < 0.01 * side
-        assert abs(old[:, k].max() - new[:, k].max()) < 0.01 * side
+    for k in (0, 1):
+        assert abs(old[:, k].min() - new[:, k].min()) < PX[size]
+        assert abs(old[:, k].max() - new[:, k].max()) < PX[size]
     # the calibration is the room's, not the output's: the same world
     # whatever the output's shape
     assert np.allclose(G.calibration(box, m), G.calibration(box, m, aspect=G.CAL_ASPECT))
@@ -274,12 +279,13 @@ def test_the_scenes_depth_resolves_out_of_the_multisampled_target(ctx):
 def test_the_presenter_carries_the_hands_the_readout_and_the_dim_in_every_wiring(ctx):
     """A second output in another context (`Presenter`) under each wiring:
     its picture is the target view's, byte for byte — the scene with the
-    hands in it, the glass's layer, the readout and the dim. A
+    hands in it, the glass's layer, the hands added (`blend` "add" rides the
+    hand-off), the readout and the dim. A
     depth-aware over is the target's alone (the depth stays in this
     context): the presenter lays the layer plain over."""
     from test_outputs import _presented
 
-    for wiring in (Wiring(hands="scene"), Wiring(history="scene+hands")):
+    for wiring in (Wiring(hands="scene"), Wiring(history="scene+hands"), Wiring(blend="add")):
         r = _rig(ctx, wiring, alpha=0.7, dim=0.8, guide=1)
         pairs = [(S(dim=0.5), (W, H)), (S(scene=False), (W, H)),
                  (S(scene=False, through=True), (640, 300))]
@@ -295,6 +301,13 @@ def test_the_presenter_carries_the_hands_the_readout_and_the_dim_in_every_wiring
     assert pv1.handoff.hands is None and pv1.handoff.readout is r.ghost.readout
     assert pv2.handoff.hands is r.ghost.tex and pv2.handoff.readout is r.ghost.readout
     assert pv1.handoff.factor == pytest.approx(0.5) and pv1.handoff.frame is not None
+    assert pv1.handoff.blend == pv2.handoff.blend == "over"
+    # add rides the hand-off; depth-aware goes plain over there
+    for blend, want in (("add", "add"), ("depth", "over")):
+        r = _rig(ctx, Wiring(blend=blend))
+        pv = O.View(S(), (W, H), presenter=object())
+        _draw(ctx, r, [views(ctx, S())[0], pv], frames=2)
+        assert pv.handoff.hands is r.ghost.tex and pv.handoff.blend == want
 
 
 def test_the_mirror_and_an_output_flip_each_flip_the_hands_once(ctx):

@@ -802,7 +802,8 @@ class Output(Node):
                     lay(frame, blend, over, self.inputs["depth"], tgt, rect, opaque, flip)
             with frame.timed(self.name):
                 r._compose(v, end.key if end is not None else None, laid is not None,
-                           frame.frames, frame.failed, frame.size, ro, lay=put)
+                           frame.frames, frame.failed, frame.size, ro, lay=put,
+                           blend=laid[1] if laid is not None else "over")
         except Exception as e:  # noqa: BLE001 — one view must not take the others down
             r._view_failed(v, "output", e)
             r._rebind(frame.target, frame.vp)
@@ -957,7 +958,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None) -> Graph:
         ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=src,
                              fallback=ends.get(SCENE) if key == SCENE_HANDS else None))
     held = scene
-    if wiring.history == "scene+hands" and layer is not None:
+    if wiring.history == "scene+hands" and layer is not None and not in_scene:
         held = g.add(Composite(HISTORY_COMPOSITE, blend=wiring.blend, depth=depth,
                                under=scene, over=layer))
     capture = g.add(Capture("capture", image=held, after=tuple(ends[k] for k in PIPELINES

@@ -1291,16 +1291,18 @@ class Renderer:
             graph = self._graph = default_graph(views, wiring)
         return graph
 
-    def _compose(self, v: View, key: str | None, after: bool,
-                 frames: dict, failed: set,
+    def _compose(self, v: View, key: int | None, after: bool,
+                 frames: dict[int, moderngl.Texture | None], failed: set[int],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
-                 lay=None) -> None:
-        """One view's picture: the pipeline's frame (`key`, its end's name;
-        already there when it was drawn direct), the hands over it in the
-        same rect, the readout layer over that when there is one, its dim.
-        `lay(target, rect, opaque, flip)` lays the hands when the output's
-        wiring is not plain over (plan 26 A3: add, depth-aware); a
-        presenter's hand-off lays them plain over."""
+                 lay=None, blend: str = "over") -> None:
+        """One view's picture: the pipeline's frame (`key`, the pipeline its
+        end node closes, `outputs.SCENE` …; already there when it was drawn
+        direct), the hands over it in the same rect, the readout layer over
+        that when there is one, its dim. `lay(target, rect, opaque, flip)`
+        lays the hands when the output's wiring is not plain over (plan 26
+        A3: add, depth-aware); a presenter's hand-off carries `blend` and
+        honours add, and lays a depth-aware layer plain over (the depths
+        stay in this context)."""
         ctx, gh = self.ctx, self.ghost
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
         # plan 23 WP1: this output's mirror, its last step — the frame, the
@@ -1317,7 +1319,8 @@ class Renderer:
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
                                 hands=gh.tex if after else None, readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
-                                bg_alpha=float(v.bg_alpha), flip=flip)
+                                bg_alpha=float(v.bg_alpha), flip=flip,
+                                blend="add" if blend == "add" else "over")
             return
         tgt, rect = v.target, v.rect
         opaque = v.bg_alpha >= 1.0
