@@ -358,9 +358,9 @@
       <em>everything</em> pointing at it.
     </p>
     <dl class="prov">
-      <div><dt>Modules</dt><dd>51</dd></div>
-      <div><dt>Python</dt><dd>32,632</dd></div>
-      <div><dt>Tests</dt><dd>38,025</dd></div>
+      <div><dt>Modules</dt><dd>56</dd></div>
+      <div><dt>Python</dt><dd>39,835</dd></div>
+      <div><dt>Tests</dt><dd>45,290</dd></div>
       <div><dt>Shapes</dt><dd>26</dd></div>
       <div><dt>Patterns</dt><dd>17</dd></div>
     </dl>
@@ -557,7 +557,7 @@
           <rect class="boxa" x="4" y="22" width="152" height="88" rx="2"/>
           <g font-size="11" class="soft">
             <text x="16" y="42">keys · mouse · pad</text>
-            <text x="16" y="59">MIDI desk (APC40)</text>
+            <text x="16" y="59">MIDI desks · OSC hits</text>
             <text x="16" y="76">panel widgets</text>
             <text x="16" y="93">presets · undo</text>
           </g>
@@ -570,7 +570,7 @@
             <text x="16" y="186">audio band lanes</text>
             <text x="16" y="203">hands (Ultraleap)</text>
             <text x="16" y="220">LFOs · clock</text>
-            <text x="16" y="237">DAW in (bridge)</text>
+            <text x="16" y="237">DAW in · OSC faders</text>
           </g>
 
           <!-- router -->
@@ -656,8 +656,8 @@
         <h4>Writes the base</h4>
         <p>The stored value — what a preset saves and undo restores. Every setter
         funnels into <code>Param.set</code>.</p>
-        <p class="who">panel widgets · key, pad and hat rows · MIDI rows and knob
-        glides · macro subscribers · preset and show loads · mouse orbit and
+        <p class="who">panel widgets · key, pad and hat rows · every MIDI desk's
+        rows and knob glides · OSC hits · macro subscribers · preset and show loads · mouse orbit and
         zoom · undo and redo</p>
       </div>
       <div class="writer w-offset">
@@ -667,7 +667,7 @@
         moment the source stops feeding.</p>
         <p class="who">only <code>Router.modulate</code> → <code>Param.modulate</code>
         — one call site in the entire package, held by an AST-walking test.
-        Adapters may only <code>feed</code>.</p>
+        Devices may only <code>feed</code>.</p>
       </div>
       <div class="writer w-direct">
         <p class="tag">Object writer</p>
@@ -713,8 +713,8 @@
         <div class="chip c-base">Rows</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Input adapters</div><div class="mods">midi · apc40 · hands/ · gamepad · bridge · Keys · Mouse</div></div>
-        <div class="what">A device and its pickup state. Keys, pad, mouse and MIDI write bases; hands and the DAW bridge may only <code>feed</code>.</div>
+        <div><div class="name">Devices</div><div class="mods">devices · midi · apc40 · generic · gamepad · hands/ · bridge · osc · Keys · Mouse</div></div>
+        <div class="what">Every input and output the config's <code>[[devices]]</code> list names, each opened behind its entry with a status line. Desks, pad buttons and OSC hits write bases; hands, the DAW bridge and OSC faders may only <code>feed</code>; sinks send effective values out after <code>apply()</code>. <span>The one importer of every adapter.</span></div>
         <div class="chip c-base">Mixed</div>
       </div>
       <div class="rrow">
@@ -739,7 +739,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Library</div><div class="mods">library · preset · config</div></div>
-        <div class="what">The library root (the home, or a shared folder), presets, shows, the bank of twenty-four, the trash; the machine home's own files stay apart. A preset load replaces the table's performer rows.</div>
+        <div class="what">The library root (the home, or a shared folder), presets, shows, the bank of twenty-four, the trash; the machine home's own files stay apart, <code>config.toml</code> and its device list among them. A preset load replaces the table's performer rows.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -749,7 +749,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog</div></div>
-        <div class="what">Construction order, the one frame loop, the windows, the reload watch list. The only importer of any optional adapter, each behind a config gate.</div>
+        <div class="what">Construction order, the one frame loop, the windows, the reload watch list. Builds the device registry and the dream worker; importing it pulls in no gated adapter.</div>
         <div class="chip c-read">Builds</div>
       </div>
     </div>
@@ -759,8 +759,8 @@
   <section>
     <div class="shead"><span class="num">05</span><h2>The frame</h2></div>
     <p class="dek">
-      Seventeen steps in a fixed order — the one place that order exists, pinned
-      by a test over stubs.
+      Sixteen steps in a fixed order — the one place that order exists, pinned
+      by a test over stubs. The devices run in three of them.
     </p>
 
     <div class="col">
@@ -776,31 +776,32 @@
     <div class="frame">
       <div class="step"><div class="n">0</div><div class="d">Clock tick, hot-reload poll, quit and restart keys</div><div class="chip c-read">—</div></div>
       <div class="step"><div class="n">1</div><div class="d">Key rows — <b>router.keys()</b>; the arrow keys ride the 4D depth</div><div class="chip c-base">base</div></div>
-      <div class="step"><div class="n">2</div><div class="d">Gamepad poll — sticks and triggers as relative writers</div><div class="chip c-base">base</div></div>
-      <div class="step"><div class="n">3</div><div class="d">MIDI desk — the active layer plus invariant rows, and knob glides</div><div class="chip c-base">base</div></div>
-      <div class="step"><div class="n">4</div><div class="d">Macros — <b>follow_macros()</b> lands the base subscribers</div><div class="chip c-base">base</div></div>
-      <div class="step mark"><div class="n">5</div><div class="d">Undo tick — compares watched bases against last frame</div><div class="chip c-read">watch</div></div>
-      <div class="step"><div class="n">6</div><div class="d">Hands — <b>hands_io.poll()</b> feeds twelve axes and eight pinches</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">7</div><div class="d">Output switches, background alpha and dim</div><div class="chip c-read">rig</div></div>
-      <div class="step"><div class="n">8</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
-      <div class="step"><div class="n">9</div><div class="d">Audio step and publish — the six band lanes</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">10</div><div class="d">DAW bridge — feeds external lanes, sends lanes out</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">11</div><div class="d">LFOs step and publish</div><div class="chip c-offset">feed</div></div>
-      <div class="step mark"><div class="n">12</div><div class="d"><b>router.modulate()</b> — every live performer row, in table order</div><div class="chip c-offset">offset</div></div>
-      <div class="step mark"><div class="n">13</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
-      <div class="step"><div class="n">14</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">15</div><div class="d">Hand the renderer the bands, read only; draw every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
-      <div class="step"><div class="n">16</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">2</div><div class="d">Devices poll — <b>devices.poll()</b>, in list order: the pad's rows and its sticks' camera job, each MIDI desk's active layer plus invariant rows and knob glides, OSC hits</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">3</div><div class="d">Macros — <b>follow_macros()</b> lands the base subscribers</div><div class="chip c-base">base</div></div>
+      <div class="step mark"><div class="n">4</div><div class="d">Undo tick — compares watched bases against last frame</div><div class="chip c-read">watch</div></div>
+      <div class="step"><div class="n">5</div><div class="d">Output switches, background alpha and dim</div><div class="chip c-read">rig</div></div>
+      <div class="step"><div class="n">6</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
+      <div class="step"><div class="n">7</div><div class="d">Audio step and publish — the band lanes</div><div class="chip c-offset">feed</div></div>
+      <div class="step"><div class="n">8</div><div class="d">Devices feed — <b>devices.feed()</b>: the hands, the DAW bridge's external lanes, OSC faders</div><div class="chip c-offset">feed</div></div>
+      <div class="step"><div class="n">9</div><div class="d">LFOs step and publish</div><div class="chip c-offset">feed</div></div>
+      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — every live performer row, in table order</div><div class="chip c-offset">offset</div></div>
+      <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
+      <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
+      <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; draw every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
     <h3>One frame of lag, deliberately</h3>
     <p>
       Anything that <em>reads</em> a parameter while sources are being gathered —
-      an LFO reading its own depth, a route scaled by a macro, the bridge sending
-      values out — sees what <code>apply()</code> wrote last frame. That is what
-      makes the pass non-recursive: nothing in it reads a value it is about to
-      write. Each block is also individually guarded, so hot-reloaded code that
-      raises records the error and the loop carries on drawing.
+      an LFO reading its own depth, a route scaled by a macro — sees what
+      <code>apply()</code> wrote last frame. That is what makes the pass
+      non-recursive: nothing in it reads a value it is about to write. The
+      sinks run after <code>apply()</code>, so what goes out to the DAW is this
+      frame's value. Each block, and each device, is also individually guarded,
+      so hot-reloaded code that raises records the error and the loop carries on
+      drawing.
     </p>
   </section>
 
@@ -820,19 +821,33 @@
       </div>
       <div class="sub">
         <h4>Hands</h4>
-        <p>Ultraleap tracking shaped into twelve axes, two presence lanes and
-        eight pinch switches. Each axis runs calibration, a One Euro filter, a
-        dead zone and curve, then attack–decay dynamics with a spring back to
-        rest when the hand leaves frame.</p>
-        <span class="path">hands/core · hands/signal · hands/tape · hands/panel</span>
+        <p>Ultraleap tracking shaped into twelve axes, two presence lanes,
+        eight pinch switches, the dance sources and a grab. Each axis runs
+        calibration, a One Euro filter, a dead zone and curve, then
+        attack–decay dynamics with a spring back to rest when the hand leaves
+        frame. A thin device wrapper puts it on the registry; its DAW messages
+        go out through a sink.</p>
+        <span class="path">hands/core · hands/signal · hands/tape · hands/panel · hands/device</span>
       </div>
       <div class="sub">
         <h4>The desk</h4>
         <p>An APC40 driving two layers of one table — the loaded preset's and the
         session's — plus invariant rows that mean the same on both. SHIFT latches
         the layer; the knob rings show the base and never chase a performer, so a
-        knob can always catch.</p>
-        <span class="path">midi · apc40 · ui_desk</span>
+        knob can always catch. A second desk on the generic profile adds rows
+        of its own, named by its role, on a layer of its own.</p>
+        <span class="path">midi · apc40 · generic · ui_desk</span>
+      </div>
+      <div class="sub">
+        <h4>Devices</h4>
+        <p>Every input and output is a device on one registry, listed in the
+        config and opened behind its own entry: polled with the scene setters,
+        fed with the sources, sent after <code>apply()</code>. The config is
+        watched, so a device comes and goes without a relaunch; one that fails
+        is an error line, never a stopped frame. A phone app over OSC is added
+        by an entry alone, and a recorded point cloud plays on the registry,
+        off the router.</p>
+        <span class="path">devices · config · osc · bridge</span>
       </div>
       <div class="sub">
         <h4>Effects</h4>
@@ -901,14 +916,15 @@
   <!-- ══ 07 ═════════════════════════════════════════════════════════ -->
   <section>
     <div class="shead"><span class="num">07</span><h2>The boundaries are tested, not intended</h2></div>
-    <p class="dek">What keeps a 32,600-line single process from turning into a knot.</p>
+    <p class="dek">What keeps a 39,800-line single process from turning into a knot.</p>
 
     <div class="col">
       <p>
         The dependency rules above are not documentation that drifts — most of
         them are assertions. Tests walk the import graph and the abstract syntax
-        tree to prove that the core never imports the MIDI adapter, the bridge or
-        the dream worker; that the routing table imports nothing above it; that
+        tree to prove that the core never imports the MIDI adapter, the bridge,
+        the OSC device or the dream worker; that the routing table imports
+        nothing above it; that
         the render stack imports no registry; that <code>Param.modulate</code> has
         exactly one call site; and that importing the host pulls in no gated
         adapter, no <code>torch</code> and no tracking SDK.
@@ -919,8 +935,9 @@
         <code>analysis</code>, <code>tapers</code>, <code>undo</code>,
         <code>placement</code>, <code>geometry</code>,
         <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
-        <code>gamepad</code>, <code>apc40</code>, <code>watchdog</code>, and the
-        hands package's signal and tape modules.
+        <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
+        <code>watchdog</code>, and the hands package's signal and tape
+        modules.
       </p>
 
       <h3>The hands package is built to be removed</h3>
@@ -931,8 +948,9 @@
         signal modules import nothing from Hyperspace. Everything they need
         arrives duck-typed as an argument: the registry as anything with the right
         setters, the tracker as anything with a <code>latest()</code>, the MIDI
-        sink as anything with a <code>send()</code>. One module knows the host,
-        and extracting the package means replacing that one file.
+        sink as anything that carries its messages out. Two modules know the
+        host — the page and the device wrapper — and extracting the package
+        means replacing those two files.
       </p>
       <p>
         A test walks the syntax tree and fails the build if either module ever
@@ -943,12 +961,12 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="v">51</div><div class="k">Python modules</div></div>
-      <div class="stat"><div class="v">32,632</div><div class="k">lines of app</div></div>
-      <div class="stat"><div class="v">38,025</div><div class="k">lines of tests</div></div>
-      <div class="stat"><div class="v">58</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">56</div><div class="k">Python modules</div></div>
+      <div class="stat"><div class="v">39,835</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">45,290</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">76</div><div class="k">test files</div></div>
       <div class="stat"><div class="v">26</div><div class="k">shapes</div></div>
-      <div class="stat"><div class="v">12</div><div class="k">effects</div></div>
+      <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
     </div>
     <p class="note">
       There is more test code than application code — which, for a program whose
@@ -962,7 +980,9 @@
     it: when a boundary, the frame order or the control model changes, change
     both in the same PR.<br>
     Drawn from the component map and the frame order; counts measured from the
-    tree. Band-to-plane map from hyperspace/bands.py and routing.legacy6_routes;
+    tree (modules and lines: every .py under hyperspace/ and under tests/;
+    test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib).
+    Band-to-plane map from hyperspace/bands.py and routing.legacy6_routes;
     shapes from geometry.SHAPES; patterns and their inputs from patterns.py; the liftable-package rule
     from hyperspace/hands/__init__.py and tests/test_hands_boundary.py.
   </footer>

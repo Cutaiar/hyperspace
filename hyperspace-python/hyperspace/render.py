@@ -910,6 +910,12 @@ class Renderer:
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
+        # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
+        # …), handed over by whoever declared their params (the preset's
+        # graph section, `preset.GraphSection`); their Ghosts, made on
+        # first use (`ghost_of`)
+        self.ghost_states: dict[str, GhostState] = {}
+        self._ghosts: dict[str, Ghost] = {}
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
@@ -1035,6 +1041,10 @@ class Renderer:
         if getattr(self, "_cloud_gl", None) is not None:
             self._cloud_gl.release()
         self._cloud_gl = None
+        # plan 26 A4: an extra hands node's Ghost is not a reload target
+        # (the reloader re-classes the renderer's own): released, and made
+        # again from ghost.py as it is now on next use, over the same state
+        self.drop_ghosts()
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None),
                     getattr(self, "_lay_vao", None), getattr(self, "_lay_prog", None)):
             if res is not None:
@@ -1302,12 +1312,16 @@ class Renderer:
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds):
             graph = self._graph = default_graph(views, wiring, clouds)
+            # plan 26 A4: a second hands node's Ghost the new graph does
+            # not hold goes with the old graph
+            self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
         return graph
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
-                 lay=None, blend: str = "over") -> None:
+                 lay=None, blend: str = "over", ghost: Ghost | None = None,
+                 readout_ghost: Ghost | None = None) -> None:
         """One view's picture: the pipeline's frame (`key`, the pipeline its
         end node closes, `outputs.SCENE` …; already there when it was drawn
         direct), the hands over it in the same rect, the readout layer over
@@ -1315,8 +1329,12 @@ class Renderer:
         lays the hands when the output's wiring is not plain over (plan 26
         A3: add, depth-aware); a presenter's hand-off carries `blend` and
         honours add, and lays a depth-aware layer plain over (the depths
-        stay in this context)."""
-        ctx, gh = self.ctx, self.ghost
+        stay in this context). `ghost` is the Ghost whose layer is laid
+        over and `readout_ghost` the one whose readout goes on (plan 26 A4:
+        each hands node's own; the renderer's when None)."""
+        ctx = self.ctx
+        gh = ghost if ghost is not None else self.ghost
+        rg = readout_ghost if readout_ghost is not None else gh
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
         # plan 23 WP1: this output's mirror, its last step — the frame, the
         # hands laid after and the readout, never the hands-through pass
@@ -1354,7 +1372,7 @@ class Renderer:
                 elif after:
                     gh.composite(tgt, inner, opaque=opaque, flip=flip)
                 if readout is not None:      # the guide and its labels, never bent
-                    gh.composite_readout(tgt, inner, opaque=opaque, flip=flip)
+                    rg.composite_readout(tgt, inner, opaque=opaque, flip=flip)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, tgt, rect)
         # the dim, after everything: the scene, the look-back, every effect
@@ -1500,12 +1518,42 @@ class Renderer:
             tex.release()
         self._frames = {}
 
-    def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple) -> None:
-        """The hands raised: say why (the first reason, kept) and put back
-        the state the frame's other passes expect."""
-        if not self.ghost.error:
-            self.ghost.error = f"ghost hands: {type(e).__name__}: {e}"[:160]
+    def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple,
+                      ghost: Ghost | None = None) -> None:
+        """The hands raised: say why (the first reason, kept, on the hands
+        node's own `ghost`, the renderer's when None) and put back the
+        state the frame's other passes expect."""
+        gh = ghost if ghost is not None else self.ghost
+        if not gh.error:
+            gh.error = f"ghost hands: {type(e).__name__}: {e}"[:160]
         self._rebind(target, vp)
+
+    def ghost_of(self, name: str) -> Ghost:
+        """The `Ghost` that draws hands node `name` (plan 26 A4): `ghost` is
+        the renderer's own (`self.ghost`, `ghost.*`); another (`ghost.2` …)
+        is made on first ask over its state in `ghost_states` — the one the
+        registry's `ghost.2.*` params write (`preset.GraphSection`), a
+        fresh one when none was handed over — and follows the first's
+        tracker and routing table. A state handed over again later
+        replaces the Ghost. getattr: a renderer from before A4."""
+        if name == "ghost":
+            return self.ghost
+        ghosts = self.__dict__.setdefault("_ghosts", {})
+        state = (getattr(self, "ghost_states", None) or {}).get(name)
+        gh = ghosts.get(name)
+        if gh is None or (state is not None and gh.state is not state):
+            if gh is not None:
+                gh.release()
+            gh = ghosts[name] = Ghost(self.ctx, state if state is not None else GhostState())
+        gh.source, gh.router = self.ghost.source, self.ghost.router
+        return gh
+
+    def drop_ghosts(self, keep: set[str] = frozenset()) -> None:
+        """Release every extra hands node's `Ghost` not named in `keep`
+        (a graph that no longer holds it, a hot reload)."""
+        ghosts = getattr(self, "_ghosts", None) or {}
+        for name in [n for n in ghosts if n not in keep]:
+            ghosts.pop(name).release()
 
     @staticmethod
     def _view_failed(v: View, what: str, e: Exception) -> None:

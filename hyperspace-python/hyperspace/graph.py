@@ -1,4 +1,4 @@
-"""The render graph (plan 26 A1, A3): the frame as nodes, evaluated in
+"""The render graph (plan 26 A1, A3, A4): the frame as nodes, evaluated in
 dependency order.
 
 `Renderer._draw_frame` (render.py) used to be a fixed list of passes.
@@ -17,7 +17,8 @@ decisions"):
   eye, `eye.*`), no framebuffer of its own. The shape is the see-through
   4D shape; the hands (`ghost.py`'s parts and styles, plan 26 A3) are
   solid geometry, settled once a frame (`Hands.run`) and drawn by
-  whatever holds them — the scene, the hands' layer, or both. The point
+  whatever holds them — the scene, the hands' layer, or both; one node
+  per instance (`ghost`, `ghost.2`, A4), solid or as lines. The point
   cloud (`PointCloud`, kind `cloud`, plan 26 A4b) draws a cloud device's
   points, solid, in the scene of any graph built while one is listed.
 - **Scene** (`Scene`): any number of geometries into one colour + depth
@@ -75,6 +76,21 @@ laid onto, with the layer laid over at the output instead (`Fx.fallback`,
 `Output.settle`): `outputs.route`'s table, as wiring. A pipeline with no
 output this frame is skipped and its nodes read 0 ms.
 
+**The graph in the preset** (plan 26 A4). A preset may carry a `graph`
+section: plain JSON listing node instances by kind and their wiring,
+never a param (`GraphSpec`, `read_graph`; the kinds in `NODE_KINDS`).
+What it says becomes the `Wiring` the default graph is built from —
+where each hands node is drawn (in the scene or as the layer), solid or
+as lines, how the layer is laid on, what the history holds — and the
+effect instances the chain holds (`FxState.set_instances`). A second
+instance of a node is named by the naming rule (ENGINEERING §2):
+`ghost.2` (its own `Ghost`, `Renderer.ghost_of`, its own `ghost.2.*`
+params), `hands.2` its layer, `fx.acid.2.*` a second acid. No section
+is the default graph; one this build cannot read is a note and the
+default graph (preset.py, `GraphSection`). The words the OUTPUT and
+LOOKBACK pages say it in are here too (`hands_words`, `history_words`,
+`graph_words`): no editor until plan 28.
+
 Render stack (ARCHITECTURE §3): this module reads params through the
 objects it is handed and never writes one; it imports moderngl and its
 sibling render modules only, never params, routing, library, preset,
@@ -85,7 +101,8 @@ undo or control. Node methods are `run`, `paint`, `draw`, `image`,
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar
 
 import moderngl
@@ -112,6 +129,47 @@ BLENDS = ("over", "add", "depth")
 # hands' layer laid on (with the hands inside the scene, the scene holds
 # them already)
 HISTORY_OF = ("scene", "scene+hands")
+# how a hands node draws its style's parts (plan 26 A4): solid (today), or
+# as lines — the edges of the same meshes (`Ghost.draw_solid(…, lines)`),
+# a node's setting in the preset's graph, not a param
+DRAWS = ("solid", "lines")
+
+
+def hands_name(n: int) -> str:
+    """The n-th hands geometry node's name — its params' prefix by the
+    naming rule (ENGINEERING §2): `ghost`, `ghost.2`, …"""
+    return "ghost" if n == 1 else f"ghost.{n}"
+
+
+def layer_name(n: int) -> str:
+    """The hands' layer drawn from the n-th hands node: `hands` (today's
+    SYSTEM line), `hands.2`, …"""
+    return "hands" if n == 1 else f"hands.{n}"
+
+
+def readout_name(n: int) -> str:
+    """The readout alone of the n-th hands node: `readout`, `readout.2`, …"""
+    return "readout" if n == 1 else f"readout.{n}"
+
+
+@dataclass(frozen=True)
+class HandsAt:
+    """One hands geometry node of the graph (plan 26 A4): its instance
+    (`n`: 1 is `ghost.*`, n ≥ 2 `ghost.<n>.*`), where it is drawn (`into`:
+    `HANDS_IN`) and how (`draw`: `DRAWS`). Each node is its own `Ghost`
+    with its own `ghost[.n].*` params (`Renderer.ghost_of`)."""
+
+    n: int = 1
+    into: str = "layer"
+    draw: str = "solid"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"hands instance {self.n!r}: a whole number, 1 or more")
+        if self.into not in HANDS_IN:
+            raise ValueError(f"hands {self.n} into {self.into!r}: one of {', '.join(HANDS_IN)}")
+        if self.draw not in DRAWS:
+            raise ValueError(f"hands {self.n} draw {self.draw!r}: one of {', '.join(DRAWS)}")
 
 
 @dataclass(frozen=True)
@@ -119,19 +177,341 @@ class Wiring:
     """The choices the default graph is built from besides the outputs'
     switches (plan 26 A3): where the hands are drawn, how their layer is
     laid on, what the history captures. The defaults are today's frame.
-    The renderer holds one (`Renderer.wiring`); A4 reads it from a
-    preset's `graph` section."""
+    The renderer holds one (`Renderer.wiring`); a preset's `graph` section
+    sets it (A4, `GraphSpec.wiring`).
+
+    Plan 26 A4: `draw` is the first hands node's (`HandsAt`), and `extra`
+    the hands nodes after it (`ghost.2` …), each its own `Ghost`. One
+    hands node makes the layer: the one `into` "layer", else the first;
+    `blend` is how that layer is laid on."""
 
     hands: str = "layer"
     blend: str = "over"
     history: str = "scene"
+    draw: str = "solid"
+    extra: tuple[HandsAt, ...] = ()
 
     def __post_init__(self) -> None:
         for name, value, allowed in (("hands", self.hands, HANDS_IN),
                                      ("blend", self.blend, BLENDS),
-                                     ("history", self.history, HISTORY_OF)):
+                                     ("history", self.history, HISTORY_OF),
+                                     ("draw", self.draw, DRAWS)):
             if value not in allowed:
                 raise ValueError(f"wiring {name} {value!r}: one of {', '.join(allowed)}")
+        ns = [getattr(h, "n", None) for h in self.extra]
+        if (any(not isinstance(h, HandsAt) or h.n < 2 for h in self.extra)
+                or len(set(ns)) != len(ns)):
+            raise ValueError(f"wiring extra {self.extra!r}: hands nodes numbered 2 or more, "
+                             "each once")
+        layers = [h for h in self.nodes() if h.into == "layer"]
+        if len(layers) > 1:
+            raise ValueError("wiring: one hands node makes the layer, not "
+                             + " and ".join(hands_name(h.n) for h in layers))
+
+    def nodes(self) -> list[HandsAt]:
+        """Every hands node, the first first, then by instance."""
+        return [HandsAt(1, self.hands, self.draw), *sorted(self.extra, key=lambda h: h.n)]
+
+    def layer_node(self) -> HandsAt:
+        """The hands node whose layer the outputs lay on: the one drawn
+        `into` "layer", else the first (A3: the scene's hands, laid on an
+        output without the scene)."""
+        nodes = self.nodes()
+        return next((h for h in nodes if h.into == "layer"), nodes[0])
+
+    def in_scene(self) -> list[HandsAt]:
+        """The hands nodes drawn inside the scene, in instance order."""
+        return [h for h in self.nodes() if h.into == "scene"]
+
+
+# ---------------------------------------------------------------- the preset's graph
+
+class GraphError(ValueError):
+    """A preset's `graph` section this build cannot read: the load notes
+    it and takes the default graph (plan 26 A4)."""
+
+
+@dataclass(frozen=True)
+class EffectAt:
+    """An extra instance of an effect file in the chain (plan 26 A4):
+    `fx.<file>.<n>.*` (n ≥ 2), its own params and clock, ordered by its own
+    `order` like any effect. Instance 1 is the file itself, always there."""
+
+    file: str
+    n: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.file, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", self.file):
+            raise ValueError(f"effect file {self.file!r}: an effect's file name, "
+                             "lower_snake_case")
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 2:
+            raise ValueError(f"effect {self.file} instance {self.n!r}: 2 or more (instance 1 "
+                             "is the file itself)")
+
+
+@dataclass(frozen=True)
+class HistoryAt:
+    """The history node: what its capture holds (`HISTORY_OF`)."""
+
+    holds: str = "scene"
+
+    def __post_init__(self) -> None:
+        if self.holds not in HISTORY_OF:
+            raise ValueError(f"history holds {self.holds!r}: one of {', '.join(HISTORY_OF)}")
+
+
+def _entry_keys(e: dict, kind: str, allowed: tuple[str, ...]) -> None:
+    extra = sorted(set(e) - {"kind", *allowed})
+    if extra:
+        raise GraphError(f"{kind} node: no key {', '.join(map(repr, extra))} "
+                         f"(it takes {', '.join(allowed) or 'nothing'})")
+
+
+def _instance(e: dict) -> int:
+    n = e.get("instance", 1)
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+        raise GraphError(f"{e.get('kind')} node: instance {n!r}, a whole number from 1")
+    return n
+
+
+def _hands_entry(e: dict) -> tuple[HandsAt, str | None]:
+    _entry_keys(e, "hands", ("instance", "into", "draw", "laid"))
+    laid = e.get("laid")
+    if laid is not None and laid not in BLENDS:
+        raise GraphError(f"hands node: laid {laid!r}, one of {', '.join(BLENDS)}")
+    return HandsAt(_instance(e), e.get("into", "layer"), e.get("draw", "solid")), laid
+
+
+def _effect_entry(e: dict) -> EffectAt:
+    _entry_keys(e, "effect", ("instance", "file"))
+    if "file" not in e:
+        raise GraphError("effect node: names no file")
+    return EffectAt(e["file"], _instance(e))
+
+
+def _history_entry(e: dict) -> HistoryAt:
+    _entry_keys(e, "history", ("holds",))
+    return HistoryAt(e.get("holds", "scene"))
+
+
+# The node kinds a preset's graph may name: kind → the reader of one entry
+# (a dict with "kind"). A kind missing here is unknown: a note and the
+# default graph, never a crash. A later WP adds its kind with one line
+# here (plan 26 A4b: the point cloud) and its node class in its own block;
+# an entry of a kind not hands / effect / history rides in
+# `GraphSpec.others` as its reader returned it.
+NODE_KINDS: dict[str, Any] = {
+    "hands": _hands_entry,
+    "effect": _effect_entry,
+    "history": _history_entry,
+}
+
+
+@dataclass(frozen=True)
+class GraphSpec:
+    """A preset's `graph` section, read (plan 26 A4): the node instances
+    and their wiring, in data — never anything that is already a param
+    (an effect's on, mix and order, `ghost.alpha`, `dream.*` are in
+    `values` or the show). What the default graph is built from besides
+    the outputs' switches (`wiring`), and the effect instances the chain
+    holds (`effect_counts`). A kind added by a later WP rides in `others`.
+
+    The JSON (`to_json`, plain and git-diffable)::
+
+        "graph": {"nodes": [
+            {"kind": "hands", "into": "scene", "draw": "lines"},
+            {"kind": "hands", "instance": 2, "into": "layer", "laid": "depth"},
+            {"kind": "effect", "file": "acid", "instance": 2},
+            {"kind": "history", "holds": "scene+hands"}]}
+
+    A node left out is the default one: hands 1 a solid layer laid over,
+    the history of the scene, every effect file once. `laid` (how the
+    hands' layer is laid on: over, add, depth) belongs on the hands node
+    that makes the layer."""
+
+    hands: tuple[HandsAt, ...] = ()
+    laid: str = "over"
+    history: HistoryAt = HistoryAt()
+    effects: tuple[EffectAt, ...] = ()
+    others: tuple[tuple[str, Any], ...] = ()      # (kind, what its reader returned)
+
+    def wiring(self) -> Wiring:
+        """The default graph's wiring this graph says."""
+        first = next((h for h in self.hands if h.n == 1), HandsAt())
+        return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
+                      draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1))
+
+    def effect_counts(self) -> dict[str, int]:
+        """Effect file → how many instances the chain holds (only files
+        with more than one; the highest instance named counts)."""
+        out: dict[str, int] = {}
+        for e in self.effects:
+            out[e.file] = max(out.get(e.file, 1), e.n)
+        return out
+
+    def to_json(self) -> dict:
+        """The section as a preset writes it: every node that is not the
+        default, in a fixed order (hands by instance, effects by file and
+        instance, the history, then later kinds' entries as read)."""
+        nodes: list[dict] = []
+        layer = self.wiring().layer_node().n
+        hands = {h.n: h for h in self.hands}
+        if layer not in hands and self.laid != "over":
+            hands[layer] = HandsAt(layer)
+        for n in sorted(hands):
+            h = hands[n]
+            d: dict[str, Any] = {"kind": "hands"}
+            if h.n != 1:
+                d["instance"] = h.n
+            if h.into != "layer":
+                d["into"] = h.into
+            if h.draw != "solid":
+                d["draw"] = h.draw
+            if h.n == layer and self.laid != "over":
+                d["laid"] = self.laid
+            if len(d) > 1:
+                nodes.append(d)
+        for e in sorted(self.effects, key=lambda e: (e.file, e.n)):
+            nodes.append({"kind": "effect", "file": e.file, "instance": e.n})
+        if self.history.holds != "scene":
+            nodes.append({"kind": "history", "holds": self.history.holds})
+        for kind, got in self.others:
+            to = getattr(got, "to_json", None)
+            nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
+        return {"nodes": nodes}
+
+
+def read_graph(section: Any) -> GraphSpec:
+    """A preset's `graph` section → its `GraphSpec`; raises `GraphError`
+    (the reason in words) for anything this build cannot read — a kind
+    not in `NODE_KINDS`, a key a node does not take, a value out of its
+    choices, two nodes of one instance, two hands layers, `laid` on a
+    hands node that makes no layer. The caller notes it and takes the
+    default graph."""
+    if not isinstance(section, dict):
+        raise GraphError(f"not an object but {type(section).__name__}")
+    extra = sorted(set(section) - {"nodes"})
+    if extra:
+        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes)")
+    entries = section.get("nodes", [])
+    if not isinstance(entries, list):
+        raise GraphError("nodes is not a list")
+    hands: dict[int, HandsAt] = {}
+    laid: dict[int, str] = {}
+    effects: dict[tuple[str, int], EffectAt] = {}
+    history: HistoryAt | None = None
+    others: list[tuple[str, Any]] = []
+    for e in entries:
+        if not isinstance(e, dict) or not isinstance(e.get("kind"), str):
+            raise GraphError(f"a node that names no kind: {e!r}"[:120])
+        kind = e["kind"]
+        reader = NODE_KINDS.get(kind)
+        if reader is None:
+            raise GraphError(f"unknown node kind {kind!r} (this build knows "
+                             f"{', '.join(sorted(NODE_KINDS))})")
+        try:
+            got = reader(e)
+        except GraphError:
+            raise
+        except (ValueError, TypeError) as err:
+            raise GraphError(str(err)) from err
+        if kind == "hands":
+            h, how = got
+            if h.n in hands:
+                raise GraphError(f"two hands nodes of instance {h.n}")
+            hands[h.n] = h
+            if how is not None:
+                laid[h.n] = how
+        elif kind == "effect":
+            if (got.file, got.n) in effects:
+                raise GraphError(f"two effect nodes {got.file} instance {got.n}")
+            effects[(got.file, got.n)] = got
+        elif kind == "history":
+            if history is not None:
+                raise GraphError("two history nodes")
+            history = got
+        else:
+            others.append((kind, got))
+    spec = GraphSpec(hands=tuple(hands[n] for n in sorted(hands)),
+                     history=history if history is not None else HistoryAt(),
+                     effects=tuple(effects[k] for k in sorted(effects)), others=tuple(others))
+    try:
+        wiring = spec.wiring()
+    except ValueError as err:
+        raise GraphError(str(err)) from err
+    layer = wiring.layer_node().n
+    for n, how in laid.items():
+        if n != layer:
+            raise GraphError(f"hands {n}: laid {how!r}, but {hands_name(layer)} makes the layer")
+    return replace(spec, laid=laid.get(layer, "over"))
+
+
+# ---------------------------------------------------------------- in words
+
+def hands_words(wiring: Wiring, sw: Switches) -> str:
+    """Where one output's hands come from under `wiring`, in words (the
+    OUTPUT page, plan 26 A4: no editor until plan 28): `hands: in the
+    scene`, `hands: through FX` or `hands: over` — with the hands node's
+    number when the graph has more than one, `as lines` for a node drawn
+    as lines, and how a layer is laid on when it is not plainly over
+    (`· depth-aware`, `· added`). `hands: off` with the hands switch off — but an
+    output whose scene holds the hands says so whatever its switch."""
+    inside = wiring.in_scene()
+    if inside and sw.scene:
+        # the scene holds the hands whatever this output's hands switch
+        # says (that switch then wires only the readout)
+        return "hands: " + " · ".join(f"in the scene{_node_words(wiring, h)}" for h in inside)
+    if not sw.hands:
+        return "hands: off"
+    return f"hands: {'through FX' if sw.through else 'over'}{layer_words(wiring)}"
+
+
+def _node_words(wiring: Wiring, h: HandsAt) -> str:
+    """` (2)` when the graph has more than one hands node, ` as lines`."""
+    return ((f" ({h.n})" if len(wiring.nodes()) > 1 else "")
+            + (" as lines" if h.draw == "lines" else ""))
+
+
+def layer_words(wiring: Wiring) -> str:
+    """What the hands' layer is, after "over" or "through FX": its node's
+    number when there are two, `as lines`, and its blend when it is not
+    plainly over (`· depth-aware`, `· added`); "" for today's layer."""
+    words = _node_words(wiring, wiring.layer_node())
+    if wiring.blend != "over":
+        words += " · depth-aware" if wiring.blend == "depth" else " · added"
+    return words
+
+
+def history_words(wiring: Wiring) -> str:
+    """What the history captures under `wiring`, in words (the LOOKBACK
+    page, plan 26 A4): `history: the scene`, or `history: the scene · with
+    the hands` — the hands' layer laid on, or hands drawn inside the scene
+    (which then holds them whatever the history node says)."""
+    if wiring.history == "scene+hands" or wiring.in_scene():
+        return "history: the scene · with the hands"
+    return "history: the scene"
+
+
+def graph_words(spec: GraphSpec | None) -> str:
+    """The loaded preset's graph in one line (the OUTPUT page): `graph:
+    default`, or what it changes — `graph: hands 1 in the scene as lines ·
+    hands 2 a layer · acid ×2 · history with the hands`."""
+    if spec is None:
+        return "graph: default"
+    w, parts = spec.wiring(), []
+    several = len(w.nodes()) > 1
+    for h in w.nodes():
+        if h.into == "layer" and h.draw == "solid" and not several:
+            continue
+        where = "in the scene" if h.into == "scene" else "a layer"
+        parts.append(f"hands {h.n} {where}" + (" as lines" if h.draw == "lines" else ""))
+    if w.blend != "over":
+        parts.append("laid " + ("depth-aware" if w.blend == "depth" else "added"))
+    parts += [f"{f} ×{n}" for f, n in sorted(spec.effect_counts().items())]
+    if w.history == "scene+hands":
+        parts.append("history with the hands")
+    parts += [kind for kind, _ in spec.others]
+    return "graph: " + (" · ".join(parts) if parts else "default")
 
 
 @dataclass
@@ -300,32 +680,41 @@ class Hands(Node):
     same settled poses into their own targets. The `ghost.*` params are
     this node's (the naming rule: the first hands node keeps today's ids).
 
-    Its time is its own SYSTEM line while a scene draws it (`TIMED`), and
-    the layer's otherwise. A draw that raises costs the scene nothing:
-    the frame goes on without the hands and `Ghost.error` says why."""
+    Plan 26 A4: each hands node is its own `Ghost` (`Renderer.ghost_of`
+    its name: `ghost` is the renderer's own, `ghost.2` … a second one
+    with its own `ghost.2.*` params), drawn solid or as lines (`draw`,
+    the preset's graph). Its time is its own SYSTEM line where a scene
+    draws it — the consumer edge decides (`Graph.timed`), the node is
+    never told — and the layer's otherwise. A draw that raises costs the
+    scene nothing: the frame goes on without the hands and its
+    `Ghost.error` says why."""
 
     KIND = "geometry"
     OUTPUT = GEOMETRY
     SOLID = True
+    TIMED = False             # timed under its own name by the scene that draws it
 
-    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
+    def __init__(self, name: str, after: tuple[Node, ...] = (), draw: str = "solid",
+                 **inputs: Node | None):
+        if draw not in DRAWS:
+            raise ValueError(f"hands {name!r}: draw {draw!r}, one of {', '.join(DRAWS)}")
         super().__init__(name, after, **inputs)
-        self.in_scene = False         # a Scene holds it: its draws there are its own line
+        self.draw_as = draw
 
-    @property
-    def TIMED(self) -> bool:     # the class attribute, per instance
-        return self.in_scene
+    def ghost(self, frame: Frame):
+        """This node's `Ghost` (`Renderer.ghost_of`)."""
+        return ghost_of(frame.r, self.name)
 
     def run(self, frame: Frame) -> None:
         w, h = frame.size
         s, r = frame.s, frame.r
         frame.data[self.name] = None
         try:
-            frame.data[self.name] = r.ghost.settle(
+            frame.data[self.name] = self.ghost(frame).settle(
                 frame.t, max(w, 1) / max(h, 1), getattr(s, "eye_fov", None),
                 getattr(s, "eye_distance", None))
         except Exception as e:  # noqa: BLE001 — a malformed skeleton costs the hands only
-            r._hands_failed(e, frame.target, frame.vp)
+            r._hands_failed(e, frame.target, frame.vp, ghost=self.ghost(frame))
 
     def now(self, frame: Frame):
         """This frame's settled (poses, view_proj, eye), or None."""
@@ -335,12 +724,15 @@ class Hands(Node):
         """Nothing before the scene's target is bound."""
 
     def draw(self, frame: Frame) -> None:
-        r = frame.r
+        r, gh = frame.r, self.ghost(frame)
         try:
-            frame.stats["in_scene"] = bool(r.ghost.draw_solid(self.now(frame)))
+            now = self.now(frame)
+            drew = bool(gh.draw_solid(now, lines=True) if self.draw_as == "lines"
+                        else gh.draw_solid(now))
+            frame.stats["in_scene"] = bool(frame.stats.get("in_scene")) or drew
         except Exception as e:  # noqa: BLE001 — the hands must not take the scene down
-            if not r.ghost.error:
-                r.ghost.error = f"ghost hands in the scene: {type(e).__name__}: {e}"[:160]
+            if not gh.error:
+                gh.error = f"ghost hands in the scene: {type(e).__name__}: {e}"[:160]
             r._rebind(r.scene.draw_fbo, (0, 0, *frame.size))
 
 
@@ -359,7 +751,8 @@ class Hands(Node):
 # (`ViewState.cloud_*`). A role with no device, a device not open, or a
 # frame not yet published draws nothing and raises nothing.
 
-# the node kind (A4's graph JSON names it: {"kind": "cloud", "role": "scan"})
+# the device kind a point-cloud node is made for (the ruling of this run:
+# clouds follow the device list; A4's graph JSON has no `cloud` node kind)
 CLOUD_KIND = "cloud"
 
 CLOUD_EYE_W = f"{EYE_NEAR * 1.2:.6f}"    # render.EYE_W: a point behind the eye is dropped
@@ -558,6 +951,11 @@ def cloud_nodes(g: Graph, roles: tuple[str, ...] | list[str]) -> list[PointCloud
 
 
 # ---------------------------------------------------------------- end point cloud
+def ghost_of(r, name: str):
+    """The `Ghost` that draws hands node `name` (`Renderer.ghost_of`); the
+    renderer's one ghost for a renderer from before A4 (or a stand-in)."""
+    get = getattr(r, "ghost_of", None)
+    return get(name) if get is not None else r.ghost
 
 
 # ---------------------------------------------------------------- scene
@@ -590,9 +988,6 @@ class Scene(Node):
         self.INPUTS = {_geometry_port(i): GEOMETRY for i in range(max(len(geoms), 1))}
         super().__init__(name, after, **{_geometry_port(i): g for i, g in enumerate(geoms)},
                          **inputs)
-        for g in geoms:
-            if g is not None and g.SOLID and hasattr(g, "in_scene"):
-                g.in_scene = True
 
     def geometries(self) -> list[Node]:
         return [g for g in self.inputs.values() if g is not None]
@@ -674,7 +1069,11 @@ class HandsLayer(Node):
     the guide may never be in a picture the effects bend). With no
     geometry wired it settles the hands itself. A pass that raises is
     caught (`Renderer._hands_failed`): the frame goes on without the
-    hands and `Ghost.error` says why."""
+    hands and `Ghost.error` says why.
+
+    Plan 26 A4: the layer is its geometry's `Ghost` (`Hands.ghost`) — a
+    second hands node's layer (`hands.2`) is a second Ghost's — and what
+    it drew is kept per node (`frame.data`), never in one slot."""
 
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
@@ -685,35 +1084,55 @@ class HandsLayer(Node):
         super().__init__(name, after, **inputs)
         self.readout = readout
 
+    def ghost(self, frame: Frame):
+        """The `Ghost` this layer draws: its geometry's, or the renderer's."""
+        geo = self.inputs["geometry"]
+        return geo.ghost(frame) if geo is not None else frame.r.ghost
+
+    def drew(self, frame: Frame) -> bool:
+        """The layer drew this frame (a hand shows)."""
+        return bool(frame.data.get(self.name + "#drew"))
+
     def run(self, frame: Frame) -> None:
         r, views = frame.r, frame.views
-        frame.hands, frame.readout = False, None
+        frame.data[self.name + "#drew"] = False
         if self.readout == "always":
             split = True
         else:
             split = frame.fx_on and any(v.switches.hands and v.switches.through for v in views)
         geo = self.inputs["geometry"]
+        gh = self.ghost(frame)
+        drew = False
         try:
             with frame.timed(self.name):
                 if geo is not None:
-                    drew = r.ghost.layer(frame.size, frame.t, readout=split,
-                                         now=geo.now(frame), settled=True)
+                    kw = {"lines": True} if getattr(geo, "draw_as", "solid") == "lines" else {}
+                    drew = gh.layer(frame.size, frame.t, readout=split, now=geo.now(frame),
+                                    settled=True, **kw)
                 else:
-                    drew = r.ghost.layer(frame.size, frame.t, readout=split)
-            frame.hands = bool(drew)
+                    drew = gh.layer(frame.size, frame.t, readout=split)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
-            r._hands_failed(e, frame.target, frame.vp)
-        frame.readout = r.ghost.readout if frame.hands else None
-        frame.stats["layer"], frame.stats["readout"] = frame.hands, frame.readout is not None
+            r._hands_failed(e, frame.target, frame.vp, ghost=gh)
+            drew = False
+        frame.data[self.name + "#drew"] = bool(drew)
+        frame.hands = frame.hands or bool(drew)
+        ro = gh.readout if drew else None
+        frame.readout = ro if ro is not None else frame.readout
+        frame.stats["layer"] = bool(frame.stats.get("layer")) or bool(drew)
+        frame.stats["readout"] = bool(frame.stats.get("readout")) or ro is not None
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
-        return frame.r.ghost.tex if frame.hands else None
+        return self.ghost(frame).tex if self.drew(frame) else None
 
     def depth(self, frame: Frame) -> moderngl.Texture | None:
-        return frame.r.ghost.depth if frame.hands else None
+        return self.ghost(frame).depth if self.drew(frame) else None
+
+    def readout_image(self, frame: Frame) -> moderngl.Texture | None:
+        """The guide and the tethers' labels this layer split out, or None."""
+        return self.ghost(frame).readout if self.drew(frame) else None
 
     def alpha(self, frame: Frame) -> float:
-        return float(frame.r.ghost.state.alpha)
+        return float(self.ghost(frame).state.alpha)
 
     def lay(self, frame: Frame, dst: moderngl.Framebuffer, rect: tuple, blend: str,
             opaque: bool, flip: tuple[bool, bool] = (False, False),
@@ -721,7 +1140,7 @@ class HandsLayer(Node):
         """Plain over is `Ghost.composite`'s blend, as it always was; add
         and depth-aware are `Renderer.lay`'s."""
         if blend == "over" or (blend == "depth" and scene_depth is None):
-            frame.r.ghost.composite(dst, rect, opaque=opaque, flip=flip)
+            self.ghost(frame).composite(dst, rect, opaque=opaque, flip=flip)
             return
         super().lay(frame, dst, rect, blend, opaque, flip, scene_depth)
 
@@ -730,29 +1149,40 @@ class Readout(Node):
     """The readout alone (plan 26 A3): the guide and the tethers' labels
     of the hands its geometry settled, into `Ghost.readout`, for the
     outputs that show the hands — when the hands are drawn inside the
-    scene and no hands' layer runs to draw it (`Ghost.layer(…,
-    hands=False)`). Its own SYSTEM line."""
+    scene and no hands' layer of that geometry runs to draw it
+    (`Ghost.layer(…, hands=False)`). Its own SYSTEM line. Kept per node
+    (A4: a second hands node's readout is its own Ghost's)."""
 
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
     OUTPUT = IMAGE
 
+    def ghost(self, frame: Frame):
+        geo = self.inputs["geometry"]
+        return geo.ghost(frame) if geo is not None else frame.r.ghost
+
     def run(self, frame: Frame) -> None:
         r, geo = frame.r, self.inputs["geometry"]
-        frame.readout = None
+        frame.data[self.name] = None
         if geo is None:
             return
+        gh = self.ghost(frame)
         try:
             with frame.timed(self.name):
-                drew = r.ghost.layer(frame.size, frame.t, readout=True, now=geo.now(frame),
-                                     settled=True, hands=False)
-            frame.readout = r.ghost.readout if drew else None
+                drew = gh.layer(frame.size, frame.t, readout=True, now=geo.now(frame),
+                                settled=True, hands=False)
+            frame.data[self.name] = gh.readout if drew else None
         except Exception as e:  # noqa: BLE001 — the guide must not take the frame down
-            r._hands_failed(e, frame.target, frame.vp)
-        frame.stats["readout"] = frame.readout is not None
+            r._hands_failed(e, frame.target, frame.vp, ghost=gh)
+        got = frame.data[self.name]
+        frame.readout = got if got is not None else frame.readout
+        frame.stats["readout"] = bool(frame.stats.get("readout")) or got is not None
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
-        return frame.readout
+        return frame.data.get(self.name)
+
+    def readout_image(self, frame: Frame) -> moderngl.Texture | None:
+        return frame.data.get(self.name)
 
 
 # ---------------------------------------------------------------- history
@@ -1007,8 +1437,13 @@ class Output(Node):
     def run(self, frame: Frame) -> None:
         r, v = frame.r, frame.views[self.index]
         # the readout goes on every output that shows the hands, over,
-        # through or in the scene: in its own layer the guide is in none
-        ro = frame.readout if self.inputs["readout"] is not None else None
+        # through or in the scene: in its own layer the guide is in none.
+        # A4: the readout of the node wired to this output's port, and the
+        # hands laid over by their own layer's Ghost (a second hands node's
+        # on the glass, the first's in the scene on the projector)
+        src = self.inputs["readout"]
+        ro = None if src is None else (src.readout_image(frame)
+                                       if hasattr(src, "readout_image") else frame.readout)
         try:
             end, laid = self.settle(frame)
             if "routes" in frame.stats:          # what this output shows: (end, hands over)
@@ -1020,10 +1455,15 @@ class Output(Node):
 
                 def put(tgt, rect, opaque, flip, over=over, blend=blend):
                     lay(frame, blend, over, self.inputs["depth"], tgt, rect, opaque, flip)
+            ghosts = {}
+            if laid is not None and hasattr(laid[0], "ghost"):
+                ghosts["ghost"] = laid[0].ghost(frame)
+            if ro is not None and hasattr(src, "ghost"):
+                ghosts["readout_ghost"] = src.ghost(frame)
             with frame.timed(self.name):
                 r._compose(v, end.key if end is not None else None, laid is not None,
                            frame.frames, frame.failed, frame.size, ro, lay=put,
-                           blend=laid[1] if laid is not None else "over")
+                           blend=laid[1] if laid is not None else "over", **ghosts)
         except Exception as e:  # noqa: BLE001 — one view must not take the others down
             r._view_failed(v, "output", e)
             r._rebind(frame.target, frame.vp)
@@ -1073,8 +1513,18 @@ class Graph:
 
     @property
     def timed(self) -> list[str]:
-        """The names the GPU timer reports, one per node, in order."""
-        return [n.name for n in self.order if n.TIMED]
+        """The names the GPU timer reports, one per node, in order: every
+        node that times itself (`TIMED`), and every solid geometry a scene
+        draws — the scene times those draws under the geometry's name (plan
+        26 A4: decided by the consumer edge, so one hands node may feed a
+        scene and a layer and its line is its in-scene draws)."""
+        held = self.in_scene()
+        return [n.name for n in self.order if n.TIMED or n.name in held]
+
+    def in_scene(self) -> set[str]:
+        """The names of the solid geometries some scene of this graph draws."""
+        return {g.name for n in self.order if isinstance(n, Scene)
+                for g in n.geometries() if g.SOLID}
 
     @property
     def outputs(self) -> list[Output]:
@@ -1146,12 +1596,23 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     every pipeline, from the scene or the scene with the hands' layer
     (`Wiring.history`); one output per view, after the capture.
 
+    Plan 26 A4: the hands are one node per instance (`Wiring.nodes`:
+    `ghost`, `ghost.2` …, each its own `Ghost`). Every node drawn into
+    the scene is one of the scene's geometries; the layer — laid on the
+    outputs that do not show the hands in their scene — is drawn from the
+    node `into` "layer", else from the first (`Wiring.layer_node`), and
+    named after it (`hands`, `hands.2`). An output showing the scene with
+    hands in it takes the first in-scene node's readout; one taking the
+    layer, the layer's.
+
     Plan 26 A4b: `clouds`, the roles of the listed `cloud` devices
     (`cloud_roles`), each a point-cloud geometry in the scene, solid,
     before the hands; none listed, the graph is the one above."""
     wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
-    in_scene = wiring.hands == "scene"
+    inside = wiring.in_scene()
+    in_scene = bool(inside)
+    from_layer = wiring.layer_node()
     depth_aware = wiring.blend == "depth"
 
     def layered(sw: Switches) -> bool:
@@ -1163,14 +1624,23 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
     points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
-    hands = g.add(Hands("ghost")) if (in_scene or want_layer) else None
-    scene = g.add(Scene("scene", geometries=[*points, *([hands, shape] if in_scene else [shape])]))
+    geo: dict[int, Hands] = {}
+    for h in wiring.nodes():
+        if h.into == "scene" or (want_layer and h == from_layer):
+            geo[h.n] = g.add(Hands(hands_name(h.n), draw=h.draw))
+    scene = g.add(Scene("scene", geometries=[*points, *(geo[h.n] for h in inside), shape]))
     cover = g.add(Cover("cover", scene=scene))
-    layer = (g.add(HandsLayer("hands", readout="always" if in_scene else "through",
-                              geometry=hands)) if want_layer else None)
-    readout = layer
-    if in_scene and layer is None and any(sw.scene and sw.hands for sw in switches):
-        readout = g.add(Readout("readout", geometry=hands))
+    layer = (g.add(HandsLayer(layer_name(from_layer.n),
+                              readout="always" if from_layer.into == "scene" else "through",
+                              geometry=geo[from_layer.n])) if want_layer else None)
+    # the readout of an output that shows the hands inside its scene: the
+    # first in-scene node's — its own layer's when it makes the layer
+    # (split always), else the readout alone
+    scene_readout = None
+    if in_scene and any(sw.scene and sw.hands for sw in switches):
+        first = inside[0]
+        scene_readout = (layer if layer is not None and from_layer == first else
+                         g.add(Readout(readout_name(first.n), geometry=geo[first.n])))
     history = g.add(History("history", image=scene, cover=cover))
     depth = scene if depth_aware else None
     ends: dict[int, Fx] = {}
@@ -1199,7 +1669,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         elif sw.hands and sw.through:
             image = ends[HANDS]
         over = layer if layered(sw) and not sw.through else None
+        readout = None
+        if sw.hands:
+            readout = scene_readout if (in_scene and sw.scene) else layer
         g.add(Output(f"output.{i + 1}", i, after=(capture,), blend=wiring.blend, image=image,
-                     hands=over, readout=readout if sw.hands else None,
-                     depth=depth if layered(sw) else None))
+                     hands=over, readout=readout, depth=depth if layered(sw) else None))
     return g
