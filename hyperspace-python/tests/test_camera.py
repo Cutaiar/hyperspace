@@ -391,22 +391,30 @@ BOX = ((-200.0, 200.0), (100.0, 350.0), (-120.0, 120.0))
 
 
 def test_the_shared_camera_frames_the_padded_box_like_the_ghost_camera():
-    """In A2 the hands still draw through `ghost.camera`; `shared_camera`
-    is them through the shape's eye after the calibration (A3's wiring).
-    From the box it frames the padded box as `camera` does: its centre at
-    the picture's centre, every corner in frame, the shorter side filled."""
+    """The hands draw through `shared_camera` (plan 26 A3): the shape's
+    eye after the calibration. From the box it frames the padded box as
+    `camera` frames it on a 16:9 picture (`ghost.CAL_ASPECT`, the party
+    projector's; A3 tuned it from A2's square on the shorter side, which
+    drew the hands at two thirds of their size on a landscape output):
+    its centre at the picture's centre, every corner in a 16:9 frame, the
+    box touching its edge. The calibration is the room's, not an
+    output's: the box lands at the same place in the world whatever the
+    output's shape (a portrait output sees it cut at the sides)."""
     m = ghost.basis("desktop")
     lo, hi = ghost.stage_box(BOX, m)
     corners = np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                         for z in (lo[2], hi[2])])
+    ref, _ = ghost.shared_camera(BOX, m, ghost.CAL_ASPECT)
+    c = _ndc(ref, corners)
+    assert (np.abs(c[:, :2]) <= 1.0 + 1e-9).all() and (np.abs(c[:, 2]) < 1).all()
+    assert np.abs(c[:, :2]).max() == pytest.approx(1.0, abs=1e-9)
+    cal = ghost.calibration(BOX, m)
     for aspect in (16 / 9, 1.0, 9 / 16):
         vp, eye = ghost.shared_camera(BOX, m, aspect)
-        c = _ndc(vp, corners)
-        assert (np.abs(c[:, :2]) <= 1.0 + 1e-9).all() and (np.abs(c[:, 2]) < 1).all()
-        # in the square on the shorter side (the room's calibration does not
-        # depend on an output's shape), the box touches its edge
-        sq = c[:, :2] * np.array([max(aspect, 1.0), max(1.0 / aspect, 1.0)])
-        assert np.abs(sq).max() == pytest.approx(1.0, abs=1e-9)
+        assert np.allclose(ghost.calibration(BOX, m), cal)
+        # the same world: on any landscape picture the box's height is the same
+        if aspect >= 1.0:
+            assert _ndc(vp, corners)[:, 1] == pytest.approx(c[:, 1], abs=1e-9)
         assert _ndc(vp, ((lo + hi) / 2)[None])[0, :2] == pytest.approx([0.0, 0.0], abs=1e-12)
         # the eye is above and behind the hands, as the ghost camera stands
         centre = (lo + hi) / 2

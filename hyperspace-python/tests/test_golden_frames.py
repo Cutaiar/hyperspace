@@ -56,7 +56,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     present; the window's own frame alone (`solo`, the default state) for
     each, and alone through (`solo-scene+hands+through`) for each preset
     with an effect on; and the one cap frame. Each names its pipeline and
-    a PNG that exists; every preset loaded with nothing missing."""
+    a PNG that exists; every preset loaded with nothing missing. Plan 26
+    A3: the graph's other wirings, hands present — the hands in the scene
+    and the depth-aware layer for every preset, the history holding the
+    hands for each preset with the look-back on — named
+    `<wiring>/<state>`, and nothing else."""
     from hyperspace.outputs import NAMES
     from hyperspace.preset import FACTORY_PRESETS
 
@@ -67,6 +71,13 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         "solo": {"scene": True, "hands": True, "through": False},
         "solo-scene+hands+through": {"scene": True, "hands": True, "through": True}}
     assert doc["solo_fx_only"] == ["solo-scene+hands+through"]
+    assert doc["wired_states"] == {
+        "in-scene": {"wiring": {"hands": "scene"},
+                     "states": ["scene+hands", "hands", "hands+through"], "presets": None},
+        "depth": {"wiring": {"blend": "depth"},
+                  "states": ["scene+hands", "scene+hands+through"], "presets": None},
+        "history+hands": {"wiring": {"history": "scene+hands"}, "states": ["scene+hands"],
+                          "presets": ["party-wake", "party-tracer"]}}
     assert doc["size"] == [960, 600] and doc["dpr"] == 1.0 and doc["frames"] == 8
     assert abs(doc["dt"] - 1 / 60) < 1e-12
     assert doc["gl_version"]
@@ -79,10 +90,13 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             for s in [*doc["states"], "solo"]
             + (["solo-scene+hands+through"] if p in fx_on else [])}
     cap = doc["cap"]
+    wired = {(p, "present", f"{name}/{s}") for name, w in doc["wired_states"].items()
+             for p in (w["presets"] or FACTORY_PRESETS) for s in w["states"]}
     capped = {(e["preset"], e["hands"], e["state"]) for e in doc["goldens"]
-              if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]}
-    assert keys - capped == want
-    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1
+              if e["state"] not in doc["states"] and e["state"] not in doc["solo_states"]
+              and "/" not in e["state"]}
+    assert keys - capped - wired == want and wired <= keys
+    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -106,6 +120,18 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             assert said[hands]["hands_shown"] is (hands == "present"), slug
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
+
+
+def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
+    """The history-with-the-hands goldens cover exactly the factory presets
+    whose file turns the look-back on (elsewhere the history holds nothing
+    the picture shows, so the frame is the default one)."""
+    from hyperspace.preset import FACTORY_PRESETS
+
+    lib = ROOT / "hyperspace" / "library" / "presets"
+    on = [slug for slug in FACTORY_PRESETS
+          if json.loads((lib / f"{slug}.json").read_text()).get("values", {}).get("dream.on")]
+    assert sorted(on) == sorted(_tool().LOOKBACK_ON)
 
 
 def test_the_gpu_lines_on_the_system_page():

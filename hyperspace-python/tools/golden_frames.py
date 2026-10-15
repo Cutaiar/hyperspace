@@ -18,7 +18,13 @@ the render cap is the app's default (1080p). Then the window's own frame,
 output 1 alone (`SOLO`: the default state, and with an effect on also
 through), so the pipeline is drawn direct into the multisampled target.
 Once more, for one preset, a 2× HiDPI 1080p screen (3840×2160) under
-that cap.
+that cap. And (plan 26 A3) the render graph's other wirings, hands
+present (`WIRED`): the hands inside the scene (the scene's output with
+the hands in it, beside a glass output that shows the hands' layer
+alone, over and through) and the hands' layer laid on depth-aware, for
+every preset; the history holding the hands' layer, for the presets
+with the look-back on — each a rig of its own (`Renderer.wiring`), its
+outputs named `<wiring>/<state>`.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -86,6 +92,21 @@ HANDS = ("absent", "present")
 SOLO = (("solo", {"scene": True, "hands": True, "through": False}),)
 SOLO_FX = (("solo-scene+hands+through", {"scene": True, "hands": True, "through": True}),)
 
+# plan 26 A3: the graph's other wirings (`graph.Wiring`), hands present —
+# (name, the wiring's fields, the output states drawn as one rig's
+# outputs, output 1 first, the presets it is drawn for: None, every
+# one). In the scene: the scene's output with the hands in it, and a glass
+# (scene off) with the hands' layer over and through; depth-aware: the
+# layer over at the output and through the effects; the history of the
+# scene with the hands' layer — only where the look-back is on
+# (`dream.on` in the file: elsewhere the history holds nothing to see)
+LOOKBACK_ON = ("party-wake", "party-tracer")
+WIRED: tuple[tuple[str, dict, tuple[str, ...], tuple[str, ...] | None], ...] = (
+    ("in-scene", {"hands": "scene"}, ("scene+hands", "hands", "hands+through"), None),
+    ("depth", {"blend": "depth"}, ("scene+hands", "scene+hands+through"), None),
+    ("history+hands", {"history": "scene+hands"}, ("scene+hands",), LOOKBACK_ON),
+)
+
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
 CAP = {"preset": "party-trip", "hands": "present", "state": "scene+hands",
@@ -115,6 +136,7 @@ from hyperspace.bands import default_params
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
+from hyperspace.graph import Wiring
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
@@ -276,12 +298,15 @@ def context() -> moderngl.Context:
     return _CTX
 
 
-def _shoot(slug: str, hands: str, states, size, logical, dpr) -> tuple[list[Shot], dict]:
-    """Render one rig's states; its shots and what the load said. The
-    framebuffers and the renderer are new per rig, so nothing a rig drew
-    reaches the next."""
+def _shoot(slug: str, hands: str, states, size, logical, dpr,
+           wiring: dict | None = None) -> tuple[list[Shot], dict]:
+    """Render one rig's states (under `wiring`, the default graph's when
+    None); its shots and what the load said. The framebuffers and the
+    renderer are new per rig, so nothing a rig drew reaches the next."""
     ctx = context()
     rig = Rig(slug, hands, ctx)
+    if wiring is not None:
+        rig.renderer.wiring = Wiring(**wiring)
     try:
         targets = [_target(ctx, size, SAMPLES if k == 0 else 0) for k in range(len(states))]
         views = [View(Switches(**sw), size, target=f) for f, (_, sw) in zip(targets, states)]
@@ -292,10 +317,14 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr) -> tuple[list[Shot
             if v.error:
                 raise RuntimeError(f"{slug} {hands}: an output failed: {v.error}")
         fx_on = rig.renderer.fx.active()
-        visible = bool(rig.renderer.stats.get("layer"))
+        visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
-        for (name, sw), f in zip(states, targets):
-            key, over = route(Switches(**sw), fx_on, visible)
+        for k, ((name, sw), f) in enumerate(zip(states, targets)):
+            # the pipeline the graph's output settled on (plan 26 A3: the
+            # wiring); with the default wiring it is `outputs.route`'s
+            key, over = rig.renderer.stats["routes"][k]
+            if wiring is None:
+                assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
             raw = _read(ctx, f, size)
             shots.append(Shot(slug, hands, name, NAMES[key] if key is not None else "none",
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
@@ -328,6 +357,17 @@ def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[
             for one in solo:
                 got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR)
                 gc.collect()
+                shots += got
+            if hands != "present":
+                continue
+            for wired, wiring, names, which in WIRED:
+                if which is not None and slug not in which:
+                    continue
+                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                                (W, H), (W, H), DPR, wiring)
+                gc.collect()
+                for sh in got:
+                    sh.state = f"{wired}/{sh.state}"
                 shots += got
     if cap and (not only or CAP["preset"] in only):
         state = dict(STATES)[CAP["state"]]
@@ -391,6 +431,9 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
         "states": {name: sw for name, sw in STATES},
         "solo_states": {name: sw for name, sw in SOLO + SOLO_FX},
         "solo_fx_only": [name for name, _ in SOLO_FX],
+        "wired_states": {name: {"wiring": wiring, "states": list(names),
+                                "presets": None if which is None else list(which)}
+                         for name, wiring, names, which in WIRED},
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
         "presets": {k: presets[k] for k in sorted(presets, key=order.__getitem__)},
         "goldens": entries,

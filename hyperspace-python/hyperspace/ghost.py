@@ -8,24 +8,31 @@ plain data (`hands.core.skeleton`, kept by `HandsIO.poll` in
 it raw — no smoothing, none of the per-axis shaping — so the ghost never
 lags or drifts from the real hand.
 
-Its own pass, after everything else (`Renderer._draw_frame`): the scene,
-the look-back composite and the FX chain have all written the target
-when the hands go on, so no effect, echo or dream ever touches them and
-the look-back history (captured from the scene texture) never sees them.
-The hands draw opaque, with a depth buffer, into their own framebuffer;
-one composite then lays that over the target at `ghost.alpha`, so a
-translucent hand shows no overlaps of its own. On an opaque ground the
-composite leaves the target's alpha exactly as it was (plan 14 WP1, the
-Pepper's Ghost rig); off, the pass does not run at all and the frame is
-bit-identical to one without it.
+Plan 26 A3: the hands are a geometry node of the render graph
+(graph.py `Hands`): settled once a frame (`Ghost.settle`) and drawn by
+whatever the wiring says — their own layer (`layer`: opaque, with a
+depth buffer, into their own framebuffer, laid over a picture at
+`ghost.alpha` so a translucent hand shows no overlaps of its own; the
+default, today's frame), and/or inside the scene (`draw_solid`: solid,
+before the see-through shape, so the shape's depth puts a hand in front
+of or behind it). As a layer laid on at the output no effect, echo or
+dream touches them and the default history (captured from the scene)
+never sees them. On an opaque ground the composite leaves the target's
+alpha exactly as it was (plan 14 WP1, the Pepper's Ghost rig); off, the
+hands do not draw at all and the frame is bit-identical to one without
+them.
 
-Its own camera: a fixed perspective view, independent of the 4D view's
-camera, zoom and instances. Leap space (mm, origin at the camera, the
-table in hands/core.py) goes through the tracking mode's basis (`MODES`)
-into the *stage* — x right, y up, z toward the performer — and the
-camera, behind and above the performer's hands, fits the calibrated box
-(the HANDS page's ranges, `<home>/hands.json`; the defaults without one)
-padded by a hand's reach, so the box fills the frame.
+The one camera (A2, A3): the shape's eye (`eye.*`,
+`geometry.eye_matrix`) after a calibration from the Leap's mm into the
+shape's units (`calibration`, `hands.core.Units` in hands.json). Leap
+space (mm, origin at the camera, the table in hands/core.py) goes through
+the tracking mode's basis (`MODES`) into the *stage* — x right, y up, z
+toward the performer — and, by default, the calibration fits the
+calibrated box (the HANDS page's ranges, `<home>/hands.json`; the
+defaults without one) padded by a hand's reach into a 16:9 picture of the
+eye, tilted so the eye sees the hands from behind and above the
+performer, as the hands' own camera (`camera`, kept as the reference)
+did until A3.
 
 Leaving the box: a hand that is no longer reported fades out over
 FADE_OUT where it was last seen, and fades in over FADE_IN when it comes
@@ -59,6 +66,10 @@ FADE_IN = 0.10      # s: a hand that enters comes up this fast
 FADE_OUT = 0.30     # s: one that leaves fades over this, where it was last seen
 PAD = 60.0          # mm around the palm box: the fingers reach past the palm
 FOV_Y = 38.0        # degrees, the camera's vertical field of view
+# plan 26 A3: the reference picture the default calibration ("from the
+# box", `calibration`) fits the padded box into, through the shape's eye —
+# 16:9, the party projector's, as the 1080p cap and PAN_REF_PX are
+CAL_ASPECT = 16.0 / 9.0
 ELEVATION = 32.0    # degrees the camera looks down onto the hands
 SAMPLES = 4         # MSAA for the hands' own framebuffer
 FINGER_R = 0.085    # finger radius as a fraction of palm width, when bones give none
@@ -246,13 +257,13 @@ def camera(box, m: np.ndarray, aspect: float) -> tuple[np.ndarray, np.ndarray]:
 #
 # Plan 26 A2 puts the shape in a world with one fixed eye (`eye.*`,
 # geometry.eye_matrix) and a calibration that maps the Leap's mm into that
-# world (hands.core.Units, in hands.json). In A2 the hands still draw
-# through `camera` above; `shared_camera` is the same hands seen through
-# the shape's eye, so A3 moving them into the scene is the one call in
-# `Ghost.poses` swapped (and the eye handed in).
+# world (hands.core.Units, in hands.json). Since A3 the hands draw through
+# `shared_camera` (`Ghost.poses`); `camera` above is the hands' own camera
+# they had until then, kept as the reference the default calibration is
+# tuned against (tests/test_hands_node.py).
 
 def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
-                distance: float | None = None) -> np.ndarray:
+                distance: float | None = None, aspect: float | None = None) -> np.ndarray:
     """Leap mm → world, 4×4 (column vectors): world = s·R_x(tilt)·(m·p − c).
 
     `m` is the stage basis (`basis`: the tracking mode, `ghost.mirror`
@@ -260,9 +271,12 @@ def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
     its `origin` (Leap mm) is the point that lands on the world's centre,
     else the padded box's centre (`stage_box`, what `camera` looks at);
     its `mm` is millimetres per shape unit (s = 1 / mm), else the scale at
-    which every corner of the padded box is in the eye's frame on the
-    shorter side, as tightly as `camera` frames it — so the hands fill the
-    picture whatever the output's shape. `tilt` (degrees, 32 = ELEVATION)
+    which every corner of the padded box is in the eye's frame of a
+    reference picture `aspect` wide (`CAL_ASPECT`, 16:9, the party
+    projector), as tightly as `camera` frames it on that picture — a room
+    setting, so the same on every output (plan 26 A3: A2 fitted the
+    square on the shorter side, which drew the hands at about two thirds
+    of their old size on a landscape output). `tilt` (degrees, 32 = ELEVATION)
     turns the stage's up toward the eye: the eye looks along the world's
     −z, and the ghost camera looked down onto the hands from that high."""
     fov = EYE_FOV if fov is None else fov
@@ -279,13 +293,17 @@ def calibration(box, m: np.ndarray, units=None, *, fov: float | None = None,
         s = 1.0 / float(mm)
     else:
         # each padded corner c (tilted, about the centre) is in frame when
-        # s·max(|cx|, |cy|) ≤ t·(D − s·cz), t the half-field's tangent
+        # s·|cx| ≤ tx·(D − s·cz) and s·|cy| ≤ ty·(D − s·cz), tx and ty the
+        # half-field's tangents across and up the reference picture (the
+        # eye's fov is across its shorter side)
         t = math.tan(math.radians(fov) / 2.0)
+        a = CAL_ASPECT if aspect is None else max(float(aspect), 1e-3)
+        tx, ty = (t * a, t) if a >= 1.0 else (t, t / a)
         corners = np.array([(x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
                             for z in (lo[2], hi[2])]) - centre
         c = corners @ rot.T
-        need = np.maximum(np.abs(c[:, 0]), np.abs(c[:, 1])) + t * c[:, 2]
-        s = t * float(distance) / max(float(np.max(need)), 1e-6)
+        need = np.maximum(np.abs(c[:, 0]) / tx, np.abs(c[:, 1]) / ty) + c[:, 2]
+        s = float(distance) / max(float(np.max(need)), 1e-6)
     out = np.eye(4)
     out[:3, :3] = s * rot @ m
     out[:3, 3] = -s * rot @ centre
@@ -300,7 +318,7 @@ def shared_camera(box, m: np.ndarray, aspect: float, units=None, *,
     after `calibration`. `view_proj` takes Leap-basis stage points, as
     `camera`'s does — the calibration's stage basis is undone first — and
     `eye` is the eye's position in that stage space, for the shading. What
-    A3's hands node draws with; A2 draws the hands through `camera`."""
+    the hands node draws with (plan 26 A3)."""
     fov = EYE_FOV if fov is None else fov
     distance = EYE_DISTANCE if distance is None else distance
     cal = calibration(box, m, units, fov=fov, distance=distance)
@@ -1109,6 +1127,16 @@ def style_parts(i) -> object:
     return PARTS[k] if 0 <= k < len(PARTS) else hands_parts
 
 
+def _depth_texture(ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Texture:
+    """A depth texture a shader can read as a value (no comparison),
+    nearest-sampled: a layer's depth for a depth-aware composite."""
+    t = ctx.depth_texture(size)
+    t.compare_func = ""
+    t.filter = (moderngl.NEAREST, moderngl.NEAREST)
+    t.repeat_x = t.repeat_y = False
+    return t
+
+
 def _clear_depth(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> None:
     """Clear `fbo`'s depth and leave its colour: the clear with the colour
     masked (moderngl applies a framebuffer's mask when it is bound)."""
@@ -1226,10 +1254,12 @@ class _Side:
 
 
 class Ghost:
-    """The ghost-hands pass: `layer` renders the hands once a frame into
-    their own texture (`tex`), `composite` lays it over a target — after
-    the FX chain, onto each output that shows the hands (plan 21 WP1).
-    `draw` is the two together, onto one target.
+    """The ghost hands: `settle` steps them once a frame (the graph's
+    `Hands` node); `layer` renders them into their own texture (`tex`, and
+    its depth), `composite` lays it over a target — after the FX chain,
+    onto each output that shows the hands (plan 21 WP1); `draw_solid`
+    draws them into the scene (plan 26 A3). `draw` is `layer` and
+    `composite` together, onto one target.
 
     `source` is anything with ``.skeleton`` (side → `hands.core.skeleton`
     for the hands present this frame) — the HandsIO, set by the app when
@@ -1252,7 +1282,9 @@ class Ghost:
         self._fbo: moderngl.Framebuffer | None = None     # on the texture
         self._msaa: moderngl.Framebuffer | None = None    # multisampled, with depth
         self._res: list = []
+        self._depth: moderngl.Texture | None = None       # the layer's depth (plan 26 A3)
         self._shown = False      # `layer` drew this frame: `tex` is the layer
+        self.now = None          # this frame's (poses, view_proj, eye), `settle`'s
         # the readout layer (plan 21 WP2): the guide and the tethers apart
         # from the hands, made on first use, only while a pipeline puts the
         # hands through the effects with the guide on
@@ -1292,8 +1324,16 @@ class Ghost:
                 out.append((side, sd.skel, sd.fade))
         return out
 
-    def poses(self, t: float, aspect: float):
-        """This frame's poses and camera, or None when nothing would show."""
+    def poses(self, t: float, aspect: float, fov: float | None = None,
+              distance: float | None = None):
+        """This frame's poses and camera, or None when nothing would show.
+
+        Plan 26 A3: the camera is the shape's eye (`shared_camera`: the
+        `eye.*` params, `fov` / `distance`, their defaults when None) after
+        the Leap calibration (`HandsIO.units`, from the box when the source
+        has none) — the one camera the scene is drawn in, so the hands can
+        be drawn inside the scene and a hands layer's depth compares with
+        the scene's. Steps the fades: call it once a frame (`settle`)."""
         st = self.state
         if not st.on or st.alpha <= 0.0 or self.source is None:
             for sd in self.sides.values():           # off: no stale hand on the way back
@@ -1312,7 +1352,8 @@ class Ghost:
         cfg = getattr(self.source, "cfg", None) or {}
         m = basis(cfg.get("mode", "desktop"), st.mirror)
         box = box_of(self.source)
-        vp, eye = camera(box, m, aspect)
+        vp, eye = shared_camera(box, m, aspect, getattr(self.source, "units", None),
+                                fov=fov, distance=distance)
         poses = [pose(side, sk, m, fade) for side, sk, fade in seen]
         if st.guide:
             lo, hi = stage_box(box, m)
@@ -1336,6 +1377,44 @@ class Ghost:
                 if st.tethers and rows:
                     p.tethers = tethers(p.side, rows, anchors)
         return poses, vp, eye
+
+    def settle(self, t: float, aspect: float, fov: float | None = None,
+               distance: float | None = None):
+        """The frame's hands, once (plan 26 A3, the hands geometry node's
+        `run`): the fades stepped and the poses and the camera kept in
+        `now` — (poses, view_proj, eye), or None when nothing shows — for
+        every draw of this frame: inside the scene (`draw_solid`), into
+        the hands' layer and the readout (`layer(…, now=…)`)."""
+        self.now = self.poses(t, aspect, fov, distance)
+        return self.now
+
+    def draw_solid(self, now) -> bool:
+        """The hands into whatever is bound — the scene's framebuffer, with
+        its depth — as solid geometry (plan 26 A3: hands inside the scene
+        are drawn first, opaque, `ghost.alpha` not applied; the
+        see-through shape is depth-tested against them after). The style's
+        parts only: the guide and the tethers are the readout's, never the
+        scene's. Each hand is premultiplied by its fade and laid over
+        (`ONE, ONE_MINUS_SRC_ALPHA`), so a hand fading in or out is
+        see-through for those tenths of a second. Leaves the depth test
+        off and the frame's blend on, a raise included. True when it
+        drew."""
+        if now is None:
+            return False
+        if self.geometry is None and not self._build():
+            return False
+        poses, view_proj, eye = now
+        ctx = self.ctx
+        try:
+            ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
+            ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+            self.geometry.draw(poses, view_proj, eye,
+                               style_parts(getattr(self.state, "style", 0)))
+        finally:
+            ctx.disable(moderngl.DEPTH_TEST)
+            ctx.enable(moderngl.BLEND)
+            ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
+        return True
 
     def draw(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int], t: float,
              opaque: bool = True) -> bool:
@@ -1366,6 +1445,13 @@ class Ghost:
         return self._tex if getattr(self, "_shown", False) else None
 
     @property
+    def depth(self) -> moderngl.Texture | None:
+        """The hands' layer's depth (plan 26 A3), resolved beside `tex`:
+        what a depth-aware composite compares with the scene's. None when
+        the layer drew nothing."""
+        return getattr(self, "_depth", None) if getattr(self, "_shown", False) else None
+
+    @property
     def readout(self) -> moderngl.Texture | None:
         """The readout layer (plan 21 WP2, fork F3): the guide and the
         tethers' labels, apart from the hands so the effects never bend
@@ -1373,7 +1459,8 @@ class Ghost:
         None otherwise (then they are in `tex`, as they always were)."""
         return self._ro_tex if getattr(self, "_ro_shown", False) else None
 
-    def layer(self, size: tuple[int, int], t: float, readout: bool = False) -> bool:
+    def layer(self, size: tuple[int, int], t: float, readout: bool = False,
+              now=None, hands: bool = True, settled: bool = False) -> bool:
         """Render the hands' layer at `size` (the frame's) for time `t`:
         the fades stepped, the hands drawn opaque with depth into their own
         framebuffer, the tethers flat over them, resolved into `tex`.
@@ -1389,50 +1476,41 @@ class Ghost:
         the hands drawn there depth-only first, so an ON HAND gauge is
         still hidden behind the palm, then the guide's spheres and tubes,
         then the tethers. Only while the guide is on; with it off, or if
-        that layer will not build, the one layer as ever."""
+        that layer will not build, the one layer as ever.
+
+        Plan 26 A3: `settled` — the hands geometry node settled the frame
+        once (`settle`) and `now` is what it got (the scene may already
+        have drawn those poses); else the layer settles them itself, as it
+        always did. `hands` False draws the readout alone (the hands are
+        inside the scene and no output wants their own layer): False when
+        there is no guide."""
         self._shown = self._ro_shown = False
         w, h = max(int(size[0]), 1), max(int(size[1]), 1)
-        got = self.poses(t, w / h)
+        got = now if settled else self.settle(t, w / h)
         if got is None:
             return False
         poses, view_proj, eye = got
         ctx = self.ctx
         if self.geometry is None and not self._build():
             return False
-        if not self._ensure((w, h)):
+        if not hands:
+            readout = True
+        elif not self._ensure((w, h)):
             return False                 # nothing bound, nothing drawn: no layer
         split = (readout and any(p.guide[0] or p.guide[1] or p.tethers for p in poses)
                  and self._ensure_readout((w, h)))
+        if not hands and not split:
+            return False
         # the style draws the hands; the guide's rows ride with each pose as
         # `extra` (no style knows the guide exists, plan 21 WP6).
         # getattr: a GhostState from before the style existed
         parts = style_parts(getattr(self.state, "style", 0))
         guides = [p.guide for p in poses]
         try:
-            draw_fbo = self._msaa if self._msaa is not None else self._fbo
-            draw_fbo.use()
-            ctx.viewport = (0, 0, *self.size)
-            ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
-            ctx.disable(moderngl.BLEND)
-            ctx.enable(moderngl.DEPTH_TEST)
-            # HANDS draws the guide in the same depth-tested pass, as ever (an
-            # ON HAND gauge partly behind the palm). Any other style puts a
-            # solid at the palm far bigger than a guide ball, so its guide
-            # goes over it: the style first, then the depth cleared, then
-            # the guide — the guide reads the same in every style
-            over = parts is not hands_parts
-            self.geometry.draw(poses, view_proj, eye, parts,
-                               None if split or over else guides)
-            if over and not split and any(g[0] or g[1] for g in guides):
-                _clear_depth(ctx, draw_fbo)
-                ctx.viewport = (0, 0, *self.size)
-                self.geometry.draw(poses, view_proj, eye, None, guides)
-            ctx.disable(moderngl.DEPTH_TEST)
-            if not split and any(p.tethers for p in poses):
-                self._draw_tethers(poses, view_proj)
-            if self._msaa is not None:
-                ctx.copy_framebuffer(self._fbo, self._msaa)
+            if hands:
+                self._draw_hands(poses, view_proj, eye, parts, guides, split)
             if split:
+                over = parts is not hands_parts
                 ro = self._ro_msaa if self._ro_msaa is not None else self._ro_fbo
                 ro.use()
                 ctx.viewport = (0, 0, w, h)
@@ -1453,7 +1531,7 @@ class Ghost:
                 self.geometry.draw(poses, view_proj, eye, None, guides)
                 ctx.disable(moderngl.DEPTH_TEST)
                 if any(p.tethers for p in poses):
-                    self._draw_tethers(poses, view_proj)
+                    self._draw_tethers(poses, view_proj, (w, h))
                 if self._ro_msaa is not None:
                     ctx.copy_framebuffer(self._ro_fbo, self._ro_msaa)
         finally:
@@ -1462,8 +1540,38 @@ class Ghost:
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
-        self._shown, self._ro_shown = True, bool(split)
+        self._shown, self._ro_shown = bool(hands), bool(split)
         return True
+
+    def _draw_hands(self, poses, view_proj, eye, parts, guides, split: bool) -> None:
+        """`layer`'s hands: opaque with depth into the layer's own
+        framebuffer, the guide and the tethers with them unless `split`
+        puts them in the readout, resolved into `tex` (and the depth into
+        `depth`, plan 26 A3)."""
+        ctx = self.ctx
+        draw_fbo = self._msaa if self._msaa is not None else self._fbo
+        draw_fbo.use()
+        ctx.viewport = (0, 0, *self.size)
+        ctx.clear(0.0, 0.0, 0.0, 0.0, depth=1.0)
+        ctx.disable(moderngl.BLEND)
+        ctx.enable(moderngl.DEPTH_TEST)
+        # HANDS draws the guide in the same depth-tested pass, as ever (an
+        # ON HAND gauge partly behind the palm). Any other style puts a
+        # solid at the palm far bigger than a guide ball, so its guide
+        # goes over it: the style first, then the depth cleared, then
+        # the guide — the guide reads the same in every style
+        over = parts is not hands_parts
+        self.geometry.draw(poses, view_proj, eye, parts,
+                           None if split or over else guides)
+        if over and not split and any(g[0] or g[1] for g in guides):
+            _clear_depth(ctx, draw_fbo)
+            ctx.viewport = (0, 0, *self.size)
+            self.geometry.draw(poses, view_proj, eye, None, guides)
+        ctx.disable(moderngl.DEPTH_TEST)
+        if not split and any(p.tethers for p in poses):
+            self._draw_tethers(poses, view_proj)
+        if self._msaa is not None:
+            ctx.copy_framebuffer(self._fbo, self._msaa)      # colour and depth
 
     def composite(self, target: moderngl.Framebuffer, vp: tuple[int, int, int, int],
                   opaque: bool = True, flip: tuple[bool, bool] = (False, False)) -> bool:
@@ -1509,7 +1617,8 @@ class Ghost:
             ctx.viewport = tuple(vp)
         return True
 
-    def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray) -> None:
+    def _draw_tethers(self, poses: list[HandPose], view_proj: np.ndarray,
+                      size: tuple[int, int] | None = None) -> None:
         """The tethers, flat over the hands, into the bound hands' framebuffer
         (premultiplied, so the composite treats them like the hands).
 
@@ -1522,17 +1631,18 @@ class Ghost:
         if getattr(self, "_labels_failed", False):   # getattr: a pre-reload Ghost
             return
         ctx = self.ctx
+        size = self.size if size is None else size
         try:
             if self._labels is None:
                 self._labels = TetherLabels(ctx)
             layout, fades = [], []
             for p in poses:
-                got = layout_tethers(p.tethers, view_proj, self.size, self._labels.width)
+                got = layout_tethers(p.tethers, view_proj, size, self._labels.width)
                 layout += got
                 fades += [p.fade] * len(got)
             ctx.enable(moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            self._labels.draw(layout, fades, self.size)
+            self._labels.draw(layout, fades, size)
         except Exception as e:  # noqa: BLE001 — no labels, never no hands
             self._labels_failed = True
             if not self.error:
@@ -1585,19 +1695,23 @@ class Ghost:
                 made.append(depth)
                 msaa = ctx.framebuffer(color_attachments=[rb], depth_attachment=depth)
                 made.append(msaa)
-                fbo = ctx.framebuffer(color_attachments=[tex])
-                res = [msaa, rb, depth, fbo]
+                dtex = _depth_texture(ctx, size)
+                made.append(dtex)
+                fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=dtex)
+                res = [msaa, rb, depth, fbo, dtex]
             else:
-                depth = ctx.depth_renderbuffer(size)
-                made.append(depth)
+                dtex = _depth_texture(ctx, size)
+                made.append(dtex)
                 msaa = None
-                fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=depth)
-                res = [fbo, depth]
+                fbo = ctx.framebuffer(color_attachments=[tex], depth_attachment=dtex)
+                res = [fbo, dtex]
         except Exception:
             for r in reversed(made):
                 r.release()
             raise
-        return tex, fbo, msaa, res
+        # plan 26 A3: the depth beside the colour, resolved with it — a
+        # depth-aware composite reads it (`depth`)
+        return tex, fbo, msaa, res, dtex
 
     def _ensure(self, size: tuple[int, int]) -> bool:
         """The hands' layer at `size`, all or nothing: built into locals and
@@ -1609,12 +1723,13 @@ class Ghost:
             return True
         self.release_targets()
         try:
-            tex, fbo, msaa, res = self._make(size)
+            tex, fbo, msaa, res, dtex = self._make(size)
         except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
             if not self.error:
                 self.error = f"ghost layer {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
             return False
         self.size, self._tex, self._fbo, self._msaa, self._res = size, tex, fbo, msaa, res
+        self._depth = dtex
         return True
 
     def _ensure_readout(self, size: tuple[int, int]) -> bool:
@@ -1625,7 +1740,7 @@ class Ghost:
             return True
         self.release_readout()
         try:
-            tex, fbo, msaa, res = self._make(size)
+            tex, fbo, msaa, res, _ = self._make(size)
         except Exception as e:  # noqa: BLE001 — the guide must not take the hands down
             if not self.error:
                 self.error = f"ghost readout {size[0]}×{size[1]}: {type(e).__name__}: {e}"[:160]
@@ -1646,6 +1761,7 @@ class Ghost:
             if res is not None:
                 res.release()
         self._res, self._tex, self._fbo, self._msaa = [], None, None, None
+        self._depth = None
         self.size = (0, 0)
 
     def on_reload(self) -> None:

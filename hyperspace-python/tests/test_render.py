@@ -650,18 +650,31 @@ def test_dim_fades_a_see_through_ground(ctx):
         assert gone.max() == 0                                        # nothing left over it
 
 
-def test_the_history_never_holds_the_dim(ctx):
-    """The look-back's history is captured from the scene texture, before
-    the dim: with echoes trailing a turning shape, the atlas is the same
-    bytes dimmed or not, and the dimmed frame is the undimmed one times the
-    factor — an echo that remembered the dim would come out darker."""
-    def run(dim):
-        r = _dim_renderer(ctx, effect=False, hands=False, echoes=True)
+def test_the_default_graphs_history_holds_what_todays_does_never_the_dim(ctx):
+    """The look-back's history is captured from what it is wired to (plan
+    26 A3) — in the default graph the scene texture, before the dim: with
+    echoes trailing a turning shape, the atlas is the same bytes dimmed or
+    not, and the dimmed frame is the undimmed one times the factor — an
+    echo that remembered the dim would come out darker. Wired to the scene
+    with the hands' layer, it still never holds the dim (the dim is the
+    outputs')."""
+    from hyperspace.graph import Wiring
+
+    def run(dim, wiring=None, hands=False):
+        r = _dim_renderer(ctx, effect=False, hands=hands, echoes=True)
+        if wiring is not None:
+            r.wiring = wiring
         out = _dim_frames(ctx, r, dim, frames=8, spin=0.05)
         assert r.lookback.atlas is not None and r.lookback.layers()
+        held = r._graph.nodes["capture"].inputs["image"]
+        assert held.name == ("scene" if wiring is None else "composite(history)")
         scene = np.frombuffer(r.scene.tex.read(), dtype=np.uint8).copy()
         return out, np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).copy(), scene
 
+    with_hands = Wiring(history="scene+hands")
+    _, held, _ = run(1.0, with_hands, hands=True)
+    _, held_d, _ = run(0.5, with_hands, hands=True)
+    assert np.array_equal(held, held_d)
     full, atlas, scene = run(1.0)
     dimmed, atlas_d, scene_d = run(0.5)
     assert atlas.max() > 100
