@@ -582,3 +582,60 @@ def test_inst_layout_is_declared(tmp_path):
         assert r.view.inst_layout == 0 and lay.base == 0, name
     for f in FACTORY.rglob("*.json"):
         assert "inst_layout" not in f.read_text(), f.name
+
+
+# ---- plan 26 A0: the naming rule for node instances (ENGINEERING §2) ----
+
+def test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker():
+    """The first instance of a node is today's id; instance n ≥ 2 carries
+    n as a segment right after the node's prefix, never a new first
+    segment; `instance_of` reads either back."""
+    from hyperspace.params import instance_id, instance_of
+
+    for node, key in (("fx.acid", "mix"), ("ghost", "alpha"), ("dream", "mix")):
+        assert instance_id(node, key) == instance_id(node, key, 1) == f"{node}.{key}"
+        assert instance_of(f"{node}.{key}", node) == (1, key)
+        for n in (2, 3, 12):
+            pid = instance_id(node, key, n)
+            assert pid.split(".")[0] == node.split(".")[0]          # the group stays
+            assert instance_of(pid, node) == (n, key)
+    assert instance_id("fx.acid", "mix", 2) == "fx.acid.2.mix"
+    assert instance_id("ghost", "alpha", 2) == "ghost.2.alpha"
+    assert instance_of("fx.acid.mix", "fx.warp") is None
+    # an explicit `.1.` is never written, so it reads as a key, by design
+    assert instance_of("fx.acid.1.mix", "fx.acid") == (1, "1.mix")
+    with pytest.raises(ValueError):
+        instance_id("fx.acid", "mix", 0)
+
+
+def test_every_node_param_today_reads_as_its_first_instance():
+    """No preset or binding migrates for a single-instance graph: every
+    effect's, the hands' and the dream's params as registered today read
+    back as instance 1 under their own id, their group is their id's
+    first segment (so an extra instance lands in the same part of a
+    preset), and no effect file or key is purely decimal (which would
+    read as a marker)."""
+    from hyperspace.fx import FxState
+    from hyperspace.ghost import GhostState
+    from hyperspace.lookback import DreamState
+    from hyperspace.params import instance_of
+
+    chain = Analyzer(Analyser())
+    fx = FxState()
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), None,
+                         DreamState(), fx, ghost=GhostState())
+    nodes = [f"fx.{name}" for name in fx.names()] + ["ghost", "dream"]
+    assert len(nodes) > 2
+    assert not any(name.isdecimal() for name in fx.names())
+    seen = set()
+    for p in reg:
+        for node in nodes:
+            got = instance_of(p.id, node)
+            if got is None:
+                continue
+            n, key = got
+            assert n == 1 and f"{node}.{key}" == p.id, p.id
+            assert not key.split(".")[0].isdecimal(), p.id
+            assert p.group == p.id.split(".")[0], (p.id, p.group)
+            seen.add(node)
+    assert seen == set(nodes)

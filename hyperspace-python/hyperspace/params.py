@@ -573,6 +573,39 @@ def part_of(p: Param) -> str | None:
     return None
 
 
+def instance_id(node: str, key: str, n: int = 1) -> str:
+    """The naming rule for a render node's params (plan 26 A0; ENGINEERING
+    §2, "Node instances"). `node` is the node's id prefix — ``fx.acid``
+    for an effect, ``ghost``, ``dream`` — and `key` the param's own name.
+    The first instance keeps today's id (``fx.acid.mix``); instance n ≥ 2
+    carries its number as a segment right after the prefix
+    (``fx.acid.2.mix``, ``ghost.2.alpha``). The first segment never
+    changes: it is the group, which decides whether the param is in a
+    preset (`part_of`), so a single-instance graph never migrates a preset
+    or a binding."""
+    if n < 1:
+        raise ValueError(f"instance numbers start at 1, not {n}")
+    return f"{node}.{key}" if n == 1 else f"{node}.{n}.{key}"
+
+
+def instance_of(pid: str, node: str) -> tuple[int, str] | None:
+    """`instance_id` backwards: (n, key) when `pid` is a param of some
+    instance of `node`, else None. A purely decimal segment right after
+    the prefix is the marker (n ≥ 2); no key and no effect file is ever
+    purely decimal (tests/test_params.py pins it), so today's ids all
+    read as the first instance."""
+    head = f"{node}."
+    if not pid.startswith(head):
+        return None
+    rest = pid[len(head):]
+    mark, dot, key = rest.partition(".")
+    if dot and mark.isdecimal() and key and int(mark) >= 2 and str(int(mark)) == mark:
+        return int(mark), key
+    # by design an explicit `.1.` (or `.02.`) is no marker: `instance_id`
+    # never writes one, so `fx.acid.1.mix` reads as instance 1, key `1.mix`
+    return (1, rest) if rest else None
+
+
 class Registry:
     """An ordered map of Param by id."""
 

@@ -57,6 +57,7 @@ import math
 import time
 from dataclasses import replace
 from pathlib import Path
+from typing import Self
 
 import moderngl
 import numpy as np
@@ -516,6 +517,135 @@ class FaceTarget:
         self.fbo = self.tex = None
 
 
+# the passes `PassTimer` reports, in frame order (plan 26 A0): what the
+# SYSTEM page lists, one line each. After A1 they become the graph's nodes
+GPU_PASSES = ("scene", "cover", "hands", "lookback", "fx", "compose")
+
+
+class PassTimer:
+    """GPU time per pass of `Renderer._draw_frame` (plan 26 A0): a
+    ``ctx.query(time=True)`` around each pass, read back `LAG` frames
+    later so the CPU does not wait on the GPU for a result, and kept as a
+    rolling median over the last `WINDOW` frames in ms (`medians`).
+
+    A pass that runs more than once a frame (the look-back composite per
+    pipeline and then the capture; the compose per output) is summed into
+    its frame's total; a pass that did not run in a frame counts 0 that
+    frame. Time queries never nest (GL allows one active per target), so
+    the passes are timed side by side, never one inside another.
+
+    A context with no timer queries (`ctx.query(time=True)` raises) leaves
+    `on` false and `note` saying why; `time` is then a no-op and the frame
+    is drawn as without it. A query that fails mid-run turns the timer off
+    the same way: timing never costs a frame."""
+
+    LAG = 3          # frames between a query's end and its read
+    WINDOW = 60      # frames in the rolling median
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.on = False
+        self.note = ""
+        self._free: list = []
+        self._frame: list[tuple[str, object]] = []          # this frame's (pass, query)
+        self._pending: list[list[tuple[str, object]]] = []  # ended, not yet read
+        self._ms: dict[str, list[float]] = {p: [] for p in GPU_PASSES}
+        try:
+            q = ctx.query(time=True)
+            with q:
+                pass
+            # reading it back syncs with the GPU once, per Renderer: the
+            # price of knowing the context really has timer queries
+            _ = q.elapsed
+            self._free.append(q)
+            self.on = True
+        except Exception as e:  # noqa: BLE001 — no timer queries on this context
+            self.note = f"no GPU timer queries on this context ({type(e).__name__})"
+
+    def _off(self, e: Exception) -> None:
+        """Timing off for good: the note, and every query freed. A query
+        still active (begun, its pass running) is ended by its `_Timed`
+        first, so only the rest are released here."""
+        self.on = False
+        self.note = f"GPU timing off: {type(e).__name__}: {e}"[:120]
+        held = [q for _, q in self._frame] + [q for f in self._pending for _, q in f]
+        self._frame, self._pending = [], []
+        for q in held + self._free:
+            try:
+                q.release()
+            except Exception:  # noqa: BLE001, S110 — a stand-in or a lost context: nothing to free
+                pass
+        self._free = []
+
+    def time(self, name: str) -> _Timed:
+        """``with timer.time("scene"):`` — the pass's GPU time, this frame."""
+        if not self.on:
+            return _Timed(None)
+        try:
+            q = self._free.pop() if self._free else self.ctx.query(time=True)
+        except Exception as e:  # noqa: BLE001 — a driver that runs out: timing off
+            self._off(e)
+            return _Timed(None)
+        self._frame.append((name, q))
+        return _Timed(q, self)
+
+    def end_frame(self) -> None:
+        """Once a frame, after the last pass: this frame's queries wait;
+        the frame `LAG` frames back is read into the medians."""
+        if not self.on:
+            return
+        self._pending.append(self._frame)
+        self._frame = []
+        while len(self._pending) > self.LAG:
+            done = self._pending.pop(0)
+            totals = dict.fromkeys(GPU_PASSES, 0.0)
+            try:
+                for name, q in done:
+                    # blocks if the result is still not there LAG frames on
+                    # (moderngl has no availability query to ask first)
+                    totals[name] = totals.get(name, 0.0) + q.elapsed / 1e6
+                    self._free.append(q)
+            except Exception as e:  # noqa: BLE001 — a read that fails: timing off
+                self._off(e)
+                return
+            for name, ms in totals.items():
+                window = self._ms.setdefault(name, [])
+                window.append(ms)
+                del window[:-self.WINDOW]
+
+    def medians(self) -> dict[str, float]:
+        """Pass → median ms over the window, in `GPU_PASSES` order; empty
+        until the first frame has been read back, and with no timer."""
+        return {name: float(np.median(w)) for name, w in self._ms.items() if w}
+
+
+class _Timed:
+    """One pass's query as a context manager; nothing with no query. A
+    query whose begin or end raises turns the timer off, never the frame."""
+
+    __slots__ = ("began", "q", "timer")
+
+    def __init__(self, q, timer: PassTimer | None = None):
+        self.q, self.timer, self.began = q, timer, False
+
+    def __enter__(self) -> Self:
+        if self.q is not None:
+            try:
+                self.q.__enter__()
+                self.began = True
+            except Exception as e:  # noqa: BLE001 — timing never costs a frame
+                self.timer._off(e)
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        if self.began:
+            try:
+                self.q.__exit__(None, None, None)
+            except Exception as e:  # noqa: BLE001 — timing never costs a frame
+                self.timer._off(e)
+        return False
+
+
 class Renderer:
     def __init__(self, ctx: moderngl.Context, dream: DreamState | None = None,
                  fx: FxState | None = None, ghost: GhostState | None = None):
@@ -559,6 +689,8 @@ class Renderer:
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
+        # plan 26 A0: GPU time per pass, `stats["gpu_ms"]` (the SYSTEM page)
+        self.timer = PassTimer(ctx)
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
@@ -836,9 +968,34 @@ class Renderer:
             ctx.viewport = vp
             ctx.enable(moderngl.BLEND)
 
+    def _pass_timer(self) -> PassTimer:
+        """The GPU pass timer (getattr: a renderer from before a hot reload
+        has none, and gets one)."""
+        timer = getattr(self, "timer", None)
+        if timer is None:
+            timer = self.timer = PassTimer(self.ctx)
+        return timer
+
+    def _timed(self, name: str) -> _Timed:
+        """``with self._timed("fx"):`` — the pass's GPU time (plan 26 A0)."""
+        return self._pass_timer().time(name)
+
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     views: list[View]) -> None:
-        """draw_outputs()'s body: the face picture (only while an effect is
+        """draw_outputs()'s body, timed per pass on the GPU (`PassTimer`):
+        `stats["gpu_ms"]` is each pass's rolling median in ms and
+        `stats["gpu_note"]` why there is none, whatever the frame did."""
+        timer = self._pass_timer()
+        try:
+            self._frame_passes(s, w, h, dpr, t, views)
+        finally:
+            timer.end_frame()
+            self.stats["gpu_ms"] = timer.medians()
+            self.stats["gpu_note"] = timer.note
+
+    def _frame_passes(self, s: ViewState, w: int, h: int, dpr: float, t: float,
+                      views: list[View]) -> None:
+        """The frame's passes: the face picture (only while an effect is
         aimed at the faces), scene, cover, pull, the hands' layer, each
         pipeline once (composite, capture, effects), then each view's
         picture, the ghost hands over it and its dim."""
@@ -861,16 +1018,21 @@ class Renderer:
         # the scene pass begins and not bound again this frame. The scene
         # pass below shows it, so everything after — the echoes, the dream,
         # the frame's effects — sees the faces' effects as part of the scene
-        self._pic = self._face_picture(s, t)
-        try:
-            self.scene.draw_fbo.use()
-            ctx.viewport = (0, 0, *size)
-            self.draw_scene(s, w, h, dpr, t)
-        finally:
-            self._pic = None         # handed to that one scene pass only
-        self.scene.resolve()
+        clock = self._timed
+        with clock("scene"):         # the face picture, the scene, the resolve
+            self._pic = self._face_picture(s, t)
+            try:
+                self.scene.draw_fbo.use()
+                ctx.viewport = (0, 0, *size)
+                self.draw_scene(s, w, h, dpr, t)
+            finally:
+                self._pic = None         # handed to that one scene pass only
+            self.scene.resolve()
         lb = self.lookback
-        cover = self._draw_cover(w, h) if lb.wants_cover() else None
+        cover = None
+        if lb.wants_cover():
+            with clock("cover"):
+                cover = self._draw_cover(w, h)
         target.viewport = vp
         lb.tick(t)                       # echo time is seconds (plan 14 WP6)
         lb.pull()
@@ -896,7 +1058,8 @@ class Renderer:
         if any(v.switches.hands for v in views):
             through = fx_on and any(v.switches.hands and v.switches.through for v in views)
             try:
-                hands = bool(self.ghost.layer(size, t, readout=through))
+                with self._timed("hands"):
+                    hands = bool(self.ghost.layer(size, t, readout=through))
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, target, vp)
         readout = self.ghost.readout if hands else None
@@ -943,7 +1106,8 @@ class Renderer:
         # showing the scene it runs all the same — the history and the
         # dream go on, so switching the scene back on shows no gap
         stats["captures"] = 1
-        lb.capture(self.scene.tex, self.scene.fbo)
+        with self._timed("lookback"):
+            lb.capture(self.scene.tex, self.scene.fbo)
         if fx_on and not stats["chain_runs"]:
             fx.state.advance_to(t)       # …and so do the effects' clocks
         for i, v in enumerate(views):
@@ -952,7 +1116,8 @@ class Renderer:
             # or through: in its own layer the guide is in neither
             ro = readout if v.switches.hands else None
             try:
-                self._compose(v, key, after, frames, failed, size, ro)
+                with self._timed("compose"):
+                    self._compose(v, key, after, frames, failed, size, ro)
             except Exception as e:  # noqa: BLE001 — one view must not take the others down
                 self._view_failed(v, "output", e)
                 self._rebind(target, vp)
@@ -966,8 +1131,10 @@ class Renderer:
         the chain; no look-back (the echoes are the scene's, and the scene
         is off). Both only ever with an effect on (`outputs.route`)."""
         lb, fx, ctx = self.lookback, self.fx, self.ctx
+        clock = self._timed
         if not fx_on:
-            lb.composite(self.scene.tex, dst, cover)
+            with clock("lookback"):
+                lb.composite(self.scene.tex, dst, cover)
             return
         # the post pass into the chain's first texture; the chain ends on
         # `dst`. The history is captured after every pipeline's composite
@@ -979,16 +1146,19 @@ class Renderer:
             ctx.viewport = (0, 0, *size)
             ctx.clear(0.0, 0.0, 0.0, getattr(self, "bg_alpha", 1.0))
         else:
-            lb.composite(self.scene.tex, buf, cover)
+            with clock("lookback"):
+                lb.composite(self.scene.tex, buf, cover)
         if key != SCENE:
             # the hands onto the chain's input (fork F1: after the look-back
             # composite, before the first effect). Failing, the chain still
             # runs on the scene alone and `Ghost.error` says why
             try:
-                self.ghost.composite(buf, (0, 0, *size), opaque=fx.opaque)
+                with clock("hands"):
+                    self.ghost.composite(buf, (0, 0, *size), opaque=fx.opaque)
             except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
                 self._hands_failed(e, *restore)
-        fx.run(dst, t)
+        with clock("fx"):
+            fx.run(dst, t)
         stats["chain_runs"] += 1
 
     def _compose(self, v: View, key: int | None, after: bool,
