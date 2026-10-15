@@ -60,6 +60,21 @@ def test_lanes_rest_and_travel():
     assert pad.lanes() == [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
 
 
+def test_the_share_button_is_named_and_free(rig):
+    """A pad with a Share button reports it at 15 (2026-10-15). It carries
+    no factory row — like BACK, Learn pad puts anything on it — and the
+    name has to exist for the learn to land at all."""
+    pad, lrn = ScriptedPad(), rig.learn
+    assert gp.BUTTONS["SHARE"] == 15 and gp.SHARE < gp.N_BUTTONS
+    assert not [b for b in routing.padmap() if b.source == "pad:SHARE"]
+    pad.frame()
+    lrn.arm("view.points", "pad")
+    pad.frame(held={gp.SHARE})
+    assert gp.learn_from(pad, lrn) is True
+    rows = [(b.target, b.op) for b in rig.table.bindings if b.source == "pad:SHARE"]
+    assert rows == [("view.points", "toggle")]
+
+
 def test_release_edges():
     pad = ScriptedPad()
     pad.frame(held={gp.A}, hat=gp.HAT_UP)
