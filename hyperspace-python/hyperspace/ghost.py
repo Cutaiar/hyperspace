@@ -109,7 +109,16 @@ class GhostState:
     style: int = 0          # STYLES: what is drawn from the poses (HANDS, the capsules)
 
 
-def register(reg, state: GhostState) -> None:
+def prefix(n: int = 1) -> str:
+    """The n-th hands node's id prefix, by the naming rule (plan 26 A0/A4,
+    ENGINEERING §2): `ghost`, then `ghost.2`, … — same group, so an extra
+    hands node's params are the session's like the first's."""
+    if n < 1:
+        raise ValueError(f"hands instances start at 1, not {n}")
+    return GROUP if n == 1 else f"{GROUP}.{n}"
+
+
+def register(reg, state: GhostState, n: int = 1) -> None:
     """ghost.* — session params (params.SESSION_GROUPS): the hands are the
     room's display, like the output's placement, so a preset load never
     switches them off mid-set. They show on the HANDS page and can be
@@ -118,25 +127,29 @@ def register(reg, state: GhostState) -> None:
     `tethers` and `style` are settings of the rig and the show — a
     performer's row on the mirror would flip the hands with a hand's move,
     and a style stepping under an LFO would swap the drawn object
-    mid-gesture (plan 21 WP5 R12, WP6)."""
-    if f"{GROUP}.on" in reg:
+    mid-gesture (plan 21 WP5 R12, WP6).
+
+    Plan 26 A4: `n` ≥ 2 declares a second hands node's own set
+    (`ghost.2.on` … "Ghost 2 opacity"), the same params on its own state."""
+    pre, lb = prefix(n), "Ghost" if n == 1 else f"Ghost {n}"
+    if f"{pre}.on" in reg:
         return
-    reg.toggle(f"{GROUP}.on", "Ghost hands", lambda: state.on,
+    reg.toggle(f"{pre}.on", f"{lb} hands", lambda: state.on,
                lambda v: setattr(state, "on", bool(v)), group=GROUP,
                tip="Draw both tracked hands over the render, after every effect — "
                    "so a newcomer sees their hands are in there. Needs the tracker on.")
-    reg.continuous(f"{GROUP}.alpha", "Ghost opacity", lambda: state.alpha,
+    reg.continuous(f"{pre}.alpha", f"{lb} opacity", lambda: state.alpha,
                    lambda v: setattr(state, "alpha", float(v)), lo=0.0, hi=1.0,
                    fmt=lambda v: f"{v * 100:.0f}%", group=GROUP,
                    tip="How solid the ghost hands are over the picture.")
-    reg.toggle(f"{GROUP}.mirror", "Ghost mirror", lambda: state.mirror,
+    reg.toggle(f"{pre}.mirror", f"{lb} mirror", lambda: state.mirror,
                lambda v: setattr(state, "mirror", bool(v)), group=GROUP, modulatable=False,
                tip="Flip the ghost hands left for right, the hands only — for a real "
                    "mirror in front of the performer's hands. For a Pepper's Ghost "
                    "glass use Flip X / Flip Y on the OUTPUT page, which mirror the whole "
                    "picture; with an output flip on, leave this off or the hands flip "
                    "twice.")
-    reg.enum(f"{GROUP}.guide", "Ghost guide", lambda: state.guide,
+    reg.enum(f"{pre}.guide", f"{lb} guide", lambda: state.guide,
              lambda i: setattr(state, "guide", int(i)), GUIDES, group=GROUP,
              modulatable=False,
              tip="What each hand is doing: a ball per axis (x red, y green, z blue), a "
@@ -144,11 +157,11 @@ def register(reg, state: GhostState) -> None:
                  "the palm faces (roll), and the four pinch switches. All six always "
                  "show; the ones the setup routes are brighter and show what the table "
                  "is fed. Beside the hand, or on it.")
-    reg.toggle(f"{GROUP}.tethers", "Ghost tethers", lambda: state.tethers,
+    reg.toggle(f"{pre}.tethers", f"{lb} tethers", lambda: state.tethers,
                lambda v: setattr(state, "tethers", bool(v)), group=GROUP, modulatable=False,
                tip="With a guide on: a line from each routed axis, pinch or grab to a "
                    "label at the edge of the frame naming the params it drives.")
-    reg.enum(f"{GROUP}.style", "Ghost style", lambda: getattr(state, "style", 0),
+    reg.enum(f"{pre}.style", f"{lb} style", lambda: getattr(state, "style", 0),
              lambda i: setattr(state, "style", int(i)), STYLES, group=GROUP,
              modulatable=False,
              tip="What is drawn where your hands are: HANDS (capsule hands), JOINTS (a "
@@ -1198,11 +1211,20 @@ class Geometry:
             res.release()
 
     def draw(self, poses: list[HandPose], view_proj: np.ndarray, eye: np.ndarray,
-             parts=hands_parts, extra: list | None = None) -> None:
+             parts=hands_parts, extra: list | None = None, lines: bool = False) -> None:
         """Each pose as `parts` draws it, in its colour and fade, then the
         pose's `extra` rows — (sphere rows, tube rows), aligned with `poses`
         — in the same instanced draws, so they share the depth test. With
-        `parts` None only the extra rows draw."""
+        `parts` None only the extra rows draw. `lines` (plan 26 A4, a hands
+        node drawn as lines): the same triangles' edges only, one pixel
+        wide (`ctx.wireframe`), with depth as ever."""
+        if lines:
+            self.ctx.wireframe = True
+            try:
+                self.draw(poses, view_proj, eye, parts, extra)
+            finally:
+                self.ctx.wireframe = False
+            return
         s_rows, t_rows, m_rows = [], [], []
         for k, p in enumerate(poses):
             if parts is not None:
@@ -1388,7 +1410,7 @@ class Ghost:
         self.now = self.poses(t, aspect, fov, distance)
         return self.now
 
-    def draw_solid(self, now) -> bool:
+    def draw_solid(self, now, lines: bool = False) -> bool:
         """The hands into whatever is bound — the scene's framebuffer, with
         its depth — as solid geometry (plan 26 A3: hands inside the scene
         are drawn first, opaque, `ghost.alpha` not applied; the
@@ -1398,7 +1420,7 @@ class Ghost:
         (`ONE, ONE_MINUS_SRC_ALPHA`), so a hand fading in or out is
         see-through for those tenths of a second. Leaves the depth test
         off and the frame's blend on, a raise included. True when it
-        drew."""
+        drew. `lines` (plan 26 A4): the parts' edges only (`Geometry.draw`)."""
         if now is None:
             return False
         if self.geometry is None and not self._build():
@@ -1408,8 +1430,11 @@ class Ghost:
         try:
             ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND)
             ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
-            self.geometry.draw(poses, view_proj, eye,
-                               style_parts(getattr(self.state, "style", 0)))
+            parts = style_parts(getattr(self.state, "style", 0))
+            if lines:
+                self.geometry.draw(poses, view_proj, eye, parts, lines=True)
+            else:
+                self.geometry.draw(poses, view_proj, eye, parts)
         finally:
             ctx.disable(moderngl.DEPTH_TEST)
             ctx.enable(moderngl.BLEND)
@@ -1460,7 +1485,8 @@ class Ghost:
         return self._ro_tex if getattr(self, "_ro_shown", False) else None
 
     def layer(self, size: tuple[int, int], t: float, readout: bool = False,
-              now=None, hands: bool = True, settled: bool = False) -> bool:
+              now=None, hands: bool = True, settled: bool = False,
+              lines: bool = False) -> bool:
         """Render the hands' layer at `size` (the frame's) for time `t`:
         the fades stepped, the hands drawn opaque with depth into their own
         framebuffer, the tethers flat over them, resolved into `tex`.
@@ -1483,7 +1509,9 @@ class Ghost:
         have drawn those poses); else the layer settles them itself, as it
         always did. `hands` False draws the readout alone (the hands are
         inside the scene and no output wants their own layer): False when
-        there is no guide."""
+        there is no guide. `lines` (plan 26 A4, a hands node drawn as
+        lines): the style's parts as edges; the guide stays solid, drawn
+        after them as for any style but HANDS."""
         self._shown = self._ro_shown = False
         w, h = max(int(size[0]), 1), max(int(size[1]), 1)
         got = now if settled else self.settle(t, w / h)
@@ -1508,9 +1536,12 @@ class Ghost:
         guides = [p.guide for p in poses]
         try:
             if hands:
-                self._draw_hands(poses, view_proj, eye, parts, guides, split)
+                if lines:
+                    self._draw_hands(poses, view_proj, eye, parts, guides, split, lines=True)
+                else:
+                    self._draw_hands(poses, view_proj, eye, parts, guides, split)
             if split:
-                over = parts is not hands_parts
+                over = parts is not hands_parts or lines
                 ro = self._ro_msaa if self._ro_msaa is not None else self._ro_fbo
                 ro.use()
                 ctx.viewport = (0, 0, w, h)
@@ -1543,7 +1574,8 @@ class Ghost:
         self._shown, self._ro_shown = bool(hands), bool(split)
         return True
 
-    def _draw_hands(self, poses, view_proj, eye, parts, guides, split: bool) -> None:
+    def _draw_hands(self, poses, view_proj, eye, parts, guides, split: bool,
+                    lines: bool = False) -> None:
         """`layer`'s hands: opaque with depth into the layer's own
         framebuffer, the guide and the tethers with them unless `split`
         puts them in the readout, resolved into `tex` (and the depth into
@@ -1560,9 +1592,12 @@ class Ghost:
         # solid at the palm far bigger than a guide ball, so its guide
         # goes over it: the style first, then the depth cleared, then
         # the guide — the guide reads the same in every style
-        over = parts is not hands_parts
-        self.geometry.draw(poses, view_proj, eye, parts,
-                           None if split or over else guides)
+        over = parts is not hands_parts or lines
+        if lines:                       # the parts' edges; the guide solid, after
+            self.geometry.draw(poses, view_proj, eye, parts, None, lines=True)
+        else:
+            self.geometry.draw(poses, view_proj, eye, parts,
+                               None if split or over else guides)
         if over and not split and any(g[0] or g[1] for g in guides):
             _clear_depth(ctx, draw_fbo)
             ctx.viewport = (0, 0, *self.size)
@@ -1763,6 +1798,22 @@ class Ghost:
         self._res, self._tex, self._fbo, self._msaa = [], None, None, None
         self._depth = None
         self.size = (0, 0)
+
+    def release(self) -> None:
+        """Everything this ghost made on its GL context: its layers, the
+        tethers' labels, its geometry and composite (plan 26 A4: a second
+        hands node's Ghost goes when the graph no longer holds it). The
+        ghost can be drawn again after: it builds afresh on next use."""
+        self.release_targets()
+        self.release_readout()
+        labels = getattr(self, "_labels", None)
+        if labels is not None:
+            labels.release()
+        for res in (self.geometry, self._comp_vao, self._comp):
+            if res is not None:
+                res.release()
+        self._labels = self.geometry = self._comp_vao = self._comp = None
+        self._shown = False
 
     def on_reload(self) -> None:
         """Hot-swap hook: rebuild every program (geometry and composite)
