@@ -31,7 +31,7 @@ Contract for hot classes:
     and `error` says so.
 
 A watched module that was never imported (an optional adapter behind its
-config gate — dream, bridge, midi) is skipped, not an error.
+device entry — dream, bridge, midi) is skipped, not an error.
 
 Data is watched the same way: `watchers` are objects with a ``poll(now)``
 (the preset library) that get polled on the same cadence, so a preset
@@ -57,7 +57,7 @@ MODULES = (
     "analysis", "tapers", "motion", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "lfo", "glsl", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "view", "render", "params", "library", "control", "config",
     "overlay", "gamepad", "apc40", "routing", "preset", "learn", "midi", "bridge",
-    "hands.signal", "hands.tape", "hands.core", "hands", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_patterns",
+    "hands.signal", "hands.tape", "hands.core", "hands", "devices", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_desk", "hands.panel", "ui",
 )
 
