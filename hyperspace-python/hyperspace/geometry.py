@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.random import default_rng
 
 PHI = (1 + math.sqrt(5)) / 2
 IP1 = 1 / PHI
@@ -805,7 +806,7 @@ def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
     e2 = w / np.linalg.norm(w)
     A = np.stack([e1, e2]).T
     q_basis, _ = np.linalg.qr(
-        np.hstack([A, np.random.default_rng(1).standard_normal((4, 2))])
+        np.hstack([A, default_rng(1).standard_normal((4, 2))])
     )
     o1, o2 = q_basis[:, 2], q_basis[:, 3]
     mask = np.ones(len(V), bool)
