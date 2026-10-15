@@ -558,10 +558,16 @@ on the SYSTEM page; a value of the wrong kind is its default with a note
 on stderr and the SYSTEM page — never a dead launch.
 
 ```toml
-[midi]                  # the MIDI adapter (midi.py)
+[[devices]]             # the rig's devices (plan 27, devices.py), one table each, in poll order
+role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
+kind = "midi"           # midi · gamepad · hands · bridge · midi-out · osc · cloud
+enabled = true          # false: listed as `off`, nothing opened, its adapter never imported
+port = "APC40"          # …then the kind's own keys (below)
+
+[midi]                  # the MIDI table: still read when there is no [[devices]] list
 enabled = true          # false: no MIDI at all (Learn's menus still work)
 # port = "APC40"        # substring of the port name; unset = the profile's ("APC40")
-profile = "apc40"       # device profile: hyperspace/apc40.py
+profile = "apc40"       # device profile: hyperspace/apc40.py, or "generic" (generic.py)
 map = "midi_map.json"   # an old map, read once when bindings.json does not exist
 
 [output]                # output 1 and the control window
@@ -585,6 +591,7 @@ dim = 1.0               # under 0.1 is 0.1, with a note
 
 [gamepad]
 enabled = true          # an Xbox-layout pad over GLFW; inert when absent
+usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
 
 [bridge]                # the analyzer's lanes out / external lanes in (bridge.py)
 enabled = false
@@ -594,7 +601,8 @@ encoding = "pitch"      # "pitch": lane i → pitch bend on channel+i; "cc14": C
 channel = 0             # 0-based
 cc = 16                 # cc14: first MSB controller (0–31)
 rate = 100              # messages a second per lane at most (0 = every frame)
-send = ["lane:*"]       # "lane:*", "lane:3", "param:<id>", in lane order
+send = ["lane:*"]       # "lane:*", "lane:3", "param:<id>", in lane order — read once,
+                        # into bindings.json's sink rows (§13)
 in_lanes = 16
 
 [dream]                 # the look-back's dream worker (dream.py, torch)
@@ -608,7 +616,8 @@ enabled = false         # true opens the tracker; off, `leap` is never imported
 mode = "desktop"        # camera looks up; "screentop" looks down; "hmd"
 dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand; also grab, pinch,
                         # grab_angle, pinch_mm, pinch_index … pinch_pinky
-out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new virtual port ("" = none)
+out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new virtual port ("" = none);
+                           # becomes the `hands-daw` midi-out entry at load (§12)
 channel = 16            # 1-based
 cc = 102                # left hand cc…cc+n−1, right cc+n…cc+2n−1
 presence = true         # a note on/off as each hand enters / leaves
@@ -640,6 +649,100 @@ Rules worth knowing:
   `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
 
+### The device list
+
+Every input and output is a `[[devices]]` entry (plan 27). Without a
+list, nothing changes: the four device tables above — `[gamepad]`,
+`[midi]`, `[hands]`, `[bridge]`, with their defaults — become the
+equivalent entries at load, in that order, as roles `pad`, `apc40` (the
+MIDI profile's name), `leap` and `bridge` (`config._translate`), with
+**one note per table the file holds** ("config: [midi] is now a
+[[devices]] entry (role = 'apc40', kind = 'midi') — see config.py"),
+on stderr and the SYSTEM page, until the file is renamed. With a list,
+the list says, and each of those tables left in the file is ignored
+with a note ("config: [[devices]] is listed, so [midi] is ignored — its
+midi entry says"). The first entry of each of those kinds is folded back
+into its table (`cfg["midi"]`, `cfg["hands"]`, …), so code that still
+reads them reads the entry. `[dream]` stays a table: it is a worker, not
+a device. Today's rig as a list (this exact block equals the old tables,
+`tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`):
+
+```toml
+[[devices]]
+role = "pad"
+kind = "gamepad"
+
+[[devices]]
+role = "apc40"
+kind = "midi"
+port = "APC40"
+
+[[devices]]
+role = "leap"
+kind = "hands"
+enabled = false
+
+[[devices]]
+role = "bridge"
+kind = "bridge"
+enabled = false
+```
+
+Every entry has `role` (required, unique, no `:`), `kind` (required)
+and `enabled` (true unless false; anything else is true with a note), and
+then its kind's own keys, each defaulting as the old table does
+(`config._kind_defaults`):
+
+| Kind | Its keys (defaults) |
+|---|---|
+| `midi` | `port` (a substring; required for `generic`), `profile` (`"apc40"` or `"generic"`), `map` |
+| `gamepad` | `usb` (`true`) |
+| `hands` | the whole `[hands]` table (`hands/core.py` `DEFAULTS`); a relative `calibration` or `tape` is the config's folder's |
+| `bridge` | `out` (`"IAC"`), `in` (`""`), `encoding` (`"pitch"`), `channel` (0), `cc` (16), `rate` (100), `send` (`["lane:*"]`, read once into sink rows, §13), `in_lanes` (16) |
+| `midi-out` | `port` (required), `virtual` (`true`: make a virtual port of that name when none matches), `carries` (a hands role whose DAW messages it sends), `encoding`, `channel`, `cc`, `rate` (its sink rows' wire, as the bridge's; `config.MIDI_OUT`) |
+| `osc` | `host` (`"0.0.0.0"`), `port` (9000), `axes` (OSC addresses, `["/x", "/y"]`; none by default), `hits` (addresses; none), `rest` (a number, or a table per address; 0), `range` (`[0, 1]`), `timeout` (5 s), `hold` (`true`) — checked by `osc.Layout` when the device opens |
+| `cloud` | `file` (required; relative to the home), `rate` (the file's), `loop` (`true`) |
+
+A missing or bad `role`, a role listed twice, or no `kind` drops the
+entry with a note; an unknown kind is kept as an `error: unknown kind
+'x'` line. A kind's keys are checked when the device opens: a bad value
+is an `error: …` line on SYSTEM and one note, never a dead launch.
+**`[hands] out`** — on the old table or on a hands entry — becomes a
+`midi-out` entry right after the first enabled hands entry (`role =
+"hands-daw"`, `port` = the old `out`, `carries` = the hands' role),
+unless the list already has a `midi-out` carrying that role; one note
+only when the file wrote `out` itself (`config._daw`).
+
+**The list is watched.** Every 30 frames (`devices.WATCH_FRAMES`) the
+registry looks at `config.toml`'s mtime; when it moved it re-reads the
+device list only (`config.read_devices`; nothing else in the file is
+re-applied). A parse error or an entry that would be dropped is one note
+— "config: [[devices]] not applied — … — the old list stands" — and
+nothing changes; otherwise an unchanged entry keeps its device, a
+changed one is closed and opened again ("devices: apc40 changed —
+reopened"), a new one opens ("added"), one that left closes ("removed").
+Everything else in `config.toml` still needs a relaunch.
+
+**A device that fails** to open (a missing tape or recording, a busy UDP
+port, a bad key) is an `error: …` line and one note, tried again every
+2 s five times, then every 10 s, and comes up with no relaunch; one whose
+hardware is simply absent is `lost` and looks for it itself. A device
+that raises on a frame shows the error on its line and the hot-reload
+toast; the frame and every other device go on. Two enabled entries that
+would feed one source scheme (two pads, two hands) are not both opened:
+the later is `error: feeds 'axis', which pad already feeds — not
+opened`.
+
+**A recorded point cloud** (`kind = "cloud"`, `file =
+"clouds/knot.npz"`): a `devices.write_clouds` file (version-1 `.npz`:
+`rate`, ragged `offsets`, `points`, optional `colors`) played at its own
+rate against the frame clock (`loop = false` holds the last frame). It
+publishes a `devices.PointCloud` — read-only N×3 float32 points, `t`, a
+counting `frame`, `bounds`, optional colours — on the registry as
+`cloud:<role>` (`DeviceRegistry.clouds`), never through the router;
+the render graph's point-cloud node draws it. `tools/cloud_fixture.py`
+writes the test fixture `tests/fixtures/clouds/knot.npz`.
+
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
@@ -663,7 +766,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **midi**: knob smoothing, the port's state, the learn line; **bridge**: port, encoding, messages sent or why it is off. |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road; the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -779,10 +882,48 @@ exactly the held ones that some row on that key names (`SHIFT`, `SUPER`,
 the key names is ignored.
 
 **Gamepad** (Xbox layout, Bluetooth or USB; `gamepad.py` keeps its own
-button map): A pause rotation · B next preset · X points · Y faces ·
-LB / RB previous / next shape · d-pad brightness (↑↓) and speed (←→) ·
-left stick orbit, right stick zoom, a stick click resets · LT / RT 4D
-depth out / in · VIEW panel · MENU cheat sheet.
+button map; the factory rows in `bindings.default.json`): A faces · Y
+lines · B / X next / previous preset in the PRESETS list · LB / RB
+previous / next shape · d-pad brightness (↑↓) and speed (←→) · left
+stick orbit, its click resets the camera · right stick ↕ zoom, ↔ the
+spin of the W planes, its click resets the 4D spin · LT / RT 4D depth
+out / in · START and BACK unbound (hand check 144).
+
+**The pad is a device** (plan 27): a `[[devices]] kind = "gamepad"`
+entry (`role = "pad"` from the old `[gamepad]` table). It finds a pad
+itself every poll — GLFW first, then a wired 360 pad over libusb with
+`usb = true` — so absent it is `lost`, never an error; ⌘R and quit
+close it, stopping the USB reader (`Pad.close`). In the scene-setter
+slot it is polled, offered to an armed **Learn pad**
+(`gamepad.learn_from`), delivers its rows (`Router.pad`: the `axis`
+lanes fed, with names, labels and rests from `gamepad.publish`, then the
+button and d-pad rows), then runs the sticks' default camera job
+(`gamepad.steer`): every stick or trigger no route names moves its
+camera param through `nudge` / `scale`, through the pad's feel
+(`desk.pad.*`, SYSTEM → gamepad). A second enabled pad is refused (two
+devices may not feed `axis`).
+
+**A phone, or any OSC sender** (plan 27, `osc.py`): one `[[devices]]
+kind = "osc"` entry, no code. Its role is its scheme: `axes = ["/x",
+"/y"]` are the sources `phone:x`, `phone:y` (the address without its
+`/`; `/1/fader3` is `phone:1/fader3`), routable like a hand axis and
+offered on ROUTING; `hits = ["/hit"]` are buttons, `phone:hit`, whose
+rows act when the velocity (the message's first number, 0–1, or 1 with
+none) is above 0 — `abs` lands the velocity, `momentary` holds a toggle
+until a 0 comes. An axis's value is the message's first number mapped
+from `range` (default `[0, 1]`) and clamped; until a message arrives it
+reads nothing, so no route moves at launch. The line reads `connected`
+while a message came within `timeout` (5 s), `lost` otherwise; while
+lost the axes hold their values unless `hold = false`. **Learn phone**
+on a param's menu takes the next fader moved a quarter of its travel (a
+route) or button pressed (a session row). The socket (UDP, `0.0.0.0:9000`
+by default) is read without a thread in the scene-setter slot, at most
+512 datagrams a frame; a datagram that is not OSC is counted on the line;
+a port another program holds is an `error:` line, retried until it
+frees. macOS asks once whether Python may accept incoming connections:
+allow it. A role that is a row kind or a built-in scheme (`cc`, `pad`,
+`lane`, `lfo`, `cloud`, …) is refused on open. Only a message's first
+number is read; there is no OSC output yet.
 
 ## 8. The APC40
 
@@ -960,7 +1101,35 @@ setting is saved with the show, never with a preset, and is on no knob.
 **Reconnect.** With no desk connected the app looks for it every 2 s
 five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
 `RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. `[midi] enabled = false` stops all of it.
+again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+comes, it gets its power-up and every light. `enabled = false` on its
+entry (or `[midi] enabled = false` in the old form) stops all of it.
+
+**Several desks** (plan 27). Each `[[devices]] kind = "midi"` entry is a
+desk of its own — its `role`, its `port` and its `profile`: `apc40`, or
+`generic` (`generic.py`: plain CC, note and pitch; the app sends it
+nothing at all; every CC absolute with soft pickup, a note a toggle;
+no layout, so its line counts 0 sources; the entry must name a `port`).
+`bindings.json`'s top-level `"profile"` only says which profile its
+unqualified rows were written for; the entry's profile is the desk's.
+**One desk owns the unqualified rows** — every row in `bindings.json`
+and in every preset before plan 27 (`cc:0:48`): the first MIDI entry
+whose profile is `bindings.json`'s (`apc40`), else the first MIDI entry
+listed (`DeviceRegistry.midi_roles`). **Any other desk's rows carry its
+role** after `@` on the kind — `cc@launch:0:21`, `note@launch:0:40`,
+`pitch@launch:3` (`routing.QUALIFIER`) — and Learn desk writes that form
+for you; ROUTING and the footer say "MIDI CC 21 ch1 on launch". A knob
+on one desk never moves another desk's row. **SHIFT** (`desk.shift`) is
+the owning desk's latch; every other desk has a layer of its own
+(`Bindings.layer_of(role)`), the preset layer, and no SHIFT — so with
+the APC40 on SHIFT a second desk's rows still act and a learn on it
+still lands; a preset load drops every desk to the preset layer; a
+layer switch re-arms only that desk's faders. A desk learn replaces the
+param's knob on the same desk only (one knob per param per desk). The
+on-screen desk, the desk log and the panel's knob hints are the first
+open MIDI desk's (`ui_desk.py` draws the APC40 only): list the APC40
+first. A second APC40-profile desk gets its power-up and the lights of
+its own rows but no SHIFT.
 
 **Macros** (`macro.1`–`macro.8`) are knobs with subscribers: each
 subscriber sets a param's base or scales a route's depth over its own
@@ -988,6 +1157,20 @@ session's rows dim — then:
   can drive (not a setting such as `ghost.mirror`), for the sides the
   rig's axes have. Completed only by an axis of that hand; the other
   hand and the desk do their own jobs meanwhile.
+- **Learn pad** — while a pad is connected, wherever Learn desk is: a
+  button or the d-pad makes a session row in `bindings.json` (written
+  at once), a stick or a trigger a route in the preset (§7).
+- **Learn <role>** — on a modulatable param, for any other listed device
+  that feeds (plan 27; an OSC phone: "Learn phone"): completed only by
+  that device — an OSC fader moved a quarter of its travel lands a
+  route, a button a session row. What the menu offers is "desk" plus the
+  devices' `wants` (`Learn.wants`). A bridge in the list (on or off)
+  offers **Learn bridge** too, which nothing completes: a known fault.
+- **Learn sink ▸** `<role>:<channel>` — on any param but a trigger, for
+  every sink port the rig lists (`bridge:3 · pitch ch4`): sends the
+  param's effective value out on that port (§13). It lands at once, as a
+  session row in `bindings.json` — no question, no undo step, no preset
+  dirt — and takes the port from whatever sent on it before.
 - **Cancel learn** while this param is armed.
 - **Unbind** — shown only when there is something to remove; a submenu
   ("desk — K2", "route — R height, LFO 1", "both") when there are both.
@@ -1012,8 +1195,12 @@ from …"; one ⌘Z puts them back). An armed learn never times out.
 
 **The ROUTING page** is one page over the loaded preset: its head (the
 preset, its dirty dot, save / as…, which desk layer is up), the routes,
-the desk with its dark controls, the macros and their subscribers, and
-the session's MIDI rows read-only. **The filter** (left of `+ route`)
+the desk with its dark controls, the macros and their subscribers, the
+session's MIDI rows read-only, and the **sinks** (plan 27: each sink row
+with a checkbox and a ×, both writing `bindings.json`). A route's source
+list is the analyzer's lanes, LFO 1–4, then each listed device's sources
+in the `[[devices]]` order (`Router.schemes()`; a scheme a route names
+is offered too). **The filter** (left of `+ route`)
 keeps only the lines that contain every typed word, matched anywhere —
 a route's sentence, source, target and label; a desk line's glyph, Akai's
 name and target; a macro's id, label and subscribers. It is UI state:
@@ -1144,8 +1331,9 @@ no file. The band strips' 8-second "Reset all → Undo" is separate.
 
 ## 12. Hands
 
-Ultraleap hands (`hyperspace/hands/`), off until `[hands] enabled =
-true`. Each hand gives its palm's pose — six axes by default, from the
+Ultraleap hands (`hyperspace/hands/`), off until the hands entry says
+`enabled = true` (`[[devices]] kind = "hands"`, or the old `[hands]`
+table). Each hand gives its palm's pose — six axes by default, from the
 features in `hands/core.py` (`FEATURES`: x y z in mm, roll pitch yaw in
 degrees, grab, pinch, grab angle, pinch distance, four thumb-to-finger
 ratios) — plus eight pinch switches. Each axis is calibrated, smoothed,
@@ -1156,6 +1344,28 @@ routes; outside they go to a MIDI port for a DAW (`[hands] out`).
 `uv run python tools/hands_probe.py` shows every axis live without the
 app (`--calibrate 20` runs the sweep, `--solo right.pitch` sends one axis
 to the DAW).
+
+**On the device registry** (plan 27). The hands are a device:
+`hands/device.py`'s `HandsDevice` owns the `HandsIO` (it and
+`hands/panel.py` are the only files of the package that know the host;
+`core.py`, `signal.py`, `tape.py` import nothing from it). It makes the
+instrument's one call, `HandsIO.poll(dt, learn, router)`, in the
+registry's feed slot — after the audio step, before the LFOs — which
+reads the tracker, feeds `hand` and `hands`, completes a hand Learn and
+makes the frame's DAW messages. Its SYSTEM line counts the instrument's
+lanes as sources (42 with six axes a hand) and reads `connected` while
+the tracker gives frames, `lost` while it connects, and the tracker's
+own words otherwise (`error: no camera`, `error: service lost`) — the
+Leap SDK's thread reconnects by itself. A hands entry whose `open`
+fails (a missing tape) is retried on the registry's schedule. **The DAW
+out is a sink**: `HandsIO` opens no MIDI port; its messages wait in
+`HandsIO.outbox` and the `hands-daw` device (`kind = "midi-out"`,
+derived from `out` at load, §5) carries them after `reg.apply`
+(`HandsIO.carry`), looks for a lost port again on the MIDI schedule, and
+on its return sends `HandsIO.resync()` first, so the DAW catches up with
+where the hands are. Its line: `hands-daw · midi-out · connected · 0
+sources · 0 sinks · Hyperspace Hands · leap's DAW out · cc 102 = 64
+ch16`.
 
 **The HANDS page** (`hands/panel.py`): the setup strip (a setup is every
 per-axis and global hand setting, a module preset of the `hands` group);
@@ -1310,11 +1520,40 @@ the quantity is already even; the tag is in each knob's tooltip.
 **The tempo clock** (LFO page; B or TAP TEMPO taps, NUDGE shifts the
 downbeat) drives the four LFOs. It syncs to nothing outside the app.
 
-**The bridge** (`[bridge]`, `bridge.py`) sends the lanes (or any param)
-out as 14-bit MIDI — pitch bend per channel, or CC pairs — rate-limited
-and only on change, and turns the same messages coming in on `in` into
-`ext:<i>` sources for routes. Use two buses: IAC echoes. The SYSTEM page
-shows its state.
+**The bridge** (`[[devices]] kind = "bridge"`, or the old `[bridge]`
+table; `bridge.py`) sends the lanes (or any param) out as 14-bit MIDI —
+pitch bend per channel, or CC pairs — rate-limited and only on change,
+and turns the same messages coming in on `in` into `ext:<i>` sources for
+routes, published with labels ("ext 0" …) and rests (0). Use two buses:
+IAC echoes. It is one device with two halves: in the feed slot it
+receives and publishes `ext`; after `reg.apply` it sends its **sink
+rows** (`bridge.Sender`: quantise, change-gate, rate-limit, encode), so
+what goes out is this frame's effective value. Its SYSTEM line: `bridge ·
+bridge · connected · 16 sources · 2 sinks · IAC Driver Bus 1 · pitch, 16
+lanes · 41 sent`.
+
+**Sink rows** (plan 27). What a sink sends is rows in `bindings.json`
+(the session's: sinks are rig), `{"source": "param:view.bright",
+"target": "bridge:6", "op": "send"}` — a source `param:<id>` (the
+param's effective norm), `lane:<i>` (the lane as a route reads it) or
+`lane:*` (every lane from the row's channel on), a target `<role>:<k>`
+(the sink's lane k: with `encoding = "pitch"` the pitch bend on channel
+`channel + k + 1`, with `cc14` the CC pair `cc + k` / `cc + k + 32`). An
+explicit row wins its channel over a `lane:*`; a trigger or an unknown id
+sends 0. Make one with the param menu's **Learn sink ▸**, or on ROUTING →
+sinks; a sink row is never a performer, never in a preset, never asks
+Replace / Keep, and Unbind never removes it. **The old `send` list
+becomes rows once**: the first launch an entry with a `send` list (the
+bridge's default `["lane:*"]` included) is on and its role has no sink
+row, the list is written into `bindings.json` (slot k → `<role>:k`;
+`lane:*` takes the default layout's six channels before the next entry)
+with one note — "bindings: [bridge] send is now sink rows in
+bindings.json (lane:* → bridge:0, param:view.bright → bridge:6) — the
+rows say from here on; edit them on ROUTING (sinks)" — and the file's
+top-level `"sinks_seeded": ["bridge"]` marks it done, so rows you delete
+never come back and `send` is not read again. To translate an edited
+`send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
+sink alone: its own port (§12) and its own sink rows on its role.
 
 ## 14. Outputs
 
@@ -1454,7 +1693,8 @@ uv run ruff check .
 - Fixtures: `tests/fixtures/` holds the test-only presets, templates
   and palettes a test copies into a scratch library (plan 24's
   `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
-  `grab-follow/` and `palettes/`, and `macro-candidates/`). The folder
+  `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, and
+  `macro-candidates/`). The folder
   is gitignored at the repo root, so a new fixture is added with
   `git add -f`. No test proves a mechanism by editing a factory preset.
 - The desk coverage report: `tests/test_desk_coverage.py` regenerates
@@ -1464,9 +1704,18 @@ uv run ruff check .
   `uv run python tools/desk_coverage.py` and commit the report
   (`--check` tells you whether it is stale).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
-  or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
-  and `undo.py` import nothing from the package; `library.py` never
+  or `dream`; importing `app` imports none of `midi`, `bridge`, `dream`,
+  `osc`, `leap`, `torch`, `pythonosc` (`devices.py` imports each inside
+  its device's `open`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
+  `tempo.py`, and `undo.py` import nothing from the package; only
+  `osc.py` and `devices.kinds()` name the OSC device; `library.py` never
   imports `config`.
+- The devices: `tests/test_devices.py` (the protocol and the registry
+  over fakes), `tests/test_device_inputs.py` (two desks, the pad and the
+  hands on the registry, over a fake MIDI bus), `tests/test_sinks.py`,
+  `tests/test_osc.py` (`pythonosc`'s client to 127.0.0.1 on a port the
+  device bound itself) and `tests/test_clouds.py`.
+  `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
 
 What only a person at the machine can check is
 [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in
@@ -1482,8 +1731,12 @@ What only a person at the machine can check is
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown.
 - **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `[midi]
-  enabled = false` stops it.
+  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
+  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
+- **"Learn bridge" never completes.** A device that feeds is offered as a
+  Learn by its role; the bridge feeds `ext` but has no learn, so while a
+  bridge is listed (on or off) the param menu offers an item that waits
+  until cancelled (register row 151).
 - **On the masked Heart, the W planes' readouts keep counting**: the
   VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
   planes turning while the picture turns in XZ, YZ and XY. Nothing says

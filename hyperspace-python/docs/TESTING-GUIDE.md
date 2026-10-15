@@ -28,7 +28,8 @@ explained in the [glossary](#glossary) at the end.
    entries (L48–L54, A19, D14) and the pattern entries (L55–L68, A20–A23,
    D15) need plan 22: until it is merged, use
    branch `plan-22-integration` instead. The party-fix entries (L69–L71,
-   A24–A32, B30–B36, C5) need plan 24: until it is merged, use branch
+   A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
+   A33, B37, B38, F5, G1–G6) plan 27: until they are merged, use branch
    `plan-24-26-27-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -40,7 +41,8 @@ explained in the [glossary](#glossary) at the end.
    (`~/Hyperspace/config.toml`, or `~/Hyperspace-try/config.toml` on the
    copy). Every setting is explained in
    `hyperspace-python/hyperspace/config.py`. Edit it with the app closed,
-   then launch again.
+   then launch again — except the device list (`[[devices]]`), which the
+   app re-reads while it runs; the entries that say so edit it live.
 5. **The control window's pages** are the column of names down its left
    edge — OUTPUT, VIEW, FACES, BITMAP, CAMERA, LOOKBACK, FX, AUDIO,
    ANALYZER, ROUTING, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
@@ -60,8 +62,9 @@ changes brightness or volume instead).
 >    cases macOS can kill the app while it looks (seen once during
 >    automated testing, never yet in the app). The risk is now smaller,
 >    not gone; putting `enabled = false` under `[midi]` in the config
->    file removes it (put it back before testing the desk). A desk
->    plugged in while the app runs is found within ten seconds.
+>    file (or on the `apc40` entry of a device list) removes it (put it
+>    back before testing the desk). A desk plugged in while the app runs
+>    is found within ten seconds.
 > 2. **Plug every screen in before launching.** A screen plugged in after
 >    the app starts is not used until you restart it (⌘R or quit and
 >    launch again).
@@ -88,6 +91,11 @@ changes brightness or volume instead).
 8. Part 2 (d), the glass and the projector: D1 first (it sets up two
    outputs in the config file), D14 any time, D12 and D13 last.
 9. Part 2 (e), a mouse, and (f), the gamepad — any time.
+10. Plan 27's device entries, on the copy: L72 first (it puts the
+    device list in the config file), then L73–L76; the FL Studio ones
+    (L77–L81) with L46; A33 with the APC40; B37, B38 with the hand
+    camera; F5 with the pad; (g) when a second controller or a phone is
+    to hand.
 
 ## Summary
 
@@ -164,6 +172,16 @@ changes brightness or volume instead).
 | L69 | The palette fold | 1 | laptop (APC40 for the fader) | 166 |
 | L70 | A saved palette, and the palette's controls | 1 | laptop, the copy | 167 |
 | L71 | Lines and points opacity | 1 | laptop | 154 |
+| L72 | Every device on the SYSTEM page | 1 | laptop, the copy | 168 |
+| L73 | Change the device list while the app runs | 1 | laptop, the copy | 173, 174 |
+| L74 | A broken device does not stop the show | 1 | laptop, the copy | 170 |
+| L75 | The pages offer what the rig lists | 1 | laptop, the copy | 178 |
+| L76 | A recorded point cloud plays | 1 | laptop, the copy | 190 |
+| L77 | A setting sent to FL Studio | 1 | laptop, FL Studio, the copy | 181 |
+| L78 | The bridge's old "send" list becomes rows, once | 1 | laptop, FL Studio, the copy | 182 |
+| L79 | Sending a setting never asks a question | 1 | laptop, FL Studio, the copy | 183 |
+| L80 | The hands' own port, now a device | 1 | FL Studio, hand camera or a tape, the copy | 184 |
+| L81 | The hands' port in the device list | 1 | laptop, the copy | 185 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -196,6 +214,7 @@ changes brightness or volume instead).
 | A30 | The desk coverage report against what you see | 2a | laptop (APC40 helps) | 155 |
 | A31 | A desk template | 2a | laptop, the copy | 156 |
 | A32 | Click a control: this preset's settings first | 2a | laptop (APC40 helps) | 157 |
+| A33 | The desk plugged in after the app started | 2a | APC40 | 175 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -232,6 +251,8 @@ changes brightness or volume instead).
 | B34 | Gap and twist | 2b | hand camera | 162 |
 | B35 | The grab | 2b | hand camera | 163 |
 | B36 | Grab to steer the shape | 2b | hand camera, the copy | 164 |
+| B37 | The hands in the device list | 2b | hand camera, the copy | 169, 180 |
+| B38 | A tracker that would not start comes up later | 2b | hand camera, a tape, the copy | 172 |
 | C1 | Choosing the screen; the see-through mode locked | 2c | projector | 26 |
 | C2 | A black ground, never see-through | 2c | projector | 43 |
 | C3 | Windows reopen on the right screen | 2c | projector | 61 |
@@ -257,6 +278,13 @@ changes brightness or volume instead).
 | F2 | Learn pad — a button | 2f | gamepad | 145 |
 | F3 | Learn pad — a stick and a trigger | 2f | gamepad | 146 |
 | F4 | Momentary and hold on a pad button | 2f | gamepad | 147 |
+| F5 | The pad after a restart, and its sticks | 2f | gamepad | 171, 179 |
+| G1 | A second MIDI controller learned onto a knob | 2g | APC40, a second MIDI controller, the copy | 176 |
+| G2 | SHIFT is the APC40's | 2g | APC40, a second MIDI controller, the copy | 177 |
+| G3 | A phone's fader moves a setting | 2g | a phone on the same Wi-Fi, the copy | 186 |
+| G4 | A phone's button | 2g | a phone, the copy | 187 |
+| G5 | The phone goes quiet | 2g | a phone, the copy | 188 |
+| G6 | Port 9000 already taken | 2g | a phone, a terminal, the copy | 189 |
 
 Covered by other entries: check 32 is part of D11; check 37 is replaced
 by B25; check 47 is finished by D8 (with D3, D9 and B28).
@@ -1486,6 +1514,129 @@ off".
 
 *(check 100)*
 
+## The device list (on the copy)
+
+Plan 27 (the device registry). Every device — the desk, the pad, the
+hands, the bridge, a phone — is one entry in the config file's device
+list, and one line on the SYSTEM page. These entries change the config
+file **while the app runs**: the app reads the device list again about
+half a second after you save it. The blocks to paste are in
+`hyperspace-python/docs/plans/27-device-registry.md`, "The block to
+paste".
+
+#### L72. Every device on the SYSTEM page
+
+**Needs:** laptop; the copy; the APC40 and the pad plugged in if you
+have them.
+
+**Do:**
+1. Launch on the copy as it is. SYSTEM page → **devices**.
+2. Quit. In `<home>/config.toml` replace the `[midi]`, `[gamepad]`,
+   `[hands]` and `[bridge]` sections with the "today's rig" block
+   (if the hands are on, write `enabled = true` on the `leap` entry and
+   move the `[hands]` lines under it). Launch again.
+
+**Right if:** (1) one line per device: `pad · gamepad …`, `apc40 · midi
+· connected · 137 sources …` (or `lost` with no desk), `leap · hands …`,
+`bridge · bridge · off …`; one grey note per old section the file has
+("config: [midi] is now a [[devices]] entry …"); everything works as
+before. (2) the same lines and no note.
+
+**Wrong if:** a device missing; a note for a section the file does not
+have; a note after the paste (an old section left in the file).
+
+**Changes:** the config file; keep the copy of it you started from.
+
+*(check 168)*
+
+#### L73. Change the device list while the app runs
+
+**Needs:** laptop; the copy, with the list from L72.
+
+**Do:**
+1. With the app running, set the `bridge` entry's `enabled = true`;
+   save.
+2. Write `role = "a:b"` on any entry; save. Then put it back; save.
+3. Add a second pad: `[[devices]]`, `role = "pad2"`, `kind =
+   "gamepad"`; save. Then set the first pad's `enabled = false`; save.
+
+**Right if:** (1) within a second "devices: bridge changed — reopened"
+on SYSTEM and the bridge line no longer says `off`. (2) one note
+"config: [[devices]] not applied — … — the old list stands" and nothing
+else changes; put back, the list is followed again. (3) `pad2 · gamepad ·
+error: feeds 'axis', which pad already feeds — not opened`, the first
+pad unchanged; with the first pad off, `pad2` takes over.
+
+**Wrong if:** nothing happens after a save; a window moves or the app
+restarts; both pads `connected` at once.
+
+**Changes:** put the list back as it was.
+
+*(checks 173, 174)*
+
+#### L74. A broken device does not stop the show
+
+**Needs:** laptop; the copy; a text editor on the code. The APC40
+helps.
+
+**Do:** with the app running, open `hyperspace-python/hyperspace/midi.py`
+and add `raise RuntimeError("x")` as the first line inside `def
+poll(self)` of `MidiIO`; save. Watch for a few seconds. Remove the line;
+save.
+
+**Right if:** a message `midi: RuntimeError: x` appears and the apc40
+line reads `error: RuntimeError: x` in the warning colour, while the
+picture and everything else go on; once the line is removed the message
+clears and the line reads `connected` (or `lost`) again.
+
+**Wrong if:** the window freezes; the other devices stop.
+
+**Changes:** none once the line is removed (check `git diff`).
+
+*(check 170)*
+
+#### L75. The pages offer what the rig lists
+
+**Needs:** laptop; the copy.
+
+**Do:** ROUTING page: open a row's source list. Right-click any slider
+(Brightness) and read its menu.
+
+**Right if:** the source list has the sound bands, then LFO 1–4, then
+the pad's sticks, the hands and `ext` lanes, in the order the device
+list gives them. The menu has Learn desk, Learn hand (with a tracker on)
+and Learn pad (with a pad connected), as before.
+
+**Known:** while a bridge is listed (on or off — an un-renamed config
+always lists one) the menu also offers **Learn bridge**, which nothing
+completes: click the footer to cancel it. Note it if you see it; it is
+a known fault.
+
+**Wrong if:** a device's sources missing from the list.
+
+*(check 178)*
+
+#### L76. A recorded point cloud plays
+
+**Needs:** laptop; the copy.
+
+**Do:** copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the recorded-cloud block to the device list;
+save. Watch the SYSTEM page. Then rename the file, add `loop = false`
+to the entry and save; rename the file back.
+
+**Right if:** `scan · cloud · connected · 1 source · knot.npz · frame
+n/16 · … points · 12 fps`, the frame counting through 16 a little faster
+than once a second and starting over; nothing else on screen changes.
+Renamed: `error: FileNotFoundError …`; back: `connected` within about
+10 seconds, the frame stopping at 16/16.
+
+**Wrong if:** the frame number races with the app's frame rate.
+
+**Changes:** remove the entry and the file.
+
+*(check 190)*
+
 ## With FL Studio (no hardware)
 
 These need FL Studio installed and the Mac's built-in virtual MIDI
@@ -1500,11 +1651,14 @@ online", with one bus.
 Launch, SYSTEM page. In FL Studio, take IAC as input and put a Fruity
 Formula Controller or Peak Controller on pitch bend, channel 1.
 
-**Right if:** SYSTEM's bridge line names the port, `pitch`, 16 lanes and
-a rising `sent` count; the FL controller moves with the lowest sound
-band.
+**Right if:** SYSTEM's bridge line (under **devices**) reads `bridge ·
+bridge · connected · 16 sources · 1 sink ·` the port, `pitch, 16 lanes`
+and a rising `sent` count; the FL controller moves with the lowest sound
+band. With plan 27, the first launch with the bridge on also says
+"bindings: [bridge] send is now sink rows in bindings.json …" (L78).
 
-**Wrong if:** "bridge: no port" (check the IAC name); no bridge line.
+**Wrong if:** the bridge line says `lost` or `error` (check the IAC
+name); no bridge line.
 
 **Changes:** set `[bridge] enabled = false` afterwards.
 
@@ -1527,6 +1681,112 @@ row is switched on).
 **Changes:** delete the route; undo the `[bridge]` lines.
 
 *(check 28)*
+
+#### L77. A setting sent to FL Studio
+
+**Needs:** as L46 (FL Studio, or MIDI Monitor, listening to the IAC
+bus); the copy.
+
+**Do:** right-click Brightness → **Learn sink** → `bridge:6 · pitch
+ch7`. Make brightness move by itself: ROUTING → `+ route`, LFO 1 →
+Brightness. Watch channel 7 in FL. Load another preset.
+
+**Right if:** the footer says "sent view.bright → bridge:6 (into
+bindings.json)"; channel 7's pitch bend follows the brightness as it
+moves with the LFO — not just the slider — and nothing is sent while it
+holds still; the other preset leaves the sending in place.
+
+**Wrong if:** FL follows only the slider; nothing on channel 7.
+
+**Changes:** ROUTING → sinks: × the row.
+
+*(check 181)*
+
+#### L78. The bridge's old "send" list becomes rows, once
+
+**Needs:** as L46; a copy whose bridge has never been switched on.
+
+**Do:**
+1. In the config set the bridge on with `send = ["lane:*",
+   "param:view.bright"]` (on `[bridge]`, or on the bridge entry); launch.
+2. Quit and launch again.
+3. ROUTING → **sinks**: × every row. Change anything in the config file,
+   save; quit and launch again.
+
+**Right if:** (1) one note "bindings: [bridge] send is now sink rows in
+bindings.json (lane:* → bridge:0, param:view.bright → bridge:6) …"; the
+sinks section lists "every lane → bridge:0" and "param view.bright →
+bridge:6"; SYSTEM: `bridge · bridge · connected · 16 sources · 2 sinks
+…`; FL gets the lanes as before and brightness on channel 7; the source
+list on ROUTING has `ext ext 0` … `ext ext 15`. (2) no note. (3) no row
+comes back.
+
+**Judge:** an entry after `lane:*` always lands on channel 7 (six sound
+bands), whatever your band count: if a mapping in FL used another
+channel, move it once.
+
+**Wrong if:** the note on every launch; the rows come back.
+
+*(check 182)*
+
+#### L79. Sending a setting never asks a question
+
+**Needs:** as L77.
+
+**Do:** put an LFO on Brightness (ROUTING → `+ route`). Right-click
+Brightness → **Learn sink** → any port. Then right-click Speed →
+**Learn sink** → the same port. Right-click Speed → **Unbind**.
+
+**Right if:** no Replace / Keep question either time; the LFO still
+moves brightness; the second time the footer adds "…; param:view.bright
+let go"; Speed's menu lists the sending dimmed, and Unbind leaves it;
+the preset's unsaved dot stays off.
+
+**Wrong if:** a Replace / Keep question; the unsaved dot lights.
+
+**Changes:** × the row on ROUTING → sinks.
+
+*(check 183)*
+
+#### L80. The hands' own port, now a device
+
+**Needs:** FL Studio; the IAC bus; the copy; the hand camera, or a
+recorded hand tape (`[hands] tape`).
+
+**Do:** hands on with `out = "IAC"`. Launch, raise the right hand. Take
+the IAC bus offline in Audio MIDI Setup for a few seconds, then back.
+
+**Right if:** SYSTEM shows the leap line and under it `hands-daw ·
+midi-out · connected · 0 sources · 0 sinks · IAC …  · leap's DAW out ·
+cc …`; FL's knobs follow the hands; offline the line says `lost`, and
+within about 2 seconds of the bus coming back it says `connected` and
+FL's knobs jump to where the hands are. FL lists no second "Hyperspace
+Hands" port.
+
+**Wrong if:** no messages; no jump after the reconnect; a second
+"Hyperspace Hands".
+
+**Changes:** put `out` back.
+
+*(check 184)*
+
+#### L81. The hands' port in the device list
+
+**Needs:** the copy, with a device list and the hands on.
+
+**Do:** put `out = "IAC"` on the `leap` entry; launch. Then remove it
+and add an entry `role = "daw"`, `kind = "midi-out"`, `port = "IAC"`,
+`carries = "leap"`; launch.
+
+**Right if:** first: one note "config: [hands] out is now a [[devices]]
+entry (role = 'hands-daw', …)" and a `hands-daw` line naming the bus.
+Second: no `hands-daw` line; the `daw` line carries the hands.
+
+**Wrong if:** two lines both carrying the hands.
+
+**Changes:** put the entries back.
+
+*(check 185)*
 
 ## The shapes in four dimensions
 
@@ -2684,6 +2944,25 @@ the list covering a control.
 
 *(check 157)*
 
+#### A33. The desk plugged in after the app started
+
+**Needs:** APC40. Plan 27 (the device registry).
+
+**Do:** unplug the APC40 and launch. Look at SYSTEM → **devices**;
+click a bank pad on the on-screen desk. Plug the APC40 in and wait ten
+seconds. Move the crossfader and a knob; tap a bank pad.
+
+**Right if:** before: the apc40 line says `lost` (not an error) and the
+on-screen desk works. Within about ten seconds of plugging in, the line
+says `connected`, the desk wakes up and every light shows the loaded
+preset (points, lines, faces and rotate their live state), and the
+crossfader, the knobs and the pads work at once, with no restart.
+
+**Wrong if:** the line says `error`; the desk stays dark after it says
+`connected`.
+
+*(check 175)*
+
 ## (b) The hand camera
 
 Plug in the hand camera (Ultraleap Leap Motion Controller 2) by USB
@@ -3386,6 +3665,49 @@ turn of the hand should be one turn of the shape.
 
 *(check 164)*
 
+#### B37. The hands in the device list (on the copy)
+
+**Needs:** hand camera; the copy. Plan 27.
+
+**Do:** in the config's device list put the `[hands]` lines on the
+`leap` entry with `enabled = true` and delete the `[hands]` section.
+Launch. Look at SYSTEM and the HANDS page; move both hands; try a hand
+Learn; press ⌘R.
+
+**Right if:** SYSTEM: `leap · hands · connected · 42 sources · …`; the
+HANDS page shows the same axes and calibration as before; routes, a hand
+Learn and the ghost hands work as before; after ⌘R the hands come back.
+
+**Wrong if:** the HANDS page shows the default axes; `error: no hands
+setup`; the ghost hands gone.
+
+*(checks 169, 180)*
+
+#### B38. A tracker that would not start comes up later (on the copy)
+
+**Needs:** hand camera; the copy; a recorded tape
+(`uv run python tools/hands_tape.py record <file>`).
+
+**Do:**
+1. On the `leap` entry set `tape = "missing.json"` (no such file) and
+   launch.
+2. After a few seconds copy your tape to `<home>/missing.json`.
+3. Remove the `tape` line and save; once the camera's hands show,
+   unplug the camera; plug it back.
+
+**Right if:** (1) the leap line says `error: …No such file…`, with one
+"hands: …" note and no more. (2) within about ten seconds it says
+`connected` and the HANDS page plays the tape, with no restart. (3)
+unplugged, the line says `error: no camera` (the tracker's own words)
+and no new note appears; plugged back, `connected` on its own.
+
+**Wrong if:** it stays `error` after the file appears; a new note every
+two seconds; the hands never come back after the replug.
+
+**Changes:** remove the tape file.
+
+*(check 172)*
+
 ## (c) One projector, or any second screen
 
 Plug it in before launching. For C1–C4 the config has no
@@ -3984,6 +4306,153 @@ repeats while held.
 
 *(check 147)*
 
+#### F5. The pad after a restart, and its sticks
+
+**Needs:** the wired pad. Plan 27.
+
+**Do:** press ⌘R three times, a few seconds apart. Then repeat F1's
+sticks and triggers, with SYSTEM → gamepad → feel on follow and on
+spring; then F3.
+
+**Right if:** after each restart the pad is found within a few seconds
+(ring lit, sticks orbiting) and its SYSTEM line says `connected`; the
+sticks and triggers do exactly what F1 says; a stick learned onto a
+setting drives it and stops orbiting.
+
+**Wrong if:** a dead pad after a restart (the ring blinks); nothing
+moves; a learned stick still orbits.
+
+*(checks 171, 179)*
+
+## (g) A second controller, a phone (OSC)
+
+Plan 27. Each of these adds an entry to the config file's device list
+while the app runs (on the copy); the blocks are in
+`hyperspace-python/docs/plans/27-device-registry.md`.
+
+#### G1. A second MIDI controller learned onto a knob
+
+**Needs:** the APC40 and any second USB MIDI controller with knobs; the
+copy.
+
+**Do:**
+1. Plug in the second controller. Add an entry: `role = "launch"`,
+   `kind = "midi"`, `profile = "generic"`, `port = "<part of its
+   name>"`; save.
+2. Right-click Field amp (VIEW page) → **Learn desk**, turn a knob on the
+   second controller, and sweep it through the slider's value.
+3. Turn the APC40 knob with the same number. Save the preset as a copy,
+   load another, load it back.
+
+**Right if:** (1) `launch · midi · connected · 0 sources · <its port> ·
+0 bindings`; its lights do nothing new (the app sends it nothing). (2)
+the footer says "learned view.inst_amp ← MIDI CC n ch1 on launch (into
+the preset)"; the knob takes hold once it passes the value, then drives
+it. (3) the APC40's knob does not move it; any APC40 knob already on
+Field amp still works; after the reload the second knob still works.
+
+**Wrong if:** "error: … matches no port" (give the entry a `port`); the
+APC40's same knob moves it; the controller's lights flicker.
+
+**Changes:** remove the entry; unbind the knob.
+
+*(check 176)*
+
+#### G2. SHIFT is the APC40's
+
+**Needs:** G1's set-up.
+
+**Do:** latch SHIFT on the APC40. Turn the second controller's learned
+knob; right-click another setting → **Learn desk** → turn another knob on
+the second controller; then try **Learn desk** with an APC40 knob.
+Unlatch. Latch SHIFT again and load a preset.
+
+**Right if:** under SHIFT the second controller's knob still works and
+its learn lands; the APC40 learn is refused ("… on the global layer …
+latch SHIFT off …") and stays armed; the load drops the APC40 back to
+the preset layer.
+
+**Wrong if:** the second controller goes dead under SHIFT; its learn is
+refused.
+
+*(check 177)*
+
+#### G3. A phone's fader moves a setting
+
+**Needs:** a phone with an OSC app (TouchOSC, or any) on the same Wi-Fi
+as the Mac; the copy.
+
+**Do:**
+1. In the app set the host to the Mac's address (System Settings →
+   Wi-Fi → Details) and the port to 9000; note its first two faders'
+   addresses (TouchOSC's simple layout: `/1/fader1`, `/1/fader2`).
+2. Add the phone block with `axes = ["/1/fader1", "/1/fader2"]`; save.
+3. Move fader 1. Right-click Yaw (CAMERA page) → **Learn phone**, move
+   fader 1 a good way; move it again.
+
+**Right if:** (2) `phone · osc · lost · 2 sources · UDP 0.0.0.0:9000`;
+macOS may ask whether Python may accept incoming connections — allow.
+(3) the line says `connected` and shows the last message; the learn
+lands and the yaw then moves with the fader; ROUTING's source list has
+`phone`.
+
+**Wrong if:** the line stays `lost` (the app's address or port, or the
+firewall question was denied: System Settings → Network → Firewall); no
+"Learn phone" item; `error: … in use` (another program has port 9000).
+
+*(check 186)*
+
+#### G4. A phone's button
+
+**Needs:** G3's set-up.
+
+**Do:** add the app's first button's address to `hits` (TouchOSC:
+`/1/push1`); save. Right-click **Faces** (VIEW page) → **Learn phone** →
+press the button; then press it a few times.
+
+**Right if:** the learn lands (a row in `bindings.json`); each press
+flips the faces once; letting go does nothing.
+
+**Wrong if:** each press flips twice (set the button's off value to 0
+in the app); nothing (the address is not in `hits`).
+
+*(check 187)*
+
+#### G5. The phone goes quiet
+
+**Needs:** G3's set-up, with the learned yaw.
+
+**Do:** leave the phone alone ten seconds, then move the fader. Add
+`hold = false` to the entry, save, and repeat.
+
+**Right if:** about five seconds after the last message the line says
+`lost` and the yaw stays where the fader left it; the next move brings
+`connected` back and the yaw follows. With `hold = false`, after five
+seconds the yaw goes back to its setting.
+
+**Wrong if:** the yaw snaps back without `hold = false`; the line never
+says `lost` (fine if the app sends all the time, like a tilt sensor
+page).
+
+*(check 188)*
+
+#### G6. Port 9000 already taken
+
+**Needs:** G3's set-up; a terminal.
+
+**Do:** quit the app. In a terminal run `python3 -c "import socket; s =
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(('0.0.0.0',
+9000)); input()"` and leave it waiting. Launch. Then press Return in
+that terminal.
+
+**Right if:** `phone · osc · error: OSError: … Address already in use`
+and one note, everything else running; within about ten seconds of
+Return it says `lost`, then `connected` at the phone's next message.
+
+**Wrong if:** the app stalls; the line stays `error`.
+
+*(check 189)*
+
 ---
 
 ## What a person has to judge
@@ -4017,6 +4486,12 @@ what you want changed.
   what you call dark, the click-to-map list, every new hand source's
   range and the grab's thresholds on real hands, and the palette fold
   on the projector. (A24–A32, B30–B36, L69; checks 148–167)
+- **The device registry's choices** — whether a second desk's rows
+  should carry its name (`cc@launch:…`) and have no SHIFT of their own;
+  whether five seconds of silence is the right moment for a phone to
+  read `lost`, and whether its faders should hold their place then;
+  whether sending a setting out should land at once, as it does, or wait
+  like the other learns. (G1–G5, L77–L79; checks 176–188)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
@@ -4139,6 +4614,11 @@ on a table (desktop, the usual) or on top of a screen facing the
 performer (screentop).
 
 **Device knobs** — the eight lower-right knobs on the APC40 (D1–D8).
+
+**Device list** — the `[[devices]]` entries in the config file: one per
+desk, pad, hand camera, bridge, phone or recording, each with a `role`
+(its name) and a `kind`. Each has one line on the SYSTEM page:
+`connected`, `lost` (not there; it keeps looking), `off` or `error`.
 
 **Dirty dot / unsaved dot** — the red disc that shows the loaded preset
 has changes not yet saved.
@@ -4267,6 +4747,9 @@ messages.
 **Modulatable** — able to be moved by a lane; "not modulatable" settings
 can be set but not performed.
 
+**OSC** — Open Sound Control: messages a phone app or a music program
+sends over the network (Wi-Fi); a phone app can be a device.
+
 **Output** — a screen the picture is drawn on (the glass, the
 projector); each can show different layers and has its own dim.
 
@@ -4350,8 +4833,12 @@ hand, return how quickly it goes back when the hand leaves (see also
 **Synthetic tape** — a recording of made-up hand movements, played in
 place of the hand camera (`tools/hands_tape.py synth`).
 
-**SYSTEM page** — the page for notes, errors, the MIDI and library
-status, and app-wide settings.
+**Sink** — a device that sends values out of the app (to FL Studio): the
+bridge, the hands' own port. A setting goes out on one by **Learn
+sink**.
+
+**SYSTEM page** — the page for notes, errors, one line per device, the
+library status, and app-wide settings.
 
 **Tape (hand recording)** — a file of recorded hand movements that can
 be played back instead of the hand camera; a *synthetic tape* is made

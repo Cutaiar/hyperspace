@@ -10,9 +10,9 @@ numbers.
 ## Before you start
 
 On `main` (`git pull`, `uv sync`); group R needs plan 22, on
-`plan-22-integration` until it is merged, and group U plan 24, on
-`plan-24-26-27-integration` until it is merged. Before any launch of
-this build:
+`plan-22-integration` until it is merged, and groups U (plan 24) and W
+(plan 27), on `plan-24-26-27-integration` until it is merged. Before
+any launch of this build:
 
 ```
 cp -R ~/Hyperspace ~/Hyperspace-backup-<date>     # the one to keep
@@ -46,7 +46,11 @@ number and what you saw.
    42, 52, 66, 73, 75–77, 80, 100, 158, 160–163; (copy) 159, 164; APC40
    in: 22, 65, 67, 74, 79, 110.
 6. One projector: 26, 43, 61, 96; with the hand camera, 165.
-7. The wired Xbox 360 pad: 144–147, any time.
+7. The wired Xbox 360 pad: 144–147, any time; then 171, 174, 179.
+   (copy) The device registry: 168 first, then 170, 173, 178, 190 on the
+   laptop; 175 with the APC40 unplugged at launch; 176, 177 with a second
+   MIDI controller; 169, 172, 180 with the hand camera; 181–185 with FL
+   Studio over IAC; 186–189 with a phone on the same Wi-Fi.
 8. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
    113 from the audience, 129; 111, 112 last.
 
@@ -2292,6 +2296,324 @@ magenta → orange → cream; your palette comes back with its anchors.
 `HIDDEN_BY_MODE`; a mode's rows never appear → the `mode` param; anchors
 missing after a load → the ids.
 
+## W. Plan 27: the device registry
+
+Plan 27 as built is [`27-device-registry.md`](27-device-registry.md):
+its "The block to paste" section has the exact `[[devices]]` blocks these
+checks use (today's rig, a phone, the recorded cloud). Run them on the
+copy (**(copy)**): several edit `config.toml` while the app runs — the
+registry re-reads the device list within about half a second of a save,
+so these checks are the exception to "edit `config.toml` with the app
+closed". Put back what each changes. 168–175 need nothing but the rig as
+it is; 176–177 a second USB MIDI controller; 181–185 FL Studio (or MIDI
+Monitor.app) over the IAC bus; 186–189 a phone on the same Wi-Fi as the
+Mac; 190 the laptop alone.
+
+**168. The SYSTEM page lists every device, and an un-renamed config says so.** (copy)
+Headless: `tests/test_ui_shell.py::test_system_page_shows_one_line_per_device`, `tests/test_config.py::test_no_devices_list_translates_the_old_tables_with_one_note_each`, `tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`.
+Launch with the copy's `config.toml` as it is (old `[midi]` / `[gamepad]`
+/ `[hands]` / `[bridge]` tables), APC40 and pad plugged in. SYSTEM page →
+**devices**. Then replace the old tables with the "today's rig" block
+(the hands' keys moved onto the `leap` entry if the hands are on) and
+relaunch. *Pass:* one line per device, in order — `pad · gamepad ·
+connected · 21 sources · …` (the road, `usb: <name>` for the wired
+pad), `apc40 · midi · connected · 137 sources
+· Akai APC40 · N bindings`, `leap · hands · off · 0 sources` (or
+`connected · 42 sources` with the hands on, followed by `hands-daw ·
+midi-out · …`), `bridge · bridge · off · 0 sources` — and one "config:
+[midi] is now a [[devices]] entry …" note per old table the file holds;
+the desk, the pad and the hands work as before. After the paste: the
+same lines and no note. *Fail:* a line missing → `config._translate` /
+`DEVICE_TABLES`; a note for a table the file does not hold → `_translate`;
+a note after the paste → an old table left in the file ("… is ignored").
+
+**169. A hands entry carries the hands setup.** (copy, hand camera)
+Headless: `tests/test_config.py::test_a_devices_list_wins_and_is_checked_per_entry`.
+On the list form, put the rig's `[hands]` keys (`mode`, `dofs`, `out`,
+`calibration`, …) on the `leap` entry with `enabled = true`, and delete
+the `[hands]` table. Launch. *Pass:* the HANDS page shows the same axes
+and calibration as with the old table; the tracker connects; `hand:`
+routes work. *Fail:* the page shows the default axes → the fold-back of
+the first hands entry into `cfg["hands"]` (`config._devices`).
+
+**170. A device that raises does not take the frame down.** (copy)
+Headless: `tests/test_devices.py::test_one_devices_exception_never_stops_the_frame`, `tests/test_app_boundary.py::test_a_raising_adapter_is_a_note_that_survives_the_frame`.
+APC40 plugged in, the app running. In `hyperspace/midi.py` add `raise
+RuntimeError("x")` as the first line of `MidiIO.poll` and save. Then
+remove it and save. *Pass:* the hot-reload toast reads `midi:
+RuntimeError: x` and the apc40 line `error: RuntimeError: x` in the
+warning colour, while the picture, the pad and the hands go on; after
+the second save the toast clears and the line reads `connected` again.
+*Fail:* the window freezes or the other devices stop →
+`DeviceRegistry._guard`; the error stays after the fix → the clean-poll
+clear in `_guard`.
+
+**171. ⌘R with the USB pad.** (pad)
+Headless: `tests/test_devices.py::test_pad_close_stops_the_usb_reader_and_forgets_the_pad`, `tests/test_app_boundary.py::test_the_host_close_list_is_every_adapter_in_shutdown_order`.
+The wired Xbox 360 pad on USB (T, 144). Press ⌘R three times, a few
+seconds apart. *Pass:* each new image finds the pad within a few
+seconds: its ring lights one quarter, the sticks orbit; the pad line on
+SYSTEM reads `connected`. *Fail:* the pad is dead after a restart (the
+ring blinks) → `Pad.close` / `UsbPad.close`, the reader thread's join.
+
+**172. A device whose open failed is retried; a tracker comes back on its own.** (copy, hand camera)
+Headless: `tests/test_devices.py::test_the_registry_retries_a_failed_open_and_a_lost_device_reconnects_itself`, `tests/test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show`.
+On the `leap` entry set `enabled = true` and `tape = "missing.json"` (no
+such file) and launch. After a few seconds copy a real tape
+(`tools/hands_tape.py record`) to `<home>/missing.json`. Then remove the
+`tape` key, save, and once the camera's hands show, unplug the Leap;
+plug it back. *Pass:* the leap line reads `error: …No such file…` with
+one "hands: …" note on SYSTEM and in the terminal and no more notes;
+within about 10 s of the copy the line reads `connected` with no
+relaunch and the HANDS page plays the tape. Unplugged, the line reads
+`error: no camera` (the tracker's own words) and nothing new appears in
+the notes; plugged back, it reads `connected` on its own, with no
+relaunch. *Fail:* it stays `error` after the file appears →
+`DeviceRegistry._open`'s schedule; a note every 2 s → the first-miss
+guard; the hands never come back after a replug → the Leap SDK's thread
+(`LeapSource`), not the registry.
+
+**173. Editing `[[devices]]` lands without a relaunch; a bad edit does not.** (copy)
+Headless: `tests/test_devices.py::test_the_config_list_is_watched_every_30_frames_and_a_bad_edit_keeps_the_old_list`, `tests/test_config.py::test_read_devices_reports_problems_and_prints_nothing`.
+On the list form, with the app running: set the `bridge` entry's
+`enabled = true` and save. Then write `role = "a:b"` on any entry and
+save. Fix it and save again. *Pass:* within a second "devices: bridge
+changed — reopened" appears on SYSTEM and the bridge line reads
+`connected` or `lost` (not `off`); the bad edit gives one "config:
+[[devices]] not applied — … — the old list stands" note and nothing else
+moves; the fixed file is followed again. *Fail:* nothing happens after a
+save → the mtime watch (`DeviceRegistry.watch`, `WATCH_FRAMES`); the
+whole app reloads or a window moves → something other than the device
+list was re-read.
+
+**174. A second pad is refused, and comes up when the first leaves.** (copy)
+Headless: `tests/test_devices.py::test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note`.
+On the list form, with the app running, add `[[devices]] role = "pad2"
+kind = "gamepad"` and save. Then set the first pad's `enabled = false`
+and save. *Pass:* `pad2 · gamepad · error: feeds 'axis', which pad
+already feeds — not opened` and one note saying the same; the first pad
+works as before. With the first pad off, `pad2` reads `connected` (or
+`lost` with no pad plugged in) and the sticks orbit through it. *Fail:*
+both read `connected` and the sticks fight → `devices.make`'s claimed
+schemes; `pad2` stays refused → `DeviceRegistry.apply`'s re-make.
+
+**175. The APC40 plugged in after launch lights up.** (APC40)
+Headless: `tests/test_device_inputs.py::test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback`.
+Unplug the APC40 and launch. Look at SYSTEM and the on-screen desk;
+press a bank pad on the on-screen desk. Plug the APC40 in; wait ten
+seconds. Move the crossfader and a knob; load a preset from a pad.
+*Pass:* the apc40 line reads `lost` (not an error), the on-screen desk
+still works; within about ten seconds of plugging in, the line reads
+`connected`, the desk wakes (its power-up), every light shows the loaded
+preset's state (the scene-launch toggles the live state), and the
+crossfader and the knobs act at once with no relaunch. *Fail:* the line
+reads `error` → the desk's own retry (`midi.Ports.retry`), not the
+registry's; the desk stays dark after connecting → the reconnect's
+redraw in `MidiIO.poll`.
+
+**176. A second controller maps on Learn desk with no code.** (copy, APC40, a second USB MIDI controller)
+Headless: `tests/test_device_inputs.py::{test_two_desks_open_each_with_its_profile_and_its_own_rows,test_a_generic_desk_maps_on_the_desks_learn_with_no_code,test_the_desk_whose_profile_wrote_the_table_owns_the_unqualified_rows}`.
+Plug in any knob box. With the app running, add `[[devices]] role =
+"launch"  kind = "midi"  profile = "generic"  port = "<part of its
+name>"` (after the APC40's entry is best) and save. Right-click
+Field amp (VIEW, the field row) → **Learn desk**, turn a knob on the
+box; turn it through the slider's value. Turn the APC40 knob that has
+the same CC number. Save the preset as a copy, load another, load it
+back. *Pass:* `launch · midi · connected · 0 sources · <its port> · 0
+bindings`; the box's lights do nothing new (nothing is sent to it); the
+footer says "learned view.inst_amp ← MIDI CC n ch1 on launch (into the
+preset)" and the preset's dot lights; the knob takes hold once it
+crosses the value, then drives it; the APC40's same CC does not move it,
+and an APC40 knob already on the param still works; after the reload
+the box's knob still works. *Fail:* `error: … matches no port` → the
+entry has no `port`; the row is `cc:0:n` with no `@launch` →
+`MidiIO.qualifier`, `DeviceRegistry.midi_roles`; the box's lights
+flicker → `generic.FEEDBACK`, `MidiIO._send`.
+
+**177. SHIFT is the APC40's; the second desk keeps its layer.** (copy, APC40, the second controller)
+Headless: `tests/test_device_inputs.py::{test_the_latch_is_per_role,test_an_unqualified_row_is_the_first_midi_roles,test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught}`.
+176's rig. Latch SHIFT on the APC40. Turn the box's learned knob;
+right-click another param → **Learn desk** → turn another box knob; then
+try **Learn desk** with an APC40 knob. Unlatch; load a preset with SHIFT
+latched again. *Pass:* the box's knob keeps driving its param under
+SHIFT; the second learn lands; the APC40 learn is refused ("… is on the
+global layer (the session's) — latch SHIFT off to learn into the
+preset") and stays armed; the box's caught knob
+does not have to be caught again after SHIFT flips; the load drops the
+APC40 to the preset layer. *Fail:* the box goes dead under SHIFT →
+`Bindings.dispatch`'s `layer_of(role)`; the box's learn is refused →
+`learn.blocked`.
+
+**178. The pages offer what the rig lists.** (copy)
+Headless: `tests/test_device_inputs.py::test_schemes_wants_and_row_schemes_come_from_the_registry`, `tests/test_ui_lfo.py::test_the_lfos_are_offered_as_routing_sources`.
+ROUTING page → a row's source combo; a modulatable param's right-click
+menu, with and without a bridge entry in the list. *Pass:* the combo
+lists the analyzer's lanes, then LFO 1–4, then the pad's axes, the
+hands, then `ext` (when the bridge is listed or a route names it), in
+the `[[devices]]` order; the menu offers Learn desk, Learn hand ▸ (a
+tracker on) and Learn pad (a pad connected), as before. **Known:** with
+a bridge listed (on or off, which includes every un-renamed config) the
+menu also offers **Learn bridge**, and no move completes it — cancel it
+(register row 151). *Fail:* a scheme missing → its device's `feeds`,
+`DeviceRegistry.continuous_schemes`.
+
+**179. The sticks still steer; a routed stick does not.** (pad)
+Headless: `tests/test_device_inputs.py::test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job`, `tests/test_app_boundary.py::{test_the_relative_writers_run_with_the_setters_and_move_the_base,test_a_routed_right_stick_leaves_the_w_rates_alone,test_the_sticks_camera_job_reads_through_the_pads_feel}`.
+The left stick orbits, the right stick's Y zooms and X rides the 4D
+spin, the triggers ride 4D depth — with `desk.pad.feel` (SYSTEM →
+gamepad) on follow and on spring; then **Learn pad** a stick onto a
+param. *Pass:* exactly as before plan 27 (144, 146); the learned stick
+drives its param and stops orbiting. *Fail:* nothing moves →
+`PadDevice.act`, `gamepad.steer`; a routed stick still orbits →
+`gamepad.publish` (no names, so `claimed` is empty).
+
+**180. The hands on the registry.** (copy, hand camera)
+Headless: `tests/test_device_inputs.py::test_the_hands_run_on_the_registry_through_hands_device`, `tests/test_devices.py::test_the_hands_shims_ports_are_the_layout`.
+Hands on (the camera, or a tape). *Pass:* SYSTEM shows `leap · hands ·
+connected · 42 sources · …` (the forty `hand` lanes with six axes a
+hand, then gap and twist); the HANDS page, hand routes, a hand Learn
+and the ghost hands on the projector all as before; after ⌘R the hands
+come back. *Fail:* `error: no hands setup …` → `Context.hand_settings`;
+the ghost gone → the registry listener's `renderer.ghost.source`
+(`app.point_at_devices`).
+
+**181. A param's effective value goes out on the bridge.** (copy, FL Studio or MIDI Monitor, IAC)
+Headless: `tests/test_sinks.py::{test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply,test_a_sink_row_is_a_session_row_never_a_performer_and_round_trips}`.
+Bridge on (`role = "bridge"  kind = "bridge"  out = "IAC"`), a MIDI
+monitor on the IAC bus. Right-click Brightness → **Learn sink ▸** →
+`bridge:6 · pitch ch7`; give Brightness a moving performer (Learn hand,
+or an LFO push). Load another preset. *Pass:* the footer says "sent
+view.bright → bridge:6 (into bindings.json)"; the monitor shows pitch
+bend on channel 7 following the **moving** brightness (the setting plus
+the hand or LFO), not the slider alone, and nothing while it holds
+still; `bindings.json` has the row; the other preset leaves it in place.
+*Fail:* the bend follows only the slider → the sink read before
+`reg.apply` (`app.frame`'s `devs.send`); nothing on channel 7 →
+`BridgeDevice.send`, `table.sinks("bridge")`.
+
+**182. The bridge's `send` list becomes rows once, seen in the DAW.** (copy, FL Studio, IAC)
+Headless: `tests/test_sinks.py::{test_the_bridges_send_list_becomes_sink_rows_once_with_one_note,test_rows_deleted_on_routing_never_come_back_the_translation_is_marked,test_the_system_line_of_a_sink_says_what_it_sends,test_the_bridge_publishes_its_ext_labels_and_rests}`.
+A copy whose bridge has never been on: set `[bridge]` (or the bridge
+entry) to `enabled = true`, `out = "IAC"`, `send = ["lane:*",
+"param:view.bright"]`, and launch. FL Studio takes IAC as input (L46).
+Relaunch. Then × every bridge row on ROUTING → sinks, edit
+`config.toml` (any change), relaunch. *Pass:* one note "bindings:
+[bridge] send is now sink rows in bindings.json (lane:* → bridge:0,
+param:view.bright → bridge:6) …" on SYSTEM and in the terminal; ROUTING →
+sinks lists "every lane → bridge:0" and "param view.bright → bridge:6";
+SYSTEM: `bridge · bridge · connected · 16 sources · 2 sinks · …`; FL
+receives the lanes as before (pitch bend from channel 1) and brightness
+on channel 7; the source combo lists `ext ext 0` … `ext ext 15`. The
+second launch: no note. After the deletion: no row comes back
+(`bindings.json` holds `"sinks_seeded": ["bridge"]`). **Check FL's channel
+map once:** an entry after `lane:*` lands at channel 6 (seven, 1-based)
+whatever the band count; with more or fewer than six bands, a mapping
+from before may need its channel moved. *Fail:* the note every launch,
+or rows back after the deletion → `_seed_sinks`' `sinks_seeded` mark;
+the lanes stop → `sink_values`' `lane:*`.
+
+**183. Learn sink never asks Replace / Keep.** (copy)
+Headless: `tests/test_sinks.py::test_learn_sink_on_a_param_lands_a_session_row_with_no_question`, `tests/test_ui_routing.py::test_the_routing_page_lists_the_sink_rows_with_the_others`.
+The bridge on. Put an LFO push on Brightness (or Learn a hand onto it).
+Right-click Brightness → **Learn sink ▸** any port; then right-click
+Speed → **Learn sink ▸** the same port. Right-click Speed → **Unbind**.
+*Pass:* no prompt either time; the LFO (or hand) still performs
+brightness; the second learn says "…; param:view.bright let go"; Speed's
+menu lists "→ bridge:N" dim; Unbind leaves that row; the preset's dot
+stays clean. *Fail:* a Replace / Keep prompt → the row went through the
+referee; a dirty dot → the row reached the preset (`is_session_row`).
+
+**184. The hands' DAW out works as before, from the `hands-daw` sink.** (copy, hand camera or a tape, FL Studio)
+Headless: `tests/test_hands.py::{test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced,test_a_daw_port_that_stays_missing_is_looked_for_less_often,test_a_virtual_port_is_made_again_when_it_fails,test_the_hands_daw_sink_sends_what_the_instrument_made_and_no_port_is_opened}`, `tests/test_sinks.py::test_the_hands_daw_sink_on_the_registry_sends_what_handsio_sent`.
+Hands on with `out = "IAC"` (a named bus, so a loss can be tested), FL
+listening to it. Raise the right hand. Take the IAC bus offline in Audio
+MIDI Setup for a few seconds, then back. *Pass:* SYSTEM shows the leap
+line and right after it `hands-daw · midi-out · connected · 0 sources ·
+0 sinks · IAC Driver Bus 1 · leap's DAW out · cc … ch16`; FL's mapped
+knobs follow the hands, presence and pinch notes arrive; offline, the
+line reads `lost`, and within about 2 s of the bus coming back it reads
+`connected` and FL's knobs jump to where the hands are (the resync). FL's
+port list holds no second "Hyperspace Hands". *Fail:* no messages →
+`MidiOutDevice.send`, `carries`; no resync → `MidiOutDevice.poll`; a
+second port → something still opens one (`HandsIO` must not).
+
+**185. `[hands] out` on a list, and an explicit `midi-out`.** (copy)
+Headless: `tests/test_sinks.py::test_hands_out_becomes_the_hands_daw_entry_with_a_note_when_written`, `tests/test_config.py::test_a_devices_list_wins_and_is_checked_per_entry`.
+On the list form with the hands on, put `out = "IAC"` on the `leap`
+entry and launch. Then remove it and add `[[devices]] role = "daw"  kind
+= "midi-out"  port = "IAC"  carries = "leap"`; relaunch. *Pass:* one note
+"config: [hands] out is now a [[devices]] entry (role = 'hands-daw', … ,
+carries = 'leap')" and a `hands-daw` line naming the bus; with the
+explicit entry, no derived `hands-daw` line and the `daw` line carries
+the hands. *Fail:* two lines both carrying leap → `config._daw`'s
+"already carried" test.
+
+**186. A phone's fader drives a param, with no code.** (copy, a phone on the same Wi-Fi)
+Headless: `tests/test_osc.py::{test_an_osc_entry_alone_adds_the_device_and_a_fader_moves_a_routed_param,test_only_osc_py_and_the_kind_table_name_the_osc_device,test_a_learn_armed_for_the_role_takes_a_hit_as_a_row_and_a_fader_as_a_route}`.
+Install an OSC controller app (TouchOSC, or any); set its host to the
+Mac's LAN address (System Settings → Wi-Fi → Details) and its outgoing
+port to 9000; note the addresses its first two faders send (TouchOSC's
+simple layout: `/1/fader1`, `/1/fader2`). With the app running, add the
+phone block with `axes = ["/1/fader1", "/1/fader2"]` and save.
+Right-click Yaw (CAMERA) → **Learn phone**, move fader 1 a good way.
+*Pass:* within a second `phone · osc · lost · 2 sources · UDP
+0.0.0.0:9000` (macOS may ask once whether Python may accept incoming
+connections: allow); a fader move makes it `connected · … · /1/fader1
+0.42`; the learn lands ("learned camera.yaw ← …") and the yaw then moves
+with the fader; ROUTING's source combo lists `phone` with `1/fader1` and
+`1/fader2`. *Fail:* the line stays `lost` → the app's host or port, or
+the firewall prompt was denied (System Settings → Network → Firewall); no
+"Learn phone" item → the device's `wants`; `error: OSError … in use` →
+another program on 9000 (189).
+
+**187. A phone's button fires a row.** (copy, the phone)
+Headless: `tests/test_osc.py::{test_a_hit_with_velocity_fires_its_rows,test_a_learn_armed_for_the_role_takes_a_hit_as_a_row_and_a_fader_as_a_route}`.
+186's rig: add the app's first push button's address to `hits`
+(TouchOSC: `/1/push1`) and save. Right-click **Faces** (VIEW) → **Learn
+phone** → press the button; then press it a few times. *Pass:* the learn
+lands as a row in `bindings.json` (`phone:1/push1` → `view.faces`); each
+press toggles the faces once and the release does nothing. *Fail:* each
+press toggles twice → the app sends a non-zero release (set the button's
+off value to 0); nothing → the address is not in `hits` (the line's last
+message shows what arrives).
+
+**188. A silence reads `lost`; the faders keep their place.** (copy, the phone)
+Headless: `tests/test_osc.py::{test_lost_after_the_timeout_and_back_on_the_next_message,test_hold_false_lets_the_routes_go_in_a_silence}`.
+With 186's route acting, leave the phone alone for ten seconds, then
+move the fader. Add `hold = false` to the entry, save, and repeat.
+*Pass:* about 5 s after the last message the line reads `lost` and the
+yaw stays where the fader left it; one move and the line reads
+`connected` and the yaw follows again. With `hold = false`, after 5 s
+the yaw returns to its setting. *Fail:* the yaw snaps back with `hold`
+unset → `OscDevice.feed`; the line never reads `lost` → the app streams
+continuously (an accelerometer page: expected).
+
+**189. A busy port is a line, not a crash, and comes up when it frees.** (copy, the phone)
+Headless: `tests/test_osc.py::test_a_busy_port_is_an_error_line_and_comes_up_when_it_frees`.
+Quit the app. In a terminal, hold port 9000: `python3 -c "import
+socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);
+s.bind(('0.0.0.0', 9000)); input()"`. Launch with the phone entry, then
+press Return in that terminal. *Pass:* `phone · osc · error: OSError: …
+Address already in use` and one note; the rest of the app runs; within
+about 10 s of Return the line reads `lost`, then `connected` on the
+phone's next message. *Fail:* the app stalls → `osc.Server` is blocking;
+the line stays `error` after the port frees → the registry's retry
+schedule.
+
+**190. The recorded cloud plays at its own rate.** (copy)
+Headless: `tests/test_clouds.py::{test_a_cloud_entry_publishes_the_recording_at_its_own_rate,test_a_missing_recording_is_an_error_line_and_comes_up_when_it_appears,test_a_cloud_is_on_the_registry_not_the_router}`.
+Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the cloud block. Watch SYSTEM for a few seconds.
+Then rename the file and add `loop = false` to the entry (an edit, so it
+reopens); rename the file back. *Pass:* `scan · cloud · connected · 1
+source · knot.npz · frame n/16 · … points · 12 fps`, the frame counting
+through 16 a little faster than once a second and starting again;
+nothing else on screen changes (the render graph's point-cloud node
+draws it). Renamed: `error: FileNotFoundError …`; back: `connected`
+within about 10 s, and with `loop = false` the frame stops at 16/16.
+*Fail:* the frame number follows the app's frame rate →
+`CloudDevice.poll`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -2318,5 +2640,12 @@ Only a person can settle these:
   thresholds, on real hands (158–163): all were tuned on synthetic
   hands;
 - the palette fold by eye on a projector (166): the tests prove only
-  that mix 0 is today's picture and that a raised mix changes it.
+  that mix 0 is today's picture and that a raised mix changes it;
+- every device of plan 27 on real hardware (168–190): the tests use a
+  fake MIDI bus, stub devices and `pythonosc`'s client on localhost —
+  never a real APC40 replugged under the registry (175), two real desks
+  at once (176, 177), a DAW receiving a sink row or the hands through
+  `hands-daw` (181–185), a phone app on Wi-Fi or the macOS firewall
+  prompt (186–189), or a real editor's save while the config is watched
+  (173).
 
