@@ -71,14 +71,19 @@ Schmitt edge (`BOX_EDGE`) so a hand on a face does not flicker. The
 sweep sets the box from where the palms went (`_sweep_box`); "reset
 ranges" opens it; no box, the default, bounds nothing.
 
-  {"schema": "hyperspace.hands/2",
+  {"schema": "hyperspace.hands/3",
    "axes": {"left.x": {"lo": -214.2, "hi": 18.5}, …},
-   "box": {"x": [-262.0, 262.0], "y": [71.5, 402.0], "z": null}}
+   "box": {"x": [-262.0, 262.0], "y": [71.5, 402.0], "z": null},
+   "units": {"mm": null, "origin": null, "tilt": 32.0}}
 
 ``box`` is absent or null (no bounds) or has x, y, z each ``[lo, hi]``
-or null (open). A ``/1`` file has no box, is read as it is and is never
-rewritten at load; the first save over a file that is not ``/2`` first
-keeps it beside itself as ``hands.json.bak-v1`` (`_keep`).
+or null (open). ``units`` (plan 26 A2, `Units`) is the calibration from
+the Leap's mm into the shape's units — millimetres per shape unit, the
+Leap point at the world's centre, the tilt toward the eye; null for
+"from the box". A ``/1`` file has no box, a ``/2`` file no units; each
+is read as it is and never rewritten at load; the first save over a file
+that is not ``/3`` first keeps it beside itself as ``hands.json.bak-v1``
+or ``.bak-v2`` (`_keep`).
 
 The tracking service calls back on its own thread; `LeapSource` keeps
 the newest frame under a lock and the render loop reads it once per
@@ -165,7 +170,14 @@ from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no han
 SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
 CAL_FILE = "hands.json"
-CAL_SCHEMA = "hyperspace.hands/2"
+# /3 (plan 26 A2): the file gains "units", the calibration from the Leap's
+# mm into the shape's units; a /2 file reads as it is (units: from the box)
+# and is kept beside itself as hands.json.bak-v2 before the first save
+CAL_SCHEMA = "hyperspace.hands/3"
+# the calibration's tilt when the file names none: the Leap's up turned
+# this far toward the eye, so the eye on the shape's axis sees the hands
+# from above as the ghost hands' own camera does (ghost.ELEVATION)
+UNITS_TILT = 32.0
 CAL_MIN_SAMPLES = 30
 # the interaction box: bounds on the palm, in the Leap's mm (plan 18 WP1)
 BOX_AXES = ("x", "y", "z")
@@ -985,14 +997,91 @@ def inside(box: Box | None, feats: dict, grow: float = 0.0) -> bool:
     return True
 
 
+@dataclass
+class Units:
+    """The calibration from the Leap's millimetres into the shape's units
+    (plan 26 A2): where the hands sit in the one world the shape is drawn
+    in, so the eye (`eye.*`) sees both. A point p (Leap mm) lands at
+
+        world = R_x(tilt) · stage(p − origin) / mm
+
+    where stage is the tracking mode's basis (`ghost.basis`, `ghost.mirror`
+    included) and R_x turns the stage's up `tilt` degrees toward the eye.
+    `mm` is how many millimetres make one shape unit (the shape's unit
+    circumradius) and `origin` the Leap point at the world's centre — each
+    None for "from the box": the box's centre, and the scale that fits the
+    padded box in the eye's frame as the ghost hands' camera fits it
+    (`ghost.calibration`). Room settings, beside the ranges and the box in
+    hands.json; the defaults are all "from the box"."""
+
+    mm: float | None = None
+    origin: tuple[float, float, float] | None = None
+    tilt: float = UNITS_TILT
+
+    def to_json(self) -> dict:
+        return {"mm": None if self.mm is None else round(self.mm, 4),
+                "origin": None if self.origin is None else [round(n, 3) for n in self.origin],
+                "tilt": round(self.tilt, 3)}
+
+
+def load_units(path: Path | None) -> Units:
+    """The calibration in the file, or the defaults (all from the box) when
+    it has none: no file, a /1 or /2 file, ``"units": null``. A bad entry
+    is left at its default and said once on stderr — a typo never moves
+    the hands out of the frame."""
+    if path is None or not path.exists():
+        return Units()
+    try:
+        raw = json.loads(path.read_text()).get("units")
+    except (OSError, ValueError, AttributeError):
+        return Units()
+    if raw is None:
+        return Units()
+    if not isinstance(raw, dict):
+        print(f"hands: {path.name}: units: not an object ({str(raw)[:40]!r}); from the box",
+              file=sys.stderr)
+        return Units()
+
+    def number(v) -> float | None:
+        ok = (isinstance(v, (int, float)) and not isinstance(v, bool)
+              and math.isfinite(float(v)))
+        return float(v) if ok else None
+
+    out = Units()
+    mm, origin, tilt = raw.get("mm"), raw.get("origin"), raw.get("tilt", UNITS_TILT)
+    if mm is not None:
+        n = number(mm)
+        if n is None or n <= 0.0:
+            print(f"hands: {path.name}: units.mm: not a positive number ({str(mm)[:40]!r}); "
+                  "from the box", file=sys.stderr)
+        else:
+            out.mm = n
+    if origin is not None:
+        ns = [number(v) for v in origin] if isinstance(origin, (list, tuple)) else []
+        if len(ns) != 3 or any(n is None for n in ns):
+            print(f"hands: {path.name}: units.origin: not [x, y, z] ({str(origin)[:40]!r}); "
+                  "from the box", file=sys.stderr)
+        else:
+            out.origin = (ns[0], ns[1], ns[2])
+    if tilt is not None:
+        n = number(tilt)
+        if n is None:
+            print(f"hands: {path.name}: units.tilt: not a number ({str(tilt)[:40]!r}); "
+                  f"{UNITS_TILT:g}°", file=sys.stderr)
+        else:
+            out.tilt = n
+    return out
+
+
 def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
-                     box: Box | None = None) -> None:
+                     box: Box | None = None, units: Units | None = None) -> None:
     data = {"schema": CAL_SCHEMA,
             "axes": {k: {"lo": round(lo, 3), "hi": round(hi, 3)}
                      for k, (lo, hi) in ranges.items()},
             "box": None if box is None else
             {c: None if box.get(c) is None else [round(n, 3) for n in box[c]]
-             for c in BOX_AXES}}
+             for c in BOX_AXES},
+            "units": (units or Units()).to_json()}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1) + "\n")
 
@@ -1303,6 +1392,9 @@ class HandsIO:
         cal = load_calibration(cal_path)
         # the interaction box, None for no bounds (the default, an old file)
         self.box: Box | None = load_box(cal_path)
+        # the calibration into the shape's units (plan 26 A2), from the box
+        # unless the file says otherwise
+        self.units: Units = load_units(cal_path)
         self.state = []
         for a in settings.axes:
             lo, hi = default_range(a.side, a.feature)
@@ -1853,7 +1945,7 @@ class HandsIO:
         try:
             save_calibration(self.cal_path,
                              {a.name: (st.lo, st.hi) for a, st in zip(self.axes, self.state)},
-                             getattr(self, "box", None))
+                             getattr(self, "box", None), getattr(self, "units", None))
         except OSError as e:
             self.cal_note = f"save: {e}"[:120]
 
