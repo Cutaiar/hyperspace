@@ -395,6 +395,17 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
 # the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
 TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
     (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
+# Plan 24 C2 (decision 17, amending D6) frees the track faders S1–S8 for
+# the presets: the audio strip that was invariant on them (the bands'
+# post-drive on 1–6, master.dyn and master.trim on 7–8) moves to the SHIFT
+# layer. A session file from before holds those eight rows with no layer;
+# `remap_factory` gives each exact row the global layer, with a note (the
+# file is backed up and written back once). A fader row the owner changed
+# matches no key and stays invariant: that fader is the owner's on both
+# layers, and a preset's row on it drops with D6's note.
+FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"cc:{ch}:{apc40.CC_FADER}", pid, "abs", 1.0)
+    for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
@@ -402,6 +413,7 @@ APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
                   **{source: "plan 19" for _k, source in _FAR_PADS},
                   **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
+                  **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
                   f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
@@ -974,7 +986,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14 (PAD_REMAP).
+    2026-10-14 (PAD_REMAP); the track faders' eight invariant audio rows
+    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
@@ -1002,6 +1015,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target, op=op, value=value)
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
+        elif ((b.source, b.target, b.op, float(b.value)) in FADER_SHIFT_ROWS
+              and b.layer is None):
+            notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
+                         "map of plan 24: the track faders are the presets')")
+            b = replace(b, layer="global")
         elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
             hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
             if hit is None:
@@ -1440,9 +1458,10 @@ class Bindings:
     # is an edit (`set_routes`), so they are gone before the first frame;
     # this line stays for the session. "" when the load wrote nothing
     said: str = ""
-    # the MIDI devices' roles, in `[[devices]]` order (plan 27 B2; the
-    # device registry sets them): an unqualified MIDI row is the first
-    # one's, a second device's rows carry its role (``cc@launch:0:7``).
+    # the MIDI devices' roles (plan 27 B2; the device registry sets them,
+    # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
+    # then `[[devices]]` order): an unqualified MIDI row is the first
+    # one's, another device's rows carry its role (``cc@launch:0:7``).
     # Empty — a bare table, the tests' — every unqualified row is the
     # one desk's, as before
     midi_roles: tuple[str, ...] = ()
@@ -1836,7 +1855,17 @@ class Bindings:
         layers = self.__dict__.setdefault("layers", {})
         if layers.get(role, "preset") != layer:
             layers[role] = layer
-            self.layer_serial += 1
+            serials = self.__dict__.setdefault("layer_serials", {})
+            serials[role] = serials.get(role, 0) + 1
+
+    def layer_serial_of(self, role: str | None = None) -> int:
+        """How many times the layer up on the device of `role` has changed:
+        the first role's is `layer_serial` (SHIFT's), another role's its
+        own count — so a desk redraws and re-arms its faders' pickup only
+        when **its** latch flips (D7, per desk), never on another's."""
+        if self.is_primary(role):
+            return self.layer_serial
+        return self.__dict__.setdefault("layer_serials", {}).get(role, 0)
 
     def toggle_layer(self, role: str | None = None) -> str:
         """SHIFT's press: the other layer on that device. Returns the one

@@ -269,7 +269,10 @@ class Base:
 
 class OffDevice(Base):
     """A listed device whose entry says ``enabled = false``: on the SYSTEM
-    page as `off`, never opened, its module never imported."""
+    page as `off`, never opened, its adapter module (midi, gamepad, bridge,
+    the Leap SDK) never imported — only its device class is looked up
+    (`kind_class`, which for the hands imports `hands.device`, a host
+    wrapper that imports no adapter), for its schemes and wants."""
 
     def __init__(self, role: str, kind: str, entry: dict | None = None,
                  ctx: Context | None = None):
@@ -718,9 +721,23 @@ class DeviceRegistry:
         return tuple(out)
 
     def midi_roles(self) -> tuple[str, ...]:
-        """Every MIDI entry's role, in list order, off or not: the first is
-        the one whose rows are unqualified (`Bindings.midi_roles`)."""
-        return tuple(d.role for d in self.devices if d.kind == "midi")
+        """Every MIDI entry's role, off or not, the one whose rows are
+        unqualified first (`Bindings.midi_roles`): the first MIDI role whose
+        profile is the binding table's (`bindings.json`'s "profile",
+        `apc40` by default) — the desk the file's rows were written for —
+        else the first listed; the rest in list order. So a generic box
+        listed above the APC40 never inherits the APC40's rows or SHIFT,
+        and a rig whose only desk is generic still maps (orchestrator's
+        ruling on PR #181)."""
+        midi = [d for d in self.devices if d.kind == "midi"]
+        table = getattr(self.ctx, "table", None)
+        want = str(getattr(table, "profile", "") or "apc40")
+        owner = next((d for d in midi
+                      if str(getattr(d, "entry", {}).get("profile") or "apc40") == want), None)
+        if owner is not None:
+            midi.remove(owner)
+            midi.insert(0, owner)
+        return tuple(d.role for d in midi)
 
     def wants(self) -> tuple[str, ...]:
         """What a Learn can be armed for on this rig (`Learn.wants`), in

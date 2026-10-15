@@ -39,7 +39,7 @@ def test_the_instrument_imports_nothing_from_the_host(name):
 
 def test_the_panel_is_the_only_piece_that_knows_the_host():
     """If this fails, the adapter has spread and extraction got harder."""
-    reaching = [f.name for f in PKG.glob("*.py")
+    reaching = [f.name for f in sorted(PKG.glob("*.py"))
                 if any(lv > 1 or m.startswith("hyperspace")
                        for m, lv in _imports(f))]
     assert reaching == ["device.py", "panel.py"]

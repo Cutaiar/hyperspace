@@ -49,6 +49,16 @@ frame; the look-back composite and the effect chain once per distinct
 pipeline (`outputs.route`); the picture, the hands over it and the dim
 once per output. `draw` is `draw_outputs` with one default view on the
 bound framebuffer, and is the frame it always was, byte for byte.
+
+Plan 26 A1: those passes are the nodes of a render graph (graph.py).
+`_draw_frame` builds the default graph for the views' switches — or
+reuses the last one while they do not change — and evaluates it: the
+nodes run once each, in an order settled when the graph was built, and
+each node is timed on the GPU (`PassTimer`, one line per node on the
+SYSTEM page). The default graph is today's three pipelines; every golden
+frame of A0 is drawn byte for byte. The passes themselves (`draw_scene`,
+`_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
+here; the nodes call them.
 """
 
 from __future__ import annotations
@@ -66,8 +76,9 @@ from .fx import FACES, SCREEN, FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, project_h, view_angles, view_depth, w_masked
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
+from .graph import Frame, Graph, default_graph, graph_key
 from .lookback import DreamState, Lookback
-from .outputs import HANDS, NAMES, PIPELINES, SCENE, Handoff, Switches, View, capped, fit, route
+from .outputs import Handoff, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -517,22 +528,20 @@ class FaceTarget:
         self.fbo = self.tex = None
 
 
-# the passes `PassTimer` reports, in frame order (plan 26 A0): what the
-# SYSTEM page lists, one line each. After A1 they become the graph's nodes
-GPU_PASSES = ("scene", "cover", "hands", "lookback", "fx", "compose")
-
-
 class PassTimer:
-    """GPU time per pass of `Renderer._draw_frame` (plan 26 A0): a
-    ``ctx.query(time=True)`` around each pass, read back `LAG` frames
-    later so the CPU does not wait on the GPU for a result, and kept as a
-    rolling median over the last `WINDOW` frames in ms (`medians`).
+    """GPU time per node of the render graph (plan 26 A0, per pass; A1,
+    per node): a ``ctx.query(time=True)`` around each node's work, read
+    back `LAG` frames later so the CPU does not wait on the GPU for a
+    result, and kept as a rolling median over the last `WINDOW` frames in
+    ms (`medians`), in the graph's order.
 
-    A pass that runs more than once a frame (the look-back composite per
-    pipeline and then the capture; the compose per output) is summed into
-    its frame's total; a pass that did not run in a frame counts 0 that
-    frame. Time queries never nest (GL allows one active per target), so
-    the passes are timed side by side, never one inside another.
+    `end_frame(names)` takes the frame's node names (`Graph.timed`): a
+    node that ran more than once (the history painted for two pipelines)
+    is summed into its frame's total; one that did not run counts 0 that
+    frame; a name no longer in the graph (an output closed, a pipeline
+    gone with its switch) drops out of the medians. Time queries never
+    nest (GL allows one active per target), so the nodes are timed side
+    by side, never one inside another.
 
     A context with no timer queries (`ctx.query(time=True)` raises) leaves
     `on` false and `note` saying why; `time` is then a no-op and the frame
@@ -547,9 +556,10 @@ class PassTimer:
         self.on = False
         self.note = ""
         self._free: list = []
-        self._frame: list[tuple[str, object]] = []          # this frame's (pass, query)
-        self._pending: list[list[tuple[str, object]]] = []  # ended, not yet read
-        self._ms: dict[str, list[float]] = {p: [] for p in GPU_PASSES}
+        self._frame: list[tuple[str, object]] = []          # this frame's (node, query)
+        # frames ended, not yet read: (the frame's node names, its queries)
+        self._pending: list[tuple[list[str], list[tuple[str, object]]]] = []
+        self._ms: dict[str, list[float]] = {}
         try:
             q = ctx.query(time=True)
             with q:
@@ -568,7 +578,7 @@ class PassTimer:
         first, so only the rest are released here."""
         self.on = False
         self.note = f"GPU timing off: {type(e).__name__}: {e}"[:120]
-        held = [q for _, q in self._frame] + [q for f in self._pending for _, q in f]
+        held = [q for _, q in self._frame] + [q for _, f in self._pending for _, q in f]
         self._frame, self._pending = [], []
         for q in held + self._free:
             try:
@@ -578,7 +588,7 @@ class PassTimer:
         self._free = []
 
     def time(self, name: str) -> _Timed:
-        """``with timer.time("scene"):`` — the pass's GPU time, this frame."""
+        """``with timer.time("scene"):`` — the node's GPU time, this frame."""
         if not self.on:
             return _Timed(None)
         try:
@@ -589,16 +599,17 @@ class PassTimer:
         self._frame.append((name, q))
         return _Timed(q, self)
 
-    def end_frame(self) -> None:
-        """Once a frame, after the last pass: this frame's queries wait;
-        the frame `LAG` frames back is read into the medians."""
+    def end_frame(self, names: tuple[str, ...] | list[str] = ()) -> None:
+        """Once a frame, after the last node: this frame's queries wait;
+        the frame `LAG` frames back is read into the medians. `names` are
+        this frame's nodes in order: the lines the medians keep."""
         if not self.on:
             return
-        self._pending.append(self._frame)
+        self._pending.append((list(names), self._frame))
         self._frame = []
         while len(self._pending) > self.LAG:
-            done = self._pending.pop(0)
-            totals = dict.fromkeys(GPU_PASSES, 0.0)
+            names, done = self._pending.pop(0)
+            totals = dict.fromkeys(names, 0.0)
             try:
                 for name, q in done:
                     # blocks if the result is still not there LAG frames on
@@ -608,19 +619,21 @@ class PassTimer:
             except Exception as e:  # noqa: BLE001 — a read that fails: timing off
                 self._off(e)
                 return
+            ms_by: dict[str, list[float]] = {}
             for name, ms in totals.items():
-                window = self._ms.setdefault(name, [])
+                window = ms_by[name] = self._ms.get(name, [])
                 window.append(ms)
                 del window[:-self.WINDOW]
+            self._ms = ms_by             # that frame's nodes, in its order
 
     def medians(self) -> dict[str, float]:
-        """Pass → median ms over the window, in `GPU_PASSES` order; empty
+        """Node → median ms over the window, in the graph's order; empty
         until the first frame has been read back, and with no timer."""
         return {name: float(np.median(w)) for name, w in self._ms.items() if w}
 
 
 class _Timed:
-    """One pass's query as a context manager; nothing with no query. A
+    """One node's query as a context manager; nothing with no query. A
     query whose begin or end raises turns the timer off, never the frame."""
 
     __slots__ = ("began", "q", "timer")
@@ -689,8 +702,11 @@ class Renderer:
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
-        # plan 26 A0: GPU time per pass, `stats["gpu_ms"]` (the SYSTEM page)
+        # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
+        # plan 26 A1: the render graph for the last frame's views, reused
+        # while their switches do not change (graph.graph_key)
+        self._graph: Graph | None = None
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
@@ -796,6 +812,12 @@ class Renderer:
         # made again from this module's source on next use. getattr: a
         # renderer from before the outputs existed has none of them
         self._release_frames()
+        # plan 26 A1: the graph is built again from graph.py as it is now
+        # (its nodes are not re-classed; they hold no GL resources), and so
+        # is the timer — the one from before the reload is this module's
+        # old `PassTimer`, with an `end_frame` of another shape
+        self._graph = None
+        self._drop_timer()
         for res in (getattr(self, "_show_vao", None), getattr(self, "_show_prog", None)):
             if res is not None:
                 res.release()
@@ -969,12 +991,28 @@ class Renderer:
             ctx.enable(moderngl.BLEND)
 
     def _pass_timer(self) -> PassTimer:
-        """The GPU pass timer (getattr: a renderer from before a hot reload
-        has none, and gets one)."""
+        """The GPU node timer (getattr: a renderer from before a hot reload
+        has none, and gets one). A timer of another class — this module's
+        `PassTimer` as it was before a reload, whose `end_frame` and
+        pending frames have the old shape — is dropped for a fresh one:
+        the timer is not a reload target, only the renderer is."""
         timer = getattr(self, "timer", None)
-        if timer is None:
+        if timer is None or type(timer) is not PassTimer:
+            self._drop_timer()
             timer = self.timer = PassTimer(self.ctx)
         return timer
+
+    def _drop_timer(self) -> None:
+        """Free the timer's queries, whatever shape it has (its own `_off`
+        knows), and forget it; best-effort — a timer never costs a frame."""
+        timer = getattr(self, "timer", None)
+        self.timer = None
+        off = getattr(timer, "_off", None)
+        if off is not None:
+            try:
+                off(RuntimeError("replaced"))
+            except Exception:  # noqa: BLE001, S110 — a stand-in or a lost context: nothing to free
+                pass
 
     def _timed(self, name: str) -> _Timed:
         """``with self._timed("fx"):`` — the pass's GPU time (plan 26 A0)."""
@@ -982,22 +1020,18 @@ class Renderer:
 
     def _draw_frame(self, s: ViewState, w: int, h: int, dpr: float, t: float,
                     views: list[View]) -> None:
-        """draw_outputs()'s body, timed per pass on the GPU (`PassTimer`):
-        `stats["gpu_ms"]` is each pass's rolling median in ms and
-        `stats["gpu_note"]` why there is none, whatever the frame did."""
-        timer = self._pass_timer()
-        try:
-            self._frame_passes(s, w, h, dpr, t, views)
-        finally:
-            timer.end_frame()
-            self.stats["gpu_ms"] = timer.medians()
-            self.stats["gpu_note"] = timer.note
+        """draw_outputs()'s body (plan 26 A1): the frame's size under the
+        render cap, the chain's clocks, then the render graph for these
+        views — built from their switches, or the last frame's while they
+        have not changed — evaluated once, every node timed on the GPU
+        (`PassTimer`): `stats["gpu_ms"]` is each node's rolling median in
+        ms and `stats["gpu_note"]` why there is none, whatever the frame
+        did.
 
-    def _frame_passes(self, s: ViewState, w: int, h: int, dpr: float, t: float,
-                      views: list[View]) -> None:
-        """The frame's passes: the face picture (only while an effect is
-        aimed at the faces), scene, cover, pull, the hands' layer, each
-        pipeline once (composite, capture, effects), then each view's
+        What the nodes run is the frame as it was: the face picture (only
+        while an effect is aimed at the faces), the scene, the cover, the
+        hands' layer, each pipeline once (the look-back composite, the
+        hands onto it, the effects), the capture, then each view's
         picture, the ghost hands over it and its dim."""
         ctx = self.ctx
         first = views[0]
@@ -1011,155 +1045,39 @@ class Renderer:
         full = (max(vp[2], 1), max(vp[3], 1))
         size = capped(full, getattr(self, "max_frame", None))
         dpr *= size[0] / full[0]
-        self.scene.ensure(size, _samples_of(ctx, target))
-        for unit in range(4):
-            self._blank.use(location=unit)
-        # the faces' effects first, into their own picture: finished before
-        # the scene pass begins and not bound again this frame. The scene
-        # pass below shows it, so everything after — the echoes, the dream,
-        # the frame's effects — sees the faces' effects as part of the scene
-        clock = self._timed
-        with clock("scene"):         # the face picture, the scene, the resolve
-            self._pic = self._face_picture(s, t)
-            try:
-                self.scene.draw_fbo.use()
-                ctx.viewport = (0, 0, *size)
-                self.draw_scene(s, w, h, dpr, t)
-            finally:
-                self._pic = None         # handed to that one scene pass only
-            self.scene.resolve()
-        lb = self.lookback
-        cover = None
-        if lb.wants_cover():
-            with clock("cover"):
-                cover = self._draw_cover(w, h)
         target.viewport = vp
-        lb.tick(t)                       # echo time is seconds (plan 14 WP6)
-        lb.pull()
+        # the chain's folder watch and ground, once a frame, before the
+        # graph: whether an effect is on steers the hands' readout and the
+        # routes. An opaque ground keeps the whole chain at alpha 1 (plan
+        # 14 WP1)
         fx = self.fx
         fx.tick()
-        # an opaque ground keeps the whole chain at alpha 1 (plan 14 WP1)
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        fx_on = fx.active()
         stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
-                 "layer": False}
+                 "layer": False, "readout": False}
         self.stats = stats
-        # the hands' layer, once, before any pipeline that might want it —
-        # only while some view shows hands. A pass that raises (a malformed
-        # skeleton, a font, a driver) is caught, as the faces' is: the frame
-        # goes on without the hands, `Ghost.error` says why (the first
-        # reason, kept), the target is bound again and the dim still runs —
-        # a rig at black must never flash full because of the hands
-        # With an effect on and some view's hands going through it, the
-        # guide and the tethers' labels are drawn into a layer of their own
-        # (`Ghost.readout`, fork F3) and laid over after everything, so the
-        # effects never bend them; otherwise they are in the hands' layer
-        hands = False
-        if any(v.switches.hands for v in views):
-            through = fx_on and any(v.switches.hands and v.switches.through for v in views)
-            try:
-                with self._timed("hands"):
-                    hands = bool(self.ghost.layer(size, t, readout=through))
-            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
-                self._hands_failed(e, target, vp)
-        readout = self.ghost.readout if hands else None
-        stats["layer"], stats["readout"] = hands, readout is not None
-        routes = [route(v.switches, fx_on, hands) for v in views]
-        # each distinct pipeline once, in key order. The history is
-        # captured after the first composite of the scene, from the scene
-        # texture: it never holds the hands, the effects or the dim
-        users: dict[int, list[int]] = {}
-        for i, (key, _) in enumerate(routes):
-            if key is not None:
-                users.setdefault(key, []).append(i)
-        frames: dict[int, moderngl.Texture | None] = {}   # key → its texture; None: drawn direct
-        failed: set[int] = set()
-        for key in PIPELINES:
-            if key not in users:
-                continue
-            only = views[users[key][0]]
-            # a flipped output (plan 23 WP1) takes the frame through a
-            # texture: the mirror is `_show`'s, at the output stage
-            direct = (len(users[key]) == 1 and only.target is not None
-                      and tuple(only.rect[2:]) == size
-                      and not getattr(only.switches, "flip_x", False)
-                      and not getattr(only.switches, "flip_y", False))
-            stats["pipelines"].append(key)
-            try:
-                if direct:
-                    dst, tex = only.target, None
-                    dst.viewport = only.rect
-                else:
-                    tex, dst = self._frame_target(key, size)
-                    stats["direct"] = False
-                self._pipeline(key, dst, cover, t, fx_on, stats, (target, vp))
-                frames[key] = tex
-            except Exception as e:  # noqa: BLE001 — one pipeline must not take the others down
-                failed.add(key)
-                for i in users[key]:
-                    self._view_failed(views[i], f"{NAMES[key]}", e)
-                self._rebind(target, vp)
-        # the history, exactly once, from the scene texture, after every
-        # pipeline has composited it: a capture changes the echoes' weights,
-        # ages and tint, so one before a second pipeline's composite would
-        # give two outputs different echoes in one frame. With no view
-        # showing the scene it runs all the same — the history and the
-        # dream go on, so switching the scene back on shows no gap
-        stats["captures"] = 1
-        with self._timed("lookback"):
-            lb.capture(self.scene.tex, self.scene.fbo)
-        if fx_on and not stats["chain_runs"]:
-            fx.state.advance_to(t)       # …and so do the effects' clocks
-        for i, v in enumerate(views):
-            key, after = routes[i]
-            # the readout goes on every output that shows the hands, over
-            # or through: in its own layer the guide is in neither
-            ro = readout if v.switches.hands else None
-            try:
-                with self._timed("compose"):
-                    self._compose(v, key, after, frames, failed, size, ro)
-            except Exception as e:  # noqa: BLE001 — one view must not take the others down
-                self._view_failed(v, "output", e)
-                self._rebind(target, vp)
+        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
+                      target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx.active(),
+                      stats=stats)
+        graph = self._graph_for(views)
+        timer = self._pass_timer()
+        try:
+            graph.evaluate(frame)
+        finally:
+            timer.end_frame(graph.timed)
+            stats["gpu_ms"] = timer.medians()
+            stats["gpu_note"] = timer.note
 
-    def _pipeline(self, key: int, dst: moderngl.Framebuffer, cover, t: float, fx_on: bool,
-                  stats: dict, restore: tuple) -> None:
-        """One pipeline into `dst` (its viewport). SCENE: the look-back
-        composite and, with an effect on, the chain after it. SCENE_HANDS
-        (WP2): the composite, the hands over it, then the chain — the
-        effects bend the hands with the shape. HANDS: the ground, the hands,
-        the chain; no look-back (the echoes are the scene's, and the scene
-        is off). Both only ever with an effect on (`outputs.route`)."""
-        lb, fx, ctx = self.lookback, self.fx, self.ctx
-        clock = self._timed
-        if not fx_on:
-            with clock("lookback"):
-                lb.composite(self.scene.tex, dst, cover)
-            return
-        # the post pass into the chain's first texture; the chain ends on
-        # `dst`. The history is captured after every pipeline's composite
-        # (`_draw_frame`), from the scene texture: never the hands or effects
-        size = self.scene.size
-        buf = fx.begin(size)
-        if key == HANDS:
-            buf.use()
-            ctx.viewport = (0, 0, *size)
-            ctx.clear(0.0, 0.0, 0.0, getattr(self, "bg_alpha", 1.0))
-        else:
-            with clock("lookback"):
-                lb.composite(self.scene.tex, buf, cover)
-        if key != SCENE:
-            # the hands onto the chain's input (fork F1: after the look-back
-            # composite, before the first effect). Failing, the chain still
-            # runs on the scene alone and `Ghost.error` says why
-            try:
-                with clock("hands"):
-                    self.ghost.composite(buf, (0, 0, *size), opaque=fx.opaque)
-            except Exception as e:  # noqa: BLE001 — the hands must not take the frame down
-                self._hands_failed(e, *restore)
-        with clock("fx"):
-            fx.run(dst, t)
-        stats["chain_runs"] += 1
+    def _graph_for(self, views: list[View]) -> Graph:
+        """The render graph for these views: the last one while their
+        switches have not changed (`graph.graph_key`), else the default
+        graph built from them (`graph.default_graph`). getattr: a renderer
+        from before the graph has none."""
+        key = graph_key(views)
+        graph = getattr(self, "_graph", None)
+        if graph is None or graph.key != key:
+            graph = self._graph = default_graph(views)
+        return graph
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
@@ -1171,7 +1089,7 @@ class Renderer:
         factor = clamp(getattr(self, "dim", 1.0) * float(v.switches.dim), 0.0, 1.0)
         # plan 23 WP1: this output's mirror, its last step — the frame, the
         # hands laid after and the readout, never the hands-through pass
-        # (`_pipeline`'s composite, inside the frame this flips whole)
+        # (the graph's Composite node, inside the frame this flips whole)
         flip = (bool(getattr(v.switches, "flip_x", False)),
                 bool(getattr(v.switches, "flip_y", False)))
         frame = None if key is None or key in failed else frames.get(key)
@@ -1660,7 +1578,7 @@ class Renderer:
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * zoom
         draw_w = np.maximum(width, 1.0)
-        alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
+        alpha = alpha * np.minimum(width, 1.0) * s.lines_alpha  # sub-px width; C2's opacity
 
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
@@ -1763,7 +1681,7 @@ class Renderer:
             order_p = np.argsort(pd, kind="stable")
             r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * zoom
             PB = s.bright * clamp(dens * 1.5, 0.55, 1)
-            pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1)
+            pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1) * s.points_alpha  # C2's opacity
             pverts = np.empty((g["n"], 4), dtype=np.float32)
             pverts[:, 0] = px[order_p]
             pverts[:, 1] = py[order_p]

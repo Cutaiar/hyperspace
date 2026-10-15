@@ -337,7 +337,7 @@ def test_the_latch_is_per_role(build):
     t.add(Binding("note@launch:0:50", "view.faces", "momentary", layer="preset"))
     t.add(Binding("note@launch:0:50", "view.lines", "momentary", layer="global"))
     faces, lines = r.reg["view.faces"], r.reg["view.lines"]
-    f0, l0 = faces.value, lines.value
+    l0 = lines.value
     push(r, LAUNCH, note(50))
     assert faces.value is True
     t.set_layer("global", "launch")
@@ -347,9 +347,10 @@ def test_the_latch_is_per_role(build):
     push(r, LAUNCH, note(50))
     assert lines.value is True and faces.value is False
     push(r, LAUNCH, note(50, 0))
+    assert lines.value is False and faces.value is False    # each release let its own go
     t.drop_layer()                                   # a preset load: every desk back (D4)
     assert t.layer_of("launch") == "preset" and t.layer_of("apc40") == "preset"
-    assert shift.value is False and f0 is not None
+    assert shift.value is False
 
 
 def test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback(build):
@@ -502,3 +503,53 @@ def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(bu
         assert not lib.is_dirty("presets"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
+
+
+# ---------------------------------------------------------------- review of PR #181
+
+def test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught(build):
+    """D7 per desk: a layer switch re-arms pickup on the faders of the desk
+    whose latch flipped (C2's `redraw(switch=True)`), never another's —
+    the layer serial is per role (`Bindings.layer_serial_of`)."""
+    r = build(entries())
+    t = r.table
+    row = Binding("cc@launch:0:30", "view.inst_amp", "abs", layer="preset")
+    t.add(row)
+    amp = r.reg["view.inst_amp"]
+    push(r, LAUNCH, cc(30, round(amp.norm * 127)))    # on the value: caught
+    assert row.caught
+    io = r.devices.get("launch").io
+    switches: list[dict] = []
+    real = io.redraw
+    io.redraw = lambda **k: switches.append(k) or real(**k)
+    serial = t.layer_serial_of("launch")
+    push(r, APC, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
+    assert r.reg[SHIFT_PARAM].value is True and t.layer_of("apc40") == "global"
+    frame(r)
+    assert t.layer_serial_of("launch") == serial and switches == [] and row.caught
+    # the APC40's own layered fader is re-armed by its switch (C2), as before
+    assert r.devices.get("apc40").io._seen[0] == t.layer_serial
+    t.set_layer("global", "launch")                   # its own latch flips: it redraws
+    frame(r)
+    assert t.layer_serial_of("launch") == serial + 1
+    assert switches == [{"load": False, "switch": True}]
+
+
+def test_the_desk_whose_profile_wrote_the_table_owns_the_unqualified_rows(build):
+    """Orchestrator's ruling on PR #181: the unqualified rows are the first
+    MIDI role whose profile is the table's (`bindings.json`'s "profile",
+    apc40), else the first listed — a generic box listed above the APC40
+    does not inherit the APC40's factory rows or SHIFT; a rig whose only
+    desk is generic still maps."""
+    r = build(list(reversed(entries())))              # the generic box listed first
+    assert r.table.midi_roles == ("apc40", "launch")
+    apc, launch = r.devices.get("apc40"), r.devices.get("launch")
+    assert apc.io.qualifier == "" and launch.io.qualifier == "launch"
+    assert len(launch.io.bindings) == 0 < len(apc.io.bindings)
+    push(r, LAUNCH, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
+    assert r.reg[SHIFT_PARAM].value is False          # the box's note 98 is not SHIFT
+    push(r, APC, note(apc40.N_SHIFT), note(apc40.N_SHIFT, 0))
+    assert r.reg[SHIFT_PARAM].value is True
+    only = devices.DeviceRegistry(
+        [entries(apc=False)[0]], devices.Context(table=NS(profile="apc40", midi_roles=())))
+    assert only.midi_roles() == ("launch",)           # its only desk: it owns them

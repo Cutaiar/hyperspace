@@ -1708,6 +1708,11 @@ class Panel:
         self._check("view.rotate")
         imgui.same_line()
         self._check("view.faces")
+        # the two layers' opacities (plan 24 C2), side by side
+        half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+        self._slider("view.points_alpha", half)
+        imgui.same_line()
+        self._slider("view.lines_alpha", half)
         self._slider("view.instances")
         if v.instances > 1:
             # the field's one row: how the copies are laid out, how they
@@ -1927,8 +1932,9 @@ class Panel:
                     "edit a file and the app follows")
 
     def gpu_lines(self) -> list[str]:
-        """The SYSTEM page's GPU timing (plan 26 A0): a heading, then one
-        line per pass of the last frames, its rolling median in ms
+        """The SYSTEM page's GPU timing (plan 26 A0, per node since A1): a
+        heading, then one line per node of the render graph (graph.py) of
+        the last frames, its rolling median in ms
         (`Renderer.stats["gpu_ms"]`, render.PassTimer); with no timer
         queries on the context, the one line saying so. Nothing before a
         frame has been timed, or with no renderer."""
@@ -1938,7 +1944,7 @@ class Panel:
         if not ms:
             return [f"gpu: {note}"] if note else []
         width = max(len(name) for name in ms)
-        return (["gpu per pass, ms (median of the last frames):"]
+        return (["gpu per node, ms (median of the last frames):"]
                 + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()])
 
     def _gpu_timing(self) -> None:

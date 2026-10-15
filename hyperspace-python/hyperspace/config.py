@@ -120,8 +120,10 @@ like the rename above. The SYSTEM page shows both.
                             # Several MIDI desks (plan 27 B2): one entry each, its
                             # own `profile` — "apc40", or "generic" (plain CC /
                             # note / pitch, no feedback; it needs a `port`). The
-                            # first MIDI entry's rows are unqualified (cc:0:7, as
-                            # every row before plan 27); another's carry its role
+                            # first MIDI entry whose profile is bindings.json's
+                            # ("apc40"), else the first listed, owns the
+                            # unqualified rows (cc:0:7, as every row before
+                            # plan 27); another's carry its role
                             # (cc@launch:0:7), which Learn desk writes for you:
                             #   [[devices]]  role = "launch"  kind = "midi"
                             #                profile = "generic"  port = "Launch Control"
