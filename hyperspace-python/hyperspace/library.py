@@ -1272,12 +1272,15 @@ class Marks:
     def take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
-        its load left for the panel)."""
+        its load left for the panel, the loaded preset's graph — plan 26
+        A4, `preset.GraphSection.mark`, None with no presets)."""
         lib, pre = self.lib, self.lib.presets
+        gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
-                 list(getattr(pre, "desk_notes", ()))))
+                 list(getattr(pre, "desk_notes", ()))),
+                gs.mark() if gs is not None else None)
 
     def lands(self) -> dict:
         """{group: landed} — every group's name, reference and re-apply
@@ -1302,8 +1305,13 @@ class Marks:
         """First in a restore: a group whose layout differs from the
         mark's gets it back through its own `on_layout` hook, so its
         params exist before their values land — the order `_apply_doc`
-        keeps."""
+        keeps. The loaded preset's graph goes back first of all (plan 26
+        A4): an effect instance's params (`fx.acid.2.*`) exist before their
+        values land."""
         lib = self.lib
+        gs = getattr(lib.presets, "graph", None)
+        if len(mark) > 4 and mark[4] is not None and gs is not None:
+            gs.put(mark[4])
         for group, extra in mark[2].items():
             hook, now = lib._layout_hooks.get(group), lib._extra_hooks.get(group)
             if hook is None or now is None or not extra or extra.get("layout") is None:
@@ -1323,7 +1331,7 @@ class Marks:
         the moment they change, and reverting them in memory would make
         the show's dirty dot lie. `last_show` is never rewritten."""
         lib, pr = self.lib, self.lib.project
-        show, landed, _extras, note = mark
+        show, landed, _extras, note = mark[:4]
         if not Project.same_show(show, pr.mark()):
             pr.remark(show)
         for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):

@@ -1087,6 +1087,9 @@ def main() -> None:
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
+    # plan 26 A4: a preset's graph section sets the renderer's wiring and
+    # hands an extra hands node its own state (`Renderer.ghost_states`)
+    presets.graph.attach(renderer)
     # plan 13 §6, once: an older home's projects, routing presets and the
     # preset part of bindings.json become presets (backups beside every
     # rewritten file); a home already migrated finds nothing to do

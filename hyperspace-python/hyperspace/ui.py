@@ -50,6 +50,7 @@ from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
+from .graph import Wiring, graph_words, hands_words, layer_words
 from .hands import panel as ui_hands
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
@@ -251,7 +252,8 @@ def fit_text(text: str, width: float) -> str:
     return text[:lo].rstrip() + "…"
 
 
-def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, str]:
+def output_shows(sw, fx_on: bool, visible: bool, master: float,
+                 wiring: Wiring | None = None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
     words, no picture). It is `outputs.route`'s answer for the output's
@@ -259,8 +261,19 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, st
     the ghost hands are on and the layer drew, fork F7), with master × its
     own dim. The reasons: "nothing" (scene and hands off), "no hand" (the
     scene off and no hand showing), "dim" (its own dim at 0), "master" (the
-    crossfader at black — the footer already says "dim black")."""
+    crossfader at black — the footer already says "dim black").
+
+    Plan 26 A4: under the loaded preset's graph (`wiring`; None or the
+    default, the words above, unchanged) the words say the wiring too
+    (`graph.hands_words`): an output whose scene holds the hands shows
+    "scene + hands in the scene" (no layer over it), and a layer laid on
+    names its hands node when there are two, "as lines", and a blend that
+    is not plainly over."""
     key, after = route(sw, fx_on, visible)
+    wired = wiring is not None and wiring != Wiring()
+    inside = wired and bool(wiring.in_scene()) and sw.scene and sw.hands
+    if inside:                      # the scene holds the hands: no layer, no SCENE+HANDS
+        key, after = SCENE, False
     own = float(sw.dim)
     if key is None and not after:
         if not sw.scene and not sw.hands:
@@ -278,6 +291,11 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, st
         words = "hands through the effects"
     else:
         words = "hands"
+    if inside:
+        words = "scene + " + hands_words(wiring, sw)
+    elif wired and (after or key in (SCENE_HANDS, HANDS)):
+        # a layer laid on: its node, "as lines", its blend
+        words += layer_words(wiring)
     factor = min(1.0, master * own)
     if factor < 1.0:
         words += f" · {min(99, max(1, round(factor * 100)))}%"
@@ -1583,13 +1601,23 @@ class Panel:
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)
 
+    def graph_now(self):
+        """(the renderer's wiring, the loaded preset's graph spec or None):
+        what the OUTPUT page says in words (plan 26 A4). Any piece missing
+        (no renderer, no presets) reads as the default graph."""
+        wiring = getattr(self.renderer, "wiring", None) or Wiring()
+        presets = getattr(getattr(self, "library", None), "presets", None)
+        spec = getattr(getattr(presets, "graph", None), "spec", None)
+        return wiring, spec
+
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the
         master dim (which the footer already says): the footer names them
         on every page (plan 21 WP4)."""
         fx_on, visible, master = self._outputs_now()
+        wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master)[1]
+                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring)[1]
                 not in ("", "master")]
 
     @staticmethod
@@ -1612,6 +1640,9 @@ class Panel:
         several = len(slots) > 1
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
+        # plan 26 A4: the render graph the outputs are wired by — the
+        # loaded preset's `graph` section, or the default
+        wiring, spec = self.graph_now()
         # the switches line up after the widest "N  name", which is cut so
         # the three ticks always fit the page's width
         ticks = sum(imgui.calc_text_size(s).x for s in ("scene", "hands", "through effects"))
@@ -1668,9 +1699,14 @@ class Panel:
                                    fit_text(line, imgui.get_content_region_avail().x))
                 if imgui.is_item_hovered():
                     imgui.set_tooltip(line)
-            words, black = output_shows(sw, fx_on, visible, master)
+            # plan 26 A4: the words say the wiring too — the switches above
+            # and the loaded preset's graph set it (`hands: in the scene`);
+            # the whole graph in words on the line's hover
+            words, black = output_shows(sw, fx_on, visible, master, wiring)
             if not flips:
                 imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"{hands_words(wiring, sw)}\n{graph_words(spec)}")
                 continue
             # no dim row: the ticks at the right of the "shows:" line, the
             # words cut to the room left of them
@@ -1678,6 +1714,9 @@ class Panel:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(WARN if black else FAINT,
                                fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw)}\n"
+                                  f"{graph_words(spec)}")
             for k, (pid, t) in enumerate(flips):
                 imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
                 self._check(pid, t)
