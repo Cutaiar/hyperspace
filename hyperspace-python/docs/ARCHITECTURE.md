@@ -32,36 +32,39 @@ the registry's live objects, a **panel** that edits the registry, and a
 runs the one frame loop.
 
 ```text
- keys · mouse · pad · MIDI desk ──rows──▶ Param.set* ──▶ BASE ─┐
- panel widgets · presets · undo ─────────▶ Param.set* ──▶ BASE ─┤
-                                                                ├─▶ Registry.apply() ─▶ live objects ─▶ render stack
- audio lanes · hands · LFOs · DAW in ──feed──▶ Router.modulate ─┤      (once a frame)    (ViewState,    (reads only)
-                                    (one performer row per param)▶ OFFSET                FxState, …)
+ keys · mouse · devices' rows (pad, MIDI desks, OSC hits) ──▶ Param.set* ──▶ BASE ─┐
+ panel widgets · presets · undo ─────────────────────────────▶ Param.set* ──▶ BASE ─┤
+                                                                                    ├─▶ Registry.apply() ─▶ live objects ─▶ render stack
+ audio lanes · LFOs · devices' feeds (hands, DAW in, pad axes, OSC) ──▶ Router.modulate ─┤  (once a frame)  (ViewState,    (reads only)
+                                              (one performer row per param) ▶ OFFSET     │                  FxState, …)
+                                                                                         └─▶ sinks (bridge out, hands-daw): effective values out
 ```
 
 | Component | Modules | Owns | Writes | Boundary (held by) |
 |---|---|---|---|---|
 | **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects, once a frame, in `Registry.apply()` | never imports `midi`, `bridge` or `dream` (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_bridge.py::test_core_does_not_import_the_bridge`, `tests/test_dream.py::test_core_does_not_import_the_worker`). It does import `fx`, `ghost`, `lookback`, `geometry`, `analyzer` and `bands` for their state classes and constants |
 | **Routing table** | `routing.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the per-frame modulation pass | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `glfw` and `gamepad` only lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
-| **Learn** | `learn.py` | the armed param and what it waits for, the held Replace / Keep question, the picked desk control, Unbind | table rows, through the table's edit doors | imports only `undo`, `params`, `routing`; the device profile arrives as an argument (`tests/test_learn.py::test_learn_control_needs_no_adapter`) |
-| **Input adapters** | `midi.py` + `apc40.py`, `hands/`, `gamepad.py`, `bridge.py`, `app.Keys` / `app.Mouse` | a device and its pickup state | MIDI / keys / pad buttons / mouse: the **base**; hands, bridge and the pad's axes: only `Router.feed` | the core never imports `midi` or `bridge` (above); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/panel.py` is the only piece that knows the host (`tests/test_hands_boundary.py`) |
+| **Learn** | `learn.py` | the armed param and what it waits for, the held Replace / Keep question, the picked desk control, Unbind | table rows, through the table's edit doors | imports only `undo`, `params`, `routing`; the device profile and the device registry (what can be armed, the sink ports) arrive as arguments (`tests/test_learn.py::test_learn_control_needs_no_adapter`) |
+| **Devices** | `devices.py` (the `Device` protocol, `Port`, `DeviceRegistry`, the kind table, `PointCloud`), each kind's adapter: `midi.py` + `apc40.py` / `generic.py`, `gamepad.py`, `hands/` (`hands/device.py` the wrapper), `bridge.py`, `osc.py`; and the host's own `app.Keys` / `app.Mouse` | every input and output the rig lists in `config.toml`'s `[[devices]]`, each opened behind its entry with its pickup state and a status line; the device list's watch and retry; the point clouds (`DeviceRegistry.clouds`) | MIDI rows / pad buttons / OSC hits / keys / mouse: the **base** (scene-setter slot); hands, bridge `ext`, the pad's axes, OSC axes: only `Router.feed` (feed slot); sinks read effective values after `reg.apply` and send them out, writing nothing | `devices.py` is the one importer of every adapter module, each inside its device's `open`; the core never imports `midi`, `bridge`, `osc` (above, and `tests/test_app_boundary.py`); routing and learn are handed the registry as an argument (`Router.use`, `Learn.devices`); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/device.py` and `hands/panel.py` are the only pieces that know the host (`tests/test_hands_boundary.py`); only `osc.py` and `devices.kinds()` name the OSC device (`tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device`) |
 | **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture or file playback, the FFT, the N band lanes | `Analyzer.lanes` (read by `Router.modulate`), the lanes' names (`AudioEngine.publish`) | imports only itself, `tapers` and `motion` (`tests/test_audio_boundary.py`) |
 | **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | `Router.feed("lfo", …)`, its labels and rests | import nothing from the package; registry, router and clock arrive as arguments (`tests/test_lfo_boundary.py`) |
 | **Render stack** | `geometry.py`, `view.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the frame history, the dream worker, the faces' picture, the outputs' pipelines, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
 | **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it |
-| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
+| **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
-| **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓, pad sticks); no key of its own but `app.LOOP_KEYS` | the only importer of every optional adapter, each behind its config gate (`_open_midi`, `_open_bridge`, `_open_hands`, `_open_dream`, `_open_pad`); importing `app` imports no gated adapter, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
+| **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓; the pad's sticks are the pad device's own, `gamepad.steer`); no key of its own but `app.LOOP_KEYS` | builds the device registry (`app._open_devices`: every device behind its own `[[devices]]` entry) and the dream worker behind `[dream] enabled` (`_open_dream`, the one gate left); `Host.devices`, one close list `Host.adapters == (devices, dream_io)`; importing `app` imports no gated adapter, no `osc`, no `pythonosc`, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
 
 **Everything points at the registry; the registry points at nothing
-above it.** Adapters and sources feed the router; the router writes
+above it.** Devices and sources feed the router; the router writes
 offsets; the panel, the desk and the library write bases; the render
 stack only reads.
 
 **Leaves** — modules that import nothing from the package, so anything
 may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `geometry`, `patterns`, `tempo`, `lfo`, `glsl`, `gamepad`, `apc40`,
-`watchdog`, `hands/signal.py`, `hands/tape.py`. Near-leaves: `outputs`, `fx` and
+`generic`, `watchdog`, `hands/signal.py`, `hands/tape.py`. `devices`
+imports nothing from the package at load: every adapter, and `routing`,
+only inside a function. Near-leaves: `outputs`, `fx` and
 `lookback` import only `glsl`; `view` only `geometry`.
 
 ---
@@ -79,32 +82,42 @@ pins this order over stubs:
 |---|---|---|
 | 0 | `clock.tick(now)`, `reloader.poll()`; Esc / Q quit; ⌘R restarts (claims R's edge first) | — |
 | 1 | `router.keys(keys)` — key rows, R, F1–F8 / ⇧F1–F8, ⌘Z among them; ↑ / ↓ ride `view.depth4` (`_ride_depth`) | bases |
-| 2 | `pad.poll()`, `gamepad.learn_from` (an armed Learn pad), `router.pad(pad)` (the `axis` lanes fed, then the button rows); each stick or trigger no route names through `nudge` / `scale` (`router.claimed("axis")`) | bases |
-| 3 | `midi_io.poll()` — the rows of the layer that is up and the invariant rows; knob glides; an armed desk Learn takes its candidate message | bases |
-| 4 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
-| 5 | `undo.tick(now)` — compares the watched bases and the preset's table with last frame's | nothing |
-| 6 | `hands_io.poll(dt, learn, router)` — feeds `hand`; may complete a hand Learn | feed |
-| 7 | `output.apply()` for every output; `renderer.bg_alpha` and `renderer.dim` handed over | window state |
-| 8 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
-| 9 | `audio.step(dt)`, `audio.publish(router)` | lanes |
-| 10 | `bridge_io.step(…)` — feeds `ext`, sends lanes out | feed |
-| 11 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
-| 12 | `router.modulate(chain)` — every live performer row calls `p.modulate(offset)` | offsets |
-| 13 | `reg.apply()` — base + offsets onto every live object | objects |
-| 14 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
-| 15 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — every render output (below) | the screens |
-| 16 | `draw_panel` — the control window | bases, rows |
+| 2 | `devices.poll(dt, now, router=, learn=)` — **the scene-setter slot**: every open device in `[[devices]]` order is polled (`poll`), offered to an armed Learn (`learn`), then delivers its rows (`act`). The pad: `Pad.poll`, `gamepad.learn_from`, `router.pad(pad)` (the `axis` lanes fed, then the button rows), then the sticks' camera job (`gamepad.steer`: each stick or trigger no route names, through `nudge` / `scale`, `router.claimed("axis")`); each MIDI desk: `MidiIO.poll` — the rows of its layer that is up and the invariant rows, knob glides, an armed desk Learn's candidate; the bridge and a `midi-out`: their ports looked for again; an OSC device: its socket read, its hits as rows; a cloud: its frame. Every ~30 frames the registry also looks at `config.toml`'s mtime (`DeviceRegistry.watch`) | bases |
+| 3 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
+| 4 | `undo.tick(now)` — compares the watched bases and the preset's table with last frame's | nothing |
+| 5 | `output.apply()` for every output; `renderer.bg_alpha` and `renderer.dim` handed over | window state |
+| 6 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
+| 7 | `audio.step(dt)`, `audio.publish(router)` | lanes |
+| 8 | `devices.feed(router)` — **the feed slot**: the hands feed `hand` and `hands` (`HandsIO.poll`, which may complete a hand Learn and makes the frame's DAW messages); the bridge feeds `ext` and publishes its labels and rests; an OSC device feeds its role's axes | feed |
+| 9 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
+| 10 | `router.modulate(chain, dt)` — every live performer row calls `p.modulate(offset)` | offsets |
+| 11 | `reg.apply()` — base + offsets onto every live object | objects |
+| 12 | `devices.send(reg, chain)` — **the sink slot**: the bridge sends its sink rows (`routing.sink_values`: effective values, the lanes) through `Bridge.send_values`; `hands-daw` sends the hands' DAW messages and its own sink rows | nothing in the app (MIDI out) |
+| 13 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
+| 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — every render output (below) | the screens |
+| 15 | `draw_panel` — the control window | bases, rows |
 
 Rules that follow from the order:
 
 - **One-frame lag.** Everything a performer moves lands once, in
   `reg.apply()`. A source that reads a parameter — an LFO reading its own
   `depth`, a route scaled by a macro's depth subscriber or by
-  `master.gain`, the bridge sending `eff_norm`, `output.apply` — reads what
-  `apply()` wrote **last** frame. There is no recursion, because nothing in
-  the pass reads a value it is about to write
+  `master.gain`, `output.apply` — reads what `apply()` wrote **last**
+  frame. There is no recursion, because nothing in the pass reads a value
+  it is about to write
   (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame`,
   `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later`).
+  The sinks are the exception that proves it: they run **after**
+  `apply()` (step 12) and read this frame's effective values, so a param
+  sent to the DAW is not a frame behind
+  (`tests/test_sinks.py::test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply`).
+- **Devices poll with the scene-setters, feed with the sources, send
+  after `apply()`** — the three slots of the registry, each over the open
+  devices in `[[devices]]` order
+  (`tests/test_devices.py::test_devices_run_in_list_order_poll_learn_act_then_feed_then_send`).
+  `ORDER` pins them by stub name: the pad's rows and its camera job, then
+  MIDI's rows, then the bridge's ports in step 2; the hands and the
+  bridge's `ext` in step 8; the bridge's sink rows in step 12.
 - **Base before offset.** Every scene-setter runs before `router.modulate`
   (the panel's edits are the previous frame's tail), so a base write and
   the offsets on it combine in one `apply()`. The one writer after
@@ -112,14 +125,19 @@ Rules that follow from the order:
   delta on the base next frame
   (`tests/test_modulation.py::test_a_direct_object_write_is_adopted_into_the_base`).
 - **The undo watcher sits between the scene-setters and the feeds**, so it
-  sees every base this frame's keys, pad, MIDI and macros wrote and no
+  sees every base this frame's keys, devices' rows and macros wrote and no
   performer has run. It writes nothing; `edit.undo` / `edit.redo` are
   key-row triggers in step 1 (`tests/test_undo.py::test_an_idle_app_makes_no_step`).
-- **Guards.** The MIDI poll, the macro step, the undo tick, the hands
-  poll, steps 9–14 as one block, the render draw and the panel draw are
-  each wrapped: hot-reloaded code that raises sets
-  `reloader.runtime_error` (cleared by the next clean frame) and the loop
-  goes on (`tests/test_app_boundary.py::test_a_raising_step_is_recorded_and_the_windows_still_draw`).
+- **Guards.** Each device's every step (`DeviceRegistry._guard`: one
+  device's exception is its own `error:` line and the frame's toast, and
+  the next device runs; a raising `poll` skips that device's rows for the
+  frame), the macro step, the undo tick, steps 7–13 as one block, the
+  render draw and the panel draw are each wrapped: hot-reloaded code that
+  raises sets `reloader.runtime_error` (cleared by the next clean frame)
+  and the loop goes on
+  (`tests/test_app_boundary.py::test_a_raising_step_is_recorded_and_the_windows_still_draw`,
+  `::test_a_raising_adapter_is_a_note_that_survives_the_frame`,
+  `tests/test_devices.py::test_one_devices_exception_never_stops_the_frame`).
   The key block is not wrapped, so the module-level `undo.push` /
   `undo.undo` / `undo.redo` catch their own exceptions (`undo._guarded`).
   A raising render draw is also `watchdog.RenderWatch`'s: logged to
@@ -215,7 +233,7 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   ang)`: the view's own angles for every shape but a masked one (§5,
   Shapes), whose W planes' angles are added onto 3D planes. The fold is a
   pure function read in the scene pass. It writes no param and not
-  `ViewState.ang`; the integrator (step 14) and every `rot.*` param are
+  `ViewState.ang`; the integrator (step 13) and every `rot.*` param are
   as they were. So it changes no boundary, no step of the frame and
   nothing in the control model: modulation stays non-destructive, a rate
   or a phase route on a W plane still lands on that plane's param, and
@@ -233,7 +251,7 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
 - **The bands reach the patterns as a render input, not a param.**
   `app.frame` sets `renderer.bands` from `app._bands(audio)` (the lanes
   as a route reads them, out / CEIL; `()` with the analyzer off; it never
-  raises) after the integrator and before the draw, as step 7 hands over
+  raises) after the integrator and before the draw, as step 5 hands over
   the dim. The face shaders read it as `u_levels` / `u_nlevels`; only
   METER and PULSE do
   (`tests/test_patterns.py::test_only_meter_and_pulse_read_the_bands_and_they_show_them`).
@@ -378,16 +396,36 @@ desk).
 |---|---|---|---|
 | `key:` | a GLFW key name, with modifiers `SHIFT+` / `SUPER+` / `CONTROL+` (`routing.MODIFIERS`) | `Router.keys`, reading `app.Keys` | a discrete op on the base |
 | `pad:` / `hat:` | a `gamepad` button / hat name (`gamepad.BUTTONS`, `HATS`) | `Router.pad` (times `hold`, lets `momentary` go on the release) | a discrete op on the base |
-| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES` | `Router.pad` → `Router.feed("axis")`, from `Pad.lanes` | performer; a stick or trigger with a route leaves its default camera job |
-| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` channel only; `*` any channel) | `MidiIO._handle` → `Bindings.dispatch` → `MidiIO._apply` | `abs` (soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary`, `fire`, `hold` — all base |
+| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES` | the pad device: `Router.pad` → `Router.feed("axis")`, from `Pad.lanes`; names, labels and rests from `gamepad.publish` | performer; a stick or trigger with a route leaves its default camera job (`gamepad.steer`) |
+| `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` channel only; `*` any channel). A desk other than the one that owns the unqualified rows writes its role after `@`: `cc@launch:0:21` (`routing.QUALIFIER`, `Binding.device`) | each MIDI desk: `MidiIO._handle` → `Bindings.dispatch(…, role)` → `MidiIO._apply` | `abs` (soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary`, `fire`, `hold` — all base |
 | `lane:` | analyzer band index | `Analyzer.lanes / CEIL` inside `Router.modulate`; names and rests from `AudioEngine.publish` | **performer** |
-| `hand:` | a name: `left.x` … `right.yaw` as `[hands] dofs` spells them, `left.present`, `left.pinch.index` … `right.pinch.pinky`; a number still reads as that lane | `HandsIO.poll` → `Router.feed("hand")`; the name → lane map in `router.names["hand"]` (`hands.core.Layout`) | performer; a pinch may also gate |
-| `ext:` | DAW lane 0–15 | `Bridge.step` → `Router.feed("ext")` | performer |
+| `hand:` | a name: `left.x` … `right.yaw` as `[hands] dofs` spells them, `left.present`, `left.pinch.index` … `right.pinch.pinky`, the dance sources and the grab (plan 24); a number still reads as that lane | the hands device's feed (`hands.device.HandsDevice` → `HandsIO.poll`) → `Router.feed("hand")`; the name → lane map in `router.names["hand"]` (`hands.core.Layout`) | performer; a pinch or a grab may also gate |
+| `hands:` | `gap`, `twist` (both hands) | the same call → `Router.feed("hands")` | performer |
+| `ext:` | DAW lane 0 … `in_lanes` − 1 (16 by default) | the bridge device's feed: `Bridge.receive` → `Router.feed("ext")`, `Bridge.publish` (labels "ext 0" …, rests 0) | performer |
 | `lfo:` | 0–3 (`lfo:0` is LFO 1) | `LFOs.publish` → `Router.feed("lfo")` | performer |
+| `<role>:` (a new device's) | an OSC address without its `/`: `phone:x`, `phone:1/fader3` | the OSC device's feed → `Router.feed("<role>")`, names, labels, rests; its `hits` as rows under the same scheme in its `act` | performer (axes); a hit row: `fire`, `toggle`, `step`, `set`, `abs`, `momentary` on the base (`osc.fire`) |
 
-`routing.LANE_SCHEMES = ("lane", "ext", "lfo", "hand")` are the
-continuous schemes; a row on one carries only `routing.MOD_OPS =
-("push", "position")` (`Bindings._check` raises otherwise).
+A **sink row** runs the other way: its source is `param:<id>` (the
+param's effective norm) or `lane:<i>` / `lane:*`, its target a sink
+port `<role>:<channel>` (`bridge:3`), its op `send` (`routing.SINK_OP`).
+It is a session row, never a performer and never in a preset; the sink
+device reads it after `reg.apply` (`routing.sink_values`). A point cloud
+is no scheme at all: `DeviceRegistry.clouds` holds it as `cloud:<role>`,
+off the Router.
+
+**There is no fixed list of schemes.** A scheme is continuous unless it
+is one the table dispatches as rows (`routing.is_continuous`: not in
+`ROW_SCHEMES = ("key", "pad", "hat", "cc", "note", "pitch")`), so a row
+on a device this rig lacks is a dormant performer, never dropped; a row
+on a continuous scheme carries only `routing.MOD_OPS = ("push",
+"position")` (`Bindings._check` raises otherwise) unless the scheme also
+takes rows (an OSC role with hits: `Bindings.row_schemes`, which the
+registry extends). *Which* schemes this rig has, and in what order the
+ROUTING page offers them, is the registry's, handed to the router as an
+argument (`Router.use(registry)`, `Router.schemes()` =
+`DeviceRegistry.continuous_schemes()`: `lane`, `lfo`, then each listed
+device's `feeds` in list order)
+(`tests/test_device_inputs.py::test_schemes_wants_and_row_schemes_come_from_the_registry`).
 
 **A key press fires only its own chord.** Rows on one key are settled
 together: a row fires when its modifiers equal the held modifiers that
@@ -459,14 +497,26 @@ or file are never rewritten):
 D is the session's `hands.learn_depth` (`learn.PUSH_DEPTH` when a caller
 names none); a learned push has `rest = None`.
 
-**Adding a source** is an adapter that, before `router.modulate`, does
-what `LFOs.publish` does: `router.feed("<scheme>", vector)` (floats in
-`[0, 1]`, `NaN` for a lane out of view, `None` when the device is gone)
-and publishes `router.labels`, `router.rests`, optionally `router.gates`
-and `router.names` (a new dict whenever its layout changes). The scheme
-must be in `LANE_SCHEMES` for its rows to perform. The adapter imports
-nothing from the package, never writes a `Param`, and is opened by
-`app.main` behind a config gate.
+**Adding a device** is a class and one line in `devices.kinds()`, never
+an edit to `app.py` (`osc.py` is the proof:
+`tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device`).
+The class subclasses `devices.Base` and implements only what it has:
+`open()` (import its library here, so an `off` entry never imports it;
+raise and the registry retries on its schedule), `poll(dt, now)` (read
+the hardware; a device whose hardware went away reports `lost` and looks
+for it again itself), `act(router)` for discrete controls as rows
+through the table, `feed(router)` for continuous ones —
+`router.feed("<role>", vector)` (floats in `[0, 1]`, `NaN` for a lane
+out of view, `None` when the device is gone) and `router.labels`,
+`router.rests`, optionally `router.gates` and `router.names` (a new dict
+whenever its layout changes) — `learn(learn)` to complete a "Learn
+<role>", `sinks` and `send(reg, analyzer)` for an output, `close()`, a
+`status` and `last` for its SYSTEM line, and `sources` as `Port`s. Its
+role is its scheme (`feeds = schemes = (role,)`; `publishes` says so
+before it is made); a row on the role performs with no list to join.
+The entry's keys arrive as `self.entry` (config checks only `role`,
+`kind`, `enabled`). It never writes a `Param` from `feed`, and nothing
+in the core imports it.
 
 ### 3.5 One performer per parameter
 
@@ -490,10 +540,16 @@ through `test_a_preset_load_lists_what_it_dropped`, and
 `test_every_factory_preset_names_real_params_with_one_owner`.
 
 **Learn.** The host owns one `learn.Learn`, built over the live table
-whatever the MIDI gate says. The right-click menu arms a param with what
-it waits for (`Learn.arm(pid, want)`, `learn.WANTS`: `"desk"`,
-`"hand:left"`, `"hand:right"`); `Learn.accepts(source)` is the one
-question every completer asks. Three completers:
+whatever devices are listed, and hands it the device registry
+(`Learn.devices`). The right-click menu arms a param with what it waits
+for (`Learn.arm(pid, want)`); what can be armed is `Learn.wants()`:
+`"desk"` (the on-screen desk completes it with no MIDI device at all),
+then each listed device's `wants` in list order — `"pad"`,
+`"hand:left"`, `"hand:right"`, and a new device's role (`"phone"`) —
+off devices included; with no registry, `learn.BARE_WANTS`.
+`Learn.accepts(source)` is the one question every completer asks; a
+desk want completes from any MIDI desk, and the row names which. The
+completers:
 
 - **A hand** — `HandsIO._learn` → `Learn.learn_source`: the axis that
   moved, by name, with a pinch held as its gate. A non-modulatable target
@@ -518,8 +574,16 @@ question every completer asks. Three completers:
   widget is `Learn.map_picked(pid, profile)` = `arm(pid, "desk")` +
   `learn_control` — the same road
   (`tests/test_learn.py::test_pick_then_param_maps_through_the_learn`).
+- **A pad button, or an OSC hit** — `gamepad.learn_from` (or
+  `OscDevice.learn`) → `Learn.learn_pad_button`: a session row in
+  `bindings.json`, written at once; a stick, a trigger or an OSC axis →
+  `Learn.learn_source`, a route in the loaded preset.
+- **A sink port** — not armed at all: the menu's **Learn sink ▸** pick
+  is `Learn.learn_sink(pid, port)`, a session sink row written to
+  `bindings.json` at once, never a performer and never a prompt
+  (`tests/test_sinks.py::test_learn_sink_on_a_param_lands_a_session_row_with_no_question`).
 
-Every learn lands in the **loaded preset**: the table changes, the
+Every desk, hand and stick learn lands in the **loaded preset**: the table changes, the
 preset's dirty dot lights (`Presets.signature`), and no file is written
 until a save. **Unbind** is `Learn.unbind(ids, *, desk=True,
 routes=True)`: the loaded preset's desk rows and every route on the param
@@ -550,7 +614,7 @@ A macro acts only through its **subscribers** (`routing.Macro`, `Sub`;
 
 - a **base** subscriber `{"base": id, "from": a, "to": b}` sets that
   param's base to `a + m · (b − a)` whenever the macro's *base* moves
-  (`Router.follow_macros`, frame step 4). It names a persisted,
+  (`Router.follow_macros`, frame step 3). It names a persisted,
   non-alias **performance** param; any other is dropped with a note
   (`routing.base_refusal`;
   `tests/test_macros.py::test_a_base_subscriber_on_a_session_param_is_dropped_with_a_note`).
@@ -574,10 +638,12 @@ them.
 | ⌘Z / Ctrl+Z, with ⇧ | key rows → `edit.undo` / `edit.redo` → `undo.undo()` / `undo.redo()` | the bases and table parts that differ |
 | Home, or the APC40's OVERDUB | `preset.home` → `Project.home`: the show's "starts on" preset loads | a preset load |
 | ⌘R, Esc / Q, ↑ / ↓ | loop code (`app.LOOP_KEYS`): restart, quit, `_ride_depth` on `view.depth4` | ↑ / ↓: base, relative |
-| mouse drag / wheel, a pad stick or trigger | `Mouse.poll`, the pad block of `app.frame` → `nudge` / `scale` | base, relative |
+| mouse drag / wheel, a pad stick or trigger | `Mouse.poll`; the pad device's camera job (`gamepad.steer`, in `PadDevice.act`) → `nudge` / `scale` | base, relative |
 | a pad button or hat | `Router.pad` → `routing.act` | base |
 | an APC40 knob or fader | the row of the layer that is up, or the invariant row → `Param.set_norm` (a fader after soft pickup; a knob caught at the ring just sent, `apc40.RING_REBASES_KNOB`, hand check 31); smoothed by `desk.slew` | base |
 | an APC40 button | the rows its press went to — the release goes there too | base |
+| a second MIDI desk's knob or button | its own rows (`cc@<role>:…`), on its own layer (the preset layer: it has no SHIFT) | base |
+| an OSC fader / an OSC button | `<role>:<name>` → its performer row → `Router.modulate` / its rows (`osc.fire`) | offset / base |
 | SHIFT | the invariant row → `desk.shift`: flips the table's layer; every ring and LED redrawn, a control the layer does not map dark | the table's layer |
 | the crossfader | invariant row → `output.dim`, the master dim (CC 0 black — hand check 55); a rig setting, 1 at every launch | base of a rig setting |
 | a bank pad (clip rows 1, 4, 5) or a bank button | invariant `set` rows → `preset.select = k` → `Project.load_slot(k)` (`apc40.BANK_PADS`: 24 slots, `library.SLOTS`). Lights by `routing.led_level`: loaded, filled, empty | a preset load |
@@ -587,6 +653,7 @@ them.
 | an analyzer band, a hand axis, a pinch, a DAW lane, an LFO | `lane:` / `hand:` / `ext:` / `lfo:` → its performer row → `Router.modulate` | offset (a pinch may instead gate a row) |
 | right-click → Learn hand / Learn desk / click-then-map | `Learn` (§3.5) | the loaded preset's table |
 | right-click → Learn pad | `gamepad.learn_from` → `Learn.learn_pad_button` (a button: the session's `bindings.json`, written at once) or `Learn.learn_source` (a stick or trigger: a route in the loaded preset) | the table |
+| right-click → Learn sink ▸ `<role>:<channel>` | `Learn.learn_sink`: a sink row; the sink device sends the param's effective value after `reg.apply` | `bindings.json` (no param) |
 | right-click → Unbind | `Learn.unbind` | the loaded preset's table |
 | a ROUTING-page edit | the table in place: the loaded preset, its dirty dot | the table |
 | a preset | `Presets.load`: every performance base in one `Library.restore`, then `Bindings.set_routes`, `set_desk`, `set_macros`, the base subscribers landed (`Router.follow_macros(force=True)`); session params never | bases and the preset's table |
@@ -596,11 +663,17 @@ them.
 
 `<home>/bindings.json`, schema `routing.SCHEMA`
 (`hyperspace.bindings/3`), holds the **session's controls** only: the
-keys, the pad, and the invariant and global-layer MIDI rows. Performer
+keys, the pad, OSC hit rows, the invariant and global-layer MIDI rows,
+and the sink rows (plan 27; with `"sinks_seeded"`, the roles whose old
+`send` list has been translated). Its top-level `"profile"` says which
+MIDI profile its unqualified rows were written for; the desk listed with
+that profile owns them (`DeviceRegistry.midi_roles`). Performer
 rows, preset-layer rows, macros and values are the loaded preset's and
 are never written there (`routing.is_session_row`;
 `tests/test_routing.py::test_the_live_table_writes_only_the_sessions_controls`).
-Nothing in the app edits a session row; the file is edited by hand. The
+Learn pad (a pad button or an OSC hit) and Learn sink add session rows,
+and ROUTING's sinks section switches and removes sink rows, each writing
+the file at once; the other session rows are edited by hand. The
 factory session table is exported to `hyperspace/bindings.default.json`
 (`python -m hyperspace.routing`;
 `tests/test_routing.py::test_factory_files_match_the_code`).
@@ -660,6 +733,14 @@ Behaviour the code has today that the model does not guard:
   non-invariant control until SHIFT is unlatched or the learn cancelled.
 - An `abs` knob learned onto `preset.select` spreads over all twenty-four
   slots and can rest on an empty one (audit R14).
+- A device that feeds inherits its role as a Learn want
+  (`devices.Base.wants`), whether or not it can complete one: the bridge
+  does, so "Learn bridge" is offered while a bridge is listed and nothing
+  completes it (register row 151).
+- `routing.is_continuous` is open-ended: a typo'd scheme in a preset
+  route is a dormant performer, not a refused row. A hand-written
+  `cc@<owner>:…` (the owning desk named) dispatches as that desk's but is
+  a different control from its unqualified twin to `Binding.overlaps`.
 
 ---
 
@@ -675,9 +756,9 @@ docstring has the rest.
 | `motion.py` | the envelope followers the analyzer is made of, and a damped spring, for any signal | `pole`, `follow`, `spring`, `Motion`, `Follower` | the chain still matches the frozen oracle (`tests/test_golden.py`); the spring is exact at any dt (`tests/test_motion.py`) |
 | `tapers.py` | position ↔ value for every fader | `Taper` | exact round trip on every detent (`tests/test_control.py::test_taper_round_trip`) |
 | `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modulation pass | `Binding`, `Bindings`, `Router`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
-| `learn.py` | arming, completing and refusing a Learn; pick-then-map; Unbind | `Learn` (`arm`, `accepts`, `learn_control`, `learn_source`, `pick`, `map_picked`, `unbind`, `pending`, `last`), `WANTS`, `blocked`, `bound`, `centred_target`, `PUSH_DEPTH` | nothing completes a learn its `want` does not name; a refused desk learn stays armed; a non-modulatable target is refused for a hand; no learn writes a file (`tests/test_learn.py`) |
-| `midi.py` + `apc40.py` | the MIDI adapter (ports, two-layer dispatch, feedback, soft pickup, knob glides, holds) and the APC40 profile (the default map, `LAYOUT` of every control, LED colours) | `MidiIO`, `Ports`, `Slew`, `retry_after`, `HOLD_S`, `BLINK_S`; `apc40.DEFAULT_MAP`, `BANK_PADS`, `SCENE`, `LAYOUT`, `named` | every write is a base write; a note-off goes where its note-on went; a message a row did not apply (a disabled row, a learn candidate) makes that pickup row pick up again (`MidiIO._passed_over`); a lost port is looked for at `retry_after`'s pace (`tests/test_midi.py`, `tests/test_desk.py`). Every test runs with no real MIDI port (`tests/conftest.py::_no_real_midi`) |
-| `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, MIDI out to a DAW, calibration and the interaction box, hand tapes, the HANDS page | `HandsIO`, `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `panel.py` alone knows it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
+| `learn.py` | arming, completing and refusing a Learn; pick-then-map; a sink pick; Unbind | `Learn` (`arm`, `wants`, `accepts`, `learn_control`, `learn_source`, `learn_pad_button`, `learn_sink`, `sinks`, `pick`, `map_picked`, `unbind`, `pending`, `last`, `devices`), `BARE_WANTS`, `blocked`, `bound`, `centred_target`, `PUSH_DEPTH` | nothing completes a learn its `want` does not name; a refused desk learn stays armed; a non-modulatable target is refused for a hand; no learn writes a file (`tests/test_learn.py`) |
+| `midi.py` + `apc40.py` + `generic.py` | the MIDI adapter, one `MidiIO` per desk with its role and profile (ports, per-desk layered dispatch, feedback, soft pickup, knob glides, holds), the APC40 profile (the default map, `LAYOUT` of every control, LED colours) and the `generic` profile (plain CC / note / pitch, nothing sent back) | `MidiIO` (`role`, `qualifier`), `Ports`, `Slew`, `retry_after`, `HOLD_S`, `BLINK_S`, `PROFILES`; `apc40.DEFAULT_MAP`, `BANK_PADS`, `SCENE`, `LAYOUT`, `named`; `generic.PORT_MATCH`, `FEEDBACK` | every write is a base write; a note-off goes where its note-on went; a message a row did not apply (a disabled row, a learn candidate) makes that pickup row pick up again (`MidiIO._passed_over`); a lost port is looked for at `retry_after`'s pace (`tests/test_midi.py`, `tests/test_desk.py`). Every test runs with no real MIDI port (`tests/conftest.py::_no_real_midi`) |
+| `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, the dance sources and the grab, the DAW messages (carried out by the `hands-daw` sink; the instrument opens no port), calibration and the interaction box, hand tapes, the HANDS page, the device wrapper | `HandsIO` (`poll`, `outbox`, `carry`, `resync`), `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`); `device.py` (`HandsDevice`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `device.py` and `panel.py` alone know it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
 | `lfo.py` + `tempo.py` | four LFOs and the tap-tempo clock | `LFOs`, `LFO`, `Clock`, `register` | import nothing from the package (`tests/test_lfo_boundary.py`); §3.9 (`tests/test_lfo.py`, `tests/test_tempo.py`) |
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | capture or file playback, the FFT, the N-band analyzer whose output is `lanes`; `bands.py` is its parts bin | `AudioEngine`, `Analyser`, `Analyzer`, `CEIL` | imports only the stack and `tapers` (`tests/test_audio_boundary.py`); the legacy six-band layout matches the frozen oracle to the bit (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`) |
 | `geometry.py` | the shapes as vertex, edge and face arrays; how each fills the fourth dimension; the 4D → 2D transform; the volume measures | `SHAPES`, `Shape` (`cells`, `w`), `W_KINDS`, `geom`, `faces`, `project_h`, `project3`, `PLANES`, `view_angles`, `w_masked`, `W_REMAP`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it drew unless its builder is given a lift (`tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`); only a masked shape's angles are changed, and never in place (`::test_no_shape_but_a_masked_one_has_its_angles_touched`); every lifted or masked shape keeps `VOLUME_FLOOR` through each W plane (`::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`) |
@@ -694,10 +775,12 @@ docstring has the rest.
 | `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
 | `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
 | `preset.py` | the preset document kind: values, routes, desk, macros, module labels; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`), `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
-| `config.py` | `config.toml`: defaults, reading, `[[output.screens]]` | `DEFAULTS`, `load`, `screens`, `number` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
+| `config.py` | `config.toml`: defaults, reading, `[[output.screens]]`, `[[devices]]` (checked per entry; the old device tables translated; `[hands] out` → `hands-daw`) | `DEFAULTS`, `load`, `screens`, `number`, `devices`, `read_devices`, `DEVICE_TABLES`, `MIDI_OUT`, `DAW_ROLE` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
 | `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
-| `gamepad.py` + `bridge.py` | the Xbox pad polled raw through GLFW, or a wired 360 pad over libusb (`UsbPad`), its axes fed as the `axis` lanes; the DAW bridge (lanes out as MIDI, `ext` lanes in) | `Pad`, `Bridge` | the pad never raises when absent; the bridge never writes a `Param` and is off by default (`tests/test_gamepad.py`, `tests/test_bridge.py`) |
-| `app.py` | the entry point: windows and outputs, construction order, the frame loop, the adapters' gates | `main`, `Host`, `frame`, `Keys`, `Mouse`, `close_all`, `_draw_render`, `_open_*` | §1 Host row, §2 (`tests/test_app_boundary.py`, `tests/test_app_relative.py`) |
+| `devices.py` | the device registry: the protocol, the ports, today's devices (MIDI, the pad, the bridge, `midi-out`), the point-cloud type, file and device, the list's open / retry / watch / close | `Device`, `Port`, `Context`, `Base`, `OffDevice`, `RefusedDevice`, `MidiDevice`, `PadDevice`, `BridgeDevice`, `MidiOutDevice`, `CloudDevice`, `PointCloud`, `write_clouds`, `read_clouds`, `kinds`, `make`, `DeviceRegistry` (`poll`, `feed`, `send`, `continuous_schemes`, `row_schemes`, `midi_roles`, `wants`, `sink_ports`, `clouds`, `lines`, `watch`, `apply`), `retry_after`, `WATCH_FRAMES` | the one importer of every adapter module, each inside its device's `open` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); one device's exception never stops the frame; two enabled devices never feed one scheme (`tests/test_devices.py`) |
+| `osc.py` | an OSC sender as a device: a non-blocking UDP socket read in `poll`, axes fed under the role, hits as rows | `OscDevice`, `Server`, `Layout`, `fire`, `TIMEOUT_S`, `DEFAULT_PORT` | `pythonosc` only inside `Server`; only this module and the kind table name the device (`tests/test_osc.py`) |
+| `gamepad.py` + `bridge.py` | the Xbox pad polled raw through GLFW, or a wired 360 pad over libusb (`UsbPad`), its axes fed as the `axis` lanes and the sticks' default camera job; the DAW bridge (`ext` lanes in, its sink rows out as MIDI) and the MIDI out port and gate the sinks share | `Pad` (`open`, `poll`, `close`, `publish`), `publish`, `steer`, `ride_depth`; `Bridge` (`receive`, `publish`, `send_values`, `reconnect`), `Sender`, `OutPort` | the pad never raises when absent; the bridge never writes a `Param` and is off by default (`tests/test_gamepad.py`, `tests/test_bridge.py`) |
+| `app.py` | the entry point: windows and outputs, construction order, the frame loop, the device registry and the dream gate | `main`, `Host` (`devices`, `adapters`, `pad`), `frame`, `Keys`, `Mouse`, `close_all`, `_draw_render`, `_open_devices`, `_open_dream` | §1 Host row, §2 (`tests/test_app_boundary.py`, `tests/test_app_relative.py`) |
 | `hotreload.py` | hot reload of every module but the cold core | `HotReloader`, `MODULES` | every module but `app`, `hotreload`, `offline`, `watchdog` is watched, in dependency order, leaves first (`tests/test_hotreload.py::test_every_package_module_but_the_cold_core_is_watched`, `::test_the_watch_list_is_in_dependency_order`) |
 | `placement.py` | where the windows open and `<home>/windows.json` | `place`, `screens`, `load` / `save`, `read` | a leaf; a remembered rect is used only when enough of it is on a connected screen (`tests/test_placement.py`) |
 | `watchdog.py` | the stall log and the render watch | `Watchdog`, `RenderWatch` | never stops the show; cold, like `app` (`tests/test_watchdog.py`) |
@@ -760,14 +843,60 @@ lights and what `ui_desk` draws. A preset load replaces the preset layer
 fader's catch is cleared only if its param moved, and every control that
 lost its row goes dark. The bank of twenty-four (`library.SLOTS`) is
 F1–F8 plus clip row 1 for slots 1–8 (`params.F_KEYS`) and clip rows 4–5
-for slots 9–24 (`apc40.BANK_PADS`).
+for slots 9–24 (`apc40.BANK_PADS`). **Several desks** (plan 27): each
+MIDI entry is a `MidiIO` with its role and profile. One desk owns the
+unqualified rows and SHIFT — the first whose profile is `bindings.json`'s
+(`DeviceRegistry.midi_roles`, told to the table as `Bindings.midi_roles`
+before any desk opens); any other desk's rows are `cc@<role>:…`,
+dispatched only to it (`Bindings.serves`), on a layer of its own
+(`Bindings.layer_of(role)`, the preset layer: no SHIFT). A preset load
+drops every desk to the preset layer. `ui_desk.py` draws the APC40 only.
+
+**Devices.** `app.main` builds one `DeviceRegistry` over `config.toml`'s
+`[[devices]]` (`config.devices`; the old tables translated) with a
+`Context` (the registry, the table, the Learn, the audio engine, the
+hands setup, the notes, the home), opens each device behind its entry
+and hands the registry to the router (`Router.use`) and the Learn
+(`Learn.devices`). A listener re-points what holds an adapter — the
+panel's `midi`, `pad` and `hands`, the ghost's `source` — whenever the
+list changes. The registry polls, feeds and sends in the frame's three
+slots (§2), retries a device whose `open` raised on the `Ports` schedule,
+leaves a `lost` device to reconnect itself, watches `config.toml`'s
+mtime every `WATCH_FRAMES` frames (only the device list is re-read; a
+bad edit keeps the old list), and closes every device last listed first
+in `Host.adapters`. The SYSTEM page draws `DeviceRegistry.lines()`, one
+per device. The hot reloader's swap targets come from
+`DeviceRegistry.targets()`.
+
+**Sinks.** A sink port is `<role>:<channel>` (a `Port` in a device's
+`sinks`). A sink row (`param:<id>` or `lane:<i>` / `lane:*` →
+`<role>:<channel>`, op `send`) lives in `bindings.json`; the device's
+`send(reg, analyzer)` runs after `reg.apply`, reads `routing.sink_values`
+over the enabled rows on its role and pushes them through
+`bridge.Sender` (quantise, change-gate, rate-limit, encode). The bridge
+is one device with an `ext` source half and this sink half; a `midi-out`
+entry (`hands-daw`) is a sink alone that also carries the hands' DAW
+messages (`HandsIO.carry`) and resyncs the DAW after a reconnect. An
+entry's old `send` list becomes its rows once
+(`DeviceRegistry._seed_sinks`, marked `"sinks_seeded"`).
+
+**Point clouds.** A `devices.PointCloud` (read-only N×3 float32 points,
+`t`, a counting `frame`, `bounds`, optional colours) is published on the
+registry, not the Router: `DeviceRegistry.clouds` maps `cloud:<role>` to
+each open device's latest frame. The `cloud` kind plays a version-1
+`.npz` (`write_clouds` / `read_clouds`) at its own rate against the frame
+clock; nothing on screen draws it yet (plan 26's point-cloud node, A4b,
+does).
 
 **Hands.** `hands/core.py`'s `LeapSource` (or a `TapeSource`) gives
 features and skeletons; `HandsIO.poll` shapes twelve axes, two presence
-lanes and eight pinch switches (`Layout`), feeds them as `hand`, publishes
-the name map, may complete a Learn, and sends MIDI to a DAW. The ghost
-hands read `HandsIO.skeleton` raw through `renderer.ghost.source`; they
-are not a source.
+lanes, eight pinch switches, the dance sources and the grabs (`Layout`),
+feeds them as `hand` (and the pair as `hands`), publishes the name map,
+may complete a Learn, and makes the frame's DAW messages, which wait in
+`HandsIO.outbox` for the `hands-daw` sink to carry (the instrument opens
+no MIDI port). `hands/device.py`'s `HandsDevice` makes that one call from
+the registry's feed slot. The ghost hands read `HandsIO.skeleton` raw
+through `renderer.ghost.source`; they are not a source.
 
 **Face patterns.** `shaders/patterns.glsl` paints the faces, one of
 seventeen modes (`view.pattern`), reading eight inputs, `pattern.mod.0–7`
@@ -830,7 +959,7 @@ client's conflict copy is listed under its own file stem. A library
 folder named but missing at launch (`Library.missing`) is never created:
 only the factory lists and every write raises `LibraryError`.
 
-**Undo.** `Undo.tick` (frame step 5) compares a fingerprint of the watched
+**Undo.** `Undo.tick` (frame step 4) compares a fingerprint of the watched
 bases (`undo.watched`: persisted, not an alias, not a trigger, not the
 `tempo` group), the table's performer and preset-layer rows, the macros
 and the band layout; a change opens a step and `SETTLE_S` of quiet closes

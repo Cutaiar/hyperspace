@@ -10,7 +10,7 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
 - **owner**: settled with the owner.
 - **row N**: built on a recommendation during an unattended run (rows
   34–88 on 2026-10-04, rows 89–108 in plan 22 on 2026-10-06, rows
-  110–139 in plan 24 on 2026-10-14). The owner
+  110–139 in plan 24 and rows 140–168 in plan 27 on 2026-10-14). The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
 
@@ -22,7 +22,13 @@ replaces a row, rewrite that row instead of adding a new one.
 | Decision | Where | Who |
 |---|---|---|
 | One Python process: a moderngl renderer, sounddevice capture and an imgui control panel. The retired web app never runs; it is only the oracle the golden traces were recorded from. | `app.py` | owner |
-| A DAW connects only through an optional bridge, which is off by default. Nothing in the core depends on it. | `bridge.py`, `[bridge] enabled` | owner |
+| A DAW connects only through optional devices: the bridge (lanes out, `ext` lanes in), off by default, and the hands' DAW out (`hands-daw`, a `midi-out` sink). Nothing in the core depends on them. | `bridge.py`, the `bridge` and `midi-out` entries | owner |
+| **The device registry** (plan 27): every input and output is a `Device` — open, poll each frame, close — publishing its sources as ports (values, and triggers with velocity), their names and rests, and a status (`connected`, `lost`, `off`, `error: …`) for the SYSTEM page. Devices are listed in `config.toml` as `[[devices]]` and come and go without a relaunch; several MIDI ports at once, each with its own profile; source schemes come from the registry, not a fixed tuple; sinks are devices too; a point-cloud source type exists. Done when the APC40, the pad and the hands run on it and an OSC device is added with no edit to `app.py`. | `devices.py` | owner |
+| **Adding a device is a class and one line in the kind table**, never an edit to `app.py`: `osc.py` and `devices.kinds()` are the only code that names the OSC device. | `devices.kinds`, `tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device` | owner |
+| **The core never imports `midi`, `bridge`, `dream`, `osc`, `torch` or `leap`**; adapters only `feed`; the hands package stays liftable. `devices.py` is the one importer of every adapter module, each inside its device's `open`. | `tests/test_app_boundary.py`, `tests/test_hands_boundary.py` | owner |
+| A config with no `[[devices]]` list keeps working: the old `[midi]`, `[gamepad]`, `[hands]` and `[bridge]` tables become the equivalent entries at load (`pad`, `apc40`, `leap`, `bridge`), one note per table the file holds. With a list, the list says. `[dream]` is a worker, not a device. | `config._translate`, `config.DEVICE_TABLES` | row 140 |
+| `config.toml`'s mtime is looked at every 30 frames and only the device list is re-read; a bad edit is a note and the old list stands. A device whose `open` raised is retried every 2 s five times, then every 10 s; a `lost` device reconnects itself. Devices close last listed first, the pad included. | `DeviceRegistry.watch`, `retry_after`, `DeviceRegistry.close` | rows 144, 145 |
+| The `Device` protocol's frame slots: `poll`, `learn`, `act` in the scene-setter slot; `feed` in the feed slot; `send` after `reg.apply`. One `Port` type describes a device for the node editor. The SYSTEM page shows one line per device. | `devices.Device`, `devices.Port`, `ui.device_lines` | rows 142, 143, 146 |
 | Parity bar: geometry is exact (1e-12, vertex order kept), audio is behavioural and visuals are judged by eye. | `tests/` | owner |
 | Generalise before hardware: every input goes through registry ids and the binding table, never straight at the view state or the chain. | `params.py`, `routing.py` | owner |
 | The analyzer runs in-process on the frame loop. MIDI is an adapter at the edges and never the internal bus: values flow as floats. | `analyzer.py`, `midi.py` | owner |
@@ -35,12 +41,18 @@ replaces a row, rewrite that row instead of adding a new one.
 | **One parameter registry.** Everything settable has a stable id and one normalised interface (continuous, enum, toggle or trigger). | `params.py` | owner |
 | **Base and effective value.** `p.base` is the user's setting. Once a frame, `Registry.apply` writes base plus the sum of offsets. | `Registry.apply` | owner |
 | **Any param is a modulation target unless it is flagged `modulatable=False`.** That includes enums, toggles and triggers, which follow with hysteresis. | `Param.modulatable` | owner |
-| **One path.** Every continuous source (lane, hand, ext, lfo) reaches a param only through `Router.modulate`. | `Router.modulate` | owner |
+| **One path.** Every continuous source (lane, hand, ext, lfo, a device's own scheme) reaches a param only through `Router.modulate`. | `Router.modulate` | owner |
+| **Two input ports per param** (plan 27 changes nothing here): the base takes many scene-setters, last touch wins; the modulation takes one performer, under the referee. Combining two performers needs an explicit combine node (plan 28). | `routing.Owned`, `routing.referee`, `Router.modulate` | owner |
+| **Roles, not serials.** A `[[devices]]` entry has a `role` (`apc40`, `pad`, `leap`, `phone`), the name rows and the SYSTEM page use; the session maps roles to physical devices (a port, USB, a host and port). A preset names a role's sources; a device the rig lacks is `lost` or unlisted and its rows wait, dormant. | `config._device`, `Router.lane` | owner |
+| **Values and triggers are two signal kinds.** A value (an axis, a fader, a lane) is fed; a trigger (a hit, a button, a pad, with a velocity when it has one) is delivered as rows through the table. Encoder or fader behaviour, soft pickup included, is set by the device profile. | `devices.Port.kind`, `routing.is_continuous` | owner |
+| **A device may expose layers**, so a device with a mode switch can be one node per mode (the APC40 as *APC40* and *APC40 (SHIFT)* in plan 28); D1, D4–D6 and D12 hold. | `Device.layers`, `Bindings.layer_of` | owner |
+| A new device publishes under its role (`phone:x`); today's devices keep the schemes their rows already name (`hand`, `axis`, `ext`, `cc`), and two enabled devices never feed one scheme. A continuous source is any scheme the table does not dispatch as a row; which schemes exist, and in what order a page offers them, is the registry's (`lane`, `lfo`, then each device's feeds in list order). | `Device.schemes`, `devices.make`, `routing.is_continuous`, `Router.use` | rows 141, 150 |
+| **A sink row** sends a param's effective value (`param:<id>`) or an analyzer lane (`lane:<i>`, `lane:*`) out on a sink port, `<role>:<channel>`. It is the session's (sinks are rig), never a performer, never asks Replace / Keep and is never in a preset. | `routing.SINK_OP`, `sink_values` | row 155 |
 | **One performer per parameter.** A performer is an enabled route row from a continuous scheme. A second performer on the same target asks *Replace / Keep*, and gates do not exempt a row. The panel's tooltip names the param's owner. | `Bindings.owner`, `Router.describe` | owner |
-| **Scene-setters write the base and never prompt**: the panel, keys, pad buttons, the APC40, presets, the mouse and the sticks. Relative writers read the base, not the effective value. | `Param.nudge`, `Param.scale` | owner |
+| **Scene-setters write the base and never prompt**: the panel, keys, pad buttons, every MIDI desk, an OSC device's hits, presets, the mouse and the sticks. Relative writers read the base, not the effective value. | `Param.nudge`, `Param.scale` | owner |
 | **Hands grab and never yield.** A performer row has no pickup. | `routing.py` | owner |
 | **Two ops.** `push` adds depth · scale · (u − rest). `position` makes the source the param's fader along its taper, and the base returns when the source stops. | `routing.MOD_OPS` | owner |
-| **Push is centred where the source rests.** The rest is the one the source's adapter publishes, unless the row sets its own. | `Router.rest_of` | owner |
+| **Push is centred where the source rests.** The rest is the one the source's device publishes, unless the row sets its own. | `Router.rest_of` | owner |
 | **Chaining, not stacking.** Layers come from a performer owning another source's knob (an LFO's depth, a macro), never from two rows on one target. | `routing.py` | owner |
 | **One macro concept.** `macro.1–8` each have subscribers. A subscriber either sets a param's base or scales a route's depth, over its own from → to range, so polarity is per subscriber. A performer on a macro moves only its depth subscribers. Base subscribers follow the macro's base. | `routing.Macro`, `Router.follow_macros` | owner |
 | A route keeps `scale` only when the scale names a session param (the MASTER drive fader on the six band → rotation routes). On a performance param, `scale` is dropped at load with a note. | `routing.migrate_scales` | owner |
@@ -62,22 +74,33 @@ replaces a row, rewrite that row instead of adding a new one.
 
 | Decision | Where | Who |
 |---|---|---|
-| **A Learn says what it waits for.** The menu offers "Learn desk" and "Learn hand ▸ left / right", and only that kind of source can complete it. Anything else does its own job. | `learn.WANTS`, `Learn.accepts` | row 60 |
+| **A Learn says what it waits for.** The menu offers "Learn desk" and "Learn hand ▸ left / right" (and Learn pad, and "Learn <role>" for any other listed device that feeds), and only that kind of source can complete it. Anything else does its own job. What can be armed is "desk" plus each listed device's `wants`, not a fixed tuple. | `Learn.wants`, `DeviceRegistry.wants`, `Learn.accepts` | rows 60, 151 |
+| **Learn sink ▸ <role>:<channel>** sends a param out on a sink port: the pick lands at once as a session row in `bindings.json`, with no question, no undo step and no preset dirt. | `Learn.learn_sink`, `ui.sink_items` | row 158 |
+| One knob per param **per desk**: a desk learn replaces the param's knob on the same desk only. | `Bindings.bind` | row 154 |
 | **A new hand Learn lands by a table.** A centred axis, or any axis onto a range centred on zero, lands a `push` at `hands.learn_depth` (0.25). A one-sided axis on a one-sided param, or any axis on an enum, toggle, trigger or whole-number param, lands a `position` row. Existing rows are never rewritten. | `Learn._row`, `learn.PUSH_DEPTH` | row 52 |
 | **A learned axis drives one param.** A hand learn removes that axis's other push/position rows. Learning the same pair again only refreshes the gate. | `Learn._place` | row 53 |
 | Whose pinch gates a hand learn is left as it was: the learning hand's thumb first, then the other hand's. Within the wanted hand, the axis that travelled furthest wins. | `HandsIO.held_gate`, `LEARN_MOVE` | row 64 |
 | **The global layer is never a Learn target.** A Learn writes only into the loaded preset. A refused desk learn stays armed. | `learn.blocked` | owner (D5) |
 | **An invariant control is not a learn candidate: it keeps doing its job through an armed learn.** | `MidiIO._handle` | row 61 |
-| **One road onto the desk.** `Learn.learn_control` serves the MIDI adapter, a click on the on-screen desk and pick-then-click alike, so mapping works with no device. | `Learn.learn_control` | row 62 |
+| **One road onto the desk.** `Learn.learn_control` serves every MIDI desk, a click on the on-screen desk and pick-then-click alike, so mapping works with no device. | `Learn.learn_control` | row 62 |
 | **Click a desk control, then a param's widget, to map it.** Every page but ROUTING dims while a control is picked. A pick lets go after 20 s, or when its footer line is clicked. | `ui_desk.click`, `ui_desk.PICK_S`, `Learn.map_picked` | row 58 |
 | **One Unbind.** It removes the loaded preset's desk rows and every route on the param as one undo step. It is offered only when it would remove something, and it never touches a session row. | `Learn.unbind`, `learn.bound` | row 59 |
 
-## Inputs
+## Inputs and devices
 
 | Decision | Where | Who |
 |---|---|---|
 | The Xbox pad is polled raw through GLFW with the app's own index map, not the gamepad-mapping database. | `gamepad.py` | owner |
-| The APC40 is a device *profile* over a generic MIDI adapter. | `apc40.py`, `midi.py` | owner |
+| The APC40 is a device *profile* over a generic MIDI adapter; each `midi` entry names its profile. | `apc40.py`, `midi.py` | owner |
+| **Several MIDI desks at once**, each a `midi` entry with its own profile. The `generic` profile (plain CC, note and pitch; nothing sent back; the entry names its `port`) lets a second controller map on Learn desk with no code. | `generic.py`, `midi.PROFILES` | owner (several ports, own profiles); row 149 (the profile) |
+| One desk reads the unqualified rows (every row before plan 27): the first MIDI entry whose profile is `bindings.json`'s, else the first listed. Any other desk's rows carry its role, `cc@<role>:<ch>:<n>`. | `routing.QUALIFIER`, `DeviceRegistry.midi_roles` | row 147 |
+| SHIFT (`desk.shift`) is that first desk's latch; every other desk has a layer of its own and no SHIFT; a preset load drops every desk to the preset layer. | `Bindings.layer_of`, `MidiDevice.layers` | row 148 |
+| The pad is a device: it publishes its axes and runs the sticks' camera job itself, right after its rows. | `gamepad.publish`, `gamepad.steer`, `PadDevice` | row 152 |
+| The hands' device is a thin wrapper in `hands/device.py`; the hands' one call runs in the feed slot. | `hands.device.HandsDevice` | rows 143, 153 |
+| The hands' DAW out is a `midi-out` sink, `hands-daw`: `HandsIO` makes the messages and opens no port. `[hands] out` becomes that entry at load. | `devices.MidiOutDevice`, `HandsIO.carry`, `config._daw` | row 157 |
+| The bridge is one device with two halves: `ext` in (with its labels and rests), sink rows out after `reg.apply`. Its old `send` list becomes sink rows once, marked `"sinks_seeded"` in `bindings.json`. A sink's SYSTEM line says how many rows it sends. | `devices.BridgeDevice`, `DeviceRegistry._seed_sinks` | rows 156, 159, 160 |
+| **An OSC device** is added by a `[[devices]]` entry alone (`kind = "osc"`): its role is its scheme, an address is a source name (`/1/fader1` → `phone:1/fader1`), its hits are rows under the same scheme with a velocity; values are the first number mapped from `range`, held while the sender is silent; the socket is read in `poll`, UDP `0.0.0.0:9000` by default. | `osc.py` | owner (no edit to `app.py`); rows 161–164 |
+| **A point cloud is a source type, not a scalar lane**: `devices.PointCloud` (read-only N×3 float32, a time, a frame id, bounds, optional colours) on the registry as `cloud:<role>` (`DeviceRegistry.clouds`), never through the Router. A `cloud` device plays a recorded version-1 `.npz` at its own rate. The Kinect and the live sensors are plan 29. | `devices.PointCloud`, `devices.CloudDevice` | owner (the type); rows 165–168 |
 | APC40 feedback: **rings show the base** (while a knob glides, its target), and **LEDs show the effective value**. | `MidiIO._ring_norm`, `MidiIO.feedback` | owner |
 | Hands are the primary performing surface. The APC40 keeps presets, scenes and master controls. | — | owner |
 | **Twelve axes** (palm pose, six per hand), shaped as analog signals, plus eight pinch switches. **No gesture vocabularies and no more DOFs.** The twelve axes stay as they are; the dance sources and the grab below are added beside them as sources (2026-10-12). | `hands/core.py` | owner |
@@ -87,9 +110,9 @@ replaces a row, rewrite that row instead of adding a new one.
 | **The grab switch** (plan 24): `hand:<side>.grab` closes on a fist and is a gate like the pinches. What it is for — the shape following a closed hand — is a mapping the owner authors; nothing in a preset uses it yet. | `hands.fist`, `step_grab`, `HandsIO.grab` | owner |
 | The grab is the four fingers' mean curl through the pinches' `Gate` (closes past 0.65, opens under 0.45, 0.05 s debounce). Its two lanes go after the dance lanes, its gates after the pinches. | `GRAB_CLOSE`, `GRAB_OPEN`, `Layout.gates` | rows 131, 132 |
 | The dance sources and the grab have no settings of their own, send nothing to the DAW, and are not offered by a hand Learn: pick them on ROUTING. The HANDS page shows them in a column beside the axes. | `hands/panel.py` `_dance`, `_grab` | rows 129, 130 |
-| The hands package is liftable: `core.py` and `signal.py` import nothing from the host. | `tests/test_hands_boundary.py` | owner |
+| The hands package is liftable: `core.py`, `signal.py` and `tape.py` import nothing from the host; `device.py` and `panel.py` are the only files that know it. | `tests/test_hands_boundary.py` | owner |
 | Pinch switches are a Schmitt trigger plus a debounce. | `hands/core.py` `Gate` | owner |
-| Hand settings live in three places, each where it changes: rig settings in `[hands]`, the room (ranges and box) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
+| Hand settings live in three places, each where it changes: rig settings in the hands device's entry (`[[devices]] kind = "hands"`, or the old `[hands]` table), the room (ranges and box) in `hands.json`, and the feel (including `hands.learn_depth`) in the hands params. | `hands/core.py` | owner |
 | **The interaction box** bounds the palm in the Leap's mm. It is one box for both hands, with x symmetric. The calibration sweep sets it (2nd–98th percentile + `BOX_MARGIN`) and "reset ranges" opens it. No widget edits it. Its edge is a Schmitt edge (`BOX_EDGE`). | `load_box`, `inside`, `HandsIO._sweep_box` | row 50 |
 | **A hand outside the box is absent everywhere**: NaN axes, presence off, pinches dropped and its ghost faded. Only the HANDS page shows it, drawn hollow. | `HandsIO.poll`, `ghost.box_of` | row 51 |
 | Home on the keyboard is `key:HOME` only (fn ← on a laptop). | `routing.LOOP_KEY_ROWS` | row 38 |
@@ -207,7 +230,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | The library home is `~/Hyperspace` (or `HYPERSPACE_HOME` / config). Factory files ship read-only in the repo, and a user file shadows a factory file of the same name. | `library.py` | owner |
 | A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. | `library.py` | owner |
 | The library is watched like source: editing a file shows in the running app. The library's own renames and trash moves are never re-applied. | `hotreload.py`, `Library._sync` | owner |
-| `<home>/bindings.json` holds only the session's controls. A show carries no routing of its own. | `routing.FILE` | owner |
+| `<home>/bindings.json` holds only the session's controls, the sink rows among them (sinks are rig). A show carries no routing of its own. | `routing.FILE` | owner |
 | **A preset file about to be overwritten or deleted is copied to `<home>/trash/` first.** | `library.to_trash` | owner |
 | …only when the text differs. A failed copy warns and lets a save go on, but refuses a delete. | `library.to_trash` | row 37 |
 | The windows open where the config says, otherwise where they were (`<home>/windows.json`, one render rect per output). Fullscreen is never remembered. The file is written on quit and ⌘R only. | `placement.py` | row 48 |

@@ -1,10 +1,11 @@
 # Decision register — the open decisions
 
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
-rows 89–108 during plan 22's run on 2026-10-06, and rows 110–139 during
-plan 24's run on 2026-10-14: the build took its own recommendation and
-built it. Every one is in the app now (rows 110–139 on
-`plan-24-26-27-integration`, until the owner merges it) and waits for the
+rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during
+plan 24's run and rows 140–168 during plan 27's run on 2026-10-14: the
+build took its own recommendation and built it. Every one is in the app
+now (rows 110–168 on `plan-24-26-27-integration`, until the owner merges
+it) and waits for the
 owner to say **keep** or **overturn**. Row 109 is the owner's own (plan
 25). Each row
 says what was built (what you will see or feel), the other option(s), what
@@ -49,7 +50,7 @@ here; overturn → the change, then the same.
 | 57 | The big on-screen desk and its names | 69 | |
 | 58 | Click a desk control, then a param | 70 | |
 | 59 | One Unbind removes desk rows and routes | 64 | |
-| 60 | "Learn desk" and "Learn hand ▸ left / right" | 66–68 | |
+| 60 | "Learn desk" and "Learn hand ▸ left / right" (what it waits for comes from the device registry since plan 27: rows 151, 158) | 66–68 | |
 | 61 | Session controls work through a desk learn (its list changed in plan 24: S1–S8 left it; SAVE and the four toggles joined) | 65 | |
 | 62 | One road onto the desk, no APC40 needed | 70 | |
 | 63 | The ROUTING filter: only you clear it | 71 | |
@@ -129,6 +130,35 @@ here; overturn → the change, then the same.
 | 137 | The palette at `@order 95` | — | |
 | 138 | The fold over the absolute hue wheel; linear sat and val | 166 | |
 | 139 | The FX page repacked; strip rows packed by name | 167 | |
+| 140 | `[[devices]]`; the old tables translated with a note each | 168, 169 | |
+| 141 | Today's devices keep their schemes; two never feed one scheme | 174 | |
+| 142 | The `Device` protocol, one `Port`, four status words | 170 | |
+| 143 | The devices own today's adapters; the hands read in the feed slot | 168, 180 | |
+| 144 | Open behind the entry, retry a failed open, close last-listed-first | 170–172, 175 | |
+| 145 | `config.toml` watched every 30 frames; a bad edit keeps the old list | 173 | |
+| 146 | The SYSTEM page: one line per device | 168 | |
+| 147 | A second desk's rows are `cc@<role>:…`; who owns the unqualified rows | 176, 177 | |
+| 148 | SHIFT is the first desk's; other desks have their own layer, no SHIFT | 177 | |
+| 149 | The `generic` MIDI profile | 176 | |
+| 150 | Continuous = not a row kind; schemes and their order from the registry | 178 | |
+| 151 | What a Learn waits for is each device's `wants` ("Learn bridge" never completes) | 178, 186 | |
+| 152 | The pad is a device; it runs the sticks' camera job | 179 | |
+| 153 | The hands' device in `hands/device.py` | 180 | |
+| 154 | One knob per param per desk | 176 | |
+| 155 | The sink row: `param:<id>` / `lane:<i>` → `<role>:<channel>`, the session's | 181, 183 | |
+| 156 | `[bridge] send` becomes sink rows once (`sinks_seeded`) | 182 | |
+| 157 | The hands' DAW out is the `hands-daw` sink | 184, 185 | |
+| 158 | Learn sink ▸ lands at once, in the session | 183 | |
+| 159 | The bridge in two halves; `ext` labels and rests | 181, 182 | |
+| 160 | A sink's line says `n sinks` | 182, 184 | |
+| 161 | An OSC role is its scheme; hits are rows under it | 186, 187 | |
+| 162 | OSC values: first number, range, NaN until heard, held while lost | 188 | |
+| 163 | OSC hits: velocity is the first number | 187 | |
+| 164 | The OSC socket read in `poll`; UDP 0.0.0.0:9000 | 186, 189 | |
+| 165 | `devices.PointCloud` | 190 | |
+| 166 | Clouds on the registry, not the Router | 190 | |
+| 167 | The cloud file: version-1 `.npz` | 190 | |
+| 168 | The cloud device plays at its own rate | 190 | |
 
 "—": no hand check shows it; tests only.
 
@@ -529,6 +559,11 @@ here; overturn → the change, then the same.
 
 ### 60. "Learn desk" and "Learn hand ▸ left / right"
 
+- **Changed in plan 27.** What a Learn can wait for is no longer the
+  fixed `learn.WANTS`: it is "desk" plus each listed device's `wants`
+  (row 151), so the menu also offers "Learn <role>" for a new device and
+  **Learn sink ▸** (row 158). Learn desk completes from any listed MIDI
+  desk. The rule itself stands.
 - **Built.** A Learn says what it waits for. **Learn desk** completes only
   from a knob, button or a click on the on-screen desk; **Learn hand ▸
   left** only from the left hand. Anything else does its own job meanwhile.
@@ -1962,3 +1997,661 @@ added: every proof is a fixture under `tests/fixtures/`.
   sit closer to the status lines; a route on a hidden row cannot be seen
   on the strip until the mode flips.
 - **Judge it.** Check 167.
+
+## The device registry (plan 27)
+
+Built in plan 27's run on 2026-10-14
+([`plans/27-device-registry.md`](plans/27-device-registry.md)), on
+`plan-24-26-27-integration` until the owner merges it. The owner's own
+decisions for this plan (10–14 and 16 of the launch prompt: the
+registry's shape, roles not serials, two input ports per param, values
+and triggers, a device's layers, the processes) are in
+[`DECISIONS.md`](DECISIONS.md) with Who "owner"; these rows are what the
+build chose where those left a choice open — the `[[devices]]` keys, the
+MIDI qualifier, the sink row, the OSC addresses and the cloud file among
+them. No preset was edited or added.
+
+### 140. `[[devices]]`: the rig's devices as a list of tables; the old tables translated
+
+- **Built.** `config.toml` may list the rig's devices as `[[devices]]`
+  tables, each with `role` (a name without `:`, unique), `kind` (`midi`,
+  `gamepad`, `hands`, `bridge`, `midi-out`, `osc`, `cloud`), `enabled`
+  (default true) and the kind's own keys — the keys the old `[midi]`,
+  `[gamepad]`, `[hands]` and `[bridge]` tables hold, with the same
+  defaults. **A config with no list keeps working unedited**: the four old
+  tables become the equivalent entries at load, in today's poll order —
+  `pad` (gamepad), `apc40` (midi; the profile's name), `leap` (hands),
+  `bridge` — with one note per table the file holds ("config: [midi] is
+  now a [[devices]] entry (role = 'apc40', kind = 'midi') — see
+  config.py"), on stderr and the SYSTEM page. With a list, the list says
+  and each old table is ignored with a note. The first entry of each old
+  kind is folded back into its table, so `cfg["midi"]` (the binding
+  file's profile) and `cfg["hands"]` (the hands setup) say what the entry
+  says. An entry with a bad or duplicate role, or no kind, is dropped
+  with a note; an `enabled` that is not true or false is true; an unknown
+  kind is kept as an `error: unknown kind` line. `[dream]` stays a table:
+  the worker has no sources and no sinks.
+- **Other options.** A list only, the old tables an error (breaks every
+  rig config, `config.toml.rig` included); translate silently (the file
+  never catches up); roles `midi` / `gamepad` / `hands` instead of
+  `apc40` / `pad` / `leap`.
+- **To reverse.** `config._translate` and `config.DEVICE_TABLES`; the
+  notes are strings.
+- **Rough edge.** An un-renamed rig config prints a note per old table on
+  every launch, by design. A list with no `hands` entry leaves the hands
+  settings registered from the defaults, so the HANDS page says "tracker
+  off".
+- **Judge it.** Checks 168 and 169.
+
+### 141. Today's devices keep their schemes behind their roles; two devices never feed one scheme
+
+- **Built.** "The role is the scheme" holds for a *new* device (an OSC
+  phone publishes `phone:x`). Today's four keep the schemes their rows
+  already name: an entry's `role` names the device (the SYSTEM line, the
+  notes, a MIDI row's qualifier) and the device class's `schemes` say
+  which Router keys it publishes — `axis` / `pad` / `hat` (the pad),
+  `hand` / `hands` (the hands), `ext` (the bridge), `cc` / `note` /
+  `pitch` (MIDI) — so a preset names a scheme and every existing row is
+  unchanged whatever the entry is called. `feeds` is the subset fed as
+  continuous vectors. Every `Port` carries its `scheme` and `address`
+  (`axis:LX`, `hand:right.roll`, `cc:0:48`), so plan 28 can build a cable
+  from a port. A second **enabled** entry whose kind would feed a scheme
+  an earlier enabled entry already feeds is refused — `error: feeds
+  'axis', which pad already feeds — not opened`, one note naming both
+  roles — and comes up when the first leaves the list. A kind that feeds
+  nothing (MIDI: its messages are rows) is never refused, so two desks
+  both open.
+- **Other options.** The role as the scheme for today's devices too
+  (every preset and `bindings.json` rewritten to `leap:right.roll`); let
+  the last entry win silently (the Router's feed overwrites); refuse in
+  `config` (which does not know a kind's schemes).
+- **To reverse.** `Device.schemes` / `feeds` are class tuples;
+  `RefusedDevice` and the `claimed` map in `devices.make` are twenty
+  lines.
+- **Rough edge.** A refused entry is an `error:` line, not `off`, so the
+  reason shows.
+- **Judge it.** Check 174.
+
+### 142. The `Device` protocol: open, poll, learn, act, feed, send, close; one `Port`; four status words
+
+- **Built.** `devices.Device` (a runtime-checkable protocol): `role`,
+  `kind`, `schemes`, `feeds`, `layers`, `wants`, `status`, `last`,
+  `sources`, `sinks`, `open()`, `poll(dt, now)`, `learn(learn) -> bool`,
+  `act(router)`, `feed(router)`, `send(reg, analyzer)`, `close()`,
+  `targets()`. One `Port` type — name, label, kind (`value`, `trigger`,
+  or `cloud`), rest, bipolar, velocity, group, layer, scheme — is the
+  node editor's description of a device (plan 28), with no second one.
+  The registry's frame slots: the **scene-setter slot** runs each open
+  device's `poll` (the hardware read; MIDI applies its rows here), then
+  `learn` (an armed Learn is offered a moved axis or a pressed button),
+  then `act` (the rest of the frame's rows: the pad's, an OSC device's
+  hits); the **feed slot** runs `feed`; the **sink slot**, after
+  `reg.apply`, runs `send`. Status is `connected`, `lost` (the hardware is
+  not there; the device looks for it itself), `off` or `error: <why>`.
+  The registry retries only an `open` that raised; a `lost` device
+  reconnects on its own schedule and is never closed or reopened by the
+  registry. A `poll` that raises skips that device's `learn` and `act`
+  for the frame; its error stands until the next clean poll and the
+  first error of the frame goes to the hot-reload toast.
+- **Other options.** One `poll(dt, now, router, learn)` call (what
+  `HandsIO.poll` is); a status enum.
+- **To reverse.** The protocol is one class; the slots are three
+  registry methods.
+- **Rough edge.** `learn` and `act` are steps a device's user never sees;
+  the hands complete a hand Learn inside their feed-slot call, MIDI
+  inside its `poll`.
+- **Judge it.** Check 170.
+
+### 143. The devices own today's adapters; the hands' one call runs in the feed slot
+
+- **Built.** `MidiDevice`, `PadDevice`, `hands.device.HandsDevice` and
+  `BridgeDevice` own a `MidiIO`, `Pad`, `HandsIO` and `Bridge`, built in
+  `open()` (each adapter module imported there, so `import
+  hyperspace.app` imports none of `midi`, `bridge`, `dream`, `osc`,
+  `leap`, `torch`, `pythonosc`). Those objects are still what the panel
+  holds and the ghost renderer reads: a registry listener in `app.main`
+  re-points `panel.midi`, `panel.pad`, `panel.hands` and
+  `renderer.ghost.source` whenever the list changes. The hands device
+  makes the instrument's one call, `HandsIO.poll(dt, learn, router)`, from
+  the **feed** slot, so the hands' tracker read now runs after
+  `output.apply`, the mouse and the audio step rather than before them;
+  nothing in between reads the `hand` feed.
+- **Other options.** Split `HandsIO.poll` so the read is in the
+  scene-setter slot (a change to the liftable `hands/core.py`).
+- **To reverse.** Call the hands from `poll`; a few lines.
+- **Rough edge.** The hands device's status passes the tracker's own
+  words through: an unplugged camera reads `error: no camera` and a
+  stopped service `error: service lost` — though the Leap thread
+  reconnects by itself — and only "connecting" or a tape not yet started
+  reads `lost`.
+- **Judge it.** Checks 168 and 180.
+
+### 144. The registry: open behind the entry, retry a failed open on the Ports schedule, close last-listed-first
+
+- **Built.** `DeviceRegistry` makes one device per checked entry (`off`
+  for `enabled = false`: listed, never opened, its adapter never
+  imported).
+  `open_all` opens each; one whose `open` raises is `error: …`, said once
+  on stderr and in the config notes in the old gates' words (`"hands:
+  …"`), and tried again on the MIDI desk's schedule — every 2 s for five
+  misses, then every 10 s (`devices.retry_after`, held equal to
+  `midi.retry_after` by a test); the frame it opens it is polled and the
+  listeners run. `close()` closes every device last listed first,
+  best-effort; `Host.adapters == (devices, dream_io)` is the one close
+  list for a quit and ⌘R, and the pad is on it now (`Pad.close` stops and
+  joins its USB reader, at most 0.5 s).
+- **Other options.** Each device retries itself (every device a clock of
+  its own); close in list order.
+- **To reverse.** The schedule is three constants; the close order one
+  `reversed`.
+- **Rough edge.** A device whose `poll` raises every frame (a hot-reload
+  bug) is never closed and reopened: it stays red on its line and the
+  toast until the file is fixed.
+- **Judge it.** Checks 170, 171, 172 and 175.
+
+### 145. `config.toml` is watched every 30 frames; only the device list is re-read; a bad edit keeps the old list
+
+- **Built.** Every 30 frames (`devices.WATCH_FRAMES`, the shaders'
+  cadence) the registry stats `<home>/config.toml`; when its mtime moved
+  it re-reads the `[[devices]]` list only (`config.read_devices`). Any
+  problem — a parse error, an entry that would be dropped — is one note
+  ("config: [[devices]] not applied — … — the old list stands") and
+  nothing changes. Otherwise an unchanged entry keeps its device, a
+  changed one is closed and opened again ("devices: apc40 changed —
+  reopened"), a new role opens ("added"), a role that left closes
+  ("removed"), and the order becomes the list's. A file with no list
+  re-reads as the old tables translated.
+- **Other options.** Reload the whole config (the outputs, the library
+  path and the windows are not hot-pluggable); apply the good entries of
+  a partly bad edit.
+- **To reverse.** `watch` / `apply`; `WATCH_FRAMES`.
+- **Rough edge.** A changed entry is reopened whole: an edit to the
+  `apc40` entry re-sends the power-up and redraws the desk. An editor
+  that saves in two steps may land a parse error (a note) and then the
+  good list.
+- **Judge it.** Check 173.
+
+### 146. The SYSTEM page: one line per device
+
+- **Built.** A **devices** section above **midi**, one line per listed
+  device in list order: `role · kind · status · n sources · last` —
+  MIDI's `last` is the port, the binding count and the last message; the
+  pad's road and USB name; the hands' last DAW message or tracker status;
+  the bridge's port, encoding, lanes and sent count; a sink's starts with
+  `n sinks` (row 160). `error: …` lines are in the warning colour, `lost`
+  in the dimmed colour of a normal line. "no devices — [[devices]] in
+  config.toml" for an empty list. The old MIDI and bridge lines are gone;
+  the HANDS page keeps its own status.
+- **Other options.** Keep the old lines beside the new ones.
+- **To reverse.** `ui.device_lines` and `Panel._device_lines`.
+- **Rough edge.** A bridge's line is long; `lost` is not a warning, so an
+  unplugged desk does not stand out.
+- **Judge it.** Check 168.
+
+### 147. A second desk's rows are `cc@<role>:<ch>:<n>`; the unqualified rows are the desk the table was written for
+
+- **Built.** Every `[[devices]]` MIDI entry is its own desk. One MIDI role
+  reads the unqualified rows — every row in `bindings.json` and every
+  preset written before plan 27 (`cc:0:48`, `note:0:98`, `pitch:0`), so
+  nothing moves: the first MIDI entry whose `profile` is the binding
+  table's (`bindings.json`'s `"profile"`, `apc40` by default), else the
+  first MIDI entry listed (`DeviceRegistry.midi_roles`). Any other desk's
+  rows carry its role after `@` on the kind: `cc@launch:0:21`,
+  `note@launch:0:40`, `pitch@launch:3`. The qualifier adds no `:`, so
+  everything that splits a source at its first `:` is untouched. Learn
+  desk on the second desk writes the qualified form; ROUTING and the
+  footer say "MIDI CC 21 ch1 on launch".
+- **Other options.** `<role>:cc:<ch>:<n>` (adds a `:`); the role inside
+  the channel field; every row qualified (rewrites every preset and
+  `bindings.json`); "the first MIDI entry listed" without the profile
+  test (a generic box listed above the APC40 would take its rows and
+  SHIFT).
+- **To reverse.** `routing.QUALIFIER`, `base_scheme`, `Binding.device` /
+  `bare`, the table's `serves`: an hour; nothing on disk uses the form
+  until a learn on a second desk.
+- **Rough edge.** A hand-written `cc@apc40:…` (the owning role named)
+  acts as that desk's but is a different control from its unqualified
+  twin to `overlaps` and the invariant check. Two APC40-profile desks:
+  the first listed owns the unqualified rows.
+- **Judge it.** Checks 176 and 177.
+
+### 148. SHIFT is the first desk's latch; every other desk has a layer of its own and no SHIFT
+
+- **Built.** `Bindings.layer` stays the owning desk's layer, the one
+  `desk.shift` reads and SHIFT toggles; every other MIDI role has its own
+  in `Bindings.layers` (`layer_of(role)`, `set_layer(layer, role)`,
+  `toggle_layer(role)`), the preset layer until something latches it.
+  Learn's refusal on the global layer (D5) is per desk: with the APC40 on
+  SHIFT a knob on the second desk still learns into the preset and its
+  rows still act. A preset load drops **every** desk to the preset layer
+  (D4); D12 holds per desk; each desk's latch changes are counted on
+  their own (`layer_serial_of`), so the APC40's SHIFT re-arms the APC40's
+  faders only (D7). `MidiDevice.layers` says what a desk exposes for plan
+  28: `("preset", "global")` for the owning APC40, `("preset",)` for any
+  other.
+- **Other options.** One layer for every desk (the APC40's SHIFT would
+  blank the second desk's preset rows); a latch param and a SHIFT row per
+  APC40-profile desk (deferred: "a second desk has its own, or none").
+- **To reverse.** `layers` / `layer_of` and the `role` argument on four
+  methods.
+- **Rough edge.** A second APC40 gets its power-up and the lights of its
+  own rows but no SHIFT: its SHIFT button is an ordinary unmapped note.
+- **Judge it.** Check 177.
+
+### 149. The `generic` MIDI profile: plain CC, note and pitch, nothing sent back, a `port` required
+
+- **Built.** `hyperspace/generic.py`, a profile beside `apc40.py`:
+  `PORT_MATCH = None` (the entry must name its `port`; without one the
+  line reads `error: ValueError: the generic profile matches no port by
+  itself …`, never the first port that happens to be there), `FEEDBACK =
+  False` (the device is sent nothing: no power-up, ring, LED or leave),
+  every CC absolute with soft pickup, a note a toggle, pitch an absolute
+  14-bit fader, no layout (its line counts 0 sources; the on-screen desk
+  stays the APC40's), no factory rows. A `profile` the registry does not
+  know is an error line ("no MIDI profile 'akai'; one of apc40,
+  generic"). The entry's profile is the desk's: `bindings.json`'s
+  `"profile"` only says which profile the file's unqualified rows were
+  written for.
+- **Other options.** Echo values back as CC (a box that echoes would
+  loop); take the first port when none is named (would grab the APC40);
+  separate "generic pads" and "generic CC" profiles.
+- **To reverse.** One module, one `midi.PROFILES` entry, one gate in
+  `MidiIO._send`.
+- **Rough edge.** A relative encoder on a generic box learns as `abs`;
+  change its op on ROUTING.
+- **Judge it.** Check 176.
+
+### 150. A continuous source is "not a row kind"; the registry says which schemes there are and in what order
+
+- **Built.** `routing.LANE_SCHEMES`, `ui_routing.SOURCE_ORDER` and
+  `learn.WANTS` are gone. A row's shape is judged by
+  `routing.is_continuous(scheme)`: anything but the kinds the table
+  dispatches itself (`ROW_SCHEMES`: `key`, `pad`, `hat`, `cc`, `note`,
+  `pitch`). So a preset route on a device this rig lacks (`phone:x`,
+  `wand1:tilt`) is a dormant performer, never dropped (decision 11).
+  *Which* schemes exist and in what order a page offers them is the
+  registry's, handed to the Router as an argument (`Router.use`):
+  `continuous_schemes()` is `lane`, `lfo`, then each listed device's
+  `feeds` in list order (an `off` device's too). The referee's row
+  schemes are extended the same way (`DeviceRegistry.row_schemes`). With
+  no registry (a bare router), `lane` and `lfo` then whatever has been
+  fed.
+- **Other options.** A module-level tuple the registry appends to;
+  `is_performer` asking the registry (a `Binding` has no table); keep
+  `SOURCE_ORDER`'s order (`hand` before `lfo`).
+- **To reverse.** `is_continuous` back to a tuple test; `Router.schemes`
+  back to a tuple: minutes each.
+- **Rough edge.** A typo'd scheme in a preset route (`hnad:right.roll`)
+  is kept as a dormant performer, not dropped with a note. The ROUTING
+  combo now lists the LFOs before the hands and the pad.
+- **Judge it.** Check 178.
+
+### 151. What a Learn can wait for is each device's `wants`; "desk" is always there
+
+- **Built.** `Device.wants`: a MIDI desk `("desk",)` (one want; whichever
+  desk moves first completes it, and the row says which), the pad
+  `("pad",)`, the hands `("hand:left", "hand:right")`, and by default a
+  device that feeds, its role. `Learn.wants()` is `desk` (the on-screen
+  desk completes it with no MIDI device at all) then the registry's, in
+  list order, `off` devices included (the learn completes once the device
+  is on); `Learn.arm` refuses a want not in it. The param menu keeps
+  Learn desk, Learn hand ▸ and Learn pad on their old conditions and adds
+  "Learn <role>" on a modulatable param for any other want (an OSC phone:
+  "Learn phone"). With no registry, today's four (`learn.BARE_WANTS`).
+- **Other options.** One want per MIDI role (`desk@launch`: you would
+  have to say which desk before touching it); only open devices' wants.
+- **To reverse.** One property per class, `DeviceRegistry.wants`,
+  `Learn.wants`.
+- **Rough edge.** **The bridge feeds `ext`, so it inherits the default,
+  and "Learn bridge" is offered on every modulatable param whenever a
+  bridge is listed — on or off, so on every un-renamed config — and no
+  move completes it** (the bridge has no `learn`; cancel it). One line
+  (`wants = ()` on `BridgeDevice`) would remove it. A new device's item
+  completes only through that device's own `learn`.
+- **Judge it.** Checks 178 and 186.
+
+### 152. The pad is a device: it publishes its axes and runs the sticks' camera job itself
+
+- **Built.** `gamepad.Pad` has `open()`, a `status` (`connected` /
+  `lost`, never an error) and `publish(router)` (the `axis` names, labels
+  and rests; `Router._publish_axes` is gone). The sticks' default camera
+  job moved from `app.frame` to `gamepad.steer(pad, router, reg, dt)`,
+  run by `PadDevice.act` right after the pad's rows: the same constants,
+  the same `router.claimed("axis")` and the pad's feel through
+  `router.felt` (`desk.pad.*`, unchanged on purpose). It now runs before
+  the MIDI desk's rows in the scene-setter slot; both write the bases of
+  independent params by relative moves.
+- **Other options.** Keep the job in `app.frame`; run it in the device's
+  `poll` (which is handed no router).
+- **To reverse.** Move `steer`'s body back into `frame`; restore
+  `_publish_axes`.
+- **Rough edge.** A route on `axis:LX` added before the pad ever
+  published is not "claimed" for that one frame (no pad, no job anyway).
+- **Judge it.** Check 179.
+
+### 153. The hands' device is `hands/device.py`; the kinds table looks it up lazily
+
+- **Built.** `HandsDevice` lives in `hands/device.py`, a `devices.Base`
+  subclass beside `hands/panel.py`, so `hands/core.py`, `signal.py` and
+  `tape.py` still import nothing from the host and
+  `tests/test_hands_boundary.py`'s host-reaching list is `["device.py",
+  "panel.py"]`. Its `schemes` and `feeds` are `hand` and `hands`; its
+  ports read every count from `Layout` (axes, switches, presence, dance
+  under `hand`; gap and twist under `hands`), so plan 24's new lanes
+  needed no edit. Because it imports `devices`, `devices.kinds()` imports
+  it when asked (`devices.KINDS` and `devices.HandsDevice` read through a
+  module `__getattr__`). `hotreload.MODULES` gains `hands.device` after
+  `devices`.
+- **Other options.** Duck-type the protocol without `Base`; import
+  `hands.device` at the bottom of `devices.py` (a circular import).
+- **To reverse.** Move the class back; `KINDS` a dict again.
+- **Rough edge.** `devices.KINDS` is built on each access (cheap).
+- **Judge it.** Check 180.
+
+### 154. One knob per param per desk
+
+- **Built.** A desk learn still replaces the param's previous knob on
+  the same layer, but only on the **same desk**: learning
+  `view.inst_amp` on the second desk leaves the APC40's knob on it alone.
+- **Other options.** One knob per param across every desk (a learn on
+  the second desk would silently unmap the APC40's).
+- **To reverse.** One condition in `Bindings.bind`.
+- **Rough edge.** Two knobs on two desks drive one param, last touch wins
+  (scene-setters, as two rows always could).
+- **Judge it.** Check 176.
+
+### 155. The sink row: a param or a lane, sent to `<role>:<channel>`, in the session
+
+- **Built.** A param routed *out* is one more row in the one table:
+  `{"source": "param:view.bright", "target": "bridge:3", "op": "send"}`
+  (`routing.SINK_OP`). Its source is `param:<id>` (the **effective**
+  norm, base plus this frame's modulation, read after `reg.apply`),
+  `lane:<i>` (as a route reads it, `lane / CEIL`) or `lane:*` (every
+  analyzer lane from the row's channel on); its target is a device's sink
+  port, `<role>:<channel>`. It is a **session** row (`bindings.json`:
+  sinks are rig, D1 / D9), never a performer (no `Owned`, no Replace /
+  Keep, the modulation pass never reads it) and never in a preset; the
+  referee checks only its form (`sink_refusal`). What a sink sends is
+  `routing.sink_values(rows, reg, analyzer)` over the enabled rows on its
+  role; an explicit row wins its channel over a `lane:*`. A trigger, or
+  an id the registry lacks, reads 0.
+- **Other options.** A separate `sinks` list in `bindings.json`; the op
+  named `sink` or `out`; the sink port as the source and the param as
+  the target; sink rows in the preset.
+- **To reverse.** `SINK_OP`, `Binding.is_sink`, `sink_refusal`,
+  `sink_values`, `Bindings.sinks`, the referee's branch: an hour.
+- **Rough edge.** A `lane:*` row's width is the live band layout's; a
+  later explicit row hides the star's lane on its channel. A param's
+  alias (`band.sel.*`) can be sent and follows the selection.
+- **Judge it.** Checks 181 and 183.
+
+### 156. `[bridge] send` becomes sink rows once, marked in `bindings.json`
+
+- **Built.** When the registry is built, and whenever the list is
+  re-applied, every **enabled** entry with a `send` list — the bridge's
+  default `["lane:*"]` included — whose role has no sink row at all gets
+  the list as rows (slot k → `<role>:<k>`; `lane:*` one row taking the
+  default layout's 6 channels before the next entry), written to
+  `bindings.json` with one note: "bindings: [bridge] send is now sink
+  rows in bindings.json (lane:* → bridge:0, param:view.bright → bridge:6)
+  — the rows say from here on; edit them on ROUTING (sinks)". The
+  translation is marked done in `bindings.json` itself, `"sinks_seeded":
+  ["bridge"]` (written only when non-empty, so a file with none is
+  byte-identical): a role in it is never seeded again, so rows deleted on
+  ROUTING never come back. An entry it cannot translate (`ext:3`) is its
+  own note; an off bridge seeds nothing. A `Bridge` made on its own
+  (tests, tools) still sends its `send` list.
+- **Other options.** Translate on every launch (the key would beat the
+  owner's ROUTING edits for ever); keep `send` as the truth and show it
+  read-only; mark it done by consuming the config key.
+- **To reverse.** `DeviceRegistry._seed_sinks` and
+  `routing.sink_rows_from_send`.
+- **Rough edge.** Editing `[bridge] send` after the first launch does
+  nothing (remove the role from `"sinks_seeded"` to translate again). An
+  entry after `lane:*` lands at channel 6 whatever the rig's band count,
+  so a DAW mapping may need one move.
+- **Judge it.** Check 182.
+
+### 157. The hands' DAW out is a `midi-out` sink, `hands-daw`; `HandsIO` makes the messages and opens no port
+
+- **Built.** `hands/core.py` no longer opens a MIDI port: `HandsIO.poll`
+  makes the frame's DAW messages exactly as before (per-axis CC, 14-bit,
+  pitch or pressure, presence and pinch notes, rate-limited, solo) and
+  leaves them in `HandsIO.outbox` for a carrier (`HandsIO.carry`);
+  `HandsIO.resync()` gives the notes that are on for a port that came
+  back. The port moved to `bridge.OutPort`. The device is
+  `devices.MidiOutDevice` (`kind = "midi-out"`): its `poll` looks for a
+  lost port again and, on a reconnect, queues the resync before the
+  hands' frame; its `send` (after `reg.apply`) sends the resync, the
+  carried messages, then any sink rows on its role (encoded as the
+  bridge's lanes). **`[hands] out` keeps working**: at load the first
+  enabled hands entry whose `out` names a port gets an entry right after
+  it — `role = "hands-daw"`, `kind = "midi-out"`, `port = <out>`,
+  `carries = <hands role>` — unless the list already has a `midi-out`
+  carrying that role; one note when the file wrote `out` itself, none for
+  the default.
+- **Other options.** Keep the port in `HandsIO` with the sink only owning
+  it; move the whole DAW encoding out of `hands/` (it reads the axes'
+  settings; a liftable instrument that makes its MIDI is more useful);
+  send from the feed slot.
+- **To reverse.** Put `_open` / `_send` and the reconnect fields back in
+  `HandsIO`; drop `config._daw` and the kind.
+- **Rough edge.** The messages leave a millisecond or so later than
+  before, in the sink slot. A rig with the hands off gets no `hands-daw`
+  entry until a live edit turns them on. Tools that build a `HandsIO`
+  with no `out` no longer make a "Hyperspace Hands" port.
+- **Judge it.** Checks 184 and 185.
+
+### 158. "Learn sink ▸ <role>:<channel>" lands at once, in the session
+
+- **Built.** A param's right-click menu has **Learn sink ▸**, listing
+  every sink port the rig's devices offer (`bridge:3 · pitch ch4`), on
+  any param but a trigger. A pick lands immediately — nothing on a sink
+  moves to complete it — through `Learn.learn_sink`: the row `param:<id>
+  → <port>` is added and `bindings.json` written now, with no undo step
+  and no preset dirt (like Learn pad). It takes the port from whatever
+  sent on it ("…; param:view.bright let go"); a param may go out on
+  several ports. Never a Replace / Keep question. The menu's bound lines
+  list the param's sink rows dim, and Unbind never removes them. ROUTING
+  has a **sinks** section after the session's (a checkbox and a ×, both
+  writing the file).
+- **Other options.** Arm and wait like the other learns; a sink picker
+  page; an undo step.
+- **To reverse.** `Learn.learn_sink` / `sinks`, `ui.sink_items`, the menu
+  block, `ui_routing.sinks`.
+- **Rough edge.** An `off` sink offers no ports, so nothing can be
+  learned onto it until it is on. A pitch-encoded sink lists sixteen
+  ports.
+- **Judge it.** Check 183.
+
+### 159. The bridge is one device with two halves; `ext` publishes its labels and rests
+
+- **Built.** `BridgeDevice.poll` looks for its ports again (scene-setter
+  slot); `feed` receives the inbound lanes as `ext` and publishes their
+  labels ("ext 0" …) and rests (0); `send`, after `reg.apply`, sends the
+  sink rows on its role through `bridge.Sender` (per channel: quantise,
+  change-gate, rate-limit, encode), shared with `midi-out`. So a sent
+  param is this frame's effective value, no longer a frame behind, and
+  `ui_routing.N_EXT` is gone: the ROUTING combo offers the lanes the
+  bridge publishes (and, for a scheme nobody publishes, up to the highest
+  lane a row names).
+- **Other options.** Labels as the wire ("pitch ch4"), which would change
+  every `ext` route's words.
+- **To reverse.** `Bridge.publish` and one line in the ROUTING combo.
+- **Rough edge.** The combo reads "ext ext 0" (scheme, then label), as
+  the LFOs read "lfo LFO 1".
+- **Judge it.** Checks 181 and 182.
+
+### 160. A sink's SYSTEM line starts its last part with `n sinks`
+
+- **Built.** A device with sink ports shows the number of **enabled**
+  sink rows on its role first: `bridge · bridge · connected · 16 sources
+  · 2 sinks · IAC Driver Bus 1 · pitch, 16 lanes · 41 sent`; `hands-daw ·
+  midi-out · connected · 0 sources · 0 sinks · Hyperspace Hands · leap's
+  DAW out · cc 102 = 64 ch16`.
+- **Other options.** A sixth field on every line; counting sink ports
+  (sixteen on any pitch bridge, saying nothing).
+- **To reverse.** Four lines in `DeviceRegistry.lines`.
+- **Rough edge.** `hands-daw` reads `0 sinks` while it carries the hands
+  (the words after it say so).
+- **Judge it.** Checks 182 and 184.
+
+### 161. An OSC device's role is its scheme; an address is a source name; its hits are rows under the same scheme
+
+- **Built.** `kind = "osc"` with `role = "phone"` feeds the scheme
+  `phone`: `axes = ["/x", "/y"]` are `phone:x`, `phone:y` (the address
+  without its leading `/`; a deeper path kept, `/1/fader3` →
+  `phone:1/fader3`), published with names, labels and rests, so a route
+  names them like `hand:right.roll` and ROUTING and "Learn phone" offer
+  them. `hits = ["/hit"]` are triggers under the **same** scheme
+  (`phone:hit`), delivered as rows like a pad button's. A device says
+  which schemes it delivers rows under (`Base.rows`) and what an entry
+  would publish before it is made (`Base.publishes`), so a second feeder
+  of `phone` is refused and an `off` OSC entry still lists its scheme (a
+  row on it waits). A role that is a row kind or a built-in scheme
+  (`key`, `pad`, `hat`, `cc`, `note`, `pitch`, `lane`, `lfo`, `cloud`) is
+  an error line on open.
+- **Other options.** `osc:<role>.<name>` (the launch prompt's text: one
+  `osc` scheme for every OSC device, so two phones would share one
+  vector); hits under a scheme of their own (`hit@phone:…`: a Learn armed
+  for `phone` could not take a hit); hits as a fed 0/1 lane (no velocity,
+  against decision 13).
+- **To reverse.** `OscDevice.publishes` / `rows` and the read in
+  `DeviceRegistry.row_schemes`: an hour.
+- **Rough edge.** Because `phone` is fed and a row scheme, the referee
+  accepts any op on a `phone:` row. A hit row in `bindings.json` waits
+  while its device is not listed; re-enabling it on ROUTING then is
+  refused ("'fire' is not an op for a phone source") until the phone is
+  listed (even off).
+- **Judge it.** Checks 186 and 187.
+
+### 162. OSC values: the first number, the entry's range onto 0–1; nothing until heard; held while lost
+
+- **Built.** An axis's value is the message's first number (a bool, a
+  string or a NaN is skipped) — only the first: an XY pad's second value
+  is not read — mapped from `range` (default `[0, 1]`) onto 0–1 and
+  clamped. An axis no message has reached reads NaN, so its routes stay
+  dormant and nothing moves at launch. The device is `connected` while
+  any message arrived within `timeout` (5 s), `lost` before the first and
+  after a silence; while lost the axes **hold** their last values (`hold
+  = true`: a phone app sends only on change, so a fader left alone must
+  not snap back), and `hold = false` lets the routes go. Closing the
+  device takes its scheme off the router (vector, labels, names, rests).
+  A `timeout`, `range` or `rest` of the wrong kind is an error line.
+- **Other options.** Let routes go when lost, always; a 2 s timeout (the
+  line would flicker between touches); the rest instead of NaN before the
+  first message (a `position` route would move its param at launch).
+- **To reverse.** `TIMEOUT_S`, `hold`, the NaN fill: minutes.
+- **Rough edge.** With `hold = true` a phone that leaves the network
+  leaves its routes where they were (the line says `lost`). An app that
+  streams continuously is never `lost`.
+- **Judge it.** Check 188.
+
+### 163. An OSC hit: its velocity is the first number; a press is a velocity above 0
+
+- **Built.** A hit's velocity is the message's first number clamped to
+  0–1 (`range` is the axes' only), 1 when the message has none. Its rows
+  act as a pad button's when the velocity is above 0 (`fire`, `toggle`,
+  `step`, `set`); `abs` lands the velocity itself; `momentary` holds a
+  toggle while the velocity is above 0 and lets go at 0; `hold` does
+  nothing (a hit has no duration). A Learn armed for the role takes the
+  next hit above 0 as a button row in `bindings.json`
+  (`Learn.learn_pad_button`, as a pad button) and holds that frame's rows
+  back; else the first axis moved 0.25 from its rest as a route.
+- **Other options.** Velocity on 0–127 like MIDI; hit rows in the
+  preset; a timed `hold`.
+- **To reverse.** `osc.fire`.
+- **Rough edge.** A velocity above 1 clamps; a learned step on a fader
+  always steps up.
+- **Judge it.** Check 187.
+
+### 164. The OSC socket is read in `poll`, non-blocking, with no thread; UDP `0.0.0.0:9000` by default
+
+- **Built.** `osc.Server` binds a UDP socket on the entry's `host:port`
+  (every interface by default, so a phone on the LAN reaches it, port
+  9000) and the device's `poll` reads every datagram waiting, at most 512
+  a frame; `pythonosc` parses each (a bundle's messages in order), and a
+  datagram that is not OSC is counted on the line ("… · 3 not OSC"). A
+  port another program holds is an error line and one note, retried on
+  the registry's schedule. `pythonosc` is imported only in `Server`;
+  `hyperspace.osc` itself is imported whenever the registry looks a kind
+  up, so an `off` OSC entry still lists its scheme.
+- **Other options.** `pythonosc`'s threading server and a dispatcher (a
+  thread, a lock and a queue per device, and tests that race it); import
+  `osc.py` only when an entry names the kind.
+- **To reverse.** `Server` is forty lines.
+- **Rough edge.** macOS asks once whether Python may accept incoming
+  connections the first time it binds `0.0.0.0`; denied, nothing ever
+  arrives and the line stays `lost`.
+- **Judge it.** Checks 186 and 189.
+
+### 165. `devices.PointCloud`: a read-only N×3 float32 buffer, the frame clock's time, a counting frame id, bounds, optional colours
+
+- **Built.** `PointCloud(points, t, frame, colors=None)`, frozen:
+  `points` N×3 float32, C-contiguous and read-only (`ctx.buffer(points)`
+  uploads it as it is; a caller's writeable array is copied), `t` the
+  frame clock's `now` when it was published, `frame` an id counting up
+  from 0 while the device is open (a reader uploads only when it moved),
+  `bounds` a read-only 2×3 box (zeros for an empty cloud), `colors` None
+  or N×3 RGB 0–1. Units are the publisher's.
+- **Other options.** `t` as the recording's own time; `frame` as the
+  index into the file (repeats on a loop); N×4 points.
+- **To reverse.** One dataclass.
+- **Rough edge.** Points are expected finite: a NaN point gives NaN
+  bounds (plan 29's sensors must filter, or `bounds` moves to
+  `nanmin` / `nanmax`).
+- **Judge it.** Check 190 (and plan 26's own check when its node draws
+  it).
+
+### 166. Clouds are on the registry, not the Router: `DeviceRegistry.clouds` as `cloud:<role>`
+
+- **Built.** A device that publishes a cloud holds its latest frame;
+  `DeviceRegistry.clouds` maps `cloud:<role>` to it for every **open**
+  device that has one, in list order — what plan 26's point-cloud node
+  (A4b, not on this branch yet) will read (`cloud:scan`). No `cloud` scheme reaches the Router, the referee
+  or a Learn. The cloud device's one `Port` has `kind = "cloud"`. A
+  closed or removed device's cloud is gone from the map at once.
+- **Other options.** `Router.feed("cloud", …)` (the Router holds float
+  vectors per scheme); a stored map filled in the feed slot.
+- **To reverse.** One property.
+- **Rough edge.** The map is rebuilt on each read (cheap).
+- **Judge it.** Check 190.
+
+### 167. The cloud file: a version-1 `.npz` — rate, ragged offsets, concatenated points, optional colours
+
+- **Built.** `devices.write_clouds(path, frames, rate, colors=None)`
+  writes `version` (1), `rate` (frames per second), `offsets` (F + 1:
+  frame i is `points[offsets[i]:offsets[i+1]]`, so frames may differ in
+  size) and `points` (M×3 float32), plus `colors` when given;
+  `read_clouds` checks every key and shape and refuses another version,
+  offsets that do not walk the points or a rate that is not positive, as
+  an error the device's line shows. The fixture
+  `tests/fixtures/clouds/knot.npz` is a (2, 3) torus knot turning about
+  its vertical axis, 16 frames at 12 fps, 96 + 8i points on frame i,
+  coloured by height, written by `tools/cloud_fixture.py` with no random
+  numbers and no clock.
+- **Other options.** A fixed N per frame; PLY or PCD; one `.npy` per
+  frame in a folder.
+- **To reverse.** Two functions; nothing outside the tests reads the
+  format yet.
+- **Rough edge.** No per-frame timestamps: a recording plays at one rate
+  (a later version may add `times`; version-1 readers ignore unknown
+  keys).
+- **Judge it.** Check 190.
+
+### 168. The `cloud` device plays at its own rate against the frame clock; `file` is the home's
+
+- **Built.** `kind = "cloud"` with `file` (required; relative to the
+  home), `rate` (default the file's) and `loop` (default true; false
+  holds the last frame). Polled at `now` it shows recorded frame
+  `floor((now − start) · rate)`, so it plays at 12 fps whatever the app's
+  frame rate. `connected` while the file is loaded; a missing or bad
+  file, or a bad `rate`, is `error: …` with one note and retried, so a
+  file copied in later comes up with no relaunch. The line: `scan · cloud
+  · connected · 1 source · knot.npz · frame 7/16 · 144 points · 12 fps`.
+- **Other options.** One recorded frame per app frame; resolve `file` in
+  `config.py`.
+- **To reverse.** One class.
+- **Rough edge.** The file is read whole at open; a recording changed on
+  disk is not re-read until its entry changes or the app restarts.
+- **Judge it.** Check 190.
