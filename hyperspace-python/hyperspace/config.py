@@ -345,12 +345,20 @@ def screens(cfg: dict) -> list[dict]:
              "flip_y": oc.get("flip_y", False) is True}]
 
 
-def _kind_defaults(kind: str, cfg: dict) -> dict:
+def _kind_defaults(kind: str) -> dict:
     """The keys an entry of `kind` carries beyond role / kind / enabled,
-    with their defaults: the old table's, less `enabled`."""
+    with their defaults: the old table's *defaults* (DEFAULTS, the hands'
+    own table), less `enabled` — never the file's old table, which a
+    `[[devices]]` list says is ignored."""
     for section, k, _ in DEVICE_TABLES:
-        if k == kind:
-            return {key: v for key, v in cfg[section].items() if key != "enabled"}
+        if k != kind:
+            continue
+        if section == "hands":
+            from .hands.core import DEFAULTS as HANDS
+            base = HANDS
+        else:
+            base = DEFAULTS[section]
+        return {key: copy.deepcopy(v) for key, v in base.items() if key != "enabled"}
     return {}
 
 
@@ -386,7 +394,7 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
         enabled = True
     roles.add(role)
     own = {k: v for k, v in e.items() if k not in DEVICE_KEYS}
-    return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind, cfg), **own}
+    return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind), **own}
 
 
 def _translate(cfg: dict, data: dict) -> list[dict]:
@@ -461,16 +469,19 @@ def read_devices(path: Path) -> tuple[list[dict], list[str]]:
     """The device list of `path` as it is now, for the registry's watch:
     (entries, problems) — a file that will not parse, or an entry that
     had to be dropped, is a problem, and the registry keeps its old list.
-    Nothing is printed: the notes `load` would make are its own."""
+    An error elsewhere in the file (a scalar where a table should be) is
+    not the list's problem and does not block it. Nothing is printed: the
+    notes `load` would make are its own."""
     import contextlib
     import io
 
+    try:
+        tomllib.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        return [], [f"config: {e}"]
     with contextlib.redirect_stderr(io.StringIO()):
         cfg = load(path)
-    problems = list(cfg.get("problems", []))
-    if cfg.get("error"):
-        problems.insert(0, cfg["error"])
-    return devices(cfg), problems
+    return devices(cfg), list(cfg.get("problems", []))
 
 
 def load(path: Path | None = None) -> dict:

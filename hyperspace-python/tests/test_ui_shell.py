@@ -178,7 +178,8 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
     assert shown() == [("no device registry", False)]
     bridge = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0,
                              decoder=SimpleNamespace(n=16), close=lambda: None)
-    midi = SimpleNamespace(on=False, name="", error="", last="", profile=None, close=lambda: None)
+    midi = SimpleNamespace(on=False, name="", error="", last="", profile=None, bindings=[],
+                           close=lambda: None)
     reg = devices.DeviceRegistry(devices=[
         devices.PadDevice("pad", io=SimpleNamespace(on=False, usb_pad=None, close=lambda: None)),
         devices.MidiDevice("apc40", io=midi),
@@ -191,7 +192,8 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
                        ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]
     bridge.on, bridge.name, bridge.sent = True, "out IAC Bus 1", 42
     midi.on, midi.name, midi.last = True, "Akai APC40", "cc 0 48 = 64"
-    assert shown()[1] == ("apc40  ·  midi  ·  connected  ·  0 sources  ·  cc 0 48 = 64", False)
+    assert shown()[1] == (("apc40  ·  midi  ·  connected  ·  0 sources  ·  Akai APC40  ·  "
+                           "0 bindings  ·  cc 0 48 = 64"), False)
     assert shown()[3] == (("bridge  ·  bridge  ·  connected  ·  16 sources  ·  out IAC Bus 1  ·  "
                            "pitch, 16 lanes  ·  42 sent"), False)
     bridge.error = "no such port"

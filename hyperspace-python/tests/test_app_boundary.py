@@ -326,7 +326,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     # the four devices as the registry's shims over recording stubs, in
     # today's list order (config.DEVICE_TABLES): the pad, MIDI, the hands,
     # the bridge — each counted open because it holds an adapter
-    midi = Stub("midi", log, on=True, error="", last="")
+    midi = Stub("midi", log, on=True, error="", last="", bindings=[])
     midi.name = ""
     rig = devices.DeviceRegistry(devices=[
         devices.PadDevice("pad", io=pad),

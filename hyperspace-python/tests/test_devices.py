@@ -92,7 +92,53 @@ def test_the_kinds_table_lists_todays_four_and_make_sorts_an_entry():
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
     assert isinstance(odd, devices.UnknownDevice) and odd.status == "error: unknown kind 'wand'"
-    assert devices.Port("x", "X") == devices.Port("x", "X", "value", 0.0, False, False, "", "")
+    assert devices.Port("x", "X") == devices.Port("x", "X", "value", 0.0, False, False, "", "", "")
+    # a port knows its scheme, so a row's source — a cable (plan 28) — is one property
+    assert devices.Port("LX", "left stick X", scheme="axis").address == "axis:LX"
+    assert devices.Port("0:48", "track knob 1", scheme="cc").address == "cc:0:48"
+    assert devices.Port("x", "X").address == "x"                       # (no scheme: bare)
+    assert off.schemes == ("cc", "note", "pitch") and off.feeds == ()   # off, still its kind's
+
+
+def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkeypatch):
+    """Roles are not schemes for today's devices (`pad` publishes `axis`,
+    `leap` publishes `hand`), and the Router holds one vector per scheme:
+    a second enabled entry of a kind whose scheme is already claimed is
+    refused — an error line naming both roles, never opened, as if
+    `enabled = false` — and comes up when the first leaves the list."""
+    entries = [
+        {"role": "pad", "kind": "gamepad", "enabled": True},
+        {"role": "pad2", "kind": "gamepad", "enabled": True},
+        {"role": "leap", "kind": "hands", "enabled": True},
+        {"role": "leap2", "kind": "hands", "enabled": False},
+        {"role": "apc40", "kind": "midi", "enabled": True},
+        {"role": "launchpad", "kind": "midi", "enabled": True},
+    ]
+    notes: list[str] = []
+    reg = devices.DeviceRegistry(entries, devices.Context(hand_settings=None), notes=notes)
+    pad2, leap2, lp = reg.get("pad2"), reg.get("leap2"), reg.get("launchpad")
+    assert isinstance(pad2, devices.RefusedDevice) and isinstance(lp, devices.RefusedDevice)
+    assert pad2.status == "error: claims 'axis', which pad already publishes — not opened"
+    assert lp.status == "error: claims 'cc', which apc40 already publishes — not opened"
+    assert isinstance(leap2, devices.OffDevice) and leap2.status == "off"   # off claims nothing
+    for cls in (devices.PadDevice, devices.MidiDevice):
+        monkeypatch.setattr(cls, "open", lambda self: None)      # no port, no pad asked for
+    reg.open_all()
+    for _ in range(3):
+        reg.poll(1 / 60, 0.0, router=object())
+    assert pad2.io is None and lp.io is None and reg.adapter("gamepad") is None
+    assert [n for n in notes if "pad2" in n] == [
+        "config: [[devices]] pad2: claims 'axis', which pad already publishes — not opened"]
+    assert [n for n in notes if "launchpad" in n] == [
+        "config: [[devices]] launchpad: claims 'cc', which apc40 already publishes — not opened"]
+    assert reg.schemes() == ("axis", "pad", "hat", "hand", "cc", "note", "pitch")
+    # the first pad leaves the list: pad2 is no longer refused and opens
+    monkeypatch.undo()                                    # the real Pad opens (never raises)
+    reg.apply([e for e in entries if e["role"] != "pad"])
+    pad2 = reg.get("pad2")
+    assert isinstance(pad2, devices.PadDevice) and pad2.status == "lost" and pad2.io is not None
+    assert "devices: pad removed" in notes and "devices: pad2 changed — reopened" in notes
+    reg.close()
 
 
 # ---------------------------------------------------------------- the frame slots
@@ -143,18 +189,33 @@ def test_one_devices_exception_never_stops_the_frame():
 
 # ---------------------------------------------------------------- opening, retrying, closing
 
-def test_a_device_that_would_not_open_is_an_error_line_said_once_and_tried_again():
+class Lost(Fake):
+    """An open device whose hardware is not there: it looks for it itself."""
+
+    @property
+    def status(self) -> str:
+        return "lost"
+
+
+def test_the_registry_retries_a_failed_open_and_a_lost_device_reconnects_itself():
+    """Whose job reconnect is: an `open` that raised is the registry's to
+    try again, on the Ports schedule; a device whose `open` returned and
+    reports `lost` reconnects itself (today's adapters do, inside their
+    own `poll`) — the registry never closes or reopens it."""
     log: list[str] = []
     notes: list[str] = []
     clock = SimpleNamespace(t=100.0)
     d = Fake("a", log, open_fails=True, opened=False)
-    reg = devices.DeviceRegistry(devices=[d], clock=lambda: clock.t, notes=notes)
-    reg.entries = [{"role": "a", "kind": "fake", "enabled": True}]
+    lost = Lost("b", log)
+    reg = devices.DeviceRegistry(devices=[d, lost], clock=lambda: clock.t, notes=notes)
+    reg.entries = [{"role": "a", "kind": "fake", "enabled": True},
+                   {"role": "b", "kind": "fake", "enabled": True}]
     seen: list[int] = []
     reg.listeners.append(lambda: seen.append(len(reg)))
     reg.open_all()
     assert d.status == "error: RuntimeError: no port" and notes == ["fake: no port"]
-    assert log == ["a.open"] and seen == [1]
+    assert log == ["a.open"] and seen == [2]
+    assert lost.status == "lost" and "b.open" not in log            # open, looking itself
     # tried again on the Ports schedule: 2 s, five times, then every 10 s
     tries = [100.0]
     for _ in range(8):
@@ -167,11 +228,13 @@ def test_a_device_that_would_not_open_is_an_error_line_said_once_and_tried_again
         assert log.count("a.open") == len(tries), tries
     assert notes == ["fake: no port"]                       # said once
     assert "a.poll" not in log                              # never polled while shut
+    assert "b.open" not in log and "b.close" not in log     # the lost one is left to itself…
+    assert log.count("b.poll") == 16                        # …and polled every frame
     d.open_fails = False
     clock.t += devices.RETRY_SLOW_S
     reg.poll(1 / 60, 0.0, router=object())
-    assert d.status == "connected" and seen == [1, 1]       # the listener re-points
-    assert log[-3:] == ["a.open", "a.poll", "a.act"]        # …and it runs this very frame
+    assert d.status == "connected" and seen == [2, 2]       # the listener re-points
+    assert log[-5:] == ["a.open", "a.poll", "a.act", "b.poll", "b.act"]   # …runs this very frame
 
 
 def test_the_close_list_is_every_device_last_listed_first_and_survives_a_broken_one():
@@ -197,6 +260,22 @@ def test_adapter_first_get_and_schemes():
     assert reg.first("fake") is a and reg.first("other") is b and reg.first("x") is None
     assert reg.adapter("fake") is a.io and reg.adapter("other") is None
     assert reg.schemes() == ("fake",)
+
+
+def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_order():
+    """What B2 hands the Router in place of `LANE_SCHEMES` / `SOURCE_ORDER`:
+    `lane` and `lfo` first, then the schemes the listed devices feed —
+    the pad's `axis` (not its `pad` / `hat` rows), the hands' `hand`, the
+    bridge's `ext`; MIDI feeds nothing; an `off` device's scheme is still
+    listed, so a preset row naming it is dormant, not unknown."""
+    io = SimpleNamespace(on=False, error="", last="", name="", profile=None, bindings=[])
+    reg = devices.DeviceRegistry(devices=[
+        devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
+        devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
+    assert devices.BUILTIN_SCHEMES == ("lane", "lfo")
+    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "hand", "ext")
+    assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "ext")
+    assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo")
 
 
 # ---------------------------------------------------------------- config.toml, watched
@@ -325,6 +404,8 @@ def test_the_pad_shim_polls_learns_and_delivers_rows_as_the_frame_did(monkeypatc
     assert calls == ["poll", ("learn", "other"), ("rows", True, True)]
     assert d.status == "connected" and d.last == "glfw"
     assert [p.name for p in d.sources][:6] == list(gamepad.AXES)
+    assert [p.address for p in d.sources][:6] == [f"axis:{n}" for n in gamepad.AXES]
+    assert "pad:A" in [p.address for p in d.sources] and "hat:UP" in [p.address for p in d.sources]
     assert [p.kind for p in d.sources].count("trigger") == len(gamepad.BUTTONS) + len(gamepad.HATS)
     assert {p.name: p.rest for p in d.sources if p.group == "sticks"} == {
         "LX": 0.5, "LY": 0.5, "RX": 0.5, "RY": 0.5}
@@ -372,6 +453,7 @@ def test_the_hands_shims_ports_are_the_layout():
     ports = d.sources
     assert len(ports) == io.layout.n == 22
     assert [p.name for p in ports] == io.layout.addresses
+    assert [p.address for p in ports] == [f"hand:{a}" for a in io.layout.addresses]
     assert [p.group for p in ports].count("axes") == io.layout.n_axes
     assert [p.group for p in ports].count("presence") == 2
     assert [p.group for p in ports].count("pinches") == 8
@@ -399,7 +481,8 @@ def test_the_bridge_shim_steps_with_the_live_analyzer_only_while_audio_runs():
     io.error = "read: gone"
     assert d.status == "error: read: gone"
     assert devices.BridgeDevice("b", {"in_lanes": 2}).sources == (
-        devices.Port("0", "ext 0", group="ext"), devices.Port("1", "ext 1", group="ext"))
+        devices.Port("0", "ext 0", group="ext", scheme="ext"),
+        devices.Port("1", "ext 1", group="ext", scheme="ext"))
 
 
 def test_the_midi_shim_polls_and_reads_its_status_off_the_ports():
@@ -407,19 +490,22 @@ def test_the_midi_shim_polls_and_reads_its_status_off_the_ports():
 
     calls: list = []
     io = SimpleNamespace(poll=lambda: calls.append("poll"), on=True, error="", name="Akai APC40",
-                         last="", profile=apc40)
+                         last="", profile=apc40, bindings=[1, 2])
     d = devices.MidiDevice("apc40", io=io)
     d.poll(1 / 60, 0.0)
     d.act(object())
     d.feed(object())
     assert calls == ["poll"]                                # rows and learn happen in poll
-    assert d.status == "connected" and d.last == "Akai APC40"
+    # the line keeps the port's name and the binding count the old MIDI line
+    # showed, then the last message once one has come
+    assert d.status == "connected" and d.last == "Akai APC40  ·  2 bindings"
     io.last = "cc 0 48 = 64"
-    assert d.last == "cc 0 48 = 64"
+    assert d.last == "Akai APC40  ·  2 bindings  ·  cc 0 48 = 64"
     ports = d.sources
     assert len(ports) == len(apc40.LAYOUT)
-    by = {p.name: p for p in ports}
+    by = {p.address: p for p in ports}
     assert by["cc:0:48"].kind == "value" and by["cc:0:48"].label == apc40.control_name("cc:0:48")
+    assert by["cc:0:48"].scheme == "cc" and by["cc:0:48"].name == "0:48"
     assert by["note:0:98"].kind == "trigger" and by["note:0:98"].velocity is True
     io.on = False
     assert d.status == "lost" and d.last == ""

@@ -310,7 +310,7 @@ def test_a_devices_list_wins_and_is_checked_per_entry(tmp_path, capsys):
     `cfg["midi"]` / `cfg["hands"]` say what the entry says."""
     p = tmp_path / "config.toml"
     p.write_text(
-        '[[devices]]\nrole = "apc40"\nkind = "midi"\nport = "APC"\n'
+        '[[devices]]\nrole = "apc40"\nkind = "midi"\n'
         '[[devices]]\nrole = "leap"\nkind = "hands"\ndofs = ["x"]\ncalibration = "c.json"\n'
         '[[devices]]\nrole = "phone"\nkind = "osc"\nhost = "0.0.0.0"\nenabled = "yes"\n'
         '[[devices]]\nrole = "x:y"\nkind = "midi"\n'
@@ -323,10 +323,12 @@ def test_a_devices_list_wins_and_is_checked_per_entry(tmp_path, capsys):
     got = config.devices(cfg)
     assert [(e["role"], e["kind"], e["enabled"]) for e in got] == [
         ("apc40", "midi", True), ("leap", "hands", True), ("phone", "osc", True)]
-    assert got[0]["port"] == "APC" and got[0]["profile"] == "apc40"       # defaults filled
+    # the defaults fill the entry's missing keys — the *defaults*, never the
+    # ignored [midi] table's `port = "ignored"`
+    assert got[0]["port"] is None and got[0]["profile"] == "apc40"
     assert got[1]["dofs"] == ["x"] and got[1]["calibration"] == str(tmp_path / "c.json")
     assert got[2] == {"role": "phone", "kind": "osc", "enabled": True, "host": "0.0.0.0"}
-    assert cfg["midi"]["port"] == "APC" and cfg["midi"]["enabled"] is True
+    assert cfg["midi"]["port"] is None and cfg["midi"]["enabled"] is True
     assert cfg["hands"]["dofs"] == ["x"] and cfg["hands"]["enabled"] is True
     assert cfg["hands"]["calibration"] == str(tmp_path / "c.json")
     assert cfg["gamepad"]["enabled"] is False and cfg["bridge"]["enabled"] is False
@@ -373,6 +375,11 @@ def test_read_devices_reports_problems_and_prints_nothing(tmp_path, capsys):
     assert problems == ["config: [[devices]] entry 2: role 'a' is listed twice — the second dropped"]
     p.write_text("[[devices\n")
     entries, problems = config.read_devices(p)
-    assert len(problems) == 1 and problems[0].startswith("config: ")
-    assert [e["role"] for e in entries] == ["pad", "apc40", "leap", "bridge"]   # the defaults
+    assert len(problems) == 1 and problems[0].startswith("config: ") and entries == []
+    # an error elsewhere in the file (a scalar where a table should be) is
+    # not the list's problem: the list still applies
+    p.write_text('midi = true\n[[devices]]\nrole = "a"\nkind = "midi"\n')
+    entries, problems = config.read_devices(p)
+    assert [e["role"] for e in entries] == ["a"] and problems == []
+    assert "[midi] must be a table" in config.load(p)["error"]
     assert capsys.readouterr().err == ""

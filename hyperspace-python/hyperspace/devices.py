@@ -14,11 +14,15 @@ module, each imported lazily inside its device's `open`, so importing
 `app` imports none of them (tests/test_app_boundary.py).
 
 **Roles, not serials** (decision 11): an entry has a `role` — `apc40`,
-`pad`, `leap`, `wand1` — and the role is what source strings and rows
-name. For a new device the role is its scheme (`phone:x`); today's
-devices keep the schemes their rows already use (`hand`, `axis` / `pad` /
-`hat`, `ext`, `cc` / `note` / `pitch`), so every existing row is
-unchanged. A role contains no ``:``.
+`pad`, `leap`, `wand1` — the name the SYSTEM page, the notes and (from
+B2) a MIDI row's qualifier use. A role contains no ``:``. **For today's
+devices the role is not the scheme:** a preset names a *scheme*
+(`hand:right.roll`, `axis:LX`, `ext:3`, `cc:0:48`) and the device's
+`schemes` tuple says which schemes its role publishes, so every existing
+row is unchanged whatever the entry is called. A new device (B4's OSC)
+publishes under its role. Two enabled devices may not claim one scheme:
+the Router holds one vector per scheme, so the later entry is refused
+with a note naming both roles (`RefusedDevice`).
 
 **Two signal kinds** (decision 13): a port is a *value* (an axis, a
 fader, a lane) or a *trigger* (a hit, a button, a pad — with a velocity
@@ -36,11 +40,15 @@ sinks (B3). One device's exception never stops the frame: it is recorded
 on the device (`status = "error: …"`) and on the registry (`error`, the
 hot-reload toast), and the next device runs.
 
-**Coming and going.** A device that would not open is `error: …`, said
-once (stderr and the config notes), and opened again on the `Ports`
-schedule (midi.py: every 2 s five times, then every 10 s). A device whose
-hardware left is `lost` and reconnects itself (`midi.Ports.retry`, the
-pad's rescan, the hands' port). The registry watches `config.toml`'s
+**Coming and going — whose job reconnect is.** The registry retries a
+device whose `open()` *raised*: `error: …`, said once (stderr and the
+config notes), opened again on the `Ports` schedule (midi.py: every 2 s
+five times, then every 10 s). A device whose `open()` returned but whose
+hardware is not there reports `lost` and **reconnects itself** on its own
+schedule — today's adapters do (`midi.Ports.retry`, the pad's GLFW poll
+and USB rescan, the hands' Leap thread and DAW port), and a B2 / B4
+device must too; the registry never closes or reopens a `lost` device
+(a `Ports` of its own inside `poll` is the pattern). The registry watches `config.toml`'s
 mtime every `WATCH_FRAMES` frames and re-reads only the device list,
 closing what left and opening what arrived; a bad edit is a note and the
 old list stands.
@@ -62,6 +70,7 @@ RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
 WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
+BUILTIN_SCHEMES = ("lane", "lfo")           # fed by the analyzer and the LFOs, not a device
 
 
 def retry_after(misses: int) -> float:
@@ -74,13 +83,14 @@ def retry_after(misses: int) -> float:
 class Port:
     """One source (or, from B3, one sink) a device publishes — what the
     node editor (plan 28) draws a device from, so there is no second
-    description of it. `name` is the address after the scheme
-    (``hand:right.roll`` → ``right.roll``; ``cc:0:48`` for a MIDI
-    control, whose scheme is in the name); `kind` is ``value`` or
-    ``trigger``; `rest` where a value idles; `bipolar` a value centred on
-    its rest; `velocity` a trigger that carries one; `group` folds a
-    long list (the APC40's hundred controls); `layer` the device layer
-    the port belongs to ("" = every layer)."""
+    description of it. `scheme` is the Router scheme the port lives under
+    (`hand`, `axis`, `cc`), `name` the address after it (``right.roll``,
+    ``LX``, ``0:48``), and `address` the row's source string,
+    ``scheme:name`` — a cable can be built from a port. `kind` is
+    ``value`` or ``trigger``; `rest` where a value idles; `bipolar` a
+    value centred on its rest; `velocity` a trigger that carries one;
+    `group` folds a long list (the APC40's hundred controls); `layer` the
+    device layer the port belongs to ("" = every layer)."""
 
     name: str
     label: str
@@ -90,15 +100,26 @@ class Port:
     velocity: bool = False
     group: str = ""
     layer: str = ""
+    scheme: str = ""
+
+    @property
+    def address(self) -> str:
+        """The source string a row names: ``scheme:name``."""
+        return f"{self.scheme}:{self.name}" if self.scheme else self.name
 
 
 @runtime_checkable
 class Device(Protocol):
-    """What the registry asks of a device. `role` names it in rows and on
-    the SYSTEM page; `kind` is its `[[devices]]` kind; `schemes` the
-    Router keys it publishes under (a new device's is its role);
-    `status` one of `connected`, `lost`, `off` or ``error: <why>``;
-    `last` the last thing seen, for the status line. `poll` reads the
+    """What the registry asks of a device. `role` names it on the SYSTEM
+    page and in the notes; `kind` is its `[[devices]]` kind; `schemes`
+    the Router keys it publishes under (a new device's is its role;
+    today's keep the schemes their rows use) and `feeds` the subset it
+    feeds continuous vectors under (the pad's `axis`, not its `pad` /
+    `hat` rows; MIDI feeds nothing); `status` one of `connected`, `lost`,
+    `off` or ``error: <why>``; `last` the last thing seen, for the status
+    line. Reconnecting is the device's own job once `open` returned: a
+    `lost` device looks for its hardware itself (as `midi.Ports` does);
+    the registry retries only an `open` that raised. `poll` reads the
     hardware and, for a scene-setting device, applies its rows; `learn`
     offers a moved axis or a pressed button to an armed Learn and says
     whether a press was the learn's; `act` delivers the rest of this
@@ -109,6 +130,7 @@ class Device(Protocol):
     role: str
     kind: str
     schemes: tuple[str, ...]
+    feeds: tuple[str, ...]
     layers: tuple[str, ...]
 
     @property
@@ -162,6 +184,7 @@ class Base:
 
     kind = ""
     schemes: tuple[str, ...] = ()
+    feeds: tuple[str, ...] = ()
     layers: tuple[str, ...] = ()
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
@@ -224,6 +247,9 @@ class OffDevice(Base):
                  ctx: Context | None = None):
         super().__init__(role, entry, ctx)
         self.kind = kind
+        cls = KINDS.get(kind)       # its kind's schemes, so a row naming it stays dormant, not unknown
+        if cls is not None:
+            self.schemes, self.feeds = cls.schemes, cls.feeds
 
     @property
     def status(self) -> str:
@@ -241,6 +267,19 @@ class UnknownDevice(Base):
         self.error = f"unknown kind {kind!r}"
 
 
+class RefusedDevice(Base):
+    """An enabled entry that claims a scheme an earlier enabled entry
+    already publishes: never opened (two devices feeding one Router key
+    would overwrite each other every frame), an error line naming the
+    other role, as if ``enabled = false``."""
+
+    def __init__(self, role: str, kind: str, scheme: str, other: str,
+                 entry: dict | None = None, ctx: Context | None = None):
+        super().__init__(role, entry, ctx)
+        self.kind = kind
+        self.error = f"claims {scheme!r}, which {other} already publishes — not opened"
+
+
 # ---- the four shims over today's adapters ----
 
 class MidiDevice(Base):
@@ -251,6 +290,7 @@ class MidiDevice(Base):
 
     kind = "midi"
     schemes = ("cc", "note", "pitch")
+    feeds = ()                  # MIDI is never a feed source: every message is a row
 
     def open(self) -> None:
         from . import midi
@@ -269,10 +309,14 @@ class MidiDevice(Base):
 
     @property
     def last(self) -> str:
+        """The port's name and the table's binding count (what the old
+        MIDI line showed), then the last message when one has come."""
         io = self.io
         if io is None or io.error or not io.on:
             return ""
-        return io.last or io.name
+        n = len(getattr(io, "bindings", ()) or ())
+        head = f"{io.name}  ·  {n} binding{'' if n == 1 else 's'}"
+        return f"{head}  ·  {io.last}" if io.last else head
 
     @property
     def sources(self) -> tuple[Port, ...]:
@@ -284,9 +328,10 @@ class MidiDevice(Base):
         out = []
         for c in layout:
             button = c.kind in ("button", "grid")
-            out.append(Port(c.source, name(c.source) or c.source,
+            scheme, _, rest = c.source.partition(":")
+            out.append(Port(rest, name(c.source) or c.source,
                             kind="trigger" if button else "value",
-                            velocity=button, group=c.kind))
+                            velocity=button, group=c.kind, scheme=scheme))
         return tuple(out)
 
     def poll(self, dt: float, now: float) -> None:
@@ -305,6 +350,7 @@ class PadDevice(Base):
 
     kind = "gamepad"
     schemes = ("axis", "pad", "hat")
+    feeds = ("axis",)
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
@@ -337,10 +383,10 @@ class PadDevice(Base):
     def sources(self) -> tuple[Port, ...]:
         from . import gamepad as g
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
-                     group="sticks" if n in g.STICKS else "triggers")
+                     group="sticks" if n in g.STICKS else "triggers", scheme="axis")
                 for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True)]
-        buttons = [Port(f"pad:{n}", n, kind="trigger", group="buttons") for n in g.BUTTONS]
-        hats = [Port(f"hat:{n}", f"D-pad {n.lower()}", kind="trigger", group="d-pad")
+        buttons = [Port(n, n, kind="trigger", group="buttons", scheme="pad") for n in g.BUTTONS]
+        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme="hat")
                 for n in g.HATS]
         return tuple(axes + buttons + hats)
 
@@ -375,6 +421,7 @@ class HandsDevice(Base):
 
     kind = "hands"
     schemes = ("hand",)
+    feeds = ("hand",)
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
@@ -418,11 +465,11 @@ class HandsDevice(Base):
         for i, (addr, label) in enumerate(zip(lay.addresses, lay.names, strict=True)):
             if i < lay.n_axes:
                 out.append(Port(addr, label, rest=rests[i], bipolar=bool(axes[i].bipolar),
-                                group="axes"))
+                                group="axes", scheme="hand"))
             elif i in gates:
-                out.append(Port(addr, label, group="pinches"))
+                out.append(Port(addr, label, group="pinches", scheme="hand"))
             else:
-                out.append(Port(addr, label, group="presence"))
+                out.append(Port(addr, label, group="presence", scheme="hand"))
         return tuple(out)
 
     def poll(self, dt: float, now: float) -> None:
@@ -447,6 +494,7 @@ class BridgeDevice(Base):
 
     kind = "bridge"
     schemes = ("ext",)
+    feeds = ("ext",)
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None, audio=None):
@@ -477,7 +525,7 @@ class BridgeDevice(Base):
     def sources(self) -> tuple[Port, ...]:
         io = self.io
         n = int(io.decoder.n) if io is not None else int(self.entry.get("in_lanes", 0) or 0)
-        return tuple(Port(str(i), f"ext {i}", group="ext") for i in range(n))
+        return tuple(Port(str(i), f"ext {i}", group="ext", scheme="ext") for i in range(n))
 
     def feed(self, router) -> None:
         if self.io is None:
@@ -500,17 +548,32 @@ KINDS: dict[str, type[Base]] = {
 }
 
 
-def make(entry: dict, ctx: Context | None = None) -> Base:
+def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None) -> Base:
     """A device for one checked `[[devices]]` entry (config.devices):
     `OffDevice` when it is not enabled, `UnknownDevice` for a kind the
-    table lacks. Nothing is opened here."""
+    table lacks, `RefusedDevice` when an earlier enabled entry already
+    publishes one of its schemes (`claimed`: scheme → role, filled here
+    for the next entry). Nothing is opened here."""
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
     if not entry.get("enabled", True):
         return OffDevice(role, kind, entry, ctx)
     cls = KINDS.get(kind)
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
+    if claimed is not None:
+        for scheme in cls.schemes:
+            if scheme in claimed and claimed[scheme] != role:
+                return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
+        for scheme in cls.schemes:
+            claimed[scheme] = role
     return cls(role, entry, ctx)
+
+
+def make_all(entries: list[dict], ctx: Context | None = None) -> list[Base]:
+    """One device per entry, in order, each later entry refused the
+    schemes an earlier enabled one claims."""
+    claimed: dict[str, str] = {}
+    return [make(e, ctx, claimed) for e in entries]
 
 
 def _err(where: str, e: Exception) -> str:
@@ -535,8 +598,8 @@ class DeviceRegistry:
         self.path = Path(path) if path is not None else None
         self.clock = clock
         self.entries: list[dict] = [dict(e) for e in (entries or [])]
-        self.devices: list = list(devices) if devices is not None else [
-            make(e, self.ctx) for e in self.entries]
+        self.devices: list = list(devices) if devices is not None else make_all(
+            self.entries, self.ctx)
         self.listeners: list = []
         self.error = ""              # this frame's first device error (the toast)
         # a device handed in with its adapter (tests, the frame-order stubs) is open
@@ -573,6 +636,19 @@ class DeviceRegistry:
         out: list[str] = []
         for d in self.devices:
             for s in getattr(d, "schemes", ()):
+                if s not in out:
+                    out.append(s)
+        return tuple(out)
+
+    def continuous_schemes(self) -> tuple[str, ...]:
+        """The schemes a route can read as a lane, in offer order: the
+        built-in `lane` (the analyzer) and `lfo` first, then each listed
+        device's `feeds` in list order (an `off` device's too, so a preset
+        row naming it stays a dormant route, not an unknown one). What B2
+        hands the Router in place of `LANE_SCHEMES` / `SOURCE_ORDER`."""
+        out = list(BUILTIN_SCHEMES)
+        for d in self.devices:
+            for s in getattr(d, "feeds", ()):
                 if s not in out:
                     out.append(s)
         return tuple(out)
@@ -617,10 +693,11 @@ class DeviceRegistry:
         `error`, said once, and the next try is scheduled (`retry_after`)."""
         if d.role in self._opened:
             return True
-        if d.status == "off" or isinstance(d, UnknownDevice):
-            if isinstance(d, UnknownDevice) and d.role not in self._retry:
+        if d.status == "off" or isinstance(d, UnknownDevice | RefusedDevice):
+            if d.role not in self._retry and not isinstance(d, OffDevice):
                 self._retry[d.role] = (0, float("inf"))
-                self._note(f"config: [[devices]] {d.role}: {d.error} — not opened")
+                self._note(f"config: [[devices]] {d.role}: {d.error}"
+                           + ("" if isinstance(d, RefusedDevice) else " — not opened"))
             return False
         try:
             d.open()
@@ -746,19 +823,23 @@ class DeviceRegistry:
         new = [dict(e) for e in entries]
         old = {e["role"]: e for e in self.entries}
         have = {d.role: d for d in self.devices}
+        fresh = {d.role: d for d in make_all(new, self.ctx)}
         changed = False
         devices = []
         for e in new:
             role = e["role"]
-            if role in have and old.get(role) == e:
+            kept = have.get(role)
+            # unchanged, and refused or not exactly as before: the device stays
+            if kept is not None and old.get(role) == e and (
+                    isinstance(kept, RefusedDevice) == isinstance(fresh[role], RefusedDevice)):
                 devices.append(have.pop(role))
                 continue
-            if role in have:
+            if kept is not None:
                 self._close(have.pop(role))
                 self._note(f"devices: {role} changed — reopened")
             else:
                 self._note(f"devices: {role} added")
-            devices.append(make(e, self.ctx))
+            devices.append(fresh[role])
             changed = True
         for role, d in have.items():
             self._close(d)
