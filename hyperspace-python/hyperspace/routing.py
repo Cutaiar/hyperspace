@@ -294,19 +294,31 @@ MIDI_SCHEMES = ("cc", "note", "pitch")
 # (`Router.schemes`, devices.DeviceRegistry.continuous_schemes): there is
 # no fixed list of them here
 ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
-# a MIDI source's device qualifier (plan 27 B2): ``cc@<role>:<ch>:<n>``,
-# ``note@<role>:<ch>:<n>``, ``pitch@<role>:<ch>`` — the row of a MIDI device
-# other than the first one listed. An unqualified source is the first MIDI
-# role's (`Bindings.midi_roles`), so every row written before plan 27 means
-# what it meant. The qualifier adds no ``:`` (a role has none)
+# a source's device qualifier (plan 27 B2 for MIDI, B6 for every scheme):
+# ``cc@<role>:<ch>:<n>``, ``pitch@<role>:<ch>``, ``pad@<role>:A``,
+# ``axis@<role>:LX`` — the row of a device other than the first one listed
+# that publishes the scheme. An unqualified source is that first device's
+# (MIDI: `Bindings.midi_roles`, the profile-matching rule B2 built; any
+# other scheme: `Bindings.primaries`, the first enabled device of its kind
+# in list order), so every row written before plan 27 means what it meant.
+# The qualifier adds no ``:`` (a role has none). For a continuous scheme
+# the qualified head (``axis@p2``) is its own Router key — its own feed,
+# labels, rests and names — so two pads never overwrite each other
 QUALIFIER = "@"
 
 
 def base_scheme(scheme: str) -> str:
-    """A scheme without its device qualifier: ``cc@launch`` → ``cc``. Only
-    a MIDI scheme takes one; any other scheme is returned as it is."""
+    """A scheme without its device qualifier: ``cc@launch`` → ``cc``,
+    ``axis@p2`` → ``axis`` (plan 27 B6: any scheme takes one); a scheme
+    with none is returned as it is."""
     head, at, _ = scheme.partition(QUALIFIER)
-    return head if at and head in MIDI_SCHEMES else scheme
+    return head if at else scheme
+
+
+def qualified(scheme: str, role: str) -> str:
+    """`scheme` under the device qualifier `role` (``axis`` + ``p2`` →
+    ``axis@p2``); "" leaves it bare — the primary device's (plan 27 B6)."""
+    return f"{scheme}{QUALIFIER}{role}" if role else scheme
 
 
 def is_continuous(scheme: str) -> bool:
@@ -607,17 +619,24 @@ class Binding:
 
     @property
     def scheme(self) -> str:
-        """The source's scheme — a MIDI row's without its device qualifier
-        (``cc@launch:0:7`` → ``cc``; `device` holds the role)."""
-        return base_scheme(self.source.split(":", 1)[0])
+        """The source's scheme without its device qualifier (``cc@launch:0:7``
+        → ``cc``, ``axis@p2:LX`` → ``axis``; `device` holds the role)."""
+        return base_scheme(self.head)
+
+    @property
+    def head(self) -> str:
+        """The source before its first ``:``, qualifier and all
+        (``axis@p2``): the Router key a continuous row reads its lane
+        under (plan 27 B6)."""
+        return self.source.split(":", 1)[0]
 
     @property
     def device(self) -> str:
-        """A MIDI row's device qualifier — the role after ``@`` — or ""
-        for an unqualified row, the first MIDI role's (`Bindings.role_of`)."""
-        head = self.source.split(":", 1)[0]
-        base, at, role = head.partition(QUALIFIER)
-        return role if at and base in MIDI_SCHEMES else ""
+        """The row's device qualifier — the role after ``@`` — or "" for
+        an unqualified row, the scheme's primary device's
+        (`Bindings.role_of`). Any scheme takes one (plan 27 B6)."""
+        _, at, role = self.head.partition(QUALIFIER)
+        return role if at else ""
 
     @property
     def parts(self) -> list[str]:
@@ -789,10 +808,11 @@ class Binding:
             extra = "" if self.op in ("abs", "toggle") else f" {self.op}"
             return f"MIDI {what} {self.number} {ch}{on}{extra}"
         addr = ":".join(self.parts)
+        on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
         if s == "hat":
-            return f"d-pad {addr}"
+            return f"d-pad {addr}{on}"
         lane = is_continuous(s)
-        who = name if name and lane else f"{s} {addr}"
+        who = (name if name and lane else f"{s} {addr}") + on
         if lane and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
             when = f" while {gate or self.when}" if self.when else ""
@@ -1628,6 +1648,12 @@ class Bindings:
     # Empty — a bare table, the tests' — every unqualified row is the
     # one desk's, as before
     midi_roles: tuple[str, ...] = ()
+    # every other scheme's primary device (plan 27 B6; the registry sets
+    # it, `DeviceRegistry.primaries`): scheme → the role of the first
+    # enabled device of its kind in list order, whose rows are unqualified
+    # (``pad:A`` is the first pad's; a second pad's carry its role,
+    # ``pad@p2:A``). Empty — a bare table — names no role
+    primaries: dict[str, str] = {}  # noqa: RUF012 — never mutated: replaced whole
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
     row_schemes: tuple[str, ...] = ROW_SCHEMES
@@ -1930,9 +1956,14 @@ class Bindings:
         return not role or not roles or role == roles[0]
 
     def role_of(self, b: Binding) -> str:
-        """The MIDI role a row belongs to: its qualifier, else the first
-        role's."""
-        return b.device or self.primary_role()
+        """The role a row belongs to: its qualifier, else — a MIDI row —
+        the first MIDI role's, or — any other row (plan 27 B6) — its
+        scheme's primary device's (`primaries`; "" when told none)."""
+        if b.device:
+            return b.device
+        if b.is_midi:
+            return self.primary_role()
+        return getattr(self, "primaries", {}).get(b.scheme, "")
 
     def serves(self, role: str | None, b: Binding) -> bool:
         """Is MIDI row `b` the device of `role`'s? An unqualified row is the
@@ -2387,6 +2418,9 @@ class Router:
         roles = getattr(devs, "midi_roles", None)
         if roles is not None:
             self.table.midi_roles = tuple(roles())
+        prim = getattr(devs, "primaries", None)
+        if prim is not None:
+            self.table.primaries = dict(prim())
 
     def schemes(self) -> tuple[str, ...]:
         """The continuous schemes a route can read, in the order a page
@@ -2556,7 +2590,8 @@ class Router:
                 if b.modifiers == chord:
                     act(self.reg, b)
 
-    def pad(self, pad, now: float | None = None, *, buttons: bool = True) -> None:
+    def pad(self, pad, now: float | None = None, *, buttons: bool = True,
+            role: str = "") -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
@@ -2565,20 +2600,28 @@ class Router:
         `hold` row fires once its button has been down HOLD_S (`now`, a
         monotonic clock; a shorter press does nothing). The axes' names,
         labels and rests are the pad's to publish (`pad.publish`, plan 27
-        B2: gamepad.publish), not this table's."""
+        B2: gamepad.publish), not this table's.
+
+        `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
+        — the unqualified rows and the `axis` lanes, as ever — or a second
+        pad's role, whose lanes are ``axis@<role>`` and whose rows are
+        those qualified with it (``pad@p2:A``); each pad hears only its own."""
+        axis = qualified("axis", role)
         publish = getattr(pad, "publish", None)
         if publish is not None:
-            publish(self)
-        self.feed("axis", pad.lanes() if pad.on else None)
-        holds = self.__dict__.setdefault("_pad_holds", {})   # source → press time; None once fired
+            publish(self, axis) if role else publish(self)
+        self.feed(axis, pad.lanes() if pad.on else None)
+        # source → press time (None once fired), one dict per pad
+        holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
+                 self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
         if not pad.on:
             holds.clear()
-            self.felt("axis", None, 0.0)     # the camera job's followers start afresh
+            self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
         for b in self.table.of("pad", "hat"):
             code = self._code(b)
-            if code is None or not b.enabled:
+            if code is None or not b.enabled or b.device != role:
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
@@ -2665,8 +2708,9 @@ class Router:
     def source_feel(self, scheme: str) -> Motion:
         """A scheme's own feel: the pad's (`table.pad_feel`) for `axis`,
         none for every other source — the analyzer's lanes have theirs in
-        the chain already, a hand has its own smoothing."""
-        return getattr(self.table, "pad_feel", OFF) if scheme == "axis" else OFF
+        the chain already, a hand has its own smoothing. One feel for every
+        pad (plan 27 B6): ``axis@p2`` travels with it too."""
+        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
 
     def feel_of(self, b: Binding) -> Motion:
         """The motion row `b` runs on its reading: its own, or its source's."""

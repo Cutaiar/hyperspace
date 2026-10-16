@@ -292,9 +292,10 @@ class Pad:
         joysticks, then libusb when `usb` is on). Here so the pad answers
         the device protocol's `open` / `poll` / `close` itself."""
 
-    def publish(self, router) -> None:
-        """The axes' names, labels and rests on the router (`publish`)."""
-        publish(router)
+    def publish(self, router, scheme: str = "axis") -> None:
+        """The axes' names, labels and rests on the router (`publish`),
+        under `scheme` (a second pad's ``axis@p2``)."""
+        publish(router, scheme)
 
     def poll(self) -> None:
         source = getattr(self, "source", None)
@@ -413,16 +414,17 @@ def learn_from(pad: Pad, learn) -> bool:
     return False
 
 
-def publish(router) -> None:
+def publish(router, scheme: str = "axis") -> None:
     """The `axis` lanes' names, labels and rests on `router` (its `names`,
     `labels`, `rests` dicts, duck-typed) — the pad's to say, not the
     table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
-    map is published as one new dict, so the router's address cache keeps."""
-    if "axis" in router.names:
+    map is published as one new dict, so the router's address cache keeps.
+    `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
+    if scheme in router.names:
         return
-    router.labels["axis"] = list(AXIS_LABELS)
-    router.rests["axis"] = list(AXIS_RESTS)
-    router.names["axis"] = {n: i for i, n in enumerate(AXES)}
+    router.labels[scheme] = list(AXIS_LABELS)
+    router.rests[scheme] = list(AXIS_RESTS)
+    router.names[scheme] = {n: i for i, n in enumerate(AXES)}
 
 
 def ride_depth(p, octaves: float) -> None:

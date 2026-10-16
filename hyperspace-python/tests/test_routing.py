@@ -2408,3 +2408,114 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     out, notes = routing.remap_factory([wild])
     added = [b.source for b in out if b.target == "preset.select"]
     assert added == far[:8] and wild in out
+
+
+# ---------------------------------------------------------------- plan 27 B6: the general qualifier
+
+def test_the_qualifier_is_general_any_scheme_takes_a_role():
+    """Plan 27 B6 (the general qualifier): a source head may carry
+    ``@<role>`` for any scheme, not only MIDI's. The base scheme, the
+    role, the bare source and whether it is continuous read the same way
+    for a second pad's rows as for a second desk's; an unqualified row
+    means the scheme's primary device — the first one listed."""
+    assert routing.base_scheme("axis@p2") == "axis"
+    assert routing.base_scheme("pad@p2") == "pad"
+    assert routing.base_scheme("hat@p2") == "hat"
+    assert routing.base_scheme("axis") == "axis"
+    b = Binding("pad@p2:A", "view.faces", "toggle")
+    assert (b.scheme, b.device, b.bare, b.parts) == ("pad", "p2", "pad:A", ["A"])
+    a = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert (a.scheme, a.device, a.bare, a.is_performer) == ("axis", "p2", "axis:LX", True)
+    assert a.head == "axis@p2" and Binding("axis:LX", "x", "push").head == "axis"
+    assert routing.is_continuous("axis@p2") and not routing.is_continuous("pad@p2")
+    assert not routing.is_continuous("hat@p2")
+    plain = Binding("pad:A", "view.faces", "toggle")
+    assert plain.device == "" and plain.bare == "pad:A"
+    # the qualified head is its own Router key: a lane, a label, a rest
+    assert routing.qualified("axis", "p2") == "axis@p2" and routing.qualified("axis", "") == "axis"
+    # the MIDI cases, as B2 built them (copied from test_device_inputs)
+    m = Binding("cc@launch:0:7", "view.bright", "abs")
+    assert (m.scheme, m.kind, m.device, m.channel, m.number) == ("cc", "cc", "launch", 0, 7)
+    assert m.is_midi and not m.is_performer and m.bare == "cc:0:7"
+    assert m.describe() == "MIDI CC 7 ch1 on launch"
+    assert routing.base_scheme("cc@launch") == "cc"
+    assert not routing.is_continuous("cc@launch") and not routing.is_continuous("pad")
+    # a qualified non-MIDI row never looks like a desk's
+    assert not b.is_midi and b.kind is None and not b.overlaps(Binding("pad:A", "x"))
+    # the row says whose it is
+    assert "on p2" in a.describe() and "on p2" in b.describe()
+    assert "on p2" not in plain.describe()
+
+
+def test_an_unqualified_pad_row_is_the_primary_pads():
+    """`Bindings.primaries` (scheme → role, the registry's `primaries`):
+    an unqualified non-MIDI row is the first listed device's that
+    publishes its scheme; a qualified one its qualifier's. MIDI keeps
+    `midi_roles` exactly as B2 built it."""
+    t = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                  Binding("pad@p2:A", "view.points", "toggle"),
+                  Binding("cc:0:7", "view.speed", "abs")])
+    assert t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[0]) == ""                 # a bare table: told none
+    t.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    t.midi_roles = ("apc40",)
+    assert t.role_of(t.bindings[0]) == "pad" and t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[2]) == "apc40"            # MIDI: the first MIDI role, as ever
+
+
+class TwoPadsPad(FakePad):
+    """FakePad with edges and a publish, so a frame can be held."""
+
+    def __init__(self):
+        super().__init__()
+        self.prev: set[int] = set()
+
+    def publish(self, router, scheme="axis"):
+        from hyperspace import gamepad
+        gamepad.publish(router, scheme)
+
+    def pressed(self, b: int) -> bool:
+        return b in self.hits and b not in self.prev
+
+    def down(self, b: int) -> bool:
+        return b in self.hits
+
+    def lanes(self) -> list[float]:
+        return [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
+
+
+def test_the_router_keeps_two_pads_apart(tmp_path):
+    """`Router.pad(…, role=)`: a second pad feeds `axis@p2`, publishes its
+    labels there, and fires only its own qualified rows; the primary's
+    unqualified rows hear only the primary pad. One feel for every pad."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                      Binding("pad@p2:A", "view.points", "toggle")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces, points = r.reg["view.faces"].value, r.reg["view.points"].value
+    two.hits = {gp.A}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces and r.reg["view.points"].value != points
+    assert router.labels["axis@p2"] == list(gp.AXIS_LABELS) and "axis" in router.labels
+    assert float(router.feeds["axis@p2"][5]) == 1.0
+    assert router.lane("axis@p2:RT") == ("axis@p2", 5)
+    points = r.reg["view.points"].value
+    one.hits = {gp.A}
+    two.prev = {gp.A}
+    router.pad(one, now=0.1)
+    router.pad(two, now=0.1, role="p2")
+    assert r.reg["view.faces"].value != faces and r.reg["view.points"].value == points
+    two.on = False
+    router.pad(two, now=0.2, role="p2")
+    assert router.feeds["axis@p2"] is None and router.feeds["axis"] is not None
+    # the pad's feel is one set, applied to every pad
+    assert router.source_feel("axis@p2") == router.source_feel("axis")
+    a2 = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert router.feel_of(a2) == router.source_feel("axis")
+    # the primary's camera job counts only its own axes as claimed
+    table.add(a2)
+    assert router.claimed("axis") == set() and router.claimed("axis@p2") == {0}

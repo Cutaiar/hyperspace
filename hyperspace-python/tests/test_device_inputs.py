@@ -212,8 +212,10 @@ def test_a_qualified_source_is_its_roles_and_adds_no_colon():
     assert not b.overlaps(plain) and not plain.overlaps(b)
     assert b.overlaps(Binding("cc@launch:*:7", "view.speed", "abs"))
     assert b.matches("cc", 0, 7)                     # (the table picks the device: `serves`)
-    # a scheme that is not MIDI takes no qualifier: it stays one scheme
-    assert Binding("hand@x:1", "x", "push").scheme == "hand@x"
+    # plan 27 B6: any scheme takes the qualifier (it was MIDI's only), and
+    # the qualified head stays the Router key its lanes are read under
+    h = Binding("hand@x:1", "x", "push")
+    assert (h.scheme, h.device, h.head, h.bare) == ("hand", "x", "hand@x", "hand:1")
     assert routing.is_continuous("hand") and routing.is_continuous("osc")
     assert not routing.is_continuous("cc@launch") and not routing.is_continuous("pad")
 
