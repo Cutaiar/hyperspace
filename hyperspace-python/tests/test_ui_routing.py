@@ -1292,3 +1292,89 @@ def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, mon
     ui_routing._state(rig.panel)["find"] = "bridge:2"
     n, m = ui_routing.found(rig.panel, router)
     assert m >= 2 and n >= 1
+
+
+# ------------------------------- review: the page's cost a frame (35 fps → full rate)
+
+def test_the_routing_page_builds_its_source_list_once_a_draw(rig, monkeypatch):
+    """The source combo's list is the same for every route row: the page
+    builds it once a draw, not once a row (21 rows × every binding per
+    scheme was 5 ms a frame on the rig)."""
+    _many_routes(rig, 12)
+    calls = []
+    real = ui_routing._sources
+
+    def counted(panel, router):
+        calls.append(1)
+        return real(panel, router)
+    monkeypatch.setattr(ui_routing, "_sources", counted)
+    frame(rig.panel, "routing")
+    frame(rig.panel)
+    assert len(rig.router.table.routes()) >= 12
+    assert len(calls) == 2
+
+
+def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
+        rig, tmp_path, monkeypatch):
+    """`unmapped` (the desk's dark lines) is a pairwise scan of the table:
+    9.5 ms a frame on ROUTING. It is remembered against what decides it —
+    the profile and each row's source, layer, enabled flag (and target) —
+    so two draws of an unchanged table work it out once, and a Learn, a
+    flipped row, a preset load or another profile each work it out again,
+    with the same answer as a fresh scan."""
+    from test_presets import put
+
+    from hyperspace import apc40
+    from hyperspace.learn import Learn
+
+    panel, lib, table = rig.panel, rig.lib, rig.router.table
+    real = ui_routing.preset_controls
+    calls = []
+
+    def counted(t):
+        calls.append(1)
+        return real(t)
+    monkeypatch.setattr(ui_routing, "_DARK", {})           # nothing remembered yet
+    monkeypatch.setattr(ui_routing, "preset_controls", counted)
+
+    def fresh() -> list[str]:
+        rows = table.desk()
+        return [f.source for f in real(table) if not any(b.overlaps(f) for b in rows)]
+
+    def dark() -> list[str]:
+        return [f.source for f in ui_routing.unmapped(table)]
+
+    frame(panel, "routing")
+    frame(panel)
+    assert len(calls) == 1 and dark() == fresh() and len(calls) == 1
+    # the same rows as new objects: nothing to work out again
+    table.bindings = [replace(b) for b in table.bindings]
+    frame(panel)
+    assert len(calls) == 1
+    # (a) a Learn lands a desk row on a dark control
+    first = dark()[0]
+    lrn = panel.learn = Learn(rig.reg, table)
+    lrn.arm("view.depth4", "desk")
+    assert lrn.learn_control(first, apc40)
+    frame(panel)
+    assert len(calls) == 2 and first not in dark() and dark() == fresh()
+    # (b) a session row on a dark control makes it invariant; its enabled
+    # flag flipped off gives the control back to the preset
+    ctl = dark()[0]
+    row = table.add(Binding(ctl, "view.bright", "abs"))
+    frame(panel)
+    assert len(calls) == 3 and ctl not in dark() and dark() == fresh()
+    table.enable(row, False)
+    frame(panel)
+    assert len(calls) == 4 and ctl in dark() and dark() == fresh()
+    # (c) a preset load replaces the desk
+    nxt = next(c for c in dark() if c != ctl)
+    put(tmp_path, "SHOW", desk=[{"source": nxt, "target": "view.speed", "op": "abs"}])
+    lib.load("presets", "SHOW")
+    frame(panel)
+    assert len(calls) == 5 and nxt not in dark() and first in dark()
+    assert dark() == fresh()
+    # (d) another profile: no factory map, nothing dark
+    table.profile = "none"
+    frame(panel)
+    assert len(calls) == 6 and dark() == fresh() == []

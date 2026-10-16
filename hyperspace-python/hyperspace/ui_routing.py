@@ -673,7 +673,9 @@ def _param_combo(panel, label: str, current: str | None, width: float,
 
 
 def _row(panel, router: Router, b: Binding, k: int) -> bool:
-    """One route, two lines; returns True when the row asked to be deleted."""
+    """One route, two lines; returns True when the row asked to be deleted.
+    The source combo's list is the one `page` built for this draw (the
+    state's "sources"), else built here."""
     reg, st = panel.reg, _state(panel)
     imgui.push_id(k)
     p = reg.get(b.target)
@@ -689,7 +691,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if imgui.is_item_hovered():
         imgui.set_tooltip("Enabled — a dormant row keeps its settings and owns nothing")
     imgui.same_line()
-    sources = _sources(panel, router)
+    sources = st.get("sources") or _sources(panel, router)
     labels = [lb for _, lb in sources]
     cur = _at(router, [s for s, _ in sources], b.source)
     imgui.set_next_item_width(SRC_W)
@@ -1068,10 +1070,31 @@ def preset_controls(table) -> list[Binding]:
     return out
 
 
+# `unmapped`'s last answer, against the signature it was worked out for
+_DARK: dict = {}
+
+
+def _dark_signature(table) -> tuple:
+    """Everything `unmapped` reads: the profile (its factory map), the MIDI
+    roles (`is_primary`), and each row's source (scheme, device, channel,
+    number — all `overlaps` compares), layer and enabled flag (which rows
+    are invariant, which are the desk). The target too, though no answer
+    reads it — cheap, and safe. Field values, never row identity."""
+    return (table.profile, tuple(getattr(table, "midi_roles", ())),
+            tuple((b.source, b.layer, b.enabled, b.target) for b in table.bindings))
+
+
 def unmapped(table) -> list[Binding]:
-    """The preset-layer controls the loaded preset leaves dark (D8)."""
-    rows = table.desk()
-    return [f for f in preset_controls(table) if not any(b.overlaps(f) for b in rows)]
+    """The preset-layer controls the loaded preset leaves dark (D8).
+    A pairwise scan of the table (~10 ms on the rig), so the ROUTING page
+    draw remembers the last answer until the table's signature changes."""
+    sig = _dark_signature(table)
+    if _DARK.get("sig") != sig:
+        rows = table.desk()
+        _DARK["rows"] = [f for f in preset_controls(table)
+                         if not any(b.overlaps(f) for b in rows)]
+        _DARK["sig"] = sig
+    return list(_DARK["rows"])
 
 
 def desk_target(p: Param) -> bool:
@@ -1498,6 +1521,9 @@ def page(panel, dt: float) -> None:
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
         ui._micro("routes")
         dead, drawn = None, 0
+        # the source combo's list, once a draw: the same for every row (once
+        # a row, it scanned the whole table per scheme ~20 times a frame)
+        st["sources"] = _sources(panel, router) if rows else None
         for k, b in enumerate(rows):            # k: its place unfiltered — the imgui id
             if not _shown(panel, router, ("route", id(b)), route_hay, b):
                 continue
@@ -1505,6 +1531,7 @@ def page(panel, dt: float) -> None:
             if _row(panel, router, b, k):
                 dead = b
             imgui.separator()
+        st["sources"] = None                    # this draw's only
         if dead is not None:
             # one undo step (undo.py, plan 15): the row and the depth
             # subscribers that go with it come back with a Ctrl+Z
