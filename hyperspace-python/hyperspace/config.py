@@ -267,6 +267,7 @@ DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 for
 DEVICE_TABLES = (("gamepad", "gamepad", "pad"), ("midi", "midi", None),
                  ("hands", "hands", "leap"), ("bridge", "bridge", "bridge"))
 DEVICE_KEYS = ("role", "kind", "enabled")
+JOYSTICKS = 16           # GLFW's joystick slots (JOYSTICK_1–16): a gamepad's `joystick` is 0–15
 # a `midi-out` entry's own keys and their defaults (plan 27 B3): the port
 # (a substring of an existing one, else a virtual port of that name unless
 # `virtual` is false), the hands role whose DAW messages it carries, and
@@ -436,6 +437,14 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
         enabled = True
     roles.add(role)
     own = {k: v for k, v in e.items() if k not in DEVICE_KEYS}
+    if kind == "gamepad" and "joystick" in own:
+        # plan 27 B6: a pinned GLFW index, 0-based (GLFW has 16). Anything
+        # else is a note, and the pad takes the next free joystick
+        j = own["joystick"]
+        if isinstance(j, bool) or not isinstance(j, int) or not 0 <= j < JOYSTICKS:
+            _note(cfg, f"{where} ({role}) joystick = {j!r} is not a GLFW index 0–"
+                       f"{JOYSTICKS - 1} — the pad takes the next free joystick")
+            del own["joystick"]
     return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind), **own}
 
 

@@ -228,6 +228,10 @@ class Context:
     # the registry itself (set by `DeviceRegistry`): a sink that carries
     # another device's output (the hands' DAW messages) finds it by role
     devices: object | None = None
+    # what the pad devices share (plan 27 B6, gamepad.Claims): which GLFW
+    # joystick each reads, the pinned indices, the one USB reader's owner.
+    # Made by the first pad that opens
+    pads: object | None = None
 
 
 class Base:
@@ -240,6 +244,15 @@ class Base:
     schemes: tuple[str, ...] = ()
     feeds: tuple[str, ...] = ()
     layers: tuple[str, ...] = ()
+    # plan 27 B6: may several entries of this kind be enabled at once? A
+    # repeatable kind's first enabled entry (`primaries`) publishes its
+    # schemes bare, as every row before B6 names them; each later one
+    # publishes them under its role (``axis@p2``, `qualify`), so no two
+    # feed one Router key. A kind that is not repeatable keeps B1's rule:
+    # a second entry that would feed a scheme already fed is refused
+    repeatable = False
+    # the device's qualifier: "" for its kind's primary, else its role
+    qualifier = ""
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
@@ -307,6 +320,19 @@ class Base:
         scheme and which has both lanes and hits under it (B4's OSC) says
         so itself."""
         return tuple(s for s in self.schemes if s not in self.feeds)
+
+    def qualify(self, q: str) -> None:
+        """Publish under the qualifier `q` (plan 27 B6): a repeatable
+        kind's entry that is not its kind's primary — its `schemes`,
+        `feeds` and `rows` become ``<scheme>@<role>``. "" leaves them bare."""
+        self.qualifier = q
+        if not q:
+            return
+        from .routing import qualified
+        self.schemes = tuple(qualified(s, q) for s in self.schemes)
+        self.feeds = tuple(qualified(s, q) for s in self.feeds)
+        if "_rows" in self.__dict__:
+            self._rows = tuple(qualified(s, q) for s in self._rows)
 
     @classmethod
     def publishes(cls, role: str, entry: dict | None = None
@@ -380,10 +406,10 @@ class RefusedDevice(Base):
     role, as if ``enabled = false``."""
 
     def __init__(self, role: str, kind: str, scheme: str, other: str,
-                 entry: dict | None = None, ctx: Context | None = None):
+                 entry: dict | None = None, ctx: Context | None = None, *, why: str = ""):
         super().__init__(role, entry, ctx)
         self.kind = kind
-        self.error = f"feeds {scheme!r}, which {other} already feeds — not opened"
+        self.error = why or f"feeds {scheme!r}, which {other} already feeds — not opened"
 
     @property
     def wants(self) -> tuple[str, ...]:
@@ -503,12 +529,23 @@ class PadDevice(Base):
     — and the button and D-pad rows) and **the sticks' default camera
     job** run (`gamepad.steer`, moved here from `app.frame`: each axis no
     route names, a relative move on the base, through the pad's feel).
-    All in the scene-setter slot."""
+    All in the scene-setter slot.
+
+    Several at once (plan 27 B6): the kind is `repeatable`. The first
+    enabled pad entry is the primary — its rows unqualified (``pad:A``,
+    ``axis:LX``, every row before B6), the factory pad rows its, the
+    sticks' camera job its alone; each later pad publishes under its
+    role (``pad@p2:A``, ``axis@p2:LX``) and starts with no rows. Each
+    reads its own controller (`gamepad.Pad.attach` on the registry's
+    shared `Context.pads`): the next free GLFW joystick in list order, or
+    the entry's ``joystick = n``; the one libusb reader is the first
+    ``usb = true`` entry's."""
 
     kind = "gamepad"
     schemes = ("axis", "pad", "hat")
     feeds = ("axis",)
-    wants = ("pad",)
+    wants = ("pad",)            # every pad's: Learn pad completes on whichever moves
+    repeatable = True
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,
                  io=None):
@@ -516,9 +553,21 @@ class PadDevice(Base):
         self._taken = False      # this frame's press completed a learn
         self._dt = 0.0
 
+    @property
+    def joystick(self) -> int | None:
+        """The entry's pinned GLFW index (``joystick = n``, 0-based; config
+        checks it), or None: the next free one."""
+        j = self.entry.get("joystick")
+        return j if isinstance(j, int) and not isinstance(j, bool) and j >= 0 else None
+
     def open(self) -> None:
-        from .gamepad import Pad
+        from .gamepad import Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
+        claims = getattr(self.ctx, "pads", None)
+        if claims is None:
+            claims = self.ctx.pads = Claims()
+        if hasattr(self.io, "attach"):
+            self.io.attach(claims, self.role, self.joystick)
         self.io.open()
 
     @property
@@ -530,23 +579,42 @@ class PadDevice(Base):
 
     @property
     def last(self) -> str:
+        """Where the pad reads from — ``glfw 1`` (the GLFW joystick index,
+        so two pads are told apart, plan 27 B6) or ``usb: <name>`` — and,
+        while lost, why: a pinned index waited for, the USB reader's note,
+        or that another pad owns the USB reader."""
         io = self.io
         if io is None:
             return ""
+        own = getattr(io, "usb_note", "") or ""
         if io.on:
             usb = getattr(io, "usb_pad", None)
             name = getattr(usb, "name", "") if io.source == "usb" else ""
-            return f"{io.source}: {name}" if name else str(io.source)
-        return getattr(getattr(io, "usb_pad", None), "note", "") or ""
+            jid = getattr(io, "jid", None) if io.source == "glfw" else None
+            head = (f"{io.source}: {name}" if name else
+                    f"{io.source} {jid}" if jid is not None else str(io.source))
+            return f"{head}  ·  {own}" if own else head
+        pin = getattr(io, "joystick", None)
+        why = [f"waiting for joystick {pin}"] if pin is not None else []
+        why += [n for n in (getattr(getattr(io, "usb_pad", None), "note", "") or "", own) if n]
+        return "  ·  ".join(why)
 
     @property
     def sources(self) -> tuple[Port, ...]:
+        """The pad's fixed layout as ports, each addressed as this pad's
+        rows name it — qualified for every pad but the primary (plan 27
+        B6: ``axis@p2:LX``), as `MidiDevice.sources` does for a desk."""
         from . import gamepad as g
+        q = self.qualifier
+
+        def sc(s: str) -> str:
+            return f"{s}@{q}" if q else s
         axes = [Port(n, lb, rest=r, bipolar=n in g.STICKS,
-                     group="sticks" if n in g.STICKS else "triggers", scheme="axis")
+                     group="sticks" if n in g.STICKS else "triggers", scheme=sc("axis"))
                 for n, lb, r in zip(g.AXES, g.AXIS_LABELS, g.AXIS_RESTS, strict=True)]
-        buttons = [Port(n, n, kind="trigger", group="buttons", scheme="pad") for n in g.BUTTONS]
-        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme="hat")
+        buttons = [Port(n, n, kind="trigger", group="buttons", scheme=sc("pad"))
+                   for n in g.BUTTONS]
+        hats = [Port(n, f"D-pad {n.lower()}", kind="trigger", group="d-pad", scheme=sc("hat"))
                 for n in g.HATS]
         return tuple(axes + buttons + hats)
 
@@ -560,14 +628,22 @@ class PadDevice(Base):
         if self.io is None:
             return False
         from . import gamepad
-        self._taken = bool(gamepad.learn_from(self.io, learn))
+        q = self.qualifier
+        self._taken = bool(gamepad.learn_from(self.io, learn, role=q) if q else
+                           gamepad.learn_from(self.io, learn))
         return self._taken
 
     def act(self, router) -> None:
         """The pad's rows, then the sticks' camera job — on the registry
-        the context carries (`Context.reg`), else the router's."""
+        the context carries (`Context.reg`), else the router's. The camera
+        job is the primary pad's only (plan 27 B6, decision 24: defaults
+        author no look): a second pad's unrouted axes do nothing."""
         io = self.io
         if io is None:
+            return
+        q = self.qualifier
+        if q:
+            router.pad(io, buttons=not self._taken, role=q)
             return
         router.pad(io, buttons=not self._taken)
         if io.on:
@@ -1079,36 +1155,81 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None) -> Base:
+_ROLE = "\0role:"       # `claimed`'s key for a role (no scheme starts with a NUL)
+
+
+def primaries_of(entries: list[dict]) -> dict[str, str]:
+    """kind → the role of its primary entry, for each repeatable kind
+    (plan 27 B6): the first *enabled* entry of the kind in list order,
+    else (none enabled) the first listed — the one whose rows are
+    unqualified."""
+    out: dict[str, str] = {}
+    for want_on in (True, False):
+        for e in entries:
+            kind = str(e.get("kind", ""))
+            cls = kind_class(kind)
+            if (cls is None or not cls.repeatable or kind in out
+                    or (want_on and not e.get("enabled", True))):
+                continue
+            out[kind] = str(e.get("role", ""))
+    return out
+
+
+def make(entry: dict, ctx: Context | None = None, claimed: dict[str, str] | None = None,
+         primaries: dict[str, str] | None = None) -> Base:
     """A device for one checked `[[devices]]` entry (config.devices):
     `OffDevice` when it is not enabled, `UnknownDevice` for a kind the
-    table lacks, `RefusedDevice` when an earlier enabled entry already
-    **feeds** one of its `feeds` (`claimed`: fed scheme → role, filled
-    here for the next entry) — a kind that feeds nothing (MIDI: rows,
-    not vectors) is never refused, so two desks of different roles both
+    table lacks, `RefusedDevice` on a true collision — an earlier enabled
+    entry of the same role, or one that already **feeds** one of its
+    `feeds` (`claimed`: fed scheme → role, filled here for the next
+    entry). The registry claims (scheme, role), not scheme (plan 27 B6):
+    a repeatable kind's entry other than its kind's primary (`primaries`,
+    kind → role; `primaries_of`) publishes under its role (`qualify`:
+    a second pad feeds ``axis@p2``), so two pads never collide; a kind
+    that cannot qualify (the hands: forty lanes of another shape) is
+    refused as in B1. A kind that feeds nothing (MIDI: rows, not vectors)
+    is never refused for a scheme, so two desks of different roles both
     open. Nothing is opened here."""
     role, kind = str(entry.get("role", "")), str(entry.get("kind", ""))
-    if not entry.get("enabled", True):
-        return OffDevice(role, kind, entry, ctx)
     cls = kind_class(kind)
+    q = ""
+    if cls is not None and cls.repeatable and primaries is not None:
+        q = "" if primaries.get(kind, role) == role else role
+    if not entry.get("enabled", True):
+        d = OffDevice(role, kind, entry, ctx)
+        if q:
+            d.qualify(q)
+        return d
     if cls is None:
         return UnknownDevice(role, kind, entry, ctx)
     if claimed is not None:
+        if _ROLE + role in claimed:
+            return RefusedDevice(role, kind, "", "", entry, ctx,
+                                 why=f"role {role!r} is listed twice — not opened")
+        claimed[_ROLE + role] = role
         feeds = cls.publishes(role, entry)[1]       # an OSC role feeds its own name (B4)
+        if q:
+            from .routing import qualified
+            feeds = tuple(qualified(s, q) for s in feeds)
         for scheme in feeds:
             if scheme in claimed and claimed[scheme] != role:
                 return RefusedDevice(role, kind, scheme, claimed[scheme], entry, ctx)
         for scheme in feeds:
             claimed[scheme] = role
-    return cls(role, entry, ctx)
+    d = cls(role, entry, ctx)
+    if q:
+        d.qualify(q)
+    return d
 
 
 def make_all(entries: list[dict], ctx: Context | None = None) -> list[Base]:
-    """One device per entry, in order, each later entry refused the fed
-    schemes an earlier enabled one claims (roles are unique already:
-    config drops a duplicate role at load and on a re-read)."""
+    """One device per entry, in order, each later entry refused a role or
+    the fed schemes an earlier enabled one claims (roles are unique
+    already: config drops a duplicate role at load and on a re-read); a
+    repeatable kind's entries after its primary qualified (plan 27 B6)."""
     claimed: dict[str, str] = {}
-    return [make(e, ctx, claimed) for e in entries]
+    prim = primaries_of(entries)
+    return [make(e, ctx, claimed, prim) for e in entries]
 
 
 def _err(where: str, e: Exception) -> str:
@@ -1228,6 +1349,23 @@ class DeviceRegistry:
             midi.insert(0, owner)
         return tuple(d.role for d in midi)
 
+    def primaries(self) -> dict[str, str]:
+        """scheme → the role whose rows on it are unqualified, for every
+        scheme but MIDI's (plan 27 B6; MIDI's rule is `midi_roles`): the
+        first listed device that publishes the scheme bare and is not off,
+        refused or unknown — a repeatable kind's primary (``pad``, ``axis``,
+        ``hat`` → the first enabled pad), any other device its own
+        schemes. `Bindings.primaries`, through `Router.use`."""
+        out: dict[str, str] = {}
+        for d in self.devices:
+            if isinstance(d, OffDevice | UnknownDevice | RefusedDevice) or d.kind == "midi":
+                continue
+            if getattr(d, "qualifier", ""):
+                continue
+            for s in getattr(d, "schemes", ()):
+                out.setdefault(s, d.role)
+        return out
+
     def wants(self) -> tuple[str, ...]:
         """What a Learn can be armed for on this rig (`Learn.wants`), in
         list order, off devices' included (the learn completes once the
@@ -1295,6 +1433,7 @@ class DeviceRegistry:
         table = getattr(self.ctx, "table", None)
         if table is not None:
             table.midi_roles = self.midi_roles()
+            table.primaries = self.primaries()      # plan 27 B6: every other scheme's
 
     @property
     def clouds(self) -> dict[str, PointCloud]:
@@ -1495,9 +1634,12 @@ class DeviceRegistry:
         for e in new:
             role = e["role"]
             kept = have.get(role)
-            # unchanged, and refused or not exactly as before: the device stays
+            # unchanged, refused or not exactly as before, and under the same
+            # qualifier (plan 27 B6: the first pad leaving makes the second
+            # the primary — it reopens with its rows bare): the device stays
             if kept is not None and old.get(role) == e and (
-                    isinstance(kept, RefusedDevice) == isinstance(fresh[role], RefusedDevice)):
+                    isinstance(kept, RefusedDevice) == isinstance(fresh[role], RefusedDevice)
+                    and getattr(kept, "qualifier", "") == getattr(fresh[role], "qualifier", "")):
                 devices.append(have.pop(role))
                 continue
             if kept is not None:

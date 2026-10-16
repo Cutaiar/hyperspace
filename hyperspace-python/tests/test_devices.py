@@ -103,46 +103,147 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
 
 def test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note(monkeypatch):
     """Roles are not schemes for today's devices (`pad` feeds `axis`,
-    `leap` feeds `hand`), and the Router holds one vector per fed scheme:
-    a second enabled entry of a kind that would feed a scheme already fed
-    is refused — an error line naming both roles, never opened, as if
-    `enabled = false` — and comes up when the first leaves the list. MIDI
-    feeds nothing (its messages are rows), so a second desk of another
-    role is accepted: the configuration B2 builds."""
+    `leap` feeds `hand`), and the Router holds one vector per fed key. The
+    registry claims (scheme, role), not scheme (plan 27 B6): a kind that
+    can qualify (the gamepad) opens a second entry under its role
+    (``axis@pad2``); a kind that cannot (the hands) is refused when a
+    second enabled entry would feed what the first feeds — an error line
+    naming both roles, never opened, as if `enabled = false` — and comes
+    up when the first leaves the list. MIDI feeds nothing (its messages
+    are rows), so a second desk of another role is accepted."""
     entries = [
         {"role": "pad", "kind": "gamepad", "enabled": True},
         {"role": "pad2", "kind": "gamepad", "enabled": True},
         {"role": "leap", "kind": "hands", "enabled": True},
-        {"role": "leap2", "kind": "hands", "enabled": False},
+        {"role": "leap2", "kind": "hands", "enabled": True},
+        {"role": "leap3", "kind": "hands", "enabled": False},
         {"role": "apc40", "kind": "midi", "enabled": True},
         {"role": "launchpad", "kind": "midi", "enabled": True},
     ]
     notes: list[str] = []
     reg = devices.DeviceRegistry(entries, devices.Context(hand_settings=None), notes=notes)
-    pad2, leap2, lp = reg.get("pad2"), reg.get("leap2"), reg.get("launchpad")
-    assert isinstance(pad2, devices.RefusedDevice)
-    assert pad2.status == "error: feeds 'axis', which pad already feeds — not opened"
+    pad2, leap2, leap3, lp = (reg.get(r) for r in ("pad2", "leap2", "leap3", "launchpad"))
+    assert isinstance(pad2, devices.PadDevice) and pad2.qualifier == "pad2"   # B6: a second pad
+    assert isinstance(leap2, devices.RefusedDevice)
+    assert leap2.status == "error: feeds 'hand', which leap already feeds — not opened"
     assert isinstance(lp, devices.MidiDevice) and lp.status == "lost"    # a second desk: fine
-    assert isinstance(leap2, devices.OffDevice) and leap2.status == "off"   # off claims nothing
+    assert isinstance(leap3, devices.OffDevice) and leap3.status == "off"   # off claims nothing
     for cls in (devices.PadDevice, devices.MidiDevice):
         monkeypatch.setattr(cls, "open", lambda self: None)      # no port, no pad asked for
+    monkeypatch.setattr(devices.HandsDevice, "open", lambda self: None)
     reg.open_all()
     for _ in range(3):
         reg.poll(1 / 60, 0.0, router=object())
-    assert pad2.io is None and reg.adapter("gamepad") is None
-    assert [n for n in notes if "pad2" in n] == [
-        "config: [[devices]] pad2: feeds 'axis', which pad already feeds — not opened"]
-    assert not any("launchpad" in n for n in notes)
+    assert leap2.io is None
+    assert [n for n in notes if "leap2" in n] == [
+        "config: [[devices]] leap2: feeds 'hand', which leap already feeds — not opened"]
+    assert not any("launchpad" in n or "pad2" in n for n in notes)
     assert [r for r, _, st, _, _ in reg.lines() if r in ("apc40", "launchpad")] == [
         "apc40", "launchpad"]                               # both desks on the SYSTEM page
-    assert reg.schemes() == ("axis", "pad", "hat", "hand", "hands", "cc", "note", "pitch")
-    # the first pad leaves the list: pad2 is no longer refused and opens
-    monkeypatch.undo()                                    # the real Pad opens (never raises)
-    reg.apply([e for e in entries if e["role"] != "pad"])
-    pad2 = reg.get("pad2")
-    assert isinstance(pad2, devices.PadDevice) and pad2.status == "lost" and pad2.io is not None
-    assert "devices: pad removed" in notes and "devices: pad2 changed — reopened" in notes
+    assert reg.schemes() == ("axis", "pad", "hat", "axis@pad2", "pad@pad2", "hat@pad2",
+                             "hand", "hands", "cc", "note", "pitch")
+    # the first hands device leaves the list: leap2 is no longer refused and opens
+    monkeypatch.undo()
+    monkeypatch.setattr(devices.PadDevice, "open", lambda self: None)
+    monkeypatch.setattr(devices.HandsDevice, "open", lambda self: None)
+    reg.apply([e for e in entries if e["role"] != "leap"])
+    leap2 = reg.get("leap2")
+    assert isinstance(leap2, devices.HandsDevice)
+    assert "devices: leap removed" in notes and "devices: leap2 changed — reopened" in notes
     reg.close()
+
+
+def test_two_pads_open_each_under_its_role(monkeypatch):
+    """Plan 27 B6: two enabled gamepad entries both open; the first is
+    the primary (its ports bare, every row before B6 its), the second
+    publishes under its role — its sources, schemes, feeds and rows
+    qualified — and arms the same Learn pad. The SYSTEM page names both
+    pads with the joystick each reads. The first leaving the list makes
+    the second the primary: it reopens with its ports bare."""
+    from hyperspace import gamepad as gp
+
+    entries = [{"role": "pad", "kind": "gamepad", "enabled": True, "usb": False},
+               {"role": "p2", "kind": "gamepad", "enabled": True, "usb": False}]
+    notes: list[str] = []
+    table = SimpleNamespace(midi_roles=(), primaries={})
+    reg = devices.DeviceRegistry(entries, devices.Context(table=table), notes=notes)
+    one, two = reg.get("pad"), reg.get("p2")
+    assert isinstance(one, devices.PadDevice) and isinstance(two, devices.PadDevice)
+    assert (one.qualifier, two.qualifier) == ("", "p2")
+    assert one.schemes == ("axis", "pad", "hat") and two.schemes == ("axis@p2", "pad@p2", "hat@p2")
+    assert two.feeds == ("axis@p2",) and two.rows == ("pad@p2", "hat@p2")
+    assert [p.address for p in one.sources][:2] == ["axis:LX", "axis:LY"]
+    assert [p.address for p in two.sources][:2] == ["axis@p2:LX", "axis@p2:LY"]
+    assert "pad@p2:A" in [p.address for p in two.sources]
+    assert "hat@p2:UP" in [p.address for p in two.sources]
+    assert reg.schemes() == ("axis", "pad", "hat", "axis@p2", "pad@p2", "hat@p2")
+    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "axis@p2")
+    assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
+    assert reg.wants() == ("pad",)                          # one Learn pad: whichever moves
+    assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad"}
+    assert table.primaries == reg.primaries()               # the table is told
+    # two joysticks: each pad reads its own, and its line says which
+    present = {0, 1}
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: j in present)
+    monkeypatch.setattr(gp.glfw, "get_joystick_buttons", lambda j: ([0] * 16, 16))
+    monkeypatch.setattr(gp.glfw, "get_joystick_hats", lambda j: ([0], 1))
+    monkeypatch.setattr(gp.glfw, "get_joystick_axes",
+                        lambda j: ([0.0, 0.0, 0.0, 0.0, -1.0, -1.0], 6))
+    reg.open_all()
+    reg.poll(1 / 60, 0.0)
+    assert ui.device_lines(reg) == [
+        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 0",
+        "p2  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 1"]
+    assert one.io.claims is two.io.claims                   # one shared set of taken joysticks
+    present.discard(0)
+    reg.poll(1 / 60, 0.0)
+    assert [st for _, _, st, _, _ in reg.lines()] == ["lost", "connected"]
+    # the first pad leaves: p2 is the primary now, its rows bare
+    reg.apply(entries[1:])
+    two = reg.get("p2")
+    assert two.qualifier == "" and two.schemes == ("axis", "pad", "hat")
+    assert "devices: p2 changed — reopened" in notes
+    reg.close()
+
+
+def test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad():
+    """make_all refuses a true collision — a second enabled entry of the
+    same role (config drops one at load already; the registry holds the
+    line too) — and an entry's ``joystick = n`` pins its pad."""
+    made = devices.make_all([
+        {"role": "pad", "kind": "gamepad", "enabled": True},
+        {"role": "pad", "kind": "gamepad", "enabled": True},
+        {"role": "p2", "kind": "gamepad", "enabled": True, "joystick": 1, "usb": False}])
+    assert isinstance(made[0], devices.PadDevice)
+    assert isinstance(made[1], devices.RefusedDevice)
+    assert made[1].status == "error: role 'pad' is listed twice — not opened"
+    p2 = made[2]
+    assert p2.joystick == 1 and p2.qualifier == "p2"
+    p2.open()
+    try:
+        assert p2.io.joystick == 1 and p2.io.claims.pinned == {1: p2.io}
+        assert p2.last == "waiting for joystick 1"
+    finally:
+        p2.close()
+
+
+def test_the_joystick_key_is_checked(tmp_path):
+    """A gamepad entry's `joystick` (plan 27 B6) is a GLFW index, 0–15: a
+    whole number in range pins the pad; anything else is a note and the
+    pad takes the next free one."""
+    path = tmp_path / "config.toml"
+    path.write_text('[[devices]]\nrole = "pad"\nkind = "gamepad"\n'
+                    '[[devices]]\nrole = "p2"\nkind = "gamepad"\njoystick = "x"\n'
+                    '[[devices]]\nrole = "p3"\nkind = "gamepad"\njoystick = 2\n'
+                    '[[devices]]\nrole = "p4"\nkind = "gamepad"\njoystick = 16\n')
+    cfg = config.load(path)
+    ents = {e["role"]: e for e in config.devices(cfg)}
+    assert "joystick" not in ents["pad"] and "joystick" not in ents["p2"]
+    assert ents["p3"]["joystick"] == 2 and "joystick" not in ents["p4"]
+    said = [n for n in cfg["notes"] if "joystick" in n]
+    assert len(said) == 2 and "'x'" in said[0] and "16" in said[1]
+    from hyperspace import gamepad as gp
+    assert len(gp.JOYSTICKS) == config.JOYSTICKS           # the two counts agree
 
 
 # ---------------------------------------------------------------- the frame slots
