@@ -266,13 +266,31 @@ class Claims:
     per device registry (devices.Context.pads): which GLFW joystick each
     pad reads (`taken`, jid → the `Pad`), which indices a pad is pinned to
     (`pinned`, an entry's ``joystick = n`` — no unpinned pad takes one),
-    and the one pad that owns the libusb reader (`usb`). A `Pad` no device
-    attached has none of this and reads the first present joystick."""
+    the pads in attach order (`order`, the list's), the one libusb reader
+    (`reader`, made the first time a pad borrows it) and the pad it is lent
+    to now (`usb`). The reader is **lent, not owned** (ruling 3 as
+    amended): each poll it goes to its holder while that pad still has
+    `usb` on and no GLFW joystick (sticky), else to the first pad in
+    `order` with `usb` on and no GLFW joystick. A `Pad` no device attached
+    has none of this: it reads the first present joystick and its own
+    reader."""
 
     def __init__(self):
         self.taken: dict[int, Pad] = {}
         self.pinned: dict[int, Pad] = {}
+        self.order: list[Pad] = []
+        self.reader: UsbPad | None = None
         self.usb: Pad | None = None
+
+    def lend(self) -> Pad | None:
+        """Who holds the reader this poll: the holder while it still may
+        (attached, `usb` on, no GLFW joystick), else the first such pad in
+        list order; None when no pad may."""
+        def may(p: Pad) -> bool:
+            return p in self.order and getattr(p, "usb", False) and p.jid is None
+        if self.usb is not None and may(self.usb):
+            return self.usb
+        return next((p for p in self.order if may(p)), None)
 
     def release(self, pad: Pad) -> None:
         """Everything `pad` held: its joystick, its pin, the USB reader."""
@@ -311,23 +329,28 @@ class Pad:
         self.claims: Claims | None = None  # shared with the other pads (`attach`)
         self.role = ""
         self.joystick: int | None = None   # pinned GLFW index, or None
-        self.usb_note = ""                 # why this pad does not read USB
 
     def attach(self, claims: Claims, role: str = "", joystick: int | None = None) -> None:
         """Join the other pad devices (plan 27 B6): `claims` is the
         registry's shared `Claims`, `role` this pad's entry, `joystick` a
-        pinned GLFW index. The libusb reader stays one: the first pad
-        attached with `usb` on owns it; a later one with `usb` on reads
-        GLFW only and says so (`usb_note`)."""
+        pinned GLFW index. Attach order is list order: it decides who the
+        one libusb reader is lent to (`Claims.lend`)."""
         self.claims, self.role, self.joystick = claims, role, joystick
         if joystick is not None:
             claims.pinned.setdefault(joystick, self)
-        if getattr(self, "usb", False):
-            if claims.usb is None or claims.usb is self:
-                claims.usb = self
-            else:
-                self.usb = False
-                self.usb_note = f"usb: {claims.usb.role or 'another pad'} has the wired pad"
+        if self not in claims.order:
+            claims.order.append(self)
+
+    @property
+    def usb_note(self) -> str:
+        """Why this pad with `usb` on is not reading USB: the reader is
+        lent to another pad (``usb: lent to p2``); "" otherwise, the reader
+        idle included."""
+        claims = getattr(self, "claims", None)
+        holder = getattr(claims, "usb", None)
+        if not getattr(self, "usb", False) or holder is None or holder is self:
+            return ""
+        return f"usb: lent to {holder.role or 'another pad'}"
 
     def _find(self) -> int | None:
         """The joystick this pad reads this frame: the one it has while it
@@ -336,7 +359,8 @@ class Pad:
         claims = getattr(self, "claims", None)
         jid = self.jid
         if jid is not None and glfw.joystick_present(jid) and (
-                claims is None or claims.taken.get(jid, self) is self):
+                claims is None or (claims.taken.get(jid, self) is self
+                                   and claims.pinned.get(jid, self) is self)):
             if claims is not None:
                 claims.taken[jid] = self
             return jid
@@ -380,6 +404,9 @@ class Pad:
     def poll(self) -> None:
         source = getattr(self, "source", None)
         self.jid = self._find()
+        claims = getattr(self, "claims", None)
+        if claims is not None and claims.usb is self and self.jid is not None:
+            claims.usb, self.usb_pad = None, None    # reading GLFW: the reader goes back
         state = None if self.jid is not None else self._usb_state()
         new = "glfw" if self.jid is not None else "usb" if state is not None else None
         if new != source:      # a pad came, went or changed road: no stale edges
@@ -406,6 +433,13 @@ class Pad:
         claims = getattr(self, "claims", None)
         if claims is not None:
             claims.release(self)       # its joystick, its pin, the USB reader (plan 27 B6)
+            if self in claims.order:
+                claims.order.remove(self)
+            # the shared reader closes only when no pad left could borrow it
+            usb = None
+            if claims.reader is not None and not any(
+                    getattr(p, "usb", False) for p in claims.order):
+                usb, claims.reader = claims.reader, None
         self.jid, self.source = None, None
         self.buttons, self.prev_buttons, self.hat, self.prev_hat = [], [], 0, 0
         if usb is not None:
@@ -420,6 +454,15 @@ class Pad:
         module never starts a second reader fighting for the device."""
         if not getattr(self, "usb", False):
             return None
+        claims = getattr(self, "claims", None)
+        if claims is not None:              # several pads: one reader, lent (plan 27 B6)
+            if claims.lend() is not self:
+                return None
+            claims.usb = self
+            if claims.reader is None:
+                claims.reader = UsbPad()
+            self.usb_pad = claims.reader
+            return claims.reader.latest()
         if getattr(self, "usb_pad", None) is None:
             self.usb_pad = UsbPad()
         return self.usb_pad.latest()

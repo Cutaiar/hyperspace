@@ -191,34 +191,94 @@ def test_a_bare_pad_still_takes_the_first_present_joystick(monkeypatch):
 
 
 def test_one_usb_reader_across_two_pads(monkeypatch):
-    """The libusb reader stays one: the first pad attached with usb on
-    owns it; a second with usb on is told so and reads GLFW only. Closing
-    the owner lets the reader go."""
-    fake = FakeJoysticks()
+    """The libusb reader is lent, not owned (ruling 3 as amended): one
+    `UsbPad` ever, lent to the first pad in list order with `usb` on and
+    no GLFW joystick, and kept by its holder while that holds (sticky).
+    A pad reading GLFW never holds it; the reader closes once, when the
+    last pad that could borrow it closes."""
+    fake = FakeJoysticks(0)
     fake.install(monkeypatch)
     made = []
+    rest = gp.decode(report())
 
     class Counted:
         def __init__(self):
             made.append(self)
-            self.name, self.note = "", ""
+            self.name, self.note, self.closed = "", "", 0
 
         def latest(self):
-            return None
+            return rest
 
         def close(self):
-            pass
+            self.closed += 1
 
     monkeypatch.setattr(gp, "UsbPad", Counted)
     claims, one, two = two_pads(usb=True)
     for _ in range(3):
         one.poll()
         two.poll()
-    assert len(made) == 1 and one.usb_pad is made[0] and two.usb_pad is None
-    assert claims.usb is one and not two.usb
-    assert two.usb_note == "usb: pad has the wired pad"
+    assert one.jid == 0 and one.source == "glfw" and two.source == "usb"
+    assert len(made) == 1 and claims.usb is two and two.usb_pad is made[0]
+    assert one.usb_pad is None and one.usb and two.usb       # nobody's switch was turned off
+    assert one.usb_note == "usb: lent to p2" and two.usb_note == ""
+    fake.present.discard(0)                                  # the Bluetooth pad goes
+    for _ in range(2):
+        one.poll()
+        two.poll()
+    assert claims.usb is two and two.source == "usb" and not one.on   # sticky: p2 keeps it
+    assert len(made) == 1
+    two.close()
+    assert made[0].closed == 0                               # pad may still borrow it
+    one.poll()
+    assert claims.usb is one and one.usb_pad is made[0] and one.source == "usb"
+    assert one.usb_note == "" and len(made) == 1
     one.close()
-    assert claims.usb is None and claims.taken == {}
+    assert made[0].closed == 1 and claims.reader is None
+    assert claims.usb is None and claims.taken == {} and claims.order == []
+
+
+class Rest:
+    """A USB reader at rest that never closes anything real."""
+
+    name, note = "", ""
+
+    def latest(self):
+        return gp.decode(report())
+
+    def close(self):
+        pass
+
+
+def test_a_pad_that_finds_a_joystick_hands_the_reader_back(monkeypatch):
+    """A holder that gets a GLFW joystick lets the reader go that poll."""
+    fake = FakeJoysticks()
+    fake.install(monkeypatch)
+    monkeypatch.setattr(gp, "UsbPad", Rest)
+    claims, one, two = two_pads(usb=True)
+    one.poll()
+    two.poll()
+    assert claims.usb is one and one.source == "usb" and two.usb_note == "usb: lent to pad"
+    fake.present.add(0)
+    one.poll()
+    two.poll()
+    assert one.source == "glfw" and one.usb_pad is None and claims.usb is two
+    assert two.source == "usb"
+
+
+def test_keeping_a_joystick_respects_another_pads_pin(monkeypatch):
+    """An unpinned pad reading a joystick pinned to another pad (it took it
+    before the pin) lets it go once the pinned pad asks."""
+    fake = FakeJoysticks(1)
+    fake.install(monkeypatch)
+    claims = gp.Claims()
+    one, two = Pad(), Pad()
+    one.attach(claims, "pad")
+    one.poll()
+    assert one.jid == 1
+    two.attach(claims, "p2", joystick=1)
+    one.poll()
+    two.poll()
+    assert one.jid is None and two.jid == 1
 
 
 # ---- wired Xbox 360 pads over USB ----

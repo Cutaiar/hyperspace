@@ -418,7 +418,8 @@ def _midi_role(mc: dict) -> str:
     return prof if isinstance(prof, str) and prof and ":" not in prof else "midi"
 
 
-def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) -> dict | None:
+def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str],
+            pins: set[int] | None = None) -> dict | None:
     """One `[[devices]]` entry, checked like `_screen`: a missing or bad
     role or kind drops the entry (a note, never a dead launch); `enabled`
     that is not true or false is true; a known kind's own keys are filled
@@ -432,6 +433,13 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
     role = role.strip()
     if role in roles:
         problems.append(f"{where} role {role!r} is listed twice — the second dropped")
+        return None
+    j = e.get("joystick")
+    if (pins is not None and e.get("kind") == "gamepad" and isinstance(j, int)
+            and not isinstance(j, bool) and j in pins):
+        # plan 27 B6: one GLFW index, one pad — like a role listed twice
+        problems.append(f"{where} ({role}) joystick = {j} is pinned by an earlier pad "
+                        "— the second dropped")
         return None
     if not isinstance(kind, str) or not kind.strip():
         problems.append(f"{where} ({role}) kind = {kind!r} is not a kind — dropped")
@@ -451,6 +459,8 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
             _note(cfg, f"{where} ({role}) joystick = {j!r} is not a GLFW index 0–"
                        f"{JOYSTICKS - 1} — the pad takes the next free joystick")
             del own["joystick"]
+        elif pins is not None:
+            pins.add(j)
     return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind), **own}
 
 
@@ -519,13 +529,13 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         if not isinstance(raw, list):
             problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
             raw = []
-        entries, roles = [], set()
+        entries, roles, pins = [], set(), set()
         for i, e in enumerate(raw):
             if not isinstance(e, dict):
                 problems.append(f"config: [[devices]] entry {i + 1} is not a table ({e!r}) "
                                 "— dropped")
                 continue
-            got = _device(i + 1, e, cfg, roles, problems)
+            got = _device(i + 1, e, cfg, roles, problems, pins)
             if got is not None:
                 entries.append(got)
         for section, kind, _ in DEVICE_TABLES:

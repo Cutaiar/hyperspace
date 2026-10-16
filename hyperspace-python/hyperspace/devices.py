@@ -366,12 +366,15 @@ class OffDevice(Base):
             self.schemes, self.feeds, self._rows = cls.publishes(role, self.entry)
             w = cls.__dict__.get("wants")
             self._wants = w if isinstance(w, tuple) else ((role,) if self.feeds else ())
+            self._wants_for = getattr(cls, "wants_for", None)    # a kind whose wants
+                                                                 # follow its qualifier (B6)
 
     @property
     def wants(self) -> tuple[str, ...]:
         """Its kind's: a rig that lists a device, off or not, can arm a
         learn for it (it completes once the device is on)."""
-        return self._wants
+        f = self.__dict__.get("_wants_for")
+        return f(self.role, self.qualifier) if f is not None else self._wants
 
     @property
     def rows(self) -> tuple[str, ...]:
@@ -544,7 +547,18 @@ class PadDevice(Base):
     kind = "gamepad"
     schemes = ("axis", "pad", "hat")
     feeds = ("axis",)
-    wants = ("pad",)            # every pad's: Learn pad completes on whichever moves
+
+    @staticmethod
+    def wants_for(role: str, qualifier: str) -> tuple[str, ...]:
+        """``pad`` — Learn pad, completed by whichever pad moves — and, for
+        a pad other than the primary, its role too (plan 27 B6): "Learn
+        p2" on a param's menu completes only from that pad, so a second
+        pad can be learned onto while the first is not plugged in."""
+        return ("pad", role) if qualifier else ("pad",)
+
+    @property
+    def wants(self) -> tuple[str, ...]:
+        return self.wants_for(self.role, self.qualifier)
     repeatable = True
 
     def __init__(self, role: str, entry: dict | None = None, ctx: Context | None = None, *,

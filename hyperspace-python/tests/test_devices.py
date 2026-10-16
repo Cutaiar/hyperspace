@@ -179,7 +179,9 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert reg.schemes() == ("axis", "pad", "hat", "axis@p2", "pad@p2", "hat@p2")
     assert reg.continuous_schemes() == ("lane", "lfo", "axis", "axis@p2")
     assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
-    assert reg.wants() == ("pad",)                          # one Learn pad: whichever moves
+    # Learn pad (whichever pad moves) and "Learn p2" (that pad only)
+    assert reg.wants() == ("pad", "p2")
+    assert one.wants == ("pad",) and two.wants == ("pad", "p2")
     assert reg.primaries() == {"axis": "pad", "pad": "pad", "hat": "pad"}
     assert table.primaries == reg.primaries()               # the table is told
     # two joysticks: each pad reads its own, and its line says which
@@ -203,7 +205,46 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     two = reg.get("p2")
     assert two.qualifier == "" and two.schemes == ("axis", "pad", "hat")
     assert "devices: p2 changed — reopened" in notes
+    assert two.wants == ("pad",) and reg.wants() == ("pad",)
     reg.close()
+
+
+def test_two_pads_with_usb_on_the_reader_is_lent_to_the_one_without_a_joystick(monkeypatch):
+    """Ruling 3 as amended: both entries at the default `usb = true`; the
+    Bluetooth pad reads GLFW joystick 0, so the one USB reader is lent to
+    the second pad — its line names the wired pad, the first says to whom
+    the reader is lent."""
+    from hyperspace import gamepad as gp
+
+    class Wired:
+        name, note = "Afterglow", ""
+
+        def latest(self):
+            return gp.decode(bytes((0x00, 0x14)) + bytes(18))
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(gp, "UsbPad", Wired)
+    monkeypatch.setattr(gp.glfw, "joystick_present", lambda j: j == 0)
+    monkeypatch.setattr(gp.glfw, "get_joystick_buttons", lambda j: ([0] * 16, 16))
+    monkeypatch.setattr(gp.glfw, "get_joystick_hats", lambda j: ([0], 1))
+    monkeypatch.setattr(gp.glfw, "get_joystick_axes",
+                        lambda j: ([0.0, 0.0, 0.0, 0.0, -1.0, -1.0], 6))
+    entries = [{"role": "pad", "kind": "gamepad", "enabled": True},
+               {"role": "p2", "kind": "gamepad", "enabled": True}]
+    reg = devices.DeviceRegistry(config_entries(entries), devices.Context())
+    reg.open_all()
+    reg.poll(1 / 60, 0.0)
+    assert ui.device_lines(reg) == [
+        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  glfw 0  ·  usb: lent to p2",
+        "p2  ·  gamepad  ·  connected  ·  22 sources  ·  usb: Afterglow"]
+    reg.close()
+
+
+def config_entries(entries: list[dict]) -> list[dict]:
+    """Entries with the kind's defaults filled in, as config.devices gives them."""
+    return [{**config._kind_defaults(e["kind"]), **e} for e in entries]
 
 
 def test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad():
@@ -244,6 +285,12 @@ def test_the_joystick_key_is_checked(tmp_path):
     assert len(said) == 2 and "'x'" in said[0] and "16" in said[1]
     from hyperspace import gamepad as gp
     assert len(gp.JOYSTICKS) == config.JOYSTICKS           # the two counts agree
+    # one GLFW index, one pad: a second entry pinned to it is dropped, said
+    path.write_text('[[devices]]\nrole = "pad"\nkind = "gamepad"\njoystick = 1\n'
+                    '[[devices]]\nrole = "p2"\nkind = "gamepad"\njoystick = 1\n')
+    cfg = config.load(path)
+    assert [e["role"] for e in config.devices(cfg)] == ["pad"]
+    assert any("joystick = 1 is pinned by an earlier pad" in n for n in cfg["problems"])
 
 
 # ---------------------------------------------------------------- the frame slots

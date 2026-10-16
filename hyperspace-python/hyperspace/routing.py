@@ -2421,6 +2421,7 @@ class Router:
         prim = getattr(devs, "primaries", None)
         if prim is not None:
             self.table.primaries = dict(prim())
+            self.__dict__.pop("_lanes", None)     # an ``axis@pad`` address may mean another key
 
     def schemes(self) -> tuple[str, ...]:
         """The continuous schemes a route can read, in the order a page
@@ -2470,6 +2471,9 @@ class Router:
         if cache is None or len(cache) > 4096:       # addresses typed at the page, say
             cache = self.__dict__["_lanes"] = {}
         scheme, _, addr = source.partition(":")
+        base, at, role = scheme.partition(QUALIFIER)
+        if at and role and getattr(self.table, "primaries", {}).get(base) == role:
+            scheme = base        # qualified with the primary's own role: its lanes (B6)
         m = self.names.get(scheme)
         try:
             i = int(addr)
@@ -2619,9 +2623,14 @@ class Router:
             self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
+        # each pad hears its own rows: a second pad those qualified with its
+        # role; the primary the bare ones and — as a desk's `serves` — any
+        # qualified with the primary's own role (``pad@pad:A``)
+        own = role or getattr(self.table, "primaries", {}).get("pad", "")
         for b in self.table.of("pad", "hat"):
             code = self._code(b)
-            if code is None or not b.enabled or b.device != role:
+            if code is None or not b.enabled or not (
+                    b.device == role or (not role and own and b.device == own)):
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)

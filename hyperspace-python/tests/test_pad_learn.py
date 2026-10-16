@@ -381,14 +381,14 @@ def test_two_pads_drive_their_own_routes(rig):
     one, two, r, t = ScriptedPad(), ScriptedPad(), rig.router, rig.table
     t.add(Binding("axis@p2:RT", "view.inst_amp", "position", 1.0))
     t.add(Binding("axis:RT", "rot.rate.XY", "position", 1.0))
-    amp, bright = rig.reg["view.inst_amp"], rig.reg["rot.rate.XY"]
+    amp, rate = rig.reg["view.inst_amp"], rig.reg["rot.rate.XY"]
     one.frame()
     two.frame(axes=[0, 0, 0, 0, -1, 1.0])               # p2's right trigger, all the way
     r.pad(one)
     r.pad(two, role="p2")
     r.modulate()
     rig.reg.apply()
-    assert amp.value == pytest.approx(amp.hi) and bright.value < bright.hi
+    assert amp.value == pytest.approx(amp.hi) and rate.value < rate.hi
     assert r.claimed("axis") == {gp.AX_RT} and r.claimed("axis@p2") == {gp.AX_RT}
     one.frame(axes=[0, 0, 0, 0, -1, 1.0])
     two.frame()
@@ -396,7 +396,7 @@ def test_two_pads_drive_their_own_routes(rig):
     r.pad(two, role="p2")
     r.modulate()
     rig.reg.apply()
-    assert bright.value == pytest.approx(bright.hi) and amp.value < amp.hi
+    assert rate.value == pytest.approx(rate.hi) and amp.value < amp.hi
 
 
 def test_the_camera_job_is_the_primary_pads_only(rig, monkeypatch):
@@ -423,3 +423,33 @@ def test_the_camera_job_is_the_primary_pads_only(rig, monkeypatch):
         d._dt = 1 / 60                                   # (no poll: the pads are scripted)
         d.act(rig.router)
     assert yaw.base > y0                                 # the primary's orbits
+
+
+def test_learn_p2_completes_only_from_the_second_pad(rig):
+    """"Learn p2" (the second pad's own want): a press on the primary does
+    not complete it; a press on p2 writes `pad@p2:A`."""
+    from hyperspace import devices
+
+    lrn, t = rig.learn, rig.table
+    one, two = ScriptedPad(), ScriptedPad()
+    lrn.devices = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", io=one), _second(devices.PadDevice("p2", io=two))])
+    assert lrn.wants() == ("desk", "pad", "p2")
+    lrn.arm("view.points", "p2")
+    one.frame()
+    one.frame(held={gp.A})
+    assert gp.learn_from(one, lrn) is False and lrn.learning == "view.points"
+    two.frame()
+    two.frame(held={gp.A})
+    assert gp.learn_from(two, lrn, role="p2") is True
+    assert [b.source for b in t.bindings if b.target == "view.points"
+            and b.source.startswith("pad")] == ["pad@p2:A"]
+    assert lrn.accepts("pad@p2:A") is False                 # (it landed: nothing armed)
+    lrn.arm("view.points", "p2")
+    assert lrn.accepts("pad@p2:B") and lrn.accepts("axis@p2:LX")
+    assert not lrn.accepts("pad:B") and not lrn.accepts("axis:LX")
+
+
+def _second(d):
+    d.qualifier = d.role
+    return d

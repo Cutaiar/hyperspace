@@ -2519,3 +2519,59 @@ def test_the_router_keeps_two_pads_apart(tmp_path):
     # the primary's camera job counts only its own axes as claimed
     table.add(a2)
     assert router.claimed("axis") == set() and router.claimed("axis@p2") == {0}
+
+
+def test_each_pad_times_its_own_holds(tmp_path):
+    """A `hold` row on each pad's START: held past HOLD_S only the held
+    pad's target fires, and a press on one pad never resets the other's
+    timer."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    r.reg.trigger("t.one", "one", lambda: fired.append("one"))
+    r.reg.trigger("t.two", "two", lambda: fired.append("two"))
+    table = Bindings([Binding("pad:MENU", "t.one", "hold"),
+                      Binding("pad@p2:MENU", "t.two", "hold")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    one.hits = {gp.MENU}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    one.prev = {gp.MENU}
+    two.hits = {gp.MENU}                                  # p2 pressed later
+    router.pad(one, now=0.3)
+    router.pad(two, now=0.3, role="p2")
+    two.prev = {gp.MENU}
+    router.pad(one, now=routing.HOLD_S + 0.01)
+    router.pad(two, now=routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one"]                               # p2's press did not reset pad's
+    router.pad(one, now=0.3 + routing.HOLD_S + 0.01)
+    router.pad(two, now=0.3 + routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one", "two"]
+
+
+def test_a_row_qualified_with_the_primary_pads_own_role_is_its(tmp_path):
+    """As a desk's `serves`: `pad@pad:A` (the primary named) fires on the
+    primary pad, and `axis@pad:LX` reads the primary's lanes."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad@pad:A", "view.faces", "toggle"),
+                      Binding("axis@pad:RT", "view.inst_amp", "position", 1.0)])
+    table.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces = r.reg["view.faces"].value
+    two.hits = {gp.A}
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces             # not the second pad's
+    one.hits = {gp.A}
+    router.pad(one, now=0.0)
+    assert r.reg["view.faces"].value != faces
+    assert router.lane("axis@pad:RT") == ("axis", 5)
+    assert router.claimed("axis") == {5}
+    router.modulate()
+    r.reg.apply()
+    amp = r.reg["view.inst_amp"]
+    assert amp.value == pytest.approx(amp.hi)             # TwoPadsPad's RT is all the way

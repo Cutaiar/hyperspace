@@ -390,7 +390,10 @@ class Learn:
         if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
             return base_scheme(source.partition(":")[0]) in PAD_SCHEMES
         if ":" not in want:
-            return source.partition(":")[0] == want
+            # a role: a source under that scheme (an OSC role's), or one
+            # qualified with it (``pad@p2:A`` completes "p2", plan 27 B6)
+            return (source.partition(":")[0] == want
+                    or Binding(source, "").device == want)
         return source.startswith(f"{want}.")
 
     # ---- a desk control completes it ----
