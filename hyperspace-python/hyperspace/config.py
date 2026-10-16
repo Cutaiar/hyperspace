@@ -156,6 +156,12 @@ like the rename above. The SYSTEM page shows both.
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
+                            # (one reader: only the first usb = true pad entry reads USB)
+                            # joystick = 1  pins a GLFW index, 0–15 (plan 27 B6); absent:
+                            # the next joystick no other pad entry reads. Several pads:
+                            # one gamepad entry each; the first is the primary (the
+                            # unqualified rows, the sticks' camera job), another's rows
+                            # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
