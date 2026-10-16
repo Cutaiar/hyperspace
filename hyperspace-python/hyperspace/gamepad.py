@@ -261,9 +261,60 @@ class UsbPad:
                 self._set(state)
 
 
+class Claims:
+    """What the pad devices share (plan 27 B6: several pads at once), one
+    per device registry (devices.Context.pads): which GLFW joystick each
+    pad reads (`taken`, jid → the `Pad`), which indices a pad is pinned to
+    (`pinned`, an entry's ``joystick = n`` — no unpinned pad takes one),
+    the pads in attach order (`order`, the list's), the one libusb reader
+    (`reader`, made the first time a pad borrows it) and the pad it is lent
+    to now (`usb`). The reader is **lent, not owned** (ruling 3 as
+    amended): each poll it goes to its holder while that pad still has
+    `usb` on and no GLFW joystick (sticky), else to the first pad in
+    `order` with `usb` on and no GLFW joystick. A `Pad` no device attached
+    has none of this: it reads the first present joystick and its own
+    reader."""
+
+    def __init__(self):
+        self.taken: dict[int, Pad] = {}
+        self.pinned: dict[int, Pad] = {}
+        self.order: list[Pad] = []
+        self.reader: UsbPad | None = None
+        self.usb: Pad | None = None
+
+    def lend(self) -> Pad | None:
+        """Who holds the reader this poll: the holder while it still may
+        (attached, `usb` on, no GLFW joystick), else the first such pad in
+        list order; None when no pad may."""
+        def may(p: Pad) -> bool:
+            return p in self.order and getattr(p, "usb", False) and p.jid is None
+        if self.usb is not None and may(self.usb):
+            return self.usb
+        return next((p for p in self.order if may(p)), None)
+
+    def release(self, pad: Pad) -> None:
+        """Everything `pad` held: its joystick, its pin, the USB reader."""
+        for d in (self.taken, self.pinned):
+            for j in [j for j, p in d.items() if p is pad]:
+                del d[j]
+        if self.usb is pad:
+            self.usb = None
+
+
+JOYSTICKS = range(glfw.JOYSTICK_1, glfw.JOYSTICK_LAST + 1)   # GLFW's indices, 0–15
+
+
 class Pad:
     """Edge detection and analog reads over polled pad state. `usb`: look
-    for a wired 360 pad over libusb when GLFW has none (`UsbPad`)."""
+    for a wired 360 pad over libusb when GLFW has none (`UsbPad`).
+
+    Several pads at once (plan 27 B6): a pad its device `attach`es to the
+    registry's shared `Claims` reads the next present GLFW joystick no
+    other pad has taken (the devices poll in list order, so the first
+    listed pad takes the first), or — pinned (`joystick`) — that index
+    only, waiting while it is absent. A pad whose joystick leaves is
+    `lost` and lets it go; unpinned, it takes the next free one that
+    appears."""
 
     def __init__(self, usb: bool = False):
         self.jid: int | None = None
@@ -275,6 +326,59 @@ class Pad:
         self.usb = usb
         self.usb_pad: UsbPad | None = None
         self.source: str | None = None     # "glfw", "usb" or None
+        self.claims: Claims | None = None  # shared with the other pads (`attach`)
+        self.role = ""
+        self.joystick: int | None = None   # pinned GLFW index, or None
+
+    def attach(self, claims: Claims, role: str = "", joystick: int | None = None) -> None:
+        """Join the other pad devices (plan 27 B6): `claims` is the
+        registry's shared `Claims`, `role` this pad's entry, `joystick` a
+        pinned GLFW index. Attach order is list order: it decides who the
+        one libusb reader is lent to (`Claims.lend`)."""
+        self.claims, self.role, self.joystick = claims, role, joystick
+        if joystick is not None:
+            claims.pinned.setdefault(joystick, self)
+        if self not in claims.order:
+            claims.order.append(self)
+
+    @property
+    def usb_note(self) -> str:
+        """Why this pad with `usb` on is not reading USB: the reader is
+        lent to another pad (``usb: lent to p2``); "" otherwise, the reader
+        idle included."""
+        claims = getattr(self, "claims", None)
+        holder = getattr(claims, "usb", None)
+        if not getattr(self, "usb", False) or holder is None or holder is self:
+            return ""
+        return f"usb: lent to {holder.role or 'another pad'}"
+
+    def _find(self) -> int | None:
+        """The joystick this pad reads this frame: the one it has while it
+        is present (and still its own), else the next free one — or, pinned,
+        its index once present. None: no joystick for it now."""
+        claims = getattr(self, "claims", None)
+        jid = self.jid
+        if jid is not None and glfw.joystick_present(jid) and (
+                claims is None or (claims.taken.get(jid, self) is self
+                                   and claims.pinned.get(jid, self) is self)):
+            if claims is not None:
+                claims.taken[jid] = self
+            return jid
+        if jid is not None and claims is not None and claims.taken.get(jid) is self:
+            del claims.taken[jid]          # gone: free for whoever finds it next
+        pin = getattr(self, "joystick", None)
+        cands = JOYSTICKS if pin is None else ([pin] if pin in JOYSTICKS else [])
+        for j in cands:
+            if not glfw.joystick_present(j):
+                continue
+            if claims is not None:
+                if claims.taken.get(j, self) is not self:
+                    continue               # another pad reads it
+                if pin is None and claims.pinned.get(j, self) is not self:
+                    continue               # pinned to another pad
+                claims.taken[j] = self
+            return j
+        return None
 
     @property
     def on(self) -> bool:
@@ -292,18 +396,17 @@ class Pad:
         joysticks, then libusb when `usb` is on). Here so the pad answers
         the device protocol's `open` / `poll` / `close` itself."""
 
-    def publish(self, router) -> None:
-        """The axes' names, labels and rests on the router (`publish`)."""
-        publish(router)
+    def publish(self, router, scheme: str = "axis") -> None:
+        """The axes' names, labels and rests on the router (`publish`),
+        under `scheme` (a second pad's ``axis@p2``)."""
+        publish(router, scheme)
 
     def poll(self) -> None:
         source = getattr(self, "source", None)
-        if self.jid is None or not glfw.joystick_present(self.jid):
-            self.jid = next(
-                (j for j in range(glfw.JOYSTICK_1, glfw.JOYSTICK_LAST + 1)
-                 if glfw.joystick_present(j)),
-                None,
-            )
+        self.jid = self._find()
+        claims = getattr(self, "claims", None)
+        if claims is not None and claims.usb is self and self.jid is not None:
+            claims.usb, self.usb_pad = None, None    # reading GLFW: the reader goes back
         state = None if self.jid is not None else self._usb_state()
         new = "glfw" if self.jid is not None else "usb" if state is not None else None
         if new != source:      # a pad came, went or changed road: no stale edges
@@ -327,6 +430,16 @@ class Pad:
         it again. Never raises."""
         usb = getattr(self, "usb_pad", None)
         self.usb_pad = None
+        claims = getattr(self, "claims", None)
+        if claims is not None:
+            claims.release(self)       # its joystick, its pin, the USB reader (plan 27 B6)
+            if self in claims.order:
+                claims.order.remove(self)
+            # the shared reader closes only when no pad left could borrow it
+            usb = None
+            if claims.reader is not None and not any(
+                    getattr(p, "usb", False) for p in claims.order):
+                usb, claims.reader = claims.reader, None
         self.jid, self.source = None, None
         self.buttons, self.prev_buttons, self.hat, self.prev_hat = [], [], 0, 0
         if usb is not None:
@@ -341,6 +454,15 @@ class Pad:
         module never starts a second reader fighting for the device."""
         if not getattr(self, "usb", False):
             return None
+        claims = getattr(self, "claims", None)
+        if claims is not None:              # several pads: one reader, lent (plan 27 B6)
+            if claims.lend() is not self:
+                return None
+            claims.usb = self
+            if claims.reader is None:
+                claims.reader = UsbPad()
+            self.usb_pad = claims.reader
+            return claims.reader.latest()
         if getattr(self, "usb_pad", None) is None:
             self.usb_pad = UsbPad()
         return self.usb_pad.latest()
@@ -384,7 +506,7 @@ class Pad:
         return v if v > 0.02 else 0.0
 
 
-def learn_from(pad: Pad, learn) -> bool:
+def learn_from(pad: Pad, learn, role: str = "") -> bool:
     """The pad completes an armed learn (learn.Learn, duck-typed — this
     module imports nothing from the package): the first button or D-pad
     press this frame lands a button row (`Learn.learn_pad_button`), else
@@ -392,37 +514,41 @@ def learn_from(pad: Pad, learn) -> bool:
     a stick is centred, so a push). On a setting no performer may drive
     (not modulatable) only a button can: the axes are not asked, so a
     nudged stick never ends the learn. True when the press was the
-    learn's, so the router lets that frame's button rows be."""
+    learn's, so the router lets that frame's button rows be. `role` is a
+    second pad's qualifier (plan 27 B6): its rows read ``pad@p2:A``,
+    ``hat@p2:UP``, ``axis@p2:LX``; "" (the primary pad) leaves them bare."""
     if learn is None or getattr(learn, "learning", None) is None or not pad.on:
         return False
     target = learn.target_for(learn.learning)
+    q = f"@{role}" if role else ""          # routing.QUALIFIER (nothing imported here)
     for name, i in BUTTONS.items():
-        if pad.pressed(i) and learn.accepts(f"pad:{name}"):
-            learn.learn_pad_button(f"pad:{name}")
+        if pad.pressed(i) and learn.accepts(f"pad{q}:{name}"):
+            learn.learn_pad_button(f"pad{q}:{name}")
             return True
     for name, bit in HATS.items():
-        if pad.hat_pressed(bit) and learn.accepts(f"hat:{name}"):
-            learn.learn_pad_button(f"hat:{name}")
+        if pad.hat_pressed(bit) and learn.accepts(f"hat{q}:{name}"):
+            learn.learn_pad_button(f"hat{q}:{name}")
             return True
     if target is None or not target.modulatable:
         return False
     for name, u, rest in zip(AXES, pad.lanes(), AXIS_RESTS):
-        if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis:{name}"):
-            learn.learn_source(f"axis:{name}", centred=name in STICKS)
+        if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis{q}:{name}"):
+            learn.learn_source(f"axis{q}:{name}", centred=name in STICKS)
             return False        # an axis has no button row to hold back
     return False
 
 
-def publish(router) -> None:
+def publish(router, scheme: str = "axis") -> None:
     """The `axis` lanes' names, labels and rests on `router` (its `names`,
     `labels`, `rests` dicts, duck-typed) — the pad's to say, not the
     table's (plan 27 B2: they left `Router._publish_axes`). Once: the names
-    map is published as one new dict, so the router's address cache keeps."""
-    if "axis" in router.names:
+    map is published as one new dict, so the router's address cache keeps.
+    `scheme` is a second pad's qualified key (``axis@p2``, plan 27 B6)."""
+    if scheme in router.names:
         return
-    router.labels["axis"] = list(AXIS_LABELS)
-    router.rests["axis"] = list(AXIS_RESTS)
-    router.names["axis"] = {n: i for i, n in enumerate(AXES)}
+    router.labels[scheme] = list(AXIS_LABELS)
+    router.rests[scheme] = list(AXIS_RESTS)
+    router.names[scheme] = {n: i for i, n in enumerate(AXES)}
 
 
 def ride_depth(p, octaves: float) -> None:

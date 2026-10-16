@@ -304,6 +304,7 @@ changes brightness or volume instead).
 | F3 | Learn pad — a stick and a trigger | 2f | gamepad | 146 |
 | F4 | Momentary and hold on a pad button | 2f | gamepad | 147 |
 | F5 | The pad after a restart, and its sticks | 2f | gamepad | 171, 179 |
+| F6 | Two pads at once | 2f | the Xbox pad (Bluetooth), the wired pad, the copy | 219 |
 | G1 | A second MIDI controller learned onto a knob | 2g | APC40, a second MIDI controller, the copy | 176 |
 | G2 | SHIFT is the APC40's | 2g | APC40, a second MIDI controller, the copy | 177 |
 | G3 | A phone's fader moves a setting | 2g | a phone on the same Wi-Fi, the copy | 186 |
@@ -1582,18 +1583,21 @@ have; a note after the paste (an old section left in the file).
 1. With the app running, set the `bridge` entry's `enabled = true`;
    save.
 2. Write `role = "a:b"` on any entry; save. Then put it back; save.
-3. Add a second pad: `[[devices]]`, `role = "pad2"`, `kind =
-   "gamepad"`; save. Then set the first pad's `enabled = false`; save.
+3. Add a second hands device: `[[devices]]`, `role = "leap2"`, `kind =
+   "hands"`; save. Then add a second pad: `role = "pad2"`, `kind =
+   "gamepad"`; save. Then set the `leap` entry's `enabled = false`; save.
 
 **Right if:** (1) within a second "devices: bridge changed — reopened"
 on SYSTEM and the bridge line no longer says `off`. (2) one note
 "config: [[devices]] not applied — … — the old list stands" and nothing
-else changes; put back, the list is followed again. (3) `pad2 · gamepad ·
-error: feeds 'axis', which pad already feeds — not opened`, the first
-pad unchanged; with the first pad off, `pad2` takes over.
+else changes; put back, the list is followed again. (3) `leap2 · hands ·
+error: feeds 'hand', which leap already feeds — not opened`, the hands
+unchanged; `pad2 · gamepad · lost` (or `connected · … · glfw 1` with a
+second pad in), no error — two pads may run at once since plan 27 B6
+(F6); with `leap` off, `leap2` takes over.
 
 **Wrong if:** nothing happens after a save; a window moves or the app
-restarts; both pads `connected` at once.
+restarts; both hands devices `connected` at once; `pad2` an `error:` line.
 
 **Changes:** put the list back as it was.
 
@@ -4803,6 +4807,35 @@ setting drives it and stops orbiting.
 moves; a learned stick still orbits.
 
 *(checks 171, 179)*
+
+#### F6. Two pads at once (on the copy)
+
+**Needs:** the Xbox pad paired over Bluetooth and the wired pad (the
+Afterglow) on USB. Plan 27 B6.
+
+**Do:** in the copy's `config.toml`, put the two-pads block from
+`docs/plans/27-device-registry.md` ("The block to paste") in place of
+the `pad` entry: `pad`, then `p2` (both keep `usb = true`). Save. Look at
+SYSTEM → devices. Right-click Points → **Learn pad**, press A on the
+wired pad; right-click Field amp → **Learn pad**, squeeze the wired
+pad's RT. Use both pads together. Unplug the wired pad; plug it back.
+Turn the Xbox pad off and on.
+
+**Right if:** two lines, `pad · gamepad · connected · … · glfw 0 · usb:
+lent to p2` and `p2 · gamepad · connected · … · usb: Afterglow …`; the learns say "pad A
+on p2" and "right trigger on p2"; the Xbox pad does everything it did
+(A flips faces, the sticks steer); the wired pad's A flips points, its
+RT rides Field amp and its sticks do nothing else; both at once.
+Unplugged, `p2` reads `lost` and the Xbox pad keeps working; plugged
+back, `connected` again. The Xbox pad off: `pad` reads `lost · usb:
+lent to p2`, the wired pad keeps working, and **Learn p2** on a setting
+completes from the wired pad.
+
+**Wrong if:** `p2` reads `lost` while the Xbox pad is connected; with
+the Xbox pad off, `pad` takes the wired pad; one press does both pads' jobs; the
+wired pad's stick turns the camera.
+
+*(check 219)*
 
 ## (g) A second controller, a phone (OSC)
 

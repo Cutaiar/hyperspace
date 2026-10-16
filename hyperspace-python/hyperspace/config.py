@@ -156,6 +156,13 @@ like the rename above. The SYSTEM page shows both.
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
     usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
+                            # (one reader, lent to the first usb = true pad entry
+                            # that has no GLFW joystick, kept while it has none)
+                            # joystick = 1  pins a GLFW index, 0–15 (plan 27 B6); absent:
+                            # the next joystick no other pad entry reads. Several pads:
+                            # one gamepad entry each; the first is the primary (the
+                            # unqualified rows, the sticks' camera job), another's rows
+                            # carry its role (pad@p2:A, axis@p2:LX) — Learn pad writes them
 
     [bridge]                # lanes out / external lanes in over MIDI (bridge.py)
     enabled = false         # true opens the bridge; off, it is never imported
@@ -267,6 +274,7 @@ DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 for
 DEVICE_TABLES = (("gamepad", "gamepad", "pad"), ("midi", "midi", None),
                  ("hands", "hands", "leap"), ("bridge", "bridge", "bridge"))
 DEVICE_KEYS = ("role", "kind", "enabled")
+JOYSTICKS = 16           # GLFW's joystick slots (JOYSTICK_1–16): a gamepad's `joystick` is 0–15
 # a `midi-out` entry's own keys and their defaults (plan 27 B3): the port
 # (a substring of an existing one, else a virtual port of that name unless
 # `virtual` is false), the hands role whose DAW messages it carries, and
@@ -411,7 +419,8 @@ def _midi_role(mc: dict) -> str:
     return prof if isinstance(prof, str) and prof and ":" not in prof else "midi"
 
 
-def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) -> dict | None:
+def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str],
+            pins: set[int] | None = None) -> dict | None:
     """One `[[devices]]` entry, checked like `_screen`: a missing or bad
     role or kind drops the entry (a note, never a dead launch); `enabled`
     that is not true or false is true; a known kind's own keys are filled
@@ -426,6 +435,13 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
     if role in roles:
         problems.append(f"{where} role {role!r} is listed twice — the second dropped")
         return None
+    j = e.get("joystick")
+    if (pins is not None and e.get("kind") == "gamepad" and isinstance(j, int)
+            and not isinstance(j, bool) and j in pins):
+        # plan 27 B6: one GLFW index, one pad — like a role listed twice
+        problems.append(f"{where} ({role}) joystick = {j} is pinned by an earlier pad "
+                        "— the second dropped")
+        return None
     if not isinstance(kind, str) or not kind.strip():
         problems.append(f"{where} ({role}) kind = {kind!r} is not a kind — dropped")
         return None
@@ -436,6 +452,16 @@ def _device(n: int, e: dict, cfg: dict, roles: set[str], problems: list[str]) ->
         enabled = True
     roles.add(role)
     own = {k: v for k, v in e.items() if k not in DEVICE_KEYS}
+    if kind == "gamepad" and "joystick" in own:
+        # plan 27 B6: a pinned GLFW index, 0-based (GLFW has 16). Anything
+        # else is a note, and the pad takes the next free joystick
+        j = own["joystick"]
+        if isinstance(j, bool) or not isinstance(j, int) or not 0 <= j < JOYSTICKS:
+            _note(cfg, f"{where} ({role}) joystick = {j!r} is not a GLFW index 0–"
+                       f"{JOYSTICKS - 1} — the pad takes the next free joystick")
+            del own["joystick"]
+        elif pins is not None:
+            pins.add(j)
     return {"role": role, "kind": kind, "enabled": enabled, **_kind_defaults(kind), **own}
 
 
@@ -504,13 +530,13 @@ def _devices(cfg: dict, data: dict, path: Path, problems: list[str]) -> None:
         if not isinstance(raw, list):
             problems.append(f"config: devices = {raw!r} is not a list of [[devices]] tables")
             raw = []
-        entries, roles = [], set()
+        entries, roles, pins = [], set(), set()
         for i, e in enumerate(raw):
             if not isinstance(e, dict):
                 problems.append(f"config: [[devices]] entry {i + 1} is not a table ({e!r}) "
                                 "— dropped")
                 continue
-            got = _device(i + 1, e, cfg, roles, problems)
+            got = _device(i + 1, e, cfg, roles, problems, pins)
             if got is not None:
                 entries.append(got)
         for section, kind, _ in DEVICE_TABLES:

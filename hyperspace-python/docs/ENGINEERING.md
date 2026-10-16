@@ -977,7 +977,7 @@ keys through unchecked:
 | Kind | Its keys (defaults) |
 |---|---|
 | `midi` | `port` (a substring; required for `generic`), `profile` (`"apc40"` or `"generic"`), `map` |
-| `gamepad` | `usb` (`true`) |
+| `gamepad` | `usb` (`true`; the one USB reader is lent to the first `usb = true` pad with no GLFW joystick), `joystick` (none: the next free GLFW joystick; `0`–`15` pins that index — anything else is a note and dropped) |
 | `hands` | the whole `[hands]` table (`hands/core.py` `DEFAULTS`); a relative `calibration` or `tape` is the config's folder's |
 | `bridge` | `out` (`"IAC"`), `in` (`""`), `encoding` (`"pitch"`), `channel` (0), `cc` (16), `rate` (100), `send` (`["lane:*"]`, read once into sink rows, §13), `in_lanes` (16) |
 | `midi-out` | `port` (required), `virtual` (`true`: make a virtual port of that name when none matches), `carries` (a hands role whose DAW messages it sends), `encoding`, `channel`, `cc`, `rate` (its sink rows' wire, as the bridge's; `config.MIDI_OUT`) |
@@ -1009,10 +1009,25 @@ port, a bad key) is an `error: …` line and one note, tried again every
 2 s five times, then every 10 s, and comes up with no relaunch; one whose
 hardware is simply absent is `lost` and looks for it itself. A device
 that raises on a frame shows the error on its line and the hot-reload
-toast; the frame and every other device go on. Two enabled entries that
-would feed one source scheme (two pads, two hands) are not both opened:
-the later is `error: feeds 'axis', which pad already feeds — not
-opened`.
+toast; the frame and every other device go on. The registry claims
+(scheme, role), not scheme (plan 27 B6): **two pads** both open — the
+first enabled `gamepad` entry is the primary (its rows unqualified,
+`pad:A`, `axis:LX`), each later one publishes under its role
+(`pad@p2:A`, `axis@p2:LX`) — but two enabled entries of a kind that
+cannot qualify are not: a second hands device is `error: feeds 'hand',
+which leap already feeds — not opened` (two Leaps are plan 29's). Each
+pad reads its own controller: the next present GLFW joystick no other
+pad has taken, in list order, or the entry's `joystick = n`; one whose
+joystick leaves is `lost` and takes the next free one that appears (a
+pinned one waits for its index; two entries pinned to one index: the
+second is dropped with a note). **The libusb reader is one, lent, not
+owned** (`gamepad.Claims.lend`): each poll it goes to the pad holding it
+while that pad has `usb` on and no GLFW joystick (sticky), else to the
+first `usb = true` pad in list order with no GLFW joystick; a pad that
+finds a GLFW joystick hands it back that poll. So the Bluetooth pad
+plus the wired Afterglow work with both entries at the default `usb =
+true`: the Bluetooth pad's line says `glfw 0  ·  usb: lent to p2`. The
+reader closes when the last pad that could borrow it closes.
 
 **A recorded point cloud** (`kind = "cloud"`, `file =
 "clouds/knot.npz"`): a `devices.write_clouds` file (version-1 `.npz`:
@@ -1049,7 +1064,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road; the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -1183,8 +1198,15 @@ lanes fed, with names, labels and rests from `gamepad.publish`, then the
 button and d-pad rows), then runs the sticks' default camera job
 (`gamepad.steer`): every stick or trigger no route names moves its
 camera param through `nudge` / `scale`, through the pad's feel
-(`desk.pad.*`, SYSTEM → gamepad). A second enabled pad is refused (two
-devices may not feed `axis`).
+(`desk.pad.*`, SYSTEM → gamepad). **Several pads** (plan 27 B6): each
+`gamepad` entry is a pad device reading its own controller (§5). The
+first enabled one is the primary: the factory pad rows, every row
+written before B6 and the sticks' camera job are its. A second pad
+(`role = "p2"`) feeds `axis@p2` and fires only `pad@p2:…` / `hat@p2:…`
+rows; it starts with none and gets them from Learn pad (which completes
+on whichever pad moves) or ROUTING, where its axes are listed as
+`axis@p2 left stick X`; its unrouted sticks do nothing. One feel for
+every pad. Its SYSTEM line names the joystick it reads (`glfw 1`).
 
 **A phone, or any OSC sender** (plan 27, `osc.py`): one `[[devices]]
 kind = "osc"` entry, no code. Its role is its scheme: `axes = ["/x",

@@ -18,12 +18,13 @@ edited or added (decision 23): every file under `hyperspace/library/` is
 byte-identical; the proofs are fixtures under `tests/fixtures/`.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group W, checks
-168–190. Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
-rows 140–168. The owner's decisions for this plan (10–14 and 16 of the
+168–190 and 219 (B6). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
+rows 140–168 and 210–213 (B6). The owner's decisions for this plan (10–14 and 16 of the
 launch prompt) are in [`DECISIONS.md`](../DECISIONS.md) with Who "owner".
 
 Branch `plan-24-26-27-integration`, in merge order: B1 (PR #177), B2
-(#181), B4 (#184), B3 (#185).
+(#181), B4 (#184), B3 (#185); then B6 (several gamepads at once, the
+owner's ask of 2026-10-15), after plan 26.
 
 ## The block to paste
 
@@ -103,6 +104,28 @@ file = "clouds/knot.npz"  # relative to the home (the folder config.toml is in)
 **A second desk** (B2): `[[devices]] role = "launch"  kind = "midi"
 profile = "generic"  port = "<part of its port name>"`.
 
+**Two pads at once** (B6) — the Xbox pad over Bluetooth and the wired
+Afterglow over USB. The first pad entry is the primary: the factory pad
+rows and every row written before B6 are its, and its sticks keep the
+camera job. The second is `p2`: its rows read `pad@p2:A`, `axis@p2:LX`,
+and it starts with none (Learn pad, "Learn p2" or ROUTING gives it
+some). Both keep the default `usb = true`: the one USB reader is lent,
+not owned — each poll it goes to the pad that holds it while that pad
+still has no GLFW joystick, else to the first `usb = true` pad in list
+order with none. The Xbox pad reads GLFW joystick 0, so the reader is
+lent to `p2`:
+
+```toml
+[[devices]]
+role = "pad"              # the Xbox pad (Bluetooth): GLFW joystick 0
+kind = "gamepad"
+
+[[devices]]
+role = "p2"               # the Afterglow (USB): no GLFW joystick is free, so the reader is lent to it
+kind = "gamepad"
+# joystick = 1            # pin a GLFW index (0–15) instead of "the next free one"
+```
+
 ### What was translated from the old tables
 
 | Old table | Entry (`role`, `kind`) | Its keys |
@@ -176,9 +199,12 @@ the config's folder.
   hands', `ext` the bridge's, `cc` / `note` / `pitch` MIDI's), so every
   existing row is unchanged whatever the entry is called. A new device
   (B4's OSC) publishes under its role. Two enabled devices may not feed
-  one scheme: a second pad or a second hands device is refused with an
-  error line naming both ("feeds 'axis', which pad already feeds — not
-  opened") and comes up when the first leaves the list.
+  one Router key. **Changed in B6:** the registry claims (scheme, role),
+  not scheme — a second pad publishes under its role (`axis@p2`) and
+  opens; a kind that cannot qualify (a second hands device) is still
+  refused with an error line naming both ("feeds 'hand', which leap
+  already feeds — not opened") and comes up when the first leaves the
+  list.
 - **Tests.** `tests/test_devices.py` (new), notably
   `::test_devices_run_in_list_order_poll_learn_act_then_feed_then_send`,
   `::test_one_devices_exception_never_stops_the_frame`,
@@ -381,7 +407,7 @@ defaults; `config.py`'s docstring is the full list):
 | Kind | Keys beyond `role`, `kind`, `enabled` |
 |---|---|
 | `midi` | `port` (a substring of the port name; required for `generic`), `profile` (`apc40`, `generic`), `map` |
-| `gamepad` | `usb` |
+| `gamepad` | `usb` (the one USB reader is lent to the first `usb = true` pad with no GLFW joystick, and kept while it has none), `joystick` (B6: a pinned GLFW index, 0–15; absent: the next free one) |
 | `hands` | the `[hands]` table: `mode`, `dofs`, `out`, `channel`, `cc`, `presence`, `note`, `min_confidence`, `calibration`, `tape`, … |
 | `bridge` | `out`, `in`, `encoding`, `channel`, `cc`, `rate`, `send` (read once, B3), `in_lanes` |
 | `midi-out` | `port` (required), `virtual` (true), `carries` (a hands role), `encoding`, `channel`, `cc`, `rate` |
@@ -394,6 +420,99 @@ with a note). A bad role, a role listed twice or no kind drops the entry
 with a note; an unknown kind is kept as an `error: unknown kind` line. An
 OSC role that is a row kind or a built-in scheme (`key`, `pad`, `hat`,
 `cc`, `note`, `pitch`, `lane`, `lfo`, `cloud`) is an error line on open.
+
+### B6 — several gamepads at once
+
+- **At the machine.** Two `gamepad` entries (the block above) give two
+  SYSTEM lines, `pad · gamepad · connected · 22 sources · glfw 0` and
+  `p2 · gamepad · connected · 22 sources · usb: Afterglow Gamepad for
+  Xbox 360` (a second Bluetooth pad would read `glfw 1`). The first pad
+  works exactly as before: the factory rows, its sticks' camera job,
+  everything already learned. The second does nothing until it has
+  rows: **Learn pad** on any param completes from whichever pad moves
+  first, and a press or a stick on the second writes `pad@p2:A` /
+  `axis@p2:LX` ("learned view.points ← pad A on p2 …"). ROUTING's source
+  combo lists the second pad's axes after the first's, as `axis@p2 left
+  stick X`, and its rows read "left stick X on p2 pushes …". Both drive
+  at once. Unplugged, a pad's line reads `lost` and its routes let go;
+  the other keeps working; plugged back (or any new pad appearing), the
+  lost pad takes the next free joystick. A pad pinned with `joystick =
+  1` reads `lost · waiting for joystick 1` until that index is there.
+  The one USB reader is lent: the Afterglow on `p2` is read with both
+  entries at `usb = true`, and the Xbox pad's line says `glfw 0  ·  usb:
+  lent to p2`; turned off, the Xbox pad reads `lost · usb: lent to p2`
+  while `p2` keeps the reader. A param's menu offers **Learn pad** (any
+  pad) and **Learn p2** (that pad only), so a second pad can be learned
+  onto with the first unplugged. Removing the first pad's entry makes the
+  second the primary: it reopens ("devices: p2 changed — reopened") with
+  its rows bare, the factory rows and the camera job.
+- **Code.** `routing.py`: `base_scheme` strips the qualifier from any
+  scheme; `qualified(scheme, role)`; `Binding.head` (the qualified Router
+  key), `Binding.device` for every scheme, `describe` says "on <role>";
+  `Bindings.primaries` (scheme → role) and `role_of` for a non-MIDI row;
+  `Router.pad(…, role=)` (feeds `axis@<role>`, publishes there, fires only
+  the rows qualified with the role, holds per pad); `Router.source_feel`
+  gives every pad the one `desk.pad.*` feel; `Router.follow_devices`
+  reads `primaries`. `devices.py`: `Base.repeatable`, `Base.qualifier`,
+  `Base.qualify`; `primaries_of`, `make(…, primaries)` (a role listed
+  twice refused, a repeatable kind qualified after its primary),
+  `make_all`; `DeviceRegistry.primaries`, told to the table with
+  `midi_roles`; `apply` reopens a kept device whose qualifier changed;
+  `Context.pads`; `PadDevice` (`repeatable`, `joystick`, the qualified
+  `sources`, `last` with the joystick index, `learn` / `act` with the
+  role, the camera job the primary's only). `gamepad.py`: `Claims`
+  (`taken`, `pinned`, `usb`, `release`), `JOYSTICKS`, `Pad.attach`,
+  `Pad._find`, `Pad.close` releases its claims, `learn_from(…, role=)`,
+  `publish(router, scheme)`. `learn.py`: `accepts("pad")` takes any
+  pad's source; a hat's step sign and a stick's refusal read the bare
+  source. `config.py`: `JOYSTICKS`, a gamepad entry's `joystick` checked
+  (0–15, else a note and dropped). `ui_routing.source_schemes` /
+  `_sources` key on `Binding.head`, so a row on a pad this rig lacks
+  still shows its source. After review: `Claims.order` / `reader` /
+  `lend` (the USB reader lent, sticky; `Pad.usb_note` a property, "usb:
+  lent to p2"; the reader closed with the last pad that could borrow
+  it); `PadDevice.wants_for` (a second pad's role is a want, "Learn p2";
+  `Learn.accepts` matches a role on a qualified source); `Router.pad`
+  and `Router._resolve_lane` read a row qualified with the primary's own
+  role as the primary's (`pad@pad:A`, `axis@pad:LX`, as a desk's
+  `serves`); `_find` keeps a joystick only while no other pad is pinned
+  to it; `config._device` drops a second entry pinned to the same index.
+- **The rules as built.** An unqualified row is the scheme's primary
+  device's: MIDI's by B2's profile-matching rule (`midi_roles`, the same
+  to the byte), every other scheme's by list order — the first enabled
+  entry of the kind (`primaries_of`; with none enabled, the first
+  listed). No file migrates: `pad:A`, `axis:LX`, `hat:UP` in any
+  `bindings.json` or preset mean the first pad, as they did. The factory
+  pad rows and `PAD_REMAP` / `PAD_NEW_ROWS` are the primary's; a second
+  pad starts with none. The pad feel is one set for every pad. A row
+  qualified with the primary's own role is the primary's.
+- **Tests.** `tests/test_routing.py::test_the_qualifier_is_general_any_scheme_takes_a_role`,
+  `::test_an_unqualified_pad_row_is_the_primary_pads`,
+  `::test_the_router_keeps_two_pads_apart`;
+  `tests/test_devices.py::test_two_pads_open_each_under_its_role`,
+  `::test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad`,
+  `::test_the_joystick_key_is_checked`,
+  `::test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note`
+  (now: a second pad opens, a second hands device is refused);
+  `tests/test_gamepad.py::test_two_pads_take_different_joysticks_in_list_order`,
+  `::test_an_unpinned_pad_whose_joystick_leaves_is_lost_then_takes_the_next_free`,
+  `::test_a_pinned_pad_waits_for_its_index`,
+  `::test_a_bare_pad_still_takes_the_first_present_joystick`,
+  `::test_one_usb_reader_across_two_pads`;
+  `tests/test_pad_learn.py::test_learn_on_a_second_pad_writes_its_qualified_rows`,
+  `::test_two_pads_drive_their_own_routes`,
+  `::test_the_camera_job_is_the_primary_pads_only`;
+  `tests/test_device_inputs.py::test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed`.
+  After review: `tests/test_gamepad.py::test_a_pad_that_finds_a_joystick_hands_the_reader_back`,
+  `::test_keeping_a_joystick_respects_another_pads_pin`;
+  `tests/test_devices.py::test_two_pads_with_usb_on_the_reader_is_lent_to_the_one_without_a_joystick`;
+  `tests/test_pad_learn.py::test_learn_p2_completes_only_from_the_second_pad`;
+  `tests/test_routing.py::test_each_pad_times_its_own_holds`,
+  `::test_a_row_qualified_with_the_primary_pads_own_role_is_its`.
+  `test_device_inputs.py::test_a_qualified_source_is_its_roles_and_adds_no_colon`
+  changed one assertion on purpose (`hand@x:1`'s scheme is `hand` now,
+  its role `x`). Every MIDI test passes untouched; the boundary tests
+  are untouched.
 
 ## Not verified by a person
 
@@ -417,6 +536,10 @@ particular:
   time a server binds `0.0.0.0`, and a bundle from a real sender
   (186–189).
 - **The "Learn sink ▸" and "Learn <role>" menu items** on a screen.
+- **Two real pads at once** (219): the joystick claims, the one USB
+  reader and both pads driving together are proven with fake GLFW
+  joysticks and scripted pads only; no second controller was on the
+  build Mac (the smoke run's two pad lines read `lost`).
 
 ## Known rough edges
 
@@ -466,6 +589,19 @@ particular:
 - Clouds: the file is read whole at open, has one rate (no per-frame
   times), and a NaN point gives NaN `bounds`; a recording changed on disk
   is not re-read until its entry changes.
+- **Two pads (B6).** One libusb reader, so only one wired 360 pad is
+  ever read; it is sticky — a holder keeps it while it has no GLFW
+  joystick, even when a pad listed earlier loses its own. One
+  feel (`desk.pad.*`) for every pad; per-pad feel is plan 28/29's. The
+  hands stay single (a second hands entry is refused): their forty lanes
+  are another shape, two Leaps are plan 29's. A second pad has no
+  factory rows and no camera job. "Learn pad" on a param's menu is
+  offered while the *first open* pad is connected
+  (`rig.adapter("gamepad")`); "Learn p2" is offered on a param a lane can
+  drive (`p.modulatable`). Two entries pinned to one `joystick` index:
+  the second is dropped with a note. Reordering the two pad entries swaps
+  which one the bare rows mean; a second pad's qualified rows go dormant
+  if it becomes the primary.
 - **What the launch prompt asked for that was built otherwise.** "The
   role is the scheme" holds for a new device only; today's four keep
   their schemes (`Device.schemes`, row 141). The OSC sources are

@@ -212,8 +212,10 @@ def test_a_qualified_source_is_its_roles_and_adds_no_colon():
     assert not b.overlaps(plain) and not plain.overlaps(b)
     assert b.overlaps(Binding("cc@launch:*:7", "view.speed", "abs"))
     assert b.matches("cc", 0, 7)                     # (the table picks the device: `serves`)
-    # a scheme that is not MIDI takes no qualifier: it stays one scheme
-    assert Binding("hand@x:1", "x", "push").scheme == "hand@x"
+    # plan 27 B6: any scheme takes the qualifier (it was MIDI's only), and
+    # the qualified head stays the Router key its lanes are read under
+    h = Binding("hand@x:1", "x", "push")
+    assert (h.scheme, h.device, h.head, h.bare) == ("hand", "x", "hand@x", "hand:1")
     assert routing.is_continuous("hand") and routing.is_continuous("osc")
     assert not routing.is_continuous("cc@launch") and not routing.is_continuous("pad")
 
@@ -503,6 +505,49 @@ def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(bu
         assert not lib.is_dirty("presets"), name
     assert r.path.read_text() == text                # never rewritten
     assert not r.notes                               # the registry said nothing either
+
+
+def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build):
+    """Plan 27 B6: a `bindings.json` written before B6 (today's factory
+    file, its pad rows unqualified) loads with two pads listed with no
+    note, no rewrite and no dirt, and every pad row means the primary
+    pad: a press on the second pad fires none of them."""
+    text = routing.FACTORY_FILE.read_text()
+    pads = [{"role": "pad", "kind": "gamepad", "enabled": True, "usb": False},
+            {"role": "p2", "kind": "gamepad", "enabled": True, "usb": False}]
+    r = build(entries() + pads, bindings=text)
+    t = r.table
+    assert t.notes == [] and t.said == "" and not t.changed and t.error == ""
+    rows = t.of("pad", "hat")
+    assert rows and all(not b.device and t.role_of(b) == "pad" for b in rows)
+    lib = r.lib
+    for name in lib.list("presets"):
+        lib.presets.load(name)
+        frame(r)
+        assert not lib.is_dirty("presets"), name
+    one, two = r.devices.get("pad").io, r.devices.get("p2").io
+    faces = r.reg["view.faces"].value                    # pad:A's
+    one.frame()
+    two.frame()
+    frame(r)
+    two.frame(held={gp.A})
+    frame(r)
+    assert r.reg["view.faces"].value == faces            # the second pad's A: none of the file's
+    one.frame(held={gp.A})
+    frame(r)
+    assert r.reg["view.faces"].value != faces            # the primary's A: the file's row
+    # ROUTING's combo offers the second pad's axes under its role, after
+    # the primary's (no page change: the registry's feeds, the pad's labels)
+    assert ui_routing.source_schemes(r.router) == ["lfo", "axis", "axis@p2"]
+    panel = NS(audio=NS(chain=NS(band_names=["LOW"])))
+    offered = dict(ui_routing._sources(panel, r.router))
+    assert offered["axis@p2:LX"] == "axis@p2 left stick X"
+    assert offered["axis:LX"] == "axis left stick X"
+    # a route on a pad this rig does not list still shows its source
+    r.table.add(Binding("axis@p3:RT", "view.inst_amp", "position", 1.0))
+    assert "axis@p3" in ui_routing.source_schemes(r.router)
+    assert r.path.read_text() == text                    # never rewritten
+    assert not r.notes
 
 
 # ---------------------------------------------------------------- review of PR #181

@@ -505,8 +505,9 @@ def source_schemes(router: Router) -> list[str]:
     device this rig lacks still shows its source."""
     out = [sc for sc in router.schemes() if sc != "lane"]
     for b in router.table.routes():
-        if b.scheme != "lane" and b.scheme not in out:
-            out.append(b.scheme)
+        # its Router key, qualifier and all (``axis@p2``, plan 27 B6)
+        if b.head != "lane" and b.head not in out:
+            out.append(b.head)
     return out
 
 
@@ -531,10 +532,10 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
     for scheme in source_schemes(router):
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)
-        used = any(b.scheme == scheme for b in router.table.bindings)
+        used = any(b.head == scheme for b in router.table.bindings)
         if not (names or vec is not None or used):
             continue
-        named = [b.index + 1 for b in router.table.bindings if b.scheme == scheme]
+        named = [b.index + 1 for b in router.table.bindings if b.head == scheme]
         n = len(names) or (len(vec) if vec is not None else 0) or max(named, default=0)
         out += [(router.address(scheme, i), f"{scheme} {names[i] if i < len(names) else i}")
                 for i in range(n)]

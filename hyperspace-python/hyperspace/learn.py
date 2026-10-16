@@ -86,7 +86,16 @@ from __future__ import annotations
 
 from . import undo
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
-from .routing import MOD_OPS, SAVE_PARAM, SINK_OP, Binding, Bindings, Owned, parse_sink
+from .routing import (
+    MOD_OPS,
+    SAVE_PARAM,
+    SINK_OP,
+    Binding,
+    Bindings,
+    Owned,
+    base_scheme,
+    parse_sink,
+)
 
 # plan 24 C1: the desk's SAVE is held, never latched — a learned toggle or
 # button row would leave it on, and every bank pad's tap would then save
@@ -378,10 +387,13 @@ class Learn:
             return True
         if want == DESK:
             return Binding(source, "").is_midi
-        if want == "pad":
-            return source.partition(":")[0] in PAD_SCHEMES
+        if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
+            return base_scheme(source.partition(":")[0]) in PAD_SCHEMES
         if ":" not in want:
-            return source.partition(":")[0] == want
+            # a role: a source under that scheme (an OSC role's), or one
+            # qualified with it (``pad@p2:A`` completes "p2", plan 27 B6)
+            return (source.partition(":")[0] == want
+                    or Binding(source, "").device == want)
         return source.startswith(f"{want}.")
 
     # ---- a desk control completes it ----
@@ -515,7 +527,8 @@ class Learn:
         if p.kind is Kind.TRIGGER:
             op, value = "fire", 0.0
         elif p.kind is Kind.CONTINUOUS:
-            op, value = "step", (-1.0 if source in ("hat:DOWN", "hat:LEFT") else 1.0)
+            down = Binding(source, pid).bare in ("hat:DOWN", "hat:LEFT")   # any pad's
+            op, value = "step", (-1.0 if down else 1.0)
         else:
             op, value = "toggle", 0.0
         self.take()
@@ -628,7 +641,7 @@ class Learn:
             # a setting no performer may drive (ghost.mirror, a rig switch):
             # a route on it would sit dormant, so none is made. The learn
             # is over — no hand can ever complete it — and nothing changed
-            if source.startswith("axis:"):
+            if Binding(source, p.id).scheme == "axis":     # any pad's stick (plan 27 B6)
                 self.refuse(f"{p.label} can't follow a stick (not modulatable) "
                             "— not learned; Learn pad with a button puts it on one")
                 return
