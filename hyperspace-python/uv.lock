@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 
 [[package]]
@@ -305,6 +305,7 @@ dependencies = [
     { name = "glfw" },
     { name = "imgui-bundle" },
     { name = "leap" },
+    { name = "leapc-cffi" },
     { name = "libusb-package" },
     { name = "mido" },
     { name = "mlx", marker = "sys_platform == 'darwin'" },
@@ -336,6 +337,7 @@ requires-dist = [
     { name = "glfw", specifier = ">=2.10.2" },
     { name = "imgui-bundle", specifier = ">=1.92.900" },
     { name = "leap", git = "https://github.com/ultraleap/leapc-python-bindings?subdirectory=leapc-python-api&rev=2341c6c3db5dc08236bb52890d8c43a224139694" },
+    { name = "leapc-cffi", git = "https://github.com/ultraleap/leapc-python-bindings?subdirectory=leapc-cffi&rev=2341c6c3db5dc08236bb52890d8c43a224139694" },
     { name = "libusb-package", specifier = ">=1.0.30.0" },
     { name = "mido", specifier = ">=1.3.3" },
     { name = "mlx", marker = "sys_platform == 'darwin'", specifier = ">=0.20" },
@@ -425,6 +427,14 @@ wheels = [
 name = "leap"
 version = "0.0.1"
 source = { git = "https://github.com/ultraleap/leapc-python-bindings?subdirectory=leapc-python-api&rev=2341c6c3db5dc08236bb52890d8c43a224139694#2341c6c3db5dc08236bb52890d8c43a224139694" }
+
+[[package]]
+name = "leapc-cffi"
+version = "0.0.1"
+source = { git = "https://github.com/ultraleap/leapc-python-bindings?subdirectory=leapc-cffi&rev=2341c6c3db5dc08236bb52890d8c43a224139694#2341c6c3db5dc08236bb52890d8c43a224139694" }
+dependencies = [
+    { name = "cffi" },
+]
 
 [[package]]
 name = "libusb-package"

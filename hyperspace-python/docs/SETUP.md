@@ -22,8 +22,10 @@ uv sync               # everything, including torch for the dream and the dev to
 uv run hyperspace     # opens the render window and the control window
 ```
 
-`uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned in
-`pyproject.toml`); it is only imported when the hands are switched on.
+`uv sync` also fetches Ultraleap's `leap` wrapper and its `leapc_cffi`
+module from GitHub (both pinned to one commit in `pyproject.toml`, and
+the cffi module is compiled during the sync); they are only imported
+when the hands are switched on.
 To check the install: `uv run pytest -q`.
 
 **Microphone permission.** The first time you press M (or *Listen to
@@ -82,7 +84,13 @@ enabled = false     # no MIDI adapter at all
    panel sees the camera. The `leap` wrapper loads its library from
    `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`; if it is
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
-   folder in the shell that launches the app.
+   folder in the shell that launches the app. The tracking *service* must
+   be the app's; the `leapc_cffi` the app ships is not used — `uv sync`
+   builds our own for 3.12, and it is found first on `sys.path`. An
+   `ImportError: Cannot import leapc_cffi … Unknown error` means that
+   build is missing from the environment (re-run `uv sync`): an older
+   Hand Tracking app ships only a Python 3.8 build of it, which this
+   project's 3.12 cannot import.
 2. Switch the hands on:
 
    ```toml
