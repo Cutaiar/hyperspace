@@ -203,7 +203,7 @@ here; overturn → the change, then the same.
 | 208 | The cloud buffer uploaded on a new (frame, time) | 218 | |
 | 209 | The cloud's draw is its own SYSTEM line | 218 | |
 | 210 | The device qualifier is general: any scheme takes `@<role>`; an unqualified row is the primary device's | 219 | |
-| 211 | A joystick per pad device (next free, or pinned); one USB reader, the first `usb = true` entry's | 219 | |
+| 211 | A joystick per pad device (next free, or pinned); one USB reader, lent to the first `usb = true` pad with no GLFW joystick, sticky | 219 | |
 | 212 | The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel | 219 | |
 | 213 | The hands stay single: a second hands entry is refused | 174 | |
 
@@ -2739,15 +2739,13 @@ them. No preset was edited or added.
   migrating old rows to `pad@pad:A`.
 - **To reverse.** `base_scheme` back to its MIDI-only test and
   `Binding.device` with it; the pad's role then has no way into a row.
-- **Rough edge.** A row qualified with the primary's own role
-  (`pad@pad:A`) means nothing — the primary reads bare rows only (a
-  desk's `cc@apc40:…` does act). Swapping the two pad entries swaps
+- **Rough edge.** Swapping the two pad entries swaps
   which pad the bare rows mean; the second pad's qualified rows go
   dormant when it becomes the primary. A role containing `@` would read
   as a qualifier (config does not refuse one).
 - **Judge it.** Check 219.
 
-### 211. A joystick per pad device, the next free one or pinned; one USB reader, the first `usb = true` entry's
+### 211. A joystick per pad device, the next free one or pinned; one USB reader, lent to the first `usb = true` pad with no GLFW joystick
 
 - **Built.** Each pad device reads its own controller. The pads share
   one `gamepad.Claims` on the registry's context (`Context.pads`): a pad
@@ -2758,25 +2756,32 @@ them. No preset was edited or added.
   for it (`lost · waiting for joystick 1`), and no unpinned pad takes it.
   An unpinned pad whose joystick leaves reads `lost`, lets the index go,
   and takes the next free one that appears. The SYSTEM line names the
-  joystick read (`glfw 1`). **The libusb reader stays one**: the first
-  pad entry with `usb = true` owns it; a later `usb = true` entry reads
-  GLFW only and says `usb: pad has the wired pad` on its line. A pad no
-  device attached (a tool, a test) reads the first present joystick, as
-  before.
+  joystick read (`glfw 1`); two entries pinned to one index: the second
+  is dropped with a note. **The libusb reader is one, lent, not owned**
+  (the owner's amendment): one `UsbPad` (`Claims.reader`), lent each
+  poll to the pad that holds it while that pad still has `usb` on and no
+  GLFW joystick (**sticky**), else to the first `usb = true` pad in list
+  order with no GLFW joystick; a pad that finds a GLFW joystick hands it
+  back that poll. With both entries at the default `usb = true` the
+  Bluetooth pad reads GLFW and the Afterglow on `p2` reads USB; the
+  first pad's line says `usb: lent to p2` (no note while the reader is
+  idle). It closes when the last pad that could borrow it closes. A pad
+  no device attached (a tool, a test) reads the first present joystick
+  and its own reader, as before.
 - **Other options.** Match a pad to its entry by GUID or name (GLFW
   reports both; a re-paired Bluetooth pad keeps its GUID) — plan 28/29's
-  device identity; hand the USB reader to whichever pad has no GLFW
-  joystick (works with the defaults, but the owner's ruling is "the
-  first `usb = true` entry"); one USB reader per entry (two wired pads —
+  device identity; the reader owned by the first `usb = true` entry (as
+  first built: the defaults then never read a wired pad on the second
+  entry); re-deciding the lend from list order every poll (not sticky: a
+  pad listed earlier that loses its Bluetooth pad would take the wired
+  pad from the second); one USB reader per entry (two wired pads —
   `UsbPad` takes the first 360 pad it finds, so two readers would fight
   for one).
 - **To reverse.** `Pad._find` back to "the first present joystick" and
   `Pad.attach` out of `PadDevice.open`: about forty lines.
-- **Rough edge.** With the defaults (`usb = true` on both entries) the
-  first pad owns the USB reader even while it reads a Bluetooth pad over
-  GLFW, so a wired pad on the second entry is never read: the
-  Bluetooth pad's entry needs `usb = false`. Only one wired 360 pad is
-  ever read. GLFW's index for a pad can change across a reconnect, so a
+- **Rough edge.** Only one wired 360 pad is ever read; sticky means a
+  pad listed earlier that loses its GLFW joystick reads `lost · usb:
+  lent to p2` rather than taking the wired pad. GLFW's index for a pad can change across a reconnect, so a
   pinned pad may wait for an index its controller no longer has.
 - **Judge it.** Check 219.
 
@@ -2787,8 +2792,10 @@ them. No preset was edited or added.
   pad's unrouted sticks and triggers do nothing until a route names
   them. The factory pad rows (`bindings.default.json`) and `PAD_REMAP` /
   `PAD_NEW_ROWS` are unqualified, so the primary's; a second pad starts
-  with no rows and gets them from Learn pad (one item: it completes on
-  whichever pad moves first) or ROUTING. The pad's feel, the five
+  with no rows and gets them from Learn pad (it completes on whichever
+  pad moves first), **Learn p2** (the second pad's own want: only it
+  completes it, so it can be learned onto with the first unplugged) or
+  ROUTING. The pad's feel, the five
   `desk.pad.*` session params, is one set applied to every pad
   (`Router.source_feel` reads any `axis@<role>` as `axis`).
 - **Other options.** Copy the factory rows for each pad (two pads would
@@ -2797,10 +2804,9 @@ them. No preset was edited or added.
   on SYSTEM for a case not yet played).
 - **To reverse.** The `if q:` branch in `PadDevice.act`; per-pad feel is
   a new set of params and a role key in `Router.source_feel`.
-- **Rough edge.** Per-pad feel is plan 28/29's. "Learn pad" on a
-  param's menu shows while the *first open* pad is connected
-  (`rig.adapter("gamepad")`), so with only the second pad plugged in the
-  item is missing.
+- **Rough edge.** Per-pad feel is plan 28/29's. "Learn p2" is offered
+  only on a param a lane can drive (`p.modulatable`), as every "Learn
+  <role>" item.
 - **Judge it.** Check 219.
 
 ### 213. The hands stay single: a second hands entry is refused

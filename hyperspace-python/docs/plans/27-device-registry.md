@@ -108,19 +108,20 @@ profile = "generic"  port = "<part of its port name>"`.
 Afterglow over USB. The first pad entry is the primary: the factory pad
 rows and every row written before B6 are its, and its sticks keep the
 camera job. The second is `p2`: its rows read `pad@p2:A`, `axis@p2:LX`,
-and it starts with none (Learn pad or ROUTING gives it some). The USB
-reader is the first `usb = true` entry's, and GLFW wins on a pad that
-has a joystick, so the Bluetooth pad's entry says `usb = false` and the
-wired pad's entry owns the reader:
+and it starts with none (Learn pad, "Learn p2" or ROUTING gives it
+some). Both keep the default `usb = true`: the one USB reader is lent,
+not owned — each poll it goes to the pad that holds it while that pad
+still has no GLFW joystick, else to the first `usb = true` pad in list
+order with none. The Xbox pad reads GLFW joystick 0, so the reader is
+lent to `p2`:
 
 ```toml
 [[devices]]
 role = "pad"              # the Xbox pad (Bluetooth): GLFW joystick 0
 kind = "gamepad"
-usb = false               # it never reads USB, so the wired pad's entry owns the reader
 
 [[devices]]
-role = "p2"               # the Afterglow (USB): no GLFW joystick is free, so it reads USB
+role = "p2"               # the Afterglow (USB): no GLFW joystick is free, so the reader is lent to it
 kind = "gamepad"
 # joystick = 1            # pin a GLFW index (0–15) instead of "the next free one"
 ```
@@ -406,7 +407,7 @@ defaults; `config.py`'s docstring is the full list):
 | Kind | Keys beyond `role`, `kind`, `enabled` |
 |---|---|
 | `midi` | `port` (a substring of the port name; required for `generic`), `profile` (`apc40`, `generic`), `map` |
-| `gamepad` | `usb` (only the first `usb = true` entry reads USB), `joystick` (B6: a pinned GLFW index, 0–15; absent: the next free one) |
+| `gamepad` | `usb` (the one USB reader is lent to the first `usb = true` pad with no GLFW joystick, and kept while it has none), `joystick` (B6: a pinned GLFW index, 0–15; absent: the next free one) |
 | `hands` | the `[hands]` table: `mode`, `dofs`, `out`, `channel`, `cc`, `presence`, `note`, `min_confidence`, `calibration`, `tape`, … |
 | `bridge` | `out`, `in`, `encoding`, `channel`, `cc`, `rate`, `send` (read once, B3), `in_lanes` |
 | `midi-out` | `port` (required), `virtual` (true), `carries` (a hands role), `encoding`, `channel`, `cc`, `rate` |
@@ -436,9 +437,13 @@ OSC role that is a row kind or a built-in scheme (`key`, `pad`, `hat`,
   at once. Unplugged, a pad's line reads `lost` and its routes let go;
   the other keeps working; plugged back (or any new pad appearing), the
   lost pad takes the next free joystick. A pad pinned with `joystick =
-  1` reads `lost · waiting for joystick 1` until that index is there. A
-  second `usb = true` entry reads GLFW only and says `usb: pad has the
-  wired pad` on its line. Removing the first pad's entry makes the
+  1` reads `lost · waiting for joystick 1` until that index is there.
+  The one USB reader is lent: the Afterglow on `p2` is read with both
+  entries at `usb = true`, and the Xbox pad's line says `glfw 0  ·  usb:
+  lent to p2`; turned off, the Xbox pad reads `lost · usb: lent to p2`
+  while `p2` keeps the reader. A param's menu offers **Learn pad** (any
+  pad) and **Learn p2** (that pad only), so a second pad can be learned
+  onto with the first unplugged. Removing the first pad's entry makes the
   second the primary: it reopens ("devices: p2 changed — reopened") with
   its rows bare, the factory rows and the camera job.
 - **Code.** `routing.py`: `base_scheme` strips the qualifier from any
@@ -463,7 +468,15 @@ OSC role that is a row kind or a built-in scheme (`key`, `pad`, `hat`,
   source. `config.py`: `JOYSTICKS`, a gamepad entry's `joystick` checked
   (0–15, else a note and dropped). `ui_routing.source_schemes` /
   `_sources` key on `Binding.head`, so a row on a pad this rig lacks
-  still shows its source.
+  still shows its source. After review: `Claims.order` / `reader` /
+  `lend` (the USB reader lent, sticky; `Pad.usb_note` a property, "usb:
+  lent to p2"; the reader closed with the last pad that could borrow
+  it); `PadDevice.wants_for` (a second pad's role is a want, "Learn p2";
+  `Learn.accepts` matches a role on a qualified source); `Router.pad`
+  and `Router._resolve_lane` read a row qualified with the primary's own
+  role as the primary's (`pad@pad:A`, `axis@pad:LX`, as a desk's
+  `serves`); `_find` keeps a joystick only while no other pad is pinned
+  to it; `config._device` drops a second entry pinned to the same index.
 - **The rules as built.** An unqualified row is the scheme's primary
   device's: MIDI's by B2's profile-matching rule (`midi_roles`, the same
   to the byte), every other scheme's by list order — the first enabled
@@ -471,7 +484,8 @@ OSC role that is a row kind or a built-in scheme (`key`, `pad`, `hat`,
   listed). No file migrates: `pad:A`, `axis:LX`, `hat:UP` in any
   `bindings.json` or preset mean the first pad, as they did. The factory
   pad rows and `PAD_REMAP` / `PAD_NEW_ROWS` are the primary's; a second
-  pad starts with none. The pad feel is one set for every pad.
+  pad starts with none. The pad feel is one set for every pad. A row
+  qualified with the primary's own role is the primary's.
 - **Tests.** `tests/test_routing.py::test_the_qualifier_is_general_any_scheme_takes_a_role`,
   `::test_an_unqualified_pad_row_is_the_primary_pads`,
   `::test_the_router_keeps_two_pads_apart`;
@@ -489,6 +503,12 @@ OSC role that is a row kind or a built-in scheme (`key`, `pad`, `hat`,
   `::test_two_pads_drive_their_own_routes`,
   `::test_the_camera_job_is_the_primary_pads_only`;
   `tests/test_device_inputs.py::test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed`.
+  After review: `tests/test_gamepad.py::test_a_pad_that_finds_a_joystick_hands_the_reader_back`,
+  `::test_keeping_a_joystick_respects_another_pads_pin`;
+  `tests/test_devices.py::test_two_pads_with_usb_on_the_reader_is_lent_to_the_one_without_a_joystick`;
+  `tests/test_pad_learn.py::test_learn_p2_completes_only_from_the_second_pad`;
+  `tests/test_routing.py::test_each_pad_times_its_own_holds`,
+  `::test_a_row_qualified_with_the_primary_pads_own_role_is_its`.
   `test_device_inputs.py::test_a_qualified_source_is_its_roles_and_adds_no_colon`
   changed one assertion on purpose (`hand@x:1`'s scheme is `hand` now,
   its role `x`). Every MIDI test passes untouched; the boundary tests
@@ -569,19 +589,17 @@ particular:
 - Clouds: the file is read whole at open, has one rate (no per-frame
   times), and a NaN point gives NaN `bounds`; a recording changed on disk
   is not re-read until its entry changes.
-- **Two pads (B6).** One libusb reader: the first `usb = true` entry
-  owns it even while it reads a GLFW joystick, so with the defaults
-  (`usb = true` on both) a wired pad on the second entry is never read —
-  put `usb = false` on the Bluetooth pad's entry (the block above). One
+- **Two pads (B6).** One libusb reader, so only one wired 360 pad is
+  ever read; it is sticky — a holder keeps it while it has no GLFW
+  joystick, even when a pad listed earlier loses its own. One
   feel (`desk.pad.*`) for every pad; per-pad feel is plan 28/29's. The
   hands stay single (a second hands entry is refused): their forty lanes
   are another shape, two Leaps are plan 29's. A second pad has no
   factory rows and no camera job. "Learn pad" on a param's menu is
   offered while the *first open* pad is connected
-  (`rig.adapter("gamepad")`), so with only the second pad plugged in the
-  item is missing (arm it from ROUTING instead, or plug the first). A
-  row qualified with the primary's own role (`pad@pad:A`) means nothing:
-  the primary reads only bare rows. Reordering the two pad entries swaps
+  (`rig.adapter("gamepad")`); "Learn p2" is offered on a param a lane can
+  drive (`p.modulatable`). Two entries pinned to one `joystick` index:
+  the second is dropped with a note. Reordering the two pad entries swaps
   which one the bare rows mean; a second pad's qualified rows go dormant
   if it becomes the primary.
 - **What the launch prompt asked for that was built otherwise.** "The

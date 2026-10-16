@@ -2626,14 +2626,14 @@ Plan 27 B6 (numbered after group V, which was numbered first; it sits
 here with the other device checks). Pair the Xbox pad over Bluetooth; plug the Afterglow AX.1 into USB.
 On the copy, write the two-pads block from
 [`27-device-registry.md`](27-device-registry.md) ("The block to paste":
-`pad` with `usb = false`, then `p2`) in place of the `pad` entry; save
+`pad`, then `p2`, both at the default `usb = true`) in place of the `pad` entry; save
 (the app may run). SYSTEM → **devices**. Then: on the VIEW page
 right-click Points → **Learn pad** and press A on the **Afterglow**;
 right-click Field amp → **Learn pad** and squeeze the Afterglow's RT.
 Move both pads' left sticks and press A on each. Unplug the Afterglow;
 use the Xbox pad. Plug it back. Then turn the Xbox pad off and on.
-*Pass:* two lines, `pad · gamepad · connected · 22 sources · glfw 0`
-and `p2 · gamepad · connected · 22 sources · usb: Afterglow Gamepad for
+*Pass:* two lines, `pad · gamepad · connected · 22 sources · glfw 0 ·
+usb: lent to p2` and `p2 · gamepad · connected · 22 sources · usb: Afterglow Gamepad for
 Xbox 360` (a second Bluetooth pad would read `glfw 1`: the indices
 differ); the footer says `learned view.points ← pad A on p2 (into
 bindings.json)`, `bindings.json` holds `pad@p2:A`, and ROUTING shows
@@ -2643,11 +2643,14 @@ ever) and its left stick orbits; the Afterglow's A flips points, its RT
 rides Field amp, and its left stick does nothing (no camera job for a
 second pad). Unplugged, `p2` reads `lost` within a frame and Field amp
 lets go; the Xbox pad keeps working; replugged, `connected` again within
-a few seconds and its rows work. The Xbox pad off: `pad` reads `lost`,
-the Afterglow keeps working; on: `pad` is `connected · glfw 0` again.
-*Fail:* only one line `connected` and the other `lost · usb: pad has
-the wired pad` → the `pad` entry is missing `usb = false` (row 211's
-rough edge), not a bug; both pads flip faces on A → the qualifier
+a few seconds and its rows work. The Xbox pad off: `pad` reads `lost · usb: lent to p2` (the reader
+stays with `p2`), the Afterglow keeps working; on: `pad` is `connected
+· glfw 0` again. Then **Learn p2** on a param with the Xbox pad off: a
+press on the Afterglow completes it.
+*Fail:* `p2` reads `lost` while the Xbox pad is `connected` →
+`gamepad.Claims.lend` / `Pad._usb_state` (a pad reading GLFW must not
+hold the reader); with the Xbox pad off, `pad` takes the Afterglow →
+the lend is not sticky; both pads flip faces on A → the qualifier
 (`Router.pad`'s `b.device != role`, `gamepad.learn_from(…, role=)`); the
 Afterglow's stick orbits → `PadDevice.act`'s primary-only camera job;
 the Xbox pad takes the Afterglow's line after a reconnect, or the two

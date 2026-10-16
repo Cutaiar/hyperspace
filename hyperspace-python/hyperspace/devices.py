@@ -541,8 +541,10 @@ class PadDevice(Base):
     role (``pad@p2:A``, ``axis@p2:LX``) and starts with no rows. Each
     reads its own controller (`gamepad.Pad.attach` on the registry's
     shared `Context.pads`): the next free GLFW joystick in list order, or
-    the entry's ``joystick = n``; the one libusb reader is the first
-    ``usb = true`` entry's."""
+    the entry's ``joystick = n``; the one libusb reader is lent, not
+    owned (`gamepad.Claims.lend`): to the pad holding it while it has no
+    GLFW joystick, else to the first ``usb = true`` pad with none. A
+    second pad also arms a Learn by its role (`wants_for`)."""
 
     kind = "gamepad"
     schemes = ("axis", "pad", "hat")

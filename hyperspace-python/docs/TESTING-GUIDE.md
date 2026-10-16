@@ -4815,23 +4815,24 @@ Afterglow) on USB. Plan 27 B6.
 
 **Do:** in the copy's `config.toml`, put the two-pads block from
 `docs/plans/27-device-registry.md` ("The block to paste") in place of
-the `pad` entry: `pad` with `usb = false`, then `p2`. Save. Look at
+the `pad` entry: `pad`, then `p2` (both keep `usb = true`). Save. Look at
 SYSTEM → devices. Right-click Points → **Learn pad**, press A on the
 wired pad; right-click Field amp → **Learn pad**, squeeze the wired
 pad's RT. Use both pads together. Unplug the wired pad; plug it back.
 Turn the Xbox pad off and on.
 
-**Right if:** two lines, `pad · gamepad · connected · … · glfw 0` and
-`p2 · gamepad · connected · … · usb: Afterglow …`; the learns say "pad A
+**Right if:** two lines, `pad · gamepad · connected · … · glfw 0 · usb:
+lent to p2` and `p2 · gamepad · connected · … · usb: Afterglow …`; the learns say "pad A
 on p2" and "right trigger on p2"; the Xbox pad does everything it did
 (A flips faces, the sticks steer); the wired pad's A flips points, its
 RT rides Field amp and its sticks do nothing else; both at once.
 Unplugged, `p2` reads `lost` and the Xbox pad keeps working; plugged
-back, `connected` again. The Xbox pad off: `pad` reads `lost`, the
-wired pad keeps working.
+back, `connected` again. The Xbox pad off: `pad` reads `lost · usb:
+lent to p2`, the wired pad keeps working, and **Learn p2** on a setting
+completes from the wired pad.
 
-**Wrong if:** `p2` reads `lost · usb: pad has the wired pad` (the `pad`
-entry is missing `usb = false`); one press does both pads' jobs; the
+**Wrong if:** `p2` reads `lost` while the Xbox pad is connected; with
+the Xbox pad off, `pad` takes the wired pad; one press does both pads' jobs; the
 wired pad's stick turns the camera.
 
 *(check 219)*

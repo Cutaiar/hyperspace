@@ -977,7 +977,7 @@ keys through unchecked:
 | Kind | Its keys (defaults) |
 |---|---|
 | `midi` | `port` (a substring; required for `generic`), `profile` (`"apc40"` or `"generic"`), `map` |
-| `gamepad` | `usb` (`true`; only the first `usb = true` entry reads USB), `joystick` (none: the next free GLFW joystick; `0`–`15` pins that index — anything else is a note and dropped) |
+| `gamepad` | `usb` (`true`; the one USB reader is lent to the first `usb = true` pad with no GLFW joystick), `joystick` (none: the next free GLFW joystick; `0`–`15` pins that index — anything else is a note and dropped) |
 | `hands` | the whole `[hands]` table (`hands/core.py` `DEFAULTS`); a relative `calibration` or `tape` is the config's folder's |
 | `bridge` | `out` (`"IAC"`), `in` (`""`), `encoding` (`"pitch"`), `channel` (0), `cc` (16), `rate` (100), `send` (`["lane:*"]`, read once into sink rows, §13), `in_lanes` (16) |
 | `midi-out` | `port` (required), `virtual` (`true`: make a virtual port of that name when none matches), `carries` (a hands role whose DAW messages it sends), `encoding`, `channel`, `cc`, `rate` (its sink rows' wire, as the bridge's; `config.MIDI_OUT`) |
@@ -1019,12 +1019,15 @@ which leap already feeds — not opened` (two Leaps are plan 29's). Each
 pad reads its own controller: the next present GLFW joystick no other
 pad has taken, in list order, or the entry's `joystick = n`; one whose
 joystick leaves is `lost` and takes the next free one that appears (a
-pinned one waits for its index). **The libusb reader stays one**: the
-first `usb = true` pad entry owns it, even while it reads a GLFW
-joystick; a later `usb = true` entry reads GLFW only and says `usb: pad
-has the wired pad` on its line. So for the Bluetooth pad plus the wired
-Afterglow, put `usb = false` on the Bluetooth pad's entry (the block in
-`docs/plans/27-device-registry.md`).
+pinned one waits for its index; two entries pinned to one index: the
+second is dropped with a note). **The libusb reader is one, lent, not
+owned** (`gamepad.Claims.lend`): each poll it goes to the pad holding it
+while that pad has `usb` on and no GLFW joystick (sticky), else to the
+first `usb = true` pad in list order with no GLFW joystick; a pad that
+finds a GLFW joystick hands it back that poll. So the Bluetooth pad
+plus the wired Afterglow work with both entries at the default `usb =
+true`: the Bluetooth pad's line says `glfw 0  ·  usb: lent to p2`. The
+reader closes when the last pad that could borrow it closes.
 
 **A recorded point cloud** (`kind = "cloud"`, `file =
 "clouds/knot.npz"`): a `devices.write_clouds` file (version-1 `.npz`:
