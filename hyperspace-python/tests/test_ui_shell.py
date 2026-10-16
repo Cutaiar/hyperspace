@@ -186,7 +186,7 @@ def test_system_page_shows_one_line_per_device(rig, monkeypatch):
         devices.OffDevice("leap", "hands"),
         devices.BridgeDevice("bridge", io=bridge, audio=None)])
     rig.panel.devices = reg
-    assert shown() == [("pad  ·  gamepad  ·  lost  ·  21 sources", False),
+    assert shown() == [("pad  ·  gamepad  ·  lost  ·  22 sources", False),
                        ("apc40  ·  midi  ·  lost  ·  0 sources", False),
                        ("leap  ·  hands  ·  off  ·  0 sources", False),
                        ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]
@@ -939,7 +939,7 @@ _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": 
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
             "Home": "HOME"}
 _PADS = {"pad X / B": ["X", "B"], "pad A Y": ["A", "Y"], "LB / RB": ["LB", "RB"],
-         "sticks": ["LSTICK", "RSTICK"]}
+         "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
 _MOUSE = {"drag", "⇧drag", "scroll", "right-click", "d-pad", "LT / RT",
           "APC40"}                                   # the desk's glyph legend, not a key
 

@@ -53,6 +53,7 @@
   {"source": "pad:B", "target": "preset.list.next", "op": "fire"},
   {"source": "pad:X", "target": "preset.list.prev", "op": "fire"},
   {"source": "pad:Y", "target": "view.lines", "op": "toggle"},
+  {"source": "pad:MENU", "target": "preset.save_new", "op": "hold"},
   {"source": "pad:LB", "target": "view.shape", "op": "step", "value": -1},
   {"source": "pad:RB", "target": "view.shape", "op": "step"},
   {"source": "pad:LSTICK", "target": "camera.reset", "op": "fire"},
