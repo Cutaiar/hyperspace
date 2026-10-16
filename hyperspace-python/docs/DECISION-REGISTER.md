@@ -3,8 +3,9 @@
 Rows 34–88 were each decided during an unattended build on 2026-10-04,
 rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during
 plan 24's run, rows 140–168 during plan 27's run and rows 169–209
-during plan 26's run on 2026-10-14: the build took its own
-recommendation and built it. Every one is in the app now (rows 110–209
+during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
+(several gamepads at once) on 2026-10-15: the build took its own
+recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, until the owner merges it) and waits
 for the
 owner to say **keep** or **overturn**. Row 109 is the owner's own (plan
@@ -132,7 +133,7 @@ here; overturn → the change, then the same.
 | 138 | The fold over the absolute hue wheel; linear sat and val | 166 | |
 | 139 | The FX page repacked; strip rows packed by name | 167 | |
 | 140 | `[[devices]]`; the old tables translated with a note each | 168, 169 | |
-| 141 | Today's devices keep their schemes; two never feed one scheme | 174 | |
+| 141 | Today's devices keep their schemes; two never feed one Router key (since B6: a second pad opens under its role, rows 210–213; a second hands device is still refused) | 174, 219 | |
 | 142 | The `Device` protocol, one `Port`, four status words | 170 | |
 | 143 | The devices own today's adapters; the hands read in the feed slot | 168, 180 | |
 | 144 | Open behind the entry, retry a failed open, close last-listed-first | 170–172, 175 | |
@@ -201,6 +202,10 @@ here; overturn → the change, then the same.
 | 207 | A listed `cloud` device adds its node to the scene | 216, 218 | |
 | 208 | The cloud buffer uploaded on a new (frame, time) | 218 | |
 | 209 | The cloud's draw is its own SYSTEM line | 218 | |
+| 210 | The device qualifier is general: any scheme takes `@<role>`; an unqualified row is the primary device's | 219 | |
+| 211 | A joystick per pad device (next free, or pinned); one USB reader, the first `usb = true` entry's | 219 | |
+| 212 | The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel | 219 | |
+| 213 | The hands stay single: a second hands entry is refused | 174 | |
 
 "—": no hand check shows it; tests only.
 
@@ -2095,6 +2100,13 @@ them. No preset was edited or added.
 
 ### 141. Today's devices keep their schemes behind their roles; two devices never feed one scheme
 
+- **Changed in B6.** The registry claims (scheme, role), not scheme
+  (row 210): a second **pad** is no longer refused — it opens and
+  publishes under its role (`axis@p2`, `pad@p2:A`), so it still never
+  feeds the first pad's key. The refusal stands for a kind that cannot
+  qualify: a second **hands** device is `error: feeds 'hand', which leap
+  already feeds — not opened` (row 213). A role listed twice is refused
+  by the registry too. The rest of the row stands.
 - **Built.** "The role is the scheme" holds for a *new* device (an OSC
   phone publishes `phone:x`). Today's four keep the schemes their rows
   already name: an entry's `role` names the device (the SYSTEM line, the
@@ -2704,6 +2716,108 @@ them. No preset was edited or added.
 - **Rough edge.** The file is read whole at open; a recording changed on
   disk is not re-read until its entry changes or the app restarts.
 - **Judge it.** Check 190.
+
+### 210. The device qualifier is general: any scheme takes `@<role>`; an unqualified row is the primary device's
+
+- **Built.** A row's source may carry `@<role>` on any scheme, not only
+  MIDI's (`pad@p2:A`, `hat@p2:UP`, `axis@p2:LX`): `routing.base_scheme`,
+  `Binding.device`, `Binding.bare`, `is_continuous` read it the same way
+  for every scheme, and the qualified head (`axis@p2`) is its own Router
+  key — its own feed, labels, rests and names — so two pads never
+  overwrite each other. An unqualified row means the scheme's primary
+  device: MIDI's by B2's rule, unchanged to the byte (`midi_roles`: the
+  desk whose profile wrote the table, else the first listed); every
+  other scheme's by list order, the first enabled entry of its kind
+  (`devices.primaries_of`, `DeviceRegistry.primaries`, told to the table
+  as `Bindings.primaries`). No file migrates: every `pad:A`, `axis:LX`,
+  `hat:UP` written before means the first pad. A qualified row's line
+  says whose it is ("left stick X on p2 pushes +0.25"; "pad A on p2").
+- **Other options.** A role-named scheme per pad (`p2:A`, as an OSC
+  device's — but then a second pad's rows look nothing like the first's
+  and Learn, the remap and the camera job would each need a branch); the
+  primary chosen by a key (`primary = true`) rather than list order;
+  migrating old rows to `pad@pad:A`.
+- **To reverse.** `base_scheme` back to its MIDI-only test and
+  `Binding.device` with it; the pad's role then has no way into a row.
+- **Rough edge.** A row qualified with the primary's own role
+  (`pad@pad:A`) means nothing — the primary reads bare rows only (a
+  desk's `cc@apc40:…` does act). Swapping the two pad entries swaps
+  which pad the bare rows mean; the second pad's qualified rows go
+  dormant when it becomes the primary. A role containing `@` would read
+  as a qualifier (config does not refuse one).
+- **Judge it.** Check 219.
+
+### 211. A joystick per pad device, the next free one or pinned; one USB reader, the first `usb = true` entry's
+
+- **Built.** Each pad device reads its own controller. The pads share
+  one `gamepad.Claims` on the registry's context (`Context.pads`): a pad
+  takes the next present GLFW joystick no other pad has taken, in list
+  order (the devices poll in list order, so the first pad takes the
+  first). An entry's `joystick = n` (0–15, checked in `config.py`; a bad
+  value is a note and dropped) pins it: it reads only that index, waits
+  for it (`lost · waiting for joystick 1`), and no unpinned pad takes it.
+  An unpinned pad whose joystick leaves reads `lost`, lets the index go,
+  and takes the next free one that appears. The SYSTEM line names the
+  joystick read (`glfw 1`). **The libusb reader stays one**: the first
+  pad entry with `usb = true` owns it; a later `usb = true` entry reads
+  GLFW only and says `usb: pad has the wired pad` on its line. A pad no
+  device attached (a tool, a test) reads the first present joystick, as
+  before.
+- **Other options.** Match a pad to its entry by GUID or name (GLFW
+  reports both; a re-paired Bluetooth pad keeps its GUID) — plan 28/29's
+  device identity; hand the USB reader to whichever pad has no GLFW
+  joystick (works with the defaults, but the owner's ruling is "the
+  first `usb = true` entry"); one USB reader per entry (two wired pads —
+  `UsbPad` takes the first 360 pad it finds, so two readers would fight
+  for one).
+- **To reverse.** `Pad._find` back to "the first present joystick" and
+  `Pad.attach` out of `PadDevice.open`: about forty lines.
+- **Rough edge.** With the defaults (`usb = true` on both entries) the
+  first pad owns the USB reader even while it reads a Bluetooth pad over
+  GLFW, so a wired pad on the second entry is never read: the
+  Bluetooth pad's entry needs `usb = false`. Only one wired 360 pad is
+  ever read. GLFW's index for a pad can change across a reconnect, so a
+  pinned pad may wait for an index its controller no longer has.
+- **Judge it.** Check 219.
+
+### 212. The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel
+
+- **Built.** Defaults author no look (decision 24): the sticks' default
+  camera job (`gamepad.steer`) runs for the primary pad only — a second
+  pad's unrouted sticks and triggers do nothing until a route names
+  them. The factory pad rows (`bindings.default.json`) and `PAD_REMAP` /
+  `PAD_NEW_ROWS` are unqualified, so the primary's; a second pad starts
+  with no rows and gets them from Learn pad (one item: it completes on
+  whichever pad moves first) or ROUTING. The pad's feel, the five
+  `desk.pad.*` session params, is one set applied to every pad
+  (`Router.source_feel` reads any `axis@<role>` as `axis`).
+- **Other options.** Copy the factory rows for each pad (two pads would
+  both flip faces on A); run the camera job on every pad (two sticks on
+  one camera); a feel per pad (`desk.pad.<role>.*` — more session params
+  on SYSTEM for a case not yet played).
+- **To reverse.** The `if q:` branch in `PadDevice.act`; per-pad feel is
+  a new set of params and a role key in `Router.source_feel`.
+- **Rough edge.** Per-pad feel is plan 28/29's. "Learn pad" on a
+  param's menu shows while the *first open* pad is connected
+  (`rig.adapter("gamepad")`), so with only the second pad plugged in the
+  item is missing.
+- **Judge it.** Check 219.
+
+### 213. The hands stay single: a second hands entry is refused
+
+- **Built.** The hands kind is not `repeatable`: a second enabled hands
+  entry is refused as in B1 (`error: feeds 'hand', which leap already
+  feeds — not opened`, one note) and comes up when the first leaves the
+  list. Their forty named lanes, the pair scheme `hands`, the HANDS page,
+  the ghost and the calibration are all one tracker's; two Leaps are
+  plan 29's.
+- **Other options.** Qualify the hands too (`hand@leap2:right.roll`):
+  the Router would take it, the HANDS page, the ghost and the
+  calibration would not.
+- **To reverse.** `repeatable = True` on `HandsDevice`, then a page, a
+  ghost and a calibration per tracker.
+- **Rough edge.** None new: the refusal is B1's.
+- **Judge it.** Check 174.
 
 ## The render graph (plan 26)
 

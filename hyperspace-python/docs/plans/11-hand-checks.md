@@ -47,7 +47,8 @@ number and what you saw.
    42, 52, 66, 73, 75–77, 80, 100, 158, 160–163; (copy) 159, 164; APC40
    in: 22, 65, 67, 74, 79, 110.
 6. One projector: 26, 43, 61, 96; with the hand camera, 165.
-7. The wired Xbox 360 pad: 144–147, any time; then 171, 174, 179.
+7. The wired Xbox 360 pad: 144–147, any time; then 171, 174, 179; with
+   the Xbox pad over Bluetooth as well, 219 (copy).
    (copy) The device registry: 168 first, then 170, 173, 178, 190 on the
    laptop; 175 with the APC40 unplugged at launch; 176, 177 with a second
    MIDI controller; 169, 172, 180 with the hand camera; 181–185 with FL
@@ -2305,7 +2306,9 @@ so these checks are the exception to "edit `config.toml` with the app
 closed". Put back what each changes. 168–175 need nothing but the rig as
 it is; 176–177 a second USB MIDI controller; 181–185 FL Studio (or MIDI
 Monitor.app) over the IAC bus; 186–189 a phone on the same Wi-Fi as the
-Mac; 190 the laptop alone.
+Mac; 190 the laptop alone; 219 (B6, last in this group though numbered
+after group V) both pads — the Xbox pad over Bluetooth and the wired
+Afterglow.
 
 **168. The SYSTEM page lists every device, and an un-renamed config says so.** (copy)
 Headless: `tests/test_ui_shell.py::test_system_page_shows_one_line_per_device`, `tests/test_config.py::test_no_devices_list_translates_the_old_tables_with_one_note_each`, `tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`.
@@ -2384,16 +2387,23 @@ save → the mtime watch (`DeviceRegistry.watch`, `WATCH_FRAMES`); the
 whole app reloads or a window moves → something other than the device
 list was re-read.
 
-**174. A second pad is refused, and comes up when the first leaves.** (copy)
-Headless: `tests/test_devices.py::test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note`.
-On the list form, with the app running, add `[[devices]] role = "pad2"
-kind = "gamepad"` and save. Then set the first pad's `enabled = false`
-and save. *Pass:* `pad2 · gamepad · error: feeds 'axis', which pad
-already feeds — not opened` and one note saying the same; the first pad
-works as before. With the first pad off, `pad2` reads `connected` (or
-`lost` with no pad plugged in) and the sticks orbit through it. *Fail:*
-both read `connected` and the sticks fight → `devices.make`'s claimed
-schemes; `pad2` stays refused → `DeviceRegistry.apply`'s re-make.
+**174. A second hands device is refused, and comes up when the first leaves; a second pad opens.** (copy)
+Headless: `tests/test_devices.py::test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note`, `::test_two_pads_open_each_under_its_role`.
+Changed in plan 27 B6: a second pad is no longer refused (check 219 is
+the two pads at work). On the list form, with the app running, add
+`[[devices]] role = "leap2" kind = "hands"` and save; then add
+`[[devices]] role = "pad2" kind = "gamepad"` and save. Then set the
+`leap` entry's `enabled = false` and save. *Pass:* `leap2 · hands ·
+error: feeds 'hand', which leap already feeds — not opened` and one note
+saying the same; the first hands device works as before. `pad2 · gamepad
+· lost · 22 sources` (or `connected · … · glfw 1` with a second pad
+plugged in), no note; the first pad works as before. With `leap` off,
+`leap2` reads `connected` (or `lost` with no camera) and the hands work
+through it. *Fail:* `leap2` reads `connected` beside `leap` and the
+hands fight → `devices.make`'s claimed schemes (`HandsDevice` must not
+be `repeatable`); `pad2` is an `error:` line → `PadDevice.repeatable`,
+`devices.primaries_of`; `leap2` stays refused → `DeviceRegistry.apply`'s
+re-make.
 
 **175. The APC40 plugged in after launch lights up.** (APC40)
 Headless: `tests/test_device_inputs.py::test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback`.
@@ -2609,6 +2619,40 @@ starting again; the scene shows the knot as dots in the shape's world
 within about 10 s, and with `loop = false` the frame stops at 16/16.
 *Fail:* the frame number follows the app's frame rate →
 `CloudDevice.poll`.
+
+**219. Two pads at once: the Xbox pad over Bluetooth and the wired Afterglow over USB.** (copy, both pads)
+Headless: `tests/test_devices.py::{test_two_pads_open_each_under_its_role,test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad,test_the_joystick_key_is_checked}`, `tests/test_gamepad.py::{test_two_pads_take_different_joysticks_in_list_order,test_an_unpinned_pad_whose_joystick_leaves_is_lost_then_takes_the_next_free,test_a_pinned_pad_waits_for_its_index,test_one_usb_reader_across_two_pads}`, `tests/test_pad_learn.py::{test_learn_on_a_second_pad_writes_its_qualified_rows,test_two_pads_drive_their_own_routes,test_the_camera_job_is_the_primary_pads_only}`, `tests/test_device_inputs.py::test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed`, `tests/test_routing.py::test_the_router_keeps_two_pads_apart`.
+Plan 27 B6 (numbered after group V, which was numbered first; it sits
+here with the other device checks). Pair the Xbox pad over Bluetooth; plug the Afterglow AX.1 into USB.
+On the copy, write the two-pads block from
+[`27-device-registry.md`](27-device-registry.md) ("The block to paste":
+`pad` with `usb = false`, then `p2`) in place of the `pad` entry; save
+(the app may run). SYSTEM → **devices**. Then: on the VIEW page
+right-click Points → **Learn pad** and press A on the **Afterglow**;
+right-click Field amp → **Learn pad** and squeeze the Afterglow's RT.
+Move both pads' left sticks and press A on each. Unplug the Afterglow;
+use the Xbox pad. Plug it back. Then turn the Xbox pad off and on.
+*Pass:* two lines, `pad · gamepad · connected · 22 sources · glfw 0`
+and `p2 · gamepad · connected · 22 sources · usb: Afterglow Gamepad for
+Xbox 360` (a second Bluetooth pad would read `glfw 1`: the indices
+differ); the footer says `learned view.points ← pad A on p2 (into
+bindings.json)`, `bindings.json` holds `pad@p2:A`, and ROUTING shows
+`right trigger on p2 positions` on Field amp (its combo lists `axis@p2
+…` after `axis …`). Both drive at once: the Xbox pad's A flips faces (as
+ever) and its left stick orbits; the Afterglow's A flips points, its RT
+rides Field amp, and its left stick does nothing (no camera job for a
+second pad). Unplugged, `p2` reads `lost` within a frame and Field amp
+lets go; the Xbox pad keeps working; replugged, `connected` again within
+a few seconds and its rows work. The Xbox pad off: `pad` reads `lost`,
+the Afterglow keeps working; on: `pad` is `connected · glfw 0` again.
+*Fail:* only one line `connected` and the other `lost · usb: pad has
+the wired pad` → the `pad` entry is missing `usb = false` (row 211's
+rough edge), not a bug; both pads flip faces on A → the qualifier
+(`Router.pad`'s `b.device != role`, `gamepad.learn_from(…, role=)`); the
+Afterglow's stick orbits → `PadDevice.act`'s primary-only camera job;
+the Xbox pad takes the Afterglow's line after a reconnect, or the two
+read one joystick → `gamepad.Pad._find` / `Claims`; a learn on the
+Afterglow writes `pad:A` → `PadDevice.learn`'s role.
 
 ## V. Plan 26: the render graph
 
