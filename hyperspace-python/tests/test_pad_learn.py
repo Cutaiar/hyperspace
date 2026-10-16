@@ -60,6 +60,21 @@ def test_lanes_rest_and_travel():
     assert pad.lanes() == [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
 
 
+def test_the_share_button_is_named_and_free(rig):
+    """A pad with a Share button reports it at 15 (2026-10-15). It carries
+    no factory row — like BACK, Learn pad puts anything on it — and the
+    name has to exist for the learn to land at all."""
+    pad, lrn = ScriptedPad(), rig.learn
+    assert gp.BUTTONS["SHARE"] == 15 and gp.SHARE < gp.N_BUTTONS
+    assert not [b for b in routing.padmap() if b.source == "pad:SHARE"]
+    pad.frame()
+    lrn.arm("view.points", "pad")
+    pad.frame(held={gp.SHARE})
+    assert gp.learn_from(pad, lrn) is True
+    rows = [(b.target, b.op) for b in rig.table.bindings if b.source == "pad:SHARE"]
+    assert rows == [("view.points", "toggle")]
+
+
 def test_release_edges():
     pad = ScriptedPad()
     pad.frame(held={gp.A}, hat=gp.HAT_UP)
@@ -229,7 +244,8 @@ def test_a_stick_never_ends_a_learn_on_a_setting_it_cannot_drive(rig):
 def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_path):
     """The old factory pad rows (A rotate, X points, Y faces, START the
     sheet, BACK the panel, the right-stick click the camera) move to the
-    layout of 2026-10-14 — START and BACK free; a row the owner learned
+    layout of 2026-10-14 — BACK free, START's sheet gone and its
+    hold-to-save in its place (PAD_NEW_ROWS); a row the owner learned
     onto a button stays; a second load changes nothing."""
     old = [Binding("pad:A", "view.rotate", "toggle"), Binding("pad:X", "view.points", "toggle"),
            Binding("pad:Y", "view.faces", "toggle"), Binding("pad:MENU", "ui.cheatsheet", "toggle"),
@@ -244,11 +260,12 @@ def test_an_older_files_pad_rows_move_to_the_new_layout_and_the_owners_stay(tmp_
     assert rows["pad:A"] == ("view.faces", "toggle")
     assert rows["pad:X"] == ("preset.list.prev", "fire")      # straight to the newest
     assert rows["pad:Y"] == ("view.lines", "toggle")
-    assert "pad:MENU" not in rows and "pad:VIEW" not in rows
+    assert rows["pad:MENU"] == ("preset.save_new", "hold")   # the sheet's row gone
+    assert "pad:VIEW" not in rows
     assert rows["pad:LSTICK"] == ("camera.reset", "fire")
     assert rows["pad:RSTICK"] == ("rot.reset_w", "fire")
     assert rows["hat:UP"] == ("fx.wobble.freq", "step")
-    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 6
+    assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 7
     after = path.read_text()
     again = Bindings.load(path, legacy_midi=None)
     assert not again.notes and path.read_text() == after
@@ -272,7 +289,8 @@ def test_the_pads_bank_rows_move_onto_the_preset_list(tmp_path):
         assert rows["pad:X"] == ("preset.list.prev", "fire")
         assert rows["pad:LB"] == ("preset.next", "fire")
         assert rows["pad:RB"] == ("preset.prev", "hold")
-        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 2
+        assert rows["pad:MENU"] == ("preset.save_new", "hold")      # added, not held
+        assert sum("the pad layout of 2026-10-14" in n for n in t.notes) == 3
         after = path.read_text()
         again = Bindings.load(path, legacy_midi=None)
         assert not again.notes and path.read_text() == after
@@ -290,10 +308,12 @@ def test_the_factory_pad_walks_the_list_and_the_desk_the_bank():
                for b in factory_desk())
 
 
-def test_start_and_back_are_free_and_a_learned_start_hold_saves(rig):
-    """The factory leaves START and BACK unbound (2026-10-14); a save-as
-    the owner puts on START as a hold fires once it is held HOLD_S."""
-    assert not [b for b in routing.padmap() if b.source in ("pad:MENU", "pad:VIEW")]
+def test_held_start_saves_a_new_preset_and_back_is_free(rig):
+    """START carries the factory's hold-to-save and fires it once the
+    button has been down HOLD_S; BACK is left unbound (2026-10-14)."""
+    rows = {b.source: (b.target, b.op) for b in routing.padmap()}
+    assert rows["pad:MENU"] == ("preset.save_new", "hold")
+    assert "pad:VIEW" not in rows
     pad, r = ScriptedPad(), rig.router
     saved = []
     rig.reg["preset.save_new"].fire = lambda: saved.append(1)

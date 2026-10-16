@@ -499,12 +499,15 @@ THEME_TO_PRESET = {
 # older form maps straight to the newest: X's points and bank rows, B's
 # bank row and its theme row from before plan 13 (ahead of THEME_TO_PRESET).
 # Later the same day: the right-stick click resets the 4D spin
-# (`rot.reset_w`), and START and BACK are let go — BACK hid the panel, and
-# START's save-as is learnable onto any button: None drops the row
+# (`rot.reset_w`) and BACK is let go — it hid the panel, and the desk
+# diagram filled the window: None drops the row. START keeps its
+# hold-to-save. That row was dropped here too for one night: a file
+# written before `padmap` gained it never gained it either (no pad row
+# was ever added to an existing file), which read as a pad whose buttons
+# the map could not find. PAD_NEW_ROWS adds it instead.
 PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:RSTICK", "camera.reset", "fire", 1.0): ("rot.reset_w", "fire", 1.0),
     ("pad:VIEW", "ui.panel", "toggle", 1.0): None,
-    ("pad:MENU", "preset.save_new", "hold", 1.0): None,
     ("pad:A", "view.rotate", "toggle", 1.0): ("view.faces", "toggle", 1.0),
     ("pad:X", "view.points", "toggle", 1.0): ("preset.list.prev", "fire", 1.0),
     ("pad:X", "preset.prev", "fire", 1.0): ("preset.list.prev", "fire", 1.0),
@@ -513,6 +516,16 @@ PAD_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float] | None] = {
     ("pad:Y", "view.faces", "toggle", 1.0): ("view.lines", "toggle", 1.0),
     ("pad:MENU", "ui.cheatsheet", "toggle", 1.0): None,
 }
+# Pad rows added where nothing uses the button, as (source, target, op,
+# value) — the pad's APC_NEW_ROWS. Until 2026-10-14 a row `padmap` gained
+# reached a fresh table only (`Bindings.factory`), so every pad already
+# carrying a bindings.json stayed on the layout of the day it was written:
+# START's hold-to-save was added, never arrived, and was taken back out as
+# a mapping fault. A row the owner put on the button is left alone, and a
+# second load finds the source taken.
+PAD_NEW_ROWS = (
+    ("pad:MENU", "preset.save_new", "hold", 1.0),
+)
 KEY_NEW_ROWS = (
     ("key:B", "tempo.tap", "fire", 1.0),
     ("key:SHIFT+B", "lfo.trigger", "fire", 1.0),
@@ -962,12 +975,14 @@ def padmap() -> list[Binding]:
     list — the PRESETS page's drop-down, by name, a new save included
     (`Project.walk`), not the bank the desk walks — A / Y the faces and
     lines; the left-stick click resets the camera, the right-stick click
-    the 4D spin; START and BACK (``pad:MENU`` / ``pad:VIEW``) are free —
-    Learn pad puts anything on them (2026-10-14, the owner's layout —
-    PAD_REMAP moves an older file's)."""
+    the 4D spin; START (``pad:MENU``) held HOLD_S saves the live state as
+    a new preset, and BACK (``pad:VIEW``) is free — Learn pad puts
+    anything on it (2026-10-14, the owner's layout — PAD_REMAP moves an
+    older file's, PAD_NEW_ROWS adds what it never held)."""
     rows = [
         ("pad:A", "view.faces", "toggle"), ("pad:B", "preset.list.next", "fire"),
         ("pad:X", "preset.list.prev", "fire"), ("pad:Y", "view.lines", "toggle"),
+        ("pad:MENU", "preset.save_new", "hold"),
         ("pad:LB", "view.shape", "step", -1), ("pad:RB", "view.shape", "step", 1),
         ("pad:LSTICK", "camera.reset", "fire"), ("pad:RSTICK", "rot.reset_w", "fire"),
         ("hat:UP", "view.bright", "step", 3), ("hat:DOWN", "view.bright", "step", -3),
@@ -1185,6 +1200,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
         out.append(new)
         notes.append(f"added {source} → {target} (the APC40 map of "
                      f"{APC_REMAP_PLAN.get(source, 'plan 09')})")
+    for source, target, op, value in PAD_NEW_ROWS:
+        if source in used:
+            continue
+        out.append(Binding(source, target, op, value))
+        notes.append(f"added {source} → {target} (the pad layout of 2026-10-14)")
     # a key row is taken by its chord, however its modifiers are ordered:
     # "key:SUPER+SHIFT+Z" holds ⌘⇧Z as "key:SHIFT+SUPER+Z" does
     chords = {(b.key_name, b.modifiers) for b in out if b.scheme == "key"}

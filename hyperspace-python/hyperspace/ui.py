@@ -450,6 +450,7 @@ CHEATSHEET = [
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad X / B", "previous / next in the preset list"),
     ("pad A Y", "faces · lines"),
+    ("hold START", "save the live state as a new preset"),
     ("LB / RB", "previous / next shape"),
     ("d-pad", "brightness ↑↓ · speed ←→"),
     ("sticks", "orbit · zoom ↕ 4D spin ↔ — click resets each"),

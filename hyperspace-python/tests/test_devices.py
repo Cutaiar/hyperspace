@@ -88,7 +88,7 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
         assert isinstance(d, devices.Device)                 # the protocol, structurally
         assert d.status == "lost" and d.last == ""
     assert devices.make({"role": "r", "kind": "midi"}).sources == ()      # (no adapter yet)
-    assert len(devices.make({"role": "r", "kind": "gamepad"}).sources) == 21   # (a fixed layout)
+    assert len(devices.make({"role": "r", "kind": "gamepad"}).sources) == 22   # (a fixed layout; + SHARE, #197)
     off = devices.make({"role": "r", "kind": "midi", "enabled": False})
     assert isinstance(off, devices.OffDevice) and off.status == "off" and off.kind == "midi"
     odd = devices.make({"role": "r", "kind": "wand", "enabled": True})
@@ -357,7 +357,7 @@ def test_lines_and_the_system_pages_text():
     pad = devices.PadDevice("pad", io=SimpleNamespace(on=True, source="usb",
                                                        usb_pad=SimpleNamespace(name="AX.1")))
     assert ui.device_lines(devices.DeviceRegistry(devices=[pad])) == [
-        "pad  ·  gamepad  ·  connected  ·  21 sources  ·  usb: AX.1"]
+        "pad  ·  gamepad  ·  connected  ·  22 sources  ·  usb: AX.1"]
     # a status that raises is a line, not a page that will not draw
     bad = Fake("c", log)
     type(bad).last = property(lambda self: 1 / 0)

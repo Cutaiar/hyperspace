@@ -7,6 +7,11 @@ own index map, captured against a real Xbox Series S controller over
 Bluetooth (fw 5.9.2709.0). Buttons 2/5/8/9 are unused gaps on this
 firmware. Works identically over USB-C.
 
+A pad with a Share button under the Xbox button reports it at 15 and
+19 buttons after it (tools/pad_probe.py, 2026-10-15); the sixteen below
+are the same, so one map reads both pads. Every other index a pad
+reports has no name here: it is read and ignored.
+
 The Pad class mirrors app.Keys: poll once per frame, then edge-detect
 with pressed(). A disconnect just makes the pad inert; reconnecting is
 picked up on a later poll, no re-pairing dance in code.
@@ -37,6 +42,7 @@ LB, RB = 6, 7
 VIEW, MENU = 10, 11
 GUIDE = 12
 LSTICK, RSTICK = 13, 14
+SHARE = 15                  # only on a pad that has one; free of a factory row
 
 # axes: sticks in ±1, triggers resting at −1.0. Unrouted, the left stick
 # orbits, the right stick's Y zooms, its X rides the W planes' rates (the
@@ -50,7 +56,8 @@ DEADZONE = 0.18
 
 # the names a row's source spells: pad:<BUTTON>, hat:<DIR>, axis:<AXIS>
 BUTTONS = {"A": A, "B": B, "X": X, "Y": Y, "LB": LB, "RB": RB, "VIEW": VIEW,
-           "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK}
+           "MENU": MENU, "GUIDE": GUIDE, "LSTICK": LSTICK, "RSTICK": RSTICK,
+           "SHARE": SHARE}
 HATS = {"UP": HAT_UP, "RIGHT": HAT_RIGHT, "DOWN": HAT_DOWN, "LEFT": HAT_LEFT}
 
 # the axes as continuous lanes (routing's `axis` scheme), each in [0, 1]:
@@ -93,7 +100,9 @@ XINPUT_IFACE = (0xFF, 0x5D, 0x01)
 _B2_BTN = ((0x10, MENU), (0x20, VIEW), (0x40, LSTICK), (0x80, RSTICK))
 _B3_BTN = ((0x01, LB), (0x02, RB), (0x04, GUIDE), (0x10, A), (0x20, B), (0x40, X), (0x80, Y))
 _B2_HAT = ((0x01, HAT_UP), (0x02, HAT_DOWN), (0x04, HAT_LEFT), (0x08, HAT_RIGHT))
-N_BUTTONS = 15
+# the raw layout's width: every named index fits, SHARE's included — a 360
+# pad has no Share button, so that one stays 0 in every report it sends
+N_BUTTONS = 16
 
 # the "you are player 1" ring: without it a 360 pad blinks all four quarters
 LED_PLAYER_1 = bytes((0x01, 0x03, 0x06))
