@@ -22,8 +22,11 @@ uv sync               # everything, including torch for the dream and the dev to
 uv run hyperspace     # opens the render window and the control window
 ```
 
-`uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned in
-`pyproject.toml`); it is only imported when the hands are switched on.
+`uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned to
+one commit in `pyproject.toml`) and compiles its `leapc_cffi` module from
+`vendor/leapc-cffi` (upstream's at the same commit, patched to build
+against whichever Ultraleap Hand Tracking is installed); they are only
+imported when the hands are switched on.
 To check the install: `uv run pytest -q`.
 
 **Microphone permission.** The first time you press M (or *Listen to
@@ -179,7 +182,24 @@ hits = ["/1/push1"]                 # → phone:1/push1, a button
    panel sees the camera. The `leap` wrapper loads its library from
    `/Applications/Ultraleap Hand Tracking.app/Contents/LeapSDK`; if it is
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
-   folder in the shell that launches the app.
+   folder in the shell that launches the app. The tracking *service* must
+   be the app's; the `leapc_cffi` the app ships is not used — `uv sync`
+   builds our own for 3.12, and it is found first on `sys.path`. The
+   build finds whichever Gemini version is installed, 5 or 6 (the highest
+   `libLeapC.<N>.dylib` in the app's `LeapSDK/lib`, else
+   `libLeapC.dylib`), and stages that library inside the built package,
+   so no environment variable is needed. If `uv sync` fails with "No
+   LeapC library found", Hand Tracking is not installed where the build
+   looks: install it, or for an SDK in an unusual place re-run `uv sync`
+   with `LEAPSDK_INSTALL_LOCATION` set to its `LeapSDK` folder (or
+   `LEAPC_LIB_OVERRIDE` / `LEAPC_HEADER_OVERRIDE` naming the library and
+   `LeapC.h` files themselves). An `ImportError: Cannot import leapc_cffi
+   … Unknown error` at hands start-up means our build is missing from the
+   environment and Python fell back to the app's copy (re-run `uv sync`):
+   an older Hand Tracking app ships only a Python 3.8 build of it, which
+   this project's 3.12 cannot import. If you upgrade Hand Tracking (say 5
+   to 6), re-run `uv sync --reinstall-package leapc-cffi` so the module is
+   rebuilt against the new library.
 2. Switch the hands on (on a device list, these lines go on the `leap`
    entry instead):
 
