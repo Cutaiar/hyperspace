@@ -90,9 +90,9 @@ pins this order over stubs:
 | 6 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
 | 7 | `audio.step(dt)`, `audio.publish(router)` | lanes |
 | 8 | `devices.feed(router)` — **the feed slot**: the hands feed `hand` and `hands` (`HandsIO.poll`, which may complete a hand Learn and makes the frame's DAW messages); the bridge feeds `ext` and publishes its labels and rests; an OSC device feeds its role's axes | feed |
-| 9 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
-| 10 | `router.modulate(chain, dt)` — every live performer row calls `p.modulate(offset)` | offsets |
-| 11 | `reg.apply()` — base + offsets onto every live object | objects |
+| 9 | the LFOs step **inside the patch** (step 10): `LFOs.begin`, then `LFOs.step_one` at each LFO's node, feeding `lfo` (plan 28 N0) | feed |
+| 10 | `router.modulate(chain, dt, now)` — the modulation patch (`Router.patch`, `patch.order`) in dependency order: at an LFO's node it steps; at a param's, every live performer row on it calls `p.modulate(offset)`, and a param a later node reads (a `scale`, a macro behind a depth subscriber, an LFO knob) is landed there and then (`Param.apply` under the frame's mark) | offsets; the objects of the params the pass reads |
+| 11 | `reg.apply()` — base + offsets onto every other live object (a param the pass landed under this frame's mark is skipped) | objects |
 | 12 | `devices.send(reg, chain)` — **the sink slot**: the bridge sends its sink rows (`routing.sink_values`: effective values, the lanes) through `Bridge.send_values`; `hands-daw` sends the hands' DAW messages and its own sink rows | nothing in the app (MIDI out) |
 | 13 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
 | 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — the render graph evaluated, every render output (below) | the screens |
@@ -100,18 +100,35 @@ pins this order over stubs:
 
 Rules that follow from the order:
 
-- **One-frame lag.** Everything a performer moves lands once, in
-  `reg.apply()`. A source that reads a parameter — an LFO reading its own
-  `depth`, a route scaled by a macro's depth subscriber or by
-  `master.gain`, `output.apply` — reads what `apply()` wrote **last**
-  frame. There is no recursion, because nothing in the pass reads a value
-  it is about to write
-  (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame`,
-  `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later`).
-  The sinks are the exception that proves it: they run **after**
-  `apply()` (step 12) and read this frame's effective values, so a param
-  sent to the DAW is not a frame behind
-  (`tests/test_sinks.py::test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply`).
+- **Dependency order, no lag** (plan 28 N0, decision 7; drafted by N0,
+  finished by N6). Everything a performer moves lands in this frame's
+  pass in dependency order: `Router.modulate` runs the table as a graph
+  (`patch.py`; `Router.build_patch`, cached as `Router.patch` and rebuilt
+  only when the table, the LFO list or the registry's params change),
+  each node after everything it reads. An LFO is a source with inputs —
+  its knobs land, then it steps; a `scale` param or a macro behind a
+  depth subscriber lands before the cable that reads it. So an LFO owning
+  another LFO's depth, a macro scaling a push, a `scale` that is itself
+  modulated all land **this frame**
+  (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`,
+  `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame`),
+  and every factory preset lands the same values as before, a frame
+  earlier where it was late
+  (`tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`).
+  **Nothing reads a stale value but through a delay node**: a loop that
+  passes through no `delay` modifier is refused — its last cable in table
+  order is kept off, the row left in the table and the file, a note on
+  ROUTING's head (`Router.patch_notes`;
+  `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`).
+  A macro's base subscribers are scene-setters (step 3), not part of the
+  order. `Param.apply` is idempotent within a frame (`Registry.begin_frame`
+  opens a mark, `Registry.apply` closes it): a param the pass landed is
+  never applied twice. The readers outside the pass still read last
+  frame's objects: `output.apply` (step 5) and the analyzer (step 7). The
+  sinks run **after** `apply()` (step 12) and read this frame's effective
+  values, so a param sent to the DAW is not a frame behind
+  (`tests/test_sinks.py::test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply`,
+  `tests/test_routing.py::test_sinks_still_send_after_apply`).
 - **Devices poll with the scene-setters, feed with the sources, send
   after `apply()`** — the three slots of the registry, each over the open
   devices in `[[devices]]` order
