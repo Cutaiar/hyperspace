@@ -200,3 +200,30 @@ def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
         pad.source = None                        # unplugged: empty faces
         frame(r.panel, "system")
         assert faces[-1][0] == [0.0] * gp.DIAL
+
+
+def test_picking_a_reading_on_the_panel_sets_it(tmp_path, monkeypatch):
+    """The readings, and the stick feel above them, are enums: the panel
+    offers their choices, and picking one sets it — it once drew them as
+    sliders, whose write (`set_value`) an enum refuses with a TypeError."""
+    from imgui_bundle import imgui
+    from test_ui_shell import build_rig, frame
+
+    pick = {"desk.pad.dial.left": 1, "desk.pad.dial.right": 0, "desk.pad.feel": 2}
+
+    def chosen(label, cur, *a, **kw):
+        pid = label.rpartition("##")[2]
+        return (pid in pick, pick.get(pid, cur))
+
+    def slid(label, v, *a, **kw):
+        return (label.rpartition("##")[2] in pick, 1.0)
+
+    monkeypatch.setattr(imgui, "combo", chosen)
+    monkeypatch.setattr(imgui, "slider_float", slid)
+    with build_rig(tmp_path) as r:
+        pad = ScriptedPad()
+        r.panel.pad = pad
+        app._register_dial(r.reg, pad)
+        frame(r.panel, "system")
+        assert pad.dial_modes == {"L": "blend", "R": "petal"}
+        assert r.reg["desk.pad.feel"].text() == "spring"

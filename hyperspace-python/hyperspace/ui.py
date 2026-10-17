@@ -1022,10 +1022,14 @@ class Panel:
 
     def _row(self, pid: str, width: float = -1, label: str | None = None,
              label_w: float = LABEL_W) -> bool:
-        """A labelled compact slider: label in a column, slider beside it."""
+        """A labelled compact slider: label in a column, slider beside it —
+        or, for an enum (whose write a slider's `set_value` refuses), its
+        choices in a combo."""
         p = self.reg[pid]
         self._label_cell(p.label if label is None else label, width=label_w)
         self._ctx_label(p)      # the label opens the menu the slider's `_ctx` draws
+        if self._real(p).kind is Kind.ENUM:
+            return self._combo(pid, width)
         return self._slider(pid, width)
 
     def half(self, pid: str, label: str | None = None, label_w: float = HALF_LABEL_W) -> bool:
