@@ -278,3 +278,65 @@ def test_a_shape_that_is_not_a_scene_is_drawn_as_before():
             want[2] = G.view_depth(V, a, yaw, pitch)
         for got, w in zip(G.shape_view(i, ang, yaw, pitch), want):
             assert np.array_equal(got, w)
+
+
+# ------------------------------------------------------- vector subjects
+
+FLOW_MARK, FLOW_CAPS = BY_NAME["Flow mark"], BY_NAME["Flow capsules"]
+
+
+def _bars(V: np.ndarray, faces: list) -> list:
+    """Each bar's (x centre, width, height), left to right."""
+    out = []
+    for c in faces:
+        P = V[np.asarray(c)]
+        out.append((P[:, 0].mean(), np.ptp(P[:, 0]), np.ptp(P[:, 1])))
+    return sorted(out)
+
+
+def test_the_flow_mark_is_five_stadia_as_the_svg_draws_them():
+    # five bars of one width on one pitch, their heights the SVG's: the
+    # two outer bars tallest, then the middle one, the two short ones equal
+    g = G.geom(FLOW_MARK)
+    V, F = g["V"], G.faces(FLOW_MARK)
+    assert all(G.SHAPES[i].dims == 3 and G.SHAPES[i].family == "Vector marks"
+               for i in (FLOW_MARK, FLOW_CAPS))
+    assert len(F) == 5 and (V[:, 2] == 0).all() and g.get("flat") and g.get("curve")
+    bars = _bars(V, F)
+    widths = [b[1] for b in bars]
+    assert np.ptp(widths) < 1e-9
+    assert np.ptp(np.diff([b[0] for b in bars])) < 1e-3          # one pitch
+    h = [b[2] / widths[0] for b in bars]                          # height in widths
+    svg = [(bot - top) / (2 * G.FLOW_R) for _, top, bot in G.FLOW_BARS]
+    assert h == pytest.approx(svg, abs=1e-3)
+    assert h[0] == pytest.approx(h[4], abs=0.01) and h[1] == pytest.approx(h[3])
+    assert h[0] > h[2] > h[1]
+
+
+def test_the_flow_mark_shows_one_picture_through_its_bars():
+    # its face UVs are the mark's own plane: a corner's UV is an affine
+    # function of where it is, the same for every bar
+    g = G.geom(FLOW_MARK)
+    V, F = g["V"], G.faces(FLOW_MARK)
+    P = np.concatenate([V[np.asarray(c), :2] for c in F])
+    uv = np.concatenate([np.asarray(f) for f in g["FUV"]])
+    A = np.hstack([P, np.ones((len(P), 1))])
+    fit = np.linalg.lstsq(A, uv, rcond=None)[0]
+    assert np.allclose(A @ fit, uv)
+    assert fit[0, 0] > 0 and fit[0, 0] == pytest.approx(fit[1, 1])  # square, not stretched
+
+
+def test_the_flow_capsules_are_the_marks_bars_lifted():
+    # each bar, seen face-on, has the flat mark's outline; in depth it is
+    # round, one bar's width deep; its UVs wrap it, v running up the bar
+    caps, mark = G.geom(FLOW_CAPS), G.geom(FLOW_MARK)
+    V = caps["V"]
+    assert np.allclose(V[:, :2].min(0), mark["V"][:, :2].min(0))
+    assert np.allclose(V[:, :2].max(0), mark["V"][:, :2].max(0))
+    width = _bars(mark["V"], G.faces(FLOW_MARK))[0][1]
+    assert np.ptp(V[:, 2]) == pytest.approx(width)
+    for cyc, f in zip(G.faces(FLOW_CAPS), caps["FUV"]):
+        u, v = np.asarray(f).T
+        assert np.ptp(u) <= 1 / 16 + 1e-9                      # no quad spans the seam
+        dy, dv = np.subtract.outer(V[cyc, 1], V[cyc, 1]), np.subtract.outer(v, v)
+        assert (dy * dv >= -1e-12).all()                     # v rises with y

@@ -106,6 +106,39 @@ YW), `spiral-silk` (Torus, YZ XW), `inverse-halo` (Starfruit, XZ XW YW).
 Each keeps a 3D plane, so each still turns; their W planes and the bass
 routes on them no longer move the shape. They were left as they are.
 
+## Stacked on it: a vector subject (the Flow mark)
+
+A first subject read from a vector source instead of a formula. The
+Wispr Flow mark is five pill-shaped bars, taken from the paths of
+wisprflow.ai's own SVG (`geometry.FLOW_BARS`). It comes in two forms,
+3D shapes in a family of their own (Vector marks), appended after the
+prisms:
+
+- **Flow mark** (100) is the mark as drawn: five stadium outlines in one
+  plane, one face each. Its face UVs are the mark's own plane, so a face
+  pattern or a bitmap reads as one picture through the five bars.
+- **Flow capsules** (101) lifts each bar into a capsule. Its face UVs
+  wrap each bar (u round it, v along it), so a pattern turns with the bar
+  instead of tiling every quad.
+
+The renderer needed one change: a plane figure has no depth of its own,
+so its depth cue now spans the unit sphere back from its nearest point
+(`"flat"`). Face-on it draws at full weight, and a tilt dims its far
+side. Neither form draws points.
+
+![The Flow mark with the PLAID pattern through its bars; the capsules with BLOOM, turned](assets/28-catalog/flow-mark-and-capsules.png)
+
+[`flow-demo.mp4`](assets/28-catalog/flow-demo.mp4) (45 s, `tools/flow_demo.py`, the real
+renderer offscreen) shows the mark face-on and turning, eight face patterns
+through it, the capsules turning with BLOOM wrapped round each bar, and a
+rippling field of nine marks.
+
+`prototypes/subjects/` (repository root) is a browser prototype of where
+this could go next: a flat ↔ capsule depth slider, physical materials
+(clay, chrome, glass, pearl), toon, halftone and plasma shaders,
+textures mapped across the mark or per bar, and bars that stretch with
+audio. Any SVG can be loaded there as a source.
+
 ## What it does not do (yet)
 
 - **No scene editor.** Scenes are code (`geometry.SHAPES`); a layer list in
@@ -119,7 +152,7 @@ routes on them no longer move the shape. They were left as they are.
   moves a little as the switch goes on or off.
 - **The scene's depth cue mixes kinds.** A 4D layer cues on w, a 3D
   layer on its depth to the 3D camera; the painter's sort runs over both.
-- **The Shape menu is long** (99 entries), though grouped. The shortlist
+- **The Shape menu is long** (101 entries), though grouped. The shortlist
   shapes were added so the owner can judge them by eye; most will
   probably go.
 - **The rectified 600-cell's faces take about 8 s to build** the first
@@ -147,3 +180,6 @@ too), 4D shapes untouched, the 3D switch never jumping and turning
 rigidly, every 4D shape over the volume floor. The shape digests gained
 the new rows, and the seven shapes plan 22 had lifted were re-recorded
 at w = 0 (`tests/golden/shape_digests.json`); no polytope's row moved.
+The Flow tests check the bars against the SVG, the mark's one-picture
+UVs, the capsules' wrap, and the flat cue's full weight face-on
+(`tests/test_render.py`).

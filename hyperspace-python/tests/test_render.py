@@ -46,6 +46,14 @@ def test_shape_renders(ctx, i):
         assert (img[:, :, 0] > img[:, :, 1]).any(), "no red-dominant (vertex) pixels"
 
 
+def test_a_flat_vector_draws_at_full_weight_face_on(ctx):
+    # the Flow mark has no depth of its own; face-on its outline is drawn as
+    # bright as a shape's nearest edge, not at the depth cue's dimmest
+    i = next(k for k, s in enumerate(SHAPES) if s.name == "Flow mark")
+    img = render_offscreen(ViewState(shape=i), w=600, h=400, ctx=ctx)
+    assert img.max() >= 200
+
+
 def test_pixels_land_on_projection(ctx):
     """Bright pixels must appear at the projected vertex positions of the
     golden view — ties the raster output to the parity-proven transform."""
