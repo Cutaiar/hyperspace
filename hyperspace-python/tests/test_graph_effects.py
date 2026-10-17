@@ -366,3 +366,37 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
     assert r.stats["chain_runs"] == old.stats["chain_runs"] >= 1
     for a, b in zip(got, want, strict=True):
         assert np.array_equal(a, b)
+
+
+def test_the_value_port_type_exists_and_no_node_uses_it():
+    """Plan 30 D2: `VALUE` is a port type beside `IMAGE`, `MASK` and
+    `GEOMETRY`, its docstring naming its two intended uses (the palette's
+    value out for a lights sink; an image-in `sample` port setting a
+    palette's params) — and no node publishes or reads one in this plan:
+    not any Node class, nor any node of a built default graph. `patch.py`
+    knows the name without importing the graph (it is a leaf)."""
+    import ast
+    import inspect
+    from pathlib import Path
+
+    from hyperspace import patch
+
+    assert G.VALUE == "value" and G.PORT_TYPES == (G.IMAGE, G.MASK, G.GEOMETRY, G.VALUE)
+    assert len(set(G.PORT_TYPES)) == 4
+    src = Path(G.__file__).read_text()
+    doc = src[src.index('VALUE = "value"'):src.index("PORT_TYPES =")]
+    assert "palette" in doc and "lights" in doc and "sample" in doc and "plan 29" in doc
+    classes = [c for _, c in inspect.getmembers(G, inspect.isclass) if issubclass(c, G.Node)]
+    assert G.Effect in classes and G.Output in classes
+    for c in classes:
+        assert c.OUTPUT != G.VALUE and G.VALUE not in c.INPUTS.values(), c
+        assert c.OUTPUT in (None, *G.PORT_TYPES), c
+    g = G.default_graph([View(S(through=True), (10, 10)),
+                         View(S(scene=False, through=True), (10, 10))], effects=RUN)
+    for node in g.order:
+        assert node.OUTPUT != G.VALUE and G.VALUE not in node.INPUTS.values(), node.name
+    assert patch.RENDER_VALUE == G.VALUE
+    for node in ast.walk(ast.parse(Path(patch.__file__).read_text())):
+        if isinstance(node, ast.ImportFrom):
+            assert "graph" not in {(node.module or "").split(".")[-1],
+                                   *(a.name for a in node.names)}
