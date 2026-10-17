@@ -561,3 +561,78 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     serial = table.macros_serial
     assert e.remove_node("macro.5") == []
     assert "macro.5" not in table.macros and table.macros_serial > serial
+
+
+def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig):
+    """`st["said"]` (the last render edit's words on the head) is cleared
+    by the next value edit, landed or refused (`_settle`), and by any
+    refusal, render or not; a render landing puts its own words back."""
+    panel = rig.panel
+    st = ui_graph._state(panel)
+    landed = SimpleNamespace(said="wired hands → output.2.hands")
+
+    def said_once():
+        assert ui_graph._render_said(panel, landed, lambda e: None, st) is None
+        assert st["said"] == landed.said and st["note"] == ""
+
+    said_once()
+    m = ui_graph.add_modifier(panel, "threshold")            # a value edit that lands
+    assert m is not None and st["said"] == "" and st["note"] == ""
+    said_once()
+    ui_graph._settle(panel, graphview.Refusal("no such pin"))  # a value edit refused
+    assert st["said"] == "" and st["note"] == "no such pin"
+    said_once()
+    assert ui_graph._render_said(panel, landed, lambda e: "a loop", st) == "a loop"
+    assert st["said"] == "" and st["note"] == "a loop"
+    said_once()
+    ui_graph._rig_node_cut(panel, st, None, graphview.VNode("lfo.1", "lfo", "LFO 1"))
+    assert st["said"] == "" and st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")
+
+
+def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
+    """Delete on a selection of three: the frame's own shape (refused), a
+    modifier (it goes) and an LFO (refused) — the head keeps the first
+    refusal's words for the frame, not wiped by the modifier's landing nor
+    replaced by the LFO's. The next delete starts afresh: a landing alone
+    clears the note."""
+    from imgui_bundle import imgui_node_editor as ed
+    panel, table = rig.panel, rig.router.table
+    st = ui_graph._state(panel)
+    m = ui_graph.add_modifier(panel, "threshold")
+    shape = graphview.VNode("render:shape", "render", "shape")
+    lfo = graphview.VNode("lfo.1", "lfo", "LFO 1")
+    mod = graphview.VNode(m.id, "modifier", "threshold")
+    view = graphview.View(nodes=[shape, mod, lfo])
+    queue: list[int] = []
+
+    class Id:
+        k = 0
+
+        def id(self):
+            return self.k
+
+    def query(nk):
+        if not queue:
+            return False
+        nk.k = queue.pop(0)
+        return True
+
+    monkeypatch.setattr(ed, "begin_delete", lambda: True)
+    monkeypatch.setattr(ed, "end_delete", lambda: None)
+    monkeypatch.setattr(ed, "NodeId", Id)
+    monkeypatch.setattr(ed, "LinkId", Id)
+    monkeypatch.setattr(ed, "query_deleted_node", query)
+    monkeypatch.setattr(ed, "query_deleted_link", lambda lk: False)
+    monkeypatch.setattr(ed, "accept_deleted_item", lambda *a: True)
+    monkeypatch.setattr(ed, "reject_deleted_item", lambda: None)
+    queue[:] = [ui_graph._id(st, f"n:{n.id}") for n in (shape, mod, lfo)]
+    ui_graph._delete(panel, st, view)
+    assert table.modifier(m.id) is None                     # the modifier went …
+    assert st["note"] == "shape is drawn by the scene, not wired"   # … the first words stay
+    assert "held" not in st
+    m2 = ui_graph.add_modifier(panel, "threshold")
+    st["note"] = "an old refusal"
+    queue[:] = [ui_graph._id(st, f"n:{m2.id}")]
+    view.nodes.append(graphview.VNode(m2.id, "modifier", "threshold"))
+    ui_graph._delete(panel, st, view)
+    assert table.modifier(m2.id) is None and st["note"] == ""
