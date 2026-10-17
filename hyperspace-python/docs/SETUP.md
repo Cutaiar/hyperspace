@@ -84,7 +84,20 @@ MIDI adapter is on by default and looks for a port whose name contains
 - **Points, lines, faces, rotate** are scene launch 1–4, the same with
   or without SHIFT. The **MASTER** fader is the audio drive and the
   **crossfader** the master dim, on both layers.
-- What each press did: the SYSTEM page's **desk log**.
+- **The track buttons, columns 1–6** (one per band): **select** (G7)
+  opens that band's strip — the device knobs follow it under SHIFT;
+  **solo** (G9) steps that band's transfer curve to the next one; **rec
+  arm** (G10) resets that band. **◀ ▶** step the selected band.
+- **QUANT** loads the next filled bank slot (the pad's B walks the preset
+  list instead). **STOP ALL** resets every band to the selected scene; a
+  second press within 8 s undoes it. **MASTER select** is overlay mode
+  and **PAN** its click-through: both do nothing unless `config.toml`'s
+  `[output] overlay` allows overlay.
+- What each press did: the SYSTEM page's **desk log**. If the desk is
+  switched off and on while the app runs it comes back in Akai's
+  Generic mode (activator, solo and rec-arm latch on the device, track
+  select does nothing); the app sees the first Generic-mode message and
+  puts it back, and the desk log says so.
 
 To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
