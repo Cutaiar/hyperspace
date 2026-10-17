@@ -430,17 +430,6 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
     rig.panel.close()
 
 
-def test_the_page_is_read_only():
-    """N2 opens no create or delete on the canvas (N3 and N4 do)."""
-    src = (PKG / "ui_graph.py").read_text()
-    tree = ast.parse(src)
-    calls = {n.func.attr for n in ast.walk(tree)
-             if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
-    assert not calls & {"begin_create", "begin_delete", "query_new_link",
-                        "query_deleted_link", "accept_new_item", "accept_deleted_item"}
-
-
-
 # ---------------------------------------------------------------- review round 1
 
 def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables(rig):

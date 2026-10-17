@@ -624,14 +624,7 @@ class Panel:
         # Learn is the host's, not the MIDI adapter's, and it says what it
         # waits for (plan 17 WP2): the desk, or one hand — nothing else can
         # complete it
-        if lrn is None:
-            imgui.text_disabled("no learn")
-        elif lrn.learning == a.id:
-            imgui.text_colored(RED, self._learn_hint())
-            if imgui.menu_item_simple("Cancel learn"):
-                lrn.arm(None)
-        else:
-            self._ctx_learn(a, p)
+        self._ctx_learn_block(a, p)
         if lrn is not None:
             self._ctx_unbind(a, p, desk, routes)
         ui_hands.ctx_rows(self, p, lines=False)     # the hand rows' "Gate: … ▸"
@@ -767,6 +760,21 @@ class Panel:
         if imgui.menu_item_simple("both"):
             lrn.unbind(ids, name=self._row_name)
         imgui.end_menu()
+
+    def _ctx_learn_block(self, a: Param, p: Param) -> None:
+        """The menu's Learn block: "no learn" without one; while `a` is
+        armed, what it waits for and Cancel; else the Learn items
+        (`_ctx_learn`). The param menu and the GRAPH page's `mod` pin
+        menu (plan 28 N3) both draw it."""
+        lrn = self.learn
+        if lrn is None:
+            imgui.text_disabled("no learn")
+        elif lrn.learning == a.id:
+            imgui.text_colored(RED, self._learn_hint())
+            if imgui.menu_item_simple("Cancel learn"):
+                lrn.arm(None)
+        else:
+            self._ctx_learn(a, p)
 
     def _ctx_learn(self, a: Param, p: Param) -> None:
         """The Learn items of a param not armed (plan 17 WP2, fork 5).
