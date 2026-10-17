@@ -22,6 +22,12 @@ material on top. Open `index.html` from any static server
   right. A demo voice or an audio file's log-spaced bands drive the gains,
   so the bars move like the waveform they draw.
 
-Not yet in the Python app. To bring it there, the capsule source would
-become a `geometry.Shape` builder (V, E and F cycles, with subject-wide UVs
-for the face patterns), and the gains would become routable params.
+`demo.mp4` walks through it: the capsules moving to the demo voice, the
+morph to flat and back, every look, a texture per part, and the wordmark
+in chrome. It was recorded headless on a stepped clock, so it plays at an
+even 30 fps.
+
+In the Python app (plan 28, stacked): the mark is now two shapes in the
+catalog, Flow mark and Flow capsules (`hyperspace-python/hyperspace/geometry.py`,
+`docs/plans/28-catalog-and-scenes.md`). Still to port: the solid
+materials, and the bar gains as routable params so audio can drive them.

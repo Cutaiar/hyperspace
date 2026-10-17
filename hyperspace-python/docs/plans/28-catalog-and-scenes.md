@@ -93,6 +93,11 @@ side. Neither form draws points.
 
 ![The Flow mark with the PLAID pattern through its bars; the capsules with BLOOM, turned](assets/28-catalog/flow-mark-and-capsules.png)
 
+[`flow-demo.mp4`](assets/28-catalog/flow-demo.mp4) (45 s, `tools/flow_demo.py`, the real
+renderer offscreen) shows the mark face-on and turning, eight face patterns
+through it, the capsules turning with BLOOM wrapped round each bar, and a
+rippling field of nine marks.
+
 `prototypes/subjects/` (repository root) is a browser prototype of where
 this could go next: a flat ↔ capsule depth slider, physical materials
 (clay, chrome, glass, pearl), toon, halftone and plasma shaders,
