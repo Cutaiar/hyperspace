@@ -39,6 +39,7 @@ from . import (
     ui_bands,
     ui_desk,
     ui_fx,
+    ui_graph,
     ui_lfo,
     ui_lookback,
     ui_patterns,
@@ -488,6 +489,7 @@ PAGES = [
     ("audio", "audio", "master"),
     ("analyzer", "analyzer", "band"),
     ("routing", "routing", None),
+    ("graph", "graph", None),        # plan 28 N2: both graphs on one canvas (ui_graph.py)
     ("lfo", "lfo", ("lfo", "tempo")),
     ("hands", "hands", "hands"),
     ("presets", "presets", "presets"),     # the loaded preset's dirty dot
@@ -541,6 +543,13 @@ class Panel:
         self.clock = None          # set by app.py (tempo.Clock): the LFO page's beat light
         self.lfos = None           # set by app.py (lfo.LFOs): the LFO page's scopes
         self._register_panel_params()
+
+    def close(self) -> None:
+        """Let go of what the panel holds outside Python: the GRAPH page's
+        node editor context (ui_graph.py, plan 28 N2). app.py calls it on
+        quit and on ⌘R, before imgui shuts down; a panel that never drew
+        the page holds none. Safe to call twice."""
+        ui_graph.close(self)
 
     def _register_panel_params(self) -> None:
         """The panel's own state as ``ui.*`` params: the window, the sheet,
@@ -1945,6 +1954,10 @@ class Panel:
         self._meters(dt)
         ui_bands.section(self, dt)
 
+    def _page_graph(self, dt: float) -> None:
+        """Both graphs on one canvas, read-only (ui_graph.py, plan 28 N2)."""
+        ui_graph.page(self, dt)
+
     def _page_routing(self, dt: float) -> None:
         """The routing matrix — lanes → params (ui_routing.py)."""
         ui_routing.page(self, dt)
@@ -2052,6 +2065,9 @@ class Panel:
             imgui.text_colored(WARN, self.dream_error)
         self._stall_status()
         self._gpu_timing()
+        graph_ms = ui_graph.timing_line(self)     # plan 28 N2: the GRAPH page's own draw
+        if graph_ms:
+            imgui.text_disabled(graph_ms)
         imgui.spacing()
         self._section("devices")
         self._device_lines()
