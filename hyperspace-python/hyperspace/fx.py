@@ -622,6 +622,11 @@ def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
 class FxChain:
     """The ping-pong textures and one program per effect, on one GL context.
 
+    Plan 30 D0: the frame's effects are the render graph's `Effect` nodes,
+    one pass each (`run_one`) between textures of this chain's `pool`;
+    `run` (the whole stack as one block, from `begin`'s texture) is the
+    faces' chain's.
+
     A chain runs the effects aimed at its `target`: the frame's (the
     default — with every effect aimed at the frame it is the whole stack)
     or the faces'. A chain made with `programs=` another chain borrows that

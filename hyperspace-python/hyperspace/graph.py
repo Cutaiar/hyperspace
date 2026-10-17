@@ -39,9 +39,11 @@ decisions"):
 
 And the three that wrap what exists (A1's call, registered):
 
-- **FX** (`Fx`): the effect chain (`fx.FxChain`), one node per pipeline,
-  the effects' order inside it as today. Inactive, it passes its input
-  through untouched.
+- **FX** (`Effect`, `Fx`; plan 30 D0): each effect instance is an image
+  node (`Effect`: one pass of its file's program, `FxChain.run_one`),
+  and each pipeline's chain is a run of them in the stack's order ending
+  in the pipeline's end (`Fx`). An effect that is off reads its input
+  through: no pass, no texture.
 - **History** (`History`, `Capture`): the look-back (`lookback.Lookback`)
   as two nodes, because its composite must read the ring before the
   frame's capture changes it: `history` lays the echoes and the dream
@@ -1638,6 +1640,7 @@ class Graph:
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
         self._readers: dict[str, int] = {}
+        self._pool: int | None = None
 
     def add(self, node: Node) -> Node:
         if node.name in self.nodes:
@@ -1650,6 +1653,7 @@ class Graph:
             if src is not None:
                 self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
+        self._pool = None
         return node
 
     def readers(self, node: Node) -> int:
@@ -1661,11 +1665,12 @@ class Graph:
         """The textures the effects' pool needs (`FxChain.pool`): none
         without an effect node; two for straight runs (each effect reads
         the one its consumer does not write); one more for each effect
-        read by more than one node, whose picture is held for the frame."""
-        effects = [n for n in self.order if isinstance(n, Effect)]
-        if not effects:
-            return 0
-        return 2 + sum(1 for n in effects if self.readers(n) > 1)
+        read by more than one node, whose picture is held for the frame.
+        Settled with the graph (asked once a pass)."""
+        if self._pool is None:
+            effects = [n for n in self.order if isinstance(n, Effect)]
+            self._pool = (2 + sum(1 for n in effects if self.readers(n) > 1)) if effects else 0
+        return self._pool
 
     def _sort(self) -> list[Node]:
         done: list[Node] = []
