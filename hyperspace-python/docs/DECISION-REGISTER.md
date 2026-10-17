@@ -4,9 +4,11 @@ Rows 34–88 were each decided during an unattended build on 2026-10-04,
 rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during
 plan 24's run, rows 140–168 during plan 27's run and rows 169–209
 during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
-(several gamepads at once) on 2026-10-15: the build took its own
+(several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
+run (shader nodes) on 2026-10-17: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
-on `plan-24-26-27-integration`, until the owner merges it) and waits
+on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
+until the owner merges them) and waits
 for the
 owner to say **keep** or **overturn**. Row 109 is the owner's own (plan
 25). Each row
@@ -168,11 +170,11 @@ here; overturn → the change, then the same.
 | 173 | The 1080p-cap golden: party-trip at 2× HiDPI | 191 | |
 | 174 | GPU time per node: read 3 frames late, a median of 60 | 194 | |
 | 175 | The golden tool's one GL context | 191 | |
-| 176 | The FX node is the chain, one per pipeline, the pipeline's end | 194 | |
+| 176 | The FX node is the chain, one per pipeline, the pipeline's end — **superseded by rows 214, 215** (plan 30: each effect is its own node; `Fx` is the end only) | 194 | superseded |
 | 177 | The history as two nodes, `history` and `capture` | 194 | |
 | 178 | The Output node is `_compose` | 194, 195 | |
 | 179 | Nodes and ports: made images pulled, painted images drawn into the consumer | 194 | |
-| 180 | The default graph keyed by switches, wiring and clouds; reused | 194, 195 | |
+| 180 | The default graph keyed by switches, wiring and clouds; reused (plan 30 adds the effect list and the placements to the key: rows 215, 219) | 194, 195 | |
 | 181 | The cover mask as a Layer node | 194 | |
 | 182 | The eye: `eye.fov`, `eye.distance`, session, the old divide | 196 | |
 | 183 | `camera.pan` in world units (±12), marked by `units`, through 1080p | 199, 201 | |
@@ -188,8 +190,8 @@ here; overturn → the change, then the same.
 | 193 | The OUTPUT switches are wiring; through stands down per frame | 195, 208 | |
 | 194 | `Wiring`: hands, blend, history — renderer-wide | 206, 209 | |
 | 195 | The hands node `ghost` and its layer `hands`; time by the consumer edge | 210, 213 | |
-| 196 | The preset's `graph` section: the nodes that differ, one object each | 211 | |
-| 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown | 211 | |
+| 196 | The preset's `graph` section: the nodes that differ, one object each (an effect's `after` / `into` and a placed instance 1: row 219) | 211 | |
+| 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown — "the whole section falls back" **superseded in part by row 221** (a refused placement costs only that effect its place) | 211 | |
 | 198 | Instances as built: `fx.<file>.<n>`, `ghost.<n>`, `hands.<n>` | 212, 213 | |
 | 199 | A second hands node is its own `Ghost` over its own state | 213 | |
 | 200 | Where two hands nodes go | 213 | |
@@ -206,6 +208,25 @@ here; overturn → the change, then the same.
 | 211 | A joystick per pad device (next free, or pinned); one USB reader, lent to the first `usb = true` pad with no GLFW joystick, sticky | 219 | |
 | 212 | The camera job and the factory pad rows are the primary pad's; a second pad starts with no rows; one feel | 219 | |
 | 213 | The hands stay single: a second hands entry is refused | 174 | |
+| 214 | The pipeline end keeps the name `Fx`; its own line reads 0.00 | 220 | |
+| 215 | An off effect is read through: no pass, no texture, no rebuild | 221 | |
+| 216 | The effects' pool: two half-float textures plus one per held picture | 222 | |
+| 217 | An effect node's name: `acid` in the scene's pipeline, `acid(scene+hands)` in the others | 220, 222 | |
+| 218 | SYSTEM: a line only for an effect that ran | 220 | |
+| 219 | The placement keys `after` and `into`; a placed instance 1 | 223, 224 | |
+| 220 | The placeable names and which key each takes | 225 | |
+| 221 | A refused placement costs only that effect its place; loops refused twice (two drafts folded) | 225 | |
+| 222 | A placement on a missing node is dormant, said in words | 226 | |
+| 223 | How an effect sits on an edge; the presenter gets the folded picture | 223, 224, 227 | |
+| 224 | The words: "on the hands", "before the history", "on output 2 only" | 228 | |
+| 225 | The three proof fixtures' extra values | 223, 224, 227 | |
+| 226 | A placed chip in a grid of its own, its place after its name | 229 | |
+| 227 | The FX status line adds "· N placed" | 229 | |
+| 228 | Two vocabularies: the chip's and OUTPUT's | 228, 229 | |
+| 229 | A dormant placement still shows as placed | 229 | |
+| 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
+| 231 | The `VALUE` port: a fourth type, used by no node | — | |
+| 232 | The faces target stays an inner chain (the lift as the other option) | 230 | |
 
 "—": no hand check shows it; tests only.
 
@@ -2965,6 +2986,11 @@ among them. No preset was edited or added: no factory preset carries a
 
 ### 176. The FX node is the chain, one per pipeline, and the end of its pipeline
 
+- **Superseded by rows 214 and 215** (plan 30, 2026-10-17): every effect
+  instance is now its own `Effect` node, the chain a run of them in each
+  pipeline, and `Fx` the thin pipeline end that keeps the jobs below
+  (where the picture lands, the stand-down, the error path). Kept here
+  as history.
 - **Built.** `graph.Fx` wraps `fx.FxChain`: it paints its input into the
   chain's first half-float texture and the last effect writes the
   destination; with no effect on it paints its input straight through.
@@ -3053,6 +3079,10 @@ among them. No preset was edited or added: no factory preset carries a
 
 ### 180. The default graph is keyed by the views' switches, the wiring and the listed clouds; the last one is reused
 
+- **Amended by plan 30** (rows 215, 219): the key also holds the effect
+  stack's list in order (`FxState.names()`: an order, an instance or a
+  file changed rebuilds, a toggle does not) and the preset's placements
+  (`Wiring.placed`).
 - **Built.** `graph.graph_key(views)` is each view's (scene, hands,
   through); `Renderer._graph_for` keeps the last graph and builds a new
   one only when that key, `Renderer.wiring` (row 194) or the listed
@@ -3416,6 +3446,9 @@ among them. No preset was edited or added: no factory preset carries a
 
 ### 196. The preset's `graph` section lists the nodes that differ from the default graph, one JSON object per node
 
+- **Amended by row 219** (plan 30): an `effect` entry may also carry
+  `after` or `into` (a placement), and a placed entry may name instance
+  1; an unplaced one still needs `instance` ≥ 2.
 - **Built.** A preset may carry `"graph": {"nodes": [...]}`
   (`graph.GraphSpec`, `graph.read_graph`, `preset.GraphSection`). Each
   entry names its `kind` and, for a second or later node, its
@@ -3446,6 +3479,11 @@ among them. No preset was edited or added: no factory preset carries a
 
 ### 197. A section this build cannot read is a note and the default graph, kept as the file had it
 
+- **Superseded in part by row 221** (plan 30): a placement this build
+  cannot honour — both keys, a non-string, an unknown name, a loop — is
+  a note ending "; the default placement" and costs only that effect its
+  place; the rest of the section lands. Every other unreadable section
+  still falls back whole, as below.
 - **Built.** An unknown node kind, a value out of its choices, a key a
   node does not take, two nodes of one instance, two layers, `laid` on a
   node that makes no layer: one note on the preset strip ("graph:
@@ -3702,3 +3740,430 @@ among them. No preset was edited or added: no factory preset carries a
 - **Rough edge.** `cloud_error` is on no page (the device's own SYSTEM
   line says whether it is `connected`).
 - **Judge it.** Check 218.
+
+## Shader nodes (plan 30)
+
+Built in plan 30's run on 2026-10-17
+([`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)), on
+`plan-28-30-integration` until the owner merges it. The owner's own
+decisions for this plan (1–5 and the render parts of 16 of the launch
+prompt: shaders are nodes, the palette moved first, the auxiliary ports
+designed and not built, no preset edited, the default graph
+pixel-identical) are in [`DECISIONS.md`](DECISIONS.md) with Who
+"owner"; these rows are what the build chose where those left a choice
+open — the end node's name, how an off effect is skipped, the texture
+pool, the placement keys and their vocabulary, refusals and dormancy,
+the words, the FX page's placed chips, the `VALUE` port's shape and the
+faces target. No preset was edited or added: every proof is a fixture
+under `tests/fixtures/presets/`.
+
+### 214. The pipeline end keeps the class name `Fx`, its node names and its SYSTEM lines
+
+- **Built.** `graph.Fx` is now the thin end of a pipeline: its input is
+  the last effect of its run, its `paint` paints that input (moving the
+  clocks once and counting `chain_runs`), and its `run` keeps every job
+  it had — straight into the one output at the frame's size, unflipped
+  and on this context, else the pipeline's frame texture; `bent` /
+  `fallback` through `Fx.source` / `Fx.layer`; a raise marking the
+  views. The nodes are still `fx`, `fx(scene+hands)`, `fx(hands)`, and
+  SYSTEM keeps their lines. The owner sees the `fx` line at **0.00**:
+  the end runs no pass of its own, and the effects' time moved to their
+  own lines just above it.
+- **Other options.** A new class (`End`, `Pipeline`) with `Fx` gone or an
+  alias: every test, tool and document naming `fx` / `Fx` changes, and
+  the golden manifest's recorded `nodes` lists would move.
+- **To reverse.** Rename the class and `FX_NAMES`; re-record the
+  manifest's `nodes` lists (no pixel moves).
+- **Rough edge.** 0.00 on `fx` does not mean the effects cost nothing:
+  their cost is on their own lines (`acid`, `huecycle` …).
+- **Judge it.** Check 220.
+
+### 215. An off effect is read through by its consumer: no pass, no texture, no change to the graph
+
+- **Built.** An `Effect` not in `FxState.chain(FRAME)` this frame
+  (switched off, mix 0, the stack bypassed, aimed at the faces) or whose
+  file never compiled paints its input straight into its consumer's
+  framebuffer, and its `image` is its input's. Every instance is in
+  every run, on or off (the run is `FxState.names()`), so switching a
+  chip on or off rebuilds nothing: `Renderer._graph_for` rebuilds only
+  when the list in order changes (an order, an instance, a file).
+  Retargeting an effect to the faces rebuilds nothing either. Measured
+  on party-acid: four passes a frame for the four on effects, none for
+  the nine off.
+- **Other options.** Rewire the edge around an off node each frame (the
+  graph's shape follows the chips); a run holding only the on effects (a
+  rebuild on every toggle).
+- **To reverse.** `Effect.paint` / `image` and `_graph_for`'s key.
+- **Rough edge.** Thirteen effect nodes per pipeline whatever is on (up
+  to 39 with the three pipelines), seen only in `repr(graph)` and on the
+  GRAPH page. A file that fails to compile reads through instead of the
+  old block's copy through a half-float texture (the same picture
+  within half-float rounding).
+- **Judge it.** Check 221.
+
+### 216. The effects' pool is the chain's half-float textures: two, plus one per held picture, sized by the graph
+
+- **Built.** `FxChain.pool(size, n)` hands out the chain's `f2` textures
+  (the faces' chain's `begin` hands out the pool's first framebuffer, asking for at least the textures it already holds, two at the least). `Graph.pool` is 0
+  with no effect node, else 2 plus one per effect read by more than one
+  node — and, since D1, one per placed effect that folds a made texture
+  or an output's frame. A straight run alternates the two however long
+  it is. A held picture is made once (`Effect._make(frame, avoid=dst)`,
+  `graph._spare`: never the consumer's target, never a texture already
+  held) and shown 1:1 into each reader. A graph that needs fewer
+  textures releases the pool (`FxChain.fit_pool`); a size change makes
+  all of them again; the pool grows by one if none is free.
+- **Other options.** A pool owned by the graph object (the renderer's
+  release paths and the hot-reload hooks would need it too); a texture
+  per effect (13 × 3 half-float frames).
+- **To reverse.** Local to `FxChain.pool`, `graph._spare`, `Graph.pool`.
+- **Rough edge.** A held picture costs one copy more than a direct pass,
+  and its second reader sees the half-float texture. The `avoid` rule is
+  load-bearing: a held texture shown into itself is a GL feedback loop
+  (pinned by
+  `tests/test_graph_effects.py::test_a_held_effect_read_through_the_pool_is_never_its_consumers_target`).
+- **Judge it.** Check 222.
+
+### 217. An effect's node is named by the effect in the scene's pipeline and with the pipeline's suffix in the others
+
+- **Built.** `graph.effect_node_name`: `acid`, `acid.2`, `palette` in the
+  scene's pipeline — the SYSTEM line and the word a placement names —
+  and `acid(scene+hands)`, `acid(hands)` in the others, as the ends are
+  named. An effect whose name another node has (a `scene.glsl`, a
+  `capture.glsl`, `output.2`, or `fx` against the ends) takes the
+  params' prefix: `fx.scene`, `fx.fx(scene+hands)`.
+- **Other options.** `fx.<name>` for every effect node (unambiguous, but
+  not the word the design and the placements use); one node shared by
+  the pipelines (the passes differ per pipeline).
+- **To reverse.** `effect_node_name` and the collision rule in
+  `default_graph`.
+- **Rough edge.** With the hands through and two pipelines running,
+  SYSTEM shows `acid` and `acid(scene+hands)`: correct, but two lines for
+  one chip.
+- **Judge it.** Checks 220, 222.
+
+### 218. SYSTEM shows a line only for an effect that ran a pass that frame
+
+- **Built.** `Effect.TIMED` is False, so `Graph.timed` (and the golden
+  manifest's recorded `nodes`) are as before; `Graph.timed_in(frame)`
+  adds the effects that ran (`frame.stats["effects"]`) in their places,
+  and the renderer hands that to the timer. An effect switched off drops
+  its line once its last timed frame is read back (`PassTimer.LAG`, a
+  few frames).
+- **Other options.** A line for every effect node, 0.00 when off (13 to
+  39 dead lines).
+- **To reverse.** `Effect.TIMED = True` and `end_frame(graph.timed)`.
+- **Rough edge.** On Apple's tile GPU a timer query is charged when a
+  render pass is flushed, so a line can carry its input's work or read
+  0.00: the lines are indicative, not an exact split (party-acid: the
+  old `fx` line 0.225 ms, the new lines summing to 0.089 ms, wall time
+  the same within noise).
+- **Judge it.** Check 220.
+
+### 219. The placement keys are `after` and `into`, both kept
+
+- **Built.** An effect entry in a preset's `graph` section may carry
+  `"after": "<node>"` — on that node's picture, every consumer of it
+  reading the effect — or `"into": "<node>"` — on that node's `image`
+  input alone — never both. A placed effect may name instance 1
+  (`{"kind": "effect", "file": "palette", "after": "hands"}`), which
+  takes the file itself out of the chain; an unplaced instance 1 is
+  still refused ("2 or more"). The section writes instance 1 by its file
+  alone and an extra instance with `instance`. The owner sees nothing in
+  a factory preset; the three fixtures use one key each.
+- **Other options.** One key with a port suffix (`"at":
+  "output.2.image"`): it reads less plainly and needs a port vocabulary
+  plan 28's wires bring anyway; `after` alone, `into: output.2` written
+  `after: output.2`.
+- **To reverse.** `EffectAt`, `_effect_entry`, `GraphSpec.to_json`, the
+  three fixtures; plan 28's wires read both keys.
+- **Rough edge.** `after: "output.<n>"` is accepted and means the same
+  as `into` (an output has no picture of its own to come after); both
+  are written back as the file had them.
+- **Judge it.** Checks 223, 224.
+
+### 220. The placeable names, and which key each takes
+
+- **Built.** `scene`, `hands`, `hands.<n>` (n ≥ 2), `history`,
+  `output.<n>` (n ≥ 1) and an effect instance this build has (a file on
+  disk, or an extra instance the same section declares). `into` takes
+  only the history, an output or an effect: the scene's and a layer's
+  inputs are geometry, so `into: "scene"` is refused with "its inputs
+  are geometry, not a picture: after 'scene' folds its picture". An
+  effect cannot sit after or into itself. The note: `graph: palette after
+  'teapot' — this build places after scene, hands, hands.2 …, history,
+  output.1 …, or an effect; the default placement` (for `into`:
+  "history, output.1 …, or an effect").
+- **Other options.** One list for both keys, `into: scene` meaning
+  `after: scene` (hides a mistake).
+- **To reverse.** `placement_error`, `_PLACE_NODE` / `_PLACE_EFFECT`,
+  `PLACE_WORDS`.
+- **Rough edge.** `hands.<n>` is honoured only on the node that makes
+  the layer (one layer per graph); otherwise the effect is dormant ("no
+  hands.2 layer this frame"). Read with no list of files
+  (`read_graph(section)` alone) any well-formed effect name passes and a
+  missing file is dormant at build.
+- **Judge it.** Check 225.
+
+### 221. A refused placement costs only that effect its place; a loop is refused at read and again at build
+
+Folds two of D1's drafts: the refusals, and the loops.
+
+- **Built.** Both keys at once, a non-string (an explicit `null`
+  included), a name outside the vocabulary, or a placement that makes a
+  loop each give one note on the preset strip ending "; the default
+  placement", and that effect goes back to the chain: an extra instance
+  at its order, instance 1 as the file. The rest of the graph lands,
+  and the section is kept as the file had it. A loop is found by
+  following each placed effect's target through the others
+  (`graph.placement_loops`): every effect on it gets `palette after
+  'acid.2' — that makes a loop (palette after acid.2 into palette)`.
+  `default_graph` checks again (`Graph.notes`) and `Graph.insert` refuses
+  an edge whose consumer is upstream, so a hand-built `Wiring` cannot
+  loop either. `read_graph` returns the notes in `GraphSpec.notes`;
+  `GraphSection.read` passes it the effect files on disk. Anything else
+  unreadable is still row 197's note and the default graph.
+- **Other options.** Treat a bad placement like any unreadable section
+  (the whole section dropped, the hands' wiring lost for one typo);
+  detect loops only at build, through the sort.
+- **To reverse.** `_effect_entry`'s return, `read_graph`'s notes,
+  `GraphSection.read`, `placement_loops` and its two callers.
+- **Rough edge.** A save writes the refused placement back unchanged (by
+  design: fix it in the JSON or on plan 28's GRAPH page). Every member of
+  a loop is refused, not only the last named.
+- **Judge it.** Check 225.
+
+### 222. A placement on a node the built graph lacks is dormant: no node, said in words
+
+- **Built.** `default_graph` builds no node for a placed effect whose
+  target is absent this frame and says why in `Graph.dormant`: `palette
+  after hands — no hands layer this frame`, `palette.2 into output.3 —
+  no output 3 this frame`, `… — output 2 shows no picture this frame`,
+  `… — no kaleido effect in this build`, `warp after palette — palette
+  is dormant this frame`. It does not fall back into the chain. The
+  OUTPUT page lists `dormant: …` under the output blocks
+  (`ui.dormant_lines`) and the "shows:" hover uses `graph_words(spec,
+  graph.dormant)`. The graph is rebuilt when the switches change, so the
+  node comes back as soon as its target exists.
+- **Other options.** Put a dormant effect back in the chain (it would
+  bend the whole picture where the preset said the hands only); keep a
+  node with no input.
+- **To reverse.** `_place_one`'s returns and `Graph.dormant`.
+- **Rough edge.** Dormancy follows the switches, not "a hand is in the
+  box": with the hands switch on and no hand, the node exists and has
+  nothing to fold (no pass).
+- **Judge it.** Check 226.
+
+### 223. How an effect sits on an edge: folded once in `run` after a texture, folded by the output into an output, the presenter given the folded picture
+
+- **Built.**
+  - After the scene or a hands layer, or after such an effect, the
+    effect folds that texture once in its own `run`, before any pipeline
+    paints, into a held pool texture (`Effect.makes`, `_made`); every
+    consumer reads that picture, and a source with no picture this frame
+    leaves it none.
+  - On a layer (`Effect.see_through`, walked back to the source, so no
+    edge carries it) the pass runs with `u_opaque = 0`, so a see-through
+    pixel stays see-through, and it is laid on at the layer's
+    `ghost.alpha` with the layer's depth (`Renderer.lay`). The layer's
+    readout is split always: the guide and labels are never folded.
+  - Into an output: `Output.folds` folds the frame texture the output
+    settled on into a held pool texture and shows it; that pipeline is
+    never painted direct.
+  - After or into a painted node (the history, an effect of the run):
+    D0's paint path, held with two readers. `after` rewires every image
+    port but those that read something else of the node (`Node.REFS`:
+    the face buffer, a depth, the readout). After an effect of the run,
+    one placed node per pipeline. A placed node is listed after its
+    source, so SYSTEM shows it under it.
+  - **Presenters** (every output after the first): an output laying a
+    folded layer hands `_compose` the folded texture, so `Handoff.hands`
+    is folded, at its own Ghost's opacity (`Effect.ghost`: ghost 2's for
+    `hands.2`); an output folded by `into` hands its presenter the folded
+    frame.
+  - **`fx_on`** is "an effect of a chain run is on" (`chain(FRAME)` less
+    `Graph.placed_names`): with only placed effects on, a through output
+    stands down as with none.
+- **Other options.** Paint the layer through the effect on demand at
+  each consumer (a pass per consumer, or D0's aliasing risk from a
+  `lay`); an output-fold node that re-runs the pipeline (two chain runs).
+- **To reverse.** `Effect.run` / `_made` / `fold` / `_one`,
+  `Output.folds` / `run`, `Fx.run`'s direct test, `Graph.pool`,
+  `Graph.insert`, `Renderer._compose`'s `hands_tex`.
+- **Rough edge.** A presenter's `Handoff.frame` / `hands` may be a
+  half-float pool texture wrapped "f1" (plan 26's contract widened, the
+  docstring says so): proven by texture identity in the tests, never on
+  a real second window.
+- **Judge it.** Checks 223, 224, 227.
+
+### 224. The words: "on the hands", "before the history", "on output 2 only"
+
+- **Built.** `graph.placement_words`: after the hands `palette on the
+  hands` (`on hands 2`); after the scene `acid 2 before the history`
+  (the history and the capture both read it); into the history `acid 2
+  into the history only`; after it `palette after the history`; an
+  output `palette 2 on output 2 only`; after an effect `palette after
+  acid 2`; into one `palette before warp`. `graph_words` appends them,
+  or the dormant words. The OUTPUT "shows:" line adds the placements on
+  what that output shows (`· palette 2 on this output only` for its own
+  fold); LOOKBACK's history line adds those on the history's way in or
+  after it.
+- **Other options.** The node words as written (`after scene`, `into
+  output.2`): less readable at distance.
+- **To reverse.** `placement_words`, `output_placement_words`,
+  `history_words`.
+- **Rough edge.** LOOKBACK reads `history: the scene · acid 2 before the
+  history` (a little redundant); a placed extra instance still counts in
+  `palette ×2` on the graph line.
+- **Judge it.** Check 228.
+
+### 225. The three proof fixtures and their extra values
+
+- **Built.** Each fixture is a factory preset's `values`, `routes` and
+  `macros`, with no `desk` or `modules` (like `hands-lines`), plus:
+  `palette-hands.json` — party-tracer, the palette `after: "hands"`, on,
+  mix 1, centre 200, width 60, and `fx.on: true` (party-tracer bypasses
+  the stack, so the palette would never run); `palette-glass.json` —
+  party-acid, the palette `into: "output.2"` with the same values, so
+  the output visibly folds; `acid-scene.json` — party-mandala, a second
+  acid `after: "scene"` with party-acid's acid (bend 0.04, twist 0.9,
+  reach 10, breathe 0.35), on, mix 1, and `dream.on: true`
+  (party-mandala has the look-back off, and "the echoes hold the bent
+  scene" needs echoes). 24 goldens, recorded once.
+- **Other options.** The default palette (width 360, which barely shows);
+  the look-back left off in acid-scene (nothing of the capture shown).
+- **To reverse.** Edit the fixtures and re-record their goldens
+  (`--only`).
+- **Rough edge.** No desk, so a fixture loaded at the machine has no
+  APC40 rows (the desk is Dylan's). No fixture places two instances of one file (check 231 uses a hand-made variant; no test loads that configuration). `palette-glass` folds output 2,
+  which on the testing guide's rig (D1: the glass output 1) is the
+  projector.
+- **Judge it.** Checks 223, 224, 227.
+
+### 226. A placed effect's chip sits in a grid of its own, its place after its name
+
+- **Built.** The FX page still edits the default chain. An effect the
+  loaded preset places leaves the chain's grid for a second grid under
+  it, three to a row: `Warp · after hands`, `Palette · into output 2`,
+  `Acid 2 · after scene`, cut with an ellipsis to fit
+  (`ui_fx.placed_label`). The name's hover has the place whole, "placed
+  by the preset's graph, not in the chain: moved in the preset's JSON,
+  not by a drag", and `dormant: …` when the built graph has it dormant.
+  It is no drag source and no drop target, and a drop among the chain's
+  chips never rewrites a placed effect's order (`_drop` works over the
+  chain). Its LED switches it; its name opens its strip, whose title
+  hover reads `warp.glsl · after hands` in place of `#20`. The words
+  come from `graph.placed_chips(spec)`. Two grids of a and b chips take
+  at most one row more than one of a + b: the page never scrolls at the
+  control size.
+- **Other options.** One chip to a row with the words beside it (the
+  first build: it scrolled with three placed effects); the chip in its
+  grid place with a mark and the place on hover only (unreadable at
+  distance, and it looks reorderable).
+- **To reverse.** `ui_fx.page`'s second grid, `_chip(place=, dormant=)`,
+  `placed_label`, `_drop(placed=)`.
+- **Rough edge.** A long label and place is cut (`Kaleidoscope ·
+  aft…`). The page reads the preset's spec (`Panel.graph_now`), not the
+  built graph: a placement refused only at build would still show as
+  placed (none reaches it: `read_graph` refuses loops first).
+- **Judge it.** Check 229.
+
+### 227. The FX status line keeps the chain's labels and adds the count of placed effects that run
+
+- **Built.** Under the bypass, the running chain's labels without the
+  placed effects, then ` · N placed`: `Acid → Palette · 1 placed`, or
+  `nothing in the chain · 1 placed`. N counts placed effects that are on
+  (mix above 0), aimed at the frame and not dormant in the built graph.
+  With nothing placed the line is byte-identical to before.
+- **Other options.** The prompt's literal `3 in the chain · 1 placed`
+  (drops the labels the line has always shown and the FX tests assert).
+- **To reverse.** `ui_fx._status`.
+- **Rough edge.** The count says how many, not which (the placed grid
+  says which).
+- **Judge it.** Check 229.
+
+### 228. The chip's place words and OUTPUT's placement words are two vocabularies
+
+- **Built.** The FX chip (`graph.placed_chips`) uses the key and the
+  node — `after hands`, `into output 2`, `after scene`, `into history`,
+  `after acid 2` — the edit view, worded like the JSON. OUTPUT's
+  "shows:" line and LOOKBACK (`graph.placement_words`, row 224) say
+  what the picture gets — `palette on the hands`, `acid 2 before the
+  history`, `palette 2 on output 2 only` — the show view. Plan 28's N4
+  extends `placed_chips` for wires.
+- **Other options.** One vocabulary (`palette on the hands` is too long
+  for a chip; `after hands` reads poorly on the output line).
+- **To reverse.** Have `placed_chips` call `placement_words`.
+- **Rough edge.** One placement reads two ways on two pages.
+- **Judge it.** Checks 228, 229.
+
+### 229. A dormant placement still shows as placed, said only in the hover and the count
+
+- **Built.** A placed effect whose node the built graph lacks this frame
+  keeps its chip in the placed grid with the same words; its LED and
+  strip still work. Its hover adds `dormant: palette after hands — no
+  hands layer this frame`, and the status count leaves it out. OUTPUT's
+  `dormant:` lines (row 222) say it in full.
+- **Other options.** Dim the chip or add `(dormant)` to its label (the
+  label is already cut at three to a row); hide the chip (then it
+  cannot be switched or edited until its node comes back).
+- **To reverse.** Pass `dormant` into the label in `_chip`.
+- **Rough edge.** A lit chip can run nothing, with only the count and
+  the hover saying so.
+- **Judge it.** Check 229 (with every output's hands switch off).
+
+### 230. A placed effect aimed at the faces says "on the faces" and is not counted as placed
+
+- **Built.** An effect both placed and aimed at the faces runs in the
+  faces' chain, not on its edge (row 232). Its chip reads `Warp · on the
+  faces`, its hover "placed after hands, aimed at the faces: it runs in
+  the faces' chain", the status count leaves it out and the faces row
+  lists it.
+- **Other options.** Refuse the placement at load when the effect is
+  aimed at the faces (but `target` is a param a person can change at any
+  time: a load-time check on a live value).
+- **To reverse.** `_chip`'s words and `_status`'s count filter.
+- **Rough edge.** The preset says `after hands`; the chip does not.
+- **Judge it.** Check 230.
+
+### 231. The `VALUE` port: a fourth type, named, used by no node
+
+- **Built.** `graph.VALUE = "value"` beside `IMAGE`, `MASK` and
+  `GEOMETRY` (`graph.PORT_TYPES` holds the four): a scalar or a small
+  float vector a node publishes once a frame. Its docstring names its
+  two uses — the palette's `palette` value out (centre, width, the sat
+  and val ranges, the ramp's anchors) for a lights sink (plan 29), and
+  an image-in `sample` port on the palette that would set its params
+  from a bitmap. No node publishes or reads one (a test walks every
+  `Node` class and the built default graph). `patch.RENDER_VALUE =
+  "value"` names it on the modulation side, as a future source whose id
+  is the node's port (`palette:palette`); `patch.py` stays a leaf.
+  `Node.__init__` already type-checks a wired port, so the first node to
+  declare one wires like any other. Nothing to see.
+- **Other options.** A typed shape (a `ValuePort(n, names)` naming the
+  vector's fields); deferring the type to plan 29. Both rejected for
+  now: built with nothing to read them.
+- **To reverse.** Delete `VALUE`, `PORT_TYPES` and `RENDER_VALUE`
+  (nothing reads them).
+- **Rough edge.** The vector's layout (which float is the centre) is
+  undecided until a node publishes one.
+- **Judge it.** None at the machine: nothing is drawn.
+
+### 232. The faces target stays an inner chain
+
+- **Built.** `target = faces` still runs inside the shape's face drawing
+  (`render.face_fx`, `FxChain.run`), not on a graph edge. The
+  `fx.<name>.target` tip (an ONTO chip's hover) ends: "On the faces it
+  runs inside the shape's face drawing: the one shader run the render
+  graph does not show, and a placement in the preset's graph does not
+  move it." An effect both placed and aimed at the faces runs there
+  (row 230).
+- **Other options.** The lift, "faces as a layer": the shape's faces
+  drawn to a texture of their own, an image edge where any effect can
+  be placed — a change to the scene's drawing that puts the face pass's
+  translucency and depth at stake.
+- **To reverse.** Build the lift (a plan of its own).
+- **Rough edge.** The graph and the GRAPH page do not show this one
+  shader run; SYSTEM times it inside `scene`. Placement is not checked
+  against `target`.
+- **Judge it.** Check 230.
