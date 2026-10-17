@@ -257,8 +257,9 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, motion
+from . import apc40, modifiers, motion
 from .bands import BANDS, CEIL
+from .modifiers import Modifier, ModState
 from .motion import OFF, Follower, Motion
 from .params import (
     DRIVE,
@@ -1512,6 +1513,34 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     _register_pad_feel(reg, table)
 
 
+def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
+    """The modifiers' params on `reg` (plan 28 N1), the way `fx.declare`
+    adds an effect's: every ``mod.*`` param dropped, then ``mod.<n>.<p>``
+    for each modifier's kind (`modifiers.PARAMS`), group ``mod`` — a
+    performance group, so preset content — modulatable, a view onto the
+    modifier's `params`. A route onto one of a modifier that went away
+    goes dormant, as for a deleted band."""
+    reg.remove_prefix(modifiers.PREFIX)
+    g = modifiers.GROUP
+    for m in mods:
+        for sp in modifiers.PARAMS[m.kind]:
+            pid, label = modifiers.param_id(m.id, sp.key), f"mod {m.n} {sp.label}"
+            vals, k = m.params, sp.key
+            tip = f"{m.kind} {m.n}: {sp.tip}" if sp.tip else ""
+            if sp.kind == "toggle":
+                reg.toggle(pid, label, lambda v=vals, k=k: v[k] >= 0.5,
+                           lambda x, v=vals, k=k: v.__setitem__(k, 1.0 if x else 0.0),
+                           group=g, tip=tip)
+            elif sp.kind == "enum":
+                reg.enum(pid, label, lambda v=vals, k=k: round(v[k]),
+                         lambda x, v=vals, k=k: v.__setitem__(k, float(int(x))),
+                         list(sp.choices), group=g, tip=tip)
+            else:
+                reg.continuous(pid, label, lambda v=vals, k=k: v[k],
+                               lambda x, v=vals, k=k: v.__setitem__(k, float(x)),
+                               lo=sp.lo, hi=sp.hi, group=g, tip=tip)
+
+
 PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
 
 
@@ -1657,6 +1686,13 @@ class Bindings:
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
     row_schemes: tuple[str, ...] = ROW_SCHEMES
+    # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
+    # id order: a tuple, always replaced whole (`set_modifiers`,
+    # `add_modifier`, `remove_modifier`), so a table from before a hot
+    # reload reads the class's empty one. The preset's, never the file's:
+    # `to_json` writes rows only, and `is_session_row` is about rows
+    modifiers: tuple[Modifier, ...] = ()
+    modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -2350,6 +2386,64 @@ class Bindings:
         self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
 
+    # ---- the modifiers (plan 28 N1) ----
+
+    def modifier(self, mid: str) -> Modifier | None:
+        return next((m for m in self.modifiers if m.id == mid), None)
+
+    def modifiers_doc(self, reg: Registry | None = None) -> list[dict]:
+        """The preset's ``modifiers`` list: each modifier's entry, its
+        params at their **bases** in `reg` (a performer riding one never
+        reaches the file), else as the modifier holds them."""
+        out = []
+        for m in self.modifiers:
+            bases = {}
+            if reg is not None:
+                for s in modifiers.PARAMS[m.kind]:
+                    p = reg.get(modifiers.param_id(m.id, s.key))
+                    if p is not None:
+                        bases[s.key] = float(p.base)
+            out.append(m.to_json(bases))
+        return out
+
+    def set_modifiers(self, doc, reg: Registry | None = None) -> list[str]:
+        """Replace every modifier with `doc`'s (the preset's list of
+        entries, or Modifier objects), and — given `reg` — their params
+        ``mod.<n>.<p>`` with them (`declare_modifiers`). An entry this
+        build cannot read, or a second one with an id already taken, is
+        dropped; returns a note for each."""
+        notes: list[str] = []
+        mods: dict[str, Modifier] = {}
+        for d in doc or ():
+            try:
+                m = d if isinstance(d, Modifier) else Modifier.from_json(d)
+            except (ValueError, TypeError) as e:
+                notes.append(f"dropped a modifier: {e}")
+                continue
+            if m.id in mods:
+                notes.append(f"dropped a second {m.id}")
+                continue
+            mods[m.id] = m
+        self.modifiers = tuple(sorted(mods.values(), key=lambda m: m.n))
+        self.modifiers_serial = self.modifiers_serial + 1
+        if reg is not None:
+            declare_modifiers(reg, self.modifiers)
+        return notes
+
+    def add_modifier(self, kind: str, inputs: Iterable[str] = (),
+                     reg: Registry | None = None, **params: float) -> Modifier:
+        """A new modifier of `kind` under the next free id (`next_id`)."""
+        m = Modifier(modifiers.next_id(x.id for x in self.modifiers), kind, tuple(inputs),
+                     dict(params))
+        bases = self.modifiers_doc(reg)            # the others keep their bases
+        self.set_modifiers([*bases, m], reg)
+        return self.modifier(m.id)
+
+    def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
+        """Take a modifier out, its params with it; a route on its lane
+        stays, dormant, until it is removed or the id comes back."""
+        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+
 
 # ---------------------------------------------------------------- router
 
@@ -2759,6 +2853,109 @@ class Router:
             f = movers[key] = Follower(seed)
         return f.step(u, dt, m, rest)
 
+    # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
+
+    def _reading(self, address: str, lanes) -> float | None:
+        """A source address's reading this frame, as a modifier reads its
+        input: the analyzer's lane (`lanes`, already normalised) for
+        ``lane:``, else the scheme's fed vector; None while it is not
+        live — not fed, no such lane, a name the map lacks, NaN."""
+        if not address:
+            return None
+        scheme, i = self.lane(address)
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None or not 0 <= i < len(vec):
+            return None
+        u = float(vec[i])
+        return None if math.isnan(u) else u
+
+    def _step_modifier(self, mid: str, dt: float, lanes=None) -> float | None:
+        """Step one modifier (`modifiers.step`) on its inputs' readings and
+        write its output into its ``mod`` lane — the vector
+        `_step_modifiers` publishes. One call per node: N0's patch
+        evaluation calls it in dependency order. An input that is not live
+        leaves the node dormant — its lane NaN, so a route on it lets go
+        like a route on that source would — and its memory starts afresh
+        when the input comes back. Returns the output (None: dormant)."""
+        m = self.table.modifier(mid)
+        vec = self.feeds.get(modifiers.SCHEME)
+        if m is None or vec is None or not 0 <= m.n < len(vec):
+            return None
+        states = self.__dict__.setdefault("_mod_states", {})
+        reads = [self._reading(a, lanes) for a in m.inputs]
+        if any(u is None for u in reads):
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        hit = states.get(mid)
+        if hit is None or hit[0] != m.kind:
+            hit = states[mid] = (m.kind, ModState())
+        out = modifiers.step(m, tuple(reads), hit[1], dt)
+        if not math.isfinite(out):
+            # a non-finite output (an input that read ±inf): not live, and
+            # its memory is dropped, so the next finite reading starts afresh
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        vec[m.n] = out
+        return float(out)
+
+    def _publish_modifiers(self) -> None:
+        """The ``mod`` scheme's labels, rests, gates and signal kinds, as
+        an adapter publishes its lanes' — once the table's modifiers
+        change. No modifiers: the scheme is not offered at all."""
+        mods = self.table.modifiers
+        if not mods:
+            for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
+                d.pop(modifiers.SCHEME, None)
+            return
+        n = max(m.n for m in mods) + 1
+        labels, kinds = [""] * n, [modifiers.VALUE] * n
+        for m in mods:
+            labels[m.n] = f"{m.n} {m.kind}"
+            kinds[m.n] = m.out
+        sc = modifiers.SCHEME
+        self.labels[sc], self.rests[sc] = labels, [modifiers.REST] * n
+        self.lane_kinds[sc] = kinds
+        # a threshold's fire is a switch a row's `when` can wait on
+        self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
+                          if m.out == modifiers.TRIGGER]
+        old = self.feeds.get(sc)
+        vec = np.full(n, math.nan)
+        if old is not None:                  # last frame's outputs stand until stepped
+            vec[:min(n, len(old))] = old[:n]
+        self.feed(sc, vec)                   # written in place per node after this
+
+    @property
+    def lane_kinds(self) -> dict[str, list[str]]:
+        """scheme → each lane's signal kind, "value" or "trigger" (decision
+        10), published like `labels` by a source that has triggers: today
+        the ``mod`` lanes, where a threshold's output is a trigger. A
+        trigger lane is still read as a value (1 while it fires, else 0)."""
+        d = self.__dict__.get("_lane_kinds")
+        if d is None:
+            d = self.__dict__["_lane_kinds"] = {}
+        return d
+
+    def _step_modifiers(self, analyzer=None, dt: float = 1 / 60) -> None:
+        """Every modifier, in id order, before the performer rows read
+        their lanes: until N0 orders the patch, a modifier reading a
+        higher id's lane reads last frame's output."""
+        mods = self.table.modifiers
+        serial = self.table.modifiers_serial
+        if self.__dict__.get("_mods_seen") != serial:
+            self.__dict__["_mods_seen"] = serial
+            self._publish_modifiers()
+            live = {m.id for m in mods}
+            states = self.__dict__.setdefault("_mod_states", {})
+            for mid in [k for k in states if k not in live]:
+                del states[mid]
+        if not mods:
+            return
+        lanes = None if analyzer is None else analyzer.lanes / CEIL
+        for m in mods:
+            self._step_modifier(m.id, dt, lanes)
+
     def modulate(self, analyzer=None, dt: float | None = None) -> None:
         """The frame's modulation pass — the one path a continuous source
         has to a param: every enabled performer row whose source is live
@@ -2768,6 +2965,7 @@ class Router:
         frame. A row that does not act this frame — its source not live,
         its gate shut — loses its follower, and starts afresh."""
         dt = 1 / 60 if dt is None else dt
+        self._step_modifiers(analyzer, dt)       # plan 28 N1: the ``mod:<n>`` lanes
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL

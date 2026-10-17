@@ -1,0 +1,19 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "MOD ENERGY",
+ "note": "plan 28 N1's fixture preset: the right hand's energy, smoothed, times band 0, into the acid's mix",
+ "values": {
+  "fx.on": true,
+  "fx.acid.on": true
+ },
+ "routes": [
+  {"source": "mod:2", "target": "fx.acid.mix", "op": "position", "value": 1.0}
+ ],
+ "modifiers": [
+  {"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05, "release": 0.6},
+  {"id": "mod.2", "kind": "combine", "in": ["mod:1", "lane:0"], "how": "mul"}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}
