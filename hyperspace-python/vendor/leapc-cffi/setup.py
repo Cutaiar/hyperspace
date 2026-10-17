@@ -128,6 +128,11 @@ def staged_library_name(libleapc_path, system=None):
 def _remove_staged_libraries():
     # A library staged by an earlier build (say libLeapC.5.dylib) must not be
     # linked against instead of this build's: cffi_build.py links whatever is here.
+    # The in-tree build/ goes too: uv builds this path source in place, and a
+    # stale build/ makes cffi call the C source "already up-to-date", so the
+    # module is not relinked after a Hand Tracking upgrade and the old library
+    # still ships in the wheel beside the new one.
+    shutil.rmtree(os.path.join(_HERE, "build"), ignore_errors=True)
     for name in os.listdir(_RESOURCE_DIRECTORY):
         if name.startswith("libLeapC.") or name == "LeapC.dll":
             path = os.path.join(_RESOURCE_DIRECTORY, name)

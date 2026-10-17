@@ -13,7 +13,14 @@ library as `LEAPC_LIB_OVERRIDE` if set, else the highest `libLeapC.<N>.dylib`
 in `<LeapSDK>/lib`, else `libLeapC.dylib` (likewise `libLeapC.so.<N>` /
 `libLeapC.so` on Linux; `LeapC.dll` on Windows as before); stages it in the
 package under its own (resolved) file name, which is the name the module asks
-for; and only builds when run as the setup script, so the lookup can be tested
-by importing the file. `cffi_build.py` links against whatever library was
-staged. `LEAPSDK_INSTALL_LOCATION` and `LEAPC_HEADER_OVERRIDE` behave as
-upstream. The rest of the directory is upstream's, unchanged.
+for; before staging, removes any previously staged library and the in-tree
+`build/` (uv builds this path source in place, and a stale `build/` stops
+cffi relinking after a Hand Tracking upgrade); and only builds when run as
+the setup script, so the lookup can be tested by importing the file.
+`cffi_build.py` links against whatever library was staged.
+`LEAPSDK_INSTALL_LOCATION` and `LEAPC_HEADER_OVERRIDE` behave as upstream.
+Known limit: an unversioned `libLeapC.dylib` that is a real file (not a
+symlink) with a versioned install name would be staged under the wrong name;
+neither Gemini 5 nor 6 ships that layout. Besides `setup.py`, `cffi_build.py`,
+this file and `.gitignore` (hyperspace's, scoping upstream's repo-level build
+ignores to this directory), the directory is upstream's, unchanged.

@@ -16,6 +16,7 @@ SETUP = Path(__file__).resolve().parents[1] / "vendor" / "leapc-cffi" / "setup.p
 
 @pytest.fixture(scope="module")
 def setup_py():
+    pytest.importorskip("setuptools")  # setup.py imports it; here only through torch
     spec = importlib.util.spec_from_file_location("leapc_cffi_setup", SETUP)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -102,3 +103,19 @@ def test_unversioned_symlink_is_staged_under_its_real_name(setup_py, tmp_path):
     assert setup_py.staged_library_name(str(tmp_path / "libLeapC.6.dylib"), "Darwin") == (
         "libLeapC.6.dylib"
     )
+
+
+def test_cleanup_removes_stale_build_and_staged_libraries(setup_py, tmp_path, monkeypatch):
+    # A stale in-tree build/ would keep cffi from relinking after an upgrade
+    here = tmp_path / "pkg"
+    resource = here / "src" / "leapc_cffi"
+    stale_build = here / "build" / "lib" / "leapc_cffi"
+    resource.mkdir(parents=True)
+    stale_build.mkdir(parents=True)
+    _touch(stale_build, "libLeapC.6.dylib", "_leapc_cffi.abi3.so")
+    _touch(resource, "__init__.py", "libLeapC.6.dylib")
+    monkeypatch.setattr(setup_py, "_HERE", str(here))
+    monkeypatch.setattr(setup_py, "_RESOURCE_DIRECTORY", str(resource))
+    setup_py._remove_staged_libraries()
+    assert not (here / "build").exists()
+    assert sorted(p.name for p in resource.iterdir()) == ["__init__.py"]
