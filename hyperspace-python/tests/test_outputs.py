@@ -606,7 +606,9 @@ def test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn(ct
     want_hands = run(ctx, rig(ctx, dim=0.5), views(ctx, S(scene=False)))[0]
     r = rig(ctx, dim=0.5)
     with monkeypatch.context() as m:
-        m.setattr(FxChain, "run", lambda self, *a: (_ for _ in ()).throw(RuntimeError("chain")))
+        # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+        m.setattr(FxChain, "run_one",
+                  lambda self, *a: (_ for _ in ()).throw(RuntimeError("chain")))
         broken, hands = run(ctx, r, (vs := views(ctx, S(), S(scene=False))))
         assert vs[0].error == "SCENE: RuntimeError: chain" and vs[1].error == ""
         assert np.array_equal(broken, want_hands) and np.array_equal(hands, want_hands)
