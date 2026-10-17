@@ -2459,6 +2459,20 @@ class Output(Node):
         frame.data[key] = got = (end, laid)
         return got
 
+    def _stood_down(self, frame: Frame, folds: list[Effect]) -> None:
+        """Each of `folds` dormant this frame in `Graph.dormant` (and
+        `Graph.stood`, so the next frame takes the words out again):
+        `palette into output 2 — output 2 stands down this frame`."""
+        g = frame.graph
+        if g is None:
+            return
+        n = self.name.partition(".")[2] or str(self.index + 1)
+        for e in folds:
+            if e.effect not in g.dormant:
+                g.dormant[e.effect] = (f"{e.effect} into output {n} — output {n} "
+                                       "stands down this frame")
+                g.stood.add(e.effect)
+
     def run(self, frame: Frame) -> None:
         r, v = frame.r, frame.views[self.index]
         # the readout goes on every output that shows the hands, over,
@@ -2505,6 +2519,11 @@ class Output(Node):
                     for e in folds:
                         tex = e.fold(frame, tex)
                     frames = {**frame.frames, end.key: tex}
+            elif folds and end is None:
+                # a through output standing down to its ground: nothing to
+                # fold this frame — say so where the build's dormant words
+                # are read (`graph_words`, OUTPUT's `dormant:` lines)
+                self._stood_down(frame, folds)
             with frame.timed(self.name):
                 r._compose(v, end.key if end is not None else None, laid is not None,
                            frames, frame.failed, frame.size, ro, lay=put,
@@ -2543,6 +2562,10 @@ class Graph:
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
+        # the entries of `dormant` written while the graph ran (an output's
+        # folds skipped this frame: `Output.run`), taken out again before
+        # the next frame runs — the build's own are never among them
+        self.stood: set[str] = set()
         self.notes: list[str] = []               # D1: placements refused at build
         # D1: the effects placed out of the runs (dormant ones included):
         # the renderer's `fx_on` ("an effect bends a pipeline") leaves them out
@@ -2678,6 +2701,9 @@ class Graph:
 
     def evaluate(self, frame: Frame) -> None:
         frame.graph = self
+        for name in self.stood:                   # last frame's run-time words
+            self.dormant.pop(name, None)
+        self.stood.clear()
         for node in self.order:
             node.run(frame)
 
