@@ -1398,7 +1398,11 @@ class Effect(Node):
             return
         readers = frame.graph.readers(self) if frame.graph is not None else 1
         if self.name in frame.data or readers > 1:
-            super().paint(frame, dst)             # made once (`image`), shown 1:1
+            # made once into a held texture that is never `dst` (a consumer
+            # painting into a pool texture must not be shown it: a feedback
+            # loop), then shown 1:1
+            self._make(frame, dst)
+            super().paint(frame, dst)
             return
         self._pass(frame, dst)
 
@@ -1406,8 +1410,16 @@ class Effect(Node):
         src = self.inputs["image"]
         if not self.on(frame):
             return src.image(frame) if src is not None else None
+        return self._make(frame, None)
+
+    def _make(self, frame: Frame, avoid: moderngl.Framebuffer | None) -> moderngl.Texture:
+        """This effect's picture for the frame, made once into a pool
+        texture held for the rest of it: never `avoid` (the framebuffer the
+        consumer asking paints into), never one held already. A held
+        texture is never handed out again this frame, so a later
+        consumer's `dst` cannot be it."""
         if self.name not in frame.data:
-            tex, fbo = _spare(frame, None, hold=True)
+            tex, fbo = _spare(frame, avoid, hold=True)
             self._pass(frame, fbo)
             frame.data[self.name] = tex
         return frame.data[self.name]
@@ -1850,7 +1862,8 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         # prefix, `fx.<name>`
         for e in g.effects:
             name = effect_node_name(e, key)
-            if name in g.nodes or name in ("capture", "fx") or name.startswith("output."):
+            if (name in g.nodes or name in ("capture", *FX_NAMES.values())
+                    or name.startswith("output.")):
                 name = f"fx.{name}"
             src = g.add(Effect(e, image=src, node=name))
         return src

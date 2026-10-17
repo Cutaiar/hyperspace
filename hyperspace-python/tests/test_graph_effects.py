@@ -72,6 +72,13 @@ def test_an_effect_named_like_another_node_is_kept_apart():
     g = G.default_graph([View(S(), (10, 10))], effects=("scene", "capture", "warp"))
     assert [e.name for e in g.nodes["fx"].effects] == ["fx.scene", "fx.capture", "warp"]
     assert isinstance(g.nodes["scene"], G.Scene) and isinstance(g.nodes["capture"], G.Capture)
+    # one called `fx`: its nodes would be the ends' names in every pipeline
+    g = G.default_graph([View(S(through=True), (10, 10)),
+                         View(S(scene=False, through=True), (10, 10))], effects=("fx",))
+    assert [e.name for e in g.nodes["fx"].effects] == ["fx.fx"]
+    assert [e.name for e in g.nodes["fx(scene+hands)"].effects] == ["fx.fx(scene+hands)"]
+    assert [e.name for e in g.nodes["fx(hands)"].effects] == ["fx.fx(hands)"]
+    assert all(isinstance(g.nodes[n], G.Fx) for n in G.FX_NAMES.values())
 
 
 def test_an_effect_node_takes_an_image_and_makes_one():
@@ -209,6 +216,67 @@ def test_an_effect_read_by_two_runs_once_into_a_held_texture(ctx):
     assert np.array_equal(pa, np.frombuffer(b.read(components=4), dtype=np.uint8))
     assert pa.any()
     r.scene.fbo.use()
+
+
+def test_a_held_effect_read_through_the_pool_is_never_its_consumers_target(ctx):
+    """An on effect whose input is an effect with two readers (D1's
+    `after:` placements): the held picture is made into a pool texture
+    that is not the one its consumer paints into (no feedback loop), no
+    pass reads the texture it writes, and the picture is the straight
+    run's, byte for byte (the held texture is shown 1:1, half float to
+    half float)."""
+    import numpy as np
+    from test_outputs import H, W, fbo, rig, run, views
+
+    r = rig(ctx, effects=("warp", "kaleido"))
+    run(ctx, r, views(ctx, S()), frames=1)                 # the scene's texture exists
+
+    class Picture(G.Node):
+        OUTPUT = G.IMAGE
+
+        def image(self, frame):
+            return r.scene.tex
+
+    def draw(held: bool):
+        g = G.Graph()
+        pic = g.add(Picture("picture"))
+        warp = g.add(G.Effect("warp", image=pic))
+        kal = g.add(G.Effect("kaleido", image=warp))
+        g.add(G.Fx("fx", SCENE, image=kal))
+        if held:                                           # a second reader of warp
+            g.add(G.Fx("fx(hands)", HANDS, image=warp))
+        assert g.readers(warp) == (2 if held else 1) and g.pool == (3 if held else 2)
+        frame = G.Frame(r, ctx, None, W, H, 1.0, 2.0, [], (W, H), 0, r.scene.fbo,
+                        (0, 0, W, H), fx_on=True, stats={"chain_runs": 0})
+        frame.graph = g
+        calls = []
+        real = r.fx.run_one
+
+        def run_one(name, src, dst, t):
+            calls.append((name, src, dst))
+            real(name, src, dst, t)
+
+        r.fx.run_one = run_one
+        out = fbo(ctx)
+        out.use()
+        ctx.viewport = (0, 0, W, H)
+        g.nodes["fx"].paint(frame, out)
+        r.fx.run_one = real
+        got = np.frombuffer(out.read(components=4), dtype=np.uint8).copy()
+        r.scene.fbo.use()
+        return got, calls, frame
+
+    want, _, _ = draw(False)
+    got, calls, frame = draw(True)
+    assert [n for n, _, _ in calls] == ["warp", "kaleido"]
+    for _, src, dst in calls:                              # no pass reads what it writes
+        assert all(src is not a for a in dst.color_attachments)
+    (_, _, held_dst), (_, kal_src, _) = calls
+    held = frame.data["warp"]
+    assert held_dst.color_attachments[0] is held           # warp made into the held texture ...
+    assert kal_src is not held                             # ... never kaleido's own source
+    assert len(frame.data["fx#held"]) == 1
+    assert np.array_equal(got, want) and got.any()
 
 
 def test_the_system_page_times_each_effect_that_ran(ctx):
