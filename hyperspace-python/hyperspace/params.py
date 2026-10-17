@@ -55,6 +55,7 @@ fires on a rising edge.
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -66,7 +67,7 @@ from .analyzer import CURVES, F_HI, F_LO, Q_HI, Q_LO
 from .bands import CEIL, NORMS, SHAPERS
 from .fx import FxState
 from .fx import declare as declare_fx
-from .geometry import PLANE_NAMES, SHAPES
+from .geometry import EYE_DISTANCE, EYE_FOV, PLANE_NAMES, SHAPES, pan_px_to_world
 from .ghost import GhostState
 from .ghost import register as declare_ghost
 from .lookback import (
@@ -107,7 +108,7 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
-                  "overlay", "ui", "desk")
+                  "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
 
 # the reference's fader → rotation-rate factor (its PLANEDRIVE was
@@ -120,6 +121,17 @@ DRIVE = 3.2
 # legacy6 routes (routing.py) land today's rate without clamping. Wide for
 # a slider (RAW_STEPS detents of 1.33×); WP5a can give it a finer widget.
 ROT_RATE_MAX = CEIL * DRIVE * tapers.T_DRIVE.map(tapers.T_DRIVE.steps)
+
+# camera.pan's reach, world units (plan 26 A2). Chosen so a routed pan
+# travels as far as the old ±4000 px did on the 1080p screen
+# (geometry.PAN_REF_PX, 324 px a unit there: ±12.3): hands-orbit's push
+# of 0.1 moves the shape ±1.2 units (≈ ±390 px) for a hand across the box,
+# where it moved ±400 px
+PAN_RANGE = 12.0
+# the eye's ranges: a field of view from a long lens to a wide one, and a
+# distance from just outside a unit shape to far off
+EYE_FOV_RANGE = (10.0, 120.0)
+EYE_DISTANCE_RANGE = (1.5, 40.0)
 
 # modulation hysteresis: a toggle or trigger goes high above ON and low
 # below OFF; an enum or integer only moves once the target is this far
@@ -164,6 +176,11 @@ class Param:
     # (a bank pad: save the live state into an empty slot) — True when it
     # did something, so the new light blinks; None: a hold is a press
     held: Callable[[int], bool] | None = field(repr=False, default=None)
+    # ENUM: what a desk `set` button tapped while the desk's SAVE is held
+    # does with its choice (plan 24 C1: a bank pad saves the live state into
+    # its slot, filled or empty) — True when it saved, so the pad blinks;
+    # None: under SAVE the press is an ordinary press
+    save_into: Callable[[int], bool] | None = field(repr=False, default=None)
     # what the param is for
     persist: bool = True         # belongs in a snapshot: a preset or a project's session (part_of)
     modulatable: bool = True     # a lane may drive it
@@ -573,6 +590,55 @@ def part_of(p: Param) -> str | None:
     return None
 
 
+def instance_id(node: str, key: str, n: int = 1) -> str:
+    """The naming rule for a render node's params (plan 26 A0; ENGINEERING
+    §2, "Node instances"). `node` is the node's id prefix — ``fx.acid``
+    for an effect, ``ghost``, ``dream`` — and `key` the param's own name.
+    The first instance keeps today's id (``fx.acid.mix``); instance n ≥ 2
+    carries its number as a segment right after the prefix
+    (``fx.acid.2.mix``, ``ghost.2.alpha``). The first segment never
+    changes: it is the group, which decides whether the param is in a
+    preset (`part_of`), so a single-instance graph never migrates a preset
+    or a binding."""
+    if n < 1:
+        raise ValueError(f"instance numbers start at 1, not {n}")
+    return f"{node}.{key}" if n == 1 else f"{node}.{n}.{key}"
+
+
+def instance_of(pid: str, node: str) -> tuple[int, str] | None:
+    """`instance_id` backwards: (n, key) when `pid` is a param of some
+    instance of `node`, else None. A purely decimal segment right after
+    the prefix is the marker (n ≥ 2); no key and no effect file is ever
+    purely decimal (tests/test_params.py pins it), so today's ids all
+    read as the first instance."""
+    head = f"{node}."
+    if not pid.startswith(head):
+        return None
+    rest = pid[len(head):]
+    mark, dot, key = rest.partition(".")
+    if dot and mark.isdecimal() and key and int(mark) >= 2 and str(int(mark)) == mark:
+        return int(mark), key
+    # by design an explicit `.1.` (or `.02.`) is no marker: `instance_id`
+    # never writes one, so `fx.acid.1.mix` reads as instance 1, key `1.mix`
+    return (1, rest) if rest else None
+
+
+def is_instance_id(pid: str) -> bool:
+    """Is `pid` a param of an extra node instance — `fx.<file>.<n>.<key>`
+    or `ghost.<n>.<key>`, n ≥ 2 — one that exists only while a preset's
+    graph holds that instance (plan 26 A4)? A preset load sorts such ids
+    against the graph it lands; a show holds back the `ghost.<n>.*` ones
+    the registry lacks until a graph declares them."""
+    parts = pid.split(".")
+    if parts[0] == "fx" and len(parts) >= 4:
+        mark = parts[2]
+    elif parts[0] == "ghost" and len(parts) >= 3:
+        mark = parts[1]
+    else:
+        return False
+    return mark.isdecimal() and str(int(mark)) == mark and int(mark) >= 2
+
+
 class Registry:
     """An ordered map of Param by id."""
 
@@ -718,15 +784,18 @@ class Registry:
     def enum(self, pid, label, get, set, choices, *, group="", tip="",
              persist=True, modulatable=True, alias=False,
              has: Callable[[int], bool] | None = None,
-             held: Callable[[int], bool] | None = None) -> Param:
+             held: Callable[[int], bool] | None = None,
+             save_into: Callable[[int], bool] | None = None) -> Param:
         """`has`, if given, says which choices hold something — the enum's
         counterpart of `trigger(lit=)`: the param carries what its lights
         need (a filled bank slot), so an adapter learns nothing about what
         the choices are. Stored as `Param.has`. `held`, likewise, is what a
-        `set` button held midi.HOLD_S does with its choice (`Param.held`)."""
+        `set` button held midi.HOLD_S does with its choice (`Param.held`),
+        and `save_into` what its tap does while the desk's SAVE is held
+        (`Param.save_into`, plan 24 C1)."""
         return self.add(Param(pid, label, Kind.ENUM, get, set, group=group, tip=tip,
                               choices=choices, persist=persist, modulatable=modulatable,
-                              alias=alias, has=has, held=held))
+                              alias=alias, has=has, held=held, save_into=save_into))
 
     def toggle(self, pid, label, get, set, *, group="", tip="",
                persist=True, modulatable=True, alias=False) -> Param:
@@ -750,6 +819,47 @@ class Registry:
 
 
 # ---------------------------------------------------------------- builder
+
+# plan 26 A2: camera.pan is in world units (the shape's unit circumradius),
+# no longer logical px. A document saved since says so with this key (the
+# schema stays preset/2: `load_doc` ignores keys it does not know, so an
+# older build still loads the file — reading its pan as px); one without
+# it is a preset/2 file from before, its pan read in px and converted
+UNITS_KEY = "units"
+UNITS = {"camera.pan": "world"}
+PAN_IDS = ("camera.pan.x", "camera.pan.y")
+
+
+def pan_world(doc: dict) -> tuple[dict, bool]:
+    """A preset document — a whole preset (`preset.load_doc`) or a camera
+    module preset (`Library._apply_doc`, `Library.defaults`) — with its
+    camera.pan in world units (plan 26 A2):
+    a file without the `units` key stored logical px, which become world
+    units through the default eye on the 1080p screen
+    (`geometry.pan_px_to_world`), so the shape sits where it did there.
+    Only its values are converted: a route's or a desk row's depth and a
+    macro base subscriber's from / to are fractions of the param's range
+    (`Sub.at` lands a norm), and `params.PAN_RANGE` was chosen so that
+    range reaches as far on that screen as the old ±4000 px did (±12 units,
+    ±3888 px). Returns (a copy, whether anything changed); the document
+    itself when it is already in world units or names no pan value."""
+    units = doc.get(UNITS_KEY)
+    # a hand-edited non-object `units` is no marker: the pan is read in px
+    if isinstance(units, dict) and units.get("camera.pan") == "world":
+        return doc, False
+    values = doc.get("values")
+    if not isinstance(values, dict) or not any(k in values for k in PAN_IDS):
+        return doc, False
+    out = copy.deepcopy(doc)
+    changed = False
+    for pid in PAN_IDS:
+        v = out["values"].get(pid)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            new = pan_px_to_world(v)
+            changed |= new != v
+            out["values"][pid] = new
+    return out, changed
+
 
 def _attr(obj, name):
     return (lambda: getattr(obj, name)), (lambda v: setattr(obj, name, v))
@@ -824,6 +934,23 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  tip=f"Rotate in the {name} plane")
     r.toggle("view.points", "Points", *_attr(view, "points"), group=g)
     r.toggle("view.lines", "Lines", *_attr(view, "lines"), group=g)
+    # plan 24 C2: a mix on the two layers that had none (decision 17), at 1
+    # — the picture as it was (decision 24); performance params, modulatable
+    r.continuous("view.points_alpha", "Points opacity", *_attr(view, "points_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"points {v:.2f}", group=g,
+                 tip="The points' opacity: 1 draws them as they always were, 0 not at all.")
+    r.continuous("view.lines_alpha", "Lines opacity", *_attr(view, "lines_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"lines {v:.2f}", group=g,
+                 tip="The lines' opacity: 1 draws them as they always were, 0 not at all.")
+    # plan 26 A2b (owner, 2026-10-14): off — strokes in world space, × the
+    # zoom (main's picture, decision 24); on — screen space, A2's fixed
+    # pixel weight. A performance switch like view.lines: in the preset,
+    # routable and modulatable
+    r.toggle("view.screen_strokes", "Screen strokes", *_attr(view, "screen_strokes"),
+             group=g,
+             tip="Off: the edges and the dots are drawn in world space — they grow and "
+                 "shrink with the shape as you zoom. On: screen space — they keep the "
+                 "same pixel weight whatever the zoom.")
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
@@ -923,9 +1050,16 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # with no up vector to flip, so tumbling over the top is just more turn
     r.continuous("camera.pitch", "Pitch", *_attr(view, "pitch"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
+    # plan 26 A2: zoom and pan are the shape's world scale and position
+    # (geometry.model_matrix) — the hands stay where the performer is and
+    # only the shape grows or moves. Pan is in world units, the shape's
+    # unit circumradius (y positive down, as it always was); a preset/2
+    # file's px are converted at load (preset.pan_world)
     for i, axis in enumerate("xy"):
         r.continuous(f"camera.pan.{axis}", f"Pan {axis.upper()}", *_item(lambda: view.pan, i),
-                     lo=-4000.0, hi=4000.0, fmt=lambda v: f"{v:+.0f} px", group=g)
+                     lo=-PAN_RANGE, hi=PAN_RANGE, fmt=lambda v: f"{v:+.2f}", group=g,
+                     tip="Where the shape sits in the world, in shape radii (the "
+                         "shape's own size): x right, y down. The hands do not move.")
 
     def reset_view():
         view.ang = [0.0] * 6
@@ -934,6 +1068,47 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     r.trigger("camera.reset", "Reset view", reset_view, group=g,
               tip="Reset rotation phases, orbit, zoom and pan.")
+
+    # ---- the eye (plan 26 A2): the one fixed camera the shape (and, from
+    # A3, the hands) are seen through. Session, like the room it is framed
+    # on: a preset never moves it. The defaults are the old 3D divide, so
+    # the shape lands where it always did; not modulatable — the camera
+    # is the rig, the shape is what moves
+    g = "eye"
+    r.continuous("eye.fov", "Eye field of view", *_attr(view, "eye_fov"),
+                 lo=EYE_FOV_RANGE[0], hi=EYE_FOV_RANGE[1],
+                 fmt=lambda v: f"{v:.1f}°", group=g, modulatable=False,
+                 tip="How wide the eye sees, across the shorter side of the picture. "
+                     f"Wider shows more of the world, smaller; {EYE_FOV:.1f}° is the "
+                     "view the shape was always drawn in.")
+    r.continuous("eye.distance", "Eye distance", *_attr(view, "eye_distance"),
+                 lo=EYE_DISTANCE_RANGE[0], hi=EYE_DISTANCE_RANGE[1], log=True,
+                 fmt=lambda v: f"{v:.2f}", group=g, modulatable=False,
+                 tip="How far the eye stands from the centre of the world, in shape "
+                     "radii. Nearer: a stronger perspective and a bigger shape. "
+                     f"{EYE_DISTANCE:.2f} is the view the shape was always drawn in.")
+
+    # ---- the point clouds (plan 26 A4b): how a cloud device's points are
+    # drawn in the shared camera (graph.PointCloud). Session, like the
+    # hands' look: a cloud is the room's sensor, and a preset load never
+    # changes how it is shown. Nothing reads them until a `cloud` device
+    # is listed, so they move no picture of today's
+    g = "cloud"
+    r.continuous("cloud.size", "Cloud point size", *_attr(view, "cloud_size"),
+                 lo=0.5, hi=12.0, fmt=lambda v: f"{v:.1f} px", group=g,
+                 tip="Each point's radius on screen, in pixels, whatever its depth.")
+    r.continuous("cloud.scale", "Cloud scale", *_attr(view, "cloud_scale"),
+                 lo=0.01, hi=10.0, log=True, fmt=lambda v: f"{v:.2f}×", group=g,
+                 tip="The cloud's own units in the world's (the shape's radius is 1), "
+                     "about the world's centre.")
+    r.continuous("cloud.bright", "Cloud brightness", *_attr(view, "cloud_bright"),
+                 lo=0.0, hi=2.0, fmt=lambda v: f"{v:.2f}", group=g,
+                 tip="The points' colour × this; 0 draws them black (they still hide "
+                     "what is behind them).")
+    r.toggle("cloud.colors", "Cloud colours", *_attr(view, "cloud_colors"), group=g,
+             modulatable=False,
+             tip="The cloud's own colours, when its source has them; off, every point "
+                 "is white.")
 
     # ---- look-back: the frame history composited over the scene ----
     # lookback.py reads these every frame; the dream worker (WP6b) reads
@@ -1058,6 +1233,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
+    # the stack the fx.* params write, for whoever declares more of them:
+    # a preset's graph holding an effect twice (plan 26 A4,
+    # preset.GraphSection — `fx.acid.2.*`)
+    r.fx_state = fx
     # the ghost hands' display (ghost.py; the renderer's Ghost.state)
     declare_ghost(r, ghost if ghost is not None else GhostState())
 
@@ -1203,12 +1382,16 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                has=lambda k: 0 <= k < len(bank.bank) and bank.bank[k] is not None,
                # a pad held on an empty slot saves the live state into it
                # (2026-10-09, replacing the clip-stop SAVE AS bar); a filled
-               # slot is never written over — the press loaded it
-               held=bank.save_into,
+               # slot held only loads — the press loaded it
+               held=bank.save_empty,
+               # SAVE held and a pad tapped (plan 24 C1): a new preset into
+               # that slot, filled or empty; the old preset stays listed
+               save_into=bank.save_into,
                tip="The show's twenty-four presets: F1–F8, then the desk's clip rows "
                    "1, 4 and 5. Each one is the whole performance — the look, its "
                    "routes, its LFOs and macros. Never the tempo, the hands or the "
-                   "analyzer. Hold an empty pad to save the live state into it.")
+                   "analyzer. Hold SAVE (track 8's clip stop) and tap a pad to save the "
+                   "live state into it as a new preset, or hold an empty pad.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -1223,8 +1406,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "
                       "one (TRIP → TRIP 2), into the next empty slot. It never "
-                      "overwrites a preset. On the desk, hold an empty pad instead "
-                      "to choose the slot.")
+                      "overwrites a preset. On the desk, hold SAVE (track 8's clip "
+                      "stop) and tap a pad instead to choose the slot.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # the preset list, not the bank (2026-10-14): the pad's B / X step

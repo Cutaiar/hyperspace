@@ -1,7 +1,8 @@
-"""The host (app.py): its import boundary, the config gates, the two input
-classes over fake GLFW state, the one close list, and the frame order that
-ARCHITECTURE §2 states — pinned over stubs, since the real loop needs two
-windows (audit P1, P2, P4, P5)."""
+"""The host (app.py): its import boundary, the device gates (plan 27 B1:
+the registry opens each device behind its own `[[devices]]` entry), the
+two input classes over fake GLFW state, the one close list, and the frame
+order that ARCHITECTURE §2 states — pinned over stubs, since the real loop
+needs two windows (audit P1, P2, P4, P5)."""
 
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import app
+from hyperspace import app, config, devices
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -24,20 +25,22 @@ from hyperspace.render import ViewState
 IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
-gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "leap", "torch")
+gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
+         "leap", "torch", "pythonosc")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
 
 def test_importing_app_leaves_every_gated_adapter_unimported():
-    """`hyperspace.app` is the only importer of the optional adapters and
-    imports each one lazily, behind its config gate — so importing the
-    module pulls in none of them, nor torch, nor the Ultraleap SDK. The
-    hands *package* is the one exception, on purpose: its settings register
-    and its page draws whether or not the tracker is on (`_hand_settings`,
-    `ui.py`), and `hands/core.py` imports `leap` only inside `LeapSource`.
-    In a subprocess, because this test session has long since imported
-    them all itself."""
+    """`hyperspace.devices` is the only importer of the optional adapters
+    and imports each one lazily, inside its device's `open` (plan 27 B1) —
+    so importing `app` pulls in none of them, nor torch, nor the Ultraleap
+    SDK, nor the OSC library (B4's `osc.py` and `pythonosc` are gated the
+    same way before they exist). The hands *package* is the one exception,
+    on purpose: its settings register and its page draws whether or not
+    the tracker is on (`_hand_settings`, `ui.py`), and `hands/core.py`
+    imports `leap` only inside `LeapSource`. In a subprocess, because this
+    test session has long since imported them all itself."""
     out = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT], capture_output=True, text=True,
                          check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
     assert out.returncode == 0, out.stderr
@@ -51,23 +54,59 @@ def _registry():
     return build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain))
 
 
-def test_a_shut_gate_opens_nothing():
-    reg = _registry()
-    assert app._open_midi(reg, {"midi": {"enabled": False}}, table=None, learn=None) is None
-    assert app._open_bridge(reg, {"bridge": {"enabled": False}}) is None
-    assert app._open_hands({"hands": {"enabled": False}}, settings=SimpleNamespace()) is None
-    assert app._open_hands({"hands": {"enabled": True}}, settings=None) is None
-    assert app._open_dream(reg, {"dream": {"enabled": False}}) == (None, "")
-    assert app._open_dream(reg, {}) == (None, "")            # off by default
-    assert app._open_bridge(reg, {}) is None
-    assert app._open_pad({"gamepad": {"enabled": False}}) is None
+def _entries(**enabled: bool) -> list[dict]:
+    """Today's four devices as checked entries, each gate as given."""
+    roles = {"midi": "apc40", "gamepad": "pad", "hands": "leap", "bridge": "bridge"}
+    return [{"role": roles[k], "kind": k, "enabled": on} for k, on in enabled.items()]
 
 
-def test_the_pad_gate_is_open_by_default():
-    """[gamepad] enabled defaults to true: the pad never raises when absent,
-    so polling for one costs nothing (audit P2)."""
-    assert isinstance(app._open_pad({}), app.Pad)
-    assert isinstance(app._open_pad({"gamepad": {"enabled": True}}), app.Pad)
+def test_a_shut_gate_opens_nothing(monkeypatch):
+    """A `[[devices]]` entry with `enabled = false` is listed as `off`:
+    its device is never opened, so its adapter module is never imported
+    (plan 27 B1; the `_open_*` gates this replaced)."""
+    for cls in (devices.MidiDevice, devices.PadDevice, devices.HandsDevice,
+                devices.BridgeDevice):
+        monkeypatch.setattr(cls, "open", _boom)
+    reg = devices.DeviceRegistry(_entries(midi=False, gamepad=False, hands=False, bridge=False),
+                                 devices.Context(reg=_registry()))
+    reg.open_all()
+    assert [d.status for d in reg] == ["off"] * 4
+    assert [d.role for d in reg] == ["apc40", "pad", "leap", "bridge"]
+    for kind in ("midi", "gamepad", "hands", "bridge"):
+        assert reg.adapter(kind) is None
+    # the config gives the same list from the old tables, every gate shut
+    cfg = {"devices": _entries(midi=False, gamepad=False, hands=False, bridge=False)}
+    assert all(not e["enabled"] for e in config.devices(cfg))
+    # a hands entry with no hands setup is an error, not a crash
+    r2 = devices.DeviceRegistry(_entries(hands=True), devices.Context(hand_settings=None))
+    monkeypatch.undo()
+    r2.open_all()
+    assert r2.get("leap").status.startswith("error: RuntimeError: no hands setup")
+    # the dream worker is not a device: its gate is app's, as before
+    assert app._open_dream(_registry(), {"dream": {"enabled": False}}) == (None, "")
+    assert app._open_dream(_registry(), {}) == (None, "")            # off by default
+
+
+def test_the_pad_gate_is_open_by_default(tmp_path):
+    """A config with no `[[devices]]` and no `[gamepad]` lists the pad
+    enabled (the old table's default): the pad never raises when absent,
+    so polling for one costs nothing (audit P2). The registry opens a
+    `gamepad.Pad` for it; `enabled = false` leaves it `off`."""
+    from hyperspace import gamepad
+
+    cfg = config.load(tmp_path / "config.toml")
+    (pad,) = [e for e in config.devices(cfg) if e["kind"] == "gamepad"]
+    assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True}
+    reg = devices.DeviceRegistry([pad])
+    reg.open_all()
+    assert isinstance(reg.adapter("gamepad"), gamepad.Pad)
+    assert reg.get("pad").status == "lost"              # no pad on this machine
+    assert reg.get("pad").io.usb is True
+    reg.close()
+    assert reg.adapter("gamepad") is None
+    off = devices.DeviceRegistry([{**pad, "enabled": False}])
+    off.open_all()
+    assert off.get("pad").status == "off" and off.adapter("gamepad") is None
 
 
 def _boom(*_a, **_k):
@@ -75,8 +114,10 @@ def _boom(*_a, **_k):
 
 
 def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
-    """An open gate whose adapter fails to build leaves the slot `None` and
-    says why on stderr — the show goes on without it."""
+    """A device whose adapter fails to build is `error: …` on its line, no
+    adapter, and says why once on stderr and in the config notes — the
+    show goes on without it (and the registry tries again on the Ports
+    schedule, tests/test_devices.py)."""
     import hyperspace.bridge
     import hyperspace.hands
     import hyperspace.midi
@@ -86,9 +127,14 @@ def test_a_broken_adapter_is_a_note_not_a_crash(monkeypatch, capsys):
     monkeypatch.setattr(hyperspace.bridge, "Bridge", _boom)
     monkeypatch.setattr(hyperspace.hands, "HandsIO", _boom)
     monkeypatch.setitem(sys.modules, "hyperspace.dream", SimpleNamespace(DreamWorker=_boom))
-    assert app._open_midi(reg, {"midi": {"enabled": True}}, table=None, learn=None) is None
-    assert app._open_bridge(reg, {"bridge": {"enabled": True}}) is None
-    assert app._open_hands({"hands": {"enabled": True}}, settings=SimpleNamespace()) is None
+    notes: list[str] = []
+    rig = devices.DeviceRegistry(_entries(midi=True, bridge=True, hands=True),
+                                 devices.Context(reg=reg, hand_settings=SimpleNamespace(),
+                                                 notes=notes))
+    rig.open_all()
+    assert [d.status for d in rig] == ["error: RuntimeError: boom"] * 3
+    assert all(rig.adapter(k) is None for k in ("midi", "bridge", "hands"))
+    assert notes == ["midi: boom", "bridge: boom", "hands: boom"]
     assert app._open_dream(reg, {"dream": {"enabled": True}}) == (
         None, "dream worker off: RuntimeError: boom")
     # torch missing (no `dream` extra): dream.py's own `import torch`
@@ -207,7 +253,10 @@ def test_mouse_orbits_pans_and_zooms_on_the_base(fake):
     mouse.poll(shift=True)                            # re-anchors as a pan
     fake.cursor = (150.0, 110.0)
     mouse.poll(shift=True)
-    assert (pan_x.base, pan_y.base) == (10.0, -10.0)
+    # plan 26 A2: the pan is in world units — the cursor's px over the px a
+    # unit spans at the origin through the eye
+    unit = app._px_per_unit(view, *g.get_window_size("render"))
+    assert (pan_x.base, pan_y.base) == pytest.approx((10.0 / unit, -10.0 / unit))
     # letting go ends it; the wheel zooms
     fake.buttons.clear()
     mouse.poll(shift=False)
@@ -277,6 +326,23 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     reg.__dict__["fired"] = fired
     panel = Stub("panel", log, restart_requested=False)
     renderer = Stub("renderer", log)
+    # the four devices as the registry's shims over recording stubs, in
+    # today's list order (config.DEVICE_TABLES): the pad, MIDI, the hands,
+    # the bridge — each counted open because it holds an adapter
+    midi = Stub("midi", log, on=True, error="", last="", bindings=[])
+    midi.name = ""
+    rig = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", None, devices.Context(reg=reg), io=pad),   # its camera job's reg
+        devices.MidiDevice("apc40", io=midi),
+        devices.HandsDevice("leap", io=Stub("hands", log, status="tracking", last="",
+                                            source=SimpleNamespace(on=True))),
+        # the bridge's sink half reads the table's sink rows (plan 27 B3):
+        # `table.sinks` then `bridge.send_values`, the path a live rig runs
+        devices.BridgeDevice(
+            "bridge", None,
+            devices.Context(table=SimpleNamespace(
+                sinks=lambda role: log.append("table.sinks") or [])),
+            io=Stub("bridge", log, on=True, error=""), audio=audio)])
     h = app.Host(
         reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
         router=Stub("router", log), clock=Stub("clock", log), lfos=Stub("lfos", log),
@@ -285,30 +351,41 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_render=lambda dt: log.append("render.draw"),
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
-        pad=pad, midi_io=Stub("midi", log), hands_io=Stub("hands", log),
-        bridge_io=Stub("bridge", log), dream_io=None, undo=Stub("undo", log),
+        devices=rig, dream_io=None, undo=Stub("undo", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
 
 
-# ARCHITECTURE §2, top to bottom: the scene-setters, the feeds, the pass, the draw
+# ARCHITECTURE §2, top to bottom: the scene-setters, the feeds, the pass,
+# the draw. Plan 27 B1: the devices poll in the scene-setter slot (the
+# registry, in list order — the pad's rows, then MIDI's), the sources feed
+# in the feed slot (the hands feed `hand`, the bridge feeds `ext`), and the
+# sinks run after `reg.apply` (`devices.send`). Plan 27
+# B2: the sticks' camera job is the pad device's own (`gamepad.steer`, in
+# its `act`), so it runs right after the pad's rows, before MIDI's. Plan 27
+# B3: the bridge is two halves — its ports looked for again in its `poll`,
+# the ext lanes received and published in the feed slot, the out half a
+# sink after `reg.apply` (effective values, no longer a frame behind)
 ORDER = [
     "clock.tick", "reloader.poll",
     "router.keys",                                   # key rows (and the loop keys)
-    "pad.poll", "router.pad",                        # axis lanes, pad and hat rows
-    "router.claimed",                                # sticks no route names, to the base
-    "pad.lanes", "router.felt",                      # through the pad's feel (motion.py)
-    "midi.poll",                                     # cc and note rows
+    "pad.poll", "router.pad",                        # devices.poll: the pad — axis lanes, pad and hat rows
+    "router.claimed",                                #   …its sticks no route names, to the base
+    "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
+    "midi.poll",                                     #   …MIDI — cc and note rows
+    "bridge.reconnect",                              #   …the bridge's ports, looked for again
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
-    "hands.poll",                                   # feeds hand
     "output.apply",                                  # reads last frame's objects
     "mouse.poll",                                    # relative writers, to the base
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)
-    "bridge.step",                                   # feeds ext
+    "hands.poll",                                    # devices.feed: the hands feed hand
+    "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
     "lfos.step", "lfos.publish",                     # feeds lfo
-    "router.modulate", "reg.apply", "view.integrate",  # the pass, then one commit
+    "router.modulate", "reg.apply",                  # the pass, then one commit
+    "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
+    "view.integrate",
     "render.draw", "panel.draw",                     # the two windows
 ]
 
@@ -325,13 +402,20 @@ def test_the_frame_runs_in_the_documented_order():
 
 
 def test_an_absent_pad_or_adapter_is_simply_skipped():
+    """No registry, or one with nothing listed: the frame runs the same
+    order with no device step in it."""
     log: list[str] = []
     h = _host(log)
-    h.pad, h.midi_io, h.hands_io, h.bridge_io = None, None, None, None
+    h.devices = None
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
-    assert log == [s for s in ORDER
-                   if not s.startswith(("pad.", "router.pad", "router.claimed", "router.felt", "midi.",
-                                        "hands.", "bridge."))]
+    without = [s for s in ORDER
+               if not s.startswith(("pad.", "router.pad", "router.claimed", "router.felt", "midi.",
+                                    "hands.", "bridge.", "table.sinks"))]
+    assert log == without
+    log.clear()
+    h.devices = devices.DeviceRegistry([])
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert log == without
     log.clear()
     h = _host(log, pad_on=False)                     # a pad polled for but not there:
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)       # its axis lanes go dark (router.pad),
@@ -356,22 +440,38 @@ def test_a_raising_adapter_is_a_note_that_survives_the_frame():
     loop silently drops its input."""
     log: list[str] = []
     h = _host(log)
-    h.midi_io.poll = _boom
+    midi, hands = h.devices.adapter("midi"), h.devices.adapter("hands")
+    midi.poll = _boom
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("midi: RuntimeError: boom")
+    assert h.devices.get("apc40").status == "error: RuntimeError: boom"   # and on its line
     assert "hands.poll" in log and "reg.apply" in log and "render.draw" in log
-    h.midi_io.poll = lambda: None
+    midi.poll = lambda: None
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
     assert h.reloader.runtime_error == ""            # …and a clean frame clears it
-    h.hands_io.poll = _boom
+    assert h.devices.get("apc40").status == "connected"
+    hands.poll = _boom
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("hands: RuntimeError: boom")
+    assert "bridge.receive" in log and "reg.apply" in log    # the next device still fed
+    hands.poll = lambda *a, **k: None
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is True
+    # a sink that raises after `reg.apply` (plan 27 B3): the toast, its
+    # line, and the frame still draws
+    h.devices.adapter("bridge").send_values = _boom
+    log.clear()
+    assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
+    assert h.reloader.runtime_error.startswith("bridge: RuntimeError: boom")
+    assert h.devices.get("bridge").status == "error: RuntimeError: boom"
+    assert "view.integrate" in log and "render.draw" in log
 
 
 def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     """↑/↓ held and the pad's sticks are relative writers on the base
     (`nudge` / `scale`), and they run in the scene-setter block — after the
-    key rows and the pad rows, before any source feeds."""
+    key rows and the pad's rows (plan 27 B2: the camera job is the pad
+    device's, `gamepad.steer`, right after its rows and before MIDI's),
+    before the macros and before any source feeds."""
     g = app.glfw
     log: list[str] = []
     h = _host(log, held={g.KEY_UP}, stick=0.5)
@@ -380,10 +480,11 @@ def test_the_relative_writers_run_with_the_setters_and_move_the_base():
     assert i("router.keys") < i("view.depth4.nudge") < i("pad.poll") < i("router.pad")
     assert i("router.pad") < i("camera.yaw.nudge") < i("camera.pitch.nudge")
     assert i("camera.pitch.nudge") < i("camera.zoom.scale") < i("midi.poll")
+    assert i("midi.poll") < i("router.follow_macros")
     assert log.count("view.depth4.nudge") == 1     # the triggers rest, so no second ride
     # the right stick's X rides the three W planes' rates, after the zoom
-    w = [f"rot.rate.{p}.nudge" for p in app.W_PLANES]
-    assert app.W_PLANES == ("XW", "YW", "ZW")
+    w = [f"rot.rate.{p}.nudge" for p in app.gamepad.W_PLANES]
+    assert app.gamepad.W_PLANES == ("XW", "YW", "ZW")
     assert i("camera.zoom.scale") < i(w[0]) < i(w[1]) < i(w[2]) < i("midi.poll")
 
 
@@ -443,9 +544,14 @@ def test_the_loop_keys_outside_the_table():
 
 
 def test_the_host_close_list_is_every_adapter_in_shutdown_order():
+    """The one close list (audit P1) is the registry — every device, last
+    listed first, the pad included (plan 27 B1) — then the dream worker."""
     log: list[str] = []
     h = _host(log)
-    assert h.adapters == (h.midi_io, h.bridge_io, h.hands_io, None)
+    assert h.adapters == (h.devices, None)
+    app.close_all(SimpleNamespace(stop=lambda: log.append("audio")), *h.adapters)
+    assert log == ["bridge.close", "hands.close", "midi.close", "pad.close", "audio"]
+    assert all(d.io is None for d in h.devices) and h.pad is None
 
 
 def _imports(path: Path) -> set[str]:
@@ -738,6 +844,48 @@ def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
         "glfw.terminate()")
     assert "save=save_windows" in src and "home = library_home()" in src
     assert app.library_home is library.home
+
+
+# ---- the exit: every window destroyed before glfw.terminate (the exit crash) ----
+
+def test_both_exits_destroy_every_window_before_terminate(monkeypatch):
+    """pyGLFW's terminate() frees the windows' callback closures before
+    glfwTerminate destroys the windows, and destroying one pumps macOS's
+    event queue into the others: an input event queued at quit then calls
+    a freed closure (SIGSEGV, "Python closed unexpectedly"). Both exits
+    destroy each window themselves first, `None` skipped, one that raises
+    stopping none."""
+    import inspect
+
+    log: list[str] = []
+
+    def destroy(w):
+        log.append(f"destroy {w}")
+        if w == "bad":
+            raise RuntimeError("gone")
+
+    monkeypatch.setattr(app, "glfw", SimpleNamespace(
+        destroy_window=destroy, terminate=lambda: log.append("terminate"),
+        make_context_current=lambda w: None))
+    app._destroy_windows(["w2", None, "bad", "ctrl", "render"])
+    assert log == ["destroy w2", "destroy bad", "destroy ctrl", "destroy render"]
+
+    # ⌘R: the windows go after imgui's shutdown and before terminate and execv
+    log.clear()
+    monkeypatch.setattr(app.os, "execv", lambda *a: log.append("execv"))
+    audio = SimpleNamespace(stop=lambda: log.append("audio"))
+    impl = SimpleNamespace(shutdown=lambda: log.append("shutdown"))
+    app._restart(audio, (), impl, "ctrl", windows=["ctrl", "render"])
+    assert log == ["audio", "shutdown", "destroy ctrl", "destroy render", "terminate", "execv"]
+
+    # main: the quit destroys every window (the later outputs', the control
+    # window, output 1's) after imgui's shutdown, before terminate; the
+    # restart is handed the same list
+    src = inspect.getsource(app.main)
+    tail = src[src.index("impl.shutdown()"):]
+    assert tail.index("_destroy_windows(all_windows())") < tail.index("glfw.terminate()")
+    assert "windows=all_windows()" in src
+    assert "return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]" in src
 
 
 # ---- the desk's table and knob smoothing's default (plan 18 WP2, fork 12) ----

@@ -1,0 +1,24 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "fx",
+ "name": "sunset",
+ "note": "Test fixture, not shipped: a four-anchor gradient map from deep violet through magenta and orange to cream.",
+ "values": {
+  "fx.palette.on": true,
+  "fx.palette.mix": 1.0,
+  "fx.palette.mode": 1,
+  "fx.palette.anchors": 4,
+  "fx.palette.a1_hue": 270.0,
+  "fx.palette.a1_sat": 0.9,
+  "fx.palette.a1_val": 0.1,
+  "fx.palette.a2_hue": 320.0,
+  "fx.palette.a2_sat": 0.85,
+  "fx.palette.a2_val": 0.5,
+  "fx.palette.a3_hue": 25.0,
+  "fx.palette.a3_sat": 0.9,
+  "fx.palette.a3_val": 0.9,
+  "fx.palette.a4_hue": 50.0,
+  "fx.palette.a4_sat": 0.2,
+  "fx.palette.a4_val": 1.0
+ }
+}

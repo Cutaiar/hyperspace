@@ -452,14 +452,18 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     # the old map had no OVERDUB row and the note is free: the next load
     # adds home there, as it does to any older file (plan 15 WP2), and the
     # bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2), and nothing
-    # else moves (the clip-stop SAVE AS bar, retired 2026-10-09, is not added)
+    # else moves (the clip-stop SAVE AS bar, retired 2026-10-09, is not added);
+    # plan 24 C1: the four invariant render toggles and SAVE, likewise
     again = Bindings.load(path, legacy_midi=legacy)
     far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[routing.F_KEYS:]]
+    c1 = [(s, pid) for s, pid, *_ in sorted(routing.TOGGLE_DESK_ROWS)] + [
+        (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM)]
     assert again.notes == [
         f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
-        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far]]
+        *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far],
+        *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1]]
     assert [b for b in again.to_json()["bindings"]
-            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far)] \
+            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far, *(s for s, _ in c1))] \
         == t.to_json()["bindings"]
     assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
@@ -483,9 +487,9 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
     assert len(t.of("pad")) == 9 and len(t.of("hat")) == 4     # BACK free, START saves
-    assert len(t.midi()) == 113 + 6 + 1 + 4 and t.mods() == []   # + SHIFT, the global track
+    assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
-    # retired 2026-10-09),
+    # retired 2026-10-09), SAVE on track 8's clip stop (plan 24 C1),
     # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
     # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
@@ -932,7 +936,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 + 1 + 4 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 4 + 1 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
@@ -1338,7 +1342,12 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert "added pad:MENU → preset.save_new (the pad layout of 2026-10-14)" in err
     # + the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2)
     assert f"added note:7:{apc40.N_CLIP[4]} → preset.select (the APC40 map of plan 19)" in err
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 73 rows changed)" in err
+    # + the four invariant render toggles and SAVE (plan 24 C1)
+    assert f"added note:7:{apc40.N_CLIPSTOP} → desk.save (the APC40 map of plan 24)" in err
+    # + the track faders' audio strip, eight global rows since plan 24 C2 (decision 17)
+    assert f"added cc:0:{apc40.CC_FADER} → band.0.post (the global layer, plan 13 §3.2)" in err
+    # + START's hold-to-save (the pad layout of 2026-10-14): one more row changed
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 86 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1354,9 +1363,11 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     assert [b.source for b, _ in t.dropped] == ["hand:2"]
     # + the moved keys of plan 11, the desk's sort, the undo keys of plan 15,
     # OVERDUB and the Home key (plan 15 WP2) (the clip-stop row of plan 15
-    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19
-    # WP2), START's hold-to-save (the pad layout of 2026-10-14)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 1
+    # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2),
+    # the four invariant render toggles and SAVE (plan 24 C1), the track
+    # faders' audio strip on the global layer (plan 24 C2: the sort adds 8),
+    # START's hold-to-save (the pad layout of 2026-10-14)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 5 + 8 + 1
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1645,15 +1656,17 @@ def test_an_older_file_gets_home_where_it_is_free(tmp_path, capsys):
     assert len(list((tmp_path / "a").glob("bindings.json.bak-*"))) == 1
     assert capsys.readouterr().err == ""
     # the owner's own rows on OVERDUB and on Home stay, and nothing is added or written
+    # (view.plane.ZW: no session row of its own — view.lines has the
+    # invariant render toggle since plan 24 C1)
     path = write(tmp_path / "b",
-                 Binding(over, "view.lines", "toggle", feedback="led"),
+                 Binding(over, "view.plane.ZW", "toggle", feedback="led"),
                  Binding(key, "camera.reset", "fire"))
     before = path.read_text()
     t = Bindings.load(path, legacy_midi=None)
     assert t.notes == [] and path.read_text() == before
     assert not list((tmp_path / "b").glob("bindings.json.bak-*"))
     assert not [b for b in t.bindings if b.target == "preset.home"]
-    assert t.for_param("view.lines").source == over
+    assert t.for_param("view.plane.ZW").source == over
 
 
 def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
@@ -1662,13 +1675,19 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     eight factory rows loses exactly those on its next load — each said,
     the old file kept whole beside it — and the next load is quiet; the
     row is then free (dark, for Learn). A row the owner put on a clip-stop
-    button is kept; a file without the bar gains nothing there."""
+    button is kept; a file without the bar gains nothing there. Since plan
+    24 C1 track 8's clip stop is the desk's SAVE (decision 18): the other
+    seven stay free."""
     stop = apc40.N_CLIPSTOP
     bar = [f"note:{k}:{stop}" for k in range(8)]
+    free = bar[:7]
     for s in bar:
         assert (s, "preset.save_new", "hold", 1.0) in routing.RETIRED_ROWS
+    for s in free:
         assert not [r for r in routing.APC_NEW_ROWS if r[0] == s]
-    assert not [b for b in session_rows() if b.source in bar]
+    assert [r[:3] for r in routing.APC_NEW_ROWS if r[0] == bar[7]] \
+        == [(bar[7], routing.SAVE_PARAM, "momentary")]
+    assert [b.target for b in session_rows() if b.source in bar] == [routing.SAVE_PARAM]
 
     def write(home, *mine):
         path = bindings_path(home)
@@ -1683,7 +1702,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     assert t.notes == [f"removed {s} → preset.save_new (the clip-stop SAVE AS bar is retired: "
                        "hold an empty bank pad to save into it; the row is free)" for s in bar]
     assert f"updated {path} (8 rows changed)" in capsys.readouterr().err
-    assert not [b for b in t.bindings if b.source in bar]
+    assert [b.target for b in t.bindings if b.source in bar] == [routing.SAVE_PARAM]
     (bak,) = (tmp_path / "a").glob("bindings.json.bak-*")
     assert bak.name == "bindings.json.bak-v3" and bak.read_text() == before
     after = path.read_text()
@@ -1703,7 +1722,7 @@ def test_the_clip_stop_save_bar_is_retired_and_the_row_freed(tmp_path, capsys):
     before = path.read_text()
     t = Bindings.load(path, legacy_midi=None)
     assert t.notes == [] and path.read_text() == before
-    assert not [b for b in t.bindings if b.source in bar]
+    assert not [b for b in t.bindings if b.source in free]
 
 
 def test_an_old_crossfader_row_moves_to_the_dim_with_a_backup(tmp_path, capsys):
@@ -1816,11 +1835,12 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + undo and redo and the Home key (plan 15)
     assert (f"note:0:{apc40.N_OVERDUB}", "preset.home") in by
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
-    # on clip rows 4 and 5 (plan 19 WP2), + START's hold-to-save (the pad
+    # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
+    # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
     # layout of 2026-10-14)
     assert ("pad:MENU", "preset.save_new") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]
@@ -2330,7 +2350,9 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     far = far_pads()
     pads = old_shape_pads()
     assert [p["source"] for p in pads] == far
-    assert set(routing.RETIRED_DESK_ROWS) == set(routing.BANK_REMAP) == {
+    # (+ the four render toggles plan 24 C1 made invariant)
+    assert set(routing.RETIRED_DESK_ROWS) - routing.TOGGLE_DESK_ROWS \
+        == set(routing.BANK_REMAP) == {
         (p["source"], "view.shape", "set", float(p.get("value", 1.0)))
         for p in pads}
     assert [routing.BANK_REMAP[(s, "view.shape", "set", float(k))]
@@ -2386,3 +2408,170 @@ def test_the_old_shape_pads_are_swapped_and_a_changed_row_is_left_alone(tmp_path
     out, notes = routing.remap_factory([wild])
     added = [b.source for b in out if b.target == "preset.select"]
     assert added == far[:8] and wild in out
+
+
+# ---------------------------------------------------------------- plan 27 B6: the general qualifier
+
+def test_the_qualifier_is_general_any_scheme_takes_a_role():
+    """Plan 27 B6 (the general qualifier): a source head may carry
+    ``@<role>`` for any scheme, not only MIDI's. The base scheme, the
+    role, the bare source and whether it is continuous read the same way
+    for a second pad's rows as for a second desk's; an unqualified row
+    means the scheme's primary device — the first one listed."""
+    assert routing.base_scheme("axis@p2") == "axis"
+    assert routing.base_scheme("pad@p2") == "pad"
+    assert routing.base_scheme("hat@p2") == "hat"
+    assert routing.base_scheme("axis") == "axis"
+    b = Binding("pad@p2:A", "view.faces", "toggle")
+    assert (b.scheme, b.device, b.bare, b.parts) == ("pad", "p2", "pad:A", ["A"])
+    a = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert (a.scheme, a.device, a.bare, a.is_performer) == ("axis", "p2", "axis:LX", True)
+    assert a.head == "axis@p2" and Binding("axis:LX", "x", "push").head == "axis"
+    assert routing.is_continuous("axis@p2") and not routing.is_continuous("pad@p2")
+    assert not routing.is_continuous("hat@p2")
+    plain = Binding("pad:A", "view.faces", "toggle")
+    assert plain.device == "" and plain.bare == "pad:A"
+    # the qualified head is its own Router key: a lane, a label, a rest
+    assert routing.qualified("axis", "p2") == "axis@p2" and routing.qualified("axis", "") == "axis"
+    # the MIDI cases, as B2 built them (copied from test_device_inputs)
+    m = Binding("cc@launch:0:7", "view.bright", "abs")
+    assert (m.scheme, m.kind, m.device, m.channel, m.number) == ("cc", "cc", "launch", 0, 7)
+    assert m.is_midi and not m.is_performer and m.bare == "cc:0:7"
+    assert m.describe() == "MIDI CC 7 ch1 on launch"
+    assert routing.base_scheme("cc@launch") == "cc"
+    assert not routing.is_continuous("cc@launch") and not routing.is_continuous("pad")
+    # a qualified non-MIDI row never looks like a desk's
+    assert not b.is_midi and b.kind is None and not b.overlaps(Binding("pad:A", "x"))
+    # the row says whose it is
+    assert "on p2" in a.describe() and "on p2" in b.describe()
+    assert "on p2" not in plain.describe()
+
+
+def test_an_unqualified_pad_row_is_the_primary_pads():
+    """`Bindings.primaries` (scheme → role, the registry's `primaries`):
+    an unqualified non-MIDI row is the first listed device's that
+    publishes its scheme; a qualified one its qualifier's. MIDI keeps
+    `midi_roles` exactly as B2 built it."""
+    t = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                  Binding("pad@p2:A", "view.points", "toggle"),
+                  Binding("cc:0:7", "view.speed", "abs")])
+    assert t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[0]) == ""                 # a bare table: told none
+    t.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    t.midi_roles = ("apc40",)
+    assert t.role_of(t.bindings[0]) == "pad" and t.role_of(t.bindings[1]) == "p2"
+    assert t.role_of(t.bindings[2]) == "apc40"            # MIDI: the first MIDI role, as ever
+
+
+class TwoPadsPad(FakePad):
+    """FakePad with edges and a publish, so a frame can be held."""
+
+    def __init__(self):
+        super().__init__()
+        self.prev: set[int] = set()
+
+    def publish(self, router, scheme="axis"):
+        from hyperspace import gamepad
+        gamepad.publish(router, scheme)
+
+    def pressed(self, b: int) -> bool:
+        return b in self.hits and b not in self.prev
+
+    def down(self, b: int) -> bool:
+        return b in self.hits
+
+    def lanes(self) -> list[float]:
+        return [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
+
+
+def test_the_router_keeps_two_pads_apart(tmp_path):
+    """`Router.pad(…, role=)`: a second pad feeds `axis@p2`, publishes its
+    labels there, and fires only its own qualified rows; the primary's
+    unqualified rows hear only the primary pad. One feel for every pad."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad:A", "view.faces", "toggle"),
+                      Binding("pad@p2:A", "view.points", "toggle")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces, points = r.reg["view.faces"].value, r.reg["view.points"].value
+    two.hits = {gp.A}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces and r.reg["view.points"].value != points
+    assert router.labels["axis@p2"] == list(gp.AXIS_LABELS) and "axis" in router.labels
+    assert float(router.feeds["axis@p2"][5]) == 1.0
+    assert router.lane("axis@p2:RT") == ("axis@p2", 5)
+    points = r.reg["view.points"].value
+    one.hits = {gp.A}
+    two.prev = {gp.A}
+    router.pad(one, now=0.1)
+    router.pad(two, now=0.1, role="p2")
+    assert r.reg["view.faces"].value != faces and r.reg["view.points"].value == points
+    two.on = False
+    router.pad(two, now=0.2, role="p2")
+    assert router.feeds["axis@p2"] is None and router.feeds["axis"] is not None
+    # the pad's feel is one set, applied to every pad
+    assert router.source_feel("axis@p2") == router.source_feel("axis")
+    a2 = Binding("axis@p2:LX", "view.inst_amp", "push", 0.25)
+    assert router.feel_of(a2) == router.source_feel("axis")
+    # the primary's camera job counts only its own axes as claimed
+    table.add(a2)
+    assert router.claimed("axis") == set() and router.claimed("axis@p2") == {0}
+
+
+def test_each_pad_times_its_own_holds(tmp_path):
+    """A `hold` row on each pad's START: held past HOLD_S only the held
+    pad's target fires, and a press on one pad never resets the other's
+    timer."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    fired: list[str] = []
+    r.reg.trigger("t.one", "one", lambda: fired.append("one"))
+    r.reg.trigger("t.two", "two", lambda: fired.append("two"))
+    table = Bindings([Binding("pad:MENU", "t.one", "hold"),
+                      Binding("pad@p2:MENU", "t.two", "hold")])
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    one.hits = {gp.MENU}
+    router.pad(one, now=0.0)
+    router.pad(two, now=0.0, role="p2")
+    one.prev = {gp.MENU}
+    two.hits = {gp.MENU}                                  # p2 pressed later
+    router.pad(one, now=0.3)
+    router.pad(two, now=0.3, role="p2")
+    two.prev = {gp.MENU}
+    router.pad(one, now=routing.HOLD_S + 0.01)
+    router.pad(two, now=routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one"]                               # p2's press did not reset pad's
+    router.pad(one, now=0.3 + routing.HOLD_S + 0.01)
+    router.pad(two, now=0.3 + routing.HOLD_S + 0.01, role="p2")
+    assert fired == ["one", "two"]
+
+
+def test_a_row_qualified_with_the_primary_pads_own_role_is_its(tmp_path):
+    """As a desk's `serves`: `pad@pad:A` (the primary named) fires on the
+    primary pad, and `axis@pad:LX` reads the primary's lanes."""
+    from hyperspace import gamepad as gp
+
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("pad@pad:A", "view.faces", "toggle"),
+                      Binding("axis@pad:RT", "view.inst_amp", "position", 1.0)])
+    table.primaries = {"axis": "pad", "pad": "pad", "hat": "pad"}
+    router = Router(r.reg, table)
+    one, two = TwoPadsPad(), TwoPadsPad()
+    faces = r.reg["view.faces"].value
+    two.hits = {gp.A}
+    router.pad(two, now=0.0, role="p2")
+    assert r.reg["view.faces"].value == faces             # not the second pad's
+    one.hits = {gp.A}
+    router.pad(one, now=0.0)
+    assert r.reg["view.faces"].value != faces
+    assert router.lane("axis@pad:RT") == ("axis", 5)
+    assert router.claimed("axis") == {5}
+    router.modulate()
+    r.reg.apply()
+    amp = r.reg["view.inst_amp"]
+    assert amp.value == pytest.approx(amp.hi)             # TwoPadsPad's RT is all the way

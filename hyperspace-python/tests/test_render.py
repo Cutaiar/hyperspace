@@ -181,11 +181,14 @@ def test_bitmap_path_oscillates(ctx, tmp_path):
 
 def test_zoom_and_pan(ctx):
     base = render_offscreen(ViewState(shape=3, ang=list(VIEW["ang"])), 600, 400, ctx=ctx)
+    # plan 26 A2: pan is in world units — 150 px at 600×400 through the
+    # default eye (min(w, h)·SCALE = 120 px a unit at the origin)
     panned = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), pan=[150.0, 0.0]), 600, 400, ctx=ctx
+        ViewState(shape=3, ang=list(VIEW["ang"]), pan=[150.0 / 120.0, 0.0]), 600, 400, ctx=ctx
     )
     import numpy as np
-    # panning right moves the lit centroid right by ~the pan distance
+    # panning right moves the lit centroid right by ~the pan distance (the
+    # shape seen a little from the side now: its centre lands exactly)
     ys, xs = np.nonzero(base.max(axis=2) > 8)
     ys2, xs2 = np.nonzero(panned.max(axis=2) > 8)
     assert abs((xs2.mean() - xs.mean()) - 150) < 4
@@ -647,18 +650,31 @@ def test_dim_fades_a_see_through_ground(ctx):
         assert gone.max() == 0                                        # nothing left over it
 
 
-def test_the_history_never_holds_the_dim(ctx):
-    """The look-back's history is captured from the scene texture, before
-    the dim: with echoes trailing a turning shape, the atlas is the same
-    bytes dimmed or not, and the dimmed frame is the undimmed one times the
-    factor — an echo that remembered the dim would come out darker."""
-    def run(dim):
-        r = _dim_renderer(ctx, effect=False, hands=False, echoes=True)
+def test_the_default_graphs_history_holds_what_todays_does_never_the_dim(ctx):
+    """The look-back's history is captured from what it is wired to (plan
+    26 A3) — in the default graph the scene texture, before the dim: with
+    echoes trailing a turning shape, the atlas is the same bytes dimmed or
+    not, and the dimmed frame is the undimmed one times the factor — an
+    echo that remembered the dim would come out darker. Wired to the scene
+    with the hands' layer, it still never holds the dim (the dim is the
+    outputs')."""
+    from hyperspace.graph import Wiring
+
+    def run(dim, wiring=None, hands=False):
+        r = _dim_renderer(ctx, effect=False, hands=hands, echoes=True)
+        if wiring is not None:
+            r.wiring = wiring
         out = _dim_frames(ctx, r, dim, frames=8, spin=0.05)
         assert r.lookback.atlas is not None and r.lookback.layers()
+        held = r._graph.nodes["capture"].inputs["image"]
+        assert held.name == ("scene" if wiring is None else "composite(history)")
         scene = np.frombuffer(r.scene.tex.read(), dtype=np.uint8).copy()
         return out, np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).copy(), scene
 
+    with_hands = Wiring(history="scene+hands")
+    _, held, _ = run(1.0, with_hands, hands=True)
+    _, held_d, _ = run(0.5, with_hands, hands=True)
+    assert np.array_equal(held, held_d)
     full, atlas, scene = run(1.0)
     dimmed, atlas_d, scene_d = run(0.5)
     assert atlas.max() > 100
@@ -880,7 +896,8 @@ def test_one_instance_is_the_frame_it_was(ctx):
     r = Renderer(ctx)
     seen = []
     real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    r._tile = lambda verts, offs, **kw: (seen.append(offs.copy()),
+                                     real(verts, offs, **kw))[1]
     _inst_frames(ctx, r, [1])
     assert len(seen) == 3 and all(o.shape == (1, 2) and not o.any() for o in seen)
     v = np.arange(12, dtype=np.float32).reshape(4, 3)
@@ -962,7 +979,7 @@ class _FrozenProgram:
 def _freeze_faces(ctx, r):
     """Swap `r`'s face program for one built from the frozen source."""
     from hyperspace import glsl
-    from hyperspace.render import FACE_VS, PATTERNS_GLSL
+    from hyperspace.render import FACE_FORMAT, FACE_VS, PATTERNS_GLSL
     from hyperspace.view import N_MOD
 
     prog = ctx.program(
@@ -971,7 +988,7 @@ def _freeze_faces(ctx, r):
                          + "\n#line 1 2\n" + PATTERNS_GLSL.read_text() + OLD_FACE_FS_TAIL))
     r._face_prog = _FrozenProgram(prog)
     r._fvao = ctx.vertex_array(
-        prog, [(r._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")])
+        prog, [(r._fbuf, FACE_FORMAT, "in_pos", "in_w4", "in_uv", "in_alpha", "in_fid")])
     r._seed_prog = r._seed_vao = None
     return r
 
@@ -1638,7 +1655,8 @@ def _scene(ctx, r, s, t=2.0):
 
     seen = []
     real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    r._tile = lambda verts, offs, **kw: (seen.append(offs.copy()),
+                                     real(verts, offs, **kw))[1]
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
     fbo.use()
     ctx.viewport = (0, 0, LW, LH)
@@ -1783,7 +1801,9 @@ def test_every_motion_moves_every_layout(ctx):
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
-    cell = min(LW, LH) * 0.72 * 0.3
+    # plan 26 A2: the offsets are in the world, before the zoom (render.CELL
+    # shape radii a cell; 0.72·min(w, h)·zoom px on screen before)
+    from hyperspace.render import CELL as cell
     for layout in (0, 1, 2):
         for n in (7, 12):
             still, (o_still, *_) = _scene(ctx, r, _layout_view(n, layout, 0))
@@ -1801,7 +1821,7 @@ def test_every_motion_moves_every_layout(ctx):
     _, (o_still, *_) = _scene(ctx, r, _layout_view(12, 2, 0))
     _, (o, *_) = _scene(ctx, r, _layout_view(12, 2, 3))
     radial = np.hypot(*o.T) - np.hypot(*o_still.T)
-    assert np.allclose(radial, radial[0], atol=1e-2) and abs(radial[0]) > 0.5
+    assert np.allclose(radial, radial[0], atol=1e-3) and abs(radial[0]) > 0.02 * cell
 
 
 def test_every_layout_and_motion_draws_any_count(ctx):

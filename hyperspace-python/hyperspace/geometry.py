@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
+from numpy.random import default_rng
 
 PHI = (1 + math.sqrt(5)) / 2
 IP1 = 1 / PHI
@@ -805,7 +806,7 @@ def _is_boundary_face(V: np.ndarray, cyc: list[int], tol: float = 1e-7) -> bool:
     e2 = w / np.linalg.norm(w)
     A = np.stack([e1, e2]).T
     q_basis, _ = np.linalg.qr(
-        np.hstack([A, np.random.default_rng(1).standard_normal((4, 2))])
+        np.hstack([A, default_rng(1).standard_normal((4, 2))])
     )
     o1, o2 = q_basis[:, 2], q_basis[:, 3]
     mask = np.ones(len(V), bool)
@@ -1026,6 +1027,111 @@ def project_h(
     px = w / 2 + x1 * k2 * scale
     py = h / 2 - y1 * k2 * scale
     return px, py, v[:, 3].copy(), div4 * div3
+
+
+# ------------------------------------------------------------ the one camera
+#
+# Plan 26 A2. The renderer's path is no longer project_h: the CPU takes a
+# vertex to 3D (`world_points`: rotate4, the 4D divide, the yaw/pitch
+# turntable) and the GPU takes it on to the clip through two 4×4s — the
+# shape's world transform (`model_matrix`: camera.zoom scales it about the
+# world origin, camera.pan moves it) and the eye (`eye_matrix`: a fixed
+# perspective camera, the `eye.*` params). The default eye IS project_h's
+# 3D divide: CAM3 − 0.9·z1 is an eye at CAM3 / 0.9 on +z looking at the
+# origin, and min(w, h)·SCALE px per unit at the origin is a field of view
+# across the shorter side with tan(fov / 2) = 1 / (2·SCALE·distance). With
+# the default eye, zoom 1 and pan 0, `eye_project` lands every vertex
+# where project_h puts it (tests/test_camera.py: within a millionth of a
+# pixel in float64, and the float32 the GPU sees well inside half a pixel);
+# project / project_h stay the parity oracle.
+
+SCALE = 0.30                         # project_h's px per unit at the origin, × min(w, h)
+EYE_DISTANCE = CAM3 / 0.9            # world units from the eye to the origin
+EYE_FOV = math.degrees(2.0 * math.atan(1.0 / (2.0 * SCALE * EYE_DISTANCE)))   # ≈ 47.6°
+EYE_NEAR = 0.05                      # the eye's clip planes, world units: depth for
+EYE_FAR = 1000.0                     # the scene's depth test, nothing the picture shows
+# a preset/2 file's camera.pan is in logical px; through the default eye a
+# px at the origin is min(w, h)·SCALE of a unit, and the reference screen
+# is the 1080p render cap (the projector the party runs on): 324 px a unit
+PAN_REF_PX = SCALE * 1080.0
+
+
+def world_points(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6):
+    """The CPU's half of the one camera: (P, div4, w) — P (n, 3) the
+    vertices after the 4D tumble, the 4D divide and the yaw/pitch
+    turntable (x right, y up, z toward the eye), in the shape's own units
+    (the unit circumradius), before camera.zoom/pan; div4 the 4D divisor,
+    which the face shader multiplies into its clip w so the faces' uv
+    stays perspective-correct across the 4D divide as well; w the rotated
+    4D w, project_h's pd (the depth cue)."""
+    x, y, z, v, div4 = _to3(V, ang, d4)
+    x1, y1, z1 = _camera(x, y, z, yaw, pitch)
+    return np.stack([x1, y1, z1], axis=1), div4, v[:, 3].copy()
+
+
+def model_matrix(zoom: float = 1.0, pan=(0.0, 0.0)) -> np.ndarray:
+    """camera.zoom / camera.pan as the shape's world transform, 4×4
+    (column vectors): scale about the world origin, then move. pan is in
+    world units — the shape's unit circumradius — with pan.y positive
+    *down* the screen, as it always was (so a stored or routed pan keeps
+    its direction): world y is up, so it moves by −pan.y."""
+    m = np.eye(4)
+    m[0, 0] = m[1, 1] = m[2, 2] = float(zoom)
+    m[0, 3], m[1, 3] = float(pan[0]), -float(pan[1])
+    return m
+
+
+def eye_matrix(w: float, h: float, fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
+               near: float = EYE_NEAR, far: float = EYE_FAR) -> np.ndarray:
+    """The eye's view-projection, 4×4 (column vectors): at `distance` on
+    +z looking at the world origin, y up, `fov` degrees across the
+    shorter side of a (w, h) picture (the longer side sees more), OpenGL
+    clip space. The defaults are project_h's divide (module comment)."""
+    f = 1.0 / math.tan(math.radians(fov) / 2.0)
+    aspect = max(float(w), 1e-6) / max(float(h), 1e-6)
+    p = np.zeros((4, 4))
+    if aspect >= 1.0:
+        p[0, 0], p[1, 1] = f / aspect, f
+    else:
+        p[0, 0], p[1, 1] = f, f * aspect
+    p[2, 2] = (far + near) / (near - far)
+    p[2, 3] = 2.0 * far * near / (near - far)
+    p[3, 2] = -1.0
+    view = np.eye(4)
+    view[2, 3] = -float(distance)
+    return p @ view
+
+
+def eye_project(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6,
+                w: int = 1200, h: int = 800, *, zoom: float = 1.0, pan=(0.0, 0.0),
+                fov: float = EYE_FOV, distance: float = EYE_DISTANCE,
+                dtype=np.float64) -> tuple[np.ndarray, np.ndarray]:
+    """(px, py) in logical pixels, y down, through the one camera: what
+    the scene's vertex shader computes (`render.FACE_VS`, `LINE_VS`), on
+    the CPU. `dtype=np.float32` does the GPU's arithmetic (positions and
+    the matrix in float32). With the default eye, zoom 1 and pan 0 it is
+    project_h's (px, py)."""
+    P, _, _ = world_points(V, ang, yaw, pitch, d4)
+    mvp = (eye_matrix(w, h, fov, distance) @ model_matrix(zoom, pan)).astype(dtype)
+    q = np.concatenate([P, np.ones((len(P), 1))], axis=1).astype(dtype)
+    c = q @ mvp.T
+    nx, ny = c[:, 0] / c[:, 3], c[:, 1] / c[:, 3]
+    return (w / 2 + nx * (w / 2)).astype(np.float64), (h / 2 - ny * (h / 2)).astype(np.float64)
+
+
+def px_per_unit(w: float, h: float, fov: float = EYE_FOV,
+                distance: float = EYE_DISTANCE) -> float:
+    """Logical px a world unit spans at the world origin (depth 0) through
+    the eye: what a pan moves the shape's centre by on screen. The default
+    eye's is project_h's min(w, h)·SCALE."""
+    return min(float(w), float(h)) / 2.0 / math.tan(math.radians(fov) / 2.0) / float(distance)
+
+
+def pan_px_to_world(px: float) -> float:
+    """A preset/2 file's camera.pan (logical px) in world units, through
+    the default eye at the reference screen (`PAN_REF_PX`): the shape's
+    centre lands where it did on that screen."""
+    return float(px) / PAN_REF_PX
 
 
 # ----------------------------------------------------------- volume ratio

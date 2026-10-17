@@ -399,9 +399,10 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
     put(tmp_path, "SHOW",
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
         desk=[{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-              {"source": "note:0:82", "target": "view.points", "op": "toggle",
+              # (scene launch 5: 1–4 are the invariant render toggles, plan 24 C1)
+              {"source": "note:0:86", "target": "view.points", "op": "toggle",
                "feedback": "led"},
-              {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],   # a fader: dropped
+              {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],  # MASTER: dropped
         macros={"macro.1": {"label": "Heat", "subs": [
                     {"base": "view.depth4", "from": 0.2, "to": 0.8},
                     {"depth": {"source": "hand:7", "target": "view.bright"},
@@ -409,26 +410,27 @@ def test_the_routing_page_is_one_page_over_the_loaded_preset(rig, tmp_path, monk
                 "macro.2": {"subs": [{"base": "view.depth4", "from": 1.0, "to": 0.0}]}})
     lib.load("presets", "SHOW")
     panel.learn = Learn(reg, table)
-    panel.learn.refuse("track fader 3 is invariant (the session's) — not learned")
+    panel.learn.refuse("MASTER fader is invariant (the session's) — not learned")
     texts, previews = _drawn(monkeypatch)
     frame(panel, "routing")
     frame(panel)
     # the head
     assert "SHOW" in texts and "DESK LAYER: PRESET" in texts and "●" not in texts
-    assert "learn: track fader 3 is invariant (the session's) — not learned" in texts
-    assert any(t.startswith("desk: dropped cc:0:7 → view.bright") and "invariant" in t
+    assert "learn: MASTER fader is invariant (the session's) — not learned" in texts
+    assert any(t.startswith("desk: dropped cc:0:14 → view.bright") and "invariant" in t
                for t in texts)
     assert "bindings" not in lib.kinds                         # no routing-preset strip
     # the routes, with the macro's chip
     assert "view.bright" in previews and "× macro.1" in texts
-    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G1·9
-    # scene launch 1), and the controls it leaves dark
-    assert {"DESK  ·  PRESET LAYER", "D1", "G1·9"} <= set(texts)
+    # the desk: its rows by glyph (plan 14 WP7: D1 is device knob 1, G5·9
+    # scene launch 5), and the controls it leaves dark
+    assert {"DESK  ·  PRESET LAYER", "D1", "G5·9"} <= set(texts)
     assert "device knob 1" not in texts                        # Akai's name: the tooltip
     assert {"view.speed", "view.points"} <= set(previews)
     assert "K1" in texts and "unmapped — dark" in texts
     dark = [f.source for f in ui_routing.unmapped(table)]
-    assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:7" not in dark
+    assert "cc:0:48" in dark and "cc:*:16" not in dark and "cc:0:14" not in dark
+    assert "cc:0:7" in dark          # S1: the preset's since plan 24 C2, and this one maps none
     # the macros: both subscribers, the shared param marked on both lines
     assert "view.depth4" in previews and any(p.endswith("→ view.bright") for p in previews)
     assert texts.count("shared") >= 2
@@ -1081,7 +1083,7 @@ def test_goto_scrolls_the_rows_child_to_the_controls_line(rig, monkeypatch):
     draw(3)
     assert got["child"][0] == at and st["marked"] == 1       # once: it does not keep pulling
     # an invariant control: its row in the session section, further down
-    s3 = control("S3")
+    s3 = control("SM")                     # MASTER (S1–S8 are layered since plan 24 C2)
     lrn.pick(s3.source)
     ui_routing.goto(panel, s3.source)
     draw(2)
@@ -1257,3 +1259,122 @@ def test_the_system_page_shows_the_sticks_feel(rig, tmp_path, monkeypatch):
     frame(panel)
     assert "desk.pad.hz" in drawn and "desk.pad.damp" in drawn
     assert "desk.pad.release" not in drawn
+
+
+def test_neither_shift_nor_save_is_a_desk_target(rig, tmp_path):
+    """`desk_target`: the one rule for the desk rows' target combo, "Learn
+    desk" and "Learn pad". SHIFT's param is not one, and neither is the
+    desk's SAVE (plan 24 C1, review of PR #175): a learned toggle or key on
+    `desk.save` would latch it, and every bank pad's tap would then make a
+    new preset."""
+    router = _with_router(rig, tmp_path)
+    routing.register_desk(rig.reg, router.table)
+    reg = rig.reg
+    assert not ui_routing.desk_target(reg[routing.SHIFT_PARAM])
+    assert not ui_routing.desk_target(reg[routing.SAVE_PARAM])
+    assert ui_routing.desk_target(reg["view.points"])
+    targets = {p.id for p in ui_routing._desk_targets(rig.panel)}
+    assert routing.SAVE_PARAM not in targets and routing.SHIFT_PARAM not in targets
+    assert not rig.panel._desk_target(reg[routing.SAVE_PARAM])
+
+
+def test_the_routing_page_lists_the_sink_rows_with_the_others(rig, tmp_path, monkeypatch):
+    """Plan 27 B3: a sink row appears as the others do — a line in the
+    page's own `sinks` section (the session's), its words the router's,
+    found by the filter, an off row dimmed but listed."""
+    router = _with_router(rig, tmp_path)
+    router.table.add(Binding("param:view.bright", "bridge:2", routing.SINK_OP))
+    router.table.add(Binding("lane:*", "bridge:0", routing.SINK_OP, enabled=False))
+    texts, _ = _drawn(monkeypatch)
+    frame(rig.panel, "routing")
+    frame(rig.panel)
+    assert "param view.bright → bridge:2" in texts and "every lane → bridge:0" in texts
+    ui_routing._state(rig.panel)["find"] = "bridge:2"
+    n, m = ui_routing.found(rig.panel, router)
+    assert m >= 2 and n >= 1
+
+
+# ------------------------------- review: the page's cost a frame (35 fps → full rate)
+
+def test_the_routing_page_builds_its_source_list_once_a_draw(rig, monkeypatch):
+    """The source combo's list is the same for every route row: the page
+    builds it once a draw, not once a row (21 rows × every binding per
+    scheme was 5 ms a frame on the rig)."""
+    _many_routes(rig, 12)
+    calls = []
+    real = ui_routing._sources
+
+    def counted(panel, router):
+        calls.append(1)
+        return real(panel, router)
+    monkeypatch.setattr(ui_routing, "_sources", counted)
+    frame(rig.panel, "routing")
+    frame(rig.panel)
+    assert len(rig.router.table.routes()) >= 12
+    assert len(calls) == 2
+
+
+def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
+        rig, tmp_path, monkeypatch):
+    """`unmapped` (the desk's dark lines) is a pairwise scan of the table:
+    9.5 ms a frame on ROUTING. It is remembered against what decides it —
+    the profile and each row's source, layer, enabled flag (and target) —
+    so two draws of an unchanged table work it out once, and a Learn, a
+    flipped row, a preset load or another profile each work it out again,
+    with the same answer as a fresh scan."""
+    from test_presets import put
+
+    from hyperspace import apc40
+    from hyperspace.learn import Learn
+
+    panel, lib, table = rig.panel, rig.lib, rig.router.table
+    real = ui_routing.preset_controls
+    calls = []
+
+    def counted(t):
+        calls.append(1)
+        return real(t)
+    monkeypatch.setattr(ui_routing, "_DARK", {})           # nothing remembered yet
+    monkeypatch.setattr(ui_routing, "preset_controls", counted)
+
+    def fresh() -> list[str]:
+        rows = table.desk()
+        return [f.source for f in real(table) if not any(b.overlaps(f) for b in rows)]
+
+    def dark() -> list[str]:
+        return [f.source for f in ui_routing.unmapped(table)]
+
+    frame(panel, "routing")
+    frame(panel)
+    assert len(calls) == 1 and dark() == fresh() and len(calls) == 1
+    # the same rows as new objects: nothing to work out again
+    table.bindings = [replace(b) for b in table.bindings]
+    frame(panel)
+    assert len(calls) == 1
+    # (a) a Learn lands a desk row on a dark control
+    first = dark()[0]
+    lrn = panel.learn = Learn(rig.reg, table)
+    lrn.arm("view.depth4", "desk")
+    assert lrn.learn_control(first, apc40)
+    frame(panel)
+    assert len(calls) == 2 and first not in dark() and dark() == fresh()
+    # (b) a session row on a dark control makes it invariant; its enabled
+    # flag flipped off gives the control back to the preset
+    ctl = dark()[0]
+    row = table.add(Binding(ctl, "view.bright", "abs"))
+    frame(panel)
+    assert len(calls) == 3 and ctl not in dark() and dark() == fresh()
+    table.enable(row, False)
+    frame(panel)
+    assert len(calls) == 4 and ctl in dark() and dark() == fresh()
+    # (c) a preset load replaces the desk
+    nxt = next(c for c in dark() if c != ctl)
+    put(tmp_path, "SHOW", desk=[{"source": nxt, "target": "view.speed", "op": "abs"}])
+    lib.load("presets", "SHOW")
+    frame(panel)
+    assert len(calls) == 5 and nxt not in dark() and first in dark()
+    assert dark() == fresh()
+    # (d) another profile: no factory map, nothing dark
+    table.profile = "none"
+    frame(panel)
+    assert len(calls) == 6 and dark() == fresh() == []

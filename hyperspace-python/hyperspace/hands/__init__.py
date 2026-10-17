@@ -16,8 +16,10 @@ argument, duck-typed, never imported:
                 router)       when=, centred=, depth=) (learn.Learn); `router` needs
                               .feed and defines the .labels / .gates / .rests
                               (and, to resolve ``hand:right.roll``, .names)
-                              dicts that poll fills. Pass neither and the
-                              hands still run.
+                              dicts that poll fills — for two schemes: ``hand``
+                              (each hand: axes, presence, pinches, the dance
+                              sources, the grab) and ``hands`` (the two together: gap,
+                              twist). Pass neither and the hands still run.
 
 panel.py is the one piece that knows this host: it draws the HANDS page
 with the host's imgui panel and palette. Extracting the package means
@@ -33,32 +35,41 @@ What the host must still provide when embedded (see app.py):
 from __future__ import annotations
 
 from .core import (
+    DANCE,
     DEFAULTS,
     FEATURES,
     GROUP,
+    PAIR,
     PALM_W,
     PINCHES,
     SIDES,
     AxisSettings,
+    Dance,
     Gate,
     HandSettings,
     HandsIO,
     Layout,
     addresses,
     conflicts,
+    curls,
     default_addresses,
     features,
+    fist,
+    grab_name,
     mirror,
+    pair_addresses,
     pinch_name,
     pinches,
     register,
     skeleton,
+    spread,
 )
 
 # what the host, the panel, the tools and the tests reach for; everything
 # else (calibration files, the tracking source, the constants) is core's
 __all__ = [
-    "DEFAULTS", "FEATURES", "GROUP", "PALM_W", "PINCHES", "SIDES", "AxisSettings", "Gate",
-    "HandSettings", "HandsIO", "Layout", "addresses", "conflicts", "default_addresses",
-    "features", "mirror", "pinch_name", "pinches", "register", "skeleton",
+    "DANCE", "DEFAULTS", "FEATURES", "GROUP", "PAIR", "PALM_W", "PINCHES", "SIDES",
+    "AxisSettings", "Dance", "Gate", "HandSettings", "HandsIO", "Layout", "addresses",
+    "conflicts", "curls", "default_addresses", "features", "fist", "grab_name", "mirror",
+    "pair_addresses", "pinch_name", "pinches", "register", "skeleton", "spread",
 ]

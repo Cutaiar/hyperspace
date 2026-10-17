@@ -44,16 +44,21 @@ and the row stays a plain trigger row that Learn can move like any other.
 
 Two layers under a latched SHIFT (plan 13 §3). Every MIDI row carries a
 ``layer``: none is **invariant** (the session defines the control; one
-meaning on both layers — the faders, the crossfader as the master dim,
+meaning on both layers — the MASTER fader, the crossfader as the master dim,
 the bank's twenty-four pads — clip row 1 and, since plan 19, clip rows 4
 and 5 (`BANK_PADS`), each a tap to load and, on an empty slot, a hold to
-save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons), ``"global"`` is the
+save into it — SHIFT, the clock and transport corner, OVERDUB as home, the track buttons,
+and since plan 24 C1 the render toggles on scene launch 1–4 and SAVE on
+track 8's clip stop, which held turns a pad's tap into a save into its
+slot), ``"global"`` is the
 SHIFT layer
 (the band strip on the device knobs, the hand feel and BPM on track knobs
-1–5, the band scenes on clip rows 2–3), ``"preset"`` is the loaded
-preset's own (the factory default below is what a fresh preset starts
-with). A control with no row on the layer that is up is dark and does
-nothing; midi.py dispatches and draws by those rules.
+1–5, the band scenes on clip rows 2–3, and since plan 24 C2 the bands'
+post-drive, the master dynamics and trim on the track faders),
+``"preset"`` is the loaded preset's own (the factory default below is
+what a fresh preset starts with; since plan 24 C2 the track faders are a
+preset's too, and the default gives them nothing). A control with no row
+on the layer that is up is dark and does nothing; midi.py dispatches and draws by those rules.
 
 The device and track knobs are endless encoders whose position the host
 sets with the same CC that draws the ring (`RING_REBASES_KNOB`), so a
@@ -114,6 +119,49 @@ def leave() -> list[mido.Message]:
     return [*msgs, _mode(MODE_GENERIC)]
 
 
+# A desk that fell back to Generic mode (2026-10-16, the owner's findings).
+# The APC40 starts in Mode 0 whenever it powers up ("The unit defaults to
+# Mode 0 on startup", Akai rev 1), and a power cycle under a running app
+# can keep the port, so the intro `enter` sends at connect is not sent
+# again. In Mode 0 ("Mode 0 Button Type", Akai's inbound table) ACTIVATOR,
+# SOLO, RECORD ARM, CLIP/TRACK, DEVICE ON/OFF, ◀ ▶, PAN and SEND A–C are
+# toggles the device keeps (one message a press: note-on turning on,
+# note-off turning off; a light the host sends sets that state), TRACK
+# SELECTION and MASTER send nothing, and the device knobs and the eight
+# device buttons send on the channel of the track the device selected
+# itself. In Mode 2 every button is momentary and those send on channel 0.
+# `fell_back` names the messages Mode 2 never sends — midi.py then sends
+# the intro again; `in_channel` reads a device button on any channel as
+# the one button it is.
+MODE0_TOGGLES = frozenset({N_ARM, N_SOLO, N_ACTIVATOR, N_CLIPTRACK, N_DEVICE_ON, N_DEV_L,
+                           N_DEV_R, N_PAN, N_SEND_A, N_SEND_B, N_SEND_C})
+DEVICE_BUTTONS = range(N_CLIPTRACK, N_METRO + 1)     # banked by track in Mode 0 only
+
+
+def fell_back(kind: str, channel: int, number: int, on: bool, held: bool) -> bool:
+    """Is this message one the device sends only in Generic mode? A device
+    knob or device button on a channel other than 0, or on a Mode-0 toggle
+    a note-off with no press held (a release of nothing) or a note-on while
+    its last press is still held (a second press with no release). `held`:
+    a press on this control is waiting for its release. A button held down
+    across a launch or a reconnect reads as one too; the cost is one more
+    intro, which changes nothing in Mode 2."""
+    if kind == "cc":
+        return number in DEVICE_KNOBS and channel != 0
+    if kind != "note":
+        return False
+    if number in DEVICE_BUTTONS and channel != 0:
+        return True
+    return number in MODE0_TOGGLES and on == held
+
+
+def in_channel(kind: str, channel: int, number: int) -> int:
+    """The channel a message is read on: a device button's is 0, whatever
+    track a Mode-0 device had selected (Mode 2 sends them on 0; the map's
+    rows name 0). Everything else keeps its own."""
+    return 0 if kind == "note" and number in DEVICE_BUTTONS else channel
+
+
 # Hand check 31 — the one hardware assumption plan 13 D7 rests on: in mode
 # 0x42 a ring CC sent to a device or track knob also re-bases the encoder,
 # so its next turn continues from the value just drawn. midi.py catches a
@@ -138,6 +186,8 @@ def feedback_for(kind: str, channel: int, number: int) -> dict | None:
     """What feedback a learned control can show, if any."""
     if kind == "cc" and (number in DEVICE_KNOBS or number in TRACK_KNOBS):
         return {"feedback": "ring", "ring": RING_VOLUME}
+    if kind == "cc" and number in (CC_FADER, CC_MASTER, CC_XFADE):
+        return {"feedback": None, "ring": 0}      # a pot: no light, the map's fader row
     if kind == "note":
         grid = N_CLIP[0] <= number <= N_CLIP[-1]
         return {"feedback": "led", "on": GREEN if grid else 1, "off": 0}
@@ -413,6 +463,26 @@ BANK_PADS: list[tuple[int, int]] = [
 # (preset.knob_desk)
 SCENE = ("view.depth4", "camera.yaw", "camera.pitch", "view.pattern")
 
+# The render toggles on scene launch 1–4 (plan 24 C1): invariant rows, so
+# points, lines, faces and rotate do the same on both layers and their
+# LEDs always show the live state. They were the preset layer's until
+# then, and every preset saved before carries those four rows in its desk
+# (routing.RETIRED_DESK_ROWS drops them quietly at load)
+TOGGLES = ("view.points", "view.lines", "view.faces", "view.rotate")
+
+# The desk's SAVE button (plan 24 C1, the owner's choice of 2026-10-14):
+# (note, channel) of track 8's clip stop, free since PR #158
+SAVE: tuple[int, int] = (N_CLIPSTOP, 7)
+
+# The track faders S1–S8 (plan 24 C2, decision 17): the channel of track
+# fader k + 1 is k. On the preset layer they are each preset's own targets,
+# bound by its desk like the device knobs (`preset.track_fader`); no row in
+# this map, so no default is inherited and a preset with no fader rows
+# leaves them dark. Under SHIFT they are SHIFT_FADERS, the audio strip that
+# was invariant on them until then
+TRACK_FADERS = range(8)
+SHIFT_FADERS = (*(f"band.{i}.post" for i in range(6)), "master.dyn", "master.trim")
+
 DEFAULT_MAP: list[dict] = [
     # device knobs, global layer (SHIFT up): the open band strip, in panel order
     *[_cc(f"band.sel.{k}", cc, layer=G) for k, cc in zip(_KNOB_KEYS, DEVICE_KNOBS)],
@@ -429,9 +499,13 @@ DEFAULT_MAP: list[dict] = [
     _cc("hands.smooth", 0x30, 0, layer=G), _cc("hands.response", 0x31, 0, layer=G),
     _cc("hands.catch", 0x32, 0, layer=G), _cc("hands.sel.return", 0x33, 0, layer=G),
     _cc("tempo.bpm", 0x34, 0, layer=G),
-    # faders (invariant): per-band output drive on 1–6, master dynamics and trim on 7–8
-    *[_cc(f"band.{i}.post", CC_FADER, i, ring=0) for i in range(6)],
-    _cc("master.dyn", CC_FADER, 6, ring=0), _cc("master.trim", CC_FADER, 7, ring=0),
+    # track faders S1–S8, global layer (SHIFT up; plan 24 C2, decision 17,
+    # amending D6): per-band output drive on 1–6, master dynamics and trim
+    # on 7–8 — the audio one latch away. On the preset layer the faders are
+    # the loaded preset's (`TRACK_FADERS`): none here, so a fresh preset and
+    # every factory one leaves them dark. Soft pickup across the latch (D7)
+    *[_cc(t, CC_FADER, i, ring=0, layer=G) for i, t in enumerate(SHIFT_FADERS)],
+    # MASTER (invariant): the audio drive, the same on both layers
     _cc("master.gain", CC_MASTER, 0, ring=0),
     # crossfader: the master dim (plan 15 WP3, decision 28) — black (left,
     # CC 0) ↔ full (right); invariant, soft pickup like every fader, so one
@@ -458,16 +532,23 @@ DEFAULT_MAP: list[dict] = [
     # state there as a new preset — the same row: `preset.select` carries
     # the hold (`Param.held`, midi.py). A filled slot is never written
     # over: the press loads it. This replaced plan 15's clip-stop SAVE AS
-    # bar (2026-10-09), and the clip-stop row is free: dark, for Learn
+    # bar (2026-10-09), and the clip-stop row was freed.
+    # SAVE (plan 24 C1, the two-handed save): track 8's clip stop, held,
+    # turns a bank pad's tap into a save into that pad's slot — an empty
+    # one as the hold does, a filled one as a NEW preset the slot then
+    # points at (`Param.save_into`, midi.py `_save_tap`). Invariant: the
+    # same on both layers, as the pads are. Clip stops 1–7 stay free
+    _note("desk.save", *SAVE, op="momentary"),
     *[_note("scene.select", N_CLIP[1], k, op="set", value=k, on=YELLOW, layer=G)
       for k in range(8)],
     *[_note("scene.select", N_CLIP[2], k, op="set", value=8 + k, on=YELLOW, layer=G)
       for k in range(3)],
     *[_note("view.inst_motion", N_CLIP[2], 4 + k, op="set", value=k, on=RED, layer=P)
       for k in range(4)],
-    # scene launch column (preset): render toggles and the view reset
-    _note("view.points", N_SCENE[0], layer=P), _note("view.lines", N_SCENE[1], layer=P),
-    _note("view.faces", N_SCENE[2], layer=P), _note("view.rotate", N_SCENE[3], layer=P),
+    # scene launch column: the render toggles, invariant since plan 24 C1
+    # (decision 18: the same on both layers, their LEDs the live state;
+    # D6's list grows by four), and the view reset on the preset layer
+    *[_note(pid, n) for pid, n in zip(TOGGLES, N_SCENE)],
     _note("camera.reset", N_SCENE[4], layer=P),
     _note("scene.reset_all", N_STOP_ALL),
     # transport and the rest

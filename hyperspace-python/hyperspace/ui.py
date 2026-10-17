@@ -50,6 +50,7 @@ from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
+from .graph import Wiring, graph_words, hands_words, layer_words
 from .hands import panel as ui_hands
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
@@ -251,7 +252,8 @@ def fit_text(text: str, width: float) -> str:
     return text[:lo].rstrip() + "…"
 
 
-def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, str]:
+def output_shows(sw, fx_on: bool, visible: bool, master: float,
+                 wiring: Wiring | None = None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
     words, no picture). It is `outputs.route`'s answer for the output's
@@ -259,8 +261,19 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, st
     the ghost hands are on and the layer drew, fork F7), with master × its
     own dim. The reasons: "nothing" (scene and hands off), "no hand" (the
     scene off and no hand showing), "dim" (its own dim at 0), "master" (the
-    crossfader at black — the footer already says "dim black")."""
+    crossfader at black — the footer already says "dim black").
+
+    Plan 26 A4: under the loaded preset's graph (`wiring`; None or the
+    default, the words above, unchanged) the words say the wiring too
+    (`graph.hands_words`): an output whose scene holds the hands shows
+    "scene + hands in the scene" (no layer over it), and a layer laid on
+    names its hands node when there are two, "as lines", and a blend that
+    is not plainly over."""
     key, after = route(sw, fx_on, visible)
+    wired = wiring is not None and wiring != Wiring()
+    inside = wired and bool(wiring.in_scene()) and sw.scene
+    if inside:                      # the scene holds the hands, whatever its hands switch
+        key, after = SCENE, False
     own = float(sw.dim)
     if key is None and not after:
         if not sw.scene and not sw.hands:
@@ -278,10 +291,23 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float) -> tuple[str, st
         words = "hands through the effects"
     else:
         words = "hands"
+    if inside:
+        words = "scene + " + hands_words(wiring, sw)
+    elif wired and (after or key in (SCENE_HANDS, HANDS)):
+        # a layer laid on: its node, "as lines", its blend
+        words += layer_words(wiring)
     factor = min(1.0, master * own)
     if factor < 1.0:
         words += f" · {min(99, max(1, round(factor * 100)))}%"
     return words, ""
+
+
+def desk_log_lines(midi) -> list[str]:
+    """The SYSTEM page's desk log (plan 24 C1): the MIDI adapter's last
+    twenty desk events, newest first (`midi.DeskLog.lines`); none with no
+    adapter, or one from before a hot reload that has no log yet."""
+    log = getattr(midi, "desk_log", None) if midi is not None else None
+    return log.lines() if log is not None else []
 
 
 def chip_w(*labels: str) -> float:
@@ -297,6 +323,41 @@ def button_w(*labels: str) -> float:
     s = imgui.get_style()
     w = sum(imgui.calc_text_size(lb.split("##")[0]).x + 2 * s.frame_padding.x for lb in labels)
     return w + s.item_spacing.x * max(len(labels) - 1, 0)
+
+
+def device_lines(registry) -> list[str]:
+    """The SYSTEM page's device lines, one per listed device, in the
+    list's order: ``role  ·  kind  ·  status  ·  n sources  ·  last``
+    (the last part only when the device has one)."""
+    out = []
+    for role, kind, status, n, last in registry.lines():
+        line = f"{role}  ·  {kind}  ·  {status}  ·  {n} source{'' if n == 1 else 's'}"
+        if last:
+            line += f"  ·  {last}"
+        out.append(line)
+    return out
+
+
+# the wants the menu offers by their own items (desk, the hands, the pad)
+_OWN_WANTS = frozenset(("desk", "hand:left", "hand:right", "pad"))
+
+
+def learn_wants(lrn) -> list[str]:
+    """What else the param menu offers to learn (plan 27 B2): every want
+    the registry lists (`Learn.wants`) beyond the desk, the hands and the
+    pad, which have their own items — a new device's role."""
+    wants = getattr(lrn, "wants", None)
+    return [w for w in (wants() if callable(wants) else ()) if w not in _OWN_WANTS]
+
+
+def sink_items(lrn) -> list[tuple[str, str]]:
+    """The param menu's "Learn sink ▸" items (plan 27 B3): (port address,
+    item text) for every sink port the rig lists (`Learn.sinks`) —
+    ``bridge:3  ·  pitch ch4``; none without a registry or a sink."""
+    sinks = getattr(lrn, "sinks", None)
+    ports = sinks() if callable(sinks) else ()
+    return [(pt.address, f"{pt.address}  ·  {pt.label}" if pt.label else pt.address)
+            for pt in ports]
 
 
 def apply_style() -> None:
@@ -398,6 +459,11 @@ CHEATSHEET = [
     ("right-click", "a control: learn desk / hand / pad · unbind"),
     # the APC40's glyphs, as the desk above and the ROUTING rows print them
     ("APC40", "K D knobs · S faders · G row·col · B ⇧"),
+    # the APC40 rows whose labels alone do not say it (2026-10-16)
+    ("APC40 G7 G9 G10", "band select (⇧ D knobs follow) · next transfer · reset"),
+    ("APC40 QUANT", "next bank preset (the pad's B walks the list)"),
+    ("APC40 STOP ALL", "reset all bands · again within 8 s: undo"),
+    ("APC40 MASTER PAN", "overlay · click-through (if config allows)"),
 ]
 
 # ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
@@ -467,7 +533,7 @@ class Panel:
         self.pad = None       # set by app.py unless [gamepad] enabled = false (gamepad.Pad)
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
-        self.bridge = None    # set by app.py when [bridge] is enabled (bridge.Bridge)
+        self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -646,6 +712,8 @@ class Panel:
         for b in session:
             where = "global layer" if b.layer == "global" else "invariant"
             imgui.text_disabled(f"{self._row_name(b)} · {where}")
+        for b in learn.sinks_of(table, (a.id, p.id)):     # the session's, out (plan 27 B3)
+            imgui.text_disabled(f"→ {b.target} · sink" + ("" if b.enabled else " (off)"))
         return desk, routes
 
     def _ctx_unbind(self, a: Param, p: Param, desk: list, routes: list) -> None:
@@ -696,6 +764,22 @@ class Panel:
         if (pad is not None and pad.on and self._desk_target(a)
                 and imgui.menu_item_simple("Learn pad")):
             lrn.arm(a.id, "pad")
+        # any other device the registry lists can be armed for by its role
+        # (plan 27 B2, `Learn.wants`): "Learn <role>", on a param a lane
+        # can drive; the device completes it from its own `learn`
+        if p.modulatable:
+            for want in learn_wants(lrn):
+                if imgui.menu_item_simple(f"Learn {want}"):
+                    lrn.arm(a.id, want)
+        # plan 27 B3: the param *out* to a sink port — the rig's ports
+        # (`Learn.sinks`), a pick lands at once as a session row
+        # (`Learn.learn_sink`): no prompt, no undo step, no preset dirt
+        ports = sink_items(lrn) if p.kind is not Kind.TRIGGER else []
+        if ports and imgui.begin_menu("Learn sink"):
+            for address, text in ports:
+                if imgui.menu_item_simple(text):
+                    lrn.learn_sink(a.id, address)
+            imgui.end_menu()
 
     def _hand_sides(self) -> list[str]:
         """The hands this rig's axes belong to, left first; none without a
@@ -1523,13 +1607,23 @@ class Panel:
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)
 
+    def graph_now(self):
+        """(the renderer's wiring, the loaded preset's graph spec or None):
+        what the OUTPUT page says in words (plan 26 A4). Any piece missing
+        (no renderer, no presets) reads as the default graph."""
+        wiring = getattr(self.renderer, "wiring", None) or Wiring()
+        presets = getattr(getattr(self, "library", None), "presets", None)
+        spec = getattr(getattr(presets, "graph", None), "spec", None)
+        return wiring, spec
+
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the
         master dim (which the footer already says): the footer names them
         on every page (plan 21 WP4)."""
         fx_on, visible, master = self._outputs_now()
+        wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master)[1]
+                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring)[1]
                 not in ("", "master")]
 
     @staticmethod
@@ -1552,6 +1646,9 @@ class Panel:
         several = len(slots) > 1
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
+        # plan 26 A4: the render graph the outputs are wired by — the
+        # loaded preset's `graph` section, or the default
+        wiring, spec = self.graph_now()
         # the switches line up after the widest "N  name", which is cut so
         # the three ticks always fit the page's width
         ticks = sum(imgui.calc_text_size(s).x for s in ("scene", "hands", "through effects"))
@@ -1608,9 +1705,14 @@ class Panel:
                                    fit_text(line, imgui.get_content_region_avail().x))
                 if imgui.is_item_hovered():
                     imgui.set_tooltip(line)
-            words, black = output_shows(sw, fx_on, visible, master)
+            # plan 26 A4: the words say the wiring too — the switches above
+            # and the loaded preset's graph set it (`hands: in the scene`);
+            # the whole graph in words on the line's hover
+            words, black = output_shows(sw, fx_on, visible, master, wiring)
             if not flips:
                 imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"{hands_words(wiring, sw)}\n{graph_words(spec)}")
                 continue
             # no dim row: the ticks at the right of the "shows:" line, the
             # words cut to the room left of them
@@ -1618,6 +1720,9 @@ class Panel:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(WARN if black else FAINT,
                                fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw)}\n"
+                                  f"{graph_words(spec)}")
             for k, (pid, t) in enumerate(flips):
                 imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
                 self._check(pid, t)
@@ -1669,6 +1774,13 @@ class Panel:
         self._check("view.rotate")
         imgui.same_line()
         self._check("view.faces")
+        # the two layers' opacities (plan 24 C2), side by side
+        half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+        self._slider("view.points_alpha", half)
+        imgui.same_line()
+        self._slider("view.lines_alpha", half)
+        # plan 26 A2b: strokes in world space (grow with the zoom) or screen space
+        self._check("view.screen_strokes")
         self._slider("view.instances")
         if v.instances > 1:
             # the field's one row: how the copies are laid out, how they
@@ -1750,6 +1862,12 @@ class Panel:
         self._button("camera.reset", "Reset view")
         imgui.same_line()
         imgui.text_disabled("R  ·  stick click")
+        # plan 26 A2: the one fixed camera the shape is seen through — the
+        # room's, not the preset's (eye.* is session); zoom and pan above
+        # move the shape in front of it
+        self._section("eye", note="the room's camera, not the preset's")
+        self._row("eye.fov")
+        self._row("eye.distance")
 
     def _page_lookback(self, dt: float) -> None:
         ui_lookback.page(self, dt)     # the frame history and its composite
@@ -1887,6 +2005,26 @@ class Panel:
                     "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
                     "edit a file and the app follows")
 
+    def gpu_lines(self) -> list[str]:
+        """The SYSTEM page's GPU timing (plan 26 A0, per node since A1): a
+        heading, then one line per node of the render graph (graph.py) of
+        the last frames, its rolling median in ms
+        (`Renderer.stats["gpu_ms"]`, render.PassTimer); with no timer
+        queries on the context, the one line saying so. Nothing before a
+        frame has been timed, or with no renderer."""
+        stats = getattr(self.renderer, "stats", None) or {}
+        ms = stats.get("gpu_ms") or {}
+        note = stats.get("gpu_note") or ""
+        if not ms:
+            return [f"gpu: {note}"] if note else []
+        width = max(len(name) for name in ms)
+        return (["gpu per node, ms (median of the last frames):"]
+                + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()])
+
+    def _gpu_timing(self) -> None:
+        for text in self.gpu_lines():
+            imgui.text_disabled(text)
+
     def _page_system(self, dt: float) -> None:
         self._section("system")
         self._check("ui.cheatsheet")
@@ -1910,11 +2048,15 @@ class Panel:
         if self.dream_error:
             imgui.text_colored(WARN, self.dream_error)
         self._stall_status()
+        self._gpu_timing()
+        imgui.spacing()
+        self._section("devices")
+        self._device_lines()
         imgui.spacing()
         self._section("midi")
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
             self._row("desk.slew")
-        self._midi_status()
+        self._desk_log()
         self._learn_status()
         if "desk.pad.feel" in self.reg:    # the sticks' feel (routing._register_pad_feel)
             imgui.spacing()
@@ -1923,9 +2065,6 @@ class Panel:
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
                 self._row(f"desk.pad.{k}")
-        imgui.spacing()
-        self._section("bridge")
-        self._bridge_status()
 
     def alerts(self) -> list[str]:
         """What the red banner says: a live render error or render stall
@@ -1994,37 +2133,40 @@ class Panel:
                 imgui.set_tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
                                   "every thread's stack, newest at the end")
 
-    def _bridge_status(self) -> None:
-        """The DAW bridge's one sign of life (audit P3): off, a port error,
-        no port yet, or the ports, the encoding and what has gone out."""
-        b = self.bridge
-        if b is None:
-            imgui.text_disabled("no bridge — [bridge] enabled = false")
+    def _device_lines(self) -> None:
+        """One line per listed device (plan 27 B1): `role · kind · status ·
+        n sources · last` — `connected`, `lost` (the hardware is not there;
+        it reconnects itself), `off` (its entry says so) or `error: …`
+        (in the warning colour; the registry tries again). Replaces the
+        MIDI and bridge lines; the HANDS page keeps its own status."""
+        regs = self.devices
+        if regs is None:
+            imgui.text_disabled("no device registry")
             return
-        if b.error:
-            imgui.text_colored(WARN, f"bridge: {b.error}")
-            return
-        if not b.on:
-            imgui.text_disabled("bridge: no port")
-            return
-        imgui.text_disabled(f"bridge: {b.name}  ·  {b.encoding}, {b.room} lanes"
-                            f"  ·  {b.sent} sent")
+        for line in device_lines(regs):
+            parts = line.split("  ·  ")
+            if len(parts) > 2 and parts[2].startswith("error"):
+                imgui.text_colored(WARN, line)
+            else:
+                imgui.text_disabled(line)
+        if not len(regs):
+            imgui.text_disabled("no devices — [[devices]] in config.toml")
 
-    def _midi_status(self) -> None:
-        m = self.midi
-        if m is None:
-            imgui.text_disabled("no MIDI adapter")
+    def _desk_log(self) -> None:
+        """The desk event log (plan 24 C1): the last twenty presses on the
+        APC40 — the control, what it did, the layer it was read on —
+        newest first, under a fold so the page stays short."""
+        lines = desk_log_lines(self.midi)
+        if not lines:
             return
-        if m.error:
-            imgui.text_colored(WARN, f"MIDI: {m.error}")
-            return
-        if not m.on:
-            imgui.text_disabled("MIDI: no device")
-            return
-        imgui.text_disabled(f"MIDI: {m.name}  ·  {len(m.bindings)} bindings")
-        if m.last:
-            imgui.same_line()
-            imgui.text_disabled(f"·  {m.last}")
+        opened = imgui.tree_node(f"desk log — the last {len(lines)} presses##desklog")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("each press on the desk: the control, what it did, and the "
+                              "layer it was read on (both: the same on either layer)")
+        if opened:
+            for line in lines:
+                imgui.text_disabled(line)
+            imgui.tree_pop()
 
     def _learn_status(self) -> None:
         """The armed param and what the last learn did — a knob's or a

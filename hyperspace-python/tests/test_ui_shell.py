@@ -152,33 +152,54 @@ def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
     assert not any(s.startswith("config:") for s in drawn)
 
 
-def test_system_page_shows_the_bridge(rig, monkeypatch):
-    """The DAW bridge's state — off, a port error, no port, or the ports and
-    what went out — is on the SYSTEM page (audit P3), where before its only
-    sign of life was a stderr line."""
+def test_system_page_shows_one_line_per_device(rig, monkeypatch):
+    """Plan 27 B1: every listed device — the pad, MIDI, the hands, the
+    bridge — is one line on the SYSTEM page, `role · kind · status · n
+    sources · last`, in the list's order; an `error: …` line is in the
+    warning colour. (Replaces the MIDI and bridge lines of audit P3; the
+    HANDS page keeps its own status.)"""
     import hyperspace.ui as ui_mod
+    from hyperspace import devices
 
-    drawn: list[str] = []
+    drawn: list[tuple[str, bool]] = []
     real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
     monkeypatch.setattr(ui_mod.imgui, "text_colored",
-                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+                        lambda col, s: (drawn.append((s, True)), real_colored(col, s)))
     monkeypatch.setattr(ui_mod.imgui, "text_disabled",
-                        lambda s: (drawn.append(s), real_disabled(s)))
+                        lambda s: (drawn.append((s, False)), real_disabled(s)))
 
-    def shown() -> list[str]:
+    def shown() -> list[tuple[str, bool]]:
         drawn.clear()
         frame(rig.panel, "system")
         imgui.end_frame()
-        return [s for s in drawn if s.startswith(("bridge", "no bridge"))]
+        return [(s, warn) for s, warn in drawn
+                if s.startswith(("no device", "pad  ·", "apc40  ·", "leap  ·", "bridge  ·"))]
 
-    assert shown() == ["no bridge — [bridge] enabled = false"]
-    b = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0)
-    rig.panel.bridge = b
-    assert shown() == ["bridge: no port"]
-    b.on, b.name, b.sent = True, "out IAC Bus 1", 42
-    assert shown() == ["bridge: out IAC Bus 1  ·  pitch, 16 lanes  ·  42 sent"]
-    b.error = "no such port"
-    assert shown() == ["bridge: no such port"]
+    assert shown() == [("no device registry", False)]
+    bridge = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0,
+                             decoder=SimpleNamespace(n=16), close=lambda: None)
+    midi = SimpleNamespace(on=False, name="", error="", last="", profile=None, bindings=[],
+                           close=lambda: None)
+    reg = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", io=SimpleNamespace(on=False, usb_pad=None, close=lambda: None)),
+        devices.MidiDevice("apc40", io=midi),
+        devices.OffDevice("leap", "hands"),
+        devices.BridgeDevice("bridge", io=bridge, audio=None)])
+    rig.panel.devices = reg
+    assert shown() == [("pad  ·  gamepad  ·  lost  ·  22 sources", False),
+                       ("apc40  ·  midi  ·  lost  ·  0 sources", False),
+                       ("leap  ·  hands  ·  off  ·  0 sources", False),
+                       ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]
+    bridge.on, bridge.name, bridge.sent = True, "out IAC Bus 1", 42
+    midi.on, midi.name, midi.last = True, "Akai APC40", "cc 0 48 = 64"
+    assert shown()[1] == (("apc40  ·  midi  ·  connected  ·  0 sources  ·  Akai APC40  ·  "
+                           "0 bindings  ·  cc 0 48 = 64"), False)
+    assert shown()[3] == (("bridge  ·  bridge  ·  connected  ·  16 sources  ·  out IAC Bus 1  ·  "
+                           "pitch, 16 lanes  ·  42 sent"), False)
+    bridge.error = "no such port"
+    assert shown()[3] == ("bridge  ·  bridge  ·  error: no such port  ·  16 sources", True)
+    rig.panel.devices = devices.DeviceRegistry([])
+    assert shown() == [("no devices — [[devices]] in config.toml", False)]
 
 
 def _drawn(monkeypatch) -> list[str]:
@@ -870,7 +891,9 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
                       layer="preset") for k in range(8)],
-            Binding("cc:0:7", "view.bright", "abs")]          # a fader: dropped, noted
+            # the track faders: the preset's own since plan 24 C2 (decision 17)
+            *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
+            Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
     rig.lib.presets.desk_notes = table.set_desk(full)
     table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
         {"base": "view.depth4", "from": 0.0, "to": 1.0},
@@ -925,7 +948,7 @@ def _sheet_keys() -> tuple[set[str], set[str]]:
     """The GLFW key names and pad buttons the sheet's key column names."""
     keys, pads = set(), set()
     for col, _ in CHEATSHEET:
-        if col in _MOUSE:
+        if col in _MOUSE or col.startswith("APC40 "):    # the desk's rows: not keys
             continue
         if col in _PADS:
             pads.update(_PADS[col])
@@ -1757,7 +1780,7 @@ def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
     assert dimmed.pop("routing") == (0, False)
     assert dimmed == {k: (1, True) for k in PAGE_KEYS if k != "routing"}
     assert panel._picking is False                           # only while the page draws
-    lrn.pick(_control("S3").source)                          # invariant: picked for the look only
+    lrn.pick(_control("SM").source)                          # invariant: picked for the look only
     assert ui_desk.picked(panel) is not None and pages() == idle
     lrn.pick(_control("D3").source)
     table.set_layer("global")                                # the session's layer: nothing maps
@@ -1964,10 +1987,10 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     clock[0] += 0.1
     assert footer()[0][0].startswith("·  D3 picked (20 s)")   # the pick is newer: it shows at once
     # an invariant control: why it cannot be mapped, dim
-    lrn.pick(_control("S3").source)
+    lrn.pick(_control("SM").source)                          # MASTER (S1–S8: layered, C2)
     clock[0] += 0.1
     (said,) = footer("view")
-    assert said[0].startswith("·  S3 (track fader 3) is invariant") and said[1] == rgb(ui.DIM)
+    assert said[0].startswith("·  SM (MASTER fader) is invariant") and said[1] == rgb(ui.DIM)
     # with the panel hidden the header alone carries it — the whole line
     panel.reg["ui.panel"].set(False)
     lrn.pick(_control("D3").source)

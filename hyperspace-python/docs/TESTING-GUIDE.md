@@ -26,8 +26,11 @@ explained in the [glossary](#glossary) at the end.
 2. **Launch the app:** on branch `main` (`git checkout main`, `git pull`),
    run `cd hyperspace-python && uv sync && uv run hyperspace`. The shape
    entries (L48–L54, A19, D14) and the pattern entries (L55–L68, A20–A23,
-   D15) need plan 22: until it is merged, use
-   branch `plan-22-integration` instead.
+   D15) are plan 22's, which is on `main`. The party-fix entries (L69–L71,
+   A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
+   A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
+   (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
+   use branch `plan-24-26-27-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -38,7 +41,8 @@ explained in the [glossary](#glossary) at the end.
    (`~/Hyperspace/config.toml`, or `~/Hyperspace-try/config.toml` on the
    copy). Every setting is explained in
    `hyperspace-python/hyperspace/config.py`. Edit it with the app closed,
-   then launch again.
+   then launch again — except the device list (`[[devices]]`), which the
+   app re-reads while it runs; the entries that say so edit it live.
 5. **The control window's pages** are the column of names down its left
    edge — OUTPUT, VIEW, FACES, BITMAP, CAMERA, LOOKBACK, FX, AUDIO,
    ANALYZER, ROUTING, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
@@ -58,8 +62,9 @@ changes brightness or volume instead).
 >    cases macOS can kill the app while it looks (seen once during
 >    automated testing, never yet in the app). The risk is now smaller,
 >    not gone; putting `enabled = false` under `[midi]` in the config
->    file removes it (put it back before testing the desk). A desk
->    plugged in while the app runs is found within ten seconds.
+>    file (or on the `apc40` entry of a device list) removes it (put it
+>    back before testing the desk). A desk plugged in while the app runs
+>    is found within ten seconds.
 > 2. **Plug every screen in before launching.** A screen plugged in after
 >    the app starts is not used until you restart it (⌘R or quit and
 >    launch again).
@@ -76,7 +81,8 @@ changes brightness or volume instead).
    do it whenever both are to hand.
 4. Part 2 (a), the APC40. Its entries marked "on the copy" run with
    `HYPERSPACE_HOME` set to the copy. A1 before A4. A20–A23 are the
-   listening session for the macro candidates: do them together.
+   listening session for the macro candidates: do them together. A28
+   before A29.
 5. (L43, if not done yet: two Macs and a shared cloud folder.)
 6. Part 2 (b), the hand camera: **B1 (calibration) first**, with nobody
    else in the camera's view. Leave the APC40 plugged in for the entries
@@ -84,7 +90,17 @@ changes brightness or volume instead).
 7. Part 2 (c), the projector.
 8. Part 2 (d), the glass and the projector: D1 first (it sets up two
    outputs in the config file), D14 any time, D12 and D13 last.
-9. Part 2 (e), a mouse — any time.
+9. Part 2 (e), a mouse, and (f), the gamepad — any time.
+10. Plan 27's device entries, on the copy: L72 first (it puts the
+    device list in the config file), then L73–L76; the FL Studio ones
+    (L77–L81) with L46; A33 with the APC40; B37, B38 with the hand
+    camera; F5 with the pad; (g) when a second controller or a phone is
+    to hand.
+11. Plan 26's render-graph entries: L82 and L83 first, on the Mac the
+    automated tests run on; then L85–L88; on the copy L89–L91, then
+    L92–L94 with the hand camera or recorded hands, and L84 after L76;
+    B39 and B40 with the hand camera; C6 and C7 on the projector; D16
+    after D2, then D17 and D18.
 
 ## Summary
 
@@ -158,6 +174,32 @@ changes brightness or volume instead).
 | L66 | The factory presets with music | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
+| L69 | The palette fold | 1 | laptop (APC40 for the fader) | 166 |
+| L70 | A saved palette, and the palette's controls | 1 | laptop, the copy | 167 |
+| L71 | Lines and points opacity | 1 | laptop | 154 |
+| L72 | Every device on the SYSTEM page | 1 | laptop, the copy | 168 |
+| L73 | Change the device list while the app runs | 1 | laptop, the copy | 173, 174 |
+| L74 | A broken device does not stop the show | 1 | laptop, the copy | 170 |
+| L75 | The pages offer what the rig lists | 1 | laptop, the copy | 178 |
+| L76 | A recorded point cloud plays | 1 | laptop, the copy | 190 |
+| L77 | A setting sent to FL Studio | 1 | laptop, FL Studio, the copy | 181 |
+| L78 | The bridge's old "send" list becomes rows, once | 1 | laptop, FL Studio, the copy | 182 |
+| L79 | Sending a setting never asks a question | 1 | laptop, FL Studio, the copy | 183 |
+| L80 | The hands' own port, now a device | 1 | FL Studio, hand camera or a tape, the copy | 184 |
+| L81 | The hands' port in the device list | 1 | laptop, the copy | 185 |
+| L82 | The golden pictures match (the gate Mac) | 1 | the gate Mac | 191 |
+| L83 | Every preset beside its golden picture | 1 | the gate Mac | 192 |
+| L84 | A recorded point cloud in the picture | 1 | laptop, the copy | 216, 217, 218 |
+| L85 | The time each part of the picture takes | 1 | laptop | 194, 210 |
+| L86 | The shape where it always was; the eye | 1 | laptop | 196 |
+| L87 | Zoom grows the shape; Screen strokes | 1 | laptop (recorded hands) | 197, 198 |
+| L88 | The naming rule | 1 | reading, L90 | 193 |
+| L89 | A preset that says how its picture is wired | 1 | laptop, the copy, recorded hands | 211, 209 |
+| L90 | Two acids | 1 | laptop, the copy | 212 |
+| L91 | The wiring in words | 1 | laptop, the copy | 215 |
+| L92 | Hands inside the shape | 1 | laptop, the copy, recorded hands (hand camera for the last part) | 204, 205 |
+| L93 | A hands layer that goes behind the shape | 1 | laptop, the copy, recorded hands | 207 |
+| L94 | Hands as lines | 1 | laptop, the copy, recorded hands | 214 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -181,6 +223,16 @@ changes brightness or volume instead).
 | A21 | Macro candidates: MACRO STREAMS | 2a | APC40, music, the copy | 134 |
 | A22 | Macro candidates: MACRO INTENSITY | 2a | APC40, music, the copy | 135 |
 | A23 | Macro candidates: MACRO BREAKDOWN DROP | 2a | APC40, music, the copy | 136 |
+| A24 | Hold SAVE, tap a pad: ten saves in a row | 2a | APC40, the copy | 148 |
+| A25 | Points, lines, faces and rotate on both layers | 2a | APC40 | 149 |
+| A26 | A load relights the whole desk | 2a | APC40 | 150 |
+| A27 | The desk log | 2a | APC40 | 151 |
+| A28 | The track faders belong to the preset | 2a | APC40, the copy | 152 |
+| A29 | The sound faders are under SHIFT | 2a | APC40, the copy | 153 |
+| A30 | The desk coverage report against what you see | 2a | laptop (APC40 helps) | 155 |
+| A31 | A desk template | 2a | laptop, the copy | 156 |
+| A32 | Click a control: this preset's settings first | 2a | laptop (APC40 helps) | 157 |
+| A33 | The desk plugged in after the app started | 2a | APC40 | 175 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -210,10 +262,24 @@ changes brightness or volume instead).
 | B27 | A smoothed knob with everything else | 2b | hand camera, APC40 | 79 |
 | B28 | A hand cannot learn a ghost-hand setting | 2b | hand camera, APC40 | 110 |
 | B29 | Hand-to-picture delay | 2b | hand camera, 120 fps phone camera | 25 |
+| B30 | The new hand sources on the HANDS page and in ROUTING | 2b | hand camera | 158 |
+| B31 | Curl and energy | 2b | hand camera | 159 |
+| B32 | Spread | 2b | hand camera | 160 |
+| B33 | Flick | 2b | hand camera | 161 |
+| B34 | Gap and twist | 2b | hand camera | 162 |
+| B35 | The grab | 2b | hand camera | 163 |
+| B36 | Grab to steer the shape | 2b | hand camera, the copy | 164 |
+| B37 | The hands in the device list | 2b | hand camera, the copy | 169, 180 |
+| B38 | A tracker that would not start comes up later | 2b | hand camera, a tape, the copy | 172 |
+| B39 | The hands where you are, through the shape's camera | 2b | hand camera, the copy (projector helps) | 202, 203 |
+| B40 | `hands-orbit` turns only the shape | 2b | hand camera | 200 |
 | C1 | Choosing the screen; the see-through mode locked | 2c | projector | 26 |
 | C2 | A black ground, never see-through | 2c | projector | 43 |
 | C3 | Windows reopen on the right screen | 2c | projector | 61 |
 | C4 | Dream speed on the rig | 2c | projector | 96 |
+| C5 | The hands on the projector | 2c | projector, hand camera | 165 |
+| C6 | A hand across the box pans as far as it did | 2c | projector, hand camera | 199 |
+| C7 | A preset saved before this build keeps its place | 2c | projector, the copy | 201 |
 | D1 | Two outputs open where the config says | 2d | glass, projector | 101 |
 | D2 | The eight output states | 2d | glass, projector, camera | 102 |
 | D3 | Hands over or through the effects | 2d | glass, projector, camera | 103, 47 |
@@ -229,11 +295,22 @@ changes brightness or volume instead).
 | D13 | Unplug the projector mid-run | 2d | glass, projector | 112 |
 | D14 | The shapes in 4D from the audience | 2d | glass | 113, 115 |
 | D15 | METER and PULSE from the audience | 2d | glass, music | 129 |
+| D16 | Every picture as on earlier builds, on the rig | 2d | glass, projector, camera, APC40 | 195, 208 |
+| D17 | The hands in the shape on the projector, clean on the glass | 2d | glass, projector, camera, the copy | 206 |
+| D18 | Two hands, one in the shape, one on the glass | 2d | glass, projector, camera, the copy | 213 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
-| F1 | A wired Xbox 360 pad is found | 2f | gamepad | 139 |
-| F2 | Learn pad — a button | 2f | gamepad | 140 |
-| F3 | Learn pad — a stick and a trigger | 2f | gamepad | 141 |
-| F4 | Momentary and hold on a pad button | 2f | gamepad | 142 |
+| F1 | A wired Xbox 360 pad is found | 2f | gamepad | 144 |
+| F2 | Learn pad — a button | 2f | gamepad | 145 |
+| F3 | Learn pad — a stick and a trigger | 2f | gamepad | 146 |
+| F4 | Momentary and hold on a pad button | 2f | gamepad | 147 |
+| F5 | The pad after a restart, and its sticks | 2f | gamepad | 171, 179 |
+| F6 | Two pads at once | 2f | the Xbox pad (Bluetooth), the wired pad, the copy | 219 |
+| G1 | A second MIDI controller learned onto a knob | 2g | APC40, a second MIDI controller, the copy | 176 |
+| G2 | SHIFT is the APC40's | 2g | APC40, a second MIDI controller, the copy | 177 |
+| G3 | A phone's fader moves a setting | 2g | a phone on the same Wi-Fi, the copy | 186 |
+| G4 | A phone's button | 2g | a phone, the copy | 187 |
+| G5 | The phone goes quiet | 2g | a phone, the copy | 188 |
+| G6 | Port 9000 already taken | 2g | a phone, a terminal, the copy | 189 |
 
 Covered by other entries: check 32 is part of D11; check 37 is replaced
 by B25; check 47 is finished by D8 (with D3, D9 and B28).
@@ -269,25 +346,33 @@ Run L1–L3 in a terminal where `HYPERSPACE_HOME` points at the copy
   as bindings.json.bak-v3" (or a name with a date if that name was
   taken), and one line per change: the crossfader moved to the master
   dimmer (`remapped cc:0:15: overlay.bg → output.dim`), OVERDUB added as
-  Home (`added note:0:64 → preset.home`), eight `added note:…:52 →
-  preset.save_new` lines (the clip-stop buttons), `added key:…` lines for
+  Home (`added note:0:64 → preset.home`), `added key:…` lines for
   ⌘Z, ⌘⇧Z, Ctrl+Z, Ctrl+⇧Z and Home, and sixteen `added note:…:56` /
   `…:57 → preset.select` lines (pad rows 4 and 5; "remapped …
   view.shape → preset.select" where your file still had the old shape
   pads), then "updated … (N rows changed)". Lines for changes an earlier launch already made do not
   appear.
+- On the first launch of a build with plan 24 (the party fixes), also:
+  `added note:7:52 → desk.save` (SAVE, unless that button is already
+  yours — then a "SAVE not added …" line on every launch), four `added`
+  lines for points, lines, faces and rotate on the scene-launch column,
+  and eight "moved cc:k:7 → … to the SHIFT layer" lines (the track
+  faders' audio strip). This is check 153's first step.
 - The SYSTEM page shows the same as one line: "bindings.json updated (N
   rows changed), the old file kept as bindings.json.bak-v3 — each change
   is on stderr".
 - `grep -c preset.select $HYPERSPACE_HOME/bindings.json` prints 24.
 - The ROUTING page's session section lists X → `output.dim`, B11 →
-  `preset.home` and G6·1–G6·8 → `preset.save_new hold`, under
-  "invariant · both layers".
+  `preset.home`, G6·8 → `desk.save` and scene launch 1–4 → points,
+  lines, faces and rotate, under "invariant · both layers". The
+  clip-stop SAVE AS bar of plan 15 is gone (since 2026-10-09): an old
+  file's eight `preset.save_new` hold rows are dropped with a note.
 - Your show files have the same size and time as before.
 - A crossfader, OVERDUB, clip-stop or pad mapping you had changed by hand
   is left as you had it.
-- The second launch prints nothing about the mapping file, the SYSTEM
-  page has no such line, and no file's time moves.
+- The second launch prints nothing about the mapping file (except
+  "SAVE not added …" when track 8's clip stop was already yours), the
+  SYSTEM page has no other such line, and no file's time moves.
 
 **Wrong if:** the file changed with no backup; one of your own mappings
 was replaced; the same lines appear on every launch.
@@ -299,8 +384,8 @@ was replaced; the same lines appear on every launch.
 **Later:** the first time you launch on the real home folder, the same
 lines and its own backup appear there: read them the same way. If your
 mapping file was itself just made from a very old `midi_map.json`, the
-OVERDUB and clip-stop lines arrive on the second launch instead, and it
-says so. If you later delete the OVERDUB or a clip-stop line from
+OVERDUB and SAVE lines arrive on the second launch instead, and it
+says so. If you later delete the OVERDUB or the SAVE line from
 `bindings.json`, it comes back on the next launch; to switch a button
 off, keep its line and add `"enabled": false`.
 
@@ -743,6 +828,59 @@ fullscreen; no difference at all in the floating mode.
 
 *(check 6)*
 
+#### L69. The palette fold
+
+**Needs:** laptop; the APC40 for the last step (leave it out without
+one). Plan 24 (the party fixes).
+
+**Do:**
+1. Any preset. FX page: the **Palette** chip is the last one. Switch it
+   on.
+2. Raise its **Mix** slowly to the top.
+3. Move **Centre** all the way round, then **Width** down to 0 and back.
+4. Set **Mode** to 1.
+5. With the APC40: right-click Mix → **Learn desk**, move track fader 2
+   (S2), then sweep S2.
+
+**Right if:** (1) nothing changes: the palette starts at mix 0. (2) the
+colours are pulled onto one slice of the colour wheel around Centre.
+(3) the slice moves round with no jump anywhere; at width 0 the picture
+is one colour, its brightness kept. (4) the picture becomes a greyscale
+ramp (the default anchors are greys). (5) the footer says the learn
+landed into the preset; S2 then fades the palette in and out once it
+reaches the mix.
+
+**Wrong if:** a jump (a seam) as Centre goes round; the picture changes
+in step 1; S2 refused as "invariant" (the track faders are still the
+session's: see A28).
+
+*(check 166)*
+
+#### L70. A saved palette, and the palette's controls (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. Copy `tests/fixtures/palettes/fx/sunset.json` into the copy's `fx/`
+   folder (`<home>/fx/`, or the shared library's).
+2. FX page, open Palette. Look at its controls with Mode 0, then Mode 1.
+3. From the FX page's preset strip (under its title) load **sunset**.
+   Change one anchor colour, save it as your own (**as…**), load another
+   effect preset, then yours again.
+
+**Right if:** (2) the page never scrolls; with Mode 0 you see Mode,
+Centre, Width, Sat (low and high on one row) and Val; with Mode 1, Mode,
+Anchors and one row per anchor colour (hue, sat, val on one row). (3)
+sunset paints dark violet → magenta → orange → cream; yours comes back
+with your anchor.
+
+**Wrong if:** a row cut off or the page scrolling; the rows of the other
+mode showing; anchors lost after a load.
+
+**Changes:** a palette preset in `fx/`; delete it to undo.
+
+*(check 167)*
+
 ## Tempo, the dream and the look-back
 
 #### L20. Tap tempo and the LFO's downbeat
@@ -1068,6 +1206,23 @@ for fn+←, and the key can be changed).
 
 *(check 54)*
 
+#### L71. Lines and points opacity
+
+**Needs:** laptop. Plan 24 (the party fixes).
+
+**Do:** F5 (TRIP); VIEW page: tick **Points** on (TRIP has them off).
+Under the Points / Lines / Rotate / Faces ticks, move **Points opacity** from 1 to
+0 and back, then **Lines opacity**. Then ROUTING → `+ route`: LFO 1 →
+Lines opacity.
+
+**Right if:** at 1 the picture is exactly as before; going down, that
+layer fades evenly (the far edges stay fainter than the near ones) and
+is gone at 0; the LFO makes the lines pulse.
+
+**Wrong if:** a faint layer left at 0; the other layer fading too.
+
+*(check 154)*
+
 ## The control window
 
 #### L34. The key legend is off at launch
@@ -1109,7 +1264,7 @@ unsaved dot is lit, and the footer said "unbound view.speed from K2
 (track knob 2) and R height …"; ⌘Z brings both back ("undid unbind
 view.speed"). (2) lines "K1 (track knob 1)", "B16 (▲) · step +3", "B17 (▼)
 · step -3", and Unbind is a single item. (3) the same with MIDI off. (4)
-"S8 (track fader 8) · invariant", dim, and no Unbind.
+"S8 (track fader 8) · global layer", dim, and no Unbind.
 
 **Wrong if:** no desk line with MIDI off; ⌘Z bringing back only half.
 
@@ -1158,8 +1313,9 @@ controls only the code; the top pad row reads TUMBLE … NOITA with TRIP
 green; the track knobs read Brightness, Speed, Instances, Pattern mix,
 Field amp, Field rate, Bitmap alpha, Zoom; the device knobs FX mix, Plasma
 level, Kaleidoscope segments, Kaleidoscope zoom, Zoom burst amount, Zoom
-burst glow, Hue cycle paint, Hue cycle spread; the clip-stop row reads
-"Save as a new preset" once; names the desk keeps on every preset are
+burst glow, Hue cycle paint, Hue cycle spread; the track faders S1–S8
+are dark (TRIP binds none); in the clip-stop row only G6·8 is mapped, to
+Save (it lights only while held); names the desk keeps on every preset are
 grey, the preset's white. Pad rows 4–5: a filled slot amber at half
 strength with its name (on the factory party show G4·1 reads TRACER), an
 empty one dark with no label. Nothing overlaps, no scrollbar. The hover
@@ -1384,6 +1540,129 @@ off".
 
 *(check 100)*
 
+## The device list (on the copy)
+
+Plan 27 (the device registry). Every device — the desk, the pad, the
+hands, the bridge, a phone — is one entry in the config file's device
+list, and one line on the SYSTEM page. These entries change the config
+file **while the app runs**: the app reads the device list again about
+half a second after you save it. The blocks to paste are in
+`hyperspace-python/docs/plans/27-device-registry.md`, "The block to
+paste".
+
+#### L72. Every device on the SYSTEM page
+
+**Needs:** laptop; the copy; the APC40 and the pad plugged in if you
+have them.
+
+**Do:**
+1. Launch on the copy as it is. SYSTEM page → **devices**.
+2. Quit. In `<home>/config.toml` replace the `[midi]`, `[gamepad]`,
+   `[hands]` and `[bridge]` sections with the "today's rig" block
+   (if the hands are on, write `enabled = true` on the `leap` entry and
+   move the `[hands]` lines under it). Launch again.
+
+**Right if:** (1) one line per device: `pad · gamepad …`, `apc40 · midi
+· connected · 137 sources …` (or `lost` with no desk), `leap · hands …`,
+`bridge · bridge · off …`; one grey note per old section the file has
+("config: [midi] is now a [[devices]] entry …"); everything works as
+before. (2) the same lines and no note.
+
+**Wrong if:** a device missing; a note for a section the file does not
+have; a note after the paste (an old section left in the file).
+
+**Changes:** the config file; keep the copy of it you started from.
+
+*(check 168)*
+
+#### L73. Change the device list while the app runs
+
+**Needs:** laptop; the copy, with the list from L72.
+
+**Do:**
+1. With the app running, set the `bridge` entry's `enabled = true`;
+   save.
+2. Write `role = "a:b"` on any entry; save. Then put it back; save.
+3. Add a second hands device: `[[devices]]`, `role = "leap2"`, `kind =
+   "hands"`; save. Then add a second pad: `role = "pad2"`, `kind =
+   "gamepad"`; save. Then set the `leap` entry's `enabled = false`; save.
+
+**Right if:** (1) within a second "devices: bridge changed — reopened"
+on SYSTEM and the bridge line no longer says `off`. (2) one note
+"config: [[devices]] not applied — … — the old list stands" and nothing
+else changes; put back, the list is followed again. (3) `leap2 · hands ·
+error: feeds 'hand', which leap already feeds — not opened`, the hands
+unchanged; `pad2 · gamepad · lost` (or `connected · … · glfw 1` with a
+second pad in), no error — two pads may run at once since plan 27 B6
+(F6); with `leap` off, `leap2` takes over.
+
+**Wrong if:** nothing happens after a save; a window moves or the app
+restarts; both hands devices `connected` at once; `pad2` an `error:` line.
+
+**Changes:** put the list back as it was.
+
+*(checks 173, 174)*
+
+#### L74. A broken device does not stop the show
+
+**Needs:** laptop; the copy; a text editor on the code. The APC40
+helps.
+
+**Do:** with the app running, open `hyperspace-python/hyperspace/midi.py`
+and add `raise RuntimeError("x")` as the first line inside `def
+poll(self)` of `MidiIO`; save. Watch for a few seconds. Remove the line;
+save.
+
+**Right if:** a message `midi: RuntimeError: x` appears and the apc40
+line reads `error: RuntimeError: x` in the warning colour, while the
+picture and everything else go on; once the line is removed the message
+clears and the line reads `connected` (or `lost`) again.
+
+**Wrong if:** the window freezes; the other devices stop.
+
+**Changes:** none once the line is removed (check `git diff`).
+
+*(check 170)*
+
+#### L75. The pages offer what the rig lists
+
+**Needs:** laptop; the copy.
+
+**Do:** ROUTING page: open a row's source list. Right-click any slider
+(Brightness) and read its menu.
+
+**Right if:** the source list has the sound bands, then LFO 1–4, then
+the pad's sticks, the hands and `ext` lanes, in the order the device
+list gives them. The menu has Learn desk, Learn hand (with a tracker on)
+and Learn pad (with a pad connected), as before.
+
+**Wrong if:** a device's sources missing from the list.
+
+*(check 178)*
+
+#### L76. A recorded point cloud plays
+
+**Needs:** laptop; the copy.
+
+**Do:** copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the recorded-cloud block to the device list;
+save. Watch the SYSTEM page. Then rename the file, add `loop = false`
+to the entry and save; rename the file back.
+
+**Right if:** `scan · cloud · connected · 1 source · knot.npz · frame
+n/16 · … points · 12 fps`, the frame counting through 16 at 12 frames a
+second (one loop about every 1⅓ seconds) and starting over; the picture
+shows the knot as dots threaded through the shape (L84 is the drawing's
+own entry).
+Renamed: `error: FileNotFoundError …`; back: `connected` within about
+10 seconds, the frame stopping at 16/16.
+
+**Wrong if:** the frame number races with the app's frame rate.
+
+**Changes:** remove the entry and the file.
+
+*(check 190)*
+
 ## With FL Studio (no hardware)
 
 These need FL Studio installed and the Mac's built-in virtual MIDI
@@ -1398,11 +1677,14 @@ online", with one bus.
 Launch, SYSTEM page. In FL Studio, take IAC as input and put a Fruity
 Formula Controller or Peak Controller on pitch bend, channel 1.
 
-**Right if:** SYSTEM's bridge line names the port, `pitch`, 16 lanes and
-a rising `sent` count; the FL controller moves with the lowest sound
-band.
+**Right if:** SYSTEM's bridge line (under **devices**) reads `bridge ·
+bridge · connected · 16 sources · 1 sink ·` the port, `pitch, 16 lanes`
+and a rising `sent` count; the FL controller moves with the lowest sound
+band. With plan 27, the first launch with the bridge on also says
+"bindings: [bridge] send is now sink rows in bindings.json …" (L78).
 
-**Wrong if:** "bridge: no port" (check the IAC name); no bridge line.
+**Wrong if:** the bridge line says `lost` or `error` (check the IAC
+name); no bridge line.
 
 **Changes:** set `[bridge] enabled = false` afterwards.
 
@@ -1425,6 +1707,112 @@ row is switched on).
 **Changes:** delete the route; undo the `[bridge]` lines.
 
 *(check 28)*
+
+#### L77. A setting sent to FL Studio
+
+**Needs:** as L46 (FL Studio, or MIDI Monitor, listening to the IAC
+bus); the copy.
+
+**Do:** right-click Brightness → **Learn sink** → `bridge:6 · pitch
+ch7`. Make brightness move by itself: ROUTING → `+ route`, LFO 1 →
+Brightness. Watch channel 7 in FL. Load another preset.
+
+**Right if:** the footer says "sent view.bright → bridge:6 (into
+bindings.json)"; channel 7's pitch bend follows the brightness as it
+moves with the LFO — not just the slider — and nothing is sent while it
+holds still; the other preset leaves the sending in place.
+
+**Wrong if:** FL follows only the slider; nothing on channel 7.
+
+**Changes:** ROUTING → sinks: × the row.
+
+*(check 181)*
+
+#### L78. The bridge's old "send" list becomes rows, once
+
+**Needs:** as L46; a copy whose bridge has never been switched on.
+
+**Do:**
+1. In the config set the bridge on with `send = ["lane:*",
+   "param:view.bright"]` (on `[bridge]`, or on the bridge entry); launch.
+2. Quit and launch again.
+3. ROUTING → **sinks**: × every row. Change anything in the config file,
+   save; quit and launch again.
+
+**Right if:** (1) one note "bindings: [bridge] send is now sink rows in
+bindings.json (lane:* → bridge:0, param:view.bright → bridge:6) …"; the
+sinks section lists "every lane → bridge:0" and "param view.bright →
+bridge:6"; SYSTEM: `bridge · bridge · connected · 16 sources · 2 sinks
+…`; FL gets the lanes as before and brightness on channel 7; the source
+list on ROUTING has `ext ext 0` … `ext ext 15`. (2) no note. (3) no row
+comes back.
+
+**Judge:** an entry after `lane:*` always lands on channel 7 (six sound
+bands), whatever your band count: if a mapping in FL used another
+channel, move it once.
+
+**Wrong if:** the note on every launch; the rows come back.
+
+*(check 182)*
+
+#### L79. Sending a setting never asks a question
+
+**Needs:** as L77.
+
+**Do:** put an LFO on Brightness (ROUTING → `+ route`). Right-click
+Brightness → **Learn sink** → any port. Then right-click Speed →
+**Learn sink** → the same port. Right-click Speed → **Unbind**.
+
+**Right if:** no Replace / Keep question either time; the LFO still
+moves brightness; the second time the footer adds "…; param:view.bright
+let go"; Speed's menu lists the sending dimmed, and Unbind leaves it;
+the preset's unsaved dot stays off.
+
+**Wrong if:** a Replace / Keep question; the unsaved dot lights.
+
+**Changes:** × the row on ROUTING → sinks.
+
+*(check 183)*
+
+#### L80. The hands' own port, now a device
+
+**Needs:** FL Studio; the IAC bus; the copy; the hand camera, or a
+recorded hand tape (`[hands] tape`).
+
+**Do:** hands on with `out = "IAC"`. Launch, raise the right hand. Take
+the IAC bus offline in Audio MIDI Setup for a few seconds, then back.
+
+**Right if:** SYSTEM shows the leap line and under it `hands-daw ·
+midi-out · connected · 0 sources · 0 sinks · IAC …  · leap's DAW out ·
+cc …`; FL's knobs follow the hands; offline the line says `lost`, and
+within about 2 seconds of the bus coming back it says `connected` and
+FL's knobs jump to where the hands are. FL lists no second "Hyperspace
+Hands" port.
+
+**Wrong if:** no messages; no jump after the reconnect; a second
+"Hyperspace Hands".
+
+**Changes:** put `out` back.
+
+*(check 184)*
+
+#### L81. The hands' port in the device list
+
+**Needs:** the copy, with a device list and the hands on.
+
+**Do:** put `out = "IAC"` on the `leap` entry; launch. Then remove it
+and add an entry `role = "daw"`, `kind = "midi-out"`, `port = "IAC"`,
+`carries = "leap"`; launch.
+
+**Right if:** first: one note "config: [hands] out is now a [[devices]]
+entry (role = 'hands-daw', …)" and a `hands-daw` line naming the bus.
+Second: no `hands-daw` line; the `daw` line carries the hands.
+
+**Wrong if:** two lines both carrying the hands.
+
+**Changes:** put the entries back.
+
+*(check 185)*
 
 ## The shapes in four dimensions
 
@@ -1833,6 +2221,318 @@ at 2.6 HEX is still a honeycomb.
 
 ---
 
+## The render graph (on the copy)
+
+Plan 26 (the render graph). The picture is now built from parts — the
+shape, the hands, a point cloud, the effects, the trail — wired
+together, and the shape and the ghost hands share one camera, so the
+hands can be drawn inside the shape. A preset can say how its picture
+is wired, in its file. **No factory preset uses any of it**: these
+entries copy a test preset into the copy's library. Before any of them,
+open `~/Hyperspace-try/config.toml` and, if it has a `[library] path`
+line, delete that line (on the copy only), so the presets you copy in
+go to the copy's own `presets` folder and never to the shared Drive
+folder. A preset file in `<home>/presets/` shows in the PRESETS list by
+its file name.
+
+The test preset is `hyperspace-python/tests/fixtures/presets/hands-lines.json`.
+Some entries use a variant: copy that file into `<home>/presets/` under
+the new name, open the copy in a text editor and replace the part that
+starts `"graph": {"nodes": [` and ends `]},` with the line given:
+
+- `hands-solid.json`: `"graph": {"nodes": [{"kind": "hands", "into":
+  "scene"}, {"kind": "history", "holds": "scene+hands"}]},`
+- `hands-depth.json`: `"graph": {"nodes": [{"kind": "hands", "laid":
+  "depth"}]},`
+- `two-acids.json`: `"graph": {"nodes": [{"kind": "effect", "file":
+  "acid", "instance": 2}]},` — and after `"fx.acid.on": true,` add
+  `"fx.acid.2.on": true, "fx.acid.2.twist": 0.3,`
+- `two-hands.json`: `"graph": {"nodes": [{"kind": "hands", "into":
+  "scene"}, {"kind": "hands", "instance": 2}]},`
+
+Entries marked "(tape)" need hands: the hand camera, or recorded fake
+hands as in L44 (`uv run python tools/hands_tape.py synth
+/tmp/hands.json`, then `enabled = true` and `tape = "/tmp/hands.json"`
+on the hands entry), with **Ghost hands** ticked on the HANDS page.
+
+#### L82. The golden pictures match (the gate Mac)
+
+**Needs:** the Mac the automated tests run on (its graphics chip is
+"Apple M3 Max"); a terminal.
+
+**Do:** in `hyperspace-python/`, run `uv run python tools/golden_frames.py`
+(it takes a minute; it uses a throwaway home folder, never yours). Then
+open a few pictures in `tests/golden/frames/png/`.
+
+**Right if:** it ends "all 556 frames match their goldens (Apple M3 Max,
+4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
+versions); the pictures show the presets, some with two made-up hands
+(the left open, the right a fist).
+
+**Wrong if:** a list of `MOVED …` lines and a picture sheet under
+`docs/plans/assets/26-render-graph/`: write down the names, then delete
+the sheet.
+
+*(check 191)*
+
+#### L83. Every preset beside its golden picture
+
+**Needs:** the gate Mac; no music playing.
+
+**Do:** in `hyperspace-python/`, list each preset's golden picture:
+`uv run python -c "import json; [print(g['preset'], 'tests/golden/frames/' + g['png']) for g in json.load(open('tests/golden/frames/frames.json'))['goldens'] if g['hands'] == 'absent' and g['state'] == 'solo']"`.
+Launch the app. Load each of the 23 presets in the PRESETS list in turn,
+its picture open beside the render window.
+
+**Right if:** each looks like its picture — the shape's size and place,
+how thick its lines are, its dots, its faces and colours, its effects.
+(The shape keeps turning, so its angle differs; the picture is taken in
+silence.)
+
+**Wrong if:** a preset blank, black or plainly different from its
+picture (note which; the SYSTEM page or `<home>/stall.log` may name a
+drawing error); lines thicker or thinner than the picture (check **Screen
+strokes** on the VIEW page is unticked).
+
+*(check 192)*
+
+#### L84. A recorded point cloud in the picture (on the copy)
+
+**Needs:** laptop; the copy, with the device list from L72.
+
+**Do:**
+1. Add the recorded-cloud block to the device list (as L76), but do not
+   copy the file in yet; save. Watch SYSTEM's last lines.
+2. Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+   `<home>/clouds/`. Load LEGACY 6.
+3. Roll the mouse wheel and drag to pan; CAMERA page → **eye** → move
+   Eye field of view, then put it back.
+4. ROUTING page: find Cloud point size, Cloud scale, Cloud brightness
+   and Cloud colours (they have no page of their own); right-click each →
+   **Learn desk** (APC40) or drag its slider on ROUTING; then load another
+   preset.
+5. Remove the entry; save.
+
+**Right if:** (1) the picture is unchanged, the `scan` line says
+`error: …`, and the GPU lines include `cloud 0.00` above `scene`.
+(2) within about 10 seconds, with no restart, a knot of dots (blue low,
+warm high) turning slowly, about the shape's size, threaded through it:
+where a dot is in front of an edge it hides the edge, where it is
+behind, the edge is drawn over it; the `cloud` line shows a small time.
+(3) the knot does not grow or move with the zoom and pan, and does not
+tumble with the shape; the field of view changes both together. (4) size
+grows the dots in whole pixels; scale grows the knot (very large, the
+near dots vanish); brightness 0 makes the dots black; colours off makes
+them white; a preset load leaves all four as you set them. (5) no
+`cloud` line.
+
+**Wrong if:** dots always on top of the shape; dots tumbling with the
+shape; nothing drawn while the `scan` line says `connected`; an error
+message or a freeze while the file is missing.
+
+**Changes:** remove the entry and the file.
+
+*(checks 216, 217, 218)*
+
+#### L85. The time each part of the picture takes
+
+**Needs:** laptop.
+
+**Do:** load TRIP (F5); SYSTEM page. On the FX page untick **Effects**,
+wait two seconds, tick it again. On LOOKBACK switch **Look-back** on
+and off. On OUTPUT tick **through effects**, then untick it.
+
+**Right if:** under the stall status, "gpu per node, ms (median of the
+last frames):" and one line each for `scene`, `cover`, `hands`,
+`history`, `fx`, `capture`, `output.1`, a few milliseconds or less and
+steady; `fx` drops near 0 with the effects off and comes back within a
+second; `history` changes with the look-back; ticking **through effects**
+adds `composite(scene+hands)` and `fx(scene+hands)`, which go again a
+moment after unticking. No `ghost` line.
+
+**Wrong if:** no lines; "gpu: no GPU timer queries …"; a line that stays
+after its switch is off.
+
+*(checks 194, 210)*
+
+#### L86. The shape where it always was; the eye
+
+**Needs:** laptop.
+
+**Do:** load LEGACY 6, then PLASMA HEART; CAMERA page.
+
+**Right if:** both look exactly as on earlier builds (size, place,
+dots); CAMERA has an **eye** section ("the room's camera, not the
+preset's") showing Eye field of view 47.6° and Eye distance 3.78, which
+loading a preset never changes.
+
+**Wrong if:** the shape off-centre or another size; dots bigger.
+
+*(check 196)*
+
+#### L87. Zoom grows the shape; Screen strokes
+
+**Needs:** laptop (the hands part: tape).
+
+**Do:**
+1. Load PARTY FIELD, then HEX ENGINE, and look at the middle column of
+   `hyperspace-python/docs/plans/assets/26-render-graph/a2b-moved.png`.
+   VIEW page: **Screen strokes** is unticked.
+2. Roll the zoom from small (about 0.3×) to big (about 5×).
+3. Tick **Screen strokes** and roll again.
+4. Load LEGACY 6 and flip **Screen strokes** on and off.
+
+**Right if:** (1) fine edges and small red dots, as on earlier builds.
+(2) the shape grows with its own perspective (the near side grows
+faster), past about 4× the view passes inside it with no streak across
+the screen, and the edges and dots grow and shrink with the shape; the
+ghost hands never move or change size. (3) the edges and dots keep one
+size whatever the zoom. (4) nothing changes at all.
+
+**Wrong if:** the hands growing with the zoom; a streak across the
+screen; lines that do not change with the zoom while the box is
+unticked; anything changing in step 4.
+
+*(checks 197, 198)*
+
+#### L88. The naming rule
+
+**Needs:** reading; then L90's preset.
+
+**Do:** read `hyperspace-python/docs/ENGINEERING.md` §2, "Node
+instances: the naming rule". With TWO-ACIDS loaded (L90), look at the
+ROUTING page's setting names.
+
+**Right if:** the rule is clear, and "Acid 2 mix" (`fx.acid.2.mix`)
+reads right as the second acid's mix.
+
+**Judge:** whether you would rather another form — say so before you
+save a preset that uses one.
+
+*(check 193)*
+
+#### L89. A preset that says how its picture is wired (on the copy, tape)
+
+**Needs:** laptop; the copy; hands (tape).
+
+**Do:**
+1. Copy `hands-lines.json` into `<home>/presets/`. Load PARTY WAKE and
+   watch the hands for a few seconds. Load HANDS-LINES. Then load TRIP,
+   then press ⌘Z.
+2. LOOKBACK page with PARTY WAKE, then with HANDS-LINES.
+3. Edit the copy's `hands-lines.json`: change the first `"hands"` (after
+   `"kind":`) to `"teapot"`. Load it, save it (the preset strip's save),
+   and open the file again.
+
+**Right if:** (1) on PARTY WAKE the hands leave no trail; HANDS-LINES
+shows the hands *inside* the shape as wire hands, bent with it by the
+acid, trailing echoes, with no warning on the preset strip; TRIP is as
+always; ⌘Z brings HANDS-LINES back as it was. (2) "history: the scene",
+then "history: the scene · with the hands". (3) the strip's warning
+reads "graph: unknown node kind 'teapot' (this build knows effect,
+hands, history); the default graph", the preset still loads (the hands
+drawn over the shape, not in it), and after the save the file still says
+`teapot`.
+
+**Wrong if:** the hands drawn over the shape on HANDS-LINES; a crash or a
+refused load on the teapot; the teapot gone after saving.
+
+**Changes:** delete the preset files you copied in.
+
+*(checks 211, 209)*
+
+#### L90. Two acids (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** make `two-acids.json` (above); load TWO-ACIDS; FX page, then
+ROUTING. Then load TRIP.
+
+**Right if:** two chips, "Acid" and "Acid 2", each with its own controls
+(twist 0.9 and 0.3); moving one moves only it; ROUTING lists "Acid 2 …"
+settings; on TRIP there is one acid and no "Acid 2".
+
+**Wrong if:** one chip; both moving together; the second acid's settings
+landing on the first.
+
+*(check 212)*
+
+#### L91. The wiring in words (on the copy)
+
+**Needs:** laptop; the copy; L89's preset.
+
+**Do:** OUTPUT and LOOKBACK pages with TRIP, then HANDS-LINES; hold the
+pointer over the "shows:" line.
+
+**Right if:** TRIP: the "shows:" line as before and "history: the
+scene"; HANDS-LINES: "scene + hands: in the scene as lines" and
+"history: the scene · with the hands"; the pop-up names the graph
+("graph: hands 1 in the scene as lines · history with the hands"). No
+page scrolls.
+
+**Wrong if:** words that disagree with the picture.
+
+*(check 215)*
+
+#### L92. Hands inside the shape (on the copy, tape)
+
+**Needs:** laptop; the copy; hands; the hand camera for the last part.
+
+**Do:** make `hands-solid.json` (above); load HANDS-SOLID; HANDS page
+→ ghost guide BESIDE. FX page: untick **Effects**. Watch the hands pass
+through the shape (with the camera: push one hand slowly into the shape
+from the front). Then drag **Ghost opacity** to 0.3, then to 0. Tick
+**Effects** again.
+
+**Right if:** the hands are solid inside the shape: near edges are drawn
+over a hand, far edges are hidden behind it, and faint far edges never
+cut a hole in it; at opacity 0.3 they are still solid, at 0 gone; with
+**Effects** on the hands bend with the shape and leave a trail (a hand
+held still turns whitish: expected); the guide stays sharp and unbent.
+
+**Wrong if:** the hands always on top of the shape; holes in a hand where
+faint edges are; the guide bent by the effect.
+
+*(checks 204, 205)*
+
+#### L93. A hands layer that goes behind the shape (on the copy, tape)
+
+**Needs:** laptop; the copy; hands.
+
+**Do:** make `hands-depth.json` (above); load HANDS-DEPTH; watch a hand
+pass through the shape.
+
+**Right if:** the hand, see-through at its Ghost opacity, disappears
+behind near edges and bright faces and reappears in front of them; the
+edges of the hiding flicker by a pixel at most; the OUTPUT page's line
+ends "· depth-aware".
+
+**Wrong if:** the hand cut where nothing is in front of it; never hidden.
+
+*(check 207)*
+
+#### L94. Hands as lines (on the copy, tape)
+
+**Needs:** laptop (the 1080p projector too, if to hand); the copy;
+hands.
+
+**Do:** load HANDS-LINES; HANDS page → step **Ghost style** through all
+five; then on OUTPUT untick **scene**.
+
+**Right if:** the hands are drawn as wires, in every style; with the
+scene off, wire hands alone on black; the guide stays solid; the shape's
+own lines are unchanged.
+
+**Judge:** whether the dense mesh of wires reads as "hands as lines", or
+whether you want a skeleton of bone lines instead.
+
+**Wrong if:** the shape drawn as wires too; hands invisible on a sharp
+(Retina) screen.
+
+**Changes:** tick **scene** again.
+
+*(check 214)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -1881,8 +2581,9 @@ skip A4's knob half.
 the knob rings light; track knobs move the VIEW page's settings; without
 SHIFT the device knobs do the preset's job (on TUMBLE D1–D4: 4D depth,
 camera yaw, camera pitch, face pattern; D5–D8 dark and dead); with SHIFT
-latched they move the open band's settings; a track fader moves that
-band's drive on either layer; after changing band the ring redraws and
+latched they move the open band's settings; with SHIFT latched a track
+fader moves that band's drive (without SHIFT the track faders are the
+preset's, and dark on every factory preset); after changing band the ring redraws and
 the knob carries on from it; a fader whose value moved does nothing
 until it passes that value, then follows. The on-screen desk lights each
 control as you use it.
@@ -1918,8 +2619,8 @@ half).
 
 **Do:** turn K1 (Brightness) to a quarter; latch SHIFT (K1 is now
 Steadiness); turn it a little; SHIFT back. Then ANALYZER page: drag SUB's
-drive to the top with the trackpad, and move track fader 1 up from the
-bottom.
+drive to the top with the trackpad, latch SHIFT, and move track fader 1
+up from the bottom.
 
 **Right if:** each switch moves the ring at once to that layer's value,
 and the next turn carries on from the ring. The fader does nothing until
@@ -2146,7 +2847,8 @@ under Master dim on the OUTPUT page (the graphics driver refused it).
 6. Free slot 10 the same way; change the look; hold row 4's second pad.
 7. Latch SHIFT, free another slot and hold its pad.
 8. Right-click F8 → **put preset here…** → NOITA.
-9. Press a clip-stop button (the row under the grid).
+9. Press one of the first seven clip-stop buttons (the row under the
+   grid; the eighth is SAVE, A24).
 
 **Right if:** (1) F8 reads "—" and the footer says "F8: cleared — NOITA
 is still in the preset list". (2) the footer says F8 is an empty slot and
@@ -2205,7 +2907,7 @@ what you see.
    controls; pick it and click the footer's line.
 5. Press H, click D6. Click again without moving the pointer. Then move
    to Speed and click. ⌘Z.
-6. Click S2. Latch SHIFT, click K1.
+6. Click SM (the master fader). Latch SHIFT, click K1.
 7. SHIFT off: right-click Brightness → **Learn desk**, then click D7 on
    the drawing. ⌘Z.
 8. Pull the APC40's cable and map D8 both ways (steps 1–2 and 7).
@@ -2221,7 +2923,7 @@ Speed; K2 goes dark; ⌘Z undoes it. (3) the page comes back by itself:
 "D6 let go — no click for 20 s"; any click restarts the count. (4) each
 lets go at once. (5) the panel returns with VIEW dimmed; the second
 click without moving maps nothing; after moving, the click maps. (6) S2:
-"S2 (track fader 2) is invariant (the session's): BASS Post-drive", VIEW
+"… is invariant (the session's): Audio drive", VIEW
 not dimmed, ROUTING scrolls to it; K1 under SHIFT: "… on the global
 layer … latch SHIFT off to map into the preset: Steadiness". (7)
 "learned view.bright ← D7 (device knob 7) (into the preset); K1 let go",
@@ -2232,7 +2934,7 @@ K1 dark (▲ ▼ keep Brightness). (8) the same lines, the dot lit.
 ROUTING.
 
 **Wrong if:** the click moves the slider; nothing maps; the page never
-returns; ROUTING's whole page scrolls; a map lands on a fader or under
+returns; ROUTING's whole page scrolls; a map lands on SM or under
 SHIFT.
 
 *(check 70)*
@@ -2243,7 +2945,8 @@ SHIFT.
 
 **Do:** F3 (FIELD). SYSTEM page, under "midi": **Knob smoothing**. Turn
 K8 (Zoom) slowly, then fast. Set smoothing to "off" and turn K8 slowly.
-Try 50 ms and 200 ms. Move S1 and the crossfader. Turn the cue knob,
+Try 50 ms and 200 ms. Latch SHIFT and move S1 (a band's drive), then
+the crossfader; unlatch. Turn the cue knob,
 press a pad.
 
 **Right if:** it reads "80 ms" and the show's dot is clean; the zoom
@@ -2344,6 +3047,259 @@ drop; then D2 and D3 as a pair (not with D1).
 the drop still feel like their names?
 
 *(check 136)*
+
+The entries from A24 on test plan 24, the party fixes. No preset was
+changed for it: where an entry needs a preset with faders, a template or
+a palette, it copies a small test file from `tests/fixtures/` into the
+copy. A30–A32 work with the on-screen desk alone too.
+
+#### A24. Hold SAVE, tap a pad: ten saves in a row (on the copy)
+
+**Needs:** APC40; the copy.
+
+**Do:**
+1. F5 (TRIP). Hold track 8's clip-stop button — the eighth button of the
+   row under the grid, now **SAVE** — and, while holding it, tap an
+   empty pad in row 4 or 5. Let go of both.
+2. Hold SAVE and tap a filled pad in row 1.
+3. Repeat, alternating empty and filled pads, until you have saved ten
+   times; latch SHIFT for every other save.
+4. Press SAVE alone and let go.
+5. Look at the PRESETS list and `<home>/trash`.
+
+**Right if:** SAVE lights while held. Each save makes a new preset
+(TRIP 2, TRIP 3 … TRIP 11), the tapped pad blinks and then stays green,
+and the footer names the new preset and its slot. On a filled pad the
+footer adds that the old preset "is still in the preset list" — and it
+is, with no pad pointing at it. Nothing is ever loaded by the tap. (4)
+nothing happens. (5) every old preset is in the list; the trash is as it
+was. SHIFT does not change any of it.
+
+**Wrong if:** the pad loads instead of saving (SAVE did not light: read
+the SYSTEM page for "SAVE not added …", which means that button was
+already yours in `bindings.json`); a preset written over or moved to
+the trash; no blink.
+
+**Changes:** ten new presets; delete them from the list afterwards.
+
+*(check 148)*
+
+#### A25. Points, lines, faces and rotate on both layers
+
+**Needs:** APC40.
+
+**Do:** press scene launch 1–4 (the top four buttons of the column right
+of the grid: points, lines, faces, rotate), then latch SHIFT and press
+them again. Unlatch. Tick Points on the VIEW page. Load TUMBLE (F1) from
+its pad, then latch SHIFT and load it again from the pad.
+
+**Right if:** each button switches its layer whether SHIFT is latched or
+not, and its light always shows whether that layer is on — it follows
+the VIEW page's tick too. Right after each load the four lights show
+TUMBLE's: points dark, the other three lit. No "dropped" line in the
+footer on a factory preset's load.
+
+**Wrong if:** a button dark or dead under SHIFT; a light that disagrees
+with the picture after a load; a "dropped" note on load.
+
+*(check 149)*
+
+#### A26. A load relights the whole desk
+
+**Needs:** APC40.
+
+**Do:** run `uv run python tools/midi_probe.py`, press a few buttons the
+app leaves dark (so they light), Ctrl-C. Launch the app and load a
+preset from a pad. Then move the crossfader half way and load three
+presets in a row, moving it after each.
+
+**Right if:** after the load every light on the desk is either a
+mapped control's state or off: nothing the probe lit is left on. The
+crossfader keeps its place through every load and the next move carries
+on from it (MASTER too).
+
+**Wrong if:** a light left on from before; the crossfader dead after a
+load.
+
+*(check 150)*
+
+#### A27. The desk log
+
+**Needs:** APC40.
+
+**Do:** SYSTEM page, under **midi**: open **desk log**. Press a bank
+pad, a points/lines button, a button that does nothing, SHIFT, a band
+scene (row 2, SHIFT latched), SAVE with a pad (on the copy), and hold a
+filled pad for a second.
+
+**Right if:** one line per press, newest at the top: the time, the
+control ("G1·5 (clip 1·5)"), what it did ("Preset → TRIP", "nothing (no
+row on the preset layer)", "saved into slot …", "held: nothing saved (a
+filled pad only loads)") and the layer in brackets ([preset], [global],
+[both]). Never more than twenty lines. Moving a knob or a fader adds no
+line.
+
+**Wrong if:** no **desk log** fold; a press missing; the wrong layer.
+
+*(check 151)*
+
+#### A28. The track faders belong to the preset (on the copy)
+
+**Needs:** APC40; the copy.
+
+**Do:**
+1. Copy `tests/fixtures/desk-faders/faders.json` into the copy's
+   `presets/` folder. Load FADERS from the PRESETS list.
+2. Move each of the eight track faders up and down.
+3. Save it as FADERS 2 and load it again.
+4. Load TRIP (F5) and move the track faders.
+5. On TRIP, VIEW page: right-click **Lines opacity** → **Learn desk**,
+   then move track fader 1 (S1). Move it again slowly.
+
+**Right if:** (1) the on-screen desk names S1–S8: points opacity, lines
+opacity, pattern mix, bitmap alpha, brightness, speed, field amp, dream
+mix. (2) each fader does nothing until it reaches its setting's value,
+then moves it. (3) the same eight. (4) on TRIP they are dark and do
+nothing. (5) the footer says "learned view.lines_alpha ← S1 … (into the
+preset)", TRIP's unsaved dot lights, and S1 then fades the lines once it
+catches them.
+
+**Wrong if:** FADERS' faders dark, or the learn refused as "invariant"
+(the first launch did not move the old fader rows: see L1 and A29);
+TRIP's faders doing something.
+
+**Changes:** FADERS, FADERS 2 and TRIP's unsaved learn; delete or revert
+them.
+
+*(check 152)*
+
+#### A29. The sound faders are under SHIFT (on the copy)
+
+**Needs:** APC40; the copy; A28 done.
+
+**Do:**
+1. On the copy's first launch of this build, read the SYSTEM page's
+   bindings line (or L1's terminal output).
+2. Load FADERS. Push S1 to the top (points fully opaque).
+3. Latch SHIFT. Pull S1 down a little; then sweep it through SUB's
+   Post-drive (watch the ANALYZER page).
+4. Unlatch SHIFT and move S1 a little.
+5. Move MASTER and the crossfader, with SHIFT up and latched.
+
+**Right if:** (1) it says `bindings.json` was updated, with
+`bindings.json.bak-v3` kept. (3) under SHIFT S1 does nothing until it
+reaches SUB's value, then drives it; S7 and S8 are dynamics and trim.
+(4) the points opacity does not jump: S1 waits until it comes back to
+the opacity's value. (5) MASTER is the audio drive and the crossfader the
+master dim, the same on both layers.
+
+**Wrong if:** a setting jumps on the first move after a SHIFT press; no
+sound faders under SHIFT.
+
+*(check 153)*
+
+#### A30. The desk coverage report against what you see
+
+**Needs:** laptop (the on-screen desk); the APC40 helps.
+
+**Do:** open `hyperspace-python/docs/plans/assets/24-party-fixes/desk-coverage.md`.
+Load TRIP, then hands-orbit; press **H** for the big desk, and compare
+each with its row under "Preset × control".
+
+**Right if:** every lit control is ● in the row and every dark one ·
+(S1–S8 are dark on every preset); K7 (Bitmap alpha) is ✕ on TRIP and
+turning it changes nothing; on hands-orbit K4 and D4 (pattern mix,
+pattern) are ✕ while the faces are off and come alive when Faces is
+pressed.
+
+**Judge:** whether "dead" (✕) matches what you would call dark, and
+which presets to give a better desk first. The report says no preset
+meets the bar of at most four dark or dead yet: that is for the
+authoring pass.
+
+**Wrong if:** a lit control marked dark; a control that visibly works
+marked ✕.
+
+*(check 155)*
+
+#### A31. A desk template (on the copy)
+
+**Needs:** laptop; the copy. The APC40 shows the same lights.
+
+**Do:**
+1. Copy `tests/fixtures/desk-templates/desk/fixture-shape.json` into
+   `<home>/desk/` and `tests/fixtures/desk-templates/presets/templated.json`
+   into `<home>/presets/`. Load TEMPLATED.
+2. Save it as TEMPLATED 2 and open `<home>/presets/templated-2.json`.
+3. In the template file add a row for D5 (copy D4's line, change `19` to
+   `20` and the target); load TEMPLATED 2 again.
+4. Load TEMPLATED. In the template file change D3's target to
+   `camera.zoom`; without reloading, save as TEMPLATED 3, open its file,
+   then load it.
+5. Move the template file out of `desk/` and load TEMPLATED.
+
+**Right if:** (1) D1 4D depth, D2 dream mix, D3 pitch, D4 pattern, K1
+brightness, K2 dark, K3 pattern mix, S1 lines opacity. (2) the file
+says `"desk_template": "fixture shape"` and holds three desk rows, not
+the seven the desk shows. (3) D5 lights. (4) TEMPLATED 3 holds the same three rows as
+TEMPLATED (none for D3); loaded, D3 is camera zoom. (5) the footer says
+"desk template 'fixture shape' not loaded …" and only D2 and K3 are lit.
+
+**Wrong if:** the saved file holds every row; D5 never appears;
+TEMPLATED 3 holds a D3 row.
+
+**Changes:** the template and three presets; delete them afterwards.
+
+*(check 156)*
+
+#### A32. Click a control: this preset's settings first
+
+**Needs:** laptop (the on-screen desk); the APC40 helps.
+
+**Do:**
+1. F5 (TRIP). Click D5 on the on-screen desk; read the short list under
+   the transport buttons. Open its chip ("all ▾", or "all params ▾" on
+   the big desk).
+2. Click a setting in the list.
+3. Click SM; latch SHIFT and click D5.
+4. Pick D5 again, open the chip's list and wait more than 20 seconds.
+5. Press **H** and repeat step 1 on the big desk.
+
+**Right if:** (1) the list starts with the settings TRIP's routes move,
+then the ones TRIP has changed, then its effects' settings — no
+look-back setting (TRIP's look-back is off); the chip shows the same,
+then a menu per group of everything else. (2) D5 is put on it: "learned
+… ← D5" in the footer, D5 labelled, one ⌘Z undoes it. Clicking a
+setting on a page still maps too. (3) no list. (4) the pick lets go and
+the panel answers clicks again. (5) the list is bigger and easier to
+read.
+
+**Judge:** whether an effect's blend, order and target belong in the
+list, and whether the list is readable at the small size.
+
+**Wrong if:** no list; a setting that does nothing on TRIP near the top;
+the list covering a control.
+
+*(check 157)*
+
+#### A33. The desk plugged in after the app started
+
+**Needs:** APC40. Plan 27 (the device registry).
+
+**Do:** unplug the APC40 and launch. Look at SYSTEM → **devices**;
+click a bank pad on the on-screen desk. Plug the APC40 in and wait ten
+seconds. Move the crossfader and a knob; tap a bank pad.
+
+**Right if:** before: the apc40 line says `lost` (not an error) and the
+on-screen desk works. Within about ten seconds of plugging in, the line
+says `connected`, the desk wakes up and every light shows the loaded
+preset (points, lines, faces and rotate their live state), and the
+crossfader, the knobs and the pads work at once, with no restart.
+
+**Wrong if:** the line says `error`; the desk stays dark after it says
+`connected`.
+
+*(check 175)*
 
 ## (b) The hand camera
 
@@ -2907,6 +3863,231 @@ nobody has measured).
 
 *(check 25)*
 
+The entries from B30 on test plan 24's new hand sources: how bent each
+finger is (*curl*), how far the fingers fan (*spread*), how fast the hand
+moves (*energy*), a sharp *flick*, the distance between the palms
+(*gap*), the two hands turning against each other (*twist*), and the
+*grab* (a closed fist). No preset uses them yet. A hand Learn offers
+only the twelve axes, so these are put on a setting by hand on the
+ROUTING page: `+ route`, then pick the source and the setting. Do it on
+a preset you do not mind changing, and do not save it over one of yours.
+
+#### B30. The new hand sources on the HANDS page and in ROUTING
+
+**Needs:** hand camera.
+
+**Do:** HANDS page: find the column right of the axis rows. Keep your
+hands out of the box, then put one in, then both. ROUTING page: open a
+route's source list.
+
+**Right if:** with no hand the bars are hollow; the hand in view fills
+its five curl bars and its spread, energy and flick bars; gap and twist
+fill only with both hands in. Hovering a bar shows its name and value
+(`hand:right.curl.index: 0.42`). The source list offers `hand L curl
+thu` … `hand R flick`, `hands gap` and `hands twist`. The twelve axis
+rows read as before.
+
+**Wrong if:** bars that never move (the camera gives no finger
+skeleton: curl and spread need it, energy and flick do not); the page
+scrolls.
+
+*(check 158)*
+
+#### B31. Curl and energy
+
+**Needs:** hand camera.
+
+**Do:** route `hand R curl ind` → Brightness (positions) and `hand R
+energy` → Speed. Hold the right hand open and still; slowly bend the
+index finger alone; make a fist; shake the hand; hold still.
+
+**Right if:** an open, relaxed hand gives a dim picture (curl near 0) and
+a fist a bright one (near 1); bending the index alone moves it first
+(the others follow a little — that is anatomy); energy is near 0 still,
+high while shaking, and falls away over about a second.
+
+**Wrong if:** an open hand already well up; a fist that never gets
+near the top; energy that moves while the hand is still. Say how far
+off, so the ranges can be tuned.
+
+*(check 159)*
+
+#### B32. Spread
+
+**Needs:** hand camera.
+
+**Do:** route `hand R spread` → Brightness. Palm down, fingers together;
+then fanned as wide as they go; then a fist.
+
+**Right if:** together is dark (≈ 0), wide is full (≈ 1), a fist is
+dark.
+
+**Wrong if:** wide never reaches full; together already a fifth of the
+way up.
+
+*(check 160)*
+
+#### B33. Flick
+
+**Needs:** hand camera.
+
+**Do:** route `hand R flick` → Brightness (pushes, depth 1). Flick the
+fingers sharply; then softly; then move the hand slowly across the box.
+
+**Right if:** a sharp flick flashes and fades in a few tenths of a
+second, a harder one brighter; a slow move does nothing; one flick, one
+flash.
+
+**Wrong if:** nothing on a real flick; flashes on ordinary moves; two
+flashes for one flick.
+
+*(check 161)*
+
+#### B34. Gap and twist
+
+**Needs:** hand camera.
+
+**Do:** route `hands gap` → Zoom and `hands twist` → Yaw (CAMERA page).
+Both hands in: bring them together and apart; hold an imaginary steering
+wheel and turn it clockwise and back; hold them palm to palm (a clap).
+Take one hand out.
+
+**Right if:** the zoom follows the distance smoothly, at one end with the
+palms nearly touching and the other at arm's width; the yaw is level
+with the hands mirror-image and in the clap, turns one way clockwise and
+the other way anticlockwise; with one hand out both let go.
+
+**Wrong if:** twist running backwards; the zoom at its end long before
+arm's width.
+
+*(check 162)*
+
+#### B35. The grab
+
+**Needs:** hand camera.
+
+**Do:** HANDS page: each hand's curl row ends in "grab ○". Open your
+hand; close it slowly into a fist; hold; loosen it half way; open it.
+Flash a fist for a split second. Take the hand out of the box while it
+is a fist. ROUTING: open a route's gate list.
+
+**Right if:** "grab ●" lights red once the fist is made (hovering it
+shows the fist level, about 0.65 or more), stays lit when loosened half
+way, goes out when the hand opens; a split-second fist does nothing; a
+fist leaving the box goes out at once; the gate list has "L grab" and
+"R grab" after the eight pinches.
+
+**Wrong if:** it never lights on a real fist (hover it and say what
+level a fist reaches); it lights on a relaxed open hand; it flickers
+half-closed.
+
+*(check 163)*
+
+#### B36. Grab to steer the shape (on the copy)
+
+**Needs:** hand camera; the copy.
+
+**Do:** copy `tests/fixtures/grab-follow/grab-follow.json` into the
+copy's `presets/` and load GRAB FOLLOW. (It holds three routes: the
+right hand's yaw, pitch and roll onto the camera's yaw and pitch and one
+rotation plane, each only while "R grab".) Turn your open right hand
+about. Then make a fist and turn it; open it mid-turn.
+
+**Right if:** the open hand moves nothing; with a fist the shape turns
+with the hand; opening lets go and the shape goes back to where it was.
+
+**Judge:** the shape jumps to the hand's angle when the fist closes,
+because these routes set the angle outright. Say whether you want it to
+be caught where it is instead (that needs a later plan), and whether one
+turn of the hand should be one turn of the shape.
+
+*(check 164)*
+
+#### B37. The hands in the device list (on the copy)
+
+**Needs:** hand camera; the copy. Plan 27.
+
+**Do:** in the config's device list put the `[hands]` lines on the
+`leap` entry with `enabled = true` and delete the `[hands]` section.
+Launch. Look at SYSTEM and the HANDS page; move both hands; try a hand
+Learn; press ⌘R.
+
+**Right if:** SYSTEM: `leap · hands · connected · 42 sources · …`; the
+HANDS page shows the same axes and calibration as before; routes, a hand
+Learn and the ghost hands work as before; after ⌘R the hands come back.
+
+**Wrong if:** the HANDS page shows the default axes; `error: no hands
+setup`; the ghost hands gone.
+
+*(checks 169, 180)*
+
+#### B38. A tracker that would not start comes up later (on the copy)
+
+**Needs:** hand camera; the copy; a recorded tape
+(`uv run python tools/hands_tape.py record <file>`).
+
+**Do:**
+1. On the `leap` entry set `enabled = true` and `tape = "missing.json"`
+   (no such file), and launch.
+2. After a few seconds copy your tape to `<home>/missing.json`.
+3. Remove the `tape` line and save; once the camera's hands show,
+   unplug the camera; plug it back.
+
+**Right if:** (1) the leap line says `error: …No such file…`, with one
+"hands: …" note and no more. (2) within about ten seconds it says
+`connected` and the HANDS page plays the tape, with no restart. (3)
+unplugged, the line says `error: no camera` (the tracker's own words)
+and no new note appears; plugged back, `connected` on its own.
+
+**Wrong if:** it stays `error` after the file appears; a new note every
+two seconds; the hands never come back after the replug.
+
+**Changes:** remove the tape file.
+
+*(check 172)*
+
+#### B39. The hands where you are, through the shape's camera (on the copy)
+
+**Needs:** hand camera; the copy, whose `hands.json` was written by an
+earlier build; the 1080p projector helps.
+
+**Do:** launch; HANDS page → **calibrate 20 s** and sweep. Then, ghost
+hands on, reach to each corner of the box, on the laptop and on the
+projector; compare with
+`hyperspace-python/docs/plans/assets/26-render-graph/a3-hands-moved.png`
+(before | after).
+
+**Right if:** `<home>/hands.json.bak-v2` appears, the same as the old
+file, and the new `hands.json` says `hyperspace.hands/3` with a
+`"units"` line; the ghost hands are the size and in the place they were
+on earlier builds, the perspective a little stronger (fingers nearer
+the camera a touch bigger); reaching to the box's edges reaches the
+picture's edges on the projector.
+
+**Wrong if:** no backup; hands a third smaller than before; a hand
+leaving a landscape picture. (On a portrait or square screen leaving at
+the sides is expected.)
+
+**Changes:** none to put back (the old file is the `.bak-v2`).
+
+*(checks 202, 203)*
+
+#### B40. `hands-orbit` turns only the shape
+
+**Needs:** hand camera; the ghost hands on.
+
+**Do:** load HANDS ORBIT. With both hands in the box: move the right
+hand sideways (orbit), raise its fingers (tip), move the left hand
+sideways, reach in, and raise it (pan and zoom).
+
+**Right if:** the shape orbits, tips, pans and grows; the ghost hands
+stay exactly over where your hands are — they never turn, move or grow
+with the shape.
+
+**Wrong if:** the ghost hands swing, move or grow with the shape.
+
+*(check 200)*
+
 ## (c) One projector, or any second screen
 
 Plug it in before launching. For C1–C4 the config has no
@@ -3002,6 +4183,66 @@ the same number (it counts the dream's own frames, not seconds).
 **Judge:** if it feels different, say so.
 
 *(check 96)*
+
+#### C5. The hands on the projector
+
+**Needs:** projector; the hand camera; the ghost hands on (HANDS page).
+
+**Do:** in the config, give the projector an `[[output.screens]]` entry
+with `hands = true` (as in SETUP.md's example; on the party rig this is
+the owner's `config.toml.rig`). Launch, hands in the box.
+
+**Right if:** the ghost hands show on the projector, and the OUTPUT
+page's **hands** tick for that output is on.
+
+**Wrong if:** no hands on the projector: that entry says `hands =
+false`, the ghost hands are off, or the output is not the screen you
+think (screen numbers can move after the HDMI reconnects).
+
+**Changes:** remove the entry afterwards if this is not the rig.
+
+*(check 165)*
+
+#### C6. A hand across the box pans as far as it did
+
+**Needs:** the projector at 1920×1080; the hand camera.
+
+**Do:** load HANDS ORBIT; left hand in the box; move it from the box's
+left edge to its right, then from near to far. Then the same on PARTY
+FIELD.
+
+**Right if:** the shape's centre (on PARTY FIELD the whole field)
+travels about a fifth of the projector's width each way (about 390
+pixels), as far as on earlier builds — sideways for side to side, up
+and down for reach; with the hand level and centred the shape is where
+the mouse left it.
+
+**Wrong if:** the shape barely moves, flies off the screen, or moves the
+wrong way up and down.
+
+*(check 199)*
+
+#### C7. A preset saved before this build keeps its place (on the copy)
+
+**Needs:** the projector at 1080p; the copy.
+
+**Do:** load PARTY MANDALA; CAMERA page. Save it as your own preset,
+load another, and load it back. Then load any preset of yours saved
+before this build with the shape off-centre.
+
+**Right if:** the mandala sits where it did on the projector, a little
+right of centre; CAMERA shows Pan X `+0.59`; the saved file has a line
+`"units": {"camera.pan": "world"}` and loads to the same place with no
+red dot; your older preset sits where it did on the projector. (On the
+laptop's smaller window an off-centre shape sits nearer the centre than
+it used to: expected.)
+
+**Wrong if:** the shape far from its old place on the projector; a
+re-loaded save drifting.
+
+**Changes:** delete the preset you saved.
+
+*(check 201)*
 
 ## (d) The glass and the projector together
 
@@ -3395,6 +4636,69 @@ the wrong wedge lights.
 
 *(check 129)*
 
+#### D16. Every picture as on earlier builds, on the rig
+
+**Needs:** glass and projector (D1); the hand camera; the APC40 for the
+crossfader.
+
+**Do:** the glass with hands over, the projector with **through
+effects** ticked; load TRIP; LOOKBACK's **Look-back** on; crossfader
+half down. Move a hand in and out of the box; untick **Effects** (FX
+page) and tick it again; close the projector's output (untick its
+**scene** and **hands**) and back. Then step one output through the
+eight states as in D2.
+
+**Right if:** nothing looks different from the last build: the hands
+clean over the effects on the glass, bent through them on the
+projector, echoes behind the shape, both outputs dimmed alike; through
+with no effect on is hands over; each state as D2 lists.
+
+**Wrong if:** any change from before; the hands twice or missing on one
+output; an output on black with a note on the OUTPUT page.
+
+*(checks 195, 208)*
+
+#### D17. The hands in the shape on the projector, clean on the glass (on the copy)
+
+**Needs:** glass and projector; the hand camera; the copy with
+`hands-solid.json` (Part 1, "The render graph").
+
+**Do:** OUTPUT page: the projector with **scene** and **hands** ticked,
+the glass with **scene** unticked and **hands** ticked. Load
+HANDS-SOLID; move both hands through the shape.
+
+**Right if:** on the projector the hands are inside the shape — in front
+of some edges, behind others, bent with it by the acid; on the glass the
+same hands alone, clean and unbent, on black; the projector's "shows:"
+line reads "scene + hands: in the scene".
+
+**Wrong if:** the glass blank; the hands twice on the projector.
+
+*(check 206)*
+
+#### D18. Two hands, one in the shape, one on the glass (on the copy)
+
+**Needs:** glass and projector; the hand camera; the copy with
+`two-hands.json` (Part 1, "The render graph"); the SYSTEM page.
+
+**Do:** D17's switches. Load TWO-HANDS. On ROUTING find **Ghost 2
+hands** and switch it on (it starts off, like every new switch); set
+**Ghost 2 mirror** on and **Ghost 2 style** to CAGE. Load TRIP, then
+TWO-HANDS again. Save the show (PRESETS page), quit, launch again and
+load TWO-HANDS.
+
+**Right if:** the projector shows solid hands inside the shape; the
+glass shows mirrored cage hands alone; SYSTEM lists `ghost`, `scene`,
+`hands.2` and `readout`; on TRIP the glass shows the usual hands and
+`hands.2` leaves SYSTEM; back on TWO-HANDS the mirror and the cage are
+back; after the restart, on TWO-HANDS, they are still there and the
+show has no red dot.
+
+**Wrong if:** the same hands on both screens; the projector's hands
+mirrored too; the cage lost after the restart.
+
+*(check 213)*
+
 ## (e) A mouse
 
 #### E1. Drag an effect with a mouse
@@ -3432,7 +4736,7 @@ pushes the 4D depth in and LT out.
 **Wrong if:** no line; a button does another one's job; a stick runs
 backwards.
 
-*(check 139)*
+*(check 144)*
 
 #### F2. Learn pad — a button
 
@@ -3450,7 +4754,7 @@ down still dims (one detent a press); `bindings.json` holds `pad:Y` →
 **Wrong if:** the press does nothing; Y does two things; a desk knob
 turned during the learn completes it.
 
-*(check 140)*
+*(check 145)*
 
 #### F3. Learn pad — a stick and a trigger
 
@@ -3469,7 +4773,7 @@ the preset, reload it: both routes are still there.
 **Wrong if:** the stick still orbits after its route is made; letting
 go leaves the setting moved.
 
-*(check 141)*
+*(check 146)*
 
 #### F4. Momentary and hold on a pad button
 
@@ -3484,7 +4788,183 @@ after about 0.6 s held, once per press; a tap does nothing.
 **Wrong if:** lines stay on after Y is let go; B fires on a tap or
 repeats while held.
 
-*(check 142)*
+*(check 147)*
+
+#### F5. The pad after a restart, and its sticks
+
+**Needs:** the wired pad. Plan 27.
+
+**Do:** press ⌘R three times, a few seconds apart. Then repeat F1's
+sticks and triggers, with SYSTEM → gamepad → feel on follow and on
+spring; then F3.
+
+**Right if:** after each restart the pad is found within a few seconds
+(ring lit, sticks orbiting) and its SYSTEM line says `connected`; the
+sticks and triggers do exactly what F1 says; a stick learned onto a
+setting drives it and stops orbiting.
+
+**Wrong if:** a dead pad after a restart (the ring blinks); nothing
+moves; a learned stick still orbits.
+
+*(checks 171, 179)*
+
+#### F6. Two pads at once (on the copy)
+
+**Needs:** the Xbox pad paired over Bluetooth and the wired pad (the
+Afterglow) on USB. Plan 27 B6.
+
+**Do:** in the copy's `config.toml`, put the two-pads block from
+`docs/plans/27-device-registry.md` ("The block to paste") in place of
+the `pad` entry: `pad`, then `p2` (both keep `usb = true`). Save. Look at
+SYSTEM → devices. Right-click Points → **Learn pad**, press A on the
+wired pad; right-click Field amp → **Learn pad**, squeeze the wired
+pad's RT. Use both pads together. Unplug the wired pad; plug it back.
+Turn the Xbox pad off and on.
+
+**Right if:** two lines, `pad · gamepad · connected · … · glfw 0 · usb:
+lent to p2` and `p2 · gamepad · connected · … · usb: Afterglow …`; the learns say "pad A
+on p2" and "right trigger on p2"; the Xbox pad does everything it did
+(A flips faces, the sticks steer); the wired pad's A flips points, its
+RT rides Field amp and its sticks do nothing else; both at once.
+Unplugged, `p2` reads `lost` and the Xbox pad keeps working; plugged
+back, `connected` again. The Xbox pad off: `pad` reads `lost · usb:
+lent to p2`, the wired pad keeps working, and **Learn p2** on a setting
+completes from the wired pad.
+
+**Wrong if:** `p2` reads `lost` while the Xbox pad is connected; with
+the Xbox pad off, `pad` takes the wired pad; one press does both pads' jobs; the
+wired pad's stick turns the camera.
+
+*(check 219)*
+
+## (g) A second controller, a phone (OSC)
+
+Plan 27. Each of these adds an entry to the config file's device list
+while the app runs (on the copy); the blocks are in
+`hyperspace-python/docs/plans/27-device-registry.md`.
+
+#### G1. A second MIDI controller learned onto a knob
+
+**Needs:** the APC40 and any second USB MIDI controller with knobs; the
+copy.
+
+**Do:**
+1. Plug in the second controller. Add an entry: `role = "launch"`,
+   `kind = "midi"`, `profile = "generic"`, `port = "<part of its
+   name>"`; save.
+2. Right-click Field amp (VIEW page) → **Learn desk**, turn a knob on the
+   second controller, and sweep it through the slider's value.
+3. Turn the APC40 knob with the same number. Save the preset as a copy,
+   load another, load it back.
+
+**Right if:** (1) `launch · midi · connected · 0 sources · <its port> ·
+0 bindings`; its lights do nothing new (the app sends it nothing). (2)
+the footer says "learned view.inst_amp ← MIDI CC n ch1 on launch (into
+the preset)"; the knob takes hold once it passes the value, then drives
+it. (3) the APC40's knob does not move it; any APC40 knob already on
+Field amp still works; after the reload the second knob still works.
+
+**Wrong if:** "error: … matches no port" (give the entry a `port`); the
+APC40's same knob moves it; the controller's lights flicker.
+
+**Changes:** remove the entry; unbind the knob.
+
+*(check 176)*
+
+#### G2. SHIFT is the APC40's
+
+**Needs:** G1's set-up.
+
+**Do:** latch SHIFT on the APC40. Turn the second controller's learned
+knob; right-click another setting → **Learn desk** → turn another knob on
+the second controller; then try **Learn desk** with an APC40 knob.
+Unlatch. Latch SHIFT again and load a preset.
+
+**Right if:** under SHIFT the second controller's knob still works and
+its learn lands; the APC40 learn is refused ("… on the global layer …
+latch SHIFT off …") and stays armed; the load drops the APC40 back to
+the preset layer.
+
+**Wrong if:** the second controller goes dead under SHIFT; its learn is
+refused.
+
+*(check 177)*
+
+#### G3. A phone's fader moves a setting
+
+**Needs:** a phone with an OSC app (TouchOSC, or any) on the same Wi-Fi
+as the Mac; the copy.
+
+**Do:**
+1. In the app set the host to the Mac's address (System Settings →
+   Wi-Fi → Details) and the port to 9000; note its first two faders'
+   addresses (TouchOSC's simple layout: `/1/fader1`, `/1/fader2`).
+2. Add the phone block with `axes = ["/1/fader1", "/1/fader2"]`; save.
+3. Move fader 1. Right-click Yaw (CAMERA page) → **Learn phone**, move
+   fader 1 a good way; move it again.
+
+**Right if:** (2) `phone · osc · lost · 2 sources · UDP 0.0.0.0:9000`;
+macOS may ask whether Python may accept incoming connections — allow.
+(3) the line says `connected` and shows the last message; the learn
+lands and the yaw then moves with the fader; ROUTING's source list has
+`phone`.
+
+**Wrong if:** the line stays `lost` (the app's address or port, or the
+firewall question was denied: System Settings → Network → Firewall); no
+"Learn phone" item; `error: … in use` (another program has port 9000).
+
+*(check 186)*
+
+#### G4. A phone's button
+
+**Needs:** G3's set-up.
+
+**Do:** add the app's first button's address to `hits` (TouchOSC:
+`/1/push1`); save. Right-click **Faces** (VIEW page) → **Learn phone** →
+press the button; then press it a few times.
+
+**Right if:** the learn lands (a row in `bindings.json`); each press
+flips the faces once; letting go does nothing.
+
+**Wrong if:** each press flips twice (set the button's off value to 0
+in the app); nothing (the address is not in `hits`).
+
+*(check 187)*
+
+#### G5. The phone goes quiet
+
+**Needs:** G3's set-up, with the learned yaw.
+
+**Do:** leave the phone alone ten seconds, then move the fader. Add
+`hold = false` to the entry, save, and repeat.
+
+**Right if:** about five seconds after the last message the line says
+`lost` and the yaw stays where the fader left it; the next move brings
+`connected` back and the yaw follows. With `hold = false`, after five
+seconds the yaw goes back to its setting.
+
+**Wrong if:** the yaw snaps back without `hold = false`; the line never
+says `lost` (fine if the app sends all the time, like a tilt sensor
+page).
+
+*(check 188)*
+
+#### G6. Port 9000 already taken
+
+**Needs:** G3's set-up; a terminal.
+
+**Do:** quit the app. In a terminal run `python3 -c "import socket; s =
+socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(('0.0.0.0',
+9000)); input()"` and leave it waiting. Launch. Then press Return in
+that terminal.
+
+**Right if:** `phone · osc · error: OSError: … Address already in use`
+and one note, everything else running; within about ten seconds of
+Return it says `lost`, then `connected` at the phone's next message.
+
+**Wrong if:** the app stalls; the line stays `error`.
+
+*(check 189)*
 
 ---
 
@@ -3514,6 +4994,24 @@ what you want changed.
   L65, L66, D15; checks 122, 131, 132, 129)
 - **The macro candidates** — which to keep, and as what. (A20–A23;
   checks 133–136)
+- **The party fixes' feel** — the two-handed save on the real desk, the
+  sound faders one SHIFT away, whether "dead" in the coverage report is
+  what you call dark, the click-to-map list, every new hand source's
+  range and the grab's thresholds on real hands, and the palette fold
+  on the projector. (A24–A32, B30–B36, L69; checks 148–167)
+- **The device registry's choices** — whether a second desk's rows
+  should carry its name (`cc@launch:…`) and have no SHIFT of their own;
+  whether five seconds of silence is the right moment for a phone to
+  read `lost`, and whether its faders should hold their place then;
+  whether sending a setting out should land at once, as it does, or wait
+  like the other learns. (G1–G5, L77–L79; checks 176–188)
+- **The render graph's looks** — every factory preset against its
+  golden picture; whether strokes should grow with the zoom (the
+  default) or keep their size (Screen strokes); the hands' size and
+  perspective through the shape's camera; solid hands inside the shape;
+  whether the wire hands read as "hands as lines"; the point cloud's
+  dots. (L83, L87, L92, L94, L84, B39; checks 192, 197, 198, 203, 204,
+  214, 216–218)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
@@ -3591,7 +5089,8 @@ for each palm.
 
 **Cage, joints, marionette, palms** — ghost-hand *styles*; see D9.
 
-**CAMERA page** — the virtual camera's settings (zoom, yaw, pitch).
+**CAMERA page** — the shape's camera settings (zoom, yaw, pitch, pan),
+and under **eye** the fixed camera everything is seen through.
 
 **Catch** — how quickly a value glides onto a hand that has just come
 back into the box, instead of jumping.
@@ -3605,7 +5104,8 @@ with `/`.
 through the render window to whatever is behind it.
 
 **Clip-stop row** — the row of eight buttons under the APC40's pad grid;
-holding it saves the current look as a new preset.
+the eighth is SAVE (hold it and tap a pad to save into that pad's slot),
+the other seven are free for Learn.
 
 **Control window** — the window with the pages and settings, as opposed
 to the render window.
@@ -3636,6 +5136,11 @@ performer (screentop).
 
 **Device knobs** — the eight lower-right knobs on the APC40 (D1–D8).
 
+**Device list** — the `[[devices]]` entries in the config file: one per
+desk, pad, hand camera, bridge, phone or recording, each with a `role`
+(its name) and a `kind`. Each has one line on the SYSTEM page:
+`connected`, `lost` (not there; it keeps looking), `off` or `error`.
+
 **Dirty dot / unsaved dot** — the red disc that shows the loaded preset
 has changes not yet saved.
 
@@ -3652,6 +5157,10 @@ moving shape.
 
 **Effect chain / stack** — the list of picture effects (kaleidoscope,
 plasma, hue cycle…) applied in order; managed on the FX page.
+
+**Eye** — the fixed camera the shape and the ghost hands are both seen
+through; its field of view and distance are on the CAMERA page, and no
+preset changes them.
 
 **FACES page** — the page for the faces' pattern and colours.
 
@@ -3683,6 +5192,10 @@ or grey ground spoils the illusion, hence the many "solid black" checks.
 D1–D8 device knobs, S1–S8 track faders, X the crossfader, G row·column
 the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
+
+**Golden picture (golden frame)** — a picture of a factory preset the
+automated tests draw and compare to the last byte; 556 of them, kept in
+`hyperspace-python/tests/golden/frames/`.
 
 **Ground** — the empty background of the picture. The OUTPUT page's
 Ground setting is how see-through it is in overlay mode.
@@ -3721,8 +5234,9 @@ IAC Driver), used to connect the app to FL Studio with no hardware.
 calibration; a hand outside it counts as absent.
 
 **Invariant** — a desk control whose job is fixed by the setup and is
-the same on every preset and both layers (faders, OVERDUB, the clip-stop
-row, the bank pads, TAP TEMPO); it cannot be learned.
+the same on every preset and both layers (the master fader, the
+crossfader, OVERDUB, SAVE, the bank pads, the points / lines / faces /
+rotate buttons, TAP TEMPO); it cannot be learned.
 
 **Lane** — a moving value that can drive a setting: a sound band
 (written `lane:0` for the first), an LFO (`lfo:0`), a hand axis (`hand R
@@ -3762,6 +5276,9 @@ messages.
 **Modulatable** — able to be moved by a lane; "not modulatable" settings
 can be set but not performed.
 
+**OSC** — Open Sound Control: messages a phone app or a music program
+sends over the network (Wi-Fi); a phone app can be a device.
+
 **Output** — a screen the picture is drawn on (the glass, the
 projector); each can show different layers and has its own dim.
 
@@ -3787,6 +5304,9 @@ move it past the current value, so the picture never jumps.
 
 **Pinch switch** — a switch that closes when thumb and a finger touch.
 
+**Point cloud** — a cloud of 3D dots from a recording (later, a depth
+sensor), listed in the device list and drawn inside the shape's world.
+
 **Preset** — a saved look: every performance setting, its routes and
 what the desk's knobs do.
 
@@ -3796,6 +5316,11 @@ what the desk's knobs do.
 
 **Refresh rate** — how many times a second a screen redraws (60 or 120
 Hz); System Settings → Displays.
+
+**Render graph** — how the picture is built: parts (the shape, the
+hands, a point cloud, the effects, the trail, each output) wired
+together; a preset may say its own wiring in its file. The SYSTEM page
+times each part.
 
 **Render window** — the window that shows the picture.
 
@@ -3818,6 +5343,9 @@ the setup's own controls (SESSION).
 
 **Scene buttons** — the column of buttons right of the APC40's pad grid;
 here they switch points, lines, faces and rotation.
+
+**Screen strokes** — a VIEW page switch: off (the default), the shape's
+lines and dots grow and shrink with the zoom; on, they keep one size.
 
 **Session** — the setup's own controls and settings, kept in the
 bindings file and config rather than in a preset.
@@ -3845,8 +5373,12 @@ hand, return how quickly it goes back when the hand leaves (see also
 **Synthetic tape** — a recording of made-up hand movements, played in
 place of the hand camera (`tools/hands_tape.py synth`).
 
-**SYSTEM page** — the page for notes, errors, the MIDI and library
-status, and app-wide settings.
+**Sink** — a device that sends values out of the app (to FL Studio): the
+bridge, the hands' own port. A setting goes out on one by **Learn
+sink**.
+
+**SYSTEM page** — the page for notes, errors, one line per device, the
+library status, and app-wide settings.
 
 **Tape (hand recording)** — a file of recorded hand movements that can
 be played back instead of the hand camera; a *synthetic tape* is made
@@ -3859,7 +5391,9 @@ bottom come from different frames.
 the effects with the shape; off, they are drawn clean on top.
 
 **Track faders** — the eight vertical faders along the APC40's bottom
-(S1–S8); here they set the sound bands' drive.
+(S1–S8); they belong to the loaded preset (dark when it binds none),
+and with SHIFT latched they set the sound bands' drive, dynamics and
+trim.
 
 **Track knobs** — the eight upper-right knobs on the APC40 (K1–K8).
 

@@ -128,8 +128,9 @@ def test_wheel_zoom_keeps_the_point_under_the_cursor():
     _zoom_about(zoom, px, py, obj, 1.0, 100.0, 500.0, 800.0, 600.0)
     f = 2.0 ** 0.15
     assert obj.zoom == pytest.approx(f)
-    assert obj.pan[0] == pytest.approx((400 - 100) * (f - 1))
-    assert obj.pan[1] == pytest.approx((300 - 500) * (f - 1))
+    # plan 26 A2: the pan in world units, 0.3 × 600 = 180 px a unit here
+    assert obj.pan[0] == pytest.approx((400 - 100) / 180 * (f - 1))
+    assert obj.pan[1] == pytest.approx((300 - 500) / 180 * (f - 1))
 
 
 def test_wheel_zoom_pinned_at_a_stop_by_a_performer_moves_only_the_return_value():
@@ -157,4 +158,4 @@ def test_wheel_zoom_pinned_at_a_stop_by_a_performer_moves_only_the_return_value(
     _zoom_about(zoom, px, py, obj, 1.0, 100.0, 500.0, 800.0, 600.0)
     factor = min(eff * 2.0 ** 0.15, 40.0) / eff
     assert 1.0 < factor < 2.0 ** 0.15
-    assert obj.pan[0] == pytest.approx((400 - 100) * (factor - 1))
+    assert obj.pan[0] == pytest.approx((400 - 100) / 180 * (factor - 1))

@@ -849,9 +849,11 @@ def slot_tip(k: int, name: str | None, *, gone: bool = False) -> str:
     pad = f"the desk's row {1 if k < F_KEYS else 4 + row}, pad {col + 1}"
     if name is not None:
         return (f"{key}: {name} — {pad}. Click loads, ⇧click saves the live state as "
-                "it. Right-click → free this pad (keeps the preset) to make room")
-    return (f"{key}: empty — {pad}. Hold the pad (or ⇧click) to save the live state "
-            "here, or right-click to put a preset here")
+                "it. On the desk, hold SAVE and tap the pad: a new preset here, "
+                f"{name} kept in the list. Right-click → free this pad (keeps the "
+                "preset) to make room")
+    return (f"{key}: empty — {pad}. Hold SAVE and tap the pad, or hold the pad (or "
+            "⇧click), to save the live state here, or right-click to put a preset here")
 
 
 def _slot_menu(panel, k: int) -> None:

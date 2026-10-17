@@ -17,6 +17,7 @@ helpers every effect can call)::
     // @blend  mix                  mix | add | screen | multiply — how its
                                     output lands on its input
     // @speed  1                    the default time rate
+    // @mix    1                    the default wet/dry (0: starts as a no-op)
     // @tip    …                    one line for the tooltip
     uniform float u_amount;  // @param 0 2 0.5 "Amount" tooltip text…
     uniform float u_scale;   // @param 0.5 12 3 log "Scale" …
@@ -60,7 +61,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -81,7 +82,7 @@ SPEED_MAX = 8.0
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|tip)\s+(.*?)\s*$")
+_DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
@@ -91,6 +92,14 @@ _PARAM = re.compile(
 
 class SpecError(ValueError):
     pass
+
+
+def instance_of_name(name: str) -> int | None:
+    """The instance number an effect name carries (plan 26 A4: `acid.2` →
+    2, the naming rule's marker), or None for a file's own name (`acid`,
+    instance 1)."""
+    _, dot, mark = name.partition(".")
+    return int(mark) if dot and mark.isdecimal() and int(mark) >= 2 else None
 
 
 @dataclass
@@ -120,11 +129,12 @@ class EffectSpec:
     order: int = 50
     blend: int = 0
     speed: float = 1.0
+    mix: float = 1.0         # the default wet/dry (@mix); 0 for a pass that starts as a no-op
     tip: str = ""
 
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
-        return (self.label, self.tip, self.order, self.blend, self.speed,
+        return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
                 tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
                       for p in self.params))
 
@@ -148,6 +158,8 @@ def parse(name: str, source: str) -> EffectSpec:
                     spec.order = max(0, min(int(val), MAX_ORDER))
                 elif key == "speed":
                     spec.speed = float(val)
+                elif key == "mix":
+                    spec.mix = max(0.0, min(float(val), 1.0))
                 elif key == "blend":
                     spec.blend = BLENDS.index(val.lower())
             except ValueError as e:
@@ -167,6 +179,12 @@ def parse(name: str, source: str) -> EffectSpec:
         key = uniform[2:]
         if key in RESERVED or key in seen:
             raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+        if key.isdecimal():
+            # the naming rule (plan 26 A0/A4): a purely decimal segment
+            # right after `fx.<file>` is an instance marker — `fx.acid.2`
+            # is the second acid — so no key may be one
+            raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
+                            "instance number (fx.<file>.2 is the second instance)")
         if not lo < hi:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
@@ -189,6 +207,14 @@ class FxState:
     (on, mix, speed, blend, order, target) and one per annotated uniform. The dicts
     are kept across a reload of the file, so a value survives an edit that
     does not remove its uniform.
+
+    Plan 26 A4, instances: a preset's graph may hold an effect file more
+    than once (`set_instances`). Instance n ≥ 2 of file `acid` is the
+    effect named `acid.2` — in `specs` (the file's spec, labelled "Acid
+    2"), `values`, `phase` and `names()` like any effect, so its params are
+    `fx.acid.2.*` by the naming rule (`declare`), it has its own clock and
+    order, and the chain runs it on the file's one program. Instance 1 is
+    the file itself, today's `acid`, always there.
     """
 
     def __init__(self, directory: Path | str = FX_DIR):
@@ -210,6 +236,9 @@ class FxState:
         # the effect names whose params changed shape on a reload
         self.on_specs: Callable[[set[str]], None] | None = None
         self._mtimes: dict[str, float] = {}
+        # plan 26 A4: file → how many instances the chain holds (a file not
+        # named here: one, itself)
+        self.instances: dict[str, int] = {}
         self.load()
 
     # ---- the folder ----
@@ -241,12 +270,21 @@ class FxState:
             if fname.startswith("_"):
                 continue
             name = fname[:-5]
+            if not _NAME.match(name):
+                # the naming rule (plan 26 A4): `acid.2` is the second acid
+                # instance, so a file stem with a dot or of digits would read
+                # as one — refused before parsing, and never kept as last good
+                self.errors[name] = (f"{fname}: file names are lower_snake_case, no dot and "
+                                     "not digits alone (acid.2 would read as the second "
+                                     "acid instance)")
+                continue
             try:
                 found[name] = parse(name, (self.dir / fname).read_text())
             except (OSError, SpecError) as e:
                 self.errors[name] = str(e)
                 if name in self.specs:        # a broken edit keeps the last good spec
                     found[name] = self.specs[name]
+        found.update(self._extras(found))
         for name in set(self.specs) - set(found):
             changed.add(name)
             self.values.pop(name, None)
@@ -255,14 +293,61 @@ class FxState:
             old = self.specs.get(name)
             if old is None or old.signature() != spec.signature():
                 changed.add(name)
-                self._adopt(spec)
+                self._adopt(spec, name)
         self.specs = found
         return changed
 
-    def _adopt(self, spec: EffectSpec) -> None:
-        """Values for a new or re-shaped spec: keep what still exists."""
-        old = self.values.get(spec.name, {})
-        v = {"on": bool(old.get("on", False)), "mix": float(old.get("mix", 1.0)),
+    def _extras(self, files: dict[str, EffectSpec]) -> dict[str, EffectSpec]:
+        """The extra instances' specs (plan 26 A4): for each file with n > 1
+        instances that is on disk, `<file>.2` … `<file>.<n>`, the file's
+        spec labelled with its number."""
+        out: dict[str, EffectSpec] = {}
+        for file, n in sorted((getattr(self, "instances", None) or {}).items()):
+            spec = files.get(file)
+            if spec is None:
+                continue
+            for k in range(2, n + 1):
+                out[f"{file}.{k}"] = replace(spec, label=f"{spec.label} {k}")
+        return out
+
+    def set_instances(self, counts: dict[str, int]) -> set[str]:
+        """Hold each effect file `counts` names that many times (plan 26 A4:
+        the loaded preset's graph; a file not named, once). Returns the
+        effect names whose params appeared or went (`acid.2`, …) — the
+        registry re-declares those (`declare`). A file that is not on disk
+        keeps its count and gets its instances when it appears."""
+        self.instances = {f: int(n) for f, n in counts.items() if int(n) > 1}
+        files = {n: s for n, s in self.specs.items() if n in self._files()}
+        want = self._extras(files)
+        changed: set[str] = set()
+        for name in [n for n in self.specs if n not in files and n not in want]:
+            changed.add(name)
+            del self.specs[name]
+            self.values.pop(name, None)
+            self.phase.pop(name, None)
+        for name, spec in want.items():
+            if name not in self.specs:
+                changed.add(name)
+                self.specs[name] = spec
+                self._adopt(spec, name)
+        return changed
+
+    def _files(self) -> set[str]:
+        """The effects that are files (instance 1): every name that carries
+        no instance marker."""
+        return {n for n in self.specs if not instance_of_name(n)}
+
+    def file_of(self, name: str) -> str:
+        """The effect file an effect name runs (`acid.2` → `acid`)."""
+        spec = self.specs.get(name)
+        return spec.name if spec is not None else name.partition(".")[0]
+
+    def _adopt(self, spec: EffectSpec, name: str | None = None) -> None:
+        """Values for a new or re-shaped spec: keep what still exists.
+        `name`: the effect's name when it is not the file's (an instance)."""
+        name = spec.name if name is None else name
+        old = self.values.get(name, {})
+        v = {"on": bool(old.get("on", False)), "mix": float(old.get("mix", spec.mix)),
              "speed": float(old.get("speed", spec.speed)),
              "blend": int(old.get("blend", spec.blend)),
              "order": int(old.get("order", spec.order)),
@@ -270,8 +355,8 @@ class FxState:
         for p in spec.params:
             x = old.get(p.key, p.default)
             v[p.key] = round(x) if p.integer else float(x)
-        self.values[spec.name] = v
-        self.phase.setdefault(spec.name, 0.0)
+        self.values[name] = v
+        self.phase.setdefault(name, 0.0)
 
     def poll(self) -> set[str]:
         """Pick up edited, added and removed files; re-declare what changed."""
@@ -416,7 +501,12 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                tip="Which effect's faders are open on the page.")
         names = set(fx.specs)
     for name in sorted(names):
-        r.remove_prefix(f"fx.{name}.")
+        # this effect's own ids, `fx.<name>.<key>` (a key has no dot) —
+        # never an instance's under it (plan 26 A4: `fx.acid.` also starts
+        # `fx.acid.2.mix`, the second acid's)
+        own = f"fx.{name}."
+        for pid in [p.id for p in r if p.id.startswith(own) and "." not in p.id[len(own):]]:
+            r.remove(pid)
         spec = fx.specs.get(name)
         if spec is None:
             continue
@@ -678,19 +768,20 @@ class FxChain:
         if spec is None:
             return None
         src = fragment_source(st.lib, spec.source, st.common)
-        have = self._progs.get(name)
-        if (have is None or have[0] != src) and self._tried.get(name) != src:
-            self._tried[name] = src
+        key = spec.name                 # the file: every instance of it runs one program (A4)
+        have = self._progs.get(key)
+        if (have is None or have[0] != src) and self._tried.get(key) != src:
+            self._tried[key] = src
             try:
                 prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=src)
             except Exception as e:  # noqa: BLE001 — a bad edit must not kill the show
-                self.errors[name] = gl_error(e, {1: "_common.glsl:", 2: "_lib.glsl:", 3: "line "})
+                self.errors[key] = gl_error(e, {1: "_common.glsl:", 2: "_lib.glsl:", 3: "line "})
             else:
                 if have is not None:
                     have[2].release()
                     have[1].release()
-                self._progs[name] = have = (src, prog, self.ctx.vertex_array(prog, []))
-                self.errors.pop(name, None)
+                self._progs[key] = have = (src, prog, self.ctx.vertex_array(prog, []))
+                self.errors.pop(key, None)
         return None if have is None else (have[1], have[2])
 
     def compile_all(self) -> dict[str, str]:
@@ -703,5 +794,7 @@ class FxChain:
         return dict(self.errors)
 
     def error(self, name: str) -> str:
-        """Why an effect is not what its file says: parse, then compile."""
-        return self.state.errors.get(name) or self.errors.get(name, "")
+        """Why an effect is not what its file says: parse, then compile
+        (an instance's are its file's)."""
+        file = self.state.file_of(name) if hasattr(self.state, "file_of") else name
+        return self.state.errors.get(file) or self.errors.get(file, "")

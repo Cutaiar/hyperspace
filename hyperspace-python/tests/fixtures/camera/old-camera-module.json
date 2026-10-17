@@ -1,0 +1,13 @@
+{
+ "schema": "hyperspace.preset/1",
+ "group": "camera",
+ "name": "Off Right",
+ "note": "plan 26 A2 fixture: a camera module preset saved before camera.pan was in world units — its pan in logical px (190 right, 81 up), no units marker",
+ "values": {
+  "camera.zoom": 0.8,
+  "camera.yaw": 0.0,
+  "camera.pitch": 0.0,
+  "camera.pan.x": 190.0,
+  "camera.pan.y": -81.0
+ }
+}

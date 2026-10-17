@@ -22,10 +22,11 @@ uv sync               # everything, including torch for the dream and the dev to
 uv run hyperspace     # opens the render window and the control window
 ```
 
-`uv sync` also fetches Ultraleap's `leap` wrapper and its `leapc_cffi`
-module from GitHub (both pinned to one commit in `pyproject.toml`, and
-the cffi module is compiled during the sync); they are only imported
-when the hands are switched on.
+`uv sync` also fetches Ultraleap's `leap` wrapper from GitHub (pinned to
+one commit in `pyproject.toml`) and compiles its `leapc_cffi` module from
+`vendor/leapc-cffi` (upstream's at the same commit, patched to build
+against whichever Ultraleap Hand Tracking is installed); they are only
+imported when the hands are switched on.
 To check the install: `uv run pytest -q`.
 
 **Microphone permission.** The first time you press M (or *Listen to
@@ -66,9 +67,43 @@ the same device list (**rescan** if it was plugged in after launch).
 
 ## The APC40
 
-Plug it in (USB). Nothing to configure: the MIDI adapter is on by default
-and looks for a port whose name contains "APC40". The desk map is
-[`ENGINEERING.md`](ENGINEERING.md) §8. To check the device without the
+Plug it in (USB), before or after launching. Nothing to configure: the
+MIDI adapter is on by default and looks for a port whose name contains
+"APC40" (the device list below names it `apc40`). The desk map is
+[`ENGINEERING.md`](ENGINEERING.md) §8. At the desk:
+
+- **Load a preset**: tap a pad in clip rows 1, 4 or 5 (the bank).
+- **Save** (the two-handed save): hold **SAVE** — track 8's clip-stop
+  button, the last of the row under the grid — and tap a pad. An empty
+  pad gets the live look as a new preset; a filled pad gets a new preset
+  too (TRIP → TRIP 2) and its old preset stays in the preset list. The
+  pad blinks. Nothing is ever overwritten or trashed from the desk.
+  Holding an empty pad alone also saves into it.
+- **SHIFT** latches the second layer: the band strip on the device
+  knobs, the hand feel and BPM on track knobs 1–5, the band scenes on
+  clip rows 2–3, and the sound on the track faders (S1–S6 the bands'
+  drive, S7 dynamics, S8 trim). Without SHIFT the knobs and track faders
+  are the loaded preset's.
+- **Points, lines, faces, rotate** are scene launch 1–4, the same with
+  or without SHIFT. The **MASTER** fader is the audio drive and the
+  **crossfader** the master dim, on both layers.
+- **The track buttons, columns 1–6** (one per band): **select** (G7)
+  opens that band's strip — the device knobs follow it under SHIFT;
+  **solo** (G9) steps that band's transfer curve to the next one; **rec
+  arm** (G10) resets that band. **◀ ▶** step the selected band.
+- **QUANT** loads the next filled bank slot (the pad's B walks the preset
+  list instead). **STOP ALL** resets every band to the selected scene; a
+  second press within 8 s undoes it. **MASTER select** is overlay mode
+  and **PAN** its click-through: both do nothing unless `config.toml`'s
+  `[output] overlay` allows overlay.
+- What each press did: the SYSTEM page's **desk log**. If the desk is
+  switched off and on while the app runs it comes back in Akai's
+  Generic mode (activator, solo and rec-arm latch on the device, track
+  select does nothing); within a press or two the app sees a message only
+  Generic mode sends and puts it back, and the desk log says so ("back in
+  the app's mode"). The press that told it may be lost: press again.
+
+To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
 all:
 
@@ -76,6 +111,69 @@ all:
 [midi]
 port = "APC40"      # a substring of the port name
 enabled = false     # no MIDI adapter at all
+```
+
+## The device list
+
+Since plan 27 every device — the desk, the pad, the hands, the bridge,
+a phone — is one `[[devices]]` table in `config.toml`, and one line on
+the SYSTEM page (`connected`, `lost`, `off` or `error: …`). The old
+`[midi]`, `[gamepad]`, `[hands]` and `[bridge]` tables still work: each
+becomes its entry at launch, with a note asking for the rename. Today's
+rig as a list — paste it in place of those four tables:
+
+```toml
+[[devices]]
+role = "pad"
+kind = "gamepad"
+
+[[devices]]
+role = "apc40"
+kind = "midi"
+port = "APC40"
+
+[[devices]]
+role = "leap"
+kind = "hands"
+enabled = false     # true for the hand camera; the [hands] lines below go here
+
+[[devices]]
+role = "bridge"
+kind = "bridge"
+enabled = false     # true for FL Studio; the [bridge] lines below go here
+```
+
+The app re-reads the list about half a second after you save the file,
+so a device can be added, switched on or off, or removed while it runs;
+a mistake is a note and the old list stands. Every kind's keys are
+[`ENGINEERING.md`](ENGINEERING.md) §5.
+
+**A second MIDI controller** (any knob box): add an entry after the
+APC40's, naming part of its port name. Then right-click a setting →
+**Learn desk** and turn one of its knobs. The APC40 keeps SHIFT and
+every row it had; the second desk's rows carry its name
+(`cc@launch:0:21`) and the app sends it nothing.
+
+```toml
+[[devices]]
+role = "launch"
+kind = "midi"
+profile = "generic"
+port = "Launch Control"
+```
+
+**A phone** (TouchOSC or any OSC app) on the same Wi-Fi: set the app to
+send to the Mac's address, port 9000, and list the addresses its faders
+and buttons send. Allow Python's incoming connections when macOS asks.
+Right-click a setting → **Learn phone**, move a fader.
+
+```toml
+[[devices]]
+role = "phone"
+kind = "osc"
+port = 9000
+axes = ["/1/fader1", "/1/fader2"]   # → phone:1/fader1, phone:1/fader2
+hits = ["/1/push1"]                 # → phone:1/push1, a button
 ```
 
 ## The Ultraleap hands
@@ -86,12 +184,24 @@ enabled = false     # no MIDI adapter at all
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
    folder in the shell that launches the app. The tracking *service* must
    be the app's; the `leapc_cffi` the app ships is not used — `uv sync`
-   builds our own for 3.12, and it is found first on `sys.path`. An
-   `ImportError: Cannot import leapc_cffi … Unknown error` means that
-   build is missing from the environment (re-run `uv sync`): an older
-   Hand Tracking app ships only a Python 3.8 build of it, which this
-   project's 3.12 cannot import.
-2. Switch the hands on:
+   builds our own for 3.12, and it is found first on `sys.path`. The
+   build finds whichever Gemini version is installed, 5 or 6 (the highest
+   `libLeapC.<N>.dylib` in the app's `LeapSDK/lib`, else
+   `libLeapC.dylib`), and stages that library inside the built package,
+   so no environment variable is needed. If `uv sync` fails with "No
+   LeapC library found", Hand Tracking is not installed where the build
+   looks: install it, or for an SDK in an unusual place re-run `uv sync`
+   with `LEAPSDK_INSTALL_LOCATION` set to its `LeapSDK` folder (or
+   `LEAPC_LIB_OVERRIDE` / `LEAPC_HEADER_OVERRIDE` naming the library and
+   `LeapC.h` files themselves). An `ImportError: Cannot import leapc_cffi
+   … Unknown error` at hands start-up means our build is missing from the
+   environment and Python fell back to the app's copy (re-run `uv sync`):
+   an older Hand Tracking app ships only a Python 3.8 build of it, which
+   this project's 3.12 cannot import. If you upgrade Hand Tracking (say 5
+   to 6), re-run `uv sync --reinstall-package leapc-cffi` so the module is
+   rebuilt against the new library.
+2. Switch the hands on (on a device list, these lines go on the `leap`
+   entry instead):
 
    ```toml
    [hands]
@@ -113,7 +223,8 @@ Only the desktop mode's axes have been measured; with `screentop` or
 1. Audio MIDI Setup → MIDI Studio → **IAC Driver** → tick "Device is
    online". For lanes both out and in, add a second bus: IAC echoes, so
    `in` must never be the bus `out` sends to.
-2. Switch the bridge on:
+2. Switch the bridge on (on a device list, these lines go on the
+   `bridge` entry instead):
 
    ```toml
    [bridge]
@@ -127,8 +238,15 @@ Only the desktop mode's axes have been measured; with `screentop` or
    instead). The SYSTEM page's bridge line shows the port and a rising
    count of messages sent.
 
+What goes out is rows in `bindings.json` (plan 27): the first launch
+with the bridge on writes its `send` list (every lane, by default) there
+once, with a note, and from then on the rows say. Send any setting out
+too: right-click it → **Learn sink ▸** → a port (`bridge:6 · pitch ch7`);
+the ROUTING page's **sinks** section lists, switches and removes them.
+
 The hands send to a DAW on their own port, a virtual one called
-"Hyperspace Hands" unless `[hands] out` names another.
+"Hyperspace Hands" unless `[hands] out` (or `out` on the hands entry)
+names another; on the SYSTEM page it is the `hands-daw` line.
 
 ## A second screen (or more)
 
@@ -145,7 +263,13 @@ fullscreen = true
 name = "projector"
 monitor = 2
 fullscreen = true
+hands = true         # the ghost hands on the main projection (the default; say it on the rig)
 ```
+
+The hands show on every output by default (each entry's `hands`
+switch); on the party rig the projector is the main projection, so its
+entry says `hands = true` outright and the OUTPUT page's switch turns
+them off for a set that wants the shape alone.
 
 The screens must be connected **before launch**: a later output whose
 screen is missing is not opened, and a screen plugged in afterwards is

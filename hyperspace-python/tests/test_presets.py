@@ -624,8 +624,9 @@ def test_a_preset_round_trips(rig):
 
 # ---------------------------------------------------------------- the desk and the macros
 
+# (scene launch 5: 1–4 are the invariant render toggles since plan 24 C1)
 DESK = [{"source": "cc:*:16", "target": "view.speed", "op": "abs", "feedback": "ring"},
-        {"source": "note:0:82", "target": "view.points", "op": "toggle", "feedback": "led"}]
+        {"source": "note:0:86", "target": "view.points", "op": "toggle", "feedback": "led"}]
 MACROS = {"macro.1": {"label": "Heat", "subs": [
     {"base": "view.depth4", "from": 0.2, "to": 0.8},
     {"depth": {"source": "hand:7", "target": "view.bright"}, "from": 0.0, "to": 1.0}]}}
@@ -643,12 +644,13 @@ def test_a_preset_load_replaces_the_desk_and_the_macros(rig):
     table.set_layer("global")
     put(rig.home, "DESKED", values={"macro.1": 0.5, "view.depth4": 1.0},
         routes=[{"source": "hand:7", "target": "view.bright", "op": "position"}],
-        desk=[*DESK, {"source": "cc:0:7", "target": "view.bright", "op": "abs"}],
+        # MASTER: invariant (the track faders are layered since plan 24 C2)
+        desk=[*DESK, {"source": "cc:0:14", "target": "view.bright", "op": "abs"}],
         macros=MACROS)
     rig.presets.load("DESKED")
     assert preset.desk_json(table.desk()) == DESK and table.layer == "preset"
-    assert any("cc:0:7 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
-    assert rig.presets.desk_notes and "cc:0:7" in rig.presets.desk_notes[0]
+    assert any("cc:0:14 → view.bright" in n and "invariant" in n for n in rig.presets.notes)
+    assert rig.presets.desk_notes and "cc:0:14" in rig.presets.desk_notes[0]
     assert [b.to_json() for b in table.midi() if b.layer != "preset"] == session
     assert table.macros_doc() == MACROS
     depth4 = reg["view.depth4"]
@@ -739,9 +741,9 @@ def boot_registry():
 
 def expected_desk(slug: str) -> list[dict] | None:
     """What the generator gives a factory preset's `desk`: its entry's
-    (None: no key), else the factory preset layer."""
+    (None: no key), else the factory files' layer (`file_desk`, plan 24 C1)."""
     spec = preset.FACTORY_PRESETS.get(slug)
-    desk = preset.fresh_desk if spec is None else spec.desk
+    desk = preset.file_desk if spec is None else spec.desk
     return None if desk is None else preset.desk_json(desk())
 
 
@@ -759,7 +761,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
             assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
         for row in doc["routes"]:
             b = Binding.from_json(row)
-            assert b.scheme in routing.LANE_SCHEMES and b.op in routing.MOD_OPS, (path.name, row)
+            assert routing.is_continuous(b.scheme) and b.op in routing.MOD_OPS, (path.name, row)
     assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
     for name in ("house", "party"):
         proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
@@ -793,7 +795,10 @@ def test_every_factory_presets_desk_is_the_generators():
     macro on lfo-breathe's device knob 1; the presets made from routes-only
     files other than lfo-breathe carry no `desk` key (a load gives them the
     factory layer)."""
-    desk = preset.desk_json(preset.fresh_desk())
+    # plan 24 C1: the generator writes `file_desk` — the fresh desk plus
+    # the four render toggles, invariant now, which the factory files keep
+    # (decision 23: no library file is rewritten) and a load drops quietly
+    desk = preset.desk_json(preset.file_desk())
     assert desk and all("layer" not in d for d in desk)
     # plan 19 WP2: the sixteen shape pads left the fresh desk (42 rows → 26)
     # and no factory file maps a pad of clip rows 4 or 5 — they are the bank's;
@@ -801,11 +806,13 @@ def test_every_factory_presets_desk_is_the_generators():
     assert len(desk) == 30 and not _on_bank_rows(desk)
     from_map = []
     for d in apc40.DEFAULT_MAP:
-        if d.get("layer") == "preset":
+        if d.get("layer") == "preset" or d["target"] in apc40.TOGGLES:
             row = Binding.from_json(d).to_json()
-            row.pop("layer")
+            row.pop("layer", None)
             from_map.append(row)
     assert desk == from_map
+    fresh = preset.desk_json(preset.fresh_desk())
+    assert fresh == [d for d in desk if d["target"] not in apc40.TOGGLES] and len(fresh) == 26
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
     # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit
     assert len(paths) == 23
@@ -853,10 +860,12 @@ def test_every_factory_presets_desk_is_the_generators():
         assert tuple(dial.values()) == tuple(table[path.stem]), path.name
         # the rest is the fresh layer's, in its order, the knobs after it
         assert [d for d in rows if d["source"] not in knobs] == rest, path.name
-        # one row per control, and none on an invariant one
+        # one row per control, and none on an invariant one but the four
+        # render toggles a load drops quietly (plan 24 C1, decision 23)
         assert len({d["source"] for d in rows}) == len(rows), path.name
-        assert not [d for d in rows
-                    if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))], path.name
+        assert [(d["source"], d["target"], d["op"], 1.0) for d in rows
+                if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))] \
+            == sorted(routing.TOGGLE_DESK_ROWS), path.name
     for slug in ("party-tumble", "party-faces", "party-field"):
         assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
 
@@ -1002,7 +1011,7 @@ ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.
               ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
 # a camera the mouse moved before the hands came in: a scene-setter's bases
 MOUSE = {"camera.yaw": 0.5, "camera.pitch": -0.2, "camera.zoom": 1.6,
-         "camera.pan.x": 120.0, "camera.pan.y": -60.0}
+         "camera.pan.x": 0.4, "camera.pan.y": -0.2}     # world units since plan 26 A2
 
 
 def orbit(rig, mouse: dict | None = None):
@@ -1083,12 +1092,14 @@ def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
     rest the param is its base; the ends are what the depth says — the
     yaw a quarter turn each way, the pitch ±45° (an eighth of the whole
     turn it wraps over since 2026-10-14; ±44° of its old ±1.55), each pan
-    ±400 px, the zoom up from 1× to 800^0.12 = 2.23× at the top and never
+    ±1.2 shape radii (±400 px before plan 26 A2), the zoom up from 1× to
+    800^0.12 = 2.23× at the top and never
     below the base; the move is monotonic; no other camera param moves;
     the hand leaving brings the base back."""
     ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
             "camera.pitch": (-math.pi / 4, math.pi / 4),
-            "camera.pan.x": (-400.0, 400.0), "camera.pan.y": (-400.0, 400.0),
+            # plan 26 A2: world units, ±1.2 (≈ ±390 px on the 1080p screen; ±400 px before)
+            "camera.pan.x": (-1.2, 1.2), "camera.pan.y": (-1.2, 1.2),
             "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
     assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(45.0)
     for k, (source, target, depth) in enumerate(ORBIT_ROWS):

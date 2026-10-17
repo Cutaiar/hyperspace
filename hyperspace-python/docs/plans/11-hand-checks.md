@@ -9,8 +9,11 @@ numbers.
 
 ## Before you start
 
-On `main` (`git pull`, `uv sync`); group R needs plan 22, on
-`plan-22-integration` until it is merged. Before any launch of this build:
+On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
+`main` (#151), and groups U (plan 24), W
+(plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
+merged. (V follows W in this file: plan 27's docs landed first.) Before
+any launch of this build:
 
 ```
 cp -R ~/Hyperspace ~/Hyperspace-backup-<date>     # the one to keep
@@ -32,17 +35,33 @@ number and what you saw.
 2. Laptop alone: 120 and 121 first (the Mac's fonts and compiler); then
    1–9, 30, 33, 38, 40, 44, 46, 48, 50, 58–64, 68, 69, 71, 91–97, and 99
    and 100 before any `[[output.screens]]` edit; 113–116, 117's keys,
-   119, 122–126, 128, 130–132, 137, 138; (copy) 86–89, 118, 127; FL
-   Studio over IAC: 27, 28.
+   119, 122–126, 128, 130–132, 137, 138, 154, 155, 157, 166 (without
+   the fader); (copy) 86–89, 118, 127, 156, 167; FL Studio over IAC: 27,
+   28.
 3. APC40: 31 first, then 10–12, 34–36, 39, 45, 49, 51, 54–56, 62, 69, 70,
-   78, 82, 85, 117's cue knob; (copy) 133–136, the macro listening
-   session (36, 56, 82, 85 on the copy).
+   78, 82, 85, 117's cue knob, 149–151, 166's fader; (copy) 153 on the
+   copy's first launch of plan 24, then 148, 152; (copy) 133–136, the
+   macro listening session (36, 56, 82, 85 on the copy).
 4. (copy) 90, last on the copy.
 5. Hand camera: 72 first, nobody else in view; then 13–21, 23–25, 29,
-   42, 52, 66, 73, 75–77, 80, 100; APC40 in: 22, 65, 67, 74, 79, 110.
-6. One projector: 26, 43, 61, 96.
-7. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
+   42, 52, 66, 73, 75–77, 80, 100, 158, 160–163; (copy) 159, 164; APC40
+   in: 22, 65, 67, 74, 79, 110.
+6. One projector: 26, 43, 61, 96; with the hand camera, 165.
+7. The wired Xbox 360 pad: 144–147, any time; then 171, 174, 179; with
+   the Xbox pad over Bluetooth as well, 219 (copy).
+   (copy) The device registry: 168 first, then 170, 173, 178, 190 on the
+   laptop; 175 with the APC40 unplugged at launch; 176, 177 with a second
+   MIDI controller; 169, 172, 180 with the hand camera; 181–185 with FL
+   Studio over IAC; 186–189 with a phone on the same Wi-Fi.
+8. Glass + projector as two outputs: 101 first, then 41, 98, 102–109,
    113 from the audience, 129; 111, 112 last.
+9. The render graph (group V): 191 and 192 on the gate Mac first (the
+   goldens, then every factory preset by eye), then 193, 194 and
+   196–198 on the laptop; (copy) 211, 212, 215 on the laptop; 199–201 on the 1080p
+   projector, 201 and 202 on the copy; with the hand camera (or the
+   synthetic tape) 200, 203–205, 207, 209, 210, 214; 206 and 213 with the
+   glass and the projector as two outputs (after 101), with 195 and 208; 216–218 (copy) with
+   the recorded cloud (after 190).
 
 ## A. Laptop alone
 
@@ -670,34 +689,21 @@ last (`Renderer._draw_frame`); line under Master dim, no dimming →
 driver refused program (`Renderer.dim_error`); preset moves it →
 preset/show lands a rig param.
 
-**56. A hold on the clip-stop row saves a new preset; a tap does not.** (APC40, copy)
-Headless: `tests/test_midi.py::{test_a_hold_fires_once_at_the_hold_time_while_held,test_a_tap_fires_nothing,test_the_bar_is_one_control,test_the_bar_lights_while_held_and_the_new_slots_pad_blinks} tests/test_presets.py::{test_save_new_never_overwrites,test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset,test_save_new_on_a_full_bank_saves_to_the_list_and_says_so,test_the_new_slot_loads_from_the_preset_row,test_put_and_clear_slot_write_the_show_and_delete_no_file} tests/test_library.py::test_next_name_counts_on_from_a_trailing_number tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear tests/test_desk.py::test_the_clip_stop_row_is_invariant`.
-PRESETS: right-click F8 → **clear slot**: F8 "—", footer "F8: cleared —
-NOITA is still in the preset list" (it is). F5 (TRIP); change the
-look. (a) Tap a clip-stop button. *Pass:* row lit while held, nothing
-else: no preset, no file in `<home>/presets`. (b) Hold one. *Pass:* at
-0.6 s row and clip row 1 pad 8 blink 1.5 s, TRIP's pad off; release:
-row dark, pad 8 green; F8 **TRIP 2**, lit; PRESETS strip TRIP 2, no
-dot; footer "saved TRIP 2 → F8"; `<home>/presets/trip-2.json` exists.
-(c) Pad 1 (TUMBLE), pad 8: your look. (d) Change look, hold another
-button: factory party (TRACER slot 9) → slot 10, row 4 pad 2 blinks,
-"saved TRIP 3 → slot 10"; own show, slot 9 free → row 4 pad 1, "→ slot
-9". TRIP 2 unchanged. All twenty-four full: "saved … — the bank is
-full: it is in the preset list" (row blinks, no pad). (e) Two fingers,
-5 s: one preset. (f) SHIFT latched: same, stays latched. (g)
-Right-click F8 → **put preset here…** (all presets, 12 rows then
-scroll) → NOITA: F8 NOITA, footer "F8: NOITA", TRIP 2/3 listed; **clear
-slot** greyed when empty; panel **save** still overwrites loaded
-preset. (h) Right-click param → **Learn desk**, hold row: saves, silent,
-learn armed. Not fails: on-screen bar lights but doesn't blink; cheat
-sheet omits the bar. *Fail:* tap saves → `midi.HOLD_S`,
-`MidiIO._handle`; taken slot/file overwritten → `Project.next_empty`,
-`library.next_name`; no blink → `apc40.blink_of`, blink in
-`MidiIO.feedback` (if clip-stop LEDs never light/blink, note behaviour:
-Akai-table velocities, unseen on mk1; footer line is the sign); dark at
-0.6 s, no blink or preset → save failed (`Project.save_new`; reason on
-PRESETS, `bank_error`); two presets per hold → `MidiIO._fire_holds`; row
-dead → its rows (`apc40.DEFAULT_MAP`; your `bindings.json`, check 57).
+**56. (Retired 2026-10-09: the clip-stop save bar.)** The save is check 148; the hold on an empty pad is #158's. (APC40, copy)
+Headless: `tests/test_midi.py::{test_a_hold_fires_once_at_the_hold_time_while_held,test_a_tap_fires_nothing,test_the_bar_is_one_control,test_the_bar_lights_while_held_and_the_new_slots_pad_blinks} tests/test_presets.py::{test_save_new_never_overwrites,test_save_new_fills_the_next_empty_slot_and_becomes_the_loaded_preset,test_save_new_on_a_full_bank_saves_to_the_list_and_says_so,test_the_new_slot_loads_from_the_preset_row,test_put_and_clear_slot_write_the_show_and_delete_no_file} tests/test_library.py::test_next_name_counts_on_from_a_trailing_number tests/test_ui_presets.py::test_a_slots_menu_offers_put_and_clear`.
+What still applies — the slot menu: (g) Right-click F8 → **put preset
+here…** (all presets, 12 rows then scroll) → NOITA: F8 NOITA, footer
+"F8: NOITA", the other presets still listed; **clear slot** greyed when
+empty; panel **save** still overwrites the loaded preset. (h) Right-click
+a param → **Learn desk**, then hold an empty bank pad (#158's hold): it
+saves, silently, and the learn stays armed. *Fail:* a taken slot or file
+overwritten → `Project.next_empty`, `library.next_name`; the slot menu
+missing → `ui_presets`.
+*Historical (the clip-stop bar, retired):* steps (a)–(f) tapped and held
+a clip-stop button to save a new preset (the row lit while held, the new
+slot's pad blinked at 0.6 s, a full bank saved to the list, two fingers
+made one preset, SHIFT stayed latched). That row no longer saves; do not
+run them.
 
 **57. The first launch brings `bindings.json` up to date, with a backup.** (copy, first launch)
 Headless: `uv run pytest -q tests/test_routing.py -k "older_file or old_crossfader"`, `tests/test_routing.py::test_old_midi_map_migrates_into_bindings_json`.
@@ -706,19 +712,23 @@ step 1). *Pass:* "backup: bindings.json kept as bindings.json.bak-v3
 before the rewrite" (or dated `.bak-v3-<stamp>`), then per change
 "bindings: <path>: …":
 `remapped cc:0:15: overlay.bg → output.dim (the APC40 map of plan 15)`;
-`added note:0:64 → preset.home (…)`; eight
-`added note:<k>:52 → preset.save_new (…)` (clip-stop);
+`added note:0:64 → preset.home (…)`; with plan 24,
+`added note:7:52 → desk.save (…)` (SAVE) and the four scene-launch
+toggles, and check 153's eight "moved cc:k:7 … to the SHIFT layer";
 `added key:… → edit.undo` / `edit.redo` / `preset.home` (plans 09, 11,
 15 keys) per missing loop key; check 84's sixteen bank-pad lines; then
 "bindings: updated <path> (N rows changed)". Earlier launches' changes
 not repeated. SYSTEM: same, one line. ROUTING session, under "invariant
-· both layers": X → `output.dim`, B11 → `preset.home`, G6·1–G6·8 →
-`preset.save_new  hold`. Hand-edited crossfader, OVERDUB, clip-stop, pad
-rows and keys on those chords kept. Relaunch: silent, no file times
-move. Note: rows are added where **nothing uses the control**, so
-deleted OVERDUB/clip-stop rows return; disable via `"enabled": false`.
-A `bindings.json` freshly converted from an old `midi_map.json` gets
-OVERDUB/clip-stop rows on second launch (which says so). *Fail:* no
+· both layers": X → `output.dim`, B11 → `preset.home`, G6·8 →
+`desk.save`, scene launch 1–4 → the four toggles (an old file's
+clip-stop `preset.save_new` hold rows, retired 2026-10-09, are dropped
+with a note). Hand-edited crossfader, OVERDUB, clip-stop, pad
+rows and keys on those chords kept. Relaunch: silent (but "SAVE not
+added …" when clip stop 8 is yours), no file times move. Note: rows are
+added where **nothing uses the control**, so deleted OVERDUB/SAVE rows
+return; disable via `"enabled": false`. A `bindings.json` freshly
+converted from an old `midi_map.json` gets OVERDUB/SAVE rows on second
+launch (which says so). *Fail:* no
 backup → `routing.backup` in `Bindings.load`; your row replaced →
 `routing.remap_factory` (swaps only exact factory rows, including an
 identical crossfader row of yours; backup has it); lines every launch →
@@ -1409,7 +1419,7 @@ wrong — Mirror flips left for right" (desktop: **more ▸**, nothing); no
 scroll with all ghost controls, nothing drawn over the **Ghost hands**
 label. Restore `mode`. Rest of headless line (raising hands pass, failed
 label build, one reload round): tests only. *Fail:* "tracker off", no
-reason → `app._open_hands`' note; no unmeasured line →
+reason → the registry's `hands:` note (`DeviceRegistry._open`); no unmeasured line →
 `hands.panel.ghost_notes`; scrolls or overlaps → `hands.panel._ghost`.
 
 **101. Two outputs open where the config says.**
@@ -1460,18 +1470,21 @@ the eight, then output 2:
 *Pass:* that output only changes; "shows:" matches. All effects off:
 through changes nothing; Ghost hands off: hands leave every output.
 *Fail:* `outputs.route`; other output changes → pipelines not keyed
-per output (`Renderer._draw_frame`); echoes with hands alone through
-effects → `Renderer._pipeline`.
+per output (`graph.default_graph`, `Output.settle`); echoes with hands
+alone through effects → what the capture is wired to (`graph.Capture`,
+`Wiring.history`).
 
 **103. Hands over or through the effects; the guide never bent.**
-Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,test_through_with_no_effect_on_is_hands_over,test_the_guide_is_never_distorted,test_the_history_never_holds_the_hands_in_any_state,test_two_pipelines_show_the_same_echoes} tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
+Headless: `tests/test_outputs.py::{test_through_bends_the_hands_with_the_shape,test_through_with_no_effect_on_is_hands_over,test_the_guide_is_never_distorted,test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today,test_two_pipelines_show_the_same_echoes} tests/test_ghost.py::test_the_readout_layer_is_the_guide_apart_from_the_hands`.
 Glass through on, projector off. F5 (TRIP), then F4 (WAKE). *Pass:*
 glass hands bend and recolour with the shape, projector's clean; no
 hand echoes or dream feed on either; same echoes on both. All effects
 off: alike, glass block "through: no effect on". HANDS: Guide
 BESIDE, then ON HAND, Tethers (**more ▸**) on: gauges, labels sharp, same on
-both, never warped. *Fail:* hand echoes → `Renderer._pipeline` (hands
-enter after look-back composite, before first effect); warped labels →
+both, never warped. *Fail:* hand echoes → `graph.default_graph` /
+`graph.Capture` (the hands' layer is composited after the look-back
+composite, before the first effect, and the capture takes the scene);
+warped labels →
 `Ghost.layer(…, readout=True)` / `Ghost.composite_readout`; echoes
 differ → capture's place (`Renderer._draw_frame`).
 
@@ -1963,6 +1976,1068 @@ for the sync. *Pass:* both entries show in the list (one under the
 conflict copy's file name); each loads; delete one. *Fail:* one hides
 the other → `Library._index`.
 
+## T. The wired Xbox 360 pad
+
+The pad's four checks from PRs #160 and #161, written into
+[`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) §(f) before they had numbers
+here. A wired Xbox 360 pad (the Afterglow AX.1) on USB, no other pad.
+
+**144. A wired Xbox 360 pad is found; the factory layout.**
+Headless: `tests/test_gamepad.py::{test_usb_pad_when_glfw_has_none,test_decode_buttons_land_on_the_glfw_indices,test_decode_sticks_and_triggers}`, `tests/test_pad_learn.py::{test_the_factory_pad_walks_the_list_and_the_desk_the_bank,test_start_and_back_are_free_and_a_learned_start_hold_saves,test_the_right_stick_click_resets_the_4d_spin}`.
+Launch from a terminal. *Pass:* the terminal says `gamepad: Afterglow
+Gamepad for Xbox 360 over USB`; the ring lights one quarter (player 1)
+instead of blinking; B / X step to the next / previous preset of the
+PRESETS page's list (by name, wrapping; a preset saved a moment ago is
+in it — not the desk's bank); A flips faces and Y lines; LB / RB step
+the shape; the D-pad steps brightness (up / down) and speed (left /
+right); START and BACK do nothing; the left stick orbits (up tilts the
+camera up; held, it tumbles over the top and keeps going round) and its
+click resets the camera; the right stick's up / down zooms and its
+right / left speeds up / slows (through zero into reverse) the spin in
+the XW, YW and ZW planes, and its click stops those three and turns them
+back to 0°; RT pushes the 4D depth in and LT out. *Fail:* no line →
+`gamepad.UsbPad` (libusb, the pad's ids); a button doing another's job
+→ `gamepad.decode`'s index map; a stick backwards → the factory pad
+rows in `routing.py`.
+
+**145. Learn pad — a button.**
+Headless: `tests/test_pad_learn.py::{test_a_button_learns_a_session_row_by_the_params_kind,test_a_button_learn_replaces_the_buttons_row_and_keeps_the_params_others,test_the_learning_press_does_not_fire_the_old_row,test_a_desk_learn_ignores_the_pad}`.
+VIEW page: right-click Points → **Learn pad**, press Y. Then right-click
+Brightness → **Learn pad**, press the D-pad's down. Afterwards put Y
+back (Lines → **Learn pad**, Y). *Pass:* the footer says `learned
+view.points ← …(into bindings.json); view.lines let go`; Y now flips
+points; the D-pad's down still dims, one detent a press; `bindings.json`
+holds `pad:Y` → `view.points`; pressing Y during the learn did not also
+flip the lines. *Fail:* the press does nothing; Y does two things; a
+desk knob turned during the learn completes it → `Learn.learn_pad_button`.
+
+**146. Learn pad — a stick and a trigger.**
+Headless: `tests/test_pad_learn.py::{test_a_stick_learns_a_push_route_into_the_preset,test_a_trigger_on_a_one_sided_fader_is_its_position,test_a_routed_axis_drives_its_param_and_is_claimed}`.
+CAMERA page: right-click Pan X → **Learn pad**, push the right stick
+left. Then VIEW page: right-click Field amp → **Learn pad**, squeeze RT.
+*Pass:* ROUTING shows `right stick X pushes` on the first and `right
+trigger positions` on the second; the first swings about its value and
+comes back when the stick is let go; the second follows the trigger and
+RT no longer rides the 4D depth, while LT still does; saved and
+reloaded, both routes are there. *Fail:* the stick still orbits after
+its route is made → `router.claimed("axis")`; letting go leaves the
+setting moved → the route's rest.
+
+**147. Momentary and hold on a pad button.**
+Headless: `tests/test_pad_learn.py::{test_momentary_holds_a_toggle_while_the_button_is_down,test_hold_fires_once_after_hold_s,test_the_hold_times_agree}`.
+In `bindings.json` change the `pad:Y` row's op to `"momentary"` and the
+`pad:B` row (`preset.list.next`) to `"hold"`; ⌘R. *Pass:* lines show
+only while Y is held; B steps the preset only after about 0.6 s held,
+once per press; a tap does nothing. *Fail:* lines stay on after Y is
+let go; B fires on a tap or repeats while held → the pad's hold timing
+(`gamepad`, `midi.HOLD_S`).
+
+## U. Plan 24: the party fixes
+
+Plan 24 as built is [`24-party-fixes.md`](24-party-fixes.md). No preset
+was edited or added: the checks that need a preset with fader rows, a
+template, a grab mapping or a palette use the fixtures under
+`tests/fixtures/`, copied into the copy's library (**(copy)**). The desk
+checks run on the APC40; 154–157, 166 and 167 run on the laptop alone.
+
+**148. The two-handed save, ten times in a row.** (copy, APC40)
+Headless: `tests/test_desk_trust.py::{test_the_two_handed_save_works_ten_times_in_a_row,test_save_held_and_a_filled_pad_tapped_saves_a_new_preset_and_keeps_the_old,test_save_held_and_an_empty_pad_tapped_saves_into_that_slot,test_the_save_button_is_track_eights_clip_stop_invariant_and_lit_while_held,test_a_save_tap_does_not_load_or_start_a_hold}`.
+Load TRIP (F5). Ten times, alternating: hold track 8's clip stop (G6·8,
+SAVE; it lights) and tap a pad — an empty one (rows 4–5) and a filled
+one (row 1) in turn, with SHIFT latched for every other save. Then press
+SAVE alone and let go. *Pass:* each save makes a new preset (TRIP 2 …
+TRIP 11); the tapped pad blinks and then stays green; the footer names
+the new preset and its slot, and on a filled pad says the old preset is
+still in the preset list — and it is, with no slot pointing at it;
+`<home>/trash` is unchanged; SAVE alone changes nothing; the layer is as
+it was. *Fail:* the pad loads instead → SAVE's light did not come on,
+so the row is missing (`routing.APC_NEW_ROWS`, the SYSTEM line "SAVE not
+added …") or the note differs (`apc40.SAVE`); the old preset overwritten
+or trashed → `library.Project._save_new`; no blink → `MidiIO._save_tap`,
+`apc40.blink_of`.
+
+**149. Points, lines, faces and rotate on both layers.** (APC40)
+Headless: `tests/test_desk_trust.py::{test_the_render_toggles_are_invariant_and_their_leds_show_the_live_state,test_an_older_presets_toggle_rows_drop_quietly_and_an_owners_row_with_a_note,test_every_factory_file_still_holds_the_toggle_rows_and_loads_quietly}`.
+Press scene launch 1–4 (points, lines, faces, rotate) on the preset
+layer, then with SHIFT latched. Toggle Points from the VIEW page. Load
+TUMBLE from a pad, once with SHIFT up and once with it latched. *Pass:*
+each button toggles its layer on both desk layers, and its light is the
+live state: it follows the panel, and right after each load shows the
+new preset's values (TUMBLE: points dark, the other three lit). No
+"dropped" note on any factory preset's load. *Fail:* dark under SHIFT →
+the session file lacks the invariant rows (`APC_NEW_ROWS`); a note on
+load → `routing.TOGGLE_DESK_ROWS`.
+
+**150. A load relights the whole desk.** (APC40)
+Headless: `tests/test_desk_trust.py::{test_every_load_relights_the_whole_desk,test_a_load_lets_go_of_every_fader_the_preset_binds}`.
+Light a button nothing maps (with `tools/midi_probe.py`), quit it, start
+the app and load a preset. Move the crossfader through a few loads.
+*Pass:* after the load every light is a mapped control's state or off;
+nothing is left lit from before; the crossfader and MASTER keep working
+through loads with no pickup gap. *Fail:* a stale light →
+`MidiIO._dark_desk`; the crossfader dead after a load → the session
+faders' rule in `MidiIO.redraw` (row 44).
+
+**151. The desk log says what a press did.** (APC40)
+Headless: `tests/test_desk_trust.py::{test_the_desk_log_keeps_the_last_twenty_presses,test_the_desk_log_lines_have_a_time_a_control_what_and_a_layer,test_the_system_page_helper_reads_the_log}`.
+SYSTEM page → **midi** → open "desk log". Press a bank pad, a toggle, an
+unmapped button, SHIFT, a band scene under SHIFT, SAVE + a pad, and hold
+a filled pad. *Pass:* one line per press, newest first, each naming the
+control, what it did (the preset loaded, "nothing (no row on the preset
+layer)", "saved into slot …", "held: nothing saved (a filled pad only
+loads)") and the layer ([preset], [global], [both]); never more than
+twenty lines. *Fail:* no fold → `Panel._desk_log`; a wrong layer →
+`MidiIO._handle`.
+
+**152. Faders on the preset layer: a preset's rows and a learned one.** (copy, APC40)
+Headless: `tests/test_desk_faders.py::{test_a_preset_with_fader_rows_lights_s1_s8_and_drives_them,test_the_fader_rows_round_trip_through_save_and_load,test_every_factory_preset_leaves_the_faders_dark_and_shift_lights_the_audio,test_a_track_fader_is_learnable_on_the_preset_layer}`.
+Copy `tests/fixtures/desk-faders/faders.json` into the library's
+`presets/`. Load FADERS (PRESETS list) and look at the on-screen desk;
+move each fader. Save as FADERS 2 and reload it. Load TRIP: pull S1–S8.
+Then on TRIP, VIEW page: right-click Lines opacity → **Learn desk**,
+move S1; move it again, and feel where it takes hold. *Pass:* FADERS
+shows S1–S8 labelled (points opacity, lines opacity, pattern mix, bitmap
+alpha, brightness, speed, field amp, dream mix) and each moves its param
+once it reaches the value; FADERS 2 has the same eight. TRIP's S1–S8 are
+dark and do nothing. The learn lands ("learned view.lines_alpha ← S1 …
+(into the preset)"), TRIP's dot lights, and S1 then drives the lines'
+opacity after catching it. *Fail:* a fader dark on FADERS → the session
+still holds it on both layers (the `bindings.json` move did not run:
+`routing.FADER_SHIFT_ROWS`); TRIP's faders lit → `preset.fresh_desk`;
+the learn refused as invariant → the same move.
+
+**153. The audio strip under SHIFT; faders pick up across the latch.** (copy, APC40)
+Headless: `tests/test_desk_faders.py::{test_a_fader_picks_up_its_own_param_across_the_latch,test_a_fader_on_its_value_when_the_layer_switches_is_caught_at_once,test_a_power_up_forgets_where_a_fader_was_on_every_layer,test_an_older_session_file_moves_the_fader_rows_to_shift_once}`.
+First launch of this build on the copy: read the SYSTEM page's bindings
+line. FADERS loaded (152): pull S1 to the top (points opacity 1). Latch
+SHIFT; pull S1 a little, then sweep it through SUB's post-drive (the
+ANALYZER page shows it). Unlatch and move S1 a little. Move MASTER and
+the crossfader on both layers. *Pass:* the first launch says
+`bindings.json` was updated, with `bindings.json.bak-v3` kept; under
+SHIFT S1 does nothing until it reaches the band's value, then drives
+it; back on the preset layer the opacity does not jump but waits for
+the fader to come back to it; S7 and S8 under SHIFT are dynamics and
+trim; MASTER and the crossfader do the same job on both layers. *Fail:*
+the band jumps on the first move after a latch → `MidiIO.redraw`'s
+switch block; no audio strip under SHIFT → `remap_factory`,
+`FADER_SHIFT_ROWS`.
+
+**154. Lines and points opacity.**
+Headless: `tests/test_desk_faders.py::{test_lines_and_points_opacity_are_performance_params_at_one,test_an_opacity_at_zero_takes_its_layer_away_and_one_changes_nothing}`, `tests/test_golden_frames.py`.
+VIEW page, a shape with points and lines on: move **Points opacity** and
+**Lines opacity** from 1 down to 0 and back. Route an LFO to Lines
+opacity (ROUTING, `+ route`). *Pass:* at 1 the picture is as before;
+going down the layer fades evenly, its depth shading kept, and is gone
+at 0; the LFO pulses it. *Fail:* a faint layer left at 0 → the factor
+was put before the floor in `Renderer.draw_scene`.
+
+**155. The coverage report against what you see as dark.**
+Headless: `tests/test_desk_coverage.py::{test_the_committed_report_is_fresh_and_regenerates_byte_identical,test_the_preset_layer_is_the_three_strips_and_the_maps_preset_controls,test_every_factory_presets_numbers_are_in_the_report,test_cannot_show_is_the_rule_by_group}`.
+Open [`assets/24-party-fixes/desk-coverage.md`](assets/24-party-fixes/desk-coverage.md).
+Load TRIP, then hands-orbit, and compare the big on-screen desk (panel
+hidden) with each one's row in "Preset × control". *Pass:* every lit
+preset control is ● in the row and every dark one ·, S1–S8 included;
+K7 (bitmap opacity) is ✕ on TRIP and turning it shows nothing; on
+hands-orbit K4 and D4 (pattern mix, pattern) are ✕ with the faces off,
+and come alive when Faces (scene launch 3) is pressed. Say whether
+"dead" matches what you call dark, and which presets to fix first.
+*Fail:* a lit control shown dark → `layer_controls`, `coverage_of`; a
+control that visibly works marked ✕ → `learn.cannot_show`; then
+`uv run python tools/desk_coverage.py --check` (a stale report fails).
+
+**156. A desk template and a preset that names it.** (copy)
+Headless: `tests/test_desk_templates.py::{test_a_preset_naming_a_template_loads_its_rows_with_the_overrides_on_top,test_a_save_round_trips_the_reference_not_the_expanded_rows,test_a_missing_template_is_a_note_and_the_overrides_alone,test_a_template_fixed_after_the_load_changes_no_override_on_save}`.
+Copy `tests/fixtures/desk-templates/desk/fixture-shape.json` into the
+library's `desk/` and `tests/fixtures/desk-templates/presets/templated.json`
+into its `presets/`. (1) Load TEMPLATED. (2) Save as TEMPLATED 2 and
+open its file. (3) Add a D5 row to the template file; load TEMPLATED 2
+again. (4) Load TEMPLATED; change the template's D3 to `camera.zoom`;
+without reloading, save as TEMPLATED 3, open its file, then load it.
+(5) Move the template file out and load TEMPLATED. *Pass:* (1) D1 4D
+depth, D2 dream mix, D3 pitch, D4 pattern, K1 brightness, K2 dark, K3
+pattern mix, S1 lines opacity. (2) the file says `"desk_template":
+"fixture shape"` and holds three desk rows, not the seven of the expanded desk. (3) D5 lights.
+(4) TEMPLATED 3 holds the same three override rows as TEMPLATED, with
+no D3 row; loaded, D3 is camera zoom. (5) the footer says "desk template
+'fixture shape' not loaded …" and only D2 and K3 are lit. *Fail:* the
+saved file holds every row → `Presets._desk_part`; D5 missing →
+`Library.desk_template` read a stale file; a D3 override in TEMPLATED 3
+→ the save compacted against the edited template (`Presets._at_load`).
+
+**157. Click a control: this preset's params first.**
+Headless: `tests/test_desk_coverage.py::{test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it,test_no_offer_for_a_control_that_cannot_be_mapped,test_ranked_puts_the_presets_own_params_first_in_tiers,test_the_offer_covers_no_control}`.
+Load TRIP and click D5 on the on-screen desk, at the default size and
+then with the panel hidden (the big desk). Read the list under the
+transport row; open the chip ("all ▾" or "all params ▾"). Click an item.
+Click SM, and D5 with SHIFT latched. Pick D5, open the chip's popup and
+wait more than 20 s. *Pass:* the list starts with TRIP's routed params,
+then its moved ones, then its effects' (no look-back param: it is off);
+the chip shows the same list, then a menu per group; the click maps D5
+("learned … ← D5"), the desk labels it, one undo step; the page click
+on a param still maps as before; SM and D5-under-SHIFT show no list;
+after 20 s the pick lets go and the panel takes clicks again. Say
+whether an effect's blend, order and target belong in the list. *Fail:*
+no list → `ui_desk._offer`; a dead param first → `learn.ranked`; the
+list covers a control → `ui_desk.OFFER`.
+
+**158. The dance sources on the HANDS page and in ROUTING.** (hand camera)
+Headless: `tests/test_hands_dance.py::{test_the_hands_page_shows_every_new_source,test_the_routing_page_offers_the_new_sources_by_name,test_the_new_lanes_follow_the_switches_and_no_older_lane_moves}`.
+HANDS page: the column right of the axis rows. Hands out of the box;
+one hand in; both. ROUTING: open a row's source combo. *Pass:* the bars
+hollow with no hand, filled for the hand in view, gap and twist only
+with both; hover shows `hand:right.curl.index: 0.xxx`; the combo lists
+`hand L curl thu` … `hand R flick`, `hands gap` and `hands twist`; the
+twelve axes read as before. *Fail:* bars there but frozen → the tracker
+gives no skeleton (curls and spread need it; energy and flick do not);
+the page scrolls → `panel._dance`.
+
+**159. Curl and energy, learned onto params.** (copy, hand camera)
+Headless: `tests/test_hands_dance.py::{test_an_open_hand_is_uncurled_and_a_fist_is_curled,test_every_new_source_moves_its_param_through_a_scratch_library}`.
+On a scratch preset, ROUTING: route `hand:right.curl.index` →
+Brightness (positions) and `hand:right.energy` → Speed (a hand Learn
+offers only the axes). Open hand still; slowly curl the index alone;
+make a fist; shake the hand; hold still. *Pass:* a relaxed open hand
+reads near 0 on every curl, a fist near 1, the index moves first (the
+others follow a little); energy near 0 when still, high while shaking,
+falling over about a second. *Fail:* an open hand well above 0 → raise
+`CURL_RANGE_FINGER`'s low end; a fist under about 0.8 → lower its high
+end; a still hand shows energy → raise `ENERGY_RANGE`'s floor.
+
+**160. Spread.** (hand camera)
+Headless: `tests/test_hands_dance.py::test_spread_is_the_fan_and_a_fist_does_not_fan`.
+Route `hand:right.spread` → Brightness. Palm down, fingers together;
+fanned wide; a fist. *Pass:* together ≈ 0, wide ≈ 1, a fist 0. *Fail:*
+wide never reaches 1 → lower `SPREAD_RANGE`'s high end; together reads
+over 0.2 → raise its low end.
+
+**161. Flick.** (hand camera)
+Headless: `tests/test_hands_dance.py::{test_a_flick_spikes_to_its_strength_holds_its_peak_and_decays,test_every_new_source_moves_its_param_through_a_scratch_library}`.
+Route `hand:right.flick` → Brightness (push, depth 1). Flick the
+fingers sharply, softly, and move the hand slowly across the box.
+*Pass:* a sharp flick flashes and fades in a few tenths of a second, a
+harder one brighter; a slow pass does nothing; one flick, one flash.
+*Fail:* nothing on a real flick → lower `FLICK_ON`; flashes on ordinary
+moves → raise it; double flashes → widen the gap to `FLICK_OFF`.
+
+**162. Gap and twist.** (hand camera)
+Headless: `tests/test_hands_dance.py::{test_twist_reads_level_for_mirror_hands_and_up_for_a_clockwise_wheel,test_gap_is_the_palms_distance}`.
+Route `hands:gap` → Zoom and `hands:twist` → Yaw (CAMERA). Both hands
+in: together and apart; hold a wheel and turn it clockwise and back; the
+clap position. *Pass:* gap follows the distance smoothly, ≈ 0 with the
+palms nearly touching, ≈ 1 at arm's width; twist level with mirror
+hands and in the clap, up clockwise, down anticlockwise; one hand out →
+both let go. *Fail:* twist backwards → the sign in `hands.twist`; gap
+full too early → widen `GAP_RANGE`.
+
+**163. The grab switch.** (hand camera)
+Headless: `tests/test_hands_grab.py::{test_the_hands_page_shows_the_grab_switches,test_the_routing_page_offers_the_grab_as_a_gate,test_the_grab_lanes_follow_every_older_lane,test_the_grab_lane_closes_with_a_fist_and_holds_through_noise}`.
+HANDS page: each hand's curl row ends in "grab ○". Open hand; slowly
+close it; hold; loosen it halfway; open it; flash a fist for a split
+second; take the hand out as a fist. ROUTING: a row's gate combo.
+*Pass:* "grab ●" lights red once the fist is made (hover: fist ≥ 0.65),
+stays lit loosened halfway, goes dark when open; a split-second fist
+does nothing; a fist leaving the box goes dark at once; the gate combo
+lists "L grab" and "R grab" after the eight pinches. *Fail:* never lit
+on a real fist → hover and read the fist level; if it tops out under
+0.65, lower `GRAB_CLOSE`; lit on a relaxed hand → raise it; flicker
+half-closed → widen the gap to `GRAB_OPEN`; never lit and the curl bars
+hollow → no skeleton.
+
+**164. Grab to steer the shape.** (copy, hand camera)
+Headless: `tests/test_hands_grab.py::{test_the_shape_follows_the_hand_only_while_it_is_closed,test_the_fixture_is_the_owners_grab_mapping}`.
+Copy `tests/fixtures/grab-follow/grab-follow.json` into the library's
+`presets/` and load GRAB FOLLOW (or, on a scratch preset, add three
+`position` rows on ROUTING: `hand:right.yaw` → `camera.yaw`,
+`hand:right.pitch` → `camera.pitch`, `hand:right.roll` → `rot.phase.XY`,
+each gated "R grab"). Open hand: turn it. Make a fist and turn it; open
+it mid-turn. *Pass:* the open hand moves nothing; with a fist the shape
+turns with the hand; opening lets go and the shape returns to where its
+params sit. Say whether the shape should rather be caught where it is
+(see *Fail*). *Fail:* the shape jumps when the fist closes → `position`
+is absolute by design (catching it where it is needs a relative op,
+plan 28); the turn feels 2:1 → the route's depth.
+
+**165. Hands on the projector at the rig.** (projector, hand camera)
+Headless: none (a config line).
+In the rig's config (the owner's `~/Hyperspace/config.toml.rig`, which
+this run did not touch), the projector's `[[output.screens]]` entry:
+add `hands = true` (see [`../SETUP.md`](../SETUP.md)). Launch on the rig,
+hands in the box. *Pass:* the ghost hands show on the projector, and
+the OUTPUT page's hands tick for that output is on. *Fail:* no hands →
+that entry says `hands = false`, the ghost hands are off (HANDS page),
+or the output is not the one you think (screen indices move after an
+HDMI re-sync).
+
+**166. The palette fold on a fader.** (APC40 for the fader; the rest on the laptop)
+Headless: `tests/test_fx_palette.py::{test_the_defaults_leave_every_frame_byte_identical,test_a_turned_up_mix_changes_the_picture,test_the_grey_ramp_is_a_greyscale_and_a_coloured_one_is_not,test_every_palette_param_takes_a_route,test_a_raised_floor_does_not_light_a_see_through_ground}`.
+Any preset. FX page: the Palette chip is last; switch it on (nothing
+changes); right-click its **Mix** → **Learn desk**, move S2; sweep S2.
+Then move Centre, Width, and set Mode to 1. *Pass:* at mix 0 the
+picture is as it was; raising S2 pulls every hue onto a slice around
+Centre; Width 0 is one colour; Centre sweeps the slice with no seam;
+Mode 1 paints brightness through the grey ramp (a greyscale picture);
+a grey wireframe takes the slice's edge colour once Sat low is above 0.
+*Fail:* a seam as Centre sweeps → the triangle in `palette.glsl`; the
+picture changes at mix 0 → the chain's skip of a zero-mix pass; S2
+refused → the fader is still the session's (153).
+
+**167. A saved palette, and the palette's strip.** (copy)
+Headless: `tests/test_fx_palette.py::test_a_saved_palette_is_an_fx_module_preset`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
+Copy `tests/fixtures/palettes/fx/sunset.json` into the library's `fx/`.
+FX page, open Palette: in Mode 0 the strip shows mode, centre, width,
+sat (low and high on one row) and val; set Mode 1: it shows mode,
+anchors and one row per anchor (hue, sat, val). Load **sunset** from the
+FX page's preset strip (under its title), change an anchor, save it as
+your own (**as…**), load another, load yours back. *Pass:* the page does not scroll in
+either mode; only the open mode's rows show; sunset paints violet →
+magenta → orange → cream; your palette comes back with its anchors.
+*Fail:* a row cut off or the page scrolls → `ui_fx.strip_rows`,
+`HIDDEN_BY_MODE`; a mode's rows never appear → the `mode` param; anchors
+missing after a load → the ids.
+
+## W. Plan 27: the device registry
+
+Plan 27 as built is [`27-device-registry.md`](27-device-registry.md):
+its "The block to paste" section has the exact `[[devices]]` blocks these
+checks use (today's rig, a phone, the recorded cloud). Run them on the
+copy (**(copy)**): several edit `config.toml` while the app runs — the
+registry re-reads the device list within about half a second of a save,
+so these checks are the exception to "edit `config.toml` with the app
+closed". Put back what each changes. 168–175 need nothing but the rig as
+it is; 176–177 a second USB MIDI controller; 181–185 FL Studio (or MIDI
+Monitor.app) over the IAC bus; 186–189 a phone on the same Wi-Fi as the
+Mac; 190 the laptop alone; 219 (B6, last in this group though numbered
+after group V) both pads — the Xbox pad over Bluetooth and the wired
+Afterglow.
+
+**168. The SYSTEM page lists every device, and an un-renamed config says so.** (copy)
+Headless: `tests/test_ui_shell.py::test_system_page_shows_one_line_per_device`, `tests/test_config.py::test_no_devices_list_translates_the_old_tables_with_one_note_each`, `tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`.
+Launch with the copy's `config.toml` as it is (old `[midi]` / `[gamepad]`
+/ `[hands]` / `[bridge]` tables), APC40 and pad plugged in. SYSTEM page →
+**devices**. Then replace the old tables with the "today's rig" block
+(the hands' keys moved onto the `leap` entry if the hands are on) and
+relaunch. *Pass:* one line per device, in order — `pad · gamepad ·
+connected · 21 sources · …` (the road, `usb: <name>` for the wired
+pad), `apc40 · midi · connected · 137 sources
+· Akai APC40 · N bindings`, `leap · hands · off · 0 sources` (or
+`connected · 42 sources` with the hands on, followed by `hands-daw ·
+midi-out · …`), `bridge · bridge · off · 0 sources` — and one "config:
+[midi] is now a [[devices]] entry …" note per old table the file holds;
+the desk, the pad and the hands work as before. After the paste: the
+same lines and no note. *Fail:* a line missing → `config._translate` /
+`DEVICE_TABLES`; a note for a table the file does not hold → `_translate`;
+a note after the paste → an old table left in the file ("… is ignored").
+
+**169. A hands entry carries the hands setup.** (copy, hand camera)
+Headless: `tests/test_config.py::test_a_devices_list_wins_and_is_checked_per_entry`.
+On the list form, put the rig's `[hands]` keys (`mode`, `dofs`, `out`,
+`calibration`, …) on the `leap` entry with `enabled = true`, and delete
+the `[hands]` table. Launch. *Pass:* the HANDS page shows the same axes
+and calibration as with the old table; the tracker connects; `hand:`
+routes work. *Fail:* the page shows the default axes → the fold-back of
+the first hands entry into `cfg["hands"]` (`config._devices`).
+
+**170. A device that raises does not take the frame down.** (copy)
+Headless: `tests/test_devices.py::test_one_devices_exception_never_stops_the_frame`, `tests/test_app_boundary.py::test_a_raising_adapter_is_a_note_that_survives_the_frame`.
+APC40 plugged in, the app running. In `hyperspace/midi.py` add `raise
+RuntimeError("x")` as the first line of `MidiIO.poll` and save. Then
+remove it and save. *Pass:* the hot-reload toast reads `midi:
+RuntimeError: x` and the apc40 line `error: RuntimeError: x` in the
+warning colour, while the picture, the pad and the hands go on; after
+the second save the toast clears and the line reads `connected` again.
+*Fail:* the window freezes or the other devices stop →
+`DeviceRegistry._guard`; the error stays after the fix → the clean-poll
+clear in `_guard`.
+
+**171. ⌘R with the USB pad.** (pad)
+Headless: `tests/test_devices.py::test_pad_close_stops_the_usb_reader_and_forgets_the_pad`, `tests/test_app_boundary.py::test_the_host_close_list_is_every_adapter_in_shutdown_order`.
+The wired Xbox 360 pad on USB (T, 144). Press ⌘R three times, a few
+seconds apart. *Pass:* each new image finds the pad within a few
+seconds: its ring lights one quarter, the sticks orbit; the pad line on
+SYSTEM reads `connected`. *Fail:* the pad is dead after a restart (the
+ring blinks) → `Pad.close` / `UsbPad.close`, the reader thread's join.
+
+**172. A device whose open failed is retried; a tracker comes back on its own.** (copy, hand camera)
+Headless: `tests/test_devices.py::test_the_registry_retries_a_failed_open_and_a_lost_device_reconnects_itself`, `tests/test_hands_tape.py::test_a_bad_tape_path_is_a_note_the_pages_show`.
+On the `leap` entry set `enabled = true` and `tape = "missing.json"` (no
+such file) and launch. After a few seconds copy a real tape
+(`tools/hands_tape.py record`) to `<home>/missing.json`. Then remove the
+`tape` key, save, and once the camera's hands show, unplug the Leap;
+plug it back. *Pass:* the leap line reads `error: …No such file…` with
+one "hands: …" note on SYSTEM and in the terminal and no more notes;
+within about 10 s of the copy the line reads `connected` with no
+relaunch and the HANDS page plays the tape. Unplugged, the line reads
+`error: no camera` (the tracker's own words) and nothing new appears in
+the notes; plugged back, it reads `connected` on its own, with no
+relaunch. *Fail:* it stays `error` after the file appears →
+`DeviceRegistry._open`'s schedule; a note every 2 s → the first-miss
+guard; the hands never come back after a replug → the Leap SDK's thread
+(`LeapSource`), not the registry.
+
+**173. Editing `[[devices]]` lands without a relaunch; a bad edit does not.** (copy)
+Headless: `tests/test_devices.py::test_the_config_list_is_watched_every_30_frames_and_a_bad_edit_keeps_the_old_list`, `tests/test_config.py::test_read_devices_reports_problems_and_prints_nothing`.
+On the list form, with the app running: set the `bridge` entry's
+`enabled = true` and save. Then write `role = "a:b"` on any entry and
+save. Fix it and save again. *Pass:* within a second "devices: bridge
+changed — reopened" appears on SYSTEM and the bridge line reads
+`connected` or `lost` (not `off`); the bad edit gives one "config:
+[[devices]] not applied — … — the old list stands" note and nothing else
+moves; the fixed file is followed again. *Fail:* nothing happens after a
+save → the mtime watch (`DeviceRegistry.watch`, `WATCH_FRAMES`); the
+whole app reloads or a window moves → something other than the device
+list was re-read.
+
+**174. A second hands device is refused, and comes up when the first leaves; a second pad opens.** (copy)
+Headless: `tests/test_devices.py::test_a_second_enabled_device_claiming_a_scheme_is_refused_with_a_note`, `::test_two_pads_open_each_under_its_role`.
+Changed in plan 27 B6: a second pad is no longer refused (check 219 is
+the two pads at work). On the list form, with the app running, add
+`[[devices]] role = "leap2" kind = "hands"` and save; then add
+`[[devices]] role = "pad2" kind = "gamepad"` and save. Then set the
+`leap` entry's `enabled = false` and save. *Pass:* `leap2 · hands ·
+error: feeds 'hand', which leap already feeds — not opened` and one note
+saying the same; the first hands device works as before. `pad2 · gamepad
+· lost · 22 sources` (or `connected · … · glfw 1` with a second pad
+plugged in), no note; the first pad works as before. With `leap` off,
+`leap2` reads `connected` (or `lost` with no camera) and the hands work
+through it. *Fail:* `leap2` reads `connected` beside `leap` and the
+hands fight → `devices.make`'s claimed schemes (`HandsDevice` must not
+be `repeatable`); `pad2` is an `error:` line → `PadDevice.repeatable`,
+`devices.primaries_of`; `leap2` stays refused → `DeviceRegistry.apply`'s
+re-make.
+
+**175. The APC40 plugged in after launch lights up.** (APC40)
+Headless: `tests/test_device_inputs.py::test_a_missing_desk_is_lost_its_rows_wait_and_it_comes_up_with_its_feedback`.
+Unplug the APC40 and launch. Look at SYSTEM and the on-screen desk;
+press a bank pad on the on-screen desk. Plug the APC40 in; wait ten
+seconds. Move the crossfader and a knob; load a preset from a pad.
+*Pass:* the apc40 line reads `lost` (not an error), the on-screen desk
+still works; within about ten seconds of plugging in, the line reads
+`connected`, the desk wakes (its power-up), every light shows the loaded
+preset's state (the scene-launch toggles the live state), and the
+crossfader and the knobs act at once with no relaunch. *Fail:* the line
+reads `error` → the desk's own retry (`midi.Ports.retry`), not the
+registry's; the desk stays dark after connecting → the reconnect's
+redraw in `MidiIO.poll`.
+
+**176. A second controller maps on Learn desk with no code.** (copy, APC40, a second USB MIDI controller)
+Headless: `tests/test_device_inputs.py::{test_two_desks_open_each_with_its_profile_and_its_own_rows,test_a_generic_desk_maps_on_the_desks_learn_with_no_code,test_the_desk_whose_profile_wrote_the_table_owns_the_unqualified_rows}`.
+Plug in any knob box. With the app running, add `[[devices]] role =
+"launch"  kind = "midi"  profile = "generic"  port = "<part of its
+name>"` (after the APC40's entry is best) and save. Right-click
+Field amp (VIEW, the field row) → **Learn desk**, turn a knob on the
+box; turn it through the slider's value. Turn the APC40 knob that has
+the same CC number. Save the preset as a copy, load another, load it
+back. *Pass:* `launch · midi · connected · 0 sources · <its port> · 0
+bindings`; the box's lights do nothing new (nothing is sent to it); the
+footer says "learned view.inst_amp ← MIDI CC n ch1 on launch (into the
+preset)" and the preset's dot lights; the knob takes hold once it
+crosses the value, then drives it; the APC40's same CC does not move it,
+and an APC40 knob already on the param still works; after the reload
+the box's knob still works. *Fail:* `error: … matches no port` → the
+entry has no `port`; the row is `cc:0:n` with no `@launch` →
+`MidiIO.qualifier`, `DeviceRegistry.midi_roles`; the box's lights
+flicker → `generic.FEEDBACK`, `MidiIO._send`.
+
+**177. SHIFT is the APC40's; the second desk keeps its layer.** (copy, APC40, the second controller)
+Headless: `tests/test_device_inputs.py::{test_the_latch_is_per_role,test_an_unqualified_row_is_the_first_midi_roles,test_shift_on_the_apc40_leaves_the_second_desks_caught_rows_caught}`.
+176's rig. Latch SHIFT on the APC40. Turn the box's learned knob;
+right-click another param → **Learn desk** → turn another box knob; then
+try **Learn desk** with an APC40 knob. Unlatch; load a preset with SHIFT
+latched again. *Pass:* the box's knob keeps driving its param under
+SHIFT; the second learn lands; the APC40 learn is refused ("… is on the
+global layer (the session's) — latch SHIFT off to learn into the
+preset") and stays armed; the box's caught knob
+does not have to be caught again after SHIFT flips; the load drops the
+APC40 to the preset layer. *Fail:* the box goes dead under SHIFT →
+`Bindings.dispatch`'s `layer_of(role)`; the box's learn is refused →
+`learn.blocked`.
+
+**178. The pages offer what the rig lists.** (copy)
+Headless: `tests/test_device_inputs.py::test_schemes_wants_and_row_schemes_come_from_the_registry`, `tests/test_ui_lfo.py::test_the_lfos_are_offered_as_routing_sources`.
+ROUTING page → a row's source combo; a modulatable param's right-click
+menu, with and without a bridge entry in the list. *Pass:* the combo
+lists the analyzer's lanes, then LFO 1–4, then the pad's axes, the
+hands, then `ext` (when the bridge is listed or a route names it), in
+the `[[devices]]` order; the menu offers Learn desk, Learn hand ▸ (a
+tracker on) and Learn pad (a pad connected), as before. *Fail:* a scheme missing → its device's `feeds`,
+`DeviceRegistry.continuous_schemes`.
+
+**179. The sticks still steer; a routed stick does not.** (pad)
+Headless: `tests/test_device_inputs.py::test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job`, `tests/test_app_boundary.py::{test_the_relative_writers_run_with_the_setters_and_move_the_base,test_a_routed_right_stick_leaves_the_w_rates_alone,test_the_sticks_camera_job_reads_through_the_pads_feel}`.
+The left stick orbits, the right stick's Y zooms and X rides the 4D
+spin, the triggers ride 4D depth — with `desk.pad.feel` (SYSTEM →
+gamepad) on follow and on spring; then **Learn pad** a stick onto a
+param. *Pass:* exactly as before plan 27 (144, 146); the learned stick
+drives its param and stops orbiting. *Fail:* nothing moves →
+`PadDevice.act`, `gamepad.steer`; a routed stick still orbits →
+`gamepad.publish` (no names, so `claimed` is empty).
+
+**180. The hands on the registry.** (copy, hand camera)
+Headless: `tests/test_device_inputs.py::test_the_hands_run_on_the_registry_through_hands_device`, `tests/test_devices.py::test_the_hands_shims_ports_are_the_layout`.
+Hands on (the camera, or a tape). *Pass:* SYSTEM shows `leap · hands ·
+connected · 42 sources · …` (the forty `hand` lanes with six axes a
+hand, then gap and twist); the HANDS page, hand routes, a hand Learn
+and the ghost hands on the projector all as before; after ⌘R the hands
+come back. *Fail:* `error: no hands setup …` → `Context.hand_settings`;
+the ghost gone → the registry listener's `renderer.ghost.source`
+(`app.point_at_devices`).
+
+**181. A param's effective value goes out on the bridge.** (copy, FL Studio or MIDI Monitor, IAC)
+Headless: `tests/test_sinks.py::{test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply,test_a_sink_row_is_a_session_row_never_a_performer_and_round_trips}`.
+Bridge on (`role = "bridge"  kind = "bridge"  out = "IAC"`), a MIDI
+monitor on the IAC bus. Right-click Brightness → **Learn sink ▸** →
+`bridge:6 · pitch ch7`; give Brightness a moving performer (Learn hand,
+or an LFO push). Load another preset. *Pass:* the footer says "sent
+view.bright → bridge:6 (into bindings.json)"; the monitor shows pitch
+bend on channel 7 following the **moving** brightness (the setting plus
+the hand or LFO), not the slider alone, and nothing while it holds
+still; `bindings.json` has the row; the other preset leaves it in place.
+*Fail:* the bend follows only the slider → the sink read before
+`reg.apply` (`app.frame`'s `devs.send`); nothing on channel 7 →
+`BridgeDevice.send`, `table.sinks("bridge")`.
+
+**182. The bridge's `send` list becomes rows once, seen in the DAW.** (copy, FL Studio, IAC)
+Headless: `tests/test_sinks.py::{test_the_bridges_send_list_becomes_sink_rows_once_with_one_note,test_rows_deleted_on_routing_never_come_back_the_translation_is_marked,test_the_system_line_of_a_sink_says_what_it_sends,test_the_bridge_publishes_its_ext_labels_and_rests}`.
+A copy whose bridge has never been on: set `[bridge]` (or the bridge
+entry) to `enabled = true`, `out = "IAC"`, `send = ["lane:*",
+"param:view.bright"]`, and launch. FL Studio takes IAC as input (L46).
+Relaunch. Then × every bridge row on ROUTING → sinks, edit
+`config.toml` (any change), relaunch. *Pass:* one note "bindings:
+[bridge] send is now sink rows in bindings.json (lane:* → bridge:0,
+param:view.bright → bridge:6) …" on SYSTEM and in the terminal; ROUTING →
+sinks lists "every lane → bridge:0" and "param view.bright → bridge:6";
+SYSTEM: `bridge · bridge · connected · 16 sources · 2 sinks · …`; FL
+receives the lanes as before (pitch bend from channel 1) and brightness
+on channel 7; the source combo lists `ext ext 0` … `ext ext 15`. The
+second launch: no note. After the deletion: no row comes back
+(`bindings.json` holds `"sinks_seeded": ["bridge"]`). **Check FL's channel
+map once:** an entry after `lane:*` lands at channel 6 (seven, 1-based)
+whatever the band count; with more or fewer than six bands, a mapping
+from before may need its channel moved. *Fail:* the note every launch,
+or rows back after the deletion → `_seed_sinks`' `sinks_seeded` mark;
+the lanes stop → `sink_values`' `lane:*`.
+
+**183. Learn sink never asks Replace / Keep.** (copy)
+Headless: `tests/test_sinks.py::test_learn_sink_on_a_param_lands_a_session_row_with_no_question`, `tests/test_ui_routing.py::test_the_routing_page_lists_the_sink_rows_with_the_others`.
+The bridge on. Put an LFO push on Brightness (or Learn a hand onto it).
+Right-click Brightness → **Learn sink ▸** any port; then right-click
+Speed → **Learn sink ▸** the same port. Right-click Speed → **Unbind**.
+*Pass:* no prompt either time; the LFO (or hand) still performs
+brightness; the second learn says "…; param:view.bright let go"; Speed's
+menu lists "→ bridge:N" dim; Unbind leaves that row; the preset's dot
+stays clean. *Fail:* a Replace / Keep prompt → the row went through the
+referee; a dirty dot → the row reached the preset (`is_session_row`).
+
+**184. The hands' DAW out works as before, from the `hands-daw` sink.** (copy, hand camera or a tape, FL Studio)
+Headless: `tests/test_hands.py::{test_a_lost_daw_port_is_looked_for_again_and_the_daw_resynced,test_a_daw_port_that_stays_missing_is_looked_for_less_often,test_a_virtual_port_is_made_again_when_it_fails,test_the_hands_daw_sink_sends_what_the_instrument_made_and_no_port_is_opened}`, `tests/test_sinks.py::test_the_hands_daw_sink_on_the_registry_sends_what_handsio_sent`.
+Hands on with `out = "IAC"` (a named bus, so a loss can be tested), FL
+listening to it. Raise the right hand. Take the IAC bus offline in Audio
+MIDI Setup for a few seconds, then back. *Pass:* SYSTEM shows the leap
+line and right after it `hands-daw · midi-out · connected · 0 sources ·
+0 sinks · IAC Driver Bus 1 · leap's DAW out · cc … ch16`; FL's mapped
+knobs follow the hands, presence and pinch notes arrive; offline, the
+line reads `lost`, and within about 2 s of the bus coming back it reads
+`connected` and FL's knobs jump to where the hands are (the resync). FL's
+port list holds no second "Hyperspace Hands". *Fail:* no messages →
+`MidiOutDevice.send`, `carries`; no resync → `MidiOutDevice.poll`; a
+second port → something still opens one (`HandsIO` must not).
+
+**185. `[hands] out` on a list, and an explicit `midi-out`.** (copy)
+Headless: `tests/test_sinks.py::test_hands_out_becomes_the_hands_daw_entry_with_a_note_when_written`, `tests/test_config.py::test_a_devices_list_wins_and_is_checked_per_entry`.
+On the list form with the hands on, put `out = "IAC"` on the `leap`
+entry and launch. Then remove it and add `[[devices]] role = "daw"  kind
+= "midi-out"  port = "IAC"  carries = "leap"`; relaunch. *Pass:* one note
+"config: [hands] out is now a [[devices]] entry (role = 'hands-daw', … ,
+carries = 'leap')" and a `hands-daw` line naming the bus; with the
+explicit entry, no derived `hands-daw` line and the `daw` line carries
+the hands. *Fail:* two lines both carrying leap → `config._daw`'s
+"already carried" test.
+
+**186. A phone's fader drives a param, with no code.** (copy, a phone on the same Wi-Fi)
+Headless: `tests/test_osc.py::{test_an_osc_entry_alone_adds_the_device_and_a_fader_moves_a_routed_param,test_only_osc_py_and_the_kind_table_name_the_osc_device,test_a_learn_armed_for_the_role_takes_a_hit_as_a_row_and_a_fader_as_a_route}`.
+Install an OSC controller app (TouchOSC, or any); set its host to the
+Mac's LAN address (System Settings → Wi-Fi → Details) and its outgoing
+port to 9000; note the addresses its first two faders send (TouchOSC's
+simple layout: `/1/fader1`, `/1/fader2`). With the app running, add the
+phone block with `axes = ["/1/fader1", "/1/fader2"]` and save.
+Right-click Yaw (CAMERA) → **Learn phone**, move fader 1 a good way.
+*Pass:* within a second `phone · osc · lost · 2 sources · UDP
+0.0.0.0:9000` (macOS may ask once whether Python may accept incoming
+connections: allow); a fader move makes it `connected · … · /1/fader1
+0.42`; the learn lands ("learned camera.yaw ← …") and the yaw then moves
+with the fader; ROUTING's source combo lists `phone` with `1/fader1` and
+`1/fader2`. *Fail:* the line stays `lost` → the app's host or port, or
+the firewall prompt was denied (System Settings → Network → Firewall); no
+"Learn phone" item → the device's `wants`; `error: OSError … in use` →
+another program on 9000 (189).
+
+**187. A phone's button fires a row.** (copy, the phone)
+Headless: `tests/test_osc.py::{test_a_hit_with_velocity_fires_its_rows,test_a_learn_armed_for_the_role_takes_a_hit_as_a_row_and_a_fader_as_a_route}`.
+186's rig: add the app's first push button's address to `hits`
+(TouchOSC: `/1/push1`) and save. Right-click **Faces** (VIEW) → **Learn
+phone** → press the button; then press it a few times. *Pass:* the learn
+lands as a row in `bindings.json` (`phone:1/push1` → `view.faces`); each
+press toggles the faces once and the release does nothing. *Fail:* each
+press toggles twice → the app sends a non-zero release (set the button's
+off value to 0); nothing → the address is not in `hits` (the line's last
+message shows what arrives).
+
+**188. A silence reads `lost`; the faders keep their place.** (copy, the phone)
+Headless: `tests/test_osc.py::{test_lost_after_the_timeout_and_back_on_the_next_message,test_hold_false_lets_the_routes_go_in_a_silence}`.
+With 186's route acting, leave the phone alone for ten seconds, then
+move the fader. Add `hold = false` to the entry, save, and repeat.
+*Pass:* about 5 s after the last message the line reads `lost` and the
+yaw stays where the fader left it; one move and the line reads
+`connected` and the yaw follows again. With `hold = false`, after 5 s
+the yaw returns to its setting. *Fail:* the yaw snaps back with `hold`
+unset → `OscDevice.feed`; the line never reads `lost` → the app streams
+continuously (an accelerometer page: expected).
+
+**189. A busy port is a line, not a crash, and comes up when it frees.** (copy, the phone)
+Headless: `tests/test_osc.py::test_a_busy_port_is_an_error_line_and_comes_up_when_it_frees`.
+Quit the app. In a terminal, hold port 9000: `python3 -c "import
+socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM);
+s.bind(('0.0.0.0', 9000)); input()"`. Launch with the phone entry, then
+press Return in that terminal. *Pass:* `phone · osc · error: OSError: …
+Address already in use` and one note; the rest of the app runs; within
+about 10 s of Return the line reads `lost`, then `connected` on the
+phone's next message. *Fail:* the app stalls → `osc.Server` is blocking;
+the line stays `error` after the port frees → the registry's retry
+schedule.
+
+**190. The recorded cloud plays at its own rate.** (copy)
+Headless: `tests/test_clouds.py::{test_a_cloud_entry_publishes_the_recording_at_its_own_rate,test_a_missing_recording_is_an_error_line_and_comes_up_when_it_appears,test_a_cloud_is_on_the_registry_not_the_router}`.
+Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the cloud block. Watch SYSTEM for a few seconds.
+Then rename the file and add `loop = false` to the entry (an edit, so it
+reopens); rename the file back. *Pass:* `scan · cloud · connected · 1
+source · knot.npz · frame n/16 · … points · 12 fps`, the frame counting
+through 16 at 12 frames a second (one loop about every 1⅓ s) and
+starting again; the scene shows the knot as dots in the shape's world
+(plan 26's `cloud` node draws it; its own checks are 216–218). Renamed:
+`error: FileNotFoundError …`; back: `connected`
+within about 10 s, and with `loop = false` the frame stops at 16/16.
+*Fail:* the frame number follows the app's frame rate →
+`CloudDevice.poll`.
+
+**219. Two pads at once: the Xbox pad over Bluetooth and the wired Afterglow over USB.** (copy, both pads)
+Headless: `tests/test_devices.py::{test_two_pads_open_each_under_its_role,test_a_role_listed_twice_is_refused_and_a_joystick_pins_a_pad,test_the_joystick_key_is_checked}`, `tests/test_gamepad.py::{test_two_pads_take_different_joysticks_in_list_order,test_an_unpinned_pad_whose_joystick_leaves_is_lost_then_takes_the_next_free,test_a_pinned_pad_waits_for_its_index,test_one_usb_reader_across_two_pads}`, `tests/test_pad_learn.py::{test_learn_on_a_second_pad_writes_its_qualified_rows,test_two_pads_drive_their_own_routes,test_the_camera_job_is_the_primary_pads_only}`, `tests/test_device_inputs.py::test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed`, `tests/test_routing.py::test_the_router_keeps_two_pads_apart`.
+Plan 27 B6 (numbered after group V, which was numbered first; it sits
+here with the other device checks). Pair the Xbox pad over Bluetooth; plug the Afterglow AX.1 into USB.
+On the copy, write the two-pads block from
+[`27-device-registry.md`](27-device-registry.md) ("The block to paste":
+`pad`, then `p2`, both at the default `usb = true`) in place of the `pad` entry; save
+(the app may run). SYSTEM → **devices**. Then: on the VIEW page
+right-click Points → **Learn pad** and press A on the **Afterglow**;
+right-click Field amp → **Learn pad** and squeeze the Afterglow's RT.
+Move both pads' left sticks and press A on each. Unplug the Afterglow;
+use the Xbox pad. Plug it back. Then turn the Xbox pad off and on.
+*Pass:* two lines, `pad · gamepad · connected · 22 sources · glfw 0 ·
+usb: lent to p2` and `p2 · gamepad · connected · 22 sources · usb: Afterglow Gamepad for
+Xbox 360` (a second Bluetooth pad would read `glfw 1`: the indices
+differ); the footer says `learned view.points ← pad A on p2 (into
+bindings.json)`, `bindings.json` holds `pad@p2:A`, and ROUTING shows
+`right trigger on p2 positions` on Field amp (its combo lists `axis@p2
+…` after `axis …`). Both drive at once: the Xbox pad's A flips faces (as
+ever) and its left stick orbits; the Afterglow's A flips points, its RT
+rides Field amp, and its left stick does nothing (no camera job for a
+second pad). Unplugged, `p2` reads `lost` within a frame and Field amp
+lets go; the Xbox pad keeps working; replugged, `connected` again within
+a few seconds and its rows work. The Xbox pad off: `pad` reads `lost · usb: lent to p2` (the reader
+stays with `p2`), the Afterglow keeps working; on: `pad` is `connected
+· glfw 0` again. Then **Learn p2** on a param with the Xbox pad off: a
+press on the Afterglow completes it.
+*Fail:* `p2` reads `lost` while the Xbox pad is `connected` →
+`gamepad.Claims.lend` / `Pad._usb_state` (a pad reading GLFW must not
+hold the reader); with the Xbox pad off, `pad` takes the Afterglow →
+the lend is not sticky; both pads flip faces on A → the qualifier
+(`Router.pad`'s `b.device != role`, `gamepad.learn_from(…, role=)`); the
+Afterglow's stick orbits → `PadDevice.act`'s primary-only camera job;
+the Xbox pad takes the Afterglow's line after a reconnect, or the two
+read one joystick → `gamepad.Pad._find` / `Claims`; a learn on the
+Afterglow writes `pad:A` → `PadDevice.learn`'s role.
+
+## V. Plan 26: the render graph
+
+Plan 26 as built is [`26-render-graph.md`](26-render-graph.md). No
+factory preset carries a `graph` section, so the checks that need one
+copy the fixture `hyperspace-python/tests/fixtures/presets/hands-lines.json`
+(the hands in the scene as lines, through the acid, the history holding
+them) into the copy's library, or a variant of it made by editing the
+copy's own file (**(copy)**). **The copy's library must be the copy**:
+if `~/Hyperspace-try/config.toml` has a `[library] path` line, delete
+that line on the copy first, so the library is `<home>` — never copy a
+fixture into the shared Drive folder. A preset file in `<home>/presets/`
+appears in the PRESETS list by its file name. The variants, each a copy
+of `hands-lines.json` saved under a new name in `<home>/presets/` with
+its `"graph"` replaced:
+
+- **hands-solid.json** — `{"nodes": [{"kind": "hands", "into": "scene"},
+  {"kind": "history", "holds": "scene+hands"}]}` (the hands in the scene,
+  solid);
+- **hands-depth.json** — `{"nodes": [{"kind": "hands", "laid": "depth"}]}`
+  (the hands' layer, depth-aware);
+- **two-acids.json** — `{"nodes": [{"kind": "effect", "file": "acid",
+  "instance": 2}]}`, and in `"values"` add `"fx.acid.2.on": true,
+  "fx.acid.2.twist": 0.3` (the first acid keeps the file's 0.9);
+- **two-hands.json** — `{"nodes": [{"kind": "hands", "into": "scene"},
+  {"kind": "hands", "instance": 2}]}`.
+
+The hands checks need the hand camera, or the synthetic tape
+(`uv run python tools/hands_tape.py synth /tmp/hands.json`, then `enabled
+= true` and `tape = "/tmp/hands.json"` on the hands entry, as in
+TESTING-GUIDE L44), with **Ghost hands** ticked on the HANDS page.
+191–194, 196 and 211, 212, 215 run on the laptop alone; 199–201 want the
+1080p projector; 195, 206, 208 and 213 the glass and the projector as two
+outputs (101).
+
+**191. The golden frames match on the gate Mac.**
+Headless: `tests/test_golden_frames.py::{test_every_golden_frame_is_drawn_byte_for_byte,test_every_factory_preset_has_every_state_recorded_and_nothing_else}`.
+On the Mac the gates run on (`GL_RENDERER` "Apple M3 Max"), from
+`hyperspace-python/`: `uv run python tools/golden_frames.py` (it uses a
+throwaway home, never `~/Hyperspace`). Open a few PNGs under
+`tests/golden/frames/png/` that `frames.json` names (party-trip, hands
+present, `scene+hands+through`). *Pass:* "all 556 frames match their
+goldens (Apple M3 Max, 4.1 Metal - 90.5)" (on a newer GL_VERSION, a note
+naming both); the PNGs show the preset with the two synthetic hands (the
+left open, the right a fist) over it, or bent through the effects in the
+through states. *Fail:* a `MOVED …` list and a contact sheet
+`docs/plans/assets/26-render-graph/golden-diff-all.png` (delete it after
+looking; do not commit it). Likely causes: a render change that moved
+pixels; a macOS or driver update (re-record with the reason, plan file
+"How to re-record"); something in the frame reading the wall clock.
+
+**192. Every factory preset against its golden, by eye, on the Mac.**
+Headless: `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`.
+The goldens prove the pixels on the gate Mac's GL, not that they look
+right; the new vertex path (edges and points as quads with depth, the
+eye's matrix) has met Apple's shader compiler only headlessly. List each
+preset's golden (output 1 alone, no hands) from `hyperspace-python/`:
+`uv run python -c "import json; [print(g['preset'], 'tests/golden/frames/' + g['png']) for g in json.load(open('tests/golden/frames/frames.json'))['goldens'] if g['hands'] == 'absent' and g['state'] == 'solo']"`.
+Launch with no sound playing, and load each of the 23 presets in turn
+from the PRESETS list, its PNG open beside the render window. *Pass:*
+each looks like its golden — the shape's size and place, its line
+weight and dots, its faces and colours, its effects (the pose differs:
+the golden is 8 frames in, with the LFOs at rest; the live shape keeps
+turning). *Fail:* a preset blank, black or wrong where its golden is not
+→ the scene's shaders on Apple's compiler (`LINE_VS`, `POINT_VS`,
+`FACE_VS` in `render.py`; SYSTEM shows a render error and `stall.log` a
+`render error`); strokes heavier or lighter than the golden → **Screen
+strokes** ticked (198).
+
+**193. The naming rule.**
+Headless: `tests/test_params.py::{test_the_first_instance_keeps_todays_id_and_extras_carry_a_marker,test_every_node_param_today_reads_as_its_first_instance}`.
+Read ENGINEERING §2, "Node instances: the naming rule"; then, with 212's
+preset loaded, look at ROUTING's param list. *Pass:* the rule reads
+clearly, and `fx.acid.2.mix` ("Acid 2 mix") reads right as the second
+acid's mix. *Fail:* the owner prefers another marker — say so before a
+preset of yours uses one (register row 169: after that it is a
+migration).
+
+**194. The per-node times on SYSTEM while an effect is toggled.**
+Headless: `tests/test_golden_frames.py::{test_each_node_has_a_rolling_median_in_ms,test_no_timer_queries_means_a_note_and_the_same_pixels,test_the_gpu_lines_on_the_system_page}`, `tests/test_graph.py::{test_the_default_graph_for_one_default_view_is_todays_frame_in_order,test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left}`.
+Launch, load TRIP (F5), open SYSTEM. On the FX page untick **Effects**,
+wait two seconds, tick it again. On LOOKBACK switch **Look-back** on and
+off. On OUTPUT tick output 1's **through effects**, then untick it.
+*Pass:* under the stall status "gpu per node, ms (median of the last
+frames):" and one line each for `scene`, `cover`, `hands`, `history`,
+`fx`, `capture`, `output.1`, a few ms or less and steady; `fx` falls
+near 0 with the effects off and comes back within about a second (a
+median of 60 frames); `history` moves with the look-back; `hands` rises
+while the ghost hands show; with through on, `composite(scene+hands)` and
+`fx(scene+hands)` join the list (0.00 until a hand shows with an effect
+on) and leave it within a few frames of unticking. *Fail:* no lines (no
+frame was timed); "gpu: no GPU timer queries on this context …" on the
+Mac (the driver refused `GL_TIME_ELAPSED`); a line that stays after its
+switch went → the graph not rebuilt (`Renderer._graph_for`) or the timer
+not handed the graph's names.
+
+**195. Every picture is what it was before the graph.**
+Headless: `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`, `tests/test_outputs.py` (whole), `tests/test_graph.py::test_a_pipeline_no_view_routes_to_this_frame_does_not_run`.
+The party rig: the glass with hands over, the projector with hands
+through, an effect on, the look-back on, the crossfader half down.
+*Pass:* the hands over the effects on the glass, bent through them on
+the projector, echoes behind the shape, both outputs dimmed alike; a
+hand entering the box changes the projector's picture (through) and not
+the glass's; closing the projector leaves the glass as it was. *Fail:* a
+visible change from the last build on either output (a painted node
+drawn through a texture; a pipeline run for the wrong output); an output
+on its ground (`View.error` on the OUTPUT page names the pipeline).
+
+**196. The shape sits where it always did; the eye on CAMERA.**
+Headless: `tests/test_camera.py::{test_the_default_eye_lands_every_vertex_within_half_a_pixel_of_project_h,test_each_point_is_drawn_where_project_h_puts_it,test_the_eye_params_are_the_rooms_and_default_to_the_old_view}`.
+Fresh launch; load LEGACY 6 then PLASMA HEART on the laptop and on the
+projector; open CAMERA. *Pass:* LEGACY 6 looks exactly as before (same
+size, same place, same dots); CAMERA has an **eye** section ("the
+room's camera, not the preset's") with Eye field of view 47.6° and Eye
+distance 3.78; a preset load never moves them. *Fail:* the shape offset
+or another size at zoom 1 (the eye's defaults, the matrix order); dots a
+pixel bigger (the point rounding).
+
+**197. Zoom grows the shape in the world; the hands stay.**
+Headless: `tests/test_camera.py::{test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it,test_a_shape_through_the_eye_draws_without_error}`, `tests/test_stroke_space.py::test_world_space_scales_the_width_and_radius_by_the_zoom`.
+Ghost hands on, a hand in the box, **Screen strokes** (VIEW) unticked as
+it rests. Wheel the zoom from 0.3× to 5×; then load EMBER ORBIT and HEX
+ENGINE. *Pass:* only the shape grows — the hands neither move nor
+scale; a big zoom shows a deeper perspective (the near side grows
+faster), and past about 4× the eye passes inside the shape with no
+streak across the screen; the edges and dots grow and shrink with the
+shape (world space); the zoomed-out fields' copies are spaced as before,
+small dots and fine edges as on earlier builds. *Fail:* the hands scaling
+with the zoom (a matrix reached the ghost); a stroke sweeping the screen
+with the eye inside (the near-clip in `LINE_VS`); strokes not changing
+with the zoom (198).
+
+**198. Screen strokes: world space by default, the switch holds the weight.**
+Headless: `tests/test_stroke_space.py::{test_the_default_is_world_space_a_preset_performance_switch,test_at_zoom_1_both_modes_draw_the_same_frame,test_the_switch_is_in_a_saved_preset_and_loads_back,test_world_space_scales_the_width_and_radius_by_the_zoom}`, `tests/test_camera.py::test_strokes_keep_their_weight_whatever_the_zoom`, `tests/test_desk_coverage.py::test_cannot_show_is_the_rule_by_group`.
+Load PARTY FIELD, then HEX ENGINE (both zoomed out); compare with the
+middle column of `docs/plans/assets/26-render-graph/a2b-moved.png`.
+**Screen strokes** (VIEW, under the opacities) rests unticked. Wheel the
+zoom (or the pad's right stick) from about 0.3× to 3×; tick **Screen
+strokes** and wheel again; load LEGACY 6 (zoom 1) and flip the switch.
+*Pass:* PARTY FIELD's edges and HEX ENGINE's red dots have their weight
+from before plan 26 (small dots, fine edges); unticked, zooming in
+fattens edges and dots and zooming out thins them, with the shape;
+ticked, they keep one pixel size whatever the zoom; on LEGACY 6 the
+switch changes nothing at all; the ghost hands never change weight with
+it. *Fail:* strokes fixed while unticked (the `sz` line in `draw_scene`,
+or a preset storing it on); dots changing size at zoom 1 (CAMERA's zoom
+not exactly 1, or the zoom applied after the rounding); the switch
+missing from a saved preset (its group is not `view`).
+
+**199. A hand across the box pans as far as it did (`hands-orbit`).**
+Headless: `tests/test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`, `tests/test_camera.py::test_the_pan_range_keeps_a_routed_pan_as_far_as_it_was`.
+The projector at 1920×1080; load HANDS ORBIT, left hand in the box; move
+it from the box's left edge to its right, then from near to far. Then the
+same with PARTY FIELD (it carries the same `hand:left.x/z →
+camera.pan.x/y` push of 0.1). *Pass:* the shape's centre (PARTY FIELD's
+whole field) travels about ±390 px — about a fifth of the projector's
+width each way, as far as before plan 26 (±400 px) — sideways for x, up
+and down for reach; level and centred, the shape is where the mouse left
+it. *Fail:* the shape barely moves or flies off (`params.PAN_RANGE`);
+moves the wrong way up and down (pan.y's sign).
+
+**200. `hands-orbit` turns only the shape; the hands stay put.**
+Headless: `tests/test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says`, `tests/test_camera.py::test_zoom_scales_the_shape_about_the_world_origin_and_pan_moves_it`, `tests/test_hands_node.py::test_the_ghost_settles_its_hands_once_through_the_shared_camera`.
+Ghost hands on; load HANDS ORBIT; with both hands in the box, orbit
+(right hand sideways), tip (fingers up), pan and zoom (left hand
+sideways, reaching, raised). *Pass:* the shape orbits, tips, pans and
+grows; the ghost hands stay exactly over where your hands are — they do
+not turn, move or scale with the shape. *Fail:* the hands swinging with
+the yaw or pitch, or moving with the pan or zoom (a camera param reached
+`ghost.shared_camera`).
+
+**201. A preset saved before plan 26 with a pan looks the same on the projector.** (copy)
+Headless: `tests/test_camera.py::{test_a_preset_2_pan_in_px_is_read_in_world_units,test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved,test_every_factory_pan_lands_inside_the_new_range,test_an_old_camera_module_loads_at_its_converted_pan}`.
+The projector at 1080p; load PARTY MANDALA (its file stores pan.x = 190
+px); open CAMERA. Then save it as your own preset, load another, and load
+it back. Then any preset of yours saved before this build with the shape
+off-centre. *Pass:* the mandala sits where it did on the projector (190
+px right of centre); CAMERA shows Pan X `+0.59`; the saved file carries
+`"units": {"camera.pan": "world"}` and loads to the same place with no
+dirty dot; your older preset sits where it did on the projector (on the
+laptop it sits nearer the centre: expected). *Fail:* the mandala off by
+a factor (the reference screen, `geometry.PAN_REF_PX`); a re-loaded save
+drifting (the key not written or not read).
+
+**202. `hands.json` gains the calibration and keeps the old file.** (copy)
+Headless: `tests/test_camera.py::{test_units_round_trip_through_hands_json,test_an_older_or_bad_units_entry_is_from_the_box,test_a_2_file_is_kept_beside_itself_before_the_first_save}`, `tests/test_hands.py::test_the_first_rewrite_of_an_old_file_keeps_a_backup`.
+A copy whose `hands.json` was written by an earlier build (schema
+`hyperspace.hands/2`); launch; HANDS page → **calibrate 20 s** and sweep.
+*Pass:* `hands.json.bak-v2` appears beside it, identical to the old
+file; the new file says `hyperspace.hands/3` with `"units": {"mm": null,
+"origin": null, "tilt": 32.0}`; the ranges and the box are as swept; the
+ghost hands are about where and as big as before (203). *Fail:* no
+backup (the schema compare in `hands/core.py` `_keep`); the hands far
+from where they were (203's causes).
+
+**203. The hands are where the performer is (the calibration).**
+Headless: `tests/test_hands_node.py::test_the_default_calibration_puts_the_hands_where_the_ghost_camera_did`, `tests/test_camera.py::test_the_shared_camera_frames_the_padded_box_like_the_ghost_camera`.
+The laptop and the 1080p projector, real hands, ghost on; compare with
+`docs/plans/assets/26-render-graph/a3-hands-moved.png` (before | after);
+reach to each corner of the box. *Pass:* the ghost hands are the size
+and in the place they were before plan 26, with a slightly stronger
+perspective (fingers nearer the eye a touch bigger); reaching to the
+box's edges reaches the picture's edges on the projector. *Fail:* hands
+smaller by a third (the square fit came back); a hand leaving the frame
+on a landscape screen (`ghost.CAL_ASPECT`); on a portrait or square
+output leaving at the sides is expected (register row 187).
+
+**204. Hands inside the scene are solid.** (copy)
+Headless: `tests/test_hands_node.py::{test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape,test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keeps_them,test_the_guide_never_rides_the_scene}`.
+HANDS-SOLID (above: its look-back is on and holds the hands), ghost on,
+guide BESIDE; push a hand into the shape and through it, then hold it
+still; drag Ghost opacity to 0.3, then to 0.
+*Pass:* the hand is solid at any opacity above 0, and gone at exactly 0;
+it moves with the acid's bend like the shape; it leaves echoes, and a
+held hand saturates towards white as its echoes stack (expected); the
+guide stays crisp and unbent beside it. *Fail:* the hand see-through at
+the opacity (the alpha rule, register row 191); the guide bent by the
+effect (the readout not split); doubled hand rims in the echoes with a
+glass output also open (`composite(history)` built under in-scene
+hands).
+
+**205. A hand passes between the shape's edges.** (copy)
+Headless: `tests/test_camera.py::{test_the_shapes_depth_is_its_nearest_visible_surface,test_the_scene_target_carries_a_depth_attachment}`, `tests/test_hands_node.py::test_hands_in_the_scene_are_solid_and_in_front_of_or_behind_the_shape`.
+HANDS-SOLID (a wireframe at brightness 2), Effects unticked so nothing
+bends; push one hand slowly into the shape from the front until it is
+through. *Pass:* near edges draw over the hand, far ones are hidden by
+it, and the line between them moves through the hand as it goes in;
+faint far edges never cut a hole in it. *Fail:* the hand always on top
+(the scene's depth not used: the hands drawn as a layer — the graph did
+not land, check the strip's warning); faint edges cutting it
+(`render.DEPTH_ALPHA` too low).
+
+**206. The hands in the scene on the projector and a clean layer on the glass, at once.** (copy, glass and projector)
+Headless: `tests/test_graph.py::test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_the_layer`, `tests/test_hands_node.py::test_a_glass_without_the_scene_still_gets_the_hands_layer`.
+Two outputs: the projector with **scene** and **hands** on, the glass
+with **scene** off and **hands** on (OUTPUT page). Load HANDS-SOLID, an
+effect on; move both hands through the shape. *Pass:* the projector shows
+the hands inside the shape (in front of and behind its edges, bent with
+it); the glass shows the same hands alone, clean, unbent, on black; the
+OUTPUT page says "scene + hands: in the scene" for the projector.
+*Fail:* the glass blank (the layer not drawn for an output without the
+scene: `default_graph`'s `layered`); the hands twice on the projector (a
+layer laid over a scene that holds them).
+
+**207. A separate hands layer goes behind the shape (depth-aware).** (copy)
+Headless: `tests/test_hands_node.py::{test_a_depth_aware_layer_goes_behind_the_shape,test_the_scenes_depth_resolves_out_of_the_multisampled_target}`, `tests/test_graph.py::test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth`.
+HANDS-DEPTH (above); one output with scene and hands on; move a hand
+through the shape. *Pass:* the hand, drawn at its Ghost opacity, vanishes
+behind near edges and bright faces and reappears in front of them, with
+no flicker at the edges beyond a pixel; the OUTPUT page says "·
+depth-aware". *Fail:* the hand cut where nothing is in front
+(`render.LAYER_DEPTH_BIAS` too small, or the far-plane rim); never
+hidden (the scene's depth not resolved).
+
+**208. The OUTPUT switches still mean what they meant.**
+Headless: `tests/test_outputs.py` (whole), `tests/test_graph.py::test_the_default_graph_has_a_pipeline_per_reachable_route_and_hands_only_when_shown`.
+The party rig: the glass with hands over, the projector with hands
+through, an effect on; switch the effect off, then take your hands out
+of the box; then step through the eight states on one output (D2).
+*Pass:* exactly as before the graph: through with no effect is hands
+over, no hand shows nothing extra, each state as TESTING-GUIDE D2 lists.
+*Fail:* hands drawn twice, or missing on one output (`Output.settle`,
+`Fx.fallback`).
+
+**209. The history can hold the hands.** (copy)
+Headless: `tests/test_outputs.py::test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today`, `tests/test_render.py::test_the_default_graphs_history_holds_what_todays_does_never_the_dim`, `tests/test_graph.py::test_the_history_is_wired_to_the_scene_or_the_scene_with_the_hands`.
+Load PARTY WAKE and wave a hand; then HANDS-LINES and wave again; pull the
+crossfader half down. *Pass:* PARTY WAKE: no hand echoes (the default);
+HANDS-LINES: the hand trails echoes; the LOOKBACK page says "history:
+the scene" then "history: the scene · with the hands"; the crossfader
+dims the picture evenly, echoes included, and back at full the echoes
+are at once as bright as before (the dim is never captured). *Fail:*
+hand echoes on PARTY WAKE (the default wiring changed); echoes that stay
+dark after the crossfader comes back (the dim in the history).
+
+**210. The hands' own line on SYSTEM.** (copy)
+Headless: `tests/test_hands_node.py::test_the_hands_have_their_own_line_when_the_scene_draws_them`, `tests/test_graph_json.py::test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene`.
+SYSTEM page; load TRIP, then HANDS-LINES, a hand in the box. *Pass:*
+TRIP: the lines as in 194 (`hands` is the layer; no `ghost` line);
+HANDS-LINES: `ghost` then `scene`, and `readout` (the guide alone) in
+place of `hands`. *Fail:* a dead `ghost 0.00` line on TRIP.
+
+**211. A preset says its graph in data.** (copy)
+Headless: `tests/test_graph_json.py::{test_the_proof_preset_loads_its_graph_from_a_scratch_library,test_an_unknown_node_kind_is_a_note_and_the_default_graph,test_no_factory_preset_carries_a_graph_and_each_loads_as_before,test_undoing_a_load_puts_the_graph_back_before_the_values}`, goldens `hands-lines|present|*`.
+Copy `hands-lines.json` into `<home>/presets/`; ghost on; load
+HANDS-LINES; then a party preset; then ⌘Z. Then edit the copy's
+`hands-lines.json` so its first node reads `"kind": "teapot"`, load it,
+save it, and open the file. *Pass:* HANDS-LINES shows the hands inside
+the shape as wire hands, bent with the acid, leaving tracers, with a
+clean strip and no warning; the party preset is its usual picture; ⌘Z
+brings HANDS-LINES and its graph back. The teapot: the strip's warning
+line says "graph: unknown node kind 'teapot' (this build knows effect,
+hands, history); the default graph", the preset still loads (hands as a
+layer), and after the save the teapot is still in the file. *Fail:* the
+hands drawn as a layer over the shape on HANDS-LINES (the graph did not
+land); a crash or a refused load on the teapot; the teapot gone after
+the save.
+
+**212. Two acids in one chain.** (copy)
+Headless: `tests/test_graph_json.py::{test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain,test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values,test_two_acids_run_in_one_chain_on_one_program}`.
+TWO-ACIDS (above); open the FX page and ROUTING; then load TRIP. *Pass:*
+two chips, "Acid" and "Acid 2", each with its own strip and twist
+(0.9 and 0.3); dragging one's slider moves only it; ROUTING lists
+`fx.acid.2.*` as "Acid 2 …"; TRIP has one acid chip and no `fx.acid.2.*`.
+*Fail:* one chip, both moving together, or the second acid's values on
+the first.
+
+**213. Two hands nodes: one in the scene, one over the glass.** (copy, glass and projector)
+Headless: `tests/test_graph_json.py::{test_two_hands_nodes_one_in_the_scene_one_over_the_glass,test_a_second_hands_node_gets_its_own_session_params_and_state,test_a_second_hands_node_is_its_own_ghost_on_the_glass,test_a_second_hands_nodes_settings_survive_reopening_the_show}`.
+The rig of 206; TWO-HANDS (above); SYSTEM open. On ROUTING (or by Learn
+desk) switch **Ghost 2 hands** (`ghost.2.on`) on — off by default, like
+every new switch — and set `ghost.2.mirror` on and `ghost.2.style` to
+CAGE. Load TRIP, then TWO-HANDS again; save the show, quit, relaunch and
+load TWO-HANDS.
+*Pass:* the projector shows solid hands inside the shape; the glass shows
+mirrored cage hands alone; SYSTEM lists `ghost`, `scene`, `hands.2`,
+`readout` with times; TRIP takes the glass back to the first node's
+layer and `hands.2` leaves SYSTEM; TWO-HANDS brings the mirror and the
+cage back; after the relaunch they are still there and the show is
+clean. *Fail:* the same hands on both outputs; the glass mirrored on the
+projector too; a stale `hands.2` line; the cage lost after the relaunch
+(the show's held-back `ghost.2.*`).
+
+**214. Hands as lines.** (copy)
+Headless: `tests/test_graph_json.py::test_hands_as_lines_draw_their_edges`, goldens `hands-lines|present|*`.
+HANDS-LINES on the laptop and on the 1080p projector, each ghost style in
+turn; one output with the scene off and hands on. *Pass:* wire hands in
+the shape and as a wire layer on the scene-less output; the guide stays
+solid; the shape's own lines unchanged. **Judge:** whether the hatching
+of the capsules' triangles reads as "lines", or bone lines are wanted
+(register row 201). *Fail:* the shape drawn in wireframe too (the
+wireframe left on); hands invisible on a 2× screen (one-pixel lines:
+registered).
+
+**215. The wiring in words.** (copy)
+Headless: `tests/test_graph_json.py::{test_the_wiring_in_words,test_the_output_pages_shows_line_says_the_wiring,test_the_lookback_page_says_what_the_history_holds}`, `tests/test_ui_shell.py::test_every_page_fits_the_control_window`.
+OUTPUT and LOOKBACK with TRIP, then HANDS-LINES, then TWO-HANDS on the
+rig of 206; hover each "shows:" line. *Pass:* TRIP: "shows:" as before,
+LOOKBACK "history: the scene"; HANDS-LINES: "scene + hands: in the scene
+as lines", LOOKBACK "history: the scene · with the hands"; TWO-HANDS: the
+glass's line names "(2)"; the hover names the graph ("graph: …"). No page
+scrolls. *Fail:* words that disagree with the picture.
+
+**216. The recorded cloud in the scene, in the shape's world.** (copy)
+Headless: `tests/test_cloud_node.py::{test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them,test_a_point_in_front_of_the_shape_hides_it_and_one_behind_is_hidden,test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_nothing}`, goldens `cloud/scene`, `cloud/scene+hands`.
+Copy `hyperspace-python/tests/fixtures/clouds/knot.npz` into
+`<home>/clouds/` and add the recorded-cloud block
+([`27-device-registry.md`](27-device-registry.md), "The block to
+paste") to the copy's device list; load LEGACY 6. Wheel the mouse's zoom
+and drag a pan; then CAMERA → eye, move Eye field of view; put it back.
+*Pass:* a knot of dots (blue low, warm high) turning slowly about the
+vertical, about the shape's size, threaded through the tesseract; where a
+dot is nearer than an edge it hides the edge, where it is behind, the
+edge draws over it; the knot neither tumbles with the shape nor moves
+with the zoom or pan; the eye's field of view changes both together.
+*Fail:* dots always on top (no depth); dots tumbling with the shape (the
+shape's model matrix); nothing at all with SYSTEM's `scan` line
+`connected` (the registry not handed to the renderer:
+`renderer.cloud_source` in `app.main`).
+
+**217. The cloud's look.** (copy)
+Headless: `tests/test_cloud_node.py::{test_the_cloud_params_are_session_and_default_to_a_cloud_at_the_shapes_size,test_the_node_draws_the_fixtures_points_where_the_shared_camera_puts_them}`.
+216's rig. Learn desk a knob each onto Cloud point size, Cloud scale and
+Cloud brightness (from ROUTING's param list — there is no panel row),
+and a button onto Cloud colours; then load another preset. *Pass:* size
+grows the dots in whole pixels; scale grows the knot about the centre
+(past about 3× it reaches the eye and the near dots vanish); brightness 0
+turns the dots black (they still hide the shape behind them); colours
+off: white dots; a preset load leaves all four as set. *Fail:* a load
+resets them (not session); shimmering fractional sizes.
+
+**218. No cloud, no change; the cloud's cost on SYSTEM.** (copy)
+Headless: `tests/test_cloud_node.py::{test_a_missing_cloud_draws_nothing_and_raises_nothing,test_the_buffer_is_uploaded_only_when_the_frame_id_moves,test_the_per_node_timer_names_the_cloud,test_a_hot_reload_rebuilds_the_clouds_program_and_the_picture_is_the_same}`, `tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`.
+216's entry with the file not yet copied in (or renamed away); launch;
+SYSTEM open; copy the file in. Then remove the entry. *Pass:* before the
+copy the picture is exactly as with no entry, the `scan` line says
+`error: …` and the GPU lines show `cloud 0.00` above `scene`; within
+about 10 s of the copy the knot appears with no relaunch and the `cloud`
+line shows a small time; with the entry gone, no `cloud` line. *Fail:*
+an error toast or a stall while the file is missing; a `cloud` line with
+no entry.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -1978,5 +3053,34 @@ Only a person can settle these:
   tests run with another machine's fonts and Mesa's compiler;
 - the macro candidates (133–136): a listening session, by design;
 - a real cloud client between two Macs (139, 140, 143): the tests write
-  the folder directly.
+  the folder directly;
+- the real APC40 under the two-handed save, the relight and the fader
+  pickup (148–153): the tests use fake ports, and the blink velocity and
+  the whole-desk dark pass (about 100 messages a load) have never met an
+  mk1;
+- whether "dead" in the coverage report is what the owner calls dark
+  (155): the rule reads the preset's bases, not what is on screen;
+- every dance source's range and time constant, and the grab's
+  thresholds, on real hands (158–163): all were tuned on synthetic
+  hands;
+- the palette fold by eye on a projector (166): the tests prove only
+  that mix 0 is today's picture and that a raised mix changes it;
+- every device of plan 27 on real hardware (168–190): the tests use a
+  fake MIDI bus, stub devices and `pythonosc`'s client on localhost —
+  never a real APC40 replugged under the registry (175), two real desks
+  at once (176, 177), a DAW receiving a sink row or the hands through
+  `hands-daw` (181–185), a phone app on Wi-Fi or the macOS firewall
+  prompt (186–189), or a real editor's save while the config is watched
+  (173);
+- every factory preset by eye on the Mac (192): the goldens pin the
+  bytes on the gate Mac's GL, not whether the picture looks right, and
+  the new vertex path has met Apple's shader compiler only headlessly;
+- real hands through the shared camera (200, 203–207, 213, 214): every
+  hands picture the tests and goldens draw is one synthetic pose or a
+  synthetic tape — the calibration's fit, a hand between the edges, the
+  depth-aware boundary and the wire hands have never been seen with a
+  real hand;
+- the zoom's feel in world and in screen space (197, 198), an old
+  preset's pan on the real 1080p projector (201), and the point cloud on
+  a real screen (216–218).
 

@@ -203,11 +203,68 @@ move.
 
 ## 2. Rendering
 
-**The transform**: rotate in 4D across six planes → project 4D→3D →
-apply the drag orientation → project to 2D, on the CPU; the GPU
-rasterises. Edges are screen-space quads whose width and alpha follow
-w-depth (the near half glows), with brightness compensated for edge
-count so the 120-cell does not clip to a blob. Points are red.
+**The transform** (plan 26, one camera): the CPU rotates the shape in
+4D across six planes (`rot.*`), projects 4D→3D and applies the
+`camera.yaw` / `camera.pitch` turntable — the shape's world pose
+(`geometry.world_points`); the vertex shaders take it to the screen
+through one shared 4×4: the shape's world transform `u_model`
+(`geometry.model_matrix`: `camera.zoom` a scale about the world origin,
+then `camera.pan`) and the eye `u_vp` (`geometry.eye_matrix`). Edges are
+quads expanded in the vertex shader from their two 3D ends, whose width
+and alpha follow w-depth (the near half glows), with brightness
+compensated for edge count so the 120-cell does not clip to a blob;
+points are red quads, each a whole number of pixels across. Both carry a
+real depth. `geometry.project` / `project_h`, the old CPU path to 2D,
+stay the parity oracle.
+
+**The eye** is a fixed perspective camera on the world's +z axis looking
+at the origin: `eye.fov` (47.6°, `geometry.EYE_FOV`, across the
+picture's shorter side; 10–120°) and `eye.distance` (3.78 shape radii,
+`EYE_DISTANCE`; 1.5–40), on the CAMERA page under **eye**. They are
+session params (group `eye`: no preset moves them) and not modulatable
+(the camera is the rig; the shape is what moves). The defaults are
+`project_h`'s old 3D divide: at zoom 1 and pan 0 every vertex lands
+within 2.3e-13 px of `project_h` in float64 and 1.1e-4 px in float32,
+against a bar of half a pixel
+(`tests/test_camera.py::test_the_default_eye_lands_every_vertex_within_half_a_pixel_of_project_h`).
+Clip planes 0.05 / 1000 (`EYE_NEAR` / `EYE_FAR`): depth only. An edge end
+behind the eye is slid along the edge to just in front of it (`EYE_W`);
+a point behind it is dropped — reachable only past zoom ≈ 3.8, where the
+eye is inside the shape.
+
+**Zoom and pan are the shape's, in the world.** `camera.zoom` scales the
+shape about the world origin (the whole-frame 2D zoom is gone): a scaled
+shape has its own perspective, and copies (`view.instances`) are copies
+in the world, a cell `render.CELL` = 2.4 radii apart before the zoom.
+`camera.pan.x/y` are in world units — shape radii, ±12
+(`params.PAN_RANGE`), y positive down the screen as it always was. A
+preset, camera module or `camera/default.json` without `"units":
+{"camera.pan": "world"}` stored logical px: `params.pan_world` divides
+them by `geometry.PAN_REF_PX` = 324 (the default eye's px per unit at
+1080p, the render cap and the party projector) at load, so an old
+preset sits where it did on the 1080p projector (nearer the centre on a
+smaller window); every save writes the marker, and the schema stays
+`hyperspace.preset/2`. The mouse pans by cursor px / px-per-unit and the
+wheel zooms about the point under the cursor (`app._px_per_unit`). The
+ghost hands and a point cloud never follow `camera.*`: only the shape
+moves.
+
+**Strokes in world space or screen space** (`view.screen_strokes`,
+"Screen strokes" on the VIEW page, a performance switch, off by
+default; the owner's toggle of 2026-10-14). Off — world space — the
+edges' width and the dots' radius are × `camera.zoom`, the pre-plan-26
+feel: strokes grow and shrink with the shape, a sub-pixel width folding
+into alpha. On — screen space — they keep their pixel weight whatever
+the zoom. At zoom 1 both draw the same frame byte for byte. One line in
+`draw_scene` (`sz`); the hands' strokes never change with it.
+
+**Depth.** The scene's target (`render.SceneTarget`) has a depth
+attachment. The see-through shape is painter-sorted as always and never
+depth-tested against itself; it is depth-tested against the solid
+geometry already drawn (hands, a point cloud), and its visible surface —
+fragments with alpha over `render.DEPTH_ALPHA` = 0.25 — is written to
+depth after its colour (`Renderer._depth_pass`), so a hand can pass
+between its edges.
 
 **Faces** are the true 2-faces, translucent and painter-sorted, with
 face-local UVs. `shaders/patterns.glsl` paints them: `vec4 pattern(int
@@ -304,14 +361,172 @@ spiral from the centre; a copy never moves as the count grows), **RING**
 `inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
 effects and the hands carry on.
 
-**The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
-the face picture (only while an effect is aimed at the faces) → the
-scene → the coverage mask (when the look-back occludes) → the look-back
-composite → the frame's effects → the hands → the master dim; then each
-render output gets its picture (§14). With the look-back, effects and
-ghost off and the dim at full, the output is bit-identical to the scene
-pass alone. The renderer re-binds its target on every exit, a raise
-included, so a failing pass never strands a framebuffer.
+**The frame is a render graph** (`graph.py`, plan 26). `Renderer.draw_outputs`
+settles the frame's size under the render cap, ticks the effect folder,
+then builds or reuses the graph for this frame's outputs and evaluates
+it; each render output gets its picture (§14). The node kinds:
+
+| Kind | Classes (node names) | Takes | Makes |
+|---|---|---|---|
+| **Geometry** | `Shape` (`shape`), `Hands` (`ghost`, `ghost.2` …), `PointCloud` (`cloud`, `cloud.2` …) | its params | draw calls in the shared camera; no framebuffer of its own |
+| **Scene** | `Scene` (`scene`) | any number of geometries (`geometry`, `geometry.2` … ports) | one colour + depth target: the solid geometries first (the hands, a cloud: depth written), then the see-through shape, painter-sorted and depth-tested against them |
+| **Layer** | `HandsLayer` (`hands`, `hands.2`), `Readout` (`readout`), `Cover` (`cover`) | one geometry (the cover: the scene) | its own target: the hands alone with their own colour and depth; the guide and tethers' labels; the faces' coverage mask (`mask`) |
+| **Composite** | `Composite` (`composite(scene+hands)`, `composite(hands)`, `composite(history)`) | `under`, `over` (and the scene's `depth`) | `over` laid on `under`: over, add or depth-aware |
+| **FX** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image | the effect chain (`fx.FxChain`), one node per pipeline; inactive, its input passes through |
+| **History** | `History` (`history`), `Capture` (`capture`) | an image (+ the cover) | the echoes and the dream laid over its input; the capture into the ring, once a frame after every pipeline |
+| **Output** | `Output` (`output.1` …) | `image`, `hands`, `readout`, `depth` | `Renderer._compose`: fit, flips, the hands over, the readout, the dim — or the five-step `outputs.Handoff` for a later output |
+
+Ports are typed (`image`, `mask`, `geometry`); the graph refuses a wrong
+type, an unknown port, a dependency outside the graph and a duplicate
+name when it is built. A Scene or Layer *makes* a texture
+(`image(frame)`, and `depth`); History, Composite and FX *paint*
+(`paint(frame, dst)`) into the framebuffer their consumer hands them, so
+the look-back composites straight into the chain's half-float input and
+the chain writes straight into the window — no texture quantises the
+picture between them. A pipeline's end (`Fx`) decides where the picture
+lands: straight into its one output when that output is at the frame's
+size, unflipped and on this context; otherwise once into a frame texture
+every output of it shows. Node methods are `run`, `paint`, `draw`,
+`image`, `depth`, never `apply`, `modulate`, `snapshot` or `set_value`,
+and `graph.py` imports `moderngl`, `numpy`, `geometry` and `outputs` only
+(`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`).
+
+**Evaluation.** `Graph.order` is dependency order — a depth-first walk,
+dependencies first, ties in insertion order — computed when the graph is
+built, never per frame; `Graph.evaluate` runs every node once.
+`Renderer._graph_for` keeps the last graph and builds a new one
+(`graph.default_graph`) only when its key changes: each output's scene /
+hands / through switches (`graph_key`), the renderer's `Wiring` (below)
+and the roles of the listed `cloud` devices. What is per frame: whether
+an effect is on and whether a hand drew decide which pipeline end each
+output takes (`Output.settle`); a pipeline no output takes is skipped and
+its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
+427 goldens. (The *modulation* graph is not evaluated this way: the
+one-frame lag of ARCHITECTURE §2 stands until plan 28.) For one default
+output the order is `shape → ghost → scene → cover → hands → history → fx
+→ capture → output.1`.
+
+**The default graph** is today's frame, wired from each output's
+switches: **scene** on, its `image` is the SCENE chain (`history → fx`);
+**hands** on, the hands' layer is laid over at the output, and its
+readout on top; **through** with scene and hands, the layer is
+composited onto the history before the effects (`composite(scene+hands)
+→ fx(scene+hands)`), or with the scene off, alone through them
+(`composite(hands) → fx(hands)`). With no effect on, or no hand drawn,
+a through pipeline stands down for its fallback with the layer over
+(`Fx.fallback`, `Output.settle`) — `outputs.route`'s table, as wiring.
+The capture takes the scene. The renderer's `Wiring` (`graph.Wiring`,
+`Renderer.wiring`, default today's) changes the rest, renderer-wide:
+
+- `hands`: `layer` (today) or `scene` — the hands drawn inside the scene,
+  solid; an output showing the scene shows them there (its hands switch
+  then wires only the readout), and an output with the scene off still
+  gets the layer. So the same hands can be in the scene on the projector
+  and a clean layer on the glass. Inside the scene the hands are at full
+  opacity (`ghost.alpha` sets only the layer; at 0 the hands are drawn
+  nowhere), and the guide and tethers stay the readout, laid on at the
+  outputs.
+- `blend`: `over`, `add` or `depth` — how the layer is laid on. Depth-aware
+  drops a layer texel where the scene's visible surface is nearer by more
+  than `render.LAYER_DEPTH_BIAS` = 0.05 shape radii (both depths
+  linearised; the scene's resolved out of its MSAA target on the first
+  ask, `SceneTarget.depth_texture`). A later output's presenter lays a
+  depth-aware layer plain over.
+- `history`: `scene` (today) or `scene+hands` — the capture takes the
+  layer laid on the scene (`composite(history)`); with the hands in the
+  scene, the scene already holds them.
+- `draw` and `extra`: the first hands node drawn `solid` or as `lines`,
+  and the hands nodes after it (below).
+
+Nothing in the app sets `Wiring` but a preset's `graph` section. The
+OUTPUT page's "shows:" line says it in words ("scene + hands: in the
+scene as lines", "· depth-aware"), its hover the loaded graph in one
+line, and the LOOKBACK page "history: the scene · with the hands"
+(`graph.hands_words`, `graph_words`, `history_words`).
+
+**The hands** (`graph.Hands`, the `ghost.*` params' node) are `ghost.py`'s
+five styles as geometry in the shared camera: `ghost.shared_camera`
+takes the Leap's millimetres into the world through the calibration in
+`hands.json` (§12) and the eye. A frame's poses are settled once
+(`Ghost.settle`) for every draw of them. A hands node is timed by its
+consumer: inside a scene its draw is its own SYSTEM line (`ghost`); its
+layer's draw is the layer's line (`hands`).
+
+**The graph in a preset** (`graph.read_graph`, `GraphSpec`,
+`preset.GraphSection`). A preset may carry a `graph` section, before
+`values`: the nodes that differ from the default graph, one JSON object
+each, one per line. `tests/fixtures/presets/hands-lines.json` (a test
+fixture, never a factory preset) puts the hands in the scene as lines
+and the history on the scene with the hands:
+
+```json
+"graph": {"nodes": [
+ {"kind": "hands", "into": "scene", "draw": "lines"},
+ {"kind": "history", "holds": "scene+hands"}
+]}
+```
+
+| Kind | Keys | Left out |
+|---|---|---|
+| `hands` | `instance` (1, 2 …), `into` (`layer` / `scene`), `draw` (`solid` / `lines`), `laid` (`over` / `add` / `depth`, only on the node that makes the layer) | hands 1, a solid layer laid over |
+| `effect` | `file`, `instance` (2 or more) | every effect file once |
+| `history` | `holds` (`scene` / `scene+hands`) | the scene |
+
+The kinds are `graph.NODE_KINDS` — the one place a kind is named. No
+section, or `{"nodes": []}`, is the default graph; nothing that is a
+param goes in it (an effect's on / mix / order, `ghost.*`, `dream.*` stay
+in `values` or the show); a save writes it back in a fixed order. A
+section this build cannot read — an unknown kind, a key a node does not
+take, a value out of its choices, two nodes of one instance, two layers
+— is a note on the preset strip and the default graph, and the section is
+kept as the file had it and written back on save. A point cloud is not a
+kind here: clouds follow the device list (below), and `{"kind":
+"cloud"}` is an unknown kind until plan 28. Undoing a load puts the
+loaded preset's graph back before its values (`library.Marks`).
+
+**Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
+adds a second acid: the effect `acid.2` in `FxState`
+(`set_instances`), its params `fx.acid.2.*` ("Acid 2 mix", performance
+params in the preset's `values`), its own clock and place in the chain,
+on the acid file's one compiled program. `{"kind": "hands", "instance":
+2}` adds a second hands node `ghost.2`: its own `Ghost`
+(`Renderer.ghost_of`) over its own state, its own session params
+`ghost.2.on/alpha/mirror/guide/tethers/style` (`ghost.2.on` starts off),
+its layer `hands.2` and its lone readout `readout.2`. Every `into:
+"scene"` node is in the scene; the `into: "layer"` node (else the first)
+makes the one layer, laid on the outputs without the hands in their
+scene. A show holds `ghost.<n>.*` back until a preset's graph declares
+the node, then seeds it. `draw: "lines"` draws a style's meshes as their
+triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
+solid.
+
+**The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
+the renderer the device registry (`Renderer.cloud_source`); each listed
+`cloud` device (§5) adds a node `cloud` (`cloud.2` …) as the default
+scene's first geometry. It draws the latest frame of `cloud:<role>` as
+one instanced quad per point through the eye — a hard round dot, alpha
+1, depth tested and written, a whole number of pixels across — before
+the see-through shape, so a dot in front of an edge hides it and an edge
+in front of a dot is drawn over it. Its world transform is one uniform
+scale about the world origin, `cloud.scale`; the shape's `camera.*` and
+`rot.*` do not move it. The look is the session group `cloud`:
+`cloud.size` (radius, logical px, 0.5–12, 2), `cloud.scale` (0.01–10,
+0.3: the fixture knot at about the shape's size), `cloud.bright` (0–2,
+1), `cloud.colors` (the source's colours, on; off or none, white) — no
+panel row: Learn and ROUTING reach them. The points are uploaded only
+when the cloud's (frame id, publish time) moves; a listed device whose
+file is missing keeps its node, which draws nothing. With no `cloud`
+entry the graph is node for node the one before.
+
+In the frame's terms: the face picture (only while an effect is aimed at
+the faces, made by the shape before the scene's target is bound) → the
+scene → the coverage mask (when the look-back occludes) → the hands'
+layer → the look-back composite → the frame's effects → the capture →
+each output's picture, the hands over it, the readout and the master
+dim. With the look-back, effects and ghost off and the dim at full, the
+output is bit-identical to the scene pass alone. The renderer re-binds
+its target on every exit, a raise included, so a failing node never
+strands a framebuffer.
 
 **The look-back** (`lookback.py`, LOOKBACK page) keeps an atlas of
 downsampled echoes of past frames and one dream buffer, and composites
@@ -346,12 +561,26 @@ LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
 **Effects** (`fx.py`, FX page). One GLSL file per effect in
-`shaders/fx/` — twelve ship: acid, deconverge, doublevision, fractals,
-glimmer, huecycle, kaleido, plasma, tripcolour, warp, wobble, zoomblur
-(`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
+`shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
+glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
+zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
-`on mix speed blend order target` per effect; `fx.on` bypasses the stack
-and `fx.mix` scales it. The folder is polled every 30 frames; a parse
+`on mix speed blend order target` per effect; `// @mix <value>` sets the
+effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
+and `fx.mix` scales it.
+
+**The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
+so last in the chain, after the look-back and before the dim — and
+before the hands unless an output sends them through the effects). Off and at `@mix 0` by default, so switching it on changes
+nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
+triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
+neighbouring hues stay neighbours, no seam) and rescales saturation and
+value linearly into `sat_lo`–`sat_hi` and `val_lo`–`val_hi`. Mode 1
+(**gradient map**) maps brightness through the first `anchors` (2–4) of
+four anchor colours, `a1`–`a4` hue / sat / val, a grey ramp by default.
+On a see-through ground the result is scaled by the pixel's alpha. A
+saved palette is an `fx` module preset; no palette ships in
+`library/fx/` (the owner's are made at the venue). The folder is polled every 30 frames; a parse
 error keeps the last version, a compile error skips the pass. Factory
 effect presets are `library/fx/*.json`.
 
@@ -363,7 +592,11 @@ effect presets are `library/fx/*.json`.
   stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
   to fix it; its controls stay live under a veil. **Drag a chip by its
   name** onto another to put it before that one (or onto the right half
-  of the last to move it to the end): one undo step.
+  of the last to move it to the end): one undo step. The open strip
+  packs params that share a stem and end `_lo`/`_hi` or
+  `_hue`/`_sat`/`_val` onto one row (`ui_fx.strip_rows`), and the
+  palette shows only its open mode's rows (`ui_fx.HIDDEN_BY_MODE`; the
+  hidden ones stay routable), so the page fits without scrolling.
 - **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
   (the default) or `faces`: the **ONTO frame · faces** chips at the
   right end of the open strip's title line, the lit one where it runs
@@ -376,6 +609,84 @@ effect presets are `library/fx/*.json`.
   the faces has a diamond LED. With an effect on the faces, every face
   shows face 0's pattern phase; the echoes and the dream carry the
   faces' effects, never the frame's.
+
+**Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
+`params.instance_of`, pinned by `tests/test_params.py`). A render node's
+params are `<node>.<key>`, where `<node>` is the node's prefix —
+`fx.<file>` for an effect, `ghost` for the hands, `dream` for the
+look-back. **The first instance of a node keeps today's ids**
+(`fx.acid.mix`, `ghost.alpha`, `dream.mix`). Only an extra instance is
+marked, and the marker is its number, 2 or more, as a segment **right
+after the prefix**: `fx.acid.2.mix`, `ghost.2.alpha`, `dream.3.mix`.
+The marker is never a new first segment: the first segment is the
+group, the group decides whether a param is in a preset (`part_of`),
+and an extra instance belongs where its first does. So a graph with one
+instance of everything — every preset and binding written before the
+graph — never migrates. No effect file and no param key may be purely
+decimal, or it would read as a marker.
+
+The rule as built (plan 26 A4): `fx.<file>.<n>.*` for an effect (the
+effect named `acid.2` in `FxState`), `ghost.<n>.*` for a hands node,
+its layer `hands.<n>` and readout `readout.<n>` (node names, not param
+prefixes), and a point cloud's nodes `cloud.<n>` (which share `cloud.*`
+for now). No `dream` instance exists yet. A load sorts the instance ids
+in a preset's `values` (`params.is_instance_id`) against the graph it
+lands, so an id whose node is not in the graph is an unknown id with a
+note. `fx.parse` refuses a `@param` key of digits alone, and
+`FxState.load` an effect file whose stem has a dot or is digits alone
+(`acid.2.glsl` would read as an instance). The pipeline nodes
+`fx(scene+hands)` and `composite(hands)` are names only, never param
+prefixes.
+
+**GPU time per node** (`render.PassTimer`): one `GL_TIME_ELAPSED` query
+around each node a frame (a node that runs several times is summed; one
+that did not run counts 0; queries never nest), read 3 frames late
+(`LAG`) so the CPU never waits on the GPU, kept as a rolling median over
+60 frames (`WINDOW`) in `Renderer.stats["gpu_ms"]`, in the graph's
+order. The SYSTEM page shows "gpu per node, ms (median of the last
+frames):" and one line per node (`Graph.timed`: every node that times
+itself and every solid geometry a scene draws); a node that leaves the
+graph leaves the list. Without timer queries `stats["gpu_note"]` says
+why ("gpu: no GPU timer queries on this context …") and the pixels are
+the same. Apple's driver reads some tiny nodes as 0.00; the figures are
+GPU time, not the CPU's.
+
+**Golden frames** (`tools/golden_frames.py`, `tests/golden/frames/`).
+Every factory preset (`preset.FACTORY_PRESETS`) is loaded through the
+real `Presets` into a throwaway home, with two synthetic hands
+(`tests/fake_hands.py`: the left open, the right a fist) present or
+absent through the real `HandsIO`, the ghost on, the LFOs and the
+analyzer at rest (never stepped, never fed), the dream off, the preset's
+own look-back kept, and drawn for 8 frames at 1/60 s on a pinned clock at
+960×600, dpr 1: the eight `Switches` states as eight outputs of one
+frame (output 1 4× MSAA like the window); `solo` (output 1 alone, drawn
+direct) and, for the presets with an effect on,
+`solo-scene+hands+through`; party-trip once at 3840×2160 (2×, 1080p
+logical) under the 1080p cap; the other wirings (`in-scene/…`,
+`depth/…`, `history+hands/…`); the fixture presets
+(`FIXTURE_PRESETS`: `hands-lines`); and a recorded cloud listed in a
+scratch config (`cloud/…`). A golden is the SHA-256 of the
+full-resolution RGBA frame, with a quarter-size PNG per distinct picture
+and the route each state reached: **556 goldens, 130 distinct
+pictures**, recorded on `GL_RENDERER` "Apple M3 Max" (GL_VERSION "4.1
+Metal - 90.5"). `tests/test_golden_frames.py` compares every hash
+exactly there and skips with a note on any other renderer. The tool:
+
+```bash
+uv run python tools/golden_frames.py                          # diff; "all 556 frames match their goldens (…)"
+uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
+uv run python tools/golden_frames.py --record                 # re-record every golden
+uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
+```
+
+A diff that finds moved frames prints `MOVED …` per frame and writes a
+contact sheet (golden | now | difference ×4) to
+`docs/plans/assets/26-render-graph/golden-diff-<presets or all>.png`; it
+refuses to diff on another renderer. Re-record only what a change moved,
+on the gate Mac, and name each moved frame and its one reason in the
+commit and the PR; a moved frame for a change that should move nothing
+means the change is wrong. Which WPs moved which frames, and why, is in
+[`plans/26-render-graph.md`](plans/26-render-graph.md).
 
 ## 3. Running it
 
@@ -525,10 +836,16 @@ on the SYSTEM page; a value of the wrong kind is its default with a note
 on stderr and the SYSTEM page — never a dead launch.
 
 ```toml
-[midi]                  # the MIDI adapter (midi.py)
+[[devices]]             # the rig's devices (plan 27, devices.py), one table each, in poll order
+role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
+kind = "midi"           # midi · gamepad · hands · bridge · midi-out · osc · cloud
+enabled = true          # false: listed as `off`, nothing opened, its adapter never imported
+port = "APC40"          # …then the kind's own keys (below)
+
+[midi]                  # the MIDI table: still read when there is no [[devices]] list
 enabled = true          # false: no MIDI at all (Learn's menus still work)
 # port = "APC40"        # substring of the port name; unset = the profile's ("APC40")
-profile = "apc40"       # device profile: hyperspace/apc40.py
+profile = "apc40"       # device profile: hyperspace/apc40.py, or "generic" (generic.py)
 map = "midi_map.json"   # an old map, read once when bindings.json does not exist
 
 [output]                # output 1 and the control window
@@ -552,6 +869,7 @@ dim = 1.0               # under 0.1 is 0.1, with a note
 
 [gamepad]
 enabled = true          # an Xbox-layout pad over GLFW; inert when absent
+usb = true              # no pad in GLFW: look for a wired Xbox 360 pad over libusb
 
 [bridge]                # the analyzer's lanes out / external lanes in (bridge.py)
 enabled = false
@@ -561,7 +879,8 @@ encoding = "pitch"      # "pitch": lane i → pitch bend on channel+i; "cc14": C
 channel = 0             # 0-based
 cc = 16                 # cc14: first MSB controller (0–31)
 rate = 100              # messages a second per lane at most (0 = every frame)
-send = ["lane:*"]       # "lane:*", "lane:3", "param:<id>", in lane order
+send = ["lane:*"]       # "lane:*", "lane:3", "param:<id>", in lane order — read once,
+                        # into bindings.json's sink rows (§13)
 in_lanes = 16
 
 [dream]                 # the look-back's dream worker (dream.py, torch)
@@ -575,7 +894,8 @@ enabled = false         # true opens the tracker; off, `leap` is never imported
 mode = "desktop"        # camera looks up; "screentop" looks down; "hmd"
 dofs = ["x", "y", "z", "roll", "pitch", "yaw"]   # per hand; also grab, pinch,
                         # grab_angle, pinch_mm, pinch_index … pinch_pinky
-out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new virtual port ("" = none)
+out = "Hyperspace Hands"   # MIDI out for a DAW: port substring, else a new virtual port ("" = none);
+                           # becomes the `hands-daw` midi-out entry at load (§12)
 channel = 16            # 1-based
 cc = 102                # left hand cc…cc+n−1, right cc+n…cc+2n−1
 presence = true         # a note on/off as each hand enters / leaves
@@ -607,6 +927,120 @@ Rules worth knowing:
   `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
 
+### The device list
+
+Every input and output is a `[[devices]]` entry (plan 27). Without a
+list, nothing changes: the four device tables above — `[gamepad]`,
+`[midi]`, `[hands]`, `[bridge]`, with their defaults — become the
+equivalent entries at load, in that order, as roles `pad`, `apc40` (the
+MIDI profile's name), `leap` and `bridge` (`config._translate`), with
+**one note per table the file holds** ("config: [midi] is now a
+[[devices]] entry (role = 'apc40', kind = 'midi') — see config.py"),
+on stderr and the SYSTEM page, until the file is renamed. With a list,
+the list says, and each of those tables left in the file is ignored
+with a note ("config: [[devices]] is listed, so [midi] is ignored — its
+midi entry says"). The first entry of each of those kinds is folded back
+into its table (`cfg["midi"]`, `cfg["hands"]`, …), so code that still
+reads them reads the entry. `[dream]` stays a table: it is a worker, not
+a device. Today's rig as a list (this exact block equals the old tables,
+`tests/test_devices.py::test_todays_rig_as_a_devices_list_equals_the_old_tables`):
+
+```toml
+[[devices]]
+role = "pad"
+kind = "gamepad"
+
+[[devices]]
+role = "apc40"
+kind = "midi"
+port = "APC40"
+
+[[devices]]
+role = "leap"
+kind = "hands"
+enabled = false
+
+[[devices]]
+role = "bridge"
+kind = "bridge"
+enabled = false
+```
+
+Every entry has `role` (required, unique, no `:`), `kind` (required)
+and `enabled` (true unless false; anything else is true with a note), and
+then its kind's own keys, each defaulting as the old table does
+(`config._kind_defaults`) — except `osc` and `cloud`, which have no old
+table: their defaults live in `osc.py` (`DEFAULT_HOST`, `DEFAULT_PORT`,
+`TIMEOUT_S`, `Layout`) and `devices.CloudDevice`, and config passes their
+keys through unchecked:
+
+| Kind | Its keys (defaults) |
+|---|---|
+| `midi` | `port` (a substring; required for `generic`), `profile` (`"apc40"` or `"generic"`), `map` |
+| `gamepad` | `usb` (`true`; the one USB reader is lent to the first `usb = true` pad with no GLFW joystick), `joystick` (none: the next free GLFW joystick; `0`–`15` pins that index — anything else is a note and dropped) |
+| `hands` | the whole `[hands]` table (`hands/core.py` `DEFAULTS`); a relative `calibration` or `tape` is the config's folder's |
+| `bridge` | `out` (`"IAC"`), `in` (`""`), `encoding` (`"pitch"`), `channel` (0), `cc` (16), `rate` (100), `send` (`["lane:*"]`, read once into sink rows, §13), `in_lanes` (16) |
+| `midi-out` | `port` (required), `virtual` (`true`: make a virtual port of that name when none matches), `carries` (a hands role whose DAW messages it sends), `encoding`, `channel`, `cc`, `rate` (its sink rows' wire, as the bridge's; `config.MIDI_OUT`) |
+| `osc` | `host` (`"0.0.0.0"`), `port` (9000), `axes` (OSC addresses, `["/x", "/y"]`; none by default), `hits` (addresses; none), `rest` (a number, or a table per address; 0), `range` (`[0, 1]`), `timeout` (5 s), `hold` (`true`) — checked by `osc.Layout` when the device opens |
+| `cloud` | `file` (required; relative to the home), `rate` (the file's), `loop` (`true`) |
+
+A missing or bad `role`, a role listed twice, or no `kind` drops the
+entry with a note; an unknown kind is kept as an `error: unknown kind
+'x'` line. A kind's keys are checked when the device opens: a bad value
+is an `error: …` line on SYSTEM and one note, never a dead launch.
+**`[hands] out`** — on the old table or on a hands entry — becomes a
+`midi-out` entry right after the first enabled hands entry (`role =
+"hands-daw"`, `port` = the old `out`, `carries` = the hands' role),
+unless the list already has a `midi-out` carrying that role; one note
+only when the file wrote `out` itself (`config._daw`).
+
+**The list is watched.** Every 30 frames (`devices.WATCH_FRAMES`) the
+registry looks at `config.toml`'s mtime; when it moved it re-reads the
+device list only (`config.read_devices`; nothing else in the file is
+re-applied). A parse error or an entry that would be dropped is one note
+— "config: [[devices]] not applied — … — the old list stands" — and
+nothing changes; otherwise an unchanged entry keeps its device, a
+changed one is closed and opened again ("devices: apc40 changed —
+reopened"), a new one opens ("added"), one that left closes ("removed").
+Everything else in `config.toml` still needs a relaunch.
+
+**A device that fails** to open (a missing tape or recording, a busy UDP
+port, a bad key) is an `error: …` line and one note, tried again every
+2 s five times, then every 10 s, and comes up with no relaunch; one whose
+hardware is simply absent is `lost` and looks for it itself. A device
+that raises on a frame shows the error on its line and the hot-reload
+toast; the frame and every other device go on. The registry claims
+(scheme, role), not scheme (plan 27 B6): **two pads** both open — the
+first enabled `gamepad` entry is the primary (its rows unqualified,
+`pad:A`, `axis:LX`), each later one publishes under its role
+(`pad@p2:A`, `axis@p2:LX`) — but two enabled entries of a kind that
+cannot qualify are not: a second hands device is `error: feeds 'hand',
+which leap already feeds — not opened` (two Leaps are plan 29's). Each
+pad reads its own controller: the next present GLFW joystick no other
+pad has taken, in list order, or the entry's `joystick = n`; one whose
+joystick leaves is `lost` and takes the next free one that appears (a
+pinned one waits for its index; two entries pinned to one index: the
+second is dropped with a note). **The libusb reader is one, lent, not
+owned** (`gamepad.Claims.lend`): each poll it goes to the pad holding it
+while that pad has `usb` on and no GLFW joystick (sticky), else to the
+first `usb = true` pad in list order with no GLFW joystick; a pad that
+finds a GLFW joystick hands it back that poll. So the Bluetooth pad
+plus the wired Afterglow work with both entries at the default `usb =
+true`: the Bluetooth pad's line says `glfw 0  ·  usb: lent to p2`. The
+reader closes when the last pad that could borrow it closes.
+
+**A recorded point cloud** (`kind = "cloud"`, `file =
+"clouds/knot.npz"`): a `devices.write_clouds` file (version-1 `.npz`:
+`rate`, ragged `offsets`, `points`, optional `colors`) played at its own
+rate against the frame clock (`loop = false` holds the last frame). It
+publishes a `devices.PointCloud` — read-only N×3 float32 points, `t`, a
+counting `frame`, `bounds`, optional colours — on the registry as
+`cloud:<role>` (`DeviceRegistry.clouds`), never through the router;
+the renderer's point-cloud node draws it in the scene (§2, "The point
+cloud").
+`tools/cloud_fixture.py`
+writes the test fixture `tests/fixtures/clouds/knot.npz`.
+
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
@@ -630,7 +1064,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
-| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **midi**: knob smoothing, the port's state, the learn line; **bridge**: port, encoding, messages sent or why it is off. |
+| SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
 
@@ -704,7 +1138,16 @@ footer line. No click maps until the mouse has moved 12 px from the click
 that picked. An invariant control, or any control while SHIFT is
 latched, is picked only to show its line; the header says why. With
 "Learn desk" armed, a click on the diagram completes the learn as a
-knob would.
+knob would. **While a mappable control is picked, the desk offers this
+preset's params** (plan 24) in a list on its empty ground under the
+transport row (`ui_desk.OFFER`, which covers no control), ranked by
+`learn.ranked` in four tiers — routed (a route or macro moves it), moved
+(its base is off the group default), on (it belongs to an effect, the
+look-back, the faces, the points or the lines, and that is on), on the
+desk — never offering one the preset cannot show (`learn.cannot_show`).
+A chip, "all params ▾" ("all ▾" on the small desk), opens the same list
+and a menu per group of the rest. A click on an item maps the control
+there through `Learn.map_picked`, the same road as a click on a page.
 
 ## 7. Keys and the gamepad
 
@@ -737,10 +1180,55 @@ exactly the held ones that some row on that key names (`SHIFT`, `SUPER`,
 the key names is ignored.
 
 **Gamepad** (Xbox layout, Bluetooth or USB; `gamepad.py` keeps its own
-button map): A pause rotation · B next preset · X points · Y faces ·
-LB / RB previous / next shape · d-pad brightness (↑↓) and speed (←→) ·
-left stick orbit, right stick zoom, a stick click resets · LT / RT 4D
-depth out / in · VIEW panel · MENU cheat sheet.
+button map; the factory rows in `bindings.default.json`): A faces · Y
+lines · B / X next / previous preset in the PRESETS list · LB / RB
+previous / next shape · d-pad brightness (↑↓) and speed (←→) · left
+stick orbit, its click resets the camera · right stick ↕ zoom, ↔ the
+spin of the W planes, its click resets the 4D spin · LT / RT 4D depth
+out / in · START and BACK unbound (hand check 144).
+
+**The pad is a device** (plan 27): a `[[devices]] kind = "gamepad"`
+entry (`role = "pad"` from the old `[gamepad]` table). It finds a pad
+itself every poll — GLFW first, then a wired 360 pad over libusb with
+`usb = true` — so absent it is `lost`, never an error; ⌘R and quit
+close it, stopping the USB reader (`Pad.close`). In the scene-setter
+slot it is polled, offered to an armed **Learn pad**
+(`gamepad.learn_from`), delivers its rows (`Router.pad`: the `axis`
+lanes fed, with names, labels and rests from `gamepad.publish`, then the
+button and d-pad rows), then runs the sticks' default camera job
+(`gamepad.steer`): every stick or trigger no route names moves its
+camera param through `nudge` / `scale`, through the pad's feel
+(`desk.pad.*`, SYSTEM → gamepad). **Several pads** (plan 27 B6): each
+`gamepad` entry is a pad device reading its own controller (§5). The
+first enabled one is the primary: the factory pad rows, every row
+written before B6 and the sticks' camera job are its. A second pad
+(`role = "p2"`) feeds `axis@p2` and fires only `pad@p2:…` / `hat@p2:…`
+rows; it starts with none and gets them from Learn pad (which completes
+on whichever pad moves) or ROUTING, where its axes are listed as
+`axis@p2 left stick X`; its unrouted sticks do nothing. One feel for
+every pad. Its SYSTEM line names the joystick it reads (`glfw 1`).
+
+**A phone, or any OSC sender** (plan 27, `osc.py`): one `[[devices]]
+kind = "osc"` entry, no code. Its role is its scheme: `axes = ["/x",
+"/y"]` are the sources `phone:x`, `phone:y` (the address without its
+`/`; `/1/fader3` is `phone:1/fader3`), routable like a hand axis and
+offered on ROUTING; `hits = ["/hit"]` are buttons, `phone:hit`, whose
+rows act when the velocity (the message's first number, 0–1, or 1 with
+none) is above 0 — `abs` lands the velocity, `momentary` holds a toggle
+until a 0 comes. An axis's value is the message's first number mapped
+from `range` (default `[0, 1]`) and clamped; until a message arrives it
+reads nothing, so no route moves at launch. The line reads `connected`
+while a message came within `timeout` (5 s), `lost` otherwise; while
+lost the axes hold their values unless `hold = false`. **Learn phone**
+on a param's menu takes the next fader moved a quarter of its travel (a
+route) or button pressed (a session row). The socket (UDP, `0.0.0.0:9000`
+by default) is read without a thread in the scene-setter slot, at most
+512 datagrams a frame; a datagram that is not OSC is counted on the line;
+a port another program holds is an `error:` line, retried until it
+frees. macOS asks once whether Python may accept incoming connections:
+allow it. A role that is a row kind or a built-in scheme (`cc`, `pad`,
+`lane`, `lfo`, `cloud`, …) is refused on open. Only a message's first
+number is read; there is no OSC output yet.
 
 ## 8. The APC40
 
@@ -768,12 +1256,13 @@ doing its job while a learn is armed.
 
 | Control | Layer | Does |
 |---|---|---|
-| S1–S6 | invariant | band 1–6 post-drive |
-| S7 · S8 · SM | invariant | master dynamics · master trim · master gain |
+| SM | invariant | master gain (the audio drive) |
 | X (crossfader) | invariant | **master dim**: left black, right full |
 | Clip row 1 (G1·1–8) | invariant | bank slots 1–8 (as F1–F8) |
 | Clip rows 4–5 (G4·*, G5·*) | invariant | bank slots 9–16 and 17–24 |
-| Clip-stop row (G6·1–8) | free | nothing by default (dark); Learn it for toggles |
+| Clip stop 8 (G6·8) | invariant | **SAVE**: held, a bank pad's tap saves into its slot (lit while held) |
+| Clip stops 1–7 (G6·1–7) | free | nothing by default (dark); Learn them for toggles |
+| Scene launch 1–4 (G1·9–G4·9) | invariant | points, lines, faces, rotate (each LED the live state) |
 | OVERDUB | invariant | **home** (lit while the show names a "starts on") |
 | QUANT | invariant | next filled bank slot |
 | SHIFT | invariant | latch the global layer |
@@ -786,48 +1275,121 @@ doing its job while a learn is armed.
 | MASTER select · PAN | invariant | overlay · overlay click-through |
 | D1–D8 | global | the selected band's strip: trim, contrast, transient, pre, post, attack, decay, threshold |
 | K1–K5 | global | hand steadiness, response, catch, the selected axis's return, BPM (K6–K8 dark) |
+| S1–S6 · S7 · S8 | global | band 1–6 post-drive · master dynamics · master trim (`apc40.SHIFT_FADERS`) |
 | Clip row 2 · row 3, columns 1–3 | global | band scenes 1–8 · 9–11 |
 | K1–K8 | preset (factory default) | brightness, speed, instances, pattern mix, field amp, field rate, bitmap opacity, zoom |
 | D1–D4 | preset (factory default) | 4D depth, camera yaw, camera pitch, pattern (D5–D8 dark) |
+| S1–S8 | preset | the preset's own fader rows; **none by default**, so dark on every factory preset |
 | C (cue knob) | preset | step the shape, one click a shape |
 | Activator (G8), columns 1–6 | preset | toggle planes ZW, XW, YW, XY, XZ, YZ |
 | Row 3, columns 5–8 | preset | field motion STILL, ORBIT, WAVE, RIPPLE |
-| Scene launch 1–5 | preset | points, lines, faces, rotate, reset view |
+| Scene launch 5 (G5·9) | preset | reset view |
 | ▲ ▼ | preset | brightness up / down |
 
 The preset rows above are what a fresh preset starts with
 (`apc40.SCENE` on D1–D4); a factory or user preset with knobs of its own
 replaces all eight device knobs, and a preset with an empty desk has
 every preset-layer control dark. D4 steps through the seventeen
-patterns, which show only where faces are drawn.
+patterns, which show only where faces are drawn. **The track faders are
+the preset's** (plan 24): a preset binds them in its desk like the knobs
+(`preset.track_fader(k, target)`, `knob_desk(targets, faders=…)`),
+nothing is inherited, and a preset that binds none leaves them dark —
+today every factory preset. The factory preset files still carry four
+scene-launch toggle rows from before plan 24; a load drops exactly those
+four without a note (`routing.TOGGLE_DESK_ROWS`), and any other preset
+row on an invariant control with the usual note.
+
+**Desk templates** (plan 24). A template is a named binding set,
+`<library>/desk/<slug>.json` (`{"schema": "hyperspace.desk/1", "name",
+"note"?, "desk": [rows]}`), read by `Library.desk_template`; the
+factory has no templates (`hyperspace/library/desk/` need not exist),
+and the owner's sit in
+the library, so a shared `[library] path` shares them. A preset that
+says `"desk_template": "<name>"` keeps only its overrides in `"desk"`: a
+row replaces every template row on the same control, and `{"source": …,
+"dark": true}` leaves a template control unmapped. A load expands it
+(`preset.expand_desk`: the template's rows not overridden, then the
+overrides); a save writes the name and the rows that differ from the
+template as the load read it (`compact_desk`), so a template edited on
+disk reaches every preset that uses it at its next load and never turns
+into overrides. A missing template is a note and the overrides alone. A
+preset with no `desk_template` loads and saves as before. No UI writes a
+template yet; `preset.template_doc` and a text editor do.
+
+**The coverage report.** `uv run python tools/desk_coverage.py` loads
+every preset in a scratch home and marks each of the preset layer's 38
+controls (D1–D8, K1–K8, S1–S8 and the factory map's other preset-layer
+controls) **mapped**, **dark** or **dead** — a row whose param the
+preset cannot show (`learn.cannot_show`: a pattern knob with the faces
+off, a bitmap knob with no bitmap, an effect's knob with it off, …). It
+writes [`plans/assets/24-party-fixes/desk-coverage.md`](plans/assets/24-party-fixes/desk-coverage.md);
+`--check` says whether that file is stale, `--stdout` prints it, and
+`--library DIR` prints a report that adds that library's presets and
+templates (copied, never written; the committed file is untouched). The
+owner's bar for the authoring pass is at most four dark or dead per
+preset; today no preset meets it.
 
 **Bank pad lights** (rows 1, 4, 5): green while its preset is the loaded
 one, amber while its slot holds another preset (velocity 5, Akai's
 "yellow"; `apc40.filled_of`), dark when empty. The diagram draws amber at
 half strength with the preset's name.
 
-**Save on the desk.** Hold an **empty** bank pad (clip rows 1, 4 and 5)
-for 0.6 s (`midi.HOLD_S`): the live state is saved as a **new** user
+**Save on the desk: the two-handed save** (plan 24). Hold **SAVE**
+(track 8's clip stop, `apc40.SAVE`) and tap a bank pad (clip rows 1, 4
+and 5), on either layer: the live state is saved as a **new** user
 preset named from the loaded one with the next free number (TRIP → TRIP
 2; with nothing loaded, PRESET 1; it never overwrites a file and never
 hides a factory preset), it becomes the loaded preset and goes into
 *that* pad's slot, and the show is written at once ("saved TRIP 2 →
-F6", or "→ slot 10"); the pad blinks for 1.5 s. Holding a filled pad
-just loads it — nothing is written. To make room, free a pad on the
-PRESETS page: right-click its slot → **free this pad (keeps the
-preset)**; the preset stays in the list. (Until 2026-10-09 the
-clip-stop row was a SAVE AS bar into the next empty slot; that row is
-free now.)
+F6", or "→ slot 10"); the pad blinks for 1.5 s (`midi.BLINK_S`). **A
+filled pad takes the new preset too**: the slot points at it, and the
+preset it named keeps its file and stays in the list, unpadded ("… (TRIP
+2 is still in the preset list)"). Nothing is overwritten and nothing
+goes to the trash (`library.Project.save_into`). The tap never loads the
+pad; SAVE alone does nothing. SAVE is a `momentary` row on the session
+param `desk.save`, lit while held: it is never latched or learned, a
+reconnect lets go of it, and where the owner's `bindings.json` already
+holds clip stop 8 it is not added and every launch says so. **Holding an
+empty bank pad** for 0.6 s (`midi.HOLD_S`) still saves into it the same
+way (`Project.save_empty`); holding a filled pad just loads it. To free
+a pad, right-click its slot on the PRESETS page → **free this pad
+(keeps the preset)**. (Until 2026-10-09 the clip-stop row was a SAVE AS
+bar into the next empty slot.)
+
+**Every load relights the whole desk** (plan 24). On a preset load, and
+at power-up, every control of the layout that no active row draws is
+sent dark (`MidiIO._dark_desk`), not only those a row once named, so a
+light another program left on goes out.
+
+**The desk log** (SYSTEM page, under **midi**, the fold "desk log"):
+the last twenty presses (`midi.DESK_LOG_SIZE`), newest first, each with
+the time, the control ("G1·5 (clip 1·5)"), what it did ("Preset →
+TRIP", "nothing (no row on the preset layer)", "saved into slot 15: TRIP
+2", "held: nothing saved (a filled pad only loads)") and the layer it
+was read on ([preset], [global], or [both] for an invariant control).
+Button presses, holds that fired and two-handed saves are logged; knob
+and fader moves are not. It is in memory only.
 
 **Knobs and faders.** The track and device knobs are endless encoders:
 the app sets their position with the ring's CC, so a knob continues from
 its ring after a layer switch or a preset load. The faders are real pots
 with **soft pickup**: after a change they do nothing until moved through
-the param's value. A fader keeps its catch through a preset load unless
-the load moved its param, so the crossfader and the faders (all session
-params) carry on from where they are. A fader moved while its row is
-disabled, or while an armed learn takes its messages, picks up again
-from where it is (`MidiIO._passed_over`) rather than jumping.
+the param's value. **A load lets go of every fader the new preset
+binds**, so each picks up from the new preset; a fresh row starts from
+where its fader physically is (the last value it sent), so a fader
+already on the value catches on its first move. The session's faders —
+the crossfader, MASTER and the band strip under SHIFT — keep their catch
+through a load unless the load moved their param, so they carry on from
+where they are. **On a layer switch** each layered fader starts again
+from where it physically is and is caught only when its param already
+sits there, so a fader moved on one layer never jumps the other layer's
+param (the preset's on S1–S8, the band's under SHIFT). A fader not moved
+since launch or a reconnect has no position, and catches only on a move
+that lands on the value. A fader moved while its row is disabled, or
+while an armed learn takes its messages, picks up again from where it is
+(`MidiIO._passed_over`) rather than jumping. An older `bindings.json`
+moves its eight invariant track-fader rows to the SHIFT layer once,
+with a backup (`routing.FADER_SHIFT_ROWS`).
 
 **Knob smoothing** (`desk.slew`, "Knob smoothing", SYSTEM page under
 **midi**; off to 250 ms; the running app starts at **80 ms**,
@@ -844,7 +1406,35 @@ setting is saved with the show, never with a preset, and is on no knob.
 **Reconnect.** With no desk connected the app looks for it every 2 s
 five times, then every 10 s (`midi.RECONNECT_S`, `RECONNECT_FAST`,
 `RECONNECT_SLOW_S`); a desk that vanishes is looked for at the fast pace
-again. `[midi] enabled = false` stops all of it.
+again. Meanwhile its SYSTEM line reads `lost` and its rows wait; when it
+comes, it gets its power-up and every light. `enabled = false` on its
+entry (or `[midi] enabled = false` in the old form) stops all of it.
+
+**Several desks** (plan 27). Each `[[devices]] kind = "midi"` entry is a
+desk of its own — its `role`, its `port` and its `profile`: `apc40`, or
+`generic` (`generic.py`: plain CC, note and pitch; the app sends it
+nothing at all; every CC absolute with soft pickup, a note a toggle;
+no layout, so its line counts 0 sources; the entry must name a `port`).
+`bindings.json`'s top-level `"profile"` only says which profile its
+unqualified rows were written for; the entry's profile is the desk's.
+**One desk owns the unqualified rows** — every row in `bindings.json`
+and in every preset before plan 27 (`cc:0:48`): the first MIDI entry
+whose profile is `bindings.json`'s (`apc40`), else the first MIDI entry
+listed (`DeviceRegistry.midi_roles`). **Any other desk's rows carry its
+role** after `@` on the kind — `cc@launch:0:21`, `note@launch:0:40`,
+`pitch@launch:3` (`routing.QUALIFIER`) — and Learn desk writes that form
+for you; ROUTING and the footer say "MIDI CC 21 ch1 on launch". A knob
+on one desk never moves another desk's row. **SHIFT** (`desk.shift`) is
+the owning desk's latch; every other desk has a layer of its own
+(`Bindings.layer_of(role)`), the preset layer, and no SHIFT — so with
+the APC40 on SHIFT a second desk's rows still act and a learn on it
+still lands; a preset load drops every desk to the preset layer; a
+layer switch re-arms only that desk's faders. A desk learn replaces the
+param's knob on the same desk only (one knob per param per desk). The
+on-screen desk, the desk log and the panel's knob hints are the first
+open MIDI desk's (`ui_desk.py` draws the APC40 only): list the APC40
+first. A second APC40-profile desk gets its power-up and the lights of
+its own rows but no SHIFT.
 
 **Macros** (`macro.1`–`macro.8`) are knobs with subscribers: each
 subscriber sets a param's base or scales a route's depth over its own
@@ -872,6 +1462,19 @@ session's rows dim — then:
   can drive (not a setting such as `ghost.mirror`), for the sides the
   rig's axes have. Completed only by an axis of that hand; the other
   hand and the desk do their own jobs meanwhile.
+- **Learn pad** — while a pad is connected, wherever Learn desk is: a
+  button or the d-pad makes a session row in `bindings.json` (written
+  at once), a stick or a trigger a route in the preset (§7).
+- **Learn <role>** — on a modulatable param, for any other listed device
+  that feeds (plan 27; an OSC phone: "Learn phone"): completed only by
+  that device — an OSC fader moved a quarter of its travel lands a
+  route, a button a session row. What the menu offers is "desk" plus the
+  devices' `wants` (`Learn.wants`).
+- **Learn sink ▸** `<role>:<channel>` — on any param but a trigger, for
+  every sink port the rig lists (`bridge:3 · pitch ch4`): sends the
+  param's effective value out on that port (§13). It lands at once, as a
+  session row in `bindings.json` — no question, no undo step, no preset
+  dirt — and takes the port from whatever sent on it before.
 - **Cancel learn** while this param is armed.
 - **Unbind** — shown only when there is something to remove; a submenu
   ("desk — K2", "route — R height, LFO 1", "both") when there are both.
@@ -896,8 +1499,12 @@ from …"; one ⌘Z puts them back). An armed learn never times out.
 
 **The ROUTING page** is one page over the loaded preset: its head (the
 preset, its dirty dot, save / as…, which desk layer is up), the routes,
-the desk with its dark controls, the macros and their subscribers, and
-the session's MIDI rows read-only. **The filter** (left of `+ route`)
+the desk with its dark controls, the macros and their subscribers, the
+session's MIDI rows read-only, and the **sinks** (plan 27: each sink row
+with a checkbox and a ×, both writing `bindings.json`). A route's source
+list is the analyzer's lanes, LFO 1–4, then each listed device's sources
+in the `[[devices]]` order (`Router.schemes()`; a scheme a route names
+is offered too). **The filter** (left of `+ route`)
 keeps only the lines that contain every typed word, matched anywhere —
 a route's sentence, source, target and label; a desk line's glyph, Akai's
 name and target; a macro's id, label and subscribers. It is UI state:
@@ -1028,8 +1635,9 @@ no file. The band strips' 8-second "Reset all → Undo" is separate.
 
 ## 12. Hands
 
-Ultraleap hands (`hyperspace/hands/`), off until `[hands] enabled =
-true`. Each hand gives its palm's pose — six axes by default, from the
+Ultraleap hands (`hyperspace/hands/`), off until the hands entry says
+`enabled = true` (`[[devices]] kind = "hands"`, or the old `[hands]`
+table). Each hand gives its palm's pose — six axes by default, from the
 features in `hands/core.py` (`FEATURES`: x y z in mm, roll pitch yaw in
 degrees, grab, pinch, grab angle, pinch distance, four thumb-to-finger
 ratios) — plus eight pinch switches. Each axis is calibrated, smoothed,
@@ -1040,6 +1648,28 @@ routes; outside they go to a MIDI port for a DAW (`[hands] out`).
 `uv run python tools/hands_probe.py` shows every axis live without the
 app (`--calibrate 20` runs the sweep, `--solo right.pitch` sends one axis
 to the DAW).
+
+**On the device registry** (plan 27). The hands are a device:
+`hands/device.py`'s `HandsDevice` owns the `HandsIO` (it and
+`hands/panel.py` are the only files of the package that know the host;
+`core.py`, `signal.py`, `tape.py` import nothing from it). It makes the
+instrument's one call, `HandsIO.poll(dt, learn, router)`, in the
+registry's feed slot — after the audio step, before the LFOs — which
+reads the tracker, feeds `hand` and `hands`, completes a hand Learn and
+makes the frame's DAW messages. Its SYSTEM line counts the instrument's
+lanes as sources (42 with six axes a hand) and reads `connected` while
+the tracker gives frames, `lost` while it connects, and the tracker's
+own words otherwise (`error: no camera`, `error: service lost`) — the
+Leap SDK's thread reconnects by itself. A hands entry whose `open`
+fails (a missing tape) is retried on the registry's schedule. **The DAW
+out is a sink**: `HandsIO` opens no MIDI port; its messages wait in
+`HandsIO.outbox` and the `hands-daw` device (`kind = "midi-out"`,
+derived from `out` at load, §5) carries them after `reg.apply`
+(`HandsIO.carry`), looks for a lost port again on the MIDI schedule, and
+on its return sends `HandsIO.resync()` first, so the DAW catches up with
+where the hands are. Its line: `hands-daw · midi-out · connected · 0
+sources · 0 sinks · Hyperspace Hands · leap's DAW out · cc 102 = 64
+ch16`.
 
 **The HANDS page** (`hands/panel.py`): the setup strip (a setup is every
 per-axis and global hand setting, a module preset of the `hands` group);
@@ -1057,6 +1687,32 @@ box, the ghost hands: the **Ghost hands** tick; while it is on,
 on) and the ghost's notes — an error, or the unmeasured-mode note; while
 there is one the chip reads **! more ▸** in the warning colour and its
 hover says it. A narrower panel wraps a group onto the next line.
+Beside the axis rows, a column shows the dance sources and the grab
+(below) live, hollow while one reads nothing, its address and value on
+hover.
+
+**The dance sources and the grab** (plan 24, `hands/core.py`). Beside
+the twelve axes, each hand publishes `hand:<side>.curl.thumb` …
+`.curl.pinky` (how bent each finger is: the summed bend of its joints),
+`.spread` (the index–pinky fan in the palm's plane; a fist reads 0),
+`.energy` (the mean speed of the palm and the five tips, quick up and
+slow down) and `.flick` (a spike to the hit's strength when the fastest
+tip passes 1500 mm/s, decaying over about 0.15 s; a lane until a trigger
+kind exists), and `hand:<side>.grab`, 1 while the hand is a fist (the
+mean curl of the four fingers through a Schmitt gate: closes past 0.65,
+opens under 0.45, 0.05 s debounce). A second scheme, `hands:`, has
+`hands:gap` (the palms' distance) and `hands:twist` (the right roll less
+the left, 0.5 for mirror-image hands), live only with both hands in.
+Curl, spread and the grab need the skeleton; energy and flick fall back
+to the palm. Every range and time constant is a constant in the `DANCE`
+block of `hands/core.py`, tuned on synthetic hands. The `hand` vector is
+the axes, two presence lanes, the eight pinches, then the sixteen dance
+lanes, then the two grabs (40 with six axes a hand), so no older lane
+index moves; `Layout` holds every index and count. The published gates
+are the pinches then the two grabs. The new sources are picked on
+ROUTING (source or gate combo); a hand Learn still offers only the
+axes, none of them goes to the DAW port, and none has settings of its
+own.
 
 **The interaction box.** A hand counts only while its palm is inside a
 box in the camera's millimetres (x across, y up, z toward the
@@ -1088,9 +1744,15 @@ following the skeleton raw (no smoothing), a display only.
 All six are in the `ghost` group, a session group: saved with the show,
 never moved by a preset. `mirror`, `guide`, `tethers` and `style` are
 settings — a hand learn onto one is refused in words, and a preset's
-route onto one is dropped at load. The ghost has its own fixed camera
-framing the box (or, with no box, the calibrated ranges); a hand leaving
-fades out over 0.3 s and one coming back fades in over 0.1 s. Desktop is
+route onto one is dropped at load. The ghost hands are drawn in the
+shape's camera (plan 26, §2): the eye, and the calibration in
+`hands.json` — `"units": {"mm": null, "origin": null, "tilt": 32.0}`,
+"from the box" by default, which fits the padded box (or, with no box,
+the calibrated ranges) into a 16:9 picture of the eye, seen from 32°
+above; an `mm` or `origin` written there wins. `hands.json` is
+`hyperspace.hands/3`; an older file is kept as `hands.json.bak-v2` before
+the first rewrite. A hand leaving fades out over 0.3 s and one coming
+back fades in over 0.1 s. Desktop is
 the only tracking mode whose axes have been measured; with `screentop`
 or `hmd` and the ghost on, the HANDS page says so (in **! more ▸**). Where the hands show
 on each output, and whether the effects bend them, is §14.
@@ -1168,11 +1830,40 @@ the quantity is already even; the tag is in each knob's tooltip.
 **The tempo clock** (LFO page; B or TAP TEMPO taps, NUDGE shifts the
 downbeat) drives the four LFOs. It syncs to nothing outside the app.
 
-**The bridge** (`[bridge]`, `bridge.py`) sends the lanes (or any param)
-out as 14-bit MIDI — pitch bend per channel, or CC pairs — rate-limited
-and only on change, and turns the same messages coming in on `in` into
-`ext:<i>` sources for routes. Use two buses: IAC echoes. The SYSTEM page
-shows its state.
+**The bridge** (`[[devices]] kind = "bridge"`, or the old `[bridge]`
+table; `bridge.py`) sends the lanes (or any param) out as 14-bit MIDI —
+pitch bend per channel, or CC pairs — rate-limited and only on change,
+and turns the same messages coming in on `in` into `ext:<i>` sources for
+routes, published with labels ("ext 0" …) and rests (0). Use two buses:
+IAC echoes. It is one device with two halves: in the feed slot it
+receives and publishes `ext`; after `reg.apply` it sends its **sink
+rows** (`bridge.Sender`: quantise, change-gate, rate-limit, encode), so
+what goes out is this frame's effective value. Its SYSTEM line: `bridge ·
+bridge · connected · 16 sources · 2 sinks · IAC Driver Bus 1 · pitch, 16
+lanes · 41 sent`.
+
+**Sink rows** (plan 27). What a sink sends is rows in `bindings.json`
+(the session's: sinks are rig), `{"source": "param:view.bright",
+"target": "bridge:6", "op": "send"}` — a source `param:<id>` (the
+param's effective norm), `lane:<i>` (the lane as a route reads it) or
+`lane:*` (every lane from the row's channel on), a target `<role>:<k>`
+(the sink's lane k: with `encoding = "pitch"` the pitch bend on channel
+`channel + k + 1`, with `cc14` the CC pair `cc + k` / `cc + k + 32`). An
+explicit row wins its channel over a `lane:*`; a trigger or an unknown id
+sends 0. Make one with the param menu's **Learn sink ▸**, or on ROUTING →
+sinks; a sink row is never a performer, never in a preset, never asks
+Replace / Keep, and Unbind never removes it. **The old `send` list
+becomes rows once**: the first launch an entry with a `send` list (the
+bridge's default `["lane:*"]` included) is on and its role has no sink
+row, the list is written into `bindings.json` (slot k → `<role>:k`;
+`lane:*` takes the default layout's six channels before the next entry)
+with one note — "bindings: [bridge] send is now sink rows in
+bindings.json (lane:* → bridge:0, param:view.bright → bridge:6) — the
+rows say from here on; edit them on ROUTING (sinks)" — and the file's
+top-level `"sinks_seeded": ["bridge"]` marks it done, so rows you delete
+never come back and `send` is not read again. To translate an edited
+`send`, remove the role from `"sinks_seeded"`. A `midi-out` entry is a
+sink alone: its own port (§12) and its own sink rows on its role.
 
 ## 14. Outputs
 
@@ -1212,8 +1903,9 @@ learned onto a desk button.
 | off | off | — | black |
 
 "Hands shown" also needs `ghost.on` and a hand drawn this frame; with no
-effect on, "through" changes nothing. The echoes and the dream never
-hold the hands. With the guide on, its gauges and labels are drawn over
+effect on, "through" changes nothing. The echoes and the dream do not
+hold the hands unless a preset's graph wires the history to the scene
+with the hands (§2). With the guide on, its gauges and labels are drawn over
 the hands after the effects, so they are never bent. The OUTPUT page
 says in words what each output shows ("scene + hands through the
 effects · 64%", "black — the scene is off and no hand shows").
@@ -1305,14 +1997,48 @@ uv run ruff check .
   this machine's font metrics: in the cloud container test_fx's own two
   fit tests miss by 18 px, so a pass or a fail there says nothing about
   the Mac.
+- The golden frames: `tests/test_golden_frames.py` compares 556
+  full-resolution frames — every factory preset in every output state,
+  hands absent and present, the other wirings, the fixture presets and a
+  recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
+  (anywhere else it skips with a note). `tools/golden_frames.py` diffs
+  them and writes a contact sheet of what moved; `--record` re-records
+  (`--only` a few presets). How, when and why to re-record: §2, "Golden
+  frames". The render graph's own tests: `tests/test_graph.py`,
+  `tests/test_camera.py`, `tests/test_hands_node.py`,
+  `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
+  `tests/test_stroke_space.py`.
 - The shapes: `tests/test_shapes4d.py` holds every shape to its
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
   1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
   W plane; `tools/turntable.py` draws the same sweeps (§1).
+- Fixtures: `tests/fixtures/` holds the test-only presets, templates
+  and palettes a test copies into a scratch library (plan 24's
+  `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
+  `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, plan
+  26's `presets/hands-lines.json` and `camera/`, and
+  `macro-candidates/`). The folder
+  is gitignored at the repo root, so a new fixture is added with
+  `git add -f`. No test proves a mechanism by editing a factory preset.
+- The desk coverage report: `tests/test_desk_coverage.py` regenerates
+  `docs/plans/assets/24-party-fixes/desk-coverage.md` with
+  `tools/desk_coverage.py` and fails when the committed file differs by
+  a byte; after a change to a desk, a preset or `learn.cannot_show`, run
+  `uv run python tools/desk_coverage.py` and commit the report
+  (`--check` tells you whether it is stale).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
-  or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
-  and `undo.py` import nothing from the package; `library.py` never
+  or `dream`; importing `app` imports none of `midi`, `bridge`, `dream`,
+  `osc`, `leap`, `torch`, `pythonosc` (`devices.py` imports each inside
+  its device's `open`); `hands/core.py`, `hands/signal.py`, `lfo.py`,
+  `tempo.py`, and `undo.py` import nothing from the package; only
+  `osc.py` and `devices.kinds()` name the OSC device; `library.py` never
   imports `config`.
+- The devices: `tests/test_devices.py` (the protocol and the registry
+  over fakes), `tests/test_device_inputs.py` (two desks, the pad and the
+  hands on the registry, over a fake MIDI bus), `tests/test_sinks.py`,
+  `tests/test_osc.py` (`pythonosc`'s client to 127.0.0.1 on a port the
+  device bound itself) and `tests/test_clouds.py`.
+  `tests/test_app_boundary.py`'s `ORDER` pins the three device slots.
 
 What only a person at the machine can check is
 [`TESTING-GUIDE.md`](TESTING-GUIDE.md) and the numbered list in
@@ -1328,8 +2054,15 @@ What only a person at the machine can check is
   paces the loop on two real screens, and whether a non-waiting
   fullscreen output tears, is unknown.
 - **With no desk connected the app keeps looking** — every 2 s five
-  times, then every 10 s. Each look creates a CoreMIDI client; `[midi]
-  enabled = false` stops it.
+  times, then every 10 s. Each look creates a CoreMIDI client; `enabled
+  = false` on the desk's entry (or `[midi] enabled = false`) stops it.
+- **The render graph's wiring is the default graph's choices, not
+  cables.** A preset's `graph` section picks where the hands go, how
+  their layer is laid on and what the history holds; it cannot say which
+  output gets which hands node (the outputs are the session's switches),
+  and at most one hands node makes the layer. A node editor is plan 28.
+- **The golden frames prove pixels only on "Apple M3 Max"**; on any
+  other Mac the test skips.
 - **On the masked Heart, the W planes' readouts keep counting**: the
   VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
   planes turning while the picture turns in XZ, YZ and XY. Nothing says

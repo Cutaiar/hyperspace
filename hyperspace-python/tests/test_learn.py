@@ -551,7 +551,7 @@ def test_learn_refuses_the_global_layer_and_invariant_controls(tmp_path):
     # the invariant controls, through `learn_control` (a click's road): each
     # refused in its own words, the learn still armed, nothing bound
     for source, why in (
-            (f"cc:2:{apc40.CC_FADER}", "S3 (track fader 3) is invariant (the session's) — not learned"),
+            (f"cc:0:{apc40.CC_MASTER}", "SM (MASTER fader) is invariant (the session's) — not learned"),
             (f"note:0:{apc40.N_SHIFT}", "⇧ (SHIFT) is invariant (the session's) — not learned"),
             (f"note:0:{apc40.N_OVERDUB}", "B11 (OVERDUB) is invariant (the session's) — not learned")):
         assert not lrn.learn_control(source, apc40)
@@ -588,13 +588,13 @@ def test_accepts_by_want():
     axes and switches by name, and not the other hand's, a number or the
     desk; None accepts anything; nothing armed accepts nothing. `arm(None)`
     and `take` clear the want."""
-    from hyperspace.learn import WANTS
-
     lrn = Learn(NS(get=lambda pid: None), Bindings())
     desk = ("cc:0:48", "cc:*:16", "note:3:53", "pitch:0:0")
     left = ("hand:left.roll", "hand:left.pinch.index", "hand:left.present")
     other = ("hand:right.y", "hand:7", "lane:0", "lfo:1", "ext:2", "key:B")
-    assert WANTS == ("desk", "hand:left", "hand:right", "pad")
+    # plan 27 B2: what can be armed is the device registry's; a Learn
+    # handed none offers today's rig's
+    assert lrn.wants() == ("desk", "hand:left", "hand:right", "pad")
     assert not any(lrn.accepts(s) for s in (*desk, *left, *other))      # nothing armed
     lrn.arm("view.bright")
     assert lrn.want is None and all(lrn.accepts(s) for s in (*desk, *left, *other))
@@ -898,7 +898,7 @@ def test_unbind_is_one_undo_step_and_none_when_nothing_goes(tmp_path):
     assert labels(r) == [f"unbind {pid}"] and u.undo()
     frames(r, 3)
     # nothing goes: no push — the stack does not grow even before it settles
-    lrn.unbind(("band.0.post",))                             # a fader's: the session's
+    lrn.unbind(("output.dim",))                              # the crossfader's: the session's
     assert lrn.refused and "invariant" in lrn.last and u.stack == []
     free = next(p.id for p in r.reg if not any(b.target == p.id for b in table.bindings))
     lrn.unbind((free,))
@@ -986,20 +986,22 @@ def test_a_pick_on_an_invariant_control_or_the_global_layer_maps_nothing(tmp_pat
     settle(r)
     u.clear()
     before = rows()
-    s3 = control("S3")
+    # MASTER: the track faders are layered since plan 24 C2 (decision 17)
+    s3 = control("SM")
     # one rule, asked before the click and refused by after it (`learn.blocked`)
     assert learn.blocked(table, s3.source) == "invariant"
     assert learn.blocked(table, "cc:0:48") is None
-    assert ui_desk.mappable(table, s3) == "S3 (track fader 3) is invariant (the session's)"
+    assert ui_desk.mappable(table, s3) == "SM (MASTER fader) is invariant (the session's)"
     lrn.pick(s3.source)
     assert not lrn.map_picked("view.speed", apc40)
-    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
     assert lrn.control == s3.source and lrn.learning is None and rows() == before
-    # every invariant control of D6: the faders, the bank row, SHIFT, TAP,
+    # every invariant control of D6: MASTER (S1–S8 are layered since plan 24
+    # C2), the bank row, SHIFT, TAP,
     # METRONOME, NUDGE, the transport, the crossfader, OVERDUB (the clip-stop
     # row is free since 2026-10-09);
     # and since plan 19 WP2 clip rows 4 and 5, the bank's slots 9–24
-    for glyph in ("S1", "SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
+    for glyph in ("SM", "G1·1", "G1·8", "⇧", "B20", "B12", "B21", "B22", "B13", "B14",
                   "X", "B11", "G4·1", "G5·8"):
         c = control(glyph)
         assert "is invariant (the session's)" in (ui_desk.mappable(table, c) or ""), glyph

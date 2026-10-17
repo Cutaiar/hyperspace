@@ -258,7 +258,7 @@ def test_a_stick_let_go_glides_home_through_its_route(rig):
 
 def test_felt_is_none_while_the_feel_is_off_and_follows_when_on(rig):
     r, t = rig.router, rig.table
-    r._publish_axes()
+    gp.publish(r)                        # the pad's names and rests (plan 27 B2: the pad's)
     assert r.felt("axis", [1.0, 0.5, 0.5, 0.5, 0.0, 0.0], DT) is None
     t.pad_feel = Motion("follow", atk=0.0, rel=0.4)
     out = r.felt("axis", [1.0, 0.5, 0.5, 0.5, 0.0, 0.0], DT)

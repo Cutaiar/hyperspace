@@ -166,6 +166,7 @@ def test_a_desk_learn_ignores_the_pad(rig):
 def test_a_routed_axis_drives_its_param_and_is_claimed(rig):
     pad, r = ScriptedPad(), rig.router
     rig.table.add(Binding("axis:RT", "view.inst_amp", "position", 1.0))
+    gp.publish(r)                       # the pad names its axes (plan 27 B2: not the router)
     assert r.claimed("axis") == {gp.AX_RT}
     pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
     r.pad(pad)
@@ -344,3 +345,111 @@ def test_the_right_stick_click_resets_the_4d_spin(rig):
     for name in ("XY", "XZ", "YZ"):
         assert reg[f"rot.rate.{name}"].value == 3.0
         assert math.isclose(reg[f"rot.phase.{name}"].value, 1.0)
+
+
+# ---- a second pad (plan 27 B6) ----
+
+def test_learn_on_a_second_pad_writes_its_qualified_rows(rig):
+    """Learn pad completes on whichever pad moves; a second pad's rows
+    carry its role (``pad@p2:A``, ``axis@p2:LX``), the primary's stay
+    unqualified."""
+    two, lrn, t = ScriptedPad(), rig.learn, rig.table
+    lrn.arm("view.points", "pad")
+    two.frame()
+    two.frame(held={gp.A})
+    assert gp.learn_from(two, lrn, role="p2") is True
+    assert [(b.source, b.op) for b in t.bindings if b.target == "view.points"
+            and b.source.startswith("pad")] == [("pad@p2:A", "toggle")]
+    assert any(d.get("source") == "pad@p2:A" for d in on_file(rig.path))   # the session's
+    assert any(b.source == "pad:A" for b in t.bindings)                   # the primary's stays
+    lrn.arm("camera.yaw", "pad")
+    two.frame(axes=[1.0, 0, 0, 0, -1, -1])
+    gp.learn_from(two, lrn, role="p2")
+    b = t.owner("camera.yaw")
+    assert (b.source, b.op, b.value) == ("axis@p2:LX", "push", PUSH_DEPTH)
+    lrn.arm("view.inst_amp", "pad")
+    two.frame(hat=gp.HAT_DOWN)
+    assert gp.learn_from(two, lrn, role="p2") is True
+    b = next(b for b in t.bindings if b.target == "view.inst_amp" and b.source.startswith("hat"))
+    assert (b.source, b.op, b.value) == ("hat@p2:DOWN", "step", -1.0)    # DOWN steps down
+
+
+def test_two_pads_drive_their_own_routes(rig):
+    """A route from `axis@p2:LX` moves its param while `axis:LX` (the
+    primary) is untouched, and the reverse; the primary's camera job
+    counts only its own axes as routed."""
+    one, two, r, t = ScriptedPad(), ScriptedPad(), rig.router, rig.table
+    t.add(Binding("axis@p2:RT", "view.inst_amp", "position", 1.0))
+    t.add(Binding("axis:RT", "rot.rate.XY", "position", 1.0))
+    amp, rate = rig.reg["view.inst_amp"], rig.reg["rot.rate.XY"]
+    one.frame()
+    two.frame(axes=[0, 0, 0, 0, -1, 1.0])               # p2's right trigger, all the way
+    r.pad(one)
+    r.pad(two, role="p2")
+    r.modulate()
+    rig.reg.apply()
+    assert amp.value == pytest.approx(amp.hi) and rate.value < rate.hi
+    assert r.claimed("axis") == {gp.AX_RT} and r.claimed("axis@p2") == {gp.AX_RT}
+    one.frame(axes=[0, 0, 0, 0, -1, 1.0])
+    two.frame()
+    r.pad(one)
+    r.pad(two, role="p2")
+    r.modulate()
+    rig.reg.apply()
+    assert rate.value == pytest.approx(rate.hi) and amp.value < amp.hi
+
+
+def test_the_camera_job_is_the_primary_pads_only(rig, monkeypatch):
+    """Defaults author no look (decision 24): a second pad's unrouted
+    sticks do nothing; the primary's still orbit."""
+    from hyperspace import devices
+
+    ctx = devices.Context(reg=rig.reg, table=rig.table)
+    one, two = ScriptedPad(), ScriptedPad()
+    d1 = devices.PadDevice("pad", ctx=ctx, io=one)
+    d2 = devices.PadDevice("p2", ctx=ctx, io=two)
+    d2.qualifier = "p2"
+    yaw = rig.reg["camera.yaw"]
+    y0 = yaw.base
+    one.frame()
+    two.frame(axes=[1.0, 0, 0, 0, -1, -1])
+    for d in (d1, d2):
+        d._dt = 1 / 60                                   # (no poll: the pads are scripted)
+        d.act(rig.router)
+    assert yaw.base == y0                                # p2's stick: no camera job
+    assert float(rig.router.feeds["axis@p2"][0]) == pytest.approx(1.0)
+    one.frame(axes=[1.0, 0, 0, 0, -1, -1])
+    for d in (d1, d2):
+        d._dt = 1 / 60                                   # (no poll: the pads are scripted)
+        d.act(rig.router)
+    assert yaw.base > y0                                 # the primary's orbits
+
+
+def test_learn_p2_completes_only_from_the_second_pad(rig):
+    """"Learn p2" (the second pad's own want): a press on the primary does
+    not complete it; a press on p2 writes `pad@p2:A`."""
+    from hyperspace import devices
+
+    lrn, t = rig.learn, rig.table
+    one, two = ScriptedPad(), ScriptedPad()
+    lrn.devices = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", io=one), _second(devices.PadDevice("p2", io=two))])
+    assert lrn.wants() == ("desk", "pad", "p2")
+    lrn.arm("view.points", "p2")
+    one.frame()
+    one.frame(held={gp.A})
+    assert gp.learn_from(one, lrn) is False and lrn.learning == "view.points"
+    two.frame()
+    two.frame(held={gp.A})
+    assert gp.learn_from(two, lrn, role="p2") is True
+    assert [b.source for b in t.bindings if b.target == "view.points"
+            and b.source.startswith("pad")] == ["pad@p2:A"]
+    assert lrn.accepts("pad@p2:A") is False                 # (it landed: nothing armed)
+    lrn.arm("view.points", "p2")
+    assert lrn.accepts("pad@p2:B") and lrn.accepts("axis@p2:LX")
+    assert not lrn.accepts("pad:B") and not lrn.accepts("axis:LX")
+
+
+def _second(d):
+    d.qualifier = d.role
+    return d
