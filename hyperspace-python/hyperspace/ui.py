@@ -1530,8 +1530,11 @@ class Panel:
             if err:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         self._output_blocks()
-        self._venue_picker()
         if len(self.reg["output.monitor"].names) > 1:
+            # labelled, and on the label's own line: under the venue picker's
+            # combo an unlabelled one read as a second venue field
+            _micro("screen", TEXT)
+            imgui.same_line()
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
             size = getattr(getattr(self.renderer, "scene", None), "size", None)
@@ -1556,6 +1559,10 @@ class Panel:
             imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
+        # last on the page: a venue is what the *next* launch reads, not a
+        # control of this one — above the live Screen combo the two read as
+        # one thing (they are not: one restarts, one moves the window now)
+        self._venue_picker()
 
     def _outputs_now(self) -> tuple[bool, bool, float]:
         """(an effect is on, a ghost hand showed last frame, the master dim):
