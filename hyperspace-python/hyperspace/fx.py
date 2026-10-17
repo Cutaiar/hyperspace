@@ -622,6 +622,11 @@ def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
 class FxChain:
     """The ping-pong textures and one program per effect, on one GL context.
 
+    Plan 30 D0: the frame's effects are the render graph's `Effect` nodes,
+    one pass each (`run_one`) between textures of this chain's `pool`;
+    `run` (the whole stack as one block, from `begin`'s texture) is the
+    faces' chain's.
+
     A chain runs the effects aimed at its `target`: the frame's (the
     default — with every effect aimed at the frame it is the whole stack)
     or the faces'. A chain made with `programs=` another chain borrows that
@@ -674,16 +679,36 @@ class FxChain:
         return bool(self.state.chain(getattr(self, "target", FRAME)))
 
     def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
-        """The framebuffer the frame should be composited into this frame."""
-        if size != self.size or not self._tex:
+        """The framebuffer the frame should be composited into this frame
+        (`run`'s first texture: the faces' chain, and anything else that
+        still runs the stack as one block)."""
+        return self.pool(size, max(2, len(self._tex)))[0][1]
+
+    def pool(self, size: tuple[int, int], n: int = 2
+             ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
+        """The chain's half-float textures at `size`, at least `n` of them
+        (plan 30 D0): `run`'s two ping-pong textures, and the textures the
+        frame's `graph.Effect` nodes paint into — two for a straight run
+        of effects, one more for each effect held for the frame
+        (`graph.Graph.pool`). Made again, all of them, when the size
+        changes; grown by appending (a texture handed out this frame stays
+        what it is); shrunk only by `fit_pool` and `release_targets`."""
+        if size != self.size:
             self.release_targets()
             self.size = size
-            for _ in range(2):
-                tex = self.ctx.texture(size, 4, dtype="f2")
-                tex.repeat_x = tex.repeat_y = False
-                self._tex.append(tex)
-                self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
-        return self._fbo[0]
+        while len(self._tex) < n:
+            tex = self.ctx.texture(size, 4, dtype="f2")
+            tex.repeat_x = tex.repeat_y = False
+            self._tex.append(tex)
+            self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
+        return list(zip(self._tex, self._fbo, strict=True))
+
+    def fit_pool(self, n: int) -> None:
+        """Release the pool when it holds more than `n` textures — a graph
+        that needs fewer was built (`Renderer._graph_for`); the next use
+        makes what that graph asks for."""
+        if len(self._tex) > n:
+            self.release_targets()
 
     def release_targets(self) -> None:
         for res in (*self._fbo, *self._tex):
@@ -718,8 +743,7 @@ class FxChain:
         st = self.state
         st.advance_to(t)
         aim = getattr(self, "target", FRAME)
-        # in the faces' picture alpha is a face's intensity, never the window's
-        opaque = int(aim == FRAME and getattr(self, "opaque", False))
+        opaque = self._opaque()
         passes = [(n, self._program(n)) for n in st.chain(aim)]
         passes = [(n, pv) for n, pv in passes if pv is not None]
         ctx = self.ctx
@@ -734,21 +758,66 @@ class FxChain:
             last = k == len(passes) - 1
             (target if last else self._fbo[1 - src]).use()
             self._tex[src].use(location=0)
-            v = st.values[name]
-            self._set(prog, "u_src", 0)
-            self._set(prog, "u_res", (float(w), float(h)))
-            self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
-            self._set(prog, "u_time", float(t))
-            self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
-            self._set(prog, "u_blend", int(v["blend"]))
-            self._set(prog, "u_opaque", opaque)
-            for p in st.specs[name].params:
-                x = v[p.key]
-                self._set(prog, p.uniform, round(x) if p.integer else float(x))
+            self._uniforms(prog, name, (w, h), t, opaque)
             vao.render(moderngl.TRIANGLES, vertices=3)
             src = 1 - src
         ctx.enable(moderngl.BLEND)
         return [n for n, _ in passes]
+
+    def _opaque(self) -> int:
+        """u_opaque for this chain's passes: 1 on the frame's chain over an
+        opaque ground; never on the faces' (there alpha is a face's
+        intensity, never the window's)."""
+        aim = getattr(self, "target", FRAME)
+        return int(aim == FRAME and getattr(self, "opaque", False))
+
+    def _uniforms(self, prog: moderngl.Program, name: str, size: tuple[int, int],
+                  t: float, opaque: int) -> None:
+        """Every uniform of effect `name`'s pass over a source of `size`:
+        one program serves every instance of a file and both chains, so all
+        of them are set before each pass."""
+        st = self.state
+        w, h = size
+        v = st.values[name]
+        self._set(prog, "u_src", 0)
+        self._set(prog, "u_res", (float(w), float(h)))
+        self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
+        self._set(prog, "u_time", float(t))
+        self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
+        self._set(prog, "u_blend", int(v["blend"]))
+        self._set(prog, "u_opaque", opaque)
+        for p in st.specs[name].params:
+            x = v[p.key]
+            self._set(prog, p.uniform, round(x) if p.integer else float(x))
+
+    def ready(self, name: str) -> bool:
+        """Whether effect `name` has a program to run (built now if it has
+        not been tried): False for a file that never compiled."""
+        return self._program(name) is not None
+
+    def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
+                t: float) -> None:
+        """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
+        program over `src` into `dst`'s viewport, every uniform set as
+        `run` sets it, the clocks moved first (once per frame time,
+        `FxState.advance_to`). An effect with no program copies `src`
+        across, so `dst` always holds the picture (the node reads such an
+        effect through and never asks)."""
+        self.state.advance_to(t)
+        pv = self._program(name)
+        ctx = self.ctx
+        ctx.disable(moderngl.BLEND)
+        try:
+            dst.use()
+            src.use(location=0)
+            if pv is None:
+                self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
+                return
+            prog, vao = pv
+            self._uniforms(prog, name, src.size, t, self._opaque())
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
 
     @staticmethod
     def _set(prog: moderngl.Program, name: str, value) -> None:

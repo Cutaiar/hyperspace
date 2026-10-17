@@ -1287,7 +1287,7 @@ class Renderer:
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
         stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
-                 "layer": False, "readout": False,
+                 "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
@@ -1298,7 +1298,7 @@ class Renderer:
         try:
             graph.evaluate(frame)
         finally:
-            timer.end_frame(graph.timed)
+            timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
 
@@ -1309,14 +1309,23 @@ class Renderer:
         (`graph.default_graph`). getattr: a renderer from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
-        one adds its point-cloud node to the scene."""
+        one adds its point-cloud node to the scene. Plan 30 D0: so is the
+        effect stack's list in order (`FxState.names()`): each pipeline's
+        run of effect nodes is built from it, and an effect switched on or
+        off changes nothing here (an off node reads through). A new graph
+        fits the effects' texture pool to what it needs (`Graph.pool`)."""
         key = graph_key(views)
         wiring = getattr(self, "wiring", None) or Wiring()
         clouds = cloud_roles(getattr(self, "cloud_source", None))
+        fx = getattr(self, "fx", None)
+        effects = tuple(fx.state.names()) if fx is not None else ()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
-                or getattr(graph, "clouds", ()) != clouds):
-            graph = self._graph = default_graph(views, wiring, clouds)
+                or getattr(graph, "clouds", ()) != clouds
+                or getattr(graph, "effects", ()) != effects):
+            graph = self._graph = default_graph(views, wiring, clouds, effects)
+            if fx is not None and hasattr(fx, "fit_pool"):
+                fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
             # not hold goes with the old graph
             self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
