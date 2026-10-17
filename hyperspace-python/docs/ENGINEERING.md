@@ -414,6 +414,8 @@ Command line:
 | Flag | Effect |
 |---|---|
 | `--venue <name>` | Lay `<library>/venues/<name>.toml` over `config.toml`, and remember it (§5). |
+
+A screen is named or numbered: `monitor` takes a case-blind piece of a screen's name (`"MStar"` finds `MStar Demo`), an index (the primary is 0), or −1 for wherever that window was last. Names travel between machines; indices do not (decision 111).
 | `--no-venue` | `config.toml` alone, and forget the remembered venue. |
 | `PYGLFW_LIBRARY` | Which GLFW dylib to load; `app.py` sets it to the bundled one when unset. |
 | `LEAPSDK_INSTALL_LOCATION` | Read by Ultraleap's `leap` package when the hand-tracking software is not at its default path (see SETUP). |

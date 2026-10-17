@@ -194,9 +194,11 @@ def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     placement.save(home, control, render, placement.screens(glfw))
 
 
-def _slots(cfg: dict | None) -> list[Slot]:
+def _slots(cfg: dict | None, scr: list | None = None) -> list[Slot]:
     """The render outputs the config lists (config.screens: one with no
-    list), numbered from 1, with their launch switches; no window yet."""
+    list), numbered from 1, with their launch switches; no window yet.
+    `scr` are the connected screens, so an entry naming one (decision 111)
+    becomes its index here — the one place a slot's screen is settled."""
     from . import config
 
     out = []
@@ -205,7 +207,7 @@ def _slots(cfg: dict | None) -> list[Slot]:
                       through=bool(e["through"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
-                        monitor=placement.index(e["monitor"]),
+                        monitor=placement.index(e["monitor"], screens=scr),
                         fullscreen=bool(e["fullscreen"])))
     return out
 
@@ -263,7 +265,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    slots = _slots(cfg)
+    slots = _slots(cfg, scr)
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
@@ -299,8 +301,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
         for key in ("monitor", "control_monitor"):
             if key in oc:
-                oc[key] = placement.index(oc[key], len(scr))
-    slots[0].monitor = placement.index(oc.get("monitor", -1))
+                oc[key] = placement.index(oc[key], len(scr), scr)
+    slots[0].monitor = placement.index(oc.get("monitor", -1), screens=scr or None)
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)

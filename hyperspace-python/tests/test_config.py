@@ -44,21 +44,23 @@ def test_a_file_with_only_output_says_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_a_screen_that_is_not_a_number_is_minus_one_and_a_note(tmp_path, capsys):
-    """Plan 16 WP7: `monitor = "left"` stopped the launch. A screen index
-    that is not a number is −1 (where the window was last time), for both
-    windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
+def test_a_screen_that_is_neither_a_number_nor_a_name_is_minus_one_and_a_note(tmp_path, capsys):
+    """Plan 16 WP7: `monitor = 0.5` stopped the launch. A screen that is
+    neither an index nor a name (decision 111) is −1 (where the window was
+    last time), said on stderr and in `cfg["notes"]` (the SYSTEM page); a
     number is read as `int()` reads it and nothing is said — whether that
-    screen exists is placement's to say, at the launch."""
+    screen exists is placement's to say, at the launch. Text is a screen
+    *name*, kept as it is for the launch to resolve."""
     p = tmp_path / "config.toml"
     p.write_text('[output]\nmonitor = "left"\ncontrol_monitor = [1]\n[overlay]\nbg = 0.3\n')
     cfg = config.load(p)
-    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    assert cfg["output"]["monitor"] == "left"        # a name: the launch says if it matches
+    assert cfg["output"]["control_monitor"] == -1    # a list is neither
     assert cfg["output"]["bg"] == 0.3
     assert cfg["notes"] == [
         f"config: [overlay] is now [output] — rename the section in {p}",   # kept, first
-        "config: [output] monitor = 'left' is not a screen index — using the last position",
-        "config: [output] control_monitor = [1] is not a screen index — using the last position",
+        ("config: [output] control_monitor = [1] is not a screen index or a screen name "
+         "— using the last position"),
     ]
     err = capsys.readouterr().err
     assert all(n in err for n in cfg["notes"]) and "error" not in cfg
@@ -211,7 +213,7 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     cfg = config.load(p)
     assert "notes" not in cfg and len(config.screens(cfg)) == 2
     # every key checked: a wrong kind is the default, with a note, never a dead launch
-    p.write_text('[[output.screens]]\nmonitor = "left"\nfullscreen = "yes"\nhands = 1\n'
+    p.write_text('[[output.screens]]\nmonitor = [2]\nfullscreen = "yes"\nhands = 1\n'
                  'dim = "x"\nmonitr = 2\nname = 7\n')
     cfg = config.load(p)
     (one,) = config.screens(cfg)

@@ -101,11 +101,13 @@ def test_a_config_monitor_that_is_not_there_is_a_note():
     c, note = place("control", CONTROL, [LAPTOP], 1, None)
     assert c == placement.default_rect("control", CONTROL, LAPTOP)
     assert "control_monitor = 1" in note and "1 screen is connected (0)" in note
-    # a key that is not a number at all is the same case, said
-    r, note = place("render", RENDER, BOTH, "projector", None)
-    assert r == placement.default_rect("render", RENDER, LAPTOP) and "not a screen index" in note
+    # a name no connected screen has is the same case, said — and it lists
+    # the screens there are, which an index could never do (decision 111)
+    r, note = place("render", RENDER, BOTH, "epson", None)
+    assert r == placement.default_rect("render", RENDER, LAPTOP)
+    assert "matches no screen" in note and "DELL U2720Q" in note
     for odd in (float("nan"), float("inf"), None, [1]):
-        assert "not a screen index" in place("render", RENDER, BOTH, odd, None)[1]
+        assert "not a screen index or a screen name" in place("render", RENDER, BOTH, odd, None)[1]
     # what int() reads is read the same way app._make_output reads it
     for one in (1.0, "1", True):
         assert place("render", RENDER, BOTH, one, None) == (
@@ -274,3 +276,49 @@ def test_placement_imports_nothing_from_the_package():
         for mod in mods:
             root = mod.split(".")[0]
             assert root not in {"hyperspace", "glfw", "moderngl", "imgui_bundle"}, mod
+
+
+# --------------------------------------------------------------- by name
+#
+# A venue travels between Macs (decision 111), and an index does not mean
+# the same thing on both: `monitor` may name the screen instead.
+
+
+def test_a_screen_can_be_named_instead_of_numbered():
+    assert placement.match("DELL U2720Q", BOTH) == 1
+    assert placement.match("Built-in Retina Display", BOTH) == 0
+
+
+def test_a_name_is_a_case_blind_substring_as_the_midi_port_is():
+    assert placement.match("dell", BOTH) == 1
+    assert placement.match("RETINA", BOTH) == 0
+    assert placement.match("u2720", BOTH) == 1
+    assert placement.match("nothing like it", BOTH) == -1
+
+
+def test_a_name_places_the_window_on_that_screen():
+    r, note = place("render", RENDER, BOTH, "DELL", None)
+    assert r == placement.default_rect("render", RENDER, PROJECTOR) and note == ""
+
+
+def test_the_first_matching_screen_wins_so_a_name_is_never_ambiguous():
+    twins = [Screen("Display", 0, 0, 1920, 1080), Screen("Display", 1920, 0, 1920, 1080)]
+    assert placement.match("display", twins) == 0
+
+
+def test_a_number_written_as_text_is_still_an_index():
+    assert placement.named("1") == "" and placement.read("monitor", "1", BOTH) == (1, "")
+    assert placement.named(" 0 ") == ""
+
+
+def test_what_is_a_name_and_what_is_not():
+    assert placement.named("projector") == "projector"
+    assert placement.named("  glass  ") == "glass"       # trimmed
+    for not_a_name in (1, -1, None, "", "   ", [1], float("nan")):
+        assert placement.named(not_a_name) == ""
+
+
+def test_a_name_with_no_screens_yet_waits_without_a_note():
+    """`config.load` runs before any window system: the name is kept, and
+    the launch resolves it (app._windows) once the screens are known."""
+    assert placement.read("monitor", "DELL") == (-1, "")

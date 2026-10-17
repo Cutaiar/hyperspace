@@ -233,25 +233,67 @@ def _key(kind: str) -> str:
     return "control_monitor" if kind == "control" else "monitor"
 
 
-def read(key: str, monitor) -> tuple[int, str]:
+def named(value) -> str:
+    """The screen *name* a config value asks for, "" when it asks by index.
+    A name is how a venue travels (decision 111): indices depend on the
+    Mac and the plug order, names do not. `config.load` keeps the string
+    this finds; `read` turns it into an index once the screens are known."""
+    if isinstance(value, str):
+        v = value.strip()
+        if v:
+            try:
+                int(v)          # "1" is an index that happens to be written as text
+            except ValueError:
+                return v
+    return ""
+
+
+def match(name: str, screens: list[Screen]) -> int:
+    """The index of the first screen whose name contains `name`, case
+    blind; −1 for no match. The substring rule is `[midi] port`'s, which
+    is how the rest of the config names a device — "projector" finds
+    "Epson Projector", and the full name always finds itself."""
+    want = name.strip().lower()
+    for i, s in enumerate(screens):
+        if want in s.name.lower():
+            return i
+    return -1
+
+
+def read(key: str, monitor, screens: list[Screen] | None = None) -> tuple[int, str]:
     """A config value as a screen index: (index, note or ""). The index
     is what `int()` reads of it, and −1 for anything under −1; a value
-    `int()` will not read ("left", None, a NaN) is −1 with the note. The
-    one reading of ``[output] monitor`` / ``control_monitor`` (plan 16
-    WP7) — `config.load`, `place` below and `app._make_output` all go
-    through it, so a window's screen and the one fullscreen covers agree.
-    It never raises. Whether a screen has that index is `place`'s to say."""
+    `int()` will not read (None, a NaN) is −1 with the note. The one
+    reading of ``[output] monitor`` / ``control_monitor`` (plan 16 WP7) —
+    `config.load`, `place` below and `app._make_output` all go through
+    it, so a window's screen and the one fullscreen covers agree.
+
+    A value that names a screen (decision 111) needs `screens` to be
+    resolved: with them it is that screen's index, or −1 and a note that
+    lists the screens there are; without them (`config.load`, before any
+    window system) it is −1 and no note, for a later call to settle.
+    It never raises. Whether a screen has an index is `place`'s to say."""
+    name = named(monitor)
+    if name:
+        if screens is None:
+            return -1, ""                       # not yet knowable; asked again later
+        i = match(name, screens)
+        if i >= 0:
+            return i, ""
+        have = ", ".join(s.name for s in screens) or "none"
+        return -1, (f"config: [output] {key} = {monitor!r} matches no screen "
+                    f"(connected: {have}) — using the last position")
     try:
         return max(int(monitor), -1), ""
     except (TypeError, ValueError, OverflowError):
-        return -1, (f"config: [output] {key} = {monitor!r} is not a screen index — "
-                    "using the last position")
+        return -1, (f"config: [output] {key} = {monitor!r} is not a screen index "
+                    "or a screen name — using the last position")
 
 
-def index(monitor, n: int | None = None) -> int:
+def index(monitor, n: int | None = None, screens: list[Screen] | None = None) -> int:
     """`read`'s index alone; with `n` screens connected, −1 for an index
     none of them has. Says nothing: the notes are `read`'s and `place`'s."""
-    i, _ = read("monitor", monitor)
+    i, _ = read("monitor", monitor, screens)
     return -1 if n is not None and i >= n else i
 
 
@@ -277,7 +319,7 @@ def place(kind: str, size: tuple[int, int], scr: list[Screen],
     notes = []
     target = None
     # read as app._make_output reads it for `output.monitor`
-    monitor, note = read(_key(kind), monitor)
+    monitor, note = read(_key(kind), monitor, scr)
     if note:
         notes.append(note)
     if monitor >= len(scr):

@@ -1358,14 +1358,13 @@ and **extended, not mirrored**, before launch.
 
    ```toml
    [[output.screens]]
-   name = "laptop"
-   monitor = 0
-
-   [[output.screens]]
    name = "projector"
-   monitor = 1
+   monitor = "projector"   # a piece of the screen's name, case blind
    fullscreen = true
    ```
+
+   If the projector reports something else, put a piece of that here —
+   step 6 shows you what the names are.
 
 3. `uv run hyperspace --venue projector`. SYSTEM page; OUTPUT page.
 4. Quit. `uv run hyperspace` with **no flag**. SYSTEM page.
@@ -1373,7 +1372,10 @@ and **extended, not mirrored**, before launch.
    the OUTPUT page.
 6. OUTPUT page: pick the other entry in the **venue** combo. Read what
    it says, then press **Restart into …**.
-7. Quit. `uv run hyperspace --venue nosuchplace`, then
+7. Edit the venue to `monitor = "nothing like it"` and launch again:
+   the SYSTEM page's note lists every connected screen by name. Put the
+   right one back.
+8. Quit. `uv run hyperspace --venue nosuchplace`, then
    `uv run hyperspace --no-venue`.
 
 **Right if:** at 3 the second screen shows the render fullscreen and the
@@ -1382,7 +1384,7 @@ OUTPUT page lists two outputs. At 4 the same, with no flag — the venue was
 remembered (`~/Hyperspace/last_venue` holds its name). At 5 the reload
 comes back windowed: ⌘R re-read the file. At 6 nothing happens until the button is pressed, the page having said
 the app restarts; then it comes back in the venue picked, and the SYSTEM
-page names it. At 7 the bad name is a note on
+page names it. At 7 the note names the screens, and nothing stops. At 8 the bad venue is a note on
 the SYSTEM page naming the venues there are, and the app runs on
 `config.toml` alone; `--no-venue` does the same and leaves no `last_venue`.
 Throughout, `config.toml` is byte-for-byte what step 1 saw, and the

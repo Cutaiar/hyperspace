@@ -28,10 +28,14 @@ dream.py, too, is imported only when its gate is open.
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
     monitor = -1            # which screen the RENDER window opens on, and the one
-                            # fullscreen covers: a screen index, or -1 = where it
-                            # was last time (else the primary screen)
+                            # fullscreen covers: a screen index, a piece of a
+                            # screen's NAME ("MStar", "projector" — case blind,
+                            # as [midi] port matches a device), or -1 = where it
+                            # was last time (else the primary screen). A name is
+                            # what travels between Macs: indices depend on the
+                            # machine and the plug order (decision 111)
     control_monitor = -1    # which screen the CONTROL window opens on: an index,
-                            # or -1 = where it was last time (else the primary).
+                            # a name, or -1 = where it was last time (else the primary).
                             # "Last time" is <home>/windows.json (placement.py),
                             # written on quit and on restart; delete it to forget.
                             # An index with no such screen is treated as -1, with
@@ -69,10 +73,13 @@ dream.py, too, is imported only when its gate is open.
                             # passthrough, bg and alpha stay above and are
                             # output 1's alone (every later output is opaque)
     name = "glass"          # optional: the label on the OUTPUT page and in notes
-    monitor = 1             # a screen index, or -1 = a plain window where it was
-                            # last. Output 1 always opens (an index no screen has
-                            # is -1, with a note). A LATER output whose index no
-                            # screen has is NOT opened, with a note (fork F9); a
+    monitor = "glass"       # a screen's name (a case-blind piece of it) or its
+                            # index, or -1 = a plain window where it was last.
+                            # A name is what travels (decision 111). Output 1
+                            # always opens (a screen nothing matches is -1, with
+                            # a note listing the screens there are). A LATER
+                            # output whose screen is not there is NOT opened,
+                            # with a note (fork F9); a
                             # screen plugged in after the launch is not picked up
                             # until the next launch
     fullscreen = true       # a borderless cover of that screen at its current
@@ -232,10 +239,15 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
     name = e.get("name", "")
     out["name"] = name if isinstance(name, str) else str(name)
     if "monitor" in e:
-        out["monitor"], bad = placement.read("monitor", e["monitor"])
-        if bad:
-            _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
-                       "using the last position")
+        # a screen *name* is kept as it is: which index it has is only
+        # knowable at the launch, with the screens in hand (decision 111)
+        if placement.named(e["monitor"]):
+            out["monitor"] = e["monitor"].strip()
+        else:
+            out["monitor"], bad = placement.read("monitor", e["monitor"])
+            if bad:
+                _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index "
+                           "or a screen name — using the last position")
     for key in ("fullscreen", "scene", "hands", "through", "flip_x", "flip_y"):
         if key in e:
             if isinstance(e[key], bool):
@@ -473,7 +485,11 @@ def load(path: Path | None = None, venue: str = "") -> dict:
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
     for key in ("monitor", "control_monitor"):
-        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        v = cfg["output"].get(key, -1)
+        if placement.named(v):          # a name: app._windows resolves it, screens in hand
+            cfg["output"][key] = v.strip()
+            continue
+        cfg["output"][key], note = placement.read(key, v)
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)

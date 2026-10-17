@@ -140,14 +140,23 @@ is output 1 (it sets the frame's size and paces the loop):
 ```toml
 [[output.screens]]
 name = "glass"
-monitor = 1          # screen index, the primary is 0; -1 = a window where it was last
+monitor = "MStar"    # a piece of the screen's name, case blind; or an index
+                     # (the primary is 0); or -1 = a window where it was last
 fullscreen = true
 
 [[output.screens]]
 name = "projector"
-monitor = 2
+monitor = "projector"
 fullscreen = true
 ```
+
+Name the screen rather than numbering it where you can: an index depends
+on the Mac and the order things were plugged in, a name does not, so a
+file that names its screens works on anyone's machine. The match is a
+case-blind substring, the way `[midi] port` matches the APC40 — `"MStar"`
+finds `MStar Demo`. A name nothing answers to is a note on the SYSTEM
+page listing every screen that *is* connected, and that window opens
+where it was last.
 
 The screens must be connected **before launch**: a later output whose
 screen is missing is not opened, and a screen plugged in afterwards is
@@ -165,12 +174,8 @@ changes:
 ```toml
 # <library>/venues/projector.toml — nothing else needs repeating here
 [[output.screens]]
-name = "laptop"
-monitor = 0
-
-[[output.screens]]
 name = "projector"
-monitor = 1
+monitor = "projector"    # by name, so it travels to the other Mac too
 fullscreen = true
 ```
 
