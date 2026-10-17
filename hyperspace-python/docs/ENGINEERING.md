@@ -406,8 +406,8 @@ chain run is on (`frame.fx_on`: a placed effect does not count), whether
 each effect runs, and whether a hand drew decide which pipeline end each
 output takes (`Output.settle`); a pipeline no output takes is skipped and
 its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
-427 goldens. (The *modulation* graph is not evaluated this way: the
-one-frame lag of ARCHITECTURE §2 stands until plan 28.) For one default
+427 goldens. (Since plan 28 the *modulation* is a graph evaluated in
+dependency order too, in `Router.modulate`: ARCHITECTURE §2.) For one default
 output the order is `shape → ghost → scene → cover → hands → history →
 plasma → acid → kaleido → … → huecycle → palette → fx → capture →
 output.1`: one effect node per instance in the stack's order (`order`,
@@ -480,6 +480,7 @@ and the history on the scene with the hands:
 | `hands` | `instance` (1, 2 …), `into` (`layer` / `scene`), `draw` (`solid` / `lines`), `laid` (`over` / `add` / `depth`, only on the node that makes the layer) | hands 1, a solid layer laid over |
 | `effect` | `file`, `instance` (2 or more; 1 allowed when placed), `after` or `into` (a node's name: below) | every effect file once, in the chain |
 | `history` | `holds` (`scene` / `scene+hands`) | the scene |
+| `composite` (plan 28 N4) | `instance` (1, 2 …), `blend` (`over` / `add` / `depth`) | none: built only once a wire feeds it |
 
 The kinds are `graph.NODE_KINDS` — the one place a kind is named. No
 section, or `{"nodes": []}`, is the default graph; nothing that is a
@@ -491,7 +492,8 @@ take, a value out of its choices, two nodes of one instance, two layers
 kept as the file had it and written back on save. (A placement it cannot
 honour costs only that effect its place: below.) A point cloud is not a
 kind here: clouds follow the device list (below), and `{"kind":
-"cloud"}` is an unknown kind until plan 28. Undoing a load puts the
+"cloud"}` is an unknown kind (plan 28 added none). Since plan 28 the
+section may also carry a `wires` list (below). Undoing a load puts the
 loaded preset's graph back before its values (`library.Marks`).
 
 **Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
@@ -592,6 +594,48 @@ factory presets):
   history`) — `graph.placement_words`, `output_placement_words`,
   `history_words`, `graph_words(spec, dormant)`. The FX page's chips say
   it the JSON's way (`after hands`, `graph.placed_chips`).
+
+**The wire list; outputs as nodes** (plan 28 N4). A section may carry
+`wires` beside `nodes`, one `{"from": "<node>", "to": "<node>.<port>"}`
+per line, kept in the file's order:
+
+```json
+"graph": {"nodes": [
+ {"kind": "hands", "into": "scene", "draw": "lines"},
+ {"kind": "hands", "instance": 2}
+],
+"wires": [
+ {"from": "hands.2", "to": "output.2.hands"}
+]}
+```
+
+`from` is a node's one output — `scene`, `hands`, `hands.<n>`,
+`history`, an effect instance (`palette`, `acid.2`), a composite; `to`
+is one of the ports a preset may wire: `output.<n>.image`, `.hands`,
+`.readout`, `history.image`, an effect's `image`, a composite's `under`
+/ `over` (`graph.WIRE_TAKES`; geometry and mask ports are typed but not
+wireable — a hands node's place stays its `into`). D1's placements are
+the same wires written short (`after X` = `X → E.image`, `into Y` = `E
+→ Y.image`); a section with only those is still written short, byte for
+byte, and one read as wires is written as wires. **An output is a
+node**: a wire into `output.<n>.image` shows that picture through the
+output's own end (`graph.Wired`, `wire(output.<n>)` on SYSTEM), ignoring
+its scene and through switches; into `.hands` it lays that node over
+(depth-aware when the blend says so; on a through output it replaces the
+switch's hands, which the effects then no longer bend); into `.readout`
+that layer's guide. **An output no wire names keeps the session's
+switches** — the rig's, not the look's — and a load never writes a
+switch. The wires ride in `Wiring.wires`, so `Renderer._graph_for`
+rebuilds when they change. A refused wire (a port of another type, a
+node or port that does not exist, two wires into one port, the history
+into `.hands`, a loop) is a note — `graph: wire ghost → output.1.image —
+ghost makes geometry, output.1.image takes a picture; the default
+wiring` — and that port keeps its default; the rest stands and the
+section is kept as written. A malformed wire is an unreadable section
+(the default graph). A wire on a node this frame lacks is dormant and
+said. The canvas edits it (§6, the GRAPH page). An older build refuses
+the `wires` key, and D1's keys, and opens such a preset as the default
+graph with a note (register row 277).
 
 **The `VALUE` port** (`graph.VALUE = "value"`, plan 30 D2): a fourth port
 type, a scalar or small float vector a node publishes once a frame, for
@@ -775,8 +819,9 @@ the list a few frames later. The pipeline end's own `fx` line reads 0.00:
 it runs no pass of its own, and its effects' time is on their lines. On
 Apple's tile GPU a query is charged for whatever is flushed inside it,
 so the per-effect split is indicative (party-acid: the old `fx` line
-0.225 ms, the effects' lines summing to 0.089 ms, the frame's wall time
-unchanged). Without timer queries `stats["gpu_note"]` says
+0.225 ms, the effects' lines summing to 0.078–0.089 ms; the frame's
+wall time 1.34 → 1.44 ms median, about +0.1 ms, within the base's
+spread but not nothing). Without timer queries `stats["gpu_note"]` says
 why ("gpu: no GPU timer queries on this context …") and the pixels are
 the same. Apple's driver reads some tiny nodes as 0.00; the figures are
 GPU time, not the CPU's.
@@ -795,18 +840,21 @@ direct) and, for the presets with an effect on,
 logical) under the 1080p cap; the other wirings (`in-scene/…`,
 `depth/…`, `history+hands/…`); the fixture presets, hands present, in
 the eight states (`FIXTURE_PRESETS`: `hands-lines` and plan 30's three
-placements, `palette-hands`, `palette-glass`, `acid-scene`); and a
+placements, `palette-hands`, `palette-glass`, `acid-scene`, and plan
+28's two wire fixtures, `hands-glass-only` and `wired-outputs`); and a
 recorded cloud listed in a scratch config (`cloud/…`). A golden is the
 SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
-distinct picture and the route each state reached: **580 goldens, 136
-distinct pictures** (556 before plan 30, which recorded 24 for its
-fixtures and moved none of the 556), recorded on `GL_RENDERER` "Apple
+distinct picture and the route each state reached (a wired output's
+route reads `none`, with a `"wired"` key naming its source): **596
+goldens, 140 distinct pictures** (556 before plan 30, which recorded 24
+for its fixtures, and plan 28's N4 16 for its own; neither moved one
+recorded before it), recorded on `GL_RENDERER` "Apple
 M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
 compares every hash exactly there and skips with a note on any other
 renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 580 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all 596 frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -819,8 +867,9 @@ refuses to diff on another renderer. Re-record only what a change moved,
 on the gate Mac, and name each moved frame and its one reason in the
 commit and the PR; a moved frame for a change that should move nothing
 means the change is wrong. Which WPs moved which frames, and why, is in
-[`plans/26-render-graph.md`](plans/26-render-graph.md) (plan 30's, none:
-[`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)).
+[`plans/26-render-graph.md`](plans/26-render-graph.md) (plan 30's and
+plan 28's, none: [`plans/30-shader-nodes.md`](plans/30-shader-nodes.md),
+[`plans/28-node-editor.md`](plans/28-node-editor.md)).
 
 ## 3. Running it
 
@@ -1178,7 +1227,7 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
-rail of fourteen pages (`ui.PAGES`); the rail shows a red dirty dot
+rail of fifteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
 scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
@@ -1194,7 +1243,8 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
-| ROUTING | One page over the loaded preset: routes, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
+| ROUTING | One page over the loaded preset: routes, the MODIFIERS strip, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
+| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — edited by dragging cables (below). |
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
@@ -1230,6 +1280,72 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 Its fit at the control size is held by
 `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
 but in font metrics that are not the Mac's (hand check 120).
+
+**The GRAPH page** (`ui_graph.py` over the model `graphview.py`, plan
+28; `imgui_bundle.imgui_node_editor`, its settings file off). One canvas
+for the modulation and the render graph, rebuilt from the live table,
+registry, Router, device registry and render graph whenever one changes
+(`graphview.key`), its readings refreshed each frame. ROUTING and GRAPH
+edit one table: either shows the other's change next frame.
+
+- **Nodes**, left to right: each listed device by role — the APC40 as
+  *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
+  (the global layer's, faint unless SHIFT is latched), the hands folded
+  as axes, pinches, grab, presence, dance; a device the rig lacks a grey
+  placeholder named by role, its cables waiting; a preset's desk template
+  one collapsed node (**+** opens it); the keys; the analyzer (a port per
+  band); each LFO (its knobs as input ports); the modifiers; the macros
+  (bus nodes); a node per param group no render node owns (`tempo`,
+  `master` …); the render nodes with their params as input ports
+  (`graphview.OWNERS`: `view` / `rot` / `pattern` on `shape`, `fx.acid.*`
+  on `acid`, `dream.*` on `history`, `camera.*` on `eye`); the outputs.
+- **Ports and cables.** A param has a round `mod` stub (one performer: a
+  route's solid cable) and a square `base` stub (the setters: desk, pad
+  and key rows, faint; a macro's base subscriber), and a `depth` stub
+  while a route lands on it. Render cables join typed image / geometry /
+  mask ports. Colour by kind, thickness by reading, faint when dormant.
+  Hover: from → to, the reading, the depth, the `scale` and the gate; a
+  cable a loop keeps off says so. A collapsed node shows only its patched
+  ports; **patched only** collapses every node.
+- **The head**: the counts, the last edit's or refusal's words, and
+  **patched only**, **tidy** (lays every node out again: one undo step),
+  **beside** (the selection pane beside the canvas rather than under it;
+  CONTROLS at 540 px puts it under).
+- **Selection**: a route shows its ROUTING row, an effect's node its FX
+  strip.
+- **Editing the modulation.** Drag a source onto a `mod` stub: the route
+  a Learn would make (push or position, `learn.row_for`), Replace / Keep
+  if the param is taken. A desk control onto a `base` stub: a desk learn
+  (a preset-layer row); a pad button: the pad learn's session row. A
+  macro onto `base` or a `depth` stub: a subscriber. A lane onto a
+  modifier's `in`: its input. Drag from a patched input pin to another
+  input pin to move a cable's end. Refused in words on the head: "a hand
+  sets no base; aim at mod", "a macro sets a base or scales a depth; aim
+  at base or a depth stub", "keys are the session's rows: map them on
+  ROUTING", a SHIFT-node port into `base`. A free modifier let go over a
+  cable is inserted into it (or a cable's right-click **insert ▸**).
+- **Editing the render graph**: an image cable between two ports is a
+  wire in the preset (§2), red with the file's words while it is wrong;
+  a geometry cable from a hands node into the scene or layer sets its
+  `into`.
+- **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
+  desk, hand ▸, pad, a role, sink) — the completed row is a cable next
+  frame; on a cable, insert and delete; on a node, delete (a modifier,
+  a macro, an extra effect / hands node / composite), `draw solid` /
+  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
+  **macro ▸** an idle one. Delete takes the selection: a session row's
+  cable and the rig's nodes are refused in words; a default render cable
+  too. Every edit is one undo step and dirties the preset.
+- **Positions**: where a node is dropped is saved — in the preset's
+  `layout` for the look's nodes (modifiers, macros, render nodes,
+  performance groups, the template), in the show's for the rig's
+  (devices, the analyzer, LFOs, outputs, session groups); an unplaced
+  node takes its column by kind. SYSTEM shows `graph page: X ms median
+  (N nodes, M cables)` (2.78 ms on party-trip at 960 × 900).
+- **The editor context** is held on the panel (a hot reload of
+  `ui_graph` keeps it) and destroyed on quit and ⌘R before imgui; no
+  `NodeEditor.json` is written.
 
 Every page that is a registry group carries a preset strip for its
 module presets.
@@ -1647,19 +1763,81 @@ its × and a click on a desk control clear it. A route's `scale` can only
 be a session param; a route may perform a session param, marked
 "session" on its row.
 
+**The order the routes run in** (plan 28 N0). `Router.modulate` runs
+the table as a graph (`patch.py`, ARCHITECTURE §2), each node after
+everything it reads: the LFOs step inside it, a `scale`, a macro's depth
+or an LFO knob a route moves lands before the route that reads it, so an
+LFO on another LFO's depth, a macro scaling a push or a hand on a
+modifier's release act **the same frame** — there is no one-frame lag.
+A **loop** through no delay modifier (`lfo:0 → lfo.2.rate` and `lfo:1 →
+lfo.1.depth`; an LFO pushing its own depth) keeps its last cable in table
+order off: a warning line under ROUTING's head names it, `loop: lfo:0 →
+lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay — lfo:1 →
+lfo.1.depth is off until it has one`; the row stays in the table (its
+checkbox still on) and in the file, and the rest runs. Put a `delay`
+modifier in the loop and it runs, one frame late.
+
+**Modifiers** (plan 28 N1, `modifiers.py`): value nodes between a source
+and a route, saved in the preset beside its routes (never in
+`bindings.json`). Each publishes a lane `mod:<n>` that a route sources
+like any other.
+
+| Kind | Inputs | Params (default) | Out |
+|---|---|---|---|
+| `curve` | 1 | `shape` −1…1 (0 straight; + slow to start, − fast), `invert` | value |
+| `scale` | 1 | `mul` −4…4 (1), `offset` −1…1 (0), `clamp` (on) | value |
+| `smooth` | 1 | `attack` 0…2 s (0.05), `release` 0…4 s (0.35), `spring` (off: a spring at ω = 1/attack) | value |
+| `combine` | 2 | `how` add · mul · min · max · cross, `balance` (0.5, the crossfade) | value |
+| `threshold` | 1 | `on` 0.6, `off` 0.4, `hold` 0…2 s (0.1): 1 on the rising edge for the hold | trigger (also a gate) |
+| `delay` | 1 | — | last frame's input |
+
+Their params `mod.<n>.<p>` are performance params (the `mod` group),
+routable and modulatable. A modifier whose input is not live (a hand out
+of the box, a device the rig lacks, no input picked) is **dormant**: its
+lane reads absent, so a route on it lets go and the base returns.
+Removing one leaves the routes on its lane, dormant; ids are one past
+the highest (`mod.1`, `mod.2` …). A desk template may carry a
+`modifiers` list; a preset that names it gets them, its own overriding
+by id.
+
+**The MODIFIERS strip** (ROUTING, between the routes and the desk): a
+kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
+per input (the route sources and the other modifiers' lanes), its live
+output ("dormant" while not live) and ×, then its params as ordinary
+widgets (right-click for Learn). Each add, remove, input picked and
+param drag is an undo step. "Right hand energy, smoothed, times band 0,
+into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
+and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.
+The same patch can be dragged on the GRAPH page (§6).
+
 ## 10. Presets, shows and the bank
 
 A **preset** (`presets/<slug>.json`) is one whole performance moment:
 the performance groups' values (`view rot camera pattern dream fx lfo
-macro`, `params.PERFORMANCE_GROUPS`), the performer routes, the desk's
-preset layer, the macros and the module labels. **A load replaces all of
+macro mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
+desk's preset layer, the macros and the module labels — and, when it has
+them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
+its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",
+"kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05,
+"release": 0.6}`, its params at their bases; no `mod.*` id in `values`)
+and its `layout` (last: `{"<node id>": [x, y]}` for the GRAPH page's
+nodes the preset holds, whole canvas units, sorted, written only for a
+node dropped by hand). None of the three is written when empty, so a
+preset without them saves byte for byte as before, and none bumps the
+schema. The show keeps the rig's nodes' positions in its own `layout`.
+A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
+note and **drops them when it saves**, and opens a `graph` with wires or
+placements as the default graph with a note: keep both Macs of a shared
+library on the same build (register row 277). **A load replaces all of
 it** — every performance param lands from the file or its group default,
 every route and preset-layer row is replaced — and never touches a
 session param (`tempo hands ghost band master scene audio output overlay
 ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
 preset. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
-invariant control) is dropped with a note and the file is left as it is.
+invariant control, a route onto a modifier the file does not hold, a
+`mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
+note and the file is left as it is.
 
 **The factory presets are generated**: `uv run python -m hyperspace.preset`
 (`preset.write_factory`) writes `hyperspace/library/presets/` from
@@ -2076,7 +2254,12 @@ broken save keeps the last good version and shows the error on the
 SYSTEM page. `app.py`, `hotreload.py`, `offline.py` and `watchdog.py`
 are cold: changing them needs Cmd+R. A changed `__init__` does not
 re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
-`shaders/fx/`) and the library's JSON files reload too.
+`shaders/fx/`) and the library's JSON files reload too. Plan 28's
+modules are on the list in dependency order: `modifiers` after
+`motion`, `patch` before `routing`, `graphview` after `osc`, `ui_graph`
+before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
+context (it is held on the panel, not in the module), so the page goes
+on drawing with its zoom and selection.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every
@@ -2131,7 +2314,7 @@ uv run ruff check .
   this machine's font metrics: in the cloud container test_fx's own two
   fit tests miss by 18 px, so a pass or a fail there says nothing about
   the Mac.
-- The golden frames: `tests/test_golden_frames.py` compares 580
+- The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every factory preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
@@ -2142,6 +2325,28 @@ uv run ruff check .
   `tests/test_camera.py`, `tests/test_hands_node.py`,
   `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
   `tests/test_stroke_space.py`.
+- The modulation graph and the node editor (plan 28), all headless:
+  `tests/test_patch.py` (the sort, the loops, the edges the design
+  names, a param applied once a frame), `tests/test_modifiers.py` (each
+  kind on a scripted input, the preset key, templates, undo, the
+  MODIFIERS strip), `tests/test_graphview.py` (the model with no imgui,
+  and the page drawn once on the real `imgui_node_editor` under the test
+  imgui harness), `tests/test_graph_edit.py` (every edit through the
+  page's functions — no test can drag a mouse on the widget),
+  `tests/test_graph_wires.py` (the wire list, outputs as nodes, the
+  canvas's render edits) and `tests/test_graphview_devices.py` (the
+  APC40's two nodes, templates, placeholders). **The equivalence test**,
+  `tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`,
+  plays every factory preset with a synthetic hand tape through the base
+  build's `modulate` (kept verbatim as `_lagged_modulate`) and through
+  today's, and asserts every modulatable param identical or exactly as
+  many frames earlier as the base was late.
+- A test-order dependence from before plan 28:
+  `tests/test_app_boundary.py::test_a_broken_adapter_is_a_note_not_a_crash`
+  fails when `tests/test_dream.py` runs before it (its
+  `monkeypatch.setitem(sys.modules, "hyperspace.dream", …)` is bypassed
+  once `hyperspace.dream` is an attribute of the package). The full
+  suite's alphabetical order hides it; it reproduces on the base build.
 - The shapes: `tests/test_shapes4d.py` holds every shape to its
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
   1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
@@ -2150,8 +2355,10 @@ uv run ruff check .
   and palettes a test copies into a scratch library (plan 24's
   `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
   `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, plan
-  26's `presets/hands-lines.json` and `camera/`, and
-  `macro-candidates/`). The folder
+  26's `presets/hands-lines.json` and `camera/`, plan 30's
+  `presets/palette-hands.json`, `palette-glass.json`, `acid-scene.json`,
+  plan 28's `presets/hands-glass-only.json`, `wired-outputs.json` and
+  `modifiers/`, and `macro-candidates/`). The folder
   is gitignored at the repo root, so a new fixture is added with
   `git add -f`. No test proves a mechanism by editing a factory preset.
 - The desk coverage report: `tests/test_desk_coverage.py` regenerates
@@ -2190,11 +2397,16 @@ What only a person at the machine can check is
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `enabled
   = false` on the desk's entry (or `[midi] enabled = false`) stops it.
-- **The render graph's wiring is the default graph's choices, not
-  cables.** A preset's `graph` section picks where the hands go, how
-  their layer is laid on and what the history holds; it cannot say which
-  output gets which hands node (the outputs are the session's switches),
-  and at most one hands node makes the layer. A node editor is plan 28.
+- **At most one hands node makes the layer.** Since plan 28 a preset's
+  `graph` section can wire which output gets which hands node and which
+  effects it alone takes (§2, the wire list); an output no wire names
+  keeps the session's switches.
+- **No mouse drag on the GRAPH page has been tested**: the tests drive
+  its functions and draw the real widget headless, never a real drag
+  (plan 28's hand checks 247–258).
+- **A build from before plans 28 and 30 loses this build's `modifiers` and
+  `layout` on a save** and opens a wired or placed `graph` as the
+  default graph: both Macs sharing a library must run the same build.
 - **The golden frames prove pixels only on "Apple M3 Max"**; on any
   other Mac the test skips.
 - **On the masked Heart, the W planes' readouts keep counting**: the

@@ -5,7 +5,8 @@ rows 89–108 during plan 22's run on 2026-10-06, rows 110–139 during
 plan 24's run, rows 140–168 during plan 27's run and rows 169–209
 during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
 (several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
-run (shader nodes) on 2026-10-17: the build took its own
+run (shader nodes) and rows 233–277 during plan 28's run (the node
+editor) on 2026-10-17: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -190,7 +191,7 @@ here; overturn → the change, then the same.
 | 193 | The OUTPUT switches are wiring; through stands down per frame | 195, 208 | |
 | 194 | `Wiring`: hands, blend, history — renderer-wide | 206, 209 | |
 | 195 | The hands node `ghost` and its layer `hands`; time by the consumer edge | 210, 213 | |
-| 196 | The preset's `graph` section: the nodes that differ, one object each (an effect's `after` / `into` and a placed instance 1: row 219) | 211 | |
+| 196 | The preset's `graph` section: the nodes that differ, one object each (an effect's `after` / `into` and a placed instance 1: row 219) — "wiring choices, not a graph" **superseded in part by rows 263, 266** (plan 28: a wire list, outputs as nodes) | 211 | superseded in part |
 | 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown — "the whole section falls back" **superseded in part by row 221** (a refused placement costs only that effect its place) | 211 | |
 | 198 | Instances as built: `fx.<file>.<n>`, `ghost.<n>`, `hands.<n>` | 212, 213 | |
 | 199 | A second hands node is its own `Ghost` over its own state | 213 | |
@@ -227,6 +228,51 @@ here; overturn → the change, then the same.
 | 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
 | 231 | The `VALUE` port: a fourth type, used by no node | — | |
 | 232 | The faces target stays an inner chain (the lift as the other option) | 230 | |
+| 233 | `patch.py`'s types: nodes by address or param id, an edge per port | — | |
+| 234 | Only the params a later node reads land in the pass; the frame's mark | 232 | |
+| 235 | The patch cached on a key built once a frame (about 5 µs a frame dearer) | — | |
+| 236 | A loop through no delay: its last cable off, a note, the row kept (two drafts folded) | 233 | |
+| 237 | A delay closing a loop runs first, one frame late (two drafts folded) | 234 | |
+| 238 | The LFOs step inside the pass, every one a node | 232, 235 | |
+| 239 | The equivalence oracle: the base's `modulate`, verbatim, in the test | — | |
+| 240 | The six modifier kinds and their params | 236 | |
+| 241 | The lane `mod:<n>`; a modifier whose input is not live reads NaN | 237 | |
+| 242 | Modifier ids one past the highest; a removal leaves its routes dormant | 237 | |
+| 243 | A modifier's params in its entry only, never in `values` | 238, 260 | |
+| 244 | A template's modifiers: overridden by id, a save writes what differs | 239 | |
+| 245 | The modifiers one undo part of the table | 240 | |
+| 246 | Learn takes a `mod:` lane only when armed for anything | — | |
+| 247 | The MODIFIERS strip between the routes and the desk | 241 | |
+| 248 | Node and pin ids: strings with a kind prefix (the `layout` keys) | 244 | |
+| 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
+| 250 | What the canvas draws: modulatable params and row targets; no sinks | 242, 245 | |
+| 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step | 244 | |
+| 252 | The tidy columns | 244 | |
+| 253 | The editor context on the panel, closed before imgui | 246 | |
+| 254 | The selection pane below the canvas; **beside** for a column | 245 | |
+| 255 | A cable into `mod` is the row a Learn would make | 247, 248 | |
+| 256 | A cable into `base`: desk or pad setters only; the refusal words | 248 | |
+| 257 | A cable's end moved input pin to input pin | 247 | |
+| 258 | A free modifier dropped on a cable is inserted | 247, 249 | |
+| 259 | The node picker: modifiers by kind, idle macros | 249, 250 | |
+| 260 | A macro onto `mod` is refused | 248 | |
+| 261 | A macro node's delete clears its label and subscribers | 250 | |
+| 262 | Cable deletes: the preset's go, the session's refused | 250, 258 | |
+| 263 | The wire list: `{"from", "to"}` in `wires` | 251, 252 | |
+| 264 | A preset wires image ports only; a hands node's place is its `into` | 253 | |
+| 265 | D1's `after` / `into` are wires written short | 251 | |
+| 266 | Outputs as nodes: a wire overrides that port alone (a through output's hands folded in) | 252, 254 | |
+| 267 | A refused wire: a note and that port's default | 253 | |
+| 268 | The render picker; every edit read back before it lands (N3's seam folded in) | 251, 255 | |
+| 269 | The two wire fixtures' look | 252 | |
+| 270 | The APC40 as two nodes; a SHIFT-node drag into `base` refused | 256 | |
+| 271 | The desk's port groups | 256 | |
+| 272 | The SHIFT latch read from the table each frame | 256 | |
+| 273 | A layered row on an invariant control drawn off on *apc40* | — | |
+| 274 | A desk template as a subgraph node; an edit inside an override (two drafts folded) | 257 | |
+| 275 | A missing role is a grey placeholder | 258 | |
+| 276 | The hands node's groups: axes, pinches, grab, presence, dance | 256 | |
+| 277 | An older build and this run's keys: both Macs on this build before sharing | 259 | |
 
 "—": no hand check shows it; tests only.
 
@@ -3470,6 +3516,12 @@ among them. No preset was edited or added: no factory preset carries a
   it cannot name instances or a later kind).
 - **To reverse.** Local to `read_graph` / `GraphSpec.to_json` and
   `GraphSection`; no factory file carries a section.
+- **Superseded in part by rows 263 and 266** (plan 28, 2026-10-17): the
+  section may now carry a wire list beside its nodes, and the outputs are
+  nodes a wire may feed, so a preset can say which output gets which
+  hands node and which effects it alone takes; an output no wire names
+  keeps the session's switches. The rough edge below is closed for the
+  outputs; at most one hands node still makes the layer.
 - **Rough edge.** The section is wiring choices for the default graph,
   not a graph: the outputs still come from the OUTPUT page's switches,
   so a preset cannot say which output gets which hands node; at most one
@@ -3857,7 +3909,12 @@ under `tests/fixtures/presets/`.
   render pass is flushed, so a line can carry its input's work or read
   0.00: the lines are indicative, not an exact split (party-acid: the
   old `fx` line 0.225 ms, the new lines summing to 0.089 ms, wall time
-  the same within noise).
+  the same within noise; the review pass measured 0.225 against 0.078
+  ms, and the frame's wall time 1.34 → 1.44 ms median, about +0.1 ms,
+  inside the base's spread but higher in two rounds of three). Each on
+  effect's `FxChain._program` is assembled twice a frame (`ready`, then
+  `run_one`): string work and a compare, never a compile — a per-frame
+  cache would need a frame counter the tests' direct calls never tick.
 - **Judge it.** Check 220.
 
 ### 219. The placement keys are `after` and `into`, both kept
@@ -3879,7 +3936,9 @@ under `tests/fixtures/presets/`.
   three fixtures; plan 28's wires read both keys.
 - **Rough edge.** `after: "output.<n>"` is accepted and means the same
   as `into` (an output has no picture of its own to come after); both
-  are written back as the file had them.
+  are written back as the file had them. A build from before plans 28 and 30
+  refuses either key and opens the preset as the default graph with a
+  note (row 277).
 - **Judge it.** Checks 223, 224.
 
 ### 220. The placeable names, and which key each takes
@@ -3930,7 +3989,9 @@ Folds two of D1's drafts: the refusals, and the loops.
   `GraphSection.read`, `placement_loops` and its two callers.
 - **Rough edge.** A save writes the refused placement back unchanged (by
   design: fix it in the JSON or on plan 28's GRAPH page). Every member of
-  a loop is refused, not only the last named.
+  a loop is refused, not only the last named. An explicit `null` is
+  refused in Python's words: the note reads `palette after None — …`
+  where the file says `null` (cosmetic).
 - **Judge it.** Check 225.
 
 ### 222. A placement on a node the built graph lacks is dormant: no node, said in words
@@ -3951,7 +4012,7 @@ Folds two of D1's drafts: the refusals, and the loops.
 - **To reverse.** `_place_one`'s returns and `Graph.dormant`.
 - **Rough edge.** Dormancy follows the switches, not "a hand is in the
   box": with the hands switch on and no hand, the node exists and has
-  nothing to fold (no pass).
+  nothing to fold (no pass). A build from before plans 28 and 30 refuses the placement keys and opens such a preset as the default graph with a note (row 277).
 - **Judge it.** Check 226.
 
 ### 223. How an effect sits on an edge: folded once in `run` after a texture, folded by the output into an output, the presenter given the folded picture
@@ -3993,7 +4054,17 @@ Folds two of D1's drafts: the refusals, and the loops.
 - **Rough edge.** A presenter's `Handoff.frame` / `hands` may be a
   half-float pool texture wrapped "f1" (plan 26's contract widened, the
   docstring says so): proven by texture identity in the tests, never on
-  a real second window.
+  a real second window. `into: output.<n>` on a **through** output that
+  stands down this frame (no effect of its run on, or no hand drawn):
+  when the output falls back to its ground, the fold has nothing to fold
+  and is skipped, and the review pass's fixes (#221) say so as a dormant
+  word for that frame — `palette into output 2 — output 2 stands down
+  this frame` (`Graph.stood`), on OUTPUT's dormant lines and the FX
+  page's chip; when it falls back to the scene pipeline, the fold does
+  run, on the scene alone — the hands laid over at the output are not
+  folded — and nothing says so. A glass on `hands+through` with the chain
+  switched off live is the reachable case: the palette stops folding the
+  hands there.
 - **Judge it.** Checks 223, 224, 227.
 
 ### 224. The words: "on the hands", "before the history", "on output 2 only"
@@ -4167,3 +4238,908 @@ Folds two of D1's drafts: the refusals, and the loops.
   shader run; SYSTEM times it inside `scene`. Placement is not checked
   against `target`.
 - **Judge it.** Check 230.
+
+## The node editor (plan 28)
+
+Built in plan 28's run on 2026-10-17
+([`plans/28-node-editor.md`](plans/28-node-editor.md)), on
+`plan-28-30-integration` until the owner merges it. The owner's own
+decisions for this plan (6–16 of the launch prompt: one editor for both
+graphs, dependency order removing the lag, modifiers in the preset, two
+ports per param, values and triggers, roles not serials, the APC40 as
+two nodes, both graphs as plain JSON, no GLSL in the graph,
+`imgui_node_editor`, the processes) are in [`DECISIONS.md`](DECISIONS.md)
+with Who "owner"; these rows are what the build chose where those left a
+choice open — the patch's types and order, the frame's mark, loops and
+the delay, each modifier kind's params, the `mod` lane, where positions
+live, what the canvas draws and how a drag lands, the wire list, outputs
+as nodes, the APC40's two nodes, placeholders — and one compatibility
+fact the review pass found (277). No preset was edited or added: every
+proof is a fixture under `tests/fixtures/`. Folds: N0's "a delay's
+place" and "a delay closing a loop" are row 237; N0's "a loop of
+modifiers alone" is in row 236; N3's "the seam with N4" is in row 268;
+N4's "a hands wire on a through output" is in row 266; N5's "an edit
+inside a template" is in row 274.
+
+### 233. `patch.py`'s types: nodes by address or param id, an edge per port
+
+- **Built.** `PatchNode(id, kind, delay=False)`, kinds `source lfo
+  modifier macro param`; a source's, an LFO's or a modifier's id is the
+  address a row names (`lane:0`, `lfo:0`, `mod:3`, `hand:right.y`), a
+  param's or a macro's its param id — an address has a `:`, an id never
+  does. `PatchEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
+  (a row's gate orders before the row: a gate on an `lfo:` lane needs
+  it), `depth`, `base`, `in`, and every LFO knob `shape rate sync depth
+  phase reset` plus `trigger` (`lfo.trigger` → every LFO); a modifier's
+  own param edge is named by its param. `cable` is the route's `(source,
+  target)`. `order` is a stable DFS post-order (dependencies first, ties
+  in insertion order); `cycles` lists every elementary loop once (capped
+  at 256).
+- **Other options.** Nodes as a list; a gate folded into the `mod`
+  edge; only `depth / rate / phase` as LFO ports (the prompt's list).
+- **To reverse.** Small: `patch.py` is data; the GRAPH page draws from
+  the table, not from it.
+- **Rough edge.** A switched-off row is in the patch as disabled edges
+  (not run); a cable cut by a loop looks the same in the patch.
+- **Judge it.** Tests only.
+
+### 234. Only the params a later node reads land in the pass; `Param.apply` is idempotent by a frame mark
+
+- **Built.** `Router.modulate` lands (`Param.apply`) only a param that a
+  later node of the pass reads — a `scale`, a macro behind a depth
+  subscriber, an LFO knob, a modifier's own param. Every other param
+  lands in `reg.apply()` exactly as before, in registry order.
+  `Registry.begin_frame()` opens a mark (`Registry.frame`,
+  `Registry.landed`); `Param.apply(mark)` returns at once under a mark
+  it has seen; `Registry.apply()` passes the mark and closes it, so an
+  `apply()` with no pass before it (tests, `Registry.remove`) lands
+  everything. `Registry.nonfinite` also names a param that dropped a NaN
+  inside the pass. The owner feels it as "a frame earlier" where a value
+  was read stale, nothing else.
+- **Other options.** Land every param node in the pass (a leaf trigger —
+  a band-layout change, `preset.select` — would fire mid-pass, in patch
+  order); a per-param flag cleared by `Registry.apply`.
+- **To reverse.** One condition in `_rebuild_patch` (land always).
+- **Rough edge.** A read param lands in patch order, not registry order:
+  the same value at another moment in the frame. A test that calls
+  `p.apply()` by hand between `modulate` and `reg.apply()` on such a
+  param lets it go.
+- **Judge it.** Check 232.
+
+### 235. The patch is cached on a key built once a frame
+
+- **Built.** `Router.patch` is rebuilt when `_patch_key` moves: every
+  performer row by identity and its `source target op enabled scale
+  when`, `macros_serial`, every macro subscriber (identity, `depth`,
+  `base`), the modifiers' `(id, kind, inputs)`, the LFO count and
+  `Registry.serial` (new: moves on every `add` / `remove`). A row's
+  `value`, `rest`, `motion` and a subscriber's range are read live.
+- **Other options.** A serial bumped by every table edit door (the table
+  is also mutated in place, by ROUTING and by tests: a missed door would
+  run a stale patch).
+- **To reverse.** `_patch_key`.
+- **Rough edge.** `Router.modulate` costs about 5 µs a frame more:
+  31.4 / 30.5 µs on the base, 37.2 / 35.0 µs now (party-trip, 21 routes,
+  the hand tape, 2000 frames × 5 rounds, twice), mostly this tuple and
+  undo's fingerprint of the modifiers — 0.2% of a 60 Hz frame. A table
+  replaced by an identical one at the same `id` would not rebuild
+  (vanishingly unlikely).
+- **Judge it.** Tests only.
+
+### 236. A loop through no delay keeps its last cable off, with a note; the row stays
+
+Folds N0's "a loop of modifiers alone".
+
+- **Built.** A loop that passes through no `delay` modifier is broken at
+  its **last cable in table order** among those on it: that cable's
+  edges are disabled in the patch, the row stays in the table, enabled,
+  and saves as written. One note per cut under ROUTING's head, in the
+  warning colour, while the loop stands: `loop: lfo:0 → lfo.2.rate →
+  lfo:1 → lfo.1.depth → lfo:0 needs a delay — lfo:1 → lfo.1.depth is off
+  until it has one`. A loop of modifiers alone (no cable on it) keeps the
+  last modifier's input on the loop off, in id order — that modifier is
+  dormant — with `loop: mod:1 → mod:2 → mod:1 needs a delay — mod.2's
+  input mod:1 is off until it has one`. Loops are cut one at a time and
+  listed again after each cut. A macro's base subscriber never closes a
+  loop (a scene-setter at step 3). GRAPH's hover on the cut cable says
+  "off: a loop needs a delay".
+- **Other options.** Switch the row off in the table (the preset dirty,
+  `enabled: false` saved); the note in `table.notes` (cleared by any
+  edit while the loop stands); labels in the note; cut the loop's first
+  input.
+- **To reverse.** `_rebuild_patch`'s loop; two lines in `ui_routing.head`.
+- **Rough edge.** The row's checkbox still reads on; the modifier's input
+  combo still shows the cut input. The note uses node ids, not labels.
+  An LFO owning its own depth, which ran before with a frame of lag, is
+  refused until a delay sits in it.
+- **Judge it.** Check 233.
+
+### 237. A delay orders like any node unless it closes a loop; then it runs first, one frame late
+
+Folds N0's two delay drafts.
+
+- **Built.** An edge into a delay orders like any other (a plain delay
+  runs after its input and uses N1's stateful step: its rest first, then
+  one frame late), unless the delay reaches that edge's source again
+  (`patch.ordering`): then the edge does not order, the delay runs
+  first and emits its input's lane as it stood — last frame's — so a
+  loop through it is exactly one frame late; on the loop's first frame
+  it emits its rest (0). `cycles` lists no loop through a delay.
+- **Other options.** Every edge into a delay non-ordering (a delay on a
+  computed lane, stepped statefully, would be two frames late); a
+  loop-closing delay that reads NaN when its other source goes (the
+  loop could never restart).
+- **To reverse.** `patch.ordering` and `_step_modifier`'s `early`.
+- **Rough edge.** If the loop's other source goes away the early delay
+  emits its rest, not NaN; it passes ±inf through (harmless:
+  `Param.modulate` drops non-finite, and a modifier reading it drops its
+  memory).
+- **Judge it.** Check 234.
+
+### 238. The LFOs step inside the pass, every one a node
+
+- **Built.** `Router.use_lfos(lfos, clock)` (`app.main`, once);
+  `Router.modulate(analyzer, dt, now)` calls `LFOs.begin` (a held
+  trigger lands) and `LFOs.publish`, then `LFOs.step_one` at each LFO's
+  node. Every LFO is a node whether or not a cable touches it, so each
+  steps once a frame, in index order unless a dependency says otherwise
+  (a random LFO's draws follow that order). A per-LFO reset is held for
+  the next step only if that LFO has already stepped at this time
+  (`LFO.at`), so a reset fired earlier in the pass lands at phase 0 the
+  same frame. `LFOs.step` is `begin` + every `step_one`, for a caller
+  with no router; a bare `Router` steps no LFO. `app.frame` no longer
+  steps or publishes them (`ORDER` lost its two entries).
+- **Other options.** The bank passed to every `modulate` call.
+- **To reverse.** `app.frame` back to `lfos.step` / `publish` before
+  `router.modulate`; `use_lfos` dropped.
+- **Rough edge.** `tools/preset_shots.py`, `tools/undo_demo.py` and
+  `tools/faces_page_shots.py` keep the old frame shape (the LFOs stepped
+  outside, no `use_lfos`): they lag a frame on an LFO-on-LFO patch,
+  harmless for stills, never a double step. A hot reload of `routing`
+  into an `app.py` from before this run keeps the old order.
+- **Judge it.** Checks 232, 235.
+
+### 239. The equivalence proof's oracle is the base build's `modulate`, verbatim, in the test file
+
+- **Built.** `tests/test_routing.py::_lagged_modulate` is the base
+  build's `Router.modulate` (5d18192) copied verbatim, checked bit for
+  bit against the real base over all 23 factory presets before the
+  change. `test_every_factory_preset_lands_the_same_values_one_frame_earlier`
+  plays every factory preset with the synthetic hand tape on both and
+  asserts every modulatable param and every LFO output identical, or
+  shifted exactly by the base's computed lag (`_lag_of`). The lanes are
+  held and LFO 1 is a held square wave, so a lagged term times a moving
+  one cannot blur the shift. Three named pairs keep it from being
+  vacuous: party-trip's `camera.zoom`, lfo-breathe's `view.bright`,
+  party-tumble's `rot.rate.ZW` (the `scale` path).
+- **Other options.** A test-only flag in `Router.modulate` (a second
+  `p.modulate` call site, which the boundary walk forbids); a committed
+  recording (large, and it could not follow a helper's change).
+- **To reverse.** Delete the function and the test.
+- **Rough edge.** It shares the Router's helpers (`_resolve_lane`,
+  `gated`, `rest_of`, `feel_of`, `_move`), so it proves timing and
+  order, not the helpers. No factory preset carries a modifier or a
+  delay: those are proven by `test_patch` and `test_modifiers` only.
+- **Judge it.** Tests only.
+
+### 240. The six modifier kinds and their params
+
+- **Built.** Each param a registry param `mod.<n>.<p>` (group `mod`,
+  performance, modulatable). `curve`: `shape` −1…1 (y = x^(4^shape):
+  0 straight, +1 x⁴, −1 x^¼; input clamped 0…1), `invert`. `scale`:
+  `mul` −4…4 (1), `offset` −1…1 (0), `clamp` (on by default: held in
+  0…1). `smooth`: `attack` 0…2 s (0.05), `release` 0…4 s (0.35),
+  `spring` (off) — `motion.follow` about 0; spring on is a
+  `motion.spring` with ω = 1/attack, damping 0.6; the first reading is
+  taken as it is. `combine`: `how` add · mul · min · max · cross (add),
+  `balance` 0…1 (0.5, the crossfade only). `threshold`: `on` 0.6, `off`
+  0.4 (an off above on reads as on), `hold` 0…2 s (0.1): 1 on the rising
+  edge and while the hold lasts, again only after falling under `off`.
+  `delay`: no params, last frame's input, 0 on its first frame.
+- **Other options.** An S-shaped curve as well as the exponent; a spring
+  with its own Hz and damping; add clamped to 0…1.
+- **To reverse.** Small: `modifiers.PARAMS` and the kind functions; a
+  preset holding a param that goes away keeps loading.
+- **Rough edge.** A spring smooth has no release; a combine `add` can
+  exceed 1 (a `position` route clamps it, a `push` does not).
+- **Judge it.** Check 236.
+
+### 241. A modifier's lane is `mod:<n>`; a modifier whose input is not live reads NaN
+
+- **Built.** Modifier `mod.<n>` publishes lane `mod:<n>` (the lane index
+  is n; index 0 unused, never offered), labelled `<n> <kind>` ("mod 2
+  combine" on ROUTING), rest 0, its signal kind in
+  `Router.lane_kinds["mod"]` ("trigger" for a threshold, whose lane is
+  also a gate a route's `when` may wait on). A modifier whose input is
+  not live this frame — a scheme never fed, a name the rig lacks, an
+  input not chosen, a hand out of the box — is dormant: its lane reads
+  NaN, so a route on it lets go and the base returns, as on that source;
+  its memory starts afresh when the input comes back. A non-finite
+  output counts as dormant for that frame.
+- **Other options.** A dormant lane at its rest 0 (the prompt's words: a
+  `position` route would pin its target at 0); a names map
+  (`mod:smooth1`).
+- **To reverse.** One line in `Router._step_modifier`.
+- **Rough edge.** A combine with one dormant input is wholly dormant. On
+  its input's return a threshold already above `on` fires at once (a
+  hand re-entering the box hot is a rising edge), and a smooth takes its
+  first reading as it is, with no glide in.
+- **Judge it.** Check 237.
+
+### 242. Ids are one past the highest; a removal leaves its routes dormant
+
+- **Built.** `modifiers.next_id` is one past the highest id held, so a
+  removed modifier's number is not reused while a higher one stands.
+  Removing a modifier drops its params; a route on its lane stays,
+  dormant (a load drops such a route with a note instead).
+- **Other options.** The lowest free number; removing the routes on its
+  lane with it.
+- **To reverse.** `next_id` / `Bindings.remove_modifier`.
+- **Rough edge.** Removing the highest and adding again reuses its
+  number, and a dormant route left on that lane wakes on the new node.
+- **Judge it.** Check 237.
+
+### 243. A modifier's params live in its entry only, at their bases
+
+- **Built.** `{"id", "kind", "in", <params>}` (an enum by name, a toggle
+  as a bool), at their bases (a performer riding one never reaches the
+  file). `values` leaves out every `mod.*` id, and a `mod.*` id written
+  into `values` by hand is ignored with a note. The `modifiers` key is
+  written only when there is one, so an older preset saves byte for byte
+  as before. `mod` is a performance group with no module presets
+  (`preset.NO_MODULE`, beside `macro`; the PRESETS overview leaves it
+  out).
+- **Other options.** The params in `values` too.
+- **To reverse.** `Presets._values`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 238, 260.
+
+### 244. A desk template's modifiers: the preset's override by id; a save writes only what differs
+
+- **Built.** A preset that names a template lands the template's
+  modifiers with its own overriding by id (the merged set held and drawn
+  in id order), and a save writes only the entries that differ from the
+  template's as the load read them (the desk's `compact_desk` rule), so
+  a fix to the template reaches every preset that uses it at the next
+  load.
+- **Other options.** A save writing the whole list (a template fix would
+  never reach a preset saved once).
+- **To reverse.** `Presets._modifiers_part`.
+- **Rough edge.** A template's modifier the preset removed comes back at
+  the next load: there is no "none" entry.
+- **Judge it.** Check 239.
+
+### 245. The modifiers and their params are one undo part of the table
+
+- **Built.** `undo.TABLE_GROUPS = ("mod",)`: the modifiers are watched as
+  one table part, their params not as bases, so adding, removing, an
+  input picked and a param's drag are each a step, and a restore puts
+  the node and its params back together (`Bindings.set_modifiers`). The
+  strip's +, × and input combos push named steps ("add modifier
+  smooth", "delete modifier mod.2", "modifier input mod.2"); an input
+  pick replaces the modifier whole, and picking the input it already
+  reads is no step.
+- **Other options.** The params watched as bases (adding a modifier, a
+  new id, would be no step).
+- **To reverse.** `undo.TABLE_GROUPS`.
+- **Rough edge.** A restore re-declares every `mod.*` param (a performer
+  riding one picks it up again next frame).
+- **Judge it.** Check 240.
+
+### 246. Learn takes a `mod:` lane only when armed for anything or for "mod"
+
+- **Built.** `Learn.accepts` takes a `mod:` lane for a learn armed with
+  no `want` or for "mod", never a desk, pad, hand or role learn;
+  `learn_source("mod:1")` lands a push or position route like a hand
+  axis. No "Learn modifier" menu entry: nothing physical moves a
+  modifier. (On GRAPH a modifier's lane is dragged onto a `mod` stub
+  instead.)
+- **Other options.** A "Learn modifier" entry that waits for a
+  modifier's output to move.
+- **To reverse.** Two lines in `Learn.accepts`.
+- **Rough edge.** None known.
+- **Judge it.** Tests only (`tests/test_modifiers.py::test_learn_takes_a_mod_lane_as_a_continuous_source`).
+
+### 247. The MODIFIERS strip sits between the routes and the desk, a line and a params line each
+
+- **Built.** A title with a kind combo and **+ modifier** flush right;
+  per modifier `MOD n`, its kind, an input combo per input (the route
+  sources plus the other modifiers' lanes, never its own), the live
+  output bar and number ("dormant" while not live), ×; a second line of
+  its params as the panel's own widgets (slider, checkbox, combo), so
+  Learn, "Route a lane here…" and base → effective come with them. The
+  kind is fixed once added. The page filter matches a modifier by id,
+  "mod n", kind and inputs.
+- **Other options.** A kind combo per modifier (changed in place); the
+  strip under the macros.
+- **To reverse.** `ui_routing.modifiers`.
+- **Rough edge.** Three params on the narrow panel make short sliders;
+  no live bar of the inputs.
+- **Judge it.** Check 241.
+
+### 248. Node and pin ids are strings with a kind prefix; the widget's integers are a per-panel map
+
+- **Built.** Nodes `device:<role>` (`device:<role>/global` for the SHIFT
+  node), `template:<name>`, `source:<scheme>`, `analyzer`, `lfo.<n>`,
+  `mod.<n>`, `macro.<n>`, `render:<node>` (`render:eye`,
+  `render:output.<n>`), `group:<group>`. Pins `out:<address>`,
+  `base:` / `mod:` / `depth:<pid>`, `in:<mod id>.<k>`, `bus:<macro id>`,
+  `rin:<node>/<port>`, `rout:<node>`. The node ids are the `layout` keys
+  the owner sees in a preset or show file. `ui_graph` maps each string to
+  a stable int for the editor.
+- **Other options.** Strings hashed to ints (collisions); bare names
+  (`shape`, which clashes with the band `scene` group).
+- **To reverse.** The layout keys change: a saved `layout` would need
+  migrating.
+- **Rough edge.** A render node a later plan renames loses its saved
+  position.
+- **Judge it.** Check 244.
+
+### 249. Params sit on the render node that owns them by one table; the rest a node per group
+
+- **Built.** `graphview.OWNERS`: `view` / `rot` / `pattern` → `shape`;
+  `ghost[.<n>]` → that hands node; `cloud` → the first point cloud;
+  `dream` → `history`; `fx.<effect>.*` → that effect's node in the
+  scene's pipeline (else its first), `fx.on` / `mix` / `select` → `fx`;
+  `camera` / `eye` → `render:eye` (the shared camera, no image port);
+  `output.<n>.*` → that output. Every other group, and a mapped one
+  whose node is not in this frame's graph, is `group:<group>`. `lfo.<n>.*`
+  sit on their LFO, `mod.<n>.*` on their modifier, `macro.<n>` on its
+  bus node.
+- **Other options.** One "misc" node; the camera on `shape`.
+- **To reverse.** One dict.
+- **Rough edge.** With no render graph yet (before the first frame, or
+  headless) everything falls to group nodes. Effects in the other
+  pipelines (`acid(hands)`) carry no params.
+- **Judge it.** Check 243.
+
+### 250. The canvas draws every modulatable param and every row's target; setters into `base`; no sinks
+
+- **Built.** Param ports are every modulatable non-alias param plus any
+  param a route, a desk / pad / key row or a macro sub names. Desk, pad
+  and key rows are `setter` cables into `base` (keys from a grey
+  `source:key` node). A route's `scale` and `when` are said on its
+  hover, not drawn (a param has no output pin). Sink rows are not drawn.
+  Only macros with subs, a label or a cable get a node.
+- **Other options.** Every param (~700 ports); only the routes.
+- **To reverse.** The filters in `graphview.build`.
+- **Rough edge.** The APC40's ~100 desk rows make many base cables,
+  faint while idle. Setters are faint, not dashed (`ed.link` draws no
+  dash): only the square `base` stub tells one from a route. The page
+  costs 2.78 ms median at 960 × 900 on party-trip (55 nodes, 239
+  cables, patched only; about 3.8 ms with every node expanded,
+  headless); `route_said` runs per route per frame and `key` builds a
+  tuple over every binding each frame.
+- **Judge it.** Checks 242, 245.
+
+### 251. Positions: the preset's map for the look's nodes, the show's for the rig's; a drop dirties; tidy forgets
+
+- **Built.** `preset["layout"]` holds the modifiers, macros, every render
+  node but the outputs (`render:eye` among them: its ports are
+  performance params) and performance-group nodes; the show's `layout`
+  the devices, sources, the analyzer, the LFOs, the outputs and
+  session-group nodes (`graphview.home`). Whole canvas units, written
+  sorted, one node a line, only for a node the owner dropped (on mouse
+  release); auto-placed nodes are never written. The preset's map is in
+  its `signature()` and the show's in `Project.is_dirty`, so a drop
+  dirties. **Tidy** deletes the canvas's nodes from both maps and lays
+  everything out again, with no confirmation and as one undo step ("tidy
+  the graph"; redo puts the tidy back). The library's marks carry both
+  maps, so undoing a load puts the earlier positions back. An unreadable
+  entry is dropped with a note; no key, no note and no dirt.
+- **Other options.** Everything in the preset; auto positions written
+  too (noisy diffs).
+- **To reverse.** `graphview.home`, `Presets.layout`, `Project.layout`.
+- **Rough edge.** A drag on its own is not an undo step: positions come
+  back only with the undo of a load or a tidy. Undoing an earlier load in
+  the same show also puts the show's positions back as they were then,
+  losing a later drag of a rig node.
+- **Judge it.** Check 244.
+
+### 252. The tidy columns: sources, LFOs, modifiers, macros, groups, the render graph by depth, outputs
+
+- **Built.** Left to right: sources (devices, the template, keys, the
+  analyzer) 0, LFOs 1, modifiers 2, macros 3, param-group nodes 4, render
+  nodes from 5 by their depth in the render graph, outputs last; stacked
+  down each column by estimated height (a node's own expand and folds
+  counted, so expanding one pushes the unplaced nodes under it down).
+  Placed nodes take no room; dropping a node re-stacks the rest of its
+  column.
+- **Other options.** One render column.
+- **To reverse.** `graphview.COLUMN` / `_columns`.
+- **Rough edge.** Thirteen effects a pipeline make a wide canvas; port
+  positions are estimated, not measured.
+- **Judge it.** Check 244.
+
+### 253. The editor context lives on the panel; `Panel.close` destroys it
+
+- **Built.** `panel._graph["editor"]` is made on the page's first draw
+  (`Config.settings_file = ""`: no `NodeEditor.json` anywhere). A hot
+  reload of `ui_graph` keeps it, so no second context is made.
+  `Panel.close()` → `ui_graph.close` runs at quit and in ⌘R's close list
+  (`close_all(…, panel, …)`) before imgui shuts down; twice is safe.
+- **Other options.** Destroy and recreate on reload (selection and zoom
+  lost).
+- **To reverse.** `ui_graph._state` / `close`.
+- **Rough edge.** A reload of `ui.py` re-classes the Panel and the state
+  survives it too. The test rig closes the panel in its teardown.
+- **Judge it.** Check 246.
+
+### 254. The selection pane goes below the canvas; **beside** or a wide page puts it in a side column
+
+- **Built.** CONTROLS is `ui.PANEL_W` 540 px wide, so the page is about
+  420 px: the ROUTING row or effect strip of the selection shows in a
+  240 px pane under the canvas by default. The head's **beside** chip,
+  or a page at least 720 px wide (CONTROLS widened by hand), puts it in a
+  320 px column beside. The effect strip is `ui_fx.strip(panel, name)`,
+  factored out of the FX page unchanged.
+- **Other options.** Always beside (a canvas about 100 px wide at the
+  default size); a lower threshold (the same).
+- **To reverse.** `ui_graph.page`'s `wide`.
+- **Rough edge.** The selection is read a frame late (last frame's
+  canvas).
+- **Judge it.** Check 245.
+
+### 255. A cable into `mod` makes the row a Learn would make (`learn.row_for`)
+
+- **Built.** A source dropped on a param's round `mod` stub is
+  `Bindings.add` of the row `learn.row_for` returns (`Learn._row`'s
+  table moved to module level, unchanged): a **push** when the source is
+  centred (the device port's `bipolar`: a hand's roll, a stick) or the
+  param is centred on zero — a hand's at `hands.learn_depth`, any other
+  at `PUSH_DEPTH` — otherwise the **position** fader at depth 1. A taken
+  param is `Ask`: ROUTING's Replace / Keep (`ui_routing.ask`), Replace
+  calling `replace_owner`. A desk knob, a pad button or a key on `mod` is
+  refused: "a desk knob sets a base, not a performer; aim at base".
+- **Other options.** The prompt's rule: push only for a hand axis, else
+  position at 1 (a band would land on a centred `rot.rate.*` as a fader
+  pinned at one end).
+- **To reverse.** `Edit.route_for` builds its own row.
+- **Rough edge.** A source the device registry does not list (no tracker
+  connected) is never read as centred: its cable lands as position
+  unless the param is centred.
+- **Judge it.** Checks 247, 248.
+
+### 256. A cable into `base` is a desk or pad setter through the learns' own roads; the rest refused in words
+
+- **Built.** A desk control (`cc` / `note` / `pitch`, any qualifier) on a
+  `base` stub goes through a private `Learn(...).learn_control`: a
+  preset-layer `abs` row (a `toggle` for a note or a trigger param),
+  `bind(write=False)`, the same refusals (an invariant control, the
+  global layer, SAVE). A pad button or the D-pad goes through
+  `Learn.learn_pad_button`: the session's row, `bindings.json` written,
+  no undo step — as the pad learn. A hand: "a hand sets no base; aim at
+  mod" (and "a band", "an LFO", "a modifier", "a stick" with their own
+  noun). A key: "keys are the session's rows: map them on ROUTING".
+- **Other options.** The prompt's row for a pad, `Binding(src, pid,
+  "abs", layer="preset")`: an `abs` on a button does nothing useful, and
+  `is_session_row` would class it as the session's anyway.
+- **To reverse.** `Edit._setter`.
+- **Rough edge.** A pad setter is written at once and not undoable. The
+  private Learn's "learned …" words are not shown; only refusals reach
+  the head.
+- **Judge it.** Check 248.
+
+### 257. A cable's end is moved by a drag from where it lands, input pin to input pin
+
+- **Built.** The widget cannot pick up a link, so a drag that starts on a
+  **patched input pin** (a route's `mod` stub, a modifier's `in`) and
+  ends on another input pin moves that cable: a route by
+  `move_route(target=…)` (same op and depth, its macro depth
+  subscribers follow; a taken param asks, Replace being
+  `replace_owner(row, target=…)`), a modifier input to the other
+  modifier's input. Between two input pins with no cable: "join an output
+  to an input". The move picks up the performer, never a sleeping row.
+- **Other options.** Ctrl-drag; a "move to…" item on the cable's menu.
+- **To reverse.** `Edit.move`.
+- **Rough edge.** The source end cannot be moved by a drag: delete and
+  draw again, or insert a modifier.
+- **Judge it.** Check 247.
+
+### 258. A free modifier let go over a cable is inserted into it
+
+- **Built.** When a **modifier node with no cables** is dropped, its
+  centre is tested against every route and modifier-input cable on the
+  cubic the widget draws (handles at `link_strength` 100 canvas units,
+  sampled 16 times: `graphview.bezier`, `cable_near`). Within 14 canvas
+  units it is inserted (`Edit.insert_modifier`): the cable's source
+  becomes its first input, its lane the cable's new source
+  (`move_route`, op and depth kept), and a push keeps its old source's
+  rest (`Router.rest_of`), so a centred hand stays centred through a
+  smooth. A cable's right-click **insert ▸ <kind>** does the same with a
+  new modifier; either is one undo step.
+- **Other options.** The mouse position rather than the node's centre;
+  the widget's own hovered link (the dragged node covers the cable).
+- **To reverse.** `ui_graph.dropped` and `_moved`'s two lines.
+- **Rough edge.** Pin positions are last frame's pin centres. A modifier
+  already patched is never inserted by a drop: unpatch it, or use
+  **insert**.
+- **Judge it.** Checks 247, 249.
+
+### 259. The node picker: modifiers by kind, idle macros; delete for a modifier or macro node
+
+- **Built.** Right-click the empty canvas: **modifier ▸ curve · scale ·
+  smooth · combine · threshold · delay** (`Bindings.add_modifier`) and
+  **macro ▸** the idle macros (every macro is already a node — its knob
+  is modulatable — so picking one labels it "macro N", and ROUTING's
+  strip names it too). The node lands where the menu opened, saved in
+  the preset's layout. A modifier or macro node goes by its right-click
+  **delete** or the Delete key; the rig's nodes are refused ("<label>:
+  the rig's, not the preset's").
+- **Other options.** Hide idle macros; the picker on a drag into empty
+  space (`query_new_node`).
+- **To reverse.** `ui_graph.picker` / `macros_free`, `Edit.show_macro`.
+- **Rough edge.** The "macro N" label dirties the preset.
+- **Judge it.** Checks 249, 250.
+
+### 260. A macro dragged onto `mod` is refused in words
+
+- **Built.** A cable from a macro's `bus` onto a param's `mod` stub is
+  refused: "a macro sets a base or scales a depth; aim at base or a
+  depth stub". A macro lands only on a `base` stub (a base subscriber)
+  or a route's `depth` stub (a depth subscriber).
+- **Why.** No Router scheme publishes a macro's knob, so a route sourced
+  from a macro would sit dormant for ever; the design's own "drag from a
+  macro → a `Sub`" is what is built.
+- **Other options.** A route sourced from a macro, through a new `macro`
+  lane fed by `follow_macros`.
+- **To reverse.** Moderate: publish the macros as a lane, then drop the
+  `MACRO_NO_MOD` branch in `Edit._macro_refusal`.
+- **Rough edge.** One knob that both sets a base and drives a
+  modulation needs two subscribers, or the desk knob routed itself.
+- **Judge it.** Check 248.
+
+### 261. Deleting a macro node clears its label and every subscriber; the knob stays
+
+- **Built.** A macro node's delete (the key, or its right-click
+  **delete**) rewrites the table's macros without it
+  (`set_macros(macros_doc() minus it)`): its label and every subscriber
+  go; the knob, one of the rig's eight `macro.*` params, stays. One undo
+  step ("delete node macro.N"). ROUTING's macro strip then shows the
+  knob with no label and no subscribers.
+- **Other options.** Refuse it, as for the rig's other nodes; remove only
+  the subscribers and keep the label.
+- **To reverse.** One branch in `Edit.remove_value_node`.
+- **Rough edge.** A label the owner typed is lost with it (⌘Z brings it
+  back).
+- **Judge it.** Check 250 (its third step: the node delete).
+
+### 262. Deleting a cable: the preset's go, the session's are refused
+
+- **Built.** The Delete key on a selected cable, or the cable's
+  **delete**: a route is `remove`d (its depth subscribers with it); a
+  preset-layer desk row is removed and the desk redrawn; a macro
+  subscriber leaves its macro; a modifier input is unset. A session
+  row's cable (keys, the pad, an invariant or global-layer desk row:
+  `is_session_row`) is refused: "<source> is the session's
+  (bindings.json): edit it on ROUTING". Each edit is one named undo step
+  ("delete cable …", "connect … → …", "insert smooth into …"). In a
+  delete of several things at once, the first refusal's words stay on the
+  head.
+- **Other options.** Let the canvas edit `bindings.json` too.
+- **To reverse.** `Edit.disconnect_value`, `ui_graph._value_cut`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 250, 258.
+
+### 263. The wire list: `{"from": "<node>", "to": "<node>.<port>"}` in a `wires` list beside `nodes`
+
+- **Built.** The preset's `graph` section takes `wires` beside `nodes`.
+  `from` is a node's name, meaning its one output (`scene`, `hands`,
+  `hands.2`, `history`, an effect instance `palette` / `acid.2`, a
+  composite); `to` is `<node>.<port>` (`output.2.hands`, `acid.2.image`,
+  `history.image`, `composite.over`). Kept in the file's order and
+  written back so, one wire a line (`preset.dumps`); a section with no
+  wires writes no key. `GraphSpec.wires` holds the list as read.
+- **Other options.** Wires nested on each node (`"inputs": {"image":
+  "history"}`: shorter for effects, but outputs are not in `nodes`);
+  `to` as two keys.
+- **To reverse.** `Wire`, `_read_wires`, `GraphSpec.to_json`,
+  `preset.dumps`, the two fixtures.
+- **Rough edge.** A list's order has no meaning, but two specs differing
+  only in order compare unequal (a rebuild, nothing more). An older
+  build refuses the key (row 277).
+- **Judge it.** Checks 251, 252.
+
+### 264. A preset may wire image ports only; a hands node's place stays its `into`
+
+- **Built.** Wireable: `output.<n>.image`, `.hands` and `.readout`;
+  `history.image`; an effect's `image`; a composite's `under` and `over`.
+  Geometry and mask ports are typed, so a wrong drag can say why, but
+  are not wireable: `ghost → scene.geometry` gives "a hands node's place
+  is its into (ghost into scene or layer), not a wire"; `cover → …`
+  "the cover is the history's own". On the canvas a geometry cable from a
+  hands node into the scene or the layer **does** land: it sets that
+  node's `into` (A4's JSON). `output.<n>.readout` takes only a hands
+  layer; a composite cannot take the history `over` (it paints into what
+  reads it); an output's `depth` follows the blend.
+- **Other options.** Geometry wires in the JSON (two spellings of A4's
+  `into`); a wireable depth port.
+- **To reverse.** `WIRE_TAKES` / `WIRE_MAKES` in `graph.py`.
+- **Rough edge.** Two spellings of "hands in the scene": a geometry drag
+  on the canvas and `into` in the JSON (the canvas writes the JSON's).
+- **Judge it.** Check 253.
+
+### 265. D1's `after` / `into` are wires written short; a D1-only section stays short
+
+- **Built.** `after X` is the wire `X → E.image`, `into Y` is `E →
+  Y.image` (`GraphSpec.all_wires`, `d1_wires`). Back the other way
+  (`split_wires`): an effect fed by one wire and wired into nothing is
+  `after` its source; fed by none and wired into one output's or the
+  history's `image`, `into` it; anything else is an explicit edge (it
+  reads exactly its source, only the named ports read it). A D1-only
+  section is written short, byte for byte; a section read as wires is
+  written as wires; an edit on the canvas writes wires, dropping a D1
+  placement it replaces (an extra instance stays in the chain).
+- **Other options.** Normalise every section to one form on save (a
+  hand-written file re-spelled; D1's three fixtures would change).
+- **To reverse.** `split_wires`, `d1_wires`, `graphview._unplace`.
+- **Rough edge.** D1's `into: <effect>` has no wire spelling (`palette →
+  warp.image` reads as "warp after palette") and stays short. A wire into
+  an effect's image and D1's `after` on that effect are two wires into
+  one port, refused.
+- **Judge it.** Check 251.
+
+### 266. Outputs as nodes: a wire overrides that port alone; the guide goes with the hands shown
+
+Folds N4's "a hands wire on a through output".
+
+- **Built.** `output.<n>.image` ← S: the output shows S through an end of
+  its own (`graph.Wired`, `wire(output.<n>)`, painted straight into the
+  output when it can), ignoring its scene and through switches; if its
+  `hands` port was empty, its readout goes too unless the readout is
+  wired. `.hands` ← S: S laid over, depth-aware when the blend is depth,
+  the layer's guide with it if the output had none; on a **through**
+  output the output's picture moves to the end the hands were laid onto
+  (the scene's end, or the ground) and only the wired node is laid
+  over, so the hands are never drawn twice; a non-layer on `.hands` (the
+  scene, a composite, an effect) is laid as its own picture, never
+  through hands 1's ghost; `history → *.hands` is refused.
+  `.readout` ← layer: that layer's guide. An output no wire names is
+  node for node the default graph's, following the session's switches; a
+  load never writes a switch. The wires ride in `Wiring`, so
+  `Renderer._graph_for` rebuilds when they change.
+- **Other options.** Keep an image-wired output's switch-derived hands
+  and readout (a guide on a picture with no hands); let the image wire
+  take `hands` too; lay a wired layer through the chain (a pipeline per
+  wired layer); refuse a hands wire on a through output.
+- **To reverse.** `_Wiring._put`, `Wired`, `Output.run`'s `laid_node`.
+- **Rough edge.** On a through output the effects no longer bend the
+  hands while a hands wire is on it (the wire wins). A wired output's
+  golden route reads `none` (with a `"wired"` key naming its source);
+  `stats["routes"]` keys it `"wire(output.2)"`.
+- **Judge it.** Checks 252, 254.
+
+### 267. A refused wire is a note and that port's default; a malformed one the default graph
+
+- **Built.** `graph: wire <from> → <to> — <why>; the default wiring`,
+  that wire left out, its port at its default (or D1's placement), the
+  rest standing, the section kept as written. The reasons: no such node
+  ("a wire leaves scene, hands …, history, an effect or a composite"),
+  no such effect in this build, an output as a source ("it makes nothing
+  to wire on"), no such port ("it takes image, hands, readout"), a type
+  mismatch ("ghost makes geometry, output.1.image takes a picture"), no
+  such layer, a readout from a non-layer, a D1 placement already there
+  ("one place"), two wires into one port ("it keeps its default"), an
+  effect with no wire in and several out, a loop ("that makes a loop
+  (palette → acid.2 → palette)"). A malformed wire (not two strings, or
+  the same twice) is a `GraphError`: the default graph, as A4 does. A
+  wire on a node this frame lacks is dormant
+  (`Graph.dormant`: "wire hands → output.3.hands — no output 3 this
+  frame"), on OUTPUT's dormant lines and in the graph words.
+- **Other options.** Drop the whole graph on any refused wire.
+- **To reverse.** `wire_error`, `_read_wires`, `GraphSection.read`'s
+  suffix.
+- **Rough edge.** Every wire into a doubly wired port is refused, not
+  only the later one; every wire on a loop.
+- **Judge it.** Check 253.
+
+### 268. The render picker; every render edit read back through `read_graph` before it lands
+
+Folds N3's "the seam with N4".
+
+- **Built.** Right-click the canvas: **effect ▸** one item per effect
+  file (`EffectAt(file, n + 1)`, its `fx.<file>.<n+1>.*` at their
+  defaults, the instance in the chain at its order), **hands**
+  (`HandsAt(n + 1)`), **composite** (`CompositeAt(n + 1)`, blend over,
+  built once a wire feeds it). A render node's menu: delete; `draw
+  solid` / `draw lines`; `laid over` / `add` / `depth`. Delete on a wire
+  unwires it; on a default cable: "… is the default graph's: no wire
+  says it (wire something else into … to replace it)". A node delete
+  removes an extra effect instance, hands node or composite with every
+  wire on it; instance 1 of an effect, hands 1, the scene, the history
+  and the outputs stay, each with words. Every edit is a new section
+  read back through `read_graph` with the build's files: a note is the
+  refusal and nothing changes; else one undo step (`undo.push(label,
+  load=True)`), then `GraphSection.land` (the preset dirty, the renderer
+  handed the wiring); an edit that empties the section lands none. The
+  page dispatches a drag by its pins' type (`ui_graph.CREATE`) and a
+  delete by the cable's or node's kind (`DELETE`, `DELETE_NODE`); value
+  and trigger edits go through `_act`, render edits through
+  `render_edit`, whose step is pushed only once an edit is accepted. The
+  head says the last edit's words until the next edit or refusal.
+- **Other options.** A picker of instances already declared; edits that
+  write the spec directly (two paths for refusals).
+- **To reverse.** `graphview`'s render edits and `ui_graph`'s.
+- **Rough edge.** A loaded section that carried a refused wire or
+  placement is kept, but the first canvas edit writes the accepted spec
+  and drops the refused part. A drag's red words are a tooltip, not a
+  note.
+- **Judge it.** Checks 251, 255.
+
+### 269. The two wire fixtures' look
+
+- **Built.** `hands-glass-only.json`: hands-lines' values, `ghost` drawn
+  in the scene **as lines** so the solid `ghost.2` layer reads apart;
+  `ghost.2` is the layer, wired to `output.2.hands`. `wired-outputs.json`:
+  palette-glass's values (party-acid, the palette at centre 200, width
+  60) plus `fx.acid.2.*` (on, mix 1, bend 0.06, twist 1.6, reach 6,
+  breathe 0.5); the palette wired into `output.1.image`, acid 2 after the
+  history into `output.2.image`. `tools/golden_frames.py` switches on any
+  `ghost.<n>.on` a fixture's graph declares (session state no preset
+  carries).
+- **Other options.** Ghost 1 solid in the scene (the two hands alike in
+  the golden).
+- **To reverse.** Re-record the two fixtures (`--only`).
+- **Rough edge.** At the machine `ghost.2.on` starts off: switch it on on
+  HANDS. Hands 2 is also on any output whose switches lay a layer with
+  the scene off (A4's one-layer rule). The name assumes the glass is
+  output 2; on the hand checks' two-screen rig (101) the glass is output
+  1.
+- **Judge it.** Check 252.
+
+### 270. The APC40 is two nodes: `device:apc40` with every control, `device:apc40/global` without the invariant ones
+
+- **Built.** A device whose `layers` has two or more entries (today the
+  first MIDI role's APC40: `("preset", "global")`) is one node per layer
+  (`graphview.device_nodes`). *apc40* keeps N2's id and name, carries
+  every control of the layout, the invariant ones included, and draws the
+  preset layer's rows and the invariant rows; *apc40 (SHIFT)*
+  (`device:apc40/global`) carries every control but the invariant ones
+  and draws the global layer's (`bindings.json`). "Invariant" is the
+  table's own `Bindings.is_invariant(Binding(control, ""))`: SHIFT plus
+  the control of any enabled layer-None row; nothing is listed by hand.
+  The first node's pins stay `out:<address>`, the SHIFT node's
+  `out:<address>|global`. Both ids are the show's layout keys. A drag
+  from a SHIFT-node port into `base` is refused whatever the latch
+  ("<addr> on the SHIFT node is the session's (bindings.json): map it on
+  ROUTING"): the global layer is never a Learn target (D5).
+- **Other options.** One node with a layer toggle (decision 12 rejects a
+  layer view); ids `device:apc40.shift`.
+- **To reverse.** `device_nodes` returns one node; the SHIFT node's
+  saved position is dropped as an unknown id.
+- **Rough edge.** The global layer's rows are edited on ROUTING only.
+- **Judge it.** Check 256.
+
+### 271. The desk's port groups
+
+- **Built.** On each desk node, in this order: `invariant` (first node
+  only), `track knobs`, `device knobs`, `knobs` (the cue level),
+  `faders` (track faders, MASTER, the crossfader when not invariant),
+  `clip grid` (the field and the scene column), `buttons`, from the
+  profile's control kind (`Port.group`) with knobs split by Akai's name;
+  inside a group, the layout's order. A generic desk (one layer, no
+  layout) has no ports, as before.
+- **Other options.** The raw kinds (N2's `knob`, `fader`, `grid`,
+  `button`); the glyph rows.
+- **To reverse.** `graphview.desk_group` / `DESK_GROUPS`.
+- **Rough edge.** An invariant fader (the crossfader) sits in
+  `invariant`, not `faders`.
+- **Judge it.** Check 256.
+
+### 272. The SHIFT latch is read from the table (`Bindings.layer_of`) each frame
+
+- **Built.** `MidiIO` reads `Bindings.layer_of(role)`, which `desk.shift`
+  sets, and the page reads the same value: each frame `graphview.refresh`
+  sets each layered node's `up` and each port's (an invariant port is
+  always up). A cable from a port whose layer is down is dormant
+  (faint); the down node's title and ports are faint, an up layer's
+  ports bright, invariant ports dim as ever. A flip rebuilds nothing.
+- **Other options.** `desk.shift` from the registry (the first role
+  only); an `up_layer` on `MidiDevice` (`devices.py` was not needed).
+- **To reverse.** The block at the top of `refresh`.
+- **Rough edge.** A second MIDI desk with no latch is one node and never
+  faint.
+- **Judge it.** Check 256.
+
+### 273. A layered row on an invariant control is drawn off, on *apc40*'s invariant port
+
+- **Built.** A preset- or global-layer row whose control is invariant
+  never acts and never lights (D6). Its cable is `off` (dormant), its
+  hover says "(under an invariant control)", and it leaves that
+  control's port on *apc40*, in `invariant` — never a port on the SHIFT
+  node — so "invariant controls on *APC40* only" holds even for it.
+- **Other options.** Hide it.
+- **To reverse.** The `shadowed` line in `build`.
+- **Rough edge.** None known (no factory row is shadowed today).
+- **Judge it.** Tests only
+  (`tests/test_graphview_devices.py::test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node`).
+
+### 274. A desk template is a subgraph node; an edit inside is an override
+
+Folds N5's "an edit inside a template is an override".
+
+- **Built.** When the loaded preset names a `desk_template`, the page
+  passes the template's rows as the load expanded them
+  (`Presets.template_at_load()`, what a save compacts against). `build`
+  draws one node, `template:<name>` (column 0, saved in the **preset's**
+  layout), a port per template row ("<control> → <target>"). A live
+  preset-layer row still the template's (same control, target, op and
+  value) is a cable from it (`VCable.inside`); an override, or a row on a
+  control the template does not map, hangs off *apc40*; an overridden or
+  darkened template control is a port with no cable. Every template
+  node starts collapsed (its ports listed, none of its cables drawn); its
+  **+** opens it, **−** closes it. Deleting a template row's cable is
+  `table.remove` (the save writes a dark row); dragging a template port
+  onto a `base` stub is the desk learn (the save writes an override).
+  The template file is never written.
+- **Other options.** Collapsed, one bundled cable per target node; the
+  overrides inside the subgraph too; template-level edits rewriting the
+  file (shared by every preset that names it).
+- **To reverse.** The template block in `build`, `template_of`,
+  `drawn_cable`.
+- **Rough edge.** While collapsed, the params its rows set show a
+  patched `base` stub with no visible cable (the stub's hover: "set by
+  desk template <name> (collapsed: + shows it)"). After an edit the cable
+  jumps from the template node to *apc40* — honest (it is an override
+  now), but it can surprise.
+- **Judge it.** Check 257.
+
+### 275. A role this rig lists no device for is a grey placeholder `device:<role>`
+
+- **Built.** A row from a role with no listed device draws from a grey
+  node `device:<role>` (`placeholder`, status "not in this rig: its
+  cables wait for it"), its cables dormant. The role: the row's
+  qualifier (`axis@p2` → `p2`); for an unqualified MIDI row the desk's
+  first role; else the kind's usual role from `config.py`'s example list
+  (`hand` / `hands` → `leap`, `axis` / `pad` / `hat` → `pad`, `cc` /
+  `note` / `pitch` → `apc40`); else the scheme. The id is the real
+  device's, so a device of that role arriving takes the placeholder's
+  saved position. Keys stay their own `source:key` node. Fixed on the
+  way: N2 drew a qualified MIDI row with no such device from the first
+  desk's node.
+- **Other options.** N2's `source:<scheme>` nodes.
+- **To reverse.** The placeholder branch in `source_pin`, `SCHEME_ROLE`
+  / `NO_DEVICE`.
+- **Rough edge.** With no desk listed there is one placeholder, not two:
+  its preset- and global-layer rows on one control share one pin.
+  `SCHEME_ROLE` guesses from `config.py`'s example names: a rig that
+  names its hands role otherwise gets a placeholder `leap`, and the real
+  device takes its own id.
+- **Judge it.** Check 258.
+
+### 276. The hands node's groups: axes, pinches, grab, presence, dance
+
+- **Built.** `hands/device.py`'s own groups, except that its `switches`
+  are told apart by address: a `.grab` port in `grab`, every other
+  switch in `pinches`; the device's order. Nothing in the hands package
+  changed (`tests/test_hands_boundary.py` untouched).
+- **Other options.** The two groups added in `hands/device.py` itself.
+- **To reverse.** `graphview.hand_group`.
+- **Rough edge.** `presence` is a fifth group the design did not name.
+- **Judge it.** Check 256.
+
+### 277. A build from before this run reads this run's presets only in part: placements and wires are a note, modifiers and positions are lost on its save
+
+- **Found by the review pass**, not chosen: no code can fix it, because
+  the old build is what reads the file.
+- **Built.** Nothing in this build: the keys are additive and no schema
+  was bumped (`hyperspace.preset/2`). What an older build (the base,
+  5d18192, or the other Mac if it is behind) does with a preset saved
+  here: a `graph` section with a placement (`after` / `into`, plan 30)
+  or a `wires` list is refused whole by its strict reader — the preset
+  opens as the default graph with one note (`graph: effect node: no key
+  'after' (it takes instance, file); the default graph`, `graph: no key
+  'wires' (it takes nodes); the default graph`), plus an unknown-id note
+  for each extra instance's params; the section survives a save there.
+  `modifiers` and `layout` are ignored **with no note**, and a save on
+  that build **drops** both; a route on `mod:<n>` is a dormant row
+  there. Everything else (values, routes, desk, macros) lands as before.
+- **Other options.** A schema bump to `hyperspace.preset/3` (an older
+  build would then refuse the whole file); writing the old short form
+  where it can (it cannot for wires or modifiers).
+- **To reverse.** n/a: it is how the base build reads.
+- **Rough edge.** The shared library (plan 25) syncs presets between two
+  Macs: **update both Macs to this build before sharing patches**, and
+  never save a preset with modifiers or positions on an older one. Rows
+  219 and 222 (the placement keys) carry the same caveat.
+- **Judge it.** Check 259.
