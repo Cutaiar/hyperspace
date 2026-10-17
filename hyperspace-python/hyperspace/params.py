@@ -106,7 +106,9 @@ F_KEYS = 8
 # scene survives a preset load. Every persisted param is in exactly one
 # (tests/test_params.py walks the full registry); a group in neither
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro")
+# `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
+# preset's, declared while it holds the modifier (routing.declare_modifiers)
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}

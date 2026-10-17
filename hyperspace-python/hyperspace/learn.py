@@ -84,7 +84,7 @@ table are all it needs.
 
 from __future__ import annotations
 
-from . import undo
+from . import modifiers, undo
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -379,12 +379,17 @@ class Learn:
         plan 27 B2). "hand:left": a source that starts "hand:left." (an
         axis or a switch of that hand, by name). "pad": a gamepad button,
         the D-pad or an axis (PAD_SCHEMES). A device's role (a want with no
-        ``:``): a source under that scheme."""
+        ``:``): a source under that scheme. A modifier's output lane
+        (``mod:<n>``, plan 28 N1) is a continuous source like a hand's
+        axis: it completes a learn armed for anything, or for "mod", and
+        never a desk, pad or hand one."""
         if getattr(self, "learning", None) is None:
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
         if want is None:
             return True
+        if source.partition(":")[0] == modifiers.SCHEME:
+            return want == modifiers.SCHEME
         if want == DESK:
             return Binding(source, "").is_midi
         if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
