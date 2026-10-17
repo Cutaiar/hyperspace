@@ -572,11 +572,31 @@ def _room(panel) -> tuple[float, float, float, float]:
 
 # ---------------------------------------------------------------- what a control says
 
+# What a few targets do, where their label alone does not say it on the
+# desk (the owner's findings, 2026-10-16): MASTER select and PAN only
+# matter in overlay mode, which config.toml's [output] overlay must allow;
+# STOP ALL resets the bands to the selected scene and a second press within
+# 8 s undoes it; QUANT walks the bank, not the preset list (the pad's B)
+DESK_WORDS = {
+    "overlay.on": "Overlay (if config allows)",
+    "overlay.passthrough": "Click-through (overlay)",
+    "scene.reset_all": "Reset all bands (again: undo)",
+    "preset.next": "Next bank preset",
+}
+# an enum `set` row whose choice's name alone does not say what the
+# button does: the word goes before the name (the track-select row, G7:
+# "band SUB" — the band strip the device knobs follow under SHIFT)
+SET_WORDS = {"band.select": "band"}
+
+
 def text(reg, b: Binding) -> str:
     """What a lit control does, in the panel's words (plan 17 fork 8): a
     `set` row on an enum → that value's name (the bank row reads the
-    presets' names, a scene pad the scene's); a `step` row → the label and
-    the step ("Brightness +3"); anything else → the param's label; a
+    presets' names, a scene pad the scene's; `SET_WORDS` puts a word
+    before it — "band SUB"); a `step` row → the label and the step
+    ("Brightness +3"); a toggle row on an enum, which steps it → the
+    label, "next" and the value now ("SUB Transfer: next (SQ)"); a target
+    in `DESK_WORDS` → its words; anything else → the param's label; a
     target the registry lacks (or a param with no label) → the id. A bank
     pad whose slot is empty says nothing (`empty`): "" — it is drawn as a
     dark control."""
@@ -589,7 +609,12 @@ def text(reg, b: Binding) -> str:
         names = p.names
         i = round(b.value)
         if 0 <= i < len(names) and names[i]:
-            return str(names[i])
+            word = SET_WORDS.get(b.target)
+            return f"{word} {names[i]}" if word else str(names[i])
+    if b.op == "toggle" and p.kind is Kind.ENUM:
+        return f"{p.label or b.target}: next ({p.text()})"
+    if b.target in DESK_WORDS:
+        return DESK_WORDS[b.target]
     if b.op == "step":
         return f"{p.label or b.target} {b.value:+g}"
     return p.label or b.target

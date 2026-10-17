@@ -948,7 +948,7 @@ def _sheet_keys() -> tuple[set[str], set[str]]:
     """The GLFW key names and pad buttons the sheet's key column names."""
     keys, pads = set(), set()
     for col, _ in CHEATSHEET:
-        if col in _MOUSE:
+        if col in _MOUSE or col.startswith("APC40 "):    # the desk's rows: not keys
             continue
         if col in _PADS:
             pads.update(_PADS[col])

@@ -119,6 +119,49 @@ def leave() -> list[mido.Message]:
     return [*msgs, _mode(MODE_GENERIC)]
 
 
+# A desk that fell back to Generic mode (2026-10-16, the owner's findings).
+# The APC40 starts in Mode 0 whenever it powers up ("The unit defaults to
+# Mode 0 on startup", Akai rev 1), and a power cycle under a running app
+# can keep the port, so the intro `enter` sends at connect is not sent
+# again. In Mode 0 ("Mode 0 Button Type", Akai's inbound table) ACTIVATOR,
+# SOLO, RECORD ARM, CLIP/TRACK, DEVICE ON/OFF, ◀ ▶, PAN and SEND A–C are
+# toggles the device keeps (one message a press: note-on turning on,
+# note-off turning off; a light the host sends sets that state), TRACK
+# SELECTION and MASTER send nothing, and the device knobs and the eight
+# device buttons send on the channel of the track the device selected
+# itself. In Mode 2 every button is momentary and those send on channel 0.
+# `fell_back` names the messages Mode 2 never sends — midi.py then sends
+# the intro again; `in_channel` reads a device button on any channel as
+# the one button it is.
+MODE0_TOGGLES = frozenset({N_ARM, N_SOLO, N_ACTIVATOR, N_CLIPTRACK, N_DEVICE_ON, N_DEV_L,
+                           N_DEV_R, N_PAN, N_SEND_A, N_SEND_B, N_SEND_C})
+DEVICE_BUTTONS = range(N_CLIPTRACK, N_METRO + 1)     # banked by track in Mode 0 only
+
+
+def fell_back(kind: str, channel: int, number: int, on: bool, held: bool) -> bool:
+    """Is this message one the device sends only in Generic mode? A device
+    knob or device button on a channel other than 0, or on a Mode-0 toggle
+    a note-off with no press held (a release of nothing) or a note-on while
+    its last press is still held (a second press with no release). `held`:
+    a press on this control is waiting for its release. A button held down
+    across a launch or a reconnect reads as one too; the cost is one more
+    intro, which changes nothing in Mode 2."""
+    if kind == "cc":
+        return number in DEVICE_KNOBS and channel != 0
+    if kind != "note":
+        return False
+    if number in DEVICE_BUTTONS and channel != 0:
+        return True
+    return number in MODE0_TOGGLES and on == held
+
+
+def in_channel(kind: str, channel: int, number: int) -> int:
+    """The channel a message is read on: a device button's is 0, whatever
+    track a Mode-0 device had selected (Mode 2 sends them on 0; the map's
+    rows name 0). Everything else keeps its own."""
+    return 0 if kind == "note" and number in DEVICE_BUTTONS else channel
+
+
 # Hand check 31 — the one hardware assumption plan 13 D7 rests on: in mode
 # 0x42 a ring CC sent to a device or track knob also re-bases the encoder,
 # so its next turn continues from the value just drawn. midi.py catches a
