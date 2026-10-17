@@ -189,7 +189,14 @@ class Wiring:
 
     Plan 30 D1: `placed`, the effect instances the preset's graph places
     after or into a node (`EffectAt` with `after` / `into`), in the order
-    the section lists them: each sits there and not in the chain's run."""
+    the section lists them: each sits there and not in the chain's run.
+
+    Plan 28 N4: `wires`, the preset's wires the default graph builds as
+    edges (`split_wires`: those D1 would write short are in `placed`) —
+    into an output's port, overriding what its switches give it; into the
+    history's picture; into an effect wired on; into a composite of
+    `composites`. Part of the renderer's graph key (`Renderer._graph_for`
+    compares the wiring)."""
 
     hands: str = "layer"
     blend: str = "over"
@@ -197,6 +204,8 @@ class Wiring:
     draw: str = "solid"
     extra: tuple[HandsAt, ...] = ()
     placed: tuple[EffectAt, ...] = ()
+    wires: tuple[Wire, ...] = ()
+    composites: tuple[CompositeAt, ...] = ()
 
     def __post_init__(self) -> None:
         names = [getattr(e, "name", None) for e in self.placed]
@@ -444,6 +453,333 @@ NODE_KINDS: dict[str, Any] = {
 }
 
 
+# ---------------------------------------------------------------- wires (plan 28 N4)
+#
+# The preset's graph is nodes plus a wire list: `{"nodes": [...], "wires":
+# [{"from": "hands.2", "to": "output.2.hands"}, {"from": "palette", "to":
+# "output.1.image"}]}`. A wire names a node's output (`from`: the node's
+# name) and an input port (`to`: `<node>.<port>`). An input no wire names
+# is the default graph's: an output's ports follow the session's switches
+# (the rig's, not the look's), an effect sits in the chain at its order.
+# D1's `after` / `into` are the same wires written short, and read as such
+# (`d1_wires`): `{"file": "palette", "after": "hands"}` is the wire
+# `hands → palette.image`, `{"file": "palette", "into": "output.2"}` the
+# wire `palette → output.2.image`.
+
+WIRE_KEYS = ("from", "to")
+_LAYER = re.compile(rf"hands(?:\.{_INSTANCE})?")
+_GHOST = re.compile(rf"ghost(?:\.{_INSTANCE})?")
+_OUTPUT = re.compile(r"output\.[1-9][0-9]*")
+_COMPOSITE = re.compile(rf"composite(?:\.{_INSTANCE})?")
+# what each kind of wireable node makes, and the ports a wire may go into
+# (port → type). The scene's and a layer's geometry ports and the
+# history's mask port are typed so a drag can say why it is refused: a
+# hands node's place is its `into`, the cover is the history's own
+WIRE_MAKES = {"scene": IMAGE, "history": IMAGE, "layer": IMAGE, "effect": IMAGE,
+              "composite": IMAGE, "ghost": GEOMETRY, "cover": MASK, "output": None}
+WIRE_TAKES: dict[str, dict[str, str]] = {
+    "output": {"image": IMAGE, "hands": IMAGE, "readout": IMAGE},
+    "history": {"image": IMAGE, "cover": MASK},
+    "effect": {"image": IMAGE},
+    "composite": {"under": IMAGE, "over": IMAGE},
+    "scene": {"geometry": GEOMETRY},
+    "layer": {"geometry": GEOMETRY},
+    "ghost": {}, "cover": {},
+}
+TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", None: "nothing"}
+WIRE_FROM_WORDS = "scene, hands …, history, an effect or a composite"
+WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, an effect's image "
+                 "or a composite's under / over")
+
+
+def wire_node_kind(name: Any) -> str | None:
+    """What kind of node a wire's name is (`WIRE_MAKES`'s keys), or None."""
+    if not isinstance(name, str):
+        return None
+    if name in ("scene", "history", "cover"):
+        return name
+    for kind, pat in (("layer", _LAYER), ("ghost", _GHOST), ("output", _OUTPUT),
+                      ("composite", _COMPOSITE)):
+        if pat.fullmatch(name):
+            return kind
+    if _PLACE_EFFECT.fullmatch(name):
+        return "effect"
+    return None
+
+
+def split_instance(name: str) -> tuple[str, int]:
+    """`acid.2` → ("acid", 2); `palette` → ("palette", 1)."""
+    head, _, n = name.partition(".")
+    return head, int(n) if n else 1
+
+
+@dataclass(frozen=True)
+class Wire:
+    """One wire of the preset's graph (plan 28 N4): `src`, a node's name
+    (its output), into `dst`, `<node>.<port>` (`output.2.hands`,
+    `acid.2.image`). JSON `{"from": src, "to": dst}`."""
+
+    src: str
+    dst: str
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.src, str) or not isinstance(self.dst, str) or not self.src
+                or "." not in self.dst):
+            raise ValueError(f"wire {self.src!r} → {self.dst!r}: from a node's name into "
+                             "'<node>.<port>'")
+
+    @property
+    def node(self) -> str:
+        """The node the wire goes into (`output.2`, `acid.2`)."""
+        return self.dst.rpartition(".")[0]
+
+    @property
+    def port(self) -> str:
+        return self.dst.rpartition(".")[2]
+
+    def to_json(self) -> dict:
+        return {"from": self.src, "to": self.dst}
+
+    def __str__(self) -> str:
+        return f"{self.src} → {self.dst}"
+
+
+@dataclass(frozen=True)
+class CompositeAt:
+    """A composite node the preset's graph adds (plan 28 N4): `under` with
+    `over` laid on it at `blend`, its ports and its picture wired by the
+    wire list — `composite`, `composite.2` … One no wire feeds is built
+    nowhere."""
+
+    n: int = 1
+    blend: str = "over"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"composite instance {self.n!r}: a whole number from 1")
+        if self.blend not in BLENDS:
+            raise ValueError(f"composite blend {self.blend!r}: one of {', '.join(BLENDS)}")
+
+    @property
+    def name(self) -> str:
+        return "composite" if self.n == 1 else f"composite.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "composite"}
+        if self.n != 1:
+            d["instance"] = self.n
+        if self.blend != "over":
+            d["blend"] = self.blend
+        return d
+
+
+def _composite_entry(e: dict) -> CompositeAt:
+    _entry_keys(e, "composite", ("instance", "blend"))
+    return CompositeAt(_instance(e), e.get("blend", "over"))
+
+
+NODE_KINDS["composite"] = _composite_entry
+
+
+def d1_wires(effects) -> list[Wire]:
+    """D1's placements (`EffectAt.after` / `into`) as the wires they are
+    short for: `after X` is `X → E.image`, `into Y` is `E → Y.image`
+    (`output.<n>`, `after` or `into`: its image port)."""
+    out = []
+    for e in effects:
+        if e is None or e.where is None:
+            continue
+        key, where = e.where
+        if key == "after" and not where.startswith("output."):
+            out.append(Wire(where, f"{e.name}.image"))
+        else:
+            out.append(Wire(e.name, f"{where}.image"))
+    return out
+
+
+@dataclass
+class _WireCtx:
+    """What a wire is checked against: the layer's name, the hands nodes,
+    the effect instances this build has (None: any well-formed name), the
+    composites declared, D1's placed effects (name → (key, where))."""
+
+    layer: str = "hands"
+    ghosts: frozenset[str] = frozenset({"ghost"})
+    effects: set[str] | frozenset[str] | None = None
+    composites: frozenset[str] = frozenset()
+    placed: dict[str, tuple[str, str]] = field(default_factory=dict)
+
+
+def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
+    """Why wire `w` cannot be, in words — None when it can (plan 28 N4):
+    a name that is no node, a port that does not exist, a port of another
+    type, a geometry or mask wire (a hands node's place is its `into`),
+    a layer or a hands node this graph lacks, an effect D1 already
+    places. The canvas's drag says the same words."""
+    ctx = ctx if ctx is not None else _WireCtx()
+    src_kind = wire_node_kind(w.src)
+    if src_kind is None:
+        return f"no node {w.src!r}: a wire leaves {WIRE_FROM_WORDS}"
+    if src_kind == "output":
+        return f"{w.src} is an output: it makes nothing to wire on"
+    node, port = w.node, w.port
+    kind = wire_node_kind(node)
+    if kind is None or kind in ("ghost", "cover"):
+        return f"no input {w.dst!r}: a wire goes into {WIRE_TO_WORDS}"
+    takes = WIRE_TAKES[kind]
+    if port not in takes:
+        said = f"it takes {', '.join(takes)}" if takes else "nothing is wired into it"
+        return f"{node} has no port {port!r} ({said})"
+    makes, want = WIRE_MAKES[src_kind], takes[port]
+    if makes != want:
+        return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
+    if want == GEOMETRY:
+        return f"a hands node's place is its into ({w.src} into scene or layer), not a wire"
+    if want == MASK:
+        return "the cover is the history's own: no mask is wired"
+    for name, k in ((w.src, src_kind), (node, kind)):
+        if k == "effect" and ctx.effects is not None and name not in ctx.effects:
+            return f"no {name} effect in this build"
+        if k == "composite" and name not in ctx.composites:
+            return f'no {name} node in this graph (add one: {{"kind": "composite"}})'
+    if src_kind == "layer" and w.src != ctx.layer:
+        return f"no {w.src} layer in this graph ({ctx.layer} makes the layer)"
+    if w.src == node:
+        return f"{node} into itself makes a loop"
+    if kind == "output" and port == "readout" and src_kind != "layer":
+        return f"{w.dst} takes a hands layer's guide ({ctx.layer})"
+    if kind == "composite" and port == "over" and src_kind == "history":
+        return ("the history paints into what reads it, so it is not laid over: "
+                "wire it under, or an effect after it over")
+    for name, k, into in ((node, kind, True), (w.src, src_kind, False)):
+        if k == "effect" and name in ctx.placed and (into or kind != "effect"):
+            key, where = ctx.placed[name]
+            return f"{name} sits {key} {where!r} already (its node says so): one place"
+    return None
+
+
+def wire_loops(wires: list[Wire]) -> dict[Wire, str]:
+    """The wires on a loop — a node reading, through wires, its own
+    picture — each with the loop in words (`acid.2 → palette → acid.2`).
+    A wire makes its node depend on its source."""
+    deps: dict[str, set[str]] = {}
+    for w in wires:
+        deps.setdefault(w.node, set()).add(w.src)
+    out: dict[Wire, str] = {}
+    for w in wires:
+        parent: dict[str, str | None] = {w.src: None}
+        todo = [w.src]
+        while todo and w.node not in parent:
+            cur = todo.pop()
+            for d in sorted(deps.get(cur, ())):
+                if d not in parent:
+                    parent[d] = cur
+                    todo.append(d)
+        if w.node not in parent:
+            continue
+        path, cur = [], w.node            # w.node … back to w.src, each read by the next
+        while cur is not None:
+            path.append(cur)
+            cur = parent[cur]
+        out[w] = " → ".join([*path, w.node])
+    return out
+
+
+def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ...], list[str]]:
+    """The section's `wires` → (the wires that stand, the notes for the
+    ones refused, each `wire <from> → <to> — why`). Anything that is not
+    a list of `{"from", "to"}` strings is unreadable (`GraphError`)."""
+    if not isinstance(raw, list):
+        raise GraphError("wires is not a list")
+    wires: list[Wire] = []
+    for e in raw:
+        if (not isinstance(e, dict) or set(e) != set(WIRE_KEYS)
+                or not all(isinstance(e[k], str) for k in WIRE_KEYS)):
+            raise GraphError(f'a wire is {{"from": a node, "to": "node.port"}}, not {e!r}'[:140])
+        try:
+            w = Wire(e["from"], e["to"])
+        except ValueError as err:
+            raise GraphError(str(err)) from err
+        if w in wires:
+            raise GraphError(f"the wire {w} twice")
+        wires.append(w)
+    notes: list[str] = []
+    ok: list[Wire] = []
+    for w in wires:
+        why = wire_error(w, ctx)
+        if why is not None:
+            notes.append(f"wire {w} — {why}")
+        else:
+            ok.append(w)
+    # two wires into one port (D1's placements count): each refused, the
+    # port keeps its default (or D1's placement)
+    into: dict[str, list[Wire]] = {}
+    for w in (*d1, *ok):
+        into.setdefault(w.dst, []).append(w)
+    for dst, ws in into.items():
+        if len(ws) > 1:
+            srcs = " and ".join(x.src for x in ws)
+            for w in ws:
+                if w in ok:
+                    ok.remove(w)
+                    notes.append(f"wire {w} — {dst} takes one wire, and {len(ws)} go into "
+                                 f"it ({srcs}): it keeps its default")
+    # an effect no wire feeds sits into one port (D1's `into`); to feed
+    # more, wire its input
+    fed = {w.node for w in (*d1, *ok) if wire_node_kind(w.node) == "effect"}
+    outs: dict[str, list[Wire]] = {}
+    for w in ok:
+        if wire_node_kind(w.src) == "effect" and wire_node_kind(w.node) != "effect":
+            outs.setdefault(w.src, []).append(w)
+    for e, ws in outs.items():
+        if e not in fed and len(ws) > 1:
+            for w in ws[1:]:
+                ok.remove(w)
+                notes.append(f"wire {w} — {e} has no wire in, so it sits into one port "
+                             f"({ws[0].dst}): wire its input to feed more")
+    loops = wire_loops([*d1, *ok])
+    for w in list(ok):
+        if w in loops:
+            ok.remove(w)
+            notes.append(f"wire {w} — that makes a loop ({loops[w]})")
+    return tuple(w for w in wires if w in ok), notes
+
+
+def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...]]:
+    """The wire list as the default graph builds it: (the effects the
+    wires place as D1 would — an effect fed by one wire and wired into
+    nothing sits `after` its source; one wired into one output's or the
+    history's `image` port and fed by none sits `into` it — and the wires
+    left, each built as an edge: into an output's port, the history's
+    image, a composite's, or an effect both fed and wired on). `placed`:
+    D1's own placements (an effect they place is not placed again)."""
+    own = {e.name for e in placed}
+    is_fx = {w.node: True for w in wires if wire_node_kind(w.node) == "effect"}
+    ins: dict[str, Wire] = {w.node: w for w in wires if is_fx.get(w.node)}
+    outs: dict[str, list[Wire]] = {}
+    for w in wires:
+        if wire_node_kind(w.src) == "effect" and not is_fx.get(w.node):
+            outs.setdefault(w.src, []).append(w)
+    synth: list[EffectAt] = []
+    edges: set[Wire] = set()
+    for name in sorted(set(ins) | set(outs)):
+        i, o = ins.get(name), outs.get(name, [])
+        if name in own:                      # (refused at read)
+            continue
+        file, n = split_instance(name)
+        if i is not None and not o and wire_node_kind(i.src) != "composite":
+            synth.append(EffectAt(file, n, after=i.src))
+        elif (i is None and len(o) == 1 and o[0].port == "image"
+              and (o[0].node == "history" or o[0].node.startswith("output."))):
+            synth.append(EffectAt(file, n, into=o[0].node))
+        else:
+            edges.update([*([i] if i is not None else []), *o])
+    for w in wires:
+        if wire_node_kind(w.src) != "effect" and not is_fx.get(w.node):
+            edges.add(w)
+    return tuple(synth), tuple(w for w in wires if w in edges)
+
+
 @dataclass(frozen=True)
 class GraphSpec:
     """A preset's `graph` section, read (plan 26 A4): the node instances
@@ -481,13 +817,28 @@ class GraphSpec:
     effects: tuple[EffectAt, ...] = ()
     others: tuple[tuple[str, Any], ...] = ()      # (kind, what its reader returned)
     notes: tuple[str, ...] = field(default=(), compare=False)
+    wires: tuple[Wire, ...] = ()                  # plan 28 N4: the wire list, as read
 
     def wiring(self) -> Wiring:
-        """The default graph's wiring this graph says."""
+        """The default graph's wiring this graph says. Plan 28 N4: the
+        wires D1 would write short are placements (`split_wires`), after
+        D1's own; the rest are the wiring's `wires`."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
+        placed = tuple(e for e in self.effects if e.placed)
+        synth, edges = split_wires(self.wires, placed)
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
                       draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
-                      placed=tuple(e for e in self.effects if e.placed))
+                      placed=placed + synth, wires=edges, composites=self.composites())
+
+    def composites(self) -> tuple[CompositeAt, ...]:
+        """The composite nodes the section adds (plan 28 N4), by instance."""
+        return tuple(sorted((got for kind, got in self.others if kind == "composite"),
+                            key=lambda c: c.n))
+
+    def all_wires(self) -> list[Wire]:
+        """Every wire this graph says (plan 28 N4): D1's placements as the
+        wires they are short for (`d1_wires`), then the wire list."""
+        return [*d1_wires(self.effects), *self.wires]
 
     def effect_counts(self) -> dict[str, int]:
         """Effect file → how many instances the chain holds (only files
@@ -531,7 +882,9 @@ class GraphSpec:
         for kind, got in self.others:
             to = getattr(got, "to_json", None)
             nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
-        return {"nodes": nodes}
+        if not self.wires:                     # N4: a graph with no wires is D1's, short
+            return {"nodes": nodes}
+        return {"nodes": nodes, "wires": [w.to_json() for w in self.wires]}
 
 
 def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -> GraphSpec:
@@ -551,9 +904,9 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     chain, at its order) and the reason rides in `GraphSpec.notes`."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
-    extra = sorted(set(section) - {"nodes"})
+    extra = sorted(set(section) - {"nodes", "wires"})
     if extra:
-        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes)")
+        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes and wires)")
     entries = section.get("nodes", [])
     if not isinstance(entries, list):
         raise GraphError("nodes is not a list")
@@ -597,6 +950,8 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                 raise GraphError("two history nodes")
             history = got
         else:
+            if kind == "composite" and any(k == kind and o.n == got.n for k, o in others):
+                raise GraphError(f"two composite nodes of instance {got.n}")
             others.append((kind, got))
     # D1: a placement on an effect this build does not have (an instance
     # the section does not hold, a file not on disk) …
@@ -629,7 +984,25 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     for n, how in laid.items():
         if n != layer:
             raise GraphError(f"hands {n}: laid {how!r}, but {hands_name(layer)} makes the layer")
-    return replace(spec, laid=laid.get(layer, "over"))
+    spec = replace(spec, laid=laid.get(layer, "over"))
+    if "wires" not in section:
+        return spec
+    # plan 28 N4: the wire list — each wire this build cannot honour (no
+    # such node or port, a port of another type, two into one port, a
+    # loop) is a note and that port's default; the rest stand
+    names = {e.name for e in effects_at}
+    ctx = _WireCtx(layer=layer_name(layer),
+                   ghosts=frozenset(hands_name(h.n) for h in wiring.nodes()),
+                   effects=None if known is None else known | names,
+                   composites=frozenset(c.name for c in spec.composites()),
+                   placed={e.name: e.where for e in effects_at if e.placed})
+    wires, wire_notes = _read_wires(section["wires"], ctx, d1_wires(effects_at))
+    spec = replace(spec, wires=wires, notes=spec.notes + tuple(wire_notes))
+    try:
+        spec.wiring()
+    except ValueError as err:
+        raise GraphError(str(err)) from err
+    return spec
 
 
 # ---------------------------------------------------------------- in words
@@ -683,6 +1056,10 @@ def history_words(wiring: Wiring) -> str:
     for e in wiring.placed:
         if e.where in (("after", "scene"), ("into", "history"), ("after", "history")):
             words += " · " + placement_words(e)
+    # plan 28 N4: a wire into the history's picture
+    for w in wiring.wires:
+        if w.node == "history":
+            words += " · " + wire_words(w)
     return words
 
 
@@ -769,8 +1146,35 @@ def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -
         parts.append("history with the hands")
     dormant = dormant or {}
     parts += [dormant.get(e.name) or placement_words(e) for e in w.placed]
-    parts += [kind for kind, _ in spec.others]
+    parts += [kind for kind, _ in spec.others if kind != "composite"]
+    # plan 28 N4: the wires the graph builds as edges, or why one is dormant
+    parts += [dormant.get(str(x)) or wire_words(x) for x in w.wires]
     return "graph: " + (" · ".join(parts) if parts else "default")
+
+
+def wire_words(w: Wire) -> str:
+    """One wire in words (plan 28 N4, the OUTPUT and LOOKBACK pages):
+    `output 2 shows acid 2`, `hands 2 over output 2`, `the guide of the
+    hands on output 1`, `the history holds the hands`, `acid 2 reads the
+    history`, `the hands over in composite`."""
+    src = _node_said(w.src)
+    if w.node.startswith("output."):
+        out = _node_said(w.node)
+        if w.port == "image":
+            return f"{out} shows {src}"
+        if w.port == "hands":
+            return f"{src} over {out}"
+        return f"the guide of {src} on {out}"
+    if w.node == "history":
+        return f"the history holds {src}"
+    if wire_node_kind(w.node) == "composite":
+        return f"{src} {w.port} in {_effect_words(w.node)}"
+    return f"{_effect_words(w.node)} reads {src}"
+
+
+def output_wires(wiring: Wiring, n: int) -> dict[str, Wire]:
+    """Output `n`'s ports the wiring's wires take (plan 28 N4): port → wire."""
+    return {w.port: w for w in wiring.wires if w.node == f"output.{n}"}
 
 
 @dataclass
@@ -1898,7 +2302,7 @@ class Fx(Node):
         except Exception as e:  # noqa: BLE001 — one pipeline must not take the others down
             frame.failed.add(self.key)
             for i in users:
-                r._view_failed(views[i], NAMES[self.key], e)
+                r._view_failed(views[i], NAMES.get(self.key, self.name), e)
             r._rebind(frame.target, frame.vp)
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
@@ -1910,6 +2314,31 @@ class Fx(Node):
         src.paint(frame, dst)
         if frame.fx_on:
             frame.stats["chain_runs"] += 1
+
+
+class Wired(Fx):
+    """The end of a picture a wire takes into an output's `image` port
+    (plan 28 N4: `{"from": "acid.2", "to": "output.2.image"}`) — not a
+    chain's run but any image node: the history, an effect wired on, a
+    layer, a composite. As an end it decides where the picture lands as
+    `Fx` does (straight into its one output when that output is at the
+    frame's size and unflipped, else once into a frame texture under its
+    own key, its name); it is always itself (no fallback) and counts no
+    chain run: an effect on its way runs its own pass and moves its own
+    clock (`FxChain.run_one`)."""
+
+    KIND = "wired"
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
+        super().__init__(name, name, after, **inputs)
+
+    def bent(self, frame: Frame) -> bool:
+        return True
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        src = self.inputs["image"]
+        if src is not None:
+            src.paint(frame, dst)
 
 
 def effect_node_name(effect: str, key: int) -> str:
@@ -2091,6 +2520,12 @@ class Graph:
             self.nodes = {n: self.nodes[n] for n in names}
         for consumer, port in edges:
             consumer.inputs[port] = node
+        self.relink()
+        return node
+
+    def relink(self) -> None:
+        """Count the readers and sort again after inputs were rewired in
+        place (D1's `insert`, plan 28 N4's wires)."""
         self._readers = {}
         for n in self.nodes.values():
             for src in n.inputs.values():
@@ -2098,7 +2533,6 @@ class Graph:
                     self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
         self._pool = None
-        return node
 
     def folds(self, index: int) -> bool:
         """Whether output `index`'s picture goes through an effect placed
@@ -2303,12 +2737,17 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
                 on_layer.add(e.name)
                 grew = True
     out_of_run = {e.name for e in placed}
+    # plan 28 N4: the effects the wires build as edges are not of the run
+    # either, and a wire from the layer wants it built whatever the switches
+    out_of_run |= {name for w in wiring.wires for name in (w.src, w.node)
+                   if wire_node_kind(name) == "effect"}
+    wired_layer = any(w.src == layer_name(from_layer.n) for w in wiring.wires)
 
     def layered(sw: Switches) -> bool:
         return bool(sw.hands) and (not in_scene or not sw.scene)
 
     want_layer = any(layered(sw) for sw in switches) or (
-        wiring.history == "scene+hands" and not in_scene)
+        wiring.history == "scene+hands" and not in_scene) or wired_layer
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
     g.effects = tuple(effects)                     # plan 30 D0: what its runs hold
@@ -2385,8 +2824,168 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         e = next(p for p in wiring.placed if p.name == name)
         g.notes.append(f"{name} {e.where[0]} {e.where[1]!r} — that makes a loop ({words}); "
                        "the default placement")
+    # plan 28 N4: the wires, as edges — those from the scene, a layer, the
+    # history or an effect of the run first, then D1's placements (which
+    # may sit after what a wire made), then the wires from a placed effect
+    wiring_left = _Wiring(g, wiring, layer, depth)
+    wiring_left.run(final=False)
     _place(g, placed)
+    wiring_left.run(final=True)
     return g
+
+
+class _Wiring:
+    """The wire list's edges built into graph `g` (plan 28 N4,
+    `default_graph`). Each effect or composite a wire feeds or takes from
+    is made as one node (`Effect(…, placed="wire")`, `Composite`), once
+    what it reads is in the graph; then each wire out of it, or out of the
+    scene, a layer or the history, is put on its port: an output's
+    `image` through a `Wired` end of its own (so the output shows that
+    picture whatever its switches), its `hands` (the layer laid over at
+    the output, and its guide where the output had none) or its
+    `readout`; the history's picture. A wire whose node this graph lacks
+    (an output not open, no layer, an effect not on disk) is dormant, in
+    `Graph.dormant` under the wire's words."""
+
+    def __init__(self, g: Graph, wiring: Wiring, layer: Node | None, depth: Node | None):
+        self.g, self.layer, self.depth = g, layer, depth
+        self.blends = {c.name: c.blend for c in wiring.composites}
+        self.wires = list(wiring.wires)
+        self.makers = {name for w in self.wires for name in (w.src, w.node)
+                       if wire_node_kind(name) in ("effect", "composite")}
+        self.made: dict[str, Node | None] = {}
+        self.done: set[Wire] = set()
+        self.explicit = {(w.node, w.port) for w in self.wires}
+
+    def node(self, name: str) -> Node | None:
+        """What a wire's name is in the graph built so far, or None."""
+        g = self.g
+        if name in self.made:
+            return self.made[name]
+        kind = wire_node_kind(name)
+        if kind in ("effect", "composite"):
+            if name in self.makers:
+                return None
+            got = g.nodes.get(name)
+            if isinstance(got, Effect) and got.effect == name:
+                return got
+            nodes = _placed_nodes(g, name)
+            return nodes[0] if nodes else None
+        got = g.nodes.get(name)
+        if kind == "layer" and not isinstance(got, HandsLayer):
+            return None
+        return got
+
+    def _dormant(self, w: Wire, why: str) -> None:
+        self.done.add(w)
+        self.g.dormant[str(w)] = f"wire {w} — {why}"
+
+    def _lacks(self, name: str) -> str:
+        kind = wire_node_kind(name)
+        if kind == "layer":
+            return f"no {name} layer this frame"
+        if kind == "output":
+            return f"no output {name.partition('.')[2]} this frame"
+        if kind == "effect":
+            return (f"{name} is dormant this frame" if name in self.g.dormant
+                    else f"no {name} effect this frame")
+        return f"no {name} this frame"
+
+    def run(self, final: bool) -> None:
+        g, changed = self.g, False
+        grew = True
+        while grew:
+            grew = False
+            for name in sorted(self.makers - set(self.made)):
+                ins = [w for w in self.wires if w.node == name and w not in self.done]
+                srcs = {w.port: self.node(w.src) for w in ins}
+                if any(v is None for v in srcs.values()):
+                    if final:
+                        for w in ins:
+                            self._dormant(w, self._lacks(w.src) if w.src not in self.makers
+                                          else f"{w.src} has no picture this frame")
+                        self.made[name] = None          # (nothing made: its wires out wait)
+                    continue
+                self._make(name, ins, srcs)
+                grew = changed = True
+        for w in self.wires:
+            if w in self.done or wire_node_kind(w.node) in ("effect", "composite"):
+                continue
+            src = self.made.get(w.src) if w.src in self.makers else self.node(w.src)
+            if src is None:
+                if final or (w.src not in self.makers and wire_node_kind(w.src) != "effect"):
+                    self._dormant(w, self._lacks(w.src) if w.src not in self.makers
+                                  else f"{w.src} has no picture this frame")
+                continue
+            why = self._put(w, src)
+            self.done.add(w)
+            if why is not None:
+                self._dormant(w, why)
+            changed = True
+        if changed:
+            g.relink()
+
+    def _make(self, name: str, ins: list[Wire], srcs: dict[str, Node | None]) -> None:
+        g = self.g
+        node_name = name if name not in g.nodes else f"fx.{name}"
+        if wire_node_kind(name) == "composite":
+            blend = self.blends.get(name, "over")
+            node = Composite(node_name, blend=blend, under=srcs.get("under"),
+                             over=srcs.get("over"),
+                             depth=self.depth if blend == "depth" else None)
+        else:
+            src = srcs.get("image")
+            if src is None:              # fed by no wire: what its one port read
+                outs = [w for w in self.wires if w.src == name]
+                src = self._reads(outs[0]) if outs else None
+                if src is None:
+                    for w in outs:
+                        self._dormant(w, f"{name} is fed by nothing here: wire its input")
+                    self.made[name] = None
+                    return
+            node = Effect(name, image=src, node=node_name, placed="wire")
+            if isinstance(src, HandsLayer):
+                src.readout = "always"   # the guide is never folded
+        g.add(node)
+        self.made[name] = node
+        self.done.update(ins)
+
+    def _reads(self, w: Wire) -> Node | None:
+        """What port `w.dst` reads in the graph as built (its default)."""
+        out = self.g.nodes.get(w.node)
+        return out.inputs.get(w.port) if out is not None else None
+
+    def _put(self, w: Wire, src: Node) -> str | None:
+        """`src` on wire `w`'s port; None, or why it is dormant."""
+        g = self.g
+        if w.node == "history":
+            g.nodes["history"].inputs["image"] = src
+            return None
+        out = g.nodes.get(w.node)
+        if not isinstance(out, Output):
+            return self._lacks(w.node)
+        if w.port == "image":
+            end = g.add(Wired(f"wire({w.node})", after=(self.layer,) if self.layer else (),
+                              image=src))
+            out.inputs["image"] = end
+            if out.inputs["hands"] is None and (w.node, "readout") not in self.explicit:
+                # the guide goes with the hands shown: a picture by a wire
+                # took the hands its switches put through (or in the scene)
+                out.inputs["readout"] = None
+            cap = g.nodes.get("capture")
+            if cap is not None:
+                cap.after = (*cap.after, end)
+        elif w.port == "hands":
+            out.inputs["hands"] = src
+            out.inputs["depth"] = self.depth
+            layer = src
+            while isinstance(layer, Effect):
+                layer = layer.inputs["image"]
+            if out.inputs["readout"] is None and isinstance(layer, HandsLayer):
+                out.inputs["readout"] = layer       # the guide where it shows the hands
+        else:
+            out.inputs["readout"] = src
+        return None
 
 
 def _place(g: Graph, placed: list[EffectAt]) -> None:

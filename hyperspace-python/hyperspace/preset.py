@@ -259,9 +259,18 @@ class GraphSection:
         except GraphError as e:
             return None, copy.deepcopy(section), [f"graph: {e}; the default graph"]
         if spec.notes:
-            return spec, copy.deepcopy(section), [f"graph: {n}; the default placement"
-                                                  for n in spec.notes]
+            # plan 28 N4: a refused wire leaves its port at the default wiring
+            return spec, copy.deepcopy(section), [
+                f"graph: {n}; the default " + ("wiring" if n.startswith("wire ") else
+                                               "placement") for n in spec.notes]
         return spec, spec.to_json(), []
+
+    def files(self) -> set[str] | None:
+        """The effect files on disk (None: no FxState to ask) — what a
+        placement or a wire may name (plan 30 D1, plan 28 N4)."""
+        fx = getattr(self, "fx", None)
+        return ({fx.file_of(n) for n in fx.specs}
+                if fx is not None and getattr(fx, "specs", None) else None)
 
     def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:
         """Make `spec` the graph (None: the default): declare and drop the
@@ -461,6 +470,14 @@ def dumps(doc: dict) -> str:
             # the graph (plan 26 A4): one node per line, like a row
             rows = ",\n".join("  " + json.dumps(n) for n in v["nodes"])
             text = '{"nodes": [\n' + rows + '\n ]}' if v["nodes"] else '{"nodes": []}'
+        elif (key == GRAPH_KEY and isinstance(v, dict) and set(v) == {"nodes", "wires"}
+                and isinstance(v["nodes"], list) and isinstance(v["wires"], list)):
+            # plan 28 N4: the nodes, then the wires, one a line
+            halves = []
+            for part in ("nodes", "wires"):
+                rows = ",\n".join("  " + json.dumps(n) for n in v[part])
+                halves.append(f'"{part}": [\n{rows}\n ]' if v[part] else f'"{part}": []')
+            text = "{" + ",\n ".join(halves) + "}"
         elif key == LAYOUT_KEY and isinstance(v, dict) and v:
             # the GRAPH page's positions (plan 28 N2): one node a line
             rows = ",\n".join(f"  {json.dumps(k)}: {json.dumps(xy)}" for k, xy in v.items())
