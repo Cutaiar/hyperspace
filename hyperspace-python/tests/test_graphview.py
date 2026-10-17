@@ -180,7 +180,8 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
     view = build(rig, devs=reg)
     leap, gp = view.node("device:leap"), view.node("device:pad")
     assert leap.kind == gp.kind == "device" and not leap.grey and gp.grey
-    assert [p.group for p in leap.ports[:4]] == ["axes", "axes", "switches", "dance"]
+    # plan 28 N5: the hands' `switches` drawn as the design's pinches (and grab)
+    assert [p.group for p in leap.ports[:4]] == ["axes", "axes", "pinches", "dance"]
     assert leap.ports[0].pins == ("out:hand:right.y",)
     # a hand route whose address the device names draws from that port
     hand_routes = [c for c in view.cables if c.kind == "route" and c.addr.startswith("hand:")]
