@@ -1,0 +1,15 @@
+the dial's own cost (Pad.lanes with both sticks moving, every call recomputes):
+  5.9 µs per frame on this machine — 0.04 % of a 60 Hz frame
+
+the app's frames during the recording (Xvfb + llvmpipe software GL, so this
+is the CPU rasterizer, not the Mac's GPU — the dial's share is the line above):
+  1081 frames, median 311 ms, p95 413 ms
+
+the sticks' camera job while both sticks are dials (largest move from the
+first frame; 0 means the routes claimed the sticks):
+  camera.yaw     0.000000
+  camera.pitch   0.000000
+  camera.zoom    0.000000
+  rot.rate.XW    0.000000
+  rot.rate.YW    0.000000
+  rot.rate.ZW    0.000000

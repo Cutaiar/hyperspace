@@ -614,7 +614,38 @@ def _open_pad(cfg: dict):
     by polling for one (audit P2)."""
     if not cfg.get("gamepad", {}).get("enabled", True):
         return None
-    return Pad(usb=bool(cfg.get("gamepad", {}).get("usb", True)))
+    pad = Pad(usb=bool(cfg.get("gamepad", {}).get("usb", True)))
+    for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+        mode = cfg.get("gamepad", {}).get(key)
+        if mode in gamepad.DIAL_MODES:
+            pad.dial_modes[stick] = mode
+    return pad
+
+
+def _register_dial(reg: Registry, pad) -> None:
+    """The sticks' dial readings (gamepad.dial, a prototype) as session
+    params on the pad: one enum per stick, and a trigger that swaps the
+    two — the same routes felt the other way, to compare them. Never
+    saved, never performed: `[gamepad] dial_left` / `dial_right` set
+    where a launch starts."""
+    if pad is None or "desk.pad.dial.left" in reg:
+        return
+    modes = list(gamepad.DIAL_MODES)
+    tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the "
+           "sector it points into gets the whole push; blend, neighbouring sectors "
+           "crossfade as it sweeps round.")
+    for stick, side in (("L", "left"), ("R", "right")):
+        reg.enum(f"desk.pad.dial.{side}", f"{side.capitalize()} dial",
+                 lambda s=stick: modes.index(pad.dial_modes.get(s, "petal")),
+                 lambda i, s=stick: pad.dial_modes.__setitem__(s, modes[int(i) % len(modes)]),
+                 modes, group="desk", persist=False, modulatable=False,
+                 tip=tip.format(side, stick))
+
+    def swap():
+        m = pad.dial_modes
+        m["L"], m["R"] = m.get("R", "blend"), m.get("L", "petal")
+    reg.trigger("desk.pad.dial.swap", "Swap dials", swap, group="desk", modulatable=False,
+                tip="Swap the two sticks' dial readings — petal ↔ blend.")
 
 
 class Awake:
@@ -889,8 +920,10 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     pad = h.pad
     if pad is not None:
         pad.poll()
-        # a press that completes an armed learn does not also fire its old row
-        learned = gamepad.learn_from(pad, h.learn)
+        # a press that completes an armed learn does not also fire its old row;
+        # a stick a route already reads as a dial learns its sectors
+        learned = gamepad.learn_from(
+            pad, h.learn, lambda: gamepad.dialed(router.claimed("axis") or ()))
         router.pad(pad, buttons=not learned)     # the axis lanes, then the button rows
         if pad.on:
             # analog, each axis while no route names it (`axis:LX` …): left
@@ -899,7 +932,8 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             # depth4 in its own log space (LT out, RT in). The pad's feel
             # (`desk.pad.feel`, motion.py) runs on the axis lanes first:
             # off, they are read as they are
-            routed = router.claimed("axis") or ()
+            # a dial lane (`axis:L.NE` …) takes its whole stick
+            routed = gamepad.claims(router.claimed("axis") or ())
             felt = router.felt("axis", pad.lanes(), dt)
             if felt is None:
                 axis, trigger = pad.axis, pad.trigger
@@ -1177,6 +1211,7 @@ def main() -> None:
     panel.bridge = bridge_io               # the SYSTEM page's bridge line
     pad = _open_pad(cfg)
     panel.pad = pad                        # the menu's "Learn pad"
+    _register_dial(reg, pad)
     awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on

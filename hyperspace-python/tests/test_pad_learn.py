@@ -54,10 +54,10 @@ def on_file(path) -> list[dict]:
 def test_lanes_rest_and_travel():
     pad = ScriptedPad()
     pad.frame()
-    assert pad.lanes() == [0.5, 0.5, 0.5, 0.5, 0.0, 0.0]
-    assert pad.lanes() == list(gp.AXIS_RESTS)
+    assert pad.lanes()[:6] == [0.5, 0.5, 0.5, 0.5, 0.0, 0.0]
+    assert pad.lanes() == list(gp.LANE_RESTS)
     pad.frame(axes=[1.0, -1.0, -1.0, 1.0, 1.0, -1.0])   # left stick right and up
-    assert pad.lanes() == [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
+    assert pad.lanes()[:6] == [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]
 
 
 def test_the_share_button_is_named_and_free(rig):
@@ -169,7 +169,7 @@ def test_a_routed_axis_drives_its_param_and_is_claimed(rig):
     assert r.claimed("axis") == {gp.AX_RT}
     pad.frame(axes=[0, 0, 0, 0, -1, 1.0])
     r.pad(pad)
-    assert list(r.feeds["axis"]) == [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
+    assert list(r.feeds["axis"][:6]) == [0.5, 0.5, 0.5, 0.5, 0.0, 1.0]
     assert r.describe(rig.table.owner("view.inst_amp")).startswith("right trigger")
     r.modulate()
     rig.reg.apply()

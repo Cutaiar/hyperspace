@@ -378,7 +378,7 @@ desk).
 |---|---|---|---|
 | `key:` | a GLFW key name, with modifiers `SHIFT+` / `SUPER+` / `CONTROL+` (`routing.MODIFIERS`) | `Router.keys`, reading `app.Keys` | a discrete op on the base |
 | `pad:` / `hat:` | a `gamepad` button / hat name (`gamepad.BUTTONS`, `HATS`) | `Router.pad` (times `hold`, lets `momentary` go on the release) | a discrete op on the base |
-| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES` | `Router.pad` → `Router.feed("axis")`, from `Pad.lanes` | performer; a stick or trigger with a route leaves its default camera job |
+| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES`; the sticks as dials, `L.N` … `L.NW` / `R.N` … `R.NW` (rest 0) — `gamepad.DIAL_LANES`, a prototype | `Router.pad` → `Router.feed("axis")`, from `Pad.lanes` | performer; a stick or trigger with a route leaves its default camera job, a dial lane's route its whole stick (`gamepad.claims`) |
 | `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` channel only; `*` any channel) | `MidiIO._handle` → `Bindings.dispatch` → `MidiIO._apply` | `abs` (soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary`, `fire`, `hold` — all base |
 | `lane:` | analyzer band index | `Analyzer.lanes / CEIL` inside `Router.modulate`; names and rests from `AudioEngine.publish` | **performer** |
 | `hand:` | a name: `left.x` … `right.yaw` as `[hands] dofs` spells them, `left.present`, `left.pinch.index` … `right.pinch.pinky`; a number still reads as that lane | `HandsIO.poll` → `Router.feed("hand")`; the name → lane map in `router.names["hand"]` (`hands.core.Layout`) | performer; a pinch may also gate |

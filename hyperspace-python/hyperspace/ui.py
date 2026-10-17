@@ -27,6 +27,7 @@ the one hand-arranged thing left here.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from collections.abc import Callable
@@ -35,6 +36,7 @@ from imgui_bundle import imgui
 
 from . import (
     apc40,
+    gamepad,
     learn,
     ui_bands,
     ui_desk,
@@ -1923,9 +1925,106 @@ class Panel:
             mode = self.reg["desk.pad.feel"].text()
             for k in {"follow": ("attack", "release"), "spring": ("hz", "damp")}.get(mode, ()):
                 self._row(f"desk.pad.{k}")
+            if "desk.pad.dial.left" in self.reg:   # the sticks as dials (app._register_dial)
+                self._dials()
         imgui.spacing()
         self._section("bridge")
         self._bridge_status()
+
+    # ---- the sticks as dials (gamepad.dial, a prototype) ----
+
+    DIAL_R = 52.0        # the clock face's radius, px
+    DIAL_ROW = 16.0      # a legend line's height, px
+
+    def _dials(self) -> None:
+        """Both sticks as clock faces, one above the other, each with its
+        legend beside it: the eight sectors clockwise from N, the param
+        each one's route drives (FAINT "·" where none does) and how far it
+        reads now. A sector fills out to its reading; the stick is a white
+        dot. Under them each stick's reading and the swap."""
+        pad = self.pad
+        routed: dict[str, str] = {}
+        router = self.router
+        if router is not None:
+            for b in router.table.mods():
+                if b.enabled and b.scheme == "axis" and b.source not in routed:
+                    p = self.reg.get(b.target)
+                    routed[b.source] = p.label if p is not None else b.target
+        on = pad is not None and pad.on
+        lanes = pad.dials() if on else [0.0] * len(gamepad.DIAL_LANES)
+        n = gamepad.DIAL
+        for j, stick in enumerate(gamepad.DIAL_STICKS):
+            mode = pad.dial_modes.get(stick, "") if pad is not None else ""
+            xy = None
+            if on:
+                ax, ay = gamepad.DIAL_STICKS[stick]
+                xy = (pad.axes[ax] if ax < len(pad.axes) else 0.0,
+                      pad.axes[ay] if ay < len(pad.axes) else 0.0)
+            names = [routed.get(f"axis:{stick}.{k}") for k in gamepad.COMPASS]
+            self._dial(lanes[j * n:(j + 1) * n], names, xy,
+                       f"{'left' if stick == 'L' else 'right'} stick · {mode}")
+        self._row("desk.pad.dial.left")
+        self._row("desk.pad.dial.right")
+        self._button("desk.pad.dial.swap", small=True)
+        if not any(routed.get(f"axis:{n}") for n in gamepad.DIAL_LANES):
+            imgui.same_line()
+            imgui.text_disabled("no route reads a dial — load the DIAL preset")
+
+    def _dial(self, vals, names, xy, title: str) -> None:
+        """One stick: its face on the left, its legend to the right."""
+        r, n = self.DIAL_R, gamepad.DIAL
+        step = math.tau / n
+        row = self.DIAL_ROW
+        h = max(2 * r + 8, (n + 1) * row + 4)
+        origin = imgui.get_cursor_screen_pos()
+        avail = imgui.get_content_region_avail().x
+        dl = imgui.get_window_draw_list()
+        c = imgui.ImVec2(origin.x + r + 4, origin.y + h / 2)
+
+        def at(theta: float, rad: float) -> imgui.ImVec2:   # θ clockwise from up
+            return imgui.ImVec2(c.x + rad * math.sin(theta), c.y - rad * math.cos(theta))
+
+        dl.add_circle(c, r, u32(LINE), 48, 1.0)
+        for k in range(n):
+            a0, a1 = (k - 0.5) * step, (k + 0.5) * step
+            v = float(vals[k]) if k < len(vals) else 0.0
+            if v > 0.002:
+                dl.path_clear()
+                dl.path_line_to(c)
+                dl.path_arc_to(c, r * v, a0 - math.pi / 2, a1 - math.pi / 2, 12)
+                dl.path_fill_convex(u32(imgui.ImVec4(FILL.x, FILL.y, FILL.z, 0.25 + 0.6 * v)))
+            dl.add_line(at(a0, 6), at(a0, r), u32(LINE), 1.0)
+        if xy is not None:
+            x, y = xy
+            m = math.hypot(x, y)
+            if m > 1.0:
+                x, y = x / m, y / m
+            dl.add_circle_filled(imgui.ImVec2(c.x + x * r, c.y + y * r), 4.0, u32(TEXT))
+        # the legend: the title, then a line per sector, clockwise from N
+        lx = origin.x + 2 * r + 24
+        bar_w = 64.0
+        name_w = max(40.0, origin.x + avail - lx - 36 - bar_w - 10)
+        y0 = origin.y + (h - (n + 1) * row) / 2
+        imgui.push_font(_FONTS["micro"], FONT_MICRO)
+        dl.add_text(imgui.ImVec2(lx, y0), u32(DIM), title.upper())
+        imgui.pop_font()
+        for k in range(n):
+            v = float(vals[k]) if k < len(vals) else 0.0
+            name = names[k] if k < len(names) else None
+            y = y0 + (k + 1) * row
+            live = v > 0.002
+            dl.add_text(imgui.ImVec2(lx, y), u32(TEXT if live else FAINT), gamepad.COMPASS[k])
+            dl.add_text(imgui.ImVec2(lx + 36, y),
+                        u32(TEXT if live else DIM if name else FAINT),
+                        fit_text(name, name_w) if name else "·")
+            bx = lx + 36 + name_w + 10
+            by = y + row / 2 - 2
+            dl.add_rect_filled(imgui.ImVec2(bx, by), imgui.ImVec2(bx + bar_w, by + 4),
+                               u32(LINE), 2.0)
+            if live:
+                dl.add_rect_filled(imgui.ImVec2(bx, by), imgui.ImVec2(bx + bar_w * min(v, 1.0),
+                                                                    by + 4), u32(RED), 2.0)
+        imgui.dummy(imgui.ImVec2(avail, h))
 
     def alerts(self) -> list[str]:
         """What the red banner says: a live render error or render stall
