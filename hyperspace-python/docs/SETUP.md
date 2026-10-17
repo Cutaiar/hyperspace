@@ -155,15 +155,15 @@ not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
 what it shows. Details and the per-output switches are
 [`ENGINEERING.md`](ENGINEERING.md) §14.
 
-## A rig per place you play
+## A file per place you play
 
-The screens differ by venue; the rest of the config does not. A **rig**
-is one file in `~/Hyperspace/rigs/` laid over `config.toml`, so the
-shared sections are said once and a rig says only what its venue
+The screens differ by place; the rest of the config does not. A **venue**
+is one file in the library's `venues/` folder laid over `config.toml`, so
+the shared sections are said once and a venue says only what that place
 changes:
 
 ```toml
-# ~/Hyperspace/rigs/projector.toml — nothing else needs repeating here
+# <library>/venues/projector.toml — nothing else needs repeating here
 [[output.screens]]
 name = "laptop"
 monitor = 0
@@ -175,22 +175,30 @@ fullscreen = true
 ```
 
 ```bash
-uv run hyperspace --rig projector   # rigs/projector.toml over config.toml
-uv run hyperspace                   # the rig used last
-uv run hyperspace --no-rig          # config.toml alone, and forget the rig
+uv run hyperspace --venue projector   # venues/projector.toml over config.toml
+uv run hyperspace                     # the venue used last
+uv run hyperspace --no-venue          # config.toml alone, and forget the venue
 ```
 
-The rig is remembered in `~/Hyperspace/last_rig`, so the flag is needed
-only when it changes; `config.toml` is never written. A key the rig
-gives wins over the same key in `config.toml`, and a key it is silent
-about keeps `config.toml`'s — `[[output.screens]]` is one key, so a rig
-that lists screens replaces the list rather than adding to it. The
-SYSTEM page names the rig in use.
+The venues live beside the presets, in the folder `[library] path`
+names ("Share presets with someone", below) — so two people playing the
+same places share them the way they share presets; with no shared
+library they sit in `~/Hyperspace/venues/`. *Which* venue you are set
+for is yours alone: it is remembered in `~/Hyperspace/last_venue`, so
+the flag is needed only when it changes, and `config.toml` is never
+written. A venue cannot set `[library]` — that is the file it was read
+out of.
 
-A rig that is missing or will not parse is a note on the SYSTEM page and
-`config.toml` alone — a typo at a venue does not stop the show.
+A key the venue gives wins over the same key in `config.toml`, and a key
+it is silent about keeps `config.toml`'s — `[[output.screens]]` is one
+key, so a venue that lists screens replaces the list rather than adding
+to it. The SYSTEM page names the venue in use.
 
-Cmd+R re-reads the rig file (it re-launches with the same flag), so
+A venue that is missing or will not parse is a note on the SYSTEM page
+and `config.toml` alone — a mistyped `--venue` does not stop the show.
+The note lists the venues there are.
+
+Cmd+R re-reads the venue file (it re-launches with the same flag), so
 dialling a venue in is: edit the file, Cmd+R, look.
 
 ## Share presets with someone

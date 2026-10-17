@@ -460,7 +460,7 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
-        self.rig = ""                      # set by app.py: the rig laid over config.toml
+        self.venue = ""                      # set by app.py: the venue laid over config.toml
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -1904,8 +1904,8 @@ class Panel:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
             self._library_lines()
-        if self.rig:
-            imgui.text_disabled(f"rig: {self.rig} (rigs/{self.rig}.toml over config.toml)")
+        if self.venue:
+            imgui.text_disabled(f"venue: {self.venue} (venues/{self.venue}.toml over config.toml)")
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:

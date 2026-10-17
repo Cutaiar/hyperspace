@@ -97,7 +97,7 @@ here; overturn → the change, then the same.
 | 107 | The house presets' routes generated from code | 132 | |
 | 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
 | 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
-| 110 | Plan 26: a rig per venue — `rigs/<name>.toml` laid over `config.toml`, `--rig`, remembered | 144 | |
+| 110 | Plan 26: a venue per place — a shared `venues/<name>.toml` laid over `config.toml`, `--venue`, remembered | 144 | |
 
 "—": no hand check shows it; tests only.
 
@@ -1397,38 +1397,47 @@ Stream B; the pictures are in
   and a cloud client's conflict copy is listed under its own file stem.
 - **Judge it.** Checks 139–143.
 
-### 110. A rig per venue: `rigs/<name>.toml` over `config.toml`
+### 110. A venue per place: a shared `venues/<name>.toml` over `config.toml`
 
 - **Why.** The same show plays in different places — the laptop alone, a
   laptop and a projector, a laptop with a hologram monitor and a
   projector. What changes between them is the screens; `[hands]`,
   `[library]` and the rest do not. One `config.toml` meant editing the
   screens by hand at every venue, with nothing to go back to.
-- **Built.** A **rig** is `<home>/rigs/<name>.toml`, chosen with
-  `--rig <name>` and laid over `config.toml` *before* any value is
-  checked, so a rig's value is read exactly as the same value in
-  `config.toml` would be (`config._layer`, `config.load(rig=…)`).
-  - A key the rig gives wins; a key it is silent about keeps
-    `config.toml`'s. `[[output.screens]]` is one key: a rig that lists
+- **Built.** A **venue** is `<library>/venues/<name>.toml`, chosen with
+  `--venue <name>` and laid over `config.toml` *before* any value is
+  checked, so a venue's value is read exactly as the same value in
+  `config.toml` would be (`config._layer`, `config.load(venue=…)`).
+  - A key the venue gives wins; a key it is silent about keeps
+    `config.toml`'s. `[[output.screens]]` is one key: a venue that lists
     screens replaces the list rather than adding to it.
-  - The rig is remembered in `<home>/last_rig`, beside `last_show`, so a
-    plain launch keeps the venue it was last dialled into. `--no-rig`
+  - **The venues are shared; which one you are in is not.** They sit in
+    the library (`[library] path`, row 109), beside the presets, so two
+    people playing the same places share them — a place's screens are
+    the place's, not the laptop's. `last_venue` stays in the home, like
+    `windows.json`: it says which place *this* Mac was last set for.
+    With no shared library the venues are in the home, as everything is.
+  - A venue cannot set `[library]`: it was read out of the library, so
+    it cannot be the thing that moves it. The key is dropped with a note
+    and the rest of the venue is used.
+  - The venue is remembered in `<home>/last_venue`, beside `last_show`, so a
+    plain launch keeps the venue it was last dialled into. `--no-venue`
     forgets it and reads `config.toml` alone.
   - **Nothing writes `config.toml`.** It stays the user's file to edit
-    and to symlink; the remembered rig is machine state, like
+    and to symlink; the remembered venue is machine state, like
     `windows.json`.
-  - ⌘R re-execs the same argv (`app._restart`), so the rig rides through
-    a reload and its file is read again — editing a rig and pressing ⌘R
-    is how a venue gets dialled in. No live rig *switch*: the screens
+  - ⌘R re-execs the same argv (`app._restart`), so the venue rides through
+    a reload and its file is read again — editing the file and pressing
+    ⌘R is how a place gets dialled in. No live venue *switch*: the screens
     still have to be connected before the process that uses them starts
     (row 86), so switching venue is a relaunch either way.
-  - A rig that is missing, will not parse, or holds a value outside a
+  - A venue that is missing, will not parse, or holds a value outside a
     table is a note on the SYSTEM page and `config.toml` alone — a typo
-    at a venue does not stop the show. The note lists the rigs there are.
-  - The SYSTEM page names the rig in use; nothing else in the UI does,
-    and no page can switch one (rig settings never persist or modulate —
+    at a venue does not stop the show. The note lists the venues there are.
+  - The SYSTEM page names the venue in use; nothing else in the UI does,
+    and no page can switch one (venue settings never persist or modulate —
     row 81).
-- **Rough edge.** The rigs are files the user makes by hand; there is no
-  "save the current screens as a rig". A rig cannot be chosen from the
+- **Rough edge.** The venues are files the user makes by hand; there is no
+  "save the current screens as a venue". A venue cannot be chosen from the
   panel, only from the command line.
 - **Judge it.** Check 144.

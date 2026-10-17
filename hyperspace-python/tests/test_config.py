@@ -265,88 +265,126 @@ def test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note(tmp
     assert (cfg["output"]["bg"], cfg["output"]["alpha"]) == (0.5, 1) and "notes" not in cfg
 
 
-# ---------------------------------------------------------------- rigs
+# ---------------------------------------------------------------- venues
 #
-# A rig (plan 26) is <home>/rigs/<name>.toml laid over config.toml: one
+# A venue (plan 26) is <home>/venues/<name>.toml laid over config.toml: one
 # venue's screens, with the shared sections said once in config.toml.
 
 
-def _rig_home(tmp_path, base: str = "", **rigs: str) -> Path:
+def _venue_home(tmp_path, base: str = "", **venues: str) -> Path:
+    """A home whose venues sit in it — no [library] path, so the library
+    *is* the home and `venue_root` lands there."""
     home = tmp_path / "home"
-    (home / "rigs").mkdir(parents=True)
+    (home / "venues").mkdir(parents=True)
     (home / "config.toml").write_text(base)
-    for name, text in rigs.items():
-        (home / "rigs" / f"{name}.toml").write_text(text)
+    for name, text in venues.items():
+        (home / "venues" / f"{name}.toml").write_text(text)
     return home
 
 
 def test_a_rig_is_laid_over_the_config_it_does_not_mention(tmp_path):
-    home = _rig_home(
+    home = _venue_home(
         tmp_path,
         base="[hands]\nenabled = true\n[output]\nkeep_awake = false\nbg = 0.25\n",
         projector='[[output.screens]]\nname = "proj"\nmonitor = 2\nfullscreen = true\n',
     )
-    cfg = config.load(home / "config.toml", rig="projector")
-    assert cfg["rig"] == "projector"
+    cfg = config.load(home / "config.toml", venue="projector")
+    assert cfg["venue"] == "projector"
     assert [(s["name"], s["monitor"]) for s in config.screens(cfg)] == [("proj", 2)]
-    assert cfg["hands"]["enabled"] is True        # the rig is silent: config.toml stands
+    assert cfg["hands"]["enabled"] is True        # the venue is silent: config.toml stands
     assert cfg["output"]["keep_awake"] is False
     assert cfg["output"]["bg"] == 0.25
 
 
 def test_a_rigs_key_wins_over_the_same_key_in_the_config(tmp_path):
-    home = _rig_home(
+    home = _venue_home(
         tmp_path,
         base="[output]\nmonitor = 0\nfullscreen = false\n",
         tv="[output]\nfullscreen = true\n",
     )
-    cfg = config.load(home / "config.toml", rig="tv")
-    assert cfg["output"]["fullscreen"] is True    # the rig's
+    cfg = config.load(home / "config.toml", venue="tv")
+    assert cfg["output"]["fullscreen"] is True    # the venue's
     assert cfg["output"]["monitor"] == 0          # config.toml's, untouched
 
 
 def test_no_rig_reads_the_config_alone_and_says_which(tmp_path):
-    home = _rig_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
     cfg = config.load(home / "config.toml")
-    assert cfg["rig"] == "" and cfg["output"]["monitor"] == 3
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3
 
 
 def test_a_rig_that_is_not_there_is_a_note_and_the_config_alone(tmp_path, capsys):
-    home = _rig_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
-    cfg = config.load(home / "config.toml", rig="cart")
-    assert cfg["rig"] == "" and cfg["output"]["monitor"] == 3     # the launch goes on
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
+    cfg = config.load(home / "config.toml", venue="cart")
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3     # the launch goes on
     note = "\n".join(cfg["notes"])
-    assert "no rig 'cart'" in note and "have: tv" in note         # and says what there is
-    assert "no rig 'cart'" in capsys.readouterr().err
+    assert "no venue 'cart'" in note and "have: tv" in note         # and says what there is
+    assert "no venue 'cart'" in capsys.readouterr().err
 
 
 def test_a_rig_that_will_not_parse_is_a_note_and_the_config_alone(tmp_path):
-    home = _rig_home(tmp_path, base="[output]\nmonitor = 3\n", bad="[output\nmonitor = ")
-    cfg = config.load(home / "config.toml", rig="bad")
-    assert cfg["rig"] == "" and cfg["output"]["monitor"] == 3
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", bad="[output\nmonitor = ")
+    cfg = config.load(home / "config.toml", venue="bad")
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3
     assert any("will not parse" in n for n in cfg["notes"])
 
 
 def test_a_rig_works_with_no_config_file_at_all(tmp_path):
     home = tmp_path / "home"
-    (home / "rigs").mkdir(parents=True)
-    (home / "rigs" / "tv.toml").write_text("[output]\nmonitor = 1\n")
-    cfg = config.load(home / "config.toml", rig="tv")
-    assert cfg["rig"] == "tv" and cfg["output"]["monitor"] == 1
+    (home / "venues").mkdir(parents=True)
+    (home / "venues" / "tv.toml").write_text("[output]\nmonitor = 1\n")
+    cfg = config.load(home / "config.toml", venue="tv")
+    assert cfg["venue"] == "tv" and cfg["output"]["monitor"] == 1
 
 
 def test_the_rigs_are_listed_in_name_order(tmp_path):
-    home = _rig_home(tmp_path, tv="", cart="", booth="")
-    assert config.rig_names(home) == ["booth", "cart", "tv"]
-    assert config.rig_names(tmp_path / "nowhere") == []
+    home = _venue_home(tmp_path, tv="", cart="", booth="")
+    assert config.venue_names(home) == ["booth", "cart", "tv"]
+    assert config.venue_names(tmp_path / "nowhere") == []
 
 
 def test_the_rig_is_remembered_beside_the_library_never_in_the_config(tmp_path):
-    home = _rig_home(tmp_path, base="[output]\nmonitor = 3\n", tv="")
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="")
     before = (home / "config.toml").read_text()
-    assert config.last_rig(home) == ""
-    config.remember_rig(home, "tv")
-    assert config.last_rig(home) == "tv"
+    assert config.last_venue(home) == ""
+    config.remember_venue(home, "tv")
+    assert config.last_venue(home) == "tv"
     assert (home / "config.toml").read_text() == before     # the file stays the user's
-    config.remember_rig(home, "")
-    assert config.last_rig(home) == "" and not (home / config.LAST_RIG).exists()
+    config.remember_venue(home, "")
+    assert config.last_venue(home) == "" and not (home / config.LAST_VENUE).exists()
+
+
+def test_the_venues_live_in_the_shared_library_when_there_is_one(tmp_path):
+    """Two people playing the same places share their venues the way they
+    share their presets (plan 25): the folder `[library] path` names."""
+    home, shared = tmp_path / "home", tmp_path / "Shared"
+    home.mkdir()
+    (shared / "venues").mkdir(parents=True)
+    (home / "config.toml").write_text(f'[library]\npath = "{shared}"\n[hands]\nenabled = true\n')
+    (shared / "venues" / "cart.toml").write_text('[[output.screens]]\nname = "cart"\nmonitor = 2\n')
+    # the same name in the home is not where it looks any more
+    (home / "venues").mkdir()
+    (home / "venues" / "cart.toml").write_text('[[output.screens]]\nname = "wrong"\nmonitor = 9\n')
+    cfg = config.load(home / "config.toml", venue="cart")
+    assert cfg["venue"] == "cart"
+    assert [(s["name"], s["monitor"]) for s in config.screens(cfg)] == [("cart", 2)]
+    assert cfg["hands"]["enabled"] is True          # config.toml still underneath
+
+
+def test_with_no_shared_library_the_venues_are_in_the_home(tmp_path):
+    home = _venue_home(tmp_path, base="", tv="[output]\nmonitor = 1\n")
+    assert config.venue_root({}, home) == home
+    assert config.load(home / "config.toml", venue="tv")["output"]["monitor"] == 1
+
+
+def test_a_venue_cannot_move_the_library_it_was_read_from(tmp_path):
+    home, shared = tmp_path / "home", tmp_path / "Shared"
+    home.mkdir()
+    (shared / "venues").mkdir(parents=True)
+    (home / "config.toml").write_text(f'[library]\npath = "{shared}"\n')
+    (shared / "venues" / "odd.toml").write_text('[library]\npath = "/tmp/elsewhere"\n'
+                                                "[output]\nmonitor = 4\n")
+    cfg = config.load(home / "config.toml", venue="odd")
+    assert Path(cfg["library"]["path"]) == shared.resolve()   # config.toml's, kept
+    assert cfg["output"]["monitor"] == 4                      # the rest of the venue stands
+    assert any("cannot set [library]" in n for n in cfg["notes"])

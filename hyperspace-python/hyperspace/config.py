@@ -165,8 +165,8 @@ from . import library, placement
 
 FILE = Path("config.toml")
 LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
-RIGS = Path("rigs")         # <home>/rigs/<name>.toml: one rig, laid over config.toml
-LAST_RIG = "last_rig"       # <home>/last_rig: the rig a launch chose last (machine file)
+VENUES = Path("venues")     # <library>/venues/<name>.toml: one venue, over config.toml
+LAST_VENUE = "last_venue"   # <home>/last_venue: the venue a launch chose last (machine file)
 
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
@@ -314,71 +314,89 @@ def screens(cfg: dict) -> list[dict]:
              "flip_y": oc.get("flip_y", False) is True}]
 
 
-# ------------------------------------------------------------------- rigs
+# ------------------------------------------------------------------- venues
 
-def rig_file(home: Path, name: str) -> Path:
-    """Where the rig called `name` lives: ``<home>/rigs/<name>.toml``."""
-    return home / RIGS / f"{name}.toml"
+def venue_root(cfg: dict, home: Path) -> Path:
+    """The folder the venues live in: the shared library when `[library]
+    path` names one (plan 25), else the home. Two people playing the same
+    places share their venues the way they share their presets — a place's
+    screens are the place's, not the laptop's. What stays in the home is
+    `last_venue`: which place *this* Mac was last set for."""
+    lp = (cfg.get("library") or {}).get("path") or ""
+    return Path(lp).expanduser() if isinstance(lp, str) and lp.strip() else home
 
 
-def rig_names(home: Path) -> list[str]:
-    """Every rig in ``<home>/rigs``, in name order; [] when there are none
-    or the folder is unreadable (a rig is a convenience, never a launch)."""
+def venue_file(root: Path, name: str) -> Path:
+    """Where the venue called `name` lives: ``<root>/venues/<name>.toml``."""
+    return root / VENUES / f"{name}.toml"
+
+
+def venue_names(root: Path) -> list[str]:
+    """Every venue in ``<root>/venues``, in name order; [] when there are none
+    or the folder is unreadable (a venue is a convenience, never a launch)."""
     try:
-        return sorted(p.stem for p in (home / RIGS).glob("*.toml"))
+        return sorted(p.stem for p in (root / VENUES).glob("*.toml"))
     except OSError:
         return []
 
 
-def last_rig(home: Path) -> str:
-    """The rig the last launch chose (``<home>/last_rig``), "" for none.
+def last_venue(home: Path) -> str:
+    """The venue the last launch chose (``<home>/last_venue``), "" for none.
     A name that no longer has a file is still returned — `load` says so
     and falls back, as it does for a name that was asked for outright."""
     try:
-        return (home / LAST_RIG).read_text().strip()
+        return (home / LAST_VENUE).read_text().strip()
     except OSError:
         return ""
 
 
-def remember_rig(home: Path, name: str) -> None:
-    """Remember `name` as the rig to use next time, "" to forget. Machine
+def remember_venue(home: Path, name: str) -> None:
+    """Remember `name` as the venue to use next time, "" to forget. Machine
     state, never the library's: it rides beside `last_show`, and nothing
     here writes config.toml — the file stays the user's to edit."""
-    path = home / LAST_RIG
+    path = home / LAST_VENUE
     try:
         if name:
             path.write_text(f"{name}\n")
         else:
             path.unlink(missing_ok=True)
     except OSError as e:      # a read-only home is not a reason to refuse a launch
-        print(f"config: {LAST_RIG} not written ({e})", file=sys.stderr)
+        print(f"config: {LAST_VENUE} not written ({e})", file=sys.stderr)
 
 
-def _rig_data(cfg: dict, home: Path, rig: str) -> dict:
-    """The rig file's tables, {} when there is no using it — a missing or
-    unparsable rig is a note and the plain config.toml, never a raise
-    (the rig names a venue; a typo at one should not stop the show)."""
-    path = rig_file(home, rig)
+def _venue_data(cfg: dict, root: Path, venue: str) -> dict:
+    """The venue file's tables, {} when there is no using it — a missing or
+    unparsable venue is a note and the plain config.toml, never a raise
+    (the venue names a venue; a typo at one should not stop the show)."""
+    path = venue_file(root, venue)
     if not path.exists():
-        have = ", ".join(rig_names(home)) or "none"
-        _note(cfg, f"config: no rig {rig!r} in {home / RIGS} (have: {have}) — config.toml alone")
+        have = ", ".join(venue_names(root)) or "none"
+        _note(cfg, f"config: no venue {venue!r} in {root / VENUES} (have: {have}) "
+                   "— config.toml alone")
         return {}
     try:
         data = tomllib.loads(path.read_text())
     except (OSError, ValueError) as e:
-        _note(cfg, f"config: rig {rig!r} ({path}) will not parse: {e} — config.toml alone")
+        _note(cfg, f"config: venue {venue!r} ({path}) will not parse: {e} — config.toml alone")
         return {}
     if not all(isinstance(v, dict) for v in data.values()):
-        _note(cfg, f"config: rig {rig!r} ({path}) has a value outside a table — config.toml alone")
+        _note(cfg, f"config: venue {venue!r} ({path}) has a value outside a table "
+                   "— config.toml alone")
         return {}
+    if "library" in data:
+        # the venue was read *out of* the library: one that moved it would be
+        # asking to have been read from somewhere else
+        data.pop("library")
+        _note(cfg, f"config: venue {venue!r} cannot set [library] — that is config.toml's "
+                   "(it says where the venues are); the rest of the venue is used")
     return data
 
 
 def _layer(base: dict, over: dict) -> dict:
-    """`over`'s tables laid on `base`'s, key by key — a rig says only what
-    its venue changes. A key the rig sets wins; one it is silent about
+    """`over`'s tables laid on `base`'s, key by key — a venue says only what
+    its venue changes. A key the venue sets wins; one it is silent about
     keeps config.toml's. `[[output.screens]]` is a key like any other, so
-    a rig that lists screens replaces the list rather than adding to it."""
+    a venue that lists screens replaces the list rather than adding to it."""
     out = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
     for section, values in over.items():
         if isinstance(values, dict) and isinstance(out.get(section), dict):
@@ -388,10 +406,10 @@ def _layer(base: dict, over: dict) -> dict:
     return out
 
 
-def load(path: Path | None = None, rig: str = "") -> dict:
+def load(path: Path | None = None, venue: str = "") -> dict:
     """The config, defaults filled in; `path` defaults to the library
-    home's. `rig` names a file in ``<home>/rigs`` whose tables are laid
-    over it (one venue's screens, say) — ``cfg["rig"]`` is the rig that
+    home's. `venue` names a file in ``<home>/venues`` whose tables are laid
+    over it (one venue's screens, say) — ``cfg["venue"]`` is the venue that
     was actually used, "" when none was or the named one could not be."""
     home = library.ensure_home() if path is None else path.parent
     if path is None:
@@ -400,7 +418,7 @@ def load(path: Path | None = None, rig: str = "") -> dict:
 
     cfg = copy.deepcopy(DEFAULTS)                 # a file may append to a list
     cfg["hands"] = copy.deepcopy(HANDS)
-    cfg["rig"] = ""
+    cfg["venue"] = ""
     data: dict = {}
     base: dict = {}
     if path.exists():
@@ -409,14 +427,16 @@ def load(path: Path | None = None, rig: str = "") -> dict:
         except (OSError, ValueError) as e:
             cfg["error"] = f"config: {e}"
             base = {}
-    # the rig's tables go on before any of them is checked, so a rig's
+    # the venue's tables go on before any of them is checked, so a venue's
     # value is read exactly as the same value in config.toml would be
     data = base
-    if rig:
-        over = _rig_data(cfg, home, rig)
+    if venue:
+        # the root comes from config.toml's [library], never the venue's: the
+        # venue is read out of the library, so it cannot be what moves it
+        over = _venue_data(cfg, venue_root(base, home), venue)
         if over:
             data = _layer(base, over)
-            cfg["rig"] = rig
+            cfg["venue"] = venue
     if data:
         bad = []
         for section, values in data.items():

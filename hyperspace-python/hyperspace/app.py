@@ -1058,44 +1058,44 @@ def _hot_error_toast(msg: str) -> None:
     imgui.end()
 
 
-def _rig_arg(argv: list[str]) -> tuple[str, bool]:
-    """(the rig named on the command line, whether to forget the
-    remembered one) from `--rig <name>` / `--rig=<name>` / `--no-rig`.
+def _venue_arg(argv: list[str]) -> tuple[str, bool]:
+    """(the venue named on the command line, whether to forget the
+    remembered one) from `--venue <name>` / `--venue=<name>` / `--no-venue`.
     An unknown flag is left alone — ⌘R re-execs this same argv, so
     anything here has to survive being read twice."""
-    rig, forget = "", False
+    venue, forget = "", False
     rest = list(argv)
     while rest:
         a = rest.pop(0)
-        if a == "--no-rig":
+        if a == "--no-venue":
             forget = True
-        elif a.startswith("--rig="):
-            rig = a[len("--rig="):]
-        elif a == "--rig":
+        elif a.startswith("--venue="):
+            venue = a[len("--venue="):]
+        elif a == "--venue":
             if rest and not rest[0].startswith("-"):
-                rig = rest.pop(0)
+                venue = rest.pop(0)
             else:
-                print("hyperspace: --rig wants a name (see <home>/rigs) — ignored",
+                print("hyperspace: --venue wants a name (see <home>/venues) — ignored",
                       file=sys.stderr)
-    return rig, forget
+    return venue, forget
 
 
 def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
-    # the rig (plan 26): a file in <home>/rigs laid over config.toml, named
+    # the venue (plan 26): a file in <home>/venues laid over config.toml, named
     # on the command line or the one a launch chose last. ⌘R re-execs with
-    # this same argv, so the rig rides through a reload and its file is read
-    # again — editing a rig and pressing ⌘R is how a venue gets dialled in
-    rig, forget = _rig_arg(sys.argv[1:])
+    # this same argv, so the venue rides through a reload and its file is read
+    # again — editing a venue and pressing ⌘R is how a venue gets dialled in
+    venue, forget = _venue_arg(sys.argv[1:])
     home = library_home()
     if forget:
-        config.remember_rig(home, "")
-    elif not rig:
-        rig = config.last_rig(home)
-    cfg = config.load(rig=rig)            # before the windows: [output] overlay is a creation hint
-    if cfg["rig"]:                        # only a rig that was there and read
-        config.remember_rig(home, cfg["rig"])
+        config.remember_venue(home, "")
+    elif not venue:
+        venue = config.last_venue(home)
+    cfg = config.load(venue=venue)            # before the windows: [output] overlay is a creation hint
+    if cfg["venue"]:                        # only a venue that was there and read
+        config.remember_venue(home, cfg["venue"])
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window
     slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
@@ -1274,7 +1274,7 @@ def main() -> None:
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
-    panel.rig = cfg.get("rig", "")              # the rig this launch laid over it
+    panel.venue = cfg.get("venue", "")              # the venue this launch laid over it
     if router.table.said:                       # what the launch did to bindings.json
         panel.config_notes = [*panel.config_notes, router.table.said]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window

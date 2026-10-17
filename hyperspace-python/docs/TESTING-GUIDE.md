@@ -158,7 +158,7 @@ changes brightness or volume instead).
 | L66 | The factory presets with music | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
-| L69 | A rig per venue | 1 | laptop, a second screen | 144 |
+| L69 | A venue per place | 1 | laptop, a second screen | 144 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -1343,7 +1343,7 @@ the shared folder; a folder created at step 4; only one entry at step 5.
 
 *(checks 139–143)*
 
-#### L69. A rig per venue
+#### L69. A venue per place
 
 **Needs:** laptop and one other screen (a projector or a TV), connected
 and **extended, not mirrored**, before launch.
@@ -1352,8 +1352,9 @@ and **extended, not mirrored**, before launch.
 
 1. Note what `~/Hyperspace/config.toml` holds — this check never changes
    it, and step 6 proves that.
-2. Make `~/Hyperspace/rigs/projector.toml` with nothing in it but the
-   screens:
+2. Make `venues/projector.toml` in the library — the folder `[library]
+   path` names, or `~/Hyperspace` when it names none — with nothing in
+   it but the screens:
 
    ```toml
    [[output.screens]]
@@ -1366,31 +1367,33 @@ and **extended, not mirrored**, before launch.
    fullscreen = true
    ```
 
-3. `uv run hyperspace --rig projector`. SYSTEM page; OUTPUT page.
+3. `uv run hyperspace --venue projector`. SYSTEM page; OUTPUT page.
 4. Quit. `uv run hyperspace` with **no flag**. SYSTEM page.
-5. Edit the rig (swap `fullscreen` to `false`), press **Cmd+R**, look at
+5. Edit the venue (swap `fullscreen` to `false`), press **Cmd+R**, look at
    the OUTPUT page.
-6. Quit. `uv run hyperspace --rig nosuchplace`, then
-   `uv run hyperspace --no-rig`.
+6. Quit. `uv run hyperspace --venue nosuchplace`, then
+   `uv run hyperspace --no-venue`.
 
 **Right if:** at 3 the second screen shows the render fullscreen and the
-controls stay on the laptop; the SYSTEM page reads `rig: projector`; the
-OUTPUT page lists two outputs. At 4 the same, with no flag — the rig was
-remembered (`~/Hyperspace/last_rig` holds its name). At 5 the reload
+controls stay on the laptop; the SYSTEM page reads `venue: projector`; the
+OUTPUT page lists two outputs. At 4 the same, with no flag — the venue was
+remembered (`~/Hyperspace/last_venue` holds its name). At 5 the reload
 comes back windowed: ⌘R re-read the file. At 6 the bad name is a note on
-the SYSTEM page naming the rigs there are, and the app runs on
-`config.toml` alone; `--no-rig` does the same and leaves no `last_rig`.
+the SYSTEM page naming the venues there are, and the app runs on
+`config.toml` alone; `--no-venue` does the same and leaves no `last_venue`.
 Throughout, `config.toml` is byte-for-byte what step 1 saw, and the
-`[hands]` and `[library]` settings in it still apply under every rig.
+`[hands]` and `[library]` settings in it still apply under every venue.
+On a second Mac sharing the library, `--venue projector` finds the same
+file (its own `last_venue`, its own `config.toml`).
 
-**Wrong if:** the rig's screens are added to the config's rather than
-replacing them; a missing rig stops the launch; `config.toml` changes;
-the hands or the shared library stop working under a rig; `--no-rig`
+**Wrong if:** the venue's screens are added to the config's rather than
+replacing them; a missing venue stops the launch; `config.toml` changes;
+the hands or the shared library stop working under a venue; `--no-venue`
 still loads one.
 
-**Changes:** creates `~/Hyperspace/rigs/projector.toml` and
-`~/Hyperspace/last_rig`; delete both after, or keep the rig if it is a
-place you play.
+**Changes:** creates `<library>/venues/projector.toml` (shared, so the
+other Mac sees it) and `~/Hyperspace/last_venue` (not shared); delete
+both after, or keep the venue if it is a place you play.
 
 *(check 144)*
 
