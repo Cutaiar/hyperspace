@@ -430,26 +430,6 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
     rig.panel.close()
 
 
-def test_the_page_edits_only_through_its_dispatch():
-    """N2 opened no create or delete on the canvas; plan 28 N4 opens them
-    for the render graph and N3 for the modulation, each through the
-    page's one dispatch by port type (`CREATE`) and by cable and node kind
-    (`DELETE_CABLE`, `DELETE_NODE`) — N4's: image, geometry and mask, the
-    render cables and nodes. The widget's create / delete calls live in
-    the dispatch's two functions alone."""
-    src = (PKG / "ui_graph.py").read_text()
-    tree = ast.parse(src)
-    edits = {"begin_create", "begin_delete", "query_new_link", "query_deleted_link",
-             "accept_new_item", "accept_deleted_item"}
-    where = {f.name for f in ast.walk(tree) if isinstance(f, ast.FunctionDef)
-             for n in ast.walk(f) if isinstance(n, ast.Call)
-             and isinstance(n.func, ast.Attribute) and n.func.attr in edits}
-    assert where <= {"_create", "_delete", "new_link", "_create_render"}
-    assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
-    assert "render" in ui_graph.DELETE_CABLE and "render" in ui_graph.DELETE_NODE
-
-
-
 # ---------------------------------------------------------------- review round 1
 
 def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables(rig):

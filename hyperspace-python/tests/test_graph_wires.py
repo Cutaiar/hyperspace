@@ -335,7 +335,7 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
                                 or True)
             monkeypatch.setattr(ed, "reject_new_item",
                                 lambda *a: got.__setitem__("rejected", got["rejected"] + 1))
-            monkeypatch.setattr(ui_graph, "_tip", lambda w: got.__setitem__("tip", w))
+            monkeypatch.setattr(ui_graph, "_drag_tip", lambda w: got.__setitem__("tip", w))
             frame(rig.panel, "graph")
             monkeypatch.undo()
 
@@ -361,8 +361,16 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
         cable = graphview.VCable("wire:hands>output.2/hands", "rout:hands", "rin:output.2/hands",
                                  G.IMAGE, ref=(g.nodes["hands"], g.nodes["output.2"], "hands"),
                                  kind="render")
-        assert ui_graph.DELETE_CABLE["render"](rig.panel, st, None, cable) is None
+        cut = []
+        monkeypatch.setattr(ed, "accept_deleted_item", lambda *a: cut.append("accepted"))
+        monkeypatch.setattr(ed, "reject_deleted_item", lambda: cut.append("rejected"))
+        ui_graph.DELETE["render"](rig.panel, st, None, cable)
+        assert cut == ["accepted"] and st["note"] == ""
         assert stub.wiring.wires == () and stub.wiring.placed
+        # the default graph's own edge: kept, said on the head
+        ui_graph.DELETE["render"](rig.panel, st, None, cable)
+        assert cut == ["accepted", "rejected"] and "is the default graph's" in st["note"]
+        monkeypatch.undo()
         rig.panel.close()
 
 

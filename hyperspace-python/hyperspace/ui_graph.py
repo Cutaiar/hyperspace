@@ -1,4 +1,5 @@
-"""The GRAPH page (plan 28 N2): both graphs on one canvas, read-only.
+"""The GRAPH page (plan 28 N2, N3): both graphs on one canvas; the
+modulation edited on it.
 
 `page(panel, dt)` draws `graphview`'s model on one `imgui_node_editor`
 canvas: the controllers, the analyzer, the LFOs, the modifiers and the
@@ -15,6 +16,21 @@ ROUTING row (`ui_routing._row`, the same widgets, the same table) beside
 the canvas — below it while the page is narrow — and selecting an effect's
 node shows its strip (`ui_fx.strip`).
 
+**Editing the modulation** (plan 28 N3): a cable dragged between two
+pins (`_create`) and a cable or node deleted (`_delete`) go through
+`graphview.Edit` and the table's own calls — the same table ROUTING
+edits, so either page shows the other's change next frame, and undo, the
+preset's dirt and the referee are theirs. A taken param asks Replace /
+Keep (ROUTING's prompt, `ui_routing.ask`); a refusal says why on the
+page's head (`st["note"]`) and on the drag. Right-click: a param's `mod`
+pin offers the param menu's Learn items (`Panel._ctx_learn_block`, the same
+function), a cable offers "insert" (a modifier onto it) and delete, the
+canvas the node picker (a modifier of each kind, a macro), a modifier or
+macro node delete. A modifier node dropped onto a cable is inserted into
+it (`dropped`). **The seam with N4** (render edits): `_create` and
+`_delete` dispatch by the pins' type through `CREATE` / `DELETE`; value and
+trigger cables are this file's handlers, image / geometry / mask N4's.
+
 **Edits** (plan 28 N4, the render graph): a cable dragged between two
 image ports is a wire in the preset's graph (`graphview.Edit.wire`),
 type-checked while it is dragged — a port of another type, a port that
@@ -22,12 +38,16 @@ does not exist, a loop: the cable goes red and the tooltip says the
 words a preset file would get; a geometry cable from a hands node into
 the scene or the layer is where that node is drawn. Right-click the
 canvas for the picker (an effect instance, a hands node, a composite);
-right-click a render node to delete it or draw its hands as lines;
+right-click a render node to delete it, draw its hands as lines or set
+a composite's blend;
 Delete takes a selected render cable or node out of the graph. Each
 edit is one undo step and dirties the preset; the renderer builds the
-graph again from it. The dispatch is by port type (`CREATE`, and by
-cable and node kind `DELETE_CABLE`, `DELETE_NODE`): image / geometry /
-mask are these, value / trigger plan 28 N3's. A node can be moved: where it is dropped is saved, in the
+graph again from it. Render edits do not go through N3's `_act`:
+their handlers (`_create_render`, `_delete_render_cable`,
+`_delete_render_node`) land through `render_edit`, whose undo step is
+pushed only once the edit is read back and accepted.
+
+A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
 node takes `graphview.auto_layout`'s column; **tidy** forgets every
@@ -52,7 +72,7 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, ui, ui_fx, ui_routing, undo
+from . import graphview, modifiers, ui, ui_fx, ui_routing, undo
 from .bands import CEIL
 from .graph import Effect
 from .view import RED as RED_RGB
@@ -95,11 +115,16 @@ def _state(panel) -> dict:
                  ("beside", False)):
         if k not in st:
             st[k] = v
-    # plan 28 N4: the last render edit's words, and the node a context
-    # menu was opened on
-    st.setdefault("said", "")
-    st.setdefault("menu_node", None)
+    for k, make in EDIT_STATE:                     # plan 28 N3's keys
+        st.setdefault(k, make())
+    st.setdefault("said", "")               # plan 28 N4: the last render edit
     return st
+
+
+# plan 28 N3: the last refusal's words (shown on the head until the next
+# edit), each drawn pin's canvas position (a drop onto a cable is found by
+# it), the right-click menu's subject, the canvas point the picker opened at
+EDIT_STATE = (("note", str), ("pin_xy", dict), ("menu", lambda: None), ("menu_at", tuple))
 
 
 def editor(panel):
@@ -260,10 +285,12 @@ def _head(panel, st: dict, view: graphview.View) -> None:
         st["beside"] = not st["beside"]
     if imgui.is_item_hovered():
         imgui.set_tooltip(BESIDE_TIP)
-    if st["said"]:                         # plan 28 N4: the last edit, or why it was refused
-        imgui.text_disabled(ui.fit_text(st["said"], imgui.get_content_region_avail().x))
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(st["said"])
+    if st["note"]:
+        imgui.text_colored(ui.WARN, st["note"])
+    elif st["said"]:                        # plan 28 N4: the last render edit
+        imgui.text_disabled(st["said"])
+    else:
+        imgui.text_disabled(EDIT_HINT)
 
 
 def _place(panel, st: dict, view: graphview.View) -> None:
@@ -303,6 +330,9 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         m = pre if graphview.home(n) == graphview.PRESET else show
         if m is not None:
             m[n.id] = [int(now[0]), int(now[1])]
+        if n.kind == "modifier":
+            size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
+            dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
 
 
 def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
@@ -317,9 +347,9 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
             _cable(st, c)
     _create(panel, st, view)
     _delete(panel, st, view)
+    _menus(panel, st, view)
     _hover(st, view)
     _moved(panel, st, view)
-    _menus(panel, st, view)
     ed.end()
 
 
@@ -344,6 +374,7 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
             dl.add_circle(c, PIN / 2, col, 0, 1.5)
     ed.end_pin()
     drawn.add(pin)
+    st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
 
 
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
@@ -450,14 +481,17 @@ def _hover(st: dict, view: graphview.View) -> None:
         ed.resume()
 
 
-# ---------------------------------------------------------------- edits (plan 28 N4)
+# ---------------------------------------------------------------- render edits (plan 28 N4)
 #
-# One dispatch, by what the cable carries: a drag between two pins goes to
-# `CREATE[type]`, a deleted cable to `DELETE_CABLE[cable kind]`, a deleted
-# node to `DELETE_NODE[node kind]`. Image / geometry / mask (the render
-# graph) are N4's; plan 28 N3 adds value / trigger, its cable kinds and
-# its node kinds beside them. A handler returns None (done) or the words
-# that refuse it.
+# The render graph's edits, beside N3's below and on its contract: a drag's
+# handler is `CREATE[type]` (image / geometry / mask → `_create_render`), a
+# deleted cable's `DELETE["render"]`, a deleted node's
+# `DELETE_NODE["render" / "output"]`; each handler accepts or rejects the
+# widget's item itself. They do not go through N3's `_act` (an undo step
+# pushed before the edit, even one refused): `render_edit` reads each edit
+# back and pushes its undo step (`load=True`: the library's marks carry the
+# graph) only when it lands. A refusal is the head's note; a landing's
+# words are `st["said"]`.
 
 def render_edit(panel) -> graphview.Edit:
     """The render edits on this panel's loaded preset (its `GraphSection`),
@@ -468,166 +502,98 @@ def render_edit(panel) -> graphview.Edit:
     return graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
 
 
-def _tip(words: str) -> None:
-    ed.suspend()
-    imgui.set_tooltip(words)
-    ed.resume()
-
-
-def ends(view: graphview.View, a: str, b: str) -> tuple[str | None, str | None, str]:
-    """A drag between pins `a` and `b`, either way round → (the output
-    pin, the input pin, the type the cable would carry: a render type if
-    either end is one, so the render edit says why a mixed pair is
-    refused), or (None, None, why it is no cable)."""
-    ha, hb = view.owner(a), view.owner(b)
-    if ha is None or hb is None or ha[1] is None or hb[1] is None:
-        return None, None, ""
-    pa, pb = ha[1], hb[1]
-    if pa.direction == pb.direction:
-        return None, None, "a cable runs from an output to an input"
-    (src, ps), (dst, pd) = ((a, pa), (b, pb)) if pa.direction == graphview.OUT else (
-        (b, pb), (a, pa))
-    if ps.type in graphview.RENDER_TYPES:
-        return src, dst, ps.type
-    if pd.type in graphview.RENDER_TYPES:
-        return src, dst, pd.type
-    return src, dst, ps.type
-
-
-def _create_render(panel, st: dict, view: graphview.View, src: str, dst: str) -> None:
-    """An image / geometry / mask cable dragged: checked while it is dragged
-    (red, and the note's words), a wire when it is dropped."""
-    edit = render_edit(panel)
-    why = edit.wire(src, dst, dry=True)
-    if why:
-        ed.reject_new_item(imgui.ImVec4(*RED_RGB, 1.0), WIRE)
-        _tip(why)
-        return
-    if ed.accept_new_item(COLOURS[graphview.IMAGE], WIRE):
-        why = edit.wire(src, dst)
-        st["said"] = why or edit.said
-
-
-def _delete_render_cable(panel, st: dict, view: graphview.View, c) -> str | None:
-    edit = render_edit(panel)
-    why = edit.unwire(c)
-    st["said"] = why or edit.said
+def _render_said(panel, e: graphview.Edit, fn, st: dict | None = None) -> str | None:
+    """Run render edit `fn(e)`: a refusal is the head's note, a landing's
+    words the head's line (`st`: the page's state). Returns the refusal,
+    or None."""
+    st = st if st is not None else _state(panel)
+    why = fn(e)
+    st["note"] = why or ""
+    if why is None:
+        st["said"] = e.said
     return why
-
-
-def _delete_render_node(panel, st: dict, view: graphview.View, n) -> str | None:
-    edit = render_edit(panel)
-    why = edit.drop_node(n.id)
-    st["said"] = why or edit.said
-    return why
-
-
-CREATE = {t: _create_render for t in graphview.RENDER_TYPES}
-DELETE_CABLE = {"render": _delete_render_cable}
-DELETE_NODE = {"render": _delete_render_node, "output": _delete_render_node}
 
 
 def new_link() -> tuple[int, int] | None:
-    """The two pins' widget ids of a cable being dragged this frame, or None."""
+    """The two pins' widget ids of a cable being dragged this frame, in drag
+    order, or None."""
     a, b = ed.PinId(), ed.PinId()
     if ed.query_new_link(a, b) and a.id() and b.id():
         return a.id(), b.id()
     return None
 
 
-def _create(panel, st: dict, view: graphview.View) -> None:
-    # (this binding's `end_create` / `end_delete` only after a `begin_*`
-    # that returned True: the widget asserts otherwise)
-    if ed.begin_create(COLOURS[graphview.IMAGE], WIRE):
-        got = new_link()
-        if got is not None:
-            names = st["names"]
-            src, dst, typ = ends(view, names.get(got[0], ""), names.get(got[1], ""))
-            if src is None:
-                if typ:
-                    ed.reject_new_item(imgui.ImVec4(*RED_RGB, 1.0), WIRE)
-                    _tip(typ)
-            else:
-                handler = CREATE.get(typ)
-                if handler is not None:
-                    handler(panel, st, view, src, dst)
-        ed.end_create()
+def _create_render(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
+    """An image / geometry / mask cable dragged (either end first): checked
+    while it is held — red, and the words a preset file would get — and a
+    wire when it is let go."""
+    src, dst = graphview.Edit.ordered(a, b)
+    e = render_edit(panel)
+    why = e.wire(src, dst, dry=True)
+    if why:
+        _drag_tip(why)
+        ed.reject_new_item(imgui.ImVec4(*REFUSED_RGB), WIRE)
+    elif ed.accept_new_item(COLOURS[graphview.IMAGE], WIRE):
+        _render_said(panel, e, lambda e: e.wire(src, dst), st)
 
 
-def _delete(panel, st: dict, view: graphview.View) -> None:
-    if ed.begin_delete():
-        names = st["names"]
-        lk = ed.LinkId()
-        while ed.query_deleted_link(lk):
-            cid = names.get(lk.id(), "")[2:]
-            c = next((x for x in view.cables if x.id == cid), None)
-            handler = DELETE_CABLE.get(c.kind) if c is not None else None
-            if handler is None or handler(panel, st, view, c) is not None:
-                ed.reject_deleted_item()
-            else:
-                ed.accept_deleted_item()
-        nk = ed.NodeId()
-        while ed.query_deleted_node(nk):
-            n = view.node(names.get(nk.id(), "")[2:])
-            handler = DELETE_NODE.get(n.kind) if n is not None else None
-            if handler is None or handler(panel, st, view, n) is not None:
-                ed.reject_deleted_item()
-            else:
-                ed.accept_deleted_item(False)
-        ed.end_delete()
-
-
-def _menus(panel, st: dict, view: graphview.View) -> None:
-    """Right-click: the picker on the canvas, a render node's own menu."""
-    ed.suspend()
-    try:
-        nk = ed.NodeId()
-        if ed.show_node_context_menu(nk):
-            st["menu_node"] = st["names"].get(nk.id(), "")[2:]
-            imgui.open_popup("##graph.node")
-        elif ed.show_background_context_menu():
-            imgui.open_popup("##graph.picker")
-        if imgui.begin_popup("##graph.picker"):
-            picker_menu(panel, st)
-            imgui.end_popup()
-        if imgui.begin_popup("##graph.node"):
-            node_menu(panel, st, view.node(st["menu_node"] or ""))
-            imgui.end_popup()
-    finally:
-        ed.resume()
-
-
-def picker_menu(panel, st: dict) -> None:
-    """The node picker: an effect instance per file, a hands node, a composite."""
-    edit = render_edit(panel)
-    imgui.text_disabled("add a node")
-    for kind, file, label in graphview.picker(edit):
-        if imgui.menu_item_simple(label if kind != "effect" else f"effect  {label}"):
-            why = edit.add_node(kind, file)
-            st["said"] = why or edit.said
-
-
-def node_menu(panel, st: dict, n) -> None:
-    """A render node's menu: delete it; a hands node drawn solid or as lines."""
-    if n is None or n.kind not in ("render", "output"):
-        imgui.text_disabled("no render edits here")
+def _delete_render_cable(panel, st: dict, view: graphview.View, c) -> None:
+    """Delete pressed on a render cable: unwired, or kept with the words
+    (the default graph's own edge). A cable of a render node this delete
+    just took out goes with it, saying nothing over the node's words."""
+    gone = st.get("dropped") or set()
+    if view is not None and gone and any(
+            view.pins.get(p, ("",))[0] in gone for p in (c.src_port, c.dst_port)):
+        ed.accept_deleted_item()
         return
-    edit = render_edit(panel)
-    name, _ = graphview.spec_name(n.id, edit.render)
+    if _render_said(panel, render_edit(panel), lambda e: e.unwire(c), st) is None:
+        ed.accept_deleted_item()
+    else:
+        ed.reject_deleted_item()
+
+
+def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
+    """Delete pressed on a render node: an extra effect instance, hands
+    node or composite out of the graph; the frame's own nodes stay, said."""
+    if _render_said(panel, render_edit(panel), lambda e: e.drop_node(n.id), st) is None:
+        st.setdefault("dropped", set()).add(n.id)
+        ed.accept_deleted_item(False)
+    else:
+        ed.reject_deleted_item()
+
+
+def render_picker(panel) -> None:
+    """The picker's render items: an effect instance per file, a hands
+    node, a composite (`graphview.picker`)."""
+    e = render_edit(panel)
+    items = graphview.picker(e)
+    effects = [(f, label) for kind, f, label in items if kind == "effect"]
+    if effects and imgui.begin_menu("effect"):
+        for f, label in effects:
+            if imgui.menu_item_simple(label):
+                _render_said(panel, e, lambda e, f=f: e.add_node("effect", f))
+        imgui.end_menu()
+    for kind, _, label in items:
+        if kind != "effect" and imgui.menu_item_simple(label):
+            _render_said(panel, e, lambda e, kind=kind: e.add_node(kind))
+
+
+def render_node_menu(panel, n) -> None:
+    """A render node's menu items: a hands node drawn solid or as lines, a
+    composite's blend, delete."""
+    e = render_edit(panel)
+    name, _ = graphview.spec_name(n.id, e.render)
     kind = rgraph.wire_node_kind(name) if name else None
     if kind in ("ghost", "layer"):
         for how in rgraph.DRAWS:
             if imgui.menu_item_simple(f"draw {how}"):
-                why = edit.set_node(name, draw=how)
-                st["said"] = why or edit.said
+                _render_said(panel, e, lambda e, how=how: e.set_node(name, draw=how))
     if kind == "composite":
         for how in rgraph.BLENDS:
             if imgui.menu_item_simple(f"laid {how}"):
-                why = edit.set_node(name, blend=how)
-                st["said"] = why or edit.said
-    if imgui.menu_item_simple(f"delete {n.label}"):
-        why = edit.drop_node(n.id)
-        st["said"] = why or edit.said
+                _render_said(panel, e, lambda e, how=how: e.set_node(name, blend=how))
+    if imgui.menu_item_simple("delete"):
+        _render_said(panel, e, lambda e: e.drop_node(n.id))
 
 
 # ---------------------------------------------------------------- the selection
@@ -689,3 +655,377 @@ def timing_line(panel) -> str:
     v = st["view"]
     size = f"  ({len(v.nodes)} nodes, {len(v.cables)} cables)" if v is not None else ""
     return f"graph page: {times[len(times) // 2] * 1000:.2f} ms median{size}"
+
+
+# ---------------------------------------------------------------- editing (plan 28 N3)
+#
+# The page's edits, as plain functions over the panel (the tests drive
+# these, as test_ui_routing drives ROUTING's): each builds a
+# `graphview.Edit` on the page's view and the router's table, names one
+# undo step before it changes anything, and settles what came back — a
+# `graphview.Ask` becomes ROUTING's Replace / Keep prompt (`ui_routing.ask`),
+# a `graphview.Refusal` the head's note. The canvas's gestures below call
+# them; `CREATE` / `DELETE` are the dispatch by type N4 extends.
+
+EDIT_HINT = ("drag pin to pin: a cable  ·  right-click: Learn, insert, add  ·  "
+             "Delete: the selection")
+MENU = "##graph.menu"
+REFUSED_RGB = (1.0, 0.45, 0.35, 1.0)       # ui.WARN: a drag the table would refuse
+
+
+def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
+    """The page's `Edit` on the router's table (None: no router)."""
+    router = ui_routing.router_of(panel)
+    if router is None:
+        return None
+    if view is None:
+        view = view_of(panel)
+    table = router.table
+    profile = ui.apc40 if getattr(table, "profile", None) == "apc40" else None
+    # plan 28 N4: render requests reach the preset's graph too (no undo push
+    # of their own here: `_act` pushed one; the canvas's render gestures use
+    # `render_edit` instead)
+    lib = getattr(panel, "library", None)
+    return graphview.Edit(table, panel.reg, router, view, profile,
+                          graph=getattr(getattr(lib, "presets", None), "graph", None),
+                          render=getattr(getattr(panel, "renderer", None), "_graph", None))
+
+
+def _settle(panel, res):
+    """Settle what an edit returned: an Ask puts up the prompt, a Refusal
+    is the head's note; anything else clears the note. Returns `res`."""
+    st = _state(panel)
+    if isinstance(res, graphview.Ask):
+        ui_routing.ask(panel, res.old, res.new, res.commit)
+        st["note"] = ""
+    elif isinstance(res, graphview.Refusal):
+        st["note"] = str(res)
+    else:
+        st["note"] = ""
+    return res
+
+
+def _act(panel, label: str, why: str | None, fn):
+    """One edit: refused before anything moves (`why`), else one undo step
+    named `label`, then `fn()` settled by `_settle`."""
+    if why is not None:
+        return _settle(panel, graphview.Refusal(why))
+    undo.push(label)
+    return _settle(panel, fn())
+
+
+def _name(view: graphview.View | None, pin: str) -> str:
+    hit = view.owner(pin) if view is not None else None
+    if hit is None or hit[1] is None:
+        return pin.partition(":")[2] or pin
+    return hit[1].param or hit[1].addr or f"{hit[0].label} {hit[1].name}"
+
+
+def connect(panel, a: str, b: str):
+    """A cable dragged from pin `a` to pin `b` (either order): a route, a
+    setter row, a macro's subscriber, a modifier's input, or a cable's end
+    moved (`graphview.Edit.connect`)."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    return _act(panel, f"connect {_name(e.view, a)} → {_name(e.view, b)}",
+                e.refusal(a, b), lambda: e.connect(a, b))
+
+
+def disconnect(panel, cable: graphview.VCable):
+    """Delete a cable (`graphview.Edit.disconnect`): a route and its depth
+    subscribers, a preset desk row, a subscriber, a modifier's input."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    return _act(panel, f"delete cable {cable.id}", None, lambda: e.disconnect(cable))
+
+
+def insert_modifier(panel, cable: graphview.VCable, kind: str):
+    """A modifier (`kind`, or an existing one's id) into `cable`."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    return _act(panel, f"insert {kind} into {cable.id}", None,
+                lambda: e.insert_modifier(cable, kind))
+
+
+def _place_new(panel, nid: str, at) -> None:
+    """A node the picker made goes where the picker opened (the preset's
+    layout: modifiers and macros are the preset's)."""
+    pre, _ = _layouts(panel)
+    if at and pre is not None:
+        pre[nid] = [round(at[0]), round(at[1])]
+
+
+def add_modifier(panel, kind: str, at=None):
+    """The picker's "+ modifier ▸ <kind>": a new node, placed at `at`."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    res = _act(panel, f"add modifier {kind}", None, lambda: e.add_modifier(kind))
+    if isinstance(res, modifiers.Modifier):
+        _place_new(panel, res.id, at)
+    return res
+
+
+def show_macro(panel, mid: str, at=None):
+    """The picker's "+ macro ▸ <n>": the macro onto the canvas (its label set)."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    res = _act(panel, f"show {mid}", None, lambda: e.show_macro(mid))
+    if not isinstance(res, graphview.Refusal):
+        _place_new(panel, mid, at)
+    return res
+
+
+def remove_node(panel, nid: str):
+    """Delete a node (`graphview.Edit.remove_node`)."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    return _act(panel, f"delete node {nid}", None, lambda: e.remove_node(nid))
+
+
+def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable | None:
+    """A modifier node let go at `centre` (canvas units): if it is still
+    free — no cable in or out — and lands on a route or a modifier's input
+    cable (`graphview.cable_near`, by the curve the widget draws), it is
+    inserted there. Returns the cable it went into, or None."""
+    n = view.node(nid)
+    if n is None or n.kind != "modifier" or view.cables_of(nid):
+        return None
+    c = graphview.cable_near(view, _state(panel)["pin_xy"], centre, skip=(nid,))
+    if c is None:
+        return None
+    res = insert_modifier(panel, c, nid)
+    return None if isinstance(res, graphview.Refusal) else c
+
+
+def macros_free(panel, view: graphview.View) -> list[str]:
+    """The macros the picker offers: the rig's knobs doing nothing yet (no
+    label, no subscriber). Every macro is a node (its knob is modulatable),
+    so picking one names it and brings it to where the picker opened."""
+    router = ui_routing.router_of(panel)
+    macros = router.table.macros if router is not None else {}
+    return [p.id for p in panel.reg.group("macro")
+            if (macros.get(p.id) is None or macros[p.id].empty)]
+
+
+# ---- the canvas's gestures ----
+
+def _value_drag(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
+    """A drag between two value / trigger pins, held: the refusal's words
+    in red while it would be refused; let go, `connect`."""
+    e = edit_of(panel, view)
+    why = e.refusal(a, b) if e is not None else "no router"
+    if why is not None:
+        _drag_tip(why)
+        ed.reject_new_item(imgui.ImVec4(*REFUSED_RGB), 2.0)
+    elif ed.accept_new_item(COLOURS[graphview.VALUE], 2.0):
+        connect(panel, a, b)
+
+
+def _drag_tip(text: str) -> None:
+    ed.suspend()
+    imgui.set_tooltip(text)
+    ed.resume()
+
+
+# a drag's handler by the signal type it carries (the seam: N4 maps
+# graphview.IMAGE / GEOMETRY / MASK to its own)
+CREATE = {graphview.VALUE: _value_drag, graphview.TRIGGER: _value_drag,
+          graphview.IMAGE: _create_render, graphview.GEOMETRY: _create_render,
+          graphview.MASK: _create_render}
+
+
+def _drag_type(view: graphview.View, a: str, b: str) -> str:
+    """The type a drag is dispatched by: a render type if either end has one."""
+    e = graphview.Edit(None, None, None, view)
+    types = [e.type_of(a), e.type_of(b)]
+    return next((t for t in types if t in graphview.RENDER_TYPES), types[0])
+
+
+def _create(panel, st: dict, view: graphview.View) -> None:
+    """The widget's create query: a pin dragged onto another pin."""
+    if ed.begin_create(COLOURS[graphview.VALUE], 2.0):
+        got = new_link()
+        if got is not None:
+            pa, pb = st["names"].get(got[0]), st["names"].get(got[1])
+            if pa and pb and pa != pb:
+                CREATE.get(_drag_type(view, pa, pb), _create_render)(panel, st, view, pa, pb)
+        ed.end_create()                 # only after a begin that opened (the widget asserts)
+
+
+def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
+    """Delete pressed on a value / trigger cable: the session's rows are
+    kept (and say so); anything else goes (`disconnect`)."""
+    b = c.ref if c.kind == "setter" else None
+    if b is not None and graphview.is_session_row(b):
+        ed.reject_deleted_item()
+        st["note"] = graphview.SESSION_ROW.format(what=b.source)
+    elif ed.accept_deleted_item():
+        disconnect(panel, c)
+
+
+def _unknown_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
+    ed.reject_deleted_item()
+
+
+# a delete's handler by the cable's kind ("render" is N4's)
+DELETE = {"route": _value_cut, "setter": _value_cut, "sub": _value_cut,
+          "input": _value_cut, "render": _delete_render_cable}
+
+
+def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on a modifier or a macro node: it goes, without its
+    cables (`accept_deleted_item(False)`): a route on a removed modifier's
+    lane stays, dormant, as on ROUTING."""
+    if ed.accept_deleted_item(False):
+        remove_node(panel, n.id)
+
+
+def _rig_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on the rig's node (a device, the analyzer, an LFO, a
+    group): kept, said."""
+    ed.reject_deleted_item()
+    st["note"] = graphview.NOT_REMOVABLE.format(label=n.label)
+
+
+# a node delete's handler by the node's kind (the seam: N4 maps "render"
+# and "output"); a kind not listed is the rig's
+DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
+               "render": _delete_render_node, "output": _delete_render_node}
+
+
+def _delete(panel, st: dict, view: graphview.View) -> None:
+    """The widget's delete query: the selection's nodes first, by kind
+    (`DELETE_NODE`), then its cables, by kind (`DELETE`)."""
+    if ed.begin_delete():
+        names = st["names"]
+        st["dropped"] = set()           # N4: render nodes this delete took out
+        nk = ed.NodeId()
+        while ed.query_deleted_node(nk):
+            n = view.node(names.get(nk.id(), "")[2:])
+            if n is None:
+                ed.reject_deleted_item()
+                continue
+            DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
+        lk = ed.LinkId()
+        while ed.query_deleted_link(lk):
+            cid = names.get(lk.id(), "")[2:]
+            c = next((x for x in view.cables if x.id == cid), None)
+            if c is None:
+                ed.reject_deleted_item()
+                continue
+            DELETE.get(c.kind, _unknown_cut)(panel, st, view, c)
+        ed.end_delete()
+
+
+def _menus(panel, st: dict, view: graphview.View) -> None:
+    """Right-click on the canvas: a pin's menu, a cable's, a node's, the
+    picker on the background. Opened and drawn with the editor suspended."""
+    at = imgui.get_mouse_pos()                 # canvas units, inside the editor
+    names = st["names"]
+    ed.suspend()
+    pin, link, node = ed.PinId(), ed.LinkId(), ed.NodeId()
+    subject = None
+    if ed.show_pin_context_menu(pin):
+        subject = ("pin", names.get(pin.id(), ""))
+    elif ed.show_link_context_menu(link):
+        subject = ("cable", names.get(link.id(), "")[2:])
+    elif ed.show_node_context_menu(node):
+        subject = ("node", names.get(node.id(), "")[2:])
+    elif ed.show_background_context_menu():
+        subject = ("picker", "")
+    if subject is not None:
+        st["menu"], st["menu_at"] = subject, (at.x, at.y)
+        imgui.open_popup(MENU)
+    if imgui.begin_popup(MENU):
+        menu(panel, st, view)
+        imgui.end_popup()
+    ed.resume()
+
+
+def menu(panel, st: dict, view: graphview.View) -> None:
+    """The open right-click menu's items, for `st["menu"]`."""
+    what, name = st["menu"] or ("", "")
+    if what == "pin":
+        _pin_menu(panel, view, name)
+    elif what == "cable":
+        c = next((x for x in view.cables if x.id == name), None)
+        if c is not None:
+            _cable_menu(panel, view, c)
+    elif what == "node":
+        n = view.node(name)
+        if n is not None:
+            _node_menu(panel, view, n)
+    elif what == "picker":
+        picker(panel, view, st["menu_at"])
+
+
+def port_param(pin: str) -> str | None:
+    """The param a ``mod:`` pin is the performer stub of; None for any other pin."""
+    kind, _, pid = pin.partition(":")
+    return pid if kind == graphview.MOD and pid else None
+
+
+def _pin_menu(panel, view: graphview.View, pin: str) -> None:
+    """A pin's menu: on a param's `mod` stub, the param menu's Learn items
+    — the same function the panel's widgets' menu calls (`Panel._ctx_learn_block`:
+    desk, hand ▸ left / right, pad, a role, sink), or Cancel while armed —
+    so a learn from here lands as a cable next frame (the view is rebuilt
+    from the table); any other pin says what it is."""
+    pid = port_param(pin)
+    a = panel.reg.get(pid) if pid else None
+    ui._micro(pid or pin)
+    if a is None:
+        hit = view.owner(pin)
+        if hit is not None and hit[1] is not None:
+            imgui.text_disabled(f"{hit[0].label} · {hit[1].name}")
+        return
+    panel._ctx_learn_block(a, panel._real(a))
+
+
+def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
+    """A cable's menu: insert a modifier of a kind (a route's or a
+    modifier input's), delete."""
+    imgui.text_disabled(cable_tip(view, c).splitlines()[0])
+    if c.kind in ("route", "input") and imgui.begin_menu("insert"):
+        for kind in modifiers.KINDS:
+            if imgui.menu_item_simple(kind):
+                insert_modifier(panel, c, kind)
+        imgui.end_menu()
+    if imgui.menu_item_simple("delete"):
+        if c.kind == "render":                  # N4: unwire, its own undo step
+            _render_said(panel, render_edit(panel), lambda e: e.unwire(c))
+        else:
+            disconnect(panel, c)
+
+
+def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
+    imgui.text_disabled(n.label)
+    if n.kind in ("modifier", "macro") and imgui.menu_item_simple("delete"):
+        remove_node(panel, n.id)
+    if n.kind in ("render", "output"):
+        render_node_menu(panel, n)
+
+
+def picker(panel, view: graphview.View, at=None) -> None:
+    """The node picker (right-click on the canvas): a modifier of each
+    kind, a macro not on the canvas yet; the node lands where the menu
+    opened."""
+    ui._micro("add")
+    if imgui.begin_menu("modifier"):
+        for kind in modifiers.KINDS:
+            if imgui.menu_item_simple(kind):
+                add_modifier(panel, kind, at)
+        imgui.end_menu()
+    render_picker(panel)                        # N4: an effect, hands, a composite
+    free = macros_free(panel, view)
+    if free and imgui.begin_menu("macro"):
+        for mid in free:
+            if imgui.menu_item_simple(mid):
+                show_macro(panel, mid, at)
+        imgui.end_menu()

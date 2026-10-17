@@ -2443,6 +2443,20 @@ class Bindings:
         self.set_modifiers([*bases, m], reg)
         return self.modifier(m.id)
 
+    def set_modifier_input(self, mid: str, k: int, source: str | None,
+                           reg: Registry | None = None) -> list[str]:
+        """Input `k` of modifier `mid` reads `source` ("" / None: none):
+        the modifier replaced whole (`set_modifiers`, every modifier's
+        params at their bases in `reg`). The callers push the undo step
+        (ROUTING's input combo, the GRAPH page's cable). Returns its notes."""
+        docs = self.modifiers_doc(reg)
+        for d in docs:
+            if d["id"] == mid:
+                ins = list(d["in"])
+                ins[k] = source or None
+                d["in"] = ins
+        return self.set_modifiers(docs, reg)
+
     def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
         """Take a modifier out, its params with it; a route on its lane
         stays, dormant, until it is removed or the id comes back."""

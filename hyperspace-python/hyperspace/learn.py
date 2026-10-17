@@ -289,6 +289,33 @@ def _switched_on(pid: str, values) -> bool:
     return False
 
 
+def row_for(source: str, p: Param, when: str | None = None, *,
+            centred: bool = False, depth: float | None = None) -> Binding:
+    """The row a hand learn makes (plan 18 WP3): its op and depth.
+
+        the target                       a centred axis   a one-sided axis
+        continuous, centred on zero      push, depth D    push, depth D
+        any other continuous param       push, depth D    position, depth 1
+        an enum, a toggle, a trigger,
+        a whole-number param             position, 1      position, 1
+
+    D is `depth`, or `PUSH_DEPTH` when the caller named none. A push
+    carries no `rest` of its own, so it is centred where the axis
+    rests, resolved every frame (`Router.rest_of`): a level hand, or
+    a height at the bottom, adds nothing and the preset's value shows
+    until the hand moves. A discrete target keeps the fader because a
+    push of D about a toggle's base never crosses `params.MOD_ON`, and
+    about a whole-number param with a short throw (`dream.steps`, 1–3)
+    never reaches the next step: the learn would land and do nothing.
+    Nothing reads the target's id or group and nothing is refused: a
+    rate-type param lands by the same table as any other."""
+    stepped = p.kind is not Kind.CONTINUOUS or p.integer
+    if not stepped and (centred or centred_target(p)):
+        d = PUSH_DEPTH if depth is None else float(depth)
+        return Binding(source, p.id, "push", d, when=when)
+    return Binding(source, p.id, "position", 1.0, when=when)
+
+
 class Learn:
     """The armed param and the question the referee left for the panel."""
 
@@ -668,29 +695,9 @@ class Learn:
 
     def _row(self, source: str, p: Param, when: str | None, *,
              centred: bool = False, depth: float | None = None) -> Binding:
-        """The row a hand learn makes (plan 18 WP3): its op and depth.
-
-            the target                       a centred axis   a one-sided axis
-            continuous, centred on zero      push, depth D    push, depth D
-            any other continuous param       push, depth D    position, depth 1
-            an enum, a toggle, a trigger,
-            a whole-number param             position, 1      position, 1
-
-        D is `depth`, or `PUSH_DEPTH` when the caller named none. A push
-        carries no `rest` of its own, so it is centred where the axis
-        rests, resolved every frame (`Router.rest_of`): a level hand, or
-        a height at the bottom, adds nothing and the preset's value shows
-        until the hand moves. A discrete target keeps the fader because a
-        push of D about a toggle's base never crosses `params.MOD_ON`, and
-        about a whole-number param with a short throw (`dream.steps`, 1–3)
-        never reaches the next step: the learn would land and do nothing.
-        Nothing reads the target's id or group and nothing is refused: a
-        rate-type param lands by the same table as any other."""
-        stepped = p.kind is not Kind.CONTINUOUS or p.integer
-        if not stepped and (centred or centred_target(p)):
-            d = PUSH_DEPTH if depth is None else float(depth)
-            return Binding(source, p.id, "push", d, when=when)
-        return Binding(source, p.id, "position", 1.0, when=when)
+        """The row a hand learn makes (`row_for`, the one table — the GRAPH
+        page's cable into a `mod` port makes the same row, plan 28 N3)."""
+        return row_for(source, p, when, centred=centred, depth=depth)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's

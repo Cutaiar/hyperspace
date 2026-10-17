@@ -1,7 +1,7 @@
 """The GRAPH page's model (plan 28 N2): both graphs as one set of nodes,
 ports and cables, built from the live objects and drawn by ui_graph.py.
 
-Nothing here draws and nothing here edits. `build` reads the binding
+Nothing here draws. `build` reads the binding
 table (`routing.Bindings`: the routes, the desk / pad / key rows, the
 macros, the modifiers), the registry (every param a cable can reach), the
 Router (the source lanes' names and readings, the LFOs, the loops `patch`
@@ -65,16 +65,32 @@ holds it)."""
 from __future__ import annotations
 
 import copy
+import itertools
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from . import graph as rgraph
+from . import learn as learnmod
 from . import modifiers as modmod
 from . import patch as patchmod
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
-from .routing import MOD_OPS, Bindings, Router, is_macro
+from .routing import (
+    MOD_OPS,
+    SAVE_PARAM,
+    Binding,
+    Bindings,
+    Macro,
+    Owned,
+    Router,
+    Sub,
+    base_refusal,
+    base_scheme,
+    is_continuous,
+    is_macro,
+    is_session_row,
+)
 
 # signal kinds a port and a cable carry (decision 10: values and triggers;
 # plan 26's image, geometry and mask)
@@ -120,6 +136,7 @@ class VPort:
     pins: tuple[str, ...] = ()
     param: str | None = None
     addr: str | None = None
+    bipolar: bool = False        # a source centred on its rest (a hand's roll, a stick)
 
     def __post_init__(self):
         if not self.pins:
@@ -413,12 +430,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         return port
 
     def add_source(n: VNode, addr: str, name: str, kind: str = VALUE,
-                   group: str = "") -> str:
+                   group: str = "", bipolar: bool = False) -> str:
         key = _lane_key(router, addr)
         if key in src_pins:
             return src_pins[key]
         pin = f"out:{addr}"
-        add_port(n, VPort(pin, name, OUT, _port_type(kind), group, addr=addr))
+        add_port(n, VPort(pin, name, OUT, _port_type(kind), group, addr=addr,
+                          bipolar=bipolar))
         src_pins[key] = pin
         return pin
 
@@ -428,7 +446,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         node, ports = device_node(d)
         n = add_node(node)
         for p in ports:
-            add_source(n, p.address, p.label, p.kind, p.group)
+            add_source(n, p.address, p.label, p.kind, p.group, bool(getattr(p, "bipolar", False)))
 
     labels = getattr(router, "labels", {}) if router is not None else {}
     band_names = list(bands) if bands is not None else list(labels.get("lane") or [])
@@ -852,6 +870,634 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
     return pre, ses
 
 
+
+# ---------------------------------------------------------------- editing (plan 28 N3)
+#
+# `Edit` turns a gesture on the canvas — a cable dragged from one pin to
+# another, a cable deleted, a modifier dropped onto a cable, a node picked
+# or deleted — into the binding table's own calls (`Bindings.add`,
+# `replace_owner`, `move_route`, `remove`, `bind`, the macros' subscribers,
+# `add_modifier` / `set_modifiers` / `remove_modifier`), so undo (which
+# watches the table), the preset's dirt, the referee and the session /
+# preset split are what they are for ROUTING. Each request returns what the
+# table call returned, a `Refusal` (the words the page shows, nothing
+# changed) or an `Ask` (the target has a performer: the page puts up the
+# same Replace / Keep prompt ROUTING does, `ui_routing.ask`, and *Replace*
+# runs `commit`).
+#
+# **The seam with plan 28 N4** (render-graph edits): a request is
+# dispatched by the type of the pins it joins. Value and trigger pins are
+# this section's (`connect_value`, `disconnect_value`, `remove_value_node`);
+# an image, geometry or mask pin, a render cable or a render node goes to
+# the method N4 adds beside them — `Edit.wire(src, dst)`,
+# `Edit.unwire(cable)`, `Edit.remove_render_node(node id)`, and
+# optionally `Edit.wire_refusal(src, dst)` for the drag's feedback —
+# looked up by name (`_render`; a plain-words refusal from them becomes a
+# `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
+
+RENDER_TYPES = (IMAGE, GEOMETRY, MASK)
+RENDER_NOT_YET = "render cables: not yet"
+# the words a refusal says
+NOT_A_PORT = "not a port"
+SAME_SIDE = "join an output to an input"
+HAND_NO_BASE = "a hand sets no base; aim at mod"
+NO_BASE = "{what} sets no base; aim at mod"
+DESK_NO_MOD = "{what} sets a base, not a performer; aim at base"
+MACRO_NO_MOD = "a macro sets a base or scales a depth; aim at base or a depth stub"
+MACRO_NO_MACRO = "a macro cannot set a macro"
+ONLY_MACRO_DEPTH = "only a macro scales a route's depth; drag from a macro"
+NO_ROUTE_DEPTH = "no route lands on {pid}: nothing to scale"
+NOT_MODULATABLE = "{label} is not modulatable: no performer may drive it"
+NO_PARAM = "no param {pid}"
+ALREADY = "already patched"
+SELF_LOOP = "a modifier cannot read itself (a loop)"
+MACRO_NO_LANE = "a macro is no lane: it cannot feed a modifier"
+NO_LANE = "{what} is no lane: it cannot feed a modifier"
+KEY_ROWS = "keys are the session's rows: map them on ROUTING"
+MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
+ROUTE_END = "a route's end moves to another param's mod"
+SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
+NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
+NO_SUCH_MOD = "no modifier {kind}"
+
+# a continuous scheme's noun for the refusals ("a hand sets no base")
+NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
+         "mod": "a modifier", "axis": "a stick", "ext": "an outside lane"}
+DESK_NOUNS = {"cc": "a desk knob", "note": "a desk button", "pitch": "a desk fader",
+              "pad": "a pad button", "hat": "the D-pad", "key": "a key"}
+OUT_PINS = ("out", "bus", "rout")
+
+
+class Refusal(str):
+    """A request the table did not take, in the words the page shows."""
+
+
+@dataclass
+class Ask:
+    """The target has a performer (`Owned`): `old` holds it, `new` asks;
+    *Replace* runs `commit` (`Bindings.replace_owner`, which reads the
+    owner at that moment). Nothing has changed yet."""
+
+    old: Binding
+    new: Binding
+    commit: Callable[[], Any]
+
+
+def pin_kind(pin: str) -> str:
+    """A pin's prefix: ``out`` / ``bus`` / ``rout`` (outputs), ``mod`` /
+    ``base`` / ``depth`` / ``in`` / ``rin`` (inputs)."""
+    return pin.partition(":")[0]
+
+
+def is_output(pin: str) -> bool:
+    return pin_kind(pin) in OUT_PINS
+
+
+def _scheme(addr: str) -> str:
+    return base_scheme(addr.partition(":")[0])
+
+
+def _noun(addr: str) -> str:
+    return NOUNS.get(_scheme(addr), f"a {_scheme(addr)} source")
+
+
+def _desk_noun(addr: str) -> str:
+    return DESK_NOUNS.get(_scheme(addr), f"a {_scheme(addr)} control")
+
+
+class Edit:
+    """The canvas's edits on one table. `view` is the page's current view
+    (the pins' types, the sources' addresses, whether a source is centred,
+    the cable a drag picked up); `router` resolves lanes and rests (None:
+    addresses compare as strings). `profile` is the desk's profile module,
+    duck-typed, for the desk learn a MIDI cable into `base` goes through
+    (the page passes `apc40`, as the panel's click-to-map does)."""
+
+    def __init__(self, table: Bindings | None = None, reg: Registry | None = None,
+                 router: Router | None = None, view: View | None = None, profile=None, *,
+                 graph=None, render=None, push: Callable[[str], None] | None = None):
+        self.table, self.reg, self.router, self.view = table, reg, router, view
+        self.profile = profile
+        # plan 28 N4, the render edits: the preset's `GraphSection` they land
+        # through, the renderer's last graph (canvas pins → names), the undo
+        # step pushed before a landing (the page: `undo.push(label,
+        # load=True)`; None: none), the last edit's words
+        self.graph, self.render, self.push = graph, render, push
+        self.said = ""
+
+    # ---- the render graph (plan 28 N4): each returns None (done; its
+    # words in `said`) or a refusal in words, nothing changed ----
+
+    def wire(self, src_port: str, dst_port: str, dry: bool = False) -> str | None:
+        """A picture from `src_port` into `dst_port` (a geometry cable: the
+        hands node's place). `dry`: only say whether it may be."""
+        return render_wire(self, src_port, dst_port, dry)
+
+    def wire_refusal(self, src_port: str, dst_port: str) -> str | None:
+        """Why `wire` would refuse, changing nothing (the drag's words)."""
+        return self.wire(src_port, dst_port, dry=True)
+
+    def unwire(self, cable, dst: str | None = None) -> str | None:
+        """Take a render cable (a `VCable`, or its two ends; one port's
+        name alone: whatever is wired into it) out of the graph."""
+        return render_unwire(self, cable, dst)
+
+    def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
+        """The picker: an effect instance (`EffectAt(file, n + 1)`), a hands
+        node (`HandsAt(n + 1)`) or a composite."""
+        return render_add(self, kind, file, **settings)
+
+    def drop_node(self, node: str) -> str | None:
+        """Delete a render node — an extra effect instance, hands node or
+        composite — out of the section, with every wire on it."""
+        return render_drop(self, node)
+
+    remove_render_node = drop_node          # N3's name for it (`remove_node`)
+
+    def set_node(self, node: str, **settings) -> str | None:
+        """A node's setting: a hands node's `draw` / `into`, a composite's `blend`."""
+        return render_set(self, node, **settings)
+
+    # ---- what a pin is ----
+
+    def _port(self, pin: str) -> VPort | None:
+        hit = self.view.owner(pin) if self.view is not None else None
+        return hit[1] if hit is not None else None
+
+    def type_of(self, pin: str) -> str:
+        """A pin's signal type: the view's, else by its prefix."""
+        port = self._port(pin)
+        if port is not None:
+            return port.type
+        return IMAGE if pin_kind(pin) in ("rout", "rin") else VALUE
+
+    def is_render(self, *pins: str) -> bool:
+        """Does a request on `pins` belong to the render graph (N4's)?"""
+        return any(pin_kind(p) in ("rout", "rin") or self.type_of(p) in RENDER_TYPES
+                   for p in pins)
+
+    def address(self, pin: str) -> str | None:
+        """The source address an ``out:`` pin reads."""
+        if pin_kind(pin) != "out":
+            return None
+        port = self._port(pin)
+        if port is not None and port.addr:
+            return port.addr
+        return pin.partition(":")[2] or None
+
+    def _centred(self, pin: str) -> bool:
+        port = self._port(pin)
+        return bool(port is not None and port.bipolar)
+
+    def _same_lane(self, a: str, b: str) -> bool:
+        if a == b:
+            return True
+        if self.router is None:
+            return False
+        la = self.router.lane(a)
+        return la[1] >= 0 and la == self.router.lane(b)
+
+    def _render(self, name: str, *args):
+        """N4's method `name` (`wire`, `unwire`, `remove_render_node`), or
+        the refusal until it lands."""
+        fn = getattr(self, name, None)
+        if fn is None:
+            return Refusal(RENDER_NOT_YET)
+        res = fn(*args)
+        # N4's methods refuse in plain words: a Refusal to the page
+        return Refusal(res) if isinstance(res, str) and not isinstance(res, Refusal) else res
+
+    @staticmethod
+    def ordered(a: str, b: str) -> tuple[str, str]:
+        """(output, input): a drag may start at either end."""
+        return (b, a) if is_output(b) and not is_output(a) else (a, b)
+
+    def _param(self, pid: str) -> Param | None:
+        p = self.reg.get(pid)
+        if p is None:
+            return None
+        real = getattr(self.reg, "real", None)
+        return real(p) if real is not None else p
+
+    # ---- a cable dragged ----
+
+    def connect(self, src_port: str, dst_port: str):
+        """A cable dragged from `src_port` to `dst_port` (either order).
+        Dispatched by type: a render pin is N4's (`wire`). Between two
+        input pins — a cable's end picked up where it lands and dropped on
+        another — the cable moves (`move`)."""
+        if self.is_render(src_port, dst_port):
+            return self._render("wire", *self.ordered(src_port, dst_port))
+        if is_output(src_port) == is_output(dst_port):
+            return self.move(src_port, dst_port)
+        return self.connect_value(*self.ordered(src_port, dst_port))
+
+    def refusal(self, src_port: str, dst_port: str) -> str | None:
+        """Why `connect` would refuse, changing nothing (the drag's words
+        while it is held); None when it would act or ask."""
+        if self.is_render(src_port, dst_port):
+            if getattr(self, "wire", None) is None:
+                return RENDER_NOT_YET
+            check = getattr(self, "wire_refusal", None)
+            return check(*self.ordered(src_port, dst_port)) if check is not None else None
+        if is_output(src_port) == is_output(dst_port):
+            return self._move_refusal(src_port, dst_port)
+        return self._value_refusal(*self.ordered(src_port, dst_port))
+
+    def _value_refusal(self, src: str, dst: str) -> str | None:
+        kind, pid = pin_kind(dst), dst.partition(":")[2]
+        skind = pin_kind(src)
+        if skind not in ("out", "bus") or kind not in (MOD, BASE, DEPTH, "in"):
+            return NOT_A_PORT
+        addr = self.address(src)
+        if kind == "in":
+            return self._input_refusal(skind, addr, pid)
+        p = self._param(pid)
+        if p is None:
+            return NO_PARAM.format(pid=pid)
+        if skind == "bus":
+            return self._macro_refusal(src.partition(":")[2], kind, p)
+        if addr is None:
+            return NOT_A_PORT
+        scheme = addr.partition(":")[0]
+        if kind == DEPTH:
+            return ONLY_MACRO_DEPTH
+        if kind == MOD:
+            if not is_continuous(scheme):
+                return KEY_ROWS if _scheme(addr) == "key" else DESK_NO_MOD.format(
+                    what=_desk_noun(addr))
+            if not p.modulatable:
+                return NOT_MODULATABLE.format(label=p.label or p.id)
+            cur = self.table.owner(p.id)
+            if cur is not None and self._same_lane(cur.source, addr):
+                return ALREADY
+            return None
+        # into base: a setter row, for a desk control or a pad button only
+        if is_continuous(scheme):
+            noun = _noun(addr)
+            return HAND_NO_BASE if noun == "a hand" else NO_BASE.format(what=noun)
+        if _scheme(addr) == "key":
+            return KEY_ROWS
+        if p.id == SAVE_PARAM:
+            return learnmod.SAVE_REFUSAL
+        if Binding(addr, p.id).is_midi:
+            why = learnmod.blocked(self.table, addr)
+            if why == "invariant":
+                return f"{addr} is invariant (the session's)"
+            if why == "global":
+                return f"{addr} is on the global layer: latch SHIFT off to map into the preset"
+        return None
+
+    def _input_refusal(self, skind: str, addr: str | None, pid: str) -> str | None:
+        mid, _, k = pid.rpartition(".")
+        m = self.table.modifier(mid)
+        if m is None or not k.isdigit() or int(k) >= len(m.inputs):
+            return NOT_A_PORT
+        if skind == "bus":
+            return MACRO_NO_LANE
+        if addr is None:
+            return NOT_A_PORT
+        if not is_continuous(addr.partition(":")[0]):
+            return NO_LANE.format(what=_desk_noun(addr))
+        if modmod.id_of(addr) == mid:
+            return SELF_LOOP
+        if m.inputs[int(k)] and self._same_lane(m.inputs[int(k)], addr):
+            return ALREADY
+        return None
+
+    def _macro_refusal(self, mid: str, kind: str, p: Param) -> str | None:
+        if kind == MOD:
+            return MACRO_NO_MOD
+        m = self.table.macros.get(mid)
+        if kind == BASE:
+            if is_macro(p.id):
+                return MACRO_NO_MACRO
+            why = base_refusal(p.id, self.reg)
+            if why is not None:
+                return why
+            if m is not None and any(s.base == p.id for s in m.subs):
+                return ALREADY
+            return None
+        r = self._route_on(p.id)
+        if r is None:
+            return NO_ROUTE_DEPTH.format(pid=p.id)
+        if m is not None and any(s.depth == (r.source, r.target) for s in m.subs):
+            return ALREADY
+        return None
+
+    def connect_value(self, src: str, dst: str):
+        """`src` (an output pin: a source's ``out:``, a macro's ``bus:``)
+        into `dst` (a param's ``mod`` / ``base`` / ``depth`` stub, a
+        modifier's ``in``)."""
+        why = self._value_refusal(src, dst)
+        if why is not None:
+            return Refusal(why)
+        kind, pid = pin_kind(dst), dst.partition(":")[2]
+        if kind == "in":
+            mid, _, k = pid.rpartition(".")
+            return self.set_input(mid, int(k), self.address(src))
+        if pin_kind(src) == "bus":
+            return self.subscribe(src.partition(":")[2], kind, pid)
+        addr = self.address(src)
+        p = self._param(pid)
+        if kind == MOD:
+            return self._add(self.route_for(src, p))
+        return self._setter(addr, p)
+
+    def route_for(self, src: str, p: Param) -> Binding:
+        """The route a cable from `src` into `p`'s mod makes: the hand
+        learn's row (`learn.row_for`) — a push at the hands' Learn depth
+        (`hands.learn_depth`) where the source or the param is centred,
+        else the `position` fader at 1."""
+        addr = self.address(src)
+        depth = None
+        if _scheme(addr) == "hand":
+            hd = self.reg.get("hands.learn_depth")
+            depth = float(hd.value) if hd is not None else None
+        return learnmod.row_for(addr, p, centred=self._centred(src), depth=depth)
+
+    def _add(self, b: Binding):
+        table = self.table
+        try:
+            return table.add(b)
+        except Owned as e:
+            return Ask(e.existing, b, lambda: table.replace_owner(b))
+        except ValueError as e:
+            return Refusal(str(e))
+
+    def _setter(self, addr: str, p: Param):
+        """A desk control or a pad button into `p`'s base: the row the
+        desk learn makes (`Learn.learn_control`: a preset-layer row through
+        `bind(write=False)`) or the pad learn (`Learn.learn_pad_button`:
+        the session's row, `bindings.json` written) — through a Learn of
+        its own, so the rules are theirs and nothing of the panel's learn
+        (an armed param, a held question) is touched. One undo step (the
+        learn's own)."""
+        lane = self.router.lane if self.router is not None else None
+        lrn = learnmod.Learn(self.reg, self.table, lane=lane)
+        lrn.arm(p.id)
+        landed = (lrn.learn_control(addr, self.profile) if Binding(addr, p.id).is_midi
+                  else lrn.learn_pad_button(addr))
+        if not landed:
+            return Refusal(lrn.last or f"{addr} did not land on {p.id}")
+        return next((b for b in reversed(self.table.bindings)
+                     if b.source == addr and b.target == p.id), None)
+
+    def subscribe(self, mid: str, kind: str, pid: str) -> Sub:
+        """A macro's cable: into `pid`'s base (a base subscriber, from = to
+        = where the param sits, so adding it moves nothing — ROUTING's
+        "+ base") or onto the depth of the route landing on `pid` (a depth
+        subscriber over 0…1 — ROUTING's "+ depth")."""
+        if kind == BASE:
+            p = self._param(pid)
+            s = Sub(base=p.id, lo=p.norm, hi=p.norm)
+        else:
+            r = self._route_on(pid)
+            s = Sub(depth=(r.source, r.target), lo=0.0, hi=1.0)
+        self.table.macros.setdefault(mid, Macro()).subs.append(s)
+        self.table.macros_serial += 1
+        return s
+
+    def _route_on(self, pid: str) -> Binding | None:
+        """The route a `depth:<pid>` stub stands for: the param's performer,
+        else its first route (a sleeping one)."""
+        return self.table.owner(pid) or next(iter(self.table.routes_to(pid)), None)
+
+    def set_input(self, mid: str, k: int, source: str | None):
+        """Modifier `mid`'s input `k` reads `source` ("" / None: none) —
+        N1's path (`ui_routing.set_modifier_input`): the modifier replaced
+        whole, its params at their bases. Returns `set_modifiers`' notes."""
+        return self.table.set_modifier_input(mid, k, source, self.reg)
+
+    # ---- a cable's end moved ----
+
+    def _cable_at(self, pin: str) -> VCable | None:
+        """The cable ending on input pin `pin` (a route's ``mod``, a
+        modifier's ``in``) — the one a drag from that pin picks up: on a
+        `mod` stub the param's performer's (`Bindings.owner`) before a
+        sleeping route on the same param."""
+        if self.view is None:
+            return None
+        here = [c for c in self.view.cables if c.dst_port == pin
+                and c.kind in ("route", "input")]
+        if pin_kind(pin) == MOD:
+            owner = self.table.owner(pin.partition(":")[2])
+            mine = next((c for c in here if c.ref is owner), None)
+            if mine is not None:
+                return mine
+        return here[0] if here else None
+
+    def _picked(self, a: str, b: str) -> tuple[VCable | None, str]:
+        picked = self._cable_at(a)
+        if picked is not None:
+            return picked, b
+        return self._cable_at(b), a
+
+    def _move_refusal(self, a: str, b: str) -> str | None:
+        if is_output(a) and is_output(b):
+            return SAME_SIDE
+        picked, to = self._picked(a, b)
+        if picked is None:
+            return SAME_SIDE
+        if picked.kind == "input":
+            if pin_kind(to) != "in":
+                return SAME_SIDE
+            return self._value_refusal(f"out:{picked.addr}", to)
+        if pin_kind(to) != MOD:
+            return ROUTE_END
+        p = self._param(to.partition(":")[2])
+        if p is None:
+            return NO_PARAM.format(pid=to.partition(":")[2])
+        if p.id == picked.ref.target:
+            return ALREADY
+        if not p.modulatable:
+            return NOT_MODULATABLE.format(label=p.label or p.id)
+        return None
+
+    def move(self, a: str, b: str):
+        """A cable's end picked up at input pin `a` and dropped on input pin
+        `b` (or the reverse): a route re-pointed at another param
+        (`move_route`, its depth subscribers with it; a taken param asks,
+        and *Replace* is `replace_owner(row, target=…)`), or a modifier's
+        input moved to another modifier's input."""
+        why = self._move_refusal(a, b)
+        if why is not None:
+            return Refusal(why)
+        picked, to = self._picked(a, b)
+        if picked.kind == "input":
+            m, k = picked.ref
+            res = self.connect_value(f"out:{picked.addr}", to)
+            if not isinstance(res, Refusal):
+                self.set_input(m.id, k, "")
+            return res
+        row, pid = picked.ref, self._param(to.partition(":")[2]).id
+        cur = self.table.owner(pid)
+        if cur is not None and cur is not row:
+            return Ask(cur, row, lambda: self.table.replace_owner(row, target=pid))
+        return self.table.move_route(row, target=pid)
+
+    # ---- a cable deleted ----
+
+    def disconnect(self, cable: VCable):
+        """Delete a cable: dispatched by kind (a render cable is N4's, `unwire`)."""
+        if cable.kind == "render" or cable.type in RENDER_TYPES:
+            return self._render("unwire", cable)
+        return self.disconnect_value(cable)
+
+    def disconnect_value(self, cable: VCable):
+        """A route → `remove` (its depth subscribers go with it); a desk
+        row of the loaded preset → `remove`; a macro subscriber → out of
+        its macro; a modifier's input → unset. The session's rows (keys,
+        the pad, an invariant or global-layer desk row) are `bindings.json`'s
+        and are refused: ROUTING edits them."""
+        table = self.table
+        if cable.kind == "route":
+            return table.remove(cable.ref)
+        if cable.kind == "setter":
+            b = cable.ref
+            if is_session_row(b):
+                return Refusal(SESSION_ROW.format(what=b.source))
+            table.remove(b)
+            table.redraw_serial += 1
+            return None
+        if cable.kind == "sub":
+            mid, s = cable.ref
+            m = table.macros.get(mid)
+            if m is None:
+                return Refusal(NOT_A_PORT)
+            m.subs = [x for x in m.subs if x is not s]
+            table.macros_serial += 1
+            return None
+        if cable.kind == "input":
+            m, k = cable.ref
+            return self.set_input(m.id, k, "")
+        return Refusal(NOT_A_PORT)
+
+    # ---- nodes ----
+
+    def add_modifier(self, kind: str, inputs: Iterable[str] = ()):
+        """A new modifier node (`Bindings.add_modifier`, its params declared)."""
+        if kind not in modmod.KINDS:
+            return Refusal(NO_SUCH_MOD.format(kind=kind))
+        return self.table.add_modifier(kind, tuple(inputs), self.reg)
+
+    def insert_modifier(self, cable: VCable, kind: str):
+        """A modifier dropped onto a cable: `kind` makes a new one, a
+        modifier's id (``mod.3``) uses that one. The cable's source becomes
+        its (first) input and its lane the cable's new source — a route's
+        through `move_route` (op, depth and depth subscribers kept; a push
+        keeps the rest its old source had, so a centred hand stays centred
+        through a smooth), a modifier's input through `set_input`."""
+        if cable.kind not in ("route", "input") or not cable.addr:
+            return Refusal(MOD_ONLY_ROUTE)
+        src = cable.addr
+        table = self.table
+        if kind in modmod.KINDS:
+            m = table.add_modifier(kind, (src,), self.reg)
+        else:
+            m = table.modifier(kind)
+            if m is None:
+                return Refusal(NO_SUCH_MOD.format(kind=kind))
+            if m.address == src or (cable.kind == "input" and cable.ref[0].id == m.id):
+                return Refusal(SELF_LOOP)
+            self.set_input(m.id, 0, src)
+            m = table.modifier(kind)
+        if cable.kind == "input":
+            owner, k = cable.ref
+            self.set_input(owner.id, k, m.address)
+            return m
+        b = cable.ref
+        if b.op == "push" and b.rest is None and self.router is not None:
+            b.rest = self.router.rest_of(src)
+        table.move_route(b, source=m.address)
+        return m
+
+    def show_macro(self, mid: str):
+        """An idle macro picked on the canvas: it gets a label ("macro 3"),
+        so ROUTING's macro strip and the canvas both name it as in use."""
+        if not is_macro(mid) or mid not in self.reg:
+            return Refusal(NO_PARAM.format(pid=mid))
+        m = self.table.macros.setdefault(mid, Macro())
+        if not m.label:
+            m.label = f"macro {mid.rpartition('.')[2]}"
+        self.table.macros_serial += 1
+        return m
+
+    def remove_node(self, nid: str):
+        """Delete a node: a modifier (`remove_modifier`: its params go, a
+        route on its lane stays, dormant); a macro (its label and every
+        subscriber go — the knob stays: the eight are the rig's); a render
+        node is N4's (`remove_render_node`); anything else is the rig's (a
+        device, the analyzer, an LFO, a group) and is refused."""
+        node = self.view.node(nid) if self.view is not None else None
+        if node is not None:
+            kind = node.kind
+        else:
+            kind = ("modifier" if modmod.number(nid) else "macro" if is_macro(nid)
+                    else "render" if nid.startswith("render:") else "")
+        if kind in ("render", "output"):
+            return self._render("remove_render_node", nid)
+        return self.remove_value_node(nid, kind, node)
+
+    def remove_value_node(self, nid: str, kind: str, node: VNode | None = None):
+        if kind == "modifier" and self.table.modifier(nid) is not None:
+            return self.table.remove_modifier(nid, self.reg)
+        if kind == "macro" and nid in self.table.macros:
+            return self.table.set_macros(
+                {k: v for k, v in self.table.macros_doc().items() if k != nid}, self.reg)
+        return Refusal(NOT_REMOVABLE.format(label=node.label if node is not None else nid))
+
+
+# ---- a node dropped onto a cable: the geometry ----
+
+LINK_STRENGTH = 100.0      # imgui_node_editor's default `Style.link_strength`
+NEAR = 14.0                # canvas units: how close a drop must come to a cable
+
+
+def bezier(p0, p3, strength: float = LINK_STRENGTH, steps: int = 16) -> list[tuple]:
+    """A cable's curve as the widget draws it: a cubic from an output pin
+    at `p0` to an input pin at `p3`, its handles `strength` out to the
+    right of the output and to the left of the input."""
+    p1 = (p0[0] + strength, p0[1])
+    p2 = (p3[0] - strength, p3[1])
+    out = []
+    for i in range(steps + 1):
+        t = i / steps
+        u = 1.0 - t
+        a, b, c, d = u ** 3, 3 * u * u * t, 3 * u * t * t, t ** 3
+        out.append((a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+                    a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]))
+    return out
+
+
+def _seg_dist(p, a, b) -> float:
+    ax, ay = b[0] - a[0], b[1] - a[1]
+    n = ax * ax + ay * ay
+    t = 0.0 if n == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * ax + (p[1] - a[1]) * ay) / n))
+    return math.hypot(p[0] - (a[0] + t * ax), p[1] - (a[1] + t * ay))
+
+
+def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEAR,
+               kinds=("route", "input"), skip: Iterable[str] = ()) -> VCable | None:
+    """The cable of `kinds` nearest `point` (canvas units) within
+    `within`, by the curve the widget draws between its pins' positions
+    (`pins`: pin → (x, y), as the page last drew them); None. A cable into
+    or out of a node in `skip` (the node being dropped) is passed over."""
+    skip = set(skip)
+    best, dist = None, within
+    for c in view.cables:
+        if c.kind not in kinds or c.src_port not in pins or c.dst_port not in pins:
+            continue
+        ends = {view.pins.get(c.src_port, ("",))[0], view.pins.get(c.dst_port, ("",))[0]}
+        if ends & skip:
+            continue
+        pts = bezier(pins[c.src_port], pins[c.dst_port])
+        d = min(_seg_dist(point, a, b) for a, b in itertools.pairwise(pts))
+        if d < dist:
+            best, dist = c, d
+    return best
+
+
 # ---------------------------------------------------------------- render edits (plan 28 N4)
 #
 # The GRAPH page's edits of the render graph: a cable dragged between two
@@ -868,7 +1514,6 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
 # with plan 28 N3's modulation edits is the port type: image / geometry /
 # mask cables are these (`RENDER_TYPES`), value / trigger cables N3's.
 
-RENDER_TYPES = (IMAGE, GEOMETRY, MASK)
 # the frame's own nodes no wire names, and why
 PLUMBING = {
     "fx": "is a chain's end: its outputs take it by their switches — wire into an "
@@ -880,6 +1525,12 @@ PLUMBING = {
     "readout": "is the hands' guide alone: wire the layer into an output's readout",
     "cloud": "is drawn by the scene, not wired",
 }
+
+
+def _is_plumbing(name: str) -> bool:
+    return any(name == head or name.startswith(head if head.endswith("(") else head + "(")
+               or (not head.endswith("(") and name.startswith(head + "."))
+               for head in PLUMBING)
 
 
 def _plumbing(name: str) -> str:
@@ -905,6 +1556,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     built, _, port = rest.partition("/")
     nodes = getattr(render_graph, "nodes", None) or {}
     node = nodes.get(built)
+    if node is None and _is_plumbing(built):     # (no graph to ask: by its name)
+        return None, _plumbing(built)
     if isinstance(node, rgraph.Wired):
         out = built[len("wire("):-1]
         if head == "rin":
@@ -927,49 +1580,6 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
             port = "geometry"
         return f"{name}.{port}", None
     return name, None
-
-
-@dataclass
-class Edit:
-    """Edit requests from the GRAPH page, each returning None (done; its
-    words in `said`) or a refusal in words, nothing changed.
-
-    Plan 28 N4, the render graph: `wire`, `unwire`, `add_node`,
-    `drop_node`, `set_node` — each lands a new `graph.GraphSpec` through
-    `graph` (the preset's `GraphSection`), with `push(label)` (the undo
-    step: the page passes `undo.push(label, load=True)`) before it;
-    `render` is the renderer's last graph, through which a canvas pin
-    names its node. (Plan 28 N3 adds the modulation's requests beside
-    these.)"""
-
-    graph: Any = None                       # preset.GraphSection
-    render: Any = None                      # graph.Graph: canvas pins → names
-    push: Callable[[str], None] | None = None
-    said: str = ""
-
-    def wire(self, src_port: str, dst_port: str, dry: bool = False) -> str | None:
-        """A picture from `src_port` into `dst_port` (a geometry cable: the
-        hands node's place). `dry`: only say whether it may be."""
-        return render_wire(self, src_port, dst_port, dry)
-
-    def unwire(self, cable, dst: str | None = None) -> str | None:
-        """Take a render cable (a `VCable`, or its two ends; one port's
-        name alone: whatever is wired into it) out of the graph."""
-        return render_unwire(self, cable, dst)
-
-    def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
-        """The picker: an effect instance (`EffectAt(file, n + 1)`), a hands
-        node (`HandsAt(n + 1)`) or a composite."""
-        return render_add(self, kind, file, **settings)
-
-    def drop_node(self, node: str) -> str | None:
-        """Delete a render node — an extra effect instance, hands node or
-        composite — out of the section, with every wire on it."""
-        return render_drop(self, node)
-
-    def set_node(self, node: str, **settings) -> str | None:
-        """A node's setting: a hands node's `draw` / `into`, a composite's `blend`."""
-        return render_set(self, node, **settings)
 
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
@@ -1104,8 +1714,11 @@ def _hands_into(edit: Edit, ghost: str, into: str, dry: bool = False) -> str | N
 
 def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     if isinstance(cable, VCable):
-        src_node, node, port = cable.ref
-        src, dst = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
+        if cable.ref is not None:
+            src_node, node, port = cable.ref
+            src, dst = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
+        else:                                # (its pins name it as well)
+            src, dst = cable.src_port, cable.dst_port
     else:
         src = cable
     s, why = spec_name(src, edit.render)
@@ -1250,4 +1863,3 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
                 return _land(edit, doc, f"{name} {blend}", f"{name} laid {blend}")
         return f"no {name} node in this graph"
     return f"{name} has no setting here"
-
