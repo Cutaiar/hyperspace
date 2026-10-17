@@ -268,17 +268,25 @@ def test_masking_a_flat_surface_lifts_it_over_the_floor(monkeypatch):
     assert G.sweep_ratios(HEART, "XW").min() < G.VOLUME_FLOOR
 
 
+# a single ring (a scene's orbit, plan 28) is flat by what it is: it is
+# gated for its faces (it has none) but not for its volume
+FLAT_BY_NATURE = {"Orbit"}
 GATED = [i for i, s in enumerate(G.SHAPES) if s.w in ("lift", "mask")]
+GATED_VOLUME = [i for i in GATED if G.SHAPES[i].name not in FLAT_BY_NATURE]
 
 
 def test_every_shape_past_the_polytopes_is_lifted_or_masked():
     # what keeps the two gates below from passing on an empty list: every
-    # surface after the Clifford torus is gated, none ships flat
-    assert GATED == list(range(18, len(G.SHAPES)))
+    # surface after the Clifford torus is gated, none ships flat. The plan
+    # 28 catalog's 4D toys (the Hopf fibration, a scene round a tesseract)
+    # are native, and held to the 4D floor instead
+    native = [i for i in range(18, len(G.SHAPES)) if i not in GATED]
+    assert all(G.SHAPES[i].family and G.SHAPES[i].w == "native" for i in native)
+    assert [G.SHAPES[i].name for i in native] == ["Hopf fibration", "Celestial tesseract"]
     assert not any(s.w == "flat" for s in G.SHAPES)
 
 
-@pytest.mark.parametrize("i", GATED, ids=lambda i: G.SHAPES[i].name)
+@pytest.mark.parametrize("i", GATED_VOLUME, ids=lambda i: G.SHAPES[i].name)
 def test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane(i):
     # Stream A's acceptance: no turn of XW, YW or ZW alone — from rest or
     # from a generic pose — reduces the shape to a plane or a line

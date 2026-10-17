@@ -221,6 +221,16 @@ def test_enum_norm_and_stepping(rig):
     assert s.text() == SHAPES[0].name
 
 
+def test_the_3d_switch_takes_the_fourth_dimension_out_of_the_view(rig):
+    # plan 28: view.three_d is ViewState.three_d, which the renderer hands
+    # to geometry.shape_view (every shape masked)
+    reg, view, *_ = rig
+    t = reg["view.three_d"]
+    assert not view.three_d
+    t.toggle()
+    assert view.three_d and t.norm == 1.0
+
+
 def test_toggles_and_triggers(rig):
     reg, view, _control, *_ = rig
     f = reg["view.faces"]

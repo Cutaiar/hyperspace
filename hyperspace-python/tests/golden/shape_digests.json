@@ -180,5 +180,229 @@
   "m": 1152,
   "faces": 576,
   "sha256": "f1d4d5ab75e2e33a5b9f92026cb115abb8f89231e25367305cde3abb3e2a2263"
+ },
+ "26": {
+  "name": "Tetrahedron",
+  "n": 4,
+  "m": 6,
+  "faces": 4,
+  "sha256": "8895a6e4b3f16c8107538ba11f81b6596f640e0503881748489f210aa5e17ae5"
+ },
+ "27": {
+  "name": "Cube",
+  "n": 8,
+  "m": 12,
+  "faces": 6,
+  "sha256": "8ee459aa0d96c478deb78f7410fe2c96915be2d7cac5c9b41d574010f357a858"
+ },
+ "28": {
+  "name": "Octahedron",
+  "n": 6,
+  "m": 12,
+  "faces": 8,
+  "sha256": "2a58e6d017110553fd523d164266863e5eb2b95f163a62090c9dec1fdd46f30d"
+ },
+ "29": {
+  "name": "Dodecahedron",
+  "n": 20,
+  "m": 30,
+  "faces": 12,
+  "sha256": "11c229f0e1df5cad17e33b7591bd06934cfe29ae3af356b670eafdc5127fcf6e"
+ },
+ "30": {
+  "name": "Icosahedron",
+  "n": 12,
+  "m": 30,
+  "faces": 20,
+  "sha256": "fc2c60c7c2272d96276b1b3912575a991dde8e11bde10ec9b1dd1b4feed87828"
+ },
+ "31": {
+  "name": "Cuboctahedron",
+  "n": 12,
+  "m": 24,
+  "faces": 14,
+  "sha256": "34af34b2ff5fb0ea663e8afed8eb9bbb2490c5a3da27a1ba1b7e3181af32178e"
+ },
+ "32": {
+  "name": "Truncated octahedron",
+  "n": 24,
+  "m": 36,
+  "faces": 14,
+  "sha256": "0337c8c596b52da0412ac3852652fba6ad34c31e8be389b7003110ae79482df9"
+ },
+ "33": {
+  "name": "Rhombicuboctahedron",
+  "n": 24,
+  "m": 48,
+  "faces": 26,
+  "sha256": "8c0504d42e6e393ddff719372db2b8662c3891ad139d6354ec51bf88718162f2"
+ },
+ "34": {
+  "name": "Snub cube",
+  "n": 24,
+  "m": 60,
+  "faces": 38,
+  "sha256": "9e646e4071ab9cfbf277c6c9492c4d11ca49a4f21930cbd4abc5f415fd5281bd"
+ },
+ "35": {
+  "name": "Icosidodecahedron",
+  "n": 30,
+  "m": 60,
+  "faces": 32,
+  "sha256": "848ebe54583e20a2cf2bdc0b8b66243c2dccf9aa88532043e676d23f415f6e58"
+ },
+ "36": {
+  "name": "Truncated icosahedron",
+  "n": 60,
+  "m": 90,
+  "faces": 32,
+  "sha256": "de37a929efef1018356ee0b326affef2970275d4c5de2c41454afce24e681d06"
+ },
+ "37": {
+  "name": "Rhombic dodecahedron",
+  "n": 14,
+  "m": 24,
+  "faces": 12,
+  "sha256": "7be3a4d57f74016be4cc7248e28c5015e2f443c930d909de1d44599e4798f26a"
+ },
+ "38": {
+  "name": "Rhombic triacontahedron",
+  "n": 32,
+  "m": 60,
+  "faces": 30,
+  "sha256": "bec32d1b6b5d301e635ba25d110aedd3b08a74cab87bd74ff08bd5cecd22ba3b"
+ },
+ "39": {
+  "name": "Small stellated dodecahedron",
+  "n": 32,
+  "m": 90,
+  "faces": 60,
+  "sha256": "51c163256b94159394147cf5f9143e2f87c4f269679761a04efab6cba5e4aa02"
+ },
+ "40": {
+  "name": "Great stellated dodecahedron",
+  "n": 32,
+  "m": 90,
+  "faces": 60,
+  "sha256": "0f2f4ebb8d6c9270306f6ea8cf7e1636a628bdbb6e646e49764079e88d8d0398"
+ },
+ "41": {
+  "name": "Moravian star",
+  "n": 50,
+  "m": 144,
+  "faces": 96,
+  "sha256": "093bdbac18f79ef76a832bec2156c9b316a90b1a8a6b0717c76f40f66e6e6cdf"
+ },
+ "42": {
+  "name": "Starburst",
+  "n": 32,
+  "m": 90,
+  "faces": 60,
+  "sha256": "137e158d0c047634fce56ae5cab987e41027c948f9e5028cbb10f4887371b736"
+ },
+ "43": {
+  "name": "Stella octangula",
+  "n": 8,
+  "m": 12,
+  "faces": 8,
+  "sha256": "7c0bb7a61b06602c3564dab81b826f9631d68d9c0ad92b9766894d4bd71fb6ef"
+ },
+ "44": {
+  "name": "Five tetrahedra",
+  "n": 20,
+  "m": 30,
+  "faces": 20,
+  "sha256": "924b8a9d11bf0c393590cfd24ec53c2cabfeacc9578859e10d64d875b689a4b5"
+ },
+ "45": {
+  "name": "Five cubes",
+  "n": 20,
+  "m": 60,
+  "faces": 30,
+  "sha256": "e5d1aefcf9fe18869532d118e88c550ecd615e93e148715dc1c52b01e16fa358"
+ },
+ "46": {
+  "name": "Cube + octahedron",
+  "n": 14,
+  "m": 24,
+  "faces": 14,
+  "sha256": "6426bbb1cb563400fe3abee3d808ba7bda77972a4fb994ebd89d8c3fb8356fc1"
+ },
+ "47": {
+  "name": "Dodecahedron + icosahedron",
+  "n": 32,
+  "m": 60,
+  "faces": 32,
+  "sha256": "fbdc479a718946e33613ffefda9374e641afc06962ff0839159934905cf9e6d9"
+ },
+ "48": {
+  "name": "Hopf fibration",
+  "n": 864,
+  "m": 864,
+  "faces": 0,
+  "sha256": "29063fce219ee76b16daa5a03bcae261c220a33e6830573128f332f8cdaca0f9"
+ },
+ "49": {
+  "name": "Armillary sphere",
+  "n": 374,
+  "m": 384,
+  "faces": 0,
+  "sha256": "2d1ee9e1f1b7f543657d77fc20fe8b3859c53031907bd51cb687de5d5b1d8f91"
+ },
+ "50": {
+  "name": "Geodesic sphere",
+  "n": 92,
+  "m": 270,
+  "faces": 180,
+  "sha256": "4a930cfacb24c1e22538f4ddf1ce782e2f14bf1982b17bf96e25e77ddc4afc60"
+ },
+ "51": {
+  "name": "Sierpinski tetrahedron",
+  "n": 130,
+  "m": 384,
+  "faces": 256,
+  "sha256": "046b48a5fbd1f228152608fdb8b5fd57e93ed5bc9c16a35f73257f0c4bb63735"
+ },
+ "52": {
+  "name": "Lissajous knot",
+  "n": 240,
+  "m": 240,
+  "faces": 0,
+  "sha256": "76ee3e5ee49d895b97e9a37f84fc36150a4e72ec76d9f3ad8ece3576e57c0c93"
+ },
+ "53": {
+  "name": "Loxodrome",
+  "n": 240,
+  "m": 240,
+  "faces": 0,
+  "sha256": "e912be5373811fe0be19a9710a3955f9e1e568ed2597cdab8087c3636e958542"
+ },
+ "54": {
+  "name": "Orbit",
+  "n": 64,
+  "m": 64,
+  "faces": 0,
+  "sha256": "0cb16b19bcb9986978305d7b8c7fef27d68d1e2e52e592ca61681546eee3ccb2"
+ },
+ "55": {
+  "name": "Celestial tesseract",
+  "n": 912,
+  "m": 986,
+  "faces": 84,
+  "sha256": "afa6af0453f4cf0212a0e782dc4ae1c000e0893a95d754f84b4f06af6a97667c"
+ },
+ "56": {
+  "name": "Celestial cube",
+  "n": 414,
+  "m": 486,
+  "faces": 66,
+  "sha256": "89a0400ec5dd00ee034c13f6cf0973ef20b9aac4eca68203d531e00df617a02a"
+ },
+ "57": {
+  "name": "Mysterium Cosmographicum",
+  "n": 744,
+  "m": 794,
+  "faces": 50,
+  "sha256": "82d5d19ba8120ba48083d7abfaed27a25fad0c85b42ec593cb9fa8949934ed4c"
  }
 }

@@ -194,6 +194,67 @@ V − E + F = 0. It is centred on its bounding box
 `::test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d`). Its own
 3D ratio is 0.23; through the W planes it keeps 0.20.
 
+**The catalog** (plan 28, an art-direction spike — see
+[`plans/28-catalog-and-scenes.md`](plans/28-catalog-and-scenes.md)). After
+the Klein bottle: closed 3D solids, mathematical toys and scenes, each
+with a `Shape.family`. Every 3D one is `mask` — a rigid 3D body. A solid's
+faces come from the polytope extraction; a star (drawn as what shows: its
+spikes, the core buried) or a compound brings its own. A curve (the
+toys with F 0) draws no points: its samples are not corners.
+
+| # | Shape | Family | F | V | E |
+|---|---|---|---|---|---|
+| 27 | Tetrahedron | Platonic | 4 | 4 | 6 |
+| 28 | Cube | Platonic | 6 | 8 | 12 |
+| 29 | Octahedron | Platonic | 8 | 6 | 12 |
+| 30 | Dodecahedron | Platonic | 12 | 20 | 30 |
+| 31 | Icosahedron | Platonic | 20 | 12 | 30 |
+| 32 | Cuboctahedron | Archimedean | 14 | 12 | 24 |
+| 33 | Truncated octahedron | Archimedean | 14 | 24 | 36 |
+| 34 | Rhombicuboctahedron | Archimedean | 26 | 24 | 48 |
+| 35 | Snub cube | Archimedean | 38 | 24 | 60 |
+| 36 | Icosidodecahedron | Archimedean | 32 | 30 | 60 |
+| 37 | Truncated icosahedron | Archimedean | 32 | 60 | 90 |
+| 38 | Rhombic dodecahedron | Catalan | 12 | 14 | 24 |
+| 39 | Rhombic triacontahedron | Catalan | 30 | 32 | 60 |
+| 40 | Small stellated dodecahedron | Star | 60 | 32 | 90 |
+| 41 | Great stellated dodecahedron | Star | 60 | 32 | 90 |
+| 42 | Moravian star | Star | 96 | 50 | 144 |
+| 43 | Starburst | Star | 60 | 32 | 90 |
+| 44 | Stella octangula | Compound | 8 | 8 | 12 |
+| 45 | Five tetrahedra | Compound | 20 | 20 | 30 |
+| 46 | Five cubes | Compound | 30 | 20 | 60 |
+| 47 | Cube + octahedron | Compound | 14 | 14 | 24 |
+| 48 | Dodecahedron + icosahedron | Compound | 32 | 32 | 60 |
+| 49 | Hopf fibration | Toy | 0 | 864 | 864 |
+| 50 | Armillary sphere | Toy | 0 | 374 | 384 |
+| 51 | Geodesic sphere | Toy | 180 | 92 | 270 |
+| 52 | Sierpinski tetrahedron | Toy | 256 | 130 | 384 |
+| 53 | Lissajous knot | Toy | 0 | 240 | 240 |
+| 54 | Loxodrome | Toy | 0 | 240 | 240 |
+| 55 | Orbit | Toy | 0 | 64 | 64 |
+| 56 | Celestial tesseract | Scene | 84 | 912 | 986 |
+| 57 | Celestial cube | Scene | 66 | 414 | 486 |
+| 58 | Mysterium Cosmographicum | Scene | 50 | 744 | 794 |
+
+**Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
+in one frame sharing a centre — a glome round a tesseract round a star.
+Each layer names a shape and has its own scale, line / face / point
+weights, line width, tint and **spin** (a multiple of the view's angles:
+−1 counter-turns, 0 holds still). A layer keeps its shape's `w`, so a
+masked star turns in 3D inside a tesseract turning in 4D.
+`geometry.shape_view` is what the renderer projects through: one shape is
+`project_h` at `view_angles` (the old path, to the bit); a scene projects
+each layer at its own angles. The scene's geometry is its layers' rows in
+order (`geom()["layers"]`, `["style"]`); its faces are the layers' own.
+Each edge's line density is its own layer's, so a 864-edge glome thins
+out without thinning the star inside it.
+
+**The 3D switch** (`view.three_d`, VIEW page "3D"). Takes the fourth
+dimension out of the view: every shape is masked as the 3D solids are
+(`w_masked(i, flat)`, `view_angles(i, ang, flat)`), so a W plane turns it
+in a 3D plane. A 4D shape then holds the 3D shadow it casts at rest.
+
 **A new shape** goes at the end of `SHAPES` (the index is its identity),
 says how it fills w, and gets a row in the V/E table above. A 3D shape is
 `lift` or `mask`, never `flat`: the acceptance tests take it in through

@@ -582,6 +582,457 @@ def _build_klein() -> dict:
     )
 
 
+# ----------------------------------------- the catalog: closed 3D solids
+#
+# Art-direction spike (plan 28): the closed solids of 3D — the five
+# Platonic solids, Archimedean and Catalan solids, two Kepler–Poinsot
+# stars, the classic compounds, spiked stars — and a few mathematical toys
+# (the Hopf fibration, an armillary sphere, a geodesic sphere, the
+# Sierpinski tetrahedron). Every 3D one is `mask`: it stays a rigid 3D
+# body and its W planes turn it in 3D planes. A solid's faces come from
+# the polytope extraction (its faces are planar, convex polygons); a star
+# or a compound, whose faces cross, brings its own "F".
+
+# dodeca3's five-fold axes (its face normals): the corners of its dual
+# icosahedron, which is not icosa3 — that one is turned a quarter turn
+DODECA_AXES = cyc3(0, PHI, 1)
+
+
+def perm3(base, mode: str = "all") -> list[list[float]]:
+    """Every permutation of a 3-tuple ("all"), only the even ones
+    ("even" — the cyclic shifts), with every sign change; deduplicated."""
+    ps = [(0, 1, 2), (1, 2, 0), (2, 0, 1)]
+    if mode == "all":
+        ps += [(0, 2, 1), (2, 1, 0), (1, 0, 2)]
+    m: dict = {}
+    for p in ps:
+        for s in range(8):
+            v = [-base[p[k]] if s >> k & 1 else base[p[k]] for k in range(3)]
+            m[kkey(v)] = [x + 0.0 for x in v]
+    return list(m.values())
+
+
+def _w0(V3) -> list[list[float]]:
+    return [[float(v[0]), float(v[1]), float(v[2]), 0.0] for v in V3]
+
+
+def solid(V3) -> dict:
+    """A convex solid from its vertices: edges by the shortest distance
+    (every Platonic and Archimedean solid has one edge length), faces by
+    extraction when it is drawn."""
+    return auto(_w0(V3))
+
+
+def _boundary_faces(g: dict) -> list[list[int]]:
+    """faces() for a geometry dict that is not in SHAPES (a core to stellate,
+    a compound's part): planar cycles that pass the support test."""
+    h = {"V": np.asarray(g["V"], dtype=np.float64),
+         "E": np.asarray(g["E"], dtype=np.int32), "n": len(g["V"])}
+    return [c for c in _planar_cycles(h) if _is_boundary_face(h["V"], c)]
+
+
+def _merge(parts) -> dict:
+    """One geometry from several, coincident vertices welded (kkey): each
+    part keeps its own edges and faces ("F", extracted when it has none),
+    re-indexed onto the merged vertices."""
+    vid: dict = {}
+    V: list[list[float]] = []
+    E: list[list[int]] = []
+    F: list[list[int]] = []
+    seen: set = set()
+    for g in parts:
+        F_g = g["F"] if "F" in g else _boundary_faces(g)
+        ix = []
+        for v in g["V"]:
+            k = kkey(v)
+            if k not in vid:
+                vid[k] = len(V)
+                V.append([float(x) for x in v])
+            ix.append(vid[k])
+        for a, b in g["E"]:
+            e = frozenset((ix[a], ix[b]))
+            if len(e) == 2 and e not in seen:
+                seen.add(e)
+                E.append([ix[a], ix[b]])
+        F.extend([ix[v] for v in c] for c in F_g)
+    return {"V": V, "E": E, "F": F}
+
+
+def _rot3(axis, ang: float) -> np.ndarray:
+    a = np.asarray(axis, dtype=np.float64)
+    a = a / np.linalg.norm(a)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    return np.eye(3) + math.sin(ang) * K + (1 - math.cos(ang)) * (K @ K)
+
+
+def _turned(g: dict, R: np.ndarray) -> dict:
+    V = [list(R @ np.asarray(v[:3], dtype=np.float64)) + [0.0] for v in g["V"]]
+    return {**g, "V": V}
+
+
+def _scaled(g: dict, s: float) -> dict:
+    return {**g, "V": [[x * s for x in v] for v in g["V"]]}
+
+
+# the five Platonic solids, at the coordinates their duals and compounds share
+def _tetra3(parity: int = 0) -> list[list[float]]:
+    return [[(-1) ** (s & 1), (-1) ** (s >> 1 & 1), (-1) ** (s >> 2 & 1)]
+            for s in range(8) if s.bit_count() % 2 == parity]
+
+
+def _build_tetra() -> dict:
+    return solid(_tetra3())
+
+
+def _build_cube() -> dict:
+    return solid(perm3([1, 1, 1]))
+
+
+def _build_octa() -> dict:
+    return solid(perm3([1, 0, 0]))
+
+
+def _build_dodeca() -> dict:
+    return solid(dodeca3())
+
+
+def _build_icosa() -> dict:
+    return solid(icosa3())
+
+
+# Archimedean and Catalan solids (coordinates: the standard Cartesian forms)
+def _build_cuboct() -> dict:
+    return solid(perm3([1, 1, 0]))
+
+
+def _build_trunc_oct() -> dict:
+    return solid(perm3([0, 1, 2]))
+
+
+def _build_rhombicuboct() -> dict:
+    return solid(perm3([1, 1, 1 + math.sqrt(2)]))
+
+
+def _build_icosidodeca() -> dict:
+    return solid(perm3([0, 0, PHI], "even") + perm3([0.5, PHI / 2, PH2 / 2], "even"))
+
+
+def _build_trunc_icosa() -> dict:
+    return solid(perm3([0, 1, 3 * PHI], "even") + perm3([1, 2 + PHI, 2 * PHI], "even")
+                 + perm3([PHI, 2, PHI ** 3], "even"))
+
+
+def _build_snub_cube() -> dict:
+    # even permutations with an even number of minus signs, odd ones with
+    # an odd number: one hand of the chiral snub (t the tribonacci constant)
+    t = (1 + (19 + 3 * math.sqrt(33)) ** (1 / 3) + (19 - 3 * math.sqrt(33)) ** (1 / 3)) / 3
+    base = [1, 1 / t, t]
+    V = []
+    for p, even in [((0, 1, 2), 1), ((1, 2, 0), 1), ((2, 0, 1), 1),
+                    ((0, 2, 1), 0), ((2, 1, 0), 0), ((1, 0, 2), 0)]:
+        for s in range(8):
+            if s.bit_count() % 2 == (0 if even else 1):
+                V.append([-base[p[k]] if s >> k & 1 else base[p[k]] for k in range(3)])
+    return solid(V)
+
+
+def _build_rhombic_dodeca() -> dict:
+    # the cube's corners and the octahedron's, edges only between the two
+    return solid(perm3([1, 1, 1]) + perm3([2, 0, 0]))
+
+
+def _build_rhombic_triaconta() -> dict:
+    # the hull of the dodecahedron–icosahedron compound: each crossing pair
+    # of edges spans one golden rhombus, so the edges run only between the
+    # dodecahedron's 20 corners and the icosahedron's 12
+    return solid(dodeca3() + [v[:3] for v in _dual_icosa()["V"]])
+
+
+# the Kepler–Poinsot stars, drawn as what is seen: every face is a {5/2}
+# pentagram, and what shows of it is its five tips (the inner pentagon is
+# buried inside the star). A tip at outer corner P_k ends at two corners of
+# the inner pentagon, c − (P_j − c)/φ² for j = k + 2 and k + 3.
+def _pentagram_tips(V3: list, rings: list[list[int]]) -> dict:
+    vid: dict = {}
+    V: list[list[float]] = []
+
+    def at(p) -> int:
+        k = kkey(p)
+        if k not in vid:
+            vid[k] = len(V)
+            V.append([float(x) for x in p])
+        return vid[k]
+
+    F: list[list[int]] = []
+    for ring in rings:
+        P = np.asarray([V3[r] for r in ring], dtype=np.float64)
+        c = P.mean(axis=0)
+        inner = [c - (P[j] - c) / PH2 for j in range(5)]
+        for k in range(5):
+            F.append([at(P[k]), at(inner[(k + 3) % 5]), at(inner[(k + 2) % 5])])
+    seen: set = set()
+    E: list[list[int]] = []
+    for f in F:
+        for a, b in ((f[0], f[1]), (f[1], f[2]), (f[2], f[0])):
+            if frozenset((a, b)) not in seen:
+                seen.add(frozenset((a, b)))
+                E.append([a, b])
+    return {"V": _w0(V), "E": E, "F": F}
+
+
+def _rings_at(V3: list, axes: list) -> list[list[int]]:
+    """For each of the 12 five-fold axes, the five corners of V3 one level
+    in from the top along it — the second distinct height — in order round
+    the axis."""
+    V = np.asarray(V3, dtype=np.float64)
+    V = V / np.linalg.norm(V, axis=1).max()
+    rings = []
+    for a in axes:
+        n = np.asarray(a, dtype=np.float64)
+        n /= np.linalg.norm(n)
+        h = V @ n
+        level = sorted({round(float(x), 6) for x in h}, reverse=True)[1]
+        idx = [i for i in range(len(V)) if abs(h[i] - level) < 1e-5]
+        assert len(idx) == 5, (a, level, len(idx))
+        u = V[idx[0]] - (V[idx[0]] @ n) * n
+        u /= np.linalg.norm(u)
+        w = np.cross(n, u)
+        idx.sort(key=lambda i: math.atan2(V[i] @ w, V[i] @ u))
+        rings.append(idx)
+    return rings
+
+
+def _build_small_stellated() -> dict:
+    # {5/2, 5}: the icosahedron's corners; a face is the pentagram on the
+    # five neighbours of a corner. Twelve pentagonal spikes on a buried
+    # dodecahedron
+    V3 = icosa3()
+    return _pentagram_tips(V3, _rings_at(V3, V3))
+
+
+def _build_great_stellated() -> dict:
+    # {5/2, 3}: the dodecahedron's corners; a face is the pentagram on the
+    # five corners one level in from a face. Twenty triangular spikes on a
+    # buried icosahedron
+    V3 = dodeca3()
+    return _pentagram_tips(V3, _rings_at(V3, DODECA_AXES))
+
+
+# compounds: several solids sharing one centre, crossing each other
+def _five(part: dict) -> dict:
+    """Five copies of a part turned by fifths of a turn about a five-fold
+    axis: the cube's and the tetrahedron's places inside a dodecahedron."""
+    return _merge([_turned(part, _rot3(DODECA_AXES[0], 2 * math.pi * k / 5)) for k in range(5)])
+
+
+def _build_stella() -> dict:
+    return _merge([solid(_tetra3(0)), solid(_tetra3(1))])
+
+
+def _build_five_tetra() -> dict:
+    return _five(solid(_tetra3()))
+
+
+def _build_five_cubes() -> dict:
+    return _five(solid(perm3([1, 1, 1])))
+
+
+def _build_cube_octa() -> dict:
+    # dual compound: the octahedron's edges cross the cube's at their midpoints
+    return _merge([solid(perm3([1, 1, 1])), solid(perm3([2, 0, 0]))])
+
+
+def _dual_icosa() -> dict:
+    # the icosahedron dual to dodeca3, scaled so each of its edges crosses
+    # a dodecahedron edge at both their midpoints
+    d, i = solid(dodeca3()), solid(DODECA_AXES)
+    mid = lambda g: float(np.linalg.norm(np.add(g["V"][g["E"][0][0]], g["V"][g["E"][0][1]]) / 2))
+    return _scaled(i, mid(d) / mid(i))
+
+
+def _build_dodeca_icosa() -> dict:
+    return _merge([solid(dodeca3()), _dual_icosa()])
+
+
+# spiked stars: a pyramid on every face of a core, the core buried
+def _spiked(core: dict, height: float) -> dict:
+    """A pyramid on every face of a convex core, its apex `height` edge
+    lengths out along the face's normal. What shows is the spikes' sides."""
+    V = np.asarray(core["V"], dtype=np.float64)
+    edge = float(np.linalg.norm(V[core["E"][0][0]] - V[core["E"][0][1]]))
+    parts = []
+    for cyc in _boundary_faces(core):
+        P = V[np.asarray(cyc)][:, :3]
+        c = P.mean(axis=0)
+        n = np.cross(P[1] - P[0], P[2] - P[0])
+        n /= np.linalg.norm(n)
+        if n @ c < 0:
+            n = -n
+        apex = c + n * height * edge
+        k = len(cyc)
+        Vp = _w0(list(P) + [apex])
+        parts.append({"V": Vp,
+                      "E": [[a, (a + 1) % k] for a in range(k)] + [[a, k] for a in range(k)],
+                      "F": [[a, (a + 1) % k, k] for a in range(k)]})
+    return _merge(parts)
+
+
+def _build_moravian() -> dict:
+    # the Moravian (Herrnhut) star: 26 points on a rhombicuboctahedron
+    return _spiked(_build_rhombicuboct(), 1.6)
+
+
+def _build_starburst() -> dict:
+    return _spiked(_build_icosa(), 2.2)
+
+
+# mathematical toys
+def _circle(n: int, f) -> dict:
+    """A closed curve of n segments, f(t) for t ∈ [0, 2π): lines only."""
+    return {"V": [list(f(2 * math.pi * k / n)) for k in range(n)],
+            "E": [[k, (k + 1) % n] for k in range(n)], "F": [], "curve": True}
+
+
+def _build_hopf() -> dict:
+    # The Hopf fibration: the 3-sphere filled with great circles, any two
+    # of them linked once. The fibre over a point of the 2-sphere at
+    # latitude 2η, longitude α is (cos η·e^it, sin η·e^i(t+α)); three
+    # latitudes of eight fibres each, every ring a nest of Villarceau
+    # circles on a torus
+    parts = []
+    for r, eta in enumerate((0.22 * math.pi, 0.32 * math.pi, 0.42 * math.pi)):
+        for k in range(8):
+            al = 2 * math.pi * (k + 0.5 * r) / 8
+            parts.append(_circle(36, lambda t, e=eta, a=al: (
+                math.cos(e) * math.cos(t), math.cos(e) * math.sin(t),
+                math.sin(e) * math.cos(t + a), math.sin(e) * math.sin(t + a))))
+    return {**_merge(parts), "curve": True}
+
+
+def _build_armillary() -> dict:
+    # the celestial sphere's rings: the equator, the tropics and the polar
+    # circles (±23.44°, ±66.56°), the ecliptic and two colures. y is the pole
+    tilt = math.radians(23.44)
+    rings = []
+    for lat in (0.0, tilt, -tilt, math.pi / 2 - tilt, tilt - math.pi / 2):
+        rings.append(_circle(48, lambda t, b=lat: (
+            math.cos(b) * math.cos(t), math.sin(b), math.cos(b) * math.sin(t))))
+    rings.append(_circle(48, lambda t: (
+        math.cos(t), math.sin(t) * math.sin(tilt), math.sin(t) * math.cos(tilt))))
+    for lon in (0.0, math.pi / 2):
+        rings.append(_circle(48, lambda t, l=lon: (
+            math.cos(t) * math.cos(l), math.sin(t), math.cos(t) * math.sin(l))))
+    return {**_merge([{**r, "V": _w0(r["V"])} for r in rings]), "curve": True}
+
+
+def _build_geodesic() -> dict:
+    # the icosahedron, each face cut into nine (frequency 3), pushed out
+    # onto the sphere: Fuller's dome, closed
+    ico = solid(icosa3())
+    V = np.asarray(ico["V"], dtype=np.float64)[:, :3]
+    f = 3
+    tris = []
+    for a, b, c in _boundary_faces(ico):
+        P = lambda i, j, a=a, b=b, c=c: (V[a] * (f - i - j) + V[b] * i + V[c] * j) / f
+        for i in range(f):
+            for j in range(f - i):
+                tris.append([P(i, j), P(i + 1, j), P(i, j + 1)])
+                if i + j < f - 1:
+                    tris.append([P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)])
+    parts = []
+    for t in tris:
+        t = [p / np.linalg.norm(p) for p in t]
+        parts.append({"V": _w0(t), "E": [[0, 1], [1, 2], [2, 0]], "F": [[0, 1, 2]]})
+    return _merge(parts)
+
+
+def _build_sierpinski() -> dict:
+    # the Sierpinski tetrahedron, three levels deep: 64 tetrahedra
+    def split(T, depth):
+        if depth == 0:
+            return [T]
+        out = []
+        for k in range(4):
+            out += split([(T[k] + T[j]) / 2 for j in range(4)], depth - 1)
+        return out
+
+    T0 = [np.asarray(v, dtype=np.float64) for v in _tetra3()]
+    six = [[a, b] for a in range(4) for b in range(a + 1, 4)]
+    return _merge([{"V": _w0(T), "E": six, "F": [[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]]}
+                   for T in split(T0, 3)])
+
+
+def _build_lissajous() -> dict:
+    # a Lissajous knot: cos(3t + 0.7), cos(2t + 0.2), cos 7t — three
+    # coprime frequencies close into a knot
+    g = _circle(240, lambda t: (math.cos(3 * t + 0.7), math.cos(2 * t + 0.2), math.cos(7 * t)))
+    g["V"] = _w0(g["V"])
+    return g
+
+
+def _build_loxodrome() -> dict:
+    # two rhumb lines, pole to pole and back, half a turn apart: each
+    # crosses every meridian at the same angle, so it winds ever tighter
+    # into the poles
+    k, n = 0.35, 120
+    pts = [(0.0, -1.0, 0.0)]
+    for half in (0, 1):
+        for j in range(1, n):
+            s = -1 + 2 * j / n if half == 0 else 1 - 2 * j / n
+            lat = math.asin(s)
+            lon = math.log(math.tan(math.pi / 4 + lat / 2)) / k + math.pi * half
+            pts.append((math.cos(lat) * math.cos(lon), s, math.cos(lat) * math.sin(lon)))
+        if half == 0:
+            pts.append((0.0, 1.0, 0.0))
+    m = len(pts)
+    return {"V": _w0(pts), "E": [[i, (i + 1) % m] for i in range(m)], "F": [], "curve": True}
+
+
+# ----------------------------------------------------------- scenes
+#
+# A scene is several shapes in one frame, sharing its centre: a sphere
+# round a hypercube round a star. Each layer is a shape of SHAPES (by
+# name) at its own scale, drawn with its own weights and colour, turning
+# at its own multiple of the view's angles (spin −1 counter-turns, 0 holds
+# still); a layer keeps its shape's own way of filling w, so a masked star
+# turns in 3D inside a tesseract turning in 4D. The scene's geometry is
+# its layers' in order (geom's "layers" says which rows are whose), and
+# its faces are the layers' own faces — a support test over the whole
+# compound would reject them.
+
+@dataclass(frozen=True)
+class Layer:
+    shape: str                    # a SHAPES name
+    scale: float = 1.0            # circumradius, against the scene's largest layer
+    spin: float = 1.0             # multiple of the view's angles
+    lines: float = 1.0            # line alpha; 0 hides them
+    width: float = 1.0            # line width
+    faces: float = 1.0            # face alpha; 0 draws no faces
+    points: float = 1.0           # point alpha and size; 0 hides them
+    tint: tuple = (1.0, 1.0, 1.0)  # the lines' colour (the points keep theirs × tint)
+
+
+GOLD = (1.0, 0.80, 0.38)
+ICE = (0.55, 0.78, 1.0)
+
+
+def _build_scene(layers) -> dict:
+    V: list = []
+    E: list = []
+    F: list = []
+    parts = []
+    for L in layers:
+        j = shape_index(L.shape)
+        g = geom(j)
+        off, eoff, foff = len(V), len(E), len(F)
+        V.extend((g["V"] * L.scale).tolist())
+        E.extend((g["E"] + off).tolist())
+        if L.faces > 0:
+            F.extend([[v + off for v in c] for c in faces(j)])
+        parts.append((off, len(V), eoff, len(E), foff, len(F), j, L))
+    return {"V": V, "E": E, "F": F, "layers": parts}
+
+
 # How a shape fills the fourth dimension (Shape.w):
 #   native  a 4-polytope or a 4D surface, built with real w-extent
 #   flat    a 3D shape at w = 0: a W plane's quarter turn flattens it
@@ -598,11 +1049,49 @@ class Shape:
     sym: str
     build: object = field(repr=False)
     w: str = "native"
+    family: str = ""              # the catalog's group (plan 28): "", or e.g. "Platonic"
+    layers: tuple = ()            # a scene's layers (Layer), empty for one shape
 
     def __post_init__(self) -> None:
         if self.w not in W_KINDS:
             raise ValueError(f"{self.name}: w must be one of {W_KINDS}, not {self.w!r}")
 
+
+
+def _build_orbit() -> dict:
+    g = _circle(64, lambda t: (math.cos(t), 0.0, math.sin(t)))
+    g["V"] = _w0(g["V"])
+    return g
+
+
+def _kepler_layers() -> tuple:
+    # Kepler's model of the six planets' spheres (Mysterium Cosmographicum,
+    # 1596): each Platonic solid inscribed in one planet's sphere and
+    # circumscribing the next one's. Outside in: Saturn, the cube,
+    # Jupiter, the tetrahedron, Mars, the dodecahedron, Earth, the
+    # icosahedron, Venus, the octahedron, Mercury. A solid's insphere over
+    # its circumsphere sets the next radius; the inner shells turn faster
+    nest = [("Cube", 1 / math.sqrt(3)), ("Tetrahedron", 1 / 3),
+            ("Dodecahedron", 0.7946544722917661), ("Icosahedron", 0.7946544722917661),
+            ("Octahedron", 1 / math.sqrt(3))]
+    planets = [(0.95, 0.80, 0.50), (0.95, 0.62, 0.38), (1.0, 0.42, 0.32),
+               (0.45, 0.70, 1.0), (1.0, 0.92, 0.62), (0.80, 0.80, 0.84)]
+    out = [Layer("Armillary sphere", 1.0, spin=0.12, lines=0.45, width=0.8, faces=0,
+                 points=0, tint=planets[0])]
+    r = 1.0
+    for k, (name, ratio) in enumerate(nest):
+        out.append(Layer(name, r, spin=(-1) ** k * (0.35 + 0.25 * k), faces=0.6,
+                         points=0.5, width=0.9 + 0.1 * k))
+        r *= ratio
+        out.append(Layer("Orbit", r, spin=0.3 + 0.3 * k, lines=0.9, faces=0, points=0,
+                         tint=planets[k + 1]))
+    return tuple(out)
+
+
+def scene(name: str, alias: str, sym: str, layers: tuple, w: str = "mask") -> Shape:
+    """A Shape that is several shapes in one frame (Layer, _build_scene)."""
+    return Shape(name, alias, 0, sym, lambda: _build_scene(layers), w=w, family="Scene",
+                 layers=layers)
 
 SHAPES = [
     Shape("5-cell", "hypertetrahedron", 5, "{3,3,3}", _build_5cell),
@@ -636,7 +1125,83 @@ SHAPES = [
           _build_mobius, w="lift"),
     Shape("Klein bottle", "4D · one-sided bottle, no self-crossing", 0, "χ=0 · one side",
           _build_klein, w="lift"),
+    # -------- plan 28 spike: the catalog of closed 3D solids, all masked
+    Shape("Tetrahedron", "Platonic · 4 triangles", 0, "{3,3}", _build_tetra,
+          w="mask", family="Platonic"),
+    Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, w="mask", family="Platonic"),
+    Shape("Octahedron", "Platonic · 8 triangles", 0, "{3,4}", _build_octa,
+          w="mask", family="Platonic"),
+    Shape("Dodecahedron", "Platonic · 12 pentagons", 0, "{5,3}", _build_dodeca,
+          w="mask", family="Platonic"),
+    Shape("Icosahedron", "Platonic · 20 triangles", 0, "{3,5}", _build_icosa,
+          w="mask", family="Platonic"),
+    Shape("Cuboctahedron", "Archimedean · 8 triangles, 6 squares", 0, "r{4,3}", _build_cuboct,
+          w="mask", family="Archimedean"),
+    Shape("Truncated octahedron", "Archimedean · the space-filler", 0, "t{3,4}",
+          _build_trunc_oct, w="mask", family="Archimedean"),
+    Shape("Rhombicuboctahedron", "Archimedean · 8 triangles, 18 squares", 0, "rr{4,3}",
+          _build_rhombicuboct, w="mask", family="Archimedean"),
+    Shape("Snub cube", "Archimedean · chiral, 38 faces", 0, "sr{4,3}", _build_snub_cube,
+          w="mask", family="Archimedean"),
+    Shape("Icosidodecahedron", "Archimedean · 20 triangles, 12 pentagons", 0, "r{5,3}",
+          _build_icosidodeca, w="mask", family="Archimedean"),
+    Shape("Truncated icosahedron", "Archimedean · the football, C₆₀", 0, "t{3,5}",
+          _build_trunc_icosa, w="mask", family="Archimedean"),
+    Shape("Rhombic dodecahedron", "Catalan · 12 rhombi", 0, "V3.4.3.4", _build_rhombic_dodeca,
+          w="mask", family="Catalan"),
+    Shape("Rhombic triacontahedron", "Catalan · 30 golden rhombi", 0, "V3.5.3.5",
+          _build_rhombic_triaconta, w="mask", family="Catalan"),
+    Shape("Small stellated dodecahedron", "Kepler–Poinsot · 12 points", 0, "{5/2,5}",
+          _build_small_stellated, w="mask", family="Star"),
+    Shape("Great stellated dodecahedron", "Kepler–Poinsot · 20 points", 0, "{5/2,3}",
+          _build_great_stellated, w="mask", family="Star"),
+    Shape("Moravian star", "spiked rhombicuboctahedron · 26 points", 0, "Herrnhut",
+          _build_moravian, w="mask", family="Star"),
+    Shape("Starburst", "spiked icosahedron · 20 points", 0, "{3,5} + pyramids",
+          _build_starburst, w="mask", family="Star"),
+    Shape("Stella octangula", "compound · two tetrahedra", 0, "2{3,3}", _build_stella,
+          w="mask", family="Compound"),
+    Shape("Five tetrahedra", "compound · chiral, in a dodecahedron", 0, "5{3,3}",
+          _build_five_tetra, w="mask", family="Compound"),
+    Shape("Five cubes", "compound · in a dodecahedron", 0, "5{4,3}", _build_five_cubes,
+          w="mask", family="Compound"),
+    Shape("Cube + octahedron", "compound · duals, edges crossing", 0, "{4,3}+{3,4}",
+          _build_cube_octa, w="mask", family="Compound"),
+    Shape("Dodecahedron + icosahedron", "compound · duals, edges crossing", 0, "{5,3}+{3,5}",
+          _build_dodeca_icosa, w="mask", family="Compound"),
+    Shape("Hopf fibration", "4D · the 3-sphere in linked great circles", 0, "S³ → S²",
+          _build_hopf, family="Toy"),
+    Shape("Armillary sphere", "celestial rings · tropics, ecliptic, colures", 0, "23.44°",
+          _build_armillary, w="mask", family="Toy"),
+    Shape("Geodesic sphere", "icosahedron, frequency 3", 0, "{3,5+}₃,₀", _build_geodesic,
+          w="mask", family="Toy"),
+    Shape("Sierpinski tetrahedron", "fractal · 64 tetrahedra, dimension 2", 0, "level 3",
+          _build_sierpinski, w="mask", family="Toy"),
+    Shape("Lissajous knot", "curve · frequencies 3, 2, 7", 0, "cos(3t+.7), cos(2t+.2), cos 7t",
+          _build_lissajous, w="mask", family="Toy"),
+    Shape("Loxodrome", "curve · two rhumb lines, pole to pole", 0, "λ = ln tan(π/4+φ/2)/k",
+          _build_loxodrome, w="mask", family="Toy"),
+    Shape("Orbit", "curve · one great circle", 0, "S¹", _build_orbit, w="mask", family="Toy"),
+    # -------- scenes: several shapes in one frame (Layer), after the shapes
+    # they name
+    scene("Celestial tesseract", "scene · glome ⊃ tesseract ⊃ star", "S³ ⊃ {4,3,3} ⊃ {5/2,5}", (
+        Layer("Hopf fibration", 1.0, spin=0.4, lines=1.0, width=1.0, faces=0, points=0,
+              tint=ICE),
+        Layer("Tesseract", 1.0, faces=1.4, points=0.6),
+        Layer("Small stellated dodecahedron", 0.62, spin=-0.7, width=1.3, faces=2.2,
+              points=1.4, tint=GOLD),
+    ), w="native"),
+    scene("Celestial cube", "scene · armillary ⊃ cube ⊃ star", "23.44° ⊃ {4,3} ⊃ {5/2,3}", (
+        Layer("Armillary sphere", 1.0, spin=0.25, lines=0.6, width=0.9, faces=0, points=0,
+              tint=ICE),
+        Layer("Cube", 1.0, faces=1.5, points=0.5),
+        Layer("Great stellated dodecahedron", 0.82, spin=-0.6, width=1.2, faces=2.0,
+              points=1.3, tint=GOLD),
+    )),
+    scene("Mysterium Cosmographicum", "scene · Kepler's nested solids, 1596",
+          "♄ {4,3} ♃ {3,3} ♂ {5,3} ♁ {3,5} ♀ {3,4} ☿", _kepler_layers()),
 ]
+
 
 _cache: dict[int, dict] = {}
 
@@ -655,7 +1220,42 @@ def geom(i: int) -> dict:
     _cache[i] = {"V": V, "E": E, "n": len(g["V"]), "m": len(g["E"])}
     if "F" in g:  # explicit face cycles from a 3D surface builder
         _cache[i]["F"] = g["F"]
+    if g.get("curve"):  # a curve's samples are not corners: no points drawn
+        _cache[i]["curve"] = True
+    if "layers" in g:  # a scene: whose rows are whose, and how each draws
+        _cache[i].update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
     return _cache[i]
+
+
+def shape_index(name: str) -> int:
+    """The SHAPES index of the shape called `name`."""
+    for i, s in enumerate(SHAPES):
+        if s.name == name:
+            return i
+    raise KeyError(name)
+
+
+def _scene_style(parts, n: int, m: int, nf: int) -> dict:
+    """A scene's per-row weights: "layers" — (first vertex, end, the
+    layer's shape, its spin) per layer — and "style": per edge its alpha,
+    width, colour and its own shape's edge count (what the line density
+    reads), per vertex its alpha, colour and whether it is tinted, per
+    face its alpha."""
+    st = {"e_alpha": np.ones(m), "e_width": np.ones(m), "e_rgb": np.ones((m, 3)),
+          "e_m": np.ones(m), "p_alpha": np.ones(n), "p_rgb": np.ones((n, 3)),
+          "p_tinted": np.zeros(n, bool), "f_alpha": np.ones(nf)}
+    layers = []
+    for a, b, ea, eb, fa, fb, j, L in parts:
+        layers.append((a, b, j, float(L.spin)))
+        st["e_alpha"][ea:eb] = L.lines
+        st["e_width"][ea:eb] = L.width
+        st["e_rgb"][ea:eb] = L.tint
+        st["e_m"][ea:eb] = eb - ea
+        st["p_alpha"][a:b] = 0.0 if geom(j).get("curve") else L.points
+        st["p_rgb"][a:b] = L.tint
+        st["p_tinted"][a:b] = tuple(L.tint) != (1.0, 1.0, 1.0)
+        st["f_alpha"][fa:fb] = L.faces
+    return {"layers": layers, "style": st}
 
 
 # ------------------------------------------------------------- transforms
@@ -690,20 +1290,23 @@ def rotate4(V: np.ndarray, ang) -> np.ndarray:
 W_REMAP = {3: 1, 4: 2, 5: 0}
 
 
-def w_masked(i: int) -> bool:
-    """Whether shape i keeps its W planes masked (Shape.w == "mask")."""
-    return SHAPES[i].w == "mask"
+def w_masked(i: int, flat: bool = False) -> bool:
+    """Whether shape i keeps its W planes masked (Shape.w == "mask"), or
+    every shape does: `flat` is the view's 3D switch (ViewState.three_d,
+    plan 28), which takes the fourth dimension out of every shape."""
+    return flat or SHAPES[i].w == "mask"
 
 
-def view_angles(i: int, ang):
+def view_angles(i: int, ang, flat: bool = False):
     """The angles shape i is drawn at: `ang` itself, unless the shape's W
     planes are masked — then a new list with each W angle added onto its
     3D plane (W_REMAP) and the W planes at 0. A pure function of the
     view's angles, read where the frame is drawn: the integrator and the
     rot.* params are untouched, so a rate or a phase routed to a W plane
     lands on the 3D plane alike, and every other shape's pose never
-    depends on which shapes were shown before it."""
-    if not w_masked(i):
+    depends on which shapes were shown before it. `flat` masks any shape
+    (w_masked)."""
+    if not w_masked(i, flat):
         return ang
     out = [float(a) for a in ang]
     for p, q in W_REMAP.items():
@@ -1026,6 +1629,37 @@ def project_h(
     px = w / 2 + x1 * k2 * scale
     py = h / 2 - y1 * k2 * scale
     return px, py, v[:, 3].copy(), div4 * div3
+
+
+def shape_view(
+    i: int, ang, yaw: float, pitch: float, d4: float = 2.6, w: int = 1200, h: int = 800,
+    flat: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """What the renderer draws shape i at: project_h's (px, py, pd, wc) at
+    the shape's own angles (view_angles), with pd its depth cue — w for a
+    4D shape, the depth toward the 3D camera for a masked one (view_depth).
+    A scene (Shape.layers) projects each layer at its own angles: the
+    view's, masked as its shape is, times its spin."""
+    g = geom(i)
+    out = [np.empty(g["n"]) for _ in range(4)]
+    for a, b, j, spin in g.get("layers") or [(0, g["n"], i, 1.0)]:
+        la = view_angles(j, ang, flat)
+        if spin != 1.0:
+            la = [float(x) * spin for x in la]
+        V = g["V"][a:b] if "layers" in g else g["V"]
+        px, py, pd, wc = project_h(V, la, yaw, pitch, d4=d4, w=w, h=h)
+        if w_masked(j, flat):
+            # its w is 0 at every angle, so the depth cue (pd: fade, width,
+            # draw order) would sit flat at its dimmest; it cues on its
+            # depth toward the 3D camera (yaw and pitch included, so a
+            # camera turned round never puts the far side on top), as a 4D
+            # shape cues on its depth toward the 4D eye
+            pd = view_depth(V, la, yaw, pitch, d4=d4)
+        if "layers" not in g:
+            return px, py, pd, wc
+        for k, arr in enumerate((px, py, pd, wc)):
+            out[k][a:b] = arr
+    return out[0], out[1], out[2], out[3]
 
 
 # ----------------------------------------------------------- volume ratio

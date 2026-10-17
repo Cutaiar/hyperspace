@@ -12,7 +12,9 @@ import pytest
 
 from hyperspace import geometry as G
 
-NEW3D = range(18, len(G.SHAPES))
+# the trig family (shapes 19–26); the plan 28 catalog after it has its own
+# tests (tests/test_catalog.py)
+NEW3D = [i for i, s in enumerate(G.SHAPES) if i >= 18 and not s.family]
 
 
 def test_polytope_count_unchanged():
@@ -125,9 +127,11 @@ KLEIN = next(i for i, s in enumerate(G.SHAPES) if s.name == "Klein bottle")
 
 
 def test_the_klein_bottle_is_appended_after_the_mobius_strip():
-    # index is identity: the 26th shape, every earlier index where it was
-    assert KLEIN == 25 == len(G.SHAPES) - 1
+    # index is identity: the 26th shape, every earlier index where it was;
+    # the plan 28 catalog starts after it
+    assert KLEIN == 25 == NEW3D[-1]
     assert G.SHAPES[24].name == "Möbius strip"
+    assert G.SHAPES[26].family
 
 
 def test_the_klein_bottle_seam_welds_into_a_closed_grid():

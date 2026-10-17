@@ -34,6 +34,7 @@ class ViewState:
     yaw: float = 0.0
     pitch: float = 0.0
     faces: bool = False          # translucent face fills under the wireframe
+    three_d: bool = False        # plan 28: the fourth dimension taken out (geometry.w_masked)
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px

@@ -40,8 +40,10 @@ def test_shape_renders(ctx, i):
     assert ctx.error == "GL_NO_ERROR"
     assert img.shape == (400, 600, 3)
     assert img.max() > 0, "frame is entirely black"
-    # red vertex pixels and white-ish edge pixels both present
-    assert (img[:, :, 0] > img[:, :, 1]).any(), "no red-dominant (vertex) pixels"
+    # red vertex pixels and white-ish edge pixels both present — but a
+    # curve (plan 28) draws no points
+    if not geom(i).get("curve"):
+        assert (img[:, :, 0] > img[:, :, 1]).any(), "no red-dominant (vertex) pixels"
 
 
 def test_pixels_land_on_projection(ctx):

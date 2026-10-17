@@ -1669,6 +1669,8 @@ class Panel:
         self._check("view.rotate")
         imgui.same_line()
         self._check("view.faces")
+        imgui.same_line()
+        self._check("view.three_d")
         self._slider("view.instances")
         if v.instances > 1:
             # the field's one row: how the copies are laid out, how they

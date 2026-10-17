@@ -827,6 +827,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.toggle("view.faces", "Faces", *_attr(view, "faces"), group=g,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
+    r.toggle("view.three_d", "3D", *_attr(view, "three_d"), group=g,
+             tip="Take out the fourth dimension: every shape turns as a rigid 3D body, "
+                 "its W planes turning it in 3D planes instead, as the 3D solids always "
+                 "do. A 4D shape holds the 3D shadow it casts at rest.")
     r.toggle("view.cut_through", "Cut-through", *_attr(view, "cut_through"), group=g,
              tip="Overlay mode only: on, the translucent faces (and faint lines) cut the "
                  "window's alpha, so the screen behind the render window shows through "
