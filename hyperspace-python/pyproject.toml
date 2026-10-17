@@ -4,12 +4,17 @@ version = "0.1.0"
 description = "Real-time 4D polytope visualizer — Python engine (see docs/ARCHITECTURE.md)"
 requires-python = ">=3.12"
 dependencies = [
-    # Ultraleap hands (hyperspace/hands): the SDK's own Python wrapper. Pure
-    # Python over the prebuilt cffi module the Ultraleap Hand Tracking app
-    # ships for 3.12 (…/LeapSDK/leapc_cffi); cffi is that module's runtime.
-    # Imported only when [hands] is enabled. Not on PyPI: [tool.uv.sources].
+    # Ultraleap hands (hyperspace/hands): the SDK's own Python wrapper
+    # (`leap`, pure Python) over the cffi module it binds (`leapc_cffi`),
+    # built here from the same pinned commit. The Hand Tracking app also
+    # ships a leapc_cffi, but an older app's is built for 3.8 and will not
+    # import under this project's 3.12 — ours is found first on sys.path
+    # (leap appends the app's folder, never prepends it). cffi is the
+    # built module's runtime. Imported only when [hands] is enabled.
+    # Neither is on PyPI: [tool.uv.sources].
     "cffi>=1.17",
     "leap",
+    "leapc-cffi",
     "glfw>=2.10.2",
     "imgui-bundle>=1.92.900",
     "mido>=1.3.3",
@@ -68,3 +73,4 @@ hyperspace = "hyperspace.app:main"
 [tool.uv.sources]
 # Ultraleap's Python wrapper, pinned by commit (see the dependency's note)
 leap = { git = "https://github.com/ultraleap/leapc-python-bindings", rev = "2341c6c3db5dc08236bb52890d8c43a224139694", subdirectory = "leapc-python-api" }
+leapc-cffi = { git = "https://github.com/ultraleap/leapc-python-bindings", rev = "2341c6c3db5dc08236bb52890d8c43a224139694", subdirectory = "leapc-cffi" }
