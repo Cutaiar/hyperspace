@@ -28,6 +28,7 @@ it has a pad.
 from __future__ import annotations
 
 import atexit
+import math
 import sys
 import threading
 
@@ -69,6 +70,81 @@ STICKS = frozenset(AXES[:4])      # centred: a learn on one lands a push
 
 # how far from rest an axis must travel to complete a learn
 LEARN_TRAVEL = 0.4
+
+# ---- the dial (prototype): each stick also read as a clock face ----
+# A stick's angle picks one of DIAL equal sectors — sector 0 straight up,
+# then clockwise — and its distance from centre, 0 at rest to 1 at the
+# rim, is how far that sector's lane reads. Every lane rests at 0, so a
+# stick let go pushes nothing: the scene sits on its bases, sane, and each
+# direction pushes one parameter of its own up from there. The lanes are
+# more `axis` lanes after the six above (`Pad.lanes`), named
+# ``<stick>.<compass>`` — ``axis:L.N`` up on the left stick, ``axis:R.SE``
+# down-right on the right — so a route reads them like any other lane, and
+# a route on one takes its stick off the camera job (`claims`).
+#
+# Two readings of the same clock, per stick (`Pad.dial_modes`):
+#   petal  hard sectors: the sector the stick points into reads the whole
+#          radius, every other 0. A border is sticky (DIAL_STICKY of a
+#          sector's width past it) so a stick held on one does not flicker
+#          between two parameters.
+#   blend  soft sectors: each lane is a triangle about its own direction,
+#          so a sweep round the rim crossfades one parameter into the next;
+#          at any angle two neighbours share the radius between them.
+DIAL = 8
+COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+DIAL_MODES = ("petal", "blend")
+DIAL_STICKY = 0.15
+DIAL_STICKS = {"L": (AX_LX, AX_LY), "R": (AX_RX, AX_RY)}
+DIAL_LANES = tuple(f"{s}.{c}" for s in DIAL_STICKS for c in COMPASS)
+DIAL_LABELS = tuple(f"{'left' if s == 'L' else 'right'} dial {c}"
+                    for s in DIAL_STICKS for c in COMPASS)
+DIAL_DEFAULT = {"L": "petal", "R": "blend"}
+
+# every axis lane in `Pad.lanes` order: the six, then the dial's
+LANES = AXES + DIAL_LANES
+LANE_LABELS = AXIS_LABELS + DIAL_LABELS
+LANE_RESTS = AXIS_RESTS + (0.0,) * len(DIAL_LANES)
+
+
+def dial(x: float, y: float, mode: str = "petal", held: int | None = None,
+         deadzone: float = DEADZONE) -> tuple[list[float], int | None]:
+    """A stick at (x, y) — raw ±1, right and *up* positive — as DIAL lanes
+    and the sector it points into (None inside the deadzone). The radius
+    is cut by `deadzone` on the stick's distance, not per axis, so the
+    angle is the stick's own, rescaled to reach 1 at the rim and clamped
+    there (a pad's square gate reads past 1 on the diagonals). `held` is
+    the sector a petal dial was in last frame: it is kept until the stick
+    is DIAL_STICKY of a sector past its border."""
+    out = [0.0] * DIAL
+    r = math.hypot(x, y)
+    if r < deadzone:
+        return out, None
+    r = min(1.0, (r - deadzone) / (1.0 - deadzone))
+    a = (math.atan2(x, y) / math.tau * DIAL) % DIAL     # sectors, clockwise from up
+    k = round(a) % DIAL
+    if mode == "blend":
+        for j in range(DIAL):
+            d = abs((a - j + DIAL / 2) % DIAL - DIAL / 2)
+            if d < 1.0:
+                out[j] = r * (1.0 - d)
+        return out, k
+    if held is not None and abs((a - held + DIAL / 2) % DIAL - DIAL / 2) < 0.5 + DIAL_STICKY:
+        k = held
+    out[k] = r
+    return out, k
+
+
+def claims(lanes) -> set[int]:
+    """The stick and trigger axes (AX_*) that routed `axis` lanes take off
+    the camera job: a lane of the six is its own axis; a dial lane takes
+    both of its stick's."""
+    out = set()
+    for i in lanes:
+        if 0 <= i < len(AXES):
+            out.add(i)
+        elif len(AXES) <= i < len(LANES):
+            out.update(DIAL_STICKS[LANES[i].partition(".")[0]])
+    return out
 
 
 def _unwrap(ret) -> list:
@@ -264,6 +340,9 @@ class Pad:
         self.usb = usb
         self.usb_pad: UsbPad | None = None
         self.source: str | None = None     # "glfw", "usb" or None
+        self.dial_modes = dict(DIAL_DEFAULT)       # stick → "petal" / "blend"
+        self.dial_lanes: list[float] = [0.0] * len(DIAL_LANES)
+        self.dial_sectors: dict[str, int | None] = dict.fromkeys(DIAL_STICKS)
 
     @property
     def on(self) -> bool:
@@ -293,6 +372,25 @@ class Pad:
         elif new == "usb":
             self.buttons, self.hat, self.axes = state
 
+    def dials(self) -> list[float]:
+        """The dial lanes (DIAL_LANES order) for the sticks as they read
+        now. A petal dial's sticky border is state, so the dials move only
+        when the sticks or a mode do: `lanes`, read several times a
+        frame, gets the same answer each time."""
+        modes = self.__dict__.setdefault("dial_modes", dict(DIAL_DEFAULT))
+        sectors = self.__dict__.setdefault("dial_sectors", dict.fromkeys(DIAL_STICKS))
+        seen = (tuple(self.axes[:4]), tuple(modes.items()))
+        if self.__dict__.get("_dial_seen") == seen:
+            return self.dial_lanes
+        lanes: list[float] = []
+        for stick, (ax, ay) in DIAL_STICKS.items():
+            x = self.axes[ax] if ax < len(self.axes) else 0.0
+            y = -self.axes[ay] if ay < len(self.axes) else 0.0
+            vals, sectors[stick] = dial(x, y, modes.get(stick, "petal"), sectors.get(stick))
+            lanes += vals
+        self.dial_lanes, self._dial_seen = lanes, seen
+        return lanes
+
     def _usb_state(self):
         """The USB pad's latest report; starts its reader the first time
         GLFW has nothing. Kept on the instance, so a hot reload of this
@@ -321,12 +419,12 @@ class Pad:
         return bool(self.prev_hat & bit) and not (self.hat & bit)
 
     def lanes(self) -> list[float]:
-        """The six axes as routing lanes in AXES order, each in [0, 1]:
-        sticks about 0.5 (deadzone cut out, up and right high), triggers
-        from 0."""
+        """The axes as routing lanes in LANES order, each in [0, 1]: the six
+        (sticks about 0.5, deadzone cut out, up and right high; triggers
+        from 0), then the dial's, resting at 0."""
         sticks = [0.5 + 0.5 * self.axis(AX_LX), 0.5 - 0.5 * self.axis(AX_LY),
                   0.5 + 0.5 * self.axis(AX_RX), 0.5 - 0.5 * self.axis(AX_RY)]
-        return sticks + [self.trigger(AX_LT), self.trigger(AX_RT)]
+        return sticks + [self.trigger(AX_LT), self.trigger(AX_RT)] + self.dials()
 
     def axis(self, i: int) -> float:
         """Stick axis with the deadzone cut out and the rest rescaled to ±1."""
@@ -342,12 +440,21 @@ class Pad:
         return v if v > 0.02 else 0.0
 
 
-def learn_from(pad: Pad, learn) -> bool:
+def dialed(lanes) -> set[str]:
+    """The sticks ("L", "R") that routed `axis` lanes use as a dial."""
+    return {LANES[i].partition(".")[0] for i in lanes if len(AXES) <= i < len(LANES)}
+
+
+def learn_from(pad: Pad, learn, dials=frozenset) -> bool:
     """The pad completes an armed learn (learn.Learn, duck-typed — this
     module imports nothing from the package): the first button or D-pad
     press this frame lands a button row (`Learn.learn_pad_button`), else
     the first axis LEARN_TRAVEL from rest a route (`Learn.learn_source`;
-    a stick is centred, so a push). On a setting no performer may drive
+    a stick is centred, so a push). A stick in `dials()` — the sticks a
+    route already reads as a dial (`dialed`), asked only once a learn is
+    armed — lands the sector it points into instead, ``axis:L.NE``,
+    resting at 0, so a dial is filled one direction at a time. On a
+    setting no performer may drive
     (not modulatable) only a button can: the axes are not asked, so a
     nudged stick never ends the learn. True when the press was the
     learn's, so the router lets that frame's button rows be."""
@@ -364,7 +471,22 @@ def learn_from(pad: Pad, learn) -> bool:
             return True
     if target is None or not target.modulatable:
         return False
-    for name, u, rest in zip(AXES, pad.lanes(), AXIS_RESTS):
+    sticks = dials()
+    pad.dials()                 # the sectors as the sticks read now
+    sectors = pad.dial_sectors
+    for stick in sticks:
+        k = sectors.get(stick)
+        if k is None:
+            continue
+        name = f"{stick}.{COMPASS[k]}"
+        x, y = (pad.axes[a] if a < len(pad.axes) else 0.0 for a in DIAL_STICKS[stick])
+        if math.hypot(x, y) >= DEADZONE + LEARN_TRAVEL and learn.accepts(f"axis:{name}"):
+            learn.learn_source(f"axis:{name}")
+            return False
+    taken = {a for s in sticks for a in DIAL_STICKS[s]}
+    for i, (name, u, rest) in enumerate(zip(AXES, pad.lanes(), AXIS_RESTS)):
+        if i in taken:
+            continue
         if abs(u - rest) >= LEARN_TRAVEL and learn.accepts(f"axis:{name}"):
             learn.learn_source(f"axis:{name}", centred=name in STICKS)
             return False        # an axis has no button row to hold back

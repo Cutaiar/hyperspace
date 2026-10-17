@@ -28,8 +28,10 @@ Sources are one string, ``scheme:address``:
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
   axis:<NAME>      a gamepad axis as a continuous lane in [0, 1]: LX LY RX
                    RY (sticks, resting 0.5, up and right high) and LT RT
-                   (triggers, resting 0). A route on one takes it off its
-                   default camera job (app.py)
+                   (triggers, resting 0); and each stick read as a dial,
+                   L.N … L.NW / R.N … R.NW (gamepad.DIAL_LANES: the stick's
+                   push toward that compass point, resting 0). A route on
+                   one takes its stick off the default camera job (app.py)
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
   note:<ch>:<n>    MIDI note n
   pitch:<ch>       MIDI pitch bend
@@ -2136,13 +2138,14 @@ class Router:
                 act(self.reg, b)
 
     def _publish_axes(self) -> None:
-        """The pad axes' names, labels and rests (gamepad.AXES …), once."""
+        """The pad axes' names, labels and rests (gamepad.LANES …: the six
+        axes, then the sticks' dial lanes), once."""
         if "axis" in self.names:
             return
         from . import gamepad
-        self.labels["axis"] = list(gamepad.AXIS_LABELS)
-        self.rests["axis"] = list(gamepad.AXIS_RESTS)
-        self.names["axis"] = {n: i for i, n in enumerate(gamepad.AXES)}
+        self.labels["axis"] = list(gamepad.LANE_LABELS)
+        self.rests["axis"] = list(gamepad.LANE_RESTS)
+        self.names["axis"] = {n: i for i, n in enumerate(gamepad.LANES)}
 
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
