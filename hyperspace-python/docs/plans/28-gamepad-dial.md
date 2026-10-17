@@ -72,6 +72,43 @@ does nothing (or next to nothing, for the wobble).
 
 The depths in the file are first guesses.
 
+## Recorded (headless, a scripted pad)
+
+`tools/dial_demo.py` runs the whole app under Xvfb with DIAL loaded and a
+pad whose sticks follow a script, on a simulated 30 fps clock. The script
+is: a push up and let go, a slow lap of the rim on each stick, a stick
+shaking ±4° on the N | NE border, then the readings swapped and the left
+stick's lap again. Its output is in
+[`assets/28-gamepad-dial/`](assets/28-gamepad-dial/): `dial.mp4` (scene
+beside the faces), `dial-sheet.png`, `dial-traces.png` (each lane and the
+param it pushes), `dial-borders.png`, `dial-trace.csv` and
+`dial-timing.txt`.
+
+What it showed (2026-10-17):
+
+- **Every sector reaches its param, and nothing else moves.** Each lane
+  peaks at 0.94 on its lap (the script's rim is 0.95 of the throw) and
+  only its own param leaves its base. Let go, and every param is back on
+  its base the same frame.
+- **The camera job is released.** With both sticks dials, the camera's
+  yaw, pitch and zoom and the W planes' rates did not move at all
+  (`dial-timing.txt`).
+- **Petal's sticky border works.** Shaking ±4° on a border, petal stayed
+  on one sector (0 changes in 2 s); blend crossfaded N ↔ NE at 3 Hz, the
+  two lanes each about 0.45 (`dial-borders.png`).
+- **Cost:** the dial adds about 6 µs a frame (0.04 % of a 60 Hz frame).
+  The recording's own frame times (about 300 ms) are the software
+  rasterizer's, not the Mac's.
+- **Depths to retune** (from the frames): wobble amount at full push
+  melts the tesseract out of recognition; plasma at full push covers the
+  whole frame; kaleidoscope at full mix replaces the scene. Deconverge,
+  double vision, trip colour, fractals, hue cycle and acid read well.
+- **Fixed on the way:** the first recording showed the rim labels of the
+  two faces colliding and both wobble sectors cut to "Wobbl…". The faces
+  now stack, each with a legend.
+
+It cannot show how a stick feels in the hand. That is the list below.
+
 ## To try at the pad
 
 1. Load DIAL. Let go of both sticks: is the scene sane? Is anything
