@@ -477,6 +477,31 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     assert not np.array_equal(got[0], plain[0])               # the lines, in the scene
 
 
+def _wire_built(n) -> bool:
+    """A node only a wire builds: a `Wired` end (`wire(…)`) or a composite
+    the section added — instance 1 is plain `composite`, later ones
+    `composite.<n>`; the default graph's own are `composite(…)`."""
+    return isinstance(n, (G.Wired, G.Composite)) and (
+        n.name == "composite" or n.name.startswith(("wire(", "composite.")))
+
+
+def test_the_wire_built_check_sees_a_wired_composite():
+    """The check `test_no_factory_preset_changes` leans on is not vacuous:
+    a section adding composite 1 (named plain `composite`) and composite 2
+    trips it; the default graph's own composites do not."""
+    section = {"nodes": [{"kind": "composite"}, {"kind": "composite", "instance": 2}],
+               "wires": _wires(("hands", "composite.over"), ("composite", "output.1.image"),
+                               ("hands", "composite.2.over"), ("composite.2", "output.2.image"))}
+    spec = G.read_graph(section, effects=FILES)
+    assert spec.notes == ()
+    g = G.default_graph(_views(S(), S()), spec.wiring(), effects=RUN)
+    built = sorted(n.name for n in g.nodes.values() if _wire_built(n))
+    assert "composite" in built and "composite.2" in built
+    plain = G.default_graph(_views(S(), S(through=True)), effects=RUN)
+    assert any(isinstance(n, G.Composite) for n in plain.nodes.values())
+    assert not any(_wire_built(n) for n in plain.nodes.values())
+
+
 def test_no_factory_preset_changes():
     """No library file carries a graph (so no wire): every factory preset
     loads with the default graph — and the default graph holds nothing a
@@ -488,8 +513,7 @@ def test_no_factory_preset_changes():
     for sw in ((S(),), (S(), S(through=True)), (S(scene=False), S(), S(through=True)),
                (S(scene=False, hands=True, through=True), S(scene=False))):
         g = G.default_graph(_views(*sw), effects=RUN)
-        assert not any(isinstance(n, (G.Wired, G.Composite)) and n.name.startswith(
-            ("wire(", "composite.")) for n in g.nodes.values())
+        assert not any(_wire_built(n) for n in g.nodes.values())
         assert all(n.placed is None for n in g.nodes.values() if isinstance(n, G.Effect))
         assert g.dormant == {} and g.notes == []
         for out in g.outputs:

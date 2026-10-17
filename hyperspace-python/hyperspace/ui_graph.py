@@ -578,10 +578,24 @@ def _render_said(panel, e: graphview.Edit, fn, st: dict | None = None) -> str | 
     or None."""
     st = st if st is not None else _state(panel)
     why = fn(e)
-    st["note"] = why or ""
+    _note(st, why)
     if why is None:
         st["said"] = e.said
     return why
+
+
+def _note(st: dict, why: str | None) -> None:
+    """The head after an edit: a refusal's words (`why`), or none for an
+    edit that landed — and either way the last render edit's line goes
+    (a render landing puts its own back after this). Inside one delete of
+    a selection (`st["held"]` present) the first refusal's words stay for
+    the frame: a later landing or refusal there does not wipe them."""
+    st["said"] = ""
+    if st.get("held"):
+        return
+    st["note"] = why or ""
+    if why and "held" in st:
+        st["held"] = True
 
 
 def new_link() -> tuple[int, int] | None:
@@ -767,11 +781,11 @@ def _settle(panel, res):
     st = _state(panel)
     if isinstance(res, graphview.Ask):
         ui_routing.ask(panel, res.old, res.new, res.commit)
-        st["note"] = ""
+        _note(st, None)
     elif isinstance(res, graphview.Refusal):
-        st["note"] = str(res)
+        _note(st, str(res))
     else:
-        st["note"] = ""
+        _note(st, None)
     return res
 
 
@@ -934,7 +948,7 @@ def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> No
     b = c.ref if c.kind == "setter" else None
     if b is not None and graphview.is_session_row(b):
         ed.reject_deleted_item()
-        st["note"] = graphview.SESSION_ROW.format(what=b.source)
+        _note(st, graphview.SESSION_ROW.format(what=b.source))
     elif ed.accept_deleted_item():
         disconnect(panel, c)
 
@@ -960,7 +974,7 @@ def _rig_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> 
     """Delete pressed on the rig's node (a device, the analyzer, an LFO, a
     group): kept, said."""
     ed.reject_deleted_item()
-    st["note"] = graphview.NOT_REMOVABLE.format(label=n.label)
+    _note(st, graphview.NOT_REMOVABLE.format(label=n.label))
 
 
 # a node delete's handler by the node's kind (the seam: N4 maps "render"
@@ -971,25 +985,30 @@ DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
 
 def _delete(panel, st: dict, view: graphview.View) -> None:
     """The widget's delete query: the selection's nodes first, by kind
-    (`DELETE_NODE`), then its cables, by kind (`DELETE`)."""
+    (`DELETE_NODE`), then its cables, by kind (`DELETE`). The first
+    refusal's words stay on the head for the frame (`st["held"]`, `_note`)."""
     if ed.begin_delete():
         names = st["names"]
         st["dropped"] = set()           # N4: render nodes this delete took out
-        nk = ed.NodeId()
-        while ed.query_deleted_node(nk):
-            n = view.node(names.get(nk.id(), "")[2:])
-            if n is None:
-                ed.reject_deleted_item()
-                continue
-            DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
-        lk = ed.LinkId()
-        while ed.query_deleted_link(lk):
-            cid = names.get(lk.id(), "")[2:]
-            c = next((x for x in view.cables if x.id == cid), None)
-            if c is None:
-                ed.reject_deleted_item()
-                continue
-            DELETE.get(c.kind, _unknown_cut)(panel, st, view, c)
+        st["held"] = False
+        try:
+            nk = ed.NodeId()
+            while ed.query_deleted_node(nk):
+                n = view.node(names.get(nk.id(), "")[2:])
+                if n is None:
+                    ed.reject_deleted_item()
+                    continue
+                DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
+            lk = ed.LinkId()
+            while ed.query_deleted_link(lk):
+                cid = names.get(lk.id(), "")[2:]
+                c = next((x for x in view.cables if x.id == cid), None)
+                if c is None:
+                    ed.reject_deleted_item()
+                    continue
+                DELETE.get(c.kind, _unknown_cut)(panel, st, view, c)
+        finally:
+            st.pop("held", None)
         ed.end_delete()
 
 

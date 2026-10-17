@@ -556,3 +556,28 @@ def test_picking_an_input_replaces_the_modifier_whole_as_one_undo_step(rig):
         assert u.undo() and table.modifier(m.id).inputs == ("lane:0",)
     finally:
         undo.install(None)
+
+
+def test_picking_the_input_a_modifier_already_reads_changes_nothing(rig):
+    """The same pick again (the combo re-chosen, a cable dropped on the
+    pin it came from): no undo step, no serial bump, the very same
+    modifier — and an input index or a modifier that is not there is the
+    same no-op."""
+    reg, table = rig.reg, rig.router.table
+    panel = panel_of(rig)
+    u = undo.Undo(reg, table)
+    undo.install(u)
+    try:
+        m = ui_routing.add_modifier(panel, "scale", ["lane:0"], mul=2.0)
+        u.tick(1.0)
+        u.tick(2.0)
+        steps, serial = len(u.stack), table.modifiers_serial
+        for mid, k in ((m.id, 0), (m.id, 1), (m.id, -1), ("mod.99", 0)):
+            ui_routing.set_modifier_input(panel, mid, k, "lane:0")
+        u.tick(3.0)
+        u.tick(4.0)
+        assert len(u.stack) == steps and table.modifiers_serial == serial
+        assert table.modifier(m.id) is m and m.inputs == ("lane:0",)
+        assert reg[f"{m.id}.mul"].value == 2.0
+    finally:
+        undo.install(None)
