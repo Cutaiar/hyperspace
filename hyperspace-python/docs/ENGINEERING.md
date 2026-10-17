@@ -236,6 +236,28 @@ toys with F 0) draws no points: its samples are not corners.
 | 56 | Celestial tesseract | Scene | 84 | 912 | 986 |
 | 57 | Celestial cube | Scene | 66 | 414 | 486 |
 | 58 | Mysterium Cosmographicum | Scene | 50 | 744 | 794 |
+| 59 | Flow mark | Vector | 5 | 130 | 130 |
+| 60 | Flow capsules | Vector | 1040 | 970 | 2000 |
+
+**Vector subjects** (the Vector family, after the scenes). A subject
+read from a vector source instead of a formula: the Wispr Flow mark,
+five pill-shaped bars taken from wisprflow.ai's SVG (`geometry.FLOW_BARS`,
+each bar's centre and ends on the 28-unit artboard; `FLOW_R` their end
+radius). **Flow mark** is the mark as drawn, five stadium outlines in the
+z = 0 plane, one face each. **Flow capsules** lifts each bar into a
+capsule round its own axis. Both are `mask` and draw no points. Each
+builder gives its own face UVs (`"FUV"`, which `face_uvs` uses as given).
+The mark's are its own plane, so a face pattern or a bitmap shows through
+the five bars as one picture. The capsules' wrap each bar, u round it and
+v along it. A plane figure has no depth of its own, so its depth cue
+(`"flat"`) spans the unit sphere's diameter back from its nearest point.
+Face-on it draws at full weight, and a tilt dims its far side. Both are
+flat by what they are (the capsules stand in one plane, one bar's width
+deep), so the volume gate passes them over, as it does the Orbit
+(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`
+and the two after it). A browser prototype of their looks (flat ↔
+capsules, materials, textures, bars moving to audio) is in
+[`prototypes/subjects/`](../../prototypes/subjects/).
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.

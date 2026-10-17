@@ -268,9 +268,10 @@ def test_masking_a_flat_surface_lifts_it_over_the_floor(monkeypatch):
     assert G.sweep_ratios(HEART, "XW").min() < G.VOLUME_FLOOR
 
 
-# a single ring (a scene's orbit, plan 28) is flat by what it is: it is
-# gated for its faces (it has none) but not for its volume
-FLAT_BY_NATURE = {"Orbit"}
+# a single ring (a scene's orbit, plan 28) is flat by what it is, as is a
+# vector mark — a plane figure, or a row of capsules standing in one plane
+# (its depth is one bar's width): gated for their faces, not their volume
+FLAT_BY_NATURE = {"Orbit", "Flow mark", "Flow capsules"}
 GATED = [i for i, s in enumerate(G.SHAPES) if s.w in ("lift", "mask")]
 GATED_VOLUME = [i for i in GATED if G.SHAPES[i].name not in FLAT_BY_NATURE]
 
