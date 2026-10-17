@@ -97,7 +97,7 @@ here; overturn → the change, then the same.
 | 107 | The house presets' routes generated from code | 132 | |
 | 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
 | 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
-| 110 | Plan 26: a venue per place — a shared `venues/<name>.toml` laid over `config.toml`, `--venue`, remembered | 144 | |
+| 110 | A venue per place — a shared `venues/<name>.toml` laid over `config.toml`, `--venue`, remembered | 144 | |
 | 111 | A screen may be named, not numbered — what makes a venue portable | 144 | |
 
 "—": no hand check shows it; tests only.

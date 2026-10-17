@@ -1115,7 +1115,7 @@ def _venue_arg(argv: list[str]) -> tuple[str, bool]:
 def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
-    # the venue (plan 26): a file in <home>/venues laid over config.toml, named
+    # the venue (decision 110): a file in <library>/venues laid over config.toml, named
     # on the command line or the one a launch chose last. ⌘R re-execs with
     # this same argv, so the venue rides through a reload and its file is read
     # again — editing a venue and pressing ⌘R is how a venue gets dialled in

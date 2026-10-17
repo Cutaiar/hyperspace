@@ -1244,7 +1244,7 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
 
 # ---------------------------------------------------------------- the venue flag
 #
-# `--venue <name>` picks a file in <home>/venues (plan 26). ⌘R re-execs the
+# `--venue <name>` picks a file in <library>/venues (decision 110). ⌘R re-execs the
 # same argv (`_restart`), so whatever is read here is read again then.
 
 

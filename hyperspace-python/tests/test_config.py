@@ -269,7 +269,7 @@ def test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note(tmp
 
 # ---------------------------------------------------------------- venues
 #
-# A venue (plan 26) is <home>/venues/<name>.toml laid over config.toml: one
+# A venue (decision 110) is <library>/venues/<name>.toml over config.toml: one
 # venue's screens, with the shared sections said once in config.toml.
 
 
