@@ -2026,7 +2026,8 @@ class Panel:
         ui_bands.section(self, dt)
 
     def _page_graph(self, dt: float) -> None:
-        """Both graphs on one canvas, read-only (ui_graph.py, plan 28 N2)."""
+        """Both graphs on one canvas, edited through `graphview.Edit` (ui_graph.py,
+        plan 28 N2; the edits N3 and N4)."""
         ui_graph.page(self, dt)
 
     def _page_routing(self, dt: float) -> None:
