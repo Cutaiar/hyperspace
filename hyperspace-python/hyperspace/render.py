@@ -1320,7 +1320,11 @@ class Renderer:
         effect stack's list in order (`FxState.names()`): each pipeline's
         run of effect nodes is built from it, and an effect switched on or
         off changes nothing here (an off node reads through). A new graph
-        fits the effects' texture pool to what it needs (`Graph.pool`)."""
+        fits the effects' texture pool to what it needs (`Graph.pool`).
+        Plan 28 N4: the preset's wires are part of the key — they ride in
+        the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
+        so an edit on the GRAPH page that lands a new `GraphSpec` builds
+        the graph again, with the same refusals (a dormant wire, a loop)."""
         key = graph_key(views)
         wiring = getattr(self, "wiring", None) or Wiring()
         clouds = cloud_roles(getattr(self, "cloud_source", None))

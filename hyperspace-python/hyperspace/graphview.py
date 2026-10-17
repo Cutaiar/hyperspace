@@ -68,6 +68,7 @@ holds it)."""
 
 from __future__ import annotations
 
+import copy
 import itertools
 import math
 from collections.abc import Callable, Iterable, Mapping
@@ -1156,8 +1157,8 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
 # the method N4 adds beside them — `Edit.wire(src, dst)`,
 # `Edit.unwire(cable)`, `Edit.remove_render_node(node id)`, and
 # optionally `Edit.wire_refusal(src, dst)` for the drag's feedback —
-# looked up by name (`_render`), so until N4 lands they are refused in
-# words (`RENDER_NOT_YET`).
+# looked up by name (`_render`; a plain-words refusal from them becomes a
+# `Refusal`). `RENDER_NOT_YET` is said only by an Edit without them.
 
 RENDER_TYPES = (IMAGE, GEOMETRY, MASK)
 RENDER_NOT_YET = "render cables: not yet"
@@ -1238,10 +1239,50 @@ class Edit:
     duck-typed, for the desk learn a MIDI cable into `base` goes through
     (the page passes `apc40`, as the panel's click-to-map does)."""
 
-    def __init__(self, table: Bindings, reg: Registry, router: Router | None = None,
-                 view: View | None = None, profile=None):
+    def __init__(self, table: Bindings | None = None, reg: Registry | None = None,
+                 router: Router | None = None, view: View | None = None, profile=None, *,
+                 graph=None, render=None, push: Callable[[str], None] | None = None):
         self.table, self.reg, self.router, self.view = table, reg, router, view
         self.profile = profile
+        # plan 28 N4, the render edits: the preset's `GraphSection` they land
+        # through, the renderer's last graph (canvas pins → names), the undo
+        # step pushed before a landing (the page: `undo.push(label,
+        # load=True)`; None: none), the last edit's words
+        self.graph, self.render, self.push = graph, render, push
+        self.said = ""
+
+    # ---- the render graph (plan 28 N4): each returns None (done; its
+    # words in `said`) or a refusal in words, nothing changed ----
+
+    def wire(self, src_port: str, dst_port: str, dry: bool = False) -> str | None:
+        """A picture from `src_port` into `dst_port` (a geometry cable: the
+        hands node's place). `dry`: only say whether it may be."""
+        return render_wire(self, src_port, dst_port, dry)
+
+    def wire_refusal(self, src_port: str, dst_port: str) -> str | None:
+        """Why `wire` would refuse, changing nothing (the drag's words)."""
+        return self.wire(src_port, dst_port, dry=True)
+
+    def unwire(self, cable, dst: str | None = None) -> str | None:
+        """Take a render cable (a `VCable`, or its two ends; one port's
+        name alone: whatever is wired into it) out of the graph."""
+        return render_unwire(self, cable, dst)
+
+    def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
+        """The picker: an effect instance (`EffectAt(file, n + 1)`), a hands
+        node (`HandsAt(n + 1)`) or a composite."""
+        return render_add(self, kind, file, **settings)
+
+    def drop_node(self, node: str) -> str | None:
+        """Delete a render node — an extra effect instance, hands node or
+        composite — out of the section, with every wire on it."""
+        return render_drop(self, node)
+
+    remove_render_node = drop_node          # N3's name for it (`remove_node`)
+
+    def set_node(self, node: str, **settings) -> str | None:
+        """A node's setting: a hands node's `draw` / `into`, a composite's `blend`."""
+        return render_set(self, node, **settings)
 
     # ---- what a pin is ----
 
@@ -1286,7 +1327,11 @@ class Edit:
         """N4's method `name` (`wire`, `unwire`, `remove_render_node`), or
         the refusal until it lands."""
         fn = getattr(self, name, None)
-        return fn(*args) if fn is not None else Refusal(RENDER_NOT_YET)
+        if fn is None:
+            return Refusal(RENDER_NOT_YET)
+        res = fn(*args)
+        # N4's methods refuse in plain words: a Refusal to the page
+        return Refusal(res) if isinstance(res, str) and not isinstance(res, Refusal) else res
 
     @staticmethod
     def ordered(a: str, b: str) -> tuple[str, str]:
@@ -1722,3 +1767,372 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
         if d < dist:
             best, dist = c, d
     return best
+
+
+# ---------------------------------------------------------------- render edits (plan 28 N4)
+#
+# The GRAPH page's edits of the render graph: a cable dragged between two
+# image ports is a wire in the preset's `graph` section (`graph.Wire`); a
+# geometry cable from a hands node into the scene or the layer is that
+# node's `into`; the picker adds an effect instance, a hands node or a
+# composite; deleting a render node or cable takes it out of the section.
+# Each edit is a new section read back through `graph.read_graph` with the
+# build's effect files — so a refusal is the very note a preset file would
+# get, in its words, and nothing changes — then landed through the
+# preset's `GraphSection` (`land`: the instances' params declared or
+# dropped, the renderer handed the new wiring, which builds the graph
+# again), one undo step before it (`push`), the preset dirty. The seam
+# with plan 28 N3's modulation edits is the port type: image / geometry /
+# mask cables are these (`RENDER_TYPES`), value / trigger cables N3's.
+
+# the frame's own nodes no wire names, and why
+PLUMBING = {
+    "fx": "is a chain's end: its outputs take it by their switches — wire into an "
+          "output's image to show something else",
+    "composite(": "lays the hands on before the chain (an output's through switch), "
+                  "not a node a wire names",
+    "capture": "holds what the history is wired to: wire into history.image",
+    "shape": "is drawn by the scene, not wired",
+    "readout": "is the hands' guide alone: wire the layer into an output's readout",
+    "cloud": "is drawn by the scene, not wired",
+}
+
+
+def _is_plumbing(name: str) -> bool:
+    return any(name == head or name.startswith(head if head.endswith("(") else head + "(")
+               or (not head.endswith("(") and name.startswith(head + "."))
+               for head in PLUMBING)
+
+
+def _plumbing(name: str) -> str:
+    for head, why in PLUMBING.items():
+        if name == head or name.startswith(head):
+            return f"{name} {why}"
+    return f"{name} is the frame's own, not a node a wire names"
+
+
+def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
+    """A canvas pin or node id (`rout:<node>`, `rin:<node>/<port>`,
+    `render:<node>`), or a name as the preset's graph says it → (that
+    name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
+    None), or (None, why it is no name a wire may use). An effect's node
+    in any pipeline is its instance (`acid(scene+hands)` → `acid`); a
+    wired output's end stands for the output's image port and what feeds
+    it."""
+    head, _, rest = pin.partition(":")
+    if head not in ("rout", "rin", "render") or not rest:
+        node = pin.rpartition(".")[0] if rgraph.wire_node_kind(pin) is None else pin
+        return (pin, None) if rgraph.wire_node_kind(node) is not None else (
+            None, f"no node {pin!r}")
+    built, _, port = rest.partition("/")
+    nodes = getattr(render_graph, "nodes", None) or {}
+    node = nodes.get(built)
+    if node is None and _is_plumbing(built):     # (no graph to ask: by its name)
+        return None, _plumbing(built)
+    if isinstance(node, rgraph.Wired):
+        out = built[len("wire("):-1]
+        if head == "rin":
+            return f"{out}.image", None
+        src = node.inputs["image"]
+        if src is None:
+            return None, f"{out}'s wired picture has no source"
+        return spec_name(f"rout:{src.name}", render_graph)
+    if isinstance(node, rgraph.Effect):
+        name = node.effect
+    elif isinstance(node, (rgraph.Fx, rgraph.Capture, rgraph.Shape, rgraph.Readout,
+                           rgraph.PointCloud)):
+        return None, _plumbing(built)
+    else:
+        name = built
+        if rgraph.wire_node_kind(name) is None:
+            return None, _plumbing(built)
+    if head == "rin":
+        if isinstance(node, rgraph.Scene) and port.startswith("geometry"):
+            port = "geometry"
+        return f"{name}.{port}", None
+    return name, None
+
+
+def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
+    """The right-click picker's list: (kind, file, label) — every effect
+    file this build has, then a hands node and a composite."""
+    gs = edit.graph
+    files = gs.files() if gs is not None and hasattr(gs, "files") else None
+    out: list[tuple[str, str | None, str]] = [("effect", f, f) for f in sorted(files or ())]
+    return out + [("hands", None, "hands"), ("composite", None, "composite")]
+
+
+def _doc(edit: Edit) -> dict:
+    spec = getattr(edit.graph, "spec", None)
+    return copy.deepcopy(spec.to_json()) if spec is not None else {"nodes": []}
+
+
+def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> str | None:
+    """Read `doc` back as a preset would (a note is the refusal, nothing
+    changed); else, unless `dry`, the undo step and the landing."""
+    gs = edit.graph
+    if gs is None:
+        return "no preset is loaded"
+    files = gs.files() if hasattr(gs, "files") else None
+    if not doc.get("wires"):
+        doc.pop("wires", None)
+    try:
+        spec = rgraph.read_graph(doc, effects=files)
+    except rgraph.GraphError as e:
+        return str(e)
+    if spec.notes:
+        return spec.notes[0]
+    if dry:
+        return None
+    new = spec.to_json()
+    if new == _doc(edit):
+        edit.said = "already so"
+        return None
+    if edit.push is not None:
+        edit.push(label)
+    if new == {"nodes": []}:                 # nothing left: the default graph, no section
+        gs.land(None, None)
+    else:
+        gs.land(spec, new)
+    edit.said = said
+    return None
+
+
+def _entry_name(e: dict) -> str | None:
+    if e.get("kind") != "effect" or "file" not in e:
+        return None
+    return rgraph.instance_name(e["file"], e.get("instance", 1))
+
+
+def _unplace(doc: dict, which: Callable[[str, str, str], bool]) -> None:
+    """D1's placement off each effect entry `which(name, key, where)`
+    picks: an extra instance back in the chain, instance 1's entry gone
+    (the file itself, always there)."""
+    keep = []
+    for e in doc.get("nodes", []):
+        name = _entry_name(e)
+        key = next((k for k in rgraph.PLACE_KEYS if k in e), None)
+        if name is not None and key is not None and which(name, key, e[key]):
+            if e.get("instance", 1) < 2:
+                continue
+            e = {k: v for k, v in e.items() if k not in rgraph.PLACE_KEYS}
+        keep.append(e)
+    doc["nodes"] = keep
+
+
+def _hands_entry(doc: dict, n: int) -> dict | None:
+    return next((e for e in doc.get("nodes", []) if e.get("kind") == "hands"
+                 and e.get("instance", 1) == n), None)
+
+
+def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None:
+    s, why = spec_name(src, edit.render)
+    if s is None:
+        return why
+    d, why = spec_name(dst, edit.render)
+    if d is None:
+        return why
+    if rgraph.wire_node_kind(d) is not None:
+        return f"{d} is a node, not a port: a wire goes into {rgraph.WIRE_TO_WORDS}"
+    w = rgraph.Wire(s, d)
+    src_kind, dst_kind = rgraph.wire_node_kind(s), rgraph.wire_node_kind(w.node)
+    takes = rgraph.WIRE_TAKES.get(dst_kind or "", {}).get(w.port)
+    makes = rgraph.WIRE_MAKES.get(src_kind or "")
+    if takes == GEOMETRY and makes == GEOMETRY:
+        return _hands_into(edit, s, "scene" if w.node == "scene" else "layer", dry)
+    if takes == MASK and makes == MASK:
+        return "the cover is the history's own: it is wired so already"
+    doc = _doc(edit)
+    doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d] + [w.to_json()]
+    into_effect = dst_kind == "effect"
+
+    def moves(name: str, key: str, where: str) -> bool:
+        if name == w.node:                       # the effect is fed by this wire now
+            return True
+        target = where if key == "into" or where.startswith("output.") else None
+        if target is not None and f"{target}.image" == d:   # its port takes this wire
+            return True
+        return name == s and not into_effect     # the effect is wired on, elsewhere
+    _unplace(doc, moves)
+    return _land(edit, doc, f"wire {w}", f"wired {w}", dry)
+
+
+def _hands_into(edit: Edit, ghost: str, into: str, dry: bool = False) -> str | None:
+    """A geometry cable: hands node `ghost` drawn in the scene or as the layer."""
+    _, n = rgraph.split_instance(ghost)
+    spec = getattr(edit.graph, "spec", None)
+    wiring = spec.wiring() if spec is not None else rgraph.Wiring()
+    if n not in {h.n for h in wiring.nodes()}:
+        return f"no {ghost} hands node in this graph"
+    layer = wiring.layer_node()
+    if into == "layer" and layer.n != n and layer.into == "layer":
+        return (f"{rgraph.hands_name(layer.n)} makes the layer: put it in the scene first "
+                "(one hands node makes the layer)")
+    doc = _doc(edit)
+    e = _hands_entry(doc, n)
+    if e is None:
+        e = {"kind": "hands", **({"instance": n} if n > 1 else {})}
+        doc["nodes"].insert(0, e)
+    if into == "layer":
+        e.pop("into", None)
+    else:
+        e["into"] = into
+        e.pop("laid", None)
+    if len(e) == 1:
+        doc["nodes"].remove(e)
+    return _land(edit, doc, f"{ghost} into the {into}", f"{ghost} drawn in the {into}", dry)
+
+
+def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
+    if isinstance(cable, VCable):
+        if cable.ref is not None:
+            src_node, node, port = cable.ref
+            src, dst = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
+        else:                                # (its pins name it as well)
+            src, dst = cable.src_port, cable.dst_port
+    else:
+        src = cable
+    s, why = spec_name(src, edit.render)
+    if s is None:
+        return why
+    d = None
+    if dst is not None:
+        d, why = spec_name(dst, edit.render)
+        if d is None:
+            return why
+    else:                                    # a port's name alone: whatever goes into it
+        s, d = None, s
+    kind = rgraph.wire_node_kind(s) if s is not None else None
+    if rgraph.WIRE_MAKES.get(kind or "") == GEOMETRY:
+        if d == "scene.geometry":
+            return _hands_into(edit, s, "layer")
+        return f"{s} is the layer's geometry: put it in the scene instead"
+    doc = _doc(edit)
+    wires = doc.get("wires", [])
+    left = [x for x in wires if not (x["to"] == d and (s is None or x["from"] == s))]
+    changed = len(left) != len(wires)
+    doc["wires"] = left
+    if not changed and s is not None:
+        before = copy.deepcopy(doc["nodes"])
+
+        def placed_here(name: str, key: str, where: str) -> bool:
+            if key == "after" and not where.startswith("output."):
+                return where == s and d == f"{name}.image"
+            return name == s and d == f"{where}.image"
+        _unplace(doc, placed_here)
+        changed = doc["nodes"] != before
+    if not changed:
+        said = f"{s} → {d}" if s is not None else d
+        return (f"{said} is the default graph's: no wire says it (wire something else "
+                f"into {d} to replace it)")
+    return _land(edit, doc, f"unwire {d}", f"unwired {d}")
+
+
+def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
+    spec = getattr(edit.graph, "spec", None)
+    doc = _doc(edit)
+    if kind == "effect":
+        files = edit.graph.files() if hasattr(edit.graph, "files") else None
+        if not file or (files is not None and file not in files):
+            return f"no {file} effect in this build"
+        n = max([e.n for e in (spec.effects if spec is not None else ()) if e.file == file],
+                default=1) + 1
+        doc["nodes"].append({"kind": "effect", "file": file, "instance": n})
+        name = rgraph.instance_name(file, n)
+        return _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
+    if kind == "hands":
+        wiring = spec.wiring() if spec is not None else rgraph.Wiring()
+        n = max(h.n for h in wiring.nodes()) + 1
+        into = settings.get("into") or ("scene" if wiring.layer_node().into == "layer"
+                                        else "layer")
+        e: dict[str, Any] = {"kind": "hands", "instance": n}
+        if into != "layer":
+            e["into"] = into
+        if settings.get("draw", "solid") != "solid":
+            e["draw"] = settings["draw"]
+        doc["nodes"].append(e)
+        name = rgraph.hands_name(n)
+        return _land(edit, doc, f"add {name}", f"{name} added, drawn in the {into}")
+    if kind == "composite":
+        n = max([c.n for c in (spec.composites() if spec is not None else ())], default=0) + 1
+        c = rgraph.CompositeAt(n, settings.get("blend", "over"))
+        doc["nodes"].append(c.to_json())
+        return _land(edit, doc, f"add {c.name}", f"{c.name} added: wire its under and over")
+    return f"no node kind {kind!r}: the picker adds an effect, hands or a composite"
+
+
+def _touches(x: dict, names: set[str]) -> bool:
+    return x["from"] in names or x["to"].rpartition(".")[0] in names
+
+
+def render_drop(edit: Edit, node: str) -> str | None:
+    name, why = spec_name(node, edit.render)
+    if name is None:
+        return why
+    kind = rgraph.wire_node_kind(name)
+    doc = _doc(edit)
+    before = copy.deepcopy(doc)
+    if kind == "effect":
+        if rgraph.split_instance(name)[1] == 1:
+            return (f"{name} is a file: it is always in the chain (switch it off on FX; "
+                    "unwire it to put it back in the chain)")
+        doc["nodes"] = [e for e in doc["nodes"] if _entry_name(e) != name]
+        names = {name}
+    elif kind in ("ghost", "layer"):
+        _, n = rgraph.split_instance(name)
+        if n == 1:
+            return "hands 1 is the frame's own hands: it stays (switch it off on HANDS)"
+        doc["nodes"] = [e for e in doc["nodes"] if not (e.get("kind") == "hands"
+                                                         and e.get("instance", 1) == n)]
+        names = {rgraph.hands_name(n), rgraph.layer_name(n)}
+    elif kind == "composite":
+        _, n = rgraph.split_instance(name)
+        doc["nodes"] = [e for e in doc["nodes"] if not (e.get("kind") == "composite"
+                                                         and e.get("instance", 1) == n)]
+        names = {name}
+    else:
+        return f"{name} is the frame's own: it stays"
+    doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
+    if not doc["wires"]:
+        doc.pop("wires")
+    _unplace(doc, lambda e, key, where: where in names)
+    if doc == before:
+        return f"{name} is not in the preset's graph"
+    return _land(edit, doc, f"delete {name}", f"{name} deleted")
+
+
+def render_set(edit: Edit, node: str, **settings) -> str | None:
+    name, why = spec_name(node, edit.render)
+    if name is None:
+        return why
+    kind = rgraph.wire_node_kind(name)
+    doc = _doc(edit)
+    if kind in ("ghost", "layer"):
+        _, n = rgraph.split_instance(name)
+        if "into" in settings:
+            return _hands_into(edit, rgraph.hands_name(n), settings["into"])
+        e = _hands_entry(doc, n)
+        if e is None:
+            if n > 1:
+                return f"no {name} hands node in this graph"
+            e = {"kind": "hands"}
+            doc["nodes"].insert(0, e)
+        how = settings.get("draw", "solid")
+        if how == "solid":
+            e.pop("draw", None)
+        else:
+            e["draw"] = how
+        if len(e) == 1:
+            doc["nodes"].remove(e)
+        return _land(edit, doc, f"{name} {how}", f"{rgraph.hands_name(n)} drawn {how}")
+    if kind == "composite":
+        _, n = rgraph.split_instance(name)
+        blend = settings.get("blend", "over")
+        for e in doc["nodes"]:
+            if e.get("kind") == "composite" and e.get("instance", 1) == n:
+                e.pop("blend", None)
+                if blend != "over":
+                    e["blend"] = blend
+                return _land(edit, doc, f"{name} {blend}", f"{name} laid {blend}")
+        return f"no {name} node in this graph"
+    return f"{name} has no setting here"
