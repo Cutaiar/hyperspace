@@ -100,6 +100,7 @@ def build_rig(tmp_path, renderer=None):
     try:
         yield r
     finally:
+        panel.close()                   # the GRAPH page's node editor context, if drawn
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
 
