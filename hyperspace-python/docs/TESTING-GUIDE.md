@@ -30,7 +30,9 @@ explained in the [glossary](#glossary) at the end.
    A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
    A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
-   use branch `plan-24-26-27-integration`.
+   use branch `plan-24-26-27-integration`. The shader-node entries
+   (L95–L102, D19–D23) are plan 30's: until it is merged, use branch
+   `plan-28-30-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -101,6 +103,9 @@ changes brightness or volume instead).
     L92–L94 with the hand camera or recorded hands, and L84 after L76;
     B39 and B40 with the hand camera; C6 and C7 on the projector; D16
     after D2, then D17 and D18.
+12. Plan 30's shader-node entries: L95–L97 on the laptop; on the copy
+    L98 (with the hand camera or recorded hands), then L99–L102; D19–D23
+    with the glass and the projector, after D1.
 
 ## Summary
 
@@ -200,6 +205,14 @@ changes brightness or volume instead).
 | L92 | Hands inside the shape | 1 | laptop, the copy, recorded hands (hand camera for the last part) | 204, 205 |
 | L93 | A hands layer that goes behind the shape | 1 | laptop, the copy, recorded hands | 207 |
 | L94 | Hands as lines | 1 | laptop, the copy, recorded hands | 214 |
+| L95 | A time for each effect on the SYSTEM page | 1 | laptop | 220 |
+| L96 | Switching effects changes only the picture | 1 | laptop | 221 |
+| L97 | An effect on the faces still bends only the faces | 1 | laptop | 230 |
+| L98 | The palette on the hands only | 1 | laptop, the copy, recorded hands | 223 |
+| L99 | A placement the app cannot follow is a note | 1 | laptop, the copy | 225 |
+| L100 | A placement with nothing to sit on says so | 1 | laptop, the copy | 226 |
+| L101 | The placements in words | 1 | laptop, the copy | 228 |
+| L102 | The FX page's placed chip | 1 | laptop, the copy | 229 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -298,6 +311,11 @@ changes brightness or volume instead).
 | D16 | Every picture as on earlier builds, on the rig | 2d | glass, projector, camera, APC40 | 195, 208 |
 | D17 | The hands in the shape on the projector, clean on the glass | 2d | glass, projector, camera, the copy | 206 |
 | D18 | Two hands, one in the shape, one on the glass | 2d | glass, projector, camera, the copy | 213 |
+| D19 | Each output still gets its own effects | 2d | glass, projector, camera | 222 |
+| D20 | The palette on the hands, on both screens | 2d | glass, projector, camera, the copy | 223 |
+| D21 | One screen recoloured | 2d | glass, projector, the copy | 224 |
+| D22 | The trail holds the bent shape | 2d | glass, projector, the copy | 227 |
+| D23 | Two palettes, a different colour on each screen | 2d | glass, projector, the copy | 231 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
 | F1 | A wired Xbox 360 pad is found | 2f | gamepad | 144 |
 | F2 | Learn pad — a button | 2f | gamepad | 145 |
@@ -2264,7 +2282,7 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 556 frames match their goldens (Apple M3 Max,
+**Right if:** it ends "all 580 frames match their goldens (Apple M3 Max,
 4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
@@ -2345,8 +2363,9 @@ and off. On OUTPUT tick **through effects**, then untick it.
 **Right if:** under the stall status, "gpu per node, ms (median of the
 last frames):" and one line each for `scene`, `cover`, `hands`,
 `history`, `fx`, `capture`, `output.1`, a few milliseconds or less and
-steady; `fx` drops near 0 with the effects off and comes back within a
-second; `history` changes with the look-back; ticking **through effects**
+steady, and a line for each effect that is running just above `fx`
+(`fx` itself always reads 0.00 now: see L95); the effects' lines go
+with the effects off and come back within a second; `history` changes with the look-back; ticking **through effects**
 adds `composite(scene+hands)` and `fx(scene+hands)`, which go again a
 moment after unticking. No `ghost` line.
 
@@ -2532,6 +2551,182 @@ whether you want a skeleton of bone lines instead.
 **Changes:** tick **scene** again.
 
 *(check 214)*
+
+## Shader nodes (on the copy)
+
+Plan 30 (shader nodes). Each effect on the FX page is now its own part
+of the picture's wiring, and a preset can put one somewhere other than
+the end of the chain: the colour palette on the hands only, on one
+screen only, or a second acid before the trail. **No factory preset
+does it**: these entries copy test presets into the copy's library, as
+for the render graph above (delete any `[library] path` line on the
+copy first). The test presets are in
+`hyperspace-python/tests/fixtures/presets/`:
+
+- `palette-hands.json` — PARTY TRACER's look with the palette on the
+  hands only;
+- `palette-glass.json` — PARTY ACID with the palette on output 2 only;
+- `acid-scene.json` — PARTY MANDALA with a second acid before the trail
+  (the look-back on).
+
+Two variants of `palette-hands.json`, made as above (copy it under the
+new name and replace the `"graph": {"nodes": [` … `]},` part):
+
+- `palette-teapot.json`: `"graph": {"nodes": [{"kind": "effect",
+  "file": "palette", "after": "teapot"}]},`
+- `palette-both.json`: `"graph": {"nodes": [{"kind": "effect", "file":
+  "palette", "after": "hands", "into": "output.2"}]},`
+
+The screens-together entries are D19–D23 in Part 2 (d).
+
+#### L95. A time for each effect on the SYSTEM page
+
+**Needs:** laptop.
+
+**Do:** SYSTEM page; load ACID (F6). On the FX page switch Kaleido on
+and Acid off.
+
+**Right if:** under "gpu per node, ms", lines `acid`, `wobble`,
+`deconverge` and `huecycle` just above `fx`. The `fx` line itself reads
+0.00 — that is by design (it only hands the picture on); the effects'
+cost is on their own lines. After the switch, `kaleido` appears and
+`acid` goes within a few frames. No line for an effect that is off.
+(The split between the lines jumps about on the Mac's graphics chip:
+look for the lines, not their exact share.)
+
+**Wrong if:** one `fx` line carrying everything; a line for every
+effect, on or off.
+
+*(check 220)*
+
+#### L96. Switching effects changes only the picture
+
+**Needs:** laptop.
+
+**Do:** ACID; on the FX page click effects on and off quickly; drag one
+chip to another place; then untick **Effects**.
+
+**Right if:** each click changes the picture as on earlier builds, with
+no flash, no black frame and no stall line on SYSTEM; the drag reorders
+as before; with **Effects** off the picture is the plain shape and
+SYSTEM shows no effect lines.
+
+**Wrong if:** a black or frozen frame on a click; a stall on every
+click.
+
+*(check 221)*
+
+#### L97. An effect on the faces still bends only the faces
+
+**Needs:** laptop.
+
+**Do:** load FACES (F2). FX page: open Warp, click ONTO **faces**,
+switch it on. Hold the pointer over the ONTO **faces** chip.
+
+**Right if:** the pictures inside the faces warp and the rest of the
+frame does not; the pop-up ends "On the faces it runs inside the
+shape's face drawing: the one shader run the render graph does not
+show, and a placement in the preset's graph does not move it."; the
+faces row lists Warp; SYSTEM has no `warp` line.
+
+**Wrong if:** the whole frame warps.
+
+**Changes:** click ONTO **frame** and switch Warp off again.
+
+*(check 230)*
+
+#### L98. The palette on the hands only (on the copy, tape)
+
+**Needs:** laptop; the copy; hands (the hand camera, or the recorded
+hands of L44), **Ghost hands** ticked.
+
+**Do:** copy `palette-hands.json` into `<home>/presets/` and load
+PALETTE-HANDS; SYSTEM page; move the hands; then take them out of view.
+
+**Right if:** the hands turn a slice of blue-cyan (they are pale, so it
+may read grey-teal) while the shape and its trail keep their colours;
+the guide and labels are not recoloured; SYSTEM shows a `palette` line
+under `hands` while the hands show, and none without them.
+
+**Judge:** whether the blue-cyan reads as you meant at a distance.
+
+**Wrong if:** the whole picture turns blue; a dark rim around the hands.
+
+*(check 223)*
+
+#### L99. A placement the app cannot follow is a note (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** make `palette-teapot.json` and `palette-both.json` (above). Load
+each; save it (the preset strip's save); open the file again.
+
+**Right if:** the preset strip says, for the teapot, "graph: palette
+after 'teapot' — this build places after scene, hands, hands.2 …,
+history, output.1 …, or an effect; the default placement", and for the
+other "graph: palette after 'hands' and into 'output.2' at once — one
+of the two; the default placement"; the palette then recolours the whole
+picture (it went back to the end of the chain); the preset loads with
+no red dot; after saving, the file still says what you wrote.
+
+**Wrong if:** the load refused; the file changed by the save.
+
+**Changes:** delete the two files.
+
+*(check 225)*
+
+#### L100. A placement with nothing to sit on says so (on the copy)
+
+**Needs:** laptop; the copy; L98's preset.
+
+**Do:** PALETTE-HANDS; OUTPUT page: untick **hands** on every output;
+then tick it again.
+
+**Right if:** OUTPUT lists "dormant: palette after hands — no hands
+layer this frame"; nothing is recoloured and SYSTEM has no palette
+line; ticking **hands** brings the recolouring back.
+
+**Wrong if:** the shape turns blue (the palette fell back into the
+chain).
+
+*(check 226)*
+
+#### L101. The placements in words (on the copy)
+
+**Needs:** laptop; the copy; the three test presets copied in.
+
+**Do:** load each in turn; OUTPUT page: hold the pointer over the
+"shows:" line.
+
+**Right if:** the pop-up's last line reads "graph: palette on the
+hands", "graph: palette on output 2 only", "graph: acid ×2 · acid 2
+before the history"; no page scrolls.
+
+**Wrong if:** words that disagree with the picture.
+
+*(check 228)*
+
+#### L102. The FX page's placed chip (on the copy)
+
+**Needs:** laptop; the copy; L98's preset.
+
+**Do:** PALETTE-HANDS; FX page. Drag the Palette chip; drop another chip
+onto it. Click its name and hold the pointer over the open strip's
+title. Untick every output's **hands** and hold the pointer over the
+chip's name. Load TRIP.
+
+**Right if:** the Palette chip sits in a second row of chips under the
+others, reading "Palette · after hands", readable from where you stand;
+the line under **Effects** reads "nothing in the chain · 1 placed"; the
+drag and the drop do nothing; its dot switches it and its name opens
+its controls, whose title pop-up reads "palette.glsl · after hands";
+with the hands off the "1 placed" goes and the pop-up says "dormant: …";
+on TRIP the Palette chip is back in the main grid, last.
+
+**Wrong if:** the Palette chip in the main grid on PALETTE-HANDS; a
+drag moving it; the page scrolling.
+
+*(check 229)*
 
 # Part 2 — tests that need hardware
 
@@ -4699,6 +4894,112 @@ mirrored too; the cage lost after the restart.
 
 *(check 213)*
 
+#### D19. Each output still gets its own effects (shader nodes)
+
+**Needs:** glass and projector (D1); the hand camera; the SYSTEM page.
+
+**Do:** OUTPUT page: the projector with **scene**, **hands** and
+**through effects** ticked; the glass with **scene** unticked and
+**hands** and **through effects** ticked. Load ACID; a hand in the box.
+Then tick **Flip X** on the glass.
+
+**Right if:** the projector bends the hands with the shape, the glass
+bends the hands alone, both as on earlier builds; SYSTEM shows
+`acid(scene+hands)` and `acid(hands)` lines; the flip mirrors the glass
+only.
+
+**Wrong if:** the glass showing the projector's picture; an effect
+applied twice; the flip on both.
+
+**Changes:** untick **Flip X** and the two **through effects**.
+
+*(check 222)*
+
+#### D20. The palette on the hands, on both screens (on the copy)
+
+**Needs:** glass and projector (D1: the glass is output 1, the projector
+output 2); the hand camera; the copy with `palette-hands.json` (Part 1,
+"Shader nodes").
+
+**Do:** OUTPUT page: **hands** ticked on both outputs. Load
+PALETTE-HANDS; move your hands in front of the shape on both screens.
+
+**Right if:** on both screens the hands are recoloured blue-cyan and the
+shape is not, at the hands' usual see-through look; the guide is not
+recoloured.
+
+**Wrong if:** the hands recoloured on the glass but plain on the
+projector (the second screen did not get the recoloured hands); a dark
+rim round the hands.
+
+*(check 223)*
+
+#### D21. One screen recoloured (on the copy)
+
+**Needs:** glass and projector (D1); the copy with `palette-glass.json`
+copied in (Part 1, "Shader nodes").
+
+**Do:** load PALETTE-GLASS. OUTPUT page: untick output 2's **scene**
+and **hands**, then tick them again. Then edit the copy's
+`palette-glass.json`: change `"output.2"` to `"output.1"`; load it
+again.
+
+**Right if:** the projector (output 2) shows the acid recoloured to
+blue-cyan while the glass keeps the rainbow; output 2's "shows:" line
+ends "· palette on this output only"; with its scene and hands unticked,
+OUTPUT lists "dormant: palette into output.2 — output 2 shows no picture
+this frame", and ticking them brings the colour back; after the edit,
+the glass is recoloured and the projector is not.
+
+**Wrong if:** both screens recoloured; output 2 black; the projector
+plain where it should be recoloured.
+
+**Changes:** delete the file.
+
+*(check 224)*
+
+#### D22. The trail holds the bent shape (on the copy)
+
+**Needs:** glass and projector; the copy with `acid-scene.json` copied
+in (Part 1, "Shader nodes").
+
+**Do:** load ACID-SCENE; LOOKBACK page.
+
+**Right if:** the mandala heaves with the second acid on both screens;
+its trail follows the heaved shape, not a straight one; LOOKBACK reads
+"history: the scene · acid 2 before the history".
+
+**Wrong if:** the trail straight while the shape heaves.
+
+*(check 227)*
+
+#### D23. Two palettes, a different colour on each screen (on the copy)
+
+**Needs:** glass and projector (D1); the copy.
+
+**Do:** copy `palette-glass.json` into `<home>/presets/` as
+`two-palettes.json` and replace its `"graph": {"nodes": [` … `]},` part
+with `"graph": {"nodes": [{"kind": "effect", "file": "palette", "into":
+"output.1"}, {"kind": "effect", "file": "palette", "instance": 2,
+"into": "output.2"}]},`; after `"fx.palette.width": 60.0` add `,
+"fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
+"fx.palette.2.centre": 30.0, "fx.palette.2.width": 60.0`. Load
+TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's centre.
+
+**Right if:** the glass is blue-cyan and the projector orange-red; FX
+shows two placed chips, "Palette · into output 1" and "Palette 2 · into
+output 2", each with its own controls; dragging Palette 2's centre
+changes only the projector; ROUTING lists "Palette 2 …" settings; each
+output's "shows:" line ends "· palette on this output only" or "·
+palette 2 on this output only".
+
+**Wrong if:** both screens one colour; the colours on the wrong
+screens; one chip.
+
+**Changes:** delete the file.
+
+*(check 231)*
+
 ## (e) A mouse
 
 #### E1. Drag an effect with a mouse
@@ -5012,6 +5313,10 @@ what you want changed.
   whether the wire hands read as "hands as lines"; the point cloud's
   dots. (L83, L87, L92, L94, L84, B39; checks 192, 197, 198, 203, 204,
   214, 216–218)
+- **The shader nodes' looks** — whether the palette on the hands reads
+  as the colour you meant from a distance (the ghost hands are pale), a
+  palette per screen, and whether the FX page's placed chip reads
+  clearly. (L98, L102, D20, D21, D23; checks 223, 224, 229, 231)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
@@ -5194,7 +5499,7 @@ the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
 
 **Golden picture (golden frame)** — a picture of a factory preset the
-automated tests draw and compare to the last byte; 556 of them, kept in
+automated tests draw and compare to the last byte; 580 of them, kept in
 `hyperspace-python/tests/golden/frames/`.
 
 **Ground** — the empty background of the picture. The OUTPUT page's

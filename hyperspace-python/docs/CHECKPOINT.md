@@ -48,6 +48,14 @@ branch: 2190 tests pass (2 skipped), and 556 golden frames match on the
 gate Mac. No preset was edited or added. Check `git log` and the PRs for
 the current state (PR #189, the exit crash, is open beside it).
 
+Plans 28 and 30 are being run together on `plan-28-30-integration`
+(cut from the plan 24–26–27 branch with `main` merged in). **Plan 30,
+shader nodes, is built** ([`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)):
+every effect an image node, placeable by a preset on any image edge;
+2327 tests pass (2 skipped) and 580 golden frames match, the 556 from
+before unchanged. Hand checks 220–231, register rows 214–232. Plan 28
+is still being built on the same branch.
+
 ## What is left
 
 - **The hand checks.** None has been run by a person. Start from

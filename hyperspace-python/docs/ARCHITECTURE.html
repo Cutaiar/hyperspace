@@ -734,7 +734,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Graph</div><div class="mods">graph</div></div>
-        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, the effect chain, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
+        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. An effect can sit on any image edge. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
@@ -857,10 +857,13 @@
       <div class="sub">
         <h4>Effects</h4>
         <p>Each shader file in the effects folder <em>is</em> an effect: its
-        uniforms become parameters automatically. An effect aims either at the
-        whole frame or at the polytope's faces, which can show the picture per
-        face or in screen space.</p>
-        <span class="path">fx · glsl · shaders/fx/*.glsl · ui_fx</span>
+        uniforms become parameters automatically. On the frame each effect is
+        a node of the render graph — bitmap in, bitmap out, off ones read
+        straight through — and a preset can place one anywhere there is a
+        picture: on the hands only, on one output only, before the trail. An
+        effect can instead aim at the polytope's faces, which can show the
+        picture per face or in screen space.</p>
+        <span class="path">fx · graph · glsl · shaders/fx/*.glsl · ui_fx</span>
       </div>
       <div class="sub">
         <h4>Look-back &amp; dream</h4>
@@ -906,8 +909,8 @@
         share one fixed camera with a depth buffer, so a hand can pass between
         the shape's edges. Zoom and pan move only the shape, in the world. A
         preset can say its wiring in its file — the hands in the scene or as a
-        layer, an effect twice — and 556 golden frames pin every factory
-        preset's picture to the byte.</p>
+        layer, an effect twice, an effect placed on one edge — and 580 golden
+        frames pin every factory preset's picture to the byte.</p>
         <span class="path">graph · render · geometry · tools/golden_frames</span>
       </div>
       <div class="sub">
