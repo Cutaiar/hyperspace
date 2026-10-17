@@ -136,7 +136,11 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # landing through the real `Presets` (`GraphSection`) onto the rig's
 # renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines",)
+# plan 30 D1: the three placements' proof presets — the palette after the
+# hands' layer, the palette into output 2's picture, a second acid after
+# the scene (`graph.EffectAt.after` / `into`)
+FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
+                                    "acid-scene")
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080

@@ -1290,10 +1290,17 @@ class Renderer:
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
-        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
-                      target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx.active(),
-                      stats=stats)
         graph = self._graph_for(views)
+        # plan 30 D1: "an effect is on" means one of the chain's runs: an
+        # effect the preset placed on an edge runs there (and moves its
+        # clock in `run_one`) but bends no pipeline, so with only placed
+        # effects on a through output stands down as with none
+        placed = getattr(graph, "placed_names", frozenset())
+        fx_on = any(n not in placed for n in fx.state.chain(getattr(fx, "target", 0)))
+        stats["fx_on"] = fx_on
+        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
+                      target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
+                      stats=stats)
         timer = self._pass_timer()
         try:
             graph.evaluate(frame)
@@ -1335,7 +1342,8 @@ class Renderer:
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
                  lay=None, blend: str = "over", ghost: Ghost | None = None,
-                 readout_ghost: Ghost | None = None) -> None:
+                 readout_ghost: Ghost | None = None,
+                 hands_tex: moderngl.Texture | None = None) -> None:
         """One view's picture: the pipeline's frame (`key`, the pipeline its
         end node closes, `outputs.SCENE` …; already there when it was drawn
         direct), the hands over it in the same rect, the readout layer over
@@ -1345,7 +1353,10 @@ class Renderer:
         honours add, and lays a depth-aware layer plain over (the depths
         stay in this context). `ghost` is the Ghost whose layer is laid
         over and `readout_ghost` the one whose readout goes on (plan 26 A4:
-        each hands node's own; the renderer's when None)."""
+        each hands node's own; the renderer's when None). `hands_tex` (plan
+        30 D1): the picture of the hands laid over when it is not the
+        Ghost's own layer — an effect placed after the hands folds it — for
+        a presenter's hand-off (a target view lays it through `lay`)."""
         ctx = self.ctx
         gh = ghost if ghost is not None else self.ghost
         rg = readout_ghost if readout_ghost is not None else gh
@@ -1362,7 +1373,8 @@ class Renderer:
             rx, ry, rw, rh = v.rect
             ix, iy, iw, ih = fit(size, (rw, rh))
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
-                                hands=gh.tex if after else None, readout=readout,
+                                hands=((hands_tex if hands_tex is not None else gh.tex)
+                                       if after else None), readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
                                 blend="add" if blend == "add" else "over")

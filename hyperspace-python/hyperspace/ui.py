@@ -50,7 +50,7 @@ from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
-from .graph import Wiring, graph_words, hands_words, layer_words
+from .graph import Wiring, graph_words, hands_words, layer_words, output_placement_words
 from .hands import panel as ui_hands
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
@@ -253,7 +253,7 @@ def fit_text(text: str, width: float) -> str:
 
 
 def output_shows(sw, fx_on: bool, visible: bool, master: float,
-                 wiring: Wiring | None = None) -> tuple[str, str]:
+                 wiring: Wiring | None = None, n: int | None = None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
     words, no picture). It is `outputs.route`'s answer for the output's
@@ -268,7 +268,12 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     (`graph.hands_words`): an output whose scene holds the hands shows
     "scene + hands in the scene" (no layer over it), and a layer laid on
     names its hands node when there are two, "as lines", and a blend that
-    is not plainly over."""
+    is not plainly over.
+
+    Plan 30 D1: with `n`, the output's number, the effects the graph
+    places on what this output shows (`graph.output_placement_words`):
+    `palette on the hands` while it shows them, `acid 2 before the
+    history` while it shows the scene, `palette 2 on this output only`."""
     key, after = route(sw, fx_on, visible)
     wired = wiring is not None and wiring != Wiring()
     inside = wired and bool(wiring.in_scene()) and sw.scene
@@ -296,10 +301,23 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     elif wired and (after or key in (SCENE_HANDS, HANDS)):
         # a layer laid on: its node, "as lines", its blend
         words += layer_words(wiring)
+    if wired and n is not None and wiring.placed:
+        shows_hands = after or key in (SCENE_HANDS, HANDS)     # the layer, not the scene's
+        words += output_placement_words(wiring, n, key in (SCENE, SCENE_HANDS), shows_hands)
     factor = min(1.0, master * own)
     if factor < 1.0:
         words += f" · {min(99, max(1, round(factor * 100)))}%"
     return words, ""
+
+
+def dormant_lines(graph) -> list[str]:
+    """The OUTPUT page's lines for the built graph's placed effects that
+    run nowhere this frame (plan 30 D1: `Graph.dormant` — `dormant:
+    palette after hands — no hands layer this frame`) and its placements
+    refused at build (`Graph.notes`); none with no graph."""
+    dormant = getattr(graph, "dormant", None) or {}
+    return ([f"dormant: {w}" for _, w in sorted(dormant.items())]
+            + list(getattr(graph, "notes", None) or []))
 
 
 def desk_log_lines(midi) -> list[str]:
@@ -1603,6 +1621,11 @@ class Panel:
             fx_on = bool(r.fx.active())
         except Exception:  # noqa: BLE001 — no renderer, or a stand-in
             fx_on = False
+        # plan 30 D1: as the renderer drew it — a placed effect bends no
+        # pipeline (`stats["fx_on"]` leaves it out)
+        drawn = (getattr(r, "stats", None) or {}).get("fx_on")
+        if isinstance(drawn, bool):
+            fx_on = fx_on and drawn
         visible = bool((getattr(r, "stats", None) or {}).get("layer", False))
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)
@@ -1708,11 +1731,15 @@ class Panel:
             # plan 26 A4: the words say the wiring too — the switches above
             # and the loaded preset's graph set it (`hands: in the scene`);
             # the whole graph in words on the line's hover
-            words, black = output_shows(sw, fx_on, visible, master, wiring)
+            # plan 30 D1: the effects placed on what it shows, and on hover
+            # why a placed one runs nowhere this frame (`Graph.dormant`)
+            words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n)
+            said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
+                                             "dormant", None))
             if not flips:
                 imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(f"{hands_words(wiring, sw)}\n{graph_words(spec)}")
+                    imgui.set_tooltip(f"{hands_words(wiring, sw)}\n{said}")
                 continue
             # no dim row: the ticks at the right of the "shows:" line, the
             # words cut to the room left of them
@@ -1721,11 +1748,15 @@ class Panel:
             imgui.text_colored(WARN if black else FAINT,
                                fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw)}\n"
-                                  f"{graph_words(spec)}")
+                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw)}\n{said}")
             for k, (pid, t) in enumerate(flips):
                 imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
                 self._check(pid, t)
+        # plan 30 D1: a placed effect that runs nowhere this frame, and why
+        for line in dormant_lines(getattr(self.renderer, "_graph", None)):
+            imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(line)
         if several:
             w, h = slots[0].size
             size = f" · frame {w}×{h}" if w and h else ""

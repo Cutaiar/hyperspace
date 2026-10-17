@@ -239,16 +239,27 @@ class GraphSection:
     def wiring(self) -> Wiring:
         return self.spec.wiring() if self.spec is not None else Wiring()
 
-    @staticmethod
-    def read(section) -> tuple[GraphSpec | None, dict | None, list[str]]:
+    def read(self, section) -> tuple[GraphSpec | None, dict | None, list[str]]:
         """(spec, the section to keep, notes) for a file's ``graph`` value
-        (None: the file has none). Reads, lands nothing."""
+        (None: the file has none). Reads, lands nothing.
+
+        Plan 30 D1: a placement this build cannot honour (a name out of
+        the vocabulary — an effect file that is not on disk among them —,
+        both keys, a loop) is a note and that effect's default placement;
+        the rest of the graph lands, and the section is kept as the file
+        had it (a save does not drop what the file said)."""
         if section is None:
             return None, None, []
+        fx = getattr(self, "fx", None)
+        files = ({fx.file_of(n) for n in fx.specs}
+                 if fx is not None and getattr(fx, "specs", None) else None)
         try:
-            spec = read_graph(section)
+            spec = read_graph(section, effects=files)
         except GraphError as e:
             return None, copy.deepcopy(section), [f"graph: {e}; the default graph"]
+        if spec.notes:
+            return spec, copy.deepcopy(section), [f"graph: {n}; the default placement"
+                                                  for n in spec.notes]
         return spec, spec.to_json(), []
 
     def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:

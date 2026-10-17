@@ -185,15 +185,25 @@ class Wiring:
     Plan 26 A4: `draw` is the first hands node's (`HandsAt`), and `extra`
     the hands nodes after it (`ghost.2` …), each its own `Ghost`. One
     hands node makes the layer: the one `into` "layer", else the first;
-    `blend` is how that layer is laid on."""
+    `blend` is how that layer is laid on.
+
+    Plan 30 D1: `placed`, the effect instances the preset's graph places
+    after or into a node (`EffectAt` with `after` / `into`), in the order
+    the section lists them: each sits there and not in the chain's run."""
 
     hands: str = "layer"
     blend: str = "over"
     history: str = "scene"
     draw: str = "solid"
     extra: tuple[HandsAt, ...] = ()
+    placed: tuple[EffectAt, ...] = ()
 
     def __post_init__(self) -> None:
+        names = [getattr(e, "name", None) for e in self.placed]
+        if (any(not isinstance(e, EffectAt) or not e.placed for e in self.placed)
+                or len(set(names)) != len(names)):
+            raise ValueError(f"wiring placed {self.placed!r}: placed effect instances, "
+                             "each once")
         for name, value, allowed in (("hands", self.hands, HANDS_IN),
                                      ("blend", self.blend, BLENDS),
                                      ("history", self.history, HISTORY_OF),
@@ -233,22 +243,128 @@ class GraphError(ValueError):
     it and takes the default graph (plan 26 A4)."""
 
 
+# plan 30 D1: the names a placed effect may sit after or into — the graph's
+# own node names, the words the OUTPUT and SYSTEM pages use: the scene, a
+# hands' layer, the history, an output, an effect instance
+PLACE_KEYS = ("after", "into")
+_INSTANCE = r"(?:[2-9]|[1-9][0-9]+)"
+_PLACE_NODE = re.compile(rf"scene|history|hands(?:\.{_INSTANCE})?|output\.[1-9][0-9]*")
+_PLACE_EFFECT = re.compile(rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
+PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
+               "into": "history, output.1 …, or an effect"}
+
+
+def instance_name(file: str, n: int) -> str:
+    """An effect instance's name as `FxState` knows it: `acid`, `acid.2`."""
+    return file if n == 1 else f"{file}.{n}"
+
+
+def placement_error(effect: str, key: str, where: Any,
+                    effects: set[str] | frozenset[str] | None = None) -> str | None:
+    """Why effect instance `effect` cannot sit `key` ("after" / "into")
+    `where`, in words — None when it can (plan 30 D1). `effects`: the
+    effect instance names this build knows (None: any well-formed name).
+    `into` takes the image input of the history, an output or an effect:
+    the scene's and a hands' layer's inputs are geometry, so those two
+    take `after`. `after output.<n>` is that output's picture, as `into`."""
+    if not isinstance(where, str):
+        return (f"{effect} {key} {where!r} — a node's name in quotes: this build places "
+                f"{key} {PLACE_WORDS[key]}")
+    if where == effect:
+        return f"{effect} {key} {where!r} — an effect cannot sit {key} itself"
+    if _PLACE_NODE.fullmatch(where):
+        if key == "into" and (where == "scene" or where.startswith("hands")):
+            return (f"{effect} into {where!r} — its inputs are geometry, not a picture: "
+                    f"after {where!r} folds its picture")
+        return None
+    if _PLACE_EFFECT.fullmatch(where) and (effects is None or where in effects):
+        return None
+    return f"{effect} {key} {where!r} — this build places {key} {PLACE_WORDS[key]}"
+
+
 @dataclass(frozen=True)
 class EffectAt:
-    """An extra instance of an effect file in the chain (plan 26 A4):
-    `fx.<file>.<n>.*` (n ≥ 2), its own params and clock, ordered by its own
-    `order` like any effect. Instance 1 is the file itself, always there."""
+    """An effect instance the preset's graph names (plan 26 A4, plan 30 D1).
+
+    Unplaced: an extra instance of a file in the chain, `fx.<file>.<n>.*`
+    (n ≥ 2), its own params and clock, ordered by its own `order` like any
+    effect — instance 1 is the file itself, always there.
+
+    Placed (D1): `after` a node — on that node's output, every consumer
+    of its picture reading the effect instead — or `into` one — on that
+    node's `image` input alone (`output.<n>`: that output's picture) —
+    one of the two, never both; then any instance, 1 included, may be
+    named. A placed instance is not in the chain's run: it sits where it
+    is put (`default_graph`), and its `order` means nothing there."""
 
     file: str
     n: int
+    after: str | None = None
+    into: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.file, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", self.file):
             raise ValueError(f"effect file {self.file!r}: an effect's file name, "
                              "lower_snake_case")
-        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 2:
+        if self.after is not None and self.into is not None:
+            raise ValueError(f"{self.file} after {self.after!r} and into {self.into!r} at "
+                             "once — one of the two")
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"effect {self.file} instance {self.n!r}: a whole number from 1")
+        if self.n < 2 and not self.placed:
             raise ValueError(f"effect {self.file} instance {self.n!r}: 2 or more (instance 1 "
                              "is the file itself)")
+        for key in PLACE_KEYS:
+            where = getattr(self, key)
+            why = placement_error(self.name, key, where) if where is not None else None
+            if why is not None:
+                raise ValueError(why)
+
+    @property
+    def name(self) -> str:
+        """The instance's name (`palette`, `acid.2`): its params' prefix
+        after `fx.`, its node's name in the scene's pipeline."""
+        return instance_name(self.file, self.n)
+
+    @property
+    def placed(self) -> bool:
+        return self.after is not None or self.into is not None
+
+    @property
+    def where(self) -> tuple[str, str] | None:
+        """("after" | "into", the node's name), or None: in the chain."""
+        if self.after is not None:
+            return "after", self.after
+        if self.into is not None:
+            return "into", self.into
+        return None
+
+    def unplaced(self) -> EffectAt | None:
+        """This instance at the default placement: in the chain at its
+        order (None for instance 1, the file itself, always there)."""
+        return EffectAt(self.file, self.n) if self.n >= 2 else None
+
+
+def placement_loops(placed) -> dict[str, str]:
+    """The placed effects (`EffectAt`s) whose placement makes a loop —
+    each sits after or into another placed effect that, followed on,
+    comes back to it — with the loop in words (`palette after acid.2
+    after palette`): effect name → words. Refused at read and again at
+    build (plan 30 D1): the effect takes the default placement."""
+    by = {e.name: e for e in placed if e.placed}
+    out: dict[str, str] = {}
+    for e in by.values():
+        path, cur = [e.name], e
+        while cur.where is not None and cur.where[1] in by:
+            nxt = cur.where[1]
+            if nxt == e.name:
+                out[e.name] = " ".join(f"{n} {by[n].where[0]}" for n in path) + f" {e.name}"
+                break
+            if nxt in path:
+                break                         # a loop further on, not through this one
+            path.append(nxt)
+            cur = by[nxt]
+    return out
 
 
 @dataclass(frozen=True)
@@ -284,11 +400,30 @@ def _hands_entry(e: dict) -> tuple[HandsAt, str | None]:
     return HandsAt(_instance(e), e.get("into", "layer"), e.get("draw", "solid")), laid
 
 
-def _effect_entry(e: dict) -> EffectAt:
-    _entry_keys(e, "effect", ("instance", "file"))
+def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
+    """(the instance, None), or — for a placement this build cannot honour
+    (plan 30 D1: both keys at once, a name that is not a string or not in
+    the placeable vocabulary) — (the instance at the default placement,
+    or None for instance 1, which is always in the chain; the reason).
+    `read_graph` notes the reason; the rest of the graph stands."""
+    _entry_keys(e, "effect", ("instance", "file", *PLACE_KEYS))
     if "file" not in e:
         raise GraphError("effect node: names no file")
-    return EffectAt(e["file"], _instance(e))
+    file, n = e["file"], _instance(e)
+    after, into = e.get("after"), e.get("into")
+    if "after" not in e and "into" not in e:
+        return EffectAt(file, n), None
+    EffectAt(file, max(n, 2))                 # the file's name is the file's, placed or not
+    name = instance_name(file, n)
+    if "after" in e and "into" in e:
+        why = f"{name} after {after!r} and into {into!r} at once — one of the two"
+    else:
+        # a key present is a placement: an explicit null is not a name
+        key, where = ("after", after) if "after" in e else ("into", into)
+        why = placement_error(name, key, where)
+        if why is None:
+            return EffectAt(file, n, after=after, into=into), None
+    return (EffectAt(file, n) if n >= 2 else None), why
 
 
 def _history_entry(e: dict) -> HistoryAt:
@@ -329,19 +464,30 @@ class GraphSpec:
     A node left out is the default one: hands 1 a solid layer laid over,
     the history of the scene, every effect file once. `laid` (how the
     hands' layer is laid on: over, add, depth) belongs on the hands node
-    that makes the layer."""
+    that makes the layer.
+
+    Plan 30 D1: an effect node may say where it sits — `"after":
+    "hands"` (on the hands' layer, every consumer of it reading the
+    effect), `"into": "output.2"` (on that output's picture alone) — and
+    then instance 1 may be named too (`{"kind": "effect", "file":
+    "palette", "after": "hands"}`: the palette itself, out of the chain).
+    `notes`: the placements read but refused (a name out of the
+    vocabulary, both keys, a loop), each at the default placement — the
+    preset strip says them; the rest of the graph stands."""
 
     hands: tuple[HandsAt, ...] = ()
     laid: str = "over"
     history: HistoryAt = HistoryAt()
     effects: tuple[EffectAt, ...] = ()
     others: tuple[tuple[str, Any], ...] = ()      # (kind, what its reader returned)
+    notes: tuple[str, ...] = field(default=(), compare=False)
 
     def wiring(self) -> Wiring:
         """The default graph's wiring this graph says."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
-                      draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1))
+                      draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
+                      placed=tuple(e for e in self.effects if e.placed))
 
     def effect_counts(self) -> dict[str, int]:
         """Effect file → how many instances the chain holds (only files
@@ -349,7 +495,7 @@ class GraphSpec:
         out: dict[str, int] = {}
         for e in self.effects:
             out[e.file] = max(out.get(e.file, 1), e.n)
-        return out
+        return {f: n for f, n in out.items() if n > 1}
 
     def to_json(self) -> dict:
         """The section as a preset writes it: every node that is not the
@@ -374,7 +520,12 @@ class GraphSpec:
             if len(d) > 1:
                 nodes.append(d)
         for e in sorted(self.effects, key=lambda e: (e.file, e.n)):
-            nodes.append({"kind": "effect", "file": e.file, "instance": e.n})
+            d = {"kind": "effect", "file": e.file}
+            if e.n != 1:                       # D1: instance 1 is named only when placed
+                d["instance"] = e.n
+            if e.where is not None:
+                d[e.where[0]] = e.where[1]
+            nodes.append(d)
         if self.history.holds != "scene":
             nodes.append({"kind": "history", "holds": self.history.holds})
         for kind, got in self.others:
@@ -383,13 +534,21 @@ class GraphSpec:
         return {"nodes": nodes}
 
 
-def read_graph(section: Any) -> GraphSpec:
+def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -> GraphSpec:
     """A preset's `graph` section → its `GraphSpec`; raises `GraphError`
     (the reason in words) for anything this build cannot read — a kind
     not in `NODE_KINDS`, a key a node does not take, a value out of its
     choices, two nodes of one instance, two hands layers, `laid` on a
     hands node that makes no layer. The caller notes it and takes the
-    default graph."""
+    default graph.
+
+    Plan 30 D1: a placement this build cannot honour is not a reason to
+    drop the graph — both keys at once, a name that is not a string or
+    not in the placeable vocabulary (`placement_error`; `effects`: the
+    effect files on disk, so `after: "teapot"` is refused — None takes
+    any well-formed effect name), or a loop of placed effects
+    (`placement_loops`) — the effect takes the default placement (the
+    chain, at its order) and the reason rides in `GraphSpec.notes`."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
     extra = sorted(set(section) - {"nodes"})
@@ -400,9 +559,10 @@ def read_graph(section: Any) -> GraphSpec:
         raise GraphError("nodes is not a list")
     hands: dict[int, HandsAt] = {}
     laid: dict[int, str] = {}
-    effects: dict[tuple[str, int], EffectAt] = {}
+    found: dict[tuple[str, int], EffectAt | None] = {}
     history: HistoryAt | None = None
     others: list[tuple[str, Any]] = []
+    notes: list[str] = []
     for e in entries:
         if not isinstance(e, dict) or not isinstance(e.get("kind"), str):
             raise GraphError(f"a node that names no kind: {e!r}"[:120])
@@ -425,18 +585,42 @@ def read_graph(section: Any) -> GraphSpec:
             if how is not None:
                 laid[h.n] = how
         elif kind == "effect":
-            if (got.file, got.n) in effects:
-                raise GraphError(f"two effect nodes {got.file} instance {got.n}")
-            effects[(got.file, got.n)] = got
+            at, why = got
+            key = (e["file"], _instance(e))
+            if key in found:
+                raise GraphError(f"two effect nodes {key[0]} instance {key[1]}")
+            found[key] = at
+            if why is not None:
+                notes.append(why)
         elif kind == "history":
             if history is not None:
                 raise GraphError("two history nodes")
             history = got
         else:
             others.append((kind, got))
+    # D1: a placement on an effect this build does not have (an instance
+    # the section does not hold, a file not on disk) …
+    known = None
+    if effects is not None:
+        known = set(effects) | {instance_name(f, k) for (f, n) in found for k in range(2, n + 1)}
+    for key, at in list(found.items()):
+        if at is None or at.where is None or _PLACE_NODE.fullmatch(at.where[1]):
+            continue
+        why = placement_error(at.name, *at.where, effects=known)
+        if why is not None:
+            notes.append(why)
+            found[key] = at.unplaced()
+    # … and a loop of placed effects: each at the default placement
+    loops = placement_loops([at for at in found.values() if at is not None])
+    for key, at in list(found.items()):
+        if at is not None and at.name in loops:
+            notes.append(f"{at.name} {at.where[0]} {at.where[1]!r} — that makes a loop "
+                         f"({loops[at.name]})")
+            found[key] = at.unplaced()
+    effects_at = tuple(found[k] for k in sorted(found) if found[k] is not None)
     spec = GraphSpec(hands=tuple(hands[n] for n in sorted(hands)),
                      history=history if history is not None else HistoryAt(),
-                     effects=tuple(effects[k] for k in sorted(effects)), others=tuple(others))
+                     effects=effects_at, others=tuple(others), notes=tuple(notes))
     try:
         wiring = spec.wiring()
     except ValueError as err:
@@ -488,16 +672,87 @@ def history_words(wiring: Wiring) -> str:
     """What the history captures under `wiring`, in words (the LOOKBACK
     page, plan 26 A4): `history: the scene`, or `history: the scene · with
     the hands` — the hands' layer laid on, or hands drawn inside the scene
-    (which then holds them whatever the history node says)."""
+    (which then holds them whatever the history node says). Plan 30 D1:
+    then each effect placed on the history's way in or after it
+    (`acid 2 before the history`)."""
     if wiring.history == "scene+hands" or wiring.in_scene():
-        return "history: the scene · with the hands"
-    return "history: the scene"
+        words = "history: the scene · with the hands"
+    else:
+        words = "history: the scene"
+    # plan 30 D1: an effect placed on the history's way in, or after it
+    for e in wiring.placed:
+        if e.where in (("after", "scene"), ("into", "history"), ("after", "history")):
+            words += " · " + placement_words(e)
+    return words
 
 
-def graph_words(spec: GraphSpec | None) -> str:
+def output_placement_words(wiring: Wiring, n: int, scene: bool, hands: bool) -> str:
+    """The placed effects one output's picture goes through (plan 30 D1:
+    the OUTPUT page's "shows:" line), each ` · ` and its words: those on
+    this output (`palette 2 on output 2 only` reads `palette 2 on this
+    output only`), those on the hands while it shows them, those on the
+    scene's way (the history, an effect of the chain) while it shows the
+    scene; "" for none."""
+    out = []
+    for e in wiring.placed:
+        where = e.where[1]
+        if where.startswith("output."):
+            if where == f"output.{n}":
+                out.append(f"{_effect_words(e.name)} on this output only")
+        elif where == "hands" or where.startswith("hands."):
+            if hands:
+                out.append(placement_words(e))
+        elif scene:
+            out.append(placement_words(e))
+    return "".join(" · " + w for w in out)
+
+
+def _effect_words(name: str) -> str:
+    """An effect instance in words: `palette`, `acid 2`."""
+    return name.replace(".", " ")
+
+
+def _node_said(where: str) -> str:
+    """A placeable node in words: `the scene`, `the hands`, `hands 2`,
+    `the history`, `output 2`, `acid 2`."""
+    if where in ("scene", "hands", "history"):
+        return f"the {where}"
+    if where.startswith("hands."):
+        return "hands " + where.partition(".")[2]
+    if where.startswith("output."):
+        return "output " + where.partition(".")[2]
+    return _effect_words(where)
+
+
+def placement_words(e: EffectAt) -> str:
+    """Where a placed effect sits, in words (plan 30 D1: the OUTPUT and
+    LOOKBACK pages): `palette on the hands`, `acid 2 before the history`
+    (after the scene: the history and the capture both read it), `palette
+    2 on output 2 only`, `acid 2 into the history only` (the capture
+    keeps the scene), `palette after the history`, `palette after acid 2`,
+    `palette before acid 2`."""
+    w = _effect_words(e.name)
+    key, where = e.where
+    if where.startswith("output."):
+        return f"{w} on {_node_said(where)} only"
+    if key == "after":
+        if where == "scene":
+            return f"{w} before the history"
+        if where == "hands" or where.startswith("hands."):
+            return f"{w} on {_node_said(where)}"
+        return f"{w} after {_node_said(where)}"
+    if where == "history":
+        return f"{w} into the history only"
+    return f"{w} before {_node_said(where)}"
+
+
+def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -> str:
     """The loaded preset's graph in one line (the OUTPUT page): `graph:
     default`, or what it changes — `graph: hands 1 in the scene as lines ·
-    hands 2 a layer · acid ×2 · history with the hands`."""
+    hands 2 a layer · acid ×2 · history with the hands`. Plan 30 D1: then
+    each placed effect where it sits (`placement_words`), or — `dormant`,
+    the built graph's `Graph.dormant` — why it runs nowhere this frame
+    (`palette after hands — no hands layer this frame`)."""
     if spec is None:
         return "graph: default"
     w, parts = spec.wiring(), []
@@ -512,6 +767,8 @@ def graph_words(spec: GraphSpec | None) -> str:
     parts += [f"{f} ×{n}" for f, n in sorted(spec.effect_counts().items())]
     if w.history == "scene+hands":
         parts.append("history with the hands")
+    dormant = dormant or {}
+    parts += [dormant.get(e.name) or placement_words(e) for e in w.placed]
     parts += [kind for kind, _ in spec.others]
     return "graph: " + (" · ".join(parts) if parts else "default")
 
@@ -587,6 +844,14 @@ class Node:
     OUTPUT: str | None = None
     TIMED = True              # a line on the SYSTEM page; a geometry's time is its scene's
     SOLID = False             # a geometry drawn opaque, before the see-through shape
+    # plan 30 D1: a node whose picture is a texture it made in `run` (the
+    # scene, a layer): `image` None means no picture this frame, and an
+    # effect placed after it folds that texture once, in its own `run`
+    MAKES = False
+    # plan 30 D1: the image ports that read something besides the picture
+    # (a depth, a readout, the face buffer): an effect placed `after` a node
+    # leaves these reading the node itself
+    REFS: ClassVar[frozenset[str]] = frozenset()
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -982,6 +1247,7 @@ class Scene(Node):
 
     KIND = "scene"
     OUTPUT = IMAGE
+    MAKES = True
 
     def __init__(self, name: str, geometries: tuple[Node, ...] | list[Node] = (),
                  after: tuple[Node, ...] = (), **inputs: Node | None):
@@ -1050,6 +1316,7 @@ class Cover(Node):
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"scene": IMAGE}
     OUTPUT = MASK
+    REFS: ClassVar[frozenset[str]] = frozenset({"scene"})   # the face buffer, not the picture
 
     def run(self, frame: Frame) -> None:
         frame.cover = None
@@ -1081,6 +1348,7 @@ class HandsLayer(Node):
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
     OUTPUT = IMAGE
+    MAKES = True
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), readout: str = "through",
                  **inputs: Node | None):
@@ -1159,6 +1427,7 @@ class Readout(Node):
     KIND = "layer"
     INPUTS: ClassVar[dict[str, str]] = {"geometry": GEOMETRY}
     OUTPUT = IMAGE
+    MAKES = True
 
     def ghost(self, frame: Frame):
         geo = self.inputs["geometry"]
@@ -1235,7 +1504,9 @@ class Capture(Node):
         src = self.inputs["image"].image(frame)
         with frame.timed(self.name):
             r.lookback.capture(src, r.scene.fbo)
-        if frame.fx_on and not frame.stats["chain_runs"]:
+        # (plan 30 D1: any effect on, a placed one too — its clock moves
+        # once a frame whether or not its edge had a picture to fold)
+        if (frame.fx_on or _chain_now(frame)) and not frame.stats["chain_runs"]:
             r.fx.state.advance_to(frame.t)
 
 
@@ -1257,6 +1528,7 @@ class Composite(Node):
     KIND = "composite"
     INPUTS: ClassVar[dict[str, str]] = {"under": IMAGE, "over": IMAGE, "depth": IMAGE}
     OUTPUT = IMAGE
+    REFS: ClassVar[frozenset[str]] = frozenset({"depth"})
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), blend: str = "over",
                  **inputs: Node | None):
@@ -1312,13 +1584,14 @@ def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
 # ---------------------------------------------------------------- fx
 
 def _chain_now(frame: Frame) -> frozenset[str]:
-    """The effects the frame's chain runs this frame (`FxState.chain` for
-    the frame's target), asked once a frame: none while `fx_on` is off."""
+    """The effects on this frame (`FxState.chain` for the frame's target:
+    none while the stack is bypassed or at mix 0), asked once a frame —
+    the runs' and (plan 30 D1) the placed ones', which `frame.fx_on`
+    leaves out."""
     got = frame.data.get("fx#chain")
     if got is None:
         fx = frame.r.fx
-        got = frame.data["fx#chain"] = (
-            frozenset(fx.state.chain(getattr(fx, "target", 0))) if frame.fx_on else frozenset())
+        got = frame.data["fx#chain"] = frozenset(fx.state.chain(getattr(fx, "target", 0)))
     return got
 
 
@@ -1368,7 +1641,20 @@ class Effect(Node):
 
     `run` does nothing: the pass runs when its consumer pulls it, like
     the history's and the composites' (the class docstring of the module:
-    "materialised and painted images")."""
+    "materialised and painted images").
+
+    Plan 30 D1 — **placed** effects (`placed`: "after" / "into", or None in
+    the chain's run). One placed after a node that makes a texture (the
+    scene, a hands' layer: `MAKES`; or after such an effect) folds that
+    texture once, in its own `run`, into a pool texture held for the
+    frame (`makes`): every consumer then reads that one picture — the
+    history and the capture after the scene, the composites and the
+    outputs laying the hands — and a source with no picture this frame
+    (no hand drawn) leaves it none. On a layer (`see_through`) its pass
+    keeps a see-through pixel see-through (`u_opaque` 0), and it is laid
+    on at the layer's opacity, with its depth (`alpha`, `depth`). One on
+    an output's picture (`into: output.<n>`) is run by that output
+    (`fold`), on the frame texture the output settles on."""
 
     KIND = "effect"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
@@ -1376,9 +1662,80 @@ class Effect(Node):
     TIMED = False            # a line on SYSTEM only in a frame it ran (`Graph.timed_in`)
 
     def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
-                 after: tuple[Node, ...] = ()):
+                 after: tuple[Node, ...] = (), placed: str | None = None):
         super().__init__(node if node is not None else name, after, image=image)
         self.effect = name
+        self.placed = placed          # D1: "after" / "into" when the preset places it
+
+    @property
+    def makes(self) -> bool:
+        """Its source makes a texture in `run` (the scene, a layer, or an
+        effect folding one): this effect folds it once in its own `run`."""
+        src = self.inputs["image"]
+        return src is not None and (src.MAKES or (isinstance(src, Effect) and src.makes))
+
+    @property
+    def see_through(self) -> bool:
+        """Its picture is a layer's (premultiplied, see-through ground)."""
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            src = src.inputs["image"]
+        return src is not None and src.KIND == "layer"
+
+    def run(self, frame: Frame) -> None:
+        if self.makes and self.on(frame):
+            self._made(frame)
+
+    def alpha(self, frame: Frame) -> float:
+        src = self.inputs["image"]
+        return src.alpha(frame) if src is not None else 1.0
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.inputs["image"]
+        return src.depth(frame) if src is not None else None
+
+    def ghost(self, frame: Frame):
+        """The `Ghost` whose layer this effect folds (its source's, through
+        any effects between): an output laying it hands a presenter that
+        Ghost's opacity — and its own layer's, for `hands.2`."""
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            src = src.inputs["image"]
+        get = getattr(src, "ghost", None)
+        return get(frame) if get is not None else frame.r.ghost
+
+    def _made(self, frame: Frame) -> moderngl.Texture | None:
+        """The folded texture of a source that makes one (`makes`): made
+        once a frame into a held pool texture, None while the source has
+        no picture this frame."""
+        if self.name not in frame.data:
+            got = self.inputs["image"].image(frame)
+            if got is not None:
+                tex, fbo = _spare(frame, None, hold=True)
+                self._one(frame, got, fbo)
+                got = tex
+            frame.data[self.name] = got
+        return frame.data[self.name]
+
+    def fold(self, frame: Frame, tex: moderngl.Texture) -> moderngl.Texture:
+        """`tex` (an output's frame) through this effect into a held pool
+        texture, once a frame — or `tex` itself while it is off (D1: an
+        effect placed into an output's picture, run by the output)."""
+        if not self.on(frame):
+            return tex
+        if self.name not in frame.data:
+            out, fbo = _spare(frame, None, hold=True)
+            self._one(frame, tex, fbo)
+            frame.data[self.name] = out
+        return frame.data[self.name]
+
+    def _one(self, frame: Frame, src: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+        """This effect's pass from texture `src` into `dst`, timed and
+        counted; a layer's keeps its see-through ground."""
+        kw = {"opaque": 0} if self.see_through else {}
+        with frame.timed(self.name):
+            frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
+        frame.stats.setdefault("effects", []).append(self.name)
 
     def on(self, frame: Frame) -> bool:
         """Whether this effect runs a pass this frame (see the class)."""
@@ -1396,6 +1753,9 @@ class Effect(Node):
         if not self.on(frame):
             src.paint(frame, dst)                 # read through: no pass, no texture
             return
+        if self.makes:                            # D1: folded once in `run`, shown 1:1
+            super().paint(frame, dst)
+            return
         readers = frame.graph.readers(self) if frame.graph is not None else 1
         if self.name in frame.data or readers > 1:
             # made once into a held texture that is never `dst` (a consumer
@@ -1410,6 +1770,8 @@ class Effect(Node):
         src = self.inputs["image"]
         if not self.on(frame):
             return src.image(frame) if src is not None else None
+        if self.makes:
+            return self._made(frame)
         return self._make(frame, None)
 
     def _make(self, frame: Frame, avoid: moderngl.Framebuffer | None) -> moderngl.Texture:
@@ -1477,11 +1839,14 @@ class Fx(Node):
 
     @property
     def effects(self) -> list[Effect]:
-        """The pipeline's run of effect nodes, first to last."""
+        """The pipeline's run of effect nodes, first to last — the chain's
+        (plan 30 D1: an effect the preset placed after or into one of them
+        sits in the line but is not of the run)."""
         run: list[Effect] = []
         src = self.inputs["image"]
         while isinstance(src, Effect):
-            run.append(src)
+            if src.placed is None:
+                run.append(src)
             src = src.inputs["image"]
         return run[::-1]
 
@@ -1513,10 +1878,13 @@ class Fx(Node):
         only = views[users[0]]
         # a flipped output (plan 23 WP1) takes the frame through a texture:
         # the mirror is `_show`'s, at the output stage
+        # plan 30 D1: an output whose picture goes through an effect placed
+        # into it folds the frame texture, so it is never painted direct
         direct = (len(users) == 1 and only.target is not None
                   and tuple(only.rect[2:]) == frame.size
                   and not getattr(only.switches, "flip_x", False)
-                  and not getattr(only.switches, "flip_y", False))
+                  and not getattr(only.switches, "flip_y", False)
+                  and not (frame.graph is not None and frame.graph.folds(users[0])))
         stats["pipelines"].append(self.key)
         try:
             if direct:
@@ -1570,12 +1938,25 @@ class Output(Node):
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "hands": IMAGE, "readout": IMAGE,
                                         "depth": IMAGE}
     OUTPUT = None
+    REFS: ClassVar[frozenset[str]] = frozenset({"readout", "depth"})
 
     def __init__(self, name: str, index: int, after: tuple[Node, ...] = (),
                  blend: str = "over", **inputs: Node | None):
         super().__init__(name, after, **inputs)
         self.index = index            # the view it draws, in Frame.views
         self.blend = blend
+
+    @property
+    def folds(self) -> list[Effect]:
+        """The effects placed into this output's picture (plan 30 D1:
+        `into: output.<n>`), first applied first: they sit on its `image`
+        port, between it and the pipeline's end."""
+        out: list[Effect] = []
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            out.append(src)
+            src = src.inputs["image"]
+        return out[::-1]
 
     def settle(self, frame: Frame) -> tuple[Node | None, tuple[Node, str] | None]:
         """(the end it shows this frame or None for its ground, (the layer
@@ -1586,6 +1967,8 @@ class Output(Node):
         if key in frame.data:
             return frame.data[key]
         end = self.inputs["image"]
+        while isinstance(end, Effect):            # D1: the end behind its folds
+            end = end.inputs["image"]
         over, blend = self.inputs["hands"], self.blend
         if isinstance(end, Fx) and not end.bent(frame):
             over, blend = end.layer, end.source.blend
@@ -1610,7 +1993,9 @@ class Output(Node):
                 frame.stats["routes"][self.index] = (
                     end.key if end is not None else None, laid is not None)
             put = None
-            if laid is not None and laid[1] != "over":
+            # D1: a layer through a placed effect is laid by the node (its
+            # folded texture), not the Ghost's own `composite`
+            if laid is not None and (laid[1] != "over" or isinstance(laid[0], Effect)):
                 over, blend = laid
 
                 def put(tgt, rect, opaque, flip, over=over, blend=blend):
@@ -1618,11 +2003,24 @@ class Output(Node):
             ghosts = {}
             if laid is not None and hasattr(laid[0], "ghost"):
                 ghosts["ghost"] = laid[0].ghost(frame)
+            if laid is not None and isinstance(laid[0], Effect):
+                # D1: a presenter lays the folded layer, not the Ghost's own
+                ghosts["hands_tex"] = laid[0].image(frame)
             if ro is not None and hasattr(src, "ghost"):
                 ghosts["readout_ghost"] = src.ghost(frame)
+            frames = frame.frames
+            folds = self.folds
+            if folds and end is not None and end.key not in frame.failed:
+                # D1: the frame this output settled on, through the effects
+                # placed into it — this output's alone
+                tex = frame.frames.get(end.key)
+                if tex is not None:
+                    for e in folds:
+                        tex = e.fold(frame, tex)
+                    frames = {**frame.frames, end.key: tex}
             with frame.timed(self.name):
                 r._compose(v, end.key if end is not None else None, laid is not None,
-                           frame.frames, frame.failed, frame.size, ro, lay=put,
+                           frames, frame.failed, frame.size, ro, lay=put,
                            blend=laid[1] if laid is not None else "over", **ghosts)
         except Exception as e:  # noqa: BLE001 — one view must not take the others down
             r._view_failed(v, "output", e)
@@ -1642,7 +2040,13 @@ class Graph:
     two is made once into a held texture), `pool` is how many textures
     the effects' pool needs for this graph, and `effects` the effect
     instances the default graph built its runs from (in the stack's
-    order: the renderer builds again when it changes)."""
+    order: the renderer builds again when it changes).
+
+    Plan 30 D1: `insert` puts a placed effect on an edge after the graph
+    is built (`default_graph`), `dormant` says why a placed effect has no
+    node in this graph (`palette after hands — no hands layer this
+    frame`), `notes` a placement refused at build (a loop), `folds` the
+    effects placed into an output's picture."""
 
     def __init__(self, key: tuple = (), wiring: Wiring | None = None):
         self.key = key
@@ -1651,8 +2055,55 @@ class Graph:
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
+        self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
+        self.notes: list[str] = []               # D1: placements refused at build
+        # D1: the effects placed out of the runs (dormant ones included):
+        # the renderer's `fx_on` ("an effect bends a pipeline") leaves them out
+        self.placed_names: frozenset[str] = frozenset()
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
+
+    def insert(self, node: Effect, edges: list[tuple[Node, str]]) -> Effect:
+        """Add placed effect `node` (its input already wired) and make each
+        (consumer, port) in `edges` read it instead (plan 30 D1). Refused
+        — nothing changed, ValueError — when that would make a loop: a
+        consumer the node already depends on."""
+        ups: set[int] = set()
+        todo = [node]
+        while todo:
+            n = todo.pop()
+            for d in n.deps():
+                if id(d) not in ups:
+                    ups.add(id(d))
+                    todo.append(d)
+        for consumer, _ in edges:
+            if consumer is node or id(consumer) in ups:
+                raise ValueError(f"{node.name}: placing it there makes a loop "
+                                 f"through {consumer.name}")
+        self.add(node)
+        # listed right after what it reads, so the order (and SYSTEM's
+        # lines) put it under its source, not at the end of the frame
+        src = node.inputs["image"]
+        if src is not None and src.name in self.nodes:
+            names = [n for n in self.nodes if n != node.name]
+            at = names.index(src.name) + 1
+            names.insert(at, node.name)
+            self.nodes = {n: self.nodes[n] for n in names}
+        for consumer, port in edges:
+            consumer.inputs[port] = node
+        self._readers = {}
+        for n in self.nodes.values():
+            for src in n.inputs.values():
+                if src is not None:
+                    self._readers[src.name] = self._readers.get(src.name, 0) + 1
+        self.order = self._sort()
+        self._pool = None
+        return node
+
+    def folds(self, index: int) -> bool:
+        """Whether output `index`'s picture goes through an effect placed
+        into it (D1): its pipeline is then never painted direct."""
+        return any(out.index == index and out.folds for out in self.outputs)
 
     def add(self, node: Node) -> Node:
         if node.name in self.nodes:
@@ -1677,11 +2128,16 @@ class Graph:
         """The textures the effects' pool needs (`FxChain.pool`): none
         without an effect node; two for straight runs (each effect reads
         the one its consumer does not write); one more for each effect
-        read by more than one node, whose picture is held for the frame.
-        Settled with the graph (asked once a pass)."""
+        read by more than one node, whose picture is held for the frame —
+        and (plan 30 D1) for each placed effect that folds a made texture
+        (`Effect.makes`) or an output's frame (`Output.folds`), whose
+        picture is held too. Settled with the graph (asked once a pass)."""
         if self._pool is None:
             effects = [n for n in self.order if isinstance(n, Effect)]
-            self._pool = (2 + sum(1 for n in effects if self.readers(n) > 1)) if effects else 0
+            folded = {id(e) for out in self.outputs for e in out.folds}
+            self._pool = (2 + sum(1 for n in effects
+                                  if self.readers(n) > 1 or n.makes or id(n) in folded)
+                          ) if effects else 0
         return self._pool
 
     def _sort(self) -> list[Node]:
@@ -1814,13 +2270,39 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     An off effect reads through, so switching one on or off changes no
     node; only a change to the list (an order, an instance, a file)
     builds the graph again. None given, the ends read their sources
-    directly: the frame with no effect."""
+    directly: the frame with no effect.
+
+    Plan 30 D1: `Wiring.placed`, the effects the preset places, are not
+    in the runs; each is put on its edge once the frame is built
+    (`_place`): `after` a node on that node's picture — every consumer of
+    it reads the effect, but for the ports that read something else of it
+    (`Node.REFS`: a depth, the readout, the face buffer) — or `into` one
+    on its `image` input alone. A placement on a node this graph lacks
+    (no hands layer, an output not open, an effect not on disk) leaves
+    the effect dormant — no node, no pass, the words in `Graph.dormant`;
+    one that makes a loop is refused (`Graph.notes`) and the effect is in
+    the run at its order. The hands' layer an effect is placed on splits
+    its readout always: the guide and the labels are never folded."""
     wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
     inside = wiring.in_scene()
     in_scene = bool(inside)
     from_layer = wiring.layer_node()
     depth_aware = wiring.blend == "depth"
+    # D1: the placements this graph honours (a loop of them is refused:
+    # those take the run at their order), and the ones on the layer
+    loops = placement_loops(wiring.placed)
+    placed = [e for e in wiring.placed if e.name not in loops]
+    on_layer: set[str] = set()
+    grew = True
+    while grew:
+        grew = False
+        for e in placed:
+            if e.name not in on_layer and e.where[0] == "after" and (
+                    e.where[1] == layer_name(from_layer.n) or e.where[1] in on_layer):
+                on_layer.add(e.name)
+                grew = True
+    out_of_run = {e.name for e in placed}
 
     def layered(sw: Switches) -> bool:
         return bool(sw.hands) and (not in_scene or not sw.scene)
@@ -1830,6 +2312,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
     g.effects = tuple(effects)                     # plan 30 D0: what its runs hold
+    g.placed_names = frozenset(out_of_run)         # plan 30 D1: … but these
     points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
@@ -1839,7 +2322,8 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     scene = g.add(Scene("scene", geometries=[*points, *(geo[h.n] for h in inside), shape]))
     cover = g.add(Cover("cover", scene=scene))
     layer = (g.add(HandsLayer(layer_name(from_layer.n),
-                              readout="always" if from_layer.into == "scene" else "through",
+                              readout="always" if from_layer.into == "scene" or on_layer
+                              else "through",
                               geometry=geo[from_layer.n])) if want_layer else None)
     # the readout of an output that shows the hands inside its scene: the
     # first in-scene node's — its own layer's when it makes the layer
@@ -1859,8 +2343,10 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     def run(key: int, src: Node) -> Node:
         # the pipeline's run of effect nodes, in the stack's order; a name
         # some other node has (or will have) is kept apart by the params'
-        # prefix, `fx.<name>`
+        # prefix, `fx.<name>`. D1: a placed effect is not of the run
         for e in g.effects:
+            if e in out_of_run:
+                continue
             name = effect_node_name(e, key)
             if (name in g.nodes or name in ("capture", *FX_NAMES.values())
                     or name.startswith("output.")):
@@ -1895,4 +2381,86 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
             readout = scene_readout if (in_scene and sw.scene) else layer
         g.add(Output(f"output.{i + 1}", i, after=(capture,), blend=wiring.blend, image=image,
                      hands=over, readout=readout, depth=depth if layered(sw) else None))
+    for name, words in loops.items():
+        e = next(p for p in wiring.placed if p.name == name)
+        g.notes.append(f"{name} {e.where[0]} {e.where[1]!r} — that makes a loop ({words}); "
+                       "the default placement")
+    _place(g, placed)
     return g
+
+
+def _place(g: Graph, placed: list[EffectAt]) -> None:
+    """Put each placed effect on its edge of the built graph `g` (plan 30
+    D1, `default_graph`): one sitting on another placed effect after it;
+    one whose node is not in this graph dormant, with why in words."""
+    pending = list(placed)
+    names = {e.name for e in placed}
+    while pending:
+        ready = [e for e in pending if e.where[1] not in names
+                 or e.where[1] in g.dormant or _placed_nodes(g, e.where[1])]
+        if not ready:                         # (a loop: refused before this)
+            break
+        for e in ready:
+            pending.remove(e)
+            why = _place_one(g, e)
+            if why is not None:
+                g.dormant[e.name] = f"{e.name} {e.where[0]} {e.where[1]} — {why}"
+
+
+def _placed_nodes(g: Graph, effect: str) -> list[Effect]:
+    """The effect nodes of instance `effect` in `g` (one per pipeline's run,
+    or the one placed)."""
+    return [n for n in g.nodes.values() if isinstance(n, Effect) and n.effect == effect]
+
+
+def _place_one(g: Graph, e: EffectAt) -> str | None:
+    """Put placed effect `e` into `g`; None, or why it is dormant."""
+    key, where = e.where
+    if e.name not in g.effects:
+        return f"no {e.name} effect in this build"
+    if where.startswith("output."):           # after or into an output: its picture
+        out = g.nodes.get(where)
+        if not isinstance(out, Output):
+            return f"no output {where.partition('.')[2]} this frame"
+        if out.inputs["image"] is None:
+            return f"output {where.partition('.')[2]} shows no picture this frame"
+        targets = [(out.inputs["image"], [(out, "image")], "")]
+    elif where in ("scene", "history") or where == "hands" or where.startswith("hands."):
+        node = g.nodes.get(where)
+        if node is None or (where.startswith("hands") and not isinstance(node, HandsLayer)):
+            return (f"no {where} layer this frame" if where.startswith("hands")
+                    else f"no {where} this frame")
+        if key == "into":                     # (only the history takes `into` here)
+            targets = [(node.inputs["image"], [(node, "image")], "")]
+        else:
+            targets = [(node, _consumers(g, node), "")]
+    else:                                     # an effect: each of its nodes
+        if where in g.dormant:
+            return f"{where} is dormant this frame"
+        nodes = _placed_nodes(g, where)
+        if not nodes:
+            return f"no {where} effect this frame"
+        targets = []
+        for node in nodes:
+            suffix = node.name.split(where, 1)[1] if where in node.name else ""
+            if key == "into":
+                targets.append((node.inputs["image"], [(node, "image")], suffix))
+            else:
+                targets.append((node, _consumers(g, node), suffix))
+    for src, edges, suffix in targets:
+        name = e.name + suffix
+        if name in g.nodes:
+            name = f"fx.{name}"
+        try:
+            g.insert(Effect(e.name, image=src, node=name, placed=key), edges)
+        except ValueError:                    # (never, past `placement_loops`)
+            return "that makes a loop"
+    return None
+
+
+def _consumers(g: Graph, node: Node) -> list[tuple[Node, str]]:
+    """Every (consumer, port) of `g` reading `node`'s picture: the image
+    ports wired to it, but those that read something else of it
+    (`Node.REFS`: a depth, the readout, the face buffer)."""
+    return [(c, port) for c in g.nodes.values() for port, src in c.inputs.items()
+            if src is node and port not in c.REFS and c.INPUTS[port] == IMAGE]
