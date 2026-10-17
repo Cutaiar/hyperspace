@@ -1,0 +1,126 @@
+# Plan 28 — the catalog, scenes and the 3D switch (art-direction spike)
+
+**Status: spike, built as a proof of concept.** Three directions explored
+with as little new surface as possible: no new page, one new toggle, and
+everything else reached through the existing **Shape** menu.
+
+1. **Several shapes in one frame.** A *scene* is a shape whose geometry is
+   other shapes, sharing a centre: a sphere round a hypercube round a
+   star. Each layer keeps its own scale, weights, colour and spin.
+2. **The third dimension.** A catalog of closed 3D solids, and a **3D**
+   switch that takes the fourth dimension out of any shape.
+3. **Mathematical toys.** Geometric diagrams as shapes: the Hopf
+   fibration, an armillary sphere, a geodesic sphere, the Sierpinski
+   tetrahedron, a Lissajous knot, a loxodrome, Kepler's nested solids.
+
+Pictures and the demo video: [`assets/28-catalog/`](assets/28-catalog/)
+(`demo.mp4`, `catalog.png`, `scene-*.png`, `three-d-*.png`), redrawn by
+`tools/catalog_demo.py`; the GIFs are cuts of `demo.mp4` (ffmpeg), and
+`view-page.png` (the Shape menu, 4D then 3D) and `view-3d-shape.png` (a
+3D shape: "3D" in the header, the W keys dimmed) are the VIEW page from a
+hidden real window.
+
+## What was built
+
+**32 shapes, appended** after the Klein bottle (index is identity), each
+with a `Shape.family`. The V/E table is ENGINEERING §1.
+
+| Family | Shapes |
+|---|---|
+| Platonic | tetrahedron, cube, octahedron, dodecahedron, icosahedron |
+| Archimedean | cuboctahedron, truncated octahedron, rhombicuboctahedron, snub cube, icosidodecahedron, truncated icosahedron |
+| Catalan | rhombic dodecahedron, rhombic triacontahedron |
+| Star | small and great stellated dodecahedron (Kepler–Poinsot), Moravian star, starburst |
+| Compound | stella octangula, five tetrahedra, five cubes, cube + octahedron, dodecahedron + icosahedron |
+| Toy | Hopf fibration (4D), armillary sphere, geodesic sphere, Sierpinski tetrahedron, Lissajous knot, loxodrome, orbit |
+| Scene | Celestial tesseract (4D), Celestial cube, Mysterium Cosmographicum |
+
+- **4D or 3D, honestly** (`Shape.dims`; the owner's call after the first
+  review, replacing plan 22's lifts and masks). A 4D shape has real
+  w-extent and every plane turns it. A 3D shape — the trig family, Heart
+  to Klein bottle, and the catalog's solids and toys — sits at w = 0 with
+  nothing invented, and the W planes, with whatever drives them, do
+  nothing to it (`geometry.view_angles`). The Shape menu lists 4D then 3D
+  under their own headings; the VIEW header says which; the W keys dim
+  while they can do nothing. Convex solids get their faces from the
+  polytope extraction unchanged; stars and compounds bring their own.
+- **A star is drawn as what is seen.** A Kepler–Poinsot star's faces are
+  {5/2} pentagrams that cross each other; what shows is each pentagram's
+  five tips (`geometry._pentagram_tips`), the inner pentagon buried. So the
+  face pipeline keeps getting simple triangles, and V − E + F = 2.
+- **A curve draws no points** (`geom()["curve"]`): a toy drawn as a curve
+  has samples, not corners, and red dots on every sample buried it.
+- **Scenes** (`geometry.Layer`, `Shape.layers`, `geometry.shape_view`).
+  The renderer projects through `shape_view`: one shape is the old path
+  to the bit (`tests/test_catalog.py::test_a_shape_that_is_not_a_scene_is_drawn_as_before`);
+  a scene projects each layer at its own shape's angles (a 3D layer has
+  no W turn), times its spin. A scene's edges carry their layer's colour, width,
+  weight and line density; its points and faces their layer's weight. The
+  line and point buffers gained a colour per vertex (white and red, as
+  before, for every shape that is not a tinted layer).
+- **The 3D switch**: `view.three_d`, "3D" on the VIEW page, beside Faces.
+  It holds a 4D shape's 4D pose and turns it as a rigid 3D body; the W
+  planes stop. On the frame it changes, `ViewState.integrate` folds the
+  pose into `ViewState.body` (a 4×4 turn applied before the angles), so
+  the shape is exactly where it was on either side: no jump going on or
+  off. (Holding the W angles alone does not work: the engine turns the 3D
+  planes before the W planes, so a 3D turn under held W angles still
+  moves w.) A 3D shape is the same either way.
+
+### The scenes
+
+- **Celestial tesseract** (4D): the Hopf fibration in ice blue (the
+  3-sphere the tesseract is inscribed in, its fibres turning at 0.4×),
+  the tesseract with faces, and a gold small stellated dodecahedron at
+  0.62 counter-turning (−0.7×) in 3D. Its twelve points reach past the
+  tesseract's inner cube (`::test_the_star_pokes_through_the_tesseract`)
+  and slide through its cells as it tumbles.
+- **Celestial cube** (3D): the armillary sphere, a cube with faces, and a
+  gold great stellated dodecahedron at 0.82 whose twelve off-axis points
+  break out through the cube's faces.
+- **Mysterium Cosmographicum**: Kepler's 1596 model — the five Platonic
+  solids nested between six planetary spheres, each radius set by the
+  solid's insphere over its circumsphere; the orbits are tinted per
+  planet and the inner shells turn faster. Mercury is 0.07 of Saturn, so
+  it wants the zoom (the demo flies in to 6.5×).
+
+## What changed on the factory presets
+
+Three factory presets sit on a 3D shape: `plasma-heart` (Heart, XZ YZ
+YW), `spiral-silk` (Torus, YZ XW), `inverse-halo` (Starfruit, XZ XW YW).
+Each keeps a 3D plane, so each still turns; their W planes and the bass
+routes on them no longer move the shape. They were left as they are.
+
+## What it does not do (yet)
+
+- **No scene editor.** Scenes are code (`geometry.SHAPES`); a layer list in
+  a preset would be the obvious next step if the direction holds.
+- **Faces do not occlude lines.** The faces stay translucent fills under
+  the whole wireframe, so a star's points "shine through" a cube's faces
+  by being drawn over them, not by passing through a surface. Interleaving
+  faces and lines by depth would sell it harder.
+- **A scene's 3D switch hold is the view's.** `ViewState.body` is one
+  turn for the whole view, so a scene layer with a spin other than 1
+  moves a little as the switch goes on or off.
+- **The scene's depth cue mixes kinds.** A 4D layer cues on w, a 3D
+  layer on its depth to the 3D camera; the painter's sort runs over both.
+- **The Shape menu is long** (58 entries). It is grouped 4D / 3D; within
+  3D it is in index order, not by `Shape.family`.
+- **Zooming thickens the lines.** Line width scales with the camera's zoom,
+  as it always has, so Kepler's inner shells at 6.5× draw chunky. A
+  scene may want its widths in world units.
+- **Not judged at the machine.** Brightness and widths were tuned on
+  offscreen software-GL renders; the look on the projector is unchecked.
+
+## Checks
+
+`tests/test_catalog.py` — textbook V/E/F for every solid, regularity of
+the Platonic solids, every star closed like a sphere, compounds sharing
+corners, dual compounds crossing at edge midpoints, the Hopf fibres great
+circles on S³, a scene's rows its layers', each layer at its own angles,
+the star reaching past the tesseract's inner cube. `test_shapes4d` —
+every 3D shape at w = 0, the W planes leaving it alone (in the renderer
+too), 4D shapes untouched, the 3D switch never jumping and turning
+rigidly, every 4D shape over the volume floor. The shape digests gained
+the new rows, and the seven shapes plan 22 had lifted were re-recorded
+at w = 0 (`tests/golden/shape_digests.json`); no polytope's row moved.
