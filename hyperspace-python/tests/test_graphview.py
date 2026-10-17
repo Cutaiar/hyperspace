@@ -439,3 +439,124 @@ def test_the_page_is_read_only():
     assert not calls & {"begin_create", "begin_delete", "query_new_link",
                         "query_deleted_link", "accept_new_item", "accept_deleted_item"}
 
+
+
+# ---------------------------------------------------------------- review round 1
+
+def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables(rig):
+    """D1's placement (`palette-hands.json`: the palette `after` the hands'
+    layer), read by `graph.read_graph` and built by `default_graph`, is an
+    `effect` render node on the canvas with its image cables in and out,
+    and the palette's params on it — nothing here reads `after` / `into`."""
+    import json
+    doc = json.loads((Path(__file__).parent / "fixtures" / "presets" /
+                      "palette-hands.json").read_text())
+    spec = G.read_graph(doc["graph"])
+    g = G.default_graph(views(Switches(), Switches(through=True)), spec.wiring(),
+                        effects=("acid", "palette"))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    node = view.node("render:palette")
+    assert node is not None and isinstance(node.ref, G.Effect) and node.ref.placed == "after"
+    assert view.spec is spec
+    wires = [c for c in view.cables if c.kind == "render"]
+    into = [c for c in wires if c.dst_port == "rin:palette/image"]
+    out = [c for c in wires if c.src_port == "rout:palette"]
+    assert [c.src_port for c in into] == ["rout:hands"]
+    assert out and all(c.type == graphview.IMAGE for c in (*into, *out))
+    assert owner_of(view, "fx.palette.mix") == "render:palette"
+
+
+def test_a_route_depth_follows_its_macro_and_its_slider_without_a_rebuild(rig):
+    """The hover's depth (`value × scale × Π depth subscribers`) is
+    `refresh`'s: a depth-subscribing macro turned, or the row's depth
+    dragged, moves it with the same view (no rebuild per frame)."""
+    rig.lib.load("presets", "lfo-breathe")
+    table = rig.router.table
+    mid, s = next((mid, s) for mid, m in table.macros.items() for s in m.subs
+                  if s.depth is not None)
+    b = next(b for b in table.routes() if (b.source, b.target) == s.depth)
+    k0 = graphview.key(table, rig.reg, rig.router, None, None, None)
+    view = build(rig)
+    c = next(c for c in view.cables if c.ref is b)
+    rig.reg[mid].set_norm(0.0)
+    b.value = 0.8
+    assert graphview.key(table, rig.reg, rig.router, None, None, None) == k0
+    graphview.refresh(view, rig.reg, rig.router)
+    want = 0.8 * s.at(float(rig.reg[mid].base))
+    if b.scale is not None:
+        want *= float(rig.reg[b.scale].value)
+    assert c.depth == pytest.approx(want) and "depth +0.80" in c.label
+
+
+def test_an_expanded_node_pushes_its_column_down():
+    """auto_layout counts a node's own expand: the node under it moves down
+    by the extra port lines, never overlapping it."""
+    view = graphview.View(nodes=[
+        graphview.VNode("a", "lfo", "a", ports=[graphview.VPort(f"p{i}", "p", "in",
+                                                                param=f"x{i}")
+                                                for i in range(10)]),
+        graphview.VNode("b", "lfo", "b")])
+    flat = graphview.auto_layout(view)
+    full = graphview.auto_layout(view, expanded=lambda nid: nid == "a")
+    assert full["b"][1] - flat["b"][1] == pytest.approx(10 * graphview.ROW_H)
+
+
+def _undo_rig(tmp_path):
+    from test_undo import boot, settle
+    r = boot(tmp_path / "home")
+    settle(r)
+    r.undo.clear()
+    return r, settle
+
+
+def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
+    """The marks carry the GRAPH page's positions: undoing a preset load
+    over a plain preset leaves no positions and no dirt; undoing a show
+    load gives the earlier show's map back, clean."""
+    from hyperspace.library import PRESETS
+    r, settle = _undo_rig(tmp_path)
+    lib, presets, pr = r.lib, r.presets, r.lib.project
+    presets.save_as("plain")
+    presets.layout["render:shape"] = [40, 80]
+    presets.save_as("laid")
+    lib.load(PRESETS, "plain")
+    settle(r)
+    lib.load(PRESETS, "laid")
+    settle(r)
+    assert presets.layout == {"render:shape": [40, 80]}
+    assert r.undo.undo()
+    assert lib.current(PRESETS) == "plain"
+    assert presets.layout == {} and not lib.is_dirty(PRESETS)
+    # the show
+    pr.save("show-plain")
+    pr.layout["lfo.1"] = [0, 10]
+    pr.save("show-laid")
+    pr.load("show-plain")
+    settle(r)
+    assert pr.layout == {} and not pr.is_dirty()
+    r.undo.clear()
+    pr.load("show-laid")
+    settle(r)
+    assert pr.layout == {"lfo.1": [0, 10]}
+    assert r.undo.undo()
+    assert pr.name == "show-plain" and pr.layout == {} and not pr.is_dirty()
+
+
+def test_a_tidy_is_one_undo_step(tmp_path):
+    """Tidy forgets both maps' positions as one step; ⌘Z puts them back."""
+    from types import SimpleNamespace
+
+    from hyperspace.library import PRESETS
+    r, settle = _undo_rig(tmp_path)
+    lib, presets, pr = r.lib, r.presets, r.lib.project
+    presets.layout["render:shape"] = [40, 80]
+    pr.layout["lfo.1"] = [0, 10]
+    settle(r)
+    view = graphview.View(nodes=[graphview.VNode("render:shape", "render", "shape"),
+                                 graphview.VNode("lfo.1", "lfo", "LFO 1")])
+    ui_graph.forget(SimpleNamespace(library=lib), view)
+    assert presets.layout == {} and pr.layout == {}
+    settle(r)
+    assert r.undo.undo() and r.undo.status.endswith("tidy the graph")
+    assert presets.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
+    assert lib.is_dirty(PRESETS)            # the positions are still not saved

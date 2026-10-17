@@ -745,14 +745,19 @@ class Project:
         the live show never reaches a mark."""
         return (self.name, self.note, self.path, self.factory, getattr(self, "_stem", None),
                 copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
-                self.startup, (list(self._saved[0]), self._saved[1]))
+                self.startup, (list(self._saved[0]), self._saved[1]),
+                # plan 28 N2: the GRAPH page's positions of the rig's nodes
+                copy.deepcopy(getattr(self, "layout", {})),
+                copy.deepcopy(getattr(self, "_saved_layout", {})))
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
         else — no file is read or written, no value lands (undo.py does
         that), and `active` is the caller's to recompute (`Marks.put`)."""
         (self.name, self.note, self.path, self.factory, self._stem,
-         session, modules, bank, self.startup, saved) = mark
+         session, modules, bank, self.startup, saved) = mark[:10]
+        if len(mark) > 10:               # plan 28 N2: the show's layout, and as on disk
+            self.layout, self._saved_layout = copy.deepcopy(mark[10]), copy.deepcopy(mark[11])
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1331,14 +1336,16 @@ class Marks:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
         its load left for the panel, the loaded preset's graph — plan 26
-        A4, `preset.GraphSection.mark`, None with no presets)."""
+        A4, `preset.GraphSection.mark`, None with no presets), and the
+        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
                  list(getattr(pre, "desk_notes", ()))),
-                gs.mark() if gs is not None else None)
+                gs.mark() if gs is not None else None,
+                copy.deepcopy(getattr(pre, "layout", None) or {}))
 
     def lands(self) -> dict:
         """{group: landed} — every group's name, reference and re-apply
@@ -1392,6 +1399,11 @@ class Marks:
         show, landed, _extras, note = mark[:4]
         if not Project.same_show(show, pr.mark()):
             pr.remark(show)
+        elif len(show) > 10:
+            # the same show: its GRAPH page positions still go back (plan 28
+            # N2; the undo of a tidy) — unlike the bank, they are not in its
+            # file until it is saved
+            pr.layout = copy.deepcopy(show[10])
         for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
             lib.reland(group, (None, None, None))
         for group, was in landed.items():
@@ -1399,6 +1411,8 @@ class Marks:
         if lib.presets is not None:
             lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
                 note[0], list(note[1]), list(note[2]))
+            if len(mark) > 5:            # the GRAPH page's positions (plan 28 N2)
+                lib.presets.layout = copy.deepcopy(mark[5])
         pr.follow()
 
 

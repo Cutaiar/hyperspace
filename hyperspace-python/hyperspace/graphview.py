@@ -584,24 +584,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         p = reg.get(b.target)
         off = (not b.enabled or p is None or not p.modulatable
                or (b.source, b.target) in cut)
-        subs = list(table.depth_subs(b)) if hasattr(table, "depth_subs") else []
-        depth = float(b.value)
-        said = [f"depth {b.value:+.2f}", b.op]
-        if b.scale is not None:
-            sc = reg.get(b.scale)
-            depth *= _value(sc)
-            said.append(f"× {b.scale}")
-        for mid, s in subs:
-            mp = reg.get(mid)
-            depth *= s.at(float(mp.base)) if mp is not None else 1.0
-            said.append(f"× {mid}")
-        if b.when is not None:
-            said.append(f"while {b.when}")
-        if (b.source, b.target) in cut:
-            said.append("off: a loop needs a delay")
+        depth, said = route_said(b, table, reg, (b.source, b.target) in cut)
         view.cables.append(VCable(cable_id(f"route:{b.source}>{b.target}"), src, dst,
                                   pin_type.get(src, VALUE), ref=b, kind="route", off=off,
-                                  depth=depth, label="  ".join(said), addr=b.source))
+                                  depth=depth, label=said, addr=b.source))
     for b in setters:
         src = source_pin(b.source)
         dst = f"{BASE}:{b.target}"
@@ -619,12 +605,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for s in m.subs:
             if s.depth is None:
                 dst, off = f"{BASE}:{s.base}", reg.get(s.base or "") is None
-                said = f"base {s.lo:.2f}…{s.hi:.2f}"
             else:
                 dst, off = f"{DEPTH}:{s.depth[1]}", s.depth not in keyed
-                said = f"depth of {s.depth[0]} × {s.lo:.2f}…{s.hi:.2f}"
             view.cables.append(VCable(cable_id(f"sub:{mid}>{dst}"), src, dst, VALUE,
-                                      ref=(mid, s), kind="sub", off=off, label=said))
+                                      ref=(mid, s), kind="sub", off=off, label=sub_said(s)))
     for m in _modifiers(table):
         for k, addr in enumerate(m.inputs):
             if not addr:
@@ -655,6 +639,34 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     return view
 
 
+def route_said(b, table, reg: Registry, cut: bool = False) -> tuple[float, str]:
+    """A route's effective depth — `value × scale × Π depth subscribers`,
+    the arithmetic `Router.modulate` runs — and the words its hover says:
+    the depth, the op, what scales it, its gate, a loop's cut."""
+    subs = list(table.depth_subs(b)) if hasattr(table, "depth_subs") else []
+    depth = float(b.value)
+    said = [f"depth {b.value:+.2f}", b.op]
+    if b.scale is not None:
+        depth *= _value(reg.get(b.scale))
+        said.append(f"× {b.scale}")
+    for mid, s in subs:
+        mp = reg.get(mid)
+        depth *= s.at(float(mp.base)) if mp is not None else 1.0
+        said.append(f"× {mid}")
+    if b.when is not None:
+        said.append(f"while {b.when}")
+    if cut:
+        said.append("off: a loop needs a delay")
+    return depth, "  ".join(said)
+
+
+def sub_said(s) -> str:
+    """A macro subscriber's hover words: what it sets and over what span."""
+    if s.depth is None:
+        return f"base {s.lo:.2f}…{s.hi:.2f}"
+    return f"depth of {s.depth[0]} × {s.lo:.2f}…{s.hi:.2f}"
+
+
 def _macro_n(mid: str) -> int:
     tail = mid.rpartition(".")[2]
     return int(tail) if tail.isdigit() else 0
@@ -680,8 +692,12 @@ def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
 def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> None:
     """This frame's readings on an already built view: each source port's
     and each cable's reading, each param port's effective value, and which
-    cables are dormant (`off`, or a source not live). Cheap: no structure
-    changes."""
+    cables are dormant (`off`, or a source not live), and each route's
+    effective depth and words (a macro's depth subscriber turning, a
+    depth dragged on ROUTING: `key` leaves the values out, so neither
+    rebuilds the view). Cheap: no structure changes."""
+    table = getattr(router, "table", None) if router is not None else None
+    cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
     for n in view.nodes:
         for port in n.ports:
             if port.addr is not None:
@@ -695,6 +711,10 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> Non
             c.live = reading(router, c.addr, lanes)
         elif c.kind == "sub":
             c.live = _norm(reg.get(c.ref[0]))
+            c.label = sub_said(c.ref[1])
+        if c.kind == "route" and table is not None:
+            b = c.ref
+            c.depth, c.label = route_said(b, table, reg, (b.source, b.target) in cut)
         grey = False
         hit = view.owner(c.src_port)
         if hit is not None and hit[0].grey:
@@ -709,8 +729,8 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
     modifiers' serials, the registry's add / remove serial, each device's
     status and port count, the render graph and the spec. The page builds
     a new view only when this moves."""
-    rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when, b.value)
-                 for b in table.bindings)
+    rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
+                 for b in table.bindings)          # not `value`: `refresh` follows a depth
     subs = tuple((mid, len(m.subs), m.label) for mid, m in
                  (getattr(table, "macros", {}) or {}).items())
     devs: tuple = ()
@@ -758,20 +778,40 @@ def _columns(view: View, render_graph) -> None:
             n.column = COLUMN.get(n.kind, COLUMN["group"])
 
 
-def height(n: VNode, patched_only: bool = True) -> float:
-    """A node's height as auto_layout stacks it: its title and the ports it
-    shows (all of them, or the patched ones and its render ports)."""
-    rows = sum(1 for p in n.ports if not patched_only or p.patched or p.param is None)
+def visible(n: VNode, full: bool, folds=frozenset()) -> list[VPort]:
+    """The ports node `n` draws: a patched port and a render port always;
+    the rest only while the node is expanded (`full`) and its group is not
+    folded (`(node id, group)` in `folds`) — so no cable ever ends on a
+    pin that is not drawn."""
+    return [p for p in n.ports
+            if p.patched or (p.param is None and p.addr is None)
+            or (full and (n.id, p.group) not in folds)]
+
+
+def grouped(n: VNode, full: bool) -> bool:
+    """Does node `n` draw a header line per port group (expanded, more than one)?"""
+    return full and len({p.group for p in n.ports}) > 1
+
+
+def height(n: VNode, full: bool = False, folds=frozenset()) -> float:
+    """A node's height as auto_layout stacks it: its title, the ports it
+    shows (`visible`) and, expanded, a line per port group."""
+    rows = len(visible(n, full, folds))
+    if grouped(n, full):
+        rows += len({p.group for p in n.ports})
     return HEAD_H + ROW_H * rows
 
 
 def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
-                patched_only: bool = True) -> dict[str, tuple[float, float]]:
+                expanded: Callable[[str], bool] | None = None,
+                folds=frozenset()) -> dict[str, tuple[float, float]]:
     """A position for every node `placed` does not hold: its column's x by
     kind (`COLUMN`; the render nodes by their depth in the render graph,
     the outputs last), stacked down the column in view order. The nodes
     already placed keep their positions and take no room here (a tidy
-    passes none)."""
+    passes none). `expanded(node id)` says which nodes show every port
+    (default none) and `folds` which of their groups are folded, so an
+    expanded node pushes the column under it down instead of overlapping."""
     placed = placed or {}
     tops: dict[int, float] = {}
     out: dict[str, tuple[float, float]] = {}
@@ -780,7 +820,8 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
             continue
         y = tops.get(n.column, 0.0)
         out[n.id] = (n.column * COL_W, y)
-        tops[n.column] = y + height(n, patched_only) + GAP
+        full = bool(expanded(n.id)) if expanded is not None else False
+        tops[n.column] = y + height(n, full, folds) + GAP
     return out
 
 

@@ -21,7 +21,9 @@ nothing. A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
 node takes `graphview.auto_layout`'s column; **tidy** forgets every
-position on the canvas and lays them all out again.
+position on the canvas and lays them all out again — one undo step
+(`forget`). The selection shows under the canvas on the panel's narrow
+page; **beside** (or a page 720 px wide) puts it in a side column.
 
 **The editor context** is the widget's own C++ object: made on the first
 draw of the page, held in the panel's state (``panel._graph``) — not in
@@ -63,19 +65,25 @@ BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
 PATCHED_TIP = ("Patched only: every node shows just its patched ports — "
                "a node's own ± flips it")
-TIDY_TIP = "Forget every position on the canvas and lay every node out again by kind"
+TIDY_TIP = ("Forget every position on the canvas and lay every node out again by kind "
+            "(⌘Z puts them back)")
+BESIDE_TIP = ("The selection beside the canvas instead of under it — widen CONTROLS "
+              "to give both room (it is beside by itself on a page this wide)")
 
 
 # ---------------------------------------------------------------- state and context
 
 def _state(panel) -> dict:
-    st = panel.__dict__.get(STATE)
-    if st is None:
-        st = panel.__dict__[STATE] = {
-            "editor": None, "ids": {}, "names": {}, "applied": {}, "flip": set(),
-            "folds": set(), "patched_only": True, "view": None, "key": None,
-            "tidy": False, "times": [], "created": 0,
-        }
+    """The page's state on the panel. Every key by `setdefault`, so a key
+    added by a later edit (N3, N4) lands on a dict an older build of this
+    file made, across a hot reload."""
+    st = panel.__dict__.setdefault(STATE, {})
+    for k, v in (("editor", None), ("ids", {}), ("names", {}), ("applied", {}),
+                 ("flip", set()), ("folds", set()), ("patched_only", True), ("view", None),
+                 ("key", None), ("tidy", False), ("times", []), ("created", 0),
+                 ("beside", False)):
+        if k not in st:
+            st[k] = v
     return st
 
 
@@ -169,13 +177,23 @@ def expanded(st: dict, nid: str) -> bool:
 
 
 def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
-    """The ports node `n` draws: a patched port and a render port always;
-    the rest only while the node is expanded and its group is not folded —
-    so no cable ever ends on a pin that is not drawn."""
-    full = expanded(st, n.id)
-    return [p for p in n.ports
-            if p.patched or (p.param is None and p.addr is None)
-            or (full and (n.id, p.group) not in st["folds"])]
+    """The ports node `n` draws (`graphview.visible` with this page's state)."""
+    return graphview.visible(n, expanded(st, n.id), st["folds"])
+
+
+def forget(panel, view: graphview.View) -> None:
+    """The tidy: every position of `view`'s nodes forgotten, in the preset's
+    map and the show's — one undo step (the library's marks carry both
+    maps, plan 28 N2), so ⌘Z puts them back."""
+    pre, show = _layouts(panel)
+    ids = {n.id for n in view.nodes}
+    if not any(k in ids for m in (pre, show) if m for k in m):
+        return
+    undo.push("tidy the graph", load=True)
+    for m in (pre, show):
+        if m:
+            for nid in [k for k in m if k in ids]:
+                del m[nid]
 
 
 # ---------------------------------------------------------------- the page
@@ -193,7 +211,7 @@ def page(panel, dt: float) -> None:
     imgui.separator()
     sel = _selection(st, view)
     avail = imgui.get_content_region_avail()
-    wide = avail.x >= WIDE
+    wide = st["beside"] or avail.x >= WIDE
     cw = avail.x - (SIDE_W + imgui.get_style().item_spacing.x if sel and wide else 0.0)
     ch = avail.y - (BELOW_H if sel and not wide else 0.0)
     _canvas(panel, st, view, imgui.ImVec2(max(cw, 80.0), max(ch, 80.0)))
@@ -222,6 +240,11 @@ def _head(panel, st: dict, view: graphview.View) -> None:
         st["tidy"] = True
     if imgui.is_item_hovered():
         imgui.set_tooltip(TIDY_TIP)
+    imgui.same_line()
+    if ui.lit_chip("beside##graph", st["beside"]):
+        st["beside"] = not st["beside"]
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(BESIDE_TIP)
 
 
 def _place(panel, st: dict, view: graphview.View) -> None:
@@ -229,16 +252,12 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     position, else the automatic column; set on the canvas only when that
     differs from what was last set, so a node being dragged is left alone.
     A tidy forgets the canvas's positions in both maps first."""
-    pre, show = _layouts(panel)
     if st["tidy"]:
         st["tidy"] = False
-        ids = {n.id for n in view.nodes}
-        for m in (pre, show):
-            if m:
-                for nid in [k for k in m if k in ids]:
-                    del m[nid]
+        forget(panel, view)
+    pre, show = _layouts(panel)
     stored = {**(show or {}), **(pre or {})}
-    auto = graphview.auto_layout(view, stored, st["patched_only"])
+    auto = graphview.auto_layout(view, stored, lambda nid: expanded(st, nid), st["folds"])
     applied = st["applied"]
     for n in view.nodes:
         xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
@@ -317,7 +336,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
-    many = full and len({p.group for p in n.ports}) > 1
+    many = graphview.grouped(n, full)
     for port in (n.ports if many else ports):
         if many and port.group != group:
             group = port.group
