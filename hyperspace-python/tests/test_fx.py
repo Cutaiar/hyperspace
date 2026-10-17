@@ -2366,3 +2366,78 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage_twelve, monkeypatch):
     assert st.names()[-1] == "acid" and pushes == [("reorder effects",)]
     # an effect whose file went away mid-drag: no raise
     ui_fx._drop(panel, st, "no_such_effect", "acid")
+
+
+def test_a_placed_effects_chip_says_where_it_sits_and_is_not_reorderable(fxpage, monkeypatch):
+    """Plan 30 D2: with the loaded preset's graph placing Warp (order 20,
+    a chip early in the grid) after the hands, the FX page still edits the default
+    chain — Warp's chip leaves the grid and is drawn under it, on its own
+    row, with "after hands" beside it; it is neither a drag source nor a
+    place to drop, and a drop among the chain's chips never rewrites its
+    order. Its LED and its strip are any effect's. The status line counts
+    it apart from the chain. The words come from one function over the
+    GraphSpec (`graph.placed_chips`)."""
+    from hyperspace import graph as G
+    from hyperspace import undo
+    from hyperspace.ui_fx import NO_CHAIN, RESET_NOTE
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]})
+    # the words, one function over the spec (N4 extends it for wires)
+    assert G.placed_chips(spec) == {"warp": "after hands"}
+    assert G.placed_chips(None) == {}
+    two = G.read_graph({"nodes": [
+        {"kind": "effect", "file": "palette", "instance": 2, "into": "output.2"},
+        {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"},
+        {"kind": "effect", "file": "acid", "instance": 3}]})
+    assert G.placed_chips(two) == {"palette.2": "into output 2", "acid.2": "after scene"}
+    others = [n for n in st.names() if n != "warp"]
+
+    def chip(n):
+        return fxpage.rects[f"chip.fx.{n}.on"]
+
+    # no graph: Warp is a chip in the grid (not its last row), like any other
+    fxpage.frame()
+    last = max(chip(n)[1] for n in others)
+    assert chip("warp")[1] < last and "after hands" not in fxpage.texts
+
+    panel.graph_now = lambda: (G.Wiring(), spec)
+    fxpage.frame()
+    # under the grid, on a row of its own, its place beside it
+    assert chip("warp")[1] > max(chip(n)[1] for n in others)
+    assert chip("warp")[0] == chip(others[0])[0]
+    assert "after hands" in fxpage.texts
+    # the status line: the chain apart, the placed counted (only those that run)
+    reg["fx.acid.on"].set(True)
+    fxpage.frame()
+    assert fxpage.wrapped[:2] == [st.specs["acid"].label, RESET_NOTE]
+    reg["fx.warp.on"].set(True)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == f"{st.specs['acid'].label} · 1 placed"
+    reg["fx.acid.on"].set(False)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == f"{NO_CHAIN} · 1 placed"
+
+    def orders():
+        return {n: reg[f"fx.{n}.order"].base for n in st.names()}
+    was = orders()
+    # the placed chip is no drag source …
+    fxpage.drag("chip.fx.warp.on", "chip.fx.plasma.on", release=False)
+    assert imgui.get_drag_drop_payload_py_id() is None
+    fxpage.release()
+    # … and no drop target: a chain chip let go on it moves nothing
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on")
+    assert orders() == was and not pushes
+    # a drop among the chain's chips rewrites chain orders only
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.plasma.on")
+    now = orders()
+    assert now != was and now["warp"] == was["warp"]
+    assert pushes == [("reorder effects",)]
+    # its LED switches it; its name opens its strip, which is any effect's
+    fxpage.click("led.fx.warp.on")
+    assert reg["fx.warp.on"].base is False
+    fxpage.click("chip.fx.warp.on")
+    assert st.selected() == "warp"
+    fxpage.frame()
+    assert {"fx.warp.on", "fx.warp.mix", "fx.warp.order"} <= set(fxpage.rects)
