@@ -504,6 +504,12 @@ def test_the_words_say_the_wires():
     assert G.graph_words(spec) == ("graph: acid ×2 · palette on output 1 only · acid 2 reads "
                                    "the history · output 2 shows acid 2")
     assert output_shows(S(through=True), True, True, 1.0, w, n=2)[0] == "acid 2 by a wire"
+    # the FX page's chips (plan 30 D2's `placed_chips`) say where a wire puts each
+    assert G.placed_chips(spec) == {"palette": "into output 1",
+                                    "acid.2": "after history into output 2"}
+    assert G.placed_chips(G.read_graph({"wires": _wires(("hands", "palette.image"),
+                                                        ("palette", "output.2.hands"))})
+                          ) == {"palette": "after hands into output 2 hands"}
     assert output_shows(S(), True, True, 1.0, w, n=1)[0].endswith(
         "palette on this output only")
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])

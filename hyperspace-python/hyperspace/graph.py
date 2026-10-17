@@ -1154,10 +1154,22 @@ def placed_chips(spec: GraphSpec | None) -> dict[str, str]:
     if spec is None:
         return {}
     out: dict[str, str] = {}
-    for e in spec.effects:
-        if e.placed:
-            key, where = e.where
-            out[e.name] = f"{key} {where.replace('.', ' ')}"
+    w = spec.wiring()
+    # D1's placements, then (plan 28 N4) the wires D1 would write short
+    for e in w.placed:
+        key, where = e.where
+        out[e.name] = f"{key} {where.replace('.', ' ')}"
+    # plan 28 N4: an effect a wire feeds and wires on (`after history into
+    # output 2`), or wires into a port D1 has no word for
+    ins = {x.node: x.src for x in w.wires if wire_node_kind(x.node) == "effect"}
+    outs: dict[str, list[str]] = {}
+    for x in w.wires:
+        if wire_node_kind(x.src) == "effect":
+            outs.setdefault(x.src, []).append(x.node if x.port == "image" else x.dst)
+    for name in sorted(set(ins) | set(outs)):
+        said = ([f"after {ins[name]}"] if name in ins else []) + (
+            ["into " + ", ".join(outs[name])] if name in outs else [])
+        out[name] = " ".join(said).replace(".", " ")
     return out
 
 
