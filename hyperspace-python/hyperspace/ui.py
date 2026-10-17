@@ -460,6 +460,13 @@ class Panel:
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
+        self.venue = ""                      # set by app.py: the venue laid over config.toml
+        self.venues: list[str] = []          # set by app.py: every venue in the library
+        # the OUTPUT page's picker puts a name here (or "" for none); app.frame
+        # remembers it and restarts the process into it — a venue cannot be
+        # swapped live (the outputs' windows are made at launch, decision 110)
+        self.venue_wanted: str | None = None
+        self._venue_pick: str | None = None   # the picker's choice, until it is confirmed
         self.dream_error = ""  # set by app.py: why the dream worker is off (SYSTEM, LOOKBACK)
         self.watchdog = None   # set by app.py (watchdog.Watchdog): the stall log line
         self.render_watch = None   # set by app.py (watchdog.RenderWatch): the red banner
@@ -1470,6 +1477,45 @@ class Panel:
 
     # ---- pages ----
 
+    NO_VENUE = "none (config.toml alone)"
+
+    def _venue_picker(self) -> None:
+        """Which venue the app is in, and a way into another (decision 110).
+        A venue cannot be swapped live — the outputs' windows are made at
+        launch — so the picker never acts on the choice alone: the header
+        says switching restarts, and the choice waits for its button. The
+        same restart as ⌘R: same PID, same terminal, a second or two.
+
+        Two lines until something is picked, three after: the OUTPUT page
+        is the fullest one and must not scroll
+        (`test_the_output_page_fits_with_the_picker_open`)."""
+        if not self.venues:
+            return                       # no venues: the picker is not a feature yet
+        note = "switching restarts"
+        _micro("venue", TEXT)
+        imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
+        _micro(note, FAINT)
+        names = [self.NO_VENUE, *self.venues]
+        here = self.venues.index(self.venue) + 1 if self.venue in self.venues else 0
+        shown = names.index(self._venue_pick) if self._venue_pick in names else here
+        imgui.set_next_item_width(-1)
+        changed, i = imgui.combo("##venue", shown, names)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("The screens of one place, laid over config.toml.\n"
+                              "Switching restarts the app, as ⌘R does.")
+        if changed:
+            self._venue_pick = names[i]
+        pick = self._venue_pick
+        if pick is None or names.index(pick) == here:
+            self._venue_pick = None      # back on the one it is in: nothing to confirm
+            return
+        if chip(f"Restart into {pick}##venue.go"):
+            self.venue_wanted = "" if pick == self.NO_VENUE else pick
+            self._venue_pick = None      # app.frame remembers it and restarts
+        imgui.same_line()
+        if chip("cancel##venue.no"):
+            self._venue_pick = None
+
     def _page_output(self, dt: float) -> None:
         """Where the render window shows: screen, fullscreen, overlay (overlay.py)."""
         self._section("output", "output", note="T overlay · G click-through")
@@ -1485,6 +1531,10 @@ class Panel:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         self._output_blocks()
         if len(self.reg["output.monitor"].names) > 1:
+            # labelled, and on the label's own line: under the venue picker's
+            # combo an unlabelled one read as a second venue field
+            _micro("screen", TEXT)
+            imgui.same_line()
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
             size = getattr(getattr(self.renderer, "scene", None), "size", None)
@@ -1509,6 +1559,10 @@ class Panel:
             imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
+        # last on the page: a venue is what the *next* launch reads, not a
+        # control of this one — above the live Screen combo the two read as
+        # one thing (they are not: one restarts, one moves the window now)
+        self._venue_picker()
 
     def _outputs_now(self) -> tuple[bool, bool, float]:
         """(an effect is on, a ghost hand showed last frame, the master dim):
@@ -1903,6 +1957,10 @@ class Panel:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
             self._library_lines()
+        if self.venue:
+            imgui.text_disabled(f"venue: {self.venue} (venues/{self.venue}.toml over config.toml)")
+        elif self.venues:
+            imgui.text_disabled("venue: none (config.toml alone) — pick one on the OUTPUT page")
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:

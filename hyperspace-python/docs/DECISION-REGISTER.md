@@ -97,6 +97,8 @@ here; overturn → the change, then the same.
 | 107 | The house presets' routes generated from code | 132 | |
 | 108 | Macro candidates in `shared/` (folder **superseded by row 109**); per-band gain as depth | 133–136 | |
 | 109 | Plan 25: presets shared through a cloud-synced folder (`[library] path`), D1–D8 | 139–143 | **owner, 2026-10-14** |
+| 110 | Plan 26: a venue per place — a shared `venues/<name>.toml` laid over `config.toml`, `--venue`, remembered | 144 | |
+| 111 | A screen may be named, not numbered — what makes a venue portable | 144 | |
 
 "—": no hand check shows it; tests only.
 
@@ -1395,3 +1397,81 @@ Stream B; the pictures are in
 - **Also built.** Library writes are atomic (temp file, then replace),
   and a cloud client's conflict copy is listed under its own file stem.
 - **Judge it.** Checks 139–143.
+
+### 110. A venue per place: a shared `venues/<name>.toml` over `config.toml`
+
+- **Why.** The same show plays in different places — the laptop alone, a
+  laptop and a projector, a laptop with a hologram monitor and a
+  projector. What changes between them is the screens; `[hands]`,
+  `[library]` and the rest do not. One `config.toml` meant editing the
+  screens by hand at every venue, with nothing to go back to.
+- **Built.** A **venue** is `<library>/venues/<name>.toml`, chosen with
+  `--venue <name>` and laid over `config.toml` *before* any value is
+  checked, so a venue's value is read exactly as the same value in
+  `config.toml` would be (`config._layer`, `config.load(venue=…)`).
+  - A key the venue gives wins; a key it is silent about keeps
+    `config.toml`'s. `[[output.screens]]` is one key: a venue that lists
+    screens replaces the list rather than adding to it.
+  - **The venues are shared; which one you are in is not.** They sit in
+    the library (`[library] path`, row 109), beside the presets, so two
+    people playing the same places share them — a place's screens are
+    the place's, not the laptop's. `last_venue` stays in the home, like
+    `windows.json`: it says which place *this* Mac was last set for.
+    With no shared library the venues are in the home, as everything is.
+  - A venue cannot set `[library]`: it was read out of the library, so
+    it cannot be the thing that moves it. The key is dropped with a note
+    and the rest of the venue is used.
+  - The venue is remembered in `<home>/last_venue`, beside `last_show`, so a
+    plain launch keeps the venue it was last dialled into. `--no-venue`
+    forgets it and reads `config.toml` alone.
+  - **Nothing writes `config.toml`.** It stays the user's file to edit
+    and to symlink; the remembered venue is machine state, like
+    `windows.json`.
+  - ⌘R re-execs the same argv (`app._restart`), so the venue rides through
+    a reload and its file is read again — editing the file and pressing
+    ⌘R is how a place gets dialled in. No live venue *switch*: the screens
+    still have to be connected before the process that uses them starts
+    (row 86), so switching venue is a relaunch either way.
+  - A venue that is missing, will not parse, or holds a value outside a
+    table is a note on the SYSTEM page and `config.toml` alone — a typo
+    at a venue does not stop the show. The note lists the venues there are.
+  - The SYSTEM page names the venue in use. The OUTPUT page picks one:
+    a combo of the venues there are, and a **Restart into …** button —
+    two steps, because the act is a restart and a picker that restarted
+    on the click alone would be a trap mid-show. Choosing writes
+    `last_venue` and re-execs without this process's `--venue`, so the
+    remembered venue is what the next image reads. The venue itself is
+    still not a parameter: nothing persists or modulates it (row 81).
+- **Rough edge.** The venues are files the user makes by hand; there is
+  no "save the current screens as a venue".
+- **Judge it.** Check 144.
+
+### 111. A screen may be named, not numbered
+
+- **Why.** Row 110 made the venues shared, and then they could not
+  travel: `monitor` was an index, and an index is as machine-specific as
+  a window rectangle — it depends on which Mac, how many screens and the
+  order they were plugged in. The one file meant to be shared carried
+  the least portable way of saying which screen. `windows.json`, the
+  file that deliberately does *not* travel, had been storing screens by
+  name all along.
+- **Built.** `monitor` (and `control_monitor`, and a `[[output.screens]]`
+  entry's) takes a screen's **name** as well as an index: a case-blind
+  substring of what the screen reports, the rule `[midi] port` already
+  uses for a device — `"MStar"` finds `MStar Demo`, `"projector"` finds
+  most of them, and a full name always finds itself. The first screen
+  that matches wins, so a name is never ambiguous.
+  - `placement.named` says whether a value is a name at all (`"1"` is an
+    index written as text, not a name); `placement.match` finds it;
+    `placement.read` takes the screens and returns an index as before.
+  - **Resolved once, at the launch.** `config.load` runs before any
+    window system, so it keeps the name as it is; `app._windows` settles
+    every one against the connected screens — output 1's scalar, the
+    control window's, and each slot's — so nothing downstream ever sees
+    a name (`Output.monitor` stays an index, plan 16 WP7).
+  - A name nothing matches is −1 and a note that **lists the screens
+    there are**, which an index could never do; the window opens where
+    it was last. A value that is neither (a list, `nan`, `None`) is the
+    same −1 with its own note.
+- **Judge it.** Check 144, which now names a screen rather than
+  numbering it.

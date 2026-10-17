@@ -28,10 +28,14 @@ dream.py, too, is imported only when its gate is open.
                             # framebuffer, and T / MASTER select / the panel cannot
                             # float it see-through; true for a laptop demo
     monitor = -1            # which screen the RENDER window opens on, and the one
-                            # fullscreen covers: a screen index, or -1 = where it
-                            # was last time (else the primary screen)
+                            # fullscreen covers: a screen index, a piece of a
+                            # screen's NAME ("MStar", "projector" — case blind,
+                            # as [midi] port matches a device), or -1 = where it
+                            # was last time (else the primary screen). A name is
+                            # what travels between Macs: indices depend on the
+                            # machine and the plug order (decision 111)
     control_monitor = -1    # which screen the CONTROL window opens on: an index,
-                            # or -1 = where it was last time (else the primary).
+                            # a name, or -1 = where it was last time (else the primary).
                             # "Last time" is <home>/windows.json (placement.py),
                             # written on quit and on restart; delete it to forget.
                             # An index with no such screen is treated as -1, with
@@ -69,10 +73,13 @@ dream.py, too, is imported only when its gate is open.
                             # passthrough, bg and alpha stay above and are
                             # output 1's alone (every later output is opaque)
     name = "glass"          # optional: the label on the OUTPUT page and in notes
-    monitor = 1             # a screen index, or -1 = a plain window where it was
-                            # last. Output 1 always opens (an index no screen has
-                            # is -1, with a note). A LATER output whose index no
-                            # screen has is NOT opened, with a note (fork F9); a
+    monitor = "glass"       # a screen's name (a case-blind piece of it) or its
+                            # index, or -1 = a plain window where it was last.
+                            # A name is what travels (decision 111). Output 1
+                            # always opens (a screen nothing matches is -1, with
+                            # a note listing the screens there are). A LATER
+                            # output whose screen is not there is NOT opened,
+                            # with a note (fork F9); a
                             # screen plugged in after the launch is not picked up
                             # until the next launch
     fullscreen = true       # a borderless cover of that screen at its current
@@ -165,6 +172,8 @@ from . import library, placement
 
 FILE = Path("config.toml")
 LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
+VENUES = Path("venues")     # <library>/venues/<name>.toml: one venue, over config.toml
+LAST_VENUE = "last_venue"   # <home>/last_venue: the venue a launch chose last (machine file)
 
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
@@ -230,10 +239,15 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
     name = e.get("name", "")
     out["name"] = name if isinstance(name, str) else str(name)
     if "monitor" in e:
-        out["monitor"], bad = placement.read("monitor", e["monitor"])
-        if bad:
-            _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
-                       "using the last position")
+        # a screen *name* is kept as it is: which index it has is only
+        # knowable at the launch, with the screens in hand (decision 111)
+        if placement.named(e["monitor"]):
+            out["monitor"] = e["monitor"].strip()
+        else:
+            out["monitor"], bad = placement.read("monitor", e["monitor"])
+            if bad:
+                _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index "
+                           "or a screen name — using the last position")
     for key in ("fullscreen", "scene", "hands", "through", "flip_x", "flip_y"):
         if key in e:
             if isinstance(e[key], bool):
@@ -312,21 +326,130 @@ def screens(cfg: dict) -> list[dict]:
              "flip_y": oc.get("flip_y", False) is True}]
 
 
-def load(path: Path | None = None) -> dict:
-    """The config, defaults filled in; `path` defaults to the library home's."""
+# ------------------------------------------------------------------- venues
+
+def venue_root(cfg: dict, home: Path) -> Path:
+    """The folder the venues live in: the shared library when `[library]
+    path` names one (plan 25), else the home. Two people playing the same
+    places share their venues the way they share their presets — a place's
+    screens are the place's, not the laptop's. What stays in the home is
+    `last_venue`: which place *this* Mac was last set for."""
+    lp = (cfg.get("library") or {}).get("path") or ""
+    return Path(lp).expanduser() if isinstance(lp, str) and lp.strip() else home
+
+
+def venue_file(root: Path, name: str) -> Path:
+    """Where the venue called `name` lives: ``<root>/venues/<name>.toml``."""
+    return root / VENUES / f"{name}.toml"
+
+
+def venue_names(root: Path) -> list[str]:
+    """Every venue in ``<root>/venues``, in name order; [] when there are none
+    or the folder is unreadable (a venue is a convenience, never a launch)."""
+    try:
+        return sorted(p.stem for p in (root / VENUES).glob("*.toml"))
+    except OSError:
+        return []
+
+
+def last_venue(home: Path) -> str:
+    """The venue the last launch chose (``<home>/last_venue``), "" for none.
+    A name that no longer has a file is still returned — `load` says so
+    and falls back, as it does for a name that was asked for outright."""
+    try:
+        return (home / LAST_VENUE).read_text().strip()
+    except OSError:
+        return ""
+
+
+def remember_venue(home: Path, name: str) -> None:
+    """Remember `name` as the venue to use next time, "" to forget. Machine
+    state, never the library's: it rides beside `last_show`, and nothing
+    here writes config.toml — the file stays the user's to edit."""
+    path = home / LAST_VENUE
+    try:
+        if name:
+            path.write_text(f"{name}\n")
+        else:
+            path.unlink(missing_ok=True)
+    except OSError as e:      # a read-only home is not a reason to refuse a launch
+        print(f"config: {LAST_VENUE} not written ({e})", file=sys.stderr)
+
+
+def _venue_data(cfg: dict, root: Path, venue: str) -> dict:
+    """The venue file's tables, {} when there is no using it — a missing or
+    unparsable venue is a note and the plain config.toml, never a raise
+    (the venue names a venue; a typo at one should not stop the show)."""
+    path = venue_file(root, venue)
+    if not path.exists():
+        have = ", ".join(venue_names(root)) or "none"
+        _note(cfg, f"config: no venue {venue!r} in {root / VENUES} (have: {have}) "
+                   "— config.toml alone")
+        return {}
+    try:
+        data = tomllib.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        _note(cfg, f"config: venue {venue!r} ({path}) will not parse: {e} — config.toml alone")
+        return {}
+    if not all(isinstance(v, dict) for v in data.values()):
+        _note(cfg, f"config: venue {venue!r} ({path}) has a value outside a table "
+                   "— config.toml alone")
+        return {}
+    if "library" in data:
+        # the venue was read *out of* the library: one that moved it would be
+        # asking to have been read from somewhere else
+        data.pop("library")
+        _note(cfg, f"config: venue {venue!r} cannot set [library] — that is config.toml's "
+                   "(it says where the venues are); the rest of the venue is used")
+    return data
+
+
+def _layer(base: dict, over: dict) -> dict:
+    """`over`'s tables laid on `base`'s, key by key — a venue says only what
+    its venue changes. A key the venue sets wins; one it is silent about
+    keeps config.toml's. `[[output.screens]]` is a key like any other, so
+    a venue that lists screens replaces the list rather than adding to it."""
+    out = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
+    for section, values in over.items():
+        if isinstance(values, dict) and isinstance(out.get(section), dict):
+            out[section].update(values)
+        else:
+            out[section] = values
+    return out
+
+
+def load(path: Path | None = None, venue: str = "") -> dict:
+    """The config, defaults filled in; `path` defaults to the library
+    home's. `venue` names a file in ``<home>/venues`` whose tables are laid
+    over it (one venue's screens, say) — ``cfg["venue"]`` is the venue that
+    was actually used, "" when none was or the named one could not be."""
+    home = library.ensure_home() if path is None else path.parent
     if path is None:
-        path = library.ensure_home() / FILE
+        path = home / FILE
     from .hands.core import DEFAULTS as HANDS  # the one [hands] table (audit N1)
 
     cfg = copy.deepcopy(DEFAULTS)                 # a file may append to a list
     cfg["hands"] = copy.deepcopy(HANDS)
+    cfg["venue"] = ""
     data: dict = {}
+    base: dict = {}
     if path.exists():
         try:
-            data = tomllib.loads(path.read_text())
+            base = tomllib.loads(path.read_text())
         except (OSError, ValueError) as e:
             cfg["error"] = f"config: {e}"
-            data = {}
+            base = {}
+    # the venue's tables go on before any of them is checked, so a venue's
+    # value is read exactly as the same value in config.toml would be
+    data = base
+    if venue:
+        # the root comes from config.toml's [library], never the venue's: the
+        # venue is read out of the library, so it cannot be what moves it
+        over = _venue_data(cfg, venue_root(base, home), venue)
+        if over:
+            data = _layer(base, over)
+            cfg["venue"] = venue
+    if data:
         bad = []
         for section, values in data.items():
             if isinstance(values, dict):
@@ -345,9 +468,8 @@ def load(path: Path | None = None) -> dict:
             real = data.get("output")
             real = real if isinstance(real, dict) else {}   # a scalar was reported above
             cfg["output"] = {**DEFAULTS["output"], **legacy, **real}
-            note = f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in {path}"
-            cfg["notes"] = [note]
-            print(note, file=sys.stderr)
+            _note(cfg, f"config: [{LEGACY_OUTPUT}] is now [output] — "
+                       f"rename the section in {path}")
     # the render outputs (plan 21 WP3): with a list, output 1's entry
     # becomes the scalar monitor / fullscreen read below
     _screens(cfg, data.get("output"))
@@ -363,7 +485,11 @@ def load(path: Path | None = None) -> dict:
     # on (where the window was last time) and the SYSTEM page says so —
     # whether that screen exists is placement's to say, at the launch
     for key in ("monitor", "control_monitor"):
-        cfg["output"][key], note = placement.read(key, cfg["output"].get(key, -1))
+        v = cfg["output"].get(key, -1)
+        if placement.named(v):          # a name: app._windows resolves it, screens in hand
+            cfg["output"][key] = v.strip()
+            continue
+        cfg["output"][key], note = placement.read(key, v)
         if note:
             cfg.setdefault("notes", []).append(note)
             print(note, file=sys.stderr)

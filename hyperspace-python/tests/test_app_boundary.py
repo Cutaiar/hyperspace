@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import app
+from hyperspace import app, config
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -275,7 +275,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     reg.get = lambda pid: SimpleNamespace(fire=lambda: fired.append(pid),
                                           step=lambda a: None, toggle=lambda: None)
     reg.__dict__["fired"] = fired
-    panel = Stub("panel", log, restart_requested=False)
+    panel = Stub("panel", log, restart_requested=False, venue_wanted=None)
     renderer = Stub("renderer", log)
     h = app.Host(
         reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
@@ -569,9 +569,9 @@ def _open(monkeypatch, cfg, home, mons=None):
 
 
 @pytest.mark.parametrize(("monitor", "said"), [
-    ("left", "monitor = 'left' is not a screen index"),      # no number at all
+    ("left", "monitor = 'left' matches no screen"),           # a name nothing answers to
     (7, "monitor = 7, but 2 screens are connected (0–1)"),    # a screen that is not there
-    (None, "monitor = None is not a screen index"),
+    (None, "monitor = None is not a screen index or a screen name"),
 ])
 def test_a_config_screen_that_cannot_be_used_is_minus_one_and_one_note(
         monkeypatch, tmp_path, capsys, monitor, said):
@@ -1240,3 +1240,103 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     r = _Renderer(log)
     app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
     assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene
+
+
+# ---------------------------------------------------------------- the venue flag
+#
+# `--venue <name>` picks a file in <home>/venues (plan 26). ⌘R re-execs the
+# same argv (`_restart`), so whatever is read here is read again then.
+
+
+def test_the_rig_flag_is_read_in_either_spelling():
+    assert app._venue_arg(["--venue", "projector"]) == ("projector", False)
+    assert app._venue_arg(["--venue=projector"]) == ("projector", False)
+
+
+def test_no_rig_flag_is_no_rig():
+    assert app._venue_arg([]) == ("", False)
+    assert app._venue_arg(["--whatever"]) == ("", False)
+
+
+def test_no_rig_forgets_the_remembered_one():
+    assert app._venue_arg(["--no-venue"]) == ("", True)
+
+
+def test_a_rig_flag_with_no_name_is_said_not_taken_from_the_next_flag(capsys):
+    assert app._venue_arg(["--venue", "--no-venue"]) == ("", True)
+    assert "--venue wants a name" in capsys.readouterr().err
+    assert app._venue_arg(["--venue"]) == ("", False)
+
+
+def test_the_last_rig_flag_wins_so_a_re_exec_of_the_same_argv_is_stable():
+    once = ["--venue", "tv"]
+    assert app._venue_arg(once) == app._venue_arg(once)      # _venue_arg does not eat its argv
+    assert app._venue_arg(["--venue", "tv", "--venue", "cart"]) == ("cart", False)
+
+
+def test_the_venue_flag_is_stripped_for_a_re_exec_into_another_venue():
+    """The picker remembers its choice, so the next image must not be told
+    the venue *this* one was told — it would win over what was remembered."""
+    assert app._without_venue(["hyperspace", "--venue", "tv"]) == ["hyperspace"]
+    assert app._without_venue(["hyperspace", "--venue=tv"]) == ["hyperspace"]
+    assert app._without_venue(["hyperspace", "--no-venue"]) == ["hyperspace"]
+    kept = ["hyperspace", "--venue", "tv", "--whatever", "x"]
+    assert app._without_venue(kept) == ["hyperspace", "--whatever", "x"]
+    assert app._without_venue(["hyperspace"]) == ["hyperspace"]
+
+
+def test_the_picker_remembers_the_venue_then_restarts(tmp_path, monkeypatch):
+    log: list[str] = []
+    h = _host(log)
+    h.panel.venue_wanted = "cart"
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HYPERSPACE_HOME", str(home))
+    monkeypatch.setattr(sys, "argv", ["hyperspace", "--venue", "tv"])
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "restart" in log                                  # it restarted…
+    assert config.last_venue(home) == "cart"                 # …into the picked venue
+    assert sys.argv == ["hyperspace"]                        # the old flag cannot win
+    assert h.panel.venue_wanted is None
+
+
+def test_the_picker_can_ask_for_no_venue_at_all(tmp_path, monkeypatch):
+    log: list[str] = []
+    h = _host(log)
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HYPERSPACE_HOME", str(home))
+    config.remember_venue(home, "tv")
+    h.panel.venue_wanted = ""
+    monkeypatch.setattr(sys, "argv", ["hyperspace"])
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "restart" in log and config.last_venue(home) == ""
+
+
+def test_a_config_screen_named_instead_of_numbered_is_found(monkeypatch, tmp_path):
+    """Decision 111: a venue travels between Macs, where the same screen
+    may have another index — so `monitor` may be the screen's name, and
+    it is settled here, once, for everything downstream."""
+    from hyperspace.params import Registry
+
+    cfg = {"output": {"monitor": "projector", "control_monitor": 0, "fullscreen": True}}
+    g, render, _ = _open(monkeypatch, cfg, tmp_path)           # "Built-in", "Projector"
+    assert cfg["output"]["monitor"] == 1                       # the name is gone from here on
+    assert not cfg.get("notes")                                # a match says nothing
+    assert g.pos[render] == (1728 + 16, 0 + 16)                # on the projector, its spot
+    out = app._make_output(render, Registry(), cfg)
+    assert out.monitor == 1 and out.fullscreen is True
+
+
+def test_a_named_screen_in_a_screens_list_is_found_too(monkeypatch, tmp_path):
+    """The same for a venue's `[[output.screens]]` entry (`_slots`)."""
+    f = tmp_path / "config.toml"
+    f.write_text('[[output.screens]]\nname = "glass"\nmonitor = "PROJ"\nfullscreen = true\n'
+                 '[[output.screens]]\nname = "laptop"\nmonitor = "built-in"\n')
+    cfg = config.load(f)                                       # as a launch reads a venue
+    assert [s["monitor"] for s in config.screens(cfg)] == ["PROJ", "built-in"]   # kept as names
+    monkeypatch.setattr(app, "glfw", _PlaceGlfw(None))
+    slots, _ = app._windows(False, cfg, tmp_path)
+    assert [s.monitor for s in slots] == [1, 0]                # case blind, both settled
+    assert [s.missing for s in slots] == ["", ""]
+    assert cfg["output"]["monitor"] == 1                       # output 1's scalar too

@@ -158,6 +158,7 @@ changes brightness or volume instead).
 | L66 | The factory presets with music | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
+| L69 | A venue per place | 1 | laptop, a second screen | 144 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -1341,6 +1342,66 @@ the shared folder; a folder created at step 4; only one entry at step 5.
 **Changes:** the shared folder gets your test presets; delete them after.
 
 *(checks 139–143)*
+
+#### L69. A venue per place
+
+**Needs:** laptop and one other screen (a projector or a TV), connected
+and **extended, not mirrored**, before launch.
+
+**Do:**
+
+1. Note what `~/Hyperspace/config.toml` holds — this check never changes
+   it, and step 6 proves that.
+2. Make `venues/projector.toml` in the library — the folder `[library]
+   path` names, or `~/Hyperspace` when it names none — with nothing in
+   it but the screens:
+
+   ```toml
+   [[output.screens]]
+   name = "projector"
+   monitor = "projector"   # a piece of the screen's name, case blind
+   fullscreen = true
+   ```
+
+   If the projector reports something else, put a piece of that here —
+   step 6 shows you what the names are.
+
+3. `uv run hyperspace --venue projector`. SYSTEM page; OUTPUT page.
+4. Quit. `uv run hyperspace` with **no flag**. SYSTEM page.
+5. Edit the venue (swap `fullscreen` to `false`), press **Cmd+R**, look at
+   the OUTPUT page.
+6. OUTPUT page: pick the other entry in the **venue** combo. Read what
+   it says, then press **Restart into …**.
+7. Edit the venue to `monitor = "nothing like it"` and launch again:
+   the SYSTEM page's note lists every connected screen by name. Put the
+   right one back.
+8. Quit. `uv run hyperspace --venue nosuchplace`, then
+   `uv run hyperspace --no-venue`.
+
+**Right if:** at 3 the second screen shows the render fullscreen and the
+controls stay on the laptop; the SYSTEM page reads `venue: projector`; the
+OUTPUT page lists two outputs. At 4 the same, with no flag — the venue was
+remembered (`~/Hyperspace/last_venue` holds its name). At 5 the reload
+comes back windowed: ⌘R re-read the file. At 6 nothing happens until the button is pressed, the page having said
+the app restarts; then it comes back in the venue picked, and the SYSTEM
+page names it. At 7 the note names the screens, and nothing stops. At 8 the bad venue is a note on
+the SYSTEM page naming the venues there are, and the app runs on
+`config.toml` alone; `--no-venue` does the same and leaves no `last_venue`.
+Throughout, `config.toml` is byte-for-byte what step 1 saw, and the
+`[hands]` and `[library]` settings in it still apply under every venue.
+On a second Mac sharing the library, `--venue projector` finds the same
+file (its own `last_venue`, its own `config.toml`).
+
+**Wrong if:** the venue's screens are added to the config's rather than
+replacing them; a missing venue stops the launch; `config.toml` changes;
+the hands or the shared library stop working under a venue; `--no-venue`
+still loads one.
+
+**Changes:** creates `<library>/venues/projector.toml` (shared, so the
+other Mac sees it) and `~/Hyperspace/last_venue` (not shared); delete
+both after, or keep the venue if it is a place you play.
+
+*(check 144)*
 
 ## Outputs and hands without the camera
 

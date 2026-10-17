@@ -12,7 +12,8 @@ are listed in [`ENGINEERING.md`](ENGINEERING.md) §5.
   Mac has; the dream worker runs on MPS.
 - **Xcode Command Line Tools**: `xcode-select --install` (git, clang).
 - **uv**: `brew install uv` (or uv's own installer). uv provides Python
-  3.12 from `.python-version` and every dependency from `pyproject.toml`
+  3.14 from `.python-version` — its own build, not the machine's
+  (`[tool.uv] python-preference`) — and every dependency from `pyproject.toml`
   and the committed `uv.lock`; never pip into a global Python.
 
 ```bash
@@ -86,11 +87,12 @@ enabled = false     # no MIDI adapter at all
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
    folder in the shell that launches the app. The tracking *service* must
    be the app's; the `leapc_cffi` the app ships is not used — `uv sync`
-   builds our own for 3.12, and it is found first on `sys.path`. An
+   builds our own for this project's Python, and it is found first on
+   `sys.path`. An
    `ImportError: Cannot import leapc_cffi … Unknown error` means that
    build is missing from the environment (re-run `uv sync`): an older
    Hand Tracking app ships only a Python 3.8 build of it, which this
-   project's 3.12 cannot import.
+   project's Python cannot import.
 2. Switch the hands on:
 
    ```toml
@@ -138,20 +140,76 @@ is output 1 (it sets the frame's size and paces the loop):
 ```toml
 [[output.screens]]
 name = "glass"
-monitor = 1          # screen index, the primary is 0; -1 = a window where it was last
+monitor = "MStar"    # a piece of the screen's name, case blind; or an index
+                     # (the primary is 0); or -1 = a window where it was last
 fullscreen = true
 
 [[output.screens]]
 name = "projector"
-monitor = 2
+monitor = "projector"
 fullscreen = true
 ```
+
+Name the screen rather than numbering it where you can: an index depends
+on the Mac and the order things were plugged in, a name does not, so a
+file that names its screens works on anyone's machine. The match is a
+case-blind substring, the way `[midi] port` matches the APC40 — `"MStar"`
+finds `MStar Demo`. A name nothing answers to is a note on the SYSTEM
+page listing every screen that *is* connected, and that window opens
+where it was last.
 
 The screens must be connected **before launch**: a later output whose
 screen is missing is not opened, and a screen plugged in afterwards is
 not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
 what it shows. Details and the per-output switches are
 [`ENGINEERING.md`](ENGINEERING.md) §14.
+
+## A file per place you play
+
+The screens differ by place; the rest of the config does not. A **venue**
+is one file in the library's `venues/` folder laid over `config.toml`, so
+the shared sections are said once and a venue says only what that place
+changes:
+
+```toml
+# <library>/venues/projector.toml — nothing else needs repeating here
+[[output.screens]]
+name = "projector"
+monitor = "projector"    # by name, so it travels to the other Mac too
+fullscreen = true
+```
+
+```bash
+uv run hyperspace --venue projector   # venues/projector.toml over config.toml
+uv run hyperspace                     # the venue used last
+uv run hyperspace --no-venue          # config.toml alone, and forget the venue
+```
+
+The venues live beside the presets, in the folder `[library] path`
+names ("Share presets with someone", below) — so two people playing the
+same places share them the way they share presets; with no shared
+library they sit in `~/Hyperspace/venues/`. *Which* venue you are set
+for is yours alone: it is remembered in `~/Hyperspace/last_venue`, so
+the flag is needed only when it changes, and `config.toml` is never
+written. A venue cannot set `[library]` — that is the file it was read
+out of.
+
+A key the venue gives wins over the same key in `config.toml`, and a key
+it is silent about keeps `config.toml`'s — `[[output.screens]]` is one
+key, so a venue that lists screens replaces the list rather than adding
+to it. The SYSTEM page names the venue in use.
+
+The OUTPUT page has a picker for them. A venue cannot be swapped while
+the app runs — the outputs' windows are made at launch — so the picker
+says so and waits for its **Restart into …** button; the restart is the
+same one ⌘R does (same terminal, a second or two).
+
+A venue that is missing or will not parse is a note on the SYSTEM page
+and `config.toml` alone — a mistyped `--venue` does not stop the show.
+The note lists the venues there are.
+
+Cmd+R re-reads the venue file (it re-launches with the same flag), so
+dialling a venue in is: edit the file, Cmd+R, look.
 
 ## Share presets with someone
 

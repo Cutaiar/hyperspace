@@ -137,6 +137,23 @@ def close_all(audio, *adapters) -> None:
     _quiet(audio.stop)
 
 
+def _without_venue(argv: list[str]) -> list[str]:
+    """`argv` with `--venue <name>` / `--venue=<name>` / `--no-venue` taken
+    out, so the re-exec takes the *remembered* venue (the picker has just
+    written it) instead of the one this process was launched with."""
+    out, rest = [], list(argv)
+    while rest:
+        a = rest.pop(0)
+        if a == "--no-venue" or a.startswith("--venue="):
+            continue
+        if a == "--venue":
+            if rest and not rest[0].startswith("-"):
+                rest.pop(0)
+            continue
+        out.append(a)
+    return out
+
+
 def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
@@ -145,7 +162,8 @@ def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     # first so Core Audio doesn't complain about a stream vanishing
     # mid-callback and the next image finds the MIDI ports free.
     # `save` remembers where the windows are (_save_windows), so the next
-    # image opens them there.
+    # image opens them there. It comes back as this process's own argv —
+    # the venue picker edits that first (frame), never this.
     if save is not None:
         _quiet(save)
     close_all(audio, *adapters)
@@ -176,9 +194,11 @@ def _save_windows(home, render_win, ctrl_win, output, more=()) -> None:
     placement.save(home, control, render, placement.screens(glfw))
 
 
-def _slots(cfg: dict | None) -> list[Slot]:
+def _slots(cfg: dict | None, scr: list | None = None) -> list[Slot]:
     """The render outputs the config lists (config.screens: one with no
-    list), numbered from 1, with their launch switches; no window yet."""
+    list), numbered from 1, with their launch switches; no window yet.
+    `scr` are the connected screens, so an entry naming one (decision 111)
+    becomes its index here — the one place a slot's screen is settled."""
     from . import config
 
     out = []
@@ -187,7 +207,7 @@ def _slots(cfg: dict | None) -> list[Slot]:
                       through=bool(e["through"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
-                        monitor=placement.index(e["monitor"]),
+                        monitor=placement.index(e["monitor"], screens=scr),
                         fullscreen=bool(e["fullscreen"])))
     return out
 
@@ -245,7 +265,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     scr = placement.screens(glfw)
     oc = (cfg or {}).get("output", {})
     oc = oc if isinstance(oc, dict) else {}
-    slots = _slots(cfg)
+    slots = _slots(cfg, scr)
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
@@ -281,8 +301,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
         # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
         for key in ("monitor", "control_monitor"):
             if key in oc:
-                oc[key] = placement.index(oc[key], len(scr))
-    slots[0].monitor = placement.index(oc.get("monitor", -1))
+                oc[key] = placement.index(oc[key], len(scr), scr)
+    slots[0].monitor = placement.index(oc.get("monitor", -1), screens=scr or None)
     render_size = render_rect[2:] if render_rect else RENDER_SIZE
     ctrl_size = ctrl_rect[2:] if ctrl_rect else CONTROL_SIZE
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
@@ -1035,6 +1055,18 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     if watch is not None:     # no presented render frame for 2 s: logged, bannered
         watch.tick(now)
 
+    # getattr: a panel from before a hot reload has no such field (as the
+    # registry checks elsewhere do), and it must not stop the frame
+    if getattr(h.panel, "venue_wanted", None) is not None:
+        # the OUTPUT page's picker: remember the venue, then come back as a
+        # launch that was not told one, so the remembered venue is used
+        config.remember_venue(library_home(), h.panel.venue_wanted)
+        # the next image must not be told the venue this one was told, or it
+        # would ignore what was just remembered: this process comes back as
+        # the same command without its --venue (_restart re-execs sys.argv)
+        sys.argv[:] = _without_venue(sys.argv)
+        h.panel.venue_wanted = None
+        h.restart()
     if h.panel.restart_requested:
         h.panel.restart_requested = False
         h.restart()
@@ -1058,11 +1090,44 @@ def _hot_error_toast(msg: str) -> None:
     imgui.end()
 
 
+def _venue_arg(argv: list[str]) -> tuple[str, bool]:
+    """(the venue named on the command line, whether to forget the
+    remembered one) from `--venue <name>` / `--venue=<name>` / `--no-venue`.
+    An unknown flag is left alone — ⌘R re-execs this same argv, so
+    anything here has to survive being read twice."""
+    venue, forget = "", False
+    rest = list(argv)
+    while rest:
+        a = rest.pop(0)
+        if a == "--no-venue":
+            forget = True
+        elif a.startswith("--venue="):
+            venue = a[len("--venue="):]
+        elif a == "--venue":
+            if rest and not rest[0].startswith("-"):
+                venue = rest.pop(0)
+            else:
+                print("hyperspace: --venue wants a name (see <home>/venues) — ignored",
+                      file=sys.stderr)
+    return venue, forget
+
+
 def main() -> None:
     if not glfw.init():
         raise SystemExit("GLFW failed to initialise")
-    cfg = config.load()                   # before the windows: [output] overlay is a creation hint
-    home = library_home()                 # the folder config.load has just ensured
+    # the venue (plan 26): a file in <home>/venues laid over config.toml, named
+    # on the command line or the one a launch chose last. ⌘R re-execs with
+    # this same argv, so the venue rides through a reload and its file is read
+    # again — editing a venue and pressing ⌘R is how a venue gets dialled in
+    venue, forget = _venue_arg(sys.argv[1:])
+    home = library_home()
+    if forget:
+        config.remember_venue(home, "")
+    elif not venue:
+        venue = config.last_venue(home)
+    cfg = config.load(venue=venue)            # before the windows: [output] overlay is a creation hint
+    if cfg["venue"]:                        # only a venue that was there and read
+        config.remember_venue(home, cfg["venue"])
     # the render outputs (plan 21 WP3: one per [[output.screens]] entry, one
     # with no list) and the controls; output 1's window is the render window
     slots, ctrl_win = _windows(_overlay_allowed(cfg), cfg, home)
@@ -1241,6 +1306,8 @@ def main() -> None:
     panel.reloader = reloader
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
+    panel.venue = cfg.get("venue", "")              # the venue this launch laid over it
+    panel.venues = config.venue_names(config.venue_root(cfg, home))   # …and the ones there are
     if router.table.said:                       # what the launch did to bindings.json
         panel.config_notes = [*panel.config_notes, router.table.said]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window

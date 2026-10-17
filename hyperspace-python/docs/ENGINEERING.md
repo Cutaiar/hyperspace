@@ -408,6 +408,15 @@ Environment variables:
 |---|---|
 | `HYPERSPACE_HOME` | The home folder (§4). Default `~/Hyperspace`. |
 | `HYPERSPACE_FRAMES` | Run that many frames, then exit (a windowed smoke test). |
+
+Command line:
+
+| Flag | Effect |
+|---|---|
+| `--venue <name>` | Lay `<library>/venues/<name>.toml` over `config.toml`, and remember it (§5). |
+
+A screen is named or numbered: `monitor` takes a case-blind piece of a screen's name (`"MStar"` finds `MStar Demo`), an index (the primary is 0), or −1 for wherever that window was last. Names travel between machines; indices do not (decision 111).
+| `--no-venue` | `config.toml` alone, and forget the remembered venue. |
 | `PYGLFW_LIBRARY` | Which GLFW dylib to load; `app.py` sets it to the bundled one when unset. |
 | `LEAPSDK_INSTALL_LOCATION` | Read by Ultraleap's `leap` package when the hand-tracking software is not at its default path (see SETUP). |
 
@@ -435,6 +444,7 @@ root and `Library.machine` the home.
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
 | `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
+| `venues/<name>.toml` | One place's settings — its screens — laid over `config.toml` by `--venue <name>` (§5). Shared, so two people playing the same place share it. Optional. | TOML |
 | `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
 
 **The home** (`Library.machine`; never in a shared folder):
@@ -442,6 +452,7 @@ root and `Library.machine` the home.
 | Path | What it is | Format |
 |---|---|---|
 | `config.toml` | The rig's settings (§5). Optional. | TOML |
+| `last_venue` | One line: the venue the last launch used. Machine state — the venues themselves are shared. Delete it, or `--no-venue`, to go back to `config.toml` alone. | text |
 | `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
 | `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |

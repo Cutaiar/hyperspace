@@ -44,21 +44,23 @@ def test_a_file_with_only_output_says_nothing(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
-def test_a_screen_that_is_not_a_number_is_minus_one_and_a_note(tmp_path, capsys):
-    """Plan 16 WP7: `monitor = "left"` stopped the launch. A screen index
-    that is not a number is −1 (where the window was last time), for both
-    windows, said on stderr and in `cfg["notes"]` (the SYSTEM page); a
+def test_a_screen_that_is_neither_a_number_nor_a_name_is_minus_one_and_a_note(tmp_path, capsys):
+    """Plan 16 WP7: `monitor = 0.5` stopped the launch. A screen that is
+    neither an index nor a name (decision 111) is −1 (where the window was
+    last time), said on stderr and in `cfg["notes"]` (the SYSTEM page); a
     number is read as `int()` reads it and nothing is said — whether that
-    screen exists is placement's to say, at the launch."""
+    screen exists is placement's to say, at the launch. Text is a screen
+    *name*, kept as it is for the launch to resolve."""
     p = tmp_path / "config.toml"
     p.write_text('[output]\nmonitor = "left"\ncontrol_monitor = [1]\n[overlay]\nbg = 0.3\n')
     cfg = config.load(p)
-    assert cfg["output"]["monitor"] == cfg["output"]["control_monitor"] == -1
+    assert cfg["output"]["monitor"] == "left"        # a name: the launch says if it matches
+    assert cfg["output"]["control_monitor"] == -1    # a list is neither
     assert cfg["output"]["bg"] == 0.3
     assert cfg["notes"] == [
         f"config: [overlay] is now [output] — rename the section in {p}",   # kept, first
-        "config: [output] monitor = 'left' is not a screen index — using the last position",
-        "config: [output] control_monitor = [1] is not a screen index — using the last position",
+        ("config: [output] control_monitor = [1] is not a screen index or a screen name "
+         "— using the last position"),
     ]
     err = capsys.readouterr().err
     assert all(n in err for n in cfg["notes"]) and "error" not in cfg
@@ -211,7 +213,7 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     cfg = config.load(p)
     assert "notes" not in cfg and len(config.screens(cfg)) == 2
     # every key checked: a wrong kind is the default, with a note, never a dead launch
-    p.write_text('[[output.screens]]\nmonitor = "left"\nfullscreen = "yes"\nhands = 1\n'
+    p.write_text('[[output.screens]]\nmonitor = [2]\nfullscreen = "yes"\nhands = 1\n'
                  'dim = "x"\nmonitr = 2\nname = 7\n')
     cfg = config.load(p)
     (one,) = config.screens(cfg)
@@ -263,3 +265,128 @@ def test_a_ground_or_opacity_that_is_not_a_number_is_the_default_with_a_note(tmp
     p.write_text("[output]\nbg = 0.5\nalpha = 1\n")
     cfg = config.load(p)
     assert (cfg["output"]["bg"], cfg["output"]["alpha"]) == (0.5, 1) and "notes" not in cfg
+
+
+# ---------------------------------------------------------------- venues
+#
+# A venue (plan 26) is <home>/venues/<name>.toml laid over config.toml: one
+# venue's screens, with the shared sections said once in config.toml.
+
+
+def _venue_home(tmp_path, base: str = "", **venues: str) -> Path:
+    """A home whose venues sit in it — no [library] path, so the library
+    *is* the home and `venue_root` lands there."""
+    home = tmp_path / "home"
+    (home / "venues").mkdir(parents=True)
+    (home / "config.toml").write_text(base)
+    for name, text in venues.items():
+        (home / "venues" / f"{name}.toml").write_text(text)
+    return home
+
+
+def test_a_rig_is_laid_over_the_config_it_does_not_mention(tmp_path):
+    home = _venue_home(
+        tmp_path,
+        base="[hands]\nenabled = true\n[output]\nkeep_awake = false\nbg = 0.25\n",
+        projector='[[output.screens]]\nname = "proj"\nmonitor = 2\nfullscreen = true\n',
+    )
+    cfg = config.load(home / "config.toml", venue="projector")
+    assert cfg["venue"] == "projector"
+    assert [(s["name"], s["monitor"]) for s in config.screens(cfg)] == [("proj", 2)]
+    assert cfg["hands"]["enabled"] is True        # the venue is silent: config.toml stands
+    assert cfg["output"]["keep_awake"] is False
+    assert cfg["output"]["bg"] == 0.25
+
+
+def test_a_rigs_key_wins_over_the_same_key_in_the_config(tmp_path):
+    home = _venue_home(
+        tmp_path,
+        base="[output]\nmonitor = 0\nfullscreen = false\n",
+        tv="[output]\nfullscreen = true\n",
+    )
+    cfg = config.load(home / "config.toml", venue="tv")
+    assert cfg["output"]["fullscreen"] is True    # the venue's
+    assert cfg["output"]["monitor"] == 0          # config.toml's, untouched
+
+
+def test_no_rig_reads_the_config_alone_and_says_which(tmp_path):
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
+    cfg = config.load(home / "config.toml")
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3
+
+
+def test_a_rig_that_is_not_there_is_a_note_and_the_config_alone(tmp_path, capsys):
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="[output]\nmonitor = 1\n")
+    cfg = config.load(home / "config.toml", venue="cart")
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3     # the launch goes on
+    note = "\n".join(cfg["notes"])
+    assert "no venue 'cart'" in note and "have: tv" in note         # and says what there is
+    assert "no venue 'cart'" in capsys.readouterr().err
+
+
+def test_a_rig_that_will_not_parse_is_a_note_and_the_config_alone(tmp_path):
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", bad="[output\nmonitor = ")
+    cfg = config.load(home / "config.toml", venue="bad")
+    assert cfg["venue"] == "" and cfg["output"]["monitor"] == 3
+    assert any("will not parse" in n for n in cfg["notes"])
+
+
+def test_a_rig_works_with_no_config_file_at_all(tmp_path):
+    home = tmp_path / "home"
+    (home / "venues").mkdir(parents=True)
+    (home / "venues" / "tv.toml").write_text("[output]\nmonitor = 1\n")
+    cfg = config.load(home / "config.toml", venue="tv")
+    assert cfg["venue"] == "tv" and cfg["output"]["monitor"] == 1
+
+
+def test_the_rigs_are_listed_in_name_order(tmp_path):
+    home = _venue_home(tmp_path, tv="", cart="", booth="")
+    assert config.venue_names(home) == ["booth", "cart", "tv"]
+    assert config.venue_names(tmp_path / "nowhere") == []
+
+
+def test_the_rig_is_remembered_beside_the_library_never_in_the_config(tmp_path):
+    home = _venue_home(tmp_path, base="[output]\nmonitor = 3\n", tv="")
+    before = (home / "config.toml").read_text()
+    assert config.last_venue(home) == ""
+    config.remember_venue(home, "tv")
+    assert config.last_venue(home) == "tv"
+    assert (home / "config.toml").read_text() == before     # the file stays the user's
+    config.remember_venue(home, "")
+    assert config.last_venue(home) == "" and not (home / config.LAST_VENUE).exists()
+
+
+def test_the_venues_live_in_the_shared_library_when_there_is_one(tmp_path):
+    """Two people playing the same places share their venues the way they
+    share their presets (plan 25): the folder `[library] path` names."""
+    home, shared = tmp_path / "home", tmp_path / "Shared"
+    home.mkdir()
+    (shared / "venues").mkdir(parents=True)
+    (home / "config.toml").write_text(f'[library]\npath = "{shared}"\n[hands]\nenabled = true\n')
+    (shared / "venues" / "cart.toml").write_text('[[output.screens]]\nname = "cart"\nmonitor = 2\n')
+    # the same name in the home is not where it looks any more
+    (home / "venues").mkdir()
+    (home / "venues" / "cart.toml").write_text('[[output.screens]]\nname = "wrong"\nmonitor = 9\n')
+    cfg = config.load(home / "config.toml", venue="cart")
+    assert cfg["venue"] == "cart"
+    assert [(s["name"], s["monitor"]) for s in config.screens(cfg)] == [("cart", 2)]
+    assert cfg["hands"]["enabled"] is True          # config.toml still underneath
+
+
+def test_with_no_shared_library_the_venues_are_in_the_home(tmp_path):
+    home = _venue_home(tmp_path, base="", tv="[output]\nmonitor = 1\n")
+    assert config.venue_root({}, home) == home
+    assert config.load(home / "config.toml", venue="tv")["output"]["monitor"] == 1
+
+
+def test_a_venue_cannot_move_the_library_it_was_read_from(tmp_path):
+    home, shared = tmp_path / "home", tmp_path / "Shared"
+    home.mkdir()
+    (shared / "venues").mkdir(parents=True)
+    (home / "config.toml").write_text(f'[library]\npath = "{shared}"\n')
+    (shared / "venues" / "odd.toml").write_text('[library]\npath = "/tmp/elsewhere"\n'
+                                                "[output]\nmonitor = 4\n")
+    cfg = config.load(home / "config.toml", venue="odd")
+    assert Path(cfg["library"]["path"]) == shared.resolve()   # config.toml's, kept
+    assert cfg["output"]["monitor"] == 4                      # the rest of the venue stands
+    assert any("cannot set [library]" in n for n in cfg["notes"])
