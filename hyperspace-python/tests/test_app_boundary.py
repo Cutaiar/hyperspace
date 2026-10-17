@@ -382,8 +382,8 @@ ORDER = [
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)
     "hands.poll",                                    # devices.feed: the hands feed hand
     "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
-    "lfos.step", "lfos.publish",                     # feeds lfo
-    "router.modulate", "reg.apply",                  # the pass, then one commit
+    "router.modulate", "reg.apply",                  # the pass (the LFOs step inside it,
+                                                     # plan 28 N0), then one commit
     "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
     "view.integrate",
     "render.draw", "panel.draw",                     # the two windows
@@ -426,7 +426,7 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
 def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     log: list[str] = []
     h = _host(log)
-    h.lfos.step = _boom
+    h.router.modulate = _boom                        # where the LFOs step now (plan 28 N0)
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("step: RuntimeError: boom")
     assert "router.modulate" not in log              # the pass stopped where it raised
