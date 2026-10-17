@@ -340,33 +340,48 @@ def test_the_routing_page_and_the_graph_page_show_one_table(rig, monkeypatch):
 
 # ---------------------------------------------------------------- the rest
 
-def test_render_pins_are_n4s_and_refused_in_words_until_then(rig):
+def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
     """The seam: a request touching an image / geometry / mask pin, a
     render cable or a render node is dispatched to N4's methods by name
-    (`wire`, `unwire`, `remove_render_node`) and refused in words while
-    they are not there; the page's drag and delete tables (`CREATE`,
-    `DELETE`) route those types to the refusal."""
-    e, _ = edit(rig)
-    assert e.connect("rout:shape", "rin:scene/geometry") == graphview.RENDER_NOT_YET
-    assert e.refusal("rin:scene/geometry", "rout:shape") == graphview.RENDER_NOT_YET
-    wire = graphview.VCable("wire:a>b/image", "rout:a", "rin:b/image", graphview.IMAGE,
-                            kind="render")
-    assert e.disconnect(wire) == graphview.RENDER_NOT_YET
-    assert e.remove_node("render:shape") == graphview.RENDER_NOT_YET
+    (`wire`, `unwire`, `remove_render_node`, `wire_refusal`); their plain
+    words come back as a `Refusal` (the page's note), a landing as None;
+    the page's drag and delete tables route those types to N4's handlers."""
+    table = rig.router.table
+    view = graphview.build(table, rig.reg, rig.router, None, None, None)
+    e = graphview.Edit(table, rig.reg, rig.router, view, graph=rig.lib.presets.graph)
+    assert graphview.RENDER_NOT_YET not in (
+        e.connect("rout:shape", "rin:scene/geometry"),
+        e.refusal("rin:scene/geometry", "rout:shape"))
+    got = e.connect("rout:shape", "rin:scene/geometry")
+    assert isinstance(got, graphview.Refusal) and got == (
+        "shape is drawn by the scene, not wired")
+    assert e.refusal("rin:output.1/image", "rout:ghost") == (
+        "wire ghost → output.1.image — ghost makes geometry, output.1.image takes a picture")
+    # input end first: ordered, and it lands
+    assert e.connect("rin:output.2/hands", "rout:hands") is None
+    assert rig.lib.presets.graph.spec.wires[0].dst == "output.2.hands"
+    wire = graphview.VCable("wire:hands>output.2/hands", "rout:hands", "rin:output.2/hands",
+                            graphview.IMAGE, kind="render")
+    assert e.disconnect(wire) is None and rig.lib.presets.graph.spec is None
+    got = e.disconnect(wire)
+    assert isinstance(got, graphview.Refusal) and "is the default graph's" in got
+    got = e.remove_node("render:shape")
+    assert isinstance(got, graphview.Refusal) and got.startswith("shape is drawn")
     for t in graphview.RENDER_TYPES:
-        assert ui_graph.CREATE[t] is ui_graph._render_drag
+        assert ui_graph.CREATE[t] is ui_graph._create_render
     for t in (graphview.VALUE, graphview.TRIGGER):
         assert ui_graph.CREATE[t] is ui_graph._value_drag
-    assert ui_graph.DELETE["render"] is ui_graph._render_cut
-    # a subclass that brings `wire` gets the call
+    assert ui_graph.DELETE["render"] is ui_graph._delete_render_cable
+    assert ui_graph.DELETE_NODE["render"] is ui_graph.DELETE_NODE["output"] is (
+        ui_graph._delete_render_node)
+    # a subclass that brings its own `wire` gets the call (by name)
     calls = []
 
     class N4(graphview.Edit):
         def wire(self, src, dst):
             calls.append((src, dst))
-            return "wired"
     n4 = N4(rig.router.table, rig.reg, rig.router, None)
-    assert n4.connect("rin:scene/geometry", "rout:shape") == "wired"
+    assert n4.connect("rin:scene/geometry", "rout:shape") is None
     assert calls == [("rout:shape", "rin:scene/geometry")]
 
 
@@ -451,13 +466,20 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
         for c in ast.walk(fn):
             if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute):
                 where.setdefault(c.func.attr, set()).add(fn.name)
-    assert where["begin_create"] == where["query_new_link"] == {"_create"}
+    assert where["begin_create"] == {"_create"}
+    assert where["query_new_link"] == {"new_link"}          # N4: `_create` asks it
     assert where["begin_delete"] == where["query_deleted_link"] == {"_delete"}
-    assert where["accept_new_item"] == {"_value_drag"}
-    assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut"}
-    assert where["reject_deleted_item"] <= {"_value_cut", "_render_cut", "_delete",
-                                            "_render_node_cut", "_rig_node_cut"}
-    assert where["reject_new_item"] <= {"_value_drag", "_render_drag"}
+    assert where["accept_new_item"] == {"_value_drag", "_create_render"}
+    assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut",
+                                            "_delete_render_cable", "_delete_render_node"}
+    assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
+                                            "_rig_node_cut", "_delete_render_cable",
+                                            "_delete_render_node"}
+    assert where["reject_new_item"] <= {"_value_drag", "_create_render"}
+    # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
+    assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
+    assert ui_graph.DELETE["render"] is ui_graph._delete_render_cable
+    assert ui_graph.DELETE_NODE["render"] is ui_graph._delete_render_node
 
 
 def test_a_route_from_the_canvas_is_a_performer_row_in_the_preset(rig):
@@ -519,7 +541,7 @@ def test_a_move_picks_up_the_performer_not_a_sleeping_route(rig):
 
 def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
-    output node is N4's (refused "render cables: not yet" until then), a
+    output node is N4's (the frame's own nodes refused in words), a
     kind not listed is the rig's; a macro node's delete goes through the
     table's `set_macros`, its label and subscribers with it."""
     from imgui_bundle import imgui_node_editor as ed
@@ -527,8 +549,8 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     st = {"note": ""}
     shape = graphview.VNode("render:shape", "render", "shape")
     ui_graph.DELETE_NODE[shape.kind](rig.panel, st, None, shape)
-    assert st["note"] == graphview.RENDER_NOT_YET
-    assert ui_graph.DELETE_NODE["output"] is ui_graph._render_node_cut
+    assert st["note"] == "shape is drawn by the scene, not wired"
+    assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
     lfo = graphview.VNode("lfo.1", "lfo", "LFO 1")
     ui_graph.DELETE_NODE.get(lfo.kind, ui_graph._rig_node_cut)(rig.panel, st, None, lfo)
     assert st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")

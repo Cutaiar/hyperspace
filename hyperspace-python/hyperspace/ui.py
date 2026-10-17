@@ -51,7 +51,15 @@ from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom
-from .graph import Wiring, graph_words, hands_words, layer_words, output_placement_words
+from .graph import (
+    Wiring,
+    graph_words,
+    hands_words,
+    layer_words,
+    output_placement_words,
+    output_wires,
+    wire_words,
+)
 from .hands import panel as ui_hands
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
@@ -281,6 +289,29 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     if inside:                      # the scene holds the hands, whatever its hands switch
         key, after = SCENE, False
     own = float(sw.dim)
+    # plan 28 N4: the preset's wires into this output's ports stand over
+    # its switches — a picture by a wire, the hands laid over by one
+    ports = output_wires(wiring, n) if wired and n is not None else {}
+    if ports:
+        if own <= 0.0:
+            return "black — dim 0", "dim"
+        if master <= 0.0:
+            return "black — master dim", "master"
+        if "image" in ports:
+            words = wire_words(ports["image"]).partition(" shows ")[2] + " by a wire"
+        elif key is None and not after:
+            words = "ground"
+        else:
+            words = output_shows(sw, fx_on, visible, 1.0, wiring)[0]
+        words += "".join(" · " + wire_words(w) for p, w in sorted(ports.items())
+                         if p != "image")
+        if "image" not in ports and wiring.placed:
+            words += output_placement_words(wiring, n, key in (SCENE, SCENE_HANDS),
+                                            after or key in (SCENE_HANDS, HANDS))
+        factor = min(1.0, master * own)
+        if factor < 1.0:
+            words += f" · {min(99, max(1, round(factor * 100)))}%"
+        return words, ""
     if key is None and not after:
         if not sw.scene and not sw.hands:
             return "black — nothing switched on", "nothing"
@@ -1663,7 +1694,8 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring)[1]
+                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring,
+                                         n=sl.n)[1]
                 not in ("", "master")]
 
     @staticmethod
