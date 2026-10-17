@@ -135,6 +135,7 @@ RECONNECT_SLOW_S = 10.0   # this often. Every look makes a CoreMIDI client; one
 #                           past any `except` (audit R15), so a desk that is not
 #                           there is not asked after thirty times a minute all night
 HOLD_S = 0.6        # a `hold` row fires once its button has been down this long
+REENTER_S = 2.0     # the intro is sent again at most this often (`MidiIO._reenter`)
 
 
 def _hold_key(b) -> object:
@@ -581,6 +582,15 @@ class MidiIO:
             return
         ch = msg.channel
         self.last = f"{kind} {number} ch{ch + 1} = {value}"
+        # a desk that fell back to its power-up mode (apc40.fell_back,
+        # 2026-10-16): the intro again, and the message read as Mode 2 would
+        # send it (a device button on channel 0)
+        fell_back = getattr(self.profile, "fell_back", None)
+        fell = fell_back is not None and fell_back(kind, ch, number, value > 0,
+                                                   (ch, number) in self._held)
+        if fell:
+            self._reenter()
+        ch = getattr(self.profile, "in_channel", lambda k, c, n: c)(kind, ch, number)
         if kind != "note":          # where the control is now (plan 24 C1, `redraw`)
             full = 16383.0 if kind == "pitch" else 127.0
             self.__dict__.setdefault("_hw", {})[(kind, ch, number)] = value / full
@@ -600,6 +610,7 @@ class MidiIO:
                     self._passed_over(b, value)
                 self._learned(kind, ch, number, value)
                 if kind == "note":
+                    self._held[(ch, number)] = []   # its release is the learn's: nothing
                     self._log_press(source, f"learn: {lrn.last}", t.layer_of(role))
                 return
         # the layer is read at the press (D12): a note-off goes to the rows
@@ -647,6 +658,30 @@ class MidiIO:
         if timed and pressed:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
             self._light_bars()
+        # a Mode-0 toggle's note-on that revealed the fall-back is a whole
+        # press: the desk, in Alternate mode now, never sends its release,
+        # so it is released here (`_held` popped, an echo dark) — else the
+        # next press would read as a second note-on while held. The release
+        # is no sign itself (held, and off)
+        if (fell and pressed
+                and number in getattr(self.profile, "MODE0_TOGGLES", ())):
+            self._handle(mido.Message("note_off", channel=msg.channel, note=number))
+
+    def _reenter(self) -> None:
+        """The desk sent a message only its power-up mode sends
+        (`profile.fell_back`): the intro again (`_enter`: the mode SysEx and
+        every light, as at a reconnect), at most once every REENTER_S, said
+        on stderr and in the desk log."""
+        now = self._now()
+        last = self.__dict__.get("_reentered")
+        if last is not None and now - last < REENTER_S:
+            return
+        self._reentered = now
+        print(f"midi: {self.name} had left the app's mode (it sent a Generic-mode "
+              "message) — put back", file=sys.stderr)
+        self._log().add(self.name or "desk", "back in the app's mode (it was in Generic "
+                        "mode: a power cycle?)", "both")
+        self._enter()
 
     # ---- the two-handed save and the desk log (plan 24 C1) ----
 
@@ -784,7 +819,10 @@ class MidiIO:
                 elif pressed:
                     p.toggle()
             elif not pressed:
-                if p.kind is Kind.TRIGGER:
+                # a press echo goes dark at the release: a trigger's, and an
+                # enum stepped by a toggle row (the solo row's next transfer,
+                # 2026-10-16 — its light used to stay on for good)
+                if p.kind is Kind.TRIGGER or (p.kind is Kind.ENUM and op == "toggle"):
                     b.lit = False
                 return
             else:  # set / step / toggle / fire — the discrete ops every button shares
