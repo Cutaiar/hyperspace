@@ -15,16 +15,17 @@ the frames render; the wall time each frame took is recorded beside it.
 
 Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
   dial-trace.csv     a row per frame: phase, both sticks, each stick's
-                     reading and sector, the 16 dial lanes, the 16
-                     routed params' effective values (0..1 of their throw)
-                     and the frame's wall time
+                     reading and sector, the camera and W-rate params the
+                     sticks drive when free (WATCH), the 16 dial lanes and
+                     the 16 routed params' effective values (0..1 of
+                     their throw)
   dial-traces.png    the lanes and their params over the whole script
   dial-borders.png   petal against blend with the stick shaking on a border
   dial-sheet.png     a contact sheet: scene + both faces at the script's beats
   dial-timing.txt    what the dial costs per frame (micro-benchmark) and
                      how long the app's frames took here (software GL)
-  frames/            every frame composited (scene | faces), for the video
-  dial.mp4           the frames at FPS, if ffmpeg is on the path
+  dial.mp4           every frame composited (scene | faces) at FPS, if
+                     ffmpeg is on the path (--frames DIR keeps the PNGs)
 
 What it shows: the dial's numbers and what they do to a frame. What it
 cannot show: how a real stick feels in the hand (plan 28's "to try").
@@ -59,6 +60,9 @@ from hyperspace.ui import PAGE_KEYS
 
 FPS = 30
 R_SWEEP = 0.95
+# what the sticks drive while no route claims them (app.py): none may move
+WATCH = ("camera.yaw", "camera.pitch", "camera.zoom", "rot.rate.XW", "rot.rate.YW",
+         "rot.rate.ZW")
 
 
 # ---- the script: (seconds, phase name, stick fn of local t in [0, 1], swap at start) ----
@@ -184,6 +188,8 @@ def record(panel, k: int, name: str) -> None:
            "lx": pad.axes[0], "ly": -pad.axes[1], "rx": pad.axes[2], "ry": -pad.axes[3],
            "mode_L": pad.dial_modes["L"], "mode_R": pad.dial_modes["R"],
            "sector_L": pad.dial_sectors["L"], "sector_R": pad.dial_sectors["R"]}
+    for pid in WATCH:                   # the camera job: a dialed stick must not move it
+        row[pid] = round(float(panel.reg[pid].value), 6)
     for lane_name, v in zip(gamepad.DIAL_LANES, lanes, strict=True):
         row[f"lane {lane_name}"] = round(v, 5)
         pid = routes.get(f"axis:{lane_name}")
@@ -289,12 +295,13 @@ def plots(out: Path) -> None:
     for ax in axes:
         for s0, (secs, name, *_) in zip(STARTS[:-1], SCRIPT, strict=True):
             ax.axvline(s0, color="0.85", lw=0.8, zorder=0)
-    for s0, (secs, name, *_) in zip(STARTS[:-1], SCRIPT, strict=True):
-        if secs >= 2.0:
-            axes[0].text(s0 + 0.1, 1.06, name, fontsize=7.5, rotation=0, va="bottom",
-                         transform=axes[0].get_xaxis_transform())
+    named = [(s0, name) for s0, (secs, name, *_) in zip(STARTS[:-1], SCRIPT, strict=True)
+             if secs >= 2.0]
+    for j, (s0, name) in enumerate(named):
+        axes[0].text(s0 + 0.1, 1.04 + 0.09 * (j % 2), name, fontsize=7.5, va="bottom",
+                     transform=axes[0].get_xaxis_transform())
     axes[-1].set_xlabel("seconds")
-    fig.suptitle("DIAL preset, scripted sticks: each lane and the param it pushes", y=0.995)
+    fig.suptitle("DIAL preset, scripted sticks: each lane and the param it pushes", y=0.998)
     fig.tight_layout()
     fig.savefig(out / "dial-traces.png", dpi=110)
     plt.close(fig)
@@ -370,6 +377,10 @@ def timing(out: Path) -> None:
         (f"  {len(walls)} frames, median {np.median(walls):.0f} ms, p95 "
          f"{np.percentile(walls, 95):.0f} ms"),
     ]
+    moved = {pid: max(abs(r[pid] - state.rows[0][pid]) for r in state.rows) for pid in WATCH}
+    lines += ["", "the sticks' camera job while both sticks are dials (largest move from the",
+              "first frame; 0 means the routes claimed the sticks):"]
+    lines += [f"  {pid:<14} {d:.6f}" for pid, d in moved.items()]
     (out / "dial-timing.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 
@@ -395,11 +406,13 @@ _open_pad = app._open_pad
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "plans" / "assets" / "28-gamepad-dial")
+    ap.add_argument("--frames", default="", help="keep the composited frames here")
     ap.add_argument("--limit", type=int, default=0, help="stop after this many frames (a probe)")
     a = ap.parse_args()
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
-    state.frames_dir = out / "frames"
+    import tempfile
+    state.frames_dir = Path(a.frames) if a.frames else Path(tempfile.mkdtemp(prefix="dial-"))
     if state.frames_dir.exists():
         shutil.rmtree(state.frames_dir)
 
@@ -458,6 +471,8 @@ def main() -> None:
                         "-i", str(state.frames_dir / "%05d.png"), "-vf",
                         "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264", "-pix_fmt",
                         "yuv420p", "-crf", "26", str(out / "dial.mp4")], check=True)
+    if not a.frames:
+        shutil.rmtree(state.frames_dir, ignore_errors=True)
     print(f"wrote {out}")
 
 
