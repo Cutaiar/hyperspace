@@ -454,7 +454,9 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert where["begin_create"] == where["query_new_link"] == {"_create"}
     assert where["begin_delete"] == where["query_deleted_link"] == {"_delete"}
     assert where["accept_new_item"] == {"_value_drag"}
-    assert where["accept_deleted_item"] <= {"_value_cut", "_delete"}
+    assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut"}
+    assert where["reject_deleted_item"] <= {"_value_cut", "_render_cut", "_delete",
+                                            "_render_node_cut", "_rig_node_cut"}
     assert where["reject_new_item"] <= {"_value_drag", "_render_drag"}
 
 
@@ -470,3 +472,70 @@ def test_a_route_from_the_canvas_is_a_performer_row_in_the_preset(rig):
     assert b.op in MOD_OPS and not is_session_row(b)
     assert lib.is_dirty("presets")
     assert (table.path.read_text() if table.path.exists() else None) == before
+
+
+# ---------------------------------------------------------------- review round 1
+
+def test_undoing_an_insert_is_one_step_the_modifier_gone_the_route_as_it_was(tmp_path):
+    """A modifier inserted into a push route is one undo step: ⌘Z takes
+    the modifier away and gives the route back its source and its rest
+    (None: the source's own, every frame)."""
+    from test_undo import boot, settle
+    r = boot(tmp_path / "home")
+    settle(r)
+    table = r.table
+    pid = next(p.id for p in r.reg if p.modulatable and not p.alias
+               and table.owner(p.id) is None and not table.routes_to(p.id)
+               and learn.centred_target(p))
+    table.add(Binding("lane:4", pid, "push", 0.3))
+    settle(r)
+    r.undo.clear()
+    panel = SimpleNamespace(router=r.router, reg=r.reg, library=r.lib, midi=None)
+    view = ui_graph.view_of(panel)
+    c = next(c for c in cables(view) if c.ref.target == pid)
+    m = ui_graph.insert_modifier(panel, c, "smooth")
+    row = table.owner(pid)
+    assert row.source == m.address and row.rest == r.router.rest_of("lane:4")
+    settle(r)
+    assert len(r.undo.stack) == 1 and r.undo.undo()
+    assert table.modifier(m.id) is None and not table.modifiers
+    row = table.owner(pid)
+    assert (row.source, row.op, row.value, row.rest) == ("lane:4", "push", 0.3, None)
+
+
+def test_a_move_picks_up_the_performer_not_a_sleeping_route(rig):
+    """A param with a sleeping route and a performer: a drag from its
+    `mod` stub picks up the performer's cable (`Bindings.owner`)."""
+    table = rig.router.table
+    p = free_param(rig, centred=False)
+    sleeper = Binding("lane:1", p.id, "position", 1.0, enabled=False)
+    table.bindings.append(sleeper)
+    performer = table.add(Binding("lane:2", p.id, "position", 1.0))
+    to = free_param(rig, centred=False)
+    e, _ = edit(rig)
+    assert e.connect(f"mod:{p.id}", f"mod:{to.id}") is None
+    assert performer.target == to.id and sleeper.target == p.id
+
+
+def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
+    """Delete on a node goes by its kind (`DELETE_NODE`): a render or an
+    output node is N4's (refused "render cables: not yet" until then), a
+    kind not listed is the rig's; a macro node's delete goes through the
+    table's `set_macros`, its label and subscribers with it."""
+    from imgui_bundle import imgui_node_editor as ed
+    monkeypatch.setattr(ed, "reject_deleted_item", lambda: None)
+    st = {"note": ""}
+    shape = graphview.VNode("render:shape", "render", "shape")
+    ui_graph.DELETE_NODE[shape.kind](rig.panel, st, None, shape)
+    assert st["note"] == graphview.RENDER_NOT_YET
+    assert ui_graph.DELETE_NODE["output"] is ui_graph._render_node_cut
+    lfo = graphview.VNode("lfo.1", "lfo", "LFO 1")
+    ui_graph.DELETE_NODE.get(lfo.kind, ui_graph._rig_node_cut)(rig.panel, st, None, lfo)
+    assert st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")
+    table = rig.router.table
+    e, _ = edit(rig)
+    e.show_macro("macro.5")
+    e.connect("bus:macro.5", "base:view.bright")
+    serial = table.macros_serial
+    assert e.remove_node("macro.5") == []
+    assert "macro.5" not in table.macros and table.macros_serial > serial

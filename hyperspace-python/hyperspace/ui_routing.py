@@ -1421,13 +1421,7 @@ def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
     if m is None or not 0 <= k < len(m.inputs) or m.inputs[k] == source:
         return
     undo.push(f"modifier input {mid}")
-    docs = table.modifiers_doc(panel.reg)
-    for d in docs:
-        if d["id"] == mid:
-            ins = list(d["in"])
-            ins[k] = source
-            d["in"] = ins
-    table.set_modifiers(docs, panel.reg)
+    table.set_modifier_input(mid, k, source, panel.reg)
 
 
 def remove_modifier(panel, mid: str) -> None:

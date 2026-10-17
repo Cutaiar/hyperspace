@@ -1222,24 +1222,25 @@ class Edit:
         """Modifier `mid`'s input `k` reads `source` ("" / None: none) —
         N1's path (`ui_routing.set_modifier_input`): the modifier replaced
         whole, its params at their bases. Returns `set_modifiers`' notes."""
-        table = self.table
-        docs = table.modifiers_doc(self.reg)
-        for d in docs:
-            if d["id"] == mid:
-                ins = list(d["in"])
-                ins[k] = source or None
-                d["in"] = ins
-        return table.set_modifiers(docs, self.reg)
+        return self.table.set_modifier_input(mid, k, source, self.reg)
 
     # ---- a cable's end moved ----
 
     def _cable_at(self, pin: str) -> VCable | None:
         """The cable ending on input pin `pin` (a route's ``mod``, a
-        modifier's ``in``) — the one a drag from that pin picks up."""
+        modifier's ``in``) — the one a drag from that pin picks up: on a
+        `mod` stub the param's performer's (`Bindings.owner`) before a
+        sleeping route on the same param."""
         if self.view is None:
             return None
-        return next((c for c in self.view.cables if c.dst_port == pin
-                     and c.kind in ("route", "input")), None)
+        here = [c for c in self.view.cables if c.dst_port == pin
+                and c.kind in ("route", "input")]
+        if pin_kind(pin) == MOD:
+            owner = self.table.owner(pin.partition(":")[2])
+            mine = next((c for c in here if c.ref is owner), None)
+            if mine is not None:
+                return mine
+        return here[0] if here else None
 
     def _picked(self, a: str, b: str) -> tuple[VCable | None, str]:
         picked = self._cable_at(a)
@@ -1312,7 +1313,7 @@ class Edit:
             if is_session_row(b):
                 return Refusal(SESSION_ROW.format(what=b.source))
             table.remove(b)
-            table.redraw_serial = getattr(table, "redraw_serial", 0) + 1
+            table.redraw_serial += 1
             return None
         if cable.kind == "sub":
             mid, s = cable.ref
@@ -1397,9 +1398,8 @@ class Edit:
         if kind == "modifier" and self.table.modifier(nid) is not None:
             return self.table.remove_modifier(nid, self.reg)
         if kind == "macro" and nid in self.table.macros:
-            self.table.macros.pop(nid)
-            self.table.macros_serial += 1
-            return None
+            return self.table.set_macros(
+                {k: v for k, v in self.table.macros_doc().items() if k != nid}, self.reg)
         return Refusal(NOT_REMOVABLE.format(label=node.label if node is not None else nid))
 
 

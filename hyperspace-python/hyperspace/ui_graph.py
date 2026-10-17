@@ -23,7 +23,7 @@ edits, so either page shows the other's change next frame, and undo, the
 preset's dirt and the referee are theirs. A taken param asks Replace /
 Keep (ROUTING's prompt, `ui_routing.ask`); a refusal says why on the
 page's head (`st["note"]`) and on the drag. Right-click: a param's `mod`
-pin offers the param menu's Learn items (`Panel._ctx_learn`, the same
+pin offers the param menu's Learn items (`Panel._ctx_learn_block`, the same
 function), a cable offers "insert" (a modifier onto it) and delete, the
 canvas the node picker (a modifier of each kind, a macro), a modifier or
 macro node delete. A modifier node dropped onto a cable is inserted into
@@ -745,23 +745,46 @@ DELETE = {"route": _value_cut, "setter": _value_cut, "sub": _value_cut,
           "input": _value_cut, "render": _render_cut}
 
 
+def _value_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on a modifier or a macro node: it goes, without its
+    cables (`accept_deleted_item(False)`): a route on a removed modifier's
+    lane stays, dormant, as on ROUTING."""
+    if ed.accept_deleted_item(False):
+        remove_node(panel, n.id)
+
+
+def _render_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on a render or output node: N4's (it replaces these
+    entries in `DELETE_NODE`); refused in words until then."""
+    ed.reject_deleted_item()
+    st["note"] = graphview.RENDER_NOT_YET
+
+
+def _rig_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on the rig's node (a device, the analyzer, an LFO, a
+    group): kept, said."""
+    ed.reject_deleted_item()
+    st["note"] = graphview.NOT_REMOVABLE.format(label=n.label)
+
+
+# a node delete's handler by the node's kind (the seam: N4 maps "render"
+# and "output"); a kind not listed is the rig's
+DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
+               "render": _render_node_cut, "output": _render_node_cut}
+
+
 def _delete(panel, st: dict, view: graphview.View) -> None:
-    """The widget's delete query: the selection's nodes first (a modifier
-    or a macro goes; the rig's nodes stay, said), then its cables. A node
-    is deleted without its cables (`accept_deleted_item(False)`): a route
-    on a removed modifier's lane stays, dormant, as on ROUTING."""
+    """The widget's delete query: the selection's nodes first, by kind
+    (`DELETE_NODE`), then its cables, by kind (`DELETE`)."""
     if ed.begin_delete():
         names = st["names"]
         nk = ed.NodeId()
         while ed.query_deleted_node(nk):
             n = view.node(names.get(nk.id(), "")[2:])
-            if n is not None and n.kind in ("modifier", "macro"):
-                if ed.accept_deleted_item(False):
-                    remove_node(panel, n.id)
-            else:
+            if n is None:
                 ed.reject_deleted_item()
-                if n is not None:
-                    st["note"] = graphview.NOT_REMOVABLE.format(label=n.label)
+                continue
+            DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
         lk = ed.LinkId()
         while ed.query_deleted_link(lk):
             cid = names.get(lk.id(), "")[2:]
@@ -823,7 +846,7 @@ def port_param(pin: str) -> str | None:
 
 def _pin_menu(panel, view: graphview.View, pin: str) -> None:
     """A pin's menu: on a param's `mod` stub, the param menu's Learn items
-    — the same function the panel's widgets' menu calls (`Panel._ctx_learn`:
+    — the same function the panel's widgets' menu calls (`Panel._ctx_learn_block`:
     desk, hand ▸ left / right, pad, a role, sink), or Cancel while armed —
     so a learn from here lands as a cable next frame (the view is rebuilt
     from the table); any other pin says what it is."""
@@ -835,16 +858,7 @@ def _pin_menu(panel, view: graphview.View, pin: str) -> None:
         if hit is not None and hit[1] is not None:
             imgui.text_disabled(f"{hit[0].label} · {hit[1].name}")
         return
-    p = panel._real(a)
-    lrn = getattr(panel, "learn", None)
-    if lrn is None:
-        imgui.text_disabled("no learn")
-    elif lrn.learning == a.id:
-        imgui.text_colored(ui.RED, panel._learn_hint())
-        if imgui.menu_item_simple("Cancel learn"):
-            lrn.arm(None)
-    else:
-        panel._ctx_learn(a, p)
+    panel._ctx_learn_block(a, panel._real(a))
 
 
 def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
