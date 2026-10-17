@@ -55,7 +55,7 @@ from pathlib import Path
 # holds both rules against the package's own imports).
 MODULES = (
     "analysis", "tapers", "motion", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "lfo", "glsl", "patterns",
-    "lookback", "dream", "fx", "ghost", "outputs", "view", "render", "params", "library", "control", "config",
+    "lookback", "dream", "fx", "ghost", "outputs", "view", "field", "render", "params", "library", "control", "config",
     "overlay", "gamepad", "apc40", "routing", "preset", "learn", "midi", "bridge",
     "hands.signal", "hands.tape", "hands.core", "hands", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_patterns",
     "ui_lfo", "ui_desk", "ui_pad", "hands.panel", "ui",
