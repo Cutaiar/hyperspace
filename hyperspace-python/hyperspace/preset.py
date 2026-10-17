@@ -92,7 +92,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, routing, undo
+from . import apc40, modifiers, routing, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -126,6 +126,7 @@ from .lookback import (
     migrate_row,
     migrate_values,
 )
+from .modifiers import Modifier
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
     PAN_IDS,
     PERFORMANCE_GROUPS,
@@ -343,6 +344,36 @@ class GraphSection:
 # alone are the desk.
 TEMPLATE_KEY = "desk_template"
 DARK = "dark"
+# plan 28 N1: the preset's modifier nodes (`modifiers.Modifier`), a list of
+# entries after `routes` — ``{"id": "mod.1", "kind": "smooth", "in":
+# ["hand:right.energy"], "attack": 0.05, "release": 0.6}``. No schema bump:
+# an older build ignores the key (and a route on a ``mod:`` lane is a
+# dormant row there). A desk template may carry the list too: a preset
+# naming the template gets its modifiers, its own overriding by id
+MODIFIERS_KEY = "modifiers"
+# the performance groups with no module presets: a macro's meaning is its
+# subscribers and a modifier's params are its entry, both the preset's
+NO_MODULE = ("macro", modifiers.GROUP)
+
+
+def merge_modifiers(template, own) -> tuple[list[dict], list[str]]:
+    """The modifier entries a preset lands: the template's (in its order)
+    with each one the preset's own list names by id replaced, then the
+    preset's others. Either may be None. An entry that is not an object
+    with an id is dropped with a note."""
+    notes: list[str] = []
+
+    def entries(lst, where):
+        out = []
+        for d in lst or ():
+            if isinstance(d, dict) and isinstance(d.get("id"), str):
+                out.append(d)
+            else:
+                notes.append(f"dropped a modifier entry in {where}: not an object with an id")
+        return out
+    mine = {d["id"]: d for d in entries(own, "the preset")}
+    merged = [mine.pop(d["id"], d) for d in entries(template, "the desk template")]
+    return merged + list(mine.values()), notes
 
 
 def is_dark_row(row) -> bool:
@@ -412,7 +443,7 @@ def dumps(doc: dict) -> str:
             # the graph (plan 26 A4): one node per line, like a row
             rows = ",\n".join("  " + json.dumps(n) for n in v["nodes"])
             text = '{"nodes": [\n' + rows + '\n ]}' if v["nodes"] else '{"nodes": []}'
-        elif key in ("routes", "desk") and isinstance(v, list):
+        elif key in ("routes", MODIFIERS_KEY, "desk") and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
                 text = f"[\n{rows}\n ]"
@@ -562,7 +593,10 @@ class Presets:
         later: dict[str, Any] = {}
         for pid, v in dict(doc.get("values") or {}).items():
             p = reg.get(pid)
-            if is_instance_id(pid):
+            if pid.startswith(modifiers.PREFIX):
+                # a modifier's param is set by its entry (`modifiers`), never here
+                notes.append(f"{pid} is a modifier's: set in its entry, ignored")
+            elif is_instance_id(pid):
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)
@@ -595,14 +629,17 @@ class Presets:
         # `desk_template` (plan 24 C3): the template's rows with `desk` as
         # its overrides; a template the library lacks is a note, and the
         # overrides alone are the desk
+        tmods = None                      # the template's modifiers (plan 28 N1)
         if doc.get(TEMPLATE_KEY):
             name = str(doc[TEMPLATE_KEY])
             try:
-                template = lib.desk_template(name)["desk"]
+                tdoc = lib.desk_template(name)
+                template = tdoc["desk"]
             except LibraryError as e:
                 notes.append(f"desk template {name!r} not loaded ({e}): this preset's own "
                              "desk rows only")
-                template = []
+                tdoc, template = {}, []
+            tmods = tdoc.get(MODIFIERS_KEY)
             desk = expand_desk(template, list(doc.get("desk") or []))
             # the template's rows as this load expanded them: a save
             # compacts against these, so a template fixed on disk after the
@@ -610,10 +647,38 @@ class Presets:
             # into overrides that undo it (`_desk_part`)
             key = str(doc.get("name") or (path.stem if path else ""))
             self._at_load()[key] = (name, copy.deepcopy(template))
+            self._mods_at_load()[key] = (name, copy.deepcopy(list(tmods or [])))
         elif "desk" in doc:
             desk = [Binding.from_json(row) for row in doc.get("desk") or []]
         else:
             desk = fresh_desk(table.profile)
+        # plan 28 N1: the modifiers, read before the routes land — the
+        # template's, the preset's own over them by id; each parsed now, so
+        # a route onto a ``mod:<n>`` lane no modifier publishes is dropped
+        # with a note, like a route onto a param no performer may drive
+        mod_docs, mod_notes = merge_modifiers(tmods, doc.get(MODIFIERS_KEY))
+        notes += mod_notes
+        mods: list[Modifier] = []
+        for d in mod_docs:
+            try:
+                m = Modifier.from_json(d)
+            except (ValueError, TypeError) as e:
+                notes.append(f"dropped modifier {d.get('id')}: {e}")
+                continue
+            if any(x.id == m.id for x in mods):
+                notes.append(f"dropped a second {m.id}")
+                continue
+            mods.append(m)
+        have = {m.id for m in mods}
+        kept_routes = []
+        for b in routes:
+            mid = modifiers.id_of(b.source)
+            if b.head == modifiers.SCHEME and mid not in have:
+                notes.append(f"dropped {b.source} → {b.target}: no modifier "
+                             f"{mid or b.source}")
+                continue
+            kept_routes.append(b)
+        routes = kept_routes
         # a bad subscriber raises before anything lands; a route's scale is
         # settled as the table's are (decision register row 18 (a)): on a
         # macro a depth subscriber, on a performance param dropped, noted
@@ -622,7 +687,7 @@ class Presets:
         macros = {mid: m.to_json() for mid, m in held.items()}
         modules = dict(doc.get("modules") or {})
         for group in list(modules):
-            if group not in PERFORMANCE_GROUPS or group == "macro":
+            if group not in PERFORMANCE_GROUPS or group in NO_MODULE:
                 notes.append(f"module {group}: not a performance group, ignored")
                 modules.pop(group)
         # the file parsed, nothing landed yet: one undo step for the whole
@@ -632,11 +697,16 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        held_mods = table.modifiers_doc(reg)
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
         try:
             gs.land(spec, section)
+            # the modifiers and their params (plan 28 N1), landed with the
+            # values: their entries are their params' values
+            notes += table.set_modifiers(mods, reg)
+            values.update(reg.snapshot(group=modifiers.GROUP))
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
@@ -669,6 +739,8 @@ class Presets:
                 lib.restore(before)
                 raise ValueError(f"a value would not land ({e}); nothing loaded") from e
         except BaseException:
+            if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
+                table.set_modifiers(held_mods, reg)
             if gs.mark() != held_graph:          # the graph as it was, and its instances'
                 gs.put(held_graph)               # values as they were
                 lib.restore({k: v for k, v in held_values.items() if k in reg})
@@ -689,7 +761,7 @@ class Presets:
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
         for group in PERFORMANCE_GROUPS:
-            if group == "macro":
+            if group in NO_MODULE:
                 continue
             label = modules.get(group)
             lib.label(group, str(label) if label else None)
@@ -702,7 +774,7 @@ class Presets:
         """The live state as a preset document, named — what a save writes."""
         lib = self.lib
         modules = {g: lib.current(g) for g in PERFORMANCE_GROUPS
-                   if g != "macro" and lib.current(g)}
+                   if g not in NO_MODULE and lib.current(g)}
         doc: dict[str, Any] = {"schema": SCHEMA, "name": name}
         if self.note:
             doc["note"] = self.note
@@ -712,11 +784,56 @@ class Presets:
         section = self._graph_section().doc
         if section is not None:
             doc[GRAPH_KEY] = copy.deepcopy(section)
-        doc.update(values=self.reg.snapshot(part="performance"),
+        doc.update(values=self._values(),
                    routes=[b.to_json() for b in table.routes()],
+                   **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
                    modules=modules, **{UNITS_KEY: dict(UNITS)})
         return doc
+
+    def _values(self) -> dict[str, Any]:
+        """The preset's `values`: every performance base but the modifiers'
+        params, which their entries hold (so a file saved here loads on an
+        older build with no unknown id)."""
+        return {k: v for k, v in self.reg.snapshot(part="performance").items()
+                if not k.startswith(modifiers.PREFIX)}
+
+    def _mods_at_load(self) -> dict[str, tuple[str, list[dict]]]:
+        """preset name → (its template's name, the template's modifier
+        entries as the load read them) — `_at_load`'s twin for the
+        modifiers. On the instance, made on first use."""
+        return self.__dict__.setdefault("_template_mods_at_load", {})
+
+    def _modifiers_part(self, name: str | None = None) -> dict:
+        """What a save writes for the modifiers: ``{"modifiers": entries}``
+        after the routes, or nothing when there are none. A preset that
+        names a desk template writes only the entries that differ from the
+        template's (as the load read them), so a template's modifier fixed
+        on disk reaches it at the next load. (A template's modifier the
+        preset removed comes back at the next load: no entry says "none".)"""
+        live = self.router.table.modifiers_doc(self.reg)
+        ref = self.template_of_loaded()
+        tmods: list[dict] = []
+        if ref is not None:
+            held = self._mods_at_load().get(self.lib.current(GROUP) or "")
+            if held is not None and held[0] == ref:
+                tmods = held[1]
+            else:
+                try:
+                    tmods = list(self.lib.desk_template(ref).get(MODIFIERS_KEY) or [])
+                except LibraryError:
+                    tmods = []
+            if name is not None:
+                self._mods_at_load()[name] = (ref, copy.deepcopy(tmods))
+        theirs: dict[str, dict] = {}
+        for d in tmods:
+            try:
+                m = Modifier.from_json(d)
+            except (ValueError, TypeError):
+                continue
+            theirs[m.id] = m.to_json()
+        own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
+        return {MODIFIERS_KEY: own} if own else {}
 
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `Presets` from
@@ -783,11 +900,12 @@ class Presets:
         preset with none, so a file from before it is never dirty)."""
         table = self.router.table
         section = self._graph_section().doc
-        return (self.reg.snapshot(part="performance"),
+        return (self._values(),
                 json.dumps([b.to_json() for b in table.routes()]),
                 json.dumps(desk_json(table.desk()), sort_keys=True),
                 json.dumps(table.macros_doc(), sort_keys=True),
-                None if section is None else json.dumps(section, sort_keys=True))
+                None if section is None else json.dumps(section, sort_keys=True),
+                table.modifiers_doc(self.reg))
 
     # ---- internals ----
 
