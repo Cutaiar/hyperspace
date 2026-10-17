@@ -244,15 +244,19 @@ class Shot:
     sha256: str
     size: tuple[int, int]
     pixels: np.ndarray   # (h, w, 4) uint8, top row first: for the PNG and a diff
+    wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
 
     @property
     def key(self) -> str:
         return f"{self.preset}|{self.hands}|{self.state}"
 
     def entry(self) -> dict:
-        return {"preset": self.preset, "hands": self.hands, "state": self.state,
-                "route": self.route, "hands_over": self.over, "size": list(self.size),
-                "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        out = {"preset": self.preset, "hands": self.hands, "state": self.state,
+               "route": self.route, "hands_over": self.over, "size": list(self.size),
+               "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        if self.wired is not None:          # (only a wired output's entry has it)
+            out["wired"] = self.wired
+        return out
 
 
 class Rig:
@@ -405,11 +409,19 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             raw = _read(ctx, f, size)
             # plan 28 N4: an output whose picture is a wire's shows no
             # pipeline of `outputs.route`'s table (its end is its own,
-            # `graph.Wired`): its route reads "none", what the wire is
-            # the manifest's fixture graph says
-            shots.append(Shot(slug, hands, name, NAMES.get(key, "none"),
+            # `graph.Wired`, keyed `wire(output.<n>)`): its route reads
+            # "none" and its entry says what feeds the wire (`wired`); any
+            # other key not in the table is a bug, and raises here
+            wired = None
+            if isinstance(key, str) and key.startswith("wire("):
+                port = f"{key[len('wire('):-1]}.image"
+                wired = next(w.src for w in rig.renderer.wiring.wires if w.dst == port)
+                route_name = "none"
+            else:
+                route_name = NAMES[key] if key is not None else "none"
+            shots.append(Shot(slug, hands, name, route_name,
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
-                              tuple(size), raw[::-1].copy()))
+                              tuple(size), raw[::-1].copy(), wired))
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed

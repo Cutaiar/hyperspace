@@ -1802,6 +1802,9 @@ def render_drop(edit: Edit, node: str) -> str | None:
     doc = _doc(edit)
     before = copy.deepcopy(doc)
     if kind == "effect":
+        if rgraph.split_instance(name)[1] == 1:
+            return (f"{name} is a file: it is always in the chain (switch it off on FX; "
+                    "unwire it to put it back in the chain)")
         doc["nodes"] = [e for e in doc["nodes"] if _entry_name(e) != name]
         names = {name}
     elif kind in ("ghost", "layer"):
@@ -1823,8 +1826,7 @@ def render_drop(edit: Edit, node: str) -> str | None:
         doc.pop("wires")
     _unplace(doc, lambda e, key, where: where in names)
     if doc == before:
-        return (f"{name} is a file: it is always in the chain (switch it off on FX)"
-                if kind == "effect" else f"{name} is not in the preset's graph")
+        return f"{name} is not in the preset's graph"
     return _land(edit, doc, f"delete {name}", f"{name} deleted")
 
 

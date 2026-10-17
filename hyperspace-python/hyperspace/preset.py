@@ -251,9 +251,7 @@ class GraphSection:
         had it (a save does not drop what the file said)."""
         if section is None:
             return None, None, []
-        fx = getattr(self, "fx", None)
-        files = ({fx.file_of(n) for n in fx.specs}
-                 if fx is not None and getattr(fx, "specs", None) else None)
+        files = self.files()
         try:
             spec = read_graph(section, effects=files)
         except GraphError as e:

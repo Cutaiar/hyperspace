@@ -271,13 +271,14 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     assert rig.lib.is_dirty(PRESETS)
     assert rig.presets.document("Base")[preset.GRAPH_KEY] == {
         "nodes": [], "wires": _wires(("hands", "output.2.hands"))}
-    assert edit.wire("history", "output.2.hands") is None        # replaces it
-    assert rig.presets.graph.spec.wires == (G.Wire("history", "output.2.hands"),)
+    assert edit.wire("history", "output.2.hands").endswith("or an effect after it over")
+    assert edit.wire("scene", "output.2.hands") is None          # replaces it
+    assert rig.presets.graph.spec.wires == (G.Wire("scene", "output.2.hands"),)
     # an effect wired after a node, then moved into an output's port
     assert edit.wire("hands", "palette.image") is None
     assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
     assert edit.unwire("hands", "palette.image") is None
-    assert edit.unwire("history", "output.2.hands") is None
+    assert edit.unwire("scene", "output.2.hands") is None
     assert rig.presets.graph.doc is None and stub.wiring == G.Wiring()
     assert not rig.lib.is_dirty(PRESETS)
     # the default graph's own edge is refused in words
@@ -394,8 +395,13 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.add_node("effect", "acid") is None and "fx.acid.3.on" in rig.reg
     assert edit.add_node("effect", "teapot") == "no teapot effect in this build"
     assert edit.drop_node("acid.3") is None and "fx.acid.3.on" not in rig.reg
-    assert edit.drop_node("acid") == ("acid is a file: it is always in the chain "
-                                      "(switch it off on FX)")
+    assert edit.drop_node("acid") == ("acid is a file: it is always in the chain (switch "
+                                      "it off on FX; unwire it to put it back in the chain)")
+    # … placed or not: deleting instance 1 is refused, its placement kept
+    assert edit.wire("hands", "palette.image") is None
+    assert edit.drop_node("palette").startswith("palette is a file")
+    assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
+    assert edit.unwire("hands", "palette.image") is None
     assert edit.add_node("hands") is None and edit.said == "ghost.2 added, drawn in the scene"
     assert "ghost.2.alpha" in rig.reg
     assert edit.add_node("composite") is None
@@ -412,7 +418,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.drop_node("output.1") == "output.1 is the frame's own: it stays"
     assert edit.drop_node("ghost") == ("hands 1 is the frame's own hands: it stays "
                                        "(switch it off on HANDS)")
-    assert len(pushed) == 8
+    assert len(pushed) == 10
 
 
 def test_an_edit_is_one_undo_step(tmp_path):
@@ -439,9 +445,11 @@ def test_an_edit_is_one_undo_step(tmp_path):
 def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_path):
     """The wishlist's done-when: "hands as lines, through the acid, with
     tracers", made on the GRAPH page — a geometry cable from the hands
-    into the scene, the hands node drawn as lines, the history wired to
-    hold them — reproduces the fixture `hands-lines.json`: the same
-    wiring, the same graph, the same picture."""
+    into the scene (which sets the hands node's `into`, A4's JSON: a
+    hands node's place is not a wire, see the register row) and the node
+    drawn as lines from its menu (`set_node`) — reproduces the fixture
+    `hands-lines.json`: the same wiring, the same graph, the same picture.
+    The name keeps the brief's words; no image wire is involved."""
     import numpy as np
     from test_outputs import rig as gl_rig
     from test_outputs import run, views
@@ -470,17 +478,23 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
 
 
 def test_no_factory_preset_changes():
-    """No library preset carries a wire (or a graph); every one still loads
-    with the default graph, and its document has no `graph` key — and
-    the default graph is the one before N4, node for node."""
+    """No library file carries a graph (so no wire): every factory preset
+    loads with the default graph — and the default graph holds nothing a
+    wire builds: no `Wired` end, no effect placed by a wire, nothing
+    dormant, every output's picture a pipeline's end or the ground."""
     for path in sorted(FACTORY.rglob("*.json")):
         doc = json.loads(path.read_text())
-        assert "wires" not in json.dumps(doc.get("graph", {})), path
-    for sw in ((S(),), (S(), S(through=True)), (S(scene=False), S(), S(through=True))):
-        vs = _views(*sw)
-        a = G.default_graph(vs, effects=RUN)
-        b = G.default_graph(vs, G.Wiring(wires=()), effects=RUN)
-        assert repr(a) == repr(b) and a.dormant == {} and a.pool == b.pool
+        assert not isinstance(doc, dict) or "graph" not in doc, path
+    for sw in ((S(),), (S(), S(through=True)), (S(scene=False), S(), S(through=True)),
+               (S(scene=False, hands=True, through=True), S(scene=False))):
+        g = G.default_graph(_views(*sw), effects=RUN)
+        assert not any(isinstance(n, (G.Wired, G.Composite)) and n.name.startswith(
+            ("wire(", "composite.")) for n in g.nodes.values())
+        assert all(n.placed is None for n in g.nodes.values() if isinstance(n, G.Effect))
+        assert g.dormant == {} and g.notes == []
+        for out in g.outputs:
+            img = out.inputs["image"]
+            assert img is None or (isinstance(img, G.Fx) and not isinstance(img, G.Wired))
 
 
 def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
@@ -605,3 +619,61 @@ def test_a_renderer_rebuilds_its_graph_when_an_edit_lands(ctx, tmp_path):
     again = r._graph
     run(ctx, r, views(ctx, S(), S()), frames=1)
     assert r._graph is again
+
+
+def test_a_composite_wired_into_an_outputs_hands_is_laid_as_its_own_picture(ctx):
+    """A wire into `output.<n>.hands` from a node that is not a hands' layer
+    (a composite: the scene with the hands laid on) is laid through the
+    node — its own picture, not hands 1's Ghost — onto the output's ground;
+    a presenter's hand-off carries that picture. The history is refused
+    there (it paints into what reads it: there is no picture to lay)."""
+    import numpy as np
+    from test_outputs import H, W, run, views
+    from test_outputs import rig as gl_rig
+
+    spec = G.read_graph({"nodes": [{"kind": "composite"}],
+                         "wires": _wires(("scene", "composite.under"),
+                                         ("hands", "composite.over"),
+                                         ("composite", "output.2.hands"))})
+    assert spec.notes == ()
+    r = gl_rig(ctx, effects=())
+    r.wiring = spec.wiring()
+    a, b = run(ctx, r, views(ctx, S(), S(scene=False, hands=False)), frames=2)
+    comp = r._graph.nodes["composite"]
+    assert r._graph.nodes["output.2"].inputs["hands"] is comp
+    assert r.stats["routes"][1] == (None, True)
+    # the scene with the hands, laid opaque onto the ground: output 1's picture
+    assert b.any() and np.abs(a - b).max() <= 2
+    # a presenter gets the composite's picture, not hands 1's layer
+    pv = View(S(scene=False, hands=False), (W, H), presenter=object())
+    run(ctx, r, [views(ctx, S())[0], pv], frames=1)
+    assert pv.handoff.hands is not None and pv.handoff.hands is not r.ghost.tex
+    assert pv.handoff.hands is r._frames["composite"][0]
+    assert G.read_graph({"wires": _wires(("history", "output.1.hands"))}).notes[0].endswith(
+        "wire it into the output's image, or an effect after it over")
+
+
+def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
+    """A through output's switch hands are inside its picture (laid on
+    before the chain): a wire into its `hands` port replaces them — its
+    picture becomes the end the hands were laid onto (the scene's, or the
+    ground with the scene off) and the wired layer alone is laid over, so
+    the hands are never drawn twice and the wire is never dropped."""
+    import numpy as np
+    from test_outputs import rig as gl_rig
+    from test_outputs import run, views
+
+    w = G.read_graph({"wires": _wires(("hands", "output.2.hands"),
+                                      ("hands", "output.3.hands"))}).wiring()
+    vs = _views(S(), S(through=True), S(scene=False, through=True))
+    g = G.default_graph(vs, w, effects=("warp",))
+    o2, o3 = g.nodes["output.2"], g.nodes["output.3"]
+    assert o2.inputs["image"] is g.nodes["fx"] and o2.inputs["hands"] is g.nodes["hands"]
+    assert o3.inputs["image"] is None and o3.inputs["hands"] is g.nodes["hands"]
+    r = gl_rig(ctx, effects=("warp",))
+    r.wiring = w
+    a, b, _ = run(ctx, r, views(ctx, S(), S(through=True), S(scene=False, through=True)),
+                  frames=2)
+    assert np.array_equal(a, b)                    # the scene, the hands over: once
+    assert r.stats["routes"][1:] == [(SCENE, True), (None, True)]
+    assert r.stats["chain_runs"] == 1              # no SCENE+HANDS or HANDS run

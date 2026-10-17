@@ -1694,7 +1694,8 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring)[1]
+                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring,
+                                         n=sl.n)[1]
                 not in ("", "master")]
 
     @staticmethod

@@ -671,6 +671,9 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     if kind == "composite" and port == "over" and src_kind == "history":
         return ("the history paints into what reads it, so it is not laid over: "
                 "wire it under, or an effect after it over")
+    if kind == "output" and port == "hands" and src_kind == "history":
+        return ("the history paints into what reads it, so it is not laid over: "
+                "wire it into the output's image, or an effect after it over")
     for name, k, into in ((node, kind, True), (w.src, src_kind, False)):
         if k == "effect" and name in ctx.placed and (into or kind != "effect"):
             key, where = ctx.placed[name]
@@ -2473,8 +2476,12 @@ class Output(Node):
                     end.key if end is not None else None, laid is not None)
             put = None
             # D1: a layer through a placed effect is laid by the node (its
-            # folded texture), not the Ghost's own `composite`
-            if laid is not None and (laid[1] != "over" or isinstance(laid[0], Effect)):
+            # folded texture), not the Ghost's own `composite` — and (plan 28
+            # N4) so is anything a wire lays on the hands port that is not a
+            # hands' layer (the scene, a composite): only a HandsLayer is a
+            # Ghost's picture
+            laid_node = laid is not None and not isinstance(laid[0], HandsLayer)
+            if laid is not None and (laid[1] != "over" or laid_node):
                 over, blend = laid
 
                 def put(tgt, rect, opaque, flip, over=over, blend=blend):
@@ -2482,8 +2489,9 @@ class Output(Node):
             ghosts = {}
             if laid is not None and hasattr(laid[0], "ghost"):
                 ghosts["ghost"] = laid[0].ghost(frame)
-            if laid is not None and isinstance(laid[0], Effect):
+            if laid_node:
                 # D1: a presenter lays the folded layer, not the Ghost's own
+                # (N4: or the wired node's picture)
                 ghosts["hands_tex"] = laid[0].image(frame)
             if ro is not None and hasattr(src, "ghost"):
                 ghosts["readout_ghost"] = src.ghost(frame)
@@ -3026,6 +3034,15 @@ class _Wiring:
             if cap is not None:
                 cap.after = (*cap.after, end)
         elif w.port == "hands":
+            # a through output's switch hands are inside its picture (the
+            # layer laid on before the chain): the wire replaces them, so
+            # the picture becomes the end it was laid onto — the scene's,
+            # or the ground — and the wired node alone is laid over
+            holder, port, img = out, "image", out.inputs["image"]
+            while isinstance(img, Effect):
+                holder, port, img = img, "image", img.inputs["image"]
+            if isinstance(img, Fx) and not isinstance(img, Wired) and img.layer is not None:
+                holder.inputs[port] = img.fallback
             out.inputs["hands"] = src
             out.inputs["depth"] = self.depth
             layer = src
