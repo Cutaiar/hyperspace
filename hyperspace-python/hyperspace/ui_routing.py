@@ -1410,15 +1410,21 @@ def add_modifier(panel, kind: str, inputs=(), **params: float) -> Modifier:
 
 
 def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
-    """Input `k` of modifier `mid` reads `source` from now on."""
+    """Input `k` of modifier `mid` reads `source` from now on: the
+    modifier replaced whole (`Bindings.set_modifiers`, its params at their
+    bases), one undo step."""
     table = router_of(panel).table
     m = table.modifier(mid)
-    if m is None or not 0 <= k < len(m.inputs):
+    if m is None or not 0 <= k < len(m.inputs) or m.inputs[k] == source:
         return
-    ins = list(m.inputs)
-    ins[k] = source
-    m.inputs = tuple(ins)
-    table.modifiers_serial += 1
+    undo.push(f"modifier input {mid}")
+    docs = table.modifiers_doc(panel.reg)
+    for d in docs:
+        if d["id"] == mid:
+            ins = list(d["in"])
+            ins[k] = source
+            d["in"] = ins
+    table.set_modifiers(docs, panel.reg)
 
 
 def remove_modifier(panel, mid: str) -> None:

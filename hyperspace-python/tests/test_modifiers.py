@@ -513,7 +513,45 @@ def test_the_modifiers_strip_draws_between_the_routes_and_the_desk(shell_rig, tm
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index("ROUTES") < texts.index("MODIFIERS") < texts.index("MACROS")
+    assert texts.index("ROUTES") < texts.index("MODIFIERS") < texts.index("DESK  ·  PRESET LAYER")
     assert {"smooth", "combine", "threshold", "0.50", "1.00", "dormant"} <= set(texts)
     dup = {i for i in ids if ids.count(i) > 1}
     assert not dup, f"conflicting ids {sorted(dup)}"
+
+
+def test_a_non_finite_output_drops_the_memory_and_the_next_reading_starts_afresh(rig):
+    """A smooth fed ±inf once: its lane is not live that frame, and its
+    follower is dropped, so the next finite reading is taken as it is —
+    never NaN for ever after."""
+    reg, router = rig.reg, rig.router
+    router.table.add_modifier("smooth", ["ext:0"], reg)
+    router.feed("ext", [0.2])
+    router.modulate()
+    assert router.feeds["mod"][1] == pytest.approx(0.2)
+    router.feed("ext", [math.inf])
+    router.modulate()
+    assert math.isnan(router.feeds["mod"][1]) and "mod.1" not in router._mod_states
+    router.feed("ext", [0.7])
+    router.modulate()
+    assert router.feeds["mod"][1] == pytest.approx(0.7)
+
+
+def test_picking_an_input_replaces_the_modifier_whole_as_one_undo_step(rig):
+    reg, table = rig.reg, rig.router.table
+    panel = panel_of(rig)
+    u = undo.Undo(reg, table)
+    undo.install(u)
+    try:
+        m = ui_routing.add_modifier(panel, "scale", ["lane:0"], mul=2.0)
+        u.tick(1.0)
+        u.tick(2.0)
+        ui_routing.set_modifier_input(panel, m.id, 0, "lane:1")
+        u.tick(3.0)
+        u.tick(4.0)
+        new = table.modifier(m.id)
+        assert new is not m and new.inputs == ("lane:1",) and m.inputs == ("lane:0",)
+        assert reg[f"{m.id}.mul"].value == 2.0                    # its params kept
+        assert len(u.stack) == 2 and u.stack[-1].label.startswith("modifier input")
+        assert u.undo() and table.modifier(m.id).inputs == ("lane:0",)
+    finally:
+        undo.install(None)

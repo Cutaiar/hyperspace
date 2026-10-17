@@ -2891,8 +2891,14 @@ class Router:
         if hit is None or hit[0] != m.kind:
             hit = states[mid] = (m.kind, ModState())
         out = modifiers.step(m, tuple(reads), hit[1], dt)
-        vec[m.n] = out if math.isfinite(out) else math.nan
-        return None if math.isnan(vec[m.n]) else float(vec[m.n])
+        if not math.isfinite(out):
+            # a non-finite output (an input that read ±inf): not live, and
+            # its memory is dropped, so the next finite reading starts afresh
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        vec[m.n] = out
+        return float(out)
 
     def _publish_modifiers(self) -> None:
         """The ``mod`` scheme's labels, rests, gates and signal kinds, as
