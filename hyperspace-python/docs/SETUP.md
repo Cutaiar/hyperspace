@@ -194,6 +194,11 @@ it is silent about keeps `config.toml`'s — `[[output.screens]]` is one
 key, so a venue that lists screens replaces the list rather than adding
 to it. The SYSTEM page names the venue in use.
 
+The OUTPUT page has a picker for them. A venue cannot be swapped while
+the app runs — the outputs' windows are made at launch — so the picker
+says so and waits for its **Restart into …** button; the restart is the
+same one ⌘R does (same terminal, a second or two).
+
 A venue that is missing or will not parse is a note on the SYSTEM page
 and `config.toml` alone — a mistyped `--venue` does not stop the show.
 The note lists the venues there are.

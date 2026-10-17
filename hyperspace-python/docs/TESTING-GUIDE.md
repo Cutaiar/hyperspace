@@ -1371,14 +1371,18 @@ and **extended, not mirrored**, before launch.
 4. Quit. `uv run hyperspace` with **no flag**. SYSTEM page.
 5. Edit the venue (swap `fullscreen` to `false`), press **Cmd+R**, look at
    the OUTPUT page.
-6. Quit. `uv run hyperspace --venue nosuchplace`, then
+6. OUTPUT page: pick the other entry in the **venue** combo. Read what
+   it says, then press **Restart into …**.
+7. Quit. `uv run hyperspace --venue nosuchplace`, then
    `uv run hyperspace --no-venue`.
 
 **Right if:** at 3 the second screen shows the render fullscreen and the
 controls stay on the laptop; the SYSTEM page reads `venue: projector`; the
 OUTPUT page lists two outputs. At 4 the same, with no flag — the venue was
 remembered (`~/Hyperspace/last_venue` holds its name). At 5 the reload
-comes back windowed: ⌘R re-read the file. At 6 the bad name is a note on
+comes back windowed: ⌘R re-read the file. At 6 nothing happens until the button is pressed, the page having said
+the app restarts; then it comes back in the venue picked, and the SYSTEM
+page names it. At 7 the bad name is a note on
 the SYSTEM page naming the venues there are, and the app runs on
 `config.toml` alone; `--no-venue` does the same and leaves no `last_venue`.
 Throughout, `config.toml` is byte-for-byte what step 1 saw, and the

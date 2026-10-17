@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import app
+from hyperspace import app, config
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -275,7 +275,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     reg.get = lambda pid: SimpleNamespace(fire=lambda: fired.append(pid),
                                           step=lambda a: None, toggle=lambda: None)
     reg.__dict__["fired"] = fired
-    panel = Stub("panel", log, restart_requested=False)
+    panel = Stub("panel", log, restart_requested=False, venue_wanted=None)
     renderer = Stub("renderer", log)
     h = app.Host(
         reg=reg, view=Stub("view", log), control=Stub("control", log), audio=audio,
@@ -1272,3 +1272,42 @@ def test_the_last_rig_flag_wins_so_a_re_exec_of_the_same_argv_is_stable():
     once = ["--venue", "tv"]
     assert app._venue_arg(once) == app._venue_arg(once)      # _venue_arg does not eat its argv
     assert app._venue_arg(["--venue", "tv", "--venue", "cart"]) == ("cart", False)
+
+
+def test_the_venue_flag_is_stripped_for_a_re_exec_into_another_venue():
+    """The picker remembers its choice, so the next image must not be told
+    the venue *this* one was told — it would win over what was remembered."""
+    assert app._without_venue(["hyperspace", "--venue", "tv"]) == ["hyperspace"]
+    assert app._without_venue(["hyperspace", "--venue=tv"]) == ["hyperspace"]
+    assert app._without_venue(["hyperspace", "--no-venue"]) == ["hyperspace"]
+    kept = ["hyperspace", "--venue", "tv", "--whatever", "x"]
+    assert app._without_venue(kept) == ["hyperspace", "--whatever", "x"]
+    assert app._without_venue(["hyperspace"]) == ["hyperspace"]
+
+
+def test_the_picker_remembers_the_venue_then_restarts(tmp_path, monkeypatch):
+    log: list[str] = []
+    h = _host(log)
+    h.panel.venue_wanted = "cart"
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HYPERSPACE_HOME", str(home))
+    monkeypatch.setattr(sys, "argv", ["hyperspace", "--venue", "tv"])
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "restart" in log                                  # it restarted…
+    assert config.last_venue(home) == "cart"                 # …into the picked venue
+    assert sys.argv == ["hyperspace"]                        # the old flag cannot win
+    assert h.panel.venue_wanted is None
+
+
+def test_the_picker_can_ask_for_no_venue_at_all(tmp_path, monkeypatch):
+    log: list[str] = []
+    h = _host(log)
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HYPERSPACE_HOME", str(home))
+    config.remember_venue(home, "tv")
+    h.panel.venue_wanted = ""
+    monkeypatch.setattr(sys, "argv", ["hyperspace"])
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "restart" in log and config.last_venue(home) == ""

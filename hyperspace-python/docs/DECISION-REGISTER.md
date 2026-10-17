@@ -1434,10 +1434,13 @@ Stream B; the pictures are in
   - A venue that is missing, will not parse, or holds a value outside a
     table is a note on the SYSTEM page and `config.toml` alone — a typo
     at a venue does not stop the show. The note lists the venues there are.
-  - The SYSTEM page names the venue in use; nothing else in the UI does,
-    and no page can switch one (venue settings never persist or modulate —
-    row 81).
-- **Rough edge.** The venues are files the user makes by hand; there is no
-  "save the current screens as a venue". A venue cannot be chosen from the
-  panel, only from the command line.
+  - The SYSTEM page names the venue in use. The OUTPUT page picks one:
+    a combo of the venues there are, and a **Restart into …** button —
+    two steps, because the act is a restart and a picker that restarted
+    on the click alone would be a trap mid-show. Choosing writes
+    `last_venue` and re-execs without this process's `--venue`, so the
+    remembered venue is what the next image reads. The venue itself is
+    still not a parameter: nothing persists or modulates it (row 81).
+- **Rough edge.** The venues are files the user makes by hand; there is
+  no "save the current screens as a venue".
 - **Judge it.** Check 144.

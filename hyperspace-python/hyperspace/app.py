@@ -137,6 +137,23 @@ def close_all(audio, *adapters) -> None:
     _quiet(audio.stop)
 
 
+def _without_venue(argv: list[str]) -> list[str]:
+    """`argv` with `--venue <name>` / `--venue=<name>` / `--no-venue` taken
+    out, so the re-exec takes the *remembered* venue (the picker has just
+    written it) instead of the one this process was launched with."""
+    out, rest = [], list(argv)
+    while rest:
+        a = rest.pop(0)
+        if a == "--no-venue" or a.startswith("--venue="):
+            continue
+        if a == "--venue":
+            if rest and not rest[0].startswith("-"):
+                rest.pop(0)
+            continue
+        out.append(a)
+    return out
+
+
 def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     # execv swaps the process image in place — same PID, same terminal,
     # same stdio — so stdout doesn't detach and the user's shell keeps
@@ -145,7 +162,8 @@ def _restart(audio, adapters, impl, ctrl_win, save=None) -> None:
     # first so Core Audio doesn't complain about a stream vanishing
     # mid-callback and the next image finds the MIDI ports free.
     # `save` remembers where the windows are (_save_windows), so the next
-    # image opens them there.
+    # image opens them there. It comes back as this process's own argv —
+    # the venue picker edits that first (frame), never this.
     if save is not None:
         _quiet(save)
     close_all(audio, *adapters)
@@ -1035,6 +1053,18 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     if watch is not None:     # no presented render frame for 2 s: logged, bannered
         watch.tick(now)
 
+    # getattr: a panel from before a hot reload has no such field (as the
+    # registry checks elsewhere do), and it must not stop the frame
+    if getattr(h.panel, "venue_wanted", None) is not None:
+        # the OUTPUT page's picker: remember the venue, then come back as a
+        # launch that was not told one, so the remembered venue is used
+        config.remember_venue(library_home(), h.panel.venue_wanted)
+        # the next image must not be told the venue this one was told, or it
+        # would ignore what was just remembered: this process comes back as
+        # the same command without its --venue (_restart re-execs sys.argv)
+        sys.argv[:] = _without_venue(sys.argv)
+        h.panel.venue_wanted = None
+        h.restart()
     if h.panel.restart_requested:
         h.panel.restart_requested = False
         h.restart()
@@ -1275,6 +1305,7 @@ def main() -> None:
     panel.config_error = cfg.get("error", "")   # a config.toml that would not parse
     panel.config_notes = cfg.get("notes", [])   # …or that wants a section renamed
     panel.venue = cfg.get("venue", "")              # the venue this launch laid over it
+    panel.venues = config.venue_names(config.venue_root(cfg, home))   # …and the ones there are
     if router.table.said:                       # what the launch did to bindings.json
         panel.config_notes = [*panel.config_notes, router.table.said]
     keys = Keys(render_win, ctrl_win, [sl.win for sl in later])   # keys from every window
