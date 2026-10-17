@@ -91,7 +91,7 @@ pins this order over stubs:
 | 11 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
 | 12 | `router.modulate(chain)` — every live performer row calls `p.modulate(offset)` | offsets |
 | 13 | `reg.apply()` — base + offsets onto every live object | objects |
-| 14 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
+| 14 | `view.integrate(dt)` — `ang += rate · dt`; on the frame the 3D switch changes, the 4D pose folded into `body` (`held`) | an object, directly |
 | 15 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — every render output (below) | the screens |
 | 16 | `draw_panel` — the control window | bases, rows |
 
@@ -210,19 +210,25 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   hands, the readout and the dim. The `glFlush` before it is what makes
   the second context see this frame's texture
   (`tests/test_app_boundary.py::test_the_rendering_context_is_flushed_before_a_presenter`).
-- **A masked shape is folded where it is drawn, and nowhere else.**
-  `Renderer.draw_scene` draws the shape at `geometry.view_angles(shape,
-  ang)`: the view's own angles for every shape but a masked one (§5,
-  Shapes), whose W planes' angles are added onto 3D planes. The fold is a
-  pure function read in the scene pass. It writes no param and not
-  `ViewState.ang`; the integrator (step 14) and every `rot.*` param are
-  as they were. So it changes no boundary, no step of the frame and
-  nothing in the control model: modulation stays non-destructive, a rate
-  or a phase route on a W plane still lands on that plane's param, and
-  the fold happens only on the way to the screen
-  (`tests/test_shapes4d.py::test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it`,
-  `::test_no_shape_but_a_masked_one_has_its_angles_touched`,
-  `::test_the_renderer_draws_a_masked_shape_through_view_angles`).
+- **A 3D shape's W angles are dropped where it is drawn, and nowhere
+  else.** `Renderer.draw_scene` draws through `geometry.shape_view`,
+  which takes `geometry.view_angles(shape, ang)`: the view's own angles
+  for a 4D shape, the 3D angles with every W angle at 0 for a 3D one
+  (§5, Shapes). It is a pure function read in the scene pass. It writes
+  no param and not `ViewState.ang`; the integrator (step 14) and every
+  `rot.*` param are as they were, and a rate or a phase route on a W
+  plane still lands on that plane's param — it just turns nothing a 3D
+  shape has (`tests/test_shapes4d.py::test_the_w_planes_leave_a_3d_shape_alone`,
+  `::test_a_4d_shape_takes_the_views_angles_as_they_are`,
+  `::test_the_renderer_draws_a_3d_shape_without_its_w_turns`).
+- **The 3D switch's hold lives on the view, written by the integrator.**
+  `view.three_d` is a plain toggle; on the frame it changes,
+  `ViewState.integrate` (step 14, already the one direct writer of
+  `ang`) folds the 4D pose into `ViewState.body` and sets
+  `ViewState.held`, and while held it stops the W planes. The renderer
+  reads `held` and `body` and writes neither, so a frame drawn between a
+  toggle and step 14 shows the pose as it was
+  (`tests/test_shapes4d.py::test_the_3d_switch_never_jumps_on_or_off`).
 - **The FACES page's swatches cost nothing unless the page is open.**
   While a page calls `Renderer.want_swatches` (and for `SWATCH_HOLD` = 30
   frames after), `draw_outputs` draws one pattern's swatch a frame, round
@@ -680,7 +686,7 @@ docstring has the rest.
 | `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, MIDI out to a DAW, calibration and the interaction box, hand tapes, the HANDS page | `HandsIO`, `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `panel.py` alone knows it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
 | `lfo.py` + `tempo.py` | four LFOs and the tap-tempo clock | `LFOs`, `LFO`, `Clock`, `register` | import nothing from the package (`tests/test_lfo_boundary.py`); §3.9 (`tests/test_lfo.py`, `tests/test_tempo.py`) |
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | capture or file playback, the FFT, the N-band analyzer whose output is `lanes`; `bands.py` is its parts bin | `AudioEngine`, `Analyser`, `Analyzer`, `CEIL` | imports only the stack and `tapers` (`tests/test_audio_boundary.py`); the legacy six-band layout matches the frozen oracle to the bit (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`) |
-| `geometry.py` | the shapes as vertex, edge and face arrays; how each fills the fourth dimension; the 4D → 2D transform; the volume measures | `SHAPES`, `Shape` (`cells`, `w`), `W_KINDS`, `geom`, `faces`, `project_h`, `project3`, `PLANES`, `view_angles`, `w_masked`, `W_REMAP`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it drew unless its builder is given a lift (`tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`); only a masked shape's angles are changed, and never in place (`::test_no_shape_but_a_masked_one_has_its_angles_touched`); every lifted or masked shape keeps `VOLUME_FLOOR` through each W plane (`::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`) |
+| `geometry.py` | the shapes as vertex, edge and face arrays; whether each is 4D or 3D; scenes of several; the 4D → 2D transform; the volume measures | `SHAPES`, `Shape` (`cells`, `dims`, `family`, `layers`), `Layer`, `geom`, `faces`, `project_h`, `project3`, `shape_view`, `PLANES`, `view_angles`, `is_3d`, `rot_matrix`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it was recorded drawing (`tests/test_shapes4d.py::test_every_shape_draws_what_it_was_recorded_drawing`); a 3D shape sits at w = 0 and only its W angles are dropped, never in place (`::test_a_3d_shape_sits_at_w_0`, `::test_the_w_planes_leave_a_3d_shape_alone`); every 4D shape keeps `VOLUME_FLOOR` through each W plane (`::test_every_4d_shape_clears_the_volume_floor`) |
 | `patterns.py` | the face patterns' eight inputs and seventeen modes as data: names, meanings, what each input does in each mode | `INPUTS`, `MODES`, `NAMES`, `SCALE` … `SPREAD`, `effect`, `ignores`, `label`, `tip` | imports nothing (by convention); `params`, `render` and `ui_patterns` read it; `shaders/patterns.glsl`'s accessors and header are held to it, and modes are appended, never inserted (`tests/test_patterns.py`) |
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
 | `render.py` | the frame (§2): face picture, scene, cover, look-back, pipelines, outputs, ghost hands, dim; the patterns' clock and the FACES page's swatches | `Renderer` (`draw`, `draw_outputs`, `dim_pass`, `face_fx`, `stats`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `FaceTarget`, `inst_positions`, `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`) |
@@ -722,32 +728,31 @@ planes), MID → XY, UPR → XZ, AIR → YZ — with each band's `dir` as the
 sign. Most factory presets carry those six rows (the hands and LFO
 presets do not), and a preset may re-aim them.
 
-**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 26
-shapes, append-only. Two fields say what each one is:
+**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 99
+shapes, append-only. Three fields say what each one is:
 
-- `Shape.cells` is the polytope's cell count, and **0 marks a surface,
-  not a polytope** — not "3D". The Clifford torus (shape 18) has cells 0
-  and is a native 4D surface; shapes 19–26 are surfaces built from trig
-  equations, each with explicit face cycles (`"F"`).
-- `Shape.w` says how the shape fills the fourth dimension
-  (`geometry.W_KINDS`): `native` — built with real w-extent, shapes 1–18;
-  `lift` — a 3D surface given w-extent by a lift of its own parameters,
-  the Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip and Klein
-  bottle; `mask` — a 3D shape kept at w = 0, the Heart alone; `flat` —
-  a 3D shape at w = 0 with nothing done, which a quarter turn of any W
-  plane flattens. No shape ships `flat`; the tests use it to show the
-  collapse.
+- `Shape.cells` is the polytope's cell count, and **0 marks a surface
+  or a 3D shape, not a polytope**. The Clifford torus (shape 18) has
+  cells 0 and is a native 4D surface; shapes 19–26 are surfaces built
+  from trig equations, each with explicit face cycles (`"F"`).
+- `Shape.dims` says, honestly, whether it is 4D or 3D (plan 28): 4 —
+  real w-extent, shapes 1–18, the 4-polytopes from plan 22's
+  shortlist, the Hopf fibration and the Celestial tesseract scene; 3 — a 3D shape at w = 0, shapes 19–26 and the rest
+  of the catalog. Nothing is invented for a w a shape does not have.
+- `Shape.family` is every shape's kind (regular polytopes, Platonic
+  solids, scenes …); `geometry.MENU` orders the families into the Shape
+  menu's sections, 4D, 3D and Scenes. `Shape.layers` makes a shape a
+  scene of several.
 
-So 25 of the 26 carry real w-extent, and the Heart does not. A masked
-shape's W planes are folded at draw time (`view_angles`, `W_REMAP`):
-XW's angle is added onto XZ, YW's onto YZ, ZW's onto XY, and the W
-planes are drawn at 0. With the map above, SUB rolls the Heart in the
-screen plane, BASS spins it about y and MIDB tumbles it about x. Its
-depth cue reads its depth toward the 3D camera (`view_depth`: z after
-the camera's yaw and pitch), since its w is 0 at every angle.
-`render.py` imports `view_angles`, `w_masked` and `view_depth` and
-nothing else new from `geometry`; the fold never reaches a param (§2,
-Drawing).
+A 3D shape is turned by XY, XZ and YZ only: `view_angles` drops its W
+angles, so whatever drives the W planes (SUB, BASS and MIDB, with the
+map above) does nothing to it. Its depth cue reads its depth toward the
+3D camera (`view_depth`: z after the camera's yaw and pitch), since its
+w is 0. `render.py` imports `shape_view` (which reads `view_angles`,
+`is_3d` and `view_depth`) and nothing else new from `geometry`; nothing
+it draws reaches a param (§2, Drawing). Plan 22's lifts (seven shapes
+given an invented w) and its mask (the Heart's W planes folded onto 3D
+planes) are gone.
 
 **The desk (APC40).** Two layers in one table: the **preset** layer (the
 loaded preset's `desk`) and the **global** layer (the session's), plus

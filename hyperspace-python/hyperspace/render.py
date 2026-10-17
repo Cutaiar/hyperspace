@@ -62,7 +62,7 @@ import moderngl
 import numpy as np
 
 from .fx import FACES, SCREEN, FxChain, FxState
-from .geometry import face_triangles, face_uvs, geom, project_h, view_angles, view_depth, w_masked
+from .geometry import face_triangles, face_uvs, geom, shape_view
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .lookback import DreamState, Lookback
@@ -84,20 +84,24 @@ LINE_VS = """
 #version 330
 in vec2 in_pos;      // pixel coordinates, logical space
 in float in_alpha;
+in vec3 in_rgb;      // white, but for a scene's tinted layer (plan 28)
 uniform vec2 u_size; // logical viewport size
 out float v_alpha;
+out vec3 v_rgb;
 void main() {
     gl_Position = vec4(2.0 * in_pos.x / u_size.x - 1.0,
                        1.0 - 2.0 * in_pos.y / u_size.y, 0.0, 1.0);
     v_alpha = in_alpha;
+    v_rgb = in_rgb;
 }
 """
 
 LINE_FS = """
 #version 330
 in float v_alpha;
+in vec3 v_rgb;
 out vec4 f_color;
-void main() { f_color = vec4(1.0, 1.0, 1.0, v_alpha); }
+void main() { f_color = vec4(v_rgb, v_alpha); }
 """
 
 # the master dim: one full-screen triangle whose only output is its alpha,
@@ -313,26 +317,29 @@ POINT_VS = """
 in vec2 in_pos;
 in float in_size;    // diameter in framebuffer pixels
 in float in_alpha;
+in vec3 in_rgb;      // RED, but for a scene's tinted layer (plan 28)
 uniform vec2 u_size;
 out float v_alpha;
+out vec3 v_rgb;
 void main() {
     gl_Position = vec4(2.0 * in_pos.x / u_size.x - 1.0,
                        1.0 - 2.0 * in_pos.y / u_size.y, 0.0, 1.0);
     gl_PointSize = in_size;
     v_alpha = in_alpha;
+    v_rgb = in_rgb;
 }
 """
 
 POINT_FS = """
 #version 330
 in float v_alpha;
+in vec3 v_rgb;
 out vec4 f_color;
-uniform vec3 u_color;
 void main() {
     vec2 d = gl_PointCoord * 2.0 - 1.0;
     float a = v_alpha * (1.0 - smoothstep(0.8, 1.0, length(d)));
     if (a <= 0.0) discard;
-    f_color = vec4(u_color, a);
+    f_color = vec4(v_rgb, a);
 }
 """
 
@@ -562,8 +569,8 @@ class Renderer:
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass
         self._blank = ctx.texture((1, 1), 4)
-        self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
-        self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
+        self._lbuf = ctx.buffer(reserve=1200 * 6 * 6 * 4, dynamic=True)
+        self._pbuf = ctx.buffer(reserve=600 * 7 * 4, dynamic=True)
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
         self._build_wire_programs()
         # bitmap layer over the faces, loaded from disk on demand
@@ -605,16 +612,16 @@ class Renderer:
             made.append(lines)
             points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
             made.append(points)
-            points["u_color"].value = RED
-            lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f", "in_pos", "in_alpha")])
+            lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f 3f", "in_pos", "in_alpha",
+                                             "in_rgb")])
             made.append(lvao)
             # the coverage pass reads the face buffer's position and divisor only
             cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
             made.append(cover_prog)
             cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
             made.append(cvao)
-            pvao = ctx.vertex_array(points,
-                                    [(self._pbuf, "2f 1f 1f", "in_pos", "in_size", "in_alpha")])
+            pvao = ctx.vertex_array(points, [(self._pbuf, "2f 1f 1f 3f", "in_pos", "in_size",
+                                              "in_alpha", "in_rgb")])
         except Exception:
             for res in made:
                 res.release()
@@ -1429,17 +1436,16 @@ class Renderer:
         faces' effects are `draw`'s (`_draw_frame` hands the picture over
         for the one scene pass it wraps)."""
         g = geom(s.shape)
-        # a shape whose W planes are masked is drawn at its own angles
-        # (geometry.view_angles); every other shape at the view's
-        ang = view_angles(s.shape, s.ang)
-        px, py, pd, wc = project_h(g["V"], ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h)
-        if w_masked(s.shape):
-            # its w is 0 at every angle, so the depth cue (pd: fade, width,
-            # draw order) would sit flat at its dimmest; it cues on its
-            # depth toward the 3D camera (yaw and pitch included, so a
-            # camera turned round never puts the far side on top), as a 4D
-            # shape cues on its depth toward the 4D eye
-            pd = view_depth(g["V"], ang, s.yaw, s.pitch, d4=s.depth4)
+        # a 3D shape is drawn with no W turn and cues on its depth toward
+        # the 3D camera; a 4D shape is turned to its body first, and with
+        # the 3D switch holding it (ViewState.held, set by integrate) by
+        # its 3D angles alone; a scene, each layer at its own
+        # (geometry.shape_view)
+        px, py, pd, wc = shape_view(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h,
+                                    flat=getattr(s, "held", False),
+                                    body=getattr(s, "body", None))
+        # a scene's per-layer weights (geometry._scene_style), else None
+        st = g.get("style")
 
         # camera: zoom about the view centre, then pan (both in logical px)
         zoom = max(s.zoom, 1e-3)
@@ -1489,6 +1495,15 @@ class Renderer:
         # scaled by the camera so a zoomed-out field thins out naturally
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
         width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * zoom
+        if st is not None:
+            # a scene: each edge's density, weight and width are its own
+            # layer's, not the whole compound's
+            em = st["e_m"][order]
+            edens = np.clip(340 / np.maximum(em, 1), 0.42, 1)
+            alpha = np.clip((0.10 + 0.90 * t * t) * s.bright * edens, 0.015, 1)
+            alpha = alpha * st["e_alpha"][order]
+            width = np.where(em > 500, 0.35 + 0.85 * t, 0.5 + 1.5 * t) * wscale * zoom
+            width = width * st["e_width"][order]
         draw_w = np.maximum(width, 1.0)
         alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
 
@@ -1530,6 +1545,8 @@ class Renderer:
                 fdens = min(1.0, 24.0 / max(nfaces, 1))
                 fa = (0.010 + 0.055 * tt * tt) * s.bright * (0.35 + 0.65 * fdens)
                 to = tris[torder]
+                if st is not None:
+                    fa = fa * st["f_alpha"][to[:, 3]]
                 uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
                 fverts = np.empty((len(tris) * 3, 7), dtype=np.float32)
                 for corner in range(3):
@@ -1569,7 +1586,7 @@ class Renderer:
             nx, ny = -dy / ln * draw_w * 0.5, dx / ln * draw_w * 0.5
 
             m = g["m"]
-            verts = np.empty((m * 6, 3), dtype=np.float32)
+            verts = np.empty((m * 6, 6), dtype=np.float32)
             ax, ay = x0 + nx, y0 + ny
             bx, by = x0 - nx, y0 - ny
             cx_, cy_ = x1 + nx, y1 + ny
@@ -1581,24 +1598,34 @@ class Renderer:
             verts[3::6, 0], verts[3::6, 1] = bx, by
             verts[4::6, 0], verts[4::6, 1] = ex, ey
             verts[5::6, 0], verts[5::6, 1] = cx_, cy_
+            rgb = st["e_rgb"][order] if st is not None else (1.0, 1.0, 1.0)
             for k in range(6):
                 verts[k::6, 2] = alpha
+                verts[k::6, 3:6] = rgb
             verts = self._tile(verts, offs)
             self._lbuf.orphan(verts.nbytes)
             self._lbuf.write(verts.tobytes())
             self._lvao.render(moderngl.TRIANGLES, vertices=len(verts))
 
-        if s.points:
+        if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
             tp = (pd - near) / span
             order_p = np.argsort(pd, kind="stable")
             r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * zoom
             PB = s.bright * clamp(dens * 1.5, 0.55, 1)
             pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1)
-            pverts = np.empty((g["n"], 4), dtype=np.float32)
+            prgb = RED
+            if st is not None:
+                # a layer's weight scales its points' alpha and size; a
+                # tinted layer's points take its tint, the rest stay red
+                pa = pa * st["p_alpha"]
+                r = r * np.sqrt(st["p_alpha"])
+                prgb = np.where(st["p_tinted"][:, None], st["p_rgb"], RED)[order_p]
+            pverts = np.empty((g["n"], 7), dtype=np.float32)
             pverts[:, 0] = px[order_p]
             pverts[:, 1] = py[order_p]
             pverts[:, 2] = 2.0 * r[order_p]  # diameter
             pverts[:, 3] = pa[order_p]
+            pverts[:, 4:7] = prgb
             pverts = self._tile(pverts, offs)
             self._pbuf.orphan(pverts.nbytes)
             self._pbuf.write(pverts.tobytes())

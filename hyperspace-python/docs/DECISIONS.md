@@ -114,15 +114,13 @@ replaces a row, rewrite that row instead of adding a new one.
 
 | Decision | Where | Who |
 |---|---|---|
-| **Per shape, a 3D surface either gets real 4D extent or stays 3D with its W planes masked**, never all down one path; no shape is removed for reading badly. | `geometry.SHAPES` | owner |
-| The Heart is masked. The Star, Torus, Trefoil knot and Starfruit are lifted, and every lifted shape's alias reads "4D lift · …". | `geometry.SHAPES` | row 89 |
-| `Shape.w` is one of four words — `native`, `flat`, `lift`, `mask` — not a 3D/4D flag (a cell count of 0 marks a surface, not a 3D shape). A masked shape's W planes are folded where it is drawn — XW onto XZ, YW onto YZ, ZW onto XY — never in the integrator or a param. | `geometry.Shape.w`, `W_KINDS`, `view_angles`, `W_REMAP`, `Renderer.draw_scene` | row 90 |
-| A masked shape's depth cue (line fade, width, draw order) reads its depth toward the 3D camera (z after the camera's yaw and pitch), as a 4D shape's reads w. | `Renderer.draw_scene`, `geometry.view_depth` | row 91 |
-| **Every lifted or masked shape keeps `VOLUME_FLOOR` (0.15) through a full turn of each W plane**, from rest and from a generic pose, and turns at most 0.15 of its face area edge-on. The floor is half the 4D shapes' worst (the cubic pyramid, 0.30). | `geometry.VOLUME_FLOOR`, `tests/test_shapes4d.py` | row 92 |
-| A lift is a function of the builder's own parameters, with no linear part of x, y or z, odd under each single-axis mirror, z-dependent on an extruded outline, and agreeing wherever the surface welds. A shape's digest hashes floats rounded to 1e-9. | `geometry.param_surface`, `spherical_surface`, `ring_prism`, `tube` | row 93 |
-| The Möbius strip is lifted, and 0.55 wide (was 0.45). | `geometry._build_mobius` | row 94 |
-| The Rose is lifted, and 0.16 deep (was 0.12). | `geometry._build_rose` | row 95 |
-| **The Klein bottle is shape 26**: the classic bottle immersion, lifted by w = sin 2u + ½·sin v·cos 2u so it never crosses itself, `Shape.w` "lift", 37 × 16 samples, centred. | `geometry._build_klein`, `_klein_xyz` | row 96 |
+| **A shape is honestly 4D or 3D** (`Shape.dims`). A 4D shape has real w-extent and every plane turns it. A 3D shape sits at w = 0 — nothing invented for a w it does not have — and the W planes, with whatever drives them, do nothing to it. This overturns plan 22's lifts (rows 89, 93–96) and its fold of the Heart's W planes onto 3D planes (row 90). | `geometry.Shape.dims`, `view_angles`, `is_3d` | owner, 2026-10-17 |
+| The Shape menu is grouped by kind: sections 4D, 3D and Scenes, each in families (regular polytopes, the 5-cell / tesseract / 24-cell / 600-cell families, star polychora, Platonic solids, star polyhedra …; `geometry.MENU`); the index stays the identity. The VIEW header says 3D or 4D; the W plane keys dim while they can do nothing. | `ui.Panel._shape_combo`, `_page_view` | owner, 2026-10-17 |
+| **The 3D switch holds a 4D shape's pose and turns it rigidly in 3D**, with no jump going on or off: the pose is folded into `ViewState.body` on the frame it changes. | `view.three_d`, `ViewState.integrate`, `geometry.shape_view` | owner, 2026-10-17 |
+| A 3D shape's depth cue (line fade, width, draw order) reads its depth toward the 3D camera (z after the camera's yaw and pitch), as a 4D shape's reads w. | `geometry.shape_view`, `geometry.view_depth` | row 91 |
+| **Every 4D shape keeps `VOLUME_FLOOR` (0.15) through a full turn of each W plane**, from rest and from a generic pose. The floor is half the polytopes' worst (the cubic pyramid, 0.30). A shape's digest hashes floats rounded to 1e-9. | `geometry.VOLUME_FLOOR`, `tests/test_shapes4d.py` | row 92 |
+| The Möbius strip is 0.55 wide (was 0.45) and the Rose 0.16 deep (was 0.12), the sizes plan 22 gave them. | `geometry._build_mobius`, `_build_rose` | rows 94, 95 |
+| **The Klein bottle is shape 26**: the classic bottle immersion, crossing itself as any Klein bottle in 3D does, 37 × 16 samples, centred. | `geometry._build_klein`, `_klein_xyz` | owner, 2026-10-17 |
 | A face of more than four corners that is not planar (a lifted cap) is framed by its least-squares plane; every planar face keeps its basis. | `geometry._face_xy` | row 97 |
 
 ## Render and outputs
@@ -282,4 +280,4 @@ The D-numbers are cited from code comments.
 | A source-first hand learn (click an axis, then a param). | row 64 |
 | A thumbnail of each output in the control window. | row 85 |
 | DJ Link, MIDI clock in and drift correction. | owner |
-| New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md); none is built until the owner picks. | owner |
+| New 4-polytope families in plan 22: ranked in [`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md). Built in plan 28 at the owner's word (2026-10-17): first its recommendation, then every candidate it drew or gave a recipe for, and its cheap extras, so the owner can judge each by eye. The 120/600 forms past the rectified 600-cell, the other Catalan duals and the duoantiprisms are not built. | owner |

@@ -6,15 +6,12 @@ sweep the plane through a full turn and measure the projected 3D cloud's
 volume ratio — smallest singular value over largest
 (geometry.volume_ratio, the same function the tests gate on) — and the
 share of face area the projection turns edge-on
-(geometry.edge_on_share, the tests' second gate, at most 0.15). A shape in
-the w = 0 hyperplane falls to ~0 at 90° and 270°: the turn has carried a
-whole axis into w and the 4D→3D divide drops it. Two passes per plane:
-the other five planes at 0 ("axis"), and at a fixed generic pose
-("generic").
+(geometry.edge_on_share). Two passes per plane: the other five planes at 0
+("axis"), and at a fixed generic pose ("generic").
 
 The sweep goes through geometry.view_angles, as the renderer does, so a
-shape whose W planes are masked (Shape.w == "mask") turns in the 3D
-plane each W plane is remapped onto instead.
+3D shape (Shape.dims == 3, plan 28) does not move at all: the W planes
+leave it alone. The default sweeps the 4D shapes.
 
 Writes, under docs/plans/assets/22-flat-shapes/ (plan 22, Stream A):
 
@@ -104,10 +101,9 @@ def sheet(ctx, renderer, i: int, frames: int) -> Image.Image:
     d = ImageDraw.Draw(img)
     # PIL's built-in font is ASCII: Möbius is drawn as Mobius
     name = unicodedata.normalize("NFKD", shape.name).encode("ascii", "ignore").decode()
-    title = f"{i:02d} {name}  -  w: {shape.w}"
-    if shape.w == "mask":
-        title += "  (W planes remapped: " + ", ".join(
-            f"{G.PLANE_NAMES[p]}->{G.PLANE_NAMES[q]}" for p, q in G.W_REMAP.items()) + ")"
+    title = f"{i:02d} {name}  -  {shape.dims}D"
+    if shape.dims == 3:
+        title += "  (no w: the W planes leave it alone)"
     d.text((4, 3), title, fill="white")
     V = G.geom(i)["V"]
     for row, plane in enumerate(W_PLANES):
@@ -136,8 +132,9 @@ def sheet(ctx, renderer, i: int, frames: int) -> Image.Image:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--prefix", default="before", help="file name prefix: before / after")
-    ap.add_argument("--shapes", default=f"0-{len(G.SHAPES) - 1}",
-                    help="indices, e.g. 18-24 or 17,21")
+    four = ",".join(str(i) for i, s in enumerate(G.SHAPES) if s.dims == 4)
+    ap.add_argument("--shapes", default=four,
+                    help="indices, e.g. 18-24 or 17,21 (default: every 4D shape)")
     ap.add_argument("--steps", type=int, default=72, help="sweep steps per turn (72 = 5°)")
     ap.add_argument("--frames", type=int, default=12, help="tiles per row in the sheets")
     ap.add_argument("--no-png", action="store_true", help="numbers only, no GL")
@@ -148,11 +145,11 @@ def main() -> None:
     rows = []
     for i in shapes:
         m = measure(i, a.steps)
-        rows.append({"index": i, "name": G.SHAPES[i].name, "w": G.SHAPES[i].w, **m})
+        rows.append({"index": i, "name": G.SHAPES[i].name, "dims": G.SHAPES[i].dims, **m})
         worst = min(m[ps][pl]["min"] for ps in m for pl in m[ps])
         line = "  ".join(f"{pl} {m['axis'][pl]['min']:.3f}@{m['axis'][pl]['at']:3.0f}°"
                          for pl in W_PLANES)
-        print(f"{i:2d} {G.SHAPES[i].name:22s} {G.SHAPES[i].w:6s} {line}  worst {worst:.3f}")
+        print(f"{i:2d} {G.SHAPES[i].name:22s} {G.SHAPES[i].dims}D {line}  worst {worst:.3f}")
 
     meta = {"steps": a.steps, "d4": ViewState().depth4, "floor": G.VOLUME_FLOOR,
             "generic_pose": list(G.GENERIC_POSE),
@@ -165,13 +162,13 @@ def main() -> None:
         json.dumps({**meta, "shapes": rows}, indent=1, ensure_ascii=False) + "\n")
     with open(OUT / f"{a.prefix}-ratios.csv", "w", newline="") as f:
         wr = csv.writer(f)
-        wr.writerow(["index", "name", "w", "pass", "plane", "min_ratio", "at_deg",
+        wr.writerow(["index", "name", "dims", "pass", "plane", "min_ratio", "at_deg",
                      "max_edge_on_share", "edge_on_at_deg"])
         for r in rows:
             for ps in ("axis", "generic"):
                 for pl in W_PLANES:
                     m = r[ps][pl]
-                    wr.writerow([r["index"], r["name"], r["w"], ps, pl, f"{m['min']:.4f}",
+                    wr.writerow([r["index"], r["name"], r["dims"], ps, pl, f"{m['min']:.4f}",
                                  f"{m['at']:.0f}", f"{m['edge_on']:.3f}",
                                  f"{m['edge_on_at']:.0f}"])
     print("wrote", (OUT / f"{a.prefix}-ratios.json").relative_to(ROOT))

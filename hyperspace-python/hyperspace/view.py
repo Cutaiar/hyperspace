@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .geometry import RATE
+import numpy as np
+
+from .geometry import RATE, rot_matrix
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -34,6 +36,9 @@ class ViewState:
     yaw: float = 0.0
     pitch: float = 0.0
     faces: bool = False          # translucent face fills under the wireframe
+    three_d: bool = False        # plan 28: hold a 4D shape's pose, turn it on in 3D (integrate)
+    held: bool = False           # whether body is the held pose (three_d, as integrate last saw it)
+    body: object = None          # a 4D shape's turn before its angles (4×4), None for none
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
@@ -58,9 +63,23 @@ class ViewState:
     pattern_mod: list[float] = field(default_factory=lambda: [1.0] * N_MOD)
 
     def integrate(self, dt: float) -> None:
-        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p]."""
+        """The frame() angle update: ang[p] += dt·speed·RATE[p]·rate[p].
+
+        The 3D switch (plan 28), on the frame it changes: a 4D shape is
+        drawn as R(ang)·body while it is off and as T(ang)·body while it is
+        on, T the 3D planes alone (geometry.view_angles). Going on, body
+        takes the pose R(ang)·body had, less the 3D turn T(ang) about to be
+        put back on it; going off, the reverse. The pose is the same either
+        side of the switch, so nothing jumps; while it is on, w is held and
+        the 3D planes turn the shape rigidly; the W planes stop."""
+        if self.three_d != self.held:
+            R = rot_matrix(self.ang)
+            T = rot_matrix([*self.ang[:3], 0.0, 0.0, 0.0])
+            B = np.eye(4) if self.body is None else self.body
+            self.body = (T.T @ R @ B) if self.three_d else (R.T @ T @ B)
+            self.held = self.three_d
         if not self.playing:
             return
-        for p in range(6):
+        for p in range(6 if not self.three_d else 3):
             if self.planes[p]:
                 self.ang[p] += dt * self.speed * RATE[p] * self.rate[p]
