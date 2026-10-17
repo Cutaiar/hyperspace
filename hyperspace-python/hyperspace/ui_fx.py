@@ -42,12 +42,16 @@ strip stays, and does the same one effect at a time.
 Plan 30 D2: the page edits the **default chain**. An effect the loaded
 preset's graph places on an edge (`"after": "hands"`, `"into":
 "output.2"`, plan 30 D1) is not in the chain's run: its chip is drawn
-under the grid, one to a row, with where it sits beside it ("after
-hands", `graph.placed_chips`), and it is neither dragged nor a place to
-drop — moving it is the preset's JSON, or plan 28's editor. Its LED and
-its strip are any effect's; the strip's title hover says the place in
-place of the order. The status line counts the placed effects that run
-apart from the chain ("Acid → Palette · 1 placed").
+in a grid of its own under the chain's, three to a row like it (so the
+page is never taller than one grid of every effect plus a row), its name
+followed by where it sits ("Warp · after hands", `graph.placed_chips`;
+cut to the chip, whole in the hover), and it is neither dragged nor a
+place to drop — moving it is the preset's JSON, or plan 28's editor. A
+placed effect aimed at the faces says "on the faces": that is where it
+runs. Its LED and its strip are any effect's; the strip's title hover
+says the place in place of the order. The status line counts the placed
+effects that run apart from the chain ("Acid → Palette · 1 placed"):
+switched on, aimed at the frame, and not dormant in the built graph.
 
 Which strip is open is a name (`FxState.sel_name`), not a place in the
 stack: moving an effect's order or loading a preset never changes it.
@@ -108,6 +112,7 @@ PLACED = "placed"   # the status line's count of placed effects that run (plan 3
 NO_CHAIN = "nothing in the chain"   # …its first part when only placed effects run
 PLACED_TIP = ("placed by the preset's graph, not in the chain: moved in the preset's "
               "JSON, not by a drag")
+ON_FACES = "on the faces"   # a placed chip's words while its effect is aimed at the faces
 
 
 def page(panel, dt: float) -> None:
@@ -119,6 +124,7 @@ def page(panel, dt: float) -> None:
     aimed = fx is not None and any(_faces(fx, n) for n in fx.specs)
     # plan 30 D2: the effects the loaded preset places on an edge, out of the chain
     placed = _placed(panel, fx) if fx is not None else {}
+    dormant = _dormant(panel)
 
     panel._section("effects", "fx", note=f"shaders/{FX_DIR.name}/*.glsl · live")
     panel._check("fx.on")
@@ -127,8 +133,8 @@ def page(panel, dt: float) -> None:
     if fx is None:
         status = "nothing on" if r["fx.on"].base else "bypassed"
     else:
-        status = (f"frame  {_status(fx, FRAME, placed)}" if aimed
-                  else _status(fx, placed=placed))
+        status = (f"frame  {_status(fx, FRAME, placed, dormant)}" if aimed
+                  else _status(fx, placed=placed, dormant=dormant))
     _faint(status)
     if aimed:
         _faces_row(panel, fx)
@@ -170,12 +176,14 @@ def page(panel, dt: float) -> None:
             sel = fx.selected()
     if not _in_flight():
         panel._fx_drag = None
-    # plan 30 D2: then each placed effect, one to a row, and where it sits
-    for name in [n for n in fx.names() if n in placed]:
+    # plan 30 D2: then the placed effects, three to a row like the chain's
+    # grid, each saying where it sits
+    for k, name in enumerate([n for n in fx.names() if n in placed]):
+        if k % CHIPS_PER_ROW:
+            imgui.same_line()
         label = fx.specs[name].label + (" !" if _error(chain, fx, name) else "")
         _chip(panel, fx, name, label, w, name == sel, index=-1, last=False,
-              place=placed[name])
-        _place_words(panel, placed[name], name)
+              place=placed[name], dormant=dormant.get(name))
 
     if sel is None:
         return
@@ -317,7 +325,7 @@ def _faint(text: str) -> None:
     imgui.pop_style_color()
 
 
-def _status(fx, target: int | None = None, placed=()) -> str:
+def _status(fx, target: int | None = None, placed=(), dormant=()) -> str:
     """What runs, as a status line says it: the chain's labels in order —
     all of it, or one target's — or why there is none. It reads what runs
     (the effective `fx.on`), as `why_idle` does.
@@ -325,9 +333,13 @@ def _status(fx, target: int | None = None, placed=()) -> str:
     Plan 30 D2: `placed`, the effects the preset's graph puts on an edge,
     run on the frame but not in its chain: they are left out of the
     labels and counted after them ("Acid → Palette · 1 placed"; "nothing
-    in the chain · 1 placed"). An effect placed and aimed at the faces
-    runs in the faces' chain (`render.face_fx`), so the faces' row lists
-    it as before. With none placed and running the line is as it was."""
+    in the chain · 1 placed"). The count is of the placed effects that
+    run: switched on (in `chain`), aimed at the frame, and not `dormant`
+    in the built graph (`Graph.dormant`: its node is not there this
+    frame). An effect placed and aimed at the faces runs in the faces'
+    chain (`render.face_fx`), so the faces' row lists it as before and
+    the frame's count leaves it out. With none placed the line is as it
+    was."""
     if not fx.on:
         return "bypassed"
     running = fx.chain(target)
@@ -335,7 +347,8 @@ def _status(fx, target: int | None = None, placed=()) -> str:
         placed = ()
     out = [n for n in running if n not in placed]
     words = " → ".join(fx.specs[n].label for n in out) if out else "nothing on"
-    k = len(running) - len(out)
+    k = len([n for n in running if n in placed and n not in dormant
+             and (target is not None or not _faces(fx, n))])
     if k:
         return f"{words if out else NO_CHAIN} · {k} {PLACED}"
     return words
@@ -349,22 +362,22 @@ def _placed(panel, fx) -> dict[str, str]:
     now = getattr(panel, "graph_now", None)
     try:
         spec = now()[1] if now is not None else None
-    except Exception:  # noqa: BLE001 — a stand-in renderer or library: the default graph
+    except (AttributeError, TypeError):     # a stand-in renderer or library: no graph
         spec = None
     return {n: w for n, w in placed_chips(spec).items() if n in fx.specs}
 
 
-def _place_words(panel, words: str, name: str) -> None:
-    """Beside a placed chip, where it sits, on the chip's baseline; the
-    hover says why it is placed and, from the built graph, why it runs
-    nowhere this frame (`Graph.dormant`)."""
-    imgui.same_line()
-    _chip_baseline()
-    imgui.text_colored(ui.FAINT, words)
-    if imgui.is_item_hovered():
-        graph = getattr(getattr(panel, "renderer", None), "_graph", None)
-        why = (getattr(graph, "dormant", None) or {}).get(name)
-        imgui.set_tooltip(PLACED_TIP + (f"\ndormant: {why}" if why else ""))
+def _dormant(panel) -> dict[str, str]:
+    """The built graph's dormant placed effects → why (`Graph.dormant`,
+    plan 30 D1); none with no renderer or no graph built yet."""
+    graph = getattr(getattr(panel, "renderer", None), "_graph", None)
+    return dict(getattr(graph, "dormant", None) or {})
+
+
+def placed_label(label: str, place: str, width: float) -> str:
+    """A placed chip's text: the effect's label and where it sits, cut to
+    `width` px (the whole of it is the chip's hover)."""
+    return ui.fit_text(f"{label} · {place}", width)
 
 
 def _chip_baseline() -> None:
@@ -567,7 +580,8 @@ def _drop_target(name: str, lo: imgui.ImVec2, hi: imgui.ImVec2,
 
 
 def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
-          index: int, last: bool, place: str | None = None) -> tuple[str | None] | None:
+          index: int, last: bool, place: str | None = None,
+          dormant: str | None = None) -> tuple[str | None] | None:
     """One effect's chip, `width` px in all: the LED, then the name.
 
     Two adjacent items rather than one over another (which needs imgui's
@@ -586,7 +600,10 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
 
     `place` (plan 30 D2): the chip of an effect the preset's graph places
     on an edge — not in the chain, so it is neither a drag source nor a
-    drop target, and always returns None."""
+    drop target, and always returns None. Its name is followed by `place`
+    (or "on the faces", where an effect aimed at them runs), cut to the
+    chip; the hover has it whole, why it does not drag, and `dormant`
+    (why it runs nowhere this frame) when the built graph says so."""
     p = panel.reg[f"fx.{name}.on"]
     on = bool(fx.values[name]["on"])
     faces = _faces(fx, name)
@@ -622,8 +639,16 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
 
     # the name: opens the strip, and carries the modulation dot
     imgui.same_line(0, LED_GAP)
+    name_w = max(1.0, width - h - LED_GAP)
+    hover = None
+    if place is not None:
+        said = ON_FACES if faces else place
+        label = placed_label(label, said, name_w - 2 * ui.CHIP_PAD.x)
+        hover = (f"placed {place}, aimed at the faces: it runs in the faces' chain"
+                 if faces else f"placed {place}")
+        hover += f"\n{PLACED_TIP}" + (f"\ndormant: {dormant}" if dormant else "")
     if ui.lit_chip(f"{label}##chip.{p.id}", on, ui.TEXT if open_ else None,
-                   imgui.ImVec2(max(1.0, width - h - LED_GAP), 0)):
+                   imgui.ImVec2(name_w, 0)):
         fx.select(name)
     if place is None and imgui.begin_drag_drop_source():
         imgui.set_drag_drop_payload_py_id(DRAG, index)
@@ -639,7 +664,11 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
         fx.select(name)
     if place is None:
         drop = _drop_target(name, r0, edge, end=last) or drop
-    panel._tip(p, (lambda: f"{p.tip}\n{FACES_TIP}" if p.tip else FACES_TIP) if faces else None)
+    if hover is not None:
+        panel._tip(p, lambda: f"{hover}\n{p.tip}" if p.tip else hover)
+    else:
+        panel._tip(p, (lambda: f"{p.tip}\n{FACES_TIP}" if p.tip else FACES_TIP)
+                   if faces else None)
     panel._ctx(p, key=".chip")
     panel._learn_frame(p)
     panel._mod_dot(p)
