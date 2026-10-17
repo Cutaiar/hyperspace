@@ -110,6 +110,7 @@ from __future__ import annotations
 import copy
 import itertools
 import json
+import math
 import os
 import re
 import shutil
@@ -196,6 +197,34 @@ UNTITLED = "untitled"
 BANK_FULL = "the bank is full: it is in the preset list"
 # what `Project.home` says when the show names no "starts on" (plan 15 WP2)
 HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PRESETS page"
+# plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
+# a show's own key for the rig's nodes (devices, the analyzer, the LFOs,
+# the outputs), a preset's (preset.LAYOUT_KEY) for the look's. No key: every
+# node is laid out automatically, and nothing is dirty
+LAYOUT = "layout"
+
+
+def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
+    """A file's ``layout`` value as {node id: [x, y]} (whole canvas units),
+    and how many entries were not a name and two finite numbers (dropped).
+    None is an empty map; a value that is no map, an empty map and one drop."""
+    if value is None:
+        return {}, 0
+    if not isinstance(value, dict):
+        return {}, 1
+    out: dict[str, list[float]] = {}
+    bad = 0
+    for k, xy in value.items():
+        try:
+            x, y = (float(v) for v in xy)
+        except (TypeError, ValueError):
+            bad += 1
+            continue
+        if not (isinstance(k, str) and k and math.isfinite(x) and math.isfinite(y)):
+            bad += 1
+            continue
+        out[k] = [round(x), round(y)]
+    return out, bad
 
 # the preset a group resets to; any other group uses one named "default"
 # if it has one, else the values its objects were built with
@@ -652,6 +681,10 @@ class Project:
         self.active = -1          # the slot last loaded, -1 until one is
         self.bank_error = ""
         self._saved: tuple = ([None] * SLOTS, None)   # bank and startup as on disk
+        # plan 28 N2: the GRAPH page's positions of the rig's nodes, and
+        # those as on disk (`is_dirty`)
+        self.layout: dict[str, list[float]] = {}
+        self._saved_layout: dict[str, list[float]] = {}
 
     # ---- documents ----
 
@@ -682,6 +715,8 @@ class Project:
         self.startup = str(doc["startup"]) if doc.get("startup") else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
+        self.layout, _ = read_layout(doc.get(LAYOUT))
+        self._saved_layout = copy.deepcopy(self.layout)
 
     @property
     def stem(self) -> str:
@@ -698,6 +733,9 @@ class Project:
             doc["note"] = self.note
         doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
                    modules=self.modules)
+        layout = getattr(self, "layout", None)
+        if layout:                       # plan 28 N2; a show with none writes none
+            doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
         return doc
 
     def mark(self) -> tuple:
@@ -1226,6 +1264,7 @@ class Project:
         _write_json(self.path, doc)
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
+        self._saved_layout = copy.deepcopy(getattr(self, "layout", {}))
         self.factory = False                          # your copy now
         return self.path
 
@@ -1239,7 +1278,8 @@ class Project:
         return ((self.path is None and not self.factory)
                 or not undo.alike(self.session, {**self._held_back(),
                                                  **reg.snapshot(part="session")})
-                or (self.bank, self.startup) != self._saved)
+                or (self.bank, self.startup) != self._saved
+                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
 
     def _held_back(self) -> dict:
         """The session's settings of node instances the registry lacks now
