@@ -1490,7 +1490,9 @@ class Panel:
         is the fullest one and must not scroll
         (`test_the_output_page_fits_with_the_picker_open`)."""
         if not self.venues:
-            return                       # no venues: the picker is not a feature yet
+            if self.venue:               # a venue, and no list: say which, at least
+                imgui.text_disabled(f"venue: {self.venue}")
+            return                       # no venues to choose between: no picker
         note = "switching restarts"
         _micro("venue", TEXT)
         imgui.same_line(imgui.get_content_region_avail().x - _micro_width(note) - 4)
@@ -1531,10 +1533,10 @@ class Panel:
                 imgui.text_colored(WARN, f"{err} — the picture is not dimmed")
         self._output_blocks()
         if len(self.reg["output.monitor"].names) > 1:
-            # labelled, and on the label's own line: under the venue picker's
-            # combo an unlabelled one read as a second venue field
+            # labelled, as every other field on the page is: unlabelled it
+            # read as part of whatever was drawn above it
             _micro("screen", TEXT)
-            imgui.same_line()
+            imgui.same_line(LABEL_W)     # the column every labelled row uses
             self._combo("output.monitor")
         if "output.render" in self.reg:     # the render cap, on the toggles' row
             size = getattr(getattr(self.renderer, "scene", None), "size", None)
@@ -1559,10 +1561,6 @@ class Panel:
             imgui.text_disabled(f"overlay {self.output.GATED}")
         if self.output.error:
             imgui.text_colored(WARN, self.output.error)
-        # last on the page: a venue is what the *next* launch reads, not a
-        # control of this one — above the live Screen combo the two read as
-        # one thing (they are not: one restarts, one moves the window now)
-        self._venue_picker()
 
     def _outputs_now(self) -> tuple[bool, bool, float]:
         """(an effect is on, a ghost hand showed last frame, the master dim):
@@ -1957,10 +1955,7 @@ class Panel:
                 imgui.text_colored(WARN, self.reloader.restart)
         if self.library is not None:
             self._library_lines()
-        if self.venue:
-            imgui.text_disabled(f"venue: {self.venue} (venues/{self.venue}.toml over config.toml)")
-        elif self.venues:
-            imgui.text_disabled("venue: none (config.toml alone) — pick one on the OUTPUT page")
+        self._venue_picker()
         if self.config_error:
             imgui.text_colored(WARN, self.config_error)
         for note in self.config_notes:

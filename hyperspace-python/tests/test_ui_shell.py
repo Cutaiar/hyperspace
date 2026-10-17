@@ -2190,15 +2190,18 @@ def test_the_footer_names_a_black_output(rig, monkeypatch):
 def test_the_venue_picker_is_not_there_with_no_venues(rig, monkeypatch):
     drawn = _drawn(monkeypatch)
     rig.panel.venues = []
-    frame(rig.panel, "output")
-    assert not any("venue" in s.lower() for s in drawn)
+    frame(rig.panel, "system")
+    # (a drawn tmp_path can hold this test's own name: match the picker's
+    # own words, not the word "venue" anywhere on the page)
+    assert not any("switching restarts" in s.lower() for s in drawn)
+    assert not any(s.lower().startswith("venue") for s in drawn)
 
 
 def test_the_venue_picker_says_it_restarts_before_it_does(rig, monkeypatch):
     drawn = _drawn(monkeypatch)
     rig.panel.venues = ["cart", "tv"]
     rig.panel.venue = "tv"
-    frame(rig.panel, "output")
+    frame(rig.panel, "system")
     assert any("switching restarts" in s.lower() for s in drawn)   # said before any pick
     assert rig.panel.venue_wanted is None                   # and nothing requested by drawing
 
@@ -2208,7 +2211,7 @@ def test_picking_the_venue_it_is_already_in_asks_for_nothing(rig, monkeypatch):
     rig.panel.venues = ["cart", "tv"]
     rig.panel.venue = "tv"
     rig.panel._venue_pick = "tv"            # the combo landed back on the current one
-    frame(rig.panel, "output")
+    frame(rig.panel, "system")
     assert rig.panel._venue_pick is None and rig.panel.venue_wanted is None
 
 
@@ -2217,16 +2220,15 @@ def test_a_pending_pick_offers_the_restart_in_words(rig, monkeypatch):
     rig.panel.venues = ["cart", "tv"]
     rig.panel.venue = "tv"
     rig.panel._venue_pick = "cart"          # a different venue is waiting on the button
-    frame(rig.panel, "output")
+    frame(rig.panel, "system")
     assert any("switching restarts" in s.lower() for s in drawn)   # still said, above it
     assert rig.panel.venue_wanted is None   # not acted on: the button was never hit
 
 
-def test_the_output_page_fits_with_the_picker_open(rig, monkeypatch):
-    """The OUTPUT page is the fullest one (audit U1); the picker and its
-    confirmation must not be what pushes it into a scroll."""
+def test_the_system_page_fits_with_the_picker_open(rig, monkeypatch):
+    """The picker and its confirmation must not push SYSTEM into a scroll."""
     rig.panel.venues = ["cart", "tv", "hologram"]
     rig.panel.venue = "tv"
-    rig.panel._venue_pick = "cart"          # drawn with the button and the warning out
+    rig.panel._venue_pick = "cart"          # drawn with the button out
     over = _page_scroll(rig, monkeypatch)
-    assert over["output"] == 0
+    assert over["system"] == 0 and over["output"] == 0
