@@ -92,12 +92,26 @@ extra_link_args = {
     "Darwin": ["-Wl,-rpath,@loader_path"],
 }
 
-os_libraries = {"Windows": ["LeapC"], "Linux": ["LeapC"], "Darwin": ["LeapC.5"]}
+
+def staged_library():
+    """hyperspace patch: link against the library setup.py staged, by its own
+    name (upstream hard-coded "LeapC.5" on Darwin), so the compiled module asks
+    for the file that sits beside it in the package."""
+    if platform.system() == "Windows":
+        return ["LeapC"]
+    for name in sorted(os.listdir(_RESOURCE_DIRECTORY)):
+        if platform.system() == "Darwin" and name.startswith("lib") and name.endswith(".dylib"):
+            return [name[len("lib"):-len(".dylib")]]  # libLeapC.6.dylib -> LeapC.6
+        if platform.system() == "Linux" and name.startswith("libLeapC.so"):
+            # libLeapC.so -> LeapC; libLeapC.so.6 -> :libLeapC.so.6 (GNU ld's exact name)
+            return ["LeapC"] if name == "libLeapC.so" else [":" + name]
+    raise Exception("No staged LeapC library in " + _RESOURCE_DIRECTORY + " (run via setup.py)")
+
 
 ffibuilder.set_source(
     "_leapc_cffi",
     cffi_src,
-    libraries=os_libraries[platform.system()],
+    libraries=staged_library(),
     include_dirs=[_RESOURCE_DIRECTORY],
     library_dirs=[_RESOURCE_DIRECTORY],
     extra_link_args=extra_link_args[platform.system()],
