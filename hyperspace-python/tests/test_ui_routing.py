@@ -1378,3 +1378,22 @@ def test_the_dark_controls_are_worked_out_again_only_when_the_table_changes(
     table.profile = "none"
     frame(panel)
     assert len(calls) == 6 and dark() == fresh() == []
+
+
+def test_the_routing_head_names_a_loop_the_patch_keeps_off(rig, tmp_path, monkeypatch):
+    """Plan 28 N0: a loop no delay breaks is named on ROUTING's head, in
+    words, while it stands; the routes it cuts stay listed."""
+    panel = rig.panel
+    router = _with_router(rig, tmp_path)
+    router.table.set_routes([Binding("lfo:0", "lfo.2.rate", "push", 0.5),
+                             Binding("lfo:1", "lfo.1.depth", "push", 0.5)])
+    texts, _ = _drawn(monkeypatch)
+    frame(panel, "routing")
+    note = ("loop: lfo:0 → lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay — "
+            "lfo:1 → lfo.1.depth is off until it has one")
+    assert note in texts
+    assert [b.target for b in router.table.routes()] == ["lfo.2.rate", "lfo.1.depth"]
+    router.table.set_routes([Binding("lfo:0", "lfo.2.rate", "push", 0.5)])
+    texts.clear()
+    frame(panel)
+    assert not any(t.startswith("loop:") for t in texts)

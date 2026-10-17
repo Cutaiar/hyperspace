@@ -233,21 +233,22 @@ def test_a_threshold_lane_is_a_trigger_and_a_gate(rig):
     assert router.feeds["mod"][1] == 1.0 and router.gated(b)
 
 
-def test_a_modifier_reads_another_in_id_order(rig):
-    """Until N0 orders the patch: a modifier reading a lower id reads this
-    frame's output, a higher id's last frame's."""
+def test_a_modifier_reads_another_the_same_frame_whatever_its_id(rig):
+    """In dependency order (plan 28 N0, decision 7; this pinned the id-order
+    lag before): a modifier reading another — a lower id or a higher one —
+    reads its output this frame."""
     reg, router = rig.reg, rig.router
     table = router.table
     table.add_modifier("scale", ["lane:0"], reg)              # mod.1 = band 0
     table.add_modifier("scale", ["mod:1"], reg, mul=0.5)      # mod.2 = mod.1 / 2
-    table.add_modifier("scale", ["mod:4"], reg)               # mod.3 = mod.4, a frame late
+    table.add_modifier("scale", ["mod:4"], reg)               # mod.3 = mod.4, now
     table.add_modifier("scale", ["lane:0"], reg)              # mod.4 = band 0
     router.modulate(analyzer(0.4))
     vec = router.feeds["mod"]
     assert vec[1] == pytest.approx(0.4) and vec[2] == pytest.approx(0.2)
-    assert math.isnan(vec[3])                                 # mod.4 not yet stepped
+    assert vec[3] == pytest.approx(0.4)                       # mod.4 stepped first
     router.modulate(analyzer(0.8))
-    assert router.feeds["mod"][3] == pytest.approx(0.4)
+    assert router.feeds["mod"][3] == pytest.approx(0.8)
 
 
 def test_a_modifiers_param_is_modulatable_by_a_route(rig):

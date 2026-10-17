@@ -382,8 +382,8 @@ ORDER = [
     "audio.step", "audio.publish",                   # new lanes, and their names (R8)
     "hands.poll",                                    # devices.feed: the hands feed hand
     "bridge.receive", "bridge.publish",              #   …the bridge feeds ext, its labels
-    "lfos.step", "lfos.publish",                     # feeds lfo
-    "router.modulate", "reg.apply",                  # the pass, then one commit
+    "router.modulate", "reg.apply",                  # the pass (the LFOs step inside it,
+                                                     # plan 28 N0), then one commit
     "table.sinks", "bridge.send_values",             # devices.send: the sinks' rows (B3)
     "view.integrate",
     "render.draw", "panel.draw",                     # the two windows
@@ -399,6 +399,20 @@ def test_the_frame_runs_in_the_documented_order():
     assert h.renderer.dim == 0.4                     # and its master dim (plan 15 WP3)
     assert h.control.chain is h.audio.chain          # the chain stays one object
     assert h.reloader.runtime_error == ""            # a clean frame clears the toast
+
+
+def test_main_hands_the_router_its_lfos():
+    """Plan 28 N0: the LFOs step inside `router.modulate`, so `ORDER` no
+    longer shows them — a main that forgot `router.use_lfos(lfos, clock)`
+    would freeze every LFO with the frame order unchanged. The call is in
+    `main`, on the router it builds, with the bank and clock it registered."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(app.main))
+    calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute) and n.func.attr == "use_lfos"]
+    assert calls == ["router.use_lfos(lfos, clock)"]
 
 
 def test_an_absent_pad_or_adapter_is_simply_skipped():
@@ -426,10 +440,10 @@ def test_an_absent_pad_or_adapter_is_simply_skipped():
 def test_a_raising_step_is_recorded_and_the_windows_still_draw():
     log: list[str] = []
     h = _host(log)
-    h.lfos.step = _boom
+    h.router.modulate = _boom                        # where the LFOs step now (plan 28 N0)
     assert app.frame(h, now=1.0, dt=1 / 60, fps=60.0) is False
     assert h.reloader.runtime_error.startswith("step: RuntimeError: boom")
-    assert "router.modulate" not in log              # the pass stopped where it raised
+    assert "reg.apply" not in log                    # the pass stopped where it raised
     assert log[-2:] == ["render.draw", "panel.draw"]
 
 

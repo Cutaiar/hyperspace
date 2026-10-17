@@ -195,6 +195,10 @@ class Param:
     _disc: float | None = field(default=None, repr=False)   # last discrete effective
     _armed: bool = field(default=True, repr=False)          # trigger edge detector
     _bad: bool = field(default=False, repr=False)           # a non-finite value was dropped
+    # the frame mark this param last landed under (plan 28 N0): `apply`
+    # with the same mark again is a no-op, so `Router.modulate` can land a
+    # param something in the pass reads and `Registry.apply` skip it
+    _mark: int | None = field(default=None, repr=False)
 
     def __post_init__(self):
         if self.alias:
@@ -530,8 +534,19 @@ class Param:
             self._bad = True
         self._held = True
 
-    def apply(self) -> None:
-        """End of frame: write base + offsets to the object, or let go."""
+    def apply(self, mark: int | None = None) -> None:
+        """End of frame: write base + offsets to the object, or let go.
+
+        `mark` is the frame's (plan 28 N0, `Registry.frame`): a second call
+        under the mark this param already landed under does nothing — no
+        base restored twice, no offset doubled, no toggle flipped twice. So
+        `Router.modulate` lands a param a later node of the pass reads, and
+        `Registry.apply` lands every other one. None: no mark, today's call
+        (`Registry.remove`, a test)."""
+        if mark is not None:
+            if getattr(self, "_mark", None) == mark:
+                return
+            self._mark = mark
         if self._base is None:
             return
         held, mod = self._held, self._mod
@@ -644,6 +659,15 @@ def is_instance_id(pid: str) -> bool:
 class Registry:
     """An ordered map of Param by id."""
 
+    # class-level so a registry from before a hot reload has them (plan 28 N0):
+    # `serial` moves on every add and remove (the modulation patch's cache
+    # key, `Router.patch`); `frame` is the frame mark `Router.modulate`
+    # opens (`begin_frame`) and `landed` the mark `apply` lands under —
+    # the params the pass already landed are skipped — and closes
+    serial: int = 0
+    frame: int = 0
+    landed: int | None = None
+
     def __init__(self):
         self._p: dict[str, Param] = {}
         self.nonfinite: list[str] = []   # params that dropped a NaN / inf last apply()
@@ -674,6 +698,7 @@ class Registry:
         if p.id in self._p:
             raise ValueError(f"duplicate param id {p.id}")
         self._p[p.id] = p
+        self.serial += 1
         return p
 
     def __getitem__(self, pid: str) -> Param:
@@ -701,6 +726,8 @@ class Registry:
         """Drop a param (a band that was deleted). Bindings to it go dormant —
         every adapter already treats an unknown id as a no-op."""
         p = self._p.pop(pid, None)
+        if p is not None:
+            self.serial += 1
         if p is not None and p.modulated:
             p._held = False
             p.apply()            # hand the object its base back
@@ -711,19 +738,33 @@ class Registry:
 
     # ---- frame ----
 
+    def begin_frame(self) -> int:
+        """A new frame mark (plan 28 N0): `Router.modulate` lands the params
+        its pass reads under it, and the next `apply` skips those. Returns
+        the mark."""
+        self.frame += 1
+        self.landed = self.frame
+        return self.frame
+
     def apply(self) -> None:
-        """Once per frame, after every source has called modulate()."""
+        """Once per frame, after every source has called modulate(): base +
+        offsets onto every modulated param, in registry order — but for
+        those `Router.modulate` already landed under this frame's mark
+        (plan 28 N0: a param the pass reads lands before its reader), which
+        `Param.apply` skips. Closes the mark: an `apply` with no pass
+        before it lands everything, as before."""
         # over a copy: a modulated trigger may add or remove params
         # (a band layout change) while we are still walking the table.
         # `nonfinite`: the params that dropped a NaN / inf this frame (the
-        # stall log names each once, app.py)
+        # stall log names each once, app.py) — those the pass landed too
+        mark, self.landed = self.landed, None
         bad: list[str] = []
         for p in list(self._p.values()):
             if p._base is not None:
-                p.apply()
-                if getattr(p, "_bad", False):
-                    p._bad = False
-                    bad.append(p.id)
+                p.apply(mark)
+            if p._bad:
+                p._bad = False
+                bad.append(p.id)
         self.nonfinite = bad
 
     # ---- persistence: the one serialization every preset is made of ----

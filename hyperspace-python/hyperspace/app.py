@@ -848,8 +848,9 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     (keys, loop keys, the devices polled — pad, MIDI — the macros' base
     subscribers) write bases, and the undo watcher compares them
     (`undo.tick`, plan 15); the sources feed the table (output, mouse,
-    audio, the devices' feeds — hands, bridge — LFOs); the pass lands
-    offsets (`router.modulate`, `reg.apply`), the sinks send (`devices.send`,
+    audio, the devices' feeds — hands, bridge); the pass lands offsets in
+    dependency order, the LFOs stepping inside it (`router.modulate`, plan
+    28 N0), then `reg.apply`; the sinks send (`devices.send`,
     plan 27 B3), `integrate`; then the two windows draw. Returns False
     when a guarded block raised — the error is on `reloader.runtime_error`
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
@@ -943,14 +944,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             devs.feed(router)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
-        # the LFOs are a source like any other: stepped on the frame's
-        # clock, fed to the table as `lfo` before the modulation pass
-        h.lfos.step(dt, now, h.clock)
-        h.lfos.publish(router)
         # the lanes are a modulation source like any other (routing.py);
-        # once every source has spoken for this frame, land base +
-        # offsets on the objects before the integrator reads them
-        router.modulate(chain, dt)   # dt: the rows' motion
+        # once every source has spoken for this frame, the pass runs the
+        # patch in dependency order — the LFOs step inside it, on the
+        # frame's clock, each after the knobs it reads (plan 28 N0) — and
+        # `reg.apply` lands base + offsets on the rest before the
+        # integrator reads them
+        router.modulate(chain, dt, now)   # dt: the rows' motion; now: the LFOs'
         reg.apply()
         if devs is not None:        # the sinks read effective values out (plan 27 B3)
             devs.send(reg, chain)
@@ -1103,6 +1103,7 @@ def main() -> None:
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
+    router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
