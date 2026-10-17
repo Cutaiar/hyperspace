@@ -241,10 +241,33 @@ def test_the_diagram_says_what_the_band_rows_and_the_corner_do(rig):
     assert text(reg, Binding("note:0:51", "band.select", "set", 0.0)) == f"band {sub}"
     fn = reg["band.0.fn"]
     assert text(reg, Binding("note:0:49", "band.0.fn", "toggle")) == \
-        f"{fn.label}: next ({fn.text()})"
+        f"{fn.label}: {fn.text()} · next"
     assert text(reg, Binding("note:0:80", "overlay.on", "toggle")) == "Overlay (if config allows)"
     assert text(reg, Binding("note:0:87", "overlay.passthrough", "toggle")) == \
         "Click-through (overlay)"
     assert text(reg, Binding("note:0:81", "scene.reset_all", "toggle")) == \
         "Reset all bands (again: undo)"
     assert text(reg, Binding("note:0:63", "preset.next", "toggle")) == "Next bank preset"
+
+
+def test_a_revealing_press_is_finished_so_the_next_press_is_no_second_sign(tmp_path):
+    """A press that told the app the desk was in Generic mode (a second
+    note-on on a Mode-0 toggle with no release between) is finished at
+    once: the desk, in Alternate mode now, never sends that release. So
+    the next ordinary press, seconds later, is not "a note-on while held"
+    — no second intro — and a trigger's echo (G10) goes dark."""
+    r = owner_rig(tmp_path)
+
+    def led():
+        v = [m.velocity for m in r.out.sent if m.type == "note_on"
+             and m.note == ARM and m.channel == 1]
+        return v[-1]
+    push(r, note(ARM, 127, 1))               # Mode 0: the toggle turned on
+    r.t[0] += 3
+    push(r, note(ARM, 127, 1))               # …and a second note-on: Generic mode
+    assert len(intros(r)) == 2
+    assert led() == 0                        # the reveal's echo is not left lit
+    r.t[0] += 3
+    push(r, note(ARM, 127, 1), note(ARM, 0, 1))  # Mode 2 now: an ordinary press
+    assert len(intros(r)) == 2
+    assert led() == 0

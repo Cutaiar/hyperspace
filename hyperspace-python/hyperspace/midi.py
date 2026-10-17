@@ -585,9 +585,10 @@ class MidiIO:
         # a desk that fell back to its power-up mode (apc40.fell_back,
         # 2026-10-16): the intro again, and the message read as Mode 2 would
         # send it (a device button on channel 0)
-        fell = getattr(self.profile, "fell_back", None)
-        if fell is not None and fell(kind, ch, number, value > 0,
-                                     (ch, number) in self._held):
+        fell_back = getattr(self.profile, "fell_back", None)
+        fell = fell_back is not None and fell_back(kind, ch, number, value > 0,
+                                                   (ch, number) in self._held)
+        if fell:
             self._reenter()
         ch = getattr(self.profile, "in_channel", lambda k, c, n: c)(kind, ch, number)
         if kind != "note":          # where the control is now (plan 24 C1, `redraw`)
@@ -657,6 +658,14 @@ class MidiIO:
         if timed and pressed:
             self._hold_state()[0][(ch, number)] = (self._now(), timed)
             self._light_bars()
+        # a Mode-0 toggle's note-on that revealed the fall-back is a whole
+        # press: the desk, in Alternate mode now, never sends its release,
+        # so it is released here (`_held` popped, an echo dark) — else the
+        # next press would read as a second note-on while held. The release
+        # is no sign itself (held, and off)
+        if (fell and pressed
+                and number in getattr(self.profile, "MODE0_TOGGLES", ())):
+            self._handle(mido.Message("note_off", channel=msg.channel, note=number))
 
     def _reenter(self) -> None:
         """The desk sent a message only its power-up mode sends

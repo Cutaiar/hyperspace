@@ -595,7 +595,7 @@ def text(reg, b: Binding) -> str:
     presets' names, a scene pad the scene's; `SET_WORDS` puts a word
     before it — "band SUB"); a `step` row → the label and the step
     ("Brightness +3"); a toggle row on an enum, which steps it → the
-    label, "next" and the value now ("SUB Transfer: next (SQ)"); a target
+    label, the value now and "next" ("SUB Transfer: SQ · next"); a target
     in `DESK_WORDS` → its words; anything else → the param's label; a
     target the registry lacks (or a param with no label) → the id. A bank
     pad whose slot is empty says nothing (`empty`): "" — it is drawn as a
@@ -612,7 +612,7 @@ def text(reg, b: Binding) -> str:
             word = SET_WORDS.get(b.target)
             return f"{word} {names[i]}" if word else str(names[i])
     if b.op == "toggle" and p.kind is Kind.ENUM:
-        return f"{p.label or b.target}: next ({p.text()})"
+        return f"{p.label or b.target}: {p.text()} · next"
     if b.target in DESK_WORDS:
         return DESK_WORDS[b.target]
     if b.op == "step":

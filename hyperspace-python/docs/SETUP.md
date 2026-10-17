@@ -96,8 +96,9 @@ MIDI adapter is on by default and looks for a port whose name contains
 - What each press did: the SYSTEM page's **desk log**. If the desk is
   switched off and on while the app runs it comes back in Akai's
   Generic mode (activator, solo and rec-arm latch on the device, track
-  select does nothing); the app sees the first Generic-mode message and
-  puts it back, and the desk log says so.
+  select does nothing); within a press or two the app sees a message only
+  Generic mode sends and puts it back, and the desk log says so ("back in
+  the app's mode"). The press that told it may be lost: press again.
 
 To check the device without the
 app: `uv run python tools/midi_probe.py`. Another port name or no MIDI at
