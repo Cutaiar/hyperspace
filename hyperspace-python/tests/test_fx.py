@@ -2511,3 +2511,37 @@ def test_the_page_fits_with_three_placed_effects(fxpage, monkeypatch):
             assert over[-1] == 0, f"the fx page scrolls with {name} open, target {target}"
         reg[f"fx.{name}.target"].set(0)
         reg[f"fx.{name}.on"].set(False)
+
+
+def test_a_placed_effects_strip_says_its_place_wherever_it_is_drawn(fxpage, monkeypatch):
+    """Plan 30 D2 after N2: `ui_fx.strip` — the FX page's open strip and
+    the GRAPH page's side column for a selected effect node — reads the
+    place itself, so a placed effect's title hover says `warp.glsl · after
+    hands` in place of its order however the strip is reached."""
+    from hyperspace import graph as G
+    from hyperspace import ui_fx
+    imgui, st, panel = fxpage.imgui, fxpage.st, fxpage.panel
+    seen = []
+    real = ui_fx._strip_header
+
+    def header(panel_, fx, name, place=None):
+        seen.append((name, place))
+        return real(panel_, fx, name, place)
+    monkeypatch.setattr(ui_fx, "_strip_header", header)
+
+    def side(name):                     # what ui_graph's side column does
+        imgui.new_frame()
+        imgui.begin("side")
+        ui_fx.strip(panel, name)
+        imgui.end()
+        imgui.end_frame()
+    side("warp")
+    assert seen[-1] == ("warp", None)
+    panel.graph_now = lambda: (G.Wiring(), G.read_graph(
+        {"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]}))
+    side("warp")
+    side("acid")
+    assert seen[-2:] == [("warp", "after hands"), ("acid", None)]
+    st.select("warp")
+    fxpage.frame()
+    assert seen[-1] == ("warp", "after hands")

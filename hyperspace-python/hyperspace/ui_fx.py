@@ -203,7 +203,9 @@ def strip(panel, sel: str) -> None:
         return
     spec = fx.specs[sel]
     pre = f"fx.{sel}"
-    _strip_header(panel, fx, sel, placed.get(sel))
+    # plan 30 D2: a placed effect's title hover says where it sits — read
+    # here, so the GRAPH page's side column says it too
+    _strip_header(panel, fx, sel, _placed(panel, fx).get(sel))
     if spec.tip:
         imgui.push_style_color(imgui.Col_.text, ui.FAINT)
         imgui.text_wrapped(spec.tip)
