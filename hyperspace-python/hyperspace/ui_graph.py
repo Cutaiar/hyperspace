@@ -62,6 +62,7 @@ from imgui_bundle import imgui_node_editor as ed
 from . import graphview, modifiers, ui, ui_fx, ui_routing, undo
 from .bands import CEIL
 from .graph import Effect
+from .library import LibraryError
 from .view import RED as RED_RGB
 
 STATE = "_graph"         # the panel's attribute: survives a reload of this module
@@ -211,12 +212,12 @@ def template_of(panel):
         ref = presets.template_of_loaded()
         if not ref:
             return None
-        lib = presets.lib
-        held = getattr(presets, "_at_load", dict)().get(lib.current("presets") or "")
+        at_load = getattr(presets, "template_at_load", None)   # (none before a reload)
+        held = at_load() if at_load is not None else None
         if held is not None and held[0] == ref:
             return ref, list(held[1])
-        return ref, list(lib.desk_template(ref).get("desk") or [])
-    except Exception:  # noqa: BLE001 — a template that will not read is the overrides alone
+        return ref, list(presets.lib.desk_template(ref).get("desk") or [])
+    except LibraryError:            # a template that will not read: the overrides alone
         return None
 
 
@@ -242,6 +243,16 @@ def drawn_cable(st: dict, c: graphview.VCable) -> bool:
     """Is cable `c` drawn this frame as far as subgraphs go: one inside a
     collapsed subgraph node is not."""
     return not c.inside or is_open(st, c.inside)
+
+
+def hidden_by(st: dict, view: graphview.View, pin: str) -> str:
+    """The hover's extra line for a pin whose cables are inside a collapsed
+    subgraph (a param's `base` stub a desk template sets): which node holds
+    them; "" when none is hidden."""
+    held = sorted({c.inside for c in view.cables
+                   if c.dst_port == pin and c.inside and not is_open(st, c.inside)})
+    names = [view.node(nid).label if view.node(nid) is not None else nid for nid in held]
+    return "".join(f"\nset by desk {n} (collapsed: + shows it)" for n in names)
 
 
 def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
@@ -509,6 +520,7 @@ def _hover(st: dict, view: graphview.View) -> None:
             stub = names.get(pin, "").partition(":")[0] if port.param else ""
             tip = (f"{port.param or port.addr or port.id}{'  ' + stub if stub else ''}\n"
                    f"{port.name}: {_said(port.live)}")
+            tip += hidden_by(st, view, names.get(pin, ""))
     elif node:
         n = view.node(names.get(node, "")[2:])
         if n is not None and n.status:

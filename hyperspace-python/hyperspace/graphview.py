@@ -718,11 +718,14 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                            TRIGGER if t.kind == "note" else VALUE,
                            groups.get(t.source, ""), PRESET_LAYER)
 
-    def row_pin(b: Binding) -> tuple[str, str]:
+    def row_pin(b: Binding, shadowed: bool = False) -> tuple[str, str]:
         """(the pin a desk row's cable leaves from, the subgraph it is
         inside): the node of the layer it belongs to on a layered desk —
         an invariant row (layer None) the first node's, a preset-layer row
-        still the template's the template node's — else `source_pin`."""
+        still the template's the template node's — else `source_pin`. A
+        layered row `shadowed` by an invariant control (D6: it never acts)
+        leaves that control's port on the first node, so an invariant
+        control is a port there only."""
         if not b.is_midi:
             return source_pin(b.source), ""
         role_of = getattr(table, "role_of", None)
@@ -734,13 +737,14 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         elif mine is None:
             return source_pin(b.source), ""
         else:
-            n = mine.get(b.layer or PRESET_LAYER) or mine[PRESET_LAYER]
+            layer = PRESET_LAYER if shadowed else (b.layer or PRESET_LAYER)
+            n = mine.get(layer) or mine[PRESET_LAYER]
             inside = ""
         pin = lpins.get((n.id, b.source))
         if pin is None:
             kind = TRIGGER if b.kind == "note" else VALUE
-            pin = add_layer_port(n, b.source, b.bare, kind, "",
-                                 "" if b.layer is None else (b.layer or ""))
+            pin = add_layer_port(n, b.source, b.bare, kind, INVARIANT if shadowed else "",
+                                 "" if b.layer is None or shadowed else b.layer)
         return pin, inside
 
     # ---- the render graph's nodes ----
@@ -853,16 +857,16 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                   depth=depth, label=said, addr=b.source))
     inv_rows = table.invariant_rows() if hasattr(table, "invariant_rows") else []
     for b in setters:
-        src, inside = row_pin(b)
+        # a layered row on an invariant control never acts (D6)
+        shadowed = (b.is_midi and b.layer is not None and bool(inv_rows)
+                    and table.is_invariant(b, inv_rows))
+        src, inside = row_pin(b, shadowed)
         dst = f"{BASE}:{b.target}"
         p = reg.get(b.target)
         typ = TRIGGER if (b.op in TRIGGER_OPS or pin_type.get(src) == TRIGGER) else VALUE
         layer = f"  {b.layer} layer" if b.layer else ""
         if inside:
             layer += f"  (desk template {tmpl[0]})"
-        # a layered row on an invariant control never acts (D6)
-        shadowed = (b.is_midi and b.layer is not None and bool(inv_rows)
-                    and table.is_invariant(b, inv_rows))
         view.cables.append(VCable(cable_id(f"set:{b.source}>{b.target}"), src, dst, typ,
                                   ref=b, kind="setter",
                                   off=not b.enabled or p is None or shadowed,
@@ -1177,6 +1181,7 @@ KEY_ROWS = "keys are the session's rows: map them on ROUTING"
 MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
 ROUTE_END = "a route's end moves to another param's mod"
 SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
+SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
 NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
 
@@ -1357,6 +1362,11 @@ class Edit:
         if p.id == SAVE_PARAM:
             return learnmod.SAVE_REFUSAL
         if Binding(addr, p.id).is_midi:
+            # plan 28 N5 (D5): the global layer is never a Learn target, so a
+            # drag from the SHIFT node is refused whatever the latch
+            port = self._port(src)
+            if port is not None and port.layer == GLOBAL_LAYER:
+                return SHIFT_NODE.format(addr=addr)
             why = learnmod.blocked(self.table, addr)
             if why == "invariant":
                 return f"{addr} is invariant (the session's)"

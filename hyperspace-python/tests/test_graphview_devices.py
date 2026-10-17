@@ -163,6 +163,52 @@ def test_invariant_controls_are_ports_on_the_first_node_only(rig):
             assert node_of(view, c.src_port) is first
 
 
+def test_a_drag_from_the_shift_node_into_base_is_refused_whatever_the_latch(rig):
+    """D5: the global layer is never a Learn target, so a cable dragged
+    from an *apc40 (SHIFT)* port onto a param's `base` stub is refused in
+    words — the hover's `refusal` and the drop's `connect` agree — with
+    SHIFT latched or not, and the table is unchanged."""
+    rig.lib.load("presets", "party-trip")
+    table = rig.router.table
+    view = build(rig, rig_devices(rig))
+    shift = view.node("device:apc40/global")
+    port = next(p for p in shift.ports if p.addr.startswith("cc:"))
+    src = port.pins[0]
+    assert src == f"out:{port.addr}|global"
+    pid = next(p.id for p in rig.reg if p.modulatable and not p.alias
+               and not any(b.target == p.id for b in table.bindings))
+    ed = graphview.Edit(table, rig.reg, rig.router, view, apc40)
+    for latched in (False, True):
+        rig.reg["desk.shift"].set(latched)
+        rows = list(table.bindings)
+        why = ed.refusal(src, f"base:{pid}")
+        res = ed.connect(src, f"base:{pid}")
+        assert isinstance(res, graphview.Refusal) and "SHIFT node" in res, latched
+        assert why == res
+        assert table.bindings == rows and all(a is b for a, b in zip(table.bindings, rows))
+    rig.reg["desk.shift"].set(False)
+    # the same control from the first node is the desk learn, as before
+    first = f"out:{port.addr}"
+    assert view.owner(first) is not None
+    assert ed.refusal(first, f"base:{pid}") is None
+
+
+def test_a_shadowed_layered_row_leaves_the_invariant_port_on_the_first_node(rig):
+    """A global-layer row on an invariant control (D6: it never acts) is
+    drawn off from that control's port on *apc40*: the SHIFT node gains no
+    invariant control."""
+    rig.lib.load("presets", "party-trip")
+    table = rig.router.table
+    row = Binding(SHIFT, "view.bright", "toggle", layer="global")
+    table.bindings.append(row)
+    view = build(rig, rig_devices(rig))
+    c = next(c for c in desk_cables(view) if c.ref is row)
+    assert c.off and c.dormant and "invariant" in c.label
+    assert node_of(view, c.src_port).id == "device:apc40"
+    assert view.owner(c.src_port)[1].group == graphview.INVARIANT
+    assert SHIFT not in {p.addr for p in view.node("device:apc40/global").ports}
+
+
 # ---------------------------------------------------------------- desk templates
 
 def put_fixtures(lib) -> None:
@@ -213,7 +259,12 @@ def test_a_templated_desk_is_one_collapsed_node_whose_edits_write_overrides(rig)
     tid = st["view"].node(tn.id)
     assert tid is not None and not ui_graph.is_open(st, tn.id)
     assert not any(ui_graph.drawn_cable(st, c) for c in st["view"].cables if c.inside)
+    # a base stub the collapsed template sets says so on hover
+    assert "desk template fixture shape" in ui_graph.hidden_by(st, st["view"],
+                                                                "base:view.depth4")
+    assert ui_graph.hidden_by(st, st["view"], "base:dream.mix") == ""      # an override
     ui_graph.toggle_open(st, tn.id)
+    assert ui_graph.hidden_by(st, st["view"], "base:view.depth4") == ""
     frame(panel, "graph")
     assert ui_graph.is_open(st, tn.id)
     assert all(ui_graph.drawn_cable(st, c) for c in st["view"].cables if c.inside)
