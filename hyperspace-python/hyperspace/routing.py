@@ -164,8 +164,8 @@ inside it and feed `lfo`, every live performer row calls modulate, and a
 param the pass itself reads lands at once) → ``reg.apply()`` (the rest) →
 ``integrate`` → ``draw`` → ``panel.draw``. A lane may modulate the
 analyzer's own params: the analyzer ran before the pass, so the offset
-lands in apply() and the next step() reads it, a frame late — the one
-reader outside the pass.
+lands in apply() and the next step() reads it, a frame late. The readers
+outside the pass are that and ``output.apply`` (step 5, before it).
 
 Legacy 6 — the parity anchor. The reference drove the planes with
 ``PLANEDRIVE[plane] = dir · out[i] · DRIVE · gain`` in place of the
@@ -259,9 +259,10 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, motion
+from . import apc40, modifiers, motion
 from . import patch as patchmod
 from .bands import BANDS, CEIL
+from .modifiers import Modifier, ModState
 from .motion import OFF, Follower, Motion
 from .params import (
     DRIVE,
@@ -1516,6 +1517,34 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     _register_pad_feel(reg, table)
 
 
+def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
+    """The modifiers' params on `reg` (plan 28 N1), the way `fx.declare`
+    adds an effect's: every ``mod.*`` param dropped, then ``mod.<n>.<p>``
+    for each modifier's kind (`modifiers.PARAMS`), group ``mod`` — a
+    performance group, so preset content — modulatable, a view onto the
+    modifier's `params`. A route onto one of a modifier that went away
+    goes dormant, as for a deleted band."""
+    reg.remove_prefix(modifiers.PREFIX)
+    g = modifiers.GROUP
+    for m in mods:
+        for sp in modifiers.PARAMS[m.kind]:
+            pid, label = modifiers.param_id(m.id, sp.key), f"mod {m.n} {sp.label}"
+            vals, k = m.params, sp.key
+            tip = f"{m.kind} {m.n}: {sp.tip}" if sp.tip else ""
+            if sp.kind == "toggle":
+                reg.toggle(pid, label, lambda v=vals, k=k: v[k] >= 0.5,
+                           lambda x, v=vals, k=k: v.__setitem__(k, 1.0 if x else 0.0),
+                           group=g, tip=tip)
+            elif sp.kind == "enum":
+                reg.enum(pid, label, lambda v=vals, k=k: round(v[k]),
+                         lambda x, v=vals, k=k: v.__setitem__(k, float(int(x))),
+                         list(sp.choices), group=g, tip=tip)
+            else:
+                reg.continuous(pid, label, lambda v=vals, k=k: v[k],
+                               lambda x, v=vals, k=k: v.__setitem__(k, float(x)),
+                               lo=sp.lo, hi=sp.hi, group=g, tip=tip)
+
+
 PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
 
 
@@ -1661,6 +1690,13 @@ class Bindings:
     # the schemes delivered as rows, never read as lanes (`_check`): the
     # table's own kinds, and any a device of this rig adds (`Router.use`)
     row_schemes: tuple[str, ...] = ROW_SCHEMES
+    # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
+    # id order: a tuple, always replaced whole (`set_modifiers`,
+    # `add_modifier`, `remove_modifier`), so a table from before a hot
+    # reload reads the class's empty one. The preset's, never the file's:
+    # `to_json` writes rows only, and `is_session_row` is about rows
+    modifiers: tuple[Modifier, ...] = ()
+    modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -2354,6 +2390,64 @@ class Bindings:
         self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
 
+    # ---- the modifiers (plan 28 N1) ----
+
+    def modifier(self, mid: str) -> Modifier | None:
+        return next((m for m in self.modifiers if m.id == mid), None)
+
+    def modifiers_doc(self, reg: Registry | None = None) -> list[dict]:
+        """The preset's ``modifiers`` list: each modifier's entry, its
+        params at their **bases** in `reg` (a performer riding one never
+        reaches the file), else as the modifier holds them."""
+        out = []
+        for m in self.modifiers:
+            bases = {}
+            if reg is not None:
+                for s in modifiers.PARAMS[m.kind]:
+                    p = reg.get(modifiers.param_id(m.id, s.key))
+                    if p is not None:
+                        bases[s.key] = float(p.base)
+            out.append(m.to_json(bases))
+        return out
+
+    def set_modifiers(self, doc, reg: Registry | None = None) -> list[str]:
+        """Replace every modifier with `doc`'s (the preset's list of
+        entries, or Modifier objects), and — given `reg` — their params
+        ``mod.<n>.<p>`` with them (`declare_modifiers`). An entry this
+        build cannot read, or a second one with an id already taken, is
+        dropped; returns a note for each."""
+        notes: list[str] = []
+        mods: dict[str, Modifier] = {}
+        for d in doc or ():
+            try:
+                m = d if isinstance(d, Modifier) else Modifier.from_json(d)
+            except (ValueError, TypeError) as e:
+                notes.append(f"dropped a modifier: {e}")
+                continue
+            if m.id in mods:
+                notes.append(f"dropped a second {m.id}")
+                continue
+            mods[m.id] = m
+        self.modifiers = tuple(sorted(mods.values(), key=lambda m: m.n))
+        self.modifiers_serial = self.modifiers_serial + 1
+        if reg is not None:
+            declare_modifiers(reg, self.modifiers)
+        return notes
+
+    def add_modifier(self, kind: str, inputs: Iterable[str] = (),
+                     reg: Registry | None = None, **params: float) -> Modifier:
+        """A new modifier of `kind` under the next free id (`next_id`)."""
+        m = Modifier(modifiers.next_id(x.id for x in self.modifiers), kind, tuple(inputs),
+                     dict(params))
+        bases = self.modifiers_doc(reg)            # the others keep their bases
+        self.set_modifiers([*bases, m], reg)
+        return self.modifier(m.id)
+
+    def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
+        """Take a modifier out, its params with it; a route on its lane
+        stays, dormant, until it is removed or the id comes back."""
+        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+
 
 # ---------------------------------------------------------------- router
 
@@ -2783,8 +2877,9 @@ class Router:
         rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
                      for b in t.bindings if b.op in MOD_OPS)
         subs = tuple((mid, id(s), s.depth, s.base) for mid, m in t.macros.items() for s in m.subs)
-        mods = tuple((getattr(m, "id", ""), getattr(m, "kind", ""),
-                      tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t))
+        mods = (getattr(t, "modifiers_serial", 0),
+                *((getattr(m, "id", ""), getattr(m, "kind", ""),
+                   tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
         lfos = self.__dict__.get("lfos")
         return (id(t), rows, t.macros_serial, subs, mods,
                 len(lfos) if lfos is not None else 0, getattr(self.reg, "serial", 0))
@@ -2820,7 +2915,8 @@ class Router:
 
         for m in mods:
             for inp in getattr(m, "inputs", ()):
-                g.link(source(inp), _modifier_node(m), "in")
+                if inp:                                  # "" is an input not chosen yet
+                    g.link(source(inp), _modifier_node(m), "in")
         for b in t.routes():
             cable, on = (b.source, b.target), b.enabled
             src = source(b.source)
@@ -2888,23 +2984,39 @@ class Router:
         for k, b in enumerate(t.bindings):
             if b.op in MOD_OPS:
                 rank[(b.source, b.target)] = k
+        mods = _modifiers_of(t)
+        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
+        mod_rank = {node: modifiers.number(mid) or 0 for node, mid in mod_ids.items()}
         cut: set[tuple[str, str]] = set()
+        cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
         notes: list[str] = []
         while True:
             loops = patchmod.cycles(g)
             if not loops:
                 break
             loop = loops[0]
+            said = " → ".join([*loop, loop[0]])
             hops = set(zip(loop, [*loop[1:], loop[0]], strict=True))
-            cables = {e.cable for e in patchmod.ordering(g)
-                      if e.cable is not None and (e.src, e.dst) in hops}
-            if not cables:                     # cannot happen: a loop enters a param by a cable
-                break
-            off = max(cables, key=lambda c: rank.get(c, -1))
-            g.edges = [replace(e, enabled=False) if e.cable == off else e for e in g.edges]
-            cut.add(off)
-            notes.append(f"loop: {' → '.join([*loop, loop[0]])} needs a delay — "
-                         f"{off[0]} → {off[1]} is off until it has one")
+            on_loop = [e for e in patchmod.ordering(g) if (e.src, e.dst) in hops]
+            cables = {e.cable for e in on_loop if e.cable is not None}
+            if cables:
+                # the loop's last cable in table order
+                off = max(cables, key=lambda c: rank.get(c, -1))
+                g.edges = [replace(e, enabled=False) if e.cable == off else e for e in g.edges]
+                cut.add(off)
+                notes.append(f"loop: {said} needs a delay — "
+                             f"{off[0]} → {off[1]} is off until it has one")
+                continue
+            # a loop of modifiers alone (`in` edges carry no cable): the last
+            # modifier's input on it, in modifier id order, is kept off — that
+            # modifier is dormant until the loop has a delay
+            ins = [e for e in on_loop if e.port == "in" and e.dst in mod_rank]
+            last = max(ins, key=lambda e: mod_rank[e.dst]) if ins else on_loop[-1]
+            g.edges = [replace(e, enabled=False) if e is last else e for e in g.edges]
+            cut_in.add((last.src, last.dst))
+            who = mod_ids.get(last.dst, last.dst)
+            notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
+                         f"is off until it has one")
         # the evaluation plan: per node in order, what `modulate` does there
         lfos = self.__dict__.get("lfos")
         n_lfo = len(lfos) if lfos is not None else 0
@@ -2913,7 +3025,12 @@ class Router:
         for b in t.mods():
             if (b.source, b.target) not in cut:
                 by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
-        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in _modifiers_of(t)}
+        # a delay closing a loop runs before its input (`patch.ordering`):
+        # it emits that input's lane as it stands — last frame's value
+        live = [e for e in g.edges if e.enabled and e.port == "in"]
+        ordered = {id(e) for e in patchmod.ordering(g)}
+        early = {e.dst for e in live if id(e) not in ordered}
+        dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
         for node in patchmod.order(g):
             if node.kind == "lfo":
@@ -2921,7 +3038,8 @@ class Router:
                 if i < n_lfo:
                     plan.append(("lfo", i))
             elif node.kind == "modifier" and node.id in mod_ids:
-                plan.append(("modifier", mod_ids[node.id]))
+                plan.append(("modifier", mod_ids[node.id], node.id in early,
+                             node.id in dormant))
             elif node.kind in ("param", "macro"):
                 rows = by_target.get(node.id, [])
                 land = node.id in reads
@@ -2929,14 +3047,120 @@ class Router:
                     plan.append(("param", node.id, rows, land))
         d = self.__dict__
         d["_patch"], d["_plan"], d["_patch_seen"] = g, plan, key
-        d["_patch_notes"], d["_patch_cut"] = notes, cut
+        d["_patch_notes"], d["_patch_cut"] = notes, cut | cut_in
 
-    def _step_modifier(self, mid: str, dt: float, lanes) -> None:
-        """Modifier `mid` (``mod.<n>``) at its node of the pass — plan 28
-        N1's to fill: step it on its inputs' lanes as they stand (all it
-        reads has run, but for a delay closing a loop, which runs first)
-        and feed its lane ``mod:<n>``. `lanes` is the analyzer's, as a
-        route reads them (None with no analyzer). N0 leaves the seam."""
+    # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
+
+    def _reading(self, address: str, lanes) -> float | None:
+        """A source address's reading this frame, as a modifier reads its
+        input: the analyzer's lane (`lanes`, already normalised) for
+        ``lane:``, else the scheme's fed vector; None while it is not
+        live — not fed, no such lane, a name the map lacks, NaN."""
+        if not address:
+            return None
+        scheme, i = self.lane(address)
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None or not 0 <= i < len(vec):
+            return None
+        u = float(vec[i])
+        return None if math.isnan(u) else u
+
+    def _step_modifier(self, mid: str, dt: float, lanes=None, *, early: bool = False,
+                       cut: bool = False) -> float | None:
+        """Step one modifier (`modifiers.step`) on its inputs' readings and
+        write its output into its ``mod`` lane — the vector
+        `_publish_modifiers` publishes. One call per node: N0's patch
+        evaluation calls it in dependency order. An input that is not live
+        leaves the node dormant — its lane NaN, so a route on it lets go
+        like a route on that source would — and its memory starts afresh
+        when the input comes back. Returns the output (None: dormant).
+
+        `early` (plan 28 N0): a delay that closes a loop, run before its
+        input — it emits that input's lane as it stands, last frame's
+        value, so the loop is exactly one frame late. `cut`: a modifier
+        whose input `patch` keeps off to break a loop with no delay: dormant."""
+        m = self.table.modifier(mid)
+        vec = self.feeds.get(modifiers.SCHEME)
+        if m is None or vec is None or not 0 <= m.n < len(vec):
+            return None
+        states = self.__dict__.setdefault("_mod_states", {})
+        reads = [self._reading(a, lanes) for a in m.inputs]
+        if early and m.kind == "delay" and not cut:
+            # a delay closing a loop runs before its input (plan 28 N0): its
+            # input's lane as it stands is last frame's value — the loop's
+            # one frame; not stepped yet (the loop's first frame), its rest
+            out = reads[0] if reads[0] is not None else modifiers.REST
+            vec[m.n] = out
+            return float(out)
+        if cut or any(u is None for u in reads):
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        hit = states.get(mid)
+        if hit is None or hit[0] != m.kind:
+            hit = states[mid] = (m.kind, ModState())
+        out = modifiers.step(m, tuple(reads), hit[1], dt)
+        if not math.isfinite(out):
+            # a non-finite output (an input that read ±inf): not live, and
+            # its memory is dropped, so the next finite reading starts afresh
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        vec[m.n] = out
+        return float(out)
+
+    def _publish_modifiers(self) -> None:
+        """The ``mod`` scheme's labels, rests, gates and signal kinds, as
+        an adapter publishes its lanes' — once the table's modifiers
+        change. No modifiers: the scheme is not offered at all."""
+        mods = self.table.modifiers
+        if not mods:
+            for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
+                d.pop(modifiers.SCHEME, None)
+            return
+        n = max(m.n for m in mods) + 1
+        labels, kinds = [""] * n, [modifiers.VALUE] * n
+        for m in mods:
+            labels[m.n] = f"{m.n} {m.kind}"
+            kinds[m.n] = m.out
+        sc = modifiers.SCHEME
+        self.labels[sc], self.rests[sc] = labels, [modifiers.REST] * n
+        self.lane_kinds[sc] = kinds
+        # a threshold's fire is a switch a row's `when` can wait on
+        self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
+                          if m.out == modifiers.TRIGGER]
+        old = self.feeds.get(sc)
+        vec = np.full(n, math.nan)
+        if old is not None:                  # last frame's outputs stand until stepped
+            vec[:min(n, len(old))] = old[:n]
+        self.feed(sc, vec)                   # written in place per node after this
+
+    @property
+    def lane_kinds(self) -> dict[str, list[str]]:
+        """scheme → each lane's signal kind, "value" or "trigger" (decision
+        10), published like `labels` by a source that has triggers: today
+        the ``mod`` lanes, where a threshold's output is a trigger. A
+        trigger lane is still read as a value (1 while it fires, else 0)."""
+        d = self.__dict__.get("_lane_kinds")
+        if d is None:
+            d = self.__dict__["_lane_kinds"] = {}
+        return d
+
+    def _sync_modifiers(self) -> None:
+        """Once the table's modifiers change (`modifiers_serial`, and on the
+        first pass): their lanes republished (`_publish_modifiers`) and a
+        removed modifier's memory dropped. The pass then steps each one at
+        its node, in dependency order (plan 28 N0) — `_step_modifier`."""
+        serial = getattr(self.table, "modifiers_serial", 0)
+        if self.__dict__.get("_mods_seen") == serial and (
+                not self.table.modifiers or modifiers.SCHEME in self.feeds):
+            return
+        self.__dict__["_mods_seen"] = serial
+        self._publish_modifiers()
+        live = {m.id for m in self.table.modifiers}
+        states = self.__dict__.setdefault("_mod_states", {})
+        for mid in [k for k in states if k not in live]:
+            del states[mid]
 
     def modulate(self, analyzer=None, dt: float | None = None,
                  now: float | None = None) -> None:
@@ -2958,6 +3182,7 @@ class Router:
         follower, and starts afresh. A cable `patch` keeps off to break a
         loop does not run."""
         dt = 1 / 60 if dt is None else dt
+        self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
         self.patch                                   # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
         begin = getattr(self.reg, "begin_frame", None)
@@ -2985,7 +3210,7 @@ class Router:
                     lfo_lane[i] = lfos.step_one(i, dt, t, clock)
                 continue
             if kind == "modifier":
-                self._step_modifier(step[1], dt, lanes)
+                self._step_modifier(step[1], dt, lanes, early=step[2], cut=step[3])
                 continue
             for b, subs in step[2]:
                 hit = cache.get(b.source)

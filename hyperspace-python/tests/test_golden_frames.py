@@ -260,8 +260,10 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    assert list(ms) == r._graph.timed == ["scene", "cover", "hands", "history", "fx",
-                                          "capture", "output.1"]
+    assert r._graph.timed == ["scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
+    assert list(ms) == ["scene", "cover", "hands", "history", "warp", "fx",
+                        "capture", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

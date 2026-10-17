@@ -119,6 +119,9 @@ from imgui_bundle import imgui
 from . import apc40, motion, ui, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
+from .modifiers import KINDS as MOD_KINDS
+from .modifiers import PARAMS as MOD_PARAMS
+from .modifiers import Modifier
 from .motion import Motion
 from .params import Kind, Param, part_of
 from .routing import (
@@ -337,6 +340,7 @@ def found(panel, router: Router) -> tuple[int, int]:
     hays = [route_hay(panel, router, b) for b in table.routes()]
     hays += [control_hay(panel, router, b) for b in table.desk()]
     hays += [control_hay(panel, router, f, mapped=False) for f in unmapped(table)]
+    hays += [mod_hay(panel, router, m) for m in table.modifiers]
     hays += [macro_hay(panel, router, p) for p in panel.reg.group("macro")]
     inv, glob = _session_rows(table)
     hays += [control_hay(panel, router, b) for b in (*inv, *glob)]
@@ -537,8 +541,10 @@ def _sources(panel, router: Router) -> list[tuple[str, str]]:
             continue
         named = [b.index + 1 for b in router.table.bindings if b.head == scheme]
         n = len(names) or (len(vec) if vec is not None else 0) or max(named, default=0)
+        # a lane published with an empty label is no lane (the `mod`
+        # scheme's index 0 and a removed modifier's place)
         out += [(router.address(scheme, i), f"{scheme} {names[i] if i < len(names) else i}")
-                for i in range(n)]
+                for i in range(n) if not (i < len(names) and names[i] == "")]
     return out
 
 
@@ -1363,6 +1369,200 @@ def macros(panel, router: Router) -> None:
         imgui.text_disabled(NO_MATCH)
 
 
+# ---- the modifiers (plan 28 N1) ----
+#
+# One block per modifier, under the routes:
+#
+#   mod 2  combine   [mod 1 smooth ▾] [0 sub ▾]        ▮▮▮▯▯ 0.42   ×
+#          how ▾   balance ─────────
+#
+# The kind is fixed once added (a combo of `KINDS` beside "+ modifier"
+# picks the next one's); each input is a combo over the route sources
+# (`modifier_sources`: `_sources` plus every modifier's own lane); the
+# params are the panel's own widgets over `mod.<n>.<p>` (so Learn, "Route
+# a lane here…" and the base → effective readout come with them); the bar
+# is the live output. Every edit is the loaded preset's (its dirty dot,
+# one undo step); nothing is written.
+
+MOD_KIND_W = 96.0        # the "+ modifier" kind combo
+MOD_IN_W = 150.0         # an input's source combo
+MOD_ID_W = 52.0          # "mod 2" beside the block
+
+
+def mod_hay(panel, router: Router, m: Modifier) -> tuple[str, ...]:
+    """What the filter searches on a modifier: its id, kind and inputs."""
+    return (m.id, f"mod {m.n}", m.kind, *m.inputs)
+
+
+def modifier_sources(panel, router: Router, mid: str | None = None) -> list[tuple[str, str]]:
+    """(address, label) an input may read: every route source (`_sources`)
+    and every modifier's output lane but `mid`'s own — a modifier reading
+    itself is a loop (N0 refuses one with no delay in it)."""
+    out = [(a, lb) for a, lb in _sources(panel, router) if not a.startswith("mod:")]
+    out += [(m.address, f"mod {m.n} {m.kind}") for m in router.table.modifiers
+            if m.id != mid]
+    return out
+
+
+def add_modifier(panel, kind: str, inputs=(), **params: float) -> Modifier:
+    """"+ modifier": a new `kind` node into the loaded preset, its params
+    declared (`Bindings.add_modifier`); one undo step."""
+    router = router_of(panel)
+    undo.push(f"add modifier {kind}")
+    return router.table.add_modifier(kind, inputs, panel.reg, **params)
+
+
+def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
+    """Input `k` of modifier `mid` reads `source` from now on: the
+    modifier replaced whole (`Bindings.set_modifiers`, its params at their
+    bases), one undo step."""
+    table = router_of(panel).table
+    m = table.modifier(mid)
+    if m is None or not 0 <= k < len(m.inputs) or m.inputs[k] == source:
+        return
+    undo.push(f"modifier input {mid}")
+    docs = table.modifiers_doc(panel.reg)
+    for d in docs:
+        if d["id"] == mid:
+            ins = list(d["in"])
+            ins[k] = source
+            d["in"] = ins
+    table.set_modifiers(docs, panel.reg)
+
+
+def remove_modifier(panel, mid: str) -> None:
+    """The ×: the modifier and its params go; a route on its lane stays,
+    dormant. One undo step."""
+    router = router_of(panel)
+    undo.push(f"delete modifier {mid}")
+    router.table.remove_modifier(mid, panel.reg)
+
+
+def modifier_output(router: Router, mid: str) -> float | None:
+    """The modifier's output lane this frame; None while it is dormant."""
+    m = router.table.modifier(mid)
+    vec = router.feeds.get("mod")
+    if m is None or vec is None or not 0 <= m.n < len(vec):
+        return None
+    u = float(vec[m.n])
+    return None if math.isnan(u) else u
+
+
+def _input_combo(panel, router: Router, m: Modifier, k: int,
+                 srcs: list[tuple[str, str]], width: float) -> None:
+    addrs = [a for a, _ in srcs]
+    labels = [lb for _, lb in srcs]
+    cur = _at(router, addrs, m.inputs[k]) if m.inputs[k] else -1
+    shown = labels[cur] if cur >= 0 else (m.inputs[k] or "pick a source")
+    imgui.set_next_item_width(width)
+    if imgui.begin_combo(f"##in{k}", shown):
+        for i, lb in enumerate(labels):
+            sel, _ = imgui.selectable(f"{lb}##{i}", i == cur)
+            if sel:
+                set_modifier_input(panel, m.id, k, addrs[i])
+        imgui.end_combo()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("What this modifier reads — an analyzer lane, a device's lane, "
+                          "an LFO, or another modifier's output")
+
+
+def _mod_bar(router: Router, m: Modifier) -> None:
+    """The live output: a filled bar and its number; "dormant" while an
+    input is not live."""
+    u = modifier_output(router, m.id)
+    h = imgui.get_frame_height()
+    pos = imgui.get_cursor_screen_pos()
+    dl = imgui.get_window_draw_list()
+    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE), 4.0)
+    if u is not None:
+        w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
+        dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
+    imgui.dummy(imgui.ImVec2(BAR_W, h))
+    imgui.same_line()
+    imgui.text_disabled("dormant" if u is None else f"{u:.2f}")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"{m.address}: what a route on this modifier reads"
+                          + (" — a trigger, 1 while it fires" if m.out == "trigger" else ""))
+
+
+def modifiers(panel, router: Router) -> None:
+    """The MODIFIERS strip: "+ modifier" with its kind, then each modifier
+    — its inputs, its params, its live output, ×. A route reads one by
+    picking ``mod <n>`` in its source combo."""
+    table, reg = router.table, panel.reg
+    st = _state(panel)
+    st.setdefault("mod_kind", "smooth")
+    ui._micro("modifiers")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Nodes between a source and a route: curve, scale, smooth, "
+                          "combine two, a threshold that fires, a one-frame delay")
+    sp = imgui.get_style().item_spacing.x
+    imgui.same_line(imgui.get_content_region_avail().x
+                    - (MOD_KIND_W + ui.chip_w("+ modifier") + sp))
+    imgui.set_next_item_width(MOD_KIND_W)
+    if imgui.begin_combo("##modkind", st["mod_kind"]):
+        for kind in MOD_KINDS:
+            sel, _ = imgui.selectable(kind, kind == st["mod_kind"])
+            if sel:
+                st["mod_kind"] = kind
+        imgui.end_combo()
+    imgui.same_line()
+    if ui.chip("+ modifier"):
+        add_modifier(panel, st["mod_kind"])
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("A new modifier of this kind; pick its input, then route its "
+                          "output (mod <n>) like any source")
+    mods = table.modifiers
+    if not mods:
+        imgui.text_disabled("no modifiers — routes read their sources as they are")
+        return
+    dead = None
+    drawn = 0
+    for m in mods:
+        if not _shown(panel, router, ("mod", m.id), mod_hay, m):
+            continue
+        drawn += 1
+        imgui.push_id(f"mod{m.id}")
+        panel._label_cell(f"mod {m.n}", width=MOD_ID_W)
+        imgui.text_colored(ui.DIM, m.kind)
+        srcs = modifier_sources(panel, router, m.id)
+        for k in range(len(m.inputs)):
+            imgui.same_line()
+            _input_combo(panel, router, m, k, srcs, MOD_IN_W)
+        imgui.same_line()
+        _mod_bar(router, m)
+        imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+        imgui.push_style_color(imgui.Col_.text, ui.DIM)
+        if ui.chip("×"):
+            dead = m.id
+        imgui.pop_style_color()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Remove this modifier — a route on it goes dormant")
+        specs = MOD_PARAMS[m.kind]
+        if specs:
+            imgui.dummy(imgui.ImVec2(MOD_ID_W, 0))
+            width = (imgui.get_content_region_avail().x - MOD_ID_W) / len(specs) - sp
+            for s in specs:
+                pid = f"{m.id}.{s.key}"
+                if pid not in reg:
+                    continue
+                imgui.same_line()
+                if s.kind == "toggle":
+                    panel._check(pid, s.label)
+                elif s.kind == "enum":
+                    panel._combo(pid, width)
+                else:
+                    panel._slider(pid, width)
+        imgui.pop_id()
+        imgui.separator()
+    if dead is not None:
+        remove_modifier(panel, dead)
+    if not drawn:
+        imgui.text_disabled(NO_MATCH)
+
+
 # ---- the session's rows, read-only ----
 
 def session(panel, router: Router) -> None:
@@ -1546,6 +1746,8 @@ def page(panel, dt: float) -> None:
         elif not drawn:
             imgui.text_disabled(NO_MATCH)
         imgui.spacing()
+        modifiers(panel, router)                # plan 28 N1: between the routes and the desk
+        imgui.separator()
         desk(panel, router)
         imgui.separator()
         macros(panel, router)

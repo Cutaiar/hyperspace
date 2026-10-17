@@ -241,8 +241,9 @@ def test_one_clock_reaches_the_patterns_and_the_effects(ctx):
 
     r = Renderer(ctx)
     seen = []
-    r.fx.run = lambda target, t: seen.append(t) or []
-    r.fx.active = lambda: True
+    # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+    r.fx.state.values["warp"]["on"] = True
+    r.fx.run_one = lambda name, src, dst, t: seen.append(t)
     fbo = ctx.framebuffer(color_attachments=[ctx.texture((64, 48), 4)])
     fbo.use()
     r.draw(ViewState(shape=3), 64, 48, t_now=2.5)
@@ -1419,9 +1420,12 @@ def test_a_frame_effect_runs_over_a_face_effect(ctx):
         fx.values["kaleido"]["on"] = frame
         r = Renderer(ctx, fx=fx)
         ran = {}
-        for key, chain in (("frame", r.fx), ("faces", r.face_fx)):
-            real = chain.run
-            chain.run = lambda *a, _real=real, _key=key, **k: ran.setdefault(_key, _real(*a, **k))
+        real = r.face_fx.run
+        r.face_fx.run = lambda *a, _real=real, **k: ran.setdefault("faces", _real(*a, **k))
+        # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+        one = r.fx.run_one
+        r.fx.run_one = lambda name, *a, _one=one: (ran.setdefault("frame", []).append(name),
+                                                   _one(name, *a))
         return _fdraw(ctx, r, _face_view()), ran, fx
 
     both, ran, fx = run(True, True)

@@ -3,11 +3,14 @@ loops — proved without a Router, then the edges `Router.build_patch`
 makes from a route, a macro subscriber and a scale."""
 
 import ast
+import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from hyperspace import patch as P
+from hyperspace.bands import CEIL
 from hyperspace.params import Registry
 from hyperspace.routing import Binding, Bindings, Macro, Router, Sub
 
@@ -78,6 +81,12 @@ def test_cycles_finds_every_loop_and_none_through_a_delay():
     d.link("mod:1", "mod.1.mul", "mod", ("mod:1", "mod.1.mul"))
     d.link("mod.1.mul", "mod:1", "mul")
     assert P.cycles(d) == [["mod:1", "mod.1.mul"]]
+    m2 = P.Patch()                                      # two modifiers, no cable: still a loop
+    m2.add("mod:1", "modifier")
+    m2.add("mod:2", "modifier")
+    m2.link("mod:2", "mod:1", "in")
+    m2.link("mod:1", "mod:2", "in")
+    assert P.cycles(m2) == [["mod:1", "mod:2"]]
     d2 = P.Patch()
     d2.add("mod:1", "modifier")
     d2.add("mod:2", "modifier", delay=True)
@@ -211,32 +220,112 @@ def test_a_param_the_pass_lands_is_applied_once_a_frame():
     assert not gain.modulated and state["gain"] == pytest.approx(0.5)
 
 
-def test_a_modifier_node_is_the_seam_n1_fills_and_runs_in_order():
-    """A table with `modifiers` (plan 28 N1's): each is a `modifier` node at
-    ``mod:<n>``, its inputs edges `in`, its own params' edges by name; the
-    pass calls `Router._step_modifier(id, dt, lanes)` once per modifier, in
-    the patch's order — after the param it reads has landed."""
+def _mod_rig():
+    """A bare registry with the two params the routes below land on, a
+    table, a router: N1's modifiers added through the table's own door."""
     from types import SimpleNamespace
 
+    state = {"view.bright": 0.5, "lfo.1.depth": 0.5, "master.gain": 0.5}
     reg = Registry()
-    for pid in ("view.bright", "mod.1.mul"):
-        reg.continuous(pid, pid, lambda: 0.5, lambda v: None)
-    table = Bindings([Binding("mod:1", "view.bright", "push", 0.5),
-                      Binding("hand:right.y", "mod.1.mul", "position")])
-    table.modifiers = (SimpleNamespace(id="mod.1", kind="scale", inputs=("lane:0",)),
-                       SimpleNamespace(id="mod.2", kind="delay", inputs=("mod:1",)))
+    for pid in state:
+        reg.continuous(pid, pid, lambda k=pid: state[k],
+                       lambda v, k=pid: state.__setitem__(k, v))
+    table = Bindings()
     router = Router(reg, table)
+    lane = lambda u: SimpleNamespace(lanes=np.array([u * CEIL, 0.0]))
+    return reg, table, router, lane
+
+
+def test_a_modifier_node_runs_in_order_and_its_params_land_first():
+    """N1's modifiers are `modifier` nodes at ``mod:<n>``: inputs as `in`
+    edges, their own params (``mod.1.mul``) as edges by name, so a route on
+    a modifier's param lands before the modifier steps — the same frame,
+    even the frame `set_modifiers` re-declared every ``mod.*`` param (N1's
+    concern 4: no frame on the bases). A route from ``mod:1`` is an edge
+    from the modifier node."""
+    reg, table, router, lane = _mod_rig()
+    table.add_modifier("scale", ["lane:0"], reg)
+    table.add(Binding("hand:right.y", "mod.1.mul", "position"))
+    table.add(Binding("mod:1", "view.bright", "push", 0.5))
+    router.names["hand"] = {"right.y": 0}
+    router.feed("hand", [0.75])                         # mul = −4 + 8 · 0.75 = 2
     g = router.patch
-    assert g.nodes["mod:1"].kind == "modifier" and g.nodes["mod:2"].delay
+    assert g.nodes["mod:1"].kind == "modifier"
     edges = {(e.src, e.dst, e.port) for e in g.edges}
-    assert {("lane:0", "mod:1", "in"), ("mod:1", "mod:2", "in"),
-            ("mod.1.mul", "mod:1", "mul"), ("mod:1", "view.bright", "mod")} <= edges
+    assert {("lane:0", "mod:1", "in"), ("mod.1.mul", "mod:1", "mul"),
+            ("mod:1", "view.bright", "mod")} <= edges
     order = _ids(P.order(g))
     assert order.index("mod.1.mul") < order.index("mod:1") < order.index("view.bright")
-    assert order.index("mod:1") < order.index("mod:2")
+    router.modulate(lane(0.4))
+    reg.apply()
+    assert router.feeds["mod"][1] == pytest.approx(0.8)  # × the hand's 2, this frame
+    # a second modifier re-declares every mod.* param: still this frame's mul
+    table.add_modifier("delay", ["mod:1"], reg)
+    router.modulate(lane(0.3))
+    assert router.feeds["mod"][1] == pytest.approx(0.6)
+    assert router.feeds["mod"][2] == pytest.approx(0.0)  # a plain delay: its rest first…
+    reg.apply()
+    router.modulate(lane(0.1))
+    assert router.feeds["mod"][2] == pytest.approx(0.6)  # …then its input, one frame on
+
+
+def test_a_loop_through_a_delay_runs_exactly_one_frame_late():
+    """`cycles` sees no loop through a delay, end to end: mod.1 adds band 0
+    to mod.2, mod.2 delays mod.1 — no cut, no note, the delay runs first
+    and emits mod.1's lane as it stood (its rest on the first frame), so
+    mod.1 climbs by band 0 a frame."""
+    reg, table, router, lane = _mod_rig()
+    table.add_modifier("combine", ["lane:0", "mod:2"], reg)          # add
+    table.add_modifier("delay", ["mod:1"], reg)
+    assert P.cycles(router.patch) == [] and router.patch_notes == []
+    assert _ids(P.order(router.patch)).index("mod:2") < _ids(P.order(router.patch)).index("mod:1")
     seen = []
-    router._step_modifier = lambda mid, dt, lanes: seen.append((mid, reg["mod.1.mul"].modulated))
-    router.feed("hand", [0.3])
-    router.names["hand"] = {"right.y": 0}
-    router.modulate(None, 1 / 60)
-    assert seen == [("mod.1", True), ("mod.2", True)]   # mod.1.mul landed before mod.1 ran
+    for _ in range(4):
+        router.modulate(lane(0.1))
+        reg.apply()
+        seen += [float(router.feeds["mod"][1]), float(router.feeds["mod"][2])]
+    assert seen == pytest.approx([0.1, 0.0, 0.2, 0.1, 0.3, 0.2, 0.4, 0.3])
+
+
+def test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note():
+    """A loop with no cable on it (two modifiers reading each other) keeps
+    the last modifier's input on it off, in id order — that modifier
+    dormant — with a note; the next loop (a cable one) is cut too."""
+    reg, table, router, lane = _mod_rig()
+    table.add_modifier("scale", ["mod:2"], reg)
+    table.add_modifier("scale", ["mod:1"], reg)
+    table.add(Binding("lfo:0", "lfo.1.depth", "push", 0.5))          # LFO 1 on its own depth
+    notes = router.patch_notes
+    assert notes == [
+        "loop: mod:1 → mod:2 → mod:1 needs a delay — mod.2's input mod:1 is off until it has one",
+        ("loop: lfo:0 → lfo.1.depth → lfo:0 needs a delay — lfo:0 → lfo.1.depth is off "
+         "until it has one")]
+    assert router.patch_cut == {("mod:1", "mod:2"), ("lfo:0", "lfo.1.depth")}
+    assert P.cycles(router.patch) == []
+    router.feed("lfo", [0.9])
+    router.rests["lfo"] = [0.5]
+    router.modulate(lane(0.4))
+    reg.apply()
+    vec = router.feeds["mod"]
+    assert math.isnan(vec[2]) and math.isnan(vec[1])     # dormant, both
+    assert not reg["lfo.1.depth"].modulated
+
+
+def test_a_loop_through_a_scale_or_a_macro_depth_sub_is_cut():
+    """The sorter sees a loop through a `scale` param and through a macro's
+    depth subscriber; the later row in table order is cut."""
+    reg = Registry()
+    for pid in ("master.gain", "lfo.1.depth", "macro.1"):
+        reg.continuous(pid, pid, lambda: 0.5, lambda v: None)
+    a = Binding("lfo:0", "master.gain", "push", 0.5)
+    b = Binding("lane:0", "lfo.1.depth", "push", 0.5, scale="master.gain")
+    router = Router(reg, Bindings([a, b]))
+    assert P.cycles(router.build_patch()) == [["lfo:0", "master.gain", "lfo.1.depth"]]
+    assert router.patch_cut == {("lane:0", "lfo.1.depth")}
+    c = Binding("lfo:0", "macro.1", "push", 0.5)
+    d = Binding("lane:0", "lfo.1.depth", "push", 0.5)
+    table = Bindings([c, d])
+    table.macros = {"macro.1": Macro("", [Sub(depth=("lane:0", "lfo.1.depth"))])}
+    router = Router(reg, table)
+    assert P.cycles(router.build_patch()) == [["lfo:0", "macro.1", "lfo.1.depth"]]
+    assert router.patch_cut == {("lane:0", "lfo.1.depth")}

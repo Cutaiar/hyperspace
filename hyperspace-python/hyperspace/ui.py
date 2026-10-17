@@ -2009,7 +2009,10 @@ class Panel:
         """The SYSTEM page's GPU timing (plan 26 A0, per node since A1): a
         heading, then one line per node of the render graph (graph.py) of
         the last frames, its rolling median in ms
-        (`Renderer.stats["gpu_ms"]`, render.PassTimer); with no timer
+        (`Renderer.stats["gpu_ms"]`, render.PassTimer) — plan 30 D0: a line
+        per effect that ran a pass (`acid`, `acid(scene+hands)`, the
+        graph's `Effect` nodes, `Graph.timed_in`) before its pipeline end's
+        own (`fx`, the work beyond its effects); with no timer
         queries on the context, the one line saying so. Nothing before a
         frame has been timed, or with no renderer."""
         stats = getattr(self.renderer, "stats", None) or {}

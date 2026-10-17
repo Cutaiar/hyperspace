@@ -1,0 +1,10 @@
+{
+ "schema": "hyperspace.desk/1",
+ "name": "mod rig",
+ "note": "plan 28 N1's fixture template: no desk rows, two rig-wide modifiers — the right hand's energy smoothed, and a threshold on band 0",
+ "desk": [],
+ "modifiers": [
+  {"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05, "release": 0.6},
+  {"id": "mod.3", "kind": "threshold", "in": ["lane:0"], "on": 0.7, "off": 0.3, "hold": 0.25}
+ ]
+}

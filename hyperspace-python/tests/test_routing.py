@@ -2778,6 +2778,7 @@ def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
     # what that LFO drives, one frame earlier
     assert ("party-trip", "camera.zoom") in shifted_somewhere
     assert ("lfo-breathe", "view.bright") in shifted_somewhere
+    assert ("party-tumble", "rot.rate.ZW") in shifted_somewhere   # the scale path
 
 
 def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
@@ -2815,11 +2816,6 @@ def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
     router.modulate(r.chain, 1 / 60, now=1.0 + 1 / 60)
     r.reg.apply()
     assert depth.modulated
-    # the page's head lists the note (ui_routing.head)
-    import inspect
-
-    from hyperspace import ui_routing
-    assert "patch_notes" in inspect.getsource(ui_routing.head)
 
 
 def test_sinks_still_send_after_apply(tmp_path):

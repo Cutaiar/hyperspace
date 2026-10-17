@@ -96,7 +96,7 @@ TRASH_KEY = "\0trash"     # …the trash
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset), and the band
 # strip's scene, the one session module a project names
-OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS if g != "macro"], "band")
+OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS if g not in ("macro", "mod")], "band")
 
 
 # ---- state on the panel, created on first use ----

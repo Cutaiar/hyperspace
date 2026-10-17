@@ -39,9 +39,11 @@ decisions"):
 
 And the three that wrap what exists (A1's call, registered):
 
-- **FX** (`Fx`): the effect chain (`fx.FxChain`), one node per pipeline,
-  the effects' order inside it as today. Inactive, it passes its input
-  through untouched.
+- **FX** (`Effect`, `Fx`; plan 30 D0): each effect instance is an image
+  node (`Effect`: one pass of its file's program, `FxChain.run_one`),
+  and each pipeline's chain is a run of them in the stack's order ending
+  in the pipeline's end (`Fx`). An effect that is off reads its input
+  through: no pass, no texture.
 - **History** (`History`, `Capture`): the look-back (`lookback.Lookback`)
   as two nodes, because its composite must read the ring before the
   frame's capture changes it: `history` lays the echoes and the dream
@@ -1309,12 +1311,144 @@ def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
 
 # ---------------------------------------------------------------- fx
 
+def _chain_now(frame: Frame) -> frozenset[str]:
+    """The effects the frame's chain runs this frame (`FxState.chain` for
+    the frame's target), asked once a frame: none while `fx_on` is off."""
+    got = frame.data.get("fx#chain")
+    if got is None:
+        fx = frame.r.fx
+        got = frame.data["fx#chain"] = (
+            frozenset(fx.state.chain(getattr(fx, "target", 0))) if frame.fx_on else frozenset())
+    return got
+
+
+def _spare(frame: Frame, dst: moderngl.Framebuffer | None, hold: bool = False
+           ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
+    """A texture of the effects' pool (`FxChain.pool`, sized by the graph:
+    `Graph.pool`) to paint an effect's input into: never `dst` (the one
+    the effect writes) and never one held for the frame (an effect's
+    image a second consumer still reads). The pool's two textures
+    alternate down a straight run — the effect writing `dst` reads the
+    other one, which the effect before it wrote from `dst`'s — so two are
+    enough however long the run; one is added if none is free. `hold`
+    keeps the texture for the rest of the frame."""
+    fx = frame.r.fx
+    held = frame.data.setdefault("fx#held", set())
+    need = frame.graph.pool if frame.graph is not None else 2
+    pool = fx.pool(frame.size, max(need, 2))
+    for tex, fbo in pool:
+        if fbo is not dst and id(tex) not in held:
+            break
+    else:
+        tex, fbo = fx.pool(frame.size, len(pool) + 1)[-1]
+    if hold:
+        held.add(id(tex))
+    return tex, fbo
+
+
+class Effect(Node):
+    """One effect instance as an image node (plan 30 D0): one effect file's
+    program (`fx.FxChain`) over its input. `effect` is the instance's name
+    as `FxState` knows it (`acid`, `acid.2`, `palette`) and its params are
+    `fx.<effect>.*`; the node's own `name` is the effect's in the scene's
+    pipeline and `acid(scene+hands)` … in the others (`effect_node_name`).
+
+    **Off** this frame — not in the frame chain's `FxState.chain` (switched
+    off, mix 0, the stack bypassed, aimed at the faces) or its file never
+    compiled — it is a read-through: its consumers get its input's
+    picture (`paint` paints the input straight into the consumer's
+    framebuffer, `image` is the input's), no pass runs and no texture is
+    taken. **On**, it paints its input into a texture of the effects' pool
+    and runs its pass from there into its consumer's framebuffer
+    (`FxChain.run_one`) under `frame.timed(name)`: the SYSTEM page's line
+    for it, in a frame it ran. Painted once a frame however many
+    consumers read it: a node with more than one reader (`Graph.readers`)
+    makes its picture once into a pool texture held for the frame
+    (`image`) and shows that 1:1 into each.
+
+    `run` does nothing: the pass runs when its consumer pulls it, like
+    the history's and the composites' (the class docstring of the module:
+    "materialised and painted images")."""
+
+    KIND = "effect"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
+    TIMED = False            # a line on SYSTEM only in a frame it ran (`Graph.timed_in`)
+
+    def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
+                 after: tuple[Node, ...] = ()):
+        super().__init__(node if node is not None else name, after, image=image)
+        self.effect = name
+
+    def on(self, frame: Frame) -> bool:
+        """Whether this effect runs a pass this frame (see the class)."""
+        key = self.name + "#on"
+        got = frame.data.get(key)
+        if got is None:
+            got = frame.data[key] = (self.effect in _chain_now(frame)
+                                     and frame.r.fx.ready(self.effect))
+        return got
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        src = self.inputs["image"]
+        if src is None:
+            return
+        if not self.on(frame):
+            src.paint(frame, dst)                 # read through: no pass, no texture
+            return
+        readers = frame.graph.readers(self) if frame.graph is not None else 1
+        if self.name in frame.data or readers > 1:
+            # made once into a held texture that is never `dst` (a consumer
+            # painting into a pool texture must not be shown it: a feedback
+            # loop), then shown 1:1
+            self._make(frame, dst)
+            super().paint(frame, dst)
+            return
+        self._pass(frame, dst)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.inputs["image"]
+        if not self.on(frame):
+            return src.image(frame) if src is not None else None
+        return self._make(frame, None)
+
+    def _make(self, frame: Frame, avoid: moderngl.Framebuffer | None) -> moderngl.Texture:
+        """This effect's picture for the frame, made once into a pool
+        texture held for the rest of it: never `avoid` (the framebuffer the
+        consumer asking paints into), never one held already. A held
+        texture is never handed out again this frame, so a later
+        consumer's `dst` cannot be it."""
+        if self.name not in frame.data:
+            tex, fbo = _spare(frame, avoid, hold=True)
+            self._pass(frame, fbo)
+            frame.data[self.name] = tex
+        return frame.data[self.name]
+
+    def _pass(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """The input into a pool texture, then this effect's pass from it
+        into `dst`; counted in `frame.stats["effects"]`. The timer brackets
+        the pass alone (queries never nest: the input's own nodes time
+        themselves before it)."""
+        tex, fbo = _spare(frame, dst)
+        self.inputs["image"].paint(frame, fbo)
+        with frame.timed(self.name):
+            frame.r.fx.run_one(self.effect, tex, dst, frame.t)
+        frame.stats.setdefault("effects", []).append(self.name)
+
+
 class Fx(Node):
-    """The effect chain (`FxChain.run`) over its input, the last node of a
-    pipeline: it paints its input into the chain's first texture
-    (`FxChain.begin`) and the chain's last effect writes the destination.
-    With no effect on, the input is painted straight into the destination
-    and the chain is not touched.
+    """The pipeline's end (plan 30 D0: the class keeps its name and its
+    `fx` lines; before D0 it ran every effect as one block). Its input is
+    the pipeline's run of `Effect` nodes — every effect instance, in the
+    stack's order, an off one reading through — whose last node paints
+    into the end's destination; with no effect on this frame the run
+    reads straight through to the pipeline's source (the history, or the
+    composite laying the hands on) and nothing of the chain is touched.
+    The clocks move once a frame whatever runs (`FxState.advance_to`);
+    each pipeline that runs with an effect on is one of
+    `frame.stats["chain_runs"]`. The end's own line on SYSTEM is the work
+    beyond its effects' passes — none — and each effect that ran has its
+    own.
 
     As the pipeline's end it decides where the picture lands (`run`):
     straight into the one output that takes it when that output is at
@@ -1324,7 +1458,7 @@ class Fx(Node):
     raises marks its views (`View.error`, named after the pipeline) and
     they show their ground.
 
-    A pipeline whose input lays a layer on before the effects (a
+    A pipeline whose source lays a layer on before the effects (a
     `Composite` with an `over`: today's "through") is only itself while
     the layer is bent: an effect on and the layer drawn. Otherwise its
     outputs take `fallback` — the pipeline it was laid onto, or the
@@ -1342,9 +1476,28 @@ class Fx(Node):
         self.fallback = fallback
 
     @property
+    def effects(self) -> list[Effect]:
+        """The pipeline's run of effect nodes, first to last."""
+        run: list[Effect] = []
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            run.append(src)
+            src = src.inputs["image"]
+        return run[::-1]
+
+    @property
+    def source(self) -> Node | None:
+        """What the run starts from: the history, or the composite that
+        lays the hands on before the effects."""
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            src = src.inputs["image"]
+        return src
+
+    @property
     def layer(self) -> Node | None:
         """The layer this pipeline lays on before the effects, if any."""
-        src = self.inputs["image"]
+        src = self.source
         return src.inputs["over"] if isinstance(src, Composite) else None
 
     def bent(self, frame: Frame) -> bool:
@@ -1381,16 +1534,22 @@ class Fx(Node):
             r._rebind(frame.target, frame.vp)
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """Its input into `dst`: the run of effects (or, with none on, the
+        source read straight through)."""
         src = self.inputs["image"]
-        if not frame.fx_on:
-            src.paint(frame, dst)
-            return
-        fx = frame.r.fx
-        buf = fx.begin(frame.size)
-        src.paint(frame, buf)
-        with frame.timed(self.name):
-            fx.run(dst, frame.t)
-        frame.stats["chain_runs"] += 1
+        if frame.fx_on:
+            frame.r.fx.state.advance_to(frame.t)
+        src.paint(frame, dst)
+        if frame.fx_on:
+            frame.stats["chain_runs"] += 1
+
+
+def effect_node_name(effect: str, key: int) -> str:
+    """The node of effect instance `effect` in pipeline `key`'s run: the
+    effect's own name in the scene's pipeline (`palette`, `acid.2`: the
+    SYSTEM line, the word a placement names), the pipeline's suffix in the
+    others (`acid(scene+hands)`, `acid(hands)`), as the ends are named."""
+    return effect if key == SCENE else effect + FX_NAMES[key][len("fx"):]
 
 
 # ---------------------------------------------------------------- output
@@ -1429,7 +1588,7 @@ class Output(Node):
         end = self.inputs["image"]
         over, blend = self.inputs["hands"], self.blend
         if isinstance(end, Fx) and not end.bent(frame):
-            over, blend = end.layer, end.inputs["image"].blend
+            over, blend = end.layer, end.source.blend
             end = end.fallback
         laid = (over, blend) if over is not None and over.image(frame) is not None else None
         frame.data[key] = got = (end, laid)
@@ -1477,7 +1636,13 @@ class Graph:
     in the graph (names unique); `order` is dependency order, settled when
     the graph is built: a depth-first walk from each node in the order
     they were added, dependencies first, so ties fall in insertion order
-    (today's frame order). `evaluate` runs every node once."""
+    (today's frame order). `evaluate` runs every node once.
+
+    Plan 30 D0: `readers` counts each node's consumers (an effect read by
+    two is made once into a held texture), `pool` is how many textures
+    the effects' pool needs for this graph, and `effects` the effect
+    instances the default graph built its runs from (in the stack's
+    order: the renderer builds again when it changes)."""
 
     def __init__(self, key: tuple = (), wiring: Wiring | None = None):
         self.key = key
@@ -1485,6 +1650,9 @@ class Graph:
         self.nodes: dict[str, Node] = {}
         self.order: list[Node] = []
         self.clouds: tuple[str, ...] = ()        # the cloud roles the default graph drew (A4b)
+        self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
+        self._readers: dict[str, int] = {}
+        self._pool: int | None = None
 
     def add(self, node: Node) -> Node:
         if node.name in self.nodes:
@@ -1493,8 +1661,28 @@ class Graph:
             if self.nodes.get(dep.name) is not dep:
                 raise ValueError(f"{node.name!r} depends on {dep.name!r}, not in the graph")
         self.nodes[node.name] = node
+        for src in node.inputs.values():
+            if src is not None:
+                self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
+        self._pool = None
         return node
+
+    def readers(self, node: Node) -> int:
+        """How many input ports of this graph's nodes read `node`."""
+        return self._readers.get(node.name, 0)
+
+    @property
+    def pool(self) -> int:
+        """The textures the effects' pool needs (`FxChain.pool`): none
+        without an effect node; two for straight runs (each effect reads
+        the one its consumer does not write); one more for each effect
+        read by more than one node, whose picture is held for the frame.
+        Settled with the graph (asked once a pass)."""
+        if self._pool is None:
+            effects = [n for n in self.order if isinstance(n, Effect)]
+            self._pool = (2 + sum(1 for n in effects if self.readers(n) > 1)) if effects else 0
+        return self._pool
 
     def _sort(self) -> list[Node]:
         done: list[Node] = []
@@ -1521,6 +1709,15 @@ class Graph:
         scene and a layer and its line is its in-scene draws)."""
         held = self.in_scene()
         return [n.name for n in self.order if n.TIMED or n.name in held]
+
+    def timed_in(self, frame: Frame) -> list[str]:
+        """`timed` with the effect nodes that ran a pass this frame
+        (`frame.stats["effects"]`) in their places (plan 30 D0): the
+        names the renderer hands the timer for the frame, so the SYSTEM
+        page has a line per effect that ran and none for one that is off."""
+        held = self.in_scene()
+        ran = set(frame.stats.get("effects", ()))
+        return [n.name for n in self.order if n.TIMED or n.name in held or n.name in ran]
 
     def in_scene(self) -> set[str]:
         """The names of the solid geometries some scene of this graph draws."""
@@ -1573,7 +1770,7 @@ HISTORY_COMPOSITE = "composite(history)"
 
 
 def default_graph(views: list[View], wiring: Wiring | None = None,
-                  clouds: tuple[str, ...] = ()) -> Graph:
+                  clouds: tuple[str, ...] = (), effects: tuple[str, ...] = ()) -> Graph:
     """The frame as a graph, from the views' switches and the wiring
     (`Wiring`; the default is today's frame). Each output's three
     switches are its wiring:
@@ -1608,7 +1805,16 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
 
     Plan 26 A4b: `clouds`, the roles of the listed `cloud` devices
     (`cloud_roles`), each a point-cloud geometry in the scene, solid,
-    before the hands; none listed, the graph is the one above."""
+    before the hands; none listed, the graph is the one above.
+
+    Plan 30 D0: `effects`, every effect instance in the stack's order
+    (`FxState.names()`: on or off, whatever its target), is each
+    pipeline's run — one `Effect` node per instance between the
+    pipeline's source and its end (`Fx`), named by `effect_node_name`.
+    An off effect reads through, so switching one on or off changes no
+    node; only a change to the list (an order, an instance, a file)
+    builds the graph again. None given, the ends read their sources
+    directly: the frame with no effect."""
     wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
     inside = wiring.in_scene()
@@ -1623,6 +1829,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         wiring.history == "scene+hands" and not in_scene)
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
+    g.effects = tuple(effects)                     # plan 30 D0: what its runs hold
     points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
@@ -1648,13 +1855,26 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     # every pipeline end runs after the hands' layer: whether a hand shows
     # this frame decides which pipelines the views take
     gate = (layer,) if layer is not None else ()
+
+    def run(key: int, src: Node) -> Node:
+        # the pipeline's run of effect nodes, in the stack's order; a name
+        # some other node has (or will have) is kept apart by the params'
+        # prefix, `fx.<name>`
+        for e in g.effects:
+            name = effect_node_name(e, key)
+            if (name in g.nodes or name in ("capture", *FX_NAMES.values())
+                    or name.startswith("output.")):
+                name = f"fx.{name}"
+            src = g.add(Effect(e, image=src, node=name))
+        return src
+
     for key in pipelines_of(switches, in_scene):
         if key == SCENE:
-            ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=history))
+            ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=run(key, history)))
             continue
         src = g.add(Composite(COMPOSITE_NAMES[key], blend=wiring.blend, depth=depth,
                               under=history if key == SCENE_HANDS else None, over=layer))
-        ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=src,
+        ends[key] = g.add(Fx(FX_NAMES[key], key, after=gate, image=run(key, src),
                              fallback=ends.get(SCENE) if key == SCENE_HANDS else None))
     held = scene
     if wiring.history == "scene+hands" and layer is not None and not in_scene:
