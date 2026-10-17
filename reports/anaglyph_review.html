@@ -1,0 +1,854 @@
+<title>Hyperspace 3D Glasses Plan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one centered reading column (max 1040px) of stacked bands; diagrams break wider into grids; everything stacks to one column at phone width. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#e3e8ee; --ink:#141922; --ink-2:#465161; --ink-3:#6a7586; --rule:#cfd6df;
+  --accent:#08758f; --accent-soft:#d6eef3;
+  --ana-red:#e3263a; --ana-cyan:#11a8c6;
+  --good:#1c7a4b; --good-soft:#dcefe4; --warn:#9a5b00; --warn-soft:#f6ead6; --bad:#b3202e; --bad-soft:#f7dfe1;
+  --screen:#06070a; --screen-ink:#c9d1dc;
+  --dot-off:#cdd4dc;
+  --band:#7d8796;
+  --s-red:#d42a3c; --s-cyan:#0a8db0; --s-green:#1d9a48; --s-magenta:#b3249f; --s-amber:#b98000; --s-blue:#2b4fe0;
+  --s-pink1:#d9466f; --s-pink2:#9b2f8a; --s-pink3:#5f5bd6; --s-ref:#3d4654;
+  --f-display:"Unbounded","Arial Black",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c0f14; --surface:#151a22; --surface-2:#1c232e; --ink:#e8ecf2; --ink-2:#aab4c2; --ink-3:#8590a0; --rule:#2a3340;
+  --accent:#4cc3db; --accent-soft:#12303a;
+  --ana-red:#ff4d5e; --ana-cyan:#2fc6e2;
+  --good:#5bc98d; --good-soft:#143224; --warn:#e2a64a; --warn-soft:#352914; --bad:#ff6b76; --bad-soft:#3a1a1e;
+  --screen:#030405; --screen-ink:#c9d1dc;
+  --dot-off:#323b48;
+  --band:#8a95a6;
+  --s-red:#ec4558; --s-cyan:#139bb9; --s-green:#2bb05c; --s-magenta:#c552c5; --s-amber:#b9870e; --s-blue:#6a82f5;
+  --s-pink1:#e9566f; --s-pink2:#a64ab3; --s-pink3:#6f7cf0; --s-ref:#b9c2cf;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0c0f14; --surface:#151a22; --surface-2:#1c232e; --ink:#e8ecf2; --ink-2:#aab4c2; --ink-3:#8590a0; --rule:#2a3340;
+  --accent:#4cc3db; --accent-soft:#12303a;
+  --ana-red:#ff4d5e; --ana-cyan:#2fc6e2;
+  --good:#5bc98d; --good-soft:#143224; --warn:#e2a64a; --warn-soft:#352914; --bad:#ff6b76; --bad-soft:#3a1a1e;
+  --screen:#030405; --screen-ink:#c9d1dc;
+  --dot-off:#323b48;
+  --band:#8a95a6;
+  --s-red:#ec4558; --s-cyan:#139bb9; --s-green:#2bb05c; --s-magenta:#c552c5; --s-amber:#b9870e; --s-blue:#6a82f5;
+  --s-pink1:#e9566f; --s-pink2:#a64ab3; --s-pink3:#6f7cf0; --s-ref:#b9c2cf;
+  color-scheme:dark }
+
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.55;margin:0;-webkit-text-size-adjust:100%}
+.page{max-width:1040px;margin:0 auto;padding-block:36px 56px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:64px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;line-height:1.15;text-wrap:balance;margin:0;letter-spacing:-0.01em}
+h2{font-size:clamp(22px,3.4vw,30px)}
+h3{font-size:17px;font-weight:500}
+p{margin:0;max-width:65ch}
+a{color:var(--accent);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.lede{font-size:19px;color:var(--ink-2)}
+.muted{color:var(--ink-3)}
+.small{font-size:14.5px}
+section{display:flex;flex-direction:column;gap:20px;min-width:0}
+.sec-head{display:flex;flex-direction:column;gap:8px}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+svg{display:block;max-width:100%}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:18px;padding-block:12px 0}
+.hero h1{font-size:clamp(32px,6.4vw,64px);text-shadow:-0.035em 0 color-mix(in srgb,var(--ana-red) 75%,transparent),0.035em 0 color-mix(in srgb,var(--ana-cyan) 75%,transparent);transition:text-shadow .4s ease}
+.hero h1:hover{text-shadow:-0.06em 0 color-mix(in srgb,var(--ana-red) 75%,transparent),0.06em 0 color-mix(in srgb,var(--ana-cyan) 75%,transparent)}
+.glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:6px}
+.glance div{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.glance b{font-family:var(--f-display);font-weight:500;font-size:19px}
+.glance span{color:var(--ink-2);font-size:15px}
+.define{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;max-width:760px}
+.define .tag{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;background:var(--ink);color:var(--bg);border-radius:4px;padding:3px 7px;white-space:nowrap;margin-top:2px}
+
+/* flow */
+.flow{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;counter-reset:st}
+.flow li{position:relative;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:10px 10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.flow li::after{content:"";position:absolute;right:-9px;top:52px;width:8px;height:2px;background:var(--ink-3)}
+.flow li:last-child::after{display:none}
+.flow .art{background:var(--screen);border-radius:7px;aspect-ratio:4/3;max-width:100%;display:flex;align-items:center;justify-content:center}
+.flow .art svg{width:100%;height:100%}
+.flow .n{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.flow b{font-size:15px;line-height:1.25}
+.flow span.t{font-size:13.5px;color:var(--ink-2);line-height:1.35}
+@media (max-width:900px){
+  .flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow li::after{display:none}
+  .flow li:last-child{grid-column:1/-1}
+  .flow li:last-child .art{aspect-ratio:auto;height:130px}
+}
+
+/* lens explainer */
+.lens-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.lens-card{display:flex;flex-direction:column;gap:8px;min-width:0}
+.lens-card .scr{background:var(--screen);border-radius:var(--r);overflow:hidden;position:relative}
+.lens-card .scr svg{width:100%;height:auto}
+.lens-card .cap{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+.lens-card p{font-size:14.5px;color:var(--ink-2)}
+.chip{display:inline-block;width:14px;height:14px;border-radius:50%;flex:none;border:1px solid var(--rule)}
+@media (max-width:820px){.lens-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.callout{border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:820px}
+.callout.bad{background:var(--bad-soft)}
+.callout.warn{background:var(--warn-soft)}
+.callout.good{background:var(--good-soft)}
+.callout b.k{font-family:var(--f-mono);font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
+.callout.bad b.k{color:var(--bad)} .callout.warn b.k{color:var(--warn)} .callout.good b.k{color:var(--good)}
+
+/* pair cards */
+.pairs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:900px){.pairs{grid-template-columns:1fr}}
+.pair{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.pair .order{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pair .order .rank{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.pair .order .badge{font-family:var(--f-mono);font-size:12px;border-radius:999px;padding:2px 9px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.pair .order .badge.diy{background:var(--warn-soft);color:var(--warn)}
+.pair h3{font-size:20px}
+.specs{background:var(--surface-2);border-radius:8px;padding:10px 12px}
+.specs svg{width:100%;height:auto}
+.through{display:flex;flex-direction:column;gap:6px}
+.through .row{display:grid;grid-template-columns:minmax(0,11em) 1fr 3.4em;gap:8px;align-items:center;font-size:14px}
+.through .bar{height:10px;border-radius:5px;background:var(--surface-2);overflow:hidden}
+.through .bar i{display:block;height:100%;border-radius:5px}
+.through .row span:last-child{text-align:right}
+.rate{display:grid;grid-template-columns:1fr auto;gap:6px 10px;font-size:14.5px;align-items:center}
+.dots{display:inline-flex;gap:4px}
+.dots i{width:11px;height:11px;border-radius:50%;background:var(--dot-off);display:block}
+.dots i.on{background:var(--ink)}
+.pair .note{font-size:14.5px;color:var(--ink-2)}
+.pair .note b{color:var(--ink)}
+
+/* score bars */
+.scores{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+@media (max-width:820px){.scores{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.hbars{display:flex;flex-direction:column;gap:9px}
+.hbar{display:grid;grid-template-columns:minmax(7.5em,11em) 1fr 3.2em;gap:10px;align-items:center;font-size:14.5px}
+.hbar .trk{min-width:0;background:var(--surface-2);border-radius:0 4px 4px 0}
+.hbar .fill{height:16px;border-radius:0 4px 4px 0;display:block;flex:none;min-width:4px}
+.hbar .val{text-align:right;font-family:var(--f-mono);font-size:13.5px;font-variant-numeric:tabular-nums}
+.split{background:linear-gradient(90deg,var(--l) 0 50%,var(--rr) 50% 100%)}
+.fill.lcd{background:var(--good)} .fill.dlp{background:var(--warn)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:18px;height:4px;border-radius:2px}
+.legend i.dash{background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 10px)!important;height:3px}
+.legend i.dot{background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 5px)!important;height:3px}
+
+/* spectra */
+.spec-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:820px){.spec-grid{grid-template-columns:1fr}}
+.chartbox{position:relative}
+svg.spec{width:100%;height:auto;touch-action:pan-y}
+svg.spec .grid{stroke:var(--rule);stroke-width:1;fill:none}
+svg.spec .axis{stroke:var(--ink-3);stroke-width:1.2;fill:none}
+svg.spec .tick{fill:var(--ink-3);font-family:var(--f-mono);font-size:11.5px}
+svg.spec .axt{fill:var(--ink-2);font-family:var(--f-body);font-size:12px}
+svg.spec .bandlab{fill:var(--ink-3);font-family:var(--f-body);font-size:11.5px}
+svg.spec .band{fill:var(--band);fill-opacity:.12}
+svg.spec .band.hl{fill:var(--s-green);fill-opacity:.22}
+svg.spec .ln{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+svg.spec .area{stroke:none;fill-opacity:.10}
+svg.spec .xh{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:3 3;fill:none}
+.s-red{stroke:var(--s-red);fill:var(--s-red);color:var(--s-red)} .s-cyan{stroke:var(--s-cyan);fill:var(--s-cyan);color:var(--s-cyan)}
+.s-green{stroke:var(--s-green);fill:var(--s-green);color:var(--s-green)} .s-magenta{stroke:var(--s-magenta);fill:var(--s-magenta);color:var(--s-magenta)}
+.s-amber{stroke:var(--s-amber);fill:var(--s-amber);color:var(--s-amber)} .s-blue{stroke:var(--s-blue);fill:var(--s-blue);color:var(--s-blue)}
+.s-pink1{stroke:var(--s-pink1);fill:var(--s-pink1);color:var(--s-pink1)} .s-pink2{stroke:var(--s-pink2);fill:var(--s-pink2);color:var(--s-pink2)}
+.s-pink3{stroke:var(--s-pink3);fill:var(--s-pink3);color:var(--s-pink3)} .s-ref{stroke:var(--s-ref);fill:var(--s-ref);color:var(--s-ref)}
+svg.spec .area.s-ref,svg.spec .area.s-pink2,svg.spec .area.s-pink3{fill-opacity:0}
+svg.spec .ln.s-ref{stroke-width:2.6}
+.legend i.s-red,.legend i.s-cyan,.legend i.s-green,.legend i.s-magenta,.legend i.s-amber,.legend i.s-blue,.legend i.s-pink1,.legend i.s-pink2,.legend i.s-pink3,.legend i.s-ref{background:currentColor}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12.5px;line-height:1.4;border-radius:6px;padding:7px 9px;min-width:150px;max-width:230px;z-index:2}
+.tip b{font-family:var(--f-mono);font-weight:600}
+.tip .r{display:flex;justify-content:space-between;gap:10px}
+.tip .r span:last-child{font-family:var(--f-mono)}
+.tbl{width:100%;border-collapse:collapse;font-size:14.5px;min-width:520px}
+.tbl th,.tbl td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule)}
+.tbl th{font-family:var(--f-mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.tbl td.num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.tbl th.num{text-align:right}
+.tbl td.blk{color:var(--ink-3)}
+.tbl td.leak{color:var(--bad);font-weight:600}
+.tbl td.ok{color:var(--good);font-weight:600}
+
+/* shop */
+.shop-group{display:flex;flex-direction:column;gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.prod{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.prod .sw{display:flex;gap:4px}
+.prod .sw i{display:block;height:10px;flex:1;border-radius:3px}
+.prod h4{margin:0;font-size:16px;line-height:1.3}
+.prod .who{font-size:13.5px;color:var(--ink-3)}
+.prod .price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.prod .price b{font-family:var(--f-mono);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.prod .price span{font-size:13.5px;color:var(--ink-2)}
+.prod dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13.5px}
+.prod dt{color:var(--ink-3)} .prod dd{margin:0;color:var(--ink-2)}
+.prod a.go{margin-top:auto;align-self:flex-start;font-weight:700;font-size:14.5px}
+.total{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;background:var(--ink);color:var(--bg);border-radius:var(--r);padding:16px 18px}
+.total b{font-family:var(--f-mono);font-size:30px;font-weight:600}
+.total .lbl{font-family:var(--f-mono);font-size:12px;letter-spacing:.07em;text-transform:uppercase;opacity:.75}
+.total .col{display:flex;flex-direction:column;gap:2px}
+.total p{font-size:14px;opacity:.85}
+.extra{font-size:14.5px;color:var(--ink-2)}
+
+/* software ladder */
+.ladder{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:820px){.ladder{grid-template-columns:1fr}}
+.step{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.step .when{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.step p{font-size:15px;color:var(--ink-2)}
+.mix{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--f-mono);font-size:13px;color:var(--ink-2)}
+.mix .px{display:inline-flex;gap:2px;padding:3px;border-radius:5px;background:var(--surface-2)}
+.mix .px i{width:16px;height:16px;border-radius:3px;display:block}
+.now{background:var(--surface-2);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:6px;max-width:820px}
+
+/* phases */
+.phases{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;position:relative}
+.phases li{display:flex;flex-direction:column;gap:10px;min-width:0}
+.phases .node{display:flex;align-items:center;gap:8px}
+.phases .node b{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-size:15px;background:var(--ink);color:var(--bg);flex:none}
+.phases .node::after{content:"";flex:1;height:2px;background:var(--rule)}
+.phases li:last-child .node::after{display:none}
+.phases h3{font-size:16px}
+.phases .body{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+.phases .body p{font-size:14.5px;color:var(--ink-2)}
+.phases .meta{display:flex;flex-direction:column;gap:4px;font-size:13.5px;border-top:1px solid var(--rule);padding-top:8px}
+.phases .meta span b{font-family:var(--f-mono);font-weight:600;color:var(--ink);white-space:nowrap}
+@media (max-width:900px){
+  .phases{grid-template-columns:1fr}
+  .phases li{display:grid;grid-template-columns:34px 1fr;gap:12px}
+  .phases .node{flex-direction:column;height:100%}
+  .phases .node::after{width:2px;height:auto;flex:1}
+  .phases .stack{display:flex;flex-direction:column;gap:8px;min-width:0}
+}
+.phases .stack{display:flex;flex-direction:column;gap:8px;min-width:0;flex:1}
+
+/* troubleshooting */
+.fix{display:flex;flex-direction:column;gap:8px}
+.fix .r{display:grid;grid-template-columns:minmax(0,1fr) 28px minmax(0,1.6fr);gap:10px;align-items:stretch}
+.fix .sym,.fix .cure{border-radius:8px;padding:11px 14px;font-size:15px}
+.fix .sym{background:var(--surface);border:1px solid var(--rule);font-weight:700;display:flex;align-items:center}
+.fix .cure{background:var(--surface-2);color:var(--ink-2)}
+.fix .cure b{color:var(--ink)}
+.fix .arr{display:flex;align-items:center;justify-content:center;color:var(--ink-3)}
+.fix .arr svg{width:24px;height:14px}
+.fix .hd{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+@media (max-width:640px){
+  .fix .r{grid-template-columns:1fr}
+  .fix .arr{justify-content:flex-start;padding-left:14px}
+  .fix .arr svg{transform:rotate(90deg)}
+  .fix .r.h{display:none}
+}
+
+/* safety + unknowns */
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:820px){.two{grid-template-columns:1fr}}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.list li{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:15.5px;align-items:start}
+.list li svg{width:20px;height:20px;margin-top:2px}
+.list li span{min-width:0}
+
+/* experiment */
+.exp{background:var(--surface);border:2px solid var(--ink);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:18px}
+.exp-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;counter-reset:e}
+.exp-steps li{display:grid;grid-template-columns:30px 1fr;gap:12px;font-size:15.5px}
+.exp-steps li::before{counter-increment:e;content:counter(e);width:30px;height:30px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-family:var(--f-mono);font-weight:600;font-size:14px}
+.exp-steps li span{min-width:0}
+.rc-test{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;max-width:720px}
+.rc-test figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rc-test figcaption{font-size:13.5px;color:var(--ink-2)}
+.rc-test .scr{background:var(--screen);border-radius:8px;overflow:hidden}
+.rc-test svg{width:100%;height:auto}
+
+footer.eng{border-top:1px solid var(--rule);padding-top:20px;display:flex;flex-direction:column;gap:10px;font-size:14px;color:var(--ink-3)}
+footer.eng code{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);word-break:break-word}
+footer.eng ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+
+@media (max-width:480px){ body{font-size:16px} .lede{font-size:17px} }
+@media (prefers-reduced-motion: reduce){ *,*::before,*::after{transition:none!important;animation:none!important} }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Unbounded:wght@500;700&display=swap">
+
+<!-- Shared drawing parts: lens filters (these really keep only the light each lens passes) and the wireframe "scene". -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="f-red" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter>
+    <filter id="f-cyan" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>
+    <filter id="f-leak" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.2 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"/></filter>
+    <symbol id="cube" viewBox="0 0 60 60"><path d="M8 22h30v30H8z M22 8h30v30H22z M8 22L22 8 M38 22L52 8 M38 52L52 38 M8 52L22 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></symbol>
+    <symbol id="scene" viewBox="0 0 200 150">
+      <rect x="0" y="0" width="200" height="150" fill="#000000"/>
+      <g fill="#ffffff" fill-opacity=".35"><circle cx="18" cy="20" r="1.2"/><circle cx="170" cy="30" r="1"/><circle cx="150" cy="128" r="1.2"/><circle cx="34" cy="120" r="1"/><circle cx="96" cy="14" r="1"/></g>
+      <use href="#cube" x="44" y="30" width="96" height="96" style="color:#ff0000"/>
+      <use href="#cube" x="60" y="30" width="96" height="96" style="color:#00ffff;mix-blend-mode:screen"/>
+    </symbol>
+    <symbol id="rc" viewBox="0 0 200 120"><rect x="0" y="0" width="100" height="120" fill="#ff0000"/><rect x="100" y="0" width="100" height="120" fill="#00ffff"/></symbol>
+  </defs>
+</svg>
+
+<main class="page">
+
+<header class="hero">
+  <div class="eyebrow">Hyperspace · projection cart · plan review · prices checked 2026-10-17</div>
+  <h1>Hyperspace 3D Glasses Plan</h1>
+  <p class="lede">We want viewers at the projection cart to see the scene in 3D through simple colored glasses. This page sums up the research plan: how it works, which colors to try, what to buy, and the first test to run.</p>
+  <div class="glance">
+    <div><b>Start with red/cyan</b><span>Easiest to buy, lowest ghosting in published tests. Then magenta/green, then amber/blue.</span></div>
+    <div><b class="mono">$173.45</b><span>First order for all three color pairs, before shipping and tax.</span></div>
+    <div><b>Not tested on our gear yet</b><span>Nothing has been measured on the Hyperspace projector. Every number here comes from sellers or published studies.</span></div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="sec-head">
+    <div class="eyebrow">How it works</div>
+    <h2>One picture on the screen, a different picture in each eye</h2>
+    <p>The computer draws the scene twice, once for each eye. It tints each copy a different color and merges them into one image. Colored lenses let each eye see only its own copy. The brain fuses the two slightly different views into depth.</p>
+  </div>
+  <ol class="flow">
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <g fill="none" stroke="var(--screen-ink)" stroke-width="2"><rect x="16" y="16" width="30" height="20" rx="3"/><path d="M46 21l12-6v22l-12-6z"/><rect x="16" y="54" width="30" height="20" rx="3"/><path d="M46 59l12-6v22l-12-6z"/></g>
+      <text x="84" y="31" fill="var(--screen-ink)" font-size="11" font-family="var(--f-mono)" text-anchor="middle">LEFT</text><text x="84" y="69" fill="var(--screen-ink)" font-size="11" font-family="var(--f-mono)" text-anchor="middle">RIGHT</text></svg></div>
+      <span class="n">1</span><b>Two cameras</b><span class="t">Draw the scene from two spots, about an eye-width apart.</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <use href="#cube" x="20" y="6" width="36" height="36" style="color:#ff0000"/><use href="#cube" x="64" y="48" width="36" height="36" style="color:#00ffff"/>
+      <text x="80" y="28" fill="#ff5a5a" font-size="10" font-family="var(--f-mono)">red</text><text x="22" y="72" fill="#5ff" font-size="10" font-family="var(--f-mono)">cyan</text></svg></div>
+      <span class="n">2</span><b>Tint each view</b><span class="t">Left view keeps only red. Right view keeps only green and blue (cyan).</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <use href="#cube" x="30" y="17" width="54" height="54" style="color:#ff0000"/><use href="#cube" x="39" y="17" width="54" height="54" style="color:#00ffff"/></svg></div>
+      <span class="n">3</span><b>Merge</b><span class="t">Both tinted views are added into one picture.</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <path d="M62 39 L118 18 L118 72 L62 51 Z" fill="var(--screen-ink)" fill-opacity=".14"/>
+      <rect x="8" y="30" width="48" height="30" rx="6" fill="none" stroke="var(--screen-ink)" stroke-width="2"/><circle cx="46" cy="45" r="8" fill="none" stroke="var(--screen-ink)" stroke-width="2"/><path d="M16 60v6M48 60v6" stroke="var(--screen-ink)" stroke-width="2" fill="none"/></svg></div>
+      <span class="n">4</span><b>Projector</b><span class="t">The cart's projector throws the merged picture.</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <rect x="14" y="10" width="92" height="62" fill="#111318" stroke="var(--screen-ink)" stroke-width="1.5"/>
+      <use href="#cube" x="38" y="18" width="44" height="44" style="color:#ff0000"/><use href="#cube" x="45" y="18" width="44" height="44" style="color:#00ffff"/>
+      <path d="M60 72v10M44 84h32" stroke="var(--screen-ink)" stroke-width="2" fill="none"/></svg></div>
+      <span class="n">5</span><b>Screen</b><span class="t">Without glasses it looks like a doubled, color-fringed image.</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <rect x="10" y="30" width="44" height="30" rx="9" fill="#ff0000" fill-opacity=".85" stroke="var(--screen-ink)" stroke-width="2"/>
+      <rect x="66" y="30" width="44" height="30" rx="9" fill="#00b7ff" fill-opacity=".85" stroke="var(--screen-ink)" stroke-width="2"/>
+      <path d="M54 40q6-7 12 0" fill="none" stroke="var(--screen-ink)" stroke-width="2"/></svg></div>
+      <span class="n">6</span><b>Glasses</b><span class="t">Red lens on the left eye, cyan lens on the right.</span></li>
+    <li><div class="art"><svg viewBox="0 0 120 90" aria-hidden="true"><rect x="0" y="0" width="120" height="90" fill="none"/>
+      <path d="M8 30 Q28 14 48 30 Q28 46 8 30Z" fill="none" stroke="var(--screen-ink)" stroke-width="2"/><circle cx="28" cy="30" r="6" fill="#ff3b3b"/>
+      <path d="M72 30 Q92 14 112 30 Q92 46 72 30Z" fill="none" stroke="var(--screen-ink)" stroke-width="2"/><circle cx="92" cy="30" r="6" fill="#33ddff"/>
+      <use href="#cube" x="42" y="48" width="36" height="36" style="color:#f2f2f2"/></svg></div>
+      <span class="n">7</span><b>Brain adds depth</b><span class="t">Each eye gets its own view. The brain fuses them into one 3D scene.</span></li>
+  </ol>
+  <div class="define"><span class="tag">Ghosting</span><p>A faint copy of the other eye's picture leaking through a lens. It is the main thing we are trying to keep low.</p></div>
+</section>
+
+<section id="lenses">
+  <div class="sec-head">
+    <div class="eyebrow">What each lens does</div>
+    <h2>Each lens passes its own picture and blocks the other</h2>
+    <p>These four views are made by actually filtering the same merged picture, the way a lens does. The red lens keeps only red light. The cyan lens keeps only green and blue light.</p>
+  </div>
+  <div class="lens-grid">
+    <div class="lens-card"><div class="scr"><svg viewBox="0 0 200 150" role="img" aria-label="Merged picture with red and cyan cube outlines, slightly offset"><use href="#scene" width="200" height="150"/></svg></div>
+      <div class="cap"><span class="chip" style="background:linear-gradient(90deg,#ff0000 50%,#00ffff 50%)"></span>On the screen</div><p>No glasses: both pictures, side by side.</p></div>
+    <div class="lens-card"><div class="scr"><svg viewBox="0 0 200 150" role="img" aria-label="Through the red lens only the red cube shows"><use href="#scene" width="200" height="150" filter="url(#f-red)"/></svg></div>
+      <div class="cap"><span class="chip" style="background:#ff0000"></span>Left eye, red lens</div><p>Only the red cube gets through. The cyan one disappears.</p></div>
+    <div class="lens-card"><div class="scr"><svg viewBox="0 0 200 150" role="img" aria-label="Through the cyan lens only the cyan cube shows"><use href="#scene" width="200" height="150" filter="url(#f-cyan)"/></svg></div>
+      <div class="cap"><span class="chip" style="background:#00b7ff"></span>Right eye, cyan lens</div><p>Only the cyan cube gets through. The red one disappears.</p></div>
+    <div class="lens-card"><div class="scr"><svg viewBox="0 0 200 150" role="img" aria-label="A leaky cyan lens shows a faint red ghost cube"><use href="#scene" width="200" height="150" filter="url(#f-leak)"/></svg></div>
+      <div class="cap"><span class="chip" style="background:#00b7ff"></span>Leaky cyan lens</div><p>This lens lets 20% of red through (exaggerated to make it visible). The faint red cube is ghosting.</p></div>
+  </div>
+</section>
+
+<section id="pairs">
+  <div class="sec-head">
+    <div class="eyebrow">Color pairs</div>
+    <h2>Three color pairs to try, in this order</h2>
+    <p>Each pair trades off differently. Dots are our summary of the evidence in the notes, 5 = best. Lens bars show how much light each lens lets through overall, from LEE's published numbers for the matching theater gels.</p>
+  </div>
+  <div class="pairs">
+    <article class="pair">
+      <div class="order"><span class="rank">Try 1st</span><span class="badge">Buy ready-made</span></div>
+      <h3>Red / cyan</h3>
+      <div class="specs"><svg viewBox="0 0 240 64" role="img" aria-label="Glasses with LEE 106 Primary Red on the left and LEE 172 Lagoon Blue on the right"><rect x="0" y="0" width="240" height="64" fill="none"/>
+<rect x="10" y="10" width="94" height="44" rx="16" fill="#ff0000" stroke="var(--ink-3)" stroke-width="2"/><rect x="136" y="10" width="94" height="44" rx="16" fill="#00b7ff" stroke="var(--ink-3)" stroke-width="2"/>
+<path d="M104 26q16-12 32 0" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/><path d="M10 24H2M230 24h8" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/></svg></div>
+      <div class="through">
+        <div class="row"><span>Left · 106 Primary Red</span><span class="bar"><i style="width:9.3%;background:#ff0000"></i></span><span class="mono">9.3%</span></div>
+        <div class="row"><span>Right · 172 Lagoon Blue</span><span class="bar"><i style="width:25.4%;background:#00b7ff"></i></span><span class="mono">25.4%</span></div>
+      </div>
+      <div class="rate"><span>Low ghosting</span><span class="dots" role="img" aria-label="5 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span>Good color</span><span class="dots" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span>Even brightness, both eyes</span><span class="dots" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span>Easy to buy</span><span class="dots" role="img" aria-label="5 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div>
+      <p class="note"><b>Why first:</b> lowest ghosting score in tests (15.7), the most research, including on projectors, and glasses are easy to buy.</p>
+      <p class="note"><b>Watch out:</b> reds look poor, and the cyan eye gets a brighter picture than the red eye.</p>
+    </article>
+    <article class="pair">
+      <div class="order"><span class="rank">Try 2nd</span><span class="badge">Buy ready-made</span></div>
+      <h3>Magenta / green</h3>
+      <div class="specs"><svg viewBox="0 0 240 64" role="img" aria-label="Glasses with LEE 139 Primary Green on the left and LEE 795 Magical Magenta on the right"><rect x="0" y="0" width="240" height="64" fill="none"/>
+<rect x="10" y="10" width="94" height="44" rx="16" fill="#00ff00" stroke="var(--ink-3)" stroke-width="2"/><rect x="136" y="10" width="94" height="44" rx="16" fill="#ff00fe" stroke="var(--ink-3)" stroke-width="2"/>
+<path d="M104 26q16-12 32 0" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/><path d="M10 24H2M230 24h8" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/></svg></div>
+      <div class="through">
+        <div class="row"><span>Left · 139 Primary Green</span><span class="bar"><i style="width:11.9%;background:#00ff00"></i></span><span class="mono">11.9%</span></div>
+        <div class="row"><span>Right · 795 Magical Magenta</span><span class="bar"><i style="width:13.3%;background:#ff00fe"></i></span><span class="mono">13.3%</span></div>
+      </div>
+      <div class="rate"><span>Low ghosting</span><span class="dots" role="img" aria-label="4 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span>Good color</span><span class="dots" role="img" aria-label="3 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span><span>Even brightness, both eyes</span><span class="dots" role="img" aria-label="5 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span>Easy to buy</span><span class="dots" role="img" aria-label="4 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div>
+      <p class="note"><b>Why second:</b> the two eyes get a closer brightness match, and reds are said to look better. Ghosting score 19.5, close behind red/cyan.</p>
+      <p class="note"><b>Watch out:</b> brands are not the same filter (TriOviz is not TrioScopics). Give everyone the same brand.</p>
+    </article>
+    <article class="pair">
+      <div class="order"><span class="rank">Try 3rd</span><span class="badge diy">DIY only</span></div>
+      <h3>Amber / blue</h3>
+      <div class="specs"><svg viewBox="0 0 240 64" role="img" aria-label="Glasses with LEE 010 Medium Yellow on the left and LEE 363 Special Medium Blue on the right"><rect x="0" y="0" width="240" height="64" fill="none"/>
+<rect x="10" y="10" width="94" height="44" rx="16" fill="#fffb00" stroke="var(--ink-3)" stroke-width="2"/><rect x="136" y="10" width="94" height="44" rx="16" fill="#0033ff" stroke="var(--ink-3)" stroke-width="2"/>
+<path d="M104 26q16-12 32 0" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/><path d="M10 24H2M230 24h8" fill="none" stroke="var(--ink-3)" stroke-width="2.5"/></svg></div>
+      <div class="through">
+        <div class="row"><span>Left · 010 Medium Yellow</span><span class="bar"><i style="width:86.5%;background:#fffb00"></i></span><span class="mono">86.5%</span></div>
+        <div class="row"><span>Right · 363 Special Medium Blue</span><span class="bar"><i style="width:4.2%;background:#0033ff"></i></span><span class="mono">4.2%</span></div>
+      </div>
+      <div class="rate"><span>Low ghosting</span><span class="dots" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><span>Good color</span><span class="dots" role="img" aria-label="4 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span>Even brightness, both eyes</span><span class="dots" role="img" aria-label="1 out of 5"><i class="on"></i><i></i><i></i><i></i><i></i></span><span>Easy to buy</span><span class="dots" role="img" aria-label="1 out of 5"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+      <p class="note"><b>Why last:</b> best color in the amber eye, but the blue eye is very dim and ghosting is highest (25.2).</p>
+      <p class="note"><b>Watch out:</b> no verified US store sells these glasses, so we make them from gels. Needs a dark room and a bright projector.</p>
+    </article>
+  </div>
+  <div class="callout bad">
+    <b class="k">Skip pale pink</b>
+    <p>Pale pink lenses look lovely and bright. They are bright because they let lots of green through, and green is the other eye's picture. That shows up as ghosting. In the green part of the light, LEE 035 Light Pink lets through <b class="mono">48.6%</b>, 036 Medium Pink <b class="mono">27.4%</b> and 002 Rose Pink <b class="mono">10.1%</b>. A deep magenta like LEE 795 lets through only <b class="mono">0.49%</b>. Chart below.</p>
+  </div>
+</section>
+
+<section id="evidence">
+  <div class="sec-head">
+    <div class="eyebrow">What the studies found</div>
+    <h2>Ghosting scores from published tests</h2>
+    <p>Each score adds up how much of the wrong picture leaks into the left eye and the right eye. Lower is better.</p>
+  </div>
+  <div class="scores">
+    <div class="panel">
+      <h3>Three color pairs compared</h3>
+      <div class="hbars">
+        <div class="hbar"><span>Red / cyan</span><div class="trk"><i class="fill split" style="--l:#ff2a3c;--rr:#00b7ff;width:60.4%"></i></div><span class="val">15.7</span></div>
+        <div class="hbar"><span>Green / magenta</span><div class="trk"><i class="fill split" style="--l:#00c800;--rr:#e000e0;width:75.0%"></i></div><span class="val">19.5</span></div>
+        <div class="hbar"><span>Blue / yellow (amber)</span><div class="trk"><i class="fill split" style="--l:#e6c800;--rr:#1f4bff;width:96.9%"></i></div><span class="val">25.2</span></div>
+      </div>
+      <p class="small muted">Woods &amp; Harris 2010. Average across many TV and computer screens, not projectors. Bars use each pair's lens colors.</p>
+    </div>
+    <div class="panel">
+      <h3>Projector type matters a lot (red/cyan)</h3>
+      <div class="hbars">
+        <div class="hbar"><span>Boxlight, 3LCD</span><div class="trk"><i class="fill lcd" style="width:14.7%"></i></div><span class="val">3.08</span></div>
+        <div class="hbar"><span>Epson, 3LCD</span><div class="trk"><i class="fill lcd" style="width:18.7%"></i></div><span class="val">3.92</span></div>
+        <div class="hbar"><span>NEC VT540, 3LCD</span><div class="trk"><i class="fill lcd" style="width:18.7%"></i></div><span class="val">3.93</span></div>
+        <div class="hbar"><span>Boxlight, 3LCD</span><div class="trk"><i class="fill lcd" style="width:21.9%"></i></div><span class="val">4.59</span></div>
+        <div class="hbar"><span>NEC VT540, 3LCD</span><div class="trk"><i class="fill lcd" style="width:22.2%"></i></div><span class="val">4.66</span></div>
+        <div class="hbar"><span>InFocus, 1-chip DLP</span><div class="trk"><i class="fill dlp" style="width:42.4%"></i></div><span class="val">8.9</span></div>
+        <div class="hbar"><span>NEC, 1-chip DLP</span><div class="trk"><i class="fill dlp" style="width:95.7%"></i></div><span class="val">20.1</span></div>
+      </div>
+      <div class="legend"><span><i style="background:var(--good)"></i>3-panel LCD projector (3LCD)</span><span><i style="background:var(--warn)"></i>Single-chip DLP projector</span></div>
+      <p class="small muted">Woods &amp; Rourke 2004, best glasses on each projector, lamp projectors of that era. Knowing which kind of projector the cart uses matters.</p>
+    </div>
+  </div>
+</section>
+
+<section id="light">
+  <div class="sec-head">
+    <div class="eyebrow">Light through the lenses</div>
+    <h2>Which colors of light each gel lets through</h2>
+    <p>Each line is one lens. High means that color of light passes. Near the floor means it is blocked. A good pair has each line high where the other is low. Shaded strips mark roughly where a projector puts its blue, green and red light (a rough guide, not measured on our projector). Hover or tap a chart to read values.</p>
+  </div>
+  <div class="spec-grid">
+    <div class="panel">
+      <h3>Red / cyan</h3>
+      <div class="legend"><span class="s-red"><i class="s-red "></i><span style="color:var(--ink-2)">LEE 106 Primary Red · left lens</span></span><span class="s-cyan"><i class="s-cyan "></i><span style="color:var(--ink-2)">LEE 172 Lagoon Blue · right lens</span></span></div>
+      <div class="chartbox"><svg class="spec" id="ch-rc" viewBox="0 0 384 290" role="img" aria-label="Red and cyan gels: light passed by color">
+<defs><linearGradient id="ch-rc-sp" x1="0" x2="1" y1="0" y2="0"><stop offset="0.000" stop-color="#7a1fd6"/><stop offset="0.100" stop-color="#4b2cff"/><stop offset="0.200" stop-color="#1f6bff"/><stop offset="0.283" stop-color="#00b7ff"/><stop offset="0.350" stop-color="#00e0b0"/><stop offset="0.433" stop-color="#3ee03a"/><stop offset="0.517" stop-color="#a9e81c"/><stop offset="0.583" stop-color="#f2e600"/><stop offset="0.650" stop-color="#ffa200"/><stop offset="0.733" stop-color="#ff4a1c"/><stop offset="0.833" stop-color="#e8141c"/><stop offset="1.000" stop-color="#9e0a12"/></linearGradient></defs>
+<rect x="0" y="0" width="384" height="290" fill="none"/>
+<rect class="band" x="94.9" y="26" width="21.7" height="170"/>
+<text class="bandlab" x="105.8" y="18" text-anchor="middle">blue</text>
+<rect class="band" x="187.3" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="203.6" y="18" text-anchor="middle">green</text>
+<rect class="band" x="274.2" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="290.5" y="18" text-anchor="middle">red</text>
+<line class="grid" x1="46" x2="372" y1="196.0" y2="196.0"/>
+<text class="tick" x="40" y="200.0" text-anchor="end">0%</text>
+<line class="grid" x1="46" x2="372" y1="153.5" y2="153.5"/>
+<text class="tick" x="40" y="157.5" text-anchor="end">25%</text>
+<line class="grid" x1="46" x2="372" y1="111.0" y2="111.0"/>
+<text class="tick" x="40" y="115.0" text-anchor="end">50%</text>
+<line class="grid" x1="46" x2="372" y1="68.5" y2="68.5"/>
+<text class="tick" x="40" y="72.5" text-anchor="end">75%</text>
+<line class="grid" x1="46" x2="372" y1="26.0" y2="26.0"/>
+<text class="tick" x="40" y="30.0" text-anchor="end">100%</text>
+<path class="area s-red" d="M46.0,196.0 L46.0,195.6 L51.4,195.5 L56.9,195.5 L62.3,195.4 L67.7,195.4 L73.2,195.4 L78.6,195.4 L84.0,195.4 L89.5,195.5 L94.9,195.6 L100.3,195.7 L105.8,195.8 L111.2,195.8 L116.6,195.9 L122.1,195.9 L127.5,195.9 L132.9,196.0 L138.4,196.0 L143.8,196.0 L149.2,196.0 L154.7,196.0 L160.1,196.0 L165.5,196.0 L171.0,196.0 L176.4,196.0 L181.8,196.0 L187.3,196.0 L192.7,196.0 L198.1,196.0 L203.6,196.0 L209.0,195.9 L214.4,195.9 L219.9,195.9 L225.3,195.8 L230.7,195.6 L236.2,195.2 L241.6,194.3 L247.0,192.2 L252.5,188.0 L257.9,180.3 L263.3,168.1 L268.8,151.9 L274.2,133.9 L279.6,117.3 L285.1,103.9 L290.5,94.0 L295.9,86.0 L301.4,80.4 L306.8,76.3 L312.2,73.7 L317.7,71.7 L323.1,69.6 L328.5,68.0 L334.0,67.1 L339.4,66.4 L344.8,65.2 L350.3,64.0 L355.7,62.3 L361.1,60.1 L366.6,59.0 L372.0,58.2 L372.0,196.0 Z"/>
+<path class="area s-cyan" d="M46.0,196.0 L46.0,159.3 L51.4,148.8 L56.9,140.4 L62.3,134.1 L67.7,127.2 L73.2,121.8 L78.6,118.0 L84.0,111.6 L89.5,105.5 L94.9,101.3 L100.3,97.4 L105.8,95.7 L111.2,93.9 L116.6,90.7 L122.1,85.1 L127.5,79.0 L132.9,76.5 L138.4,77.8 L143.8,78.9 L149.2,79.5 L154.7,81.5 L160.1,87.9 L165.5,95.8 L171.0,103.3 L176.4,109.8 L181.8,117.7 L187.3,127.9 L192.7,138.4 L198.1,147.5 L203.6,155.3 L209.0,162.7 L214.4,170.6 L219.9,178.2 L225.3,184.4 L230.7,188.8 L236.2,191.5 L241.6,193.1 L247.0,194.0 L252.5,194.6 L257.9,195.1 L263.3,195.4 L268.8,195.6 L274.2,195.8 L279.6,195.8 L285.1,195.8 L290.5,195.9 L295.9,195.8 L301.4,195.8 L306.8,195.7 L312.2,195.6 L317.7,195.5 L323.1,195.5 L328.5,195.6 L334.0,195.7 L339.4,195.7 L344.8,195.7 L350.3,195.6 L355.7,195.2 L361.1,194.3 L366.6,192.7 L372.0,189.9 L372.0,196.0 Z"/>
+<polyline class="ln s-red" points="46.0,195.6 51.4,195.5 56.9,195.5 62.3,195.4 67.7,195.4 73.2,195.4 78.6,195.4 84.0,195.4 89.5,195.5 94.9,195.6 100.3,195.7 105.8,195.8 111.2,195.8 116.6,195.9 122.1,195.9 127.5,195.9 132.9,196.0 138.4,196.0 143.8,196.0 149.2,196.0 154.7,196.0 160.1,196.0 165.5,196.0 171.0,196.0 176.4,196.0 181.8,196.0 187.3,196.0 192.7,196.0 198.1,196.0 203.6,196.0 209.0,195.9 214.4,195.9 219.9,195.9 225.3,195.8 230.7,195.6 236.2,195.2 241.6,194.3 247.0,192.2 252.5,188.0 257.9,180.3 263.3,168.1 268.8,151.9 274.2,133.9 279.6,117.3 285.1,103.9 290.5,94.0 295.9,86.0 301.4,80.4 306.8,76.3 312.2,73.7 317.7,71.7 323.1,69.6 328.5,68.0 334.0,67.1 339.4,66.4 344.8,65.2 350.3,64.0 355.7,62.3 361.1,60.1 366.6,59.0 372.0,58.2"/>
+<polyline class="ln s-cyan" points="46.0,159.3 51.4,148.8 56.9,140.4 62.3,134.1 67.7,127.2 73.2,121.8 78.6,118.0 84.0,111.6 89.5,105.5 94.9,101.3 100.3,97.4 105.8,95.7 111.2,93.9 116.6,90.7 122.1,85.1 127.5,79.0 132.9,76.5 138.4,77.8 143.8,78.9 149.2,79.5 154.7,81.5 160.1,87.9 165.5,95.8 171.0,103.3 176.4,109.8 181.8,117.7 187.3,127.9 192.7,138.4 198.1,147.5 203.6,155.3 209.0,162.7 214.4,170.6 219.9,178.2 225.3,184.4 230.7,188.8 236.2,191.5 241.6,193.1 247.0,194.0 252.5,194.6 257.9,195.1 263.3,195.4 268.8,195.6 274.2,195.8 279.6,195.8 285.1,195.8 290.5,195.9 295.9,195.8 301.4,195.8 306.8,195.7 312.2,195.6 317.7,195.5 323.1,195.5 328.5,195.6 334.0,195.7 339.4,195.7 344.8,195.7 350.3,195.6 355.7,195.2 361.1,194.3 366.6,192.7 372.0,189.9"/>
+<line class="axis" x1="46" x2="372" y1="196" y2="196"/>
+<rect x="46" y="202" width="326" height="12" rx="3" fill="url(#ch-rc-sp)"/>
+<text class="tick" x="46.0" y="230" text-anchor="start">400</text>
+<text class="tick" x="154.7" y="230" text-anchor="middle">500</text>
+<text class="tick" x="263.3" y="230" text-anchor="middle">600</text>
+<text class="tick" x="372.0" y="230" text-anchor="end">700 nm</text>
+<text class="axt" x="209.0" y="276" text-anchor="middle">Color of light: violet → blue → green → yellow → red</text>
+<text class="axt" transform="translate(12 111.0) rotate(-90)" text-anchor="middle">How much light gets through</text>
+<line class="xh" x1="0" x2="0" y1="26" y2="196" visibility="hidden"/>
+<rect class="hit" x="46" y="26" width="326" height="170" fill="transparent"/>
+</svg></div>
+      <p class="small" style="color:var(--ink-2)">Clean split. The cyan lens lets through only <b class="mono">0.12%</b> of the red strip, and the red lens <b class="mono">0.03%</b> of the green. But the cyan lens passes only <b class="mono">24.5%</b> of the green strip, so the right eye looks blue-heavy unless the software makes up for it.</p>
+    </div>
+    <div class="panel">
+      <h3>Magenta / green</h3>
+      <div class="legend"><span class="s-green"><i class="s-green "></i><span style="color:var(--ink-2)">LEE 139 Primary Green · left lens</span></span><span class="s-magenta"><i class="s-magenta "></i><span style="color:var(--ink-2)">LEE 795 Magical Magenta · right lens</span></span></div>
+      <div class="chartbox"><svg class="spec" id="ch-mg" viewBox="0 0 384 290" role="img" aria-label="Green and magenta gels: light passed by color">
+<defs><linearGradient id="ch-mg-sp" x1="0" x2="1" y1="0" y2="0"><stop offset="0.000" stop-color="#7a1fd6"/><stop offset="0.100" stop-color="#4b2cff"/><stop offset="0.200" stop-color="#1f6bff"/><stop offset="0.283" stop-color="#00b7ff"/><stop offset="0.350" stop-color="#00e0b0"/><stop offset="0.433" stop-color="#3ee03a"/><stop offset="0.517" stop-color="#a9e81c"/><stop offset="0.583" stop-color="#f2e600"/><stop offset="0.650" stop-color="#ffa200"/><stop offset="0.733" stop-color="#ff4a1c"/><stop offset="0.833" stop-color="#e8141c"/><stop offset="1.000" stop-color="#9e0a12"/></linearGradient></defs>
+<rect x="0" y="0" width="384" height="290" fill="none"/>
+<rect class="band" x="94.9" y="26" width="21.7" height="170"/>
+<text class="bandlab" x="105.8" y="18" text-anchor="middle">blue</text>
+<rect class="band" x="187.3" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="203.6" y="18" text-anchor="middle">green</text>
+<rect class="band" x="274.2" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="290.5" y="18" text-anchor="middle">red</text>
+<line class="grid" x1="46" x2="372" y1="196.0" y2="196.0"/>
+<text class="tick" x="40" y="200.0" text-anchor="end">0%</text>
+<line class="grid" x1="46" x2="372" y1="153.5" y2="153.5"/>
+<text class="tick" x="40" y="157.5" text-anchor="end">25%</text>
+<line class="grid" x1="46" x2="372" y1="111.0" y2="111.0"/>
+<text class="tick" x="40" y="115.0" text-anchor="end">50%</text>
+<line class="grid" x1="46" x2="372" y1="68.5" y2="68.5"/>
+<text class="tick" x="40" y="72.5" text-anchor="end">75%</text>
+<line class="grid" x1="46" x2="372" y1="26.0" y2="26.0"/>
+<text class="tick" x="40" y="30.0" text-anchor="end">100%</text>
+<path class="area s-green" d="M46.0,196.0 L46.0,196.0 L51.4,196.0 L56.9,196.0 L62.3,196.0 L67.7,196.0 L73.2,196.0 L78.6,196.0 L84.0,196.0 L89.5,196.0 L94.9,196.0 L100.3,196.0 L105.8,196.0 L111.2,195.9 L116.6,195.9 L122.1,195.7 L127.5,195.4 L132.9,194.4 L138.4,192.4 L143.8,188.5 L149.2,182.2 L154.7,173.6 L160.1,163.7 L165.5,154.2 L171.0,145.5 L176.4,140.0 L181.8,137.8 L187.3,137.5 L192.7,140.8 L198.1,146.7 L203.6,153.7 L209.0,162.0 L214.4,171.0 L219.9,179.0 L225.3,185.1 L230.7,189.5 L236.2,192.3 L241.6,193.9 L247.0,194.8 L252.5,195.3 L257.9,195.6 L263.3,195.8 L268.8,195.9 L274.2,196.0 L279.6,196.0 L285.1,196.0 L290.5,196.0 L295.9,196.0 L301.4,196.0 L306.8,196.0 L312.2,196.0 L317.7,196.0 L323.1,196.0 L328.5,196.0 L334.0,196.0 L339.4,196.0 L344.8,196.0 L350.3,196.0 L355.7,196.0 L361.1,195.9 L366.6,195.8 L372.0,195.4 L372.0,196.0 Z"/>
+<path class="area s-magenta" d="M46.0,196.0 L46.0,119.9 L51.4,117.2 L56.9,114.3 L62.3,112.8 L67.7,112.9 L73.2,111.6 L78.6,110.0 L84.0,109.3 L89.5,109.1 L94.9,107.6 L100.3,109.6 L105.8,114.6 L111.2,120.1 L116.6,124.1 L122.1,129.7 L127.5,137.8 L132.9,146.2 L138.4,153.5 L143.8,160.1 L149.2,167.1 L154.7,174.3 L160.1,181.2 L165.5,186.8 L171.0,190.5 L176.4,192.6 L181.8,193.6 L187.3,194.1 L192.7,194.4 L198.1,194.8 L203.6,195.4 L209.0,195.7 L214.4,195.9 L219.9,195.9 L225.3,195.9 L230.7,195.8 L236.2,195.4 L241.6,193.8 L247.0,189.5 L252.5,180.2 L257.9,166.3 L263.3,150.8 L268.8,136.2 L274.2,123.2 L279.6,111.5 L285.1,100.0 L290.5,87.9 L295.9,77.3 L301.4,68.1 L306.8,61.7 L312.2,57.5 L317.7,54.7 L323.1,53.1 L328.5,52.5 L334.0,52.3 L339.4,51.8 L344.8,52.2 L350.3,52.2 L355.7,51.5 L361.1,50.4 L366.6,49.2 L372.0,48.2 L372.0,196.0 Z"/>
+<polyline class="ln s-green" points="46.0,196.0 51.4,196.0 56.9,196.0 62.3,196.0 67.7,196.0 73.2,196.0 78.6,196.0 84.0,196.0 89.5,196.0 94.9,196.0 100.3,196.0 105.8,196.0 111.2,195.9 116.6,195.9 122.1,195.7 127.5,195.4 132.9,194.4 138.4,192.4 143.8,188.5 149.2,182.2 154.7,173.6 160.1,163.7 165.5,154.2 171.0,145.5 176.4,140.0 181.8,137.8 187.3,137.5 192.7,140.8 198.1,146.7 203.6,153.7 209.0,162.0 214.4,171.0 219.9,179.0 225.3,185.1 230.7,189.5 236.2,192.3 241.6,193.9 247.0,194.8 252.5,195.3 257.9,195.6 263.3,195.8 268.8,195.9 274.2,196.0 279.6,196.0 285.1,196.0 290.5,196.0 295.9,196.0 301.4,196.0 306.8,196.0 312.2,196.0 317.7,196.0 323.1,196.0 328.5,196.0 334.0,196.0 339.4,196.0 344.8,196.0 350.3,196.0 355.7,196.0 361.1,195.9 366.6,195.8 372.0,195.4"/>
+<polyline class="ln s-magenta" points="46.0,119.9 51.4,117.2 56.9,114.3 62.3,112.8 67.7,112.9 73.2,111.6 78.6,110.0 84.0,109.3 89.5,109.1 94.9,107.6 100.3,109.6 105.8,114.6 111.2,120.1 116.6,124.1 122.1,129.7 127.5,137.8 132.9,146.2 138.4,153.5 143.8,160.1 149.2,167.1 154.7,174.3 160.1,181.2 165.5,186.8 171.0,190.5 176.4,192.6 181.8,193.6 187.3,194.1 192.7,194.4 198.1,194.8 203.6,195.4 209.0,195.7 214.4,195.9 219.9,195.9 225.3,195.9 230.7,195.8 236.2,195.4 241.6,193.8 247.0,189.5 252.5,180.2 257.9,166.3 263.3,150.8 268.8,136.2 274.2,123.2 279.6,111.5 285.1,100.0 290.5,87.9 295.9,77.3 301.4,68.1 306.8,61.7 312.2,57.5 317.7,54.7 323.1,53.1 328.5,52.5 334.0,52.3 339.4,51.8 344.8,52.2 350.3,52.2 355.7,51.5 361.1,50.4 366.6,49.2 372.0,48.2"/>
+<line class="axis" x1="46" x2="372" y1="196" y2="196"/>
+<rect x="46" y="202" width="326" height="12" rx="3" fill="url(#ch-mg-sp)"/>
+<text class="tick" x="46.0" y="230" text-anchor="start">400</text>
+<text class="tick" x="154.7" y="230" text-anchor="middle">500</text>
+<text class="tick" x="263.3" y="230" text-anchor="middle">600</text>
+<text class="tick" x="372.0" y="230" text-anchor="end">700 nm</text>
+<text class="axt" x="209.0" y="276" text-anchor="middle">Color of light: violet → blue → green → yellow → red</text>
+<text class="axt" transform="translate(12 111.0) rotate(-90)" text-anchor="middle">How much light gets through</text>
+<line class="xh" x1="0" x2="0" y1="26" y2="196" visibility="hidden"/>
+<rect class="hit" x="46" y="26" width="326" height="170" fill="transparent"/>
+</svg></div>
+      <p class="small" style="color:var(--ink-2)">Very clean. The green lens passes <b class="mono">0.02%</b> of the red strip and <b class="mono">0.03%</b> of the blue; the magenta lens <b class="mono">0.49%</b> of the green. The green lens is dim, though: <b class="mono">23.6%</b> of its own strip.</p>
+    </div>
+    <div class="panel">
+      <h3>Amber / blue</h3>
+      <div class="legend"><span class="s-amber"><i class="s-amber "></i><span style="color:var(--ink-2)">LEE 010 Medium Yellow · left lens</span></span><span class="s-blue"><i class="s-blue "></i><span style="color:var(--ink-2)">LEE 363 Special Medium Blue · right lens</span></span></div>
+      <div class="chartbox"><svg class="spec" id="ch-ab" viewBox="0 0 384 290" role="img" aria-label="Amber and blue gels: light passed by color">
+<defs><linearGradient id="ch-ab-sp" x1="0" x2="1" y1="0" y2="0"><stop offset="0.000" stop-color="#7a1fd6"/><stop offset="0.100" stop-color="#4b2cff"/><stop offset="0.200" stop-color="#1f6bff"/><stop offset="0.283" stop-color="#00b7ff"/><stop offset="0.350" stop-color="#00e0b0"/><stop offset="0.433" stop-color="#3ee03a"/><stop offset="0.517" stop-color="#a9e81c"/><stop offset="0.583" stop-color="#f2e600"/><stop offset="0.650" stop-color="#ffa200"/><stop offset="0.733" stop-color="#ff4a1c"/><stop offset="0.833" stop-color="#e8141c"/><stop offset="1.000" stop-color="#9e0a12"/></linearGradient></defs>
+<rect x="0" y="0" width="384" height="290" fill="none"/>
+<rect class="band" x="94.9" y="26" width="21.7" height="170"/>
+<text class="bandlab" x="105.8" y="18" text-anchor="middle">blue</text>
+<rect class="band" x="187.3" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="203.6" y="18" text-anchor="middle">green</text>
+<rect class="band" x="274.2" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="290.5" y="18" text-anchor="middle">red</text>
+<line class="grid" x1="46" x2="372" y1="196.0" y2="196.0"/>
+<text class="tick" x="40" y="200.0" text-anchor="end">0%</text>
+<line class="grid" x1="46" x2="372" y1="153.5" y2="153.5"/>
+<text class="tick" x="40" y="157.5" text-anchor="end">25%</text>
+<line class="grid" x1="46" x2="372" y1="111.0" y2="111.0"/>
+<text class="tick" x="40" y="115.0" text-anchor="end">50%</text>
+<line class="grid" x1="46" x2="372" y1="68.5" y2="68.5"/>
+<text class="tick" x="40" y="72.5" text-anchor="end">75%</text>
+<line class="grid" x1="46" x2="372" y1="26.0" y2="26.0"/>
+<text class="tick" x="40" y="30.0" text-anchor="end">100%</text>
+<path class="area s-amber" d="M46.0,196.0 L46.0,196.0 L51.4,196.0 L56.9,196.0 L62.3,196.0 L67.7,196.0 L73.2,196.0 L78.6,196.0 L84.0,196.0 L89.5,196.0 L94.9,196.0 L100.3,196.0 L105.8,196.0 L111.2,195.9 L116.6,195.7 L122.1,194.8 L127.5,190.0 L132.9,174.8 L138.4,146.5 L143.8,114.4 L149.2,86.9 L154.7,70.3 L160.1,63.4 L165.5,60.4 L171.0,55.4 L176.4,49.0 L181.8,45.0 L187.3,45.2 L192.7,47.3 L198.1,49.3 L203.6,47.8 L209.0,44.1 L214.4,41.2 L219.9,41.3 L225.3,43.3 L230.7,45.8 L236.2,47.7 L241.6,47.3 L247.0,45.4 L252.5,42.8 L257.9,41.2 L263.3,41.1 L268.8,42.2 L274.2,43.8 L279.6,45.1 L285.1,45.0 L290.5,43.8 L295.9,42.8 L301.4,41.0 L306.8,40.6 L312.2,40.9 L317.7,41.6 L323.1,42.3 L328.5,43.1 L334.0,43.4 L339.4,43.6 L344.8,43.2 L350.3,43.4 L355.7,43.6 L361.1,43.2 L366.6,43.4 L372.0,43.6 L372.0,196.0 Z"/>
+<path class="area s-blue" d="M46.0,196.0 L46.0,168.5 L51.4,159.6 L56.9,150.4 L62.3,143.7 L67.7,138.8 L73.2,133.6 L78.6,128.3 L84.0,122.5 L89.5,118.6 L94.9,116.2 L100.3,115.6 L105.8,118.2 L111.2,122.4 L116.6,126.0 L122.1,131.0 L127.5,137.3 L132.9,143.9 L138.4,150.7 L143.8,157.7 L149.2,164.8 L154.7,172.0 L160.1,178.7 L165.5,184.0 L171.0,187.5 L176.4,189.6 L181.8,190.8 L187.3,191.7 L192.7,192.8 L198.1,194.0 L203.6,194.9 L209.0,195.5 L214.4,195.7 L219.9,195.8 L225.3,195.8 L230.7,195.8 L236.2,195.8 L241.6,195.7 L247.0,195.7 L252.5,195.7 L257.9,195.7 L263.3,195.8 L268.8,195.9 L274.2,195.9 L279.6,195.9 L285.1,195.9 L290.5,195.9 L295.9,195.9 L301.4,195.9 L306.8,195.9 L312.2,195.9 L317.7,195.9 L323.1,195.9 L328.5,195.9 L334.0,195.9 L339.4,195.9 L344.8,195.9 L350.3,195.9 L355.7,195.8 L361.1,195.7 L366.6,195.2 L372.0,194.4 L372.0,196.0 Z"/>
+<polyline class="ln s-amber" points="46.0,196.0 51.4,196.0 56.9,196.0 62.3,196.0 67.7,196.0 73.2,196.0 78.6,196.0 84.0,196.0 89.5,196.0 94.9,196.0 100.3,196.0 105.8,196.0 111.2,195.9 116.6,195.7 122.1,194.8 127.5,190.0 132.9,174.8 138.4,146.5 143.8,114.4 149.2,86.9 154.7,70.3 160.1,63.4 165.5,60.4 171.0,55.4 176.4,49.0 181.8,45.0 187.3,45.2 192.7,47.3 198.1,49.3 203.6,47.8 209.0,44.1 214.4,41.2 219.9,41.3 225.3,43.3 230.7,45.8 236.2,47.7 241.6,47.3 247.0,45.4 252.5,42.8 257.9,41.2 263.3,41.1 268.8,42.2 274.2,43.8 279.6,45.1 285.1,45.0 290.5,43.8 295.9,42.8 301.4,41.0 306.8,40.6 312.2,40.9 317.7,41.6 323.1,42.3 328.5,43.1 334.0,43.4 339.4,43.6 344.8,43.2 350.3,43.4 355.7,43.6 361.1,43.2 366.6,43.4 372.0,43.6"/>
+<polyline class="ln s-blue" points="46.0,168.5 51.4,159.6 56.9,150.4 62.3,143.7 67.7,138.8 73.2,133.6 78.6,128.3 84.0,122.5 89.5,118.6 94.9,116.2 100.3,115.6 105.8,118.2 111.2,122.4 116.6,126.0 122.1,131.0 127.5,137.3 132.9,143.9 138.4,150.7 143.8,157.7 149.2,164.8 154.7,172.0 160.1,178.7 165.5,184.0 171.0,187.5 176.4,189.6 181.8,190.8 187.3,191.7 192.7,192.8 198.1,194.0 203.6,194.9 209.0,195.5 214.4,195.7 219.9,195.8 225.3,195.8 230.7,195.8 236.2,195.8 241.6,195.7 247.0,195.7 252.5,195.7 257.9,195.7 263.3,195.8 268.8,195.9 274.2,195.9 279.6,195.9 285.1,195.9 290.5,195.9 295.9,195.9 301.4,195.9 306.8,195.9 312.2,195.9 317.7,195.9 323.1,195.9 328.5,195.9 334.0,195.9 339.4,195.9 344.8,195.9 350.3,195.9 355.7,195.8 361.1,195.7 366.6,195.2 372.0,194.4"/>
+<line class="axis" x1="46" x2="372" y1="196" y2="196"/>
+<rect x="46" y="202" width="326" height="12" rx="3" fill="url(#ch-ab-sp)"/>
+<text class="tick" x="46.0" y="230" text-anchor="start">400</text>
+<text class="tick" x="154.7" y="230" text-anchor="middle">500</text>
+<text class="tick" x="263.3" y="230" text-anchor="middle">600</text>
+<text class="tick" x="372.0" y="230" text-anchor="end">700 nm</text>
+<text class="axt" x="209.0" y="276" text-anchor="middle">Color of light: violet → blue → green → yellow → red</text>
+<text class="axt" transform="translate(12 111.0) rotate(-90)" text-anchor="middle">How much light gets through</text>
+<line class="xh" x1="0" x2="0" y1="26" y2="196" visibility="hidden"/>
+<rect class="hit" x="46" y="26" width="326" height="170" fill="transparent"/>
+</svg></div>
+      <p class="small" style="color:var(--ink-2)">The amber lens passes almost everything except blue (<b class="mono">0.05%</b> of the blue strip). The blue lens passes <b class="mono">44.9%</b> of blue and almost nothing else, which is why the blue eye looks dim.</p>
+    </div>
+    <div class="panel">
+      <h3>Pale pinks leak green</h3>
+      <div class="legend"><span class="s-pink1"><i class="s-pink1 "></i><span style="color:var(--ink-2)">LEE 035 Light Pink</span></span><span class="s-pink2"><i class="s-pink2 dash"></i><span style="color:var(--ink-2)">LEE 036 Medium Pink</span></span><span class="s-pink3"><i class="s-pink3 dot"></i><span style="color:var(--ink-2)">LEE 002 Rose Pink</span></span><span class="s-ref"><i class="s-ref "></i><span style="color:var(--ink-2)">LEE 795 deep magenta, for comparison</span></span></div>
+      <div class="chartbox"><svg class="spec" id="ch-pk" viewBox="0 0 384 290" role="img" aria-label="Pale pink gels compared with a deep magenta">
+<defs><linearGradient id="ch-pk-sp" x1="0" x2="1" y1="0" y2="0"><stop offset="0.000" stop-color="#7a1fd6"/><stop offset="0.100" stop-color="#4b2cff"/><stop offset="0.200" stop-color="#1f6bff"/><stop offset="0.283" stop-color="#00b7ff"/><stop offset="0.350" stop-color="#00e0b0"/><stop offset="0.433" stop-color="#3ee03a"/><stop offset="0.517" stop-color="#a9e81c"/><stop offset="0.583" stop-color="#f2e600"/><stop offset="0.650" stop-color="#ffa200"/><stop offset="0.733" stop-color="#ff4a1c"/><stop offset="0.833" stop-color="#e8141c"/><stop offset="1.000" stop-color="#9e0a12"/></linearGradient></defs>
+<rect x="0" y="0" width="384" height="290" fill="none"/>
+<rect class="band" x="94.9" y="26" width="21.7" height="170"/>
+<text class="bandlab" x="105.8" y="18" text-anchor="middle">blue</text>
+<rect class="band hl" x="187.3" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="203.6" y="18" text-anchor="middle">green</text>
+<rect class="band" x="274.2" y="26" width="32.6" height="170"/>
+<text class="bandlab" x="290.5" y="18" text-anchor="middle">red</text>
+<line class="grid" x1="46" x2="372" y1="196.0" y2="196.0"/>
+<text class="tick" x="40" y="200.0" text-anchor="end">0%</text>
+<line class="grid" x1="46" x2="372" y1="153.5" y2="153.5"/>
+<text class="tick" x="40" y="157.5" text-anchor="end">25%</text>
+<line class="grid" x1="46" x2="372" y1="111.0" y2="111.0"/>
+<text class="tick" x="40" y="115.0" text-anchor="end">50%</text>
+<line class="grid" x1="46" x2="372" y1="68.5" y2="68.5"/>
+<text class="tick" x="40" y="72.5" text-anchor="end">75%</text>
+<line class="grid" x1="46" x2="372" y1="26.0" y2="26.0"/>
+<text class="tick" x="40" y="30.0" text-anchor="end">100%</text>
+<path class="area s-pink1" d="M46.0,196.0 L46.0,83.2 L51.4,79.6 L56.9,76.3 L62.3,77.6 L67.7,79.7 L73.2,79.0 L78.6,75.6 L84.0,74.8 L89.5,78.1 L94.9,81.6 L100.3,82.5 L105.8,81.5 L111.2,80.8 L116.6,83.4 L122.1,87.5 L127.5,90.8 L132.9,92.1 L138.4,92.2 L143.8,92.4 L149.2,94.7 L154.7,98.6 L160.1,102.6 L165.5,106.2 L171.0,108.1 L176.4,108.6 L181.8,107.9 L187.3,107.3 L192.7,107.4 L198.1,109.2 L203.6,112.2 L209.0,116.6 L214.4,120.0 L219.9,121.3 L225.3,118.5 L230.7,110.5 L236.2,98.1 L241.6,85.1 L247.0,74.5 L252.5,66.9 L257.9,61.1 L263.3,56.2 L268.8,52.0 L274.2,47.5 L279.6,44.5 L285.1,43.6 L290.5,43.7 L295.9,44.8 L301.4,47.0 L306.8,49.0 L312.2,49.6 L317.7,49.2 L323.1,48.2 L328.5,45.5 L334.0,43.1 L339.4,40.7 L344.8,39.1 L350.3,38.9 L355.7,39.7 L361.1,41.0 L366.6,42.2 L372.0,44.6 L372.0,196.0 Z"/>
+<path class="area s-pink2" d="M46.0,196.0 L46.0,100.0 L51.4,97.7 L56.9,96.8 L62.3,97.0 L67.7,96.8 L73.2,97.0 L78.6,97.4 L84.0,98.3 L89.5,100.5 L94.9,103.0 L100.3,104.6 L105.8,106.5 L111.2,109.8 L116.6,114.1 L122.1,117.5 L127.5,119.5 L132.9,122.4 L138.4,126.7 L143.8,131.2 L149.2,134.7 L154.7,136.9 L160.1,139.3 L165.5,142.8 L171.0,146.5 L176.4,149.3 L181.8,149.7 L187.3,148.2 L192.7,146.1 L198.1,145.1 L203.6,146.7 L209.0,150.4 L214.4,154.1 L219.9,155.7 L225.3,153.7 L230.7,145.9 L236.2,131.7 L241.6,113.3 L247.0,96.4 L252.5,82.6 L257.9,72.0 L263.3,63.5 L268.8,57.1 L274.2,52.4 L279.6,50.3 L285.1,50.2 L290.5,51.7 L295.9,51.5 L301.4,51.6 L306.8,51.1 L312.2,49.4 L317.7,47.7 L323.1,47.2 L328.5,46.7 L334.0,47.2 L339.4,47.3 L344.8,47.6 L350.3,47.6 L355.7,47.2 L361.1,46.5 L366.6,46.0 L372.0,46.5 L372.0,196.0 Z"/>
+<path class="area s-pink3" d="M46.0,196.0 L46.0,84.9 L51.4,85.0 L56.9,81.0 L62.3,76.7 L67.7,76.6 L73.2,79.3 L78.6,80.4 L84.0,78.5 L89.5,74.7 L94.9,73.1 L100.3,76.4 L105.8,81.9 L111.2,86.9 L116.6,90.9 L122.1,94.1 L127.5,98.8 L132.9,105.4 L138.4,113.2 L143.8,120.5 L149.2,127.7 L154.7,135.4 L160.1,144.1 L165.5,153.0 L171.0,160.6 L176.4,165.5 L181.8,168.2 L187.3,169.4 L192.7,170.8 L198.1,174.0 L203.6,178.8 L209.0,183.7 L214.4,186.9 L219.9,188.3 L225.3,187.5 L230.7,184.3 L236.2,177.0 L241.6,163.5 L247.0,144.5 L252.5,121.9 L257.9,100.0 L263.3,82.2 L268.8,69.2 L274.2,59.8 L279.6,53.5 L285.1,49.2 L290.5,46.5 L295.9,44.8 L301.4,44.3 L306.8,43.9 L312.2,44.1 L317.7,43.9 L323.1,43.7 L328.5,43.7 L334.0,43.7 L339.4,43.5 L344.8,43.2 L350.3,43.5 L355.7,43.1 L361.1,42.8 L366.6,43.3 L372.0,43.2 L372.0,196.0 Z"/>
+<path class="area s-ref" d="M46.0,196.0 L46.0,119.9 L51.4,117.2 L56.9,114.3 L62.3,112.8 L67.7,112.9 L73.2,111.6 L78.6,110.0 L84.0,109.3 L89.5,109.1 L94.9,107.6 L100.3,109.6 L105.8,114.6 L111.2,120.1 L116.6,124.1 L122.1,129.7 L127.5,137.8 L132.9,146.2 L138.4,153.5 L143.8,160.1 L149.2,167.1 L154.7,174.3 L160.1,181.2 L165.5,186.8 L171.0,190.5 L176.4,192.6 L181.8,193.6 L187.3,194.1 L192.7,194.4 L198.1,194.8 L203.6,195.4 L209.0,195.7 L214.4,195.9 L219.9,195.9 L225.3,195.9 L230.7,195.8 L236.2,195.4 L241.6,193.8 L247.0,189.5 L252.5,180.2 L257.9,166.3 L263.3,150.8 L268.8,136.2 L274.2,123.2 L279.6,111.5 L285.1,100.0 L290.5,87.9 L295.9,77.3 L301.4,68.1 L306.8,61.7 L312.2,57.5 L317.7,54.7 L323.1,53.1 L328.5,52.5 L334.0,52.3 L339.4,51.8 L344.8,52.2 L350.3,52.2 L355.7,51.5 L361.1,50.4 L366.6,49.2 L372.0,48.2 L372.0,196.0 Z"/>
+<polyline class="ln s-pink1" points="46.0,83.2 51.4,79.6 56.9,76.3 62.3,77.6 67.7,79.7 73.2,79.0 78.6,75.6 84.0,74.8 89.5,78.1 94.9,81.6 100.3,82.5 105.8,81.5 111.2,80.8 116.6,83.4 122.1,87.5 127.5,90.8 132.9,92.1 138.4,92.2 143.8,92.4 149.2,94.7 154.7,98.6 160.1,102.6 165.5,106.2 171.0,108.1 176.4,108.6 181.8,107.9 187.3,107.3 192.7,107.4 198.1,109.2 203.6,112.2 209.0,116.6 214.4,120.0 219.9,121.3 225.3,118.5 230.7,110.5 236.2,98.1 241.6,85.1 247.0,74.5 252.5,66.9 257.9,61.1 263.3,56.2 268.8,52.0 274.2,47.5 279.6,44.5 285.1,43.6 290.5,43.7 295.9,44.8 301.4,47.0 306.8,49.0 312.2,49.6 317.7,49.2 323.1,48.2 328.5,45.5 334.0,43.1 339.4,40.7 344.8,39.1 350.3,38.9 355.7,39.7 361.1,41.0 366.6,42.2 372.0,44.6"/>
+<polyline class="ln s-pink2" points="46.0,100.0 51.4,97.7 56.9,96.8 62.3,97.0 67.7,96.8 73.2,97.0 78.6,97.4 84.0,98.3 89.5,100.5 94.9,103.0 100.3,104.6 105.8,106.5 111.2,109.8 116.6,114.1 122.1,117.5 127.5,119.5 132.9,122.4 138.4,126.7 143.8,131.2 149.2,134.7 154.7,136.9 160.1,139.3 165.5,142.8 171.0,146.5 176.4,149.3 181.8,149.7 187.3,148.2 192.7,146.1 198.1,145.1 203.6,146.7 209.0,150.4 214.4,154.1 219.9,155.7 225.3,153.7 230.7,145.9 236.2,131.7 241.6,113.3 247.0,96.4 252.5,82.6 257.9,72.0 263.3,63.5 268.8,57.1 274.2,52.4 279.6,50.3 285.1,50.2 290.5,51.7 295.9,51.5 301.4,51.6 306.8,51.1 312.2,49.4 317.7,47.7 323.1,47.2 328.5,46.7 334.0,47.2 339.4,47.3 344.8,47.6 350.3,47.6 355.7,47.2 361.1,46.5 366.6,46.0 372.0,46.5" stroke-dasharray="6 4"/>
+<polyline class="ln s-pink3" points="46.0,84.9 51.4,85.0 56.9,81.0 62.3,76.7 67.7,76.6 73.2,79.3 78.6,80.4 84.0,78.5 89.5,74.7 94.9,73.1 100.3,76.4 105.8,81.9 111.2,86.9 116.6,90.9 122.1,94.1 127.5,98.8 132.9,105.4 138.4,113.2 143.8,120.5 149.2,127.7 154.7,135.4 160.1,144.1 165.5,153.0 171.0,160.6 176.4,165.5 181.8,168.2 187.3,169.4 192.7,170.8 198.1,174.0 203.6,178.8 209.0,183.7 214.4,186.9 219.9,188.3 225.3,187.5 230.7,184.3 236.2,177.0 241.6,163.5 247.0,144.5 252.5,121.9 257.9,100.0 263.3,82.2 268.8,69.2 274.2,59.8 279.6,53.5 285.1,49.2 290.5,46.5 295.9,44.8 301.4,44.3 306.8,43.9 312.2,44.1 317.7,43.9 323.1,43.7 328.5,43.7 334.0,43.7 339.4,43.5 344.8,43.2 350.3,43.5 355.7,43.1 361.1,42.8 366.6,43.3 372.0,43.2" stroke-dasharray="2 3"/>
+<polyline class="ln s-ref" points="46.0,119.9 51.4,117.2 56.9,114.3 62.3,112.8 67.7,112.9 73.2,111.6 78.6,110.0 84.0,109.3 89.5,109.1 94.9,107.6 100.3,109.6 105.8,114.6 111.2,120.1 116.6,124.1 122.1,129.7 127.5,137.8 132.9,146.2 138.4,153.5 143.8,160.1 149.2,167.1 154.7,174.3 160.1,181.2 165.5,186.8 171.0,190.5 176.4,192.6 181.8,193.6 187.3,194.1 192.7,194.4 198.1,194.8 203.6,195.4 209.0,195.7 214.4,195.9 219.9,195.9 225.3,195.9 230.7,195.8 236.2,195.4 241.6,193.8 247.0,189.5 252.5,180.2 257.9,166.3 263.3,150.8 268.8,136.2 274.2,123.2 279.6,111.5 285.1,100.0 290.5,87.9 295.9,77.3 301.4,68.1 306.8,61.7 312.2,57.5 317.7,54.7 323.1,53.1 328.5,52.5 334.0,52.3 339.4,51.8 344.8,52.2 350.3,52.2 355.7,51.5 361.1,50.4 366.6,49.2 372.0,48.2"/>
+<line class="axis" x1="46" x2="372" y1="196" y2="196"/>
+<rect x="46" y="202" width="326" height="12" rx="3" fill="url(#ch-pk-sp)"/>
+<text class="tick" x="46.0" y="230" text-anchor="start">400</text>
+<text class="tick" x="154.7" y="230" text-anchor="middle">500</text>
+<text class="tick" x="263.3" y="230" text-anchor="middle">600</text>
+<text class="tick" x="372.0" y="230" text-anchor="end">700 nm</text>
+<text class="axt" x="209.0" y="276" text-anchor="middle">Color of light: violet → blue → green → yellow → red</text>
+<text class="axt" transform="translate(12 111.0) rotate(-90)" text-anchor="middle">How much light gets through</text>
+<line class="xh" x1="0" x2="0" y1="26" y2="196" visibility="hidden"/>
+<rect class="hit" x="46" y="26" width="326" height="170" fill="transparent"/>
+</svg></div>
+      <p class="small" style="color:var(--ink-2)">In the highlighted green strip, where the other eye's picture is, the pinks pass <b class="mono">48.6%</b>, <b class="mono">27.4%</b> and <b class="mono">10.1%</b>. Deep magenta 795 passes <b class="mono">0.49%</b>.</p>
+    </div>
+  </div>
+  <p class="small muted">Data: manufacturer-published (LEE Filters website, leefilters.com color pages), saved in <span class="mono">gel_spectra.csv</span> on 2026-10-17. Not measured by us. LEE's lowest reported value is 0.01%.</p>
+  <div class="panel">
+    <h3>The same data as numbers: average light passed in each strip</h3>
+    <div class="scroll-x">
+      <table class="tbl">
+        <thead><tr><th>Gel</th><th>Lens role</th><th class="num">Blue strip</th><th class="num">Green strip</th><th class="num">Red strip</th></tr></thead>
+        <tbody>
+          <tr><td>LEE 106 Primary Red</td><td>Left lens, red</td><td class="num blk">0.14%</td><td class="num blk">0.03%</td><td class="num">57.2%</td></tr>
+          <tr><td>LEE 172 Lagoon Blue</td><td>Right lens, cyan</td><td class="num">59.0%</td><td class="num">24.5%</td><td class="num blk">0.12%</td></tr>
+          <tr><td>LEE 115 Peacock Blue</td><td>Backup cyan</td><td class="num">61.5%</td><td class="num">49.9%</td><td class="num leak">1.0%</td></tr>
+          <tr><td>LEE 139 Primary Green</td><td>Left lens, green</td><td class="num blk">0.03%</td><td class="num">23.6%</td><td class="num blk">0.02%</td></tr>
+          <tr><td>LEE 795 Magical Magenta</td><td>Right lens, magenta</td><td class="num">47.5%</td><td class="num blk">0.49%</td><td class="num">62.4%</td></tr>
+          <tr><td>LEE 010 Medium Yellow</td><td>Left lens, amber</td><td class="num blk">0.05%</td><td class="num">88.7%</td><td class="num">89.9%</td></tr>
+          <tr><td>LEE 363 Special Medium Blue</td><td>Right lens, blue</td><td class="num">44.9%</td><td class="num blk">0.97%</td><td class="num blk">0.05%</td></tr>
+          <tr><td>LEE 035 Light Pink</td><td>Pale pink (avoid)</td><td class="num">67.1%</td><td class="num leak">48.6%</td><td class="num">88.4%</td></tr>
+          <tr><td>LEE 036 Medium Pink</td><td>Pale pink (avoid)</td><td class="num">52.0%</td><td class="num leak">27.4%</td><td class="num">85.1%</td></tr>
+          <tr><td>LEE 002 Rose Pink</td><td>Pale pink (avoid)</td><td class="num">67.1%</td><td class="num leak">10.1%</td><td class="num">86.6%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small muted">Gray numbers are light the lens is meant to block. Red marks a leak big enough to cause ghosting. From <span class="mono">band_summary.csv</span>.</p>
+  </div>
+</section>
+
+<section id="shop">
+  <div class="sec-head">
+    <div class="eyebrow">Shopping list</div>
+    <h2>What to buy now, and what can wait</h2>
+    <p>Prices and stock were checked on 2026-10-17. Arrival times are our estimates from where each seller ships and how fast they say they pack orders. No seller showed a real delivery date or shipping cost for San Francisco.</p>
+  </div>
+  <div class="shop-group"><h3>Buy now · ready-made glasses</h3><div class="cards">
+      <article class="prod"><div class="sw"><i style="background:#ff0000"></i><i style="background:#00b7ff"></i></div><h4>Red / cyan paper glasses, 10-pack</h4><div class="who">Rainbow Symphony · SKU 03201-10</div>
+        <div class="price"><b>$7.50</b><span>$0.75 a pair</span></div><dl><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 2–4 business days (estimate; ships in 24–48 h from Reseda, CA)</dd></dl><div><a class="go" href="https://www.rainbowsymphony.com/products/red-cyan-paper-3d-glasses" target="_blank" rel="noopener">Rainbow Symphony ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#ff0000"></i><i style="background:#00b7ff"></i></div><h4>ProView plastic red / cyan, 2-pack</h4><div class="who">Rainbow Symphony · SKU 03401</div>
+        <div class="price"><b>$18.00</b><span>$9.00 a pair</span></div><dl><dt>Lenses</dt><dd>cast acrylic; fits over most glasses</dd><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 2–4 business days (estimate; ships in 24–48 h from Reseda, CA)</dd></dl><div><a class="go" href="https://www.rainbowsymphony.com/products/proview-plastic-3dglasses" target="_blank" rel="noopener">Rainbow Symphony ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#00ff00"></i><i style="background:#ff00fe"></i></div><h4>ProView plastic magenta / green, 2-pack</h4><div class="who">Rainbow Symphony · SKU 03410</div>
+        <div class="price"><b>$18.00</b><span>$9.00 a pair</span></div><dl><dt>Stock</dt><dd>only the 2-pack; bulk packs sold out</dd><dt>Arrives</dt><dd>about 2–4 business days (estimate; ships in 24–48 h from Reseda, CA)</dd></dl><div><a class="go" href="https://www.rainbowsymphony.com/products/magenta-green-proview-3d-glasses" target="_blank" rel="noopener">Rainbow Symphony ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#00ff00"></i><i style="background:#ff00fe"></i></div><h4>ProView magenta / green clip-on</h4><div class="who">Rainbow Symphony · SKU 03412</div>
+        <div class="price"><b>$6.95</b><span>each</span></div><dl><dt>Use</dt><dd>flips up; clips onto prescription glasses</dd><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 2–4 business days (estimate; ships in 24–48 h from Reseda, CA)</dd></dl><div><a class="go" href="https://www.rainbowsymphony.com/products/clip-on-3d-glasses-magenta-green" target="_blank" rel="noopener">Rainbow Symphony ↗</a></div></article>
+  </div></div>
+  <div class="shop-group"><h3>Buy now · theater gels for our own lenses</h3><div class="cards">
+      <article class="prod"><div class="sw"><i style="background:#ff0000"></i><i style="background:#00b7ff"></i><i style="background:#00ff00"></i><i style="background:#ff00fe"></i><i style="background:#fffb00"></i><i style="background:#0033ff"></i></div><h4>LEE Designers Edition swatchbook</h4><div class="who">Studio Depot · Burbank, CA</div>
+        <div class="price"><b>$28.00</b><span>or $25.00 at Production Advantage</span></div><dl><dt>What</dt><dd>a small sample of every LEE color, enough for test lenses</dd><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 1–2 business days (estimate; ships next business day from Burbank, CA)</dd></dl><div><a class="go" href="https://www.studiodepot.com/leeswatchbook.html" target="_blank" rel="noopener">Studio Depot ↗</a> · <a class="go" href="https://proadv.com/supplies/swatchbooks/" target="_blank" rel="noopener">Production Advantage ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#ff0000"></i><i style="background:#00b7ff"></i><i style="background:#2f9fe0"></i></div><h4>LEE 106 + 172 + 183 sheets (red / two cyans)</h4><div class="who">Studio Depot · 21" × 24" sheets</div>
+        <div class="price"><b>$36.00</b><span>$12.00 each</span></div><dl><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 1–2 business days (estimate; ships next business day from Burbank, CA)</dd></dl><div><a class="go" href="https://www.studiodepot.com/31-lee-s106.html" target="_blank" rel="noopener">106 ↗</a> · <a class="go" href="https://www.studiodepot.com/31-lee-s172.html" target="_blank" rel="noopener">172 ↗</a> · <a class="go" href="https://www.studiodepot.com/31-lee-s183.html" target="_blank" rel="noopener">183 ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#00ff00"></i><i style="background:#ff2fb8"></i></div><h4>LEE 139 + 128 sheets (green / backup magenta)</h4><div class="who">Studio Depot · 21" × 24" sheets</div>
+        <div class="price"><b>$24.00</b><span>$12.00 each</span></div><dl><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 1–2 business days (estimate; ships next business day from Burbank, CA)</dd></dl><div><a class="go" href="https://www.studiodepot.com/31-lee-s139.html" target="_blank" rel="noopener">139 ↗</a> · <a class="go" href="https://www.studiodepot.com/31-lee-s128.html" target="_blank" rel="noopener">128 ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#ff00fe"></i></div><h4>LEE 795 Magical Magenta sheet</h4><div class="who">Production Advantage · 21" × 24" sheet</div>
+        <div class="price"><b>$11.00</b><span></span></div><dl><dt>Why here</dt><dd>Studio Depot does not list 795</dd><dt>Arrives</dt><dd>not stated</dd></dl><div><a class="go" href="https://proadv.com/lee-color-gel/" target="_blank" rel="noopener">Production Advantage ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#fffb00"></i><i style="background:#0033ff"></i></div><h4>LEE 010 + 363 sheets (amber / blue)</h4><div class="who">Studio Depot · 21" × 24" sheets</div>
+        <div class="price"><b>$24.00</b><span>$12.00 each</span></div><dl><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 1–2 business days (estimate; ships next business day from Burbank, CA)</dd></dl><div><a class="go" href="https://www.studiodepot.com/31-lee-s010.html" target="_blank" rel="noopener">010 ↗</a> · <a class="go" href="https://www.studiodepot.com/31-lee-s363.html" target="_blank" rel="noopener">363 ↗</a></div></article>
+  </div>
+  <p class="extra">Backups if a first pick disappoints: LEE 115, 124, 101 and 119 sheets at $12.00 each from Studio Depot. Not in the total.</p></div>
+  <div class="total">
+    <div class="col"><span class="lbl">First order</span><b>$173.45</b></div>
+    <div class="col"><span class="lbl">Glasses</span><span class="mono">$50.45</span></div>
+    <div class="col"><span class="lbl">Gels</span><span class="mono">$123.00</span></div>
+    <p>Before shipping and tax, which no seller quoted. Delivery times are estimates.</p>
+  </div>
+  <div class="shop-group"><h3>Second round · more glasses and measuring tools</h3>
+  <p class="extra">The two extra glasses brands and the two reference filters add <span class="mono">$113.15</span>. The light-meter rental is <span class="mono">$76</span> for 3 days or <span class="mono">$109</span> for 7. Before buying or renting measuring tools, run the cheap tests: by eye, plus a phone camera with exposure and white balance locked. Those are good for comparing one lens with another, not for exact numbers.</p>
+  <div class="cards">
+      <article class="prod"><div class="sw"><i style="background:#00ff00"></i><i style="background:#ff00fe"></i></div><h4>TrioScopics magenta / green paper, 50 pairs</h4><div class="who">American Paper Optics · Memphis, TN</div>
+        <div class="price"><b>$20.00</b><span>$0.40 a pair, 50 minimum</span></div><dl><dt>Why</dt><dd>a second magenta/green brand, at audience-size pricing</dd><dt>Stock</dt><dd>in stock</dd><dt>Arrives</dt><dd>about 6–7 business days by ground, 3–4 with FedEx 2-Day (estimate)</dd></dl><div><a class="go" href="https://the3dmarket.com/products/trioscopics-3d-glasses" target="_blank" rel="noopener">the3dmarket ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#00ff00"></i><i style="background:#ff00fe"></i></div><h4>TriOviz magenta / green cardboard, 2 pairs</h4><div class="who">3Dstereo · SKU GLA-TO</div>
+        <div class="price"><b>$3.90</b><span>$1.95 a pair</span></div><dl><dt>Note</dt><dd>TriOviz is not TrioScopics; compare both</dd><dt>Stock</dt><dd>in stock; no minimum order</dd><dt>Arrives</dt><dd>unknown; ship-from location not stated</dd></dl><div><a class="go" href="https://3dstereo.com/products/magenta-green-3d-anaglyph-cardboard-glasses-official-trioviz-pro-anatm-quality-black-cardboard-new" target="_blank" rel="noopener">3Dstereo ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#ff0000"></i></div><h4>Red dichroic filter, 50 mm square</h4><div class="who">Edmund Optics · #30-634</div>
+        <div class="price"><b>$44.50</b><span></span></div><dl><dt>Use</dt><dd>measuring reference only; glass, not for wearing</dd><dt>Stock</dt><dd>20+ in stock</dd><dt>Arrives</dt><dd>not stated</dd></dl><div><a class="go" href="https://www.edmundoptics.com/p/50mm-square-red-dichroic-filter/1901/" target="_blank" rel="noopener">Edmund Optics ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#00b7ff"></i></div><h4>Cyan dichroic filter, 50 mm square</h4><div class="who">Edmund Optics · #39-912</div>
+        <div class="price"><b>$44.75</b><span></span></div><dl><dt>Use</dt><dd>measuring reference only; glass, not for wearing</dd><dt>Stock</dt><dd>20+ in stock</dd><dt>Arrives</dt><dd>not stated</dd></dl><div><a class="go" href="https://www.edmundoptics.com/p/50mm-square-cyan-dichroic-filter/4596/" target="_blank" rel="noopener">Edmund Optics ↗</a></div></article>
+      <article class="prod"><div class="sw"><i style="background:#7a1fd6"></i><i style="background:#1f6bff"></i><i style="background:#3ee03a"></i><i style="background:#f2e600"></i><i style="background:#ff4a1c"></i></div><h4>Sekonic C-800 light meter, rental</h4><div class="who">Lensrentals</div>
+        <div class="price"><b>$76</b><span>for 3 days ($109 for 7 days)</span></div><dl><dt>Use</dt><dd>measures the exact mix of light from the projector, and through each lens</dd><dt>Shipping</dt><dd>FedEx or UPS; cost depends on zip code</dd></dl><div><a class="go" href="https://www.lensrentals.com/rent/sekonic-c-800-spectromaster-color-meter" target="_blank" rel="noopener">Lensrentals ↗</a></div></article>
+  </div></div>
+</section>
+
+<section id="software">
+  <div class="sec-head">
+    <div class="eyebrow">Software</div>
+    <h2>Start with the simplest color split, then upgrade the recipe</h2>
+    <p>The way the two tinted views get mixed is a "recipe". We build it so recipes can be swapped as a setting, without changing the rest of the program.</p>
+  </div>
+  <div class="ladder">
+    <div class="step"><span class="when">First</span><h3>Channel split</h3>
+      <div class="mix"><span class="px"><i style="background:#ff0000"></i><i style="background:var(--surface)"></i><i style="background:var(--surface)"></i></span>+<span class="px"><i style="background:var(--surface)"></i><i style="background:#00ff00"></i><i style="background:#0000ff"></i></span>=<span class="px"><i style="background:#ff0000"></i><i style="background:#00ff00"></i><i style="background:#0000ff"></i></span></div>
+      <p>The left view keeps only its red. The right view keeps only its green and blue. Add them. Very simple, and good enough for a first test.</p></div>
+    <div class="step"><span class="when">Next</span><h3>Better published recipes</h3>
+      <div class="mix"><span class="px"><i style="background:#ff0000"></i><i style="background:#b04040"></i><i style="background:#803030"></i></span>+<span class="px"><i style="background:#307070"></i><i style="background:#00ff00"></i><i style="background:#0000ff"></i></span></div>
+      <p>Recipes published by researcher Dubois blend a little of every color from each view. They keep more color and cut ghosting. Ready-made versions exist for red/cyan, green/magenta and amber/blue.</p></div>
+    <div class="step"><span class="when">Later</span><h3>Our own custom recipe</h3>
+      <div class="mix"><span class="px"><i style="background:var(--s-red)"></i><i style="background:var(--s-cyan)"></i></span>+ measured projector light =<span class="px"><i style="background:var(--accent)"></i></span></div>
+      <p>Once we measure our lenses and our projector, the same method computes a recipe made for exactly our setup.</p></div>
+  </div>
+  <div class="now">
+    <b>Where Hyperspace is today</b>
+    <p class="small">The active app, hyperspace-python, draws the scene from one camera. For 3D it has to draw two views every frame, one per eye, then mix them. There is no 3D or color-mixing code yet, so everything above is proposed. The engineering agent decides how to build it.</p>
+  </div>
+</section>
+
+<section id="phases">
+  <div class="sec-head">
+    <div class="eyebrow">Plan</div>
+    <h2>Five phases from first test to hand-off</h2>
+    <p>Costs come from the shopping list. Waiting times are shipping or rental estimates. The notes do not estimate how long the software work takes.</p>
+  </div>
+  <ol class="phases">
+    <li><div class="node"><b>1</b></div><div class="stack"><h3>First test</h3><div class="body"><p>Red/cyan glasses and gels. Lock the projector settings. Build the simple channel split. Run the red/cyan test pattern and the depth checks.</p><div class="meta"><span>Cost <b>$173.45</b>, the whole first order</span><span>Wait: about 2–5 business days for parts (estimate)</span></div></div></div></li>
+    <li><div class="node"><b>2</b></div><div class="stack"><h3>Compare colors</h3><div class="body"><p>Repeat the same tests with magenta/green (store-bought and gels), then amber/blue (gels only). Log ghosting, brightness and color for each.</p><div class="meta"><span>Cost <b>$23.90</b> more, for two more magenta/green brands</span><span>Wait: up to 6–7 business days for the American Paper Optics order by ground (estimate)</span></div></div></div></li>
+    <li><div class="node"><b>3</b></div><div class="stack"><h3>Fine-tune</h3><div class="body"><p>Swap in the better recipes. Compare by eye and with a phone camera at fixed settings. Optional: rent a light meter and measure the projector and lenses properly.</p><div class="meta"><span>Cost <b>$0</b> by eye, up to <b>$165.25</b> with measuring</span><span>Wait: meter rental is 3 days ($76) or 7 days ($109)</span></div></div></div></li>
+    <li><div class="node"><b>4</b></div><div class="stack"><h3>Install on the cart</h3><div class="body"><p>Pick the winning pair. Try it with a small group of 8–12 viewers. Buy glasses for the audience.</p><div class="meta"><span>Paper glasses <b>$0.25–0.75</b> a pair</span><span>Plastic ProView <b>$4.85–9.00</b> a pair</span></div></div></div></li>
+    <li><div class="node"><b>5</b></div><div class="stack"><h3>Hand off</h3><div class="body"><p>Save the final settings as a "measured" profile, with the test log and the chosen recipe, so anyone can rebuild the setup.</p><div class="meta"><span>Cost <b>$0</b> new</span><span>Templates already exist in the handoff folder</span></div></div></div></li>
+  </ol>
+</section>
+
+<section id="fix">
+  <div class="sec-head">
+    <div class="eyebrow">Troubleshooting</div>
+    <h2>If it looks wrong, try this first</h2>
+  </div>
+  <div class="fix">
+    <div class="r h"><span class="hd">What you see</span><span></span><span class="hd">Likely fix</span></div>
+    <div class="r"><div class="sym">Faint double image (ghosting)</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Turn off the projector's <b>BrilliantColor</b> or white boost. Use a cleaner lens: LEE 172 or 183 instead of 115, which leaks about 1% red. Try two layers of gel. Reduce the amount of depth. Later, a custom recipe.</div></div>
+    <div class="r"><div class="sym">One eye looks darker</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Brighten the dim eye's picture in software, or add a pale neutral layer over the brighter lens. Example: LEE 106 passes 9.3% of light, LEE 172 passes 25.4%.</div></div>
+    <div class="r"><div class="sym">Looks flat, no depth</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Space the two cameras further apart, within comfort limits. Check the viewer too: about 5–10% of people cannot see stereo depth.</div></div>
+    <div class="r"><div class="sym">Depth is inside out</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Glasses on backwards? <b>Red goes on the left eye.</b> If not, swap left and right in the settings.</div></div>
+    <div class="r"><div class="sym">Colors look wrong</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Switch to the better recipe. Check the software undoes the screen's brightness curve before mixing, and redoes it after. The cyan gels pass only about a quarter of green, so the right eye can look blue-heavy.</div></div>
+    <div class="r"><div class="sym">Fine on a monitor, wrong on the projector</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Expected: their light differs. Tune on the cart's own projector and keep a separate setting for each display.</div></div>
+    <div class="r"><div class="sym">Each viewer sees it differently</div><div class="arr"><svg viewBox="0 0 24 14" aria-hidden="true"><path d="M1 7h19M15 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="cure">Seats and eye spacing vary. Keep depth modest for the closest seats. Offer clip-ons for people who wear glasses, and a no-glasses option.</div></div>
+  </div>
+</section>
+
+<section id="safety">
+  <div class="two">
+    <div class="panel">
+      <div class="eyebrow">Safety</div>
+      <h2>Treat these as viewing filters, not eyewear</h2>
+      <ul class="list">
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Theater gels are lighting filters. They have no eyewear, impact or UV rating.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Make no sun, UV, impact or "eye protection" claims. Label the glasses "Not sunglasses. Do not wear outdoors."</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Keep glass away from eyes. Use plastic lenses for wearing. The Edmund filters are glass, so they are for measuring only.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Clean shared glasses between viewers and throw away scratched pairs. Paper frames and gels cannot be wiped with alcohol.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Take the glasses off before walking around in the dark. They cut light and change colors.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Keep gels away from the projector's hot air. Cut gel edges can be sharp.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--warn-soft)" stroke="var(--warn)" stroke-width="1.5"/><path d="M10 5.5v5.5" stroke="var(--warn)" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.2" r="1.2" fill="var(--warn)"/></svg><span>Seat viewers, keep sessions short, and offer a no-glasses option for anyone who feels uncomfortable.</span></li>
+      </ul>
+    </div>
+    <div class="panel">
+      <div class="eyebrow">Still unknown</div>
+      <h2>What we don't know yet</h2>
+      <ul class="list">
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>How our projector behaves. Nothing has been measured, and the kind of projector changes ghosting a lot.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>Whether the color-pair ranking holds on a projector. The comparison study used TV and computer screens.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>What store-bought lenses actually filter. No seller publishes it, so we test the glasses we buy.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>The real screen size and seat distances at the cart, which set how much depth is comfortable.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>Real shipping costs and delivery dates to San Francisco.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>How much brighter one eye is than the other. Studies say magenta/green balances best but give no numbers.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>How color-blind viewers get on. No study was found.</span></li>
+        <li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="var(--surface-2)" stroke="var(--ink-3)" stroke-width="1.5"/><path d="M7.6 7.6a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.2.9-1.2 1.8" stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="10" cy="14.6" r="1.1" fill="var(--ink-2)"/></svg><span>Whether gel dyes are safe to wear close to the eyes for long. No maker says.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="week">
+  <div class="exp">
+    <div class="sec-head">
+      <div class="eyebrow">This week</div>
+      <h2>The first experiment you can run this week</h2>
+      <p>The first check needs no new code. It shows how cleanly each lens blocks the other color on our own projector.</p>
+    </div>
+    <ol class="exp-steps">
+      <li><span><b>Order today:</b> Rainbow Symphony red/cyan paper glasses, 10-pack (<span class="mono">$7.50</span>), and ProView plastic, 2-pack (<span class="mono">$18.00</span>). Expect them in about 2–4 business days (estimate).</span></li>
+      <li><span><b>Lock the projector:</b> pick one fixed color mode. Turn off BrilliantColor or white boost, dynamic contrast, eco mode and auto keystone. Write the projector model and settings down.</span></li>
+      <li><span><b>Show one still image:</b> left half pure red, right half pure cyan, filling the screen.</span></li>
+      <li><span><b>Hold one lens over the line in the middle.</b> The more completely the other half turns black, the less ghosting. Do it for each lens and each pair of glasses. Take a phone photo with exposure locked, for the record.</span></li>
+      <li><span><b>Write it down</b> in the experiment log template (<span class="mono">experiment_log.csv</span>). Once two-view drawing exists, run the depth check next: a square that should float in front of a frame.</span></li>
+    </ol>
+    <div class="rc-test">
+      <figure><div class="scr"><svg viewBox="0 0 200 120" role="img" aria-label="Red and cyan halves"><use href="#rc" width="200" height="120"/></svg></div><figcaption>The test image</figcaption></figure>
+      <figure><div class="scr"><svg viewBox="0 0 200 120" role="img" aria-label="Through a good red lens the cyan half goes black"><use href="#rc" width="200" height="120" filter="url(#f-red)"/></svg></div><figcaption>Good red lens: cyan half goes black</figcaption></figure>
+      <figure><div class="scr"><svg viewBox="0 0 200 120" role="img" aria-label="Through a good cyan lens the red half goes black"><use href="#rc" width="200" height="120" filter="url(#f-cyan)"/></svg></div><figcaption>Good cyan lens: red half goes black</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<footer class="eng">
+  <div class="eyebrow">For engineers</div>
+  <p>Full detail, sources and settings files. These are paths in the Hyperspace repo:</p>
+  <ul>
+    <li><code>research_notes/Custom anaglyph 3D projection plan/</code>: <code>color_pairs.md</code>, <code>premade_glasses.md</code>, <code>theatrical_gels.md</code>, <code>optical_materials_frames_safety.md</code>, <code>calibration_equipment.md</code>, <code>rendering_algorithms.md</code>, <code>gel_spectra.csv</code></li>
+    <li><code>reports/anaglyph_handoff/README.md</code>: decisions, file list, validation results</li>
+    <li><code>reports/anaglyph_handoff/plots/</code>: <code>C1</code>–<code>C5</code> light-through-lens plots, <code>band_summary.csv</code></li>
+    <li><code>reports/anaglyph_handoff/diagrams/</code>: <code>A</code>–<code>F</code> (system, lens separation, recipe pipeline, test process, troubleshooting tree)</li>
+    <li><code>reports/anaglyph_handoff/config/profiles/</code>: <code>red_cyan_channel_mask.yaml</code>, <code>red_cyan_dubois_2009.yaml</code>, <code>magenta_green_lee795_lee139.yaml</code></li>
+    <li><code>reports/anaglyph_handoff/templates/</code>: <code>test_patterns.md</code> (TP1–TP9), <code>experiment_log.csv</code></li>
+  </ul>
+</footer>
+
+</main>
+
+<script>
+(function(){
+  var D={"js":{"ch-rc":{"x0":46,"x1":372,"W":384,"s":[{"n":"LEE 106 Primary Red (left lens)","c":"s-red","v":[0.245,0.287,0.323,0.344,0.358,0.361,0.358,0.33,0.287,0.237,0.183,0.133,0.095,0.065,0.046,0.031,0.024,0.015,0.011,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.013,0.02,0.031,0.052,0.086,0.135,0.232,0.45,1.021,2.225,4.716,9.248,16.427,25.917,36.552,46.317,54.149,59.985,64.725,67.973,70.392,71.949,73.12,74.375,75.286,75.849,76.239,76.946,77.624,78.629,79.936,80.597,81.051]},{"n":"LEE 172 Lagoon Blue (right lens)","c":"s-cyan","v":[21.601,27.74,32.702,36.416,40.47,43.619,45.891,49.62,53.263,55.73,58.024,59.011,60.082,61.931,65.241,68.801,70.274,69.551,68.855,68.557,67.342,63.609,58.94,54.529,50.716,46.032,40.083,33.91,28.546,23.963,19.569,14.97,10.462,6.828,4.25,2.662,1.711,1.171,0.807,0.536,0.332,0.207,0.139,0.105,0.09,0.088,0.102,0.128,0.176,0.232,0.273,0.275,0.235,0.189,0.172,0.189,0.263,0.475,0.978,1.955,3.595]}]},"ch-mg":{"x0":46,"x1":372,"W":384,"s":[{"n":"LEE 139 Primary Green (left lens)","c":"s-green","v":[0.016,0.017,0.014,0.013,0.011,0.01,0.01,0.01,0.01,0.012,0.015,0.019,0.033,0.068,0.151,0.375,0.923,2.14,4.439,8.097,13.157,18.975,24.559,29.735,32.946,34.249,34.425,32.495,29.024,24.905,19.975,14.692,10.016,6.399,3.798,2.204,1.255,0.727,0.405,0.206,0.098,0.046,0.024,0.018,0.014,0.014,0.013,0.016,0.021,0.024,0.023,0.019,0.012,0.01,0.01,0.01,0.01,0.012,0.032,0.107,0.324]},{"n":"LEE 795 Magical Magenta (right lens)","c":"s-magenta","v":[44.789,46.376,48.039,48.959,48.91,49.637,50.594,51.012,51.133,51.996,50.832,47.879,44.665,42.273,39.012,34.243,29.295,25.017,21.124,17.008,12.746,8.707,5.439,3.223,1.984,1.399,1.133,0.948,0.688,0.382,0.17,0.078,0.05,0.054,0.115,0.345,1.285,3.821,9.27,17.466,26.617,35.165,42.825,49.72,56.499,63.571,69.817,75.219,79.014,81.46,83.109,84.042,84.423,84.547,84.815,84.578,84.609,85.025,85.673,86.38,86.935]}]},"ch-ab":{"x0":46,"x1":372,"W":384,"s":[{"n":"LEE 010 Medium Yellow (left lens)","c":"s-amber","v":[0.024,0.013,0.01,0.01,0.011,0.01,0.01,0.01,0.01,0.013,0.015,0.022,0.046,0.15,0.732,3.554,12.475,29.092,48.004,64.175,73.945,77.984,79.753,82.685,86.481,88.849,88.722,87.489,86.281,87.193,89.324,91.079,90.979,89.85,88.326,87.264,87.464,88.578,90.119,91.048,91.114,90.47,89.505,88.763,88.837,89.501,90.126,91.148,91.44,91.239,90.838,90.436,89.969,89.751,89.672,89.889,89.756,89.661,89.857,89.767,89.653]},{"n":"LEE 363 Special Medium Blue (right lens)","c":"s-blue","v":[16.182,21.438,26.797,30.775,33.655,36.714,39.804,43.237,45.525,46.938,47.3,45.743,43.275,41.148,38.234,34.54,30.637,26.656,22.548,18.344,14.119,10.171,7.065,4.981,3.785,3.068,2.501,1.882,1.199,0.646,0.318,0.167,0.111,0.096,0.103,0.129,0.163,0.189,0.19,0.158,0.114,0.074,0.054,0.042,0.039,0.04,0.044,0.054,0.07,0.082,0.088,0.081,0.065,0.048,0.042,0.043,0.056,0.098,0.203,0.445,0.935]}]},"ch-pk":{"x0":46,"x1":372,"W":384,"s":[{"n":"LEE 035 Light Pink","c":"s-pink1","v":[66.334,68.442,70.383,69.636,68.431,68.803,70.833,71.287,69.37,67.299,66.775,67.377,67.755,66.263,63.834,61.911,61.128,61.049,60.968,59.587,57.32,54.929,52.804,51.685,51.389,51.806,52.165,52.094,51.06,49.316,46.717,44.726,43.944,45.561,50.267,57.564,65.258,71.459,75.938,79.352,82.207,84.714,87.349,89.11,89.669,89.58,88.941,87.658,86.458,86.112,86.363,86.95,88.511,89.94,91.356,92.281,92.39,91.916,91.204,90.474,89.044]},{"n":"LEE 036 Medium Pink","c":"s-pink2","v":[56.472,57.846,58.349,58.242,58.334,58.238,57.999,57.496,56.16,54.725,53.739,52.629,50.692,48.149,46.183,45.007,43.267,40.774,38.089,36.062,34.762,33.326,31.267,29.099,27.481,27.235,28.122,29.373,29.924,28.985,26.851,24.659,23.733,24.858,29.495,37.83,48.647,58.607,66.685,72.953,77.927,81.677,84.447,85.689,85.785,84.908,84.989,84.934,85.209,86.229,87.211,87.523,87.806,87.521,87.499,87.321,87.275,87.513,87.962,88.233,87.931]},{"n":"LEE 002 Rose Pink","c":"s-pink3","v":[65.38,65.319,67.66,70.203,70.237,68.656,67.995,69.09,71.375,72.28,70.346,67.129,64.158,61.828,59.934,57.164,53.286,48.724,44.414,40.181,35.624,30.526,25.299,20.803,17.912,16.361,15.661,14.806,12.912,10.096,7.259,5.338,4.549,4.976,6.905,11.19,19.139,30.271,43.566,56.491,66.954,74.607,80.101,83.818,86.374,87.97,88.928,89.215,89.448,89.357,89.488,89.587,89.574,89.584,89.707,89.867,89.73,89.941,90.094,89.852,89.906]},{"n":"LEE 795 Magical Magenta (deep magenta, for comparison)","c":"s-ref","v":[44.789,46.376,48.039,48.959,48.91,49.637,50.594,51.012,51.133,51.996,50.832,47.879,44.665,42.273,39.012,34.243,29.295,25.017,21.124,17.008,12.746,8.707,5.439,3.223,1.984,1.399,1.133,0.948,0.688,0.382,0.17,0.078,0.05,0.054,0.115,0.345,1.285,3.821,9.27,17.466,26.617,35.165,42.825,49.72,56.499,63.571,69.817,75.219,79.014,81.46,83.109,84.042,84.423,84.547,84.815,84.578,84.609,85.025,85.673,86.38,86.935]}]}},"nm":[400.0,405.0,410.0,415.0,420.0,425.0,430.0,435.0,440.0,445.0,450.0,455.0,460.0,465.0,470.0,475.0,480.0,485.0,490.0,495.0,500.0,505.0,510.0,515.0,520.0,525.0,530.0,535.0,540.0,545.0,550.0,555.0,560.0,565.0,570.0,575.0,580.0,585.0,590.0,595.0,600.0,605.0,610.0,615.0,620.0,625.0,630.0,635.0,640.0,645.0,650.0,655.0,660.0,665.0,670.0,675.0,680.0,685.0,690.0,695.0,700.0]};
+  function cname(w){return w<440?'violet':w<490?'blue':w<520?'blue-green':w<570?'green':w<590?'yellow':w<620?'orange':'red'}
+  Object.keys(D.js).forEach(function(id){
+    var svg=document.getElementById(id); if(!svg) return;
+    var cfg=D.js[id], box=svg.parentNode, tip=document.createElement('div');
+    tip.className='tip'; tip.hidden=true; box.appendChild(tip);
+    var xh=svg.querySelector('.xh');
+    function move(ev){
+      var r=svg.getBoundingClientRect(); if(!r.width) return;
+      var x=(ev.clientX-r.left)*(cfg.W/r.width);
+      var i=Math.round((x-cfg.x0)/(cfg.x1-cfg.x0)*60); if(i<0)i=0; if(i>60)i=60;
+      var w=D.nm[i], sx=cfg.x0+i/60*(cfg.x1-cfg.x0);
+      xh.setAttribute('x1',sx); xh.setAttribute('x2',sx); xh.setAttribute('visibility','visible');
+      var h='<b>'+w+' nm</b> · '+cname(w);
+      cfg.s.forEach(function(s){var v=s.v[i]; h+='<div class="r"><span>'+s.n.split(' (')[0]+'</span><span>'+(v<1?v.toFixed(2):v.toFixed(1))+'%</span></div>'});
+      tip.innerHTML=h; tip.hidden=false;
+      var px=sx*(r.width/cfg.W), bw=box.clientWidth, tw=tip.offsetWidth;
+      var left=px+12; if(left+tw>bw) left=px-tw-12; if(left<0) left=0;
+      tip.style.left=left+'px'; tip.style.top='8px';
+    }
+    function leave(){tip.hidden=true; xh.setAttribute('visibility','hidden')}
+    svg.addEventListener('pointermove',move); svg.addEventListener('pointerdown',move); svg.addEventListener('pointerleave',leave);
+  });
+})();
+</script>
