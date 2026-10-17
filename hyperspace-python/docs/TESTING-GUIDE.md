@@ -158,6 +158,9 @@ changes brightness or volume instead).
 | L66 | The factory presets with music | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
+| L69 | Four thousand copies hold the frame rate | 1 | laptop | 144 |
+| L70 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 145 |
+| L71 | The lattices read as 3D | 1 | laptop, a mouse helps | 146 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -1830,6 +1833,56 @@ at 2.6 HEX is still a honeycomb.
 **Judge:** whether 2.6 is too strong.
 
 *(check 138)*
+
+#### L69. Four thousand copies hold the frame rate
+
+**Needs:** laptop.
+
+**Do:** VIEW: shape the 120-cell, faces on. Drag Instances to the top
+(4096), Layout GRID, then CUBIC. Scroll out until the whole field
+shows. Turn faces off, then on. Scroll back in.
+
+**Right if:** the frame rate on the SYSTEM page stays near 60 with faces
+off and stays usable with faces on; zoomed in it is back at full speed.
+
+**Wrong if:** the picture stutters more and more as the count rises at
+the same zoom.
+
+*(check 144)*
+
+#### L70. Fit leaves no copy cut by the edge
+
+**Needs:** laptop; the projector or a second screen if you have one.
+
+**Do:** VIEW: Instances 12, Layout GRID, tick **Fit**. Then 7 and 19
+on HEX, and 200 on FCC. Scroll in and out; right-drag.
+
+**Right if:** 12 copies sit four across and three down, evenly spaced,
+none touching an edge. Zooming in jumps between whole copies — never
+half a shape at the screen's edge — and dragging moves one copy at a
+time. A 3D lattice stays whole and centred.
+
+**Wrong if:** any copy is cut by the edge of the screen.
+
+*(check 145)*
+
+#### L71. The lattices read as 3D
+
+**Needs:** laptop; a mouse helps.
+
+**Do:** VIEW: 300 copies of the tesseract. Try each of CUBIC, BCC, FCC,
+HCP, HEX PRISM and DIAMOND; orbit with the mouse. Set Field depth to 0,
+then 0.5, then 1. Turn a field motion on.
+
+**Right if:** the field turns as one solid; nearer copies are larger,
+brighter and drawn over farther ones; at depth 0 every copy is one size.
+
+**Judge:** whether the default depth (0.5) and how far the far copies
+fade are right.
+
+**Wrong if:** a far copy is drawn over a near one.
+
+*(check 146)*
 
 ---
 

@@ -296,13 +296,41 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
   FACES page from a hidden real window. `Renderer.pattern_tile(s, size,
   t_now, fid)` renders one face's pattern alone, for tools and tests.
 
-**Instances** (`view.instances`, 0–100): copies laid out by
-`view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
-spiral from the centre; a copy never moves as the count grows), **RING**
-(one circle, neighbours one cell apart) — and moved by
-`view.inst_motion` (STILL, ORBIT, WAVE, RIPPLE) with `inst_amp` and
-`inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
-effects and the hands carry on.
+**Instances** (`view.instances`, 0–4096 on a count taper: every count
+to 64 one detent apart, then 40 detents a doubling): copies laid out by
+`view.inst_layout` and moved by `view.inst_motion` (STILL, ORBIT, WAVE,
+RIPPLE) with `inst_amp` and `inst_rate`. At 0 nothing is drawn but the
+ground, the echoes, the effects and the hands carry on.
+
+- *Flat layouts*, in the screen's plane: **GRID** (rows of ⌈√n⌉),
+  **HEX** (a honeycomb spiral from the centre; a copy never moves as the
+  count grows), **RING** (one circle, neighbours one cell apart).
+- *3D lattices*, nearest neighbours one cell apart: **CUBIC**, **BCC**
+  (body-centred), **FCC** (face-centred), **HCP** (hexagonal
+  close-packed), **HEX PRISM** (stacked honeycombs) and **DIAMOND**.
+  The camera's yaw and pitch turn the lattice as they turn each copy;
+  `view.inst_persp` (Field depth, 0–1) is the field's own perspective —
+  0 every copy one size, 1 the nearest drawn 2.5× the middle's. Far
+  copies draw first and fade to a quarter. Fit off, a lattice grows as a
+  ball from the centre; motion runs in 3D.
+- `view.inst_spacing` (0.5–4 cells, log): the room between neighbours.
+- **Fit** (`view.inst_fit`): every copy whole on the screen, none cut by
+  its edge. A grid or honeycomb takes the rows and columns that give a
+  copy the most room at the screen's aspect (a full rectangle when one is
+  nearly as roomy — 12 is 4 × 3 at 16:9; a part row is centred) and
+  partitions the screen into even cells, a copy in each. Zoom past 1
+  snaps to whole cells — the screen shows k columns by j rows, its edges
+  on cell boundaries — and pan moves the window a whole cell at a time;
+  zoom below 1 shows the whole field. A ring or a lattice is framed whole
+  and centred (a lattice as a brick of the screen's shape); zoom past 1
+  magnifies it. One copy with Fit on fills the screen.
+
+The copies are GPU instances (`field.py` places them, `render.py` draws
+them): the shape is projected once a frame and each copy is one vec4 —
+its centre, scale and alpha — so 4096 copies of the 120-cell upload what
+one does (~0.4 MB a frame; 100 copies were 28 MB before) and copies wholly
+off screen are not drawn. Edge widths and point sizes scale per copy and
+fold into alpha below a pixel.
 
 **The frame** (`render.py`, `Renderer.draw_outputs`), once per frame:
 the face picture (only while an effect is aimed at the faces) → the
@@ -618,7 +646,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | Page | What is on it |
 |---|---|
 | OUTPUT | The master dim; one block per render output (scene / hands / through ticks, its dim, what it shows in words); the screen and fullscreen of output 1; overlay and its click-through, ground and opacity (greyed, with the reason, unless `[output] overlay = true`). |
-| VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–100) and, above one copy, the field row: layout, motion, amp, rate; the six plane rates. |
+| VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–4096) with Fit beside it and, above one copy, the field rows: layout, motion, amp, rate; spacing, and a lattice's field depth; the six plane rates. |
 | FACES | Faces, cut-through and the pattern mix; every pattern as a chip with a live swatch; the pattern on show and its line, ‹ ›; the eight pattern inputs by name, each with what it does on this pattern and what drives it (below). |
 | BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
 | CAMERA | Zoom, yaw, pitch, pan, reset. |

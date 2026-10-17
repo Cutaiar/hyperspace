@@ -433,7 +433,7 @@ def test_build_wire_programs_releases_what_it_made_when_a_step_raises():
 
     r = Renderer.__new__(Renderer)
     r.ctx = SimpleNamespace(program=lambda **_: Prog(), vertex_array=vertex_array)
-    r._lbuf = r._pbuf = r._fbuf = object()
+    r._lbuf = r._pbuf = r._fbuf = r._ibuf = object()
     r._lines = r._points = r._lvao = r._cover_prog = r._cvao = r._pvao = "live"
     with pytest.raises(RuntimeError):
         r._build_wire_programs()
@@ -876,15 +876,14 @@ def test_one_instance_is_the_frame_it_was(ctx):
         assert np.array_equal(frames(n), want), n
     assert not np.array_equal(frames(2), want)
     assert not np.array_equal(frames(0), want)                   # the old clamp drew `want` here
-    # one copy is not tiled: the vertex arrays reach the buffers as built
+    # one copy is the camera alone: at the centre, at the zoom, at full alpha
     r = Renderer(ctx)
     seen = []
-    real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    real = r._field
+    r._field = lambda *a: (seen.append(real(*a)), seen[-1])[1]
     _inst_frames(ctx, r, [1])
-    assert len(seen) == 3 and all(o.shape == (1, 2) and not o.any() for o in seen)
-    v = np.arange(12, dtype=np.float32).reshape(4, 3)
-    assert real(v, seen[0]) is v
+    assert len(seen) == 1 and np.array_equal(seen[0], [[DW / 2, DH / 2, 1.0, 1.0]])
+    assert r._copies == 1
 
 
 # ---- plan 20 WP1: the faces as an effect target ----
@@ -971,7 +970,8 @@ def _freeze_faces(ctx, r):
                          + "\n#line 1 2\n" + PATTERNS_GLSL.read_text() + OLD_FACE_FS_TAIL))
     r._face_prog = _FrozenProgram(prog)
     r._fvao = ctx.vertex_array(
-        prog, [(r._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")])
+        prog, [(r._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid"),
+               (r._ibuf, "4f/i", "in_inst")])
     r._seed_prog = r._seed_vao = None
     return r
 
@@ -1631,14 +1631,24 @@ def _layout_view(n, layout=0, motion=0, **kw) -> ViewState:
     return s
 
 
+def _offsets(s, w, h, t):
+    """Every copy's centre from the camera's (the viewport's centre plus the
+    pan), as `field.field` places them before the cull: what the pre-field
+    renderer called the copies' offsets."""
+    from hyperspace import field
+
+    rows = field.field(s, w, h, t)
+    return rows[:, :2] - np.array([w / 2 + s.pan[0], h / 2 + s.pan[1]], dtype=np.float32)
+
+
 def _scene(ctx, r, s, t=2.0):
     """One `draw_scene` into a small framebuffer: (pixels as RGBA ints, the
-    instance offsets every `_tile` call was handed)."""
-    from hyperspace.render import Renderer
-
+    copies' offsets for each time the pass asked for the field — once a
+    pass that draws anything, never one with no copies)."""
     seen = []
-    real = Renderer._tile
-    r._tile = lambda verts, offs: (seen.append(offs.copy()), real(verts, offs))[1]
+    real = r._field
+    r._field = lambda s_, w, h, t_, radius: (seen.append(_offsets(s_, w, h, t_)),
+                                             real(s_, w, h, t_, radius))[1]
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((LW, LH), 4)])
     fbo.use()
     ctx.viewport = (0, 0, LW, LH)
@@ -1646,7 +1656,7 @@ def _scene(ctx, r, s, t=2.0):
         r.draw_scene(s, LW, LH, t_now=t)
         out = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(LH, LW, 4)
     finally:
-        del r._tile
+        del r._field
         fbo.release()
     assert ctx.error == "GL_NO_ERROR"
     return out.astype(int), seen
@@ -1656,6 +1666,7 @@ def test_grid_layout_is_the_frame_it_was(ctx, monkeypatch):
     """GRID is today's four lines moved into a function: the same float32
     positions at every count, and the same frame, still and in each motion,
     as a renderer whose positions come from the frozen lines."""
+    import hyperspace.field as F
     import hyperspace.render as R
 
     for n in range(2, 101):
@@ -1670,13 +1681,13 @@ def test_grid_layout_is_the_frame_it_was(ctx, monkeypatch):
             s = _layout_view(n, R.LAYOUT_GRID, motion)
             got, offs = _scene(ctx, r, s)
             with monkeypatch.context() as m:
-                m.setattr(R, "inst_positions", lambda k, layout: (asked.append(k),
+                m.setattr(F, "inst_positions", lambda k, layout: (asked.append(k),
                                                                  _frozen_grid(k))[1])
                 want, want_offs = _scene(ctx, r, s)
             assert asked[-1] == n                           # the frozen lines drew `want`
             assert want[..., :3].max() > 20, (n, motion)
             assert np.array_equal(got, want), (n, motion)
-            assert len(offs) == 3 and all(np.array_equal(a, b) for a, b in zip(offs, want_offs))
+            assert len(offs) == 1 and all(np.array_equal(a, b) for a, b in zip(offs, want_offs))
             assert offs[0].shape == (n, 2)
 
 
@@ -1741,7 +1752,7 @@ def test_positions_for_any_count_and_layout(ctx):
     a layout `inst_positions` does not know is GRID; nothing is NaN."""
     from hyperspace.render import LAYOUT_GRID, inst_positions
 
-    for layout in (0, 1, 2, 3, -1, 99):
+    for layout in (*range(9), -1, 99):
         for n in (-3, 0):
             gx, gy = inst_positions(n, layout)
             assert gx.shape == (0,) and gy.shape == (0,) and gx.dtype == np.float32
@@ -1750,7 +1761,7 @@ def test_positions_for_any_count_and_layout(ctx):
         for n in range(1, 101):
             gx, gy = inst_positions(n, layout)
             assert len(gx) == len(gy) == n and np.isfinite(gx).all() and np.isfinite(gy).all()
-        if layout not in (1, 2):
+        if layout in (0, -1, 99):
             for n in (2, 9, 50):
                 assert all(np.array_equal(a, b) for a, b in
                            zip(inst_positions(n, layout), inst_positions(n, LAYOUT_GRID)))
@@ -1765,12 +1776,12 @@ def test_zero_and_one_are_the_same_in_every_layout(ctx):
     r = Renderer(ctx)
     for n in (0, 1):
         want, _ = _scene(ctx, r, _layout_view(n, 0, 0))
-        for layout in (0, 1, 2):
+        for layout in range(9):
             for motion in (0, 1, 3):
                 got, offs = _scene(ctx, r, _layout_view(n, layout, motion))
                 assert np.array_equal(got, want), (n, layout, motion)
                 if n == 1:
-                    assert len(offs) == 3 and all(o.shape == (1, 2) and not o.any() for o in offs)
+                    assert len(offs) == 1 and all(o.shape == (1, 2) and not o.any() for o in offs)
                 else:
                     assert offs == [] and not got[..., :3].any()
         if n == 1:
@@ -1851,3 +1862,82 @@ def test_the_face_picture_follows_a_honeycomb(ctx, tmp_path):
     for name, where in (("r", (xx < FW / 2) & (yy < FH / 2)), ("g", (xx > FW / 2) & (yy < FH / 2)),
                         ("b", (xx < FW / 2) & (yy > FH / 2)), ("y", (xx > FW / 2) & (yy > FH / 2))):
         assert (clear & where).sum() > 300 and (hue[clear & where] == name).all(), name
+
+
+# ---- the instanced field: thousands of copies, 3D lattices, fit to the screen ----
+
+def test_thousands_of_copies_upload_one(ctx):
+    """4096 copies of the 120-cell, faces, lines and points on: one copy's
+    vertices reach the vertex buffers and one vec4 per drawn copy the
+    instance buffer — the GPU draws the rest. The far copies are there."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    s = _layout_view(4096, 0, 0, shape=15, zoom=0.02)
+    img, offs = _scene(ctx, r, s)
+    g = geom(15)
+    assert r._copies == 4096 and offs[0].shape == (4096, 2)
+    assert r._lbuf.size == g["m"] * 6 * 6 * 4 and r._pbuf.size == g["n"] * 4 * 4
+    assert r._ibuf.size == 4096 * 4 * 4
+    assert r._face_verts > 0 and r._fbuf.size == r._face_verts * 7 * 4
+    lit = img[..., :3].max(axis=2) > 10
+    assert lit[:LH // 6].any() and lit[-LH // 6:].any()         # the field reaches top and bottom
+    assert lit[:, :LW // 6].any() and lit[:, -LW // 6:].any()   # and both sides
+
+
+def test_a_zoomed_in_field_draws_only_what_it_shows(ctx):
+    """At zoom 1 a field of thousands draws the few copies on screen."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    _scene(ctx, r, _layout_view(4096, 0, 0, zoom=1.0))
+    assert 0 < r._copies < 16
+
+
+@pytest.mark.parametrize("layout", range(3, 9))
+def test_every_lattice_draws(ctx, layout):
+    """Each 3D lattice draws its copies through the camera, turned by yaw,
+    fitted and not, with no GL error."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    a, _ = _scene(ctx, r, _layout_view(60, layout, 0, zoom=0.25))
+    b, _ = _scene(ctx, r, _layout_view(60, layout, 0, zoom=0.25, yaw=1.0))
+    c, _ = _scene(ctx, r, _layout_view(60, layout, 0, inst_fit=True))
+    for img in (a, b, c):
+        assert img[..., :3].max() > 20
+    assert not np.array_equal(a, b)
+
+
+def _border(img, px=1):
+    """The brightest pixel within `px` of the frame's edge."""
+    return max(img[:px, :, :3].max(), img[-px:, :, :3].max(),
+               img[:, :px, :3].max(), img[:, -px:, :3].max())
+
+
+@pytest.mark.parametrize("layout", range(9))
+def test_fit_leaves_no_copy_cut_by_the_edge(ctx, layout):
+    """The point of Fit: a field that runs off the screen without it (a
+    lit edge), with it every copy whole on the screen — the frame's edge
+    is the ground, all round, every layout, wide and tall."""
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    for w, h in ((LW, LH), (LH, LW)):
+        for n in (5, 12, 40):
+            s = _layout_view(n, layout, 0, zoom=1.0, yaw=0.3, pitch=0.2)
+            fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4)])
+            fbo.use()
+            ctx.viewport = (0, 0, w, h)
+            try:
+                r.draw_scene(s, w, h, t_now=2.0)
+                off = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(h, w, 4)
+                s.inst_fit = True
+                r.draw_scene(s, w, h, t_now=2.0)
+                on = np.frombuffer(fbo.read(components=4), dtype=np.uint8).reshape(h, w, 4)
+            finally:
+                fbo.release()
+            assert ctx.error == "GL_NO_ERROR"
+            if layout != 2 and n > 5:            # a ring of 12 or 40 is past the screen
+                assert _border(off) > 20, (layout, n, w, h)      # cut without Fit
+            assert on[..., :3].max() > 20 and _border(on) == 0, (layout, n, w, h)

@@ -88,7 +88,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, routing, undo
+from . import apc40, routing, tapers, undo
 from .bands import BANDS
 from .lfo import SHAPES, SYNCS
 from .library import (
@@ -511,6 +511,12 @@ def party_faces_routes() -> list[Binding]:
             _push("R", "pitch", "camera.pitch", PITCH_DEPTH)]
 
 
+# party-field's crowd: right height from the preset's 9 copies to 69, as
+# the push of 0.6 did on the count's old linear 0–100 throw — 59 detents of
+# the count taper (tapers.T_INSTANCES), every one a copy below 64
+FIELD_CROWD = 59 / tapers.T_INSTANCES.steps
+
+
 def party_field_routes() -> list[Binding]:
     """The instance field. Right height is the crowd: more copies, the
     camera pulling back to keep them in frame and a touch more light so
@@ -518,7 +524,7 @@ def party_field_routes() -> list[Binding]:
     XW and ZW. Left hand flies the field — sideways and reaching in pan
     it — and left height pushes how far the copies swing."""
     return [*_lane_rows(),
-            _push("R", "y", "view.instances", 0.6),
+            _push("R", "y", "view.instances", FIELD_CROWD),
             _push("R", "y", "camera.zoom", -0.15),
             _push("R", "y", "view.bright", 0.1),
             _push("R", "roll", "rot.phase.XW", TURN),

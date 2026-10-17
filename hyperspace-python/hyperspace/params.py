@@ -85,7 +85,8 @@ from .tapers import Taper
 from .tapers import clamp as _clamp
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
-INST_LAYOUT = ["GRID", "HEX", "RING"]   # render.inst_positions' layouts, in its order
+# field.py's layouts, in its order: three flat, then the six 3D lattices
+INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
@@ -535,7 +536,9 @@ class Param:
         target = self._base + mod
         if k is Kind.CONTINUOUS:
             target = target % 1.0 if self.wrap else _clamp(target, 0.0, 1.0)
-            if self.integer:
+            if self.integer and self.taper is not None:
+                self.put(self.taper.map(self._snap(target * self.steps)))
+            elif self.integer:
                 self.put(self._raw_value(self._snap(target * self.steps) / self.steps))
             else:
                 self.put(self._value_of_norm(target))
@@ -834,15 +837,20 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  "In window and fullscreen the picture is always opaque, on or off.")
     r.toggle("view.rotate", "Rotate", *_attr(view, "playing"), group=g)
     r.continuous("view.instances", "Instances", *_attr(view, "instances"),
-                 lo=0, hi=100, integer=True,
+                 taper=tapers.T_INSTANCES, lo=0, hi=tapers.T_INSTANCES.map(
+                     tapers.T_INSTANCES.steps), integer=True,
                  fmt=lambda v: f"{int(v)} instance(s)" if int(v) > 0 else "0 · nothing drawn",
                  group=g,
-                 tip="Synchronized copies, laid out as Layout says — scroll to zoom out "
-                     "over the field, right-drag to pan. 0 draws nothing: the ground, the "
-                     "echoes and the effects carry on.")
+                 tip="Synchronized copies, laid out as Layout says — one at a time to 64, "
+                     "then faster to 4096. Scroll to zoom out over the field, right-drag "
+                     "to pan; Fit frames it to the screen instead. 0 draws nothing: the "
+                     "ground, the echoes and the effects carry on.")
     r.enum("view.inst_layout", "Layout", *_attr(view, "inst_layout"), INST_LAYOUT,
-           group=g, tip="How the copies are laid out: a square grid, a honeycomb growing "
-                        "from the centre, or one ring.")
+           group=g, tip="How the copies are laid out. Flat: a square grid, a honeycomb "
+                        "growing from the centre, or one ring. 3D lattices, turned by the "
+                        "camera's yaw and pitch: cubic, body-centred cubic, face-centred "
+                        "cubic, hexagonal close-packed, stacked honeycombs (hex prism) "
+                        "and diamond — neighbours one cell apart in each.")
     r.enum("view.inst_motion", "Field motion", *_attr(view, "inst_motion"), INST_MOTION,
            group=g, tip="Trigonometric motion over the field of copies — each copy's phase "
                         "comes from its place in the layout, so the field moves as one "
@@ -851,6 +859,21 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
     r.continuous("view.inst_rate", "Field rate", *_attr(view, "inst_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
+    r.toggle("view.inst_fit", "Fit", *_attr(view, "inst_fit"), group=g,
+             tip="Fit the field to the screen: every copy whole, none cut by the edge. A "
+                 "grid or honeycomb takes the rows and columns that suit the screen and "
+                 "fills it in even cells; zooming in snaps to whole cells and panning "
+                 "moves a cell at a time. A ring or a lattice is framed whole and centred.")
+    r.continuous("view.inst_spacing", "Spacing", *_attr(view, "inst_spacing"),
+                 lo=0.5, hi=4.0, log=True, fmt=lambda v: f"spacing {v:.2f}", group=g,
+                 tip="The room between neighbours, in cells: 1 is shoulder to shoulder; "
+                     "below 1 the copies overlap. With Fit on, more room makes each copy "
+                     "smaller in its cell.")
+    r.continuous("view.inst_persp", "Field depth", *_attr(view, "inst_persp"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=g,
+                 tip="A 3D lattice's own perspective: 0 every copy one size, 1 the "
+                     "nearest copies drawn 2.5× the middle's. Nearer copies draw over "
+                     "farther ones, which fade.")
     r.enum("view.pattern", "Pattern", *_attr(view, "pattern"), PATTERNS, group=g,
            tip="Face pattern — edit hyperspace/shaders/patterns.glsl while the app runs; "
                "it hot-reloads on save. Every pattern reads the same eight inputs: "

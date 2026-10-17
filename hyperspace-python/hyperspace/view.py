@@ -38,7 +38,12 @@ class ViewState:
     zoom: float = 1.0            # camera magnification about the view centre
     pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
-    inst_layout: int = 0         # 0 grid, 1 hex (a honeycomb spiral), 2 ring (render.inst_positions)
+    # 0 grid, 1 hex (a honeycomb spiral), 2 ring; 3–8 the 3D lattices: cubic,
+    # bcc, fcc, hcp, hex prism, diamond (field.py)
+    inst_layout: int = 0
+    inst_fit: bool = False       # fit the field to the screen, whole copies only (field.py)
+    inst_spacing: float = 1.0    # neighbour spacing, in cells
+    inst_persp: float = 0.5      # a 3D lattice's own perspective: 0 flat … 1 deep
     inst_motion: int = 0         # field motion: 0 still, 1 orbit, 2 wave, 3 ripple
     inst_amp: float = 0.25       # motion amplitude, fraction of a cell (the neighbour spacing)
     inst_rate: float = 1.0       # motion angular rate, rad/s
