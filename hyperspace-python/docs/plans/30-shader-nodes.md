@@ -118,7 +118,11 @@ any render node.
   three rounds). The old `fx` line's median was 0.225 ms; the new
   per-effect lines sum to 0.089 ms (acid 0.003–0.026, wobble
   0.001–0.015, deconverge 0–0.005, huecycle 0.055–0.093; the end `fx` 0).
-  Frame wall time 1.69 ms before, 1.76 after: the same within noise.
+  Frame wall time 1.69 ms before, 1.76 after: within noise. The review
+  pass measured again, base tree against the head (three alternating
+  rounds): the old line 0.225 ms, the effects' lines summing to 0.078 ms;
+  the frame's wall time 1.34 → 1.44 ms median, about +0.1 ms, inside the
+  base's spread but higher in two rounds of three.
   `run_one` ran exactly 4.0 times a frame (the four on effects); the
   nine off effects ran 0 passes. On Apple's tile GPU a query is charged
   for whatever is flushed inside it, so the split is indicative.
@@ -366,8 +370,10 @@ only two manifest fields of palette-hands (`route` / `hands_over` of
 `scene+hands+through` and `hands+through`, which now stand down because
 a placed effect alone bends no pipeline); no hash moved, and those two
 states were already the same picture as their stood-down routes.
-`tools/golden_frames.py` diffs say "all 580 frames match their goldens".
-How to diff and re-record is in
+`tools/golden_frames.py` diffs said "all 580 frames match their goldens"
+at the end of stream D; plan 28's N4 then added 16 for its two wire
+fixtures, none of these 580 moved (596 today,
+[`28-node-editor.md`](28-node-editor.md)). How to diff and re-record is in
 [`26-render-graph.md`](26-render-graph.md), "How to re-record".
 
 ## What no person has verified
@@ -413,6 +419,16 @@ by the graph's order and `timed_in`, not seen). In particular:
 - **A presenter's `Handoff.frame` / `hands` may be a half-float pool
   texture**, not RGBA8: plan 26's hand-over contract widened, verified
   by texture identity in the tests, never on a real second window.
+- **`into: output.<n>` on a through output that stands down** (no effect
+  of its run on, or no hand drawn): falling back to its ground, the fold
+  is skipped and, since the review pass's fixes (#221), says so for that
+  frame — `palette into output 2 — output 2 stands down this frame`
+  (`Graph.stood`, on OUTPUT's dormant lines and the FX chip); falling
+  back to the scene pipeline, the fold runs on the scene alone, the hands
+  laid over at the output unfolded, and nothing says so (row 223).
+- **A build from before plans 28 and 30 refuses `after` / `into`**: a preset
+  with a placement opens there as the default graph with one note, so
+  both Macs sharing a library must run this build (row 277).
 - **The faces target is an inner chain** the graph and the GRAPH page do
   not show; SYSTEM times it inside `scene`. An effect both placed and
   aimed at the faces runs in the faces' chain, not on its edge (its chip
@@ -442,7 +458,8 @@ by the graph's order and `timed_in`, not seen). In particular:
   built graph: a placement refused only at build would still show as
   placed (none reaches it: `read_graph` refuses loops first). A dormant
   placement's chip looks like a running one but for the hover and the
-  count. A long label and place is cut (`Kaleidoscope · aft…`).
+  count. A long label and place is cut (`Kaleidoscope · aft…`). The page
+  asks `_placed` twice a frame.
 - **The words**: LOOKBACK reads `history: the scene · acid 2 before the
   history` (a little redundant); a placed extra instance still counts in
   `palette ×2` on the graph line.

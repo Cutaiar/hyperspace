@@ -703,8 +703,8 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Routing table</div><div class="mods">routing</div></div>
-        <div class="what">The binding rows, the referee, the desk's two layers, the macros, and the one per-frame modulation pass. <span>Imports nothing above it.</span></div>
+        <div><div class="name">Routing table</div><div class="mods">routing · patch · modifiers</div></div>
+        <div class="what">The binding rows, the referee, the desk's two layers, the macros, the preset's modifiers, and the one per-frame modulation pass — the table run as a graph, each node after what it reads. <span>Imports nothing above it.</span></div>
         <div class="chip c-offset">Offset</div>
       </div>
       <div class="rrow">
@@ -738,8 +738,8 @@
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Panel</div><div class="mods">ui · ui_* · hands/panel · control</div></div>
-        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal.</div>
+        <div><div class="name">Panel</div><div class="mods">ui · ui_* · ui_graph · graphview · hands/panel · control</div></div>
+        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, and the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -788,8 +788,8 @@
       <div class="step"><div class="n">6</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
       <div class="step"><div class="n">7</div><div class="d">Audio step and publish — the band lanes</div><div class="chip c-offset">feed</div></div>
       <div class="step"><div class="n">8</div><div class="d">Devices feed — <b>devices.feed()</b>: the hands, the DAW bridge's external lanes, OSC faders</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">9</div><div class="d">LFOs step and publish</div><div class="chip c-offset">feed</div></div>
-      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — every live performer row, in table order</div><div class="chip c-offset">offset</div></div>
+      <div class="step"><div class="n">9</div><div class="d">LFOs step inside the patch — at their own nodes of step 10</div><div class="chip c-offset">feed</div></div>
+      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — the patch in dependency order: LFOs, modifiers, then every live performer row at its param's node; a param something later reads lands there and then</div><div class="chip c-offset">offset</div></div>
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
@@ -797,14 +797,20 @@
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
-    <h3>One frame of lag, deliberately</h3>
+    <h3>Dependency order, no lag</h3>
     <p>
-      Anything that <em>reads</em> a parameter while sources are being gathered —
-      an LFO reading its own depth, a route scaled by a macro — sees what
-      <code>apply()</code> wrote last frame. That is what makes the pass
-      non-recursive: nothing in it reads a value it is about to write. The
-      sinks run after <code>apply()</code>, so what goes out to the DAW is this
-      frame's value. Each block, and each device, is also individually guarded,
+      The modulation pass runs the routing table as a graph, each node after
+      everything it reads. An LFO is a source with inputs: its knobs land,
+      then it steps. A scale or a macro behind a route lands before the route
+      that reads it. So an LFO owning another LFO's depth, a macro scaling a
+      push, a hand on a modifier's release all act <em>this</em> frame —
+      every factory preset lands the same values as before, a frame earlier
+      where it was late. Nothing reads a stale value but through a delay
+      node: a loop with no delay in it keeps its last cable off, with a note
+      on the routing page; a delay closing a loop makes it exactly one frame
+      late. A parameter landed in the pass is never applied twice. The
+      sinks still run after <code>apply()</code>, so what goes out to the DAW
+      is this frame's value. Each block, and each device, is also individually guarded,
       so hot-reloaded code that raises records the error and the loop carries on
       drawing.
     </p>
@@ -904,14 +910,37 @@
         <span class="path">ghost · graph</span>
       </div>
       <div class="sub">
+        <h4>Modulation as a graph</h4>
+        <p>Every route, macro subscriber, scale and LFO knob is an edge
+        between sources, LFOs, modifiers, macros and parameters, sorted once
+        when the table changes and run each frame in that order. Modifiers —
+        curve, scale, smooth, combine, threshold, delay — sit between a
+        source and a route, live in the preset, and publish a lane a route
+        reads like any other. A loop runs only through a delay.</p>
+        <span class="path">patch · modifiers · routing · ui_routing</span>
+      </div>
+      <div class="sub">
+        <h4>The node editor</h4>
+        <p>One canvas for both graphs: the controllers (the APC40 as two
+        nodes, a layer each; a desk template as one collapsible node; a
+        missing device as a grey placeholder by role), the LFOs, the
+        modifiers, the macros, the parameters under the render node that
+        owns them, the render graph's image cables and the outputs. A cable
+        dragged is the row a Learn would make, or a wire in the preset's
+        graph; Learn starts from a port. Positions live in the preset and
+        the show.</p>
+        <span class="path">graphview · ui_graph · imgui_node_editor</span>
+      </div>
+      <div class="sub">
         <h4>Render graph</h4>
         <p>The frame as wired nodes: the shape, the hands and a point cloud
         share one fixed camera with a depth buffer, so a hand can pass between
         the shape's edges. Zoom and pan move only the shape, in the world. A
         preset can say its wiring in its file — the hands in the scene or as a
-        layer, an effect twice, an effect placed on one edge — and 580 golden
-        frames pin every factory preset's picture, and the fixture presets', to
-        the byte.</p>
+        layer, an effect twice, an effect placed on one edge, a wire that gives
+        one output its own picture or its own hands — and 596 golden frames pin
+        every factory preset's picture, and the fixture presets', to the
+        byte.</p>
         <span class="path">graph · render · geometry · tools/golden_frames</span>
       </div>
       <div class="sub">
@@ -938,7 +967,7 @@
   <!-- ══ 07 ═════════════════════════════════════════════════════════ -->
   <section>
     <div class="shead"><span class="num">07</span><h2>The boundaries are tested, not intended</h2></div>
-    <p class="dek">What keeps a 41,800-line single process from turning into a knot.</p>
+    <p class="dek">What keeps a 48,900-line single process from turning into a knot.</p>
 
     <div class="col">
       <p>
@@ -958,8 +987,8 @@
         <code>placement</code>, <code>geometry</code>,
         <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
-        <code>watchdog</code>, and the hands package's signal and tape
-        modules.
+        <code>watchdog</code>, <code>patch</code> (the modulation graph's
+        sorter), and the hands package's signal and tape modules.
       </p>
 
       <h3>The hands package is built to be removed</h3>
@@ -983,10 +1012,10 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="v">56</div><div class="k">Python modules</div></div>
-      <div class="stat"><div class="v">41,792</div><div class="k">lines of app</div></div>
-      <div class="stat"><div class="v">46,985</div><div class="k">lines of tests</div></div>
-      <div class="stat"><div class="v">80</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">60</div><div class="k">Python modules</div></div>
+      <div class="stat"><div class="v">48,909</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">52,720</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">90</div><div class="k">test files</div></div>
       <div class="stat"><div class="v">26</div><div class="k">shapes</div></div>
       <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
     </div>
@@ -1003,7 +1032,9 @@
     both in the same PR.<br>
     Drawn from the component map and the frame order; counts measured from the
     tree (modules and lines: every .py under hyperspace/ and under tests/;
-    test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib).
+    test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib;
+    shapes: geometry.SHAPES; patterns: patterns.MODES, seventeen),
+    re-measured after plan 28 on plan-28-30-integration (327e646).
     Band-to-plane map from hyperspace/bands.py and routing.legacy6_routes;
     shapes from geometry.SHAPES; patterns and their inputs from patterns.py; the liftable-package rule
     from hyperspace/hands/__init__.py and tests/test_hands_boundary.py.
