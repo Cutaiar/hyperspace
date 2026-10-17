@@ -191,7 +191,7 @@ here; overturn → the change, then the same.
 | 194 | `Wiring`: hands, blend, history — renderer-wide | 206, 209 | |
 | 195 | The hands node `ghost` and its layer `hands`; time by the consumer edge | 210, 213 | |
 | 196 | The preset's `graph` section: the nodes that differ, one object each (an effect's `after` / `into` and a placed instance 1: row 219) | 211 | |
-| 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown — "the whole section falls back" **superseded in part by row 221** (a refused placement costs only that effect its place) | 211 | superseded in part |
+| 197 | An unreadable section: a note, the default graph, kept as written; `cloud` unknown — "the whole section falls back" **superseded in part by row 221** (a refused placement costs only that effect its place) | 211 | |
 | 198 | Instances as built: `fx.<file>.<n>`, `ghost.<n>`, `hands.<n>` | 212, 213 | |
 | 199 | A second hands node is its own `Ghost` over its own state | 213 | |
 | 200 | Where two hands nodes go | 213 | |
@@ -222,7 +222,7 @@ here; overturn → the change, then the same.
 | 225 | The three proof fixtures' extra values | 223, 224, 227 | |
 | 226 | A placed chip in a grid of its own, its place after its name | 229 | |
 | 227 | The FX status line adds "· N placed" | 229 | |
-| 228 | Two vocabularies: the chip's and OUTPUT's | 229, 228 | |
+| 228 | Two vocabularies: the chip's and OUTPUT's | 228, 229 | |
 | 229 | A dormant placement still shows as placed | 229 | |
 | 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
 | 231 | The `VALUE` port: a fourth type, used by no node | — | |
@@ -3804,7 +3804,7 @@ under `tests/fixtures/presets/`.
 ### 216. The effects' pool is the chain's half-float textures: two, plus one per held picture, sized by the graph
 
 - **Built.** `FxChain.pool(size, n)` hands out the chain's `f2` textures
-  (the faces' chain's `begin` is `pool(size, 2)[0]`). `Graph.pool` is 0
+  (the faces' chain's `begin` hands out the pool's first framebuffer, asking for at least the textures it already holds, two at the least). `Graph.pool` is 0
   with no effect node, else 2 plus one per effect read by more than one
   node — and, since D1, one per placed effect that folds a made texture
   or an output's frame. A straight run alternates the two however long
@@ -4035,7 +4035,7 @@ Folds two of D1's drafts: the refusals, and the loops.
 - **To reverse.** Edit the fixtures and re-record their goldens
   (`--only`).
 - **Rough edge.** No desk, so a fixture loaded at the machine has no
-  APC40 rows (the desk is Dylan's). `palette-glass` folds output 2,
+  APC40 rows (the desk is Dylan's). No fixture places two instances of one file (check 231 uses a hand-made variant; no test loads that configuration). `palette-glass` folds output 2,
   which on the testing guide's rig (D1: the glass output 1) is the
   projector.
 - **Judge it.** Checks 223, 224, 227.
@@ -4095,7 +4095,7 @@ Folds two of D1's drafts: the refusals, and the loops.
   for a chip; `after hands` reads poorly on the output line).
 - **To reverse.** Have `placed_chips` call `placement_words`.
 - **Rough edge.** One placement reads two ways on two pages.
-- **Judge it.** Checks 229, 228.
+- **Judge it.** Checks 228, 229.
 
 ### 229. A dormant placement still shows as placed, said only in the hover and the count
 

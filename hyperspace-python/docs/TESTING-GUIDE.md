@@ -2552,7 +2552,7 @@ whether you want a skeleton of bone lines instead.
 
 *(check 214)*
 
-## Shader nodes (on the copy)
+## Shader nodes (L95–L97 on the laptop; L98–L102 on the copy)
 
 Plan 30 (shader nodes). Each effect on the FX page is now its own part
 of the picture's wiring, and a preset can put one somewhere other than

@@ -3212,7 +3212,7 @@ time is inside `scene`). *Fail:* the frame warps (the target lost in the
 run of effect nodes).
 
 **231. Two palettes with different centres on two outputs.** (copy, glass and projector)
-Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain`.
+Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain` (neighbours only: no test loads this configuration, two placed instances of one file into two outputs).
 101's rig; make `two-palettes.json` (above) and load TWO-PALETTES; FX
 page, then ROUTING; drag Palette 2's centre. *Pass:* the glass folds to
 blue-cyan, the projector to orange-red; the FX page shows two placed

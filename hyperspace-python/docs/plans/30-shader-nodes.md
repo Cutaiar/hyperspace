@@ -103,7 +103,7 @@ any render node.
   `end.source`); a raise marks its views.
 - **The pool.** `FxChain.pool(size, n)` hands out the chain's half-float
   textures (as `begin` made them); `begin`, which the faces' chain still
-  uses with `FxChain.run`, is `pool(size, 2)[0]`. `Graph.pool` is 0 with
+  uses with `FxChain.run`, hands out the pool's first framebuffer, asking for at least the textures it already holds (two at the least). `Graph.pool` is 0 with
   no effect node, else 2 plus one per held texture. A straight run
   alternates the two however long it is. A new graph that needs fewer
   releases the pool (`FxChain.fit_pool`); a size change makes all of
@@ -381,7 +381,7 @@ by the graph's order and `timed_in`, not seen). In particular:
   227), and through a presenter: the rig's later outputs get the folded
   hands or frame as a half-float pool texture wrapped "f1" in a second
   context, which no test draws on a real second window.
-- **Two palettes with different centres on two outputs** (231).
+- **Two palettes with different centres on two outputs** (231): no test loads two placed instances of one file into two outputs.
 - **The folded hands' colour at distance**: the ghost's colours are
   low-saturation, so centre 200 reads grey-teal more than vivid blue
   (223).
