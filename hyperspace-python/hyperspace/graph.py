@@ -116,6 +116,26 @@ from .outputs import HANDS, NAMES, PIPELINES, SCENE, SCENE_HANDS, Switches, View
 # port types: a colour picture at the frame's size, a one-channel mask at
 # the frame's size, or draw calls (a geometry, drawn by its scene or layer)
 IMAGE, MASK, GEOMETRY = "image", "mask", "geometry"
+# plan 30 D2: the fourth port type, designed and not built
+VALUE = "value"
+"""A port type beside `IMAGE`, `MASK` and `GEOMETRY`: a scalar or a
+small vector of floats a node publishes once a frame (plan 30, "Designed,
+not built: the auxiliary ports"). Plan 28's modulation graph (`patch.py`,
+whose `RENDER_VALUE` is this name) may read one as a source, like a fed
+lane. Two uses are named so the node editor can draw them later without a
+schema change:
+
+- the palette's ``palette`` value **out** — its centre, width, the sat and
+  val ranges and the ramp's anchors — for a lights sink (plan 29) to take;
+- an image-in ``sample`` port on the palette that would set its params
+  from a bitmap (a camera frame of a neighbouring install) — an `IMAGE`
+  port whose reading becomes values.
+
+**No node publishes or reads a `VALUE` in this plan**
+(`test_the_value_port_type_exists_and_no_node_uses_it`): `Node.__init__`
+type-checks a wired port, so the first node to declare one wires like
+any other."""
+PORT_TYPES = (IMAGE, MASK, GEOMETRY, VALUE)
 
 # ---------------------------------------------------------------- the wiring
 
@@ -1121,6 +1141,24 @@ def placement_words(e: EffectAt) -> str:
     if where == "history":
         return f"{w} into the history only"
     return f"{w} before {_node_said(where)}"
+
+
+def placed_chips(spec: GraphSpec | None) -> dict[str, str]:
+    """Each placed effect instance → where it sits, in a chip's few words
+    (plan 30 D2: the FX page): `after hands`, `into output 2`, `after
+    scene`, `into history`, `after acid 2`. The FX page edits the default
+    chain, so a name here is drawn apart from the run's chips, says this
+    in place of a place in the order, and is not dragged. The one source
+    of these words: N4's wires extend it (an effect on a wire says where
+    the wire takes it). None (no preset graph) → {}."""
+    if spec is None:
+        return {}
+    out: dict[str, str] = {}
+    for e in spec.effects:
+        if e.placed:
+            key, where = e.where
+            out[e.name] = f"{key} {where.replace('.', ' ')}"
+    return out
 
 
 def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -> str:

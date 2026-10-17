@@ -532,7 +532,9 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                lambda x, v=v: v.__setitem__("target", x), TARGETS, group=g,
                modulatable=False,
                tip="What the effect runs on: the whole frame, or the picture in the "
-                   "faces (Faces must be on).")
+                   "faces (Faces must be on). On the faces it runs inside the shape's "
+                   "face drawing: the one shader run the render graph does not show, "
+                   "and a placement in the preset's graph does not move it.")
         for p in spec.params:
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
