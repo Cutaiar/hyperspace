@@ -116,6 +116,7 @@ from .library import (
     LibraryError,
     _write_text,
     bank_doc,
+    read_layout,
     slug,
 )
 from .lookback import (
@@ -362,6 +363,12 @@ DARK = "dark"
 # dormant row there). A desk template may carry the list too: a preset
 # naming the template gets its modifiers, its own overriding by id
 MODIFIERS_KEY = "modifiers"
+# plan 28 N2: where the GRAPH page's nodes the look holds sit (the
+# modifiers, the macros, the render nodes and their params) —
+# ``{"<node id>": [x, y]}``, written after everything else, one node a
+# line; the rig's nodes are the show's (library.LAYOUT). No key: laid out
+# automatically, no note and no dirt. An older build ignores the key
+LAYOUT_KEY = "layout"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
 NO_MODULE = ("macro", modifiers.GROUP)
@@ -454,6 +461,10 @@ def dumps(doc: dict) -> str:
             # the graph (plan 26 A4): one node per line, like a row
             rows = ",\n".join("  " + json.dumps(n) for n in v["nodes"])
             text = '{"nodes": [\n' + rows + '\n ]}' if v["nodes"] else '{"nodes": []}'
+        elif key == LAYOUT_KEY and isinstance(v, dict) and v:
+            # the GRAPH page's positions (plan 28 N2): one node a line
+            rows = ",\n".join(f"  {json.dumps(k)}: {json.dumps(xy)}" for k, xy in v.items())
+            text = "{\n" + rows + "\n }"
         elif key in ("routes", MODIFIERS_KEY, "desk") and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
@@ -540,6 +551,8 @@ class Presets:
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
+        # plan 28 N2: the GRAPH page's positions of the look's nodes
+        self.layout: dict[str, list[float]] = {}
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
@@ -776,6 +789,12 @@ class Presets:
                 continue
             label = modules.get(group)
             lib.label(group, str(label) if label else None)
+        # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
+        #     automatic layout; an entry that is not a name and two numbers
+        #     is dropped with a note
+        self.layout, bad = read_layout(doc.get(LAYOUT_KEY))
+        if bad:
+            notes.append(f"layout: {bad} entr{'y' if bad == 1 else 'ies'} unreadable, ignored")
         # 7. the notes, for the panel
         self.notes = notes
         self._warn(str(doc.get("name") or (path.stem if path else "preset")))
@@ -800,6 +819,9 @@ class Presets:
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
                    modules=modules, **{UNITS_KEY: dict(UNITS)})
+        layout = getattr(self, "layout", None)
+        if layout:                      # plan 28 N2: a preset with none writes none
+            doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
         return doc
 
     def _values(self) -> dict[str, Any]:
@@ -916,7 +938,9 @@ class Presets:
                 json.dumps(desk_json(table.desk()), sort_keys=True),
                 json.dumps(table.macros_doc(), sort_keys=True),
                 None if section is None else json.dumps(section, sort_keys=True),
-                table.modifiers_doc(self.reg))
+                table.modifiers_doc(self.reg),
+                # plan 28 N2: a node moved on the GRAPH page; none, no part
+                json.dumps(getattr(self, "layout", None) or None, sort_keys=True))
 
     # ---- internals ----
 

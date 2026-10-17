@@ -187,6 +187,20 @@ def page(panel, dt: float) -> None:
 
     if sel is None:
         return
+    strip(panel, sel)
+
+
+def strip(panel, sel: str) -> None:
+    """One effect's strip — its title and target chips, its tip, why it is
+    idle, on and mix, speed, blend and order, then its own params: the FX
+    page's open strip, and the GRAPH page's side column for a selected
+    effect node (plan 28 N2)."""
+    r = panel.reg
+    chain = getattr(panel.renderer, "fx", None)
+    fx = _state(panel)
+    if fx is None or sel not in fx.specs:
+        imgui.text_disabled(f"no effect {sel}" if fx is not None else "no renderer")
+        return
     spec = fx.specs[sel]
     pre = f"fx.{sel}"
     _strip_header(panel, fx, sel, placed.get(sel))

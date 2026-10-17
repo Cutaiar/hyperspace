@@ -1270,7 +1270,8 @@ def main() -> None:
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, awake, *host.adapters), impl, ctrl_win,
+                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters), impl,
+                                         ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
@@ -1318,7 +1319,9 @@ def main() -> None:
         watchdog.pet(now)          # a frame completed: one float write
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
-    close_all(audio, watchdog, awake, *host.adapters)   # the watchdog first: teardown is no stall
+    # the watchdog first: teardown is no stall; the panel before imgui goes
+    # (its GRAPH page's node editor context, plan 28 N2)
+    close_all(audio, watchdog, awake, panel, *host.adapters)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()
