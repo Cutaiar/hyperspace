@@ -372,18 +372,20 @@ it; each render output gets its picture (§14). The node kinds:
 | **Scene** | `Scene` (`scene`) | any number of geometries (`geometry`, `geometry.2` … ports) | one colour + depth target: the solid geometries first (the hands, a cloud: depth written), then the see-through shape, painter-sorted and depth-tested against them |
 | **Layer** | `HandsLayer` (`hands`, `hands.2`), `Readout` (`readout`), `Cover` (`cover`) | one geometry (the cover: the scene) | its own target: the hands alone with their own colour and depth; the guide and tethers' labels; the faces' coverage mask (`mask`) |
 | **Composite** | `Composite` (`composite(scene+hands)`, `composite(hands)`, `composite(history)`) | `under`, `over` (and the scene's `depth`) | `over` laid on `under`: over, add or depth-aware |
-| **FX** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image | the effect chain (`fx.FxChain`), one node per pipeline; inactive, its input passes through |
+| **Effect** | `Effect` (`acid`, `acid.2`, `palette` … in the scene's pipeline; `acid(scene+hands)`, `acid(hands)` in the others) | an image | one effect instance's pass (`fx.FxChain.run_one`) over its input; off this frame, its input read through (plan 30) |
+| **Pipeline end** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image (the last effect of its run) | where the pipeline's picture lands: straight into its one output, or once into a frame texture; the stand-down, the error path |
 | **History** | `History` (`history`), `Capture` (`capture`) | an image (+ the cover) | the echoes and the dream laid over its input; the capture into the ring, once a frame after every pipeline |
 | **Output** | `Output` (`output.1` …) | `image`, `hands`, `readout`, `depth` | `Renderer._compose`: fit, flips, the hands over, the readout, the dim — or the five-step `outputs.Handoff` for a later output |
 
-Ports are typed (`image`, `mask`, `geometry`); the graph refuses a wrong
+Ports are typed (`image`, `mask`, `geometry`, and `value`, declared and
+used by no node: below); the graph refuses a wrong
 type, an unknown port, a dependency outside the graph and a duplicate
 name when it is built. A Scene or Layer *makes* a texture
-(`image(frame)`, and `depth`); History, Composite and FX *paint*
+(`image(frame)`, and `depth`); History, Composite and an Effect *paint*
 (`paint(frame, dst)`) into the framebuffer their consumer hands them, so
-the look-back composites straight into the chain's half-float input and
-the chain writes straight into the window — no texture quantises the
-picture between them. A pipeline's end (`Fx`) decides where the picture
+the look-back composites straight into the first effect's half-float
+input and the last effect writes straight into the window — no texture
+quantises the picture between them. A pipeline's end (`Fx`) decides where the picture
 lands: straight into its one output when that output is at the frame's
 size, unflipped and on this context; otherwise once into a frame texture
 every output of it shows. Node methods are `run`, `paint`, `draw`,
@@ -396,18 +398,25 @@ dependencies first, ties in insertion order — computed when the graph is
 built, never per frame; `Graph.evaluate` runs every node once.
 `Renderer._graph_for` keeps the last graph and builds a new one
 (`graph.default_graph`) only when its key changes: each output's scene /
-hands / through switches (`graph_key`), the renderer's `Wiring` (below)
-and the roles of the listed `cloud` devices. What is per frame: whether
-an effect is on and whether a hand drew decide which pipeline end each
+hands / through switches (`graph_key`), the renderer's `Wiring` (below;
+its placements included), the roles of the listed `cloud` devices and
+the effect stack's list in order (`FxState.names()`: an order, an
+instance or a file changed). What is per frame: whether an effect of a
+chain run is on (`frame.fx_on`: a placed effect does not count), whether
+each effect runs, and whether a hand drew decide which pipeline end each
 output takes (`Output.settle`); a pipeline no output takes is skipped and
 its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
 427 goldens. (The *modulation* graph is not evaluated this way: the
 one-frame lag of ARCHITECTURE §2 stands until plan 28.) For one default
-output the order is `shape → ghost → scene → cover → hands → history → fx
-→ capture → output.1`.
+output the order is `shape → ghost → scene → cover → hands → history →
+plasma → acid → kaleido → … → huecycle → palette → fx → capture →
+output.1`: one effect node per instance in the stack's order (`order`,
+then name: thirteen with the factory files at their `@order`), on or
+off.
 
 **The default graph** is today's frame, wired from each output's
-switches: **scene** on, its `image` is the SCENE chain (`history → fx`);
+switches: **scene** on, its `image` is the SCENE chain (`history → the
+effects' run → fx`);
 **hands** on, the hands' layer is laid over at the output, and its
 readout on top; **through** with scene and hands, the layer is
 composited onto the history before the effects (`composite(scene+hands)
@@ -469,7 +478,7 @@ and the history on the scene with the hands:
 | Kind | Keys | Left out |
 |---|---|---|
 | `hands` | `instance` (1, 2 …), `into` (`layer` / `scene`), `draw` (`solid` / `lines`), `laid` (`over` / `add` / `depth`, only on the node that makes the layer) | hands 1, a solid layer laid over |
-| `effect` | `file`, `instance` (2 or more) | every effect file once |
+| `effect` | `file`, `instance` (2 or more; 1 allowed when placed), `after` or `into` (a node's name: below) | every effect file once, in the chain |
 | `history` | `holds` (`scene` / `scene+hands`) | the scene |
 
 The kinds are `graph.NODE_KINDS` — the one place a kind is named. No
@@ -479,7 +488,8 @@ in `values` or the show); a save writes it back in a fixed order. A
 section this build cannot read — an unknown kind, a key a node does not
 take, a value out of its choices, two nodes of one instance, two layers
 — is a note on the preset strip and the default graph, and the section is
-kept as the file had it and written back on save. A point cloud is not a
+kept as the file had it and written back on save. (A placement it cannot
+honour costs only that effect its place: below.) A point cloud is not a
 kind here: clouds follow the device list (below), and `{"kind":
 "cloud"}` is an unknown kind until plan 28. Undoing a load puts the
 loaded preset's graph back before its values (`library.Marks`).
@@ -499,6 +509,98 @@ scene. A show holds `ghost.<n>.*` back until a preset's graph declares
 the node, then seeds it. `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
+
+**The effect nodes** (`graph.Effect`, plan 30 D0). Every effect instance
+is an image node: one `image` port in, an image out, its params
+`fx.<name>.*`, its pass `FxChain.run_one` on the file's one compiled
+program (hot reload as before). Each pipeline's chain is a **run** of
+them, one per instance in `FxState.names()` — every instance, on or off,
+whatever its target — between the pipeline's source and its end, so
+switching a chip on or off changes no node and rebuilds nothing.
+Whether an effect runs is asked once a frame (`Effect.on`: in
+`FxState.chain(FRAME)` and compiled). **Off**, it is read through: it
+paints its input straight into its consumer's framebuffer and its
+`image` is its input's — no pass, no texture. **On**, it paints its
+input into a texture of the effects' pool and runs its pass from there
+into its consumer's framebuffer; read by two nodes, its picture is made
+once into a pool texture held for the frame and shown 1:1 into each.
+The pool (`FxChain.pool`, `Graph.pool`) is the chain's half-float
+textures: none without an effect node, two for straight runs (they
+alternate however long the run), one more per held picture; a held
+texture is never handed to a consumer that paints into it
+(`graph._spare`, `Effect._make(frame, avoid=dst)`). `FxChain.fit_pool`
+releases it when a new graph needs fewer. The pipeline's **end**, `Fx`,
+keeps the old node's name and jobs: it moves the clocks once a frame,
+paints its input, counts `chain_runs`, and decides where the picture
+lands (above). The faces' chain (`render.face_fx`) still runs the old
+way, `FxChain.run` over `begin`'s textures, inside the shape's face
+drawing: the one shader run the graph does not show.
+
+**Placement** (plan 30 D1). An effect entry may say where it sits:
+`after` a node — on that node's picture, every consumer of it reading
+the effect — or `into` one — on that node's `image` input alone; one of
+the two, never both. A placed entry may name instance 1 (the file
+itself, then out of the chain). The proof fixtures (test fixtures, never
+factory presets):
+
+```text
+{"kind": "effect", "file": "palette", "after": "hands"}                  // palette-hands.json
+{"kind": "effect", "file": "palette", "into": "output.2"}                // palette-glass.json
+{"kind": "effect", "file": "acid", "instance": 2, "after": "scene"}      // acid-scene.json
+```
+
+- **The names** (`graph.placement_error`): `scene`, `hands`, `hands.<n>`,
+  `history`, `output.<n>` and an effect instance this build has (a file
+  on disk, or an extra instance the same section declares). `into`
+  takes only the history, an output or an effect (the scene's and a
+  layer's inputs are geometry); `after: "output.<n>"` means `into`; an
+  effect never sits after or into itself.
+- **Refusals** — both keys, a non-string (`null` included), a name
+  outside the vocabulary, a loop of placed effects
+  (`graph.placement_loops`, at read and again at build) — are a note on
+  the preset strip ending "; the default placement" (`graph: palette
+  after 'teapot' — this build places after scene, hands, hands.2 …,
+  history, output.1 …, or an effect; the default placement`): that effect
+  goes back to the chain at its order, the rest of the graph lands, and
+  the section is kept as written (`GraphSpec.notes`).
+- **Dormant.** A placement on a node the built graph lacks this frame
+  (no hands layer, output 3 with two outputs, an output showing nothing,
+  a file not on disk) builds no node and says why in `Graph.dormant`
+  (`palette after hands — no hands layer this frame`); it never falls
+  back into the chain, and the OUTPUT page lists it under the output
+  blocks (`dormant: …`).
+- **How it sits.** A placed effect is not in the run. After the scene or
+  a layer it folds that texture once in its own `run`, before any
+  pipeline paints, into a held pool texture every consumer reads; on a
+  layer its pass keeps the ground see-through (`run_one(…, opaque=0)`),
+  it is laid on at the layer's `ghost.alpha` with the layer's depth, and
+  the layer's readout is split always (the guide and labels are never
+  folded). Into an output, the output folds the frame texture it settled
+  on (`Output.folds`) and that pipeline is never painted direct. After
+  the history or an effect of the run it paints like any effect (one
+  placed node per pipeline after a run's effect). `after` leaves the
+  ports that read something else of the node alone (`Node.REFS`). A
+  presenter is handed the folded hands or frame — possibly a half-float
+  pool texture (the `Handoff` docstring). `frame.fx_on` is "an effect
+  of a chain run is on" (`Graph.placed_names` left out), so a placed
+  effect alone bends no pipeline: a through output stands down.
+- **The words.** The OUTPUT "shows:" line adds the placements on what
+  each output shows (`· palette on this output only`), its hover the
+  graph line (`graph: palette on the hands`, `graph: acid ×2 · acid 2
+  before the history`, or the dormant words), and the LOOKBACK line those
+  on the history's way (`history: the scene · acid 2 before the
+  history`) — `graph.placement_words`, `output_placement_words`,
+  `history_words`, `graph_words(spec, dormant)`. The FX page's chips say
+  it the JSON's way (`after hands`, `graph.placed_chips`).
+
+**The `VALUE` port** (`graph.VALUE = "value"`, plan 30 D2): a fourth port
+type, a scalar or small float vector a node publishes once a frame, for
+the palette's two designed ports — a value out (centre, width, the sat
+and val ranges, the anchors) for a lights sink (plan 29), and an
+image-in `sample` port that would set its params from a bitmap. **No
+node publishes or reads one**
+(`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
+`patch.RENDER_VALUE` names it on the modulation side.
 
 **The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
 the renderer the device registry (`Renderer.cloud_source`); each listed
@@ -570,8 +672,10 @@ effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
 and `fx.mix` scales it.
 
 **The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
-so last in the chain, after the look-back and before the dim — and
-before the hands unless an output sends them through the effects). Off and at `@mix 0` by default, so switching it on changes
+so, unplaced, last in the chain, after the look-back and before the dim — and
+before the hands unless an output sends them through the effects; plan
+30: a preset's graph may place it on the hands' layer only, one output
+only, or the scene before the history). Off and at `@mix 0` by default, so switching it on changes
 nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
 triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
 neighbouring hues stay neighbours, no seam) and rescales saturation and
@@ -597,6 +701,21 @@ effect presets are `library/fx/*.json`.
   `_hue`/`_sat`/`_val` onto one row (`ui_fx.strip_rows`), and the
   palette shows only its open mode's rows (`ui_fx.HIDDEN_BY_MODE`; the
   hidden ones stay routable), so the page fits without scrolling.
+- **Placed effects** (plan 30 D2). The page edits the default chain. An
+  effect the loaded preset's graph places (`Panel.graph_now`'s spec)
+  leaves the chain's grid for a second grid under it, three to a row:
+  `Palette · after hands`, `Palette · into output 2` (`graph.placed_chips`,
+  cut to the chip by `placed_label`). It is no drag source and no drop
+  target, and a drop never rewrites its order; its LED switches it, its
+  name opens its strip (any effect's), whose title hover gives the
+  place in place of the order; the name's hover adds "placed by the
+  preset's graph, not in the chain …" and `dormant: …` while the built
+  graph has it dormant. The status line keeps the chain's labels and
+  adds the placed effects that run: `Acid → Palette · 1 placed`,
+  `nothing in the chain · 1 placed` (on, aimed at the frame, not
+  dormant). One placed and aimed at the faces reads `· on the faces`, is
+  on the faces row and is not counted. The page still never scrolls
+  (`tests/test_fx.py::test_the_page_fits_with_three_placed_effects`).
 - **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
   (the default) or `faces`: the **ONTO frame · faces** chips at the
   right end of the open strip's title line, the lit one where it runs
@@ -608,7 +727,10 @@ effect presets are `library/fx/*.json`.
   still picture seen through the faces), `fx.face_map`. A chip aimed at
   the faces has a diamond LED. With an effect on the faces, every face
   shows face 0's pattern phase; the echoes and the dream carry the
-  faces' effects, never the frame's.
+  faces' effects, never the frame's. The faces' chain is not on the
+  render graph (it runs inside the shape's face drawing; SYSTEM times it
+  inside `scene`), and a placement does not move it: an effect both
+  placed and aimed at the faces runs there.
 
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
@@ -645,8 +767,16 @@ that did not run counts 0; queries never nest), read 3 frames late
 60 frames (`WINDOW`) in `Renderer.stats["gpu_ms"]`, in the graph's
 order. The SYSTEM page shows "gpu per node, ms (median of the last
 frames):" and one line per node (`Graph.timed`: every node that times
-itself and every solid geometry a scene draws); a node that leaves the
-graph leaves the list. Without timer queries `stats["gpu_note"]` says
+itself and every solid geometry a scene draws) plus, since plan 30, one
+per effect that ran a pass that frame (`Graph.timed_in(frame)`, from
+`frame.stats["effects"]`: `acid`, `huecycle` …, a placed one under its
+source); a node that leaves the graph, or an effect switched off, leaves
+the list a few frames later. The pipeline end's own `fx` line reads 0.00:
+it runs no pass of its own, and its effects' time is on their lines. On
+Apple's tile GPU a query is charged for whatever is flushed inside it,
+so the per-effect split is indicative (party-acid: the old `fx` line
+0.225 ms, the effects' lines summing to 0.089 ms, the frame's wall time
+unchanged). Without timer queries `stats["gpu_note"]` says
 why ("gpu: no GPU timer queries on this context …") and the pixels are
 the same. Apple's driver reads some tiny nodes as 0.00; the figures are
 GPU time, not the CPU's.
@@ -663,17 +793,20 @@ frame (output 1 4× MSAA like the window); `solo` (output 1 alone, drawn
 direct) and, for the presets with an effect on,
 `solo-scene+hands+through`; party-trip once at 3840×2160 (2×, 1080p
 logical) under the 1080p cap; the other wirings (`in-scene/…`,
-`depth/…`, `history+hands/…`); the fixture presets
-(`FIXTURE_PRESETS`: `hands-lines`); and a recorded cloud listed in a
-scratch config (`cloud/…`). A golden is the SHA-256 of the
-full-resolution RGBA frame, with a quarter-size PNG per distinct picture
-and the route each state reached: **556 goldens, 130 distinct
-pictures**, recorded on `GL_RENDERER` "Apple M3 Max" (GL_VERSION "4.1
-Metal - 90.5"). `tests/test_golden_frames.py` compares every hash
-exactly there and skips with a note on any other renderer. The tool:
+`depth/…`, `history+hands/…`); the fixture presets, hands present, in
+the eight states (`FIXTURE_PRESETS`: `hands-lines` and plan 30's three
+placements, `palette-hands`, `palette-glass`, `acid-scene`); and a
+recorded cloud listed in a scratch config (`cloud/…`). A golden is the
+SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
+distinct picture and the route each state reached: **580 goldens, 136
+distinct pictures** (556 before plan 30, which recorded 24 for its
+fixtures and moved none of the 556), recorded on `GL_RENDERER` "Apple
+M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
+compares every hash exactly there and skips with a note on any other
+renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 556 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all 580 frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -686,7 +819,8 @@ refuses to diff on another renderer. Re-record only what a change moved,
 on the gate Mac, and name each moved frame and its one reason in the
 commit and the PR; a moved frame for a change that should move nothing
 means the change is wrong. Which WPs moved which frames, and why, is in
-[`plans/26-render-graph.md`](plans/26-render-graph.md).
+[`plans/26-render-graph.md`](plans/26-render-graph.md) (plan 30's, none:
+[`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)).
 
 ## 3. Running it
 
@@ -1997,7 +2131,7 @@ uv run ruff check .
   this machine's font metrics: in the cloud container test_fx's own two
   fit tests miss by 18 px, so a pass or a fail there says nothing about
   the Mac.
-- The golden frames: `tests/test_golden_frames.py` compares 556
+- The golden frames: `tests/test_golden_frames.py` compares 580
   full-resolution frames — every factory preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only

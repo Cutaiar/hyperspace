@@ -12,7 +12,8 @@ numbers.
 On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
 `main` (#151), and groups U (plan 24), W
 (plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
-merged. (V follows W in this file: plan 27's docs landed first.) Before
+merged. (V follows W in this file: plan 27's docs landed first.) Group
+X (plan 30) needs `plan-28-30-integration` until it is merged. Before
 any launch of this build:
 
 ```
@@ -62,6 +63,10 @@ number and what you saw.
    synthetic tape) 200, 203–205, 207, 209, 210, 214; 206 and 213 with the
    glass and the projector as two outputs (after 101), with 195 and 208; 216–218 (copy) with
    the recorded cloud (after 190).
+10. Shader nodes (group X): 220, 221 and 230 on the laptop; (copy) 225,
+    226, 228 and 229 on the laptop, 223 with the hand camera (or the
+    synthetic tape); 222, 224, 227 and 231 (copy) with the glass and the
+    projector as two outputs (after 101), 223 again there.
 
 ## A. Laptop alone
 
@@ -2697,7 +2702,7 @@ On the Mac the gates run on (`GL_RENDERER` "Apple M3 Max"), from
 `hyperspace-python/`: `uv run python tools/golden_frames.py` (it uses a
 throwaway home, never `~/Hyperspace`). Open a few PNGs under
 `tests/golden/frames/png/` that `frames.json` names (party-trip, hands
-present, `scene+hands+through`). *Pass:* "all 556 frames match their
+present, `scene+hands+through`). *Pass:* "all 580 frames match their
 goldens (Apple M3 Max, 4.1 Metal - 90.5)" (on a newer GL_VERSION, a note
 naming both); the PNGs show the preset with the two synthetic hands (the
 left open, the right a fist) over it, or bent through the effects in the
@@ -2741,9 +2746,11 @@ wait two seconds, tick it again. On LOOKBACK switch **Look-back** on and
 off. On OUTPUT tick output 1's **through effects**, then untick it.
 *Pass:* under the stall status "gpu per node, ms (median of the last
 frames):" and one line each for `scene`, `cover`, `hands`, `history`,
-`fx`, `capture`, `output.1`, a few ms or less and steady; `fx` falls
-near 0 with the effects off and comes back within about a second (a
-median of 60 frames); `history` moves with the look-back; `hands` rises
+`fx`, `capture`, `output.1`, a few ms or less and steady, and since plan
+30 a line per effect that ran, just above `fx` (which itself reads 0.00:
+the end runs no pass of its own, 220); the effects' lines go with the
+effects off and come back within about a second (a median of 60
+frames); `history` moves with the look-back; `hands` rises
 while the ghost hands show; with through on, `composite(scene+hands)` and
 `fx(scene+hands)` join the list (0.00 until a hand shows with an effect
 on) and leave it within a few frames of unticking. *Fail:* no lines (no
@@ -3038,6 +3045,184 @@ line shows a small time; with the entry gone, no `cloud` line. *Fail:*
 an error toast or a stall while the file is missing; a `cloud` line with
 no entry.
 
+## X. Plan 30: shader nodes
+
+Plan 30 as built is [`30-shader-nodes.md`](30-shader-nodes.md). Every
+effect is an image node; a preset's `graph` section may place one
+`after` or `into` a node. No factory preset places an effect, so the
+placement checks copy a fixture from `hyperspace-python/tests/fixtures/presets/`
+into the copy's library — `palette-hands.json` (party-tracer, the
+palette after the hands), `palette-glass.json` (party-acid, the palette
+into output 2), `acid-scene.json` (party-mandala, a second acid after
+the scene, the look-back on) — or a variant of one (**(copy)**; as for
+group V, delete any `[library] path` line on the copy first, never copy
+a fixture into the shared Drive folder). The variants, each saved under
+a new name in `<home>/presets/` with its `"graph"` replaced:
+
+- **palette-teapot.json** (from palette-hands) — `{"nodes": [{"kind":
+  "effect", "file": "palette", "after": "teapot"}]}`;
+- **palette-both.json** (from palette-hands) — `{"nodes": [{"kind":
+  "effect", "file": "palette", "after": "hands", "into": "output.2"}]}`;
+- **two-palettes.json** (from palette-glass) — `{"nodes": [{"kind":
+  "effect", "file": "palette", "into": "output.1"}, {"kind": "effect",
+  "file": "palette", "instance": 2, "into": "output.2"}]}`, and in
+  `"values"` add `"fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
+  "fx.palette.2.centre": 30.0, "fx.palette.2.width": 60.0` (the first
+  palette keeps centre 200: blue-cyan; the second is orange-red).
+
+The two-output checks use 101's rig: the glass is output 1 (the render
+window) and the projector output 2, a **presenter** on its own context
+— so `into: "output.2"` folds the projector, and a placement on the
+hands reaches the projector through the presenter's hand-over (a
+half-float texture no test has drawn on a real second window). The
+hands checks need the hand camera or the synthetic tape (as in group V),
+with **Ghost hands** ticked.
+
+**220. SYSTEM times each effect that ran.**
+Headless: `tests/test_graph_effects.py::test_the_system_page_times_each_effect_that_ran`, `tests/test_graph.py::test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left`, `tests/test_golden_frames.py::test_each_node_has_a_rolling_median_in_ms`.
+SYSTEM open; load ACID (F6); then on the FX page switch Kaleido on and
+Acid off. *Pass:* under "gpu per node, ms", lines `acid`, `wobble`,
+`deconverge` and `huecycle` before `fx`; the `fx` line itself reads
+0.00 by design (the pipeline end runs no pass of its own — not "the
+effects are free": their cost is the lines above it); after the switch,
+`kaleido` appears and `acid` goes within a few frames; no line for an
+effect that is off. The per-effect split moves from moment to moment on
+the Mac's GPU (register row 218): judge that each line is there, not
+its exact share. *Fail:* one `fx` line carrying the whole chain (the
+run not built: `Renderer._graph_for` not passing the effects); a line
+for every effect file (an off effect timed: `Effect.TIMED`).
+
+**221. Switching effects on and off changes nothing but the picture.**
+Headless: `tests/test_graph_effects.py::{test_an_off_effect_is_read_through_and_runs_no_pass,test_the_renderer_builds_the_run_from_the_stack_and_a_toggle_does_not_rebuild,test_the_run_draws_what_the_one_block_chain_drew}`, every golden.
+ACID; on the FX page toggle chips quickly, drag one chip to another
+place, then untick **Effects** (`fx.on`). *Pass:* each toggle is the
+picture as on earlier builds (no flash, no black frame, no stall line
+on SYSTEM); the drag reorders as before; bypassed, the frame is the
+plain scene and SYSTEM shows no effect line. *Fail:* a black or stale
+frame on a toggle (a texture read before it was written: `graph._spare`);
+a stall on every toggle (the graph rebuilding: `_graph_for`'s key).
+
+**222. Two outputs and the hands through still get their own chains.**
+Headless: `tests/test_graph_effects.py::test_the_pipeline_end_still_paints_straight_into_a_frame_sized_output`, `tests/test_outputs.py` (whole), goldens `*|scene+hands+through`, `*|hands+through`.
+101's rig: the projector with scene, hands and **through effects**, the
+glass with scene off and hands and through on; ACID; a hand in the box;
+SYSTEM open; then **Flip X** on the glass. *Pass:* the projector bends
+the hands with the shape, the glass bends the hands alone, both as on
+earlier builds; the flip mirrors the glass only; SYSTEM shows
+`acid(scene+hands)` and `acid(hands)` lines. *Fail:* the glass showing
+the projector's picture; an effect bending one pipeline twice; the flip
+on both.
+
+**223. The palette folds the hands and not the shape (palette-hands).** (copy)
+Headless: `tests/test_graph_placement.py::{test_after_hands_folds_the_hands_layer_and_not_the_shape,test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame}`, goldens `palette-hands|present|*`.
+Copy `palette-hands.json` into `<home>/presets/`. On the laptop first,
+then on 101's rig; load PALETTE-HANDS, hands in the box, SYSTEM open.
+*Pass:* the hands turn a blue-cyan slice (the ghost's pale colours read
+grey-teal: **judge** whether centre 200, width 60 reads as meant) while
+the 16-cell and its tracers keep their colours; the guide and labels are
+not folded; on the rig the projector (a presenter) and the glass both
+show the folded hands, at the ghost's opacity; SYSTEM shows a `palette`
+line under `hands`; take the hands out: no palette line. *Fail:* the
+whole frame blue (the palette ran in the chain: the placement lost on
+load); a dark halo round the hands (the pass did not keep the ground
+see-through: `opaque=0`); the hands folded on the glass but raw on the
+projector (the presenter given `ghost.tex`, not the folded texture:
+`Output.run`'s `hands_tex`).
+
+**224. One output folds (palette-glass).** (copy, glass and projector)
+Headless: `tests/test_graph_placement.py::{test_into_output_2_folds_one_output_only,test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame}`, golden `palette-glass|present|scene+hands+through`.
+101's rig; copy `palette-glass.json` in and load PALETTE-GLASS. Then
+on OUTPUT untick output 2's **scene** and **hands**; tick them again.
+Then edit the copy's file to `"into": "output.1"` and load it again.
+*Pass:* output 2 (the projector, a presenter) shows the acid folded to
+blue-cyan while the glass keeps the full rainbow; output 2's "shows:"
+line ends `· palette on this output only`; with output 2's scene and
+hands off the OUTPUT page lists `dormant: palette into output.2 —
+output 2 shows no picture this frame`, and ticking them brings the fold
+back; with `output.1` the glass folds and the projector does not.
+*Fail:* both outputs fold (the fold went into the pipeline, not the
+output); output 2 black (no frame texture: the pipeline painted
+direct); the projector raw where the test says folded (the presenter's
+`Handoff.frame` not the folded texture, or the half-float texture
+wrapped wrongly in the second context: register row 223).
+
+**225. A placement this build cannot honour is a note.** (copy)
+Headless: `tests/test_graph_placement.py::{test_an_unknown_placement_is_a_note_and_the_default,test_both_keys_at_once_are_refused}`.
+Make `palette-teapot.json` and `palette-both.json` (above); load each,
+then save it (the preset strip's save) and open the file again.
+*Pass:* the strip notes `graph: palette after 'teapot' — this build
+places after scene, hands, hands.2 …, history, output.1 …, or an effect;
+the default placement`, and for the other `graph: palette after 'hands'
+and into 'output.2' at once — one of the two; the default placement`;
+the palette folds the whole frame (it is back in the chain); the look
+loads, the dot is clean, and after the save the file still says what you
+wrote. *Fail:* the load refused; the whole graph dropped; the placement
+lost on save.
+
+**226. A dormant placement says so.** (copy)
+Headless: `tests/test_graph_placement.py::test_a_placement_the_graph_lacks_is_dormant_and_said_in_words`.
+PALETTE-HANDS; untick every output's **hands**; SYSTEM and OUTPUT open;
+then tick one again. *Pass:* OUTPUT lists `dormant: palette after hands
+— no hands layer this frame`; nothing is folded and SYSTEM has no
+palette line; with a hands switch on the fold comes back. *Fail:* the
+shape folds (the effect fell back into the chain).
+
+**227. The echoes hold the bent scene (acid-scene).** (copy, projector)
+Headless: `tests/test_graph_placement.py::test_after_scene_feeds_the_history_the_folded_picture`, goldens `acid-scene|present|*`.
+Copy `acid-scene.json` in; on 101's rig load ACID-SCENE; LOOKBACK open.
+*Pass:* the mandala heaves with the second acid on both outputs (the
+projector through its presenter); the echoes trail the heaved picture,
+not a straight one; LOOKBACK's line reads `history: the scene · acid 2
+before the history`. *Fail:* the echoes unbent (the capture still reads
+the scene).
+
+**228. The placements in words.** (copy)
+Headless: `tests/test_graph_placement.py::test_the_words_say_the_placements`, `tests/test_ui_shell.py::test_every_page_fits_the_control_window`.
+Each fixture in turn; hover the OUTPUT page's "shows:" line. *Pass:*
+the hover's last line names the placement: `graph: palette on the
+hands`, `graph: palette on output 2 only`, `graph: acid ×2 · acid 2
+before the history`; no page scrolls. *Fail:* words that disagree with
+the picture.
+
+**229. The FX page's placed chip.** (copy)
+Headless: `tests/test_fx.py::{test_a_placed_effects_chip_says_where_it_sits_and_is_not_reorderable,test_the_page_fits_with_three_placed_effects,test_a_placed_effects_strip_says_its_place_wherever_it_is_drawn}`.
+PALETTE-HANDS; FX page. Drag the palette's chip; drop another chip on
+it. Open its strip and hover its title. Untick every output's
+**hands** and hover the chip's name. Load TRIP. *Pass:* the palette's
+chip sits in a second grid under the chain's, reading `Palette · after
+hands`, readable from where you stand; the status line reads `nothing
+in the chain · 1 placed` (party-tracer's chain is otherwise off); a drag
+does nothing and a drop on it does nothing; its LED switches it and its
+name opens its strip, whose title hover reads `palette.glsl · after
+hands`; with the hands off the count goes and the hover says `dormant:
+…`; on TRIP the palette is back in the chain's grid, last. *Fail:* the
+palette in the chain's grid (the page did not get the preset's graph:
+`Panel.graph_now`); a drag moving it or rewriting its order (`place`
+not reaching `_chip` / `_drop`); the page scrolling.
+
+**230. The faces target still bends the faces.**
+Headless: `tests/test_render.py::{test_a_face_effect_changes_the_faces_and_nothing_else,test_a_frame_effect_runs_over_a_face_effect}`, `tests/test_fx.py::test_the_face_chain_borrows_the_frame_chains_programs`.
+Any factory preset with Faces on (FACES, F2). FX page: open Warp, click
+ONTO **faces**, switch it on; hover the ONTO faces chip. *Pass:* the picture
+inside the faces warps and the frame does not; the hover ends "On the
+faces it runs inside the shape's face drawing: the one shader run the
+render graph does not show, and a placement in the preset's graph does
+not move it."; the faces row lists Warp; SYSTEM has no `warp` line (its
+time is inside `scene`). *Fail:* the frame warps (the target lost in the
+run of effect nodes).
+
+**231. Two palettes with different centres on two outputs.** (copy, glass and projector)
+Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain` (neighbours only: no test loads this configuration, two placed instances of one file into two outputs).
+101's rig; make `two-palettes.json` (above) and load TWO-PALETTES; FX
+page, then ROUTING; drag Palette 2's centre. *Pass:* the glass folds to
+blue-cyan, the projector to orange-red; the FX page shows two placed
+chips, `Palette · into output 1` and `Palette 2 · into output 2`, each
+with its own strip; dragging Palette 2's centre moves only the
+projector's colours; ROUTING lists "Palette 2 …" settings; each
+output's "shows:" line ends `· palette on this output only` / `·
+palette 2 on this output only`. *Fail:* both outputs one colour (one
+palette's values on both); a fold on the wrong output; one chip.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -3082,5 +3267,12 @@ Only a person can settle these:
   real hand;
 - the zoom's feel in world and in screen space (197, 198), an old
   preset's pan on the real 1080p projector (201), and the point cloud on
-  a real screen (216–218).
+  a real screen (216–218);
+- a placed effect through a presenter (223, 224, 227, 231): the tests
+  prove the projector's hand-over is the folded texture by identity,
+  never that a half-float texture shows right in a real second window;
+  and whether the folded hands' colour reads as meant at distance (223);
+- the SYSTEM page's per-effect split (220): on the Mac's tile GPU a
+  line can carry its input's work, so only "a line per effect that ran"
+  is pass or fail.
 

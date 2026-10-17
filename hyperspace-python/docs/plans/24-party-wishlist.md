@@ -29,7 +29,10 @@ modifiers in the preset; the palette's "sync" became **shader nodes**,
 [`30-shader-nodes.md`](30-shader-nodes.md): every effect a bitmap-in,
 bitmap-out node placeable anywhere in the render graph, the palette the
 first one moved. The desk and the faders are in Dylan's hands and are
-not in either plan.)
+not in either plan. Shader nodes are built: the palette can sit on the
+hands only, on one output only, or before the trail —
+[`30-shader-nodes.md`](30-shader-nodes.md); the node editor is being
+built.)
 
 ## Render graph design decisions (owner, 2026-10-12)
 
@@ -173,6 +176,9 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
   restricted palettes. The owner wants a latent transform that maps the HSV
   cylinder onto a subspace that can be defined and moved live, so the
   rainbows land in a chosen slice. The doc calls it the palette fold.
+  (Built: the fold in plan 24; placeable anywhere in the render graph —
+  the hands only, one output only — as a shader node in plan 30,
+  [`30-shader-nodes.md`](30-shader-nodes.md).)
 - **DMX.** Both directions: the visuals drive the lights, and the lights are
   a controllable layer. The main reason is to interface with other people's
   lighting rigs. We own no gear yet, so we need a buy list.
