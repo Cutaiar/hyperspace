@@ -1,0 +1,62 @@
+---
+title: "A. Hyperspace anaglyph system architecture (existing code observed at commit cdd6364; anaglyph blocks are PROPOSED, not built)"
+---
+flowchart LR
+  subgraph EXIST["Existing: hyperspace-python (observed, rendering_algorithms.md Q9)"]
+    direction TB
+    APP["hyperspace.app:main<br/>GLFW window, OpenGL 3.3 core<br/>moderngl + imgui-bundle, 4x MSAA"]
+    GEO["geometry.project_h()<br/>geometry.py:1009<br/>CPU, single MONO camera<br/>_to3: 4D rotate + 4D divide<br/>_camera: yaw, pitch<br/>3D divide: k2 = CAM3/(CAM3 - 0.9 z1)"]
+    REN["render.py<br/>inline GLSL, FACE_VS line 153<br/>pixel-space vertices + divisor in_wc<br/>2D FX in hyperspace/shaders/fx"]
+    OUT["outputs.py<br/>one frame per loop<br/>up to MAX_OUTPUTS = 4 windows"]
+    APP --> GEO --> REN --> OUT
+  end
+
+  subgraph NEW["PROPOSED anaglyph additions (inferences, verify vs tests/test_core.py)"]
+    direction TB
+    PROF["Profile YAML<br/>config/profiles/*.yaml<br/>schema: anaglyph_profile.schema.json<br/>M_left, M_right, gains, stereo params"]
+    STEREO["Per-eye x offset ex = +/- e/2<br/>off-axis onto plane z1 = 0<br/>px_eye = w/2 + (x1 k2 + ex (1 - k2)) scale<br/>y unchanged: no vertical parallax"]
+    EYEL["Left-eye scene pass<br/>+ per-eye FX chain<br/>into texture L"]
+    EYER["Right-eye scene pass<br/>+ per-eye FX chain<br/>into texture R"]
+    COMP["Compositor pass, linear light<br/>decode, gains, M_L L + M_R R,<br/>clip, optional ghost cancel, encode"]
+    STEREO --> EYEL
+    STEREO --> EYER
+    EYEL --> COMP
+    EYER --> COMP
+  end
+
+  GEO -. "replace final 3D to 2D step per eye; 4D divide stays mono" .-> STEREO
+  PROF --> STEREO
+  PROF --> COMP
+  COMP --> OUT
+
+  subgraph PHYS["Physical chain"]
+    direction TB
+    PROJ["Projector<br/>fixed colour mode<br/>BrilliantColor / white boost OFF<br/>model: PLACEHOLDER"]
+    SCR["Screen<br/>low-gain neutral preferred<br/>material: PLACEHOLDER"]
+    FL["Left-eye filter<br/>e.g. LEE 106 red / LEE 139 green / LEE 010 amber"]
+    FR["Right-eye filter<br/>e.g. LEE 172 cyan / LEE 795 magenta / LEE 363 blue"]
+    EL(["Viewer left eye"])
+    ER(["Viewer right eye"])
+    PROJ --> SCR
+    SCR --> FL --> EL
+    SCR --> FR --> ER
+  end
+
+  OUT --> PROJ
+
+  subgraph CAL["Calibration loop"]
+    direction TB
+    PA["Path A: through-filter visual tests<br/>Weissman crosstalk chart<br/>phone RAW, locked exposure (relative only)"]
+    PB["Path B: rent Sekonic C-800 (Lensrentals)<br/>projector primary SPDs + filter T on halogen<br/>Woods and Rourke V-weighted integration"]
+    DUB["config/compute_dubois_matrix.py<br/>P = N (RtWR)^-1 RtW C2<br/>row-sum check"]
+    LOG["templates/experiment_log.csv"]
+    PA --> LOG
+    PB --> DUB
+    PB --> LOG
+  end
+
+  EL -. "observations" .-> PA
+  ER -. "observations" .-> PA
+  SCR -. "measured SPD, through-filter readings" .-> PB
+  DUB -- "measured matrices" --> PROF
+  LOG -- "next experiment" --> PROF

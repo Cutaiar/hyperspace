@@ -1,0 +1,17 @@
+# Mean %T of each plotted LEE gel over illustrative bands, computed by make_plots.py from gel_spectra.csv (arithmetic mean of 5 nm samples, band edges inclusive). Source data: manufacturer-published (LEE Filters website, https://leefilters.com/colour/<code>-<name>/, scraped 2026-10-17), not measured by us. Bands are illustrative markers, not measured projector primaries. LEE floor 0.01 = <=0.01.
+lee_code,csv_column,name,role_in_plot,first_plot,mean_T_pct_blue_445_465,mean_T_pct_green_530_560,mean_T_pct_red_610_640
+106,LEE_106_primary_red,LEE 106 Primary Red,left eye (red),C1_red_cyan,0.143,0.032,57.156
+172,LEE_172_lagoon_blue,LEE 172 Lagoon Blue,right eye (cyan),C1_red_cyan,58.956,24.500,0.118
+183,LEE_183_moonlight_blue,LEE 183 Moonlight Blue,right eye (cyan),C1_red_cyan,69.136,21.647,0.149
+115,LEE_115_peacock_blue,LEE 115 Peacock Blue,right eye (cyan),C1_red_cyan,61.458,49.927,1.049
+139,LEE_139_primary_green,LEE 139 Primary Green,left eye (green),C2_magenta_green,0.029,23.647,0.017
+124,LEE_124_dark_green,LEE 124 Dark Green,left eye (green),C2_magenta_green,4.344,44.940,0.512
+795,LEE_795_magical_magenta,LEE 795 Magical Magenta,right eye (magenta),C2_magenta_green,47.529,0.493,62.381
+128,LEE_128_bright_pink,LEE 128 Bright Pink,right eye (magenta),C2_magenta_green,35.284,0.538,75.766
+010,LEE_010_medium_yellow,LEE 010 Medium Yellow,left eye (amber),C3_amber_blue,0.049,88.724,89.903
+101,LEE_101_yellow,LEE 101 Yellow,left eye (amber),C3_amber_blue,0.089,81.658,88.153
+363,LEE_363_special_medium_blue,LEE 363 Special Medium Blue,right eye (blue),C3_amber_blue,44.881,0.975,0.049
+119,LEE_119_dark_blue,LEE 119 Dark Blue,right eye (blue),C3_amber_blue,45.745,1.101,0.011
+035,LEE_035_light_pink,LEE 035 Light Pink,pale pink (would-be magenta eye),C4_pale_pink_leakage,67.094,48.575,88.395
+036,LEE_036_medium_pink,LEE 036 Medium Pink,pale pink (would-be magenta eye),C4_pale_pink_leakage,51.987,27.378,85.137
+002,LEE_002_rose_pink,LEE 002 Rose Pink,pale pink (would-be magenta eye),C4_pale_pink_leakage,67.148,10.089,86.551

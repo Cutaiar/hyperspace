@@ -1,0 +1,20 @@
+---
+title: "C. Spectral transmission plots: data flow and contents (the plots themselves are matplotlib SVG/PNG in ../plots)"
+---
+flowchart LR
+  CSV[("research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv<br/>LEE_* columns: manufacturer-published, LEE Filters website<br/>leefilters.com/colour/code-name, scraped 2026-10-17<br/>NOT measured by us, floor 0.01 pct")]
+  SCRIPT["plots/make_plots.py<br/>matplotlib + numpy"]
+  CSV --> SCRIPT
+
+  SCRIPT --> C1["C1_red_cyan<br/>LEE 106 left vs LEE 172 / 183 / 115 right"]
+  SCRIPT --> C2["C2_magenta_green<br/>LEE 139 / 124 left vs LEE 795 / 128 right"]
+  SCRIPT --> C3["C3_amber_blue<br/>LEE 010 / 101 left vs LEE 363 / 119 right<br/>DIY only"]
+  SCRIPT --> C4["C4_pale_pink_leakage<br/>LEE 035 / 036 / 002 vs LEE 139<br/>pinks pass the green band"]
+  SCRIPT --> C5["C5_crosstalk_conceptual<br/>CONCEPTUAL, synthetic curves, NOT data"]
+  SCRIPT --> BS["band_summary.csv<br/>mean pct T per gel in illustrative bands<br/>blue 445-465, green 530-560, red 610-640 nm"]
+
+  BANDS["Shaded bands = ILLUSTRATIVE band markers only,<br/>not measured projector primaries"]
+  BANDS -.-> C1
+  BANDS -.-> C2
+  BANDS -.-> C3
+  BANDS -.-> C4

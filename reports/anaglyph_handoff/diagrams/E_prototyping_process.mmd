@@ -1,0 +1,19 @@
+---
+title: "E. Prototyping process: 10 steps (test order red/cyan, then magenta/green, then amber/blue)"
+---
+flowchart TB
+  P1["1. Lock the projector<br/>fixed colour mode, BrilliantColor / white boost, dynamic contrast, eco,<br/>auto keystone, ambient sensor OFF. Warm up (20-30 min is an unsourced inference).<br/>Record model + settings in experiment_log.csv"]
+  P2["2. Build the compositor<br/>two eye passes, off-axis per-eye offset at the CPU camera step,<br/>mat3 u_ML / u_MR uniforms in LINEAR light, clip, re-encode.<br/>First preset: red_cyan_channel_mask.yaml (identity rows)"]
+  P3["3. Red/cyan baseline, premade<br/>Rainbow Symphony paper 03201 + ProView plastic 03401.<br/>Run test_patterns.md: leakage L-only/R-only, ghost edges, disparity ladder"]
+  P4["4. Red/cyan DIY gels<br/>LEE 106 Primary Red (left) +<br/>LEE 172 Lagoon Blue / 183 Moonlight Blue / 115 Peacock Blue (right).<br/>Compare to premade; plot C1 shows published spectra"]
+  P5["5. Calibration Path A for each pair<br/>through-filter visual checks, Weissman-style crosstalk chart,<br/>phone RAW with locked exposure (relative comparisons only).<br/>crosstalk = (ghost - black) / (white - black) per eye"]
+  P6["6. Switch matrix preset<br/>red_cyan_dubois_2009.yaml (linear, clip each term then sum).<br/>Re-run patterns; log colour, ghosting, brightness L/R"]
+  P7["7. Magenta/green<br/>premade: RS ProView 03410 / GEMS / clip-on 03412,<br/>APO TrioScopics paper, 3Dstereo TriOviz (TriOviz is NOT TrioScopics).<br/>DIY: LEE 795 or 128 (magenta) + LEE 139 or 124 (green).<br/>Matrix: Dubois GM 2010 LCD preset, PLACEHOLDER for gels.<br/>Show pale-pink leakage: LEE 035 / 036 / 002 (plot C4)"]
+  P8["8. Amber/blue, DIY gels only<br/>no verified premade US source.<br/>LEE 010 or 101 (amber) + LEE 363 or 119 (blue).<br/>Matrix: Dubois YB 2010 LCD preset. Expect dim blue eye"]
+  P9["9. Calibration Path B<br/>rent Sekonic C-800 (Lensrentals, 3-7 days):<br/>projector R/G/B/W/K SPD at screen, filter T on a halogen source.<br/>Woods and Rourke V-weighted crosstalk; cross-check vs Path A"]
+  P10["10. Recompute matrices from measured spectra<br/>config/compute_dubois_matrix.py, Dubois least squares,<br/>row-sum check about 1.0. Write measured profile (calibration.status = measured),<br/>re-test with viewer pilot, pick pair, plan next experiment"]
+
+  P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10
+  P7 -. "repeat step 5 for this pair" .-> P5
+  P8 -. "repeat step 5 for this pair" .-> P5
+  P10 -. "iterate: new profile" .-> P3

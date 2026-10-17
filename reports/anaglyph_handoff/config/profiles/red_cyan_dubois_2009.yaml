@@ -1,0 +1,179 @@
+# Red/cyan, Dubois least-squares matrices, revised March 2009 version.
+# Matrix numbers copied EXACTLY from rendering_algorithms.md Q3, which transcribes
+# Dubois, "Conversion of a Stereo Pair to Anaglyph with the Least-Squares Projection
+# Method" (March 2009), labelled "for red/cyan glasses and CRT/plasma display".
+# Dubois procedure: sRGB EOTF -> matrices -> clip EACH term to [0,1] -> add -> sRGB OETF.
+# NOT fitted to the Hyperspace projector or to the gels below: overall status PLACEHOLDER.
+kind: anaglyph_profile
+schema_version: "1.0.0"
+name: red_cyan_dubois_2009
+version: "0.1.0"
+description: >
+  Second red/cyan preset (after the channel mask). Published Dubois 2009 matrices
+  applied in linear light. Use for comparison only until matrices are recomputed
+  from measured projector SPDs and filter transmissions (compute_dubois_matrix.py).
+status: placeholder
+color_pair: red_cyan
+
+provenance:
+  source_type: published_preset
+  created_by: anaglyph_handoff (generated from research notes, 2026-10-17)
+  created_date: "2026-10-17"
+  citations:
+    - title: "Dubois, Conversion of a Stereo Pair to Anaglyph with the Least-Squares Projection Method, March 2009"
+      url: https://www.site.uottawa.ca/~edubois/anaglyph/LeastSquaresHowToPhotoshop.pdf
+      notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+      note: "Q3 'Revised red-cyan'; input assumed sRGB; each term clipped before adding."
+    - title: "Dubois anaglyph page"
+      url: https://www.site.uottawa.ca/~edubois/anaglyph/
+  notes: "The 'classic' red-cyan matrix shipped by ffmpeg arcd / three.js (0.456, 0.500, 0.176, ...) is a DIFFERENT, older set and is not used here."
+
+filters:
+  left:
+    eye: left
+    nominal_color: red
+    designation: "LEE 106 Primary Red"
+    kind: theatrical_gel
+    manufacturer: LEE Filters
+    product_codes: ["106"]
+    suppliers:
+      - { name: "Studio Depot (Burbank, CA)", sku: "106S", url: "https://www.studiodepot.com/31-lee-s106.html", price_usd: 12.00, verified_date: "2026-10-17" }
+      - { name: "Glazer's Camera", sku: "62749", url: "https://www.glazerscamera.com/collections/all/products/primary-red-21-x24", price_usd: 12.00, verified_date: "2026-10-17" }
+    material: "polyester, 0.08 mm"
+    layers: 1
+    transmission:
+      data_type: published
+      reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+      column: LEE_106_primary_red
+      source_url: https://leefilters.com/colour/106-primary-red/
+      units: percent
+      wavelength_range_nm: [400, 700]
+      step_nm: 5
+      scraped_or_measured_date: "2026-10-17"
+      notes: "Manufacturer-published, not measured by us."
+  right:
+    eye: right
+    nominal_color: cyan
+    designation: "LEE 172 Lagoon Blue"
+    kind: theatrical_gel
+    manufacturer: LEE Filters
+    product_codes: ["172"]
+    suppliers:
+      - { name: "Studio Depot (Burbank, CA)", sku: "172S", url: "https://www.studiodepot.com/31-lee-s172.html", price_usd: 12.00, verified_date: "2026-10-17" }
+    material: "polyester, 0.08 mm"
+    layers: 1
+    transmission:
+      data_type: published
+      reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+      column: LEE_172_lagoon_blue
+      source_url: https://leefilters.com/colour/172-lagoon-blue/
+      units: percent
+      wavelength_range_nm: [400, 700]
+      step_nm: 5
+      scraped_or_measured_date: "2026-10-17"
+  alternates:
+    - eye: right
+      nominal_color: cyan
+      designation: "LEE 183 Moonlight Blue"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["183"]
+      transmission: { data_type: published, reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv", column: LEE_183_moonlight_blue, units: percent, wavelength_range_nm: [400, 700], step_nm: 5 }
+    - eye: right
+      nominal_color: cyan
+      designation: "LEE 115 Peacock Blue"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["115"]
+      transmission: { data_type: published, reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv", column: LEE_115_peacock_blue, units: percent, wavelength_range_nm: [400, 700], step_nm: 5 }
+    - eye: left
+      nominal_color: red
+      designation: "Rainbow Symphony ProView 03401, red lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03401"]
+      transmission: { data_type: unknown, reference: null, units: null }
+    - eye: right
+      nominal_color: cyan
+      designation: "Rainbow Symphony ProView 03401, cyan lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03401"]
+      transmission: { data_type: unknown, reference: null, units: null }
+
+matrices:
+  # Exact values from rendering_algorithms.md Q3 (Dubois 2009). Do not round or edit.
+  M_left:
+    - [0.437, 0.449, 0.164]
+    - [-0.062, -0.062, -0.024]
+    - [-0.048, -0.050, -0.017]
+  M_right:
+    - [-0.011, -0.032, -0.007]
+    - [0.377, 0.761, 0.009]
+    - [-0.026, -0.093, 1.234]
+  layout: row_major_output_rows
+  input_color_space: "sRGB (Dubois 2009: input 'assumed to be sRGB')"
+  output_color_space: "sRGB as assumed by Dubois; projector primaries NOT accounted for (PLACEHOLDER)"
+  math_domain: linear
+  decode_transfer: srgb_eotf
+  encode_transfer: srgb_oetf
+  clip_mode: clip_each_term_then_sum
+  status: placeholder
+  source:
+    title: "Dubois 2009 revised red-cyan, 'for red/cyan glasses and CRT/plasma display'"
+    url: https://www.site.uottawa.ca/~edubois/anaglyph/LeastSquaresHowToPhotoshop.pdf
+    notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+  row_sum_check: [1.000, 0.999, 1.000]
+  notes: "status placeholder because the matrices were designed for CRT/plasma primaries and generic red/cyan glasses, not this projector or LEE 106/172. Row sums match the notes' check (Q3 Inferences)."
+
+eye_gains:
+  left: 1.0
+  right: 1.0
+  applied_in: linear_before_matrix
+  method: "neutral default; later from ratio of integral(ybar * d_white * f_eye)"
+  status: placeholder
+  notes: "LEE-published daylight Y: 106 = 9.3, 172 = 25.4 (theatrical_gels.md Q2). Imbalance expected; measure."
+
+crosstalk_compensation:
+  enabled: false
+  method: none
+  k_left_from_right: null
+  k_right_from_left: null
+  black_floor_linear: null
+  status: placeholder
+
+stereo:
+  interaxial: { value: null, units: world_units, status: placeholder, note: "Bourke: about fo/30, fo/20 max." }
+  zero_parallax_distance: { value: 3.78, units: world_units, status: placeholder, note: "z1 = 0 plane, Zc = CAM3/0.9 (rendering_algorithms.md Q9 inference)." }
+  max_positive_parallax: { fraction_of_screen_width: null, mm: 63, px: null, status: placeholder, basis: "divergence limit p <= e (about 63 mm)" }
+  max_negative_parallax: { fraction_of_screen_width: null, mm: null, px: null, status: placeholder, basis: "more conservative than positive; compute for closest seat" }
+  off_axis: true
+  viewer_distance_m: null
+  interocular_mm: 63.36
+  eye_assignment: "red left / cyan right"
+
+display:
+  device_type: projector
+  model: null
+  technology: unknown
+  color_mode: null
+  white_boost_off: null
+  transfer_function: null
+  primaries_spd_reference: null
+  additivity_checked: null
+  screen: { material: null, gain: null, width_m: null, width_px: null }
+  ambient: null
+  status: placeholder
+  notes: "Matrices assume CRT/plasma; projector unknown."
+
+calibration:
+  status: placeholder
+  date: null
+  method: none
+  operator: null
+  instrument: null
+  formula: "(ghost - black) / (white - black)"
+  measured_crosstalk_pct: { left: null, right: null, left_sd: null, right_sd: null, n_repeats: null }
+  per_primary_leakage: null
+  data_files: []
+  notes: "PLACEHOLDER - not measured."

@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hyperspace.local/anaglyph/anaglyph_profile.schema.json",
+  "title": "Hyperspace anaglyph filter-pair profile (and experiment config)",
+  "description": "One schema for two document kinds, selected by `kind`: (1) `anaglyph_profile` - a filter pair plus the matrices, gains, crosstalk compensation, stereo parameters, display assumptions and calibration metadata needed to render it; (2) `anaglyph_experiment` - one experiment run that embeds a profile and adds the test plan. Convention for unknown values: use null and set the enclosing `status` to `placeholder`; never invent numbers. Every number must trace to research_notes/Custom anaglyph 3D projection plan/ or to a measurement recorded in `calibration`.",
+  "type": "object",
+  "required": ["kind"],
+  "properties": {
+    "kind": { "enum": ["anaglyph_profile", "anaglyph_experiment"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "anaglyph_profile" } } },
+      "then": { "$ref": "#/$defs/profile" }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "anaglyph_experiment" } } },
+      "then": { "$ref": "#/$defs/experiment" }
+    }
+  ],
+
+  "$defs": {
+    "nullableNumber": { "type": ["number", "null"] },
+    "nullableString": { "type": ["string", "null"] },
+    "status": {
+      "description": "placeholder = not measured for this setup (preset, guess, or unknown); measured = derived from a recorded measurement; published = copied verbatim from a cited publication and used for the conditions it was published for.",
+      "enum": ["placeholder", "measured", "published"]
+    },
+    "date": {
+      "description": "ISO date YYYY-MM-DD, or null if unknown/not yet done.",
+      "oneOf": [
+        { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        { "type": "null" }
+      ]
+    },
+    "citation": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "notes_file": { "type": "string", "description": "Path of the research note that records it, relative to the repo root." },
+        "note": { "type": "string" }
+      }
+    },
+    "matrix3x3": {
+      "description": "3x3 matrix, ROW-MAJOR: outer list = output channel rows (R, G, B); inner list = coefficients applied to input (R, G, B). out[i] = sum_j M[i][j] * in[j].",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "array",
+        "minItems": 3,
+        "maxItems": 3,
+        "items": { "type": "number" }
+      }
+    },
+    "supplier": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "sku": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "price_usd": { "$ref": "#/$defs/nullableNumber" },
+        "verified_date": { "$ref": "#/$defs/date" },
+        "note": { "type": "string" }
+      }
+    },
+    "transmission": {
+      "type": "object",
+      "required": ["data_type", "reference"],
+      "additionalProperties": false,
+      "properties": {
+        "data_type": {
+          "description": "measured = measured by the Hyperspace team; published = manufacturer/third-party published numbers; unknown = no spectral data (e.g. premade glasses with no published curves).",
+          "enum": ["measured", "published", "unknown"]
+        },
+        "reference": {
+          "description": "Path or URL of the data. For LEE gels: research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv.",
+          "type": ["string", "null"]
+        },
+        "column": { "type": ["string", "null"], "description": "Column name inside `reference`, if a table." },
+        "source_url": { "type": ["string", "null"] },
+        "units": { "enum": ["percent", "fraction", null] },
+        "wavelength_range_nm": {
+          "oneOf": [
+            { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+            { "type": "null" }
+          ]
+        },
+        "step_nm": { "$ref": "#/$defs/nullableNumber" },
+        "scraped_or_measured_date": { "$ref": "#/$defs/date" },
+        "notes": { "type": "string" }
+      }
+    },
+    "filter": {
+      "type": "object",
+      "required": ["eye", "nominal_color", "designation", "kind", "transmission"],
+      "additionalProperties": false,
+      "properties": {
+        "eye": { "enum": ["left", "right"] },
+        "nominal_color": { "enum": ["red", "cyan", "green", "magenta", "amber", "yellow", "blue", "other"] },
+        "designation": { "type": "string", "description": "Human-readable filter name, e.g. 'LEE 106 Primary Red'." },
+        "kind": { "enum": ["theatrical_gel", "premade_glasses", "dichroic", "wratten", "cast_plastic", "acrylic_sheet", "other"] },
+        "manufacturer": { "type": ["string", "null"] },
+        "product_codes": { "type": "array", "items": { "type": "string" } },
+        "suppliers": { "type": "array", "items": { "$ref": "#/$defs/supplier" } },
+        "material": { "type": ["string", "null"] },
+        "layers": { "type": "integer", "minimum": 1, "default": 1 },
+        "transmission": { "$ref": "#/$defs/transmission" },
+        "notes": { "type": "string" }
+      }
+    },
+    "matrices": {
+      "type": "object",
+      "required": ["M_left", "M_right", "layout", "input_color_space", "output_color_space", "math_domain", "clip_mode", "status", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "M_left": { "$ref": "#/$defs/matrix3x3" },
+        "M_right": { "$ref": "#/$defs/matrix3x3" },
+        "layout": {
+          "const": "row_major_output_rows",
+          "description": "Fixed convention: anaglyph = M_left * L + M_right * R with column vectors L, R = (r, g, b). In GLSL, mat3 is column-major: upload the TRANSPOSE (or set transpose=True in moderngl/OpenGL uniform upload)."
+        },
+        "input_color_space": {
+          "type": "string",
+          "description": "Colour space of the per-eye inputs L, R, e.g. 'sRGB primaries (Rec.709), D65'."
+        },
+        "output_color_space": {
+          "type": "string",
+          "description": "Colour space the output is interpreted in before encoding, e.g. 'projector native RGB, assumed sRGB primaries (PLACEHOLDER)'."
+        },
+        "math_domain": {
+          "enum": ["linear", "encoded"],
+          "description": "linear = inputs decoded to linear light before the matrix (Dubois 2001/2009 convention, decided for Hyperspace); encoded = applied to gamma-encoded values (ffmpeg behaviour; approximation)."
+        },
+        "decode_transfer": { "enum": ["srgb_eotf", "gamma_2.2", "projector_measured", "none"] },
+        "encode_transfer": { "enum": ["srgb_oetf", "gamma_2.2_inverse", "projector_measured_inverse", "none"] },
+        "clip_mode": {
+          "enum": ["clip_each_term_then_sum", "sum_then_clip"],
+          "description": "Dubois 2009: clip M_L L and M_R R to [0,1] separately, then add. three.js/ffmpeg: single clip after summing."
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "source": { "$ref": "#/$defs/citation" },
+        "row_sum_check": {
+          "description": "rowsum(M_left) + rowsum(M_right) per output channel; ~1.0 for Dubois-normalised matrices (white maps to white). Informational.",
+          "oneOf": [
+            { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+            { "type": "null" }
+          ]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "eye_gains": {
+      "type": "object",
+      "required": ["left", "right", "applied_in", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "left": { "type": "number", "minimum": 0 },
+        "right": { "type": "number", "minimum": 0 },
+        "applied_in": { "enum": ["linear_before_matrix", "linear_after_matrix"] },
+        "method": { "type": "string", "description": "e.g. ratio of integral(ybar * d_white * f_eye) per eye (rendering_algorithms.md Q4)." },
+        "status": { "$ref": "#/$defs/status" },
+        "notes": { "type": "string" }
+      }
+    },
+    "crosstalk_compensation": {
+      "type": "object",
+      "required": ["enabled", "method", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "method": {
+          "enum": ["none", "subtractive_linear"],
+          "description": "subtractive_linear: out_eye = in_eye - k * leak_from_other_eye, with raised black floor (extrapolated from Konrad/Lacotte/Dubois shutter-display work; not a published anaglyph method)."
+        },
+        "k_left_from_right": {
+          "description": "Leak coefficients into the left eye from the right image: scalar, per-channel [r,g,b], or 3x3 (row-major output rows). null if unknown.",
+          "oneOf": [
+            { "type": "number" },
+            { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+            { "$ref": "#/$defs/matrix3x3" },
+            { "type": "null" }
+          ]
+        },
+        "k_right_from_left": {
+          "oneOf": [
+            { "type": "number" },
+            { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+            { "$ref": "#/$defs/matrix3x3" },
+            { "type": "null" }
+          ]
+        },
+        "black_floor_linear": { "$ref": "#/$defs/nullableNumber" },
+        "status": { "$ref": "#/$defs/status" },
+        "notes": { "type": "string" }
+      }
+    },
+    "lengthWithUnits": {
+      "type": "object",
+      "required": ["value", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "$ref": "#/$defs/nullableNumber" },
+        "units": { "enum": ["mm", "m", "world_units", "px"] },
+        "status": { "$ref": "#/$defs/status" },
+        "note": { "type": "string" }
+      }
+    },
+    "parallaxLimit": {
+      "type": "object",
+      "required": ["fraction_of_screen_width", "mm", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "fraction_of_screen_width": { "$ref": "#/$defs/nullableNumber" },
+        "mm": { "$ref": "#/$defs/nullableNumber" },
+        "px": { "$ref": "#/$defs/nullableNumber" },
+        "status": { "$ref": "#/$defs/status" },
+        "basis": { "type": "string" }
+      }
+    },
+    "stereo": {
+      "type": "object",
+      "required": ["interaxial", "zero_parallax_distance", "max_positive_parallax", "max_negative_parallax", "off_axis"],
+      "additionalProperties": false,
+      "properties": {
+        "interaxial": { "$ref": "#/$defs/lengthWithUnits" },
+        "zero_parallax_distance": { "$ref": "#/$defs/lengthWithUnits" },
+        "max_positive_parallax": {
+          "description": "Uncrossed (behind-screen) limit. Must not exceed the viewer interocular distance (divergence limit).",
+          "$ref": "#/$defs/parallaxLimit"
+        },
+        "max_negative_parallax": {
+          "description": "Crossed (in-front) limit; be more conservative than positive.",
+          "$ref": "#/$defs/parallaxLimit"
+        },
+        "off_axis": { "type": "boolean", "description": "true = parallel cameras with asymmetric frusta (required; never toe-in)." },
+        "viewer_distance_m": { "$ref": "#/$defs/nullableNumber" },
+        "interocular_mm": { "$ref": "#/$defs/nullableNumber" },
+        "eye_assignment": { "type": "string", "description": "Which filter is on which eye, e.g. 'red left / cyan right'." },
+        "notes": { "type": "string" }
+      }
+    },
+    "display": {
+      "type": "object",
+      "required": ["device_type", "technology", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "device_type": { "enum": ["projector", "monitor", "unknown"] },
+        "model": { "type": ["string", "null"] },
+        "technology": { "enum": ["3LCD", "1-chip DLP", "RGB laser", "laser-phosphor", "LCD monitor", "CRT", "plasma", "unknown"] },
+        "color_mode": { "type": ["string", "null"] },
+        "white_boost_off": { "type": ["boolean", "null"], "description": "BrilliantColor / white segment disabled." },
+        "transfer_function": { "type": ["string", "null"] },
+        "primaries_spd_reference": { "type": ["string", "null"] },
+        "additivity_checked": { "type": ["boolean", "null"], "description": "White SPD compared with R+G+B SPD sum." },
+        "screen": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "material": { "type": ["string", "null"] },
+            "gain": { "$ref": "#/$defs/nullableNumber" },
+            "width_m": { "$ref": "#/$defs/nullableNumber" },
+            "width_px": { "type": ["integer", "null"] }
+          }
+        },
+        "ambient": { "type": ["string", "null"] },
+        "status": { "$ref": "#/$defs/status" },
+        "notes": { "type": "string" }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["status", "date", "method", "operator", "measured_crosstalk_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["placeholder", "measured"] },
+        "date": { "$ref": "#/$defs/date" },
+        "method": {
+          "enum": [
+            "none",
+            "path_a_visual",
+            "path_a_weissman_chart",
+            "path_a_phone_raw",
+            "path_b_c800_spectral",
+            "path_b_spectrometer",
+            "combined"
+          ]
+        },
+        "operator": { "type": ["string", "null"] },
+        "instrument": { "type": ["string", "null"] },
+        "formula": {
+          "type": "string",
+          "description": "Crosstalk definition used.",
+          "default": "(ghost - black) / (white - black)"
+        },
+        "measured_crosstalk_pct": {
+          "type": "object",
+          "required": ["left", "right"],
+          "additionalProperties": false,
+          "properties": {
+            "left": { "$ref": "#/$defs/nullableNumber" },
+            "right": { "$ref": "#/$defs/nullableNumber" },
+            "left_sd": { "$ref": "#/$defs/nullableNumber" },
+            "right_sd": { "$ref": "#/$defs/nullableNumber" },
+            "n_repeats": { "type": ["integer", "null"] }
+          }
+        },
+        "per_primary_leakage": {
+          "description": "Optional 3x2 leakage table: per primary R/G/B, fraction seen through each eye's wrong filter.",
+          "type": ["object", "null"]
+        },
+        "data_files": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "measured" } } },
+          "then": {
+            "properties": {
+              "date": { "type": "string" },
+              "method": { "not": { "const": "none" } },
+              "measured_crosstalk_pct": {
+                "properties": { "left": { "type": "number" }, "right": { "type": "number" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["source_type", "citations"],
+      "additionalProperties": false,
+      "properties": {
+        "source_type": { "enum": ["published_preset", "derived_from_notes", "measured", "placeholder"] },
+        "citations": { "type": "array", "items": { "$ref": "#/$defs/citation" } },
+        "created_by": { "type": "string" },
+        "created_date": { "$ref": "#/$defs/date" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "profile": {
+      "type": "object",
+      "required": ["kind", "schema_version", "name", "version", "status", "provenance", "filters", "matrices", "eye_gains", "crosstalk_compensation", "stereo", "display", "calibration"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "anaglyph_profile" },
+        "schema_version": { "const": "1.0.0" },
+        "name": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "description": { "type": "string" },
+        "status": {
+          "description": "Overall: PLACEHOLDER until calibration.status is measured for this exact setup.",
+          "enum": ["placeholder", "measured"]
+        },
+        "color_pair": { "enum": ["red_cyan", "magenta_green", "amber_blue", "other"] },
+        "provenance": { "$ref": "#/$defs/provenance" },
+        "filters": {
+          "type": "object",
+          "required": ["left", "right"],
+          "additionalProperties": false,
+          "properties": {
+            "left": { "allOf": [{ "$ref": "#/$defs/filter" }, { "properties": { "eye": { "const": "left" } } }] },
+            "right": { "allOf": [{ "$ref": "#/$defs/filter" }, { "properties": { "eye": { "const": "right" } } }] },
+            "alternates": {
+              "description": "Other filters that may be swapped in for the same eye roles (each must be calibrated separately).",
+              "type": "array",
+              "items": { "$ref": "#/$defs/filter" }
+            }
+          }
+        },
+        "matrices": { "$ref": "#/$defs/matrices" },
+        "eye_gains": { "$ref": "#/$defs/eye_gains" },
+        "crosstalk_compensation": { "$ref": "#/$defs/crosstalk_compensation" },
+        "stereo": { "$ref": "#/$defs/stereo" },
+        "display": { "$ref": "#/$defs/display" },
+        "calibration": { "$ref": "#/$defs/calibration" }
+      }
+    },
+
+    "experiment": {
+      "type": "object",
+      "required": ["kind", "schema_version", "experiment_id", "date", "status", "profile", "test_patterns", "observations"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "anaglyph_experiment" },
+        "schema_version": { "const": "1.0.0" },
+        "experiment_id": { "type": "string" },
+        "date": { "$ref": "#/$defs/date" },
+        "status": { "enum": ["planned", "running", "done", "example"] },
+        "goal": { "type": "string" },
+        "profile_ref": { "type": ["string", "null"], "description": "Path of the profile YAML this run started from." },
+        "profile": { "$ref": "#/$defs/profile" },
+        "test_patterns": {
+          "type": "array",
+          "items": { "type": "string", "description": "Pattern ids from templates/test_patterns.md, e.g. TP1." },
+          "minItems": 1
+        },
+        "viewers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "viewer_id": { "type": "string" },
+              "randot_arcsec": { "$ref": "#/$defs/nullableNumber" },
+              "seat": { "type": ["string", "null"] },
+              "wears_prescription_glasses": { "type": ["boolean", "null"] },
+              "feedback": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "observations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "crosstalk_left_pct": { "$ref": "#/$defs/nullableNumber" },
+            "crosstalk_right_pct": { "$ref": "#/$defs/nullableNumber" },
+            "observed_ghosting": { "type": ["string", "null"] },
+            "relative_brightness_L_R": { "$ref": "#/$defs/nullableNumber" },
+            "color_quality": { "type": ["string", "null"] },
+            "depth_quality": { "type": ["string", "null"] },
+            "outcome": { "type": ["string", "null"] },
+            "next_experiment": { "type": ["string", "null"] }
+          }
+        },
+        "log_csv": { "type": ["string", "null"], "description": "Path of the experiment_log.csv row(s) for this run." },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

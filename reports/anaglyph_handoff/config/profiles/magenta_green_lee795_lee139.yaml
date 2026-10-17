@@ -1,0 +1,205 @@
+# CANDIDATE custom magenta/green gel pair: LEE 139 Primary Green (LEFT) + LEE 795 Magical Magenta (RIGHT).
+# Eye assignment follows Dubois GM 2010 (left = green, right = magenta) and the
+# TrioScopics / Berezin convention (magenta on the right eye).
+#
+# !!! PLACEHOLDER !!!  The matrices below are Dubois's green-magenta 2010 preset,
+# "optimized for LCD display and TrioScopics3D glasses". They are a STARTING POINT
+# ONLY and are NOT calibrated for LEE 795 / LEE 139 or for any projector.
+# Fallback if the preset looks wrong: channel mask
+#   M_left  = [[0,0,0],[0,1,0],[0,0,0]]   (G from left)
+#   M_right = [[1,0,0],[0,0,0],[0,0,1]]   (R, B from right)
+kind: anaglyph_profile
+schema_version: "1.0.0"
+name: magenta_green_lee795_lee139
+version: "0.1.0"
+description: >
+  Candidate DIY magenta/green pair for test 2. Published LEE spectra (plot C2):
+  139 passes about 23.6 % mean in 530-560 nm with blue/red at or near the 0.01 floor;
+  795 passes about 47.5 % (445-465) and 62.4 % (610-640) with about 0.49 % in 530-560.
+  Matrices = Dubois GM 2010 preset, PLACEHOLDER, not calibrated for these gels.
+status: placeholder
+color_pair: magenta_green
+
+provenance:
+  source_type: placeholder
+  created_by: anaglyph_handoff (generated from research notes, 2026-10-17)
+  created_date: "2026-10-17"
+  citations:
+    - title: "Dubois SPM green-magenta matrix screenshot (uploaded 31 Oct 2010): 'optimized for LCD display and TrioScopics3D glasses'"
+      url: https://www.flickr.com/photos/e_dubois/5132528166/
+      notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+      note: "Values transcribed from the screenshot (integers /1000); ffmpeg agmd /65536 reproduces them to 3 decimals."
+    - title: "LEE colour pages (spectra in gel_spectra.csv)"
+      url: https://leefilters.com/colour/795-magical-magenta/
+      notes_file: "research_notes/Custom anaglyph 3D projection plan/theatrical_gels.md"
+  notes: "Dubois's pages do not say whether the 2010 LCD matrices assume linear or sRGB input; linear is used here per the decided Hyperspace pipeline (2009 note implies linear)."
+
+filters:
+  left:
+    eye: left
+    nominal_color: green
+    designation: "LEE 139 Primary Green"
+    kind: theatrical_gel
+    manufacturer: LEE Filters
+    product_codes: ["139"]
+    suppliers:
+      - { name: "Studio Depot (Burbank, CA)", sku: "139S", url: "https://www.studiodepot.com/31-lee-s139.html", price_usd: 12.00, verified_date: "2026-10-17" }
+    material: "polyester, 0.08 mm"
+    layers: 1
+    transmission:
+      data_type: published
+      reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+      column: LEE_139_primary_green
+      source_url: https://leefilters.com/colour/139-primary-green/
+      units: percent
+      wavelength_range_nm: [400, 700]
+      step_nm: 5
+      scraped_or_measured_date: "2026-10-17"
+      notes: "Spectrally cleanest green in the set but dim (LEE daylight Y 11.9)."
+  right:
+    eye: right
+    nominal_color: magenta
+    designation: "LEE 795 Magical Magenta"
+    kind: theatrical_gel
+    manufacturer: LEE Filters
+    product_codes: ["795"]
+    suppliers:
+      - name: Production Advantage
+        sku: LEE-GEL-SHT
+        url: https://proadv.com/lee-color-gel/
+        price_usd: 11.00
+        verified_date: "2026-10-17"
+        note: "All colours via option selector; per-colour stock NOT shown. LEE 795 is NOT listed at Studio Depot (404)."
+    material: "polyester, 0.08 mm"
+    layers: 1
+    transmission:
+      data_type: published
+      reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+      column: LEE_795_magical_magenta
+      source_url: https://leefilters.com/colour/795-magical-magenta/
+      units: percent
+      wavelength_range_nm: [400, 700]
+      step_nm: 5
+      scraped_or_measured_date: "2026-10-17"
+  alternates:
+    - eye: right
+      nominal_color: magenta
+      designation: "LEE 128 Bright Pink"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["128"]
+      suppliers:
+        - { name: "Studio Depot (Burbank, CA)", sku: "128S", url: "https://www.studiodepot.com/31-lee-s128.html", price_usd: 12.00, verified_date: "2026-10-17" }
+      transmission: { data_type: published, reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv", column: LEE_128_bright_pink, source_url: "https://leefilters.com/colour/128-bright-pink/", units: percent, wavelength_range_nm: [400, 700], step_nm: 5 }
+    - eye: left
+      nominal_color: green
+      designation: "LEE 124 Dark Green"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["124"]
+      suppliers:
+        - { name: "Studio Depot (Burbank, CA)", sku: "124S", url: "https://www.studiodepot.com/31-lee-s124.html", price_usd: 12.00, verified_date: "2026-10-17" }
+      transmission: { data_type: published, reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv", column: LEE_124_dark_green, units: percent, wavelength_range_nm: [400, 700], step_nm: 5, notes: "About twice as bright as 139 but leaks about 4 % blue at 445-465 nm." }
+    - eye: right
+      nominal_color: magenta
+      designation: "Rainbow Symphony Magenta/Green ProView 03410, magenta lens (premade)"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03410", "03412", "03415", "03461", "03462", "03463"]
+      suppliers:
+        - { name: "Rainbow Symphony", sku: "03410", url: "https://www.rainbowsymphony.com/products/magenta-green-proview-3d-glasses", price_usd: 18.00, verified_date: "2026-10-17", note: "Only the 2-pack in stock on 2026-10-17; clip-on 03412 $6.95 in stock." }
+      transmission: { data_type: unknown, reference: null, units: null }
+    - eye: right
+      nominal_color: magenta
+      designation: "American Paper Optics TrioScopics paper, magenta lens (right) (premade)"
+      kind: premade_glasses
+      manufacturer: American Paper Optics
+      product_codes: []
+      suppliers:
+        - { name: "the3dmarket.com (APO)", sku: null, url: "https://the3dmarket.com/products/trioscopics-3d-glasses", price_usd: 0.40, verified_date: "2026-10-17", note: "Unit price at 50-200; minimum 50." }
+      transmission: { data_type: unknown, reference: null, units: null }
+    - eye: right
+      nominal_color: magenta
+      designation: "3Dstereo Official TriOviz black cardboard, magenta lens (premade; TriOviz is NOT TrioScopics)"
+      kind: premade_glasses
+      manufacturer: 3Dstereo
+      product_codes: ["GLA-TO"]
+      suppliers:
+        - { name: "3Dstereo.com", sku: "GLA-TO", url: "https://3dstereo.com/products/magenta-green-3d-anaglyph-cardboard-glasses-official-trioviz-pro-anatm-quality-black-cardboard-new", price_usd: 1.95, verified_date: "2026-10-17" }
+      transmission: { data_type: unknown, reference: null, units: null }
+
+matrices:
+  # Dubois GM 2010 (left = green, right = magenta), exact values from rendering_algorithms.md Q3.
+  M_left:
+    - [-0.062, -0.158, -0.039]
+    - [0.284, 0.668, 0.143]
+    - [-0.015, -0.027, 0.021]
+  M_right:
+    - [0.529, 0.705, 0.024]
+    - [-0.016, -0.015, -0.065]
+    - [0.009, 0.075, 0.937]
+  layout: row_major_output_rows
+  input_color_space: "sRGB primaries (Rec.709), D65 - ASSUMED"
+  output_color_space: "LCD primaries as assumed by Dubois 2010; projector unknown (PLACEHOLDER)"
+  math_domain: linear
+  decode_transfer: srgb_eotf
+  encode_transfer: srgb_oetf
+  clip_mode: clip_each_term_then_sum
+  status: placeholder
+  source:
+    title: "Dubois GM 2010 'LCD' preset - PLACEHOLDER starting point, NOT calibrated for LEE 795 / LEE 139"
+    url: https://www.flickr.com/photos/e_dubois/5132528166/
+    notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+  row_sum_check: [0.999, 0.999, 1.000]
+  notes: "Replace with matrices from compute_dubois_matrix.py once projector SPDs and the actual gel transmissions are measured (Path B)."
+
+eye_gains:
+  left: 1.0
+  right: 1.0
+  applied_in: linear_before_matrix
+  method: "neutral default"
+  status: placeholder
+  notes: "LEE-published daylight Y: 139 = 11.9, 795 = 13.3 (theatrical_gels.md Q2); measure on the projector."
+
+crosstalk_compensation:
+  enabled: false
+  method: none
+  k_left_from_right: null
+  k_right_from_left: null
+  black_floor_linear: null
+  status: placeholder
+
+stereo:
+  interaxial: { value: null, units: world_units, status: placeholder, note: "Bourke: about fo/30, fo/20 max." }
+  zero_parallax_distance: { value: 3.78, units: world_units, status: placeholder, note: "z1 = 0 plane, Zc = CAM3/0.9 (rendering_algorithms.md Q9 inference)." }
+  max_positive_parallax: { fraction_of_screen_width: null, mm: 63, px: null, status: placeholder, basis: "divergence limit p <= e (about 63 mm)" }
+  max_negative_parallax: { fraction_of_screen_width: null, mm: null, px: null, status: placeholder, basis: "more conservative than positive; compute for closest seat" }
+  off_axis: true
+  viewer_distance_m: null
+  interocular_mm: 63.36
+  eye_assignment: "green left / magenta right"
+
+display:
+  device_type: projector
+  model: null
+  technology: unknown
+  color_mode: null
+  white_boost_off: null
+  transfer_function: null
+  primaries_spd_reference: null
+  additivity_checked: null
+  screen: { material: null, gain: null, width_m: null, width_px: null }
+  ambient: null
+  status: placeholder
+
+calibration:
+  status: placeholder
+  date: null
+  method: none
+  operator: null
+  instrument: null
+  formula: "(ghost - black) / (white - black)"
+  measured_crosstalk_pct: { left: null, right: null, left_sd: null, right_sd: null, n_repeats: null }
+  per_primary_leakage: null
+  data_files: []
+  notes: "PLACEHOLDER - not measured. Pale pinks LEE 035/036/002 are NOT valid substitutes for 795: they pass about 10-49 % mean in 530-560 nm (plot C4, band_summary.csv)."

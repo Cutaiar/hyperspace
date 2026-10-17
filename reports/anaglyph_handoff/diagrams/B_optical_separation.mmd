@@ -1,0 +1,44 @@
+---
+title: "B. CONCEPTUAL optical separation (red/cyan example; same logic for magenta/green and amber/blue). Not to scale, no measured values."
+---
+flowchart LR
+  subgraph IMG["Composited frame on projector (channel-mask preset)"]
+    direction TB
+    RCH["R channel<br/>= left image red"]
+    GCH["G channel<br/>= right image green"]
+    BCH["B channel<br/>= right image blue"]
+  end
+
+  subgraph LIGHT["Projector primaries (SPD shape depends on projector: MEASURE)"]
+    direction TB
+    PR["Red primary light"]
+    PG["Green primary light"]
+    PBL["Blue primary light"]
+  end
+
+  RCH --> PR
+  GCH --> PG
+  BCH --> PBL
+
+  SCR["Screen<br/>reflects all primaries toward every viewer"]
+  PR --> SCR
+  PG --> SCR
+  PBL --> SCR
+
+  subgraph LEFT["Left eye: red filter (e.g. LEE 106)"]
+    LF["Pass band: long wavelengths<br/>Stop band: blue + green"]
+  end
+  subgraph RIGHT["Right eye: cyan filter (e.g. LEE 172 / 183 / 115)"]
+    RF["Pass band: blue + green<br/>Stop band: red"]
+  end
+
+  SCR -- "red: intended signal" --> LF
+  SCR -. "green + blue: leak = ghost of right image" .-> LF
+  SCR -- "green + blue: intended signal" --> RF
+  SCR -. "red: leak = ghost of left image" .-> RF
+
+  LF --> LE(["Left eye sees left image<br/>plus small right-image ghost"])
+  RF --> RE(["Right eye sees right image<br/>plus small left-image ghost"])
+
+  NOTE["CONCEPTUAL ONLY.<br/>Leak size = overlap of other eye's primary SPD with this filter's stop band,<br/>weighted by photopic V(lambda) (Woods and Rourke 2004).<br/>Measured crosstalk per eye = (ghost - black) / (white - black).<br/>Real leak values: see plots/C1-C4 (LEE published data) and future measurements."]
+  LE ~~~ NOTE

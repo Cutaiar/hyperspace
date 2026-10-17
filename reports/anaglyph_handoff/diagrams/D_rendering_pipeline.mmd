@@ -1,0 +1,38 @@
+---
+title: "D. Proposed anaglyph rendering pipeline: stage inputs/outputs and where matrices, masks, gains and compensation apply"
+---
+flowchart TB
+  S0["Stage 0: scene state<br/>IN: 4D polytope vertices, rotations, UI state<br/>OUT: 4D points"]
+  S1["Stage 1: 4D to 3D, MONO for both eyes<br/>geometry._to3, geometry.py:972<br/>k = d4 / (d4 - w)<br/>OUT: 3D points + div4"]
+  S2["Stage 2: camera rotation, MONO<br/>geometry._camera, geometry.py:988, yaw then pitch<br/>OUT: camera-space x1, y1, z1"]
+  S3L["Stage 3L: 3D to 2D, LEFT eye, CPU<br/>k2 = CAM3/(CAM3 - 0.9 z1), CAM3 = 3.4<br/>px = w/2 + (x1 k2 + ex (1 - k2)) scale, ex = -e/2<br/>py = h/2 - y1 k2 scale<br/>OUT: pixel verts + divisor div4 div3"]
+  S3R["Stage 3R: 3D to 2D, RIGHT eye, CPU<br/>same as 3L with ex = +e/2<br/>zero parallax at z1 = 0 (Zc = CAM3/0.9, about 3.78)<br/>OUT: pixel verts + divisor"]
+  S4L["Stage 4L: scene pass + per-eye FX<br/>IN: left verts, shaders FACE_VS etc<br/>OUT: texture L (display-encoded RGBA8 today)"]
+  S4R["Stage 4R: scene pass + per-eye FX<br/>IN: right verts<br/>OUT: texture R"]
+
+  S0 --> S1 --> S2
+  S2 --> S3L --> S4L
+  S2 --> S3R --> S4R
+
+  subgraph COMP["Stage 5: compositor fragment shader (one full-screen pass)"]
+    direction TB
+    C1["5a decode to linear<br/>IN: L', R' encoded<br/>sRGB EOTF: S'/12.92 if S' at most 0.04045, else ((S'+0.055)/1.055)^2.4<br/>or measured projector EOTF<br/>OUT: L, R linear"]
+    C2["5b per-eye gains (optional)<br/>uniforms g_L, g_R from profile.eye_gains<br/>OUT: g_L L, g_R R"]
+    C3["5c ANAGLYPH MATRICES<br/>uniform mat3 u_ML, u_MR from profile.matrices<br/>channel mask = 0/1 identity rows<br/>Dubois presets or measured P = [M_L | M_R]<br/>OUT: tL = M_L L, tR = M_R R"]
+    C4["5d clip + sum<br/>Dubois 2009: clip tL and tR to 0..1 separately, then add<br/>alt: sum then clip once (three.js style)<br/>OUT: A linear"]
+    C5["5e crosstalk cancellation (optional, extrapolated to anaglyph)<br/>out = in - k leak, black floor raised for headroom<br/>k from profile.crosstalk_compensation<br/>OUT: A'"]
+    C6["5f clamp to 0..1 and encode<br/>sRGB OETF: 12.92 S if S at most 0.0031308, else 1.055 S^(1/2.4) - 0.055<br/>or projector inverse EOTF<br/>OUT: framebuffer RGB"]
+    C1 --> C2 --> C3 --> C4 --> C5 --> C6
+  end
+
+  S4L -- "texture L" --> C1
+  S4R -- "texture R" --> C1
+  PROF[("Profile YAML<br/>matrices, eye_gains,<br/>crosstalk_compensation,<br/>stereo.interaxial e,<br/>stereo.zero_parallax")]
+  PROF -. "e, zero-parallax plane" .-> S3L
+  PROF -. "e, zero-parallax plane" .-> S3R
+  PROF -. "g_L, g_R" .-> C2
+  PROF -. "u_ML, u_MR" .-> C3
+  PROF -. "k, black floor" .-> C5
+  C6 --> S6["Stage 6: outputs.py windows, projector<br/>IN: composited frame<br/>OUT: light on screen"]
+  NOTE["Notes<br/>- FX that shift channels, e.g. fx/deconverge.glsl, must run per eye BEFORE compositing.<br/>- No sRGB framebuffer or gamma code exists today: decode/encode are new.<br/>- Stages 3L/3R and 5 are proposals from rendering_algorithms.md Q4/Q5/Q9, not implemented."]
+  S6 ~~~ NOTE

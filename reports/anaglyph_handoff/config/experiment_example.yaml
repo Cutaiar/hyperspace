@@ -1,0 +1,127 @@
+# EXAMPLE experiment config (kind: anaglyph_experiment). NOT a real run.
+# Shows how one test (process step 3: red/cyan baseline with premade glasses) is
+# described. Every observation is null until measured. Geometry numbers marked
+# "worked-example assumption" come from the notes' illustrative installation
+# (rendering_algorithms.md Q7: V = 4 m, screen width 4 m, 1920 px), NOT from the
+# real Hyperspace cart. Schema: anaglyph_profile.schema.json (experiment branch).
+kind: anaglyph_experiment
+schema_version: "1.0.0"
+experiment_id: EXAMPLE-RC-001
+date: null
+status: example
+goal: >
+  EXAMPLE - Red/cyan baseline: channel-mask preset with Rainbow Symphony ProView 03401
+  and paper 03201; measure per-eye crosstalk with Path A and record ghosting, L/R brightness,
+  colour and depth quality.
+profile_ref: config/profiles/red_cyan_channel_mask.yaml
+test_patterns: [TP1, TP2, TP3, TP4, TP5, TP6, TP7, TP8]
+viewers:
+  - viewer_id: EXAMPLE-V01
+    randot_arcsec: null
+    seat: null
+    wears_prescription_glasses: null
+    feedback: null
+observations:
+  crosstalk_left_pct: null
+  crosstalk_right_pct: null
+  observed_ghosting: null
+  relative_brightness_L_R: null
+  color_quality: null
+  depth_quality: null
+  outcome: "EXAMPLE - not a real run"
+  next_experiment: "EXAMPLE - switch matrices to red_cyan_dubois_2009.yaml, same patterns"
+log_csv: templates/experiment_log.csv
+notes: "Crosstalk per eye = (ghost - black) / (white - black), measured through that eye's filter (Weissman & Woods 2011)."
+
+profile:
+  kind: anaglyph_profile
+  schema_version: "1.0.0"
+  name: red_cyan_channel_mask
+  version: "0.1.0"
+  description: "Embedded copy of profiles/red_cyan_channel_mask.yaml (alternates omitted)."
+  status: placeholder
+  color_pair: red_cyan
+  provenance:
+    source_type: published_preset
+    created_date: "2026-10-17"
+    citations:
+      - title: "Wimmer, Anaglyph Methods Comparison ('Color' anaglyph)"
+        url: https://3dtv.at/Knowhow/AnaglyphComparison_en.aspx
+  filters:
+    left:
+      eye: left
+      nominal_color: red
+      designation: "Rainbow Symphony ProView Professional plastic, red lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03401"]
+      transmission: { data_type: unknown, reference: null, units: null }
+    right:
+      eye: right
+      nominal_color: cyan
+      designation: "Rainbow Symphony ProView Professional plastic, cyan lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03401"]
+      transmission: { data_type: unknown, reference: null, units: null }
+  matrices:
+    M_left:  [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    M_right: [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    layout: row_major_output_rows
+    input_color_space: "sRGB primaries (Rec.709), D65 - ASSUMED"
+    output_color_space: "projector RGB (PLACEHOLDER)"
+    math_domain: linear
+    decode_transfer: srgb_eotf
+    encode_transfer: srgb_oetf
+    clip_mode: clip_each_term_then_sum
+    status: published
+    source:
+      title: "Channel mask (Wimmer 'Color' anaglyph)"
+      url: https://3dtv.at/Knowhow/AnaglyphComparison_en.aspx
+    row_sum_check: [1.0, 1.0, 1.0]
+  eye_gains: { left: 1.0, right: 1.0, applied_in: linear_before_matrix, status: placeholder }
+  crosstalk_compensation: { enabled: false, method: none, k_left_from_right: null, k_right_from_left: null, black_floor_linear: null, status: placeholder }
+  stereo:
+    interaxial: { value: null, units: world_units, status: placeholder }
+    zero_parallax_distance: { value: 3.78, units: world_units, status: placeholder, note: "z1 = 0 plane (rendering_algorithms.md Q9 inference)" }
+    max_positive_parallax:
+      fraction_of_screen_width: 0.01575
+      mm: 63
+      px: 30
+      status: placeholder
+      basis: "Worked-example assumption (rendering_algorithms.md Q7): divergence limit about 63 mm on a 4 m / 1920 px screen = 63/4000 of width, about 30 px. Recompute for the real screen."
+    max_negative_parallax:
+      fraction_of_screen_width: null
+      mm: null
+      px: null
+      status: placeholder
+      basis: "Not specified in notes for this geometry; keep more conservative than positive."
+    off_axis: true
+    viewer_distance_m: 4
+    interocular_mm: 63.36
+    eye_assignment: "red left / cyan right"
+    notes: "viewer_distance_m = worked-example assumption, not the installation."
+  display:
+    device_type: projector
+    model: null
+    technology: unknown
+    color_mode: null
+    white_boost_off: null
+    transfer_function: null
+    primaries_spd_reference: null
+    additivity_checked: null
+    screen: { material: null, gain: null, width_m: 4, width_px: 1920 }
+    ambient: null
+    status: placeholder
+    notes: "Screen width 4 m / 1920 px = worked-example assumption from rendering_algorithms.md Q7."
+  calibration:
+    status: placeholder
+    date: null
+    method: path_a_weissman_chart
+    operator: null
+    instrument: "phone camera RAW (DNG), locked exposure/ISO/WB/focus - relative comparison only"
+    formula: "(ghost - black) / (white - black)"
+    measured_crosstalk_pct: { left: null, right: null, left_sd: null, right_sd: null, n_repeats: null }
+    per_primary_leakage: null
+    data_files: []
+    notes: "Planned method; nothing measured yet."

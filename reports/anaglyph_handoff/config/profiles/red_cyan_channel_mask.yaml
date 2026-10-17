@@ -1,0 +1,267 @@
+# Red/cyan, pure channel mask (Wimmer "Color" anaglyph; Blender's anaglyph encoding).
+# FIRST preset to bring up (test step 1). Overall status PLACEHOLDER: nothing here is
+# calibrated for the Hyperspace projector. Unknown numbers are null, never guessed.
+# Schema: ../anaglyph_profile.schema.json
+kind: anaglyph_profile
+schema_version: "1.0.0"
+name: red_cyan_channel_mask
+version: "0.1.0"
+description: >
+  Pure channel mask in linear light: output R = left R, output G = right G,
+  output B = right B. Exact only when each filter passes exactly its assigned
+  projector primaries; a matrix pays off once filters and primaries do not align
+  (rendering_algorithms.md Q5).
+status: placeholder
+color_pair: red_cyan
+
+provenance:
+  source_type: published_preset
+  created_by: anaglyph_handoff (generated from research notes, 2026-10-17)
+  created_date: "2026-10-17"
+  citations:
+    - title: "Wimmer, Anaglyph Methods Comparison ('Color' anaglyph: ra = r1, ga = g2, ba = b2)"
+      url: https://3dtv.at/Knowhow/AnaglyphComparison_en.aspx
+      notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+    - title: "Blender stereoimbuf.cc anaglyph_encoding (per-channel source selection)"
+      url: https://github.com/blender/blender/blob/main/source/blender/imbuf/intern/stereoimbuf.cc
+      notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+
+filters:
+  left:
+    eye: left
+    nominal_color: red
+    designation: "Rainbow Symphony ProView Professional plastic, red lens"
+    kind: premade_glasses
+    manufacturer: Rainbow Symphony
+    product_codes: ["03401"]
+    suppliers:
+      - name: Rainbow Symphony (Reseda, CA)
+        sku: "03401"
+        url: https://www.rainbowsymphony.com/products/proview-plastic-3dglasses
+        price_usd: 18.00
+        verified_date: "2026-10-17"
+        note: "Pack of 2 ($9.00 each). 12-pack sold out on 2026-10-17. Same frame carries the right (cyan) lens."
+    material: "cast acrylic lenses (vendor text: 'tinted to exacting color standards')"
+    layers: 1
+    transmission:
+      data_type: unknown
+      reference: null
+      units: null
+      notes: "No vendor publishes transmission curves for anaglyph glasses (premade_glasses.md Q4). Measure."
+  right:
+    eye: right
+    nominal_color: cyan
+    designation: "Rainbow Symphony ProView Professional plastic, cyan lens"
+    kind: premade_glasses
+    manufacturer: Rainbow Symphony
+    product_codes: ["03401"]
+    suppliers:
+      - name: Rainbow Symphony (Reseda, CA)
+        sku: "03401"
+        url: https://www.rainbowsymphony.com/products/proview-plastic-3dglasses
+        price_usd: 18.00
+        verified_date: "2026-10-17"
+    material: "cast acrylic lenses"
+    layers: 1
+    transmission:
+      data_type: unknown
+      reference: null
+      units: null
+  alternates:
+    - eye: left
+      nominal_color: red
+      designation: "Rainbow Symphony paper 3D glasses, red lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03201-10", "03201-25", "03201-50", "03201-100", "03201-500"]
+      suppliers:
+        - name: Rainbow Symphony (Reseda, CA)
+          sku: "03201-10"
+          url: https://www.rainbowsymphony.com/products/red-cyan-paper-3d-glasses
+          price_usd: 7.50
+          verified_date: "2026-10-17"
+          note: "10-pack. All packs in stock except the 250-pack on 2026-10-17."
+      material: "white paper frame; lens film not specified"
+      transmission: { data_type: unknown, reference: null, units: null }
+    - eye: right
+      nominal_color: cyan
+      designation: "Rainbow Symphony paper 3D glasses, cyan lens"
+      kind: premade_glasses
+      manufacturer: Rainbow Symphony
+      product_codes: ["03201-10"]
+      material: "white paper frame; lens film not specified"
+      transmission: { data_type: unknown, reference: null, units: null }
+    - eye: left
+      nominal_color: red
+      designation: "LEE 106 Primary Red"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["106"]
+      suppliers:
+        - name: Studio Depot (Burbank, CA)
+          sku: "106S"
+          url: https://www.studiodepot.com/31-lee-s106.html
+          price_usd: 12.00
+          verified_date: "2026-10-17"
+          note: "21x24 in sheet; 'In Stock: Order now to ship the next business day'."
+      material: "polyester, 0.08 mm"
+      layers: 1
+      transmission:
+        data_type: published
+        reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+        column: LEE_106_primary_red
+        source_url: https://leefilters.com/colour/106-primary-red/
+        units: percent
+        wavelength_range_nm: [400, 700]
+        step_nm: 5
+        scraped_or_measured_date: "2026-10-17"
+        notes: "Manufacturer-published, not measured by us."
+    - eye: right
+      nominal_color: cyan
+      designation: "LEE 172 Lagoon Blue"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["172"]
+      suppliers:
+        - { name: "Studio Depot (Burbank, CA)", sku: "172S", url: "https://www.studiodepot.com/31-lee-s172.html", price_usd: 12.00, verified_date: "2026-10-17" }
+      material: "polyester, 0.08 mm"
+      transmission:
+        data_type: published
+        reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+        column: LEE_172_lagoon_blue
+        source_url: https://leefilters.com/colour/172-lagoon-blue/
+        units: percent
+        wavelength_range_nm: [400, 700]
+        step_nm: 5
+        scraped_or_measured_date: "2026-10-17"
+    - eye: right
+      nominal_color: cyan
+      designation: "LEE 183 Moonlight Blue"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["183"]
+      suppliers:
+        - { name: "Studio Depot (Burbank, CA)", sku: "183S", url: "https://www.studiodepot.com/31-lee-s183.html", price_usd: 12.00, verified_date: "2026-10-17" }
+      material: "polyester, 0.08 mm"
+      transmission:
+        data_type: published
+        reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+        column: LEE_183_moonlight_blue
+        source_url: https://leefilters.com/colour/183-moonlight-blue/
+        units: percent
+        wavelength_range_nm: [400, 700]
+        step_nm: 5
+        scraped_or_measured_date: "2026-10-17"
+    - eye: right
+      nominal_color: cyan
+      designation: "LEE 115 Peacock Blue"
+      kind: theatrical_gel
+      manufacturer: LEE Filters
+      product_codes: ["115"]
+      suppliers:
+        - { name: "Studio Depot (Burbank, CA)", sku: "115S", url: "https://www.studiodepot.com/31-lee-s115.html", price_usd: 12.00, verified_date: "2026-10-17", note: "URL follows the Studio Depot pattern recorded in theatrical_gels.md Q5." }
+      material: "polyester, 0.08 mm"
+      transmission:
+        data_type: published
+        reference: "research_notes/Custom anaglyph 3D projection plan/gel_spectra.csv"
+        column: LEE_115_peacock_blue
+        units: percent
+        wavelength_range_nm: [400, 700]
+        step_nm: 5
+        scraped_or_measured_date: "2026-10-17"
+        notes: "About twice the green of 172/183 but about 1 % red leak at 610-640 nm (theatrical_gels.md Q2)."
+
+matrices:
+  M_left:
+    - [1.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0]
+  M_right:
+    - [0.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, 1.0]
+  layout: row_major_output_rows
+  input_color_space: "sRGB primaries (Rec.709), D65 - ASSUMED; Hyperspace has no colour management today"
+  output_color_space: "projector RGB, assumed sRGB-like (PLACEHOLDER until projector primaries are measured)"
+  math_domain: linear
+  decode_transfer: srgb_eotf
+  encode_transfer: srgb_oetf
+  clip_mode: clip_each_term_then_sum
+  status: published
+  source:
+    title: "Channel mask = Wimmer 'Color' anaglyph (identity rows); exact definition, needs no fitting"
+    url: https://3dtv.at/Knowhow/AnaglyphComparison_en.aspx
+    notes_file: "research_notes/Custom anaglyph 3D projection plan/rendering_algorithms.md"
+  row_sum_check: [1.0, 1.0, 1.0]
+  notes: "Saturated red content (Hyperspace points RED = (1.0, 43/255, 43/255)) vanishes from the cyan eye under a mask: rivalry hazard (rendering_algorithms.md Q4)."
+
+eye_gains:
+  left: 1.0
+  right: 1.0
+  applied_in: linear_before_matrix
+  method: "neutral default; later set from ratio of integral(ybar * d_white * f_eye) per eye"
+  status: placeholder
+  notes: "Not calibrated. For the LEE gel alternates, LEE-published daylight Y is 9.3 (106) vs 25.4 (172), so the cyan eye is likely brighter; measure before changing."
+
+crosstalk_compensation:
+  enabled: false
+  method: none
+  k_left_from_right: null
+  k_right_from_left: null
+  black_floor_linear: null
+  status: placeholder
+
+stereo:
+  interaxial:
+    value: null
+    units: world_units
+    status: placeholder
+    note: "Bourke guidance: eye separation about fo/30, fo/20 roughly maximum. Set from installation geometry."
+  zero_parallax_distance:
+    value: 3.78
+    units: world_units
+    status: placeholder
+    note: "Plane z1 = 0 in geometry.project_h(); pinhole distance Zc = CAM3/0.9 with CAM3 = 3.4 (inference in rendering_algorithms.md Q9; verify against tests/test_core.py)."
+  max_positive_parallax:
+    fraction_of_screen_width: null
+    mm: 63
+    px: null
+    status: placeholder
+    basis: "Divergence limit p <= interocular e; notes give about 63 mm (63-65 mm figure). Fraction/px need the real screen width."
+  max_negative_parallax:
+    fraction_of_screen_width: null
+    mm: null
+    px: null
+    status: placeholder
+    basis: "Keep crossed parallax more conservative than positive; compute for the closest seat (Shibata near boundary; notes' example: at 3 m, not nearer than about 1.08 m)."
+  off_axis: true
+  viewer_distance_m: null
+  interocular_mm: 63.36
+  eye_assignment: "red left / cyan right"
+  notes: "interocular_mm = ANSUR 1988 mean cited via Dodgson (calibration_equipment.md Q5); SD 3.832 mm, range 52-78 mm."
+
+display:
+  device_type: projector
+  model: null
+  technology: unknown
+  color_mode: null
+  white_boost_off: null
+  transfer_function: null
+  primaries_spd_reference: null
+  additivity_checked: null
+  screen: { material: null, gain: null, width_m: null, width_px: null }
+  ambient: null
+  status: placeholder
+  notes: "Lock a mode with BrilliantColor / white boost, dynamic contrast and eco off before any measurement."
+
+calibration:
+  status: placeholder
+  date: null
+  method: none
+  operator: null
+  instrument: null
+  formula: "(ghost - black) / (white - black)"
+  measured_crosstalk_pct: { left: null, right: null, left_sd: null, right_sd: null, n_repeats: null }
+  per_primary_leakage: null
+  data_files: []
+  notes: "PLACEHOLDER - not measured."
