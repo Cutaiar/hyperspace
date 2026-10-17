@@ -2,12 +2,10 @@
 the scenes that put several shapes in one frame, and the 3D switch.
 
 The solids are appended after the Klein bottle (index is identity) and are
-all masked: rigid 3D bodies whose W planes turn them in 3D planes. A scene
+3D: at w = 0, untouched by the W planes. A scene
 (`Shape.layers`) is several shapes sharing one centre, each layer at its
 own scale, weight, colour and spin (`geometry.shape_view`).
 """
-
-import math
 
 import numpy as np
 import pytest
@@ -57,9 +55,8 @@ def test_a_solid_has_its_textbook_counts(i):
 def test_a_catalog_shape_is_well_formed(i):
     s, g = G.SHAPES[i], G.geom(i)
     V, E = g["V"], g["E"]
-    assert s.w in ("mask", "native")
-    if s.w == "mask":
-        assert (V[:, 3] == 0).all(), "a masked shape stays in w = 0"
+    if s.dims == 3:
+        assert (V[:, 3] == 0).all(), "a 3D shape stays in w = 0"
     assert abs(np.linalg.norm(V, axis=1).max() - 1.0) < 1e-9
     assert (E[:, 0] != E[:, 1]).all()
     assert len({frozenset(e) for e in E.tolist()}) == g["m"]
@@ -134,7 +131,7 @@ def test_dual_compounds_cross_at_their_edges_midpoints():
 def test_the_hopf_fibration_lies_on_the_3_sphere_in_linked_great_circles():
     i = BY_NAME["Hopf fibration"]
     g = G.geom(i)
-    assert G.SHAPES[i].w == "native" and G.faces(i) == []
+    assert G.SHAPES[i].dims == 4 and G.faces(i) == []
     assert np.allclose(np.linalg.norm(g["V"], axis=1), 1.0)
     # each fibre is a great circle: its 36 points span a plane through 0
     for k in range(0, g["n"], 36):
@@ -160,8 +157,8 @@ def test_a_scene_is_its_layers_in_order(i):
 
 
 def test_a_scene_turns_each_layer_at_its_own_angles():
-    # a layer is drawn where its own shape would be, scaled, at the view's
-    # angles (masked as its shape is) times its spin
+    # a layer is drawn where its own shape would be, scaled, at its own
+    # shape's angles (a 3D layer has no W turn) times its spin
     i = BY_NAME["Celestial tesseract"]
     g = G.geom(i)
     ang, yaw, pitch = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3], 0.4, 0.25
@@ -170,7 +167,7 @@ def test_a_scene_turns_each_layer_at_its_own_angles():
         la = [x * spin for x in G.view_angles(j, ang)]
         qx, qy, qd, _ = G.project_h(g["V"][a:b], la, yaw, pitch)
         assert np.allclose(px[a:b], qx) and np.allclose(py[a:b], qy)
-        if G.w_masked(j):
+        if G.is_3d(j):
             qd = G.view_depth(g["V"][a:b], la, yaw, pitch)
         assert np.allclose(pd[a:b], qd)
 
@@ -190,32 +187,13 @@ def test_the_star_pokes_through_the_tesseract():
 
 def test_a_shape_that_is_not_a_scene_is_drawn_as_before():
     # shape_view on one shape is project_h at view_angles, the depth cue
-    # swapped for a masked one: the renderer's old path, to the bit
+    # swapped for a 3D one: the renderer's old path, to the bit
     ang, yaw, pitch = [0.3, 0.1, 0.7, 0.2, 0.5, 0.9], 0.4, -0.2
     for i in (3, 18, 21, BY_NAME["Cube"]):
         V = G.geom(i)["V"]
         a = G.view_angles(i, ang)
         want = list(G.project_h(V, a, yaw, pitch))
-        if G.w_masked(i):
+        if G.is_3d(i):
             want[2] = G.view_depth(V, a, yaw, pitch)
         for got, w in zip(G.shape_view(i, ang, yaw, pitch), want):
             assert np.array_equal(got, w)
-
-
-# ---------------------------------------------------------- the 3D switch
-
-def test_the_3d_switch_masks_every_shape():
-    ang = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-    assert G.view_angles(3, ang) is ang
-    flat = G.view_angles(3, ang, flat=True)
-    assert flat[3:] == [0.0, 0.0, 0.0]
-    assert flat[:3] == pytest.approx([0.1 + 0.6, 0.2 + 0.4, 0.3 + 0.5])
-    # the tesseract then holds its rest shadow: no W turn changes its shape
-    V = G.geom(3)["V"]
-    for a in (0.0, 0.7, math.pi / 2):
-        P = G.project3(V, G.view_angles(3, [0, 0, 0, a, 0, 0], flat=True))
-        rest = G.project3(V, [0.0] * 6)
-        # a turn in XZ, so distances from the centre are kept
-        assert np.allclose(np.sort(np.linalg.norm(P, axis=1)),
-                           np.sort(np.linalg.norm(rest, axis=1)))
-

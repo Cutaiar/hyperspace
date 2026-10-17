@@ -249,13 +249,9 @@ def _build_600cell() -> dict:
 #
 # Recognizable 3D shapes built from polar curves r(θ), parametric curves
 # (x(t), y(t)), spherical functions r(θ, φ), and (u, v) surface patches.
-# Built without a lift, they live in the w = 0 hyperplane of the same 4D
-# pipeline, and a quarter turn of a W plane (XW/YW/ZW) flattens them: the
-# turn carries a whole axis into w, which the 4D→3D divide drops. Two ways
-# out, chosen per shape by Shape.w (plan 22): every builder takes an
-# optional lift `w` of its own parameters — w(u, v) for a surface patch —
-# which gives the surface real 4D extent and keeps its faces; or the shape
-# stays 3D and its W planes are masked (view_angles).
+# They are 3D (Shape.dims == 3): every point sits at w = 0, and the W
+# planes leave them alone (view_angles) — nothing turns them through a
+# fourth dimension they do not have.
 #
 # Curved surfaces have no planar edge cycles for the polytope face
 # extraction to find, so these builders return an extra "F" key — explicit
@@ -264,15 +260,12 @@ def _build_600cell() -> dict:
 
 
 def _mesh3(grid, wrap_u: bool, wrap_v: bool) -> tuple[dict, list[list[int]]]:
-    """Index an (nu, nv) grid of points into V/E/F, merging coincident
-    points (kkey) so poles, seams, and r = 0 pinches become shared
-    vertices. A point is (x, y, z), placed at w = 0, or (x, y, z, w) from
-    a lifted builder; merging compares every coordinate given, so a lift
-    that disagrees across a seam or a pole leaves it open. Quads that
-    collapse below 3 distinct vertices are dropped, as is any cycle that
-    revisits a vertex non-consecutively (face UVs need each cycle to be a
-    simple polygon). Returns the geometry dict and the deduplicated index
-    grid."""
+    """Index an (nu, nv) grid of (x, y, z) points into V/E/F, placed at
+    w = 0, merging coincident points (kkey) so poles, seams, and r = 0
+    pinches become shared vertices. Quads that collapse below 3 distinct
+    vertices are dropped, as is any cycle that revisits a vertex
+    non-consecutively (face UVs need each cycle to be a simple polygon).
+    Returns the geometry dict and the deduplicated index grid."""
     nu, nv = len(grid), len(grid[0])
     vid: dict = {}
     V: list[list[float]] = []
@@ -283,7 +276,7 @@ def _mesh3(grid, wrap_u: bool, wrap_v: bool) -> tuple[dict, list[list[int]]]:
             k = kkey(p)
             if k not in vid:
                 vid[k] = len(V)
-                V.append([p[0], p[1], p[2], p[3] if len(p) > 3 else 0.0])
+                V.append([p[0], p[1], p[2], 0.0])
             r.append(vid[k])
         idx.append(r)
 
@@ -321,32 +314,21 @@ def _mesh3(grid, wrap_u: bool, wrap_v: bool) -> tuple[dict, list[list[int]]]:
 def param_surface(
     fn, nu: int, nv: int,
     u1: float = 2 * math.pi, v1: float = 2 * math.pi,
-    wrap_u: bool = True, wrap_v: bool = True, w=None,
+    wrap_u: bool = True, wrap_v: bool = True,
 ) -> dict:
     """Sample fn(u, v) -> (x, y, z) on an nu×nv grid. A wrapped axis is
     sampled half-open (the seam closes by index); an unwrapped axis
     includes its endpoint — coincident endpoints merge by kkey, which is
-    how the Möbius half-twist seam finds its flipped partner column.
-
-    The lift w(u, v), when given, is each point's fourth coordinate (fn
-    may instead return all four itself). Seams and poles that weld by
-    coincidence weld only where it agrees: the Möbius strip needs
-    w(u1, 1 − v) == w(0, v), a pole needs w constant along it."""
+    how the Möbius half-twist seam finds its flipped partner column."""
     du = u1 / (nu if wrap_u else nu - 1)
     dv = v1 / (nv if wrap_v else nv - 1)
-    if w is None:
-        grid = [[fn(i * du, j * dv) for j in range(nv)] for i in range(nu)]
-    else:
-        grid = [[(*fn(i * du, j * dv), w(i * du, j * dv)) for j in range(nv)]
-                for i in range(nu)]
+    grid = [[fn(i * du, j * dv) for j in range(nv)] for i in range(nu)]
     return _mesh3(grid, wrap_u, wrap_v)[0]
 
 
-def spherical_surface(r_fn, n_theta: int = 32, n_phi: int = 17, w=None) -> dict:
+def spherical_surface(r_fn, n_theta: int = 32, n_phi: int = 17) -> dict:
     """Surface r(θ, φ) in spherical coordinates: azimuth θ ∈ [0, 2π),
-    polar φ ∈ [0, π] measured from the +y pole (y is up on screen). The
-    lift is w(θ, φ); the poles stay single vertices only where it does
-    not depend on θ there."""
+    polar φ ∈ [0, π] measured from the +y pole (y is up on screen)."""
 
     def fn(th: float, ph: float):
         r = r_fn(th, ph)
@@ -356,27 +338,16 @@ def spherical_surface(r_fn, n_theta: int = 32, n_phi: int = 17, w=None) -> dict:
             r * math.sin(ph) * math.sin(th),
         )
 
-    return param_surface(fn, n_theta, n_phi, v1=math.pi, wrap_u=True, wrap_v=False, w=w)
+    return param_surface(fn, n_theta, n_phi, v1=math.pi, wrap_u=True, wrap_v=False)
 
 
-def ring_prism(pts, depth: float, caps: bool = True, w=None,
-               t1: float = 2 * math.pi) -> dict:
+def ring_prism(pts, depth: float, caps: bool = True) -> dict:
     """Extrude a closed 2D outline into a slab of the given thickness.
     Sides are quads; each cap, when the deduplicated outline is a simple
     polygon, is one big face (self-intersecting outlines like the rose
-    just skip caps).
-
-    The lift is w(t, z): t = t1·k/n is outline point k's parameter (the
-    curve's own t when curve_prism calls), z = ±depth/2 the cap it is on.
-    A cap stays one face, flat only if w is affine over it."""
+    just skip caps)."""
     h = depth / 2
-    if w is None:
-        grid = [[(x, y, h), (x, y, -h)] for x, y in pts]
-    else:
-        n = len(pts)
-        grid = [[(x, y, h, w(t1 * k / n, h)), (x, y, -h, w(t1 * k / n, -h))]
-                for k, (x, y) in enumerate(pts)]
-    g, idx = _mesh3(grid, wrap_u=True, wrap_v=False)
+    g, idx = _mesh3([[(x, y, h), (x, y, -h)] for x, y in pts], wrap_u=True, wrap_v=False)
     if caps:
         for col in (0, 1):
             ring = [r[col] for r in idx]
@@ -387,27 +358,23 @@ def ring_prism(pts, depth: float, caps: bool = True, w=None,
 
 
 def curve_prism(xy_fn, n: int = 64, depth: float = 0.35,
-                t1: float = 2 * math.pi, caps: bool = True, w=None) -> dict:
-    """Extrude the closed parametric plane curve (x(t), y(t)), t ∈ [0, t1).
-    The lift is w(t, z), as ring_prism's."""
-    return ring_prism([xy_fn(t1 * k / n) for k in range(n)], depth, caps, w=w, t1=t1)
+                t1: float = 2 * math.pi, caps: bool = True) -> dict:
+    """Extrude the closed parametric plane curve (x(t), y(t)), t ∈ [0, t1)."""
+    return ring_prism([xy_fn(t1 * k / n) for k in range(n)], depth, caps)
 
 
-def polar_prism(r_fn, n: int = 96, depth: float = 0.3, caps: bool = True, w=None) -> dict:
+def polar_prism(r_fn, n: int = 96, depth: float = 0.3, caps: bool = True) -> dict:
     """Extrude the closed polar curve r(θ), θ ∈ [0, 2π). Negative r
-    reflects through the origin, as polar plotting conventions do. The
-    lift is w(θ, z)."""
+    reflects through the origin, as polar plotting conventions do."""
     return curve_prism(
-        lambda t: (r_fn(t) * math.cos(t), r_fn(t) * math.sin(t)), n, depth, caps=caps, w=w
+        lambda t: (r_fn(t) * math.cos(t), r_fn(t) * math.sin(t)), n, depth, caps=caps
     )
 
 
-def tube(curve_fn, n: int = 72, m: int = 8, radius: float = 0.32, w=None) -> dict:
+def tube(curve_fn, n: int = 72, m: int = 8, radius: float = 0.32) -> dict:
     """Circular tube around a closed 3D curve, with parallel-transport
     frames; the loop's accumulated holonomy is unwound linearly along t so
-    the seam ring meets itself without shear. The lift is w(t, a): t along
-    the curve, a = 2π·j/m the grid's angle round the tube (before the
-    holonomy unwind), so a w periodic in both closes both seams."""
+    the seam ring meets itself without shear."""
     C = [np.asarray(curve_fn(2 * math.pi * i / n), dtype=np.float64) for i in range(n)]
     T = []
     for i in range(n):
@@ -430,11 +397,7 @@ def tube(curve_fn, n: int = 72, m: int = 8, radius: float = 0.32, w=None) -> dic
         for j in range(m):
             aj = 2 * math.pi * j / m + off
             p = C[i] + radius * (math.cos(aj) * N[i] + math.sin(aj) * B)
-            if w is None:
-                row.append((float(p[0]), float(p[1]), float(p[2])))
-            else:
-                row.append((float(p[0]), float(p[1]), float(p[2]),
-                            w(2 * math.pi * i / n, 2 * math.pi * j / m)))
+            row.append((float(p[0]), float(p[1]), float(p[2])))
         grid.append(row)
     return _mesh3(grid, wrap_u=True, wrap_v=True)[0]
 
@@ -447,52 +410,25 @@ def _heart_xy(t: float) -> tuple[float, float]:
     )
 
 
-# The lifts (plan 22). Each w is chosen so the shape keeps its volume
-# through a full turn of every W plane (VOLUME_FLOOR, tests/test_shapes4d)
-# and reads as a solid, never a sheet. The rules that choose it:
-#   - w carries no linear part of x, y or z. A w that does (w = a·x, say)
-#     only tilts the shape into another flat 3-space, which some W turn
-#     still flattens.
-#   - w is odd under each mirror of the shape that flips one axis. At a
-#     quarter turn of a W plane, w takes that axis's place; if w were the
-#     same on both sides of the mirror, the two halves would land on each
-#     other and the surface would fold into a sheet.
-#   - an extruded outline's w depends on z. Otherwise the walls, whose
-#     extrusion runs along z alone, go edge-on together when ZW turns z
-#     away.
-#   - w agrees wherever the surface welds: poles, the rose's pinch, the
-#     Möbius seam (w(2π, 1 − v) == w(0, v)).
-# A lift cannot make a shape fatter than its own 3D proportions — at rest
-# the divide drops w — so the rose is a little deeper (0.12 → 0.16) and
-# the Möbius band a little wider (0.45 → 0.55) than they were at w = 0.
-# The heart stays 3D, its W planes masked: under a lift its long walls
-# read as a twisted ribbon (plan 22 A2, the turntable sheets).
-
 def _build_heart() -> dict:
     return curve_prism(_heart_xy, n=64, depth=8.0)
 
 
 def _build_star() -> dict:
     # {5/2} pentagram outline: 10 polar vertices alternating outer radius 1
-    # and the pentagram's inner-vertex radius cos(2π/5)/cos(π/5) ≈ 0.382.
-    # Lift: the two caps tip opposite ways in w, by sin t round the outline
+    # and the pentagram's inner-vertex radius cos(2π/5)/cos(π/5) ≈ 0.382
     ri = math.cos(2 * math.pi / 5) / math.cos(math.pi / 5)
     pts = []
     for k in range(10):
         th = math.pi / 2 + k * math.pi / 5
         r = 1.0 if k % 2 == 0 else ri
         pts.append((r * math.cos(th), r * math.sin(th)))
-    h = 0.35 / 2
-    return ring_prism(pts, depth=0.35, w=lambda t, z: 0.6 * (z / h) * math.sin(t))
+    return ring_prism(pts, depth=0.35)
 
 
 def _build_rose() -> dict:
-    # each petal's wall twists through w, front against back; sin 4θ and
-    # sin 8θ vanish where the petals meet, so the pinch stays one point
-    return polar_prism(
-        lambda th: math.cos(2 * th), n=96, depth=0.16, caps=False,
-        w=lambda th, z: z * (3 * math.sin(4 * th) + math.sin(8 * th)),
-    )
+    # the petals meet at the origin, where the walls pinch to one point
+    return polar_prism(lambda th: math.cos(2 * th), n=96, depth=0.16, caps=False)
 
 
 def _build_torus3() -> dict:
@@ -505,9 +441,7 @@ def _build_torus3() -> dict:
             (R + r * math.cos(v)) * math.sin(u),
         )
 
-    # the tube's upper and lower halves swing opposite ways in w, twice
-    # round the ring
-    return param_surface(fn, 32, 16, w=lambda u, v: 0.7 * math.sin(v) * math.sin(2 * u))
+    return param_surface(fn, 32, 16)
 
 
 def _build_trefoil() -> dict:
@@ -518,16 +452,12 @@ def _build_trefoil() -> dict:
             1.5 * math.sin(3 * t),
         )
 
-    # the knot's outer lobes go one way in w, its inner crossings the other
-    return tube(c, n=72, m=8, radius=0.55, w=lambda t, a: 1.5 * math.cos(3 * t))
+    return tube(c, n=72, m=8, radius=0.55)
 
 
 def _build_starfruit() -> dict:
-    # the four quarters between the poles alternate in w; 0 at the poles
     return spherical_surface(
-        lambda th, ph: 1.0 + 0.5 * math.cos(5 * th) * math.sin(ph) ** 5, 40, 15,
-        w=lambda th, ph: 0.6 * math.sin(2 * ph) * math.sin(2 * th),
-    )
+        lambda th, ph: 1.0 + 0.5 * math.cos(5 * th) * math.sin(ph) ** 5, 40, 15)
 
 
 def _build_mobius() -> dict:
@@ -536,9 +466,8 @@ def _build_mobius() -> dict:
         rr = 1 + 0.55 * h * math.cos(u / 2)
         return (rr * math.cos(u), 0.55 * h * math.sin(u / 2), rr * math.sin(u))
 
-    # the band saddles through w twice round; 0 at the seam, which welds
-    return param_surface(fn, 65, 5, v1=1.0, wrap_u=False, wrap_v=False,
-                         w=lambda u, v: 0.5 * math.sin(2 * u))
+    # the seam u = 2π lands on u = 0 flipped in v, and welds
+    return param_surface(fn, 65, 5, v1=1.0, wrap_u=False, wrap_v=False)
 
 
 def _klein_xyz(u: float, v: float) -> tuple[float, float, float]:
@@ -558,14 +487,11 @@ def _klein_xyz(u: float, v: float) -> tuple[float, float, float]:
 
 
 def _build_klein() -> dict:
-    # Lifted into w, it no longer crosses itself: where the neck passes
-    # through the body (u ≈ 0.49 against u ≈ 2.56), sin 2u puts the two
-    # sheets at least 1.56 apart in w. The sin v · cos 2u term is odd in v,
-    # so the z-mirror cannot fold the surface at a quarter turn of ZW
-    # (the rules above the heart). The seam: u = π meets u = 0 with v
-    # flipped to π − v (nv even puts the flip on the grid), where both
-    # terms agree, so it welds by kkey like the Möbius strip's —
-    # 37 × 16 samples, 36 × 16 vertices. Centred on its bounding box.
+    # The seam: u = π meets u = 0 with v flipped to π − v (nv even puts the
+    # flip on the grid), so it welds by kkey like the Möbius strip's —
+    # 37 × 16 samples, 36 × 16 vertices. Centred on its bounding box. It
+    # crosses itself where the neck passes through the body, as every
+    # Klein bottle in 3D must.
     nu, nv = 37, 16
     pts = [_klein_xyz(math.pi * i / (nu - 1), 2 * math.pi * j / nv)
            for i in range(nu) for j in range(nv)]
@@ -576,10 +502,7 @@ def _build_klein() -> dict:
         x, y, z = _klein_xyz(u, v)
         return (x - cx, y - cy, z)
 
-    return param_surface(
-        fn, nu, nv, u1=math.pi, wrap_u=False, wrap_v=True,
-        w=lambda u, v: math.sin(2 * u) + 0.5 * math.sin(v) * math.cos(2 * u),
-    )
+    return param_surface(fn, nu, nv, u1=math.pi, wrap_u=False, wrap_v=True)
 
 
 # ----------------------------------------- the catalog: closed 3D solids
@@ -588,8 +511,8 @@ def _build_klein() -> dict:
 # Platonic solids, Archimedean and Catalan solids, two Kepler–Poinsot
 # stars, the classic compounds, spiked stars — and a few mathematical toys
 # (the Hopf fibration, an armillary sphere, a geodesic sphere, the
-# Sierpinski tetrahedron). Every 3D one is `mask`: it stays a rigid 3D
-# body and its W planes turn it in 3D planes. A solid's faces come from
+# Sierpinski tetrahedron). Every one but the Hopf fibration is 3D: w = 0,
+# untouched by the W planes. A solid's faces come from
 # the polytope extraction (its faces are planar, convex polygons); a star
 # or a compound, whose faces cross, brings its own "F".
 
@@ -994,8 +917,8 @@ def _build_loxodrome() -> dict:
 # round a hypercube round a star. Each layer is a shape of SHAPES (by
 # name) at its own scale, drawn with its own weights and colour, turning
 # at its own multiple of the view's angles (spin −1 counter-turns, 0 holds
-# still); a layer keeps its shape's own way of filling w, so a masked star
-# turns in 3D inside a tesseract turning in 4D. The scene's geometry is
+# still); a layer keeps its shape's dimensions, so a 3D star turns in 3D
+# inside a tesseract turning in 4D. The scene's geometry is
 # its layers' in order (geom's "layers" says which rows are whose), and
 # its faces are the layers' own faces — a support test over the whole
 # compound would reject them.
@@ -1033,12 +956,10 @@ def _build_scene(layers) -> dict:
     return {"V": V, "E": E, "F": F, "layers": parts}
 
 
-# How a shape fills the fourth dimension (Shape.w):
-#   native  a 4-polytope or a 4D surface, built with real w-extent
-#   flat    a 3D shape at w = 0: a W plane's quarter turn flattens it
-#   lift    a 3D surface given w-extent by a lift of its parameters
-#   mask    a 3D shape kept 3D: its W planes turn it in 3D (view_angles)
-W_KINDS = ("native", "flat", "lift", "mask")
+# A shape is 4D or 3D (Shape.dims), honestly: a 4D shape has real
+# w-extent and the W planes turn it through w; a 3D shape sits at w = 0
+# and the W planes do nothing to it (view_angles).
+DIMS = (3, 4)
 
 
 @dataclass(frozen=True)
@@ -1048,13 +969,13 @@ class Shape:
     cells: int
     sym: str
     build: object = field(repr=False)
-    w: str = "native"
+    dims: int = 4                 # 4: has a w; 3: w = 0, the W planes leave it alone
     family: str = ""              # the catalog's group (plan 28): "", or e.g. "Platonic"
     layers: tuple = ()            # a scene's layers (Layer), empty for one shape
 
     def __post_init__(self) -> None:
-        if self.w not in W_KINDS:
-            raise ValueError(f"{self.name}: w must be one of {W_KINDS}, not {self.w!r}")
+        if self.dims not in DIMS:
+            raise ValueError(f"{self.name}: dims must be one of {DIMS}, not {self.dims!r}")
 
 
 
@@ -1088,10 +1009,11 @@ def _kepler_layers() -> tuple:
     return tuple(out)
 
 
-def scene(name: str, alias: str, sym: str, layers: tuple, w: str = "mask") -> Shape:
-    """A Shape that is several shapes in one frame (Layer, _build_scene)."""
-    return Shape(name, alias, 0, sym, lambda: _build_scene(layers), w=w, family="Scene",
-                 layers=layers)
+def scene(name: str, alias: str, sym: str, layers: tuple, dims: int = 3) -> Shape:
+    """A Shape that is several shapes in one frame (Layer, _build_scene):
+    4D when any layer is."""
+    return Shape(name, alias, 0, sym, lambda: _build_scene(layers), dims=dims,
+                 family="Scene", layers=layers)
 
 SHAPES = [
     Shape("5-cell", "hypertetrahedron", 5, "{3,3,3}", _build_5cell),
@@ -1113,75 +1035,75 @@ SHAPES = [
     Shape("600-cell", "hypericosahedron", 600, "{3,3,5}", _build_600cell),
     Shape("Clifford torus", "flat torus on the 3-sphere", 0, "S¹ × S¹", lambda: duoprism(32, 16, True)),
     # -------- 3D shapes from trig equations (appended: index is identity)
-    Shape("Heart", "3D · classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, w="mask"),
-    Shape("Star", "4D lift · pentagram prism", 0, "{5/2} polar", _build_star, w="lift"),
-    Shape("Rose", "4D lift · four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, w="lift"),
-    Shape("Torus", "4D lift · the donut", 0, "(R+r cos v)e^iu", _build_torus3, w="lift"),
-    Shape("Trefoil knot", "4D lift · tube round a (2,3) torus knot", 0, "sin 3t · e^2it",
-          _build_trefoil, w="lift"),
-    Shape("Starfruit", "4D lift · spherical star", 0, "r=1+½cos 5θ sin⁵φ",
-          _build_starfruit, w="lift"),
-    Shape("Möbius strip", "4D lift · one-sided band", 0, "half-twist band",
-          _build_mobius, w="lift"),
-    Shape("Klein bottle", "4D · one-sided bottle, no self-crossing", 0, "χ=0 · one side",
-          _build_klein, w="lift"),
-    # -------- plan 28 spike: the catalog of closed 3D solids, all masked
+    Shape("Heart", "classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, dims=3),
+    Shape("Star", "pentagram prism", 0, "{5/2} polar", _build_star, dims=3),
+    Shape("Rose", "four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, dims=3),
+    Shape("Torus", "the donut", 0, "(R+r cos v)e^iu", _build_torus3, dims=3),
+    Shape("Trefoil knot", "tube round a (2,3) torus knot", 0, "sin 3t · e^2it",
+          _build_trefoil, dims=3),
+    Shape("Starfruit", "spherical star", 0, "r=1+½cos 5θ sin⁵φ",
+          _build_starfruit, dims=3),
+    Shape("Möbius strip", "one-sided band", 0, "half-twist band",
+          _build_mobius, dims=3),
+    Shape("Klein bottle", "one-sided bottle, crossing itself", 0, "χ=0 · one side",
+          _build_klein, dims=3),
+    # -------- plan 28 spike: the catalog — closed 3D solids, toys, scenes
     Shape("Tetrahedron", "Platonic · 4 triangles", 0, "{3,3}", _build_tetra,
-          w="mask", family="Platonic"),
-    Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, w="mask", family="Platonic"),
+          dims=3, family="Platonic"),
+    Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, dims=3, family="Platonic"),
     Shape("Octahedron", "Platonic · 8 triangles", 0, "{3,4}", _build_octa,
-          w="mask", family="Platonic"),
+          dims=3, family="Platonic"),
     Shape("Dodecahedron", "Platonic · 12 pentagons", 0, "{5,3}", _build_dodeca,
-          w="mask", family="Platonic"),
+          dims=3, family="Platonic"),
     Shape("Icosahedron", "Platonic · 20 triangles", 0, "{3,5}", _build_icosa,
-          w="mask", family="Platonic"),
+          dims=3, family="Platonic"),
     Shape("Cuboctahedron", "Archimedean · 8 triangles, 6 squares", 0, "r{4,3}", _build_cuboct,
-          w="mask", family="Archimedean"),
+          dims=3, family="Archimedean"),
     Shape("Truncated octahedron", "Archimedean · the space-filler", 0, "t{3,4}",
-          _build_trunc_oct, w="mask", family="Archimedean"),
+          _build_trunc_oct, dims=3, family="Archimedean"),
     Shape("Rhombicuboctahedron", "Archimedean · 8 triangles, 18 squares", 0, "rr{4,3}",
-          _build_rhombicuboct, w="mask", family="Archimedean"),
+          _build_rhombicuboct, dims=3, family="Archimedean"),
     Shape("Snub cube", "Archimedean · chiral, 38 faces", 0, "sr{4,3}", _build_snub_cube,
-          w="mask", family="Archimedean"),
+          dims=3, family="Archimedean"),
     Shape("Icosidodecahedron", "Archimedean · 20 triangles, 12 pentagons", 0, "r{5,3}",
-          _build_icosidodeca, w="mask", family="Archimedean"),
+          _build_icosidodeca, dims=3, family="Archimedean"),
     Shape("Truncated icosahedron", "Archimedean · the football, C₆₀", 0, "t{3,5}",
-          _build_trunc_icosa, w="mask", family="Archimedean"),
+          _build_trunc_icosa, dims=3, family="Archimedean"),
     Shape("Rhombic dodecahedron", "Catalan · 12 rhombi", 0, "V3.4.3.4", _build_rhombic_dodeca,
-          w="mask", family="Catalan"),
+          dims=3, family="Catalan"),
     Shape("Rhombic triacontahedron", "Catalan · 30 golden rhombi", 0, "V3.5.3.5",
-          _build_rhombic_triaconta, w="mask", family="Catalan"),
+          _build_rhombic_triaconta, dims=3, family="Catalan"),
     Shape("Small stellated dodecahedron", "Kepler–Poinsot · 12 points", 0, "{5/2,5}",
-          _build_small_stellated, w="mask", family="Star"),
+          _build_small_stellated, dims=3, family="Star"),
     Shape("Great stellated dodecahedron", "Kepler–Poinsot · 20 points", 0, "{5/2,3}",
-          _build_great_stellated, w="mask", family="Star"),
+          _build_great_stellated, dims=3, family="Star"),
     Shape("Moravian star", "spiked rhombicuboctahedron · 26 points", 0, "Herrnhut",
-          _build_moravian, w="mask", family="Star"),
+          _build_moravian, dims=3, family="Star"),
     Shape("Starburst", "spiked icosahedron · 20 points", 0, "{3,5} + pyramids",
-          _build_starburst, w="mask", family="Star"),
+          _build_starburst, dims=3, family="Star"),
     Shape("Stella octangula", "compound · two tetrahedra", 0, "2{3,3}", _build_stella,
-          w="mask", family="Compound"),
+          dims=3, family="Compound"),
     Shape("Five tetrahedra", "compound · chiral, in a dodecahedron", 0, "5{3,3}",
-          _build_five_tetra, w="mask", family="Compound"),
+          _build_five_tetra, dims=3, family="Compound"),
     Shape("Five cubes", "compound · in a dodecahedron", 0, "5{4,3}", _build_five_cubes,
-          w="mask", family="Compound"),
+          dims=3, family="Compound"),
     Shape("Cube + octahedron", "compound · duals, edges crossing", 0, "{4,3}+{3,4}",
-          _build_cube_octa, w="mask", family="Compound"),
+          _build_cube_octa, dims=3, family="Compound"),
     Shape("Dodecahedron + icosahedron", "compound · duals, edges crossing", 0, "{5,3}+{3,5}",
-          _build_dodeca_icosa, w="mask", family="Compound"),
+          _build_dodeca_icosa, dims=3, family="Compound"),
     Shape("Hopf fibration", "4D · the 3-sphere in linked great circles", 0, "S³ → S²",
           _build_hopf, family="Toy"),
     Shape("Armillary sphere", "celestial rings · tropics, ecliptic, colures", 0, "23.44°",
-          _build_armillary, w="mask", family="Toy"),
+          _build_armillary, dims=3, family="Toy"),
     Shape("Geodesic sphere", "icosahedron, frequency 3", 0, "{3,5+}₃,₀", _build_geodesic,
-          w="mask", family="Toy"),
+          dims=3, family="Toy"),
     Shape("Sierpinski tetrahedron", "fractal · 64 tetrahedra, dimension 2", 0, "level 3",
-          _build_sierpinski, w="mask", family="Toy"),
+          _build_sierpinski, dims=3, family="Toy"),
     Shape("Lissajous knot", "curve · frequencies 3, 2, 7", 0, "cos(3t+.7), cos(2t+.2), cos 7t",
-          _build_lissajous, w="mask", family="Toy"),
+          _build_lissajous, dims=3, family="Toy"),
     Shape("Loxodrome", "curve · two rhumb lines, pole to pole", 0, "λ = ln tan(π/4+φ/2)/k",
-          _build_loxodrome, w="mask", family="Toy"),
-    Shape("Orbit", "curve · one great circle", 0, "S¹", _build_orbit, w="mask", family="Toy"),
+          _build_loxodrome, dims=3, family="Toy"),
+    Shape("Orbit", "curve · one great circle", 0, "S¹", _build_orbit, dims=3, family="Toy"),
     # -------- scenes: several shapes in one frame (Layer), after the shapes
     # they name
     scene("Celestial tesseract", "scene · glome ⊃ tesseract ⊃ star", "S³ ⊃ {4,3,3} ⊃ {5/2,5}", (
@@ -1190,7 +1112,7 @@ SHAPES = [
         Layer("Tesseract", 1.0, faces=1.4, points=0.6),
         Layer("Small stellated dodecahedron", 0.62, spin=-0.7, width=1.3, faces=2.2,
               points=1.4, tint=GOLD),
-    ), w="native"),
+    ), dims=4),
     scene("Celestial cube", "scene · armillary ⊃ cube ⊃ star", "23.44° ⊃ {4,3} ⊃ {5/2,3}", (
         Layer("Armillary sphere", 1.0, spin=0.25, lines=0.6, width=0.9, faces=0, points=0,
               tint=ICE),
@@ -1281,38 +1203,27 @@ def rotate4(V: np.ndarray, ang) -> np.ndarray:
     return v
 
 
-# A masked shape (Shape.w == "mask") is 3D and stays 3D: the W planes
-# cannot move it. Each W plane's angle turns it in a 3D plane instead, so
-# whatever drives that plane — the bass bands by default (bands.BANDS:
-# SUB → ZW, BASS → XW, MIDB → YW) — still moves it. w becomes z: XW → XZ
-# and YW → YZ squeeze the same axis a W turn would, with depth instead of
-# collapse; ZW, with no z left to become, takes the plane left over, XY.
-W_REMAP = {3: 1, 4: 2, 5: 0}
+def is_3d(i: int) -> bool:
+    """Whether shape i is 3D (Shape.dims == 3): w = 0, no W planes."""
+    return SHAPES[i].dims == 3
 
 
-def w_masked(i: int, flat: bool = False) -> bool:
-    """Whether shape i keeps its W planes masked (Shape.w == "mask"), or
-    every shape does: `flat` is the view's 3D switch (ViewState.three_d,
-    plan 28), which takes the fourth dimension out of every shape."""
-    return flat or SHAPES[i].w == "mask"
+def rot_matrix(ang) -> np.ndarray:
+    """The 4×4 turn rotate4 applies: rotate4(V, ang) == V @ rot_matrix(ang).T."""
+    return rotate4(np.eye(4), ang).T
 
 
 def view_angles(i: int, ang, flat: bool = False):
-    """The angles shape i is drawn at: `ang` itself, unless the shape's W
-    planes are masked — then a new list with each W angle added onto its
-    3D plane (W_REMAP) and the W planes at 0. A pure function of the
-    view's angles, read where the frame is drawn: the integrator and the
-    rot.* params are untouched, so a rate or a phase routed to a W plane
-    lands on the 3D plane alike, and every other shape's pose never
-    depends on which shapes were shown before it. `flat` masks any shape
-    (w_masked)."""
-    if not w_masked(i, flat):
+    """The angles shape i is drawn at. A 3D shape takes the view's 3D
+    angles and 0 in every W plane: the W planes would turn it through a w
+    it does not have, so whatever drives them does nothing to it. A 4D
+    shape takes `ang` itself — or, with the 3D switch holding its 4D pose
+    (`flat`, ViewState.held), the 3D angles alone: the pose it held is its
+    body (shape_view), which the 3D planes turn rigidly. A pure function of
+    what it is given: the integrator and the rot.* params are untouched."""
+    if not (flat or is_3d(i)):
         return ang
-    out = [float(a) for a in ang]
-    for p, q in W_REMAP.items():
-        out[q] += out[p]
-        out[p] = 0.0
-    return out
+    return [float(a) for a in ang[:3]] + [0.0, 0.0, 0.0]
 
 
 def project(
@@ -1441,8 +1352,7 @@ def _face_xy(P: np.ndarray) -> np.ndarray:
     """Project a face cycle onto its own centred 2-plane basis, oriented
     CCW. Best-effort for the slightly non-planar quads of curved grids.
 
-    A larger polygon that is not planar — a lifted shape's cap, whose
-    outline the lift has bent through w — is projected onto its
+    A larger polygon that is not planar is projected onto its
     least-squares plane instead: the basis through its first two corners
     can fold such an outline over itself, and the ear clip and the UVs
     both need it simple. Every planar face keeps the basis it always had."""
@@ -1603,8 +1513,8 @@ def _camera(x, y, z, yaw: float, pitch: float):
 def view_depth(V: np.ndarray, ang, yaw: float, pitch: float, d4: float = 2.6) -> np.ndarray:
     """How near each vertex is to the 3D camera, nearer larger: z after the
     4D divide and the camera's yaw and pitch, the depth the 3D divide
-    reads. What a masked shape's depth cue reads, as a 4D shape's reads
-    w (the depth the 4D divide reads)."""
+    reads. What a 3D shape's depth cue reads, as a 4D shape's reads w
+    (the depth the 4D divide reads)."""
     x, y, z, _, _ = _to3(V, ang, d4)
     return _camera(x, y, z, yaw, pitch)[2]
 
@@ -1633,13 +1543,15 @@ def project_h(
 
 def shape_view(
     i: int, ang, yaw: float, pitch: float, d4: float = 2.6, w: int = 1200, h: int = 800,
-    flat: bool = False,
+    flat: bool = False, body=None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """What the renderer draws shape i at: project_h's (px, py, pd, wc) at
     the shape's own angles (view_angles), with pd its depth cue — w for a
-    4D shape, the depth toward the 3D camera for a masked one (view_depth).
-    A scene (Shape.layers) projects each layer at its own angles: the
-    view's, masked as its shape is, times its spin."""
+    4D shape, the depth toward the 3D camera for a 3D one (view_depth). A
+    4D shape is turned to `body` first (ViewState.body: a 4×4 turn, None
+    for none), then by its angles; `flat` is the 3D switch holding it. A
+    scene (Shape.layers) projects each layer at its own angles: its
+    shape's, times its spin."""
     g = geom(i)
     out = [np.empty(g["n"]) for _ in range(4)]
     for a, b, j, spin in g.get("layers") or [(0, g["n"], i, 1.0)]:
@@ -1647,8 +1559,10 @@ def shape_view(
         if spin != 1.0:
             la = [float(x) * spin for x in la]
         V = g["V"][a:b] if "layers" in g else g["V"]
+        if body is not None and not is_3d(j):
+            V = V @ np.asarray(body).T
         px, py, pd, wc = project_h(V, la, yaw, pitch, d4=d4, w=w, h=h)
-        if w_masked(j, flat):
+        if is_3d(j):
             # its w is 0 at every angle, so the depth cue (pd: fade, width,
             # draw order) would sit flat at its dimmest; it cues on its
             # depth toward the 3D camera (yaw and pitch included, so a
@@ -1666,21 +1580,16 @@ def shape_view(
 #
 # How much volume a shape keeps on screen: the projected 3D cloud's
 # smallest singular value over its largest (centred). 1 is a ball, 0 a
-# plane or a line. A w = 0 shape reads ~0 at a quarter turn of any W
-# plane; tools/turntable.py sweeps it, tests/test_shapes4d.py gates on it.
+# plane or a line. tools/turntable.py sweeps it through the W planes,
+# tests/test_shapes4d.py gates the 4D shapes on it.
 
-# the floor a lifted or masked shape must keep through a full turn of each
-# W plane (plan 22, Stream A's acceptance), calibrated on the 18 4D shapes
-# the app already draws as volumes. Their worst case through every W plane
-# — from rest and from generic poses, which 2000 random poses of all six
-# planes never undercut — is the cubic pyramid's 0.30; then the
-# 4,8-duoprism 0.53, the dodecahedral prism 0.64, the tesseract 0.94, the
-# Clifford torus 0.97, the 24-cell 1.00. A flat shape's quarter turn reads
-# 0.000. The floor is half the 4D worst case: a shape held to it is never
-# asked to be rounder than a polytope already is, and the targets' own 3D
-# proportions — what a mask leaves them — mostly clear it (heart 0.40,
-# torus 0.43, star 0.33, Möbius band 0.158 at its old 0.45 width; the
-# rose's 0.118 at its old 0.12 depth did not — 0.192 and 0.157 now).
+# the floor a 4D shape keeps through a full turn of each W plane. The 18
+# polytopes' worst case — from rest and from generic poses, which 2000
+# random poses of all six planes never undercut — is the cubic pyramid's
+# 0.30; then the 4,8-duoprism 0.53, the dodecahedral prism 0.64, the
+# tesseract 0.94, the Clifford torus 0.97, the 24-cell 1.00. The floor is
+# half the worst case. A 3D shape is not swept: the W planes leave it as
+# it is.
 VOLUME_FLOOR = 0.15
 # a pose with every plane turned, for sweeps that are not from rest
 GENERIC_POSE = (0.3, 0.7, 1.1, 0.5, 0.9, 1.3)
@@ -1697,10 +1606,9 @@ def edge_on_share(V: np.ndarray, P: np.ndarray, tris: np.ndarray) -> float:
     """The share of a shape's face area the 4D→3D projection turns
     edge-on: faces drawn at under a tenth of their true (4D) area. The
     second gate beside the volume ratio — it catches a cloud whose volume
-    passes while its faces still read as a sheet: tests/test_shapes4d.py
-    holds every lifted or masked shape to at most 0.15 through each W
-    plane. V the 4D vertices, P their 3D projection, tris the face
-    triangles' (T, 3) vertex indices."""
+    passes while its faces still read as a sheet (tools/turntable.py).
+    V the 4D vertices, P their 3D projection, tris the face triangles'
+    (T, 3) vertex indices."""
     def area(X):
         a, b = X[tris[:, 1]] - X[tris[:, 0]], X[tris[:, 2]] - X[tris[:, 0]]
         aa, bb, ab = (a * a).sum(1), (b * b).sum(1), (a * b).sum(1)

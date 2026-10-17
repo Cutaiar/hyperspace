@@ -70,16 +70,19 @@ def zoom_in(lo: float, hi: float):
 
 
 def switch_3d(v, u):
-    v.three_d = u >= 0.5
+    # on for the middle of the segment: the W planes hold, the 3D planes
+    # turn on, and it goes off again from the pose it held
+    v.three_d = 0.35 <= u < 0.75
 
 
 def three_d_caption(u: float) -> tuple[str, str]:
-    if u < 0.5:
-        return ("The 3D switch · off",
-                "the tesseract tumbling in 4D: XW, YW, ZW turn it through w")
-    sub = ("VIEW → 3D: the fourth dimension taken out — the same planes now turn "
-           "its shadow as a rigid 3D body")
-    return ("The 3D switch · on", sub)
+    if 0.35 <= u < 0.75:
+        sub = ("VIEW → 3D: the W planes hold — the tesseract keeps its pose in w "
+               "and turns on in XY, XZ, YZ")
+        return ("The 3D switch · on", sub)
+    sub = ("the tesseract turning through w in every plane — no jump as the switch "
+           "goes on or off")
+    return ("The 3D switch · off", sub)
 
 
 def segments() -> list[Segment]:
@@ -98,11 +101,10 @@ def segments() -> list[Segment]:
                 {"shape": idx("Mysterium Cosmographicum"), "faces": True, "bright": 1.4,
                  "speed": 0.35},
                 still="scene-mysterium.png", still_at=0.55, each=zoom_in(0.95, 6.5)),
-        Segment("The 3D switch", "", 9.0,
+        Segment("The 3D switch", "", 12.0,
                 {"shape": idx("Tesseract"), "faces": True, "bright": 1.2, "speed": 0.6},
-                still="three-d-tesseract.png", still_at=0.8, each=switch_3d,
-                caption=three_d_caption,
-                planes=[False, False, False, True, True, True]),
+                still="three-d-tesseract.png", still_at=0.6, each=switch_3d,
+                caption=three_d_caption, planes=[True] * 6),
         Segment("Faces on a star", "Moravian star · faces on, pattern KALEIDO", 6.0,
                 {"shape": idx("Moravian star"), "faces": True, "bright": 1.5, "speed": 0.4,
                  "pattern": PATTERN_NAMES.index("KALEIDO")},
@@ -179,7 +181,7 @@ def run(video: bool) -> None:
             im = stage.shot(v, t)
             if seg.still and f == still_frame:
                 im.save(OUT / seg.still, optimize=True)
-            if seg.still == "three-d-tesseract.png" and f == int(0.3 * (frames - 1)):
+            if seg.still == "three-d-tesseract.png" and f == int(0.2 * (frames - 1)):
                 im.save(OUT / "three-d-off.png", optimize=True)
             if ff is not None:
                 title, sub = seg.caption(u) if seg.caption else (seg.title, seg.sub)

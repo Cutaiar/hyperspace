@@ -1060,6 +1060,34 @@ class Panel:
             p.set(i)
         return changed
 
+    def _shape_combo(self) -> bool:
+        """view.shape as a menu in two sections, 4D then 3D (Shape.dims),
+        each in index order. The index stays the shape's identity — a
+        preset holds it — so only the menu groups them."""
+        a = self.reg["view.shape"]
+        p = self._real(a)
+        cur = int(p.base)
+        changed = False
+        imgui.set_next_item_width(-1)
+        if imgui.begin_combo("##view.shape", p.names[cur]):
+            for dims in (4, 3):
+                imgui.separator_text(f"{dims}D")
+                for i, s in enumerate(SHAPES):
+                    if s.dims != dims:
+                        continue
+                    hit, _ = imgui.selectable(f"{s.name}##shape{i}", i == cur)
+                    if i == cur:
+                        imgui.set_item_default_focus()
+                    if hit and i != cur:
+                        p.set(i)
+                        changed = True
+            imgui.end_combo()
+        self._tip(a)
+        self._ctx(a)
+        self._learn_frame(a)
+        self._mod_dot(p)
+        return changed
+
     def _check(self, pid: str, label: str | None = None) -> bool:
         a = self.reg[pid]
         p = self._real(a)
@@ -1645,12 +1673,12 @@ class Panel:
         imgui.text(sh.name.upper())
         imgui.pop_font()
         _micro(sh.alias, RED)
-        _micro(f"{g['n']}V {g['m']}E  ·  {sh.sym}")
+        _micro(f"{sh.dims}D  ·  {g['n']}V {g['m']}E  ·  {sh.sym}")
         imgui.end_group()
         imgui.spacing()
 
         self._section("view", "view")
-        self._combo("view.shape")
+        self._shape_combo()
         self._fader("view.bright")
         self._fader("view.speed")
         self._fader("view.depth4")
@@ -1658,10 +1686,22 @@ class Panel:
         # the plane keys tile the row, solid red while a plane spins
         kw = (imgui.get_content_region_avail().x
               - imgui.get_style().item_spacing.x * (len(PLANES) - 1)) / len(PLANES)
+        # the W planes cannot act on a 3D shape, nor on a 4D one while the
+        # 3D switch holds its w: their keys dim (still switchable — the
+        # next 4D shape, or the switch going off, picks them up)
+        held = ("a 3D shape has no w" if sh.dims == 3
+                else "the 3D switch holds w" if v.three_d else "")
         for p, name in enumerate(PLANES):
             if p:
                 imgui.same_line()
+            inert = held and name.endswith("W")
+            if inert:
+                imgui.push_style_var(imgui.StyleVar_.alpha, 0.35)
             self._lit_button(f"view.plane.{name}", name, v.planes[p], width=kw)
+            if inert:
+                imgui.pop_style_var()
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"{name} does nothing now: {held}")
         self._check("view.points")
         imgui.same_line()
         self._check("view.lines")

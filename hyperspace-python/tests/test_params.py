@@ -222,13 +222,23 @@ def test_enum_norm_and_stepping(rig):
 
 
 def test_the_3d_switch_takes_the_fourth_dimension_out_of_the_view(rig):
-    # plan 28: view.three_d is ViewState.three_d, which the renderer hands
-    # to geometry.shape_view (every shape masked)
+    # plan 28: view.three_d is ViewState.three_d; integrate holds the 4D
+    # pose (ViewState.body) and the renderer turns it in 3D
     reg, view, *_ = rig
     t = reg["view.three_d"]
     assert not view.three_d
     t.toggle()
     assert view.three_d and t.norm == 1.0
+    # the pose it holds is folded into the view's body; a reset (the whole
+    # view, or the 4D spin alone) takes it back out
+    view.planes = [True] * 6
+    view.integrate(0.5)
+    assert view.held and view.body is not None
+    reg["camera.reset"].fire()
+    assert view.body is None and view.ang == [0.0] * 6
+    view.integrate(0.5)
+    reg["rot.reset_w"].fire()
+    assert view.body is None and view.ang[3:] == [0.0, 0.0, 0.0]
 
 
 def test_toggles_and_triggers(rig):

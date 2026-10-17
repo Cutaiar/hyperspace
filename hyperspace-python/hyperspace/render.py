@@ -1436,12 +1436,14 @@ class Renderer:
         faces' effects are `draw`'s (`_draw_frame` hands the picture over
         for the one scene pass it wraps)."""
         g = geom(s.shape)
-        # a shape whose W planes are masked — or every shape, with the 3D
-        # switch on — is drawn at its own angles and cues on its depth
-        # toward the 3D camera; a scene, each layer at its own
+        # a 3D shape is drawn with no W turn and cues on its depth toward
+        # the 3D camera; a 4D shape is turned to its body first, and with
+        # the 3D switch holding it (ViewState.held, set by integrate) by
+        # its 3D angles alone; a scene, each layer at its own
         # (geometry.shape_view)
         px, py, pd, wc = shape_view(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h,
-                                    flat=bool(getattr(s, "three_d", False)))
+                                    flat=getattr(s, "held", False),
+                                    body=getattr(s, "body", None))
         # a scene's per-layer weights (geometry._scene_style), else None
         st = g.get("style")
 

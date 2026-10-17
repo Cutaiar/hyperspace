@@ -58,76 +58,35 @@ not mean 3D: the Clifford torus (18) is a surface native to 4D. Shapes
 19–26 are surfaces from trig equations, each built with its own face
 cycles.
 
-**How a shape fills the fourth dimension** (`Shape.w`, one of
-`geometry.W_KINDS`; any other value raises):
+**4D or 3D** (`Shape.dims`, 4 or 3; any other value raises — plan 28,
+which replaced plan 22's lifts and masks). A shape says honestly what it
+is:
 
-| `Shape.w` | Means | Shapes |
+| `Shape.dims` | Means | Shapes |
 |---|---|---|
-| `native` | built with real w-extent: a 4-polytope or a 4D surface | 1–18 |
-| `lift` | a 3D surface given w-extent by a lift of its own parameters | Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip, Klein bottle |
-| `mask` | a 3D shape kept at w = 0, its W planes folded onto 3D planes where it is drawn | Heart |
-| `flat` | a 3D shape at w = 0 with nothing done: a quarter turn of XW, YW or ZW carries a whole axis into w, the 4D→3D divide drops it, and the shape draws as a plane | none (the tests use it to show the collapse) |
+| 4 | real w-extent: a 4-polytope or a 4D surface. Every plane turns it, the W planes through w | 1–18, Hopf fibration, Celestial tesseract |
+| 3 | a 3D shape at w = 0, nothing invented for a w it does not have. XY, XZ and YZ turn it; XW, YW and ZW — and whatever drives them — do nothing to it | Heart … Klein bottle, and the rest of the catalog |
 
-A surface built without a lift sits at w = 0; that is what shapes 19–25
-were before plan 22, and why they went flat whenever the bass bands
-turned a W plane.
+`geometry.view_angles(i, ang)` returns `ang` itself for a 4D shape and,
+for a 3D one, the view's 3D angles with every W angle at 0; nothing
+writes the result back, so `ViewState.ang`, the integrator and every
+`rot.*` param are untouched. A 3D shape's depth cue (`pd`: the line
+fade, width and draw order) reads its depth toward the 3D camera —
+`geometry.view_depth`, z after the camera's yaw and pitch — since its w
+is 0. On the VIEW page the header says 3D or 4D, the Shape menu lists
+the 4D shapes and then the 3D ones under their own headings (the index
+stays the identity), and the W plane keys dim while they can do nothing.
 
-**A lift** is a function of the builder's own parameters, passed as
-`w=`; each builder hands it to `_mesh3`, which takes 3- or 4-tuples and
-merges coincident points on every coordinate given. Without a lift every
-shape is what it was, vertex for vertex
-(`tests/golden/shape_digests.json`).
+So a factory preset on a 3D shape moves only through its 3D planes:
+`plasma-heart` (XZ, YZ), `spiral-silk` (YZ) and `inverse-halo` (XZ)
+keep turning; their bass → W routes no longer move them.
 
-| Builder | The lift it takes |
-|---|---|
-| `param_surface` | `w(u, v)`; or `fn` returns (x, y, z, w) itself |
-| `spherical_surface` | `w(θ, φ)`, φ from the +y pole |
-| `ring_prism`, `curve_prism`, `polar_prism` | `w(t, z)` or `w(θ, z)`: t the outline's parameter, z = ±depth/2 the cap |
-| `tube` | `w(t, a)`: t along the curve, a = 2π·j/m round the tube |
-
-The rules a lift follows (the comment above `geometry._build_heart`):
-
-- **No linear part of x, y or z.** w = a·x only tilts the shape into
-  another flat 3-space, which some W turn still flattens.
-- **Odd under each mirror of the shape that flips one axis.** At a
-  quarter turn of a W plane, w takes that axis's place; a lift that is
-  the same on both sides folds the halves onto each other into a sheet,
-  which neither measure below sees.
-- **An extruded outline's lift depends on z**, or every wall goes
-  edge-on at once when ZW turns z away.
-- **It agrees wherever the surface welds**: poles (w independent of θ
-  there), the Rose's pinch, the Möbius seam (w(2π, 1 − v) = w(0, v)). A
-  lift that disagrees leaves the seam open.
-- A lift cannot make a shape fatter than its own 3D proportions, since at
-  rest the divide drops w; a shape too thin for the floor must change
-  size (the Rose went 0.12 → 0.16 deep, the Möbius band 0.45 → 0.55
-  wide).
-
-| Shape | `Shape.w` | Lift |
-|---|---|---|
-| Heart | mask | — |
-| Star | lift | 0.6·(z/h)·sin t, h = 0.175: the caps tip opposite ways |
-| Rose | lift | z·(3 sin 4θ + sin 8θ): 0 where the petals meet |
-| Torus | lift | 0.7·sin v·sin 2u |
-| Trefoil knot | lift | 1.5·cos 3t |
-| Starfruit | lift | 0.6·sin 2φ·sin 2θ: 0 at the poles |
-| Möbius strip | lift | 0.5·sin 2u: 0 at the seam |
-| Klein bottle | lift | sin 2u + ½·sin v·cos 2u |
-
-**A mask** keeps the shape 3D. `geometry.view_angles(i, ang)` returns
-`ang` itself for every shape that is not masked; for a masked one, a new
-list with each W angle added onto a 3D plane (`W_REMAP`: XW → XZ,
-YW → YZ, ZW → XY) and the W planes at 0. `Renderer.draw_scene` draws
-through it and is its one call site; nothing writes the result back, so
-`ViewState.ang`, the integrator and every `rot.*` param are untouched
-and a rate or a phase route on a W plane lands on the 3D plane alike.
-With the factory band map (SUB → ZW, BASS → XW, MIDB → YW) SUB rolls a
-masked shape in the screen plane, BASS spins it about y and MIDB tumbles
-it about x. Its depth cue (`pd`: the line fade, width and draw order)
-reads its depth toward the 3D camera — `geometry.view_depth`, z after
-the camera's yaw and pitch, the depth the 3D divide reads — since its w
-is 0 at every angle. The VIEW page and
-`rot.phase.*` still show the W planes turning.
+Plan 22 lifted seven of these shapes into w (each builder took a lift of
+its own parameters) and folded the Heart's W planes onto 3D planes, so
+the bass bands, which drive the W planes, would move them without
+flattening them. Plan 28 took both out: a 3D shape is simply 3D. The
+Rose (0.16 deep) and the Möbius band (0.55 wide) keep the proportions
+plan 22 gave them.
 
 **The volume measures.** `project3(V, ang)` is the rotated, divided 3D
 cloud the camera views. `volume_ratio(P)` is its smallest singular value
@@ -135,30 +94,23 @@ over its largest, centred: 1 a ball, 0 a plane or a line.
 `sweep_ratios(i, plane, steps=72, pose=None)` measures it round one full
 turn of one plane, the others at `pose`, through `view_angles` as the
 renderer draws. `edge_on_share` is the share of face area drawn at under
-a tenth of its 4D area, and `sweep_edge_on` its sweep: a cloud can keep
-its volume while its faces still read as a sheet.
+a tenth of its 4D area, and `sweep_edge_on` its sweep.
 
-**`VOLUME_FLOOR = 0.15`.** Every lifted or masked shape keeps at least
-this ratio through a full turn of each W plane, from rest and from
-`GENERIC_POSE`, and turns at most 0.15 of its face area edge-on
-(`tests/test_shapes4d.py::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`,
-`::test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`).
-It is calibrated on the 18 native shapes, which already draw as volumes:
-their worst ratios through the W planes are cubic pyramid 0.30,
-4,8-duoprism 0.53, dodecahedral prism 0.64, 5-cell 0.65, tesseract 0.94,
-Clifford torus 0.97, 24-cell, 120-cell and 600-cell 1.00 (single-plane
-sweeps reach the same worst case as 2000 random poses of all six
-planes). The floor is half the cubic pyramid's, so no surface is asked
-to be rounder than a polytope is; every native shape clears it
-(`::test_every_4d_shape_clears_the_volume_floor`). A flat shape reads
-0.000 at 90° and 270°.
+**`VOLUME_FLOOR = 0.15`.** Every 4D shape keeps at least this ratio
+through a full turn of each W plane, from rest and from `GENERIC_POSE`
+(`tests/test_shapes4d.py::test_every_4d_shape_clears_the_volume_floor`):
+cubic pyramid 0.30, 4,8-duoprism 0.53, dodecahedral prism 0.64, 5-cell
+0.65, tesseract 0.94, Clifford torus 0.97, 24-cell, 120-cell and
+600-cell 1.00 (single-plane sweeps reach the same worst case as 2000
+random poses of all six planes). A 3D shape is the same at every W angle
+(`::test_a_3d_shape_is_the_same_through_every_w_plane`).
 
 **The turntable** (`tools/turntable.py`) is the same sweep with
 pictures:
 
 ```bash
-uv run python tools/turntable.py --prefix after              # every shape, numbers and sheets
-uv run python tools/turntable.py --prefix check --shapes 18-25 --no-png
+uv run python tools/turntable.py --prefix after              # every 4D shape, numbers and sheets
+uv run python tools/turntable.py --prefix check --shapes 0-17 --no-png
 ```
 
 It writes `<prefix>-ratios.json` / `.csv` (per shape, plane and pass:
@@ -170,34 +122,26 @@ labelled with its angle and ratio, red under the floor — into
 prefix there. `--shapes` takes indices (`18-24`, `17,21`); `--steps`
 the sweep's resolution (72 = 5°).
 
-**Faces on a lifted shape.** The grids' quads stay quads; a lift bends
-them slightly out of plane, which `_face_xy` already framed
-best-effort. A cap — the Star's two pentagram faces, which its lift
-bends through w — is a polygon of more than four corners that is not
-planar, and `_face_xy` frames it by its least-squares plane, where the
-outline stays simple and the ear clip tiles it exactly; every planar
-face keeps the basis it had
-(`tests/test_shapes4d.py::test_a_lifted_cap_is_triangulated_over_its_own_outline`).
+**Faces.** A face of more than four corners that is not planar is
+framed by its least-squares plane, where the outline stays simple and
+the ear clip tiles it exactly; every planar face keeps its basis
+(`geometry._face_xy`).
 
 **The Klein bottle** (26). `_klein_xyz(u, v)` is the classic "bottle"
 immersion, u ∈ [0, π], v ∈ [0, 2π): the body swells up from the base,
 the neck curls over and comes back down through the body's side, where
-in 3D the surface must cross itself. The lift sin 2u + ½·sin v·cos 2u
-holds the two crossing sheets (the body at u ≈ 0.49, the neck at
-u ≈ 2.56) at least 1.56 apart in w, so in 4D it never crosses; the
-½·sin v·cos 2u term is odd in v, so the z-mirror cannot fold it at a
-quarter turn of ZW. The seam u = π meets u = 0 with v flipped to π − v,
-where the lift agrees, and welds by `kkey` like the Möbius strip's: 37 ×
-16 samples, 36 × 16 vertices, 576 quads, every edge on two faces,
-V − E + F = 0. It is centred on its bounding box
+in 3D the surface must cross itself — and does. The seam u = π meets
+u = 0 with v flipped to π − v and welds by `kkey` like the Möbius
+strip's: 37 × 16 samples, 36 × 16 vertices, 576 quads, every edge on two
+faces, V − E + F = 0. It is centred on its bounding box
 (`tests/test_shapes3d.py::test_the_klein_bottle_seam_welds_into_a_closed_grid`,
-`::test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d`). Its own
-3D ratio is 0.23; through the W planes it keeps 0.20.
+`::test_the_klein_bottle_crosses_itself_in_3d`).
 
 **The catalog** (plan 28, an art-direction spike — see
 [`plans/28-catalog-and-scenes.md`](plans/28-catalog-and-scenes.md)). After
 the Klein bottle: closed 3D solids, mathematical toys and scenes, each
-with a `Shape.family`. Every 3D one is `mask` — a rigid 3D body. A solid's
+with a `Shape.family`. All but the Hopf fibration and Celestial
+tesseract are 3D (`Shape.dims == 3`). A solid's
 faces come from the polytope extraction; a star (drawn as what shows: its
 spikes, the core buried) or a compound brings its own. A curve (the
 toys with F 0) draws no points: its samples are not corners.
@@ -241,8 +185,9 @@ toys with F 0) draws no points: its samples are not corners.
 in one frame sharing a centre — a glome round a tesseract round a star.
 Each layer names a shape and has its own scale, line / face / point
 weights, line width, tint and **spin** (a multiple of the view's angles:
-−1 counter-turns, 0 holds still). A layer keeps its shape's `w`, so a
-masked star turns in 3D inside a tesseract turning in 4D.
+−1 counter-turns, 0 holds still). A layer keeps its shape's `dims`, so
+a 3D star turns in 3D inside a tesseract turning in 4D; a scene is 4D
+when any layer is.
 `geometry.shape_view` is what the renderer projects through: one shape is
 `project_h` at `view_angles` (the old path, to the bit); a scene projects
 each layer at its own angles. The scene's geometry is its layers' rows in
@@ -250,17 +195,30 @@ order (`geom()["layers"]`, `["style"]`); its faces are the layers' own.
 Each edge's line density is its own layer's, so a 864-edge glome thins
 out without thinning the star inside it.
 
-**The 3D switch** (`view.three_d`, VIEW page "3D"). Takes the fourth
-dimension out of the view: every shape is masked as the 3D solids are
-(`w_masked(i, flat)`, `view_angles(i, ang, flat)`), so a W plane turns it
-in a 3D plane. A 4D shape then holds the 3D shadow it casts at rest.
+**The 3D switch** (`view.three_d`, VIEW page "3D"). Holds a 4D shape's
+4D pose and turns it as a rigid 3D body. The renderer draws a 4D shape
+as R(ang)·body — `ViewState.body` a 4×4 turn applied first, None for
+none — and, while the switch holds it (`ViewState.held`), as T(ang)·body,
+T the 3D planes alone (`view_angles(i, ang, flat=True)`). On the frame
+the switch changes, `ViewState.integrate` folds the pose into the body so
+it is the same either side: going on, body ← T(ang)ᵀ·R(ang)·body; going
+off, body ← R(ang)ᵀ·T(ang)·body. While it holds, every corner keeps its
+w, so the 4D divide scales it by a fixed factor and the 3D turn is
+rigid; the W planes stop, and a route on a W angle moves nothing. Off,
+the shape goes on in 4D from where it is. Nothing jumps either way
+(`tests/test_shapes4d.py::test_the_3d_switch_never_jumps_on_or_off`,
+`::test_while_it_holds_a_4d_shape_turns_rigidly_in_3d`). Holding the W
+angles alone would not do: the engine turns the 3D planes before the W
+planes, so a 3D turn under held W angles still moves w. `camera.reset`
+and `rot.reset_w` take the body back out. A 3D shape is the same with
+the switch on or off.
 
 **A new shape** goes at the end of `SHAPES` (the index is its identity),
-says how it fills w, and gets a row in the V/E table above. A 3D shape is
-`lift` or `mask`, never `flat`: the acceptance tests take it in through
-`Shape.w`. Record its digest with `uv run python tests/test_shapes4d.py
---record`, and say so in the commit; a polytope's digest must never
-move.
+says whether it is 4D or 3D (`dims`), and gets a row in the V/E table
+above. A 3D shape is built at w = 0; a 4D one must clear `VOLUME_FLOOR`
+through each W plane. Record its digest with `uv run python
+tests/test_shapes4d.py --record`, and say so in the commit; a polytope's
+digest must never move.
 
 ## 2. Rendering
 
@@ -1368,8 +1326,8 @@ uv run ruff check .
   the Mac.
 - The shapes: `tests/test_shapes4d.py` holds every shape to its
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
-  1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
-  W plane; `tools/turntable.py` draws the same sweeps (§1).
+  1e-9) and every 4D shape to `VOLUME_FLOOR` through each W plane;
+  `tools/turntable.py` draws the same sweeps (§1).
 - Import boundaries are tests: the core never imports `midi`, `bridge`
   or `dream`; `hands/core.py`, `hands/signal.py`, `lfo.py`, `tempo.py`,
   and `undo.py` import nothing from the package; `library.py` never
@@ -1391,10 +1349,9 @@ What only a person at the machine can check is
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `[midi]
   enabled = false` stops it.
-- **On the masked Heart, the W planes' readouts keep counting**: the
-  VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
-  planes turning while the picture turns in XZ, YZ and XY. Nothing says
-  the planes are folded.
+- **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`
+  and ROUTING show the W planes turning though the shape does not; only
+  the VIEW page's dimmed W keys say they do nothing.
 - **The FACES page's fit and `patterns.glsl` on Apple's GL are
   unverified**: both were checked only in a container with Mesa and
   other font metrics (hand checks 120, 121).

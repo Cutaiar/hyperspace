@@ -828,9 +828,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
              tip="Translucent fills on the true 2-faces, under the wireframe. "
                  "First build per shape takes a moment (extraction is cached).")
     r.toggle("view.three_d", "3D", *_attr(view, "three_d"), group=g,
-             tip="Take out the fourth dimension: every shape turns as a rigid 3D body, "
-                 "its W planes turning it in 3D planes instead, as the 3D solids always "
-                 "do. A 4D shape holds the 3D shadow it casts at rest.")
+             tip="Hold the fourth dimension: a 4D shape keeps the 4D pose it has and "
+                 "turns on as a rigid 3D body (XY, XZ, YZ); the W planes stop until it goes "
+                 "off, and the shape goes on in 4D from where it is. A 3D shape has no W "
+                 "planes either way.")
     r.toggle("view.cut_through", "Cut-through", *_attr(view, "cut_through"), group=g,
              tip="Overlay mode only: on, the translucent faces (and faint lines) cut the "
                  "window's alpha, so the screen behind the render window shows through "
@@ -912,6 +913,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         for p, name in w_planes:
             r[f"rot.rate.{name}"].set(0.0)
             view.ang[p] = 0.0
+        view.body = None            # the pose the 3D switch folded in (plan 28)
 
     r.trigger("rot.reset_w", "Reset 4D spin", reset_w, group=g,
               tip="Stop the XW, YW and ZW planes (rate 0) and turn them back to 0°: "
@@ -933,6 +935,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     def reset_view():
         view.ang = [0.0] * 6
+        view.body = None            # the pose the 3D switch folded in (plan 28)
         view.yaw = view.pitch = 0.0
         view.zoom, view.pan = 1.0, [0.0, 0.0]
 

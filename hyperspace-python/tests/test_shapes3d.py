@@ -2,9 +2,8 @@
 
 These shapes are appended after the 18 polytopes (the slider index is the
 identity the golden traces key on) and carry explicit face cycles instead
-of relying on planar-cycle extraction. Built at w = 0, each is either
-lifted into w or kept 3D with its W planes masked (Shape.w, plan 22;
-tests/test_shapes4d.py).
+of relying on planar-cycle extraction. They are 3D (Shape.dims == 3): at
+w = 0, untouched by the W planes (tests/test_shapes4d.py).
 """
 
 import numpy as np
@@ -28,11 +27,8 @@ def test_polytope_count_unchanged():
 def test_shape3d_valid(i):
     g = G.geom(i)
     V, E, n, m = g["V"], g["E"], g["n"], g["m"]
-    # a masked shape stays in the w = 0 hyperplane; a lifted one leaves it
-    if G.SHAPES[i].w == "lift":
-        assert np.ptp(V[:, 3]) > 0.1
-    else:
-        assert (V[:, 3] == 0).all()
+    # 3D: in the w = 0 hyperplane
+    assert G.SHAPES[i].dims == 3 and (V[:, 3] == 0).all()
     # unit circumradius like every other shape
     assert abs(np.linalg.norm(V, axis=1).max() - 1.0) < 1e-9
     # within the renderer's design envelope (≤600 V / ≤1200 E per shape)
@@ -152,25 +148,19 @@ def test_the_klein_bottle_seam_welds_into_a_closed_grid():
     assert set(count.values()) == {2} and len(count) == g["m"]
 
 
-def test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d():
+def test_the_klein_bottle_crosses_itself_in_3d():
     # sample the surface finely: in xyz the neck passes through the body
-    # (far-apart parameters, the same point); the lift holds those sheets
-    # well apart in w
+    # (far-apart parameters, the same point) — as every Klein bottle in 3D
     u = np.linspace(0, np.pi, 120, endpoint=False)
     v = np.linspace(0, 2 * np.pi, 60, endpoint=False)
     uv = [(a, b) for a in u for b in v]
     P = np.array([G._klein_xyz(a, b) for a, b in uv])
-    lift = lambda a, b: np.sin(2 * a) + 0.5 * np.sin(b) * np.cos(2 * a)
-    W = np.array([lift(a, b) for a, b in uv])
     U = np.array([a for a, _ in uv])
-    crossings, gap = 0, np.inf
+    crossings = 0
     for k in range(0, len(P), 1200):
         d = np.linalg.norm(P[k:k + 1200, None] - P[None], axis=2)
         i, j = np.nonzero(d < 0.03)
         i = i + k
         far = (np.abs(U[i] - U[j]) > 0.5) & (np.abs(U[i] - U[j]) < np.pi - 0.5)
         crossings += int(far.sum())
-        if far.any():
-            gap = min(gap, float(np.abs(W[i[far]] - W[j[far]]).min()))
     assert crossings > 0, "the 3D immersion should cross itself"
-    assert gap > 1.0
