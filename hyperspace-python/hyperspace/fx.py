@@ -796,13 +796,15 @@ class FxChain:
         return self._program(name) is not None
 
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
-                t: float) -> None:
+                t: float, opaque: int | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set as
         `run` sets it, the clocks moved first (once per frame time,
         `FxState.advance_to`). An effect with no program copies `src`
         across, so `dst` always holds the picture (the node reads such an
-        effect through and never asks)."""
+        effect through and never asks). `opaque` (plan 30 D1): `u_opaque`
+        for this pass when not the chain's — 0 for an effect placed on a
+        hands' layer, whose ground is see-through whatever the window's."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -814,7 +816,8 @@ class FxChain:
                 self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
                 return
             prog, vao = pv
-            self._uniforms(prog, name, src.size, t, self._opaque())
+            self._uniforms(prog, name, src.size, t,
+                           self._opaque() if opaque is None else int(opaque))
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)
