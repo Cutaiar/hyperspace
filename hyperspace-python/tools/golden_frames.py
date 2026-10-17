@@ -63,6 +63,7 @@ import gc
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -139,8 +140,11 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # plan 30 D1: the three placements' proof presets — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
 # the scene (`graph.EffectAt.after` / `into`)
+# plan 28 N4: the wire list's proof presets — hands 2 wired to output 2's
+# hands alone, the palette wired into output 1's picture and a second acid
+# from the history into output 2's (`graph.Wire`)
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
-                                    "acid-scene")
+                                    "acid-scene", "hands-glass-only", "wired-outputs")
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
@@ -280,6 +284,11 @@ class Rig:
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
         reg["ghost.on"].set(True)
+        # plan 28 N4: a second hands node the graph declares shows too (its
+        # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture
+        # declares one, so no other golden sees this
+        for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
+            reg[pid].set(True)
         self.io = HandsIO(HandSettings.from_config({}), {"enabled": True},
                           source=FakeHands(lambda: self.t, hands == "present"),
                           out=NullOut(), clock=lambda: self.t)
@@ -394,7 +403,11 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             if wiring is None and rig.renderer.wiring == Wiring():    # (a fixture's graph: its own)
                 assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
             raw = _read(ctx, f, size)
-            shots.append(Shot(slug, hands, name, NAMES[key] if key is not None else "none",
+            # plan 28 N4: an output whose picture is a wire's shows no
+            # pipeline of `outputs.route`'s table (its end is its own,
+            # `graph.Wired`): its route reads "none", what the wire is
+            # the manifest's fixture graph says
+            shots.append(Shot(slug, hands, name, NAMES.get(key, "none"),
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
                               tuple(size), raw[::-1].copy()))
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
