@@ -408,6 +408,13 @@ Environment variables:
 |---|---|
 | `HYPERSPACE_HOME` | The home folder (§4). Default `~/Hyperspace`. |
 | `HYPERSPACE_FRAMES` | Run that many frames, then exit (a windowed smoke test). |
+
+Command line:
+
+| Flag | Effect |
+|---|---|
+| `--rig <name>` | Lay `<home>/rigs/<name>.toml` over `config.toml`, and remember it (§5). |
+| `--no-rig` | `config.toml` alone, and forget the remembered rig. |
 | `PYGLFW_LIBRARY` | Which GLFW dylib to load; `app.py` sets it to the bundled one when unset. |
 | `LEAPSDK_INSTALL_LOCATION` | Read by Ultraleap's `leap` package when the hand-tracking software is not at its default path (see SETUP). |
 
@@ -442,6 +449,8 @@ root and `Library.machine` the home.
 | Path | What it is | Format |
 |---|---|---|
 | `config.toml` | The rig's settings (§5). Optional. | TOML |
+| `rigs/<name>.toml` | One venue's settings, laid over `config.toml` by `--rig <name>` (§5). Optional. | TOML |
+| `last_rig` | One line: the rig the last launch used. Delete it, or `--no-rig`, to go back to `config.toml` alone. | text |
 | `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
 | `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |

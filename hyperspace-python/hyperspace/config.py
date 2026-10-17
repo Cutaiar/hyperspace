@@ -165,6 +165,8 @@ from . import library, placement
 
 FILE = Path("config.toml")
 LEGACY_OUTPUT = "overlay"   # the section [output] was called before the split
+RIGS = Path("rigs")         # <home>/rigs/<name>.toml: one rig, laid over config.toml
+LAST_RIG = "last_rig"       # <home>/last_rig: the rig a launch chose last (machine file)
 
 DEFAULTS: dict = {
     # midi.map: the legacy midi_map.json, merged once when bindings.json is missing
@@ -312,21 +314,110 @@ def screens(cfg: dict) -> list[dict]:
              "flip_y": oc.get("flip_y", False) is True}]
 
 
-def load(path: Path | None = None) -> dict:
-    """The config, defaults filled in; `path` defaults to the library home's."""
+# ------------------------------------------------------------------- rigs
+
+def rig_file(home: Path, name: str) -> Path:
+    """Where the rig called `name` lives: ``<home>/rigs/<name>.toml``."""
+    return home / RIGS / f"{name}.toml"
+
+
+def rig_names(home: Path) -> list[str]:
+    """Every rig in ``<home>/rigs``, in name order; [] when there are none
+    or the folder is unreadable (a rig is a convenience, never a launch)."""
+    try:
+        return sorted(p.stem for p in (home / RIGS).glob("*.toml"))
+    except OSError:
+        return []
+
+
+def last_rig(home: Path) -> str:
+    """The rig the last launch chose (``<home>/last_rig``), "" for none.
+    A name that no longer has a file is still returned — `load` says so
+    and falls back, as it does for a name that was asked for outright."""
+    try:
+        return (home / LAST_RIG).read_text().strip()
+    except OSError:
+        return ""
+
+
+def remember_rig(home: Path, name: str) -> None:
+    """Remember `name` as the rig to use next time, "" to forget. Machine
+    state, never the library's: it rides beside `last_show`, and nothing
+    here writes config.toml — the file stays the user's to edit."""
+    path = home / LAST_RIG
+    try:
+        if name:
+            path.write_text(f"{name}\n")
+        else:
+            path.unlink(missing_ok=True)
+    except OSError as e:      # a read-only home is not a reason to refuse a launch
+        print(f"config: {LAST_RIG} not written ({e})", file=sys.stderr)
+
+
+def _rig_data(cfg: dict, home: Path, rig: str) -> dict:
+    """The rig file's tables, {} when there is no using it — a missing or
+    unparsable rig is a note and the plain config.toml, never a raise
+    (the rig names a venue; a typo at one should not stop the show)."""
+    path = rig_file(home, rig)
+    if not path.exists():
+        have = ", ".join(rig_names(home)) or "none"
+        _note(cfg, f"config: no rig {rig!r} in {home / RIGS} (have: {have}) — config.toml alone")
+        return {}
+    try:
+        data = tomllib.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        _note(cfg, f"config: rig {rig!r} ({path}) will not parse: {e} — config.toml alone")
+        return {}
+    if not all(isinstance(v, dict) for v in data.values()):
+        _note(cfg, f"config: rig {rig!r} ({path}) has a value outside a table — config.toml alone")
+        return {}
+    return data
+
+
+def _layer(base: dict, over: dict) -> dict:
+    """`over`'s tables laid on `base`'s, key by key — a rig says only what
+    its venue changes. A key the rig sets wins; one it is silent about
+    keeps config.toml's. `[[output.screens]]` is a key like any other, so
+    a rig that lists screens replaces the list rather than adding to it."""
+    out = {k: (dict(v) if isinstance(v, dict) else v) for k, v in base.items()}
+    for section, values in over.items():
+        if isinstance(values, dict) and isinstance(out.get(section), dict):
+            out[section].update(values)
+        else:
+            out[section] = values
+    return out
+
+
+def load(path: Path | None = None, rig: str = "") -> dict:
+    """The config, defaults filled in; `path` defaults to the library
+    home's. `rig` names a file in ``<home>/rigs`` whose tables are laid
+    over it (one venue's screens, say) — ``cfg["rig"]`` is the rig that
+    was actually used, "" when none was or the named one could not be."""
+    home = library.ensure_home() if path is None else path.parent
     if path is None:
-        path = library.ensure_home() / FILE
+        path = home / FILE
     from .hands.core import DEFAULTS as HANDS  # the one [hands] table (audit N1)
 
     cfg = copy.deepcopy(DEFAULTS)                 # a file may append to a list
     cfg["hands"] = copy.deepcopy(HANDS)
+    cfg["rig"] = ""
     data: dict = {}
+    base: dict = {}
     if path.exists():
         try:
-            data = tomllib.loads(path.read_text())
+            base = tomllib.loads(path.read_text())
         except (OSError, ValueError) as e:
             cfg["error"] = f"config: {e}"
-            data = {}
+            base = {}
+    # the rig's tables go on before any of them is checked, so a rig's
+    # value is read exactly as the same value in config.toml would be
+    data = base
+    if rig:
+        over = _rig_data(cfg, home, rig)
+        if over:
+            data = _layer(base, over)
+            cfg["rig"] = rig
+    if data:
         bad = []
         for section, values in data.items():
             if isinstance(values, dict):
@@ -345,9 +436,8 @@ def load(path: Path | None = None) -> dict:
             real = data.get("output")
             real = real if isinstance(real, dict) else {}   # a scalar was reported above
             cfg["output"] = {**DEFAULTS["output"], **legacy, **real}
-            note = f"config: [{LEGACY_OUTPUT}] is now [output] — rename the section in {path}"
-            cfg["notes"] = [note]
-            print(note, file=sys.stderr)
+            _note(cfg, f"config: [{LEGACY_OUTPUT}] is now [output] — "
+                       f"rename the section in {path}")
     # the render outputs (plan 21 WP3): with a list, output 1's entry
     # becomes the scalar monitor / fullscreen read below
     _screens(cfg, data.get("output"))

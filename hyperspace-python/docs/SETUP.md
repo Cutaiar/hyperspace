@@ -12,7 +12,8 @@ are listed in [`ENGINEERING.md`](ENGINEERING.md) §5.
   Mac has; the dream worker runs on MPS.
 - **Xcode Command Line Tools**: `xcode-select --install` (git, clang).
 - **uv**: `brew install uv` (or uv's own installer). uv provides Python
-  3.12 from `.python-version` and every dependency from `pyproject.toml`
+  3.14 from `.python-version` — its own build, not the machine's
+  (`[tool.uv] python-preference`) — and every dependency from `pyproject.toml`
   and the committed `uv.lock`; never pip into a global Python.
 
 ```bash
@@ -86,11 +87,12 @@ enabled = false     # no MIDI adapter at all
    installed elsewhere, set `LEAPSDK_INSTALL_LOCATION` to that `LeapSDK`
    folder in the shell that launches the app. The tracking *service* must
    be the app's; the `leapc_cffi` the app ships is not used — `uv sync`
-   builds our own for 3.12, and it is found first on `sys.path`. An
+   builds our own for this project's Python, and it is found first on
+   `sys.path`. An
    `ImportError: Cannot import leapc_cffi … Unknown error` means that
    build is missing from the environment (re-run `uv sync`): an older
    Hand Tracking app ships only a Python 3.8 build of it, which this
-   project's 3.12 cannot import.
+   project's Python cannot import.
 2. Switch the hands on:
 
    ```toml
@@ -152,6 +154,44 @@ screen is missing is not opened, and a screen plugged in afterwards is
 not used until a relaunch (Cmd+R). The OUTPUT page lists each output and
 what it shows. Details and the per-output switches are
 [`ENGINEERING.md`](ENGINEERING.md) §14.
+
+## A rig per place you play
+
+The screens differ by venue; the rest of the config does not. A **rig**
+is one file in `~/Hyperspace/rigs/` laid over `config.toml`, so the
+shared sections are said once and a rig says only what its venue
+changes:
+
+```toml
+# ~/Hyperspace/rigs/projector.toml — nothing else needs repeating here
+[[output.screens]]
+name = "laptop"
+monitor = 0
+
+[[output.screens]]
+name = "projector"
+monitor = 1
+fullscreen = true
+```
+
+```bash
+uv run hyperspace --rig projector   # rigs/projector.toml over config.toml
+uv run hyperspace                   # the rig used last
+uv run hyperspace --no-rig          # config.toml alone, and forget the rig
+```
+
+The rig is remembered in `~/Hyperspace/last_rig`, so the flag is needed
+only when it changes; `config.toml` is never written. A key the rig
+gives wins over the same key in `config.toml`, and a key it is silent
+about keeps `config.toml`'s — `[[output.screens]]` is one key, so a rig
+that lists screens replaces the list rather than adding to it. The
+SYSTEM page names the rig in use.
+
+A rig that is missing or will not parse is a note on the SYSTEM page and
+`config.toml` alone — a typo at a venue does not stop the show.
+
+Cmd+R re-reads the rig file (it re-launches with the same flag), so
+dialling a venue in is: edit the file, Cmd+R, look.
 
 ## Share presets with someone
 

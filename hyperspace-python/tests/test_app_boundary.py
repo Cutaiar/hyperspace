@@ -1240,3 +1240,35 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     r = _Renderer(log)
     app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
     assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene
+
+
+# ---------------------------------------------------------------- the rig flag
+#
+# `--rig <name>` picks a file in <home>/rigs (plan 26). ⌘R re-execs the
+# same argv (`_restart`), so whatever is read here is read again then.
+
+
+def test_the_rig_flag_is_read_in_either_spelling():
+    assert app._rig_arg(["--rig", "projector"]) == ("projector", False)
+    assert app._rig_arg(["--rig=projector"]) == ("projector", False)
+
+
+def test_no_rig_flag_is_no_rig():
+    assert app._rig_arg([]) == ("", False)
+    assert app._rig_arg(["--whatever"]) == ("", False)
+
+
+def test_no_rig_forgets_the_remembered_one():
+    assert app._rig_arg(["--no-rig"]) == ("", True)
+
+
+def test_a_rig_flag_with_no_name_is_said_not_taken_from_the_next_flag(capsys):
+    assert app._rig_arg(["--rig", "--no-rig"]) == ("", True)
+    assert "--rig wants a name" in capsys.readouterr().err
+    assert app._rig_arg(["--rig"]) == ("", False)
+
+
+def test_the_last_rig_flag_wins_so_a_re_exec_of_the_same_argv_is_stable():
+    once = ["--rig", "tv"]
+    assert app._rig_arg(once) == app._rig_arg(once)      # _rig_arg does not eat its argv
+    assert app._rig_arg(["--rig", "tv", "--rig", "cart"]) == ("cart", False)

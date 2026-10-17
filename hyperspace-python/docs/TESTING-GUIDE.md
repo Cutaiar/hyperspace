@@ -158,6 +158,7 @@ changes brightness or volume instead).
 | L66 | The factory presets with music | 1 | laptop, music | 132 |
 | L67 | `legacy6` in silence | 1 | laptop, music | 137 |
 | L68 | WARP at full on HEX | 1 | laptop | 138 |
+| L69 | A rig per venue | 1 | laptop, a second screen | 144 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -1341,6 +1342,57 @@ the shared folder; a folder created at step 4; only one entry at step 5.
 **Changes:** the shared folder gets your test presets; delete them after.
 
 *(checks 139–143)*
+
+#### L69. A rig per venue
+
+**Needs:** laptop and one other screen (a projector or a TV), connected
+and **extended, not mirrored**, before launch.
+
+**Do:**
+
+1. Note what `~/Hyperspace/config.toml` holds — this check never changes
+   it, and step 6 proves that.
+2. Make `~/Hyperspace/rigs/projector.toml` with nothing in it but the
+   screens:
+
+   ```toml
+   [[output.screens]]
+   name = "laptop"
+   monitor = 0
+
+   [[output.screens]]
+   name = "projector"
+   monitor = 1
+   fullscreen = true
+   ```
+
+3. `uv run hyperspace --rig projector`. SYSTEM page; OUTPUT page.
+4. Quit. `uv run hyperspace` with **no flag**. SYSTEM page.
+5. Edit the rig (swap `fullscreen` to `false`), press **Cmd+R**, look at
+   the OUTPUT page.
+6. Quit. `uv run hyperspace --rig nosuchplace`, then
+   `uv run hyperspace --no-rig`.
+
+**Right if:** at 3 the second screen shows the render fullscreen and the
+controls stay on the laptop; the SYSTEM page reads `rig: projector`; the
+OUTPUT page lists two outputs. At 4 the same, with no flag — the rig was
+remembered (`~/Hyperspace/last_rig` holds its name). At 5 the reload
+comes back windowed: ⌘R re-read the file. At 6 the bad name is a note on
+the SYSTEM page naming the rigs there are, and the app runs on
+`config.toml` alone; `--no-rig` does the same and leaves no `last_rig`.
+Throughout, `config.toml` is byte-for-byte what step 1 saw, and the
+`[hands]` and `[library]` settings in it still apply under every rig.
+
+**Wrong if:** the rig's screens are added to the config's rather than
+replacing them; a missing rig stops the launch; `config.toml` changes;
+the hands or the shared library stop working under a rig; `--no-rig`
+still loads one.
+
+**Changes:** creates `~/Hyperspace/rigs/projector.toml` and
+`~/Hyperspace/last_rig`; delete both after, or keep the rig if it is a
+place you play.
+
+*(check 144)*
 
 ## Outputs and hands without the camera
 
