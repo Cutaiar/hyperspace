@@ -1067,11 +1067,14 @@ class Panel:
                 planes.append(plane)
         return f" → {', '.join(planes)}" if planes else ""
 
-    def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
+    def _combo(self, pid: str, width: float = -1, tip: str | None = None,
+               rows: int = -1) -> bool:
+        """A drop-down of the enum's choices; `rows` the most the list shows
+        before it scrolls (imgui's default, eight, at -1)."""
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
-        changed, i = imgui.combo(f"##{pid}", p.base, p.names)
+        changed, i = imgui.combo(f"##{pid}", p.base, p.names, rows)
         self._tip(a, tip)
         self._ctx(a)
         self._learn_frame(a)
@@ -1749,7 +1752,8 @@ class Panel:
             # the field's rows: how the copies are laid out, how they move
             # and — while they move — by how much and how fast; then how far
             # apart, and a lattice's depth
-            self._combo("view.inst_layout", 104)
+            # every layout at once: the flat three and the six lattices
+            self._combo("view.inst_layout", 104, rows=len(field.NAMES))
             imgui.same_line()
             self._combo("view.inst_motion", 96)
             if v.inst_motion:
