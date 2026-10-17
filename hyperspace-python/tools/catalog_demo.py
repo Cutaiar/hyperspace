@@ -112,7 +112,7 @@ def segments() -> list[Segment]:
     ]
     for i in range(len(G.SHAPES)):
         s = G.SHAPES[i]
-        if not s.family or s.family == "Scene":
+        if i < 26 or s.family == "Scenes":       # the tour: what plan 28 added
             continue
         segs.append(Segment(f"{s.name}", f"{s.alias} · {s.sym}", 1.6,
                             {"shape": i, "faces": True, "bright": 1.3, "speed": 0.7}))
@@ -198,7 +198,7 @@ def run(video: bool) -> None:
 
 def sheet() -> None:
     """Every shape the catalog adds, one tile each, at a generic pose."""
-    ids = [i for i, s in enumerate(G.SHAPES) if s.family]
+    ids = list(range(26, len(G.SHAPES)))
     tw, th, cols = 400, 340, 6
     stage = Stage(tw, th)
     rows = math.ceil(len(ids) / cols)

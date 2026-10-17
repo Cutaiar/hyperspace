@@ -49,7 +49,7 @@ from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
-from .geometry import SHAPES, geom
+from .geometry import SHAPES, geom, menu
 from .hands import panel as ui_hands
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
@@ -1061,21 +1061,26 @@ class Panel:
         return changed
 
     def _shape_combo(self) -> bool:
-        """view.shape as a menu in two sections, 4D then 3D (Shape.dims),
-        each in index order. The index stays the shape's identity — a
-        preset holds it — so only the menu groups them."""
+        """view.shape as a menu grouped by kind (geometry.menu): 4D, 3D and
+        Scenes, each in families — regular polytopes, Platonic solids … —
+        in index order. The index stays the shape's identity — a preset
+        holds it — so only the menu groups them."""
         a = self.reg["view.shape"]
         p = self._real(a)
         cur = int(p.base)
         changed = False
         imgui.set_next_item_width(-1)
-        if imgui.begin_combo("##view.shape", p.names[cur]):
-            for dims in (4, 3):
-                imgui.separator_text(f"{dims}D")
-                for i, s in enumerate(SHAPES):
-                    if s.dims != dims:
-                        continue
-                    hit, _ = imgui.selectable(f"{s.name}##shape{i}", i == cur)
+        # as tall as the window allows: the groups are the point of it
+        if imgui.begin_combo("##view.shape", p.names[cur], imgui.ComboFlags_.height_largest):
+            section = None
+            for sec, fam, ids in menu():
+                if sec != section:
+                    imgui.separator_text(sec)
+                    section = sec
+                if fam != sec:
+                    imgui.text_colored(FAINT, f"  {fam}")
+                for i in ids:
+                    hit, _ = imgui.selectable(f"    {SHAPES[i].name}##shape{i}", i == cur)
                     if i == cur:
                         imgui.set_item_default_focus()
                     if hit and i != cur:

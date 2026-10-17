@@ -245,6 +245,97 @@ def _build_600cell() -> dict:
     return auto(list(m.values()))
 
 
+# ------------------------------- more 4-polytopes (plan 22's shortlist)
+#
+# The ones docs/plans/22-polytope-shortlist.md recommends, built by plan
+# 28: none touches the face pipeline, all are under 500 edges.
+
+def perm5(c) -> list[list[float]]:
+    """The 5-cell family's vertices: Σ c[k]·simplex5()[σ(k)] over every
+    permutation σ of the five corners, deduplicated — a point of the
+    5-cell's Wythoff construction, ringed by the 5-tuple c."""
+    S = np.asarray(simplex5(), dtype=np.float64)
+    m: dict = {}
+    for p in _permutations5():
+        v = [float(x) for x in sum(c[k] * S[p[k]] for k in range(5))]
+        m[kkey(v)] = v
+    return list(m.values())
+
+
+def _permutations5() -> list[tuple[int, ...]]:
+    out: list[tuple[int, ...]] = []
+
+    def walk(cur, rest):
+        if not rest:
+            out.append(tuple(cur))
+        for i in range(len(rest)):
+            walk(cur + [rest[i]], rest[:i] + rest[i + 1:])
+
+    walk([], [0, 1, 2, 3, 4])
+    return out
+
+
+def edges_by_classes(V, k: int, tol: float = 1e-4) -> list[list[int]]:
+    """Edges between every pair at one of the k shortest distances — for a
+    shape with more than one edge length (a Catalan dual)."""
+    ds: list[float] = []
+    for i in range(len(V)):
+        for j in range(i + 1, len(V)):
+            d = d2(V[i], V[j])
+            if not any(abs(d - x) <= x * tol for x in ds):
+                ds.append(d)
+    lim = sorted(ds)[:k]
+    return [[i, j] for i in range(len(V)) for j in range(i + 1, len(V))
+            if any(abs(d2(V[i], V[j]) - x) <= x * tol for x in lim)]
+
+
+def _build_snub_24cell() -> dict:
+    # the 600-cell's corners less its inscribed 24-cell's
+    return auto(list(expand([PHI, 1, IP1, 0], "even").values()))
+
+
+def _build_rectified_24cell() -> dict:
+    return auto(list(expand([0, 1, 1, 2], "all").values()))
+
+
+def _build_bitruncated_5cell() -> dict:
+    # the decachoron: ten truncated tetrahedra, every cell alike
+    return auto(perm5((0, 0, 1, 2, 2)))
+
+
+def _build_omnitruncated_5cell() -> dict:
+    # the 4D permutohedron: an open honeycomb of hexagons and squares
+    return auto(perm5((0, 1, 2, 3, 4)))
+
+
+def _build_grand_antiprism() -> dict:
+    # the 600-cell less two great decagons in completely orthogonal planes:
+    # through a corner and its nearest neighbour lies one decagon; the
+    # plane orthogonal to that one holds the other
+    V = np.asarray(_build_600cell()["V"], dtype=np.float64)
+    V /= np.linalg.norm(V[0])
+    d = np.linalg.norm(V - V[0], axis=1)
+    nb = int(np.argmin(np.where(d > 1e-9, d, np.inf)))
+    Q = np.linalg.qr(np.stack([V[0], V[nb]], axis=1), mode="complete")[0]
+    near_p = np.linalg.norm(V @ Q[:, 2:], axis=1) < 1e-6     # in the decagon's plane
+    near_q = np.linalg.norm(V @ Q[:, :2], axis=1) < 1e-6     # in its orthogonal plane
+    assert near_p.sum() == near_q.sum() == 10
+    return auto([list(v) for v in V[~(near_p | near_q)]])
+
+
+def _build_disphenoidal_288() -> dict:
+    # dual of the bitruncated 24-cell: the 24-cell's corners and its
+    # dual's, all at radius 1; 576 tetragonal disphenoids, two edge lengths
+    m: dict = {}
+    for v in expand([1, 1, 0, 0], "all").values():
+        w = [x / math.sqrt(2) for x in v]
+        m[kkey(w)] = w
+    expand([1, 0, 0, 0], "all", m)
+    expand([0.5, 0.5, 0.5, 0.5], "all", m)
+    V = list(m.values())
+    return {"V": V, "E": edges_by_classes(V, 2)}
+
+
 # ------------------------------------------ 3D shapes from trig equations
 #
 # Recognizable 3D shapes built from polar curves r(θ), parametric curves
@@ -1013,97 +1104,113 @@ def scene(name: str, alias: str, sym: str, layers: tuple, dims: int = 3) -> Shap
     """A Shape that is several shapes in one frame (Layer, _build_scene):
     4D when any layer is."""
     return Shape(name, alias, 0, sym, lambda: _build_scene(layers), dims=dims,
-                 family="Scene", layers=layers)
+                 family="Scenes", layers=layers)
 
 SHAPES = [
-    Shape("5-cell", "hypertetrahedron", 5, "{3,3,3}", _build_5cell),
-    Shape("3,3-duoprism", "triangle × triangle", 6, "{3}×{3}", lambda: duoprism(3, 3)),
-    Shape("Cubic pyramid", "hyperpyramid", 7, "({4,3}) ∨ •", _build_cubic_pyramid),
-    Shape("Tesseract", "hypercube · hyperhexahedron", 8, "{4,3,3}", _build_tesseract),
-    Shape("Rectified 5-cell", "truncation series", 10, "r{3,3,3}", _build_rectified_5cell),
-    Shape("4,8-duoprism", "square × octagon", 12, "{4}×{8}", lambda: duoprism(4, 8)),
-    Shape("6,6-duoprism", "hexagon × hexagon", 12, "{6}×{6}", lambda: duoprism(6, 6)),
-    Shape("16-cell", "hyperoctahedron", 16, "{3,3,4}", _build_16cell),
-    Shape("10,10-duoprism", "decagon × decagon", 20, "{10}×{10}", lambda: duoprism(10, 10)),
-    Shape("Icosahedral prism", "hyperprism", 22, "{3,5}×{ }", lambda: prism(icosa3())),
-    Shape("24-cell", "no 3D counterpart exists", 24, "{3,4,3}", _build_24cell),
-    Shape("Truncated tesseract", "truncation series", 24, "t{4,3,3}", _build_trunc_tesseract),
-    Shape("12,12-duoprism", "dodecagon × dodecagon", 24, "{12}×{12}", lambda: duoprism(12, 12)),
-    Shape("Dodecahedral prism", "hyperprism", 32, "{5,3}×{ }", lambda: prism(dodeca3())),
-    Shape("20,20-duoprism", "icosagon × icosagon", 40, "{20}×{20}", lambda: duoprism(20, 20)),
-    Shape("120-cell", "hyperdodecahedron", 120, "{5,3,3}", _build_120cell),
-    Shape("600-cell", "hypericosahedron", 600, "{3,3,5}", _build_600cell),
-    Shape("Clifford torus", "flat torus on the 3-sphere", 0, "S¹ × S¹", lambda: duoprism(32, 16, True)),
+    Shape("5-cell", "hypertetrahedron", 5, "{3,3,3}", _build_5cell, family="Regular polytopes"),
+    Shape("3,3-duoprism", "triangle × triangle", 6, "{3}×{3}", lambda: duoprism(3, 3),
+          family="Prisms and pyramids"),
+    Shape("Cubic pyramid", "hyperpyramid", 7, "({4,3}) ∨ •", _build_cubic_pyramid,
+          family="Prisms and pyramids"),
+    Shape("Tesseract", "hypercube · hyperhexahedron", 8, "{4,3,3}", _build_tesseract,
+          family="Regular polytopes"),
+    Shape("Rectified 5-cell", "truncation series", 10, "r{3,3,3}", _build_rectified_5cell,
+          family="Uniform polytopes"),
+    Shape("4,8-duoprism", "square × octagon", 12, "{4}×{8}", lambda: duoprism(4, 8),
+          family="Prisms and pyramids"),
+    Shape("6,6-duoprism", "hexagon × hexagon", 12, "{6}×{6}", lambda: duoprism(6, 6),
+          family="Prisms and pyramids"),
+    Shape("16-cell", "hyperoctahedron", 16, "{3,3,4}", _build_16cell, family="Regular polytopes"),
+    Shape("10,10-duoprism", "decagon × decagon", 20, "{10}×{10}", lambda: duoprism(10, 10),
+          family="Prisms and pyramids"),
+    Shape("Icosahedral prism", "hyperprism", 22, "{3,5}×{ }", lambda: prism(icosa3()),
+          family="Prisms and pyramids"),
+    Shape("24-cell", "no 3D counterpart exists", 24, "{3,4,3}", _build_24cell,
+          family="Regular polytopes"),
+    Shape("Truncated tesseract", "truncation series", 24, "t{4,3,3}", _build_trunc_tesseract,
+          family="Uniform polytopes"),
+    Shape("12,12-duoprism", "dodecagon × dodecagon", 24, "{12}×{12}", lambda: duoprism(12, 12),
+          family="Prisms and pyramids"),
+    Shape("Dodecahedral prism", "hyperprism", 32, "{5,3}×{ }", lambda: prism(dodeca3()),
+          family="Prisms and pyramids"),
+    Shape("20,20-duoprism", "icosagon × icosagon", 40, "{20}×{20}", lambda: duoprism(20, 20),
+          family="Prisms and pyramids"),
+    Shape("120-cell", "hyperdodecahedron", 120, "{5,3,3}", _build_120cell,
+          family="Regular polytopes"),
+    Shape("600-cell", "hypericosahedron", 600, "{3,3,5}", _build_600cell,
+          family="Regular polytopes"),
+    Shape("Clifford torus", "flat torus on the 3-sphere", 0, "S¹ × S¹", lambda: duoprism(32, 16, True),
+          family="Surfaces and fibrations"),
     # -------- 3D shapes from trig equations (appended: index is identity)
-    Shape("Heart", "classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, dims=3),
-    Shape("Star", "pentagram prism", 0, "{5/2} polar", _build_star, dims=3),
-    Shape("Rose", "four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, dims=3),
-    Shape("Torus", "the donut", 0, "(R+r cos v)e^iu", _build_torus3, dims=3),
+    Shape("Heart", "classic heart curve, extruded", 0, "x=16 sin³t", _build_heart, dims=3, family="Surfaces"),
+    Shape("Star", "pentagram prism", 0, "{5/2} polar", _build_star, dims=3, family="Surfaces"),
+    Shape("Rose", "four-petal rose, extruded", 0, "r=cos 2θ", _build_rose, dims=3, family="Surfaces"),
+    Shape("Torus", "the donut", 0, "(R+r cos v)e^iu", _build_torus3, dims=3, family="Surfaces"),
     Shape("Trefoil knot", "tube round a (2,3) torus knot", 0, "sin 3t · e^2it",
-          _build_trefoil, dims=3),
+          _build_trefoil, dims=3, family="Surfaces"),
     Shape("Starfruit", "spherical star", 0, "r=1+½cos 5θ sin⁵φ",
-          _build_starfruit, dims=3),
+          _build_starfruit, dims=3, family="Surfaces"),
     Shape("Möbius strip", "one-sided band", 0, "half-twist band",
-          _build_mobius, dims=3),
+          _build_mobius, dims=3, family="Surfaces"),
     Shape("Klein bottle", "one-sided bottle, crossing itself", 0, "χ=0 · one side",
-          _build_klein, dims=3),
+          _build_klein, dims=3, family="Surfaces"),
     # -------- plan 28 spike: the catalog — closed 3D solids, toys, scenes
     Shape("Tetrahedron", "Platonic · 4 triangles", 0, "{3,3}", _build_tetra,
-          dims=3, family="Platonic"),
-    Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, dims=3, family="Platonic"),
+          dims=3, family="Platonic solids"),
+    Shape("Cube", "Platonic · 6 squares", 0, "{4,3}", _build_cube, dims=3, family="Platonic solids"),
     Shape("Octahedron", "Platonic · 8 triangles", 0, "{3,4}", _build_octa,
-          dims=3, family="Platonic"),
+          dims=3, family="Platonic solids"),
     Shape("Dodecahedron", "Platonic · 12 pentagons", 0, "{5,3}", _build_dodeca,
-          dims=3, family="Platonic"),
+          dims=3, family="Platonic solids"),
     Shape("Icosahedron", "Platonic · 20 triangles", 0, "{3,5}", _build_icosa,
-          dims=3, family="Platonic"),
+          dims=3, family="Platonic solids"),
     Shape("Cuboctahedron", "Archimedean · 8 triangles, 6 squares", 0, "r{4,3}", _build_cuboct,
-          dims=3, family="Archimedean"),
+          dims=3, family="Archimedean solids"),
     Shape("Truncated octahedron", "Archimedean · the space-filler", 0, "t{3,4}",
-          _build_trunc_oct, dims=3, family="Archimedean"),
+          _build_trunc_oct, dims=3, family="Archimedean solids"),
     Shape("Rhombicuboctahedron", "Archimedean · 8 triangles, 18 squares", 0, "rr{4,3}",
-          _build_rhombicuboct, dims=3, family="Archimedean"),
+          _build_rhombicuboct, dims=3, family="Archimedean solids"),
     Shape("Snub cube", "Archimedean · chiral, 38 faces", 0, "sr{4,3}", _build_snub_cube,
-          dims=3, family="Archimedean"),
+          dims=3, family="Archimedean solids"),
     Shape("Icosidodecahedron", "Archimedean · 20 triangles, 12 pentagons", 0, "r{5,3}",
-          _build_icosidodeca, dims=3, family="Archimedean"),
+          _build_icosidodeca, dims=3, family="Archimedean solids"),
     Shape("Truncated icosahedron", "Archimedean · the football, C₆₀", 0, "t{3,5}",
-          _build_trunc_icosa, dims=3, family="Archimedean"),
+          _build_trunc_icosa, dims=3, family="Archimedean solids"),
     Shape("Rhombic dodecahedron", "Catalan · 12 rhombi", 0, "V3.4.3.4", _build_rhombic_dodeca,
-          dims=3, family="Catalan"),
+          dims=3, family="Catalan solids"),
     Shape("Rhombic triacontahedron", "Catalan · 30 golden rhombi", 0, "V3.5.3.5",
-          _build_rhombic_triaconta, dims=3, family="Catalan"),
+          _build_rhombic_triaconta, dims=3, family="Catalan solids"),
     Shape("Small stellated dodecahedron", "Kepler–Poinsot · 12 points", 0, "{5/2,5}",
-          _build_small_stellated, dims=3, family="Star"),
+          _build_small_stellated, dims=3, family="Star polyhedra"),
     Shape("Great stellated dodecahedron", "Kepler–Poinsot · 20 points", 0, "{5/2,3}",
-          _build_great_stellated, dims=3, family="Star"),
+          _build_great_stellated, dims=3, family="Star polyhedra"),
     Shape("Moravian star", "spiked rhombicuboctahedron · 26 points", 0, "Herrnhut",
-          _build_moravian, dims=3, family="Star"),
+          _build_moravian, dims=3, family="Star polyhedra"),
     Shape("Starburst", "spiked icosahedron · 20 points", 0, "{3,5} + pyramids",
-          _build_starburst, dims=3, family="Star"),
+          _build_starburst, dims=3, family="Star polyhedra"),
     Shape("Stella octangula", "compound · two tetrahedra", 0, "2{3,3}", _build_stella,
-          dims=3, family="Compound"),
+          dims=3, family="Compounds"),
     Shape("Five tetrahedra", "compound · chiral, in a dodecahedron", 0, "5{3,3}",
-          _build_five_tetra, dims=3, family="Compound"),
+          _build_five_tetra, dims=3, family="Compounds"),
     Shape("Five cubes", "compound · in a dodecahedron", 0, "5{4,3}", _build_five_cubes,
-          dims=3, family="Compound"),
+          dims=3, family="Compounds"),
     Shape("Cube + octahedron", "compound · duals, edges crossing", 0, "{4,3}+{3,4}",
-          _build_cube_octa, dims=3, family="Compound"),
+          _build_cube_octa, dims=3, family="Compounds"),
     Shape("Dodecahedron + icosahedron", "compound · duals, edges crossing", 0, "{5,3}+{3,5}",
-          _build_dodeca_icosa, dims=3, family="Compound"),
+          _build_dodeca_icosa, dims=3, family="Compounds"),
     Shape("Hopf fibration", "4D · the 3-sphere in linked great circles", 0, "S³ → S²",
-          _build_hopf, family="Toy"),
+          _build_hopf, family="Surfaces and fibrations"),
     Shape("Armillary sphere", "celestial rings · tropics, ecliptic, colures", 0, "23.44°",
-          _build_armillary, dims=3, family="Toy"),
+          _build_armillary, dims=3, family="Mathematical toys"),
     Shape("Geodesic sphere", "icosahedron, frequency 3", 0, "{3,5+}₃,₀", _build_geodesic,
-          dims=3, family="Toy"),
+          dims=3, family="Mathematical toys"),
     Shape("Sierpinski tetrahedron", "fractal · 64 tetrahedra, dimension 2", 0, "level 3",
-          _build_sierpinski, dims=3, family="Toy"),
+          _build_sierpinski, dims=3, family="Mathematical toys"),
     Shape("Lissajous knot", "curve · frequencies 3, 2, 7", 0, "cos(3t+.7), cos(2t+.2), cos 7t",
-          _build_lissajous, dims=3, family="Toy"),
+          _build_lissajous, dims=3, family="Mathematical toys"),
     Shape("Loxodrome", "curve · two rhumb lines, pole to pole", 0, "λ = ln tan(π/4+φ/2)/k",
-          _build_loxodrome, dims=3, family="Toy"),
-    Shape("Orbit", "curve · one great circle", 0, "S¹", _build_orbit, dims=3, family="Toy"),
+          _build_loxodrome, dims=3, family="Mathematical toys"),
+    Shape("Orbit", "curve · one great circle", 0, "S¹", _build_orbit, dims=3, family="Mathematical toys"),
     # -------- scenes: several shapes in one frame (Layer), after the shapes
     # they name
     scene("Celestial tesseract", "scene · glome ⊃ tesseract ⊃ star", "S³ ⊃ {4,3,3} ⊃ {5/2,5}", (
@@ -1122,7 +1229,39 @@ SHAPES = [
     )),
     scene("Mysterium Cosmographicum", "scene · Kepler's nested solids, 1596",
           "♄ {4,3} ♃ {3,3} ♂ {5,3} ♁ {3,5} ♀ {3,4} ☿", _kepler_layers()),
+    # -------- plan 28: plan 22's shortlist (docs/plans/22-polytope-shortlist.md)
+    Shape("Snub 24-cell", "the 600-cell less its 24-cell", 144, "s{3,4,3}", _build_snub_24cell,
+          family="Uniform polytopes"),
+    Shape("Rectified 24-cell", "cuboctahedra and cubes", 48, "r{3,4,3}", _build_rectified_24cell,
+          family="Uniform polytopes"),
+    Shape("Bitruncated 5-cell", "decachoron · ten truncated tetrahedra", 10, "2t{3,3,3}",
+          _build_bitruncated_5cell, family="Uniform polytopes"),
+    Shape("Omnitruncated 5-cell", "the 4D permutohedron", 30, "t0,1,2,3{3,3,3}",
+          _build_omnitruncated_5cell, family="Uniform polytopes"),
+    Shape("Grand antiprism", "the 600-cell less two orthogonal decagons", 320, "non-Wythoffian",
+          _build_grand_antiprism, family="Uniform polytopes"),
+    Shape("Disphenoidal 288-cell", "dual of the bitruncated 24-cell", 288, "f{3,4,3}",
+          _build_disphenoidal_288, family="Catalan duals"),
 ]
+
+# The Shape menu (ui.Panel._shape_combo): sections, each a run of
+# families, every shape in exactly one. The index stays the shape's
+# identity; only the menu orders by kind.
+MENU = (
+    ("4D", ("Regular polytopes", "Uniform polytopes", "Catalan duals", "Prisms and pyramids",
+            "Surfaces and fibrations")),
+    ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
+            "Star polyhedra", "Compounds", "Mathematical toys")),
+    ("Scenes", ("Scenes",)),
+)
+
+
+def menu() -> list[tuple[str, str, list[int]]]:
+    """(section, family, shape indices in index order) for every family of
+    MENU that has shapes, in MENU's order."""
+    return [(sec, fam, [i for i, s in enumerate(SHAPES) if s.family == fam])
+            for sec, fams in MENU for fam in fams
+            if any(s.family == fam for s in SHAPES)]
 
 
 _cache: dict[int, dict] = {}

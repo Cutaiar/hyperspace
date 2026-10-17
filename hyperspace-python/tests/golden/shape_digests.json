@@ -404,5 +404,47 @@
   "m": 794,
   "faces": 50,
   "sha256": "82d5d19ba8120ba48083d7abfaed27a25fad0c85b42ec593cb9fa8949934ed4c"
+ },
+ "58": {
+  "name": "Snub 24-cell",
+  "n": 96,
+  "m": 432,
+  "faces": 480,
+  "sha256": "ad77b22108c35337bc034bb3f672cb199fc25aad64730c8ce0d0979ce06acba9"
+ },
+ "59": {
+  "name": "Rectified 24-cell",
+  "n": 96,
+  "m": 288,
+  "faces": 240,
+  "sha256": "159de81e506fd46a75f8520298e2005cca6753aff38b16b11db59ab84474baf1"
+ },
+ "60": {
+  "name": "Bitruncated 5-cell",
+  "n": 30,
+  "m": 60,
+  "faces": 40,
+  "sha256": "62812363f2484e9dd779cfeedf11735bb247e279b8547954f622d0510f5aa08a"
+ },
+ "61": {
+  "name": "Omnitruncated 5-cell",
+  "n": 120,
+  "m": 240,
+  "faces": 150,
+  "sha256": "ccd1ad1ad922e60dec9efb251418c557ea0222461863dd9ad6fd3c78dad66524"
+ },
+ "62": {
+  "name": "Grand antiprism",
+  "n": 100,
+  "m": 500,
+  "faces": 720,
+  "sha256": "d37c39fe4da94248d831accd6b98c3176f91df12978ff1b8c1c7e1397128406b"
+ },
+ "63": {
+  "name": "Disphenoidal 288-cell",
+  "n": 48,
+  "m": 336,
+  "faces": 576,
+  "sha256": "994247ba5214f03b63a89bd6344ef89c1637550fea9d5b402526e60c1a646a53"
  }
 }

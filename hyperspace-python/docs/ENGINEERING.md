@@ -139,47 +139,65 @@ faces, V − E + F = 0. It is centred on its bounding box
 
 **The catalog** (plan 28, an art-direction spike — see
 [`plans/28-catalog-and-scenes.md`](plans/28-catalog-and-scenes.md)). After
-the Klein bottle: closed 3D solids, mathematical toys and scenes, each
-with a `Shape.family`. All but the Hopf fibration and Celestial
-tesseract are 3D (`Shape.dims == 3`). A solid's
+the Klein bottle: closed 3D solids, mathematical toys, scenes, and the
+six 4-polytopes plan 22's shortlist recommends
+([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md): the
+snub and rectified 24-cell, the bitruncated and omnitruncated 5-cell
+through one `perm5` helper, the grand antiprism, and the disphenoidal
+288-cell through a two-class edge rule, `edges_by_classes`). A solid's
 faces come from the polytope extraction; a star (drawn as what shows: its
-spikes, the core buried) or a compound brings its own. A curve (the
-toys with F 0) draws no points: its samples are not corners.
+spikes, the core buried) or a compound brings its own. A curve (the toys
+with F 0) draws no points: its samples are not corners.
+
+**Families and the Shape menu.** Every shape has a `Shape.family`, and
+`geometry.MENU` orders them into the menu's sections: **4D** (regular
+polytopes, uniform polytopes, Catalan duals, prisms and pyramids,
+surfaces and fibrations), **3D** (surfaces, Platonic, Archimedean and
+Catalan solids, star polyhedra, compounds, mathematical toys) and
+**Scenes**. `geometry.menu()` lists them; within a family, index order.
+The index stays the identity, so the menu's order never reaches a preset
+(`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
 
 | # | Shape | Family | F | V | E |
 |---|---|---|---|---|---|
-| 27 | Tetrahedron | Platonic | 4 | 4 | 6 |
-| 28 | Cube | Platonic | 6 | 8 | 12 |
-| 29 | Octahedron | Platonic | 8 | 6 | 12 |
-| 30 | Dodecahedron | Platonic | 12 | 20 | 30 |
-| 31 | Icosahedron | Platonic | 20 | 12 | 30 |
-| 32 | Cuboctahedron | Archimedean | 14 | 12 | 24 |
-| 33 | Truncated octahedron | Archimedean | 14 | 24 | 36 |
-| 34 | Rhombicuboctahedron | Archimedean | 26 | 24 | 48 |
-| 35 | Snub cube | Archimedean | 38 | 24 | 60 |
-| 36 | Icosidodecahedron | Archimedean | 32 | 30 | 60 |
-| 37 | Truncated icosahedron | Archimedean | 32 | 60 | 90 |
-| 38 | Rhombic dodecahedron | Catalan | 12 | 14 | 24 |
-| 39 | Rhombic triacontahedron | Catalan | 30 | 32 | 60 |
-| 40 | Small stellated dodecahedron | Star | 60 | 32 | 90 |
-| 41 | Great stellated dodecahedron | Star | 60 | 32 | 90 |
-| 42 | Moravian star | Star | 96 | 50 | 144 |
-| 43 | Starburst | Star | 60 | 32 | 90 |
-| 44 | Stella octangula | Compound | 8 | 8 | 12 |
-| 45 | Five tetrahedra | Compound | 20 | 20 | 30 |
-| 46 | Five cubes | Compound | 30 | 20 | 60 |
-| 47 | Cube + octahedron | Compound | 14 | 14 | 24 |
-| 48 | Dodecahedron + icosahedron | Compound | 32 | 32 | 60 |
-| 49 | Hopf fibration | Toy | 0 | 864 | 864 |
-| 50 | Armillary sphere | Toy | 0 | 374 | 384 |
-| 51 | Geodesic sphere | Toy | 180 | 92 | 270 |
-| 52 | Sierpinski tetrahedron | Toy | 256 | 130 | 384 |
-| 53 | Lissajous knot | Toy | 0 | 240 | 240 |
-| 54 | Loxodrome | Toy | 0 | 240 | 240 |
-| 55 | Orbit | Toy | 0 | 64 | 64 |
-| 56 | Celestial tesseract | Scene | 84 | 912 | 986 |
-| 57 | Celestial cube | Scene | 66 | 414 | 486 |
-| 58 | Mysterium Cosmographicum | Scene | 50 | 744 | 794 |
+| 27 | Tetrahedron | Platonic solids | 4 | 4 | 6 |
+| 28 | Cube | Platonic solids | 6 | 8 | 12 |
+| 29 | Octahedron | Platonic solids | 8 | 6 | 12 |
+| 30 | Dodecahedron | Platonic solids | 12 | 20 | 30 |
+| 31 | Icosahedron | Platonic solids | 20 | 12 | 30 |
+| 32 | Cuboctahedron | Archimedean solids | 14 | 12 | 24 |
+| 33 | Truncated octahedron | Archimedean solids | 14 | 24 | 36 |
+| 34 | Rhombicuboctahedron | Archimedean solids | 26 | 24 | 48 |
+| 35 | Snub cube | Archimedean solids | 38 | 24 | 60 |
+| 36 | Icosidodecahedron | Archimedean solids | 32 | 30 | 60 |
+| 37 | Truncated icosahedron | Archimedean solids | 32 | 60 | 90 |
+| 38 | Rhombic dodecahedron | Catalan solids | 12 | 14 | 24 |
+| 39 | Rhombic triacontahedron | Catalan solids | 30 | 32 | 60 |
+| 40 | Small stellated dodecahedron | Star polyhedra | 60 | 32 | 90 |
+| 41 | Great stellated dodecahedron | Star polyhedra | 60 | 32 | 90 |
+| 42 | Moravian star | Star polyhedra | 96 | 50 | 144 |
+| 43 | Starburst | Star polyhedra | 60 | 32 | 90 |
+| 44 | Stella octangula | Compounds | 8 | 8 | 12 |
+| 45 | Five tetrahedra | Compounds | 20 | 20 | 30 |
+| 46 | Five cubes | Compounds | 30 | 20 | 60 |
+| 47 | Cube + octahedron | Compounds | 14 | 14 | 24 |
+| 48 | Dodecahedron + icosahedron | Compounds | 32 | 32 | 60 |
+| 49 | Hopf fibration | Surfaces and fibrations | 0 | 864 | 864 |
+| 50 | Armillary sphere | Mathematical toys | 0 | 374 | 384 |
+| 51 | Geodesic sphere | Mathematical toys | 180 | 92 | 270 |
+| 52 | Sierpinski tetrahedron | Mathematical toys | 256 | 130 | 384 |
+| 53 | Lissajous knot | Mathematical toys | 0 | 240 | 240 |
+| 54 | Loxodrome | Mathematical toys | 0 | 240 | 240 |
+| 55 | Orbit | Mathematical toys | 0 | 64 | 64 |
+| 56 | Celestial tesseract | Scenes | 84 | 912 | 986 |
+| 57 | Celestial cube | Scenes | 66 | 414 | 486 |
+| 58 | Mysterium Cosmographicum | Scenes | 50 | 744 | 794 |
+| 59 | Snub 24-cell | Uniform polytopes | 480 | 96 | 432 |
+| 60 | Rectified 24-cell | Uniform polytopes | 240 | 96 | 288 |
+| 61 | Bitruncated 5-cell | Uniform polytopes | 40 | 30 | 60 |
+| 62 | Omnitruncated 5-cell | Uniform polytopes | 150 | 120 | 240 |
+| 63 | Grand antiprism | Uniform polytopes | 720 | 100 | 500 |
+| 64 | Disphenoidal 288-cell | Catalan duals | 576 | 48 | 336 |
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.

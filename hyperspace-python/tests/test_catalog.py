@@ -1,5 +1,6 @@
 """Plan 28 (spike): the catalog of closed 3D solids, the mathematical toys,
-the scenes that put several shapes in one frame, and the 3D switch.
+the scenes that put several shapes in one frame, plan 22's shortlist of
+4-polytopes, and the Shape menu's groups.
 
 The solids are appended after the Klein bottle (index is identity) and are
 3D: at w = 0, untouched by the W planes. A scene
@@ -12,9 +13,11 @@ import pytest
 
 from hyperspace import geometry as G
 
-CATALOG = [i for i, s in enumerate(G.SHAPES) if s.family]
-SOLIDS = [i for i in CATALOG if G.SHAPES[i].family not in ("Toy", "Scene")]
-SCENES = [i for i in CATALOG if G.SHAPES[i].family == "Scene"]
+CATALOG = list(range(26, len(G.SHAPES)))           # everything plan 28 added
+SOLID_FAMILIES = ("Platonic solids", "Archimedean solids", "Catalan solids",
+                  "Star polyhedra", "Compounds")
+SOLIDS = [i for i in CATALOG if G.SHAPES[i].family in SOLID_FAMILIES]
+SCENES = [i for i in CATALOG if G.SHAPES[i].family == "Scenes"]
 BY_NAME = {s.name: i for i, s in enumerate(G.SHAPES)}
 
 # V, E, F of every solid: the textbook counts. A star is counted as what is
@@ -33,12 +36,47 @@ COUNTS = {
     "Dodecahedron + icosahedron": (32, 60, 32),
 }
 
+# plan 22's shortlist, as it measured them (docs/plans/22-polytope-shortlist.md):
+# V, E, F and the faces by size
+POLYTOPES = {
+    "Snub 24-cell": (96, 432, 480, {3: 480}),
+    "Rectified 24-cell": (96, 288, 240, {3: 96, 4: 144}),
+    "Bitruncated 5-cell": (30, 60, 40, {3: 20, 6: 20}),
+    "Omnitruncated 5-cell": (120, 240, 150, {4: 90, 6: 60}),
+    "Grand antiprism": (100, 500, 720, {3: 700, 5: 20}),
+    "Disphenoidal 288-cell": (48, 336, 576, {3: 576}),
+}
+
 
 def test_the_catalog_is_appended_after_the_klein_bottle():
-    assert CATALOG[0] == 26 and CATALOG == list(range(26, len(G.SHAPES)))
-    assert G.SHAPES[25].name == "Klein bottle"
-    # the scenes come last, after every shape they name
-    assert SCENES == CATALOG[-len(SCENES):]
+    assert G.SHAPES[25].name == "Klein bottle" and G.SHAPES[26].name == "Tetrahedron"
+    # a scene comes after every shape it names
+    for i in SCENES:
+        assert all(G.shape_index(L.shape) < i for L in G.SHAPES[i].layers)
+
+
+@pytest.mark.parametrize("name", POLYTOPES, ids=str)
+def test_a_shortlisted_polytope_has_the_counts_plan_22_measured(name):
+    from collections import Counter
+
+    i = BY_NAME[name]
+    g, F = G.geom(i), G.faces(i)
+    n, m, f, sizes = POLYTOPES[name]
+    assert G.SHAPES[i].dims == 4
+    assert (g["n"], g["m"], len(F)) == (n, m, f)
+    assert dict(Counter(len(c) for c in F)) == sizes
+
+
+def test_the_menu_holds_every_shape_once_by_kind():
+    seen = [i for _, _, ids in G.menu() for i in ids]
+    assert sorted(seen) == list(range(len(G.SHAPES)))
+    for sec, fam, ids in G.menu():
+        if sec != "Scenes":
+            assert all(G.SHAPES[i].dims == int(sec[0]) for i in ids), fam
+        assert all(G.SHAPES[i].family == fam for i in ids)
+        assert ids == sorted(ids)                    # index order within a family
+    sections = [sec for sec, _, _ in G.menu()]
+    assert sections == sorted(sections, key=["4D", "3D", "Scenes"].index)
 
 
 def test_every_solid_has_a_count_and_every_count_a_solid():

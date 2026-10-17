@@ -61,7 +61,10 @@ def test_every_shape_draws_what_it_was_recorded_drawing(i):
 def test_a_shape_is_4d_or_3d():
     assert all(s.dims == 4 for s in G.SHAPES[:18])
     assert all(s.dims in G.DIMS for s in G.SHAPES)
-    assert {G.SHAPES[i].name for i in FOUR_D[18:]} == {"Hopf fibration", "Celestial tesseract"}
+    assert {G.SHAPES[i].name for i in FOUR_D[18:]} == {
+        "Hopf fibration", "Celestial tesseract", "Snub 24-cell", "Rectified 24-cell",
+        "Bitruncated 5-cell", "Omnitruncated 5-cell", "Grand antiprism",
+        "Disphenoidal 288-cell"}
     with pytest.raises(ValueError):
         dataclasses.replace(G.SHAPES[21], dims=5)
 

@@ -14,34 +14,44 @@ everything else reached through the existing **Shape** menu.
    tetrahedron, a Lissajous knot, a loxodrome, Kepler's nested solids.
 
 Pictures and the demo video: [`assets/28-catalog/`](assets/28-catalog/)
-(`demo.mp4`, `catalog.png`, `scene-*.png`, `three-d-*.png`), redrawn by
+(`demo.mp4`, `catalog.png`, `scene-*.png`, `three-d-*.png`,
+`shortlist-polytopes.png`), redrawn by
 `tools/catalog_demo.py`; the GIFs are cuts of `demo.mp4` (ffmpeg), and
-`view-page.png` (the Shape menu, 4D then 3D) and `view-3d-shape.png` (a
+`view-page.png` and `view-menu-3d.png` (the Shape menu, grouped by
+kind) and `view-3d-shape.png` (a
 3D shape: "3D" in the header, the W keys dimmed) are the VIEW page from a
 hidden real window.
 
 ## What was built
 
-**32 shapes, appended** after the Klein bottle (index is identity), each
+**38 shapes, appended** after the Klein bottle (index is identity), each
 with a `Shape.family`. The V/E table is ENGINEERING §1.
 
 | Family | Shapes |
 |---|---|
-| Platonic | tetrahedron, cube, octahedron, dodecahedron, icosahedron |
-| Archimedean | cuboctahedron, truncated octahedron, rhombicuboctahedron, snub cube, icosidodecahedron, truncated icosahedron |
-| Catalan | rhombic dodecahedron, rhombic triacontahedron |
-| Star | small and great stellated dodecahedron (Kepler–Poinsot), Moravian star, starburst |
-| Compound | stella octangula, five tetrahedra, five cubes, cube + octahedron, dodecahedron + icosahedron |
-| Toy | Hopf fibration (4D), armillary sphere, geodesic sphere, Sierpinski tetrahedron, Lissajous knot, loxodrome, orbit |
-| Scene | Celestial tesseract (4D), Celestial cube, Mysterium Cosmographicum |
+| Platonic solids | tetrahedron, cube, octahedron, dodecahedron, icosahedron |
+| Archimedean solids | cuboctahedron, truncated octahedron, rhombicuboctahedron, snub cube, icosidodecahedron, truncated icosahedron |
+| Catalan solids | rhombic dodecahedron, rhombic triacontahedron |
+| Star polyhedra | small and great stellated dodecahedron (Kepler–Poinsot), Moravian star, starburst |
+| Compounds | stella octangula, five tetrahedra, five cubes, cube + octahedron, dodecahedron + icosahedron |
+| Mathematical toys | armillary sphere, geodesic sphere, Sierpinski tetrahedron, Lissajous knot, loxodrome, orbit |
+| 4D: uniform polytopes | snub 24-cell, rectified 24-cell, bitruncated 5-cell, omnitruncated 5-cell, grand antiprism — plan 22's shortlist, its recommendation |
+| 4D: Catalan duals | disphenoidal 288-cell (the shortlist's optional fifth) |
+| 4D: surfaces and fibrations | Hopf fibration (beside the Clifford torus) |
+| Scenes | Celestial tesseract (4D), Celestial cube, Mysterium Cosmographicum |
+
+**The Shape menu, grouped by kind.** Every shape now has a family —
+the 26 older ones too (regular polytopes, uniform polytopes, prisms and
+pyramids, surfaces …) — and `geometry.MENU` orders the families into
+three sections: 4D, 3D and Scenes. Within a family, index order; the
+index stays the identity, so no preset moves.
 
 - **4D or 3D, honestly** (`Shape.dims`; the owner's call after the first
   review, replacing plan 22's lifts and masks). A 4D shape has real
   w-extent and every plane turns it. A 3D shape — the trig family, Heart
   to Klein bottle, and the catalog's solids and toys — sits at w = 0 with
   nothing invented, and the W planes, with whatever drives them, do
-  nothing to it (`geometry.view_angles`). The Shape menu lists 4D then 3D
-  under their own headings; the VIEW header says which; the W keys dim
+  nothing to it (`geometry.view_angles`). The Shape menu is grouped by kind (below); the VIEW header says which; the W keys dim
   while they can do nothing. Convex solids get their faces from the
   polytope extraction unchanged; stars and compounds bring their own.
 - **A star is drawn as what is seen.** A Kepler–Poinsot star's faces are
@@ -104,8 +114,7 @@ routes on them no longer move the shape. They were left as they are.
   moves a little as the switch goes on or off.
 - **The scene's depth cue mixes kinds.** A 4D layer cues on w, a 3D
   layer on its depth to the 3D camera; the painter's sort runs over both.
-- **The Shape menu is long** (58 entries). It is grouped 4D / 3D; within
-  3D it is in index order, not by `Shape.family`.
+- **The Shape menu is long** (64 entries), though grouped.
 - **Zooming thickens the lines.** Line width scales with the camera's zoom,
   as it always has, so Kepler's inner shells at 6.5× draw chunky. A
   scene may want its widths in world units.

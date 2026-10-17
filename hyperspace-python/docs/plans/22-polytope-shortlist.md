@@ -310,6 +310,10 @@ triangles given explicitly by the builder) would serve both.
 
 ## Recommendation
 
+> **Built in plan 28 (the owner's pick, 2026-10-17):** all four below and
+> the disphenoidal 288-cell, as shapes 59–64 — the counts above, exactly
+> (`tests/test_catalog.py::test_a_shortlisted_polytope_has_the_counts_plan_22_measured`).
+
 My recommendation; the owner decides. These four give the most new
 looks for the least machinery, and none touches the face pipeline:
 

@@ -13,7 +13,7 @@ from hyperspace import geometry as G
 
 # the trig family (shapes 19–26); the plan 28 catalog after it has its own
 # tests (tests/test_catalog.py)
-NEW3D = [i for i, s in enumerate(G.SHAPES) if i >= 18 and not s.family]
+NEW3D = [i for i, s in enumerate(G.SHAPES) if s.family == "Surfaces"]
 
 
 def test_polytope_count_unchanged():
@@ -127,7 +127,7 @@ def test_the_klein_bottle_is_appended_after_the_mobius_strip():
     # the plan 28 catalog starts after it
     assert KLEIN == 25 == NEW3D[-1]
     assert G.SHAPES[24].name == "Möbius strip"
-    assert G.SHAPES[26].family
+    assert G.SHAPES[26].family == "Platonic solids"
 
 
 def test_the_klein_bottle_seam_welds_into_a_closed_grid():
