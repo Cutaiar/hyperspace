@@ -310,9 +310,16 @@ triangles given explicitly by the builder) would serve both.
 
 ## Recommendation
 
-> **Built in plan 28 (the owner's pick, 2026-10-17):** all four below and
-> the disphenoidal 288-cell, as shapes 59–64 — the counts above, exactly
+> **Built in plan 28 (the owner's word, 2026-10-17):** all four below and
+> the disphenoidal 288-cell (shapes 59–64); then, so the owner can judge
+> each by eye, every other candidate on the sheet and every form above
+> with a recipe — rows 6–20, the rectified 600-cell, the dual runcinated
+> 5-cell, the four drawn stars (the two with {5/2} faces as lines only)
+> and the cheap extras (shapes 65–99). The counts above, exactly
 > (`tests/test_catalog.py::test_a_shortlisted_polytope_has_the_counts_plan_22_measured`).
+> Not built: the runcitruncated and omnitruncated 24-cell, the 120/600
+> forms past the rectified 600-cell, the other Catalan duals and stars,
+> and the duoantiprisms.
 
 My recommendation; the owner decides. These four give the most new
 looks for the least machinery, and none touches the face pipeline:

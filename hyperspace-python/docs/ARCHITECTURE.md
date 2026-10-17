@@ -728,7 +728,7 @@ planes), MID → XY, UPR → XZ, AIR → YZ — with each band's `dir` as the
 sign. Most factory presets carry those six rows (the hands and LFO
 presets do not), and a preset may re-aim them.
 
-**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 64
+**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 99
 shapes, append-only. Three fields say what each one is:
 
 - `Shape.cells` is the polytope's cell count, and **0 marks a surface
@@ -736,7 +736,7 @@ shapes, append-only. Three fields say what each one is:
   cells 0 and is a native 4D surface; shapes 19–26 are surfaces built
   from trig equations, each with explicit face cycles (`"F"`).
 - `Shape.dims` says, honestly, whether it is 4D or 3D (plan 28): 4 —
-  real w-extent, shapes 1–18, the six 4-polytopes from plan 22's
+  real w-extent, shapes 1–18, the 4-polytopes from plan 22's
   shortlist, the Hopf fibration and the Celestial tesseract scene; 3 — a 3D shape at w = 0, shapes 19–26 and the rest
   of the catalog. Nothing is invented for a w a shape does not have.
 - `Shape.family` is every shape's kind (regular polytopes, Platonic

@@ -61,10 +61,10 @@ def test_every_shape_draws_what_it_was_recorded_drawing(i):
 def test_a_shape_is_4d_or_3d():
     assert all(s.dims == 4 for s in G.SHAPES[:18])
     assert all(s.dims in G.DIMS for s in G.SHAPES)
-    assert {G.SHAPES[i].name for i in FOUR_D[18:]} == {
-        "Hopf fibration", "Celestial tesseract", "Snub 24-cell", "Rectified 24-cell",
-        "Bitruncated 5-cell", "Omnitruncated 5-cell", "Grand antiprism",
-        "Disphenoidal 288-cell"}
+    # every 4D shape is in a 4D family of the menu, every 3D one in a 3D one
+    for sec, _, ids in G.menu():
+        if sec != "Scenes":
+            assert {G.SHAPES[i].dims for i in ids} == {int(sec[0])}
     with pytest.raises(ValueError):
         dataclasses.replace(G.SHAPES[21], dims=5)
 

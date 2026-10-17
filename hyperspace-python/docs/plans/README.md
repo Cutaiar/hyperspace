@@ -12,7 +12,7 @@ What is left in `plans/`:
 - [`21-outputs-and-the-hands.md`](21-outputs-and-the-hands.md) — several render outputs, hands over or through the effects, the ghost hands.
 - [`22-flat-shapes-and-face-patterns.md`](22-flat-shapes-and-face-patterns.md) — plan 22 as built: the flat shapes lifted into 4D or kept 3D with their W planes folded, the Klein bottle; the eight pattern inputs given one meaning each, the FACES page, five new patterns, the factory pattern depth, macro candidates.
 - [`22-orchestrator-prompt.md`](22-orchestrator-prompt.md) — the launch prompt plan 22 was run from. Two streams — the flat shapes given real 4D extent, and the face patterns made usable.
-- [`22-polytope-shortlist.md`](22-polytope-shortlist.md) — the second-tier 4-polytopes ranked by what each would cost to add. Its recommended six were built in plan 28 (the owner's pick, 2026-10-17); the rest is not.
+- [`22-polytope-shortlist.md`](22-polytope-shortlist.md) — the second-tier 4-polytopes ranked by what each would cost to add. Plan 28 built its recommendation, then every candidate it drew or gave a recipe for and its cheap extras (the owner's word, 2026-10-17).
 - [`22-macro-candidates.md`](22-macro-candidates.md) — four presets of macro configurations to audition, each macro with a line on what it is meant to do. None has been judged.
 - [`23-flip-windows-tabs.md`](23-flip-windows-tabs.md) — plan 23, **partly built** (WP1, Flip X / Flip Y per output for the glass, in #157; the rest not built): windows that come back on their named screens (fullscreen included), the control window as the MacBook's screen with the page tabs across the top.
 - [`23-session-prompt.md`](23-session-prompt.md) — the launch prompt for the session that runs plan 23.

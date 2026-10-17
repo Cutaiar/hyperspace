@@ -15,16 +15,16 @@ everything else reached through the existing **Shape** menu.
 
 Pictures and the demo video: [`assets/28-catalog/`](assets/28-catalog/)
 (`demo.mp4`, `catalog.png`, `scene-*.png`, `three-d-*.png`,
-`shortlist-polytopes.png`), redrawn by
+`shortlist-polytopes.png` — every shape from plan 22's shortlist), redrawn by
 `tools/catalog_demo.py`; the GIFs are cuts of `demo.mp4` (ffmpeg), and
-`view-page.png` and `view-menu-3d.png` (the Shape menu, grouped by
-kind) and `view-3d-shape.png` (a
+`view-page.png`, `view-menu-4d.png` and `view-menu-3d.png` (the Shape
+menu, grouped by kind) and `view-3d-shape.png` (a
 3D shape: "3D" in the header, the W keys dimmed) are the VIEW page from a
 hidden real window.
 
 ## What was built
 
-**38 shapes, appended** after the Klein bottle (index is identity), each
+**73 shapes, appended** after the Klein bottle (index is identity), each
 with a `Shape.family`. The V/E table is ENGINEERING §1.
 
 | Family | Shapes |
@@ -35,13 +35,18 @@ with a `Shape.family`. The V/E table is ENGINEERING §1.
 | Star polyhedra | small and great stellated dodecahedron (Kepler–Poinsot), Moravian star, starburst |
 | Compounds | stella octangula, five tetrahedra, five cubes, cube + octahedron, dodecahedron + icosahedron |
 | Mathematical toys | armillary sphere, geodesic sphere, Sierpinski tetrahedron, Lissajous knot, loxodrome, orbit |
-| 4D: uniform polytopes | snub 24-cell, rectified 24-cell, bitruncated 5-cell, omnitruncated 5-cell, grand antiprism — plan 22's shortlist, its recommendation |
-| 4D: Catalan duals | disphenoidal 288-cell (the shortlist's optional fifth) |
+| 4D: 5-cell family | truncated, cantellated, runcinated, bitruncated, cantitruncated, runcitruncated, omnitruncated 5-cell |
+| 4D: tesseract family | rectified tesseract, truncated 16-cell, cantellated, runcinated, bitruncated, cantitruncated, runcitruncated and omnitruncated tesseract, runcitruncated 16-cell |
+| 4D: 24-cell family | snub, rectified, truncated, cantellated, runcinated, bitruncated, cantitruncated 24-cell |
+| 4D: 600-cell family | grand antiprism, rectified 600-cell |
+| 4D: Catalan duals | disphenoidal 288-cell, dual runcinated 5-cell |
+| 4D: star polychora | grand 600-cell, great 120-cell (faces); small stellated and great grand stellated 120-cell (lines only) |
+| 4D: prisms | 3,4-, 5,5-, 3,8-, 5,10-, 8,8-duoprism; pentagonal, heptagonal, octagonal antiprism prisms; icosidodecahedral and truncated icosahedral prisms |
 | 4D: surfaces and fibrations | Hopf fibration (beside the Clifford torus) |
 | Scenes | Celestial tesseract (4D), Celestial cube, Mysterium Cosmographicum |
 
 **The Shape menu, grouped by kind.** Every shape now has a family —
-the 26 older ones too (regular polytopes, uniform polytopes, prisms and
+the 26 older ones too (regular polytopes, the 5-cell family, prisms and
 pyramids, surfaces …) — and `geometry.MENU` orders the families into
 three sections: 4D, 3D and Scenes. Within a family, index order; the
 index stays the identity, so no preset moves.
@@ -114,12 +119,21 @@ routes on them no longer move the shape. They were left as they are.
   moves a little as the switch goes on or off.
 - **The scene's depth cue mixes kinds.** A 4D layer cues on w, a 3D
   layer on its depth to the 3D camera; the painter's sort runs over both.
-- **The Shape menu is long** (64 entries), though grouped.
+- **The Shape menu is long** (99 entries), though grouped. The shortlist
+  shapes were added so the owner can judge them by eye; most will
+  probably go.
+- **The rectified 600-cell's faces take about 8 s to build** the first
+  time they are drawn (the frame stalls once).
+- **Two star polychora are lines only.** A {5/2} pentagram face needs
+  its crossing points as vertices, which the face pipeline does not have.
 - **Zooming thickens the lines.** Line width scales with the camera's zoom,
   as it always has, so Kepler's inner shells at 6.5× draw chunky. A
   scene may want its widths in world units.
 - **Not judged at the machine.** Brightness and widths were tuned on
   offscreen software-GL renders; the look on the projector is unchecked.
+
+`demo.mp4` was last drawn before shapes 65–99 were added; the contact
+sheets show them. `tools/catalog_demo.py` tours them all when rerun.
 
 ## Checks
 

@@ -1,7 +1,8 @@
 # Hyperspace
 
-A real-time 4D polytope visualizer. 64 shapes (the 5-cell to the 600-cell, the
-grand antiprism and the snub 24-cell, the Clifford torus, eight surfaces from
+A real-time 4D polytope visualizer. 99 shapes (the 5-cell to the 600-cell and
+some forty more 4-polytopes from the grand antiprism to the star polychora, the
+Clifford torus, eight surfaces from
 the Heart to a Klein bottle, and — plan 28's spike — a catalog of 3D solids,
 stars, compounds, mathematical toys and multi-shape scenes), rotating through six planes, with each plane driven by a
 frequency band of whatever audio is playing.

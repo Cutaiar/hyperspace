@@ -446,5 +446,250 @@
   "m": 336,
   "faces": 576,
   "sha256": "994247ba5214f03b63a89bd6344ef89c1637550fea9d5b402526e60c1a646a53"
+ },
+ "64": {
+  "name": "Truncated 5-cell",
+  "n": 20,
+  "m": 40,
+  "faces": 30,
+  "sha256": "cc3f36bd4bb98b5bc6aed241ca74861bae0b0f0fdba73030386968cd3ff8bdee"
+ },
+ "65": {
+  "name": "Cantellated 5-cell",
+  "n": 30,
+  "m": 90,
+  "faces": 80,
+  "sha256": "eb2bbdce85c98c39898eb663c094f090dac7100957d160c22af8fcef9ff79889"
+ },
+ "66": {
+  "name": "Runcinated 5-cell",
+  "n": 20,
+  "m": 60,
+  "faces": 70,
+  "sha256": "404f9d9d5b8f8a3b780772b658500c068fd94b1adf6d8b1e102501dec63199d1"
+ },
+ "67": {
+  "name": "Cantitruncated 5-cell",
+  "n": 60,
+  "m": 120,
+  "faces": 80,
+  "sha256": "59798b672e6ac6a6d97d4e3211543a258c2f3fc477f0306f9514ae4e84f00205"
+ },
+ "68": {
+  "name": "Runcitruncated 5-cell",
+  "n": 60,
+  "m": 150,
+  "faces": 120,
+  "sha256": "3430c8d2086e08a49f5ccf29c6ae40e8922b010fdf23469f3242b5033cbe764a"
+ },
+ "69": {
+  "name": "Rectified tesseract",
+  "n": 32,
+  "m": 96,
+  "faces": 88,
+  "sha256": "7bef20dc945ee745e688432c707ebc881a9bca6325421b8a1410295c6fb0fcff"
+ },
+ "70": {
+  "name": "Truncated 16-cell",
+  "n": 48,
+  "m": 120,
+  "faces": 96,
+  "sha256": "12ab2f15ffa5d3c216f58c8192ad612551c374648e4b9c17bb61fb4351fa28e5"
+ },
+ "71": {
+  "name": "Cantellated tesseract",
+  "n": 96,
+  "m": 288,
+  "faces": 248,
+  "sha256": "012b62b485e3612ceda346ce38533b64166cfdb9492d020ee9e2a0a9f93ec866"
+ },
+ "72": {
+  "name": "Runcinated tesseract",
+  "n": 64,
+  "m": 192,
+  "faces": 208,
+  "sha256": "fb9654f051e6a6e7077ffbe3124b0f223f4cdc698e15fc7b7316ab2826662e9f"
+ },
+ "73": {
+  "name": "Bitruncated tesseract",
+  "n": 96,
+  "m": 192,
+  "faces": 120,
+  "sha256": "9d12620751a2aa2d9424deb7bca09eb35ccb7ebe912c2f9899ea835a14fd2707"
+ },
+ "74": {
+  "name": "Cantitruncated tesseract",
+  "n": 192,
+  "m": 384,
+  "faces": 248,
+  "sha256": "021fd9d77c7f57d4bc42073b363fcbcce53935a535bce3ea6ea7d50baa284fcd"
+ },
+ "75": {
+  "name": "Runcitruncated tesseract",
+  "n": 192,
+  "m": 480,
+  "faces": 368,
+  "sha256": "579e6605b6f9014d72e25aa5f830a2a2c9ac7e86ed2e54b33e9afa34a4b91098"
+ },
+ "76": {
+  "name": "Runcitruncated 16-cell",
+  "n": 192,
+  "m": 480,
+  "faces": 368,
+  "sha256": "ac7e0c3bd06a339458feb6aa6d5eaf254ad23465c541a3bb8f32fda30770db05"
+ },
+ "77": {
+  "name": "Omnitruncated tesseract",
+  "n": 384,
+  "m": 768,
+  "faces": 464,
+  "sha256": "0b471f008e0b4a796ca5bbbf5b7d4d462c1a16cde343534513b0cc6add48d3e0"
+ },
+ "78": {
+  "name": "Truncated 24-cell",
+  "n": 192,
+  "m": 384,
+  "faces": 240,
+  "sha256": "d04ec125af10c89710443e28c0b38d086552bfeae5c66ea16b045be6a320e99d"
+ },
+ "79": {
+  "name": "Cantellated 24-cell",
+  "n": 288,
+  "m": 864,
+  "faces": 720,
+  "sha256": "293f501dd026d1b4f41c0957e47e576415b4d44de22367156fe041b59b711564"
+ },
+ "80": {
+  "name": "Runcinated 24-cell",
+  "n": 144,
+  "m": 576,
+  "faces": 672,
+  "sha256": "7250aac0b25a2897ae243f2ad2fce1bda1fa268d06f783989c643b62d39bf8cb"
+ },
+ "81": {
+  "name": "Bitruncated 24-cell",
+  "n": 288,
+  "m": 576,
+  "faces": 336,
+  "sha256": "181b67e77978dddaf3187ccb9fba539c3c51a9ff611a4523eea2a223ade1ad00"
+ },
+ "82": {
+  "name": "Cantitruncated 24-cell",
+  "n": 576,
+  "m": 1152,
+  "faces": 720,
+  "sha256": "06b8c8f560ac4b3560f565a66ee5c08634d39f50f5e5e5e5177da9a51c8b7752"
+ },
+ "83": {
+  "name": "Rectified 600-cell",
+  "n": 720,
+  "m": 3600,
+  "faces": 3600,
+  "sha256": "1eec7f7a4bce2c9860d85a6977b460fe5bdcc3b14f3520c927644d8b491661f6"
+ },
+ "84": {
+  "name": "Dual runcinated 5-cell",
+  "n": 30,
+  "m": 70,
+  "faces": 60,
+  "sha256": "e6da3a09744075c62e76e451c96b34ac550cf0c8ed933dd86660fa9b0c8311de"
+ },
+ "85": {
+  "name": "Grand 600-cell",
+  "n": 120,
+  "m": 720,
+  "faces": 1200,
+  "sha256": "b5672064b421f09163c2d074fae49e2ba4800175d7e9335e18ac43b3f9280f2b"
+ },
+ "86": {
+  "name": "Great 120-cell",
+  "n": 120,
+  "m": 720,
+  "faces": 720,
+  "sha256": "f4366523f8cc6ce9fc3ff07853b205205555d092e4f04a5d05b197dd166928a5"
+ },
+ "87": {
+  "name": "Small stellated 120-cell",
+  "n": 120,
+  "m": 1200,
+  "faces": 0,
+  "sha256": "8fa5dd19206a40385793d951dfb62a0170cacce1c8281bd432c7588a17a12c87"
+ },
+ "88": {
+  "name": "Great grand stellated 120-cell",
+  "n": 600,
+  "m": 1200,
+  "faces": 0,
+  "sha256": "57234410e4393bd667d0f39f64bd90ce8491558c5e5270af18191cc6e22c82e7"
+ },
+ "89": {
+  "name": "3,4-duoprism",
+  "n": 12,
+  "m": 24,
+  "faces": 19,
+  "sha256": "55dc741bdc856770855452d8288c0ddb7b014afe1ca83223af20a551abfd6c0d"
+ },
+ "90": {
+  "name": "5,5-duoprism",
+  "n": 25,
+  "m": 50,
+  "faces": 35,
+  "sha256": "a98bda3fcad453ba607391c5596b1f1f05e9c71018f1265ec286db14428b7b2c"
+ },
+ "91": {
+  "name": "3,8-duoprism",
+  "n": 24,
+  "m": 48,
+  "faces": 35,
+  "sha256": "774c9b17fcc33fd1255e0551fa7c628c37fe8084e4806f237b51928b3b934ecf"
+ },
+ "92": {
+  "name": "5,10-duoprism",
+  "n": 50,
+  "m": 100,
+  "faces": 65,
+  "sha256": "f1ff87cbd42418353e2f2d9f9f3171954007a7398f7bfe42d8bc5e1735b3d1fe"
+ },
+ "93": {
+  "name": "8,8-duoprism",
+  "n": 64,
+  "m": 128,
+  "faces": 80,
+  "sha256": "79b262b57952750a443954f6dbbf924fbccd851a661c5c6ff30618c3d646766f"
+ },
+ "94": {
+  "name": "Pentagonal antiprism prism",
+  "n": 20,
+  "m": 50,
+  "faces": 44,
+  "sha256": "68237be511482680b826fbc8da34ffb15e3e2b9264a53fb290b36394fe802cb7"
+ },
+ "95": {
+  "name": "Heptagonal antiprism prism",
+  "n": 28,
+  "m": 70,
+  "faces": 60,
+  "sha256": "6f6fc3b9271e700456269021ffcdcce52ecf70159eb6ea867fdf9ccc9619009a"
+ },
+ "96": {
+  "name": "Octagonal antiprism prism",
+  "n": 32,
+  "m": 80,
+  "faces": 68,
+  "sha256": "25bb0a9a38f552300f76b73e09367761264547b87df88f78ad836401645abf49"
+ },
+ "97": {
+  "name": "Icosidodecahedral prism",
+  "n": 60,
+  "m": 150,
+  "faces": 124,
+  "sha256": "c5ffcb76d06c1c1b39e7d9ab677fd387ed5c52ac29c5b905cd8f44578e805e11"
+ },
+ "98": {
+  "name": "Truncated icosahedral prism",
+  "n": 120,
+  "m": 240,
+  "faces": 154,
+  "sha256": "2b5ae00d091e8fbc5f46d1ea5fb2e39987a091e975ca144fb1db9e747d217ad4"
  }
 }

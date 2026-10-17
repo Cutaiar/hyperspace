@@ -139,20 +139,27 @@ faces, V − E + F = 0. It is centred on its bounding box
 
 **The catalog** (plan 28, an art-direction spike — see
 [`plans/28-catalog-and-scenes.md`](plans/28-catalog-and-scenes.md)). After
-the Klein bottle: closed 3D solids, mathematical toys, scenes, and the
-six 4-polytopes plan 22's shortlist recommends
-([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md): the
-snub and rectified 24-cell, the bitruncated and omnitruncated 5-cell
-through one `perm5` helper, the grand antiprism, and the disphenoidal
-288-cell through a two-class edge rule, `edges_by_classes`). A solid's
+the Klein bottle: closed 3D solids, mathematical toys, scenes, and every
+4-polytope plan 22's shortlist drew or gave a recipe for
+([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)) —
+the 5-cell family through one `perm5` helper, the tesseract and 24-cell
+families through `expand`, the snub 24-cell and grand antiprism, the
+rectified 600-cell (the 600-cell's edge midpoints; its faces take about
+8 s to build the first time they are drawn), the disphenoidal 288-cell
+(`edges_by_classes`: two edge lengths) and the dual runcinated 5-cell
+(its cells' polar points), four star polychora on the 600-cell's and
+120-cell's corners (`_star`: one distance class; the two with {5/2}
+pentagram faces drawn as lines only, since a pentagram needs points the
+face pipeline does not have), and more duoprisms and prisms. A solid's
 faces come from the polytope extraction; a star (drawn as what shows: its
 spikes, the core buried) or a compound brings its own. A curve (the toys
 with F 0) draws no points: its samples are not corners.
 
 **Families and the Shape menu.** Every shape has a `Shape.family`, and
 `geometry.MENU` orders them into the menu's sections: **4D** (regular
-polytopes, uniform polytopes, Catalan duals, prisms and pyramids,
-surfaces and fibrations), **3D** (surfaces, Platonic, Archimedean and
+polytopes; the 5-cell, tesseract, 24-cell and 600-cell families;
+Catalan duals; star polychora; prisms and pyramids; surfaces and
+fibrations), **3D** (surfaces, Platonic, Archimedean and
 Catalan solids, star polyhedra, compounds, mathematical toys) and
 **Scenes**. `geometry.menu()` lists them; within a family, index order.
 The index stays the identity, so the menu's order never reaches a preset
@@ -192,12 +199,47 @@ The index stays the identity, so the menu's order never reaches a preset
 | 56 | Celestial tesseract | Scenes | 84 | 912 | 986 |
 | 57 | Celestial cube | Scenes | 66 | 414 | 486 |
 | 58 | Mysterium Cosmographicum | Scenes | 50 | 744 | 794 |
-| 59 | Snub 24-cell | Uniform polytopes | 480 | 96 | 432 |
-| 60 | Rectified 24-cell | Uniform polytopes | 240 | 96 | 288 |
-| 61 | Bitruncated 5-cell | Uniform polytopes | 40 | 30 | 60 |
-| 62 | Omnitruncated 5-cell | Uniform polytopes | 150 | 120 | 240 |
-| 63 | Grand antiprism | Uniform polytopes | 720 | 100 | 500 |
+| 59 | Snub 24-cell | 24-cell family | 480 | 96 | 432 |
+| 60 | Rectified 24-cell | 24-cell family | 240 | 96 | 288 |
+| 61 | Bitruncated 5-cell | 5-cell family | 40 | 30 | 60 |
+| 62 | Omnitruncated 5-cell | 5-cell family | 150 | 120 | 240 |
+| 63 | Grand antiprism | 600-cell family | 720 | 100 | 500 |
 | 64 | Disphenoidal 288-cell | Catalan duals | 576 | 48 | 336 |
+| 65 | Truncated 5-cell | 5-cell family | 30 | 20 | 40 |
+| 66 | Cantellated 5-cell | 5-cell family | 80 | 30 | 90 |
+| 67 | Runcinated 5-cell | 5-cell family | 70 | 20 | 60 |
+| 68 | Cantitruncated 5-cell | 5-cell family | 80 | 60 | 120 |
+| 69 | Runcitruncated 5-cell | 5-cell family | 120 | 60 | 150 |
+| 70 | Rectified tesseract | Tesseract family | 88 | 32 | 96 |
+| 71 | Truncated 16-cell | Tesseract family | 96 | 48 | 120 |
+| 72 | Cantellated tesseract | Tesseract family | 248 | 96 | 288 |
+| 73 | Runcinated tesseract | Tesseract family | 208 | 64 | 192 |
+| 74 | Bitruncated tesseract | Tesseract family | 120 | 96 | 192 |
+| 75 | Cantitruncated tesseract | Tesseract family | 248 | 192 | 384 |
+| 76 | Runcitruncated tesseract | Tesseract family | 368 | 192 | 480 |
+| 77 | Runcitruncated 16-cell | Tesseract family | 368 | 192 | 480 |
+| 78 | Omnitruncated tesseract | Tesseract family | 464 | 384 | 768 |
+| 79 | Truncated 24-cell | 24-cell family | 240 | 192 | 384 |
+| 80 | Cantellated 24-cell | 24-cell family | 720 | 288 | 864 |
+| 81 | Runcinated 24-cell | 24-cell family | 672 | 144 | 576 |
+| 82 | Bitruncated 24-cell | 24-cell family | 336 | 288 | 576 |
+| 83 | Cantitruncated 24-cell | 24-cell family | 720 | 576 | 1152 |
+| 84 | Rectified 600-cell | 600-cell family | 3600 | 720 | 3600 |
+| 85 | Dual runcinated 5-cell | Catalan duals | 60 | 30 | 70 |
+| 86 | Grand 600-cell | Star polychora | 1200 | 120 | 720 |
+| 87 | Great 120-cell | Star polychora | 720 | 120 | 720 |
+| 88 | Small stellated 120-cell | Star polychora | 0 | 120 | 1200 |
+| 89 | Great grand stellated 120-cell | Star polychora | 0 | 600 | 1200 |
+| 90 | 3,4-duoprism | Prisms and pyramids | 19 | 12 | 24 |
+| 91 | 5,5-duoprism | Prisms and pyramids | 35 | 25 | 50 |
+| 92 | 3,8-duoprism | Prisms and pyramids | 35 | 24 | 48 |
+| 93 | 5,10-duoprism | Prisms and pyramids | 65 | 50 | 100 |
+| 94 | 8,8-duoprism | Prisms and pyramids | 80 | 64 | 128 |
+| 95 | Pentagonal antiprism prism | Prisms and pyramids | 44 | 20 | 50 |
+| 96 | Heptagonal antiprism prism | Prisms and pyramids | 60 | 28 | 70 |
+| 97 | Octagonal antiprism prism | Prisms and pyramids | 68 | 32 | 80 |
+| 98 | Icosidodecahedral prism | Prisms and pyramids | 124 | 60 | 150 |
+| 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.

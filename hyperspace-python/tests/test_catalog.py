@@ -45,6 +45,48 @@ POLYTOPES = {
     "Omnitruncated 5-cell": (120, 240, 150, {4: 90, 6: 60}),
     "Grand antiprism": (100, 500, 720, {3: 700, 5: 20}),
     "Disphenoidal 288-cell": (48, 336, 576, {3: 576}),
+    # the rest of it: every candidate its sheet drew and every form it gave
+    # a recipe for (the star polychora as below)
+    "Truncated 5-cell": (20, 40, 30, {3: 20, 6: 10}),
+    "Cantellated 5-cell": (30, 90, 80, {3: 50, 4: 30}),
+    "Runcinated 5-cell": (20, 60, 70, {3: 40, 4: 30}),
+    "Cantitruncated 5-cell": (60, 120, 80, {3: 20, 4: 30, 6: 30}),
+    "Runcitruncated 5-cell": (60, 150, 120, {3: 40, 4: 60, 6: 20}),
+    "Rectified tesseract": (32, 96, 88, {3: 64, 4: 24}),
+    "Truncated 16-cell": (48, 120, 96, {3: 64, 6: 32}),
+    "Cantellated tesseract": (96, 288, 248, {3: 128, 4: 120}),
+    "Runcinated tesseract": (64, 192, 208, {3: 64, 4: 144}),
+    "Bitruncated tesseract": (96, 192, 120, {3: 32, 4: 24, 6: 64}),
+    "Cantitruncated tesseract": (192, 384, 248, {3: 64, 4: 96, 6: 64, 8: 24}),
+    "Runcitruncated tesseract": (192, 480, 368, {3: 128, 4: 192, 8: 48}),
+    "Runcitruncated 16-cell": (192, 480, 368, {3: 64, 4: 240, 6: 64}),
+    "Omnitruncated tesseract": (384, 768, 464, {4: 288, 6: 128, 8: 48}),
+    "Truncated 24-cell": (192, 384, 240, {4: 144, 6: 96}),
+    "Cantellated 24-cell": (288, 864, 720, {3: 288, 4: 432}),
+    "Runcinated 24-cell": (144, 576, 672, {3: 384, 4: 288}),
+    "Bitruncated 24-cell": (288, 576, 336, {3: 192, 8: 144}),
+    "Cantitruncated 24-cell": (576, 1152, 720, {3: 192, 4: 288, 6: 96, 8: 144}),
+    "Rectified 600-cell": (720, 3600, 3600, {3: 3600}),
+    "Dual runcinated 5-cell": (30, 70, 60, {4: 60}),
+    # the stars: faces where they are triangles or convex pentagons; a
+    # {5/2} pentagram face needs points the face pipeline does not have,
+    # so those two are drawn as lines
+    "Grand 600-cell": (120, 720, 1200, {3: 1200}),
+    "Great 120-cell": (120, 720, 720, {5: 720}),
+    "Small stellated 120-cell": (120, 1200, 0, {}),
+    "Great grand stellated 120-cell": (600, 1200, 0, {}),
+    # its cheap extras: V = nm, E = 2nm for a duoprism; a prism of a solid
+    # with (V, E, F) has (2V, 2E + V, 2F + E)
+    "3,4-duoprism": (12, 24, 19, {3: 4, 4: 15}),
+    "5,5-duoprism": (25, 50, 35, {4: 25, 5: 10}),
+    "3,8-duoprism": (24, 48, 35, {3: 8, 4: 24, 8: 3}),
+    "5,10-duoprism": (50, 100, 65, {4: 50, 5: 10, 10: 5}),
+    "8,8-duoprism": (64, 128, 80, {4: 64, 8: 16}),
+    "Pentagonal antiprism prism": (20, 50, 44, {3: 20, 4: 20, 5: 4}),
+    "Heptagonal antiprism prism": (28, 70, 60, {3: 28, 4: 28, 7: 4}),
+    "Octagonal antiprism prism": (32, 80, 68, {3: 32, 4: 32, 8: 4}),
+    "Icosidodecahedral prism": (60, 150, 124, {3: 40, 4: 60, 5: 24}),
+    "Truncated icosahedral prism": (120, 240, 154, {4: 90, 5: 24, 6: 40}),
 }
 
 
@@ -57,6 +99,7 @@ def test_the_catalog_is_appended_after_the_klein_bottle():
 
 @pytest.mark.parametrize("name", POLYTOPES, ids=str)
 def test_a_shortlisted_polytope_has_the_counts_plan_22_measured(name):
+    # V / E / F as the shortlist checked them against a convex hull
     from collections import Counter
 
     i = BY_NAME[name]
