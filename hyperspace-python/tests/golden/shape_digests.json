@@ -404,5 +404,19 @@
   "m": 794,
   "faces": 50,
   "sha256": "82d5d19ba8120ba48083d7abfaed27a25fad0c85b42ec593cb9fa8949934ed4c"
+ },
+ "58": {
+  "name": "Flow mark",
+  "n": 130,
+  "m": 130,
+  "faces": 5,
+  "sha256": "b2fa5f4962f6f67c9de31bbfb8b73fb84f4235c82386e45db1eacff39f89c07f"
+ },
+ "59": {
+  "name": "Flow capsules",
+  "n": 970,
+  "m": 2000,
+  "faces": 1040,
+  "sha256": "9b0df510973f0a47c0b3bc45efcc518d39ffb8f3a9d7cda566a9fa7cbc15db59"
  }
 }
