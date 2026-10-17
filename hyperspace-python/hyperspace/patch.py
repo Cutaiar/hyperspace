@@ -54,6 +54,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 KINDS = ("source", "lfo", "modifier", "macro", "param")
+# plan 30 D2: the render graph's port type for a value a node publishes
+# once a frame (`graph.VALUE`; named here, not imported: this module is a
+# leaf). A render node's `VALUE` port would be a `source` here, its id the
+# node's port (``palette:palette``) — none publishes one yet
+RENDER_VALUE = "value"
 # the ports an LFO's knob params feed, in the order lfo.py declares them,
 # then the bank's global trigger
 LFO_KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")

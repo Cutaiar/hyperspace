@@ -39,6 +39,20 @@ effects", and opens the dragged effect's strip. It changes order only: an
 effect is re-aimed by the ONTO chips in its strip's header. The order slider in the
 strip stays, and does the same one effect at a time.
 
+Plan 30 D2: the page edits the **default chain**. An effect the loaded
+preset's graph places on an edge (`"after": "hands"`, `"into":
+"output.2"`, plan 30 D1) is not in the chain's run: its chip is drawn
+in a grid of its own under the chain's, three to a row like it (so the
+page is never taller than one grid of every effect plus a row), its name
+followed by where it sits ("Warp · after hands", `graph.placed_chips`;
+cut to the chip, whole in the hover), and it is neither dragged nor a
+place to drop — moving it is the preset's JSON, or plan 28's editor. A
+placed effect aimed at the faces says "on the faces": that is where it
+runs. Its LED and its strip are any effect's; the strip's title hover
+says the place in place of the order. The status line counts the placed
+effects that run apart from the chain ("Acid → Palette · 1 placed"):
+switched on, aimed at the frame, and not dormant in the built graph.
+
 Which strip is open is a name (`FxState.sel_name`), not a place in the
 stack: moving an effect's order or loading a preset never changes it.
 
@@ -55,6 +69,7 @@ from imgui_bundle import imgui
 
 from . import ui, undo
 from .fx import FACE_MAPS, FACES, FRAME, FX_DIR, PER_FACE, TARGETS, reordered
+from .graph import placed_chips
 
 # three to a row since plan 16 WP2: the LED takes a chip-height square of
 # each chip, and at four the names of seven of the twelve factory effects
@@ -93,6 +108,11 @@ REORDER = "reorder effects"     # the undo step a drop makes
 FACES_TIP = "on the faces"      # added to the hovers of a chip aimed at the faces
 FACES_OFF = "(Faces is off)"    # the faces' status row while view.faces is off
 NO_COPIES = "(no copies to show them)"      # …and while view.instances is 0
+PLACED = "placed"   # the status line's count of placed effects that run (plan 30 D2)
+NO_CHAIN = "nothing in the chain"   # …its first part when only placed effects run
+PLACED_TIP = ("placed by the preset's graph, not in the chain: moved in the preset's "
+              "JSON, not by a drag")
+ON_FACES = "on the faces"   # a placed chip's words while its effect is aimed at the faces
 
 
 def page(panel, dt: float) -> None:
@@ -102,6 +122,9 @@ def page(panel, dt: float) -> None:
     # plan 20 WP2: the status is per target while any effect — on or off —
     # is aimed at the faces; with none, it is the one line it always was
     aimed = fx is not None and any(_faces(fx, n) for n in fx.specs)
+    # plan 30 D2: the effects the loaded preset places on an edge, out of the chain
+    placed = _placed(panel, fx) if fx is not None else {}
+    dormant = _dormant(panel)
 
     panel._section("effects", "fx", note=f"shaders/{FX_DIR.name}/*.glsl · live")
     panel._check("fx.on")
@@ -110,7 +133,8 @@ def page(panel, dt: float) -> None:
     if fx is None:
         status = "nothing on" if r["fx.on"].base else "bypassed"
     else:
-        status = f"frame  {_status(fx, FRAME)}" if aimed else _status(fx)
+        status = (f"frame  {_status(fx, FRAME, placed, dormant)}" if aimed
+                  else _status(fx, placed=placed, dormant=dormant))
     _faint(status)
     if aimed:
         _faces_row(panel, fx)
@@ -124,8 +148,8 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no effects — put a .glsl file in hyperspace/shaders/fx/")
         return
 
-    # the stack, in order: a chip per effect, lit while on
-    names = fx.names()
+    # the stack, in order: a chip per effect of the chain, lit while on
+    names = [n for n in fx.names() if n not in placed]
     sel = fx.selected()
     # nothing chosen yet (every launch): the first effect is open. Now that
     # it is on show it is held by name like any other, or dragging its own
@@ -148,10 +172,18 @@ def page(panel, dt: float) -> None:
         # moved under the hand (a preset on a desk button, an undo)
         moved = _dragged(panel)
         if moved is not None:
-            _drop(panel, fx, moved, drop[0])
+            _drop(panel, fx, moved, drop[0], placed)
             sel = fx.selected()
     if not _in_flight():
         panel._fx_drag = None
+    # plan 30 D2: then the placed effects, three to a row like the chain's
+    # grid, each saying where it sits
+    for k, name in enumerate([n for n in fx.names() if n in placed]):
+        if k % CHIPS_PER_ROW:
+            imgui.same_line()
+        label = fx.specs[name].label + (" !" if _error(chain, fx, name) else "")
+        _chip(panel, fx, name, label, w, name == sel, index=-1, last=False,
+              place=placed[name], dormant=dormant.get(name))
 
     if sel is None:
         return
@@ -171,7 +203,9 @@ def strip(panel, sel: str) -> None:
         return
     spec = fx.specs[sel]
     pre = f"fx.{sel}"
-    _strip_header(panel, fx, sel)
+    # plan 30 D2: a placed effect's title hover says where it sits — read
+    # here, so the GRAPH page's side column says it too
+    _strip_header(panel, fx, sel, _placed(panel, fx).get(sel))
     if spec.tip:
         imgui.push_style_color(imgui.Col_.text, ui.FAINT)
         imgui.text_wrapped(spec.tip)
@@ -262,16 +296,18 @@ def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, lis
     return rows
 
 
-def _strip_header(panel, fx, name: str) -> None:
+def _strip_header(panel, fx, name: str, place: str | None = None) -> None:
     """The open strip's title, and at the right end of the same line where
     the effect goes: ONTO and a chip per target — frame, faces — the lit
     one where it runs. A chip click is Param.set on `fx.<name>.target`
     (structure, not modulatable: one undo step by itself, as the map chips
     are); each chip's right-click is the param's menu. The file name and
     the order are the title's hover. A registry from before plan 20 has no
-    target: the title is the plain section it was."""
+    target: the title is the plain section it was. A placed effect's
+    hover says where it sits (`place`, plan 30 D2) in place of its order,
+    which means nothing off the chain."""
     spec = fx.specs[name]
-    note = f"{spec.name}.glsl · #{fx.values[name]['order']}"
+    note = f"{spec.name}.glsl · " + (place or f"#{fx.values[name]['order']}")
     p = panel.reg.get(f"fx.{name}.target")
     if p is None:
         panel._section(spec.label.lower(), note=note)
@@ -305,14 +341,59 @@ def _faint(text: str) -> None:
     imgui.pop_style_color()
 
 
-def _status(fx, target: int | None = None) -> str:
+def _status(fx, target: int | None = None, placed=(), dormant=()) -> str:
     """What runs, as a status line says it: the chain's labels in order —
     all of it, or one target's — or why there is none. It reads what runs
-    (the effective `fx.on`), as `why_idle` does."""
+    (the effective `fx.on`), as `why_idle` does.
+
+    Plan 30 D2: `placed`, the effects the preset's graph puts on an edge,
+    run on the frame but not in its chain: they are left out of the
+    labels and counted after them ("Acid → Palette · 1 placed"; "nothing
+    in the chain · 1 placed"). The count is of the placed effects that
+    run: switched on (in `chain`), aimed at the frame, and not `dormant`
+    in the built graph (`Graph.dormant`: its node is not there this
+    frame). An effect placed and aimed at the faces runs in the faces'
+    chain (`render.face_fx`), so the faces' row lists it as before and
+    the frame's count leaves it out. With none placed the line is as it
+    was."""
     if not fx.on:
         return "bypassed"
     running = fx.chain(target)
-    return " → ".join(fx.specs[n].label for n in running) if running else "nothing on"
+    if target == FACES:
+        placed = ()
+    out = [n for n in running if n not in placed]
+    words = " → ".join(fx.specs[n].label for n in out) if out else "nothing on"
+    k = len([n for n in running if n in placed and n not in dormant
+             and (target is not None or not _faces(fx, n))])
+    if k:
+        return f"{words if out else NO_CHAIN} · {k} {PLACED}"
+    return words
+
+
+def _placed(panel, fx) -> dict[str, str]:
+    """The loaded preset's placed effect instances this FxState holds →
+    where each sits (`graph.placed_chips`). `graph_now`: the Panel's view
+    of the preset's graph; a stand-in Panel without it, or no presets,
+    places nothing."""
+    now = getattr(panel, "graph_now", None)
+    try:
+        spec = now()[1] if now is not None else None
+    except (AttributeError, TypeError):     # a stand-in renderer or library: no graph
+        spec = None
+    return {n: w for n, w in placed_chips(spec).items() if n in fx.specs}
+
+
+def _dormant(panel) -> dict[str, str]:
+    """The built graph's dormant placed effects → why (`Graph.dormant`,
+    plan 30 D1); none with no renderer or no graph built yet."""
+    graph = getattr(getattr(panel, "renderer", None), "_graph", None)
+    return dict(getattr(graph, "dormant", None) or {})
+
+
+def placed_label(label: str, place: str, width: float) -> str:
+    """A placed chip's text: the effect's label and where it sits, cut to
+    `width` px (the whole of it is the chip's hover)."""
+    return ui.fit_text(f"{label} · {place}", width)
 
 
 def _chip_baseline() -> None:
@@ -439,12 +520,14 @@ def _dim(lo: imgui.ImVec2, hi: imgui.ImVec2) -> None:
         lo, hi, ui.u32(imgui.ImVec4(c.x, c.y, c.z, 1.0 - IDLE_ALPHA)))
 
 
-def _drop(panel, fx, moved: str, before: str | None) -> None:
+def _drop(panel, fx, moved: str, before: str | None, placed=()) -> None:
     """A chip was dropped: `moved` goes before `before` in the stack (None:
     to the end), and its strip opens. The orders are bases written through
     the registry — a scene-setter's write — under one pushed undo step,
-    pushed before the first write and only when something changes."""
-    names = fx.names()
+    pushed before the first write and only when something changes. The
+    stack is the chain's: a `placed` effect (plan 30 D2) is not in it, so
+    its order is never rewritten by a drop."""
+    names = [n for n in fx.names() if n not in placed]
     if moved not in names:              # its file went away while it was in the hand
         return
     if before != moved:                 # dropped on its own LED: where it is
@@ -513,7 +596,8 @@ def _drop_target(name: str, lo: imgui.ImVec2, hi: imgui.ImVec2,
 
 
 def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
-          index: int, last: bool) -> tuple[str | None] | None:
+          index: int, last: bool, place: str | None = None,
+          dormant: str | None = None) -> tuple[str | None] | None:
     """One effect's chip, `width` px in all: the LED, then the name.
 
     Two adjacent items rather than one over another (which needs imgui's
@@ -528,7 +612,14 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
     a drop moves is the name noted on the panel. Both parts take a drop,
     which is returned as a 1-tuple: the name the dragged chip goes before
     — this chip's — or None for the end, which the right half of the
-    `last` chip's name takes (its LED is "before it", like any other)."""
+    `last` chip's name takes (its LED is "before it", like any other).
+
+    `place` (plan 30 D2): the chip of an effect the preset's graph places
+    on an edge — not in the chain, so it is neither a drag source nor a
+    drop target, and always returns None. Its name is followed by `place`
+    (or "on the faces", where an effect aimed at them runs), cut to the
+    chip; the hover has it whole, why it does not drag, and `dormant`
+    (why it runs nowhere this frame) when the built graph says so."""
     p = panel.reg[f"fx.{name}.on"]
     on = bool(fx.values[name]["on"])
     faces = _faces(fx, name)
@@ -540,7 +631,7 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
         p.toggle()                  # Param.set on the base: a scene-setter's write
     r0, r1 = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     edge = imgui.ImVec2(r0.x + width, r1.y)             # the whole chip's far corner
-    drop = _drop_target(name, r0, edge)
+    drop = _drop_target(name, r0, edge) if place is None else None
     c = imgui.ImVec2((r0.x + r1.x) / 2, (r0.y + r1.y) / 2)
     if faces:
         # aimed at the faces: a diamond, filled while on and outlined while
@@ -564,10 +655,18 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
 
     # the name: opens the strip, and carries the modulation dot
     imgui.same_line(0, LED_GAP)
+    name_w = max(1.0, width - h - LED_GAP)
+    hover = None
+    if place is not None:
+        said = ON_FACES if faces else place
+        label = placed_label(label, said, name_w - 2 * ui.CHIP_PAD.x)
+        hover = (f"placed {place}, aimed at the faces: it runs in the faces' chain"
+                 if faces else f"placed {place}")
+        hover += f"\n{PLACED_TIP}" + (f"\ndormant: {dormant}" if dormant else "")
     if ui.lit_chip(f"{label}##chip.{p.id}", on, ui.TEXT if open_ else None,
-                   imgui.ImVec2(max(1.0, width - h - LED_GAP), 0)):
+                   imgui.ImVec2(name_w, 0)):
         fx.select(name)
-    if imgui.begin_drag_drop_source():
+    if place is None and imgui.begin_drag_drop_source():
         imgui.set_drag_drop_payload_py_id(DRAG, index)
         panel._fx_drag = name                           # what a drop moves: the name
         imgui.text(label)                               # what is in the hand
@@ -579,8 +678,13 @@ def _chip(panel, fx, name: str, label: str, width: float, open_: bool, *,
         # item is never its own drop target, so this is the one place it
         # would do nothing
         fx.select(name)
-    drop = _drop_target(name, r0, edge, end=last) or drop
-    panel._tip(p, (lambda: f"{p.tip}\n{FACES_TIP}" if p.tip else FACES_TIP) if faces else None)
+    if place is None:
+        drop = _drop_target(name, r0, edge, end=last) or drop
+    if hover is not None:
+        panel._tip(p, lambda: f"{hover}\n{p.tip}" if p.tip else hover)
+    else:
+        panel._tip(p, (lambda: f"{p.tip}\n{FACES_TIP}" if p.tip else FACES_TIP)
+                   if faces else None)
     panel._ctx(p, key=".chip")
     panel._learn_frame(p)
     panel._mod_dot(p)
