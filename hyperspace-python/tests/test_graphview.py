@@ -533,7 +533,8 @@ def test_undoing_a_load_puts_the_earlier_layout_back(tmp_path):
 
 
 def test_a_tidy_is_one_undo_step(tmp_path):
-    """Tidy forgets both maps' positions as one step; ⌘Z puts them back."""
+    """Tidy forgets both maps' positions as one step; ⌘Z puts them back;
+    ⇧⌘Z tidies both again."""
     from types import SimpleNamespace
 
     from hyperspace.library import PRESETS
@@ -550,3 +551,7 @@ def test_a_tidy_is_one_undo_step(tmp_path):
     assert r.undo.undo() and r.undo.status.endswith("tidy the graph")
     assert presets.layout == {"render:shape": [40, 80]} and pr.layout == {"lfo.1": [0, 10]}
     assert lib.is_dirty(PRESETS)            # the positions are still not saved
+    settle(r)
+    assert r.undo.redo() and r.undo.status.endswith("tidy the graph")
+    assert presets.layout == {} and pr.layout == {}     # both maps tidied again
+    assert not lib.is_dirty(PRESETS)        # (the saved preset holds no positions either)
