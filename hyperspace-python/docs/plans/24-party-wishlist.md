@@ -23,6 +23,14 @@ built: the party fixes are [`24-party-fixes.md`](24-party-fixes.md), the
 render graph [`26-render-graph.md`](26-render-graph.md) and the device
 registry [`27-device-registry.md`](27-device-registry.md).)
 
+(2026-10-16: the next round is designed. The node editor is
+[`28-node-editor.md`](28-node-editor.md), N1–N4 in one plan with
+modifiers in the preset; the palette's "sync" became **shader nodes**,
+[`30-shader-nodes.md`](30-shader-nodes.md): every effect a bitmap-in,
+bitmap-out node placeable anywhere in the render graph, the palette the
+first one moved. The desk and the faders are in Dylan's hands and are
+not in either plan.)
+
 ## Render graph design decisions (owner, 2026-10-12)
 
 **Hands, and any geometry, are drawn either inside the scene or as a
