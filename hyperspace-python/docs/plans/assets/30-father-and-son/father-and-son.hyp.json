@@ -1,0 +1,18 @@
+{
+ "schema": "hyperspace.project/2",
+ "name": "father and son",
+ "note": "Boards of Canada, Father And Son (Inferno, 2026), 3:25, ~72 BPM. F1-F8 are the cues in song order, so the APC40 QUANT button is GO (F1-F8 jump to a cue). The cue sheet is docs/plans/30-father-and-son.md.",
+ "startup": "TRACER",
+ "bank": [
+  "TRACER",
+  "TUMBLE",
+  "WAKE",
+  "HEX ENGINE",
+  "NOITA",
+  "INVERSE HALO",
+  "FIELD",
+  "TRACER"
+ ],
+ "session": {},
+ "modules": {}
+}
