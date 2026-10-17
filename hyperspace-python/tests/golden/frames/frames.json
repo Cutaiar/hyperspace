@@ -7918,8 +7918,8 @@
    "preset": "palette-hands",
    "hands": "present",
    "state": "scene+hands+through",
-   "route": "SCENE+HANDS",
-   "hands_over": false,
+   "route": "SCENE",
+   "hands_over": true,
    "size": [
     960,
     600
@@ -7970,8 +7970,8 @@
    "preset": "palette-hands",
    "hands": "present",
    "state": "hands+through",
-   "route": "HANDS",
-   "hands_over": false,
+   "route": "none",
+   "hands_over": true,
    "size": [
     960,
     600

@@ -1621,6 +1621,11 @@ class Panel:
             fx_on = bool(r.fx.active())
         except Exception:  # noqa: BLE001 — no renderer, or a stand-in
             fx_on = False
+        # plan 30 D1: as the renderer drew it — a placed effect bends no
+        # pipeline (`stats["fx_on"]` leaves it out)
+        drawn = (getattr(r, "stats", None) or {}).get("fx_on")
+        if isinstance(drawn, bool):
+            fx_on = fx_on and drawn
         visible = bool((getattr(r, "stats", None) or {}).get("layer", False))
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)

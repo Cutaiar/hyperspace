@@ -80,6 +80,9 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
         ({"file": "palette", "into": "teapot"},
          "palette into 'teapot' — this build places into history, output.1 …, or an effect"),
         ({"file": "palette", "after": 3}, "palette after 3 — a node's name in quotes"),
+        ({"file": "palette", "after": None}, "palette after None — a node's name in quotes"),
+        ({"file": "palette", "instance": 2, "into": None},
+         "palette.2 into None — a node's name in quotes"),
         ({"file": "palette", "after": "output.0"}, "palette after 'output.0' — this build"),
         ({"file": "palette", "after": "hands.1"}, "palette after 'hands.1' — this build"),
         ({"file": "palette", "into": "scene"},
@@ -472,3 +475,82 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     plain = rig(ctx, effects=(), hands=False, echoes=True)
     want = run(ctx, plain, views(ctx, S()), frames=3)[0]
     assert not np.array_equal(got, want)
+
+
+def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
+    """An output in another context (a presenter: the projector and the
+    glass on the rig, `app._open_presenters`) gets what a target view
+    shows: with the palette after the hands its hand-off's hands are the
+    palette's folded texture, not the Ghost's; with the layer drawn by
+    hands 2, folded from that Ghost at its opacity; with the palette into
+    output 2, output 2's hand-off frame is the folded one and output 1 is
+    byte for byte the frame without it."""
+    import numpy as np
+    from test_outputs import H, W, rig, run, views
+
+    from hyperspace.ghost import GhostState
+
+    r = rig(ctx, effects=(), alpha=0.7)
+    _palette(r)
+    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    pv = View(S(), (W, H), presenter=object())
+    run(ctx, r, [views(ctx, S())[0], pv], frames=2)
+    assert r._graph.nodes["output.2"].inputs["hands"] is r._graph.nodes["palette"]
+    ho = pv.handoff
+    assert ho.hands is not None and ho.hands is not r.ghost.tex
+    assert any(ho.hands is t for t in r.fx._tex)              # the held, folded picture
+    assert ho.alpha == pytest.approx(0.7)
+    # the layer made by hands 2: that Ghost's picture folded, its opacity
+    r = rig(ctx, effects=())
+    _palette(r)
+    r.ghost_states = {"ghost.2": GhostState(on=True, alpha=0.25)}
+    r.wiring = G.Wiring(hands="scene", extra=(G.HandsAt(2),),
+                        placed=(G.EffectAt("palette", 1, after="hands.2"),))
+    calls = []
+    real = r.fx.run_one
+
+    def run_one(name, src, dst, t, **kw):
+        calls.append(src)
+        real(name, src, dst, t, **kw)
+
+    r.fx.run_one = run_one
+    pv = View(S(scene=False), (W, H), presenter=object())
+    run(ctx, r, [views(ctx, S())[0], pv], frames=2)
+    g2 = r.ghost_of("ghost.2")
+    from types import SimpleNamespace as NS
+    assert r._graph.nodes["palette"].ghost(NS(r=r)) is g2
+    assert calls and all(src is g2.tex for src in calls)
+    assert pv.handoff.hands is not None and pv.handoff.hands not in (g2.tex, r.ghost.tex)
+    assert pv.handoff.alpha == pytest.approx(0.25)
+
+    # into output 2, output 2 a presenter
+    def frame(placed: bool):
+        r = rig(ctx, effects=("warp",), hands=False)
+        if placed:
+            _palette(r)
+            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+        pv = View(S(), (W, H), presenter=object())
+        return r, run(ctx, r, [views(ctx, S())[0], pv], frames=2)[0], pv
+
+    plain, a1, pa = frame(False)
+    r, b1, pb = frame(True)
+    assert np.array_equal(a1, b1)
+    assert pb.handoff.frame is not None and any(pb.handoff.frame is t for t in r.fx._tex)
+    assert pa.handoff.frame is not None and not any(pa.handoff.frame is t
+                                                    for t in plain.fx._tex)
+
+
+def test_a_placed_effect_alone_bends_no_pipeline(ctx):
+    """With only a placed effect on, `fx_on` is off: a through output
+    stands down for the scene's pipeline (no SCENE+HANDS run, no second
+    frame texture), no chain runs — and the placed effect still runs."""
+    from test_outputs import rig, run, views
+
+    r = rig(ctx, effects=())
+    _palette(r)
+    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    run(ctx, r, views(ctx, S(), S(through=True)), frames=2)
+    assert r.fx.active() and r.stats["fx_on"] is False
+    assert r.stats["chain_runs"] == 0 and r.stats["effects"] == ["palette"]
+    assert r.stats["routes"] == [(SCENE, True), (SCENE, True)]
+    assert SCENE_HANDS not in r.stats["pipelines"]

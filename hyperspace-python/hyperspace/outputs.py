@@ -115,7 +115,7 @@ class Handoff:
     this order:
 
     1. clears its framebuffer to (0, 0, 0, `bg_alpha`);
-    2. draws `frame` (RGBA8, `frame_size`, premultiplied, LINEAR) into
+    2. draws `frame` (RGBA8 or half float, below; `frame_size`, premultiplied, LINEAR) into
        `rect` (in its framebuffer, the view's `viewport` included) — 1:1 when `rect`'s size is `frame_size`, else scaled; with
        `bg_alpha` 1 it writes alpha 1. `frame` None: the ground only;
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
@@ -133,7 +133,14 @@ class Handoff:
 
     The textures are valid until the next `draw_outputs`; the renderer's
     context must be flushed (`glFlush`) before the presenter's samples
-    them (plan §1: otherwise it sees last frame's)."""
+    them (plan §1: otherwise it sees last frame's).
+
+    Plan 30 D1: `frame` or `hands` may be a half-float texture of the
+    effects' pool rather than RGBA8 — an output's frame through an effect
+    placed into it, the hands' layer through one placed after the hands.
+    The presenter wraps every name as "f1" (`Presenter._ext`); that
+    declares the wrapper's dtype only, and a shader samples the texture
+    by its name whatever its real format, so the picture is right."""
 
     frame: moderngl.Texture | None
     frame_size: tuple[int, int]

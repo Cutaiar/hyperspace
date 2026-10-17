@@ -411,14 +411,15 @@ def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
         raise GraphError("effect node: names no file")
     file, n = e["file"], _instance(e)
     after, into = e.get("after"), e.get("into")
-    if after is None and into is None:
+    if "after" not in e and "into" not in e:
         return EffectAt(file, n), None
     EffectAt(file, max(n, 2))                 # the file's name is the file's, placed or not
     name = instance_name(file, n)
-    if after is not None and into is not None:
+    if "after" in e and "into" in e:
         why = f"{name} after {after!r} and into {into!r} at once — one of the two"
     else:
-        key, where = ("after", after) if after is not None else ("into", into)
+        # a key present is a placement: an explicit null is not a name
+        key, where = ("after", after) if "after" in e else ("into", into)
         why = placement_error(name, key, where)
         if why is None:
             return EffectAt(file, n, after=after, into=into), None
@@ -1503,7 +1504,9 @@ class Capture(Node):
         src = self.inputs["image"].image(frame)
         with frame.timed(self.name):
             r.lookback.capture(src, r.scene.fbo)
-        if frame.fx_on and not frame.stats["chain_runs"]:
+        # (plan 30 D1: any effect on, a placed one too — its clock moves
+        # once a frame whether or not its edge had a picture to fold)
+        if (frame.fx_on or _chain_now(frame)) and not frame.stats["chain_runs"]:
             r.fx.state.advance_to(frame.t)
 
 
@@ -1581,13 +1584,14 @@ def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
 # ---------------------------------------------------------------- fx
 
 def _chain_now(frame: Frame) -> frozenset[str]:
-    """The effects the frame's chain runs this frame (`FxState.chain` for
-    the frame's target), asked once a frame: none while `fx_on` is off."""
+    """The effects on this frame (`FxState.chain` for the frame's target:
+    none while the stack is bypassed or at mix 0), asked once a frame —
+    the runs' and (plan 30 D1) the placed ones', which `frame.fx_on`
+    leaves out."""
     got = frame.data.get("fx#chain")
     if got is None:
         fx = frame.r.fx
-        got = frame.data["fx#chain"] = (
-            frozenset(fx.state.chain(getattr(fx, "target", 0))) if frame.fx_on else frozenset())
+        got = frame.data["fx#chain"] = frozenset(fx.state.chain(getattr(fx, "target", 0)))
     return got
 
 
@@ -1689,6 +1693,16 @@ class Effect(Node):
     def depth(self, frame: Frame) -> moderngl.Texture | None:
         src = self.inputs["image"]
         return src.depth(frame) if src is not None else None
+
+    def ghost(self, frame: Frame):
+        """The `Ghost` whose layer this effect folds (its source's, through
+        any effects between): an output laying it hands a presenter that
+        Ghost's opacity — and its own layer's, for `hands.2`."""
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            src = src.inputs["image"]
+        get = getattr(src, "ghost", None)
+        return get(frame) if get is not None else frame.r.ghost
 
     def _made(self, frame: Frame) -> moderngl.Texture | None:
         """The folded texture of a source that makes one (`makes`): made
@@ -1989,6 +2003,9 @@ class Output(Node):
             ghosts = {}
             if laid is not None and hasattr(laid[0], "ghost"):
                 ghosts["ghost"] = laid[0].ghost(frame)
+            if laid is not None and isinstance(laid[0], Effect):
+                # D1: a presenter lays the folded layer, not the Ghost's own
+                ghosts["hands_tex"] = laid[0].image(frame)
             if ro is not None and hasattr(src, "ghost"):
                 ghosts["readout_ghost"] = src.ghost(frame)
             frames = frame.frames
@@ -2040,6 +2057,9 @@ class Graph:
         self.effects: tuple[str, ...] = ()       # the effect instances of its runs (D0)
         self.dormant: dict[str, str] = {}        # D1: placed effect → why it has no node
         self.notes: list[str] = []               # D1: placements refused at build
+        # D1: the effects placed out of the runs (dormant ones included):
+        # the renderer's `fx_on` ("an effect bends a pipeline") leaves them out
+        self.placed_names: frozenset[str] = frozenset()
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
 
@@ -2292,6 +2312,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
     g.effects = tuple(effects)                     # plan 30 D0: what its runs hold
+    g.placed_names = frozenset(out_of_run)         # plan 30 D1: … but these
     points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
