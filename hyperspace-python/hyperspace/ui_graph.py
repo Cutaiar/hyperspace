@@ -10,7 +10,11 @@ cable's thickness follows its reading; a dormant one is faint. A node
 shows only its patched ports while it is collapsed — the page's
 **patched only** chip collapses every node, a node's own chip flips it —
 and an expanded node folds its port groups (the hands' axes, the desk's
-knobs) one by one. Hovering a cable says its reading and its depth; a
+knobs) one by one. A desk template's node (plan 28 N5) is a subgraph:
+collapsed it lists its mapped controls and draws none of its rows; its
+**+** opens it and its rows are cables (`is_open`, `drawn_cable`). A desk
+layer that is down (SHIFT not latched, or latched) draws its node and its
+ports faint. Hovering a cable says its reading and its depth; a
 port, its reading; a device, its status. Selecting a route shows its
 ROUTING row (`ui_routing._row`, the same widgets, the same table) beside
 the canvas — below it while the page is narrow — and selecting an effect's
@@ -75,6 +79,7 @@ from . import graph as rgraph
 from . import graphview, modifiers, ui, ui_fx, ui_routing, undo
 from .bands import CEIL
 from .graph import Effect
+from .library import LibraryError
 from .view import RED as RED_RGB
 
 STATE = "_graph"         # the panel's attribute: survives a reload of this module
@@ -204,11 +209,34 @@ def view_of(panel) -> graphview.View | None:
         bands = (getattr(router, "labels", {}).get("lane")
                  or (getattr(chain, "band_names", None) if chain is not None else None))
         st["view"] = graphview.build(table, reg, router, devices, rgraph, spec,
-                                     lanes=lanes, bands=bands)
+                                     lanes=lanes, bands=bands, template=template_of(panel))
         st["key"] = k
     else:
         graphview.refresh(st["view"], reg, router, lanes)
     return st["view"]
+
+
+def template_of(panel):
+    """The loaded preset's desk template (plan 24 C3) as ``(name, rows)`` —
+    the rows as the load expanded them, the ones a save compacts against
+    (`preset.Presets._desk_part`), else the library's file — or None when
+    the preset names none (every factory preset). Read when the view is
+    rebuilt, not each frame: a load moves the table's rows, so the view's
+    key moves with it."""
+    presets = getattr(getattr(panel, "library", None), "presets", None)
+    if presets is None or not hasattr(presets, "template_of_loaded"):
+        return None
+    try:
+        ref = presets.template_of_loaded()
+        if not ref:
+            return None
+        at_load = getattr(presets, "template_at_load", None)   # (none before a reload)
+        held = at_load() if at_load is not None else None
+        if held is not None and held[0] == ref:
+            return ref, list(held[1])
+        return ref, list(presets.lib.desk_template(ref).get("desk") or [])
+    except LibraryError:            # a template that will not read: the overrides alone
+        return None
 
 
 def expanded(st: dict, nid: str) -> bool:
@@ -216,8 +244,40 @@ def expanded(st: dict, nid: str) -> bool:
     return (not st["patched_only"]) != (nid in st["flip"])
 
 
+def is_open(st: dict, nid: str) -> bool:
+    """Is subgraph node `nid` (a desk template's, plan 28 N5) open — its
+    rows drawn as cables? Each one starts collapsed: one node whose ports
+    are its mapped controls."""
+    return nid in st.setdefault("open", set())
+
+
+def toggle_open(st: dict, nid: str) -> None:
+    """Open a collapsed subgraph node, or collapse an open one."""
+    st.setdefault("open", set())
+    st["open"] ^= {nid}
+
+
+def drawn_cable(st: dict, c: graphview.VCable) -> bool:
+    """Is cable `c` drawn this frame as far as subgraphs go: one inside a
+    collapsed subgraph node is not."""
+    return not c.inside or is_open(st, c.inside)
+
+
+def hidden_by(st: dict, view: graphview.View, pin: str) -> str:
+    """The hover's extra line for a pin whose cables are inside a collapsed
+    subgraph (a param's `base` stub a desk template sets): which node holds
+    them; "" when none is hidden."""
+    held = sorted({c.inside for c in view.cables
+                   if c.dst_port == pin and c.inside and not is_open(st, c.inside)})
+    names = [view.node(nid).label if view.node(nid) is not None else nid for nid in held]
+    return "".join(f"\nset by desk {n} (collapsed: + shows it)" for n in names)
+
+
 def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
-    """The ports node `n` draws (`graphview.visible` with this page's state)."""
+    """The ports node `n` draws (`graphview.visible` with this page's state);
+    a desk template's node shows every mapped control, open or not."""
+    if n.kind == graphview.TEMPLATE:
+        return list(n.ports)
     return graphview.visible(n, expanded(st, n.id), st["folds"])
 
 
@@ -303,7 +363,9 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         forget(panel, view)
     pre, show = _layouts(panel)
     stored = {**(show or {}), **(pre or {})}
-    auto = graphview.auto_layout(view, stored, lambda nid: expanded(st, nid), st["folds"])
+    auto = graphview.auto_layout(
+        view, stored, lambda nid: expanded(st, nid) or nid.startswith(f"{graphview.TEMPLATE}:"),
+        st["folds"])
     applied = st["applied"]
     for n in view.nodes:
         xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
@@ -343,7 +405,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     for n in view.nodes:
         _node(st, n, drawn)
     for c in view.cables:
-        if c.src_port in drawn and c.dst_port in drawn:
+        if c.src_port in drawn and c.dst_port in drawn and drawn_cable(st, c):
             _cable(st, c)
     _create(panel, st, view)
     _delete(panel, st, view)
@@ -380,13 +442,19 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
-    imgui.push_style_color(imgui.Col_.text, ui.FAINT if n.grey else ui.TEXT)
+    # a desk layer that is down (plan 28 N5) reads like a lost device: faint
+    imgui.push_style_color(imgui.Col_.text, ui.FAINT if n.grey or not n.up else ui.TEXT)
     imgui.text(ui.fit_text(n.label, NODE_W - 24))
     imgui.pop_style_color()
     imgui.same_line(NODE_W - 12)
-    full = expanded(st, n.id)
-    if imgui.small_button("-" if full else "+"):
-        st["flip"] ^= {n.id}
+    if n.kind == graphview.TEMPLATE:          # a subgraph: its button opens it
+        full = True
+        if imgui.small_button("-" if is_open(st, n.id) else "+"):
+            toggle_open(st, n.id)
+    else:
+        full = expanded(st, n.id)
+        if imgui.small_button("-" if full else "+"):
+            st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
     many = graphview.grouped(n, full)
@@ -409,7 +477,8 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
 def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
     text = ui.fit_text(port.name, NODE_W - 4 * PIN - 40)
     if port.direction == graphview.OUT:
-        imgui.text_colored(ui.DIM, text)
+        # a desk layer's port (plan 28 N5): lit while its layer is up, faint while down
+        imgui.text_colored(ui.FAINT if not port.up else ui.TEXT if port.layer else ui.DIM, text)
         imgui.same_line(NODE_W - PIN)
         _pin(st, port.pins[0], ed.PinKind.output, port, "", drawn)
         return
@@ -471,6 +540,7 @@ def _hover(st: dict, view: graphview.View) -> None:
             stub = names.get(pin, "").partition(":")[0] if port.param else ""
             tip = (f"{port.param or port.addr or port.id}{'  ' + stub if stub else ''}\n"
                    f"{port.name}: {_said(port.live)}")
+            tip += hidden_by(st, view, names.get(pin, ""))
     elif node:
         n = view.node(names.get(node, "")[2:])
         if n is not None and n.status:

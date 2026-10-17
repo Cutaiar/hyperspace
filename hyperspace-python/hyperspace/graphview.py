@@ -16,9 +16,13 @@ this one read the same rows, so an edit on either is on both next frame.
 **Nodes** (`VNode.kind`, the design's §3):
 
 - ``device`` — one per listed device, by role (``device:<role>``), grey
-  while it is not connected (its cables dormant); ``source`` — a scheme
-  no listed device publishes (the keys, a role this rig lacks), so every
-  row's source has a port; ``analyzer`` — one port per band lane;
+  while it is not connected (its cables dormant); a device with `layers`
+  one per layer (plan 28 N5: *apc40* and *apc40 (SHIFT)*,
+  ``device:<role>/global``, `device_nodes`); a role this rig lists no
+  device for, a grey placeholder of that id (its cables waiting);
+  ``template`` — the loaded preset's desk template (``template:<name>``),
+  a subgraph of the preset-layer rows still its own; ``source`` — the
+  keys, which are no device; ``analyzer`` — one port per band lane;
 - ``lfo`` — each LFO (``lfo.<n>``), its knobs (`lfo.<n>.*`) as input
   ports and its lane as the output; ``modifier`` (``mod.<n>``, plan 28
   N1) — its inputs, its params, its lane; ``macro`` (``macro.<n>``) — a
@@ -99,7 +103,7 @@ IMAGE, GEOMETRY, MASK = rgraph.IMAGE, rgraph.GEOMETRY, rgraph.MASK
 TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK)
 
 KINDS = ("device", "source", "analyzer", "lfo", "modifier", "macro", "group", "render",
-         "output")
+         "output", "template")
 CABLE_KINDS = ("route", "setter", "sub", "input", "render")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
@@ -137,6 +141,11 @@ class VPort:
     param: str | None = None
     addr: str | None = None
     bipolar: bool = False        # a source centred on its rest (a hand's roll, a stick)
+    # plan 28 N5: the device layer a desk port sends on ("" every layer: an
+    # invariant control, any other device's port) and whether that layer is
+    # up this frame (`refresh`: the table's latch, `Bindings.layer_of`)
+    layer: str = ""
+    up: bool = True
 
     def __post_init__(self):
         if not self.pins:
@@ -159,6 +168,14 @@ class VNode:
     status: str = ""
     ref: Any = None
     column: int = 0
+    # plan 28 N5: a layered device's node is one layer's (`layer`, of the
+    # device of `role`), lit while that layer is up (`up`, `refresh`); a
+    # `placeholder` is a role this rig lists no device for (grey, its
+    # cables waiting)
+    layer: str = ""
+    role: str = ""
+    up: bool = True
+    placeholder: bool = False
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -188,6 +205,10 @@ class VCable:
     depth: float | None = None
     label: str = ""
     addr: str | None = None
+    # plan 28 N5: the subgraph node (a desk template's, ``template:<name>``)
+    # the cable is inside of: the page draws it only while that node is
+    # open (ui_graph.is_open); "" for every other cable
+    inside: str = ""
 
 
 @dataclass
@@ -385,8 +406,8 @@ def device_node(d) -> tuple[VNode, list]:
     """One listed device as a node (``device:<role>``) and the source ports
     it draws (`Device.sources`, value and trigger lanes; a point cloud is
     no lane, plan 27 B4), in their port groups. Grey while not connected.
-    The one place a device becomes a node: plan 28 N5 makes a device with
-    `layers` one node per layer here."""
+    The base of `device_nodes` (plan 28 N5), which makes a device with
+    `layers` one node per layer from it."""
     role = str(getattr(d, "role", "") or "")
     try:
         status = str(d.status)
@@ -401,18 +422,151 @@ def device_node(d) -> tuple[VNode, list]:
     return node, ports
 
 
+# ---------------------------------------------------------------- controllers (plan 28 N5)
+#
+# A device with `layers` (the first MIDI role's APC40: "preset", "global")
+# is **one node per layer** (decision 12): *apc40* — the preset layer's
+# rows and the invariant ones (SHIFT, the crossfader, the bank pads,
+# transport, tap: `Bindings.is_invariant`), whose controls are ports on this
+# node only — and *apc40 (SHIFT)* (``device:<role>/global``), the global
+# layer's rows. Each port is lit while its layer is up — the table's latch,
+# the one `MidiIO` reads (`Bindings.layer_of(role)`) — and each row's cable
+# leaves the node of the layer it belongs to. Presentation only: no row,
+# no home, no layer changes here. A desk template the loaded preset names
+# (plan 24 C3) is one more node, ``template:<name>``, whose ports are its
+# mapped controls: the live preset-layer rows that are still the
+# template's hang off it (`VCable.inside`: the page draws them only while
+# the node is open); an override hangs off *apc40*. A row whose role this
+# rig lists no device for draws from a grey placeholder ``device:<role>``.
+
+PRESET_LAYER, GLOBAL_LAYER = "preset", "global"
+TEMPLATE = "template"
+# what a layer's node is called after the device's role ("apc40 (SHIFT)")
+LAYER_LABEL = {GLOBAL_LAYER: "SHIFT"}
+# the desk's port groups (`Port.group` is the profile's control kind), in
+# the order a desk node lists them; the invariant controls first, as their
+# own group, on the device's first node only
+INVARIANT = "invariant"
+DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "clip grid",
+               "buttons")
+# a role-less row's role when no listed device publishes its scheme: the
+# rig's usual name for the kind behind it (config.py's example list); a
+# scheme not here is a role of its own (an OSC device's scheme is its role)
+SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
+               "cc": "apc40", "note": "apc40", "pitch": "apc40"}
+# schemes that are no device's: the keyboard, the built-in lanes, the modifiers
+NO_DEVICE = ("key", "lane", "lfo", modmod.SCHEME)
+PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
+
+
+def desk_group(group: str, label: str, invariant: bool = False) -> str:
+    """A desk port's group on its node: ``invariant`` for an invariant
+    control; else the profile's control kind (`Port.group`) as a plural,
+    the knobs split by Akai's name ("track knob 3", "device knob 1")."""
+    if invariant:
+        return INVARIANT
+    if group == "knob":
+        low = label.lower()
+        return ("track knobs" if low.startswith("track knob") else
+                "device knobs" if low.startswith("device knob") else "knobs")
+    return {"fader": "faders", "grid": "clip grid", "button": "buttons"}.get(group, group)
+
+
+def hand_group(port) -> str:
+    """A hands port's group (the design's axes, pinches, grab, dance):
+    `hands/device.py`'s groups, its ``switches`` told apart by address —
+    a grab is ``<side>.grab``, every other switch a pinch."""
+    g = getattr(port, "group", "") or ""
+    if g == "switches":
+        return "grab" if str(getattr(port, "name", "")).endswith(".grab") else "pinches"
+    return g
+
+
+def _invariant(table, addr: str) -> bool:
+    """Is the control `addr` names invariant on its desk (SHIFT, or the
+    control of an enabled layer-None row)? False for anything else."""
+    fn = getattr(table, "is_invariant", None)
+    if fn is None:
+        return False
+    try:
+        return bool(fn(Binding(addr, "")))
+    except Exception:  # noqa: BLE001 — a malformed address is no control
+        return False
+
+
+def _desk_order(rows: list) -> list:
+    rank = {g: i for i, g in enumerate(DESK_GROUPS)}
+    return sorted(rows, key=lambda r: rank.get(r[1], len(rank)))     # stable: layout order
+
+
+def device_nodes(d, table=None) -> list[tuple[VNode, list]]:
+    """A listed device as its nodes, each with the ports it draws as
+    ``(Port, group, layer)``. A device with fewer than two `layers` is one
+    node (`device_node`); one with layers is a node per layer — the first
+    (``device:<role>``) every port, the invariant controls among them
+    (layer "": lit on every layer), the others (``device:<role>/<layer>``)
+    every port but the invariant controls. A desk's ports take
+    `desk_group`'s groups, the hands' `hand_group`'s."""
+    node, ports = device_node(d)
+    kind = getattr(d, "kind", "")
+    if kind == "hands":
+        return [(node, [(p, hand_group(p), "") for p in ports])]
+    if kind != "midi":
+        return [(node, [(p, p.group, "") for p in ports])]
+    try:
+        layers = tuple(getattr(d, "layers", ()) or ())
+    except Exception:  # noqa: BLE001
+        layers = ()
+    if len(layers) < 2:
+        return [(node, _desk_order([(p, desk_group(p.group, p.label), "") for p in ports]))]
+    inv = {p.address: _invariant(table, p.address) for p in ports}
+    node.layer, node.role = layers[0], node.label
+    out = [(node, _desk_order([(p, desk_group(p.group, p.label, inv[p.address]),
+                                "" if inv[p.address] else layers[0]) for p in ports]))]
+    for layer in layers[1:]:
+        n = VNode(f"{node.id}/{layer}", "device",
+                  f"{node.label} ({LAYER_LABEL.get(layer, layer)})", grey=node.grey,
+                  status=node.status, ref=d, layer=layer, role=node.label)
+        out.append((n, _desk_order([(p, desk_group(p.group, p.label), layer)
+                                    for p in ports if not inv[p.address]])))
+    return out
+
+
+def template_rows(template) -> tuple[str, list[Binding]] | None:
+    """The loaded preset's desk template — handed in as ``(name, its rows
+    as the load read them)`` — with its rows parsed, or None."""
+    if not template:
+        return None
+    name, rows = template
+    out = []
+    for r in rows or ():
+        try:
+            out.append(Binding.from_json(r))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return str(name), out
+
+
+def _row_key(b: Binding) -> tuple:
+    """What makes a live desk row the template's own (`preset.compact_desk`
+    writes no override for it): its control, target, op and value."""
+    return (b.source, b.target, b.op, float(b.value))
+
+
 def _port_type(kind: str) -> str:
     return TRIGGER if kind == TRIGGER else VALUE
 
 
 def build(table: Bindings, reg: Registry, router: Router | None = None, devices=None,
           render_graph: rgraph.Graph | None = None, spec=None, *, lanes=None,
-          bands: Iterable[str] | None = None) -> View:
+          bands: Iterable[str] | None = None, template=None) -> View:
     """The view of `table`, `reg`, `router`, the device registry `devices`
     and the render graph `render_graph` (the renderer's last), with the
     preset's graph `spec` kept on the view. `lanes` are the analyzer's
     lanes this frame, normalised (None: not live); `bands` their names
-    (else the Router's published ``lane`` labels)."""
+    (else the Router's published ``lane`` labels); `template` the loaded
+    preset's desk template as ``(name, rows)`` (plan 28 N5), None when it
+    names none."""
     view = View(spec=spec)
     nodes: dict[str, VNode] = {}
     src_pins: dict[tuple | str, str] = {}       # lane key → pin
@@ -442,11 +596,43 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
 
     # ---- the sources: devices, the analyzer, LFOs, modifiers ----
     by_scheme, midi_first = _device_schemes(devices)
+    # plan 28 N5: a layered device's nodes by role and layer, and each
+    # port's pin on them by (node id, address): the first layer's pins are
+    # ``out:<address>`` (so a drag or a Learn reads them as before), every
+    # other node's carry its tag (``out:<address>|global``)
+    layered: dict[str, dict[str, VNode]] = {}
+    lpins: dict[tuple[str, str], str] = {}
+
+    def add_layer_port(n: VNode, addr: str, name: str, kind: str, group: str,
+                       layer: str, bipolar: bool = False) -> str:
+        k = (n.id, addr)
+        if k in lpins:
+            return lpins[k]
+        first = n.kind == "device" and n.id == f"device:{n.role}"
+        if first:
+            pin = add_source(n, addr, name, kind, group, bipolar)
+            port = n.port(pin)
+            if port is not None:
+                port.layer = layer
+        else:
+            tag = n.layer if n.kind == "device" else TEMPLATE
+            pin = f"out:{addr}|{tag}"
+            add_port(n, VPort(pin, name, OUT, _port_type(kind), group, addr=addr,
+                              bipolar=bipolar, layer=layer))
+        lpins[k] = pin
+        return pin
+
     for d in (devices or ()):
-        node, ports = device_node(d)
-        n = add_node(node)
-        for p in ports:
-            add_source(n, p.address, p.label, p.kind, p.group, bool(getattr(p, "bipolar", False)))
+        for node, ports in device_nodes(d, table):
+            n = add_node(node)
+            if node.layer:
+                layered.setdefault(node.role, {})[node.layer] = n
+            for p, group, layer in ports:
+                bip = bool(getattr(p, "bipolar", False))
+                if node.layer:
+                    add_layer_port(n, p.address, p.label, p.kind, group, layer, bip)
+                else:
+                    add_source(n, p.address, p.label, p.kind, group, bip)
 
     labels = getattr(router, "labels", {}) if router is not None else {}
     band_names = list(bands) if bands is not None else list(labels.get("lane") or [])
@@ -489,15 +675,78 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             owner = nodes.get(f"device:{role}")
         if owner is None:
             d = by_scheme.get(scheme) or by_scheme.get(base)
-            if d is None and base in ("cc", "note", "pitch") and midi_first:
+            if d is None and base in ("cc", "note", "pitch") and midi_first and not at:
                 owner = nodes.get(f"device:{midi_first}")
             elif d is not None:
                 owner = nodes.get(f"device:{d.role}")
+        if owner is None and base not in NO_DEVICE:
+            # plan 28 N5, roles not serials (decision 11): a device this rig
+            # lists none for is a grey placeholder named by its role — the
+            # row's qualifier, else the desk's first role, else the kind's
+            # usual role — its cables dormant until a device of that role
+            # comes (the same id, so it takes the placeholder's place)
+            who = role if at and role else (
+                (getattr(table, "primary_role", lambda: "")() or SCHEME_ROLE[base])
+                if base in ("cc", "note", "pitch") else SCHEME_ROLE.get(base, base))
+            nid = f"device:{who}"
+            owner = nodes.get(nid) or add_node(VNode(nid, "device", who, grey=True,
+                                                     status=PLACEHOLDER_STATUS, role=who,
+                                                     placeholder=True))
         if owner is None:
             nid = f"source:{scheme}"
             owner = nodes.get(nid) or add_node(VNode(nid, "source", scheme, grey=True,
                                                      status="no device publishes it"))
         return add_source(owner, addr, addr.partition(":")[2] or addr)
+
+    # plan 28 N5: the loaded preset's desk template, and which live
+    # preset-layer rows are still its own (an override is not)
+    tmpl = template_rows(template)
+    tmpl_keys = {_row_key(t) for t in tmpl[1]} if tmpl else set()
+    tmpl_node: VNode | None = None
+    if tmpl is not None:
+        role = (getattr(table, "primary_role", lambda: "")() or midi_first
+                or SCHEME_ROLE["cc"])
+        dev = nodes.get(f"device:{role}")
+        tmpl_node = add_node(VNode(f"{TEMPLATE}:{tmpl[0]}", TEMPLATE, f"template {tmpl[0]}",
+                                   grey=dev is None or dev.grey, role=role,
+                                   layer=PRESET_LAYER,
+                                   status=f"desk template · {len(tmpl[1])} rows · + shows "
+                                          "them as cables; an edit is the preset's override"))
+        names = {p.addr: p.name for p in (dev.ports if dev is not None else ())}
+        groups = {p.addr: p.group for p in (dev.ports if dev is not None else ())}
+        for t in tmpl[1]:
+            add_layer_port(tmpl_node, t.source, f"{names.get(t.source, t.bare)} → {t.target}",
+                           TRIGGER if t.kind == "note" else VALUE,
+                           groups.get(t.source, ""), PRESET_LAYER)
+
+    def row_pin(b: Binding, shadowed: bool = False) -> tuple[str, str]:
+        """(the pin a desk row's cable leaves from, the subgraph it is
+        inside): the node of the layer it belongs to on a layered desk —
+        an invariant row (layer None) the first node's, a preset-layer row
+        still the template's the template node's — else `source_pin`. A
+        layered row `shadowed` by an invariant control (D6: it never acts)
+        leaves that control's port on the first node, so an invariant
+        control is a port there only."""
+        if not b.is_midi:
+            return source_pin(b.source), ""
+        role_of = getattr(table, "role_of", None)
+        role = (role_of(b) if role_of is not None else "") or midi_first or ""
+        mine = layered.get(role)
+        if tmpl_node is not None and b.layer == PRESET_LAYER and _row_key(b) in tmpl_keys \
+                and role == tmpl_node.role:
+            n, inside = tmpl_node, tmpl_node.id
+        elif mine is None:
+            return source_pin(b.source), ""
+        else:
+            layer = PRESET_LAYER if shadowed else (b.layer or PRESET_LAYER)
+            n = mine.get(layer) or mine[PRESET_LAYER]
+            inside = ""
+        pin = lpins.get((n.id, b.source))
+        if pin is None:
+            kind = TRIGGER if b.kind == "note" else VALUE
+            pin = add_layer_port(n, b.source, b.bare, kind, INVARIANT if shadowed else "",
+                                 "" if b.layer is None or shadowed else b.layer)
+        return pin, inside
 
     # ---- the render graph's nodes ----
     ctx = _Ctx()
@@ -607,15 +856,24 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         view.cables.append(VCable(cable_id(f"route:{b.source}>{b.target}"), src, dst,
                                   pin_type.get(src, VALUE), ref=b, kind="route", off=off,
                                   depth=depth, label=said, addr=b.source))
+    inv_rows = table.invariant_rows() if hasattr(table, "invariant_rows") else []
     for b in setters:
-        src = source_pin(b.source)
+        # a layered row on an invariant control never acts (D6)
+        shadowed = (b.is_midi and b.layer is not None and bool(inv_rows)
+                    and table.is_invariant(b, inv_rows))
+        src, inside = row_pin(b, shadowed)
         dst = f"{BASE}:{b.target}"
         p = reg.get(b.target)
         typ = TRIGGER if (b.op in TRIGGER_OPS or pin_type.get(src) == TRIGGER) else VALUE
         layer = f"  {b.layer} layer" if b.layer else ""
+        if inside:
+            layer += f"  (desk template {tmpl[0]})"
         view.cables.append(VCable(cable_id(f"set:{b.source}>{b.target}"), src, dst, typ,
-                                  ref=b, kind="setter", off=not b.enabled or p is None,
-                                  label=f"{b.op}{layer}", addr=b.source))
+                                  ref=b, kind="setter",
+                                  off=not b.enabled or p is None or shadowed,
+                                  label=f"{b.op}{layer}" + ("  (under an invariant control)"
+                                                            if shadowed else ""),
+                                  addr=b.source, inside=inside))
     keyed = {(b.source, b.target) for b in routes}
     for mid, m in sorted(macros.items(), key=lambda kv: _macro_n(kv[0])):
         src = f"bus:{mid}"
@@ -717,7 +975,13 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> Non
     rebuilds the view). Cheap: no structure changes."""
     table = getattr(router, "table", None) if router is not None else None
     cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
+    layer_of = getattr(table, "layer_of", None)
     for n in view.nodes:
+        if n.layer and layer_of is not None:      # plan 28 N5: the latch, read each frame
+            up = layer_of(n.role or None)
+            n.up = up == n.layer
+            for port in n.ports:
+                port.up = not port.layer or port.layer == up
         for port in n.ports:
             if port.addr is not None:
                 port.live = reading(router, port.addr, lanes)
@@ -736,8 +1000,8 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> Non
             c.depth, c.label = route_said(b, table, reg, (b.source, b.target) in cut)
         grey = False
         hit = view.owner(c.src_port)
-        if hit is not None and hit[0].grey:
-            grey = True
+        if hit is not None and (hit[0].grey or (hit[1] is not None and not hit[1].up)):
+            grey = True                  # a lost device, or a desk layer that is down
         c.dormant = c.off or grey or (c.kind != "sub" and c.live is None)
 
 
@@ -775,7 +1039,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
 # macros → render nodes → outputs); the render nodes spread over as many
 # columns as the render graph is deep, so its cables run left to right
 COLUMN = {"device": 0, "source": 0, "analyzer": 0, "lfo": 1, "modifier": 2, "macro": 3,
-          "group": 4, "render": 5}
+          "group": 4, "render": 5, "template": 0}
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
 HEAD_H = 34.0          # a node's title and padding
@@ -847,9 +1111,10 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
 def home(n: VNode) -> str:
     """Which layout map holds node `n`'s position: the preset's for what
     a preset holds (modifiers, macros, the render nodes, a performance
-    group's node), the show's for the rig (devices, sources, the
+    group's node, the desk template it names), the show's for the rig
+    (devices — a layered desk's every node, a placeholder — sources, the
     analyzer, LFOs, the outputs, a session group's node)."""
-    if n.kind in ("modifier", "macro", "render"):
+    if n.kind in ("modifier", "macro", "render", TEMPLATE):
         return PRESET
     if n.kind == "group":
         group = n.id.partition(":")[2]
@@ -917,6 +1182,7 @@ KEY_ROWS = "keys are the session's rows: map them on ROUTING"
 MOD_ONLY_ROUTE = "a modifier goes onto a route or a modifier's input"
 ROUTE_END = "a route's end moves to another param's mod"
 SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
+SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
 NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
 
@@ -1141,6 +1407,11 @@ class Edit:
         if p.id == SAVE_PARAM:
             return learnmod.SAVE_REFUSAL
         if Binding(addr, p.id).is_midi:
+            # plan 28 N5 (D5): the global layer is never a Learn target, so a
+            # drag from the SHIFT node is refused whatever the latch
+            port = self._port(src)
+            if port is not None and port.layer == GLOBAL_LAYER:
+                return SHIFT_NODE.format(addr=addr)
             why = learnmod.blocked(self.table, addr)
             if why == "invariant":
                 return f"{addr} is invariant (the session's)"

@@ -910,6 +910,12 @@ class Presets:
         on first use (a `Presets` from before a hot reload has none)."""
         return self.__dict__.setdefault("_templates_at_load", {})
 
+    def template_at_load(self) -> tuple[str, list[dict]] | None:
+        """The loaded preset's (template name, template rows as its load
+        read them), or None — what a save compacts against (plan 28 N5:
+        the GRAPH page's template node reads it)."""
+        return self._at_load().get(self.lib.current(GROUP) or "")
+
     def _desk_part(self, name: str | None = None) -> dict:
         """What a save writes for the desk: ``{"desk": rows}``, the whole
         preset layer — or, when the loaded preset names a desk template,
