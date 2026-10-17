@@ -182,8 +182,8 @@ def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
     from hyperspace.ui import Panel
     faces = []
     draw = Panel._dial
-    monkeypatch.setattr(Panel, "_dial", lambda self, dl, c, vals, names, *a:
-                        faces.append((list(vals), names)) or draw(self, dl, c, vals, names, *a))
+    monkeypatch.setattr(Panel, "_dial", lambda self, vals, names, *a:
+                        faces.append((list(vals), names)) or draw(self, vals, names, *a))
     with build_rig(tmp_path) as r:
         pad = ScriptedPad()
         r.panel.pad = pad
