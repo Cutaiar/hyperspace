@@ -36,21 +36,21 @@ and a projector. It is one Python process in `hyperspace-python/`.
 
 ## Where the code stands
 
-`main` is at `56c7d44`: everything through plan 25 (the shared library
-folder), plan 22's shapes and face patterns among it. Plans 24, 26 and 27
-were run together on 2026-10-14 and are built on
-`plan-24-26-27-integration`, waiting for the owner's merge into `main`:
-the party fixes ([`plans/24-party-fixes.md`](plans/24-party-fixes.md)),
-the render graph ([`plans/26-render-graph.md`](plans/26-render-graph.md))
-and the device registry
-([`plans/27-device-registry.md`](plans/27-device-registry.md)). On that
-branch: 2190 tests pass (2 skipped), and 556 golden frames match on the
-gate Mac. No preset was edited or added. Check `git log` and the PRs for
-the current state (PR #189, the exit crash, is open beside it).
+`main` holds everything through plan 25 (the shared library folder),
+plan 22's shapes and face patterns among it, and the fixes merged since
+(the pad's share button #197, the hands' own `leapc_cffi` #201, uv's
+own Python 3.14 #206, among others). Plans 24, 26 and 27 were run
+together on 2026-10-14 and are built on `plan-24-26-27-integration`,
+waiting for the owner's merge into `main` (PR #195): the party fixes
+([`plans/24-party-fixes.md`](plans/24-party-fixes.md)), the render graph
+([`plans/26-render-graph.md`](plans/26-render-graph.md)) and the device
+registry ([`plans/27-device-registry.md`](plans/27-device-registry.md)).
+No preset was edited or added. Check `git log` and the PRs for the
+current state.
 
 **Plans 28 and 30 are built** on `plan-28-30-integration` (cut from the
-plan 24–26–27 branch with `main` merged in), waiting for the owner's
-merge with it. Plan 30, shader nodes
+plan 24–26–27 branch with `main` merged in), waiting for the run's final
+PR into `plan-24-26-27-integration` and then the owner's merge. Plan 30, shader nodes
 ([`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)): every effect an
 image node, placeable by a preset on any image edge. Plan 28, the node
 editor ([`plans/28-node-editor.md`](plans/28-node-editor.md)): the

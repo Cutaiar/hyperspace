@@ -69,9 +69,9 @@ number and what you saw.
     synthetic tape); 222, 224, 227 and 231 (copy) with the glass and the
     projector as two outputs (after 101), 223 again there.
 11. The node editor (group Y): 232–236, 240, 242, 243, 245–247, 250, 253
-    and 255 on the laptop; (copy) 238, 239, 244, 260 on the laptop; 237,
+    and 255 on the laptop; (copy) 238, 239, 244, 257, 260 on the laptop; 237,
     241, 249 with the hand camera and music; 248, 256 with the APC40 and
-    the hand camera, 257 and 258 (copy) with the APC40; 251 (copy) on the
+    the hand camera, 258 (copy) with the APC40; 251 (copy) on the
     projector with the hand camera; 252 and 254 (copy) with the glass and
     the projector (after 101); 259 with two Macs on this build and a
     shared folder (with 139).
