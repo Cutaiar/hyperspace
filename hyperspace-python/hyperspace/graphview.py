@@ -42,8 +42,14 @@ rows, a macro's base subscriber — many, last touch wins) and a
 ``depth:<pid>`` stub while a route lands on it (a macro's depth
 subscriber scales that route); a modifier's inputs are ``in:<id>.<k>``,
 a macro's output ``bus:<id>``, a render node's ports ``rin:<node>/<port>``
-and ``rout:<node>``. Pins are strings; the page maps them to the widget's
-integer ids.
+and ``rout:<node>``; every node's single in / out stub (plan 28 N7, where
+its bundles end while it is collapsed) ``nin:<node>`` / ``nout:<node>``.
+Pins are strings; the page maps them to the widget's integer ids.
+
+**Collapsed nodes and bundles** (plan 28 N7): `summary` is a collapsed
+node's lines (five at most); `wiring` folds every value / trigger cable
+with a collapsed end into one `VBundle` per (source node, target node)
+pair; `land_choices` is the picker a drag onto a stub opens.
 
 **Cables** (`VCable.kind`): ``route`` (one per performer row, `ref` the
 `Binding`, into ``mod``), ``setter`` (a desk / pad / key row, into
@@ -176,6 +182,9 @@ class VNode:
     role: str = ""
     up: bool = True
     placeholder: bool = False
+    # plan 28 N7: how many cables start or end on this node (`build`), for
+    # its collapsed lines
+    wires: int = 0
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -219,6 +228,15 @@ class View:
     pins: dict[str, tuple[str, str]] = field(default_factory=dict)   # pin → (node, port)
 
     def node(self, nid: str) -> VNode | None:
+        # by an index kept while the node list is the same list of the same
+        # length (plan 28 N7: `refresh` asks it per cable every frame)
+        idx = self.__dict__.get("_index")
+        if idx is None or idx[0] is not self.nodes or idx[1] != len(self.nodes):
+            idx = self.__dict__["_index"] = (self.nodes, len(self.nodes),
+                                             {n.id: n for n in reversed(self.nodes)})
+        n = idx[2].get(nid)
+        if n is not None and n.id == nid:
+            return n
         return next((n for n in self.nodes if n.id == nid), None)
 
     def owner(self, pin: str) -> tuple[VNode, VPort] | None:
@@ -910,6 +928,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         for port in n.ports:
             port.patched = any(pin in hit for pin in port.pins)
+    for c in view.cables:                       # plan 28 N7: each node's cable count
+        ends = {view.pins.get(c.src_port, ("",))[0], view.pins.get(c.dst_port, ("",))[0]}
+        for nid in ends:
+            if nid in nodes:
+                nodes[nid].wires += 1
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -966,13 +989,16 @@ def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     return nodes.get(nid) or add_node(VNode(nid, "group", group))
 
 
-def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> None:
+def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
+            collapsed: Callable[[str], bool] | None = None) -> None:
     """This frame's readings on an already built view: each source port's
     and each cable's reading, each param port's effective value, and which
     cables are dormant (`off`, or a source not live), and each route's
     effective depth and words (a macro's depth subscriber turning, a
     depth dragged on ROUTING: `key` leaves the values out, so neither
-    rebuilds the view). Cheap: no structure changes."""
+    rebuilds the view). Cheap: no structure changes. A node `collapsed`
+    says true for (plan 28 N7) reads only what its lines show — its
+    patched ports, its outputs and a macro's knob — not every port."""
     table = getattr(router, "table", None) if router is not None else None
     cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
@@ -982,7 +1008,10 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> Non
             n.up = up == n.layer
             for port in n.ports:
                 port.up = not port.layer or port.layer == up
+        shut = collapsed is not None and n.kind != "macro" and collapsed(n.id)
         for port in n.ports:
+            if shut and not port.patched and port.direction != OUT:
+                continue
             if port.addr is not None:
                 port.live = reading(router, port.addr, lanes)
             elif port.param is not None:
@@ -1076,9 +1105,12 @@ def grouped(n: VNode, full: bool) -> bool:
     return full and len({p.group for p in n.ports}) > 1
 
 
-def height(n: VNode, full: bool = False, folds=frozenset()) -> float:
+def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = False) -> float:
     """A node's height as auto_layout stacks it: its title, the ports it
-    shows (`visible`) and, expanded, a line per port group."""
+    shows (`visible`) and, expanded, a line per port group — or, while it
+    is `collapsed` (plan 28 N7), its title and its lines (`summary`)."""
+    if collapsed:
+        return HEAD_H + ROW_H * len(summary(n))
     rows = len(visible(n, full, folds))
     if grouped(n, full):
         rows += len({p.group for p in n.ports})
@@ -1087,14 +1119,19 @@ def height(n: VNode, full: bool = False, folds=frozenset()) -> float:
 
 def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
                 expanded: Callable[[str], bool] | None = None,
-                folds=frozenset()) -> dict[str, tuple[float, float]]:
+                folds=frozenset(),
+                collapsed: Callable[[str], bool] | None = None
+                ) -> dict[str, tuple[float, float]]:
     """A position for every node `placed` does not hold: its column's x by
     kind (`COLUMN`; the render nodes by their depth in the render graph,
     the outputs last), stacked down the column in view order. The nodes
     already placed keep their positions and take no room here (a tidy
     passes none). `expanded(node id)` says which nodes show every port
     (default none) and `folds` which of their groups are folded, so an
-    expanded node pushes the column under it down instead of overlapping."""
+    expanded node pushes the column under it down instead of overlapping.
+    `collapsed(node id)` (plan 28 N7: the page's default, every node) says
+    which nodes draw only their title and lines; such a node takes that
+    much room whatever `expanded` says."""
     placed = placed or {}
     tops: dict[int, float] = {}
     out: dict[str, tuple[float, float]] = {}
@@ -1104,7 +1141,10 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
         y = tops.get(n.column, 0.0)
         out[n.id] = (n.column * COL_W, y)
         full = bool(expanded(n.id)) if expanded is not None else False
-        tops[n.column] = y + height(n, full, folds) + GAP
+        shut = bool(collapsed(n.id)) if collapsed is not None else False
+        # an expanded node on the N7 page has its all ports / patched only line
+        chip = ROW_H if collapsed is not None and not shut and n.kind != TEMPLATE else 0.0
+        tops[n.column] = y + height(n, full, folds, shut) + chip + GAP
     return out
 
 
@@ -1133,6 +1173,249 @@ def split(view: View, positions: Mapping[str, Any]) -> tuple[dict, dict]:
             continue
         (pre if home(n) == PRESET else ses)[n.id] = [round(float(xy[0])), round(float(xy[1]))]
     return pre, ses
+
+
+# ---------------------------------------------------------------- a legible graph (plan 28 N7)
+#
+# The owner's decisions of 2026-10-20: **every node starts collapsed** — its
+# title and at most five short lines (`summary`), no row per port — and
+# **one wire between two nodes while either end is collapsed**, however
+# many params are mapped between them (`VBundle`, `wiring`); the real
+# cables appear when both ends are expanded. A collapsed node has one pin
+# pair, an ``in`` and an ``out`` stub (`stub_in`, `stub_out`) on its title
+# line: the bundles end there, and so does a render cable (image /
+# geometry / mask: few, kept one wire each) whose end is collapsed. A drag
+# onto a stub lands on one of that node's ports, picked from a list
+# (`land_choices`), through `Edit.connect` unchanged. Presentation only:
+# nothing here changes a row.
+
+STUB_IN, STUB_OUT = "nin", "nout"
+SUMMARY_LINES = 5          # at most, under a collapsed node's title
+TIP_ROWS = 10              # a bundle's hover lists this many cables, then "+ k more"
+EXPAND_TO_EDIT = "expand a node to edit its cables"
+NOTHING_TAKES = "nothing on {label} takes it"
+
+
+def stub_in(nid: str) -> str:
+    """Node `nid`'s single input stub (its bundles and collapsed render cables)."""
+    return f"{STUB_IN}:{nid}"
+
+
+def stub_out(nid: str) -> str:
+    """Node `nid`'s single output stub."""
+    return f"{STUB_OUT}:{nid}"
+
+
+def is_stub(pin: str) -> bool:
+    return pin_kind(pin) in (STUB_IN, STUB_OUT)
+
+
+def stub_node(pin: str) -> str:
+    """The node a stub pin belongs to ("" for any other pin)."""
+    return pin.partition(":")[2] if is_stub(pin) else ""
+
+
+def _short(v: float | None) -> str:
+    return "not live" if v is None else f"{v:.2f}"
+
+
+def _loudest(ports: Iterable[VPort]) -> str:
+    """The line for the loudest live port of `ports` (by |reading|)."""
+    best = max((p for p in ports if p.live is not None), key=lambda p: abs(p.live),
+               default=None)
+    return "nothing live" if best is None else f"> {best.name} {best.live:.2f}"
+
+
+def _count(k: int, noun: str) -> str:
+    return f"{k} {noun}{'' if k == 1 else 's'}"
+
+
+def summary(n: VNode) -> list[str]:
+    """A collapsed node's lines under its title — at most `SUMMARY_LINES`,
+    the same number every frame (only the readings move): what it holds
+    and how much of it is patched, and its live reading (a device's or the
+    analyzer's loudest patched port, a modifier's or an LFO's output, a
+    macro's knob)."""
+    outs = [p for p in n.ports if p.direction == OUT]
+    params = [p for p in n.ports if p.param is not None and p.direction == IN]
+    pics = [p for p in n.ports if p.type in (IMAGE, GEOMETRY, MASK)]
+    patched = sum(p.patched for p in n.ports)
+    lines: list[str]
+    if n.kind == TEMPLATE:
+        lines = [f"{_count(len(n.ports), 'mapped control')}", "+ shows its rows as cables"]
+    elif n.kind in ("device", "source", "analyzer"):
+        noun = "band" if n.kind == "analyzer" else "port"
+        lines = [f"{_count(len(n.ports), noun)} · {patched} patched",
+                 _loudest(p for p in outs if p.patched)]
+        if n.layer:
+            lines.append(f"{n.layer} layer · {'up' if n.up else 'down'}")
+        if n.placeholder:
+            lines.append("not in this rig")
+        elif n.grey:
+            lines.append(n.status.rpartition(" · ")[2] or "not connected")
+    elif n.kind == "lfo":
+        lines = [f"out {_short(outs[0].live if outs else None)}",
+                 f"{_count(len(params), 'knob')} · {sum(p.patched for p in params)} patched"]
+    elif n.kind == "modifier":
+        m = n.ref
+        ins = [a for a in getattr(m, "inputs", ()) if a]
+        out = _short(outs[0].live if outs else None)
+        lines = [f"{getattr(m, 'kind', 'modifier')} · out {out}",
+                 "in " + (", ".join(ins) if ins else "nothing yet"),
+                 f"{_count(len(params), 'param')} · {sum(p.patched for p in params)} patched"]
+    elif n.kind == "macro":
+        knob = next((p for p in n.ports if p.direction == IN), None)
+        subs = len(getattr(n.ref, "subs", ()) or ())
+        lines = [f"knob {_short(knob.live if knob is not None else None)}",
+                 _count(subs, "subscriber")]
+    else:                                   # render, output, group
+        lines = ([f"{_count(len(params), 'param')} · {sum(p.patched for p in params)} patched"]
+                 if params or not pics else [])
+        if pics:
+            lines.append(_count(len(pics), "picture port"))
+        if params:
+            lines.append(_loudest(p for p in params if p.patched))
+    return lines[:SUMMARY_LINES]
+
+
+@dataclass
+class VBundle:
+    """The one wire between two nodes while either is collapsed: every
+    value and trigger cable from node `src` to node `dst`. `type` is
+    TRIGGER when every cable is a trigger, else VALUE; `live` the largest
+    |reading| of its live cables (None while none is live); `dormant`
+    while every cable is."""
+
+    id: str
+    src: str
+    dst: str
+    type: str = VALUE
+    cables: list[VCable] = field(default_factory=list)
+    live: float | None = None
+    dormant: bool = False
+
+    @property
+    def count(self) -> int:
+        return len(self.cables)
+
+    @property
+    def src_port(self) -> str:
+        return stub_out(self.src)
+
+    @property
+    def dst_port(self) -> str:
+        return stub_in(self.dst)
+
+
+def node_of(view: View, pin: str) -> str:
+    """The id of the node pin `pin` is on (a stub's own node), "" if none."""
+    return stub_node(pin) or view.pins.get(pin, ("",))[0]
+
+
+def wiring(view: View, collapsed: Callable[[str], bool],
+           drawn: Callable[[VCable], bool] | None = None
+           ) -> tuple[list[tuple[VCable, str, str]], list[VBundle]]:
+    """What the canvas draws this frame for `view`: the cables drawn one
+    wire each, as (cable, the pin it leaves, the pin it lands on), and the
+    bundles. A value or trigger cable with a `collapsed` end goes into the
+    bundle of its (source node, target node) pair; a render cable stays
+    itself, its collapsed ends moved to the node's stub; a cable between
+    two expanded nodes is drawn as it is. `drawn(cable)` (a desk template's
+    closed rows: False) leaves a cable out altogether. Bundles are in the
+    order of their first cable; their readings are this frame's."""
+    singles: list[tuple[VCable, str, str]] = []
+    pairs: dict[tuple[str, str], VBundle] = {}
+    for c in view.cables:
+        if drawn is not None and not drawn(c):
+            continue
+        s, d = node_of(view, c.src_port), node_of(view, c.dst_port)
+        shut_s, shut_d = collapsed(s), collapsed(d)
+        if c.kind == "render" or c.type in RENDER_TYPES:
+            singles.append((c, stub_out(s) if shut_s else c.src_port,
+                            stub_in(d) if shut_d else c.dst_port))
+        elif shut_s or shut_d:
+            b = pairs.get((s, d))
+            if b is None:
+                b = pairs[(s, d)] = VBundle(f"bundle:{s}>{d}", s, d)
+            b.cables.append(c)
+        else:
+            singles.append((c, c.src_port, c.dst_port))
+    for b in pairs.values():
+        b.type = TRIGGER if all(c.type == TRIGGER for c in b.cables) else VALUE
+    bundles = list(pairs.values())
+    readings(bundles)
+    return singles, bundles
+
+
+def readings(bundles: Iterable[VBundle]) -> None:
+    """Each bundle's reading this frame from its cables' (`refresh` moved
+    them): the largest live |reading|, dormant while every cable is — so a
+    page may keep `wiring`'s answer while the collapse state holds."""
+    for b in bundles:
+        lives = [abs(c.live) for c in b.cables if c.live is not None and not c.dormant]
+        b.live = max(lives) if lives else None
+        b.dormant = all(c.dormant for c in b.cables)
+
+
+def cable_words(view: View, c: VCable) -> str:
+    """One cable as a bundle's hover lists it: "<source port> → <param>"."""
+    src, dst = view.owner(c.src_port), view.owner(c.dst_port)
+    a = src[1].name if src and src[1] else (c.addr or c.src_port)
+    b = (dst[1].param or dst[1].name) if dst and dst[1] else c.dst_port.partition(":")[2]
+    return f"{a} → {b}"
+
+
+def bundle_tip(view: View, b: VBundle) -> str:
+    """What hovering a bundle says: "<n> cables: <source port> → <param>,
+    …" — the first `TIP_ROWS`, then "+ k more" — and its reading."""
+    s, d = view.node(b.src), view.node(b.dst)
+    head = f"{s.label if s else b.src}  →  {d.label if d else b.dst}"
+    noun = "cable" if b.count == 1 else "cables"
+    rows = [cable_words(view, c) for c in b.cables[:TIP_ROWS]]
+    more = b.count - len(rows)
+    body = f"{b.count} {noun}: " + ", ".join(rows) + (f", + {more} more" if more > 0 else "")
+    lines = [head, body, f"reading {_short(b.live)}"]
+    if b.dormant:
+        lines.append("dormant")
+    return "\n".join(lines)
+
+
+def stub_pin(view: View, pin: str) -> str:
+    """What a stub stands for in a drag: a node's ``out`` stub, when the
+    node has exactly one output pin (a modifier's lane, an LFO's, a macro's
+    bus), is that pin — so a collapsed modifier is patched from its stub
+    with no picker on its side; any other pin is itself."""
+    if pin_kind(pin) != STUB_OUT:
+        return pin
+    n = view.node(stub_node(pin))
+    outs = [q for port in (n.ports if n is not None else ()) if port.direction == OUT
+            for q in port.pins]
+    return outs[0] if len(outs) == 1 else pin
+
+
+def land_choices(view: View, edit, fixed: str, nid: str
+                 ) -> list[tuple[str, str, str, str | None]]:
+    """A drag from pin `fixed` let go on collapsed node `nid`'s stub: the
+    pins of that node it could land on, as (pin, label, port group, why
+    `Edit.connect` would refuse it — None when it would act or ask). From
+    an output pin, the node's input pins (a param's `mod` / `base` /
+    `depth` stub, a modifier's input, a render port); from an input pin,
+    its output pins. `edit` is the page's `Edit` (None: nothing refused)."""
+    n = view.node(nid)
+    if n is None:
+        return []
+    out: list[tuple[str, str, str, str | None]] = []
+    from_out = is_output(fixed)
+    for port in n.ports:
+        if (port.direction == OUT) == from_out:
+            continue
+        for pin in port.pins:
+            stub = pin_kind(pin) if port.param is not None else ""
+            label = f"{port.name} · {stub}" if stub else port.name
+            src, dst = (fixed, pin) if from_out else (pin, fixed)
+            why = edit.refusal(src, dst) if edit is not None else None
+            out.append((pin, label, port.group, why))
+    return out
 
 
 

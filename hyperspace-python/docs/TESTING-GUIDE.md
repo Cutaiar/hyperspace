@@ -32,7 +32,7 @@ explained in the [glossary](#glossary) at the end.
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
    use branch `plan-24-26-27-integration`. The shader-node entries
    (L95–L102, D19–D23) are plan 30's, and the node-editor entries
-   (L103–L122, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
+   (L103–L128, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -109,7 +109,9 @@ changes brightness or volume instead).
     with the glass and the projector, after D1.
 13. Plan 28's node-editor entries: L103–L116 on the laptop (L113, the
     drag, early: everything else on the GRAPH page builds on it); on the
-    copy L117–L121; L122 with two Macs on this build (with L43); A34–A36
+    copy L117–L121; L122 with two Macs on this build (with L43); the
+    legible graph L123–L126 and L128 (the APC40 plugged in), L127 with the
+    hand camera and music on the copy; A34–A36
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
@@ -240,6 +242,12 @@ changes brightness or volume instead).
 | L120 | A desk template as one box | 1 | laptop, the copy | 257 |
 | L121 | A preset from before this build loads with no note | 1 | laptop, the copy | 260 |
 | L122 | A patch shared between two Macs | 1 | two Macs on this build, a shared folder | 259 |
+| L123 | The closed graph reads at a glance | 1 | laptop (the APC40 helps) | 261 |
+| L124 | Open two boxes: the real cables | 1 | laptop | 262 |
+| L125 | Drop a cable on a closed box | 1 | laptop | 263 |
+| L126 | Tidy says what it did; the details button | 1 | laptop | 264 |
+| L127 | The energy patch from GRAPH alone | 1 | laptop, hand camera, music, the copy | 265 |
+| L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2769,14 +2777,16 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
 another LFO's depth, a macro scaling a route) acts in the same frame.
 **Modifiers**: small boxes between a source and a route — curve, scale,
 smooth, combine two sources, threshold to a trigger, a one-frame delay —
-built on ROUTING's new **MODIFIERS** strip and saved in the preset. And
+built on GRAPH (right-click the canvas → modifier; click one for its
+settings; ROUTING's MODIFIERS strip did this before the legible graph)
+and saved in the preset. And
 a new page, **GRAPH** (after ROUTING): everything wired to everything,
 drawn as boxes and cables, which you can rewire by dragging. **No
 automated test can drag the mouse on that page**, so every drag below is
@@ -2785,13 +2795,22 @@ on the copy when you save. Two pins on a setting's box: the round one
 (**mod**) takes one performer (a hand, a band, an LFO); the square one
 (**base**) takes the desk's knobs and the pad.
 
+**Since the legible graph (L123–L128), ROUTING has no routes and no
+MODIFIERS strip any more.** Wherever an entry below says "on ROUTING add
+a route" or "the MODIFIERS strip", do it on GRAPH: drag from the source's
+dot onto the setting's round dot (or onto a closed box's small left dot
+and pick the setting), right-click the empty canvas → modifier, click a
+modifier's box to set its inputs and knobs, click a wire to see its rows.
+Right-click a slider → Route a lane here… also works and opens GRAPH.
+
 #### L103. An LFO on another LFO's depth, the same frame
 
 **Needs:** laptop.
 
 **Do:** load TRIP (F5); open the LFO page; set LFO 2's depth to 0.5. On
-ROUTING add a route from **LFO 1** onto `lfo.2.depth` (push). Watch LFO
-2's scope.
+GRAPH drag from *LFO 1*'s right-hand dot onto *LFO 2*'s left-hand dot and
+pick **depth · mod**; click the new wire and set the row to push. Watch
+LFO 2's scope.
 
 **Right if:** LFO 2's swing breathes in and out with LFO 1's wave,
 smoothly, both ways; the frame rate on SYSTEM is as before.
@@ -2806,9 +2825,11 @@ smoothly, both ways; the frame rate on SYSTEM is as before.
 
 **Needs:** laptop.
 
-**Do:** on ROUTING add a route **LFO 1** → `lfo.2.rate` (push), then
-**LFO 2** → `lfo.1.depth` (push). Look under the preset's name at the
-top of ROUTING. Then delete the first route.
+**Do:** on GRAPH drag *LFO 1*'s right-hand dot onto *LFO 2*'s left-hand
+dot and pick **rate · mod**, then *LFO 2*'s onto *LFO 1*'s and pick
+**depth · mod** (both rows push, from their wires). Look under the
+preset's name at the top of ROUTING. Then delete the first route on
+GRAPH (open both LFO boxes, click its cable, Delete).
 
 **Right if:** a warning line: "loop: lfo:0 → lfo.2.rate → lfo:1 →
 lfo.1.depth → lfo:0 needs a delay — lfo:1 → lfo.1.depth is off until it
@@ -2823,9 +2844,9 @@ first route gone the warning goes and LFO 2 moves LFO 1's depth.
 
 **Needs:** laptop.
 
-**Do:** on ROUTING's MODIFIERS strip pick **delay** and **+ modifier**;
-set its input to **LFO 1**. Add a route from **mod 1 delay** onto
-`lfo.1.depth` (push).
+**Do:** on GRAPH right-click the canvas → **modifier ▸ delay**; click it
+and set its input to **LFO 1**. Drag its right-hand dot onto *LFO 1*'s
+left-hand dot and pick **depth · mod** (push, from the wire's row).
 
 **Right if:** no warning; LFO 1's scope swells and shrinks with itself,
 smoothly.
@@ -2851,9 +2872,10 @@ synced LFO on its downbeat.
 
 **Needs:** laptop; music.
 
-**Do:** on ROUTING add one modifier at a time with its input on band 0
-(the kick), route **mod n** onto `view.bright` (position, depth 1), and
-try its settings; remove it before the next. Curve: move **shape**, tick
+**Do:** on GRAPH add one modifier at a time (right-click the canvas →
+modifier), drag band 0 (the kick) onto its left-hand dot, drag its
+right-hand dot onto *shape*'s and pick **Brightness · mod**; click it to
+try its settings; remove it (× remove) before the next. Curve: move **shape**, tick
 **invert**. Scale: **mul** 2, then **clamp**. Smooth: a long **release**;
 then **spring** on with attack 0.2. Combine: inputs band 0 and band 3,
 **how** mul, then cross and move **balance**. Threshold. Delay.
@@ -2862,8 +2884,8 @@ then **spring** on with attack 0.2. Combine: inputs band 0 and band 3,
 scale doubles it, clamp holds it at full; smooth makes it fall slowly
 after each kick, the spring overshoots and settles; combine mul is darker
 than either band, cross fades between them; threshold flashes once per
-kick; delay looks like the plain route. Each modifier's bar on the strip
-moves with the music.
+kick; delay looks like the plain route. Each modifier's bar (click it)
+and its box's "out" line move with the music.
 
 **Wrong if:** a bar that does not move (its input not set); a threshold
 lit all the time.
@@ -2888,13 +2910,16 @@ modifier; redo puts them back.
 
 **Needs:** laptop.
 
-**Do:** load TRIP; open GRAPH. Then on ROUTING add a route and go back to
-GRAPH. Look at SYSTEM.
+**Do:** load TRIP; open GRAPH; click **expand all**. Then right-click a
+slider on another page → Route a lane here…. Click **collapse all**.
+Look at SYSTEM.
 
-**Right if:** every route is one solid cable into a setting's round pin;
-the desk's and keys' rows are faint cables into square pins; the new
-route is there at once; SYSTEM has a line "graph page: … ms median (N
-nodes, M cables)", about 3 ms.
+**Right if:** with everything open every route is one solid cable into a
+setting's round pin, the desk's and keys' rows faint cables into square
+pins; the new route is selected on GRAPH, its row first in the details;
+with everything closed two boxes are one wire, whose hover counts its
+cables; SYSTEM has a line "graph page: … ms median (N nodes, M
+cables)", about 1.3 ms closed.
 
 **Wrong if:** a cable missing or doubled; the app slows down with the
 page open.
@@ -2905,7 +2930,7 @@ page open.
 
 **Needs:** laptop.
 
-**Do:** load ACID; GRAPH; untick **patched only**.
+**Do:** load ACID; GRAPH; click **expand all**, untick **patched only**.
 
 **Right if:** the view settings are on the `shape` box, the acid's on
 `acid`, the trail's on `history`, the camera's on `eye`; tempo and the
@@ -2919,12 +2944,14 @@ master faders have boxes of their own.
 
 **Needs:** laptop.
 
-**Do:** load lfo-breathe; GRAPH. Hold the pointer over a cable; click it;
-click **beside**; click an effect's box.
+**Do:** load lfo-breathe; GRAPH; open (**+**) the two boxes a route
+joins. Hold the pointer over its cable; click it; click **details
+beside**, then **details below**; click an effect's box.
 
 **Right if:** the pop-up says from → to, the reading and the depth; the
-click shows that route's ROUTING row under the canvas; **beside** moves
-it to a column at the side; changing the depth there changes the
+click shows that route's ROUTING row under the canvas; **details beside**
+(only there while something is selected) moves it to a column at the
+side and **details below** back; changing the depth there changes the
 cable's thickness; an effect's box shows its FX controls.
 
 **Wrong if:** the pop-up somewhere else on the screen.
@@ -2949,16 +2976,16 @@ cleanly.
 
 **Needs:** laptop alone, the control window at its normal size.
 
-**Do:** load TRIP; GRAPH; untick **patched only** on the analyzer and on
-`shape`. 1. Drag from band 2's pin to `view.bright`'s round pin. 2. Drag
+**Do:** load TRIP; GRAPH; open (**+**) the analyzer and `shape` and untick
+**patched only**. 1. Drag from band 2's pin to `view.bright`'s round pin. 2. Drag
 that cable's end, from the round pin, onto `view.speed`'s round pin. 3.
 Drag a band onto a setting a route already drives: answer **Keep**, then
 again and **Replace**. 4. Right-click the empty canvas → **modifier ▸
 smooth**; drag the new box over the band 2 cable and let go. 5. ⌘Z four
 times.
 
-**Right if:** the cable appears when you let go and ROUTING lists the
-route; it then ends on `view.speed`; Replace / Keep comes up; the smooth
+**Right if:** the cable appears when you let go and clicking it shows the
+route's row; it then ends on `view.speed`; Replace / Keep comes up; the smooth
 sits between band 2 and `view.speed`; each ⌘Z takes one step back; a
 drop on a wrong pin turns red with words and makes nothing.
 
@@ -3023,7 +3050,7 @@ removes them, ⌘Z brings them back; the last three are refused in words.
 
 **Needs:** laptop; the copy.
 
-**Do:** build two modifiers on ROUTING; save as a new preset; load
+**Do:** build two modifiers on GRAPH; save as a new preset; load
 another, then this one; open `<home>/bindings.json` and the preset's
 file in a text editor.
 
@@ -3098,7 +3125,7 @@ unchanged.
 
 **Do:** load each of your own presets; open ROUTING and GRAPH; save one.
 
-**Right if:** no note and no red dot on any load; ROUTING as before;
+**Right if:** no note and no red dot on any load; ROUTING's desk lines as before;
 GRAPH draws every route; the saved file gains no `"modifiers"`,
 `"layout"` or `"wires"` unless you added one.
 
@@ -3126,6 +3153,127 @@ box positions, and **throws them away if it saves the preset**. Update
 both Macs before you share patches, and never save one on an older build.
 
 *(check 259)*
+
+**A legible graph (L123–L128, plan 28 N7).** After the owner's first look the GRAPH page was too busy, so now **every
+box starts closed**: its name and at most five short lines (how many
+ports it has, how many are wired, what is loudest right now), and **one
+wire between two boxes** however many settings are mapped between them.
+Click a box's **+** to open it (its ports, as before) — the real cables
+appear only when both boxes are open. The routes and the modifiers are
+edited on GRAPH now; ROUTING keeps the desk, the macros, the session's
+rows and the sinks, with a line at the top pointing to GRAPH.
+
+#### L123. The closed graph reads at a glance
+
+**Needs:** laptop; the APC40 plugged in helps (its box says "off"
+without it).
+
+**Do:** load party-trip; open GRAPH; stand back at your usual distance.
+Then open SYSTEM and read the `graph page:` line.
+
+**Right if:** a handful of boxes, each a name and one to four short
+lines; one wire from *apc40* to *shape*, one to *fx*, one to *eye* (and
+one to each other box the desk maps into — the two APC40 boxes have 19
+wires between them, most into the small setting boxes on the right); the
+top line says about "55 nodes · 64 wires · 238 cables"; SYSTEM says
+about 1.3 ms (it was 2.3–2.8 ms before).
+
+**Wrong if:** a box lists its ports before you open it; two wires
+between the same two boxes; SYSTEM over 2.3 ms.
+
+*(check 261)*
+
+#### L124. Open two boxes: the real cables
+
+**Needs:** laptop.
+
+**Do:** hover the *apc40* → *shape* wire; click it. Click *apc40*'s
+**+**, then *shape*'s **+**. Then **collapse all**.
+
+**Right if:** the hover says "24 cables: …", ten of them and "+ 14
+more"; the click lists those rows under the canvas; with only *apc40*
+open it is still one wire; with both open each control has its own
+cable; **collapse all** brings the boxes back. (A wire of desk rows
+lists them as plain lines in the details: the desk's own lines on
+ROUTING edit them.) Pressing Delete on a
+wire says "expand a node to edit its cables" and deletes nothing.
+
+**Wrong if:** cables while one box is closed; a wire ending in mid-air.
+
+*(check 262)*
+
+#### L125. Drop a cable on a closed box
+
+**Needs:** laptop.
+
+**Do:** open *analyzer* only. Drag from band 3's dot onto the small dot
+left of *shape*'s name; let go; pick **Brightness · mod**. Press ⌘Z. Then
+right-click *shape* → **learn** → a group → a setting → Learn hand →
+right, and move your hand (or skip without the camera).
+
+**Right if:** while dragging: "let go: pick one of shape's ports"; the
+list offers only what a band can drive; the pick makes the route
+(the wire's pop-up counts one cable more; Brightness pulses with band 3), ⌘Z removes it; the Learn works without
+opening *shape*.
+
+**Wrong if:** no list; a square **base** entry offered for a band.
+
+*(check 263)*
+
+#### L126. Tidy says what it did; the details button
+
+**Needs:** laptop.
+
+**Do:** click **tidy** on a fresh page. Open two boxes, drag one far
+away, click **tidy** again. Click a wire; click **details beside**, then
+**details below**.
+
+**Right if:** first "already tidy"; then every box closed and back in
+its column, the view framed on them, "laid out 55 nodes, every one
+collapsed"; ⌘Z puts the dragged box back; the details button only
+appears once something is selected, and moves the details beside the
+canvas and back.
+
+**Wrong if:** tidy says nothing or leaves a box open; the details button
+with nothing selected.
+
+*(check 264)*
+
+#### L127. The energy patch from GRAPH alone
+
+**Needs:** laptop, the hand camera, music; the copy.
+
+**Do:** on GRAPH only (never ROUTING): right-click the canvas → modifier
+→ smooth, then → combine. Open *leap*; drag **right energy** onto the
+smooth's small left dot, pick its input. Drag the smooth's right dot onto
+the combine's left dot, pick **in 1**; open *analyzer*, drag band 0 onto
+the combine, pick **in 2**. Click the combine and set **how** to mul in
+the details. Drag the combine's right dot onto *acid*'s left dot, pick
+**acid mix mod** (acid on in the chain). Dance with the right hand.
+
+**Right if:** every step works on GRAPH; the acid's mix swells with your
+energy, smoothly, and pumps with the bass; it settles when the hand
+leaves.
+
+**Wrong if:** a step needs ROUTING; the combine's details are cut off.
+
+*(check 265)*
+
+#### L128. ROUTING points to GRAPH; the desk lines as before
+
+**Needs:** laptop, the APC40.
+
+**Do:** open ROUTING. Click a control on the desk diagram; right-click a
+desk line → Learn, move a knob. Click "routes and modifiers: the GRAPH
+page". Then right-click any slider → Route a lane here….
+
+**Right if:** no route rows and no MODIFIERS strip on ROUTING; the desk,
+macros, session and sinks exactly as before; the line opens GRAPH;
+"Route a lane here…" opens GRAPH too.
+
+**Wrong if:** anything in the desk section changed.
+
+*(check 266)*
 
 # Part 2 — tests that need hardware
 
@@ -4112,8 +4260,8 @@ the left hand…" on every page and only the left hand can complete it; a
 prompt appears whichever page you are on — "ONE PERFORMER PER
 PARAMETER", "Brightness is already performed by R height positions.",
 "L height positions asks for it.", **Replace** / **Keep**; moving hands while it is up
-learns nothing more; Keep changes nothing on ROUTING; Replace makes the
-row read "L height positions", the line ends "moved from view.speed"
+learns nothing more; Keep changes nothing (the route's row, on GRAPH);
+Replace makes the row read "L height positions", the line ends "moved from view.speed"
 (the preset's own left-height row on Speed is gone), the unsaved dot
 lights, and `<home>/bindings.json` is not written. (Had a tilt moved
 most, the row would read "pushes +0.25" — also fine.) With MIDI off it
@@ -4758,35 +4906,38 @@ leaves.
 
 **Needs:** the hand camera.
 
-**Do:** load ACID; on ROUTING add a **smooth** modifier on **hand R
-energy** and route **mod 1 smooth** onto `fx.acid.mix` (position). Move
-the right hand, then take it out of the box. Then add a second modifier,
-route something onto it, remove it with ×, and ⌘Z.
+**Do:** load ACID; on GRAPH right-click → **modifier ▸ smooth**, drag
+**right energy** onto its left-hand dot (pick its input), and its
+right-hand dot onto *acid*'s, picking **acid mix · mod**. Move the right
+hand, then take it out of the box. Then add a second modifier, route
+something from it, click it and **× remove**, and ⌘Z.
 
-**Right if:** with the hand out the strip says "dormant" and the acid
-mix goes back to its setting at once; the removed modifier's route stays
-listed and does nothing until ⌘Z brings the modifier back.
+**Right if:** with the hand out the smooth's box says "out not live" (its
+details "dormant") and the acid mix goes back to its setting at once;
+the removed modifier's route stays (a faint wire) and does nothing until
+⌘Z brings the modifier back.
 
 **Wrong if:** the mix sticks or drops to zero; the route vanishes with
 the modifier.
 
 *(check 237)*
 
-#### B43. Hand energy, smoothed, times the kick, into the acid — on ROUTING
+#### B43. Hand energy, smoothed, times the kick, into the acid — from the modifiers' details
 
 **Needs:** the hand camera; music.
 
-**Do:** load ACID and set the acid's mix to 0.2. On ROUTING: **+
-modifier** smooth, input **hand R energy**, release 0.6; **+ modifier**
-combine, inputs **mod 1 smooth** and **0 sub**, how mul; **+ route** from
-**mod 2 combine** onto `fx.acid.mix`, op pos, depth 1.
+**Do:** load ACID and set the acid's mix to 0.2. On GRAPH: right-click →
+**modifier ▸ smooth**; click it and set input **hand R energy**, release
+0.6; **modifier ▸ combine**, inputs **mod 1 smooth** and **0 sub**, how
+mul; drag the combine's right-hand dot onto *acid*'s left-hand dot and
+pick **acid mix · mod** (click the wire: op pos, depth 1).
 
 **Right if:** the acid comes in as the right hand moves fast and pulses
 with the kick, and fades over about half a second when the hand stops;
 both modifiers' bars move.
 
-**Wrong if:** the combine reads 0; **mod 2** missing from the route's
-source list a moment after adding it.
+**Wrong if:** the combine reads 0; **mod 1** missing from the combine's
+input list a moment after adding it.
 
 *(check 241)*
 
@@ -4798,13 +4949,14 @@ source list a moment after adding it.
 Right-click the canvas: add a **smooth** and a **combine**. Drag
 **right energy** onto the smooth's input; the smooth's output onto the
 combine's first input, band 0 onto its second; set the combine's **how**
-to mul (on ROUTING); drag the combine's output onto `fx.acid.mix`'s round
-pin. Save; load another preset; load this one again.
+to mul (click it: its details); drag the combine's output onto
+`fx.acid.mix`'s round pin (or *acid*'s left-hand dot). Save; load another
+preset; load this one again.
 
-**Right if:** it feels as B43; ROUTING shows the same modifiers and
-route; the boxes come back where you put them.
+**Right if:** it feels as B43; the same modifiers and route come back
+(click the wire for its row); the boxes come back where you put them.
 
-**Wrong if:** the combine reads 0; the route missing on ROUTING.
+**Wrong if:** the combine reads 0; the route missing.
 
 *(check 249)*
 
@@ -5309,7 +5461,8 @@ Turn the device knobs on each.
   TRACER: echo brightness, echo fade time, echo count, echo time apart,
   darken, contrast, shape hides, 4D depth; on TUMBLE, FACES and FIELD
   D1–D4 are 4D depth, yaw, pitch and pattern and D5–D8 dark; TUMBLE's
-  left height still pushes the sound drive, marked "session" on ROUTING.
+  left height still pushes the sound drive, marked "session" in its row
+  (click the leap → master wire on GRAPH).
 
 **Wrong if:** a look off (a number in the preset); a knob on the wrong
 setting; an axis flipped on every preset (then flip it on the HANDS page
@@ -6191,8 +6344,8 @@ can be set but not performed.
 
 **Modifier** — a small box between a source (a hand, a band, an LFO) and
 a route: curve, scale, smooth, combine two sources, threshold (turns a
-level into a trigger), delay (one frame). Built on ROUTING's MODIFIERS
-strip or the GRAPH page; saved in the preset.
+level into a trigger), delay (one frame). Built on the GRAPH page
+(ROUTING's MODIFIERS strip before the legible graph); saved in the preset.
 
 **OSC** — Open Sound Control: messages a phone app or a music program
 sends over the network (Wi-Fi); a phone app can be a device.

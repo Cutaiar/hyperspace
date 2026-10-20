@@ -6,7 +6,8 @@ plan 24's run, rows 140–168 during plan 27's run and rows 169–209
 during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
 (several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
 run (shader nodes) and rows 233–277 during plan 28's run (the node
-editor) on 2026-10-17: the build took its own
+editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
+on 2026-10-20: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -242,14 +243,14 @@ here; overturn → the change, then the same.
 | 244 | A template's modifiers: overridden by id, a save writes what differs | 239 | |
 | 245 | The modifiers one undo part of the table | 240 | |
 | 246 | Learn takes a `mod:` lane only when armed for anything | — | |
-| 247 | The MODIFIERS strip between the routes and the desk | 241 | |
+| 247 | The MODIFIERS strip between the routes and the desk — not drawn on ROUTING since N7: **superseded in part** (rows 288, 289) | 241 | superseded in part |
 | 248 | Node and pin ids: strings with a kind prefix (the `layout` keys) | 244 | |
 | 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
-| 250 | What the canvas draws: modulatable params and row targets; no sinks | 242, 245 | |
-| 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step | 244 | |
-| 252 | The tidy columns | 244 | |
+| 250 | What the canvas draws: modulatable params and row targets; no sinks — its timing **superseded in part** (row 290) | 242, 245 | superseded in part |
+| 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step — tidy's behaviour **superseded in part** (row 285) | 244 | superseded in part |
+| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278) | 244 | superseded in part |
 | 253 | The editor context on the panel, closed before imgui | 246 | |
-| 254 | The selection pane below the canvas; **beside** for a column | 245 | |
+| 254 | The selection pane below the canvas; **beside** for a column — the chip **superseded** (row 286) | 245 | superseded in part |
 | 255 | A cable into `mod` is the row a Learn would make | 247, 248 | |
 | 256 | A cable into `base`: desk or pad setters only; the refusal words | 248 | |
 | 257 | A cable's end moved input pin to input pin | 247 | |
@@ -269,10 +270,23 @@ here; overturn → the change, then the same.
 | 271 | The desk's port groups | 256 | |
 | 272 | The SHIFT latch read from the table each frame | 256 | |
 | 273 | A layered row on an invariant control drawn off on *apc40* | — | |
-| 274 | A desk template as a subgraph node; an edit inside an override (two drafts folded) | 257 | |
+| 274 | A desk template as a subgraph node; an edit inside an override (two drafts folded) — its collapsed port list **superseded in part** (row 278) | 257 | superseded in part |
 | 275 | A missing role is a grey placeholder | 258 | |
 | 276 | The hands node's groups: axes, pinches, grab, presence, dance | 256 | |
 | 277 | An older build and this run's keys: both Macs on this build before sharing | 259 | |
+| 278 | A collapsed node's lines: what it holds, how much is patched, its live reading | 261 | |
+| 279 | One in and one out stub a node; a render cable to a collapsed node's stub | 261 | |
+| 280 | A bundle per node pair, as thick as it is many (capped), its hover the first ten | 261, 262 | |
+| 281 | A bundle selected lists its rows; its Delete refused in words | 262 | |
+| 282 | The collapse state is the page's, saved nowhere | 261 | |
+| 283 | A drag onto a collapsed node's stub opens a picker of its ports | 263 | |
+| 284 | Learn from a node's right-click, per param | 263 | |
+| 285 | Tidy collapses everything, lays it out again and says what it did | 264 | |
+| 286 | The details chip only with a selection on a narrow page | 264 | |
+| 287 | Expand all / collapse all; "patched only" within an expanded node | 262 | |
+| 288 | ROUTING's pointer line; "Route a lane here…" opens GRAPH | 266 | |
+| 289 | A modifier node's side pane: the MODIFIERS strip's block, stacked | 265 | |
+| 290 | A collapsed node reads only what its lines show; wiring and columns kept | 261 | |
 
 "—": no hand check shows it; tests only.
 
@@ -4241,6 +4255,9 @@ Folds two of D1's drafts: the refusals, and the loops.
 
 ## The node editor (plan 28)
 
+Rows 278–290, plan 28's N7 (2026-10-20), are under "A legible graph"
+below.
+
 Built in plan 28's run on 2026-10-17
 ([`plans/28-node-editor.md`](plans/28-node-editor.md)), on
 `plan-28-30-integration` until the owner merges it. The owner's own
@@ -4556,6 +4573,12 @@ Folds N0's two delay drafts.
 - **Rough edge.** Three params on the narrow panel make short sliders;
   no live bar of the inputs.
 - **Judge it.** Check 241.
+- **Superseded in part by rows 288 and 289** (plan 28 N7, 2026-10-20):
+  the strip is no longer drawn on ROUTING (its pointer line to GRAPH is
+  there); its per-modifier block (`ui_routing.modifier_block`) is the
+  editor of a selected modifier node in GRAPH's side pane, stacked, and
+  a modifier is added from GRAPH's right-click picker. `ui_routing.modifiers`
+  itself is unchanged.
 
 ### 248. Node and pin ids are strings with a kind prefix; the widget's integers are a per-panel map
 
@@ -4611,6 +4634,11 @@ Folds N0's two delay drafts.
   headless); `route_said` runs per route per frame and `key` builds a
   tuple over every binding each frame.
 - **Judge it.** Checks 242, 245.
+- **Superseded in part by row 290** (plan 28 N7, 2026-10-20): every node
+  now starts collapsed, a value / trigger cable with a collapsed end is
+  folded into one wire a node pair (row 280), and the page draws in
+  1.27 ms median on party-trip at 960 × 900 (64 wires for 238 cables);
+  "patched only" is the view inside an expanded node (row 287).
 
 ### 251. Positions: the preset's map for the look's nodes, the show's for the rig's; a drop dirties; tidy forgets
 
@@ -4627,6 +4655,9 @@ Folds N0's two delay drafts.
   the graph"; redo puts the tidy back). The library's marks carry both
   maps, so undoing a load puts the earlier positions back. An unreadable
   entry is dropped with a note; no key, no note and no dirt.
+- **Superseded in part by row 285** (plan 28 N7, 2026-10-20): tidy also
+  collapses every node, frames the canvas and says what it did ("laid
+  out 55 nodes, every one collapsed", or "already tidy").
 - **Other options.** Everything in the preset; auto positions written
   too (noisy diffs).
 - **To reverse.** `graphview.home`, `Presets.layout`, `Project.layout`.
@@ -4645,6 +4676,9 @@ Folds N0's two delay drafts.
   counted, so expanding one pushes the unplaced nodes under it down).
   Placed nodes take no room; dropping a node re-stacks the rest of its
   column.
+- **Superseded in part by row 278** (plan 28 N7, 2026-10-20): a collapsed
+  node (the default) takes its title and its lines' room, an expanded
+  one its ports' and its chip line's.
 - **Other options.** One render column.
 - **To reverse.** `graphview.COLUMN` / `_columns`.
 - **Rough edge.** Thirteen effects a pipeline make a wide canvas; port
@@ -4675,6 +4709,9 @@ Folds N0's two delay drafts.
   factored out of the FX page unchanged.
 - **Other options.** Always beside (a canvas about 100 px wide at the
   default size); a lower threshold (the same).
+- **Superseded by row 286** (plan 28 N7, 2026-10-20): the **beside** chip
+  is gone; **details beside / below** shows only while something is
+  selected on a page narrower than 720 px.
 - **To reverse.** `ui_graph.page`'s `wide`.
 - **Rough edge.** The selection is read a frame late (last frame's
   canvas).
@@ -5068,7 +5105,10 @@ Folds N5's "an edit inside a template is an override".
   control the template does not map, hangs off *apc40*; an overridden or
   darkened template control is a port with no cable. Every template
   node starts collapsed (its ports listed, none of its cables drawn); its
-  **+** opens it, **−** closes it. Deleting a template row's cable is
+  **+** opens it, **−** closes it. **Superseded in part by row 278**
+  (plan 28 N7, 2026-10-20): collapsed, it lists no port either — "<n>
+  mapped controls" — like every node; its open state is every node's
+  expanded set (row 282). Deleting a template row's cable is
   `table.remove` (the save writes a dark row); dragging a template port
   onto a `base` stub is the desk learn (the save writes an override).
   The template file is never written.
@@ -5143,3 +5183,239 @@ Folds N5's "an edit inside a template is an override".
   never save a preset with modifiers or positions on an older one. Rows
   219 and 222 (the placement keys) carry the same caveat.
 - **Judge it.** Check 259.
+
+## A legible graph (plan 28, N7)
+
+Built on 2026-10-20 after the owner's first look at the GRAPH page
+("very messy … borderline illegible with the APC40 alone … I clicked
+the tidy button, and nothing happened … I clicked the beside toggle,
+and I don't know if it did anything"). The owner's three decisions —
+every node collapsed by default, one wire between two nodes while either
+end is collapsed, GRAPH takes the routes and the modifiers from ROUTING
+now (ROUTING keeps its desk, macros, session and sinks until it is
+retired) — are in [`DECISIONS.md`](DECISIONS.md) "UI" with Who "owner
+(2026-10-20)"; these rows are what the build chose where those left a
+choice open. It supersedes parts of rows 250, 251, 252, 254 and 274
+(marked there). Measured on party-trip at the control window's
+960 × 900 (55 nodes, 238 cables): the page draws in **1.27 ms** median
+collapsed (64 wires), 2.66 ms with every node expanded, against N2's
+2.32–2.78 ms. No preset was edited or added; `apc40.py`, `midi.py` and
+ROUTING's desk, macros, session and sinks sections are untouched.
+
+### 278. A collapsed node's lines: what it holds, how much is patched, its live reading
+
+- **Built.** Under the title, at most five lines (`graphview.summary`),
+  the same count every frame: a device "137 ports · 97 patched", its
+  loudest patched port ("> right y 0.83", else "nothing live"), its
+  layer and whether it is up (*apc40*: "preset layer · up"), "not in this
+  rig" for a placeholder or the device's status while it is grey; the
+  analyzer "6 bands · 6 patched" and its loudest; an LFO "out 0.42" and
+  its knobs; a modifier its kind and output ("smooth · out 0.42"), its
+  inputs, its params; a macro its knob and its subscribers; a render,
+  output or group node "51 params · 32 patched", its picture ports, its
+  loudest patched param; a desk template its mapped controls. No row
+  per port.
+- **Other options.** Only the title (nothing to read at a glance); the
+  first five patched ports (as long as the APC40's list, cut).
+- **To reverse.** `graphview.summary`.
+- **Rough edge.** "Loudest" is by |reading| of a patched port, so a knob
+  parked at 1.0 wins over a moving one. A line longer than the node is
+  cut with "…".
+- **Judge it.** Check 261.
+
+### 279. One in and one out stub a node; a render cable to a collapsed node's stub
+
+- **Built.** Every node with an input port has an ``in`` stub
+  (`nin:<node>`) at the left of its title line, every node with an output
+  port an ``out`` stub (`nout:<node>`) at the right, expanded or not; a
+  stub is lit while any cable touches the node. Bundles end on stubs.
+  A render cable (image / geometry / mask) stays one wire each, its end
+  on a collapsed node moved to that node's stub.
+- **Other options.** Stubs only while collapsed (a bundle from a
+  collapsed node into an expanded one would then have no end on the
+  expanded side).
+- **To reverse.** `ui_graph._node`, `graphview.wiring`.
+- **Rough edge.** Two render cables between the same two collapsed nodes
+  draw on top of each other.
+- **Judge it.** Check 261.
+
+### 280. A bundle: one per (source node, target node), as thick as it is many, its hover the first ten
+
+- **Built.** `graphview.wiring` folds every value and trigger cable with
+  a collapsed end into one `VBundle` per (source node, target node):
+  trigger-coloured when every cable is a trigger, else value-coloured;
+  its reading the largest live |reading|; faint while every cable is
+  dormant. Its line is 2.5 px for one cable plus 0.5 px a cable, capped
+  at 7 px (ten cables or more). Hover: "<source> → <target>", "<n>
+  cables: <source port> → <param>, …" — the first ten, then "+ k more" —
+  and the reading.
+- **Other options.** One bundle per pair and type (two wires where a
+  desk sets triggers and values on one node); thickness by the reading
+  (a bundle's many readings in one number).
+- **To reverse.** `graphview.wiring`, `ui_graph.bundle_thickness`.
+- **Rough edge.** The APC40 is still two nodes (owner decision 12), so
+  the desk reaches a node over two wires when both layers map into it,
+  and the two fan out one wire per node they map into: 19 bundles on
+  party-trip (*apc40* 14, *apc40 (SHIFT)* 5), most into group nodes
+  (`band`, `preset`, `master`, `tempo` …), three into render nodes
+  (`shape`, `fx`, `eye`). The key node fans out to about ten group
+  nodes. A bundle at the cap does not thicken with one more cable: its
+  hover's count does.
+- **Judge it.** Checks 261, 262.
+
+### 281. A bundle selected lists its rows; its Delete is refused in words
+
+- **Built.** A selected bundle's side pane lists every route in it as
+  ROUTING's own row (`ui_routing._row`, the one table: its widgets, its
+  ×), and the other cables (desk rows, subscribers) as a line each.
+  Delete on a bundle keeps it and says "expand a node to edit its
+  cables"; its right-click offers "expand both ends".
+- **Other options.** Delete removes every cable in it (one keystroke for
+  two dozen rows).
+- **To reverse.** `ui_graph._side`, `ui_graph.delete_bundle`.
+- **Rough edge.** A desk row in a bundle has no editor in the pane
+  (ROUTING's desk section edits it): a bundle of setters (the APC40's,
+  the keys') lists its cables as text lines ("<control> → <param>
+  <op>"), only its routes as rows.
+- **Judge it.** Check 262.
+
+### 282. The collapse state is the page's, saved nowhere
+
+- **Built.** Which nodes are expanded is UI state on the panel
+  (`ui_graph._state(panel)["open"]`): not in the preset, not in the
+  show's `layout`, not an undo step; every node is collapsed at launch,
+  a hot reload keeps the set, and so does a preset load (a node of the
+  same id stays expanded); a tidy clears it. A desk template's "open" is
+  the same set.
+- **Other options.** In the show's `layout` beside the rig's positions
+  (a show that opens half-expanded is the mess the owner described).
+- **To reverse.** Carry the set in the show's map (`Project.layout`,
+  `graphview.split`).
+- **Rough edge.** Expanding a node pushes the unplaced nodes under it
+  down; a node the owner placed stays and may be overlapped.
+- **Judge it.** Check 261.
+
+### 283. A drag onto a collapsed node's stub opens a picker of its ports
+
+- **Built.** A cable dragged from a port onto a collapsed node's ``in``
+  stub (or from an input onto an ``out`` stub) says "let go: pick one of
+  <node>'s ports" while held; let go, a menu lists that node's pins it
+  can land on — each param's `mod` / `base` / `depth` stub, a modifier's
+  inputs, a render port — by port group when there are more than twelve,
+  only the ones `Edit.refusal` lets through ("nothing on <node> takes it:
+  <first refusal>" when none), each "<port> · <stub>" ("Brightness ·
+  mod"). A collapsed node with exactly one output pin (a modifier, an
+  LFO, a macro) has an ``out`` stub that stands for that pin
+  (`graphview.stub_pin`), so a collapsed modifier's out dropped on
+  another collapsed node's in opens that node's picker. The pin picked goes through
+  `Edit.connect` unchanged (one undo step; Replace / Keep when taken), a
+  render one through `Edit.wire`. A drag between two stubs neither of
+  which stands for one output (a device's out onto a render node's in),
+  or onto the wrong side, is refused red in words.
+- **Other options.** A two-level menu for stub to stub (every source
+  port × every target pin: hundreds of refusal checks); expand on drop.
+- **To reverse.** `ui_graph._stub_drag`, `open_land`, `land`,
+  `graphview.land_choices`.
+- **Rough edge.** A render node lists its picture ports among its params'
+  stubs; the menu is long on the shape (about fifty params).
+- **Judge it.** Check 263.
+
+### 284. Learn from a node's right-click, per param
+
+- **Built.** Right-click any node: expand / collapse, then **learn ▸**
+  its params by port group, each opening N3's pin menu (the param menu's
+  own Learn items, `Panel._ctx_learn_block`), so a collapsed render node
+  is learned without expanding.
+- **Other options.** Only on an expanded node's `mod` pin (N3's).
+- **To reverse.** `ui_graph._node_menu`, `learn_params`.
+- **Rough edge.** Three menu levels on the shape.
+- **Judge it.** Check 263.
+
+### 285. Tidy collapses everything, lays it out again and says what it did
+
+- **Built.** **tidy** collapses every node, forgets every position in
+  both maps (one undo step, as before), lays every node out again by
+  column, frames the canvas on them, and the head says "laid out 55
+  nodes, every one collapsed" — or "already tidy" when no node moved
+  and none was expanded.
+- **Other options.** Keep the expanded nodes expanded (the owner's
+  "nothing happened" came from a tidy that changed nothing visible).
+- **To reverse.** `ui_graph.tidy`.
+- **Rough edge.** The undo puts the positions back, not the expanded
+  nodes.
+- **Judge it.** Check 264.
+
+### 286. The details chip: only with a selection on a narrow page, named by what it does
+
+- **Built.** The **beside** chip is gone. While something is selected
+  and the page is narrower than 720 px, the head has **details beside**
+  (the details are under the canvas) or **details below** (they are
+  beside); with nothing selected there is no chip; at 720 px or more the
+  details sit beside with no chip.
+- **Other options.** Always beside (a canvas about 100 px wide at the
+  panel's size).
+- **To reverse.** `ui_graph.beside_chip`.
+- **Rough edge.** The choice is kept while nothing is selected.
+- **Judge it.** Check 264.
+
+### 287. Expand all / collapse all; "patched only" within an expanded node
+
+- **Built.** The head's first chip is **expand all** (every node
+  collapsed or some) or **collapse all** (any expanded). Inside an
+  expanded node N2's view holds: the page's **patched only** chip
+  (default on) and the node's own **all ports / patched only** chip,
+  and its port groups fold.
+- **Other options.** "patched only" as the collapsed view (N2's).
+- **To reverse.** `ui_graph._head`, `_node`.
+- **Rough edge.** Expand all draws every patched port of every node
+  (2.66 ms on party-trip).
+- **Judge it.** Check 262.
+
+### 288. ROUTING's pointer line; "Route a lane here…" opens GRAPH
+
+- **Built.** Where ROUTING's counts line, its route rows, its "+ route"
+  and its MODIFIERS strip were, one dim line: "routes and modifiers: the
+  GRAPH page" (a click opens GRAPH), with the filter field beside it; the
+  filter now counts and filters the desk, the macros, the session and
+  the sinks only. The routes' and the modifiers' functions stay in
+  `ui_routing` (`add_route`, `_row`, `_sources`, `_targets`,
+  `add_modifier`, `set_modifier_input`, `remove_modifier`,
+  `modifiers`). The param menu's "Route a lane here…" adds the route as
+  before and opens GRAPH instead of ROUTING.
+- **Other options.** A route list on GRAPH's side pane while nothing is
+  selected (a second route page); leave ROUTING's rows until it is
+  retired (two pages editing the routes).
+- **To reverse.** The pointer block in `ui_routing.page` (the two
+  sections were a few lines there).
+- **Rough edge.** "+ route" is gone: a new route is a drag on the
+  canvas, a Learn, or "Route a lane here…" (which selects the new route
+  on GRAPH, its row first in the pane). While the filter holds text its
+  red "n of m rows" takes the pointer's place.
+- **Judge it.** Check 266.
+
+### 289. A modifier node's side pane is the MODIFIERS strip's block, stacked
+
+- **Built.** Selecting a modifier node shows its editor in the side
+  pane: `ui_routing.modifier_block` (the strip's own per-modifier block,
+  factored out of `modifiers` unchanged for the strip) drawn stacked for
+  the 320 px column: its output bar, each input's source combo on a line,
+  each param under it, "× remove".
+- **Other options.** The strip's one-line layout (cut at 320 px).
+- **To reverse.** `modifier_block(stacked=…)`.
+- **Rough edge.** None known.
+- **Judge it.** Check 265.
+
+### 290. A collapsed node reads only what its lines show; the wiring and the columns are kept
+
+- **Built.** `graphview.refresh` skips the unpatched input ports of a
+  collapsed node (its lines never show them); the page keeps
+  `graphview.wiring`'s answer while the view and the expanded set hold
+  (only the bundles' readings move a frame) and the column layout while
+  the view, the expanded set, the folds and the stored positions hold;
+  `View.node` is a dict lookup.
+- **Other options.** Recompute every frame (2.2 ms collapsed).
+- **To reverse.** `ui_graph._wiring`, `_place`'s cache, `refresh`'s
+  `collapsed`.
+- **Rough edge.** A port's hover on a collapsed node is not reachable,
+  so its stale reading is never seen.
+- **Judge it.** Check 261.

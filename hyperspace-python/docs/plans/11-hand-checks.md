@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–260; the last group, Y (232–260), is plan 28's.
+numbers. They run 1–266; the last group, Y (232–266), is plan 28's (261–266 its N7).
 
 ## Before you start
 
@@ -74,7 +74,9 @@ number and what you saw.
     the hand camera, 258 (copy) with the APC40; 251 (copy) on the
     projector with the hand camera; 252 and 254 (copy) with the glass and
     the projector (after 101); 259 with two Macs on this build and a
-    shared folder (with 139).
+    shared folder (with 139); N7's legible graph 261–264 on the laptop
+    (the APC40 plugged in for 261), 265 (copy) with the hand camera and
+    music, 266 with the APC40.
 
 ## A. Laptop alone
 
@@ -3257,10 +3259,20 @@ checks use 101's rig: **the glass is output 1, the projector output 2**,
 so `hands-glass-only`'s "glass" is the projector there; 252 says how to
 aim it at the glass.
 
+**Since N7 (checks 261–266) ROUTING draws no routes and no MODIFIERS
+strip**: wherever a check above or below says "on ROUTING add a route"
+or "on the MODIFIERS strip", do it on GRAPH — drag a cable from the
+source onto the param's `mod` (or onto a collapsed box's stub and pick
+it), right-click the canvas → modifier, click a modifier's box for its
+editor (inputs, params, ×), click a route's wire for its row; or
+right-click the param → Route a lane here…, which opens GRAPH. ROUTING's
+desk, macros, session and sinks are as the checks say.
+
 **232. The lag is gone on a real LFO-on-LFO patch.**
 Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_patch.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
-TRIP (F5); LFO page. Set LFO 2's depth to 0.5; on ROUTING add a route
-`LFO 1 → lfo.2.depth` (push). Watch LFO 2's scope, then SYSTEM's frame
+TRIP (F5); LFO page. Set LFO 2's depth to 0.5; on GRAPH drop *LFO 1*'s
+out stub on *LFO 2*'s in stub and pick its depth · mod, then click the
+wire and set the row's op to push. Watch LFO 2's scope, then SYSTEM's frame
 rate. Then, with the hand camera, raise and drop the left hand quickly
 (it owns LFO 1's depth; LFO 1 drives the zoom). *Pass:* LFO 2's swing
 breathes with LFO 1's wave, both ways, steady, no stutter; the zoom
@@ -3272,9 +3284,11 @@ it sticks after the hand leaves.
 
 **233. A loop is refused in words; the rest of the preset runs.**
 Headless: `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`, `tests/test_patch.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`.
-Any preset; ROUTING: add `LFO 1 → lfo.2.rate` (push), then `LFO 2 →
-lfo.1.depth` (push). Open GRAPH and hover the second cable. Delete the
-first route. *Pass:* a warning line under ROUTING's head, `loop: lfo:0 →
+Any preset; GRAPH: drop *LFO 1*'s out stub on *LFO 2* and pick its rate
+· mod, then *LFO 2*'s out stub on *LFO 1* and pick its depth · mod (each
+row's op push, from its wire). Open ROUTING for its head; back on GRAPH
+expand both LFOs and hover the second cable. Delete the first route
+(its cable, both ends expanded). *Pass:* a warning line under ROUTING's head, `loop: lfo:0 →
 lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay — lfo:1 →
 lfo.1.depth is off until it has one`; LFO 1's depth does not move; every
 other route runs; the cable's hover says "off: a loop needs a delay";
@@ -3285,8 +3299,9 @@ file.
 
 **234. A delay closes a loop.**
 Headless: `tests/test_patch.py::{test_cycles_finds_every_loop_and_none_through_a_delay,test_a_loop_through_a_delay_runs_exactly_one_frame_late}`, `tests/test_modifiers.py::test_delay_is_one_frame_late`.
-ROUTING: + modifier **delay**, input `LFO 1`; + route from `mod 1 delay`
-onto `lfo.1.depth` (push): LFO 1 riding its own depth one frame late.
+GRAPH: right-click → modifier ▸ **delay**, input `LFO 1` in its editor;
+drop its out stub on *LFO 1*'s in stub and pick depth · mod (op push in
+the wire's row): LFO 1 riding its own depth one frame late.
 *Pass:* no loop note; LFO 1's scope swells and shrinks with itself,
 smoothly. *Fail:* the loop note appears (the delay not seen as one); the
 scope jumps between two shapes (two frames round the loop).
@@ -3300,33 +3315,36 @@ racing (stepped twice).
 
 **236. Each modifier kind does what its name says.**
 Headless: `tests/test_modifiers.py::{test_curve_is_linear_at_zero_bends_both_ways_and_inverts,test_scale_multiplies_offsets_and_clamps_unless_told_not_to,test_smooth_follows_with_its_attack_and_release,test_smooth_with_spring_on_overshoots_and_settles,test_combine_mul_and_cross,test_threshold_fires_once_on_the_rising_edge_and_holds,test_delay_is_one_frame_late}`.
-Music playing; any preset; ROUTING. Add one modifier at a time on band 0
-(the kick) and route `mod <n>` onto `view.bright` (position, depth 1);
-remove each before the next. *Pass:* **curve**: the response bends as
+Music playing; any preset; GRAPH. Add one modifier at a time
+(right-click the canvas → modifier ▸ a kind), drop band 0 (the kick)
+onto its in stub, then drop its out stub onto *shape*'s and pick
+Brightness · mod; click the modifier for its editor; remove each (×
+remove) before the next. *Pass:* **curve**: the response bends as
 shape moves, invert flips it; **scale**: × 2 doubles it, clamp holds it
 at full; **smooth**: a longer release makes the brightness fall slowly
 after each kick; spring on (attack 0.2) overshoots and settles; a
 **combine** of band 0 and band 3 by mul is darker than either, by cross
 fades between them on balance; **threshold**: one flash per kick for the
-hold; **delay**: the same as the raw route. The strip's bar moves with
-each. *Fail:* the bar does not move (the input not live: its combo); a
+hold; **delay**: the same as the raw route. The editor's bar (and the
+node's "out" line) moves with each. *Fail:* the bar does not move (the input not live: its combo); a
 threshold flashing all the time (on / off near the band's floor).
 
 **237. A modifier whose input goes away lets its routes go; a removed one leaves them dormant.** (hand camera)
 Headless: `tests/test_modifiers.py::{test_a_modifier_publishes_a_lane_a_route_can_source,test_a_modifier_whose_input_the_rig_lacks_is_dormant,test_the_mod_group_is_performance_and_its_params_come_and_go}`.
-ACID (F6); ROUTING: + smooth on `hand R energy`, route `mod 1 smooth`
-onto `fx.acid.mix` (position). Move the right hand, then take it out of
-the box. Then + a second modifier, route onto it, × it; ⌘Z. *Pass:*
-with the hand out the strip says "dormant" and the acid mix returns to
+ACID (F6); GRAPH: a smooth from the picker, `right energy` dropped on
+its in stub, its out stub dropped on *acid*'s and acid mix · mod picked.
+Move the right hand, then take it out of the box. Then a second
+modifier, a route from it, select it and × remove; ⌘Z. *Pass:* with the
+hand out the smooth's editor says "dormant" and the acid mix returns to
 its setting at once; back in the box, the smooth starts afresh with no
 glide in; the removed modifier's route stays listed and does nothing,
 and ⌘Z brings the modifier back and the route works again. *Fail:* the
 mix sticks at its last value or drops to 0 (a dormant lane read as 0);
-the route removed with the modifier.
+the route removed with the modifier (its wire stays, faint).
 
 **238. A preset holds its modifiers; `bindings.json` never does.** (copy)
 Headless: `tests/test_modifiers.py::{test_modifiers_live_in_the_preset_and_never_in_bindings_json,test_an_older_preset_without_the_key_loads_as_before}`.
-Build two modifiers on ROUTING; save as a new preset; load another, then
+Build two modifiers on GRAPH (the picker, then their editors); save as a new preset; load another, then
 this one; open `<home>/bindings.json` and the preset's file. *Pass:* the
 modifiers come back with their values; the file has a `modifiers` list
 after `routes`, one entry a line, and no `mod.*` id in `values`;
@@ -3339,7 +3357,8 @@ Headless: `tests/test_modifiers.py::test_a_template_may_carry_modifiers_and_a_pr
 Copy `tests/fixtures/modifiers/desk/mod-rig.json` into `<home>/desk/` and
 `tests/fixtures/modifiers/presets/mod-templated.json` into
 `<home>/presets/`; load MOD-TEMPLATED; save a copy under a new name and
-give the copy's `mod.1` a longer release on ROUTING; save. Edit the
+give the copy's `mod.1` a longer release in its editor on GRAPH (click
+its node); save. Edit the
 template's smooth (its release) and load each preset again. *Pass:* both
 show the template's modifiers; the copy keeps its own release; the
 template's edit reaches the preset that does not override it; neither
@@ -3353,30 +3372,36 @@ Add a modifier, drag its release, pick another input; ⌘Z three times,
 removes the modifier; redo puts them back. *Fail:* the add not undoable;
 one ⌘Z taking two changes.
 
-**241. "Right hand energy, smoothed, times band 0, into acid mix" on ROUTING.** (hand camera, music)
-Headless: `tests/test_modifiers.py::{test_the_routing_page_builds_the_smoothed_energy_times_band_patch,test_the_modifiers_strip_draws_between_the_routes_and_the_desk}`.
+**241. "Right hand energy, smoothed, times band 0, into acid mix" from the modifiers' editors.** (hand camera, music)
+Headless: `tests/test_modifiers.py::{test_the_routing_page_builds_the_smoothed_energy_times_band_patch,test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph}`.
 ACID with its acid mix lowered to 0.2 (a base at the top hides a push);
-on ROUTING: + modifier **smooth**, input `hand R energy`, release 0.6; +
-modifier **combine**, inputs `mod 1 smooth` and `0 sub`, how mul; +
-route from `mod 2 combine` onto `fx.acid.mix`, op pos, depth 1. *Pass:*
-the acid comes in as the right hand moves fast and pulses with the kick;
-it fades over about 0.6 s when the hand stops; both bars on the strip
-move. *Fail:* the combine reads 0 (an input combo not set); the source
-combo not offering `mod 2` one frame after adding it.
+GRAPH (since N7 the MODIFIERS strip is not on ROUTING): right-click the
+canvas → modifier ▸ **smooth**; click it, and in its editor pick input
+`hand R energy`, release 0.6; modifier ▸ **combine**, in its editor
+inputs `mod 1 smooth` and `0 sub`, how mul; drop the combine's out stub
+on *acid*'s in stub and pick acid mix · mod (op pos, depth 1: click the
+wire to see its row). *Pass:* the acid comes in as the right hand moves
+fast and pulses with the kick; it fades over about 0.6 s when the hand
+stops; both editors' bars (and the nodes' "out" lines) move. *Fail:* the
+combine reads 0 (an input combo not set); an input combo not offering
+`mod 1` one frame after adding it.
 
 **242. The GRAPH page shows one table.**
 Headless: `tests/test_graphview.py::{test_every_route_is_one_cable_and_every_cable_one_route,test_macro_subs_are_cables_into_base_or_depth,test_the_routing_page_and_the_graph_page_show_one_table,test_the_page_draws_with_a_factory_preset_and_a_render_graph}`.
-TRIP; GRAPH; then ROUTING, add a route; back to GRAPH. *Pass:* each
+TRIP; GRAPH; **expand all**; then right-click a slider on another page
+→ Route a lane here…; then **collapse all**. *Pass:* expanded, each
 route is one solid cable into a param's round `mod` stub, each desk and
-key row a faint cable into a square `base` stub; the head counts nodes
-and cables; the new route is a cable the next frame; SYSTEM shows `graph
-page: … ms median (N nodes, M cables)`, near 3 ms. *Fail:* a cable
-missing or doubled (`graphview.key` not moving); the frame rate drops
-with the page open.
+key row a faint cable into a square `base` stub; the head counts nodes,
+wires, cables; the new route is selected on GRAPH and its row is first
+in the pane; collapsed, every pair of boxes is one wire whose hover
+counts its cables (one more on the new route's wire); SYSTEM shows
+`graph page: … ms median (N nodes, M cables)`, near 1.3 ms collapsed.
+*Fail:* a cable missing or doubled (`graphview.key` not moving); the
+frame rate drops with the page open.
 
 **243. Params sit under their render nodes.**
 Headless: `tests/test_graphview.py::test_params_group_under_the_render_node_that_owns_them`.
-ACID with the hands on; GRAPH with **patched only** off. *Pass:*
+ACID with the hands on; GRAPH, **expand all**, **patched only** off. *Pass:*
 `view.*` on `shape`, `fx.acid.*` on `acid`, `dream.*` on `history`,
 `camera.*` on `eye`, `tempo` and `master` on nodes of their own. *Fail:*
 everything on group nodes (no render graph handed in yet).
@@ -3394,13 +3419,15 @@ snapping back while dragged; a factory preset dirty on load.
 
 **245. Hover and selection.**
 Headless: `tests/test_graphview.py::test_a_route_depth_follows_its_macro_and_its_slider_without_a_rebuild`.
-lfo-breathe; GRAPH. Hover a route; click it; press **beside**; click an
-effect's node. *Pass:* the hover says from → to, the reading and the
+lfo-breathe; GRAPH; expand the route's two ends (their **+**). Hover a
+route; click it; press **details beside**, then **details below**; click
+an effect's node. *Pass:* the hover says from → to, the reading and the
 depth (turning a depth-subscribing macro changes it); the click shows
-the route's ROUTING row under the canvas (CONTROLS at 540 px); **beside**
-moves it to a side column; editing the depth there moves the cable's
-thickness; an effect's node shows its FX strip. *Fail:* the tooltip in
-the wrong place.
+the route's ROUTING row under the canvas (CONTROLS at 540 px); **details
+beside** (there only while something is selected) moves it to a side
+column and **details below** back; editing the depth there moves the
+cable's thickness; an effect's node shows its FX strip. *Fail:* the
+tooltip in the wrong place.
 
 **246. Quit, ⌘R and a hot reload with GRAPH open.**
 Headless: `tests/test_graphview.py::test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_close`.
@@ -3411,14 +3438,14 @@ destroyed after imgui); a second canvas.
 
 **247. A cable dragged on the laptop screen at the control window's size.**
 Headless: `tests/test_graph_edit.py::{test_connecting_a_source_to_a_mod_port_adds_the_route_learn_would,test_a_taken_param_asks_and_replace_owner_lands_the_cable,test_moving_a_cables_end_moves_the_route_and_its_depth_subs_follow,test_dropping_a_modifier_on_a_cable_inserts_it,test_cable_near_follows_the_widgets_curve}`.
-The laptop alone, CONTROLS at 540 px; TRIP; GRAPH with **patched only**
-off on the analyzer and `shape`. 1. Drag band 2's pin to `view.bright`'s
+The laptop alone, CONTROLS at 540 px; TRIP; GRAPH; expand the analyzer
+and `shape` (their **+**) and turn **patched only** off. 1. Drag band 2's pin to `view.bright`'s
 round `mod` stub. 2. Drag that cable's `mod` end (from the stub) onto
 `view.speed`'s. 3. Drag a band onto a param a route already holds:
 Keep, then again and Replace. 4. Right-click the canvas: **modifier ▸
 smooth**; drag the new node over the band 2 cable and let go. 5. ⌘Z
-four times. *Pass:* the cable appears on release and ROUTING lists the
-row; after 2 it ends on `view.speed`; Replace / Keep comes up; the smooth
+four times. *Pass:* the cable appears on release and clicking it shows its
+row in the pane; after 2 it ends on `view.speed`; Replace / Keep comes up; the smooth
 sits between band 2 and `view.speed`; each ⌘Z takes one step back; a
 drop on a wrong pin goes red with words and makes nothing. *Fail:* no
 cable from a drag (`begin_create` not reached, or pins too small at this
@@ -3441,13 +3468,15 @@ stub". *Fail:* an empty menu; the cable only after the page is reopened.
 Headless: `tests/test_graph_edit.py::{test_nodes_the_picker_adds_and_delete_removes,test_the_routing_page_and_the_graph_page_show_one_table,test_undoing_an_insert_is_one_step_the_modifier_gone_the_route_as_it_was}`.
 ACID, its acid mix at 0.2, a copy saved under a new name (copy);
 GRAPH. Right-click: add a **smooth** and a **combine**. Drag `right
-energy` onto the smooth's `in`; the smooth's out onto the combine's `in
-1`, band 0 onto `in 2`; set **how** mul (the strip on ROUTING); the
-combine's out onto `fx.acid.mix`'s `mod`. Save, load another preset, load
+energy` onto the smooth's `in` (or its in stub, picking `in`); the
+smooth's out onto the combine's `in 1`, band 0 onto `in 2`; set **how**
+mul in the combine's editor (click its node); the combine's out onto
+`fx.acid.mix`'s `mod` (or *acid*'s stub). Save, load another preset, load
 it back. *Pass:* the acid comes in with the fast hand and pulses with the
-kick, fading over the release; ROUTING shows the same two modifiers and
-the route; the patch comes back where it was laid out. *Fail:* the
-combine reads 0 (an input unset); ROUTING's source combo lacks `mod 2`.
+kick, fading over the release; the two modifiers and the route (click
+the combine → acid wire) come back as they were, where they were laid
+out. *Fail:* the combine reads 0 (an input unset); an input combo lacks
+`mod 1`.
 
 **250. Deleting on the canvas.**
 Headless: `tests/test_graph_edit.py::{test_deleting_a_cable_removes_the_route_and_undo_puts_it_back,test_deleting_a_node_dispatches_by_kind}`.
@@ -3586,10 +3615,98 @@ between two Macs on this build.
 Headless: `tests/test_modifiers.py::test_an_older_preset_without_the_key_loads_as_before`, `tests/test_graph_wires.py::{test_no_factory_preset_changes,test_the_fixtures_load_clean_through_a_scratch_library}`.
 The copy's own presets, saved before this build; load each in turn,
 open ROUTING and GRAPH, save one, and compare its file with the backup.
-*Pass:* no note, no dirty dot; ROUTING as before; GRAPH draws every
-route; a save writes no `modifiers`, `layout` or `wires` key while
+*Pass:* no note, no dirty dot; ROUTING's desk, macros and session as
+before; GRAPH draws every route (expand all: one cable each); a save writes no `modifiers`, `layout` or `wires` key while
 nobody added a modifier, dragged a node or wired a cable. *Fail:* a note on load; a dirty dot from a load; a new key in
 a saved file.
+
+**N7, a legible graph (2026-10-20), checks 261–266.** After the owner's first look: every node starts collapsed, one wire a
+node pair while either end is collapsed, and GRAPH takes the routes and
+the modifiers (ROUTING keeps its desk, macros, session and sinks). The
+control window at its usual 960 × 900, CONTROLS at its usual width.
+
+**261. The collapsed graph on party-trip reads at a glance.** (laptop, APC40)
+Headless: `tests/test_graph_legible.py::{test_every_node_starts_collapsed_with_at_most_five_lines,test_the_apc40_to_one_shader_is_one_bundle_while_collapsed,test_the_page_draws_in_every_state}`.
+Launch on party-trip (or load it), the APC40 plugged in; open GRAPH.
+Read it from where you stand at the desk. Then SYSTEM: the `graph page:`
+line. *Pass:* a column of boxes on the left (apc40, apc40 (SHIFT), pad,
+leap, analyzer, key) and a handful of boxes to the right, each a title
+and one to four short lines ("137 ports · 97 patched", "> L x 0.57");
+from *apc40* one wire to *shape*, one to *fx*, one to *eye* — and, as
+expected, one wire to every other node the desk maps into: *apc40* and
+*apc40 (SHIFT)* each fan out one wire per target node, 19 between them
+on party-trip, most into the group boxes (band, preset, master,
+tempo …); the head reads
+about "55 nodes · 64 wires · 238 cables"; the SYSTEM line about 1.3 ms
+(N2's page: 2.3–2.8 ms). *Fail:* a node lists its ports before you
+expand it (the collapse default); two wires between the same two boxes
+on one layer (the bundling); the line over 2.3 ms (the caches).
+
+**262. Expand the APC40 and the shape: the real cables.** (laptop, APC40)
+Headless: `tests/test_graph_legible.py::{test_a_bundle_splits_into_its_cables_when_both_ends_expand,test_a_bundles_hover_and_side_pane_list_its_rows}`.
+On 261's page hover the apc40 → shape wire, then click it; then click
+*apc40*'s **+**, then *shape*'s **+**; then **collapse all**. *Pass:*
+the hover says "24 cables: …" with ten of them and "+ 14 more"; the
+click lists its cables in the pane under the canvas — these are desk
+rows, so as text lines ("<control> → <param> <op>"; a bundle's routes
+are ROUTING's rows, as on the analyzer → shape wire); with only *apc40* expanded it is still one wire into *shape*;
+with both expanded each patched control has its own cable into the
+shape's ports, and **expand all**'s chip has turned into **collapse
+all**, which brings back the boxes. *Fail:* cables appear while one end
+is collapsed; a wire ends in mid-air (a stub not drawn); the pane is
+empty for a route bundle.
+
+**263. A drag onto a collapsed node lands a route.** (laptop)
+Headless: `tests/test_graph_legible.py::test_a_drag_onto_a_collapsed_node_offers_its_ports_and_lands_through_edit`.
+Expand *analyzer* only. Drag from band 3's dot onto the little dot at
+the left of *shape*'s title (its in stub); hold, read the tooltip, let
+go, pick a param you know (Brightness · mod, as the menu writes it). Then right-click *shape*:
+**learn ▸** a group ▸ a param ▸ Learn hand ▸ right, and move the hand.
+*Pass:* the tooltip says "let go: pick one of shape's ports"; the menu
+lists only what band 3 can drive (no `base` stubs); the pick makes the
+route (the analyzer → shape wire's hover counts one cable more — it is
+already at its full thickness — and Brightness pulses with band 3), ⌘Z takes it back; the Learn lands a hand route without expanding
+*shape*. *Fail:* no menu (the drop not seen); a `base` entry offered; a
+second route on a taken param without the Replace / Keep question.
+
+**264. Tidy says what it did; the details chip.** (laptop)
+Headless: `tests/test_graph_legible.py::{test_tidy_collapses_all_relays_and_says_what_it_did,test_beside_shows_only_with_a_selection}`.
+On a fresh page click **tidy**. Then expand two nodes, drag one across
+the canvas, click **tidy** again. Then click a wire, and the
+**details beside** chip, and **details below**. *Pass:* the first tidy
+says "already tidy"; the second collapses both, puts every box back in
+its column, frames the canvas on them and says "laid out 55 nodes,
+every one collapsed"; ⌘Z puts the dragged box back; no details chip
+until something is selected, then "details beside" moves the pane to a
+column and "details below" back under the canvas. *Fail:* tidy leaves a
+node expanded or says nothing; the chip with nothing selected.
+
+**265. Energy → smooth → combine → acid mix, from GRAPH alone, with a hand.** (hand camera, laptop; copy)
+Headless: `tests/test_graph_legible.py::test_the_smoothed_energy_times_band_patch_from_graph_alone`.
+On the copy, a preset with the acid in its chain (or party-trip with
+acid on). On GRAPH only: right-click the canvas → modifier ▸ smooth, then
+modifier ▸ combine; expand *leap*, drag *right energy* onto the smooth's
+in stub, pick its input; drag the smooth's out onto the combine's stub,
+pick in 1; expand *analyzer*, drag band 0 onto the combine, pick in 2;
+click the combine: in the side pane set **how** to mul; drag the
+combine's out onto *acid*'s stub, pick acid mix · mod. Dance with the
+right hand to music. *Pass:* nothing needed ROUTING; the combine's
+pane shows its inputs, its params and its live bar; the acid mix swells
+with the hand's energy, smoothed, and pumps with the bass; the hand
+leaves and the mix settles back. *Fail:* a step that cannot be done on
+GRAPH; the pane cut off at the column's width.
+
+**266. ROUTING points to GRAPH; its desk section as before.** (APC40)
+Headless: `tests/test_graph_legible.py::test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay`, `tests/test_ui_routing.py::test_the_routing_page_is_one_page_over_the_loaded_preset`.
+Open ROUTING with the APC40 plugged in; click a desk control on the
+diagram; right-click a desk line → Learn; move a knob. Click the line
+"routes and modifiers: the GRAPH page". Then right-click any slider
+elsewhere → Route a lane here…. *Pass:* no route rows and no MODIFIERS
+strip on ROUTING; the desk section, the macros, the session and the
+sinks exactly as before (a click frames the control's line, Learn lands
+a desk row, the filter filters them); the pointer opens GRAPH; "Route a
+lane here…" opens GRAPH with the new route there. *Fail:* any change in
+the desk section's lines or Learn; the pointer does nothing.
 
 ## What no test covers
 
