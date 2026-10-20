@@ -6,19 +6,39 @@ canvas: the controllers, the analyzer, the LFOs, the modifiers and the
 macros on the left, the params grouped under the render node that owns
 them, the render graph's own image / geometry / mask cables, the
 outputs last. Cables are coloured by what they carry (`COLOURS`); a value
-cable's thickness follows its reading; a dormant one is faint. A node
-shows only its patched ports while it is collapsed — the page's
-**patched only** chip collapses every node, a node's own chip flips it —
-and an expanded node folds its port groups (the hands' axes, the desk's
+cable's thickness follows its reading; a dormant one is faint.
+
+**Legible by default** (plan 28 N7, the owner's decisions of 2026-10-20):
+every node starts **collapsed** — its title and at most five short lines
+(`graphview.summary`: what it holds, how much is patched, its live
+reading), no row per port, one ``in`` and one ``out`` stub on its title
+line. While either end of a pair is collapsed, every value / trigger
+cable between the two nodes is **one wire** (`graphview.VBundle`, drawn
+from stub to stub, as thick as it is many, capped; hover lists its
+cables; selected, the side pane lists its rows, each route as ROUTING's
+`_row`; Delete is refused in words). A render cable stays one wire each,
+drawn to a collapsed node's stub. A node's **+** (or the head's **expand
+all**) expands it: its ports as N2 drew them — the page's **patched
+only** chip and the node's own **all ports / patched only** chip within
+— and, both ends expanded, the real cables. A drag onto a collapsed
+node's stub opens a picker of its ports (`open_land`, `land`) and lands
+through `Edit.connect`; right-click a node for Learn on any of its params.
+The collapse state is the page's UI state (`st["open"]`), saved nowhere.
+**Tidy** collapses every node, forgets every position and says what it
+did; the details chip shows only with a selection on a narrow page.
+
+An expanded node folds its port groups (the hands' axes, the desk's
 knobs) one by one. A desk template's node (plan 28 N5) is a subgraph:
-collapsed it lists its mapped controls and draws none of its rows; its
-**+** opens it and its rows are cables (`is_open`, `drawn_cable`). A desk
+collapsed it draws none of its rows; its **+** opens it and its rows are
+cables (`is_open`, `drawn_cable`). A desk
 layer that is down (SHIFT not latched, or latched) draws its node and its
 ports faint. Hovering a cable says its reading and its depth; a
 port, its reading; a device, its status. Selecting a route shows its
 ROUTING row (`ui_routing._row`, the same widgets, the same table) beside
-the canvas — below it while the page is narrow — and selecting an effect's
-node shows its strip (`ui_fx.strip`).
+the canvas — below it while the page is narrow — selecting an effect's
+node shows its strip (`ui_fx.strip`), and a modifier's node the
+MODIFIERS strip's editor for it (`ui_routing.modifier_block`, plan 28
+N7: GRAPH edits the routes and the modifiers; ROUTING points here).
 
 **Editing the modulation** (plan 28 N3): a cable dragged between two
 pins (`_create`) and a cable or node deleted (`_delete`) go through
@@ -54,10 +74,14 @@ pushed only once the edit is read back and accepted.
 A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
-node takes `graphview.auto_layout`'s column; **tidy** forgets every
-position on the canvas and lays them all out again — one undo step
-(`forget`). The selection shows under the canvas on the panel's narrow
-page; **beside** (or a page 720 px wide) puts it in a side column.
+node takes `graphview.auto_layout`'s column; **tidy** (`tidy`) collapses
+every node, forgets every position on the canvas and lays them all out
+again — one undo step for the positions (`forget`) — frames the canvas
+on them and says so on the head ("laid out 55 nodes, every one
+collapsed", or "already tidy"). The selection shows under the canvas on
+the panel's narrow page; the **details beside / below** chip, drawn only
+while something is selected, moves it (a page 720 px wide puts it in a
+side column by itself, no chip).
 
 **The editor context** is the widget's own C++ object: made on the first
 draw of the page, held in the panel's state (``panel._graph``) — not in
@@ -99,12 +123,19 @@ SIDE_W = 320.0           # the side column, when the page is wide enough for it
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
-PATCHED_TIP = ("Patched only: every node shows just its patched ports — "
-               "a node's own ± flips it")
-TIDY_TIP = ("Forget every position on the canvas and lay every node out again by kind "
-            "(⌘Z puts them back)")
-BESIDE_TIP = ("The selection beside the canvas instead of under it — widen CONTROLS "
-              "to give both room (it is beside by itself on a page this wide)")
+PATCHED_TIP = ("Patched only: an expanded node shows just its patched ports — "
+               "its own all / patched chip flips it")
+TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay them all "
+            "out again by kind (⌘Z puts the positions back)")
+BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
+              "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
+# plan 28 N7: a bundle's thickness follows how many cables it holds, capped
+BUNDLE_STEP = 0.6        # px a cable, past the first
+BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more
+EXPAND_TIP = "Expand this node: a row per port, its real cables"
+COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
+ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
+           "to a handful of boxes and wires")
 
 
 # ---------------------------------------------------------------- state and context
@@ -123,6 +154,11 @@ def _state(panel) -> dict:
     for k, make in EDIT_STATE:                     # plan 28 N3's keys
         st.setdefault(k, make())
     st.setdefault("said", "")               # plan 28 N4: the last render edit
+    # plan 28 N7: the expanded nodes (every other one is collapsed: the
+    # default), the bundles drawn last frame by id, how many wires were
+    # drawn, a drag let go on a collapsed node's stub (its port picker)
+    for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None)):
+        st.setdefault(k, make())
     return st
 
 
@@ -239,22 +275,33 @@ def template_of(panel):
         return None
 
 
-def expanded(st: dict, nid: str) -> bool:
-    """Is node `nid` showing every port? The page's chip, flipped by the node's own."""
+def full(st: dict, nid: str) -> bool:
+    """Does expanded node `nid` show every port, not just its patched ones?
+    The page's **patched only** chip, flipped by the node's own."""
     return (not st["patched_only"]) != (nid in st["flip"])
 
 
 def is_open(st: dict, nid: str) -> bool:
-    """Is subgraph node `nid` (a desk template's, plan 28 N5) open — its
-    rows drawn as cables? Each one starts collapsed: one node whose ports
-    are its mapped controls."""
+    """Is node `nid` expanded (plan 28 N7: every node starts collapsed — its
+    title and a few lines, one wire per neighbour)? For a desk template's
+    node (plan 28 N5) open is also when its rows are drawn as cables."""
     return nid in st.setdefault("open", set())
 
 
+def collapsed(st: dict, nid: str) -> bool:
+    """Is node `nid` collapsed (the default)?"""
+    return not is_open(st, nid)
+
+
 def toggle_open(st: dict, nid: str) -> None:
-    """Open a collapsed subgraph node, or collapse an open one."""
+    """Expand a collapsed node, or collapse an expanded one."""
     st.setdefault("open", set())
     st["open"] ^= {nid}
+
+
+def expand_all(st: dict, view: graphview.View, on: bool) -> None:
+    """The head's **expand all** (`on`) / **collapse all**."""
+    st["open"] = {n.id for n in view.nodes} if on else set()
 
 
 def drawn_cable(st: dict, c: graphview.VCable) -> bool:
@@ -274,11 +321,14 @@ def hidden_by(st: dict, view: graphview.View, pin: str) -> str:
 
 
 def shown(st: dict, n: graphview.VNode) -> list[graphview.VPort]:
-    """The ports node `n` draws (`graphview.visible` with this page's state);
-    a desk template's node shows every mapped control, open or not."""
+    """The ports node `n` draws: none while it is collapsed (plan 28 N7);
+    expanded, `graphview.visible` with this page's state — a desk
+    template's node every mapped control."""
+    if collapsed(st, n.id):
+        return []
     if n.kind == graphview.TEMPLATE:
         return list(n.ports)
-    return graphview.visible(n, expanded(st, n.id), st["folds"])
+    return graphview.visible(n, full(st, n.id), st["folds"])
 
 
 def forget(panel, view: graphview.View) -> None:
@@ -296,6 +346,40 @@ def forget(panel, view: graphview.View) -> None:
                 del m[nid]
 
 
+TIDIED = "laid out {n} nodes, every one collapsed"
+ALREADY_TIDY = "already tidy"
+
+
+def layout_of(st: dict, view: graphview.View, stored=None) -> dict:
+    """`graphview.auto_layout` with this page's state: a collapsed node its
+    title and lines, an expanded one its ports."""
+    return graphview.auto_layout(
+        view, stored, lambda nid: full(st, nid) or nid.startswith(f"{graphview.TEMPLATE}:"),
+        st["folds"], collapsed=lambda nid: collapsed(st, nid))
+
+
+def tidy(panel, st: dict, view: graphview.View) -> str:
+    """The head's **tidy** (plan 28 N7: it always does something you can
+    see, or says why not): every node collapsed, every position on the
+    canvas forgotten (`forget`, one undo step), every node laid out again
+    by column — and the head says what it did ("laid out 55 nodes, every
+    one collapsed"), or "already tidy" when nothing moved or folded. The
+    canvas is framed on the nodes after it (`st["frame"]`)."""
+    was_open = bool(st["open"])
+    st["open"] = set()
+    st["flip"].clear()
+    before = dict(st["applied"])
+    forget(panel, view)
+    auto = layout_of(st, view)
+    moved = sum(1 for n in view.nodes
+                if before.get(n.id) is None or tuple(round(v) for v in before[n.id])
+                != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0))))
+    said = TIDIED.format(n=len(view.nodes)) if (moved or was_open) else ALREADY_TIDY
+    st["note"], st["said"] = "", said
+    st["frame"] = True
+    return said
+
+
 # ---------------------------------------------------------------- the page
 
 def page(panel, dt: float) -> None:
@@ -307,9 +391,9 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no router attached")
         return
     st = _state(panel)
-    _head(panel, st, view)
-    imgui.separator()
     sel = _selection(st, view)
+    _head(panel, st, view, sel is not None)
+    imgui.separator()
     avail = imgui.get_content_region_avail()
     wide = st["beside"] or avail.x >= WIDE
     cw = avail.x - (SIDE_W + imgui.get_style().item_spacing.x if sel and wide else 0.0)
@@ -326,9 +410,30 @@ def page(panel, dt: float) -> None:
     del times[:-TIMES]
 
 
-def _head(panel, st: dict, view: graphview.View) -> None:
+def beside_chip(selected: bool, width: float, beside: bool) -> str | None:
+    """The head's details chip (plan 28 N7): shown only while something is
+    selected and the page is narrower than `WIDE` (that wide, the details
+    sit beside the canvas by themselves), labelled by what a click does."""
+    if not selected or width >= WIDE:
+        return None
+    return "details below" if beside else "details beside"
+
+
+def head_line(st: dict, view: graphview.View) -> str:
+    """The head's counts: the nodes, the wires drawn last frame (a bundle is
+    one), the cables they stand for, how many are live."""
     live = sum(1 for c in view.cables if not c.dormant)
-    imgui.text_disabled(f"{len(view.nodes)} nodes  ·  {len(view.cables)} cables  ·  {live} live")
+    return (f"{len(view.nodes)} nodes  ·  {st['wires']} wires  ·  {len(view.cables)} cables"
+            f"  ·  {live} live")
+
+
+def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None:
+    width = imgui.get_content_region_avail().x
+    any_open = bool(st["open"])
+    if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
+        expand_all(st, view, not any_open)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(ALL_TIP)
     imgui.same_line()
     if ui.lit_chip("patched only##graph", st["patched_only"]):
         st["patched_only"] = not st["patched_only"]
@@ -340,11 +445,19 @@ def _head(panel, st: dict, view: graphview.View) -> None:
         st["tidy"] = True
     if imgui.is_item_hovered():
         imgui.set_tooltip(TIDY_TIP)
+    label = beside_chip(selected, width, st["beside"])
+    if label is not None:
+        imgui.same_line()
+        if ui.chip(f"{label}##graph"):
+            st["beside"] = not st["beside"]
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(BESIDE_TIP)
+    # the counts after the chips, cut to what is left of the line
     imgui.same_line()
-    if ui.lit_chip("beside##graph", st["beside"]):
-        st["beside"] = not st["beside"]
+    line = head_line(st, view)
+    imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(BESIDE_TIP)
+        imgui.set_tooltip(line)
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
     elif st["said"]:                        # plan 28 N4: the last render edit
@@ -357,15 +470,14 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     """Every node where it belongs this frame: the preset's or the show's
     position, else the automatic column; set on the canvas only when that
     differs from what was last set, so a node being dragged is left alone.
-    A tidy forgets the canvas's positions in both maps first."""
+    A tidy (`tidy`) collapses every node and forgets the canvas's positions
+    in both maps first."""
     if st["tidy"]:
         st["tidy"] = False
-        forget(panel, view)
+        tidy(panel, st, view)
     pre, show = _layouts(panel)
     stored = {**(show or {}), **(pre or {})}
-    auto = graphview.auto_layout(
-        view, stored, lambda nid: expanded(st, nid) or nid.startswith(f"{graphview.TEMPLATE}:"),
-        st["folds"])
+    auto = layout_of(st, view, stored)
     applied = st["applied"]
     for n in view.nodes:
         xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
@@ -404,9 +516,23 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     drawn: set[str] = set()
     for n in view.nodes:
         _node(st, n, drawn)
-    for c in view.cables:
-        if c.src_port in drawn and c.dst_port in drawn and drawn_cable(st, c):
-            _cable(st, c)
+    # plan 28 N7: one wire per node pair while either end is collapsed
+    singles, bundles = graphview.wiring(view, lambda nid: collapsed(st, nid),
+                                        lambda c: drawn_cable(st, c))
+    wires = 0
+    for c, a, b in singles:
+        if a in drawn and b in drawn:
+            _cable(st, c, a, b)
+            wires += 1
+    st["bundles"] = {}
+    for b in bundles:
+        if b.src_port in drawn and b.dst_port in drawn:
+            _bundle(st, b)
+            st["bundles"][b.id] = b
+            wires += 1
+    st["wires"] = wires
+    if st.pop("frame", False):          # a tidy: the canvas framed on its nodes
+        ed.navigate_to_content()
     _create(panel, st, view)
     _delete(panel, st, view)
     _menus(panel, st, view)
@@ -439,25 +565,52 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
     st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
 
 
+def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:
+    """A node's single in or out stub (plan 28 N7): where its bundles and
+    its collapsed render cables end, and where a drag lands to pick a port."""
+    _pin(st, pin, kind, graphview.VPort(pin, "", "", patched=lit), "", drawn)
+
+
 def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
+    shut = collapsed(st, n.id)
+    has_in = any(p.direction == graphview.IN for p in n.ports)
+    has_out = any(p.direction == graphview.OUT for p in n.ports)
+    # the title line: [in stub] label [+ / -] [out stub]
+    if has_in:
+        _stub(st, graphview.stub_in(n.id), ed.PinKind.input, n.wires > 0, drawn)
+        imgui.same_line()
     # a desk layer that is down (plan 28 N5) reads like a lost device: faint
     imgui.push_style_color(imgui.Col_.text, ui.FAINT if n.grey or not n.up else ui.TEXT)
-    imgui.text(ui.fit_text(n.label, NODE_W - 24))
+    imgui.text(ui.fit_text(n.label, NODE_W - 28 - 2 * PIN))
     imgui.pop_style_color()
-    imgui.same_line(NODE_W - 12)
-    if n.kind == graphview.TEMPLATE:          # a subgraph: its button opens it
-        full = True
-        if imgui.small_button("-" if is_open(st, n.id) else "+"):
-            toggle_open(st, n.id)
+    imgui.same_line(NODE_W - 14 - PIN)
+    if imgui.small_button("+" if shut else "-"):
+        toggle_open(st, n.id)
+    if imgui.is_item_hovered():
+        ed.suspend()
+        imgui.set_tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
+        ed.resume()
+    if has_out:
+        imgui.same_line(NODE_W - PIN)
+        _stub(st, graphview.stub_out(n.id), ed.PinKind.output, n.wires > 0, drawn)
+    if shut:                                    # its title and at most five lines
+        for line in graphview.summary(n):
+            imgui.text_disabled(ui.fit_text(line, NODE_W))
+        imgui.dummy(imgui.ImVec2(NODE_W, 0))
+        imgui.pop_id()
+        ed.end_node()
+        return
+    if n.kind == graphview.TEMPLATE:          # a subgraph: every mapped control
+        every = True
     else:
-        full = expanded(st, n.id)
-        if imgui.small_button("-" if full else "+"):
+        every = full(st, n.id)
+        if imgui.small_button("patched only" if every else "all ports"):
             st["flip"] ^= {n.id}
     ports = shown(st, n)
     group = None
-    many = graphview.grouped(n, full)
+    many = graphview.grouped(n, every)
     for port in (n.ports if many else ports):
         if many and port.group != group:
             group = port.group
@@ -489,7 +642,9 @@ def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
     imgui.text_colored(ui.TEXT if port.patched else ui.DIM, text)
 
 
-def _cable(st: dict, c: graphview.VCable) -> None:
+def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = None) -> None:
+    """One cable, from pin `a` to pin `b` (its own ends, or a collapsed
+    node's stub for a render cable: plan 28 N7)."""
     k = COLOURS.get(c.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else k.w)
     if c.type == graphview.VALUE:
@@ -497,8 +652,23 @@ def _cable(st: dict, c: graphview.VCable) -> None:
         thick = THIN + (THICK - THIN) * max(0.0, min(1.0, abs(u)))
     else:
         thick = WIRE
-    ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, c.src_port)),
-            ed.PinId(_id(st, c.dst_port)), col, thick)
+    ed.link(ed.LinkId(_id(st, "c:" + c.id)), ed.PinId(_id(st, a or c.src_port)),
+            ed.PinId(_id(st, b or c.dst_port)), col, thick)
+
+
+def bundle_thickness(count: int) -> float:
+    """A bundle's line (plan 28 N7): a single cable's resting width, a
+    little more for each cable past the first, capped at `BUNDLE_MAX`."""
+    return min(BUNDLE_MAX, WIRE + BUNDLE_STEP * max(0, count - 1))
+
+
+def _bundle(st: dict, b: graphview.VBundle) -> None:
+    """The one wire between two nodes while either is collapsed: coloured
+    by what it carries, as thick as it is many, faint while dormant."""
+    k = COLOURS.get(b.type, ui.DIM)
+    col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if b.dormant else k.w)
+    ed.link(ed.LinkId(_id(st, "c:" + b.id)), ed.PinId(_id(st, b.src_port)),
+            ed.PinId(_id(st, b.dst_port)), col, bundle_thickness(b.count))
 
 
 def _said(v: float | None) -> str:
@@ -531,8 +701,16 @@ def _hover(st: dict, view: graphview.View) -> None:
     node = ed.get_hovered_node().id()
     if link:
         cid = names.get(link, "")[2:]
-        c = next((x for x in view.cables if x.id == cid), None)
-        tip = cable_tip(view, c) if c is not None else None
+        bundle = st["bundles"].get(cid)
+        c = next((x for x in view.cables if x.id == cid), None) if bundle is None else None
+        tip = (graphview.bundle_tip(view, bundle) if bundle is not None
+               else cable_tip(view, c) if c is not None else None)
+    elif pin and graphview.is_stub(names.get(pin, "")):
+        n = view.node(graphview.stub_node(names[pin]))
+        if n is not None:
+            side = "in" if graphview.pin_kind(names[pin]) == graphview.STUB_IN else "out"
+            tip = (f"{n.label} {side}: {n.wires} cable{'s' if n.wires != 1 else ''}\n"
+                   f"drag a cable here to pick one of its ports")
     elif pin:
         hit = view.owner(names.get(pin, ""))
         if hit is not None and hit[1] is not None:
@@ -691,6 +869,9 @@ def _selection(st: dict, view: graphview.View):
     names = st["names"]
     for lk in ed.get_selected_links():
         cid = names.get(lk.id(), "")[2:]
+        b = st["bundles"].get(cid)
+        if b is not None:                       # plan 28 N7: a bundle's rows
+            return ("bundle", b)
         c = next((x for x in view.cables if x.id == cid), None)
         if c is not None:
             return ("cable", c)
@@ -704,21 +885,34 @@ def _selection(st: dict, view: graphview.View):
 def _side(panel, st: dict, view: graphview.View, sel) -> None:
     what, obj = sel
     router = ui_routing.router_of(panel)
+    if what == "bundle":                        # plan 28 N7: each of its rows
+        b = obj
+        ui._micro("bundle")
+        imgui.text_wrapped(graphview.bundle_tip(view, b).split("\n")[0])
+        imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
+                            f"{graphview.EXPAND_TO_EDIT} on the canvas")
+        imgui.separator()
+        route_rows(panel, [c.ref for c in b.cables if c.kind == "route"])
+        for c in b.cables:                      # the rest: a desk row, a subscriber …
+            if c.kind != "route":
+                imgui.text_disabled(ui.fit_text(
+                    f"{graphview.cable_words(view, c)}  {c.label}".rstrip(),
+                    imgui.get_content_region_avail().x))
+        return
     if what == "cable":
         c = obj
         ui._micro(c.kind)
-        if c.kind == "route" and router is not None:
-            rows = router.table.routes()
-            k = next((i for i, b in enumerate(rows) if b is c.ref), None)
-            if k is not None and ui_routing._row(panel, router, c.ref, k):
-                undo.push(f"delete route {c.ref.source} → {c.ref.target}")
-                router.table.remove(c.ref)
-            return
-        imgui.text_wrapped(cable_tip(view, c))
+        _route_row(panel, router, view, c)
         return
     n = obj
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
+        return
+    m = router.table.modifier(n.id) if router is not None and n.kind == "modifier" else None
+    if m is not None:                           # plan 28 N7: the MODIFIERS strip's editor
+        ui._micro("modifier")
+        if ui_routing.modifier_block(panel, router, m, stacked=True):
+            ui_routing.remove_modifier(panel, m.id)
         return
     ui._micro(n.kind)
     imgui.text(n.label)
@@ -727,6 +921,41 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+def _route_row(panel, router, view: graphview.View, c: graphview.VCable) -> None:
+    """A cable in the side pane: a route as its ROUTING row (`ui_routing._row`,
+    the one table — its × deletes it, one undo step); anything else in words."""
+    if c.kind == "route" and router is not None:
+        rows = router.table.routes()
+        k = next((i for i, b in enumerate(rows) if b is c.ref), None)
+        if k is not None:
+            if ui_routing._row(panel, router, c.ref, k):
+                undo.push(f"delete route {c.ref.source} → {c.ref.target}")
+                router.table.remove(c.ref)
+            return
+    imgui.text_wrapped(cable_tip(view, c))
+
+
+def route_rows(panel, rows) -> None:
+    """Routes `rows` as the side pane lists a bundle's (plan 28 N7): each
+    its ROUTING row (`ui_routing._row`), under its own id, the source
+    combo's list built once for the lot (as ROUTING's page did)."""
+    router = ui_routing.router_of(panel)
+    if router is None:
+        return
+    rst = ui_routing._state(panel)
+    rst["sources"] = ui_routing._sources(panel, router) if rows else None
+    view = _state(panel)["view"]
+    try:
+        for i, b in enumerate(rows):
+            imgui.push_id(f"rows{i}")
+            if i:
+                imgui.separator()
+            _route_row(panel, router, view, graphview.VCable("", "", "", ref=b, kind="route"))
+            imgui.pop_id()
+    finally:
+        rst["sources"] = None                   # this draw's only
 
 
 def timing_line(panel) -> str:
@@ -938,8 +1167,104 @@ def _create(panel, st: dict, view: graphview.View) -> None:
         if got is not None:
             pa, pb = st["names"].get(got[0]), st["names"].get(got[1])
             if pa and pb and pa != pb:
-                CREATE.get(_drag_type(view, pa, pb), _create_render)(panel, st, view, pa, pb)
+                if graphview.is_stub(pa) or graphview.is_stub(pb):   # plan 28 N7
+                    _stub_drag(panel, st, view, pa, pb)
+                else:
+                    CREATE.get(_drag_type(view, pa, pb), _create_render)(panel, st, view,
+                                                                         pa, pb)
         ed.end_create()                 # only after a begin that opened (the widget asserts)
+
+
+# ---- plan 28 N7: a drag onto a collapsed node's stub, and landing it ----
+
+BOTH_STUBS = "drag from a port: expand one of the two nodes first"
+LAND_HINT = "let go: pick one of {label}'s ports"
+LAND = "##graph.land"
+
+
+def stub_refusal(view: graphview.View, a: str, b: str) -> str | None:
+    """Why a drag between pins `a` and `b`, one of them a node's stub, can
+    open no port picker: both are stubs, or both are outputs (inputs)."""
+    if graphview.is_stub(a) and graphview.is_stub(b):
+        return BOTH_STUBS
+    stub, fixed = (a, b) if graphview.is_stub(a) else (b, a)
+    into = graphview.pin_kind(stub) == graphview.STUB_IN
+    if into == (not graphview.is_output(fixed)):
+        return graphview.SAME_SIDE
+    return None
+
+
+def _stub_drag(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
+    """A cable dragged onto (or from) a collapsed node's stub: held, it says
+    which node's ports it will offer; let go, the picker opens (`st["land"]`,
+    drawn by `_menus`) — what it lands on goes through `land`."""
+    why = stub_refusal(view, a, b)
+    if why is not None:
+        _drag_tip(why)
+        ed.reject_new_item(imgui.ImVec4(*REFUSED_RGB), 2.0)
+        return
+    stub, fixed = (a, b) if graphview.is_stub(a) else (b, a)
+    nid = graphview.stub_node(stub)
+    n = view.node(nid)
+    _drag_tip(LAND_HINT.format(label=n.label if n is not None else nid))
+    if ed.accept_new_item(COLOURS[graphview.VALUE], 2.0):
+        open_land(panel, st, view, fixed, nid)
+
+
+def open_land(panel, st: dict, view: graphview.View, fixed: str, nid: str) -> list:
+    """The port picker for a drag from pin `fixed` let go on node `nid`'s
+    stub: its choices (`graphview.land_choices`, each with the refusal
+    `Edit.connect` would give) held in `st["land"]` until one is picked or
+    the menu closes; the next `_menus` opens it. Returns the choices."""
+    e = edit_of(panel, view) if not _is_render_pin(view, fixed) else render_edit(panel)
+    choices = graphview.land_choices(view, e, fixed, nid)
+    st["land"] = {"fixed": fixed, "node": nid, "choices": choices, "open": True}
+    return choices
+
+
+def _is_render_pin(view: graphview.View, pin: str) -> bool:
+    return graphview.Edit(None, None, None, view).is_render(pin)
+
+
+def land(panel, fixed: str, pin: str):
+    """A port picked from a stub's picker: the cable from `fixed` to `pin`
+    (either order) as if it had been dragged there — a value cable through
+    `connect` (`Edit.connect`, one undo step), a render cable through the
+    render edits (`Edit.wire`). The picker closes."""
+    st = _state(panel)
+    st["land"] = None
+    view = st["view"]
+    if view is not None and _is_render_pin(view, fixed):
+        src, dst = graphview.Edit.ordered(fixed, pin)
+        return _render_said(panel, render_edit(panel), lambda e: e.wire(src, dst), st)
+    return connect(panel, fixed, pin)
+
+
+def _land_menu(panel, st: dict, view: graphview.View) -> None:
+    """The stub's picker: the node's ports a drag may land on, by port
+    group when there are many; a refused one dim, its reason on hover."""
+    held = st["land"]
+    n = view.node(held["node"])
+    label = n.label if n is not None else held["node"]
+    ui._micro(f"onto {label}")
+    ok = [c for c in held["choices"] if c[3] is None]
+    if not ok:
+        first = next((c[3] for c in held["choices"] if c[3]), None)
+        imgui.text_disabled(graphview.NOTHING_TAKES.format(label=label)
+                            + (f": {first}" if first else ""))
+        return
+    groups: dict[str, list] = {}
+    for c in ok:
+        groups.setdefault(c[2] or "", []).append(c)
+    nested = len(ok) > 12 and len(groups) > 1
+    for g, items in groups.items():
+        if nested and not imgui.begin_menu(f"{g or 'misc'} ({len(items)})"):
+            continue
+        for pin, text, _, _ in items:
+            if imgui.menu_item_simple(f"{text}##{pin}"):
+                land(panel, held["fixed"], pin)
+        if nested:
+            imgui.end_menu()
 
 
 def _value_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
@@ -983,6 +1308,14 @@ DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "render": _delete_render_node, "output": _delete_render_node}
 
 
+def delete_bundle(st: dict, b: graphview.VBundle) -> str:
+    """Delete pressed on a bundle (plan 28 N7): kept, and the head says how
+    to edit its cables ("expand a node to edit its cables"). Returns the words."""
+    ed.reject_deleted_item()
+    _note(st, graphview.EXPAND_TO_EDIT)
+    return graphview.EXPAND_TO_EDIT
+
+
 def _delete(panel, st: dict, view: graphview.View) -> None:
     """The widget's delete query: the selection's nodes first, by kind
     (`DELETE_NODE`), then its cables, by kind (`DELETE`). The first
@@ -1002,6 +1335,9 @@ def _delete(panel, st: dict, view: graphview.View) -> None:
             lk = ed.LinkId()
             while ed.query_deleted_link(lk):
                 cid = names.get(lk.id(), "")[2:]
+                if cid in st["bundles"]:                # plan 28 N7: refused in words
+                    delete_bundle(st, st["bundles"][cid])
+                    continue
                 c = next((x for x in view.cables if x.id == cid), None)
                 if c is None:
                     ed.reject_deleted_item()
@@ -1034,6 +1370,15 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
     if imgui.begin_popup(MENU):
         menu(panel, st, view)
         imgui.end_popup()
+    held = st["land"]                       # plan 28 N7: a drag let go on a stub
+    if held is not None:
+        if held.pop("open", False):
+            imgui.open_popup(LAND)
+        if imgui.begin_popup(LAND):
+            _land_menu(panel, st, view)
+            imgui.end_popup()
+        else:
+            st["land"] = None               # closed without a pick
     ed.resume()
 
 
@@ -1043,8 +1388,11 @@ def menu(panel, st: dict, view: graphview.View) -> None:
     if what == "pin":
         _pin_menu(panel, view, name)
     elif what == "cable":
-        c = next((x for x in view.cables if x.id == name), None)
-        if c is not None:
+        b = st["bundles"].get(name)
+        c = next((x for x in view.cables if x.id == name), None) if b is None else None
+        if b is not None:
+            _bundle_menu(panel, st, view, b)
+        elif c is not None:
             _cable_menu(panel, view, c)
     elif what == "node":
         n = view.node(name)
@@ -1093,8 +1441,46 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
             disconnect(panel, c)
 
 
+def _bundle_menu(panel, st: dict, view: graphview.View, b: graphview.VBundle) -> None:
+    """A bundle's menu (plan 28 N7): what it holds, expand its ends (its
+    cables appear), and no delete — "expand a node to edit its cables"."""
+    imgui.text_disabled(graphview.bundle_tip(view, b).split("\n")[0])
+    imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''}")
+    if imgui.menu_item_simple("expand both ends"):
+        st["open"] |= {b.src, b.dst}
+    imgui.menu_item_simple(f"delete: {graphview.EXPAND_TO_EDIT}", enabled=False)
+
+
+def learn_params(n: graphview.VNode) -> dict[str, list[str]]:
+    """The params a node's right-click offers Learn on (plan 28 N7, so a
+    collapsed render node can be learned without expanding): each param
+    port's id, by its port group."""
+    out: dict[str, list[str]] = {}
+    for p in n.ports:
+        if p.param is not None and p.direction == graphview.IN:
+            out.setdefault(p.group or "", []).append(p.param)
+    return out
+
+
 def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
     imgui.text_disabled(n.label)
+    st = _state(panel)
+    if imgui.menu_item_simple("collapse" if is_open(st, n.id) else "expand"):
+        toggle_open(st, n.id)
+    params = learn_params(n)
+    if params and imgui.begin_menu("learn"):            # N3's param Learn, per param
+        nested = len(params) > 1
+        for g, pids in params.items():
+            if nested and not imgui.begin_menu(f"{g or 'misc'} ({len(pids)})"):
+                continue
+            for pid in pids:
+                p = panel.reg.get(pid)
+                if imgui.begin_menu(f"{p.label if p is not None and p.label else pid}##{pid}"):
+                    _pin_menu(panel, view, f"{graphview.MOD}:{pid}")
+                    imgui.end_menu()
+            if nested:
+                imgui.end_menu()
+        imgui.end_menu()
     if n.kind in ("modifier", "macro") and imgui.menu_item_simple("delete"):
         remove_node(panel, n.id)
     if n.kind in ("render", "output"):

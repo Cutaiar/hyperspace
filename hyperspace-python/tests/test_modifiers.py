@@ -484,11 +484,13 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
         panel, router, router.table.modifier("mod.1")))
 
 
-def test_the_modifiers_strip_draws_between_the_routes_and_the_desk(shell_rig, tmp_path,  # noqa: F811
-                                                                   monkeypatch):
-    """The strip on the real page: its title after the routes' and before
-    the desk's, each modifier's kind, its live output, its params as the
-    panel's own widgets — and every widget its own imgui id."""
+def test_the_modifiers_strip_draws_its_blocks_and_routing_points_to_graph(
+        shell_rig, tmp_path, monkeypatch):  # noqa: F811
+    """The strip's function (`ui_routing.modifiers`): each modifier's kind,
+    its live output, its params as the panel's own widgets — and every
+    widget its own imgui id. Plan 28 N7: the real ROUTING page no longer
+    draws it (its pointer line to GRAPH is where routes and modifiers
+    were, before the desk); GRAPH's side pane draws a modifier's block."""
     panel, reg = shell_rig.panel, shell_rig.reg
     table = Bindings.factory(path=routing.bindings_path(tmp_path))
     router = panel.router = Router(reg, table)
@@ -514,7 +516,16 @@ def test_the_modifiers_strip_draws_between_the_routes_and_the_desk(shell_rig, tm
     texts.clear()
     ids.clear()
     frame(panel)
-    assert texts.index("ROUTES") < texts.index("MODIFIERS") < texts.index("DESK  ·  PRESET LAYER")
+    assert texts.index(ui_routing.POINTER) < texts.index("DESK  ·  PRESET LAYER")
+    assert "ROUTES" not in texts and "MODIFIERS" not in texts
+    texts.clear()
+    ids.clear()
+    imgui.new_frame()                       # the strip's function, drawn on its own
+    imgui.begin("strip")
+    ui_routing.modifiers(panel, router)
+    imgui.end()
+    imgui.end_frame()
+    assert texts.index("MODIFIERS") == 0
     assert {"smooth", "combine", "threshold", "0.50", "1.00", "dormant"} <= set(texts)
     dup = {i for i in ids if ids.count(i) > 1}
     assert not dup, f"conflicting ids {sorted(dup)}"

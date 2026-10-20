@@ -346,6 +346,10 @@ def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
     assert st["created"] == 1 and st["editor"] is not None
     assert view.node("render:acid") is not None
     assert all(n.id in st["applied"] for n in view.nodes)   # every node placed
+    # plan 28 N7: every node starts collapsed; expanded, a route is its own cable
+    assert not st["open"]
+    ui_graph.expand_all(st, view, True)
+    frame(rig.panel, "graph")
     st["patched_only"] = False
     frame(rig.panel, "graph")
     st["folds"].add(("render:shape", "view"))

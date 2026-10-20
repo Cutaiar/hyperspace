@@ -852,9 +852,12 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the preset
-    strip and the header stay put (by design; audit U1)."""
+    strip and the header stay put (by design; audit U1). Plan 28 N7: the
+    routes are GRAPH's now — forty of them draw no line here — and the
+    child holds the desk, the macros, the session and the sinks, which
+    overflow it on their own."""
     reg, table = rig.reg, rig.router.table
-    for p in reg:                       # enough rows to overflow: one per free target
+    for p in reg:                       # forty routes: none of them a line here now
         if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
@@ -863,17 +866,18 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
         if len(table.routes()) >= 40:
             break
     assert len(table.routes()) >= 40
-    inner = []
-    row = ui_routing._row
+    inner, rows = [], []
+    sinks, row = ui_routing.sinks, ui_routing._row
 
-    def measured(panel, router, b, k):
-        out = row(panel, router, b, k)
-        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child
-        return out
-    monkeypatch.setattr(ui_routing, "_row", measured)
+    def measured(panel, router):
+        sinks(panel, router)
+        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child, at its end
+    monkeypatch.setattr(ui_routing, "sinks", measured)
+    monkeypatch.setattr(ui_routing, "_row", lambda *a: rows.append(a) or row(*a))
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page itself scrolled"
-    assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+    assert inner and inner[-1] > 0, "the child did not scroll with the factory desk"
+    assert rows == []
 
 
 def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):

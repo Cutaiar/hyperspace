@@ -314,10 +314,11 @@ def test_learn_from_a_port_lands_as_a_cable(rig, monkeypatch):
 
 
 def test_the_routing_page_and_the_graph_page_show_one_table(rig, monkeypatch):
-    """One table, two views, both ways: a cable made on GRAPH is a row
-    ROUTING draws the next frame, and a modifier picked on the canvas is
-    on ROUTING's MODIFIERS strip; deleted on ROUTING, the cable is gone
-    from GRAPH."""
+    """One table, two views, both ways: a cable made on GRAPH is a row of
+    ROUTING's table (`table.routes()`, drawn by ROUTING's `_row` in GRAPH's
+    side pane — plan 28 N7: ROUTING itself draws only the pointer to
+    GRAPH now) and a modifier picked on the canvas is in the table's
+    modifiers; deleted through the table, the cable is gone from GRAPH."""
     panel, table = rig.panel, rig.router.table
     p = free_param(rig, centred=False)
     frame(panel, "graph")
@@ -330,7 +331,18 @@ def test_the_routing_page_and_the_graph_page_show_one_table(rig, monkeypatch):
     monkeypatch.setattr(ui_routing, "modifiers", lambda pn, r: strip.extend(
         r.table.modifiers) or real_mods(pn, r))
     frame(panel, "routing")
-    assert any(x is b for x in drawn) and m in strip
+    assert not drawn and not strip                    # N7: ROUTING draws neither
+    assert any(x is b for x in table.routes()) and m in table.modifiers
+    # the cable selected on GRAPH: its ROUTING row in the side pane
+    frame(panel, "graph")
+    st = ui_graph._state(panel)
+    cable = next(c for c in st["view"].cables if c.ref is b)
+    imgui.new_frame()
+    imgui.begin("side")
+    ui_graph._side(panel, st, st["view"], ("cable", cable))
+    imgui.end()
+    imgui.end_frame()
+    assert any(x is b for x in drawn)
     table.remove(b)                                   # ROUTING's ×
     frame(panel, "graph")
     view = ui_graph._state(panel)["view"]
@@ -469,13 +481,15 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     assert where["begin_create"] == {"_create"}
     assert where["query_new_link"] == {"new_link"}          # N4: `_create` asks it
     assert where["begin_delete"] == where["query_deleted_link"] == {"_delete"}
-    assert where["accept_new_item"] == {"_value_drag", "_create_render"}
+    # plan 28 N7: a drag onto a collapsed node's stub opens its port picker
+    # (`_stub_drag`); a bundle's delete is refused in words (`delete_bundle`)
+    assert where["accept_new_item"] == {"_value_drag", "_create_render", "_stub_drag"}
     assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut",
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
                                             "_rig_node_cut", "_delete_render_cable",
-                                            "_delete_render_node"}
-    assert where["reject_new_item"] <= {"_value_drag", "_create_render"}
+                                            "_delete_render_node", "delete_bundle"}
+    assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
     # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
     assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
     assert ui_graph.DELETE["render"] is ui_graph._delete_render_cable
