@@ -1142,7 +1142,9 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
         out[n.id] = (n.column * COL_W, y)
         full = bool(expanded(n.id)) if expanded is not None else False
         shut = bool(collapsed(n.id)) if collapsed is not None else False
-        tops[n.column] = y + height(n, full, folds, shut) + GAP
+        # an expanded node on the N7 page has its all ports / patched only line
+        chip = ROW_H if collapsed is not None and not shut and n.kind != TEMPLATE else 0.0
+        tops[n.column] = y + height(n, full, folds, shut) + chip + GAP
     return out
 
 

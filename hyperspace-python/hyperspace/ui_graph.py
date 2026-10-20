@@ -600,9 +600,9 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         imgui.same_line()
     # a desk layer that is down (plan 28 N5) reads like a lost device: faint
     imgui.push_style_color(imgui.Col_.text, ui.FAINT if n.grey or not n.up else ui.TEXT)
-    imgui.text(ui.fit_text(n.label, NODE_W - 28 - 2 * PIN))
+    imgui.text(ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
     imgui.pop_style_color()
-    imgui.same_line(NODE_W - 14 - PIN)
+    imgui.same_line(NODE_W - 30 - PIN)          # the + clear of the out stub
     if imgui.small_button("+" if shut else "-"):
         toggle_open(st, n.id)
     if imgui.is_item_hovered():
