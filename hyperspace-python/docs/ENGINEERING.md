@@ -1243,8 +1243,8 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
-| ROUTING | One page over the loaded preset: routes, the MODIFIERS strip, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
-| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — edited by dragging cables (below). |
+| ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
+| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — every node collapsed by default, one wire a node pair; the routes and the modifiers are edited here (below). |
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
@@ -1286,7 +1286,34 @@ but in font metrics that are not the Mac's (hand check 120).
 for the modulation and the render graph, rebuilt from the live table,
 registry, Router, device registry and render graph whenever one changes
 (`graphview.key`), its readings refreshed each frame. ROUTING and GRAPH
-edit one table: either shows the other's change next frame.
+show one table: GRAPH edits the routes and the modifiers, ROUTING keeps
+the desk, the macros, the session's rows and the sinks until it is
+retired (plan 28 N7, the owner's decision of 2026-10-20).
+
+- **Collapsed by default** (N7). Every node starts collapsed: its title
+  and at most five short lines (`graphview.summary`: "137 ports · 97
+  patched", its loudest patched port "> right y 0.83", its layer, "51
+  params · 32 patched", a modifier's kind and output, a macro's knob), no
+  row per port, an ``in`` stub at the left of its title and an ``out``
+  stub at its right. Its **+** expands it (N2's ports: **patched only**
+  on the head and the node's own **all ports / patched only** chip within;
+  its port groups fold); **−** collapses it; the head's **expand all** /
+  **collapse all** does every node. Which nodes are expanded is UI state
+  only (not in the preset or the show; every node collapsed at launch).
+- **One wire a node pair** (N7). While either end is collapsed, every
+  value and trigger cable from one node to another is one wire
+  (`graphview.VBundle`, `graphview.wiring`) from stub to stub: coloured
+  by what it carries (trigger only when all are), 2.5 px plus 0.6 px a
+  cable up to 7 px, faint while every cable is dormant. Hover: "<n>
+  cables: <source port> → <param>, …" (ten, then "+ k more"). Selected,
+  the side pane lists its rows (each route as ROUTING's row); Delete is
+  refused: "expand a node to edit its cables". Both ends expanded, the
+  real cables. Render cables stay one each, ending on a collapsed node's
+  stub. On party-trip at 960 × 900: 64 wires for 238 cables, 1.27 ms.
+- **Patching a collapsed node** (N7): drag a cable onto its stub; let go
+  and pick one of its ports from the menu (only what `Edit.refusal` lets
+  through), and it lands through `Edit.connect` as any drag. Right-click
+  a node: expand / collapse and **learn ▸** its params, by group.
 
 - **Nodes**, left to right: each listed device by role — the APC40 as
   *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
@@ -1305,14 +1332,20 @@ edit one table: either shows the other's change next frame.
   while a route lands on it. Render cables join typed image / geometry /
   mask ports. Colour by kind, thickness by reading, faint when dormant.
   Hover: from → to, the reading, the depth, the `scale` and the gate; a
-  cable a loop keeps off says so. A collapsed node shows only its patched
-  ports; **patched only** collapses every node.
-- **The head**: the counts, the last edit's or refusal's words, and
-  **patched only**, **tidy** (lays every node out again: one undo step),
-  **beside** (the selection pane beside the canvas rather than under it;
-  CONTROLS at 540 px puts it under).
-- **Selection**: a route shows its ROUTING row, an effect's node its FX
-  strip.
+  cable a loop keeps off says so.
+- **The head**: **expand all** / **collapse all**, **patched only**,
+  **tidy** — every node collapsed, every position forgotten (one undo
+  step), laid out again by column and the canvas framed on them; it says
+  "laid out 55 nodes, every one collapsed", or "already tidy" — and,
+  only while something is selected on a page narrower than 720 px,
+  **details beside** / **details below** (where the selection's pane
+  goes; CONTROLS at 540 px puts it under the canvas, a page 720 px wide
+  beside); then the counts (nodes, wires drawn, cables, live) and the
+  last edit's or refusal's words.
+- **Selection**: a route shows its ROUTING row, a bundle its rows, an
+  effect's node its FX strip, a modifier's node the MODIFIERS strip's
+  editor for it, stacked (`ui_routing.modifier_block`: inputs, params,
+  live output, × remove).
 - **Editing the modulation.** Drag a source onto a `mod` stub: the route
   a Learn would make (push or position, `learn.row_for`), Replace / Keep
   if the param is taken. A desk control onto a `base` stub: a desk learn
@@ -1341,8 +1374,10 @@ edit one table: either shows the other's change next frame.
   `layout` for the look's nodes (modifiers, macros, render nodes,
   performance groups, the template), in the show's for the rig's
   (devices, the analyzer, LFOs, outputs, session groups); an unplaced
-  node takes its column by kind. SYSTEM shows `graph page: X ms median
-  (N nodes, M cables)` (2.78 ms on party-trip at 960 × 900).
+  node takes its column by kind (a collapsed node its lines' height).
+  SYSTEM shows `graph page: X ms median (N nodes, M cables)` (1.27 ms on
+  party-trip at 960 × 900, collapsed; 2.66 ms with every node expanded;
+  N2's page drew 2.3–2.8 ms).
 - **The editor context** is held on the panel (a hot reload of
   `ui_graph` keeps it) and destroyed on quit and ⌘R before imgui; no
   `NodeEditor.json` is written.
@@ -1748,16 +1783,20 @@ learn takes that axis's other routes with it (the line says "moved
 from …"; one ⌘Z puts them back). An armed learn never times out.
 
 **The ROUTING page** is one page over the loaded preset: its head (the
-preset, its dirty dot, save / as…, which desk layer is up), the routes,
-the desk with its dark controls, the macros and their subscribers, the
-session's MIDI rows read-only, and the **sinks** (plan 27: each sink row
-with a checkbox and a ×, both writing `bindings.json`). A route's source
-list is the analyzer's lanes, LFO 1–4, then each listed device's sources
-in the `[[devices]]` order (`Router.schemes()`; a scheme a route names
-is offered too). **The filter** (left of `+ route`)
-keeps only the lines that contain every typed word, matched anywhere —
-a route's sentence, source, target and label; a desk line's glyph, Akai's
-name and target; a macro's id, label and subscribers. It is UI state:
+preset, its dirty dot, save / as…, which desk layer is up), then a
+pointer line, "routes and modifiers: the GRAPH page" (a click opens
+GRAPH: since plan 28 N7 the routes and the MODIFIERS strip are drawn and
+edited there, ROUTING's own `_row` in GRAPH's side pane; their functions
+stay in `ui_routing`), the desk with its dark controls, the macros and
+their subscribers, the session's MIDI rows read-only, and the **sinks**
+(plan 27: each sink row with a checkbox and a ×, both writing
+`bindings.json`). "Route a lane here…" adds its route and opens GRAPH. A
+route's source list (its row's combo) is the analyzer's lanes, LFO 1–4,
+then each listed device's sources in the `[[devices]]` order
+(`Router.schemes()`; a scheme a route names is offered too). **The
+filter** (on the pointer line) keeps only the lines that contain every
+typed word, matched anywhere — a desk line's glyph, Akai's name and
+target; a macro's id, label and subscribers; a session or sink row. It is UI state:
 not saved, no undo step, empty at launch, left alone by a preset load;
 its × and a click on a desk control clear it. A route's `scale` can only
 be a session param; a route may perform a session param, marked
@@ -1800,7 +1839,9 @@ the highest (`mod.1`, `mod.2` …). A desk template may carry a
 `modifiers` list; a preset that names it gets them, its own overriding
 by id.
 
-**The MODIFIERS strip** (ROUTING, between the routes and the desk): a
+**The MODIFIERS strip** (`ui_routing.modifiers`; since plan 28 N7 not
+drawn on ROUTING — a modifier is added from GRAPH's right-click picker
+and edited in GRAPH's side pane, the strip's own block stacked): a
 kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
 per input (the route sources and the other modifiers' lanes), its live
 output ("dormant" while not live) and ×, then its params as ordinary
@@ -1808,7 +1849,9 @@ widgets (right-click for Learn). Each add, remove, input picked and
 param drag is an undo step. "Right hand energy, smoothed, times band 0,
 into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
 and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.
-The same patch can be dragged on the GRAPH page (§6).
+On GRAPH (§6): the picker's smooth and combine, cables into their
+inputs (or onto their collapsed stubs, picking the input), the combine's
+how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
 
 ## 10. Presets, shows and the bank
 

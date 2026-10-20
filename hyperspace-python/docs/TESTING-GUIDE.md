@@ -32,7 +32,7 @@ explained in the [glossary](#glossary) at the end.
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
    use branch `plan-24-26-27-integration`. The shader-node entries
    (L95–L102, D19–D23) are plan 30's, and the node-editor entries
-   (L103–L122, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
+   (L103–L128, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -109,7 +109,9 @@ changes brightness or volume instead).
     with the glass and the projector, after D1.
 13. Plan 28's node-editor entries: L103–L116 on the laptop (L113, the
     drag, early: everything else on the GRAPH page builds on it); on the
-    copy L117–L121; L122 with two Macs on this build (with L43); A34–A36
+    copy L117–L121; L122 with two Macs on this build (with L43); the
+    legible graph L123–L126 and L128 (the APC40 plugged in), L127 with the
+    hand camera and music on the copy; A34–A36
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
@@ -240,6 +242,12 @@ changes brightness or volume instead).
 | L120 | A desk template as one box | 1 | laptop, the copy | 257 |
 | L121 | A preset from before this build loads with no note | 1 | laptop, the copy | 260 |
 | L122 | A patch shared between two Macs | 1 | two Macs on this build, a shared folder | 259 |
+| L123 | The closed graph reads at a glance | 1 | laptop (the APC40 helps) | 261 |
+| L124 | Open two boxes: the real cables | 1 | laptop | 262 |
+| L125 | Drop a cable on a closed box | 1 | laptop | 263 |
+| L126 | Tidy says what it did; the details button | 1 | laptop | 264 |
+| L127 | The energy patch from GRAPH alone | 1 | laptop, hand camera, music, the copy | 265 |
+| L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2769,7 +2777,7 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
@@ -2784,6 +2792,14 @@ new to anyone. No factory preset has modifiers or wires: build your own,
 on the copy when you save. Two pins on a setting's box: the round one
 (**mod**) takes one performer (a hand, a band, an LFO); the square one
 (**base**) takes the desk's knobs and the pad.
+
+**Since the legible graph (L123–L128), ROUTING has no routes and no
+MODIFIERS strip any more.** Wherever an entry below says "on ROUTING add
+a route" or "the MODIFIERS strip", do it on GRAPH: drag from the source's
+dot onto the setting's round dot (or onto a closed box's small left dot
+and pick the setting), right-click the empty canvas → modifier, click a
+modifier's box to set its inputs and knobs, click a wire to see its rows.
+Right-click a slider → Route a lane here… also works and opens GRAPH.
 
 #### L103. An LFO on another LFO's depth, the same frame
 
@@ -3126,6 +3142,123 @@ box positions, and **throws them away if it saves the preset**. Update
 both Macs before you share patches, and never save one on an older build.
 
 *(check 259)*
+
+**A legible graph (L123–L128, plan 28 N7).** After the owner's first look the GRAPH page was too busy, so now **every
+box starts closed**: its name and at most five short lines (how many
+ports it has, how many are wired, what is loudest right now), and **one
+wire between two boxes** however many settings are mapped between them.
+Click a box's **+** to open it (its ports, as before) — the real cables
+appear only when both boxes are open. The routes and the modifiers are
+edited on GRAPH now; ROUTING keeps the desk, the macros, the session's
+rows and the sinks, with a line at the top pointing to GRAPH.
+
+#### L123. The closed graph reads at a glance
+
+**Needs:** laptop; the APC40 plugged in helps (its box says "off"
+without it).
+
+**Do:** load party-trip; open GRAPH; stand back at your usual distance.
+Then open SYSTEM and read the `graph page:` line.
+
+**Right if:** a handful of boxes, each a name and two to four short
+lines; one wire from *apc40* to *shape*, one to *fx*, one to *eye*; the
+top line says about "55 nodes · 64 wires · 238 cables"; SYSTEM says
+about 1.3 ms (it was 2.3–2.8 ms before).
+
+**Wrong if:** a box lists its ports before you open it; two wires
+between the same two boxes; SYSTEM over 2.3 ms.
+
+*(check 261)*
+
+#### L124. Open two boxes: the real cables
+
+**Needs:** laptop.
+
+**Do:** hover the *apc40* → *shape* wire; click it. Click *apc40*'s
+**+**, then *shape*'s **+**. Then **collapse all**.
+
+**Right if:** the hover says "24 cables: …", ten of them and "+ 14
+more"; the click lists those rows under the canvas; with only *apc40*
+open it is still one wire; with both open each control has its own
+cable; **collapse all** brings the boxes back. Pressing Delete on a
+wire says "expand a node to edit its cables" and deletes nothing.
+
+**Wrong if:** cables while one box is closed; a wire ending in mid-air.
+
+*(check 262)*
+
+#### L125. Drop a cable on a closed box
+
+**Needs:** laptop.
+
+**Do:** open *analyzer* only. Drag from band 3's dot onto the small dot
+left of *shape*'s name; let go; pick **Brightness mod**. Press ⌘Z. Then
+right-click *shape* → **learn** → a group → a setting → Learn hand →
+right, and move your hand (or skip without the camera).
+
+**Right if:** while dragging: "let go: pick one of shape's ports"; the
+list offers only what a band can drive; the pick makes the route
+(Brightness pulses with band 3), ⌘Z removes it; the Learn works without
+opening *shape*.
+
+**Wrong if:** no list; a square **base** entry offered for a band.
+
+*(check 263)*
+
+#### L126. Tidy says what it did; the details button
+
+**Needs:** laptop.
+
+**Do:** click **tidy** on a fresh page. Open two boxes, drag one far
+away, click **tidy** again. Click a wire; click **details beside**, then
+**details below**.
+
+**Right if:** first "already tidy"; then every box closed and back in
+its column, the view framed on them, "laid out 55 nodes, every one
+collapsed"; ⌘Z puts the dragged box back; the details button only
+appears once something is selected, and moves the details beside the
+canvas and back.
+
+**Wrong if:** tidy says nothing or leaves a box open; the details button
+with nothing selected.
+
+*(check 264)*
+
+#### L127. The energy patch from GRAPH alone
+
+**Needs:** laptop, the hand camera, music; the copy.
+
+**Do:** on GRAPH only (never ROUTING): right-click the canvas → modifier
+→ smooth, then → combine. Open *leap*; drag **right energy** onto the
+smooth's small left dot, pick its input. Drag the smooth's right dot onto
+the combine's left dot, pick **in 1**; open *analyzer*, drag band 0 onto
+the combine, pick **in 2**. Click the combine and set **how** to mul in
+the details. Drag the combine's right dot onto *acid*'s left dot, pick
+**acid mix mod** (acid on in the chain). Dance with the right hand.
+
+**Right if:** every step works on GRAPH; the acid's mix swells with your
+energy, smoothly, and pumps with the bass; it settles when the hand
+leaves.
+
+**Wrong if:** a step needs ROUTING; the combine's details are cut off.
+
+*(check 265)*
+
+#### L128. ROUTING points to GRAPH; the desk lines as before
+
+**Needs:** laptop, the APC40.
+
+**Do:** open ROUTING. Click a control on the desk diagram; right-click a
+desk line → Learn, move a knob. Click "routes and modifiers: the GRAPH
+page". Then right-click any slider → Route a lane here….
+
+**Right if:** no route rows and no MODIFIERS strip on ROUTING; the desk,
+macros, session and sinks exactly as before; the line opens GRAPH;
+"Route a lane here…" opens GRAPH too.
+
+**Wrong if:** anything in the desk section changed.
+
+*(check 266)*
 
 # Part 2 — tests that need hardware
 

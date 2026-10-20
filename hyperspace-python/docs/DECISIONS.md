@@ -12,7 +12,8 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
   34–88 on 2026-10-04, rows 89–108 in plan 22 on 2026-10-06, rows
   110–139 in plan 24, rows 140–168 in plan 27 and rows 169–209 in plan
   26 on 2026-10-14, rows 210–213 in plan 27's B6 on 2026-10-15, and
-  rows 214–232 in plan 30 and rows 233–277 in plan 28 on 2026-10-17).
+  rows 214–232 in plan 30 and rows 233–277 in plan 28 on 2026-10-17,
+  and rows 278–290 in plan 28's N7 on 2026-10-20).
   The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
@@ -337,7 +338,7 @@ The D-numbers are cited from code comments.
 |---|---|---|
 | Legibility at a distance comes first: rounded frames, pill chips, filled faders, no page scroll at the control size. The master faders are on the AUDIO page. | `ui.py` | owner |
 | The Replace / Keep prompt is drawn on every page, even with the panel collapsed. | `ui_routing.py` | owner |
-| The ROUTING page is one page over the loaded preset: its routes, its desk rows and macros, and the session's rows read-only below. | `ui_routing.page` | owner |
+| The ROUTING page is one page over the loaded preset: its desk rows and macros, and the session's rows read-only below (its routes and modifiers are the GRAPH page's since plan 28 N7; a pointer line says so). | `ui_routing.page` | owner |
 | **The cheat sheet is off at every launch.** `/` and the APC40's DETAIL toggle it (the pad's MENU did until 2026-10-14; START and BACK are now unbound). The desk diagram stays on. | `ui.cheatsheet` | owner |
 | The desk's glyphs (K1–K8, D1–D8, S1–S8, SM, X, C, G, B1–B22, ⇧) appear on every ROUTING row and Learn message, with an APC40 diagram of the layer that is up. | `apc40.LAYOUT`, `ui_desk.py` | owner |
 | The on-screen desk takes the room it has, and there is no DESK page. Once a unit is 44 × 32 px, every lit control carries its label. | `ui_desk.room`, `ui_desk.LABEL_UNIT` | row 57 |
@@ -347,10 +348,14 @@ The D-numbers are cited from code comments.
 | The dirty dot is a 12 px red disc and the save chip is solid red while there is something to save. On a factory preset, save reads "save copy". Saving never prompts. | `ui.dirty_dot`, `ui_presets.save_label` | row 77 |
 | The OUTPUT page says in words what each output shows, and there is no picture of the render. The footer names a black output. | `ui.output_shows`, `Panel._output_blocks` | row 85 |
 | **One editor for both graphs** (plan 28): the GRAPH page draws the controllers, the analyzer, the LFOs, the modifiers, the macros, the params under their render nodes, the render graph and the outputs on one canvas, and edits both; the modulation stages N1–N4 and controllers as nodes were one plan. **The editor is `imgui_node_editor` from imgui-bundle**: no new dependency. | `ui_graph.py`, `graphview.py` | owner (plan 28 decisions 6, 15) |
-| The GRAPH page edits only through the table's own calls (a cable into `mod` is the row a Learn would make; into `base` a desk or pad setter; a macro onto `mod` refused) or a `graph` section read back before it lands; the ROUTING and GRAPH pages show one table. Learn starts from a `mod` port with the param menu's own items. | `graphview.Edit`, `learn.row_for`, `Panel._ctx_learn_block` | rows 255–262, 268 |
-| The GRAPH page's ids, its params-to-render-node table, what it draws (no sinks), its tidy columns, its editor context on the panel, its selection pane under the canvas (**beside** for a column). | `graphview.OWNERS`, `graphview.auto_layout`, `ui_graph.page` | rows 248–254 |
+| The GRAPH page edits only through the table's own calls (a cable into `mod` is the row a Learn would make; into `base` a desk or pad setter; a macro onto `mod` refused) or a `graph` section read back before it lands; Learn starts from a `mod` port with the param menu's own items. ROUTING and GRAPH are two views of one table: **GRAPH edits the routes and modifiers; ROUTING keeps the desk, macros, session and sinks until it is retired.** | `graphview.Edit`, `learn.row_for`, `Panel._ctx_learn_block` | rows 255–262, 268; owner (2026-10-20) |
+| The GRAPH page's ids, its params-to-render-node table, what it draws (no sinks), its tidy columns, its editor context on the panel, its selection pane under the canvas. | `graphview.OWNERS`, `graphview.auto_layout`, `ui_graph.page` | rows 248–254 |
+| **Every node on the GRAPH page is collapsed by default**: its title and at most five short lines, nothing per port until it is expanded. | `graphview.summary`, `ui_graph.collapsed` | owner (2026-10-20) |
+| **One wire between two nodes while either end is collapsed**, however many parameters are mapped between them; the real cables appear when both ends are expanded. | `graphview.wiring`, `graphview.VBundle` | owner (2026-10-20) |
+| **GRAPH replaces ROUTING**, in steps: the routes and the modifiers are edited on GRAPH now; ROUTING keeps its desk, macros, session and sinks (the desk is Dylan's work in flight) until a later pass retires it. | `ui_routing.page`, `ui_graph._side` | owner (2026-10-20) |
+| A collapsed node's lines, its stubs, a bundle's thickness and hover, its rows in the side pane and its refused Delete, the collapse state as UI state only, the picker on a collapsed node's stub, Learn from a node's menu, tidy's collapse and words, the details chip, expand all, ROUTING's pointer, a modifier's editor on GRAPH. | `ui_graph.py`, `graphview.py`, `ui_routing.page` | rows 278–290 |
 | A preset's desk template is one collapsible node on the GRAPH page; an edit inside is an override; the hands node folds as axes, pinches, grab, presence, dance. | `graphview.template_rows`, `graphview.hand_group` | rows 274, 276 |
-| The MODIFIERS strip sits on ROUTING between the routes and the desk. | `ui_routing.modifiers` | row 247 |
+| The MODIFIERS strip's block is a modifier's editor; since plan 28 N7 it is drawn on GRAPH's side pane for a selected modifier node, not on ROUTING. | `ui_routing.modifier_block` | rows 247, 289 |
 
 ## Process
 

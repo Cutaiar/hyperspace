@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–260; the last group, Y (232–260), is plan 28's.
+numbers. They run 1–266; the last group, Y (232–266), is plan 28's (261–266 its N7).
 
 ## Before you start
 
@@ -74,7 +74,9 @@ number and what you saw.
     the hand camera, 258 (copy) with the APC40; 251 (copy) on the
     projector with the hand camera; 252 and 254 (copy) with the glass and
     the projector (after 101); 259 with two Macs on this build and a
-    shared folder (with 139).
+    shared folder (with 139); N7's legible graph 261–264 on the laptop
+    (the APC40 plugged in for 261), 265 (copy) with the hand camera and
+    music, 266 with the APC40.
 
 ## A. Laptop alone
 
@@ -3257,6 +3259,15 @@ checks use 101's rig: **the glass is output 1, the projector output 2**,
 so `hands-glass-only`'s "glass" is the projector there; 252 says how to
 aim it at the glass.
 
+**Since N7 (checks 261–266) ROUTING draws no routes and no MODIFIERS
+strip**: wherever a check above or below says "on ROUTING add a route"
+or "on the MODIFIERS strip", do it on GRAPH — drag a cable from the
+source onto the param's `mod` (or onto a collapsed box's stub and pick
+it), right-click the canvas → modifier, click a modifier's box for its
+editor (inputs, params, ×), click a route's wire for its row; or
+right-click the param → Route a lane here…, which opens GRAPH. ROUTING's
+desk, macros, session and sinks are as the checks say.
+
 **232. The lag is gone on a real LFO-on-LFO patch.**
 Headless: `tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`, `tests/test_routing.py::{test_every_factory_preset_lands_the_same_values_one_frame_earlier,test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame}`, `tests/test_patch.py::test_a_param_the_pass_lands_is_applied_once_a_frame`.
 TRIP (F5); LFO page. Set LFO 2's depth to 0.5; on ROUTING add a route
@@ -3590,6 +3601,90 @@ open ROUTING and GRAPH, save one, and compare its file with the backup.
 route; a save writes no `modifiers`, `layout` or `wires` key while
 nobody added a modifier, dragged a node or wired a cable. *Fail:* a note on load; a dirty dot from a load; a new key in
 a saved file.
+
+**N7, a legible graph (2026-10-20), checks 261–266.** After the owner's first look: every node starts collapsed, one wire a
+node pair while either end is collapsed, and GRAPH takes the routes and
+the modifiers (ROUTING keeps its desk, macros, session and sinks). The
+control window at its usual 960 × 900, CONTROLS at its usual width.
+
+**261. The collapsed graph on party-trip reads at a glance.** (laptop, APC40)
+Headless: `tests/test_graph_legible.py::{test_every_node_starts_collapsed_with_at_most_five_lines,test_the_apc40_to_one_shader_is_one_bundle_while_collapsed,test_the_page_draws_in_every_state}`.
+Launch on party-trip (or load it), the APC40 plugged in; open GRAPH.
+Read it from where you stand at the desk. Then SYSTEM: the `graph page:`
+line. *Pass:* a column of boxes on the left (apc40, apc40 (SHIFT), pad,
+leap, analyzer, key) and a handful of boxes to the right, each a title
+and two to four short lines ("137 ports · 97 patched", "> L x 0.57");
+from *apc40* one wire to *shape*, one to *fx*, one to *eye* (and one
+from *apc40 (SHIFT)* where the SHIFT layer maps there); the head reads
+about "55 nodes · 64 wires · 238 cables"; the SYSTEM line about 1.3 ms
+(N2's page: 2.3–2.8 ms). *Fail:* a node lists its ports before you
+expand it (the collapse default); two wires between the same two boxes
+on one layer (the bundling); the line over 2.3 ms (the caches).
+
+**262. Expand the APC40 and the shape: the real cables.** (laptop, APC40)
+Headless: `tests/test_graph_legible.py::{test_a_bundle_splits_into_its_cables_when_both_ends_expand,test_a_bundles_hover_and_side_pane_list_its_rows}`.
+On 261's page hover the apc40 → shape wire, then click it; then click
+*apc40*'s **+**, then *shape*'s **+**; then **collapse all**. *Pass:*
+the hover says "24 cables: …" with ten of them and "+ 14 more"; the
+click lists the rows in the pane under the canvas (routes as ROUTING's
+rows); with only *apc40* expanded it is still one wire into *shape*;
+with both expanded each patched control has its own cable into the
+shape's ports, and **expand all**'s chip has turned into **collapse
+all**, which brings back the boxes. *Fail:* cables appear while one end
+is collapsed; a wire ends in mid-air (a stub not drawn); the pane is
+empty for a route bundle.
+
+**263. A drag onto a collapsed node lands a route.** (laptop)
+Headless: `tests/test_graph_legible.py::test_a_drag_onto_a_collapsed_node_offers_its_ports_and_lands_through_edit`.
+Expand *analyzer* only. Drag from band 3's dot onto the little dot at
+the left of *shape*'s title (its in stub); hold, read the tooltip, let
+go, pick a param you know (Brightness · mod). Then right-click *shape*:
+**learn ▸** a group ▸ a param ▸ Learn hand ▸ right, and move the hand.
+*Pass:* the tooltip says "let go: pick one of shape's ports"; the menu
+lists only what band 3 can drive (no `base` stubs); the pick makes the
+route (the analyzer → shape wire thickens, Brightness pulses with band
+3), ⌘Z takes it back; the Learn lands a hand route without expanding
+*shape*. *Fail:* no menu (the drop not seen); a `base` entry offered; a
+second route on a taken param without the Replace / Keep question.
+
+**264. Tidy says what it did; the details chip.** (laptop)
+Headless: `tests/test_graph_legible.py::{test_tidy_collapses_all_relays_and_says_what_it_did,test_beside_shows_only_with_a_selection}`.
+On a fresh page click **tidy**. Then expand two nodes, drag one across
+the canvas, click **tidy** again. Then click a wire, and the
+**details beside** chip, and **details below**. *Pass:* the first tidy
+says "already tidy"; the second collapses both, puts every box back in
+its column, frames the canvas on them and says "laid out 55 nodes,
+every one collapsed"; ⌘Z puts the dragged box back; no details chip
+until something is selected, then "details beside" moves the pane to a
+column and "details below" back under the canvas. *Fail:* tidy leaves a
+node expanded or says nothing; the chip with nothing selected.
+
+**265. Energy → smooth → combine → acid mix, from GRAPH alone, with a hand.** (hand camera, laptop; copy)
+Headless: `tests/test_graph_legible.py::test_the_smoothed_energy_times_band_patch_from_graph_alone`.
+On the copy, a preset with the acid in its chain (or party-trip with
+acid on). On GRAPH only: right-click the canvas → modifier ▸ smooth, then
+modifier ▸ combine; expand *leap*, drag *right energy* onto the smooth's
+in stub, pick its input; drag the smooth's out onto the combine's stub,
+pick in 1; expand *analyzer*, drag band 0 onto the combine, pick in 2;
+click the combine: in the side pane set **how** to mul; drag the
+combine's out onto *acid*'s stub, pick acid mix · mod. Dance with the
+right hand to music. *Pass:* nothing needed ROUTING; the combine's
+pane shows its inputs, its params and its live bar; the acid mix swells
+with the hand's energy, smoothed, and pumps with the bass; the hand
+leaves and the mix settles back. *Fail:* a step that cannot be done on
+GRAPH; the pane cut off at the column's width.
+
+**266. ROUTING points to GRAPH; its desk section as before.** (APC40)
+Headless: `tests/test_graph_legible.py::test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay`, `tests/test_ui_routing.py::test_the_routing_page_is_one_page_over_the_loaded_preset`.
+Open ROUTING with the APC40 plugged in; click a desk control on the
+diagram; right-click a desk line → Learn; move a knob. Click the line
+"routes and modifiers: the GRAPH page". Then right-click any slider
+elsewhere → Route a lane here…. *Pass:* no route rows and no MODIFIERS
+strip on ROUTING; the desk section, the macros, the session and the
+sinks exactly as before (a click frames the control's line, Learn lands
+a desk row, the filter filters them); the pointer opens GRAPH; "Route a
+lane here…" opens GRAPH with the new route there. *Fail:* any change in
+the desk section's lines or Learn; the pointer does nothing.
 
 ## What no test covers
 

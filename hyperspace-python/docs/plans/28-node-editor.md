@@ -19,7 +19,10 @@ dragged between two ports is a **wire** in the preset's `graph` section,
 whose outputs are now nodes a preset may wire. The APC40 is drawn as two
 nodes, *apc40* and *apc40 (SHIFT)*, a preset's desk template as one
 collapsible node, a device this rig lacks as a grey placeholder named by
-role. **Every one of the 580 goldens recorded before stream N's render
+role. After the owner's first look, **N7** made it legible: every node
+starts collapsed (a title and a few lines), two nodes are one wire
+however many params are mapped between them, and the routes and the
+modifiers are edited on GRAPH (ROUTING points there). **Every one of the 580 goldens recorded before stream N's render
 work matched unchanged**; N4 added 16 for its two fixtures (596).
 
 Built as stream N of the run in
@@ -32,13 +35,13 @@ untouched (the desk is Dylan's), and every proof is a fixture under
 `tests/fixtures/` loaded through a scratch library.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group Y, checks
-232–260. Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
-rows 233–277. The owner's decisions for this plan (6–16 of the launch
+232–266 (N7's 261–266). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
+rows 233–290 (N7's 278–290). The owner's decisions for this plan (6–16 of the launch
 prompt) are in [`DECISIONS.md`](../DECISIONS.md) with Who "owner".
 
 Branch `plan-28-30-integration`, in merge order: N1 (PR #209), N0
 (#210), N2 (#215), N3 (#217), N4 (#219), N5 (#220), the review pass's
-fixes (#221), N6 (this file). Stream D (plan 30,
+fixes (#221), N6 (this file), N7 (a legible graph, 2026-10-20). Stream D (plan 30,
 [`30-shader-nodes.md`](30-shader-nodes.md)) merged on the same branch in
 between; the GRAPH page draws its effect nodes and placed effects as
 any render node, and N4's wires extend its placements. The suite went
@@ -505,6 +508,84 @@ among them. No sequence differed in any other way.
   assertion changed: the hands' `switches` group is `pinches` / `grab`.
   `git diff --stat` of `apc40.py` and `midi.py` against the base: empty.
 
+### N7 — a legible graph: collapsed by default, one wire per node pair, GRAPH takes the routes
+
+Added after the owner's first look at the GRAPH page (2026-10-20): "It
+looks good. It's very messy … borderline illegible when we just have the
+APC40 alone … by default you should only see one line going between
+them … The graph was meant to replace the routing tab … I clicked the
+tidy button, and nothing happened … I clicked the beside toggle, and I
+don't know if it did anything." The owner's three decisions (DECISIONS
+"UI", Who "owner (2026-10-20)"): every node collapsed by default; one
+wire between two nodes while either end is collapsed; GRAPH replaces
+ROUTING — the routes and the modifiers now, the rest later.
+
+- **At the machine.** GRAPH opens as a handful of boxes: each node's
+  title and two to four short lines ("137 ports · 97 patched", "> L x
+  0.57", "preset layer · up"; "51 params · 32 patched" on *shape*; "smooth
+  · out 0.42" on a modifier), an in dot at the left of its title and an
+  out dot at the right, and **one wire** from *apc40* to *shape*, one to
+  *fx*, one to *eye* — 64 wires for party-trip's 238 cables. A wire is as
+  thick as it is many (capped at ten); its hover lists ten of its cables
+  and "+ k more"; clicked, its rows are in the pane (routes as ROUTING's
+  rows); Delete says "expand a node to edit its cables". A box's **+**
+  expands it (N2's ports, **patched only** within); both ends expanded,
+  the real cables. **expand all / collapse all** on the head. A cable
+  dropped on a collapsed box's in dot opens a list of what it can land
+  on; right-click a box for **learn ▸** any of its params. **tidy**
+  collapses everything, lays it out again, frames it and says "laid out
+  55 nodes, every one collapsed" (or "already tidy"). The details chip
+  shows only with a selection on the narrow page, as **details beside** /
+  **details below**. A modifier's box selected shows its editor (inputs,
+  params, live bar, × remove). ROUTING has a line "routes and modifiers:
+  the GRAPH page" (a click opens it) where its routes and MODIFIERS strip
+  were; its desk, macros, session and sinks are unchanged; "Route a lane
+  here…" opens GRAPH.
+- **How.** `graphview.summary` (the lines), `stub_in` / `stub_out`
+  (`nin:` / `nout:` pins), `wiring` (cables drawn as they are, render
+  cables re-ended on a collapsed node's stub, the rest folded into
+  `VBundle`s per node pair), `bundle_tip`, `land_choices` (a stub's
+  picker, each pin with `Edit.refusal`'s words); `refresh(collapsed=…)`
+  reads only what a collapsed node shows; `View.node` an index.
+  `ui_graph`: the expanded set `st["open"]` (the template's N5 open set,
+  now every node's), `collapsed`, `full`, `expand_all`, `_stub`,
+  `_bundle` / `bundle_thickness`, `_stub_drag` / `open_land` / `land` /
+  `_land_menu`, `delete_bundle`, `_bundle_menu`, `learn_params`, `tidy`,
+  `beside_chip`, `head_line`, `route_rows`, the wiring and the columns
+  cached on the state. `ui_routing`: the pointer line in `page` (the two
+  sections' drawing dropped, the filter's count without them),
+  `modifier_block` factored out of `modifiers` (its `stacked` form for
+  GRAPH's pane), "Route a lane here…" to GRAPH. Every edit still goes
+  through `graphview.Edit` and the table's own calls.
+- **Draw time**, the real app on party-trip at the control window's
+  960 × 900, the smoke run's patch (an LFO on LFO 2's depth, two
+  modifiers, a route on the combine), 80 draws each: **1.27 ms median
+  collapsed** (p90 1.40; 55 nodes, 64 wires, 238 cables), 2.66 ms with
+  every node expanded (patched only: N2's default view), 1.29 ms after a
+  tidy — against N2's 2.32–2.78 ms. Before the caches the collapsed page
+  drew in 2.18 ms.
+- **Tests.** `tests/test_graph_legible.py` (11):
+  `::test_every_node_starts_collapsed_with_at_most_five_lines`,
+  `::test_the_apc40_to_one_shader_is_one_bundle_while_collapsed`,
+  `::test_a_bundle_splits_into_its_cables_when_both_ends_expand`,
+  `::test_a_bundles_hover_and_side_pane_list_its_rows`,
+  `::test_a_drag_onto_a_collapsed_node_offers_its_ports_and_lands_through_edit`,
+  `::test_deleting_a_bundle_is_refused_in_words`,
+  `::test_tidy_collapses_all_relays_and_says_what_it_did`,
+  `::test_beside_shows_only_with_a_selection`,
+  `::test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay`,
+  `::test_the_smoothed_energy_times_band_patch_from_graph_alone`,
+  `::test_the_page_draws_in_every_state`. Changed: `test_graphview.py`'s
+  page test expands every node before selecting a route (by expanding);
+  `test_graph_edit.py`'s one-table test finds the cable's row in GRAPH's
+  side pane, and its dispatch test admits `_stub_drag` and
+  `delete_bundle`; `test_ui_routing.py`'s row tests draw the rows as
+  GRAPH's pane does (`ui_graph.route_rows`), its filter tests count
+  without routes, and its "Route a lane here" test opens GRAPH;
+  `test_ui_shell.py`'s scroll test measures the child with the desk;
+  `test_modifiers.py`'s strip test draws the strip's function and checks
+  ROUTING's pointer.
+
 ## The goldens
 
 **596 goldens, 140 distinct pictures**, on "Apple M3 Max". The 556 of
@@ -548,6 +629,14 @@ and the page drew in 2.78 ms. In particular:
   factory preset clean; the owner's own files have not been tried.
 - The canvas's legibility at distance: the pin glyphs, the faint
   setters, the APC40's long port lists, the narrow page's pane.
+- **N7's collapsed graph** (261–266): whether party-trip reads at a
+  glance at the desk; a real drag onto a collapsed node's stub (the
+  widget reporting a drop on a stub pin, the picker opening there);
+  tidy's framing; the energy patch built on GRAPH alone with a real
+  hand; ROUTING's desk section with the real APC40 after the change. Two
+  windowed runs (the timing probe) drew the page collapsed, expanded and
+  tidied with no stall and took the numbers above; nobody has looked at
+  it but a screenshot.
 
 ## Known rough edges
 
@@ -631,6 +720,17 @@ and the page drew in 2.78 ms. In particular:
   node; `SCHEME_ROLE` guesses from `config.py`'s example names, so a rig
   that calls its hands role otherwise gets a placeholder `leap`;
   `presence` is a fifth hands group the design did not name.
+- **N7**: the APC40 is still two nodes (decision 12), so the desk reaches
+  a node it maps on both layers over two wires; the keys' node fans out
+  to about ten group nodes; two render cables between the same collapsed
+  pair overlap; a desk row in a bundle has no editor in the pane
+  (ROUTING's desk section edits it); "+ route" is gone (a drag, a Learn
+  or "Route a lane here…" makes a route); the collapse state is not
+  saved, and a tidy's undo brings the positions back but not the
+  expanded nodes; a placed node can be overlapped by one expanded above
+  it; the stub's picker on *shape* is long (about fifty params, by
+  group); older hand checks that say "on ROUTING add a route" are done
+  on GRAPH (a note at the top of group Y says so).
 - **The docstring of `graphview.py`** says it imports `routing`,
   `params`, `graph`, `patch`, `modifiers`: since N3 it imports `learn`
   too.
@@ -665,7 +765,14 @@ prompt's 6–16):
     `graph.py`'s imports, the hands package liftable, the core's
     imports; agents on Opus / Sonnet, never Fable).
 
-What the run decided where those left a choice (register rows 233–277):
+The owner's after the first look (2026-10-20), built in N7: **every node
+collapsed by default** (a title and at most five short lines, nothing
+per port until expanded); **one wire between two nodes while either end
+is collapsed**, the real cables when both are expanded; **GRAPH replaces
+ROUTING** — the routes and the modifiers now, ROUTING keeping its desk,
+macros, session and sinks until a later pass retires it.
+
+What the run decided where those left a choice (register rows 233–290):
 `patch.py`'s types (233); which params the pass lands and the frame's
 mark (234); the patch's cache key (235); a loop's cut and its note
 (236); a delay's place in the order (237); the LFOs inside the pass
@@ -686,7 +793,12 @@ the wire fixtures' look (269); the APC40's two nodes (270); the desk's
 port groups (271); the latch read from the table (272); a layered row
 on an invariant control (273); a template as a subgraph (274); grey
 placeholders by role (275); the hands' groups (276); an older build and
-this run's keys (277).
+this run's keys (277). N7: a collapsed node's lines (278); the stubs (279); a
+bundle (280); a bundle selected and its refused Delete (281); the
+collapse state as UI state (282); the picker on a stub (283); Learn from
+a node's menu (284); tidy (285); the details chip (286); expand all and
+patched only within (287); ROUTING's pointer (288); a modifier's pane
+(289); the readings and caches (290).
 
 **What the launch prompt asked for that was built otherwise.**
 - **"A `param` node … then applies that param now"**: only the params a
