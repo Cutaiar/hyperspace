@@ -358,48 +358,84 @@ def hands(router, energy):
     router.feed("hand", None if energy is None else [energy])
 
 
+def drop(rig, monkeypatch, a: str, b: str) -> dict:
+    """One frame of the page with the widget reporting a cable dragged from
+    pin `a` and let go on pin `b` (what `_create` sees). Returns what the
+    drag said: accepted / rejected, its tooltip."""
+    st = ui_graph._state(rig.panel)
+    got = {"accepted": 0, "rejected": 0, "tip": None}
+    pins = (ui_graph._id(st, a), ui_graph._id(st, b))
+    with monkeypatch.context() as m:
+        m.setattr(ed, "begin_create", lambda *x, **k: True)
+        m.setattr(ed, "end_create", lambda: None)
+        m.setattr(ui_graph, "new_link", lambda: pins)
+        m.setattr(ed, "accept_new_item",
+                  lambda *x: got.__setitem__("accepted", got["accepted"] + 1) or True)
+        m.setattr(ed, "reject_new_item",
+                  lambda *x: got.__setitem__("rejected", got["rejected"] + 1))
+        m.setattr(ui_graph, "_drag_tip", lambda w: got.__setitem__("tip", w))
+        frame(rig.panel, "graph")
+    return got
+
+
+def picked(st, pin):
+    """The stub's picker is open (`st["land"]`) and offers `pin`; its source."""
+    held = st["land"]
+    assert held is not None, "no picker opened"
+    ok = {p for p, _, _, why in held["choices"] if why is None}
+    assert pin in ok, (pin, sorted(ok))
+    return held["fixed"]
+
+
 def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch):
     """N1's patch — right hand energy, smoothed, times band 0, into acid
-    mix — built from the GRAPH page's own functions alone (the twin of
-    test_modifiers' ROUTING test): two modifiers from the picker, their
-    inputs by cables (one landed on a collapsed node's stub), the combine's
-    `how` on the side pane's editor, and the cable into acid mix; then
-    played, it is what N1's is."""
+    mix — built from the GRAPH page alone, as check 265 does it (the twin
+    of test_modifiers' ROUTING test): two modifiers from the picker, every
+    cable dropped through the page's own drop path with the nodes left
+    collapsed — the hand's energy onto the smooth's stub, the smooth's out
+    stub onto the combine's (a one-output node's stub is its output), band
+    0 onto the combine, the combine's out stub onto the acid's — each port
+    picked from the stub's menu; the combine's `how` on the side pane's
+    editor. Played, it is what N1's is."""
     panel, reg, router = rig.panel, rig.reg, rig.router
-    rig.lib.load("presets", "party-trip")
+    st = party(rig)
     router.table.set_routes([])                     # a preset with no routes yet
     hands(router, 0.0)
     frame(panel, "graph")
-    st = ui_graph._state(panel)
     smooth = ui_graph.add_modifier(panel, "smooth", at=(300, 40))
-    frame(panel, "graph")
-    # the hand's energy dropped on the collapsed smooth's stub: its input picked
-    choices = ui_graph.open_land(panel, st, st["view"], "out:hand:right.energy", smooth.id)
-    ok = [pin for pin, _, _, why in choices if why is None]
-    assert ok[0] == f"in:{smooth.id}.0"             # its input, then its params' mod stubs
-    assert set(ok[1:]) == {f"mod:{smooth.id}.{k}" for k in ("attack", "release", "spring")}
-    ui_graph.land(panel, "out:hand:right.energy", f"in:{smooth.id}.0")
     combine = ui_graph.add_modifier(panel, "combine", at=(300, 200))
     frame(panel, "graph")
-    assert not isinstance(ui_graph.connect(panel, f"out:{smooth.address}",
-                                           f"in:{combine.id}.0"), graphview.Refusal)
-    assert not isinstance(ui_graph.connect(panel, "out:lane:0", f"in:{combine.id}.1"),
-                          graphview.Refusal)
+    assert ui_graph.collapsed(st, smooth.id) and ui_graph.collapsed(st, combine.id)
+    hops = [("out:hand:right.energy", f"nin:{smooth.id}", f"in:{smooth.id}.0"),
+            (f"nout:{smooth.id}", f"nin:{combine.id}", f"in:{combine.id}.0"),
+            ("out:lane:0", f"nin:{combine.id}", f"in:{combine.id}.1"),
+            (f"nout:{combine.id}", "nin:render:acid", "mod:fx.acid.mix")]
+    for a, b, pin in hops:
+        got = drop(rig, monkeypatch, a, b)
+        assert got["accepted"] == 1 and got["rejected"] == 0, (a, b, got)
+        fixed = picked(st, pin)
+        assert fixed == graphview.stub_pin(st["view"], a)        # a stub: its one output
+        res = ui_graph.land(panel, fixed, pin)
+        assert not isinstance(res, graphview.Refusal), (a, b, res)
+        frame(panel, "graph")
+    assert st["open"] == set()                                  # nothing was expanded
+    b = router.table.owner("fx.acid.mix")
+    assert isinstance(b, Binding) and b.source == combine.address
+    assert [m.inputs for m in router.table.modifiers] == [
+        ("hand:right.energy",), (smooth.address, "lane:0")]
+    # two stubs where neither stands for one output: still refused, in words
+    got = drop(rig, monkeypatch, "nout:analyzer", f"nin:{combine.id}")
+    assert got["rejected"] == 1 and got["tip"] == ui_graph.BOTH_STUBS
     # the side pane of the selected combine: the strip's editor, its `how`
     blocks = []
     block = ui_routing.modifier_block
     monkeypatch.setattr(ui_routing, "modifier_block",
                         lambda pn, r, m, **k: blocks.append(m.id) or block(pn, r, m, **k))
-    frame(panel, "graph")
     view = st["view"]
     _in_editor(rig, lambda: ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + combine.id))))
     frame(panel, "graph")
     assert ui_graph._selection(st, view)[1].id == combine.id and blocks[-1] == combine.id
     reg[f"{combine.id}.how"].set(modifiers.HOW.index("mul"))   # what its combo sets
-    b = ui_graph.connect(panel, f"out:{combine.address}", "mod:fx.acid.mix")
-    assert isinstance(b, Binding) and router.table.owner("fx.acid.mix") is b
-    assert [m.inputs for m in router.table.modifiers] == [
-        ("hand:right.energy",), (smooth.address, "lane:0")]
     # play it: the hand to full energy, band 0 at a half
     p = reg["fx.acid.mix"]
     seen = []
@@ -412,6 +448,90 @@ def test_the_smoothed_energy_times_band_patch_from_graph_alone(rig, monkeypatch)
     assert seen[-1] == pytest.approx(0.5 * smoothed, abs=1e-3)
     assert seen == sorted(seen)
     assert ui_routing.modifier_output(router, combine.id) == pytest.approx(seen[-1], abs=1e-6)
+
+
+def test_route_a_lane_here_selects_the_new_route_on_graph(rig, monkeypatch):
+    """"Route a lane here…" adds the route and opens GRAPH with it selected:
+    the wire it is drawn in (here its bundle, the analyzer into the shape)
+    is the selection, and the side pane lists the new row first."""
+    panel = rig.panel
+    st = party(rig)
+    before = st["bundles"]["bundle:analyzer>render:shape"].count
+    target = next(p for p in st["view"].node("render:shape").ports
+                  if p.param and not p.patched and rig.reg[p.param].modulatable)
+    frame(panel, "view")
+    with monkeypatch.context() as m:
+        m.setattr(imgui, "menu_item_simple", lambda label, *a, **k: True)
+        imgui.new_frame()
+        imgui.begin("menu")
+        ui_routing.ctx_item(panel, rig.reg[target.param])
+        imgui.end()
+        imgui.end_frame()
+    b = rig.router.table.owner(target.param)
+    assert isinstance(b, Binding) and panel.page == ui.PAGE_KEYS.index("graph")
+    rows = []
+    real = ui_routing._row
+    monkeypatch.setattr(ui_routing, "_row", lambda pn, r, x, k: rows.append(x)
+                        or real(pn, r, x, k))
+    frame(panel, "graph")                            # drawn, selected
+    sel = ui_graph._selection(st, st["view"])
+    assert sel is not None and sel[0] == "bundle" and sel[1].count == before + 1
+    assert any(c.ref is b for c in sel[1].cables) and st["focus"] is b
+    rows.clear()
+    frame(panel, "graph")                            # the pane: the new row first
+    assert rows and rows[0] is b
+
+
+def test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild(
+        rig, monkeypatch):
+    """A bundle whose every cable is dormant is drawn at the dormant alpha;
+    a live one's reading follows its source frame to frame with the same
+    view and the same wiring (no rebuild)."""
+    st = party(rig)
+    links = {}
+    real = ed.link
+    monkeypatch.setattr(ed, "link", lambda lid, a, b, col, thick: links.__setitem__(
+        lid.id(), (col.w, thick)) or real(lid, a, b, col, thick))
+    router = rig.router
+    router.feed("lfo", [0.3, 0.0, 0.0, 0.0])
+    frame(rig.panel, "graph")
+    view, wiring = st["view"], st["wiring"]
+    dormant = next(b for b in st["bundles"].values() if b.dormant)
+    assert links[ui_graph._id(st, "c:" + dormant.id)][0] == pytest.approx(ui_graph.DORMANT_ALPHA)
+    lfo = st["bundles"]["bundle:lfo.1>render:eye"]
+    assert not lfo.dormant and lfo.live == pytest.approx(0.3)
+    assert links[ui_graph._id(st, "c:" + lfo.id)][0] == 1.0
+    router.feed("lfo", [0.8, 0.0, 0.0, 0.0])
+    frame(rig.panel, "graph")
+    assert st["view"] is view and st["wiring"] is wiring
+    assert st["bundles"]["bundle:lfo.1>render:eye"].live == pytest.approx(0.8)
+
+
+def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
+    """The right-click menus N7 adds, drawn once each with every submenu
+    open: a bundle's (what it holds, expand both ends, delete disabled with
+    the words) and a collapsed render node's learn ▸ group ▸ param."""
+    import hyperspace.ui as ui_mod
+    st = party(rig)
+    items, menus = [], []
+    monkeypatch.setattr(ui_mod.imgui, "begin_menu", lambda label, *a: menus.append(label) or True)
+    monkeypatch.setattr(ui_mod.imgui, "end_menu", lambda: None)
+    monkeypatch.setattr(ui_mod.imgui, "menu_item_simple",
+                        lambda label, *a, **k: items.append(label) and False)
+    bid = "bundle:analyzer>render:shape"
+    for subject in (("cable", bid), ("node", "render:shape")):
+        st["menu"] = subject
+        imgui.new_frame()
+        imgui.begin("menu")
+        ui_graph.menu(rig.panel, st, st["view"])
+        imgui.end()
+        imgui.end_frame()
+    assert "expand both ends" in items
+    assert f"delete: {graphview.EXPAND_TO_EDIT}" in items
+    assert "expand" in items and "learn" in menus
+    shape = [p.param for p in st["view"].node("render:shape").ports if p.param]
+    assert sum(1 for m in menus if m.partition("##")[2] in shape) == len(shape)  # each param
+    assert st["open"] == set()                          # nothing picked: nothing changed
 
 
 def test_the_page_draws_in_every_state(rig):

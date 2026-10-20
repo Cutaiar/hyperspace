@@ -130,8 +130,8 @@ TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay th
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
               "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
-BUNDLE_STEP = 0.6        # px a cable, past the first
-BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more
+BUNDLE_STEP = 0.5        # px a cable, past the first
+BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more (2.5 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
@@ -535,6 +535,9 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
             st["bundles"][b.id] = b
             wires += 1
     st["wires"] = wires
+    held = ui_routing._state(panel).pop("reveal", None)     # "Route a lane here…"
+    if held is not None:
+        reveal(st, view, held)
     if st.pop("frame", False):          # a tidy: the canvas framed on its nodes
         ed.navigate_to_content()
     _create(panel, st, view)
@@ -580,6 +583,31 @@ def _wiring(st: dict, view: graphview.View):
     else:
         graphview.readings(held[1][1])
     return held[1]
+
+
+def wire_of(st: dict, view: graphview.View, b) -> str | None:
+    """The drawn wire a row's cable is this frame: its bundle's id, or its
+    own cable's id; None while it is not drawn."""
+    c = next((x for x in view.cables if x.ref is b), None)
+    if c is None:
+        return None
+    bundle = next((x for x in st["bundles"].values() if any(y is c for y in x.cables)), None)
+    return bundle.id if bundle is not None else c.id
+
+
+def reveal(st: dict, view: graphview.View, b) -> str | None:
+    """A route just made elsewhere ("Route a lane here…", plan 28 N7):
+    select the wire it is drawn in — its bundle, or its own cable — and
+    bring it on screen; the side pane lists its row first (`st["focus"]`).
+    Returns the wire's id, or None (not drawn)."""
+    wid = wire_of(st, view, b)
+    if wid is None:
+        return None
+    ed.clear_selection()
+    ed.select_link(ed.LinkId(_id(st, "c:" + wid)))
+    ed.navigate_to_selection(False)
+    st["focus"] = b
+    return wid
 
 
 def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:
@@ -902,6 +930,8 @@ def _selection(st: dict, view: graphview.View):
 def _side(panel, st: dict, view: graphview.View, sel) -> None:
     what, obj = sel
     router = ui_routing.router_of(panel)
+    if what != "bundle" or not any(c.ref is st.get("focus") for c in obj.cables):
+        st["focus"] = None                      # another selection: no row first
     if what == "bundle":                        # plan 28 N7: each of its rows
         b = obj
         ui._micro("bundle")
@@ -909,7 +939,11 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         imgui.text_disabled(f"{b.count} cable{'s' if b.count != 1 else ''} · "
                             f"{graphview.EXPAND_TO_EDIT} on the canvas")
         imgui.separator()
-        route_rows(panel, [c.ref for c in b.cables if c.kind == "route"])
+        rows = [c.ref for c in b.cables if c.kind == "route"]
+        focus = st.get("focus")
+        if any(r is focus for r in rows):       # the route just made: first
+            rows = [focus] + [r for r in rows if r is not focus]
+        route_rows(panel, rows)
         for c in b.cables:                      # the rest: a desk row, a subscriber …
             if c.kind != "route":
                 imgui.text_disabled(ui.fit_text(
@@ -1183,6 +1217,8 @@ def _create(panel, st: dict, view: graphview.View) -> None:
         got = new_link()
         if got is not None:
             pa, pb = st["names"].get(got[0]), st["names"].get(got[1])
+            if pa and pb:                   # plan 28 N7: a one-output node's out stub
+                pa, pb = graphview.stub_pin(view, pa), graphview.stub_pin(view, pb)
             if pa and pb and pa != pb:
                 if graphview.is_stub(pa) or graphview.is_stub(pb):   # plan 28 N7
                     _stub_drag(panel, st, view, pa, pb)
@@ -1201,7 +1237,9 @@ LAND = "##graph.land"
 
 def stub_refusal(view: graphview.View, a: str, b: str) -> str | None:
     """Why a drag between pins `a` and `b`, one of them a node's stub, can
-    open no port picker: both are stubs, or both are outputs (inputs)."""
+    open no port picker: both are stubs (once a one-output node's out stub
+    stands for its output, `graphview.stub_pin`), or both are outputs
+    (inputs)."""
     if graphview.is_stub(a) and graphview.is_stub(b):
         return BOTH_STUBS
     stub, fixed = (a, b) if graphview.is_stub(a) else (b, a)
@@ -1259,7 +1297,8 @@ def land(panel, fixed: str, pin: str):
 
 def _land_menu(panel, st: dict, view: graphview.View) -> None:
     """The stub's picker: the node's ports a drag may land on, by port
-    group when there are many; a refused one dim, its reason on hover."""
+    group when there are more than twelve; a refused one is left out (and
+    when every one is, the first refusal is said)."""
     held = st["land"]
     n = view.node(held["node"])
     label = n.label if n is not None else held["node"]

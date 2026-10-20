@@ -86,13 +86,13 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a preset had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The filter (plan 17 WP5): one text field on the counts line, left of
-`+ route`. While it holds text, only the lines that match are drawn — in
-every section (and a line a widget is in use on, until it is let go:
-`_shown`) — the counts read "3 of 41 rows" in red and a × beside the
-field clears it. Lower-case; every typed word must be somewhere in what
-the line says (`matches`): a route's sentence, source, target and the
-target's label; a desk, dark or session line's glyph, Akai's name,
+The filter (plan 17 WP5): one text field flush right on the pointer line
+(plan 28 N7: on the counts line, left of `+ route`, before). While it
+holds text, only the lines that match are drawn — in every section (and
+a line a widget is in use on, until it is let go: `_shown`) — and the
+pointer to GRAPH gives way to "3 of 41 rows" in red, a × beside the
+field clearing it. Lower-case; every typed word must be somewhere in what
+the line says (`matches`): a desk, dark or session line's glyph, Akai's name,
 source and (mapped) target and label; a macro's id, label and
 subscribers — a macro that matches is drawn whole. The text is UI state
 (`_state(panel)["find"]`): not a param, not saved, not in a preset, not
@@ -500,7 +500,9 @@ def ctx_item(panel, p: Param) -> None:
         imgui.text_disabled("not modulatable")
         return
     if imgui.menu_item_simple("Route a lane here…"):
-        add_route(panel, real.id)
+        b = add_route(panel, real.id)
+        if b is not None:           # plan 28 N7: GRAPH selects it, its row in the pane
+            _state(panel)["reveal"] = b
         panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))     # plan 28 N7: the routes' page
 
 
@@ -1695,9 +1697,8 @@ def _find_w(on: bool) -> float:
 
 
 def _find_field(panel) -> None:
-    """The filter, on the counts line and flush right, leaving `+ route`
-    its place: the field and, while it holds text, the × that empties it.
-    Emptying it is one state write — `_state(panel)["find"] = ""`. Drawn
+    """The filter, on the pointer line and flush right: the field and,
+    while it holds text, the × that empties it. Emptying it is one state write — `_state(panel)["find"] = ""`. Drawn
     before the rows: it starts the frame's set of drawn lines."""
     st = _state(panel)
     on = bool(st["find"].strip())               # spaces alone filter nothing

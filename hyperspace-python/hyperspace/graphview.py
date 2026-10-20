@@ -1380,6 +1380,19 @@ def bundle_tip(view: View, b: VBundle) -> str:
     return "\n".join(lines)
 
 
+def stub_pin(view: View, pin: str) -> str:
+    """What a stub stands for in a drag: a node's ``out`` stub, when the
+    node has exactly one output pin (a modifier's lane, an LFO's, a macro's
+    bus), is that pin — so a collapsed modifier is patched from its stub
+    with no picker on its side; any other pin is itself."""
+    if pin_kind(pin) != STUB_OUT:
+        return pin
+    n = view.node(stub_node(pin))
+    outs = [q for port in (n.ports if n is not None else ()) if port.direction == OUT
+            for q in port.pins]
+    return outs[0] if len(outs) == 1 else pin
+
+
 def land_choices(view: View, edit, fixed: str, nid: str
                  ) -> list[tuple[str, str, str, str | None]]:
     """A drag from pin `fixed` let go on collapsed node `nid`'s stub: the
@@ -1398,7 +1411,7 @@ def land_choices(view: View, edit, fixed: str, nid: str
             continue
         for pin in port.pins:
             stub = pin_kind(pin) if port.param is not None else ""
-            label = f"{port.name}  {stub}" if stub else port.name
+            label = f"{port.name} · {stub}" if stub else port.name
             src, dst = (fixed, pin) if from_out else (pin, fixed)
             why = edit.refusal(src, dst) if edit is not None else None
             out.append((pin, label, port.group, why))
