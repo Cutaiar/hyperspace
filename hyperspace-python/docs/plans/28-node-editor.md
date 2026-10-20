@@ -8,7 +8,7 @@ frame earlier where it was late. A loop runs only through a `delay`
 modifier; any other loop keeps its last cable off, with a note.
 **Modifiers** — `curve`, `scale`, `smooth`, `combine`, `threshold`,
 `delay` — live in the preset beside its routes, each publishing a lane
-`mod:<n>` a route can source; ROUTING has a MODIFIERS strip. A new page,
+`mod:<n>` a route can source; ROUTING had a MODIFIERS strip (GRAPH since N7). A new page,
 **GRAPH**, draws both graphs on one `imgui_node_editor` canvas — the
 devices, the analyzer, the LFOs, the modifiers, the macros, the params
 under the render node that owns them, the render graph's own image
@@ -521,7 +521,7 @@ wire between two nodes while either end is collapsed; GRAPH replaces
 ROUTING — the routes and the modifiers now, the rest later.
 
 - **At the machine.** GRAPH opens as a handful of boxes: each node's
-  title and two to four short lines ("137 ports · 97 patched", "> L x
+  title and one to four short lines ("137 ports · 97 patched", "> L x
   0.57", "preset layer · up"; "51 params · 32 patched" on *shape*; "smooth
   · out 0.42" on a modifier), an in dot at the left of its title and an
   out dot at the right, and **one wire** from *apc40* to *shape*, one to
@@ -532,7 +532,9 @@ ROUTING — the routes and the modifiers now, the rest later.
   expands it (N2's ports, **patched only** within); both ends expanded,
   the real cables. **expand all / collapse all** on the head. A cable
   dropped on a collapsed box's in dot opens a list of what it can land
-  on; right-click a box for **learn ▸** any of its params. **tidy**
+  on (a collapsed modifier's, LFO's or macro's out dot is its one output,
+  so its out dropped on another collapsed box opens that box's list);
+  right-click a box for **learn ▸** any of its params. **tidy**
   collapses everything, lays it out again, frames it and says "laid out
   55 nodes, every one collapsed" (or "already tidy"). The details chip
   shows only with a selection on the narrow page, as **details beside** /
@@ -540,7 +542,8 @@ ROUTING — the routes and the modifiers now, the rest later.
   params, live bar, × remove). ROUTING has a line "routes and modifiers:
   the GRAPH page" (a click opens it) where its routes and MODIFIERS strip
   were; its desk, macros, session and sinks are unchanged; "Route a lane
-  here…" opens GRAPH.
+  here…" opens GRAPH with the new route's wire selected, its row first in
+  the pane.
 - **How.** `graphview.summary` (the lines), `stub_in` / `stub_out`
   (`nin:` / `nout:` pins), `wiring` (cables drawn as they are, render
   cables re-ended on a collapsed node's stub, the rest folded into
@@ -564,7 +567,10 @@ ROUTING — the routes and the modifiers now, the rest later.
   every node expanded (patched only: N2's default view), 1.29 ms after a
   tidy — against N2's 2.32–2.78 ms. Before the caches the collapsed page
   drew in 2.18 ms.
-- **Tests.** `tests/test_graph_legible.py` (11):
+- **Tests.** `tests/test_graph_legible.py` (14; review round 1 added the
+  reveal, the dormant / live bundle and the menus, and made the energy
+  patch four drops through the page's drop path with every node
+  collapsed):
   `::test_every_node_starts_collapsed_with_at_most_five_lines`,
   `::test_the_apc40_to_one_shader_is_one_bundle_while_collapsed`,
   `::test_a_bundle_splits_into_its_cables_when_both_ends_expand`,
@@ -575,7 +581,10 @@ ROUTING — the routes and the modifiers now, the rest later.
   `::test_beside_shows_only_with_a_selection`,
   `::test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay`,
   `::test_the_smoothed_energy_times_band_patch_from_graph_alone`,
-  `::test_the_page_draws_in_every_state`. Changed: `test_graphview.py`'s
+  `::test_the_page_draws_in_every_state`,
+  `::test_route_a_lane_here_selects_the_new_route_on_graph`,
+  `::test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild`,
+  `::test_a_bundles_menu_and_a_nodes_learn_menu_draw`. Changed: `test_graphview.py`'s
   page test expands every node before selecting a route (by expanding);
   `test_graph_edit.py`'s one-table test finds the cable's row in GRAPH's
   side pane, and its dispatch test admits `_stub_drag` and

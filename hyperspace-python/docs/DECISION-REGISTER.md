@@ -243,7 +243,7 @@ here; overturn → the change, then the same.
 | 244 | A template's modifiers: overridden by id, a save writes what differs | 239 | |
 | 245 | The modifiers one undo part of the table | 240 | |
 | 246 | Learn takes a `mod:` lane only when armed for anything | — | |
-| 247 | The MODIFIERS strip between the routes and the desk | 241 | |
+| 247 | The MODIFIERS strip between the routes and the desk — not drawn on ROUTING since N7: **superseded in part** (rows 288, 289) | 241 | superseded in part |
 | 248 | Node and pin ids: strings with a kind prefix (the `layout` keys) | 244 | |
 | 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
 | 250 | What the canvas draws: modulatable params and row targets; no sinks — its timing **superseded in part** (row 290) | 242, 245 | superseded in part |
@@ -4573,6 +4573,12 @@ Folds N0's two delay drafts.
 - **Rough edge.** Three params on the narrow panel make short sliders;
   no live bar of the inputs.
 - **Judge it.** Check 241.
+- **Superseded in part by rows 288 and 289** (plan 28 N7, 2026-10-20):
+  the strip is no longer drawn on ROUTING (its pointer line to GRAPH is
+  there); its per-modifier block (`ui_routing.modifier_block`) is the
+  editor of a selected modifier node in GRAPH's side pane, stacked, and
+  a modifier is added from GRAPH's right-click picker. `ui_routing.modifiers`
+  itself is unchanged.
 
 ### 248. Node and pin ids are strings with a kind prefix; the widget's integers are a per-panel map
 
@@ -5239,7 +5245,7 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   a collapsed end into one `VBundle` per (source node, target node):
   trigger-coloured when every cable is a trigger, else value-coloured;
   its reading the largest live |reading|; faint while every cable is
-  dormant. Its line is 2.5 px for one cable plus 0.6 px a cable, capped
+  dormant. Its line is 2.5 px for one cable plus 0.5 px a cable, capped
   at 7 px (ten cables or more). Hover: "<source> → <target>", "<n>
   cables: <source port> → <param>, …" — the first ten, then "+ k more" —
   and the reading.
@@ -5248,8 +5254,13 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   (a bundle's many readings in one number).
 - **To reverse.** `graphview.wiring`, `ui_graph.bundle_thickness`.
 - **Rough edge.** The APC40 is still two nodes (owner decision 12), so
-  the desk reaches a node over two wires when both layers map into it.
-  The key node fans out to many group nodes.
+  the desk reaches a node over two wires when both layers map into it,
+  and the two fan out one wire per node they map into: 19 bundles on
+  party-trip (*apc40* 14, *apc40 (SHIFT)* 5), most into group nodes
+  (`band`, `preset`, `master`, `tempo` …), three into render nodes
+  (`shape`, `fx`, `eye`). The key node fans out to about ten group
+  nodes. A bundle at the cap does not thicken with one more cable: its
+  hover's count does.
 - **Judge it.** Checks 261, 262.
 
 ### 281. A bundle selected lists its rows; its Delete is refused in words
@@ -5263,7 +5274,9 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   two dozen rows).
 - **To reverse.** `ui_graph._side`, `ui_graph.delete_bundle`.
 - **Rough edge.** A desk row in a bundle has no editor in the pane
-  (ROUTING's desk section edits it).
+  (ROUTING's desk section edits it): a bundle of setters (the APC40's,
+  the keys') lists its cables as text lines ("<control> → <param>
+  <op>"), only its routes as rows.
 - **Judge it.** Check 262.
 
 ### 282. The collapse state is the page's, saved nowhere
@@ -5271,8 +5284,9 @@ ROUTING's desk, macros, session and sinks sections are untouched.
 - **Built.** Which nodes are expanded is UI state on the panel
   (`ui_graph._state(panel)["open"]`): not in the preset, not in the
   show's `layout`, not an undo step; every node is collapsed at launch,
-  a hot reload keeps the set, and a tidy clears it. A desk template's
-  "open" is the same set.
+  a hot reload keeps the set, and so does a preset load (a node of the
+  same id stays expanded); a tidy clears it. A desk template's "open" is
+  the same set.
 - **Other options.** In the show's `layout` beside the rig's positions
   (a show that opens half-expanded is the mess the owner described).
 - **To reverse.** Carry the set in the show's map (`Project.layout`,
@@ -5289,10 +5303,15 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   can land on — each param's `mod` / `base` / `depth` stub, a modifier's
   inputs, a render port — by port group when there are more than twelve,
   only the ones `Edit.refusal` lets through ("nothing on <node> takes it:
-  <first refusal>" when none). The pin picked goes through
+  <first refusal>" when none), each "<port> · <stub>" ("Brightness ·
+  mod"). A collapsed node with exactly one output pin (a modifier, an
+  LFO, a macro) has an ``out`` stub that stands for that pin
+  (`graphview.stub_pin`), so a collapsed modifier's out dropped on
+  another collapsed node's in opens that node's picker. The pin picked goes through
   `Edit.connect` unchanged (one undo step; Replace / Keep when taken), a
-  render one through `Edit.wire`. A drag between two stubs, or onto the
-  wrong side, is refused red in words.
+  render one through `Edit.wire`. A drag between two stubs neither of
+  which stands for one output (a device's out onto a render node's in),
+  or onto the wrong side, is refused red in words.
 - **Other options.** A two-level menu for stub to stub (every source
   port × every target pin: hundreds of refusal checks); expand on drop.
 - **To reverse.** `ui_graph._stub_drag`, `open_land`, `land`,
@@ -5369,7 +5388,9 @@ ROUTING's desk, macros, session and sinks sections are untouched.
 - **To reverse.** The pointer block in `ui_routing.page` (the two
   sections were a few lines there).
 - **Rough edge.** "+ route" is gone: a new route is a drag on the
-  canvas, a Learn, or "Route a lane here…".
+  canvas, a Learn, or "Route a lane here…" (which selects the new route
+  on GRAPH, its row first in the pane). While the filter holds text its
+  red "n of m rows" takes the pointer's place.
 - **Judge it.** Check 266.
 
 ### 289. A modifier node's side pane is the MODIFIERS strip's block, stacked

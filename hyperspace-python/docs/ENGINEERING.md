@@ -1303,7 +1303,7 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
 - **One wire a node pair** (N7). While either end is collapsed, every
   value and trigger cable from one node to another is one wire
   (`graphview.VBundle`, `graphview.wiring`) from stub to stub: coloured
-  by what it carries (trigger only when all are), 2.5 px plus 0.6 px a
+  by what it carries (trigger only when all are), 2.5 px plus 0.5 px a
   cable up to 7 px, faint while every cable is dormant. Hover: "<n>
   cables: <source port> → <param>, …" (ten, then "+ k more"). Selected,
   the side pane lists its rows (each route as ROUTING's row); Delete is
@@ -1787,7 +1787,8 @@ preset, its dirty dot, save / as…, which desk layer is up), then a
 pointer line, "routes and modifiers: the GRAPH page" (a click opens
 GRAPH: since plan 28 N7 the routes and the MODIFIERS strip are drawn and
 edited there, ROUTING's own `_row` in GRAPH's side pane; their functions
-stay in `ui_routing`), the desk with its dark controls, the macros and
+stay in `ui_routing`; while the filter holds text its red count takes the
+pointer's place), the desk with its dark controls, the macros and
 their subscribers, the session's MIDI rows read-only, and the **sinks**
 (plan 27: each sink row with a checkbox and a ×, both writing
 `bindings.json`). "Route a lane here…" adds its route and opens GRAPH. A
