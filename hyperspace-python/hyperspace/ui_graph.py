@@ -248,7 +248,7 @@ def view_of(panel) -> graphview.View | None:
                                      lanes=lanes, bands=bands, template=template_of(panel))
         st["key"] = k
     else:
-        graphview.refresh(st["view"], reg, router, lanes)
+        graphview.refresh(st["view"], reg, router, lanes, lambda nid: collapsed(st, nid))
     return st["view"]
 
 
@@ -477,7 +477,12 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         tidy(panel, st, view)
     pre, show = _layouts(panel)
     stored = {**(show or {}), **(pre or {})}
-    auto = layout_of(st, view, stored)
+    k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
+         frozenset(st["folds"]), tuple(sorted((n, tuple(xy)) for n, xy in stored.items())))
+    held = st.get("auto")
+    if held is None or held[0] != k:          # the columns, kept while nothing moves them
+        held = st["auto"] = (k, layout_of(st, view, stored))
+    auto = held[1]
     applied = st["applied"]
     for n in view.nodes:
         xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
@@ -517,8 +522,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     for n in view.nodes:
         _node(st, n, drawn)
     # plan 28 N7: one wire per node pair while either end is collapsed
-    singles, bundles = graphview.wiring(view, lambda nid: collapsed(st, nid),
-                                        lambda c: drawn_cable(st, c))
+    singles, bundles = _wiring(st, view)
     wires = 0
     for c, a, b in singles:
         if a in drawn and b in drawn:
@@ -563,6 +567,19 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
     ed.end_pin()
     drawn.add(pin)
     st["pin_xy"][pin] = (p0.x + PIN / 2, p0.y + PIN / 2)     # canvas units, inside the editor
+
+
+def _wiring(st: dict, view: graphview.View):
+    """`graphview.wiring` for this frame, kept while the view and the
+    expanded nodes hold (only the bundles' readings move each frame)."""
+    k = (id(view), frozenset(st["open"]))
+    held = st.get("wiring")
+    if held is None or held[0] != k:
+        held = st["wiring"] = (k, graphview.wiring(view, lambda nid: collapsed(st, nid),
+                                                    lambda c: drawn_cable(st, c)))
+    else:
+        graphview.readings(held[1][1])
+    return held[1]
 
 
 def _stub(st: dict, pin: str, kind, lit: bool, drawn: set[str]) -> None:

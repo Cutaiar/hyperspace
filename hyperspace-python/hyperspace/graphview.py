@@ -228,6 +228,15 @@ class View:
     pins: dict[str, tuple[str, str]] = field(default_factory=dict)   # pin → (node, port)
 
     def node(self, nid: str) -> VNode | None:
+        # by an index kept while the node list is the same list of the same
+        # length (plan 28 N7: `refresh` asks it per cable every frame)
+        idx = self.__dict__.get("_index")
+        if idx is None or idx[0] is not self.nodes or idx[1] != len(self.nodes):
+            idx = self.__dict__["_index"] = (self.nodes, len(self.nodes),
+                                             {n.id: n for n in reversed(self.nodes)})
+        n = idx[2].get(nid)
+        if n is not None and n.id == nid:
+            return n
         return next((n for n in self.nodes if n.id == nid), None)
 
     def owner(self, pin: str) -> tuple[VNode, VPort] | None:
@@ -980,13 +989,16 @@ def _group_node(nodes: dict[str, VNode], group: str, add_node) -> VNode:
     return nodes.get(nid) or add_node(VNode(nid, "group", group))
 
 
-def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> None:
+def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
+            collapsed: Callable[[str], bool] | None = None) -> None:
     """This frame's readings on an already built view: each source port's
     and each cable's reading, each param port's effective value, and which
     cables are dormant (`off`, or a source not live), and each route's
     effective depth and words (a macro's depth subscriber turning, a
     depth dragged on ROUTING: `key` leaves the values out, so neither
-    rebuilds the view). Cheap: no structure changes."""
+    rebuilds the view). Cheap: no structure changes. A node `collapsed`
+    says true for (plan 28 N7) reads only what its lines show — its
+    patched ports, its outputs and a macro's knob — not every port."""
     table = getattr(router, "table", None) if router is not None else None
     cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
     layer_of = getattr(table, "layer_of", None)
@@ -996,7 +1008,10 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None) -> Non
             n.up = up == n.layer
             for port in n.ports:
                 port.up = not port.layer or port.layer == up
+        shut = collapsed is not None and n.kind != "macro" and collapsed(n.id)
         for port in n.ports:
+            if shut and not port.patched and port.direction != OUT:
+                continue
             if port.addr is not None:
                 port.live = reading(router, port.addr, lanes)
             elif port.param is not None:
@@ -1325,10 +1340,19 @@ def wiring(view: View, collapsed: Callable[[str], bool],
             singles.append((c, c.src_port, c.dst_port))
     for b in pairs.values():
         b.type = TRIGGER if all(c.type == TRIGGER for c in b.cables) else VALUE
+    bundles = list(pairs.values())
+    readings(bundles)
+    return singles, bundles
+
+
+def readings(bundles: Iterable[VBundle]) -> None:
+    """Each bundle's reading this frame from its cables' (`refresh` moved
+    them): the largest live |reading|, dormant while every cable is — so a
+    page may keep `wiring`'s answer while the collapse state holds."""
+    for b in bundles:
         lives = [abs(c.live) for c in b.cables if c.live is not None and not c.dormant]
         b.live = max(lives) if lives else None
         b.dormant = all(c.dormant for c in b.cables)
-    return singles, list(pairs.values())
 
 
 def cable_words(view: View, c: VCable) -> str:
