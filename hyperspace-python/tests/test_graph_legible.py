@@ -274,7 +274,8 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     assert st["applied"]["render:eye"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert st["said"] == ui_graph.TIDIED.format(n=len(view.nodes))
+    assert st["said"] == ui_graph.tidied(view)          # N9: "… in 6 areas …"
+    assert st["said"].startswith("laid out ") and " areas, every one collapsed" in st["said"]
     assert st["open"] == set() and rig.lib.presets.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes)

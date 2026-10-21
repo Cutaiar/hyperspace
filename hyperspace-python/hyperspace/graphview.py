@@ -63,8 +63,20 @@ has no output pin. Sink rows are not drawn in this plan.
 preset's (`preset.LAYOUT_KEY`) for the nodes a preset holds (modifiers,
 macros, the render nodes and their params, a performance group's node)
 and the show's for the rig's (devices, sources, the analyzer, LFOs, the
-outputs, a session group's node). An unplaced node gets a column by kind,
-left to right.
+outputs, a session group's node). An unplaced node is laid out in its
+**area** (plan 28 N9, the owner's decision of 2026-10-20: the canvas
+organised by concern), left to right: *controllers* (the devices, the
+keys, a placeholder, a desk template) → *audio* (the analyzer, the band,
+tempo, master, audio and scene params; the small *other* area — the
+preset, ui and desk params — stacked under it) → *modulation* (the LFOs,
+the modifiers, the macros) → *geometry* (the shape, the camera, the
+hands, a cloud, the scene that draws them) → *shaders* (the history, the
+effects, the composites, the outputs). `AREA` is the one table (`area_of`);
+each area's title is drawn on the canvas over its first column
+(`layout`). A node with nothing in and nothing out (`VNode.idle`: an
+unused macro, an unpatched LFO, a group node no cable reaches, a lost
+device with no rows) is not drawn: its area shows one "n idle" line in
+its place that expands to show them.
 
 Imports `routing`, `params`, `graph`, `patch`, `modifiers` — the device
 registry is handed in and read through `devices.Device`'s protocol
@@ -185,6 +197,11 @@ class VNode:
     # plan 28 N7: how many cables start or end on this node (`build`), for
     # its collapsed lines
     wires: int = 0
+    # plan 28 N9: the concern area the canvas lays this node out in
+    # (`area_of`, `AREA`), and whether it sits with nothing in and nothing
+    # out (`build`: not drawn until its area's idle line is opened)
+    area: str = ""
+    idle: bool = False
 
     def port(self, pid: str) -> VPort | None:
         return next((p for p in self.ports if p.id == pid), None)
@@ -933,6 +950,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for nid in ends:
             if nid in nodes:
                 nodes[nid].wires += 1
+    # plan 28 N9: each node's area, and which sit with nothing in and out
+    named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
+    for n in nodes.values():
+        n.area = area_of(n)
+        n.idle = is_idle(n, macros, named)
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -1064,30 +1086,181 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
 
 # ---------------------------------------------------------------- layout
 
-# the columns, left to right (the design: devices → LFOs, modifiers and
-# macros → render nodes → outputs); the render nodes spread over as many
-# columns as the render graph is deep, so its cables run left to right
-COLUMN = {"device": 0, "source": 0, "analyzer": 0, "lfo": 1, "modifier": 2, "macro": 3,
-          "group": 4, "render": 5, "template": 0}
+# plan 28 N9 — the canvas organised by concern (the owner's decision of
+# 2026-10-20: "all things audio need to live in one area; all things
+# geometry … another; all things shader … another"). Five areas, left to
+# right, so the wires read one way: the controllers, the audio (the
+# analyzer is a source: what the music says, read by the modulation and
+# the look), the modulation (the LFOs, the modifiers, the macros), then
+# the two the sources feed — the geometry and the shaders, the render
+# graph's own order (the shape is drawn by the scene, the scene feeds the
+# effects, the effects the outputs). A group no area claims goes to the
+# small `OTHER` area, stacked under the audio in its column.
+CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS = (
+    "controllers", "audio", "modulation", "geometry", "shaders")
+OTHER = "other"
+AREAS = (CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS)   # left to right
+SHARES = {OTHER: AUDIO}       # an area drawn under another's, in its column
+ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, GEOMETRY, SHADERS)
+
+# the one table: a node's area by its kind, a group node by its id
+# (``group:<param group>``), a render node by its class (or a base class)
+AREA: dict[str, str] = {
+    # by kind
+    "device": CONTROLLERS, "source": CONTROLLERS, "template": CONTROLLERS,
+    "analyzer": AUDIO,
+    "lfo": MODULATION, "modifier": MODULATION, "macro": MODULATION,
+    "output": SHADERS,
+    # a group node, by its param group
+    "group:band": AUDIO, "group:bands": AUDIO, "group:tempo": AUDIO,
+    "group:master": AUDIO, "group:audio": AUDIO, "group:scene": AUDIO,
+    "group:lfo": MODULATION, "group:mod": MODULATION, "group:macro": MODULATION,
+    "group:view": GEOMETRY, "group:rot": GEOMETRY, "group:pattern": GEOMETRY,
+    "group:camera": GEOMETRY, "group:eye": GEOMETRY, "group:ghost": GEOMETRY,
+    "group:hands": GEOMETRY, "group:cloud": GEOMETRY,
+    "group:fx": SHADERS, "group:dream": SHADERS, "group:output": SHADERS,
+    "group:overlay": SHADERS,
+    # a render node, by its class: the geometry and what draws it
+    f"render:{EYE}": GEOMETRY,
+    "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
+    "HandsLayer": GEOMETRY, "Readout": GEOMETRY, "Cover": GEOMETRY,
+    # …and the pictures it goes through
+    "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
+    "Composite": SHADERS, "Output": SHADERS,
+}
+TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
+          MODULATION: "MODULATION", GEOMETRY: "GEOMETRY", SHADERS: "SHADERS"}
+
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
 HEAD_H = 34.0          # a node's title and padding
 GAP = 28.0             # between two nodes of a column
+TITLE_H = 64.0         # an area's title, above its first node
+IDLE_H = HEAD_H        # an area's idle line
+
+
+def area_of(n: VNode) -> str:
+    """The area node `n` is laid out in (`AREA`): a group node by its id, a
+    render node by its class or a base of it (a render class no row names
+    is a shader: it is in the picture's chain), every other node by its
+    kind; a node the table does not name is `OTHER`."""
+    if n.kind == "group" or n.id == f"render:{EYE}":
+        return AREA.get(n.id, OTHER)
+    if n.kind in ("render", "output") and n.ref is not None:
+        for cls in type(n.ref).__mro__:
+            if cls.__name__ in AREA:
+                return AREA[cls.__name__]
+        return SHADERS
+    return AREA.get(n.kind, OTHER)
+
+
+# which kinds may sit idle (`is_idle`): a node of any other kind is always
+# drawn — the analyzer, a modifier just picked (it is dropped onto a cable
+# next), a render node, a connected device, a placeholder (it has rows)
+IDLE_KINDS = ("macro", "lfo", "group", "device")
+IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
+              "group": ("idle param group", "idle param groups"),
+              "device": ("lost device", "lost devices")}
+
+
+def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
+            named: Iterable[str] = ()) -> bool:
+    """Does node `n` sit with nothing in and nothing out — not drawn by
+    default (plan 28 N9)? No cable starts or ends on it (`VNode.wires`), no
+    route names one of its params as its `scale` or its sources as its
+    `when` (`named`: neither is drawn as a cable), and: a macro has no
+    label and no subscriber (an idle knob of the rig's eight — the picker
+    names one to bring it on); an LFO and a group node are idle on that
+    alone; a device only while it is lost (grey, not a placeholder: a
+    connected device is drawn even unmapped — it says the rig has it)."""
+    if n.kind not in IDLE_KINDS or n.wires:
+        return False
+    names = set(named)
+    if any(p.param in names or p.addr in names for p in n.ports):
+        return False
+    if n.kind == "macro":
+        m = (macros or {}).get(n.id)
+        return m is None or m.empty
+    if n.kind == "device":
+        return n.grey and not n.placeholder
+    return True
+
+
+def idle_words(nodes: Iterable[VNode]) -> str:
+    """An idle line's words: how many of each kind ("8 idle macros · 3 idle LFOs")."""
+    counts: dict[str, int] = {}
+    for n in nodes:
+        counts[n.kind] = counts.get(n.kind, 0) + 1
+    words = []
+    for kind in IDLE_KINDS:
+        k = counts.get(kind, 0)
+        if k:
+            one, many = IDLE_NOUNS[kind]
+            words.append(f"{k} {one if k == 1 else many}")
+    return " · ".join(words)
+
+
+def idle_id(area: str) -> str:
+    """The page's id for an area's idle line (no node of the view has it)."""
+    return f"idle:{area}"
 
 
 def _columns(view: View, render_graph) -> None:
+    """Each node's column: its area's first column (`AREAS`, left to right;
+    `OTHER` in the audio's), a render node of the geometry or the shaders
+    further by its depth in the render graph from the area's shallowest,
+    so its cables run left to right; the outputs the shaders' last."""
     depth: dict[str, int] = {}
     for r in (render_graph.order if render_graph is not None else ()):
         ins = [depth[d.name] + 1 for d in r.inputs.values() if d is not None and d.name in depth]
         depth[r.name] = max(ins, default=0)
-    last = COLUMN["render"] + max(depth.values(), default=0) + 1
     for n in view.nodes:
+        if not n.area:
+            n.area = area_of(n)
+
+    def deep(n: VNode) -> int | None:
+        return depth.get(n.label) if n.kind == "render" else None
+
+    width: dict[str, int] = {}
+    low: dict[str, int] = {}
+    for a in AREAS:
+        ds = [d for n in view.nodes if n.area == a and (d := deep(n)) is not None]
+        low[a] = min(ds, default=0)
+        width[a] = (max(ds, default=0) - low[a] + 1) if ds else 1
+        if any(n.area == a and n.kind == "output" for n in view.nodes):
+            width[a] += 1 if ds else 0
+    base: dict[str, int] = {}
+    col = 0
+    for a in AREAS:
+        if not any(n.area == a or SHARES.get(n.area) == a for n in view.nodes):
+            continue
+        base[a] = col
+        col += width[a]
+    for a, under in SHARES.items():
+        base[a] = base.get(under, 0)
+    for n in view.nodes:
+        b = base.get(n.area, 0)
+        a = n.area
         if n.kind == "output":
-            n.column = last
-        elif n.kind == "render":
-            n.column = COLUMN["render"] + depth.get(n.label, 0)
+            n.column = b + width.get(a, 1) - 1
+        elif (d := deep(n)) is not None:
+            n.column = b + d - low.get(a, 0)
         else:
-            n.column = COLUMN.get(n.kind, COLUMN["group"])
+            n.column = b
+
+
+@dataclass
+class Layout:
+    """`layout`'s answer: a position for each node (`nodes`), each area's
+    title (`titles`, over its first column), each area's idle line
+    (`lines`) and the idle nodes it stands for (`idle`); how many columns
+    each area spans (`spans`: its title may be that wide)."""
+
+    nodes: dict[str, tuple[float, float]] = field(default_factory=dict)
+    titles: dict[str, tuple[float, float]] = field(default_factory=dict)
+    lines: dict[str, tuple[float, float]] = field(default_factory=dict)
+    idle: dict[str, list[str]] = field(default_factory=dict)
+    spans: dict[str, int] = field(default_factory=dict)
 
 
 def visible(n: VNode, full: bool, folds=frozenset()) -> list[VPort]:
@@ -1117,35 +1290,85 @@ def height(n: VNode, full: bool = False, folds=frozenset(), collapsed: bool = Fa
     return HEAD_H + ROW_H * rows
 
 
-def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
-                expanded: Callable[[str], bool] | None = None,
-                folds=frozenset(),
-                collapsed: Callable[[str], bool] | None = None
-                ) -> dict[str, tuple[float, float]]:
-    """A position for every node `placed` does not hold: its column's x by
-    kind (`COLUMN`; the render nodes by their depth in the render graph,
-    the outputs last), stacked down the column in view order. The nodes
-    already placed keep their positions and take no room here (a tidy
-    passes none). `expanded(node id)` says which nodes show every port
-    (default none) and `folds` which of their groups are folded, so an
-    expanded node pushes the column under it down instead of overlapping.
-    `collapsed(node id)` (plan 28 N7: the page's default, every node) says
-    which nodes draw only their title and lines; such a node takes that
-    much room whatever `expanded` says."""
+def layout(view: View, placed: Mapping[str, Any] | None = None,
+           expanded: Callable[[str], bool] | None = None,
+           folds=frozenset(),
+           collapsed: Callable[[str], bool] | None = None,
+           idle_open: Iterable[str] = ()) -> Layout:
+    """The canvas laid out by area (plan 28 N9): every node `placed` does
+    not hold stacked down its column (`_columns`), the columns starting
+    under a row for the areas' titles; in a column two areas share, the
+    second's title and nodes under the first's. An area's idle nodes
+    (`VNode.idle`) take no room: its idle line goes under its nodes in its
+    first column and they sit at it — unless the area is in `idle_open`,
+    when they stack under the line like any node. The nodes already placed
+    keep their positions and take no room here (a tidy passes none).
+    `expanded(node id)` says which nodes show every port (default none)
+    and `folds` which of their groups are folded, so an expanded node
+    pushes the column under it down instead of overlapping. `collapsed(node
+    id)` (plan 28 N7: the page's default, every node) says which nodes draw
+    only their title and lines; such a node takes that much room whatever
+    `expanded` says."""
     placed = placed or {}
+    opened = set(idle_open)
+    rank = {a: k for k, a in enumerate(ORDER)}
+    out = Layout()
     tops: dict[int, float] = {}
-    out: dict[str, tuple[float, float]] = {}
+    first: dict[str, int] = {}               # an area's first column
+    last: dict[str, int] = {}
     for n in view.nodes:
+        if n.area:
+            first[n.area] = min(first.get(n.area, n.column), n.column)
+            last[n.area] = max(last.get(n.area, n.column), n.column)
+    out.spans = {a: last[a] - first[a] + 1 for a in first}
+
+    def put(n: VNode, col: int) -> None:
         if n.id in placed:
-            continue
-        y = tops.get(n.column, 0.0)
-        out[n.id] = (n.column * COL_W, y)
+            return
         full = bool(expanded(n.id)) if expanded is not None else False
         shut = bool(collapsed(n.id)) if collapsed is not None else False
         # an expanded node on the N7 page has its all ports / patched only line
         chip = ROW_H if collapsed is not None and not shut and n.kind != TEMPLATE else 0.0
-        tops[n.column] = y + height(n, full, folds, shut) + chip + GAP
+        out.nodes[n.id] = (col * COL_W, tops[col])
+        tops[col] += height(n, full, folds, shut) + chip + GAP
+
+    # the nodes by column, by area in `ORDER` within a column, in view order
+    runs: dict[tuple[int, int, str], list[VNode]] = {}
+    for n in view.nodes:
+        runs.setdefault((n.column, rank.get(n.area, len(rank)), n.area), []).append(n)
+    for (col, _, area), nodes in sorted(runs.items(), key=lambda kv: kv[0][:2]):
+        if col not in tops:
+            tops[col] = TITLE_H if area else 0.0
+        elif area:
+            tops[col] += TITLE_H                    # a second area in this column
+        if area and first.get(area) == col:
+            out.titles.setdefault(area, (col * COL_W, tops[col] - TITLE_H))
+        for n in nodes:
+            if not (n.idle and area):
+                put(n, col)
+        idle = [n for n in nodes if n.idle and area]
+        if not idle:
+            continue
+        out.idle.setdefault(area, []).extend(n.id for n in idle)
+        line = (col * COL_W, tops[col])
+        out.lines[area] = line
+        tops[col] += IDLE_H + GAP
+        for n in idle:
+            if area in opened:
+                put(n, col)
+            elif n.id not in placed:
+                out.nodes[n.id] = line
     return out
+
+
+def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
+                expanded: Callable[[str], bool] | None = None,
+                folds=frozenset(),
+                collapsed: Callable[[str], bool] | None = None,
+                idle_open: Iterable[str] = ()) -> dict[str, tuple[float, float]]:
+    """A position for every node `placed` does not hold: `layout`'s nodes
+    (its titles and idle lines left out)."""
+    return layout(view, placed, expanded, folds, collapsed, idle_open).nodes
 
 
 def home(n: VNode) -> str:
