@@ -128,6 +128,7 @@ from .lookback import (
     migrate_values,
 )
 from .modifiers import Modifier
+from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
     PAN_IDS,
     PERFORMANCE_GROUPS,
@@ -616,6 +617,12 @@ class Presets:
         #    before stored px. Silent — the shape lands where it was, and a
         #    factory file is read this way on every load
         doc, _ = pan_world(doc)
+        # 0. and its palette as a slice of the HSV cylinder (plan 30 N8): a
+        #    file from before stored the fold's centre/width and sat/val
+        #    lo/hi. Silent, as the pan is, but for a fold wider than the
+        #    slice reproduces
+        doc, palette_notes = palette_slice(doc)
+        notes += palette_notes
         # 0. and its render graph (plan 26 A4): read, not yet landed — no
         #    section is the default graph; one this build cannot read is a
         #    note and the default graph

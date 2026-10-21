@@ -27,8 +27,9 @@ is a fixture under `tests/fixtures/presets/` loaded through a scratch
 library.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group X, checks
-220–231. Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
-rows 214–232. The owner's decisions for this plan (1–5 of the launch
+220–231, and 267–271 for N8 (the palette as compression, below). Open
+decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md) rows
+214–232, and 291–298 for N8. The owner's decisions for this plan (1–5 of the launch
 prompt and the render parts of 16) are in [`DECISIONS.md`](../DECISIONS.md)
 with Who "owner".
 
@@ -265,7 +266,8 @@ any render node.
 - **The three fixtures** (each the factory preset's `values`, `routes`
   and `macros`, no `desk` or `modules`, like `hands-lines`; force-added):
   - `tests/fixtures/presets/palette-hands.json`: party-tracer's look,
-    the palette `after: "hands"`, on, mix 1, centre 200, width 60, and
+    the palette `after: "hands"`, on, mix 1, centre 200, width 60 (hue
+    170 → 230 since N8), and
     `fx.on: true` (party-tracer bypasses the stack).
   - `tests/fixtures/presets/palette-glass.json`: party-acid, the palette
     `into: "output.2"`, the same palette values.
@@ -330,8 +332,8 @@ any render node.
 - **`graph.VALUE = "value"`**, the fourth port type beside `IMAGE`,
   `MASK` and `GEOMETRY` (`graph.PORT_TYPES` holds all four): a scalar or
   a small float vector a node publishes once a frame. Its docstring
-  names its two uses — the palette's `palette` value out (centre, width,
-  the sat and val ranges, the ramp's anchors) for a lights sink (plan
+  names its two uses — the palette's `palette` value out (its slice —
+  the hue, sat and val ends since N8 — and the ramp's anchors) for a lights sink (plan
   29), and an image-in `sample` port on the palette that would set its
   params from a bitmap. **No node publishes or reads one.** On the
   modulation side, `patch.RENDER_VALUE = "value"` names it as a future
@@ -387,9 +389,9 @@ by the graph's order and `timed_in`, not seen). In particular:
   227), and through a presenter: the rig's later outputs get the folded
   hands or frame as a half-float pool texture wrapped "f1" in a second
   context, which no test draws on a real second window.
-- **Two palettes with different centres on two outputs** (231): no test loads two placed instances of one file into two outputs.
+- **Two palettes with different slices on two outputs** (231): no test loads two placed instances of one file into two outputs.
 - **The folded hands' colour at distance**: the ghost's colours are
-  low-saturation, so centre 200 reads grey-teal more than vivid blue
+  low-saturation, so hue 170 → 230 reads grey-teal more than vivid blue
   (223).
 - **The FX page's placed chip** and its words at the control window's
   size (229).
@@ -469,6 +471,122 @@ by the graph's order and `timed_in`, not seen). In particular:
   `scene+hands+through` are the same picture (the through output stands
   down).
 
+## N8 — the palette as a colour compression (2026-10-20)
+
+After the owner's second look: "What I want this to be is a color
+compression transform. It is definitionally mapping the space of the HSV
+cylinder onto a bounded subspace of that cylinder" — a start and a stop
+angle, a start and a stop saturation, a start and a stop value; "if I
+want the entire image to all be shades of a particular red, I want to be
+able to do that" — and "one of the mode controls is like a slider, but
+it's really a discrete picker". This supersedes decision 2's "its fold
+and gradient map are unchanged" (DECISIONS.md, Who "owner (2026-10-20)").
+Register rows 291–298; hand checks 267–271.
+
+### What was built
+
+- **The slice.** `palette.glsl`'s first mode (now called **compress**)
+  maps every pixel into the closed slice `hue_from` → `hue_to` (degrees,
+  up the wheel, through 360 when `to` < `from`; `from = to` one hue;
+  0 → 360 the whole wheel), `sat_from` → `sat_to`, `val_from` → `val_to`
+  (0–1), and `hue_turn` (degrees, wraps) added to both ends — it turns
+  the whole slice round the wheel at its width, as the old `centre` did.
+  Saturation and value are a linear map (`mix(from, to, x)`), never a
+  clamp, and `from > to` inverts. The hue map is the old triangle fold
+  (red on `from`, cyan on `to`, no seam) for arcs up to 180° — the same
+  expression, bit for bit — and above 180° its peak slides towards the far
+  red so that at 360° the map is the identity. Defaults: off, mix 0, the
+  whole cylinder — so on at mix 1 the picture is as it was on an opaque
+  ground; on a see-through one the premultiplied colour is scaled by
+  alpha once more (rows 291–294).
+- **The ids.** `centre`/`width` became `hue_from`/`hue_to`; `sat_lo`/`_hi`
+  and `val_lo`/`_hi` became `_from`/`_to` (so all three rows read the same
+  way). `palettecompat.palette_slice` (a leaf: plain dicts) reads an old
+  document in the new ids — values (any instance), routes, desk rows and
+  macros: a row on the centre goes to `hue_turn`; a push on the width
+  splits onto both ends, its depth subscribers with it; a centre set
+  outright (a position route, a base subscriber) becomes the turn, the
+  arc laid about 0 — on every whole-preset load (`Presets.load_doc`,
+  beside `pan_world`) and `fx` module load (`library._module_values`);
+  the next save writes the new keys (row 295). A note only when the
+  palette would show a changed look (on with mix above 0, or a row naming
+  it, and a fold over 180°): a preset saved before, which carries the
+  palette's defaults with it off, loads with no note and no dot. Nothing
+  in `hyperspace/library/` carried the old ids.
+- **A discrete `@param`.** `// @param choice [compress|gradient] 0 "Mode"
+  tip` on an int uniform: `fx.parse` reads it into `ParamSpec.choices`,
+  `fx.declare` declares an enum (`Kind.ENUM`), the uniform gets the
+  index. Refused: a float uniform, fewer than two choices, a repeated
+  name (row 296). The palette's `mode` is the only one.
+- **The strip.** Mode is a combo; in compress mode a faint line reads
+  `compress into: hue 170° → 230° · sat 0.00 → 1.00 · val 0.00 → 1.00`;
+  hue, sat and val are one row each, `from → to`, the hue row ending in
+  a small turn slider and with a thin bar of the arc's hues (as turned)
+  under it; the mode's label opens its param menu. `ROW_SUFFIXES` gained `_from`/`_to`;
+  `HIDDEN_BY_MODE` hides `hue_`/`sat_`/`val_` in gradient mode (row 297).
+  The gradient map is unchanged as the second mode (row 298).
+- **The fixtures.** `palette-hands`, `palette-glass` and `wired-outputs`
+  (N4's, which also carries the palette) now carry `hue_from 170`,
+  `hue_to 230` in place of `centre 200`, `width 60`. **Every one of the
+  596 goldens matched as recorded; none was re-recorded** (a first
+  rewrite of the fold's expression moved one pixel by one level in two
+  frames, `palette-glass|present|scene+hands+through` and
+  `wired-outputs|present|scene+hands`; the shipped form keeps the old
+  expression and moves none).
+- **Code.** `shaders/fx/palette.glsl`; `fx.py` (`_CHOICE`,
+  `ParamSpec.choices`, `_check_key`, `declare`'s enum branch);
+  `palettecompat.py` (new leaf: `palette_slice`, `RENAMED`, `FOLD_EXACT`);
+  `preset.py` (`load_doc` step 0); `library.py` (`_module_values`);
+  `ui_fx.py` (`strip`, `ROW_SUFFIXES`, `HIDDEN_BY_MODE`, `compress_line`,
+  `slice_arc`, `_hue_bar`, `ARROW`, `TURN_W`); `graph.py` (the `VALUE`
+  docstring's words).
+- **Tests.** `tests/test_palette.py` (new, 24): the identity at the
+  defaults; a red, a yellow, a wrapping, a one-hue and a wide slice on a
+  synthetic rainbow through the real shader; the turn through a full
+  circle keeping the arc's width, in the shader and through a converted
+  centre route; an inverted val; the gradient mode; the choice form and
+  its refusals; the strip's rows and line; the conversion (values,
+  instances, routes, macros, a centre set outright, when a note is said),
+  a full pre-N8 snapshot loading with no note and no dot, an old preset
+  and an old `fx` module through the real loads, the fixtures; no
+  factory file names the palette. Changed assertions:
+  `tests/test_fx_palette.py` (the new ids and defaults throughout; the
+  narrow slice as 200 → 200; the hot-reload edit on "Hue to"),
+  `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes` (`val_to`
+  for `val_hi`; `mode` drawn by `_combo`, never `_slider`),
+  `::test_each_effect_changes_the_frame[palette]` and
+  `tests/test_graph_placement.py::_palette`,
+  `tests/test_graph_effects.py` (the slice 170 → 230 / 155 → 245 in place
+  of centre/width — at the defaults the palette is now the identity, so a
+  test that needs it to change the picture sets a slice).
+
+### What no person has verified
+
+- **Whether the compression reads as the owner described** — the whole
+  picture as shades of one red, a yellow slice and its derivations — on
+  the projector (267, 268); the tests prove every output colour lies in
+  the slice on a synthetic rainbow.
+- **Slices wider than 180°** (268): the slide from fold to identity is a
+  choice no one has looked at.
+- **The strip at the control window's size**: the combo, the arrows, the
+  hue bar and the compress line (270); the fit test proves the page does
+  not scroll, not how it reads.
+- **An old preset loading as the same look** on a real copy (271).
+
+### Known rough edges
+
+- Near 360° wide, the return from the far red runs through a narrow band
+  of input hues just below 360, a short rainbow in the most magenta reds
+  (row 292).
+- The ends do not wrap: a route on one end alone clamps at 0 / 360;
+  the turn is what goes round (row 291).
+- A non-push row on the old `width` stays dormant with a note, and a
+  width base subscriber whose ends would cross 0 / 360 is dropped with a
+  note (row 295). A converted fold wider than 180° looks different and,
+  when it shows, says so.
+- The hue bar shows the arc at full saturation and brightness, not the
+  slice's sat and val (row 297).
+
 ## Decisions
 
 The owner's (2026-10-16), built as written:
@@ -477,7 +595,9 @@ The owner's (2026-10-16), built as written:
    bitmap out, several instances, placeable on any image edge. No single
    point in the graph holds "the shaders".
 2. **The palette is the first shader node moved**, with a fixture per
-   placement; its fold and gradient map (plan 24 C6) are unchanged.
+   placement; its fold and gradient map (plan 24 C6) are unchanged. (The
+   fold was reparametrised as a slice of the HSV cylinder on 2026-10-20:
+   N8, below.)
 3. **Auxiliary ports are separate concerns**: the palette's value out
    and image in are designed (the `VALUE` port type), not built.
 4. **No preset is edited or added**; every proof is a fixture through a

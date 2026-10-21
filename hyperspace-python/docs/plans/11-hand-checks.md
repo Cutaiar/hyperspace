@@ -5,7 +5,8 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–266; the last group, Y (232–266), is plan 28's (261–266 its N7).
+numbers. They run 1–271; group Y (232–266) is plan 28's (261–266 its N7), and
+267–271, plan 30's N8 (the palette as compression), are at the end of group X.
 
 ## Before you start
 
@@ -67,7 +68,9 @@ number and what you saw.
 10. Shader nodes (group X): 220, 221 and 230 on the laptop; (copy) 225,
     226, 228 and 229 on the laptop, 223 with the hand camera (or the
     synthetic tape); 222, 224, 227 and 231 (copy) with the glass and the
-    projector as two outputs (after 101), 223 again there.
+    projector as two outputs (after 101), 223 again there; N8's palette
+    as compression: 267–269 on the projector, 270 on the laptop, 271
+    (copy) on the laptop.
 11. The node editor (group Y): 232–236, 240, 242, 243, 245–247, 250, 253
     and 255 on the laptop; (copy) 238, 239, 244, 257, 260 on the laptop; 237,
     241, 249 with the hand camera and music; 248, 256 with the APC40 and
@@ -2288,21 +2291,25 @@ HDMI re-sync).
 Headless: `tests/test_fx_palette.py::{test_the_defaults_leave_every_frame_byte_identical,test_a_turned_up_mix_changes_the_picture,test_the_grey_ramp_is_a_greyscale_and_a_coloured_one_is_not,test_every_palette_param_takes_a_route,test_a_raised_floor_does_not_light_a_see_through_ground}`.
 Any preset. FX page: the Palette chip is last; switch it on (nothing
 changes); right-click its **Mix** → **Learn desk**, move S2; sweep S2.
-Then move Centre, Width, and set Mode to 1. *Pass:* at mix 0 the
-picture is as it was; raising S2 pulls every hue onto a slice around
-Centre; Width 0 is one colour; Centre sweeps the slice with no seam;
-Mode 1 paints brightness through the grey ramp (a greyscale picture);
-a grey wireframe takes the slice's edge colour once Sat low is above 0.
-*Fail:* a seam as Centre sweeps → the triangle in `palette.glsl`; the
+Then set the hue row to 170 → 230, then 200 → 200, and set Mode to
+gradient. (Since plan 30 N8 the slice is hue / sat / val `from → to`,
+not Centre and Width; checks 267–271.) *Pass:* at mix 0 the picture is
+as it was; at the defaults (0 → 360) raising S2 changes nothing; at
+170 → 230 raising S2 pulls every hue onto the blue-cyan slice; 200 → 200
+is one colour; no seam anywhere; gradient paints brightness through the
+grey ramp (a greyscale picture); a grey wireframe takes the slice's
+`from` colour once Sat from is above 0.
+*Fail:* a seam → the triangle in `palette.glsl`; the
 picture changes at mix 0 → the chain's skip of a zero-mix pass; S2
 refused → the fader is still the session's (153).
 
 **167. A saved palette, and the palette's strip.** (copy)
 Headless: `tests/test_fx_palette.py::test_a_saved_palette_is_an_fx_module_preset`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
 Copy `tests/fixtures/palettes/fx/sunset.json` into the library's `fx/`.
-FX page, open Palette: in Mode 0 the strip shows mode, centre, width,
-sat (low and high on one row) and val; set Mode 1: it shows mode,
-anchors and one row per anchor (hue, sat, val). Load **sunset** from the
+FX page, open Palette: in compress mode the strip shows mode (a
+picker), the "compress into" line, and hue, sat and val (each `from →
+to` on one row); set Mode to gradient: it shows mode, anchors and one
+row per anchor (hue, sat, val). Load **sunset** from the
 FX page's preset strip (under its title), change an anchor, save it as
 your own (**as…**), load another, load yours back. *Pass:* the page does not scroll in
 either mode; only the open mode's rows show; sunset paints violet →
@@ -3078,8 +3085,8 @@ a new name in `<home>/presets/` with its `"graph"` replaced:
   "effect", "file": "palette", "into": "output.1"}, {"kind": "effect",
   "file": "palette", "instance": 2, "into": "output.2"}]}`, and in
   `"values"` add `"fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
-  "fx.palette.2.centre": 30.0, "fx.palette.2.width": 60.0` (the first
-  palette keeps centre 200: blue-cyan; the second is orange-red).
+  "fx.palette.2.hue_from": 0.0, "fx.palette.2.hue_to": 60.0` (the first
+  palette keeps hue 170 → 230: blue-cyan; the second is orange-red).
 
 The two-output checks use 101's rig: the glass is output 1 (the render
 window) and the projector output 2, a **presenter** on its own context
@@ -3129,7 +3136,7 @@ Headless: `tests/test_graph_placement.py::{test_after_hands_folds_the_hands_laye
 Copy `palette-hands.json` into `<home>/presets/`. On the laptop first,
 then on 101's rig; load PALETTE-HANDS, hands in the box, SYSTEM open.
 *Pass:* the hands turn a blue-cyan slice (the ghost's pale colours read
-grey-teal: **judge** whether centre 200, width 60 reads as meant) while
+grey-teal: **judge** whether hue 170 → 230 reads as meant) while
 the 16-cell and its tracers keep their colours; the guide and labels are
 not folded; on the rig the projector (a presenter) and the glass both
 show the folded hands, at the ghost's opacity; SYSTEM shows a `palette`
@@ -3228,17 +3235,87 @@ not move it."; the faces row lists Warp; SYSTEM has no `warp` line (its
 time is inside `scene`). *Fail:* the frame warps (the target lost in the
 run of effect nodes).
 
-**231. Two palettes with different centres on two outputs.** (copy, glass and projector)
+**231. Two palettes with different slices on two outputs.** (copy, glass and projector)
 Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain` (neighbours only: no test loads this configuration, two placed instances of one file into two outputs).
 101's rig; make `two-palettes.json` (above) and load TWO-PALETTES; FX
-page, then ROUTING; drag Palette 2's centre. *Pass:* the glass folds to
+page, then ROUTING; drag Palette 2's hue turn. *Pass:* the glass folds to
 blue-cyan, the projector to orange-red; the FX page shows two placed
 chips, `Palette · into output 1` and `Palette 2 · into output 2`, each
-with its own strip; dragging Palette 2's centre moves only the
+with its own strip; dragging Palette 2's hue turn moves only the
 projector's colours; ROUTING lists "Palette 2 …" settings; each
 output's "shows:" line ends `· palette on this output only` / `·
 palette 2 on this output only`. *Fail:* both outputs one colour (one
 palette's values on both); a fold on the wrong output; one chip.
+
+**267. The whole picture as shades of one red.** (projector)
+Headless: `tests/test_palette.py::{test_a_red_slice_gives_only_reds,test_the_defaults_are_the_whole_cylinder_and_the_identity}`.
+Any factory preset with plenty of colour (TRIP, F3); FX page, open
+Palette, switch it on, raise its mix to 1 (nothing changes at the
+defaults: hue 0 → 360, sat 0 → 1, val 0 → 1). Then set hue 350 → 10,
+sat 0.6 → 1, val 0.3 → 1. *Pass:* on the projector the whole frame is
+reds — dark reds where it was dark, bright reds where it was bright, a
+pinker red where it was pale — with no green, blue or yellow anywhere
+and no hard edge where one colour met another; the strip's line reads
+`compress into: hue 350° → 10° · sat 0.60 → 1.00 · val 0.30 → 1.00`.
+**Judge** whether that reads as "shades of a particular red". *Fail:*
+colours outside red (the arc read the short way, or the hue map wrong:
+`palette.glsl`); black areas still black (a clamp, not a map: the `mix`
+calls); the picture changing at the defaults (the identity lost).
+
+**268. A yellow slice and its derivations.** (projector)
+Headless: `tests/test_palette.py::test_a_yellow_slice_spans_its_arc`.
+As 267, then hue 45 → 75, sat 0.4 → 1, val 0.5 → 1; then widen it to
+30 → 90, then 0 → 300. *Pass:* the frame is ambers through yellows to
+lime-yellows — different parts of the picture different yellows
+("derivations"), not one flat yellow — and widening the slice brings in
+oranges and greens smoothly, with no seam; at 0 → 300 most of the wheel
+is back. **Judge** the wide slices (over 180° the map slides from the
+fold towards the identity: register row 292). *Fail:* one flat yellow
+(the hue map collapsed: arc 0); a band of rainbow inside a red area
+near 300 → 360 wider than a sliver (row 292's rough edge, larger than
+it should be).
+
+**269. A slice through red, and an inverted brightness.** (projector)
+Headless: `tests/test_palette.py::{test_a_slice_through_red_wraps,test_an_inverted_val_range_turns_dark_to_bright}`.
+As 267, then hue 300 → 60 (magentas through reds to oranges, through 0);
+then hue back to 0 → 360 and val 1 → 0.2. *Pass:* with 300 → 60 the
+frame is magenta, red and orange only — no greens, cyans or blues;
+with val 1 → 0.2 the dark ground turns bright and the bright shape dim
+(on an opaque window; on the overlay the clear ground stays clear).
+*Fail:* 300 → 60 reading as the greens and blues between 60 and 300
+(the arc taken the other way); the inversion ignored (the ends sorted).
+
+**270. The mode is a picker; the strip reads as the slice.** (laptop)
+Headless: `tests/test_palette.py::{test_mode_is_a_discrete_choice,test_the_strip_rows_are_the_slice,test_the_choice_form_is_parsed_and_refused_when_bad,test_the_gradient_mode_is_still_there}`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
+FX page, open Palette. Click Mode; pick gradient, then compress. Hover
+Mode, and right-click its label. Drag the hue row's small turn slider
+round. *Pass:* Mode is a drop-down of two words, **compress** and
+**gradient**, not a slider, and its label opens the param menu (Learn,
+route…); compress shows the "compress into" line and three rows — hue,
+sat, val — each two sliders with `→` between them, the hue row ending in
+the turn, a thin bar of the slice's colours under it; turning moves the
+whole slice round the wheel at the same width, wrapping past 360, and
+the line adds `turned …°`; gradient shows the
+anchors' rows instead; the page does not scroll in either. *Fail:* a
+slider for Mode (the `@param choice` form not read: `fx.parse`); the
+rows unpaired (`ui_fx.ROW_SUFFIXES`).
+
+**271. An old preset with centre and width loads as the same look.** (copy)
+Headless: `tests/test_palette.py::{test_centre_and_width_become_the_slice_s_ends,test_an_old_preset_loads_as_the_same_slice,test_an_old_fx_module_preset_is_read_as_the_slice}`, goldens `palette-hands|*`, `palette-glass|*`, `wired-outputs|*` (the fixtures converted, their frames unmoved).
+On the copy, take `palette-glass.json` and, in its `"values"`, replace
+`"fx.palette.hue_from": 170.0, "fx.palette.hue_to": 230.0` with the old
+`"fx.palette.centre": 200.0, "fx.palette.width": 60.0`, and add a route
+`{"source": "lane:0", "target": "fx.palette.centre", "op": "push",
+"value": 0.5}`; save it as `old-glass.json` in `<home>/presets/`. Play
+music. Load PALETTE-GLASS, then
+OLD-GLASS; open the palette's strip; save OLD-GLASS and open the file.
+*Pass:* the two look the same at rest (output 2 blue-cyan); no note on
+the preset strip; the strip reads hue 170 → 230; with music the slice
+swings round the wheel at the same 60° width (the route is on
+`hue_turn`); the saved file has `hue_from` / `hue_to` and no `centre` /
+`width`. Load any preset you saved before this build: no note. *Fail:* the old one
+loads as the whole wheel or with "unknown id(s)" (`fx.palette_slice`
+not on the load: `Presets.load_doc`).
 
 ## Y. Plan 28: the node editor
 
@@ -3757,6 +3834,11 @@ Only a person can settle these:
   prove the projector's hand-over is the folded texture by identity,
   never that a half-float texture shows right in a real second window;
   and whether the folded hands' colour reads as meant at distance (223);
+- whether the palette's compression reads as the owner described it —
+  the whole picture as shades of one red, a yellow slice with its
+  derivations — and how slices wider than 180° look (267–269): the tests
+  prove every output colour lies inside the slice on a synthetic
+  rainbow, not what a person sees on a projector;
 - the SYSTEM page's per-effect split (220): on the Mac's tile GPU a
   line can carry its input's work, so only "a line per effect that ran"
   is pass or fail;

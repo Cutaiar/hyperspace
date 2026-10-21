@@ -25,7 +25,11 @@ helpers every effect can call)::
     vec4 effect(vec2 uv) { return src(uv + …); }
 
 ``@param lo hi default [log] [wrap] "Label" tip`` — the uniform name
-without its ``u_`` is the id suffix. Every effect also gets six params
+without its ``u_`` is the id suffix. A discrete choice (plan 30 N8) is
+``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
+the names in brackets, ``|`` between them, then the default's index — an
+enum param the strips draw as a picker (a combo), never a slider; the
+uniform gets the index. Every effect also gets six params
 of its own: ``on``, ``mix`` (wet/dry against its input), ``speed`` (the
 rate its clock ``u_phase`` runs at — integrated here, so a lane riding
 the speed never jumps the phase), ``blend``, ``order`` and ``target``.
@@ -84,6 +88,9 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
+_CHOICE = re.compile(
+    r"^choice\s+\[(?P<names>[^\]]*)\]\s+(?P<default>\d+)\s+\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+)
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
     r"(?P<flags>(?:(?:log|wrap)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
@@ -116,6 +123,7 @@ class ParamSpec:
     log: bool = False
     wrap: bool = False
     tip: str = ""
+    choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
 
 
 @dataclass
@@ -135,8 +143,20 @@ class EffectSpec:
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
-                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
+                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
+                       p.choices)
                       for p in self.params))
+
+
+def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
+    if key in RESERVED or key in seen:
+        raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+    if key.isdecimal():
+        # the naming rule (plan 26 A0/A4): a purely decimal segment
+        # right after `fx.<file>` is an instance marker — `fx.acid.2`
+        # is the second acid — so no key may be one
+        raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
+                        "instance number (fx.<file>.2 is the second instance)")
 
 
 def parse(name: str, source: str) -> EffectSpec:
@@ -171,20 +191,30 @@ def parse(name: str, source: str) -> EffectSpec:
                 raise SpecError(f"{name}:{n}: @param needs 'uniform float|int u_name;' before it")
             continue
         typ, uniform, body = m.groups()
+        key = uniform[2:]
+        cm = _CHOICE.match(body)
+        if cm or body.startswith("choice"):
+            if not cm:
+                raise SpecError(f'{name}:{n}: @param choice wants [a|b|…] default "Label" tip')
+            if typ != "int":
+                raise SpecError(f"{name}:{n}: u_{key} is a choice, so its uniform is an int")
+            names = tuple(c.strip() for c in cm["names"].split("|"))
+            if len(names) < 2 or not all(names) or len(set(names)) < len(names):
+                raise SpecError(f"{name}:{n}: u_{key} needs two or more distinct choices")
+            _check_key(name, n, key, seen)
+            seen.add(key)
+            spec.params.append(ParamSpec(
+                key=key, uniform=uniform, label=cm["label"], lo=0.0, hi=float(len(names) - 1),
+                default=float(min(int(cm["default"]), len(names) - 1)), integer=True,
+                tip=cm["tip"].strip(), choices=names,
+            ))
+            continue
         pm = _PARAM.match(body + " ")
         if not pm:
             raise SpecError(f'{name}:{n}: @param wants lo hi default [log] [wrap] "Label" tip')
         lo, hi, default = (float(x) for x in pm["nums"].split())
         flags = pm["flags"].split()
-        key = uniform[2:]
-        if key in RESERVED or key in seen:
-            raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
-        if key.isdecimal():
-            # the naming rule (plan 26 A0/A4): a purely decimal segment
-            # right after `fx.<file>` is an instance marker — `fx.acid.2`
-            # is the second acid — so no key may be one
-            raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
-                            "instance number (fx.<file>.2 is the second instance)")
+        _check_key(name, n, key, seen)
         if not lo < hi:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
@@ -536,6 +566,10 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                    "face drawing: the one shader run the render graph does not show, "
                    "and a placement in the preset's graph does not move it.")
         for p in spec.params:
+            if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
+                r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
+                       list(p.choices), group=g, tip=p.tip)
+                continue
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
                          fmt=_fmt(p), group=g, tip=p.tip)

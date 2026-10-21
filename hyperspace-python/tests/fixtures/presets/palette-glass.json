@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.preset/2",
  "name": "palette-glass",
- "note": "plan 30 D1's proof preset (a test fixture, never a factory preset): party-acid with the palette placed into output 2's picture \u2014 that output folds to a slice of blue-cyan, the others keep the acid's rainbow",
+ "note": "plan 30 D1's proof preset (a test fixture, never a factory preset): party-acid with the palette placed into output 2's picture \u2014 that output compresses into a slice of blue-cyan (hue 170 \u2192 230), the others keep the acid's rainbow",
  "graph": {"nodes": [
   {"kind": "effect", "file": "palette", "into": "output.2"}
  ]},
@@ -59,8 +59,8 @@
   "fx.huecycle.spread": 1.2,
   "fx.palette.on": true,
   "fx.palette.mix": 1.0,
-  "fx.palette.centre": 200.0,
-  "fx.palette.width": 60.0
+  "fx.palette.hue_from": 170.0,
+  "fx.palette.hue_to": 230.0
  },
  "routes": [
   {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},

@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.preset/2",
  "name": "palette-hands",
- "note": "plan 30 D1's proof preset (a test fixture, never a factory preset): party-tracer's look with the palette placed after the hands' layer \u2014 the hands fold to a slice of blue-cyan, the shape and its echoes keep their colours",
+ "note": "plan 30 D1's proof preset (a test fixture, never a factory preset): party-tracer's look with the palette placed after the hands' layer \u2014 the hands compress into a slice of blue-cyan (hue 170 \u2192 230), the shape and its echoes keep their colours",
  "graph": {"nodes": [
   {"kind": "effect", "file": "palette", "after": "hands"}
  ]},
@@ -56,8 +56,8 @@
   "dream.res": 2,
   "fx.palette.on": true,
   "fx.palette.mix": 1.0,
-  "fx.palette.centre": 200.0,
-  "fx.palette.width": 60.0
+  "fx.palette.hue_from": 170.0,
+  "fx.palette.hue_to": 230.0
  },
  "routes": [
   {"source": "lane:0", "target": "rot.rate.ZW", "op": "push", "value": 0.0625, "scale": "master.gain"},

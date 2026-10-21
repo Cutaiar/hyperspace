@@ -19,14 +19,14 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–290 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–298 (bar
     109), built on a recommendation and waiting for the owner's keep or
     overturn; row 109 records the owner's plan 25 answers.
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–266, with the automated test behind each.
+    numbered 1–271, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`
@@ -60,7 +60,8 @@ list with the outputs as nodes, the APC40 as two nodes — and, after the
 owner's first look (N7, 2026-10-20), a legible GRAPH: every node
 collapsed by default, one wire a node pair, the routes and the modifiers
 edited on GRAPH (ROUTING points there; its desk, macros, session and
-sinks stay). About 2380 tests pass (2384, 2 skipped, with N7), ruff is
+sinks stay); then the palette as a colour compression (N8, 2026-10-20).
+About 2410 tests pass (2411, 2 skipped, with N8), ruff is
 clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
@@ -70,11 +71,11 @@ before unchanged. No preset was edited or added; `apc40.py` and
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
   plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
-  220–266. Above all: a cable dragged on the GRAPH page (247), which no
+  220–271 (N8's palette as compression 267–271). Above all: a cable dragged on the GRAPH page (247), which no
   test can do.
-- **The owner's keep or overturn** on register rows 34–290 (the answer
+- **The owner's keep or overturn** on register rows 34–298 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
-  plans 30 and 28's being rows 214–290 (N7's 278–290).
+  plans 30 and 28's being rows 214–298 (N7's 278–290, N8's 291–298).
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory

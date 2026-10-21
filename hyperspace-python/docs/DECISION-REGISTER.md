@@ -7,6 +7,7 @@ during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
 (several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
 run (shader nodes) and rows 233–277 during plan 28's run (the node
 editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
+and rows 291–298 in plan 30's N8 (the palette as compression)
 on 2026-10-20: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
@@ -131,11 +132,11 @@ here; overturn → the change, then the same.
 | 132 | The grab lanes after the dance lanes; gates after the pinches | 163 | |
 | 133 | Hands on the projector: the SETUP.md line, not the home's file | 165 | |
 | 134 | The palette's ids are `fx.palette.*` | 166 | |
-| 135 | The `@mix` directive; the palette starts at mix 0 | 166 | |
-| 136 | The palette's params: mode, anchors, twelve anchor values | 166, 167 | |
+| 135 | The `@mix` directive; the palette starts at mix 0 — "no identity exists" **superseded in part** (row 291) | 166 | superseded in part |
+| 136 | The palette's params: mode, anchors, twelve anchor values — `mode` as a number **superseded in part** (row 296) | 166, 167 | superseded in part |
 | 137 | The palette at `@order 95` | — | |
-| 138 | The fold over the absolute hue wheel; linear sat and val | 166 | |
-| 139 | The FX page repacked; strip rows packed by name | 167 | |
+| 138 | The fold over the absolute hue wheel; linear sat and val — `centre`/`width` and `_lo`/`_hi` **superseded** (rows 291–294) | 166 | superseded in part |
+| 139 | The FX page repacked; strip rows packed by name — the palette's rows **superseded in part** (row 297) | 167 | superseded in part |
 | 140 | `[[devices]]`; the old tables translated with a note each | 168, 169 | |
 | 141 | Today's devices keep their schemes; two never feed one Router key (since B6: a second pad opens under its role, rows 210–213; a second hands device is still refused) | 174, 219 | |
 | 142 | The `Device` protocol, one `Port`, four status words | 170 | |
@@ -287,6 +288,14 @@ here; overturn → the change, then the same.
 | 288 | ROUTING's pointer line; "Route a lane here…" opens GRAPH | 266 | |
 | 289 | A modifier node's side pane: the MODIFIERS strip's block, stacked | 265 | |
 | 290 | A collapsed node reads only what its lines show; wiring and columns kept | 261 | |
+| 291 | The slice: `hue_from` → `hue_to` up the wheel, turned by a wrapping `hue_turn`; from = to one hue, 0 → 360 the whole wheel | 267, 269 | |
+| 292 | The hue map: the old fold up to 180°, sliding to the identity at 360° | 267, 268 | |
+| 293 | Saturation and value mapped linearly, never clamped | 267, 268 | |
+| 294 | `from` above `to` inverts (sat or val) | 269 | |
+| 295 | `centre`/`width` and `_lo`/`_hi` read as the slice on load (values, routes, desk rows, macros); a note only when the palette shows | 271 | |
+| 296 | `// @param choice [a\|b] n "Label"`: a discrete param, drawn as a picker | 270 | |
+| 297 | The strip: mode picker, "compress into" line, hue / sat / val rows `from → to` (the hue row's turn beside), a hue bar | 270 | |
+| 298 | The gradient map kept as the second mode | 270 | |
 
 "—": no hand check shows it; tests only.
 
@@ -2069,6 +2078,10 @@ added: every proof is a fixture under `tests/fixtures/`.
 
 ### 135. A new `// @mix` directive: the palette starts at mix 0
 
+- **Superseded in part by row 291** (plan 30 N8, 2026-10-20): the slice's
+  defaults (the whole cylinder) are the identity now, so "none exists"
+  below no longer holds; the palette still starts at mix 0.
+
 - **Built.** `fx.py` reads `// @mix <value>` as an effect's default
   wet/dry (1 when absent, so every other effect is as it was). The
   palette says `@mix 0`: switching it on changes nothing until its mix is
@@ -2081,6 +2094,11 @@ added: every proof is a fixture under `tests/fixtures/`.
 - **Judge it.** Check 166.
 
 ### 136. The palette's params: `mode` 0 / 1, an `anchors` count, twelve anchor values
+
+- **Superseded in part by row 296** (plan 30 N8, 2026-10-20): `mode` is a
+  `@param choice` (compress / gradient) drawn as a picker; its values are
+  still 0 and 1, so a saved `mode` loads as it was. The anchors are
+  unchanged.
 
 - **Built.** `mode` is a whole number, 0 (fold) or 1 (gradient map),
   because the `@param` form has no list. The ramp is up to four anchor
@@ -2104,6 +2122,13 @@ added: every proof is a fixture under `tests/fixtures/`.
 
 ### 138. The fold is a triangle over the absolute hue wheel; saturation and value are linear
 
+- **Superseded in part by rows 291–294** (plan 30 N8, 2026-10-20):
+  `centre`/`width` became the slice's ends `hue_from`/`hue_to` (and the
+  turn `hue_turn`), and `sat_lo`/`_hi`, `val_lo`/`_hi` became
+  `_from`/`_to`. The triangle is kept for arcs up to 180° (bit for bit:
+  the D1 frames did not move), and the linear sat and val and the alpha
+  scaling stand.
+
 - **Built.** Red folds to one end of the slice and cyan to the other,
   centred on `centre`, `width` wide: neighbouring hues stay neighbours,
   no seam. Saturation and value are rescaled linearly into `sat_lo`–
@@ -2119,6 +2144,10 @@ added: every proof is a fixture under `tests/fixtures/`.
 - **Judge it.** Check 166.
 
 ### 139. The FX page is repacked to fit a thirteenth chip and the palette's strip
+
+- **Superseded in part by row 297** (plan 30 N8, 2026-10-20): the palette's
+  rows are mode (a picker), hue, sat and val, each `from → to`; the packing
+  by name gained `_from`/`_to`.
 
 - **Built.** Three chips a row as before (row 45); the gaps around the
   chips and under the strip header are gone, which wins back the room a
@@ -4107,7 +4136,7 @@ Folds two of D1's drafts: the refusals, and the loops.
 - **Built.** Each fixture is a factory preset's `values`, `routes` and
   `macros`, with no `desk` or `modules` (like `hands-lines`), plus:
   `palette-hands.json` — party-tracer, the palette `after: "hands"`, on,
-  mix 1, centre 200, width 60, and `fx.on: true` (party-tracer bypasses
+  mix 1, centre 200, width 60 (hue 170 → 230 since N8, row 295), and `fx.on: true` (party-tracer bypasses
   the stack, so the palette would never run); `palette-glass.json` —
   party-acid, the palette `into: "output.2"` with the same values, so
   the output visibly folds; `acid-scene.json` — party-mandala, a second
@@ -4217,7 +4246,8 @@ Folds two of D1's drafts: the refusals, and the loops.
   `GEOMETRY` (`graph.PORT_TYPES` holds the four): a scalar or a small
   float vector a node publishes once a frame. Its docstring names its
   two uses — the palette's `palette` value out (centre, width, the sat
-  and val ranges, the ramp's anchors) for a lights sink (plan 29), and
+  and val ranges, the ramp's anchors; its slice's ends since N8, row
+  291) for a lights sink (plan 29), and
   an image-in `sample` port on the palette that would set its params
   from a bitmap. No node publishes or reads one (a test walks every
   `Node` class and the built default graph). `patch.RENDER_VALUE =
@@ -5009,7 +5039,7 @@ Folds N3's "the seam with N4".
   in the scene **as lines** so the solid `ghost.2` layer reads apart;
   `ghost.2` is the layer, wired to `output.2.hands`. `wired-outputs.json`:
   palette-glass's values (party-acid, the palette at centre 200, width
-  60) plus `fx.acid.2.*` (on, mix 1, bend 0.06, twist 1.6, reach 6,
+  60 — hue 170 → 230 since N8, row 295) plus `fx.acid.2.*` (on, mix 1, bend 0.06, twist 1.6, reach 6,
   breathe 0.5); the palette wired into `output.1.image`, acid 2 after the
   history into `output.2.image`. `tools/golden_frames.py` switches on any
   `ghost.<n>.on` a fixture's graph declares (session state no preset
@@ -5419,3 +5449,182 @@ ROUTING's desk, macros, session and sinks sections are untouched.
 - **Rough edge.** A port's hover on a collapsed node is not reachable,
   so its stale reading is never seen.
 - **Judge it.** Check 261.
+
+## The palette as compression (plan 30, N8)
+
+Built on 2026-10-20 after the owner's second look at the palette: "What I
+want this to be is a color compression transform. It is definitionally
+mapping the space of the HSV cylinder onto a bounded subspace of that
+cylinder" — a start and a stop angle, a start and a stop saturation, a
+start and a stop value — and "one of the mode controls is like a slider,
+but it's really a discrete picker". The owner's decision is in
+[`DECISIONS.md`](DECISIONS.md) "Effects and the look-back" with Who
+"owner (2026-10-20)"; these rows are what the build chose where it left
+a choice open. They supersede rows 138 and parts of 135, 136 and 139
+(marked there). No factory preset turns the palette on, so no factory
+golden moved; the three fixtures that do (`palette-hands`,
+`palette-glass`, `wired-outputs`) were converted to the slice's keys and
+their frames match as recorded.
+
+### 291. The slice: `hue_from` → `hue_to` up the wheel; from = to is one hue, 0 → 360 the whole wheel
+
+- **Built.** Seven params name the slice: `hue_from`, `hue_to` (degrees,
+  0–360), `hue_turn` (degrees, wraps), `sat_from`, `sat_to`, `val_from`,
+  `val_to` (0–1). The arc runs from `hue_from` *up* the wheel to
+  `hue_to`, through 360 when `to` is below `from` (350 → 10 is the 20° of
+  reds either side of 0); `from = to` is one hue; 0 → 360 is the whole
+  wheel. `hue_turn` is added to both ends: it turns the whole slice round
+  the wheel and keeps its width, wrapping as the old `centre` did, so a
+  hand or a lane sweeping the hue rides it (a converted centre route
+  lands there). The defaults are the whole cylinder (0 → 360, turn 0,
+  0 → 1, 0 → 1), so switched on at mix 1 the picture is as it was on an
+  opaque ground (a test; on a see-through ground — the overlay, the
+  faces — the colour is premultiplied and the pass scales it by alpha
+  once more, so a part-clear pixel darkens). The ends do not wrap: 360
+  must stay 360, or the whole wheel would read as one hue.
+- **Other options.** The short way round (350 → 10 and 10 → 350 the same
+  arc; no arc over 180° could be set); wrapping hue params with `from = to`
+  as the whole wheel (a single hue then needs two different numbers).
+- **To reverse.** The arc line in `palette.glsl`, the params' header.
+- **Rough edge.** A route on one end alone clamps at 0 / 360 (the ends do
+  not wrap): to move the slice round, route the turn, not an end.
+- **Judge it.** Checks 267, 269.
+
+### 292. The hue map: the old fold up to 180°, sliding to the identity at 360°
+
+- **Built.** A seamless map from the whole wheel onto an arc must fold
+  (a map that went once round the wheel onto a partial arc would tear at
+  red), and a map that is the identity at 360° cannot fold — so the
+  palette keeps the triangle fold for arcs up to 180° (red lands on
+  `from`, cyan on `to`, every hue between; "derivations on yellow"), and
+  above 180° the fold's peak slides from cyan towards the far side of red
+  (`smoothstep(180, 360, arc)`) until at 360° the climb is the whole
+  wheel and the map the identity. Up to 180° the expression is the old
+  one to the bit: the palette fixtures' frames did not move.
+- **Other options.** A linear map (`from + hue × arc`): the identity at
+  360°, but a seam through every red in the picture for any narrower arc;
+  the fold at every width (no identity: the defaults would change the
+  picture).
+- **To reverse.** The `if (arc > 180.0)` block in `palette.glsl`.
+- **Rough edge.** Near 360° the return from the far red runs through a
+  narrow band of input hues just below 360 (at 350° wide, the last few
+  degrees of magenta-red carry a short rainbow back to `from`); never
+  seen on a projector.
+- **Judge it.** Checks 267, 268.
+
+### 293. Saturation and value are mapped linearly, never clamped
+
+- **Built.** Saturation 0–1 lands linearly on `sat_from` → `sat_to`,
+  value 0–1 on `val_from` → `val_to` (`mix(from, to, x)`): the whole
+  input range lands inside the slice and uses all of it, so a red slice
+  with val 0.3 → 1 lifts black to a dark red and keeps white white. On a
+  see-through ground the result is still scaled by the pixel's alpha.
+- **Other options.** A clamp (cuts detail off at both ends; the owner
+  asked for a map); a curve (gamma) on value.
+- **To reverse.** The `mix` calls in `palette.glsl`.
+- **Rough edge.** A grey pixel has no hue (it reads as red), so once
+  `sat_from` is above 0 a grey wireframe takes the slice's `from` colour.
+- **Judge it.** Checks 267, 268.
+
+### 294. `from` above `to` inverts
+
+- **Built.** `sat_from > sat_to` or `val_from > val_to` is legal and
+  inverts that axis: `val 1 → 0.2` turns the darkest pixel the brightest
+  and the brightest a dim one (a test). Nothing refuses it.
+- **Other options.** Sort the two ends (no inversion; one less knob's
+  meaning).
+- **To reverse.** Swap the ends in `palette.glsl` when from > to.
+- **Rough edge.** On the overlay a black ground inverted to bright stays
+  clear (alpha scales it), so the inversion shows on the shape only.
+- **Judge it.** Check 269.
+
+### 295. Old documents are read as the slice on load
+
+- **Built.** `palettecompat.palette_slice` (a leaf module: plain dicts)
+  reads a document carrying the fold's ids (any instance,
+  `fx.palette.2.*` too) in the slice's: `hue_from` = centre − width/2 and
+  `hue_to` = centre + width/2, wrapped into 0–360 (centre 200 width 60 →
+  170 → 230; width 360 → 0 → 360), turn 0, a missing one at its old
+  default (centre 0, width 360); `sat_lo/_hi`, `val_lo/_hi` renamed
+  `_from/_to`; an id already in the new form wins. When something sets
+  the centre outright (a `position` route or a macro's base subscriber on
+  it) the arc is laid about 0 and `hue_turn` holds the centre (centre 200
+  width 60 → 330 → 30 turned 200), so those rows move to the turn as they
+  are. Routes and desk rows: a rename moves the row; any row on the
+  centre goes to `hue_turn` (it wraps, so a push through a full turn
+  keeps the arc's width — a test); a push on the width becomes half of it
+  apart on each end (it widens). Macros: base and depth subscribers on
+  the renamed ids follow; a depth subscriber on the centre's route
+  follows it to the turn; one on the width's push is split into one per
+  end (its from/to scale each half alike); a base subscriber on the width
+  is converted about the document's centre when both ends stay inside
+  0–360 over its travel, else dropped with a note. It runs on every
+  whole-preset load (`Presets.load_doc`, beside plan 26's `pan_world`)
+  and every `fx` module load (`library._module_values`), silently; the
+  next save writes the new keys. A note only when the palette would show
+  the change — on with mix above 0 in compress mode, or a row naming it —
+  and the fold was wider than 180°: at 360° "the old fold doubled the
+  whole wheel; its slice 0 → 360 now leaves the colours as they are".
+  Every preset saved before carries the palette's ids at their defaults
+  with it off (a save writes every base): those load with no note and
+  no dot (a test on a full snapshot).
+- **Other options.** A `units`-style marker (no need: the old ids are
+  unambiguous); rewrite the files at launch (`migrate_home`).
+- **To reverse.** The two call sites and the function.
+- **Rough edge.** A non-push row on the width is kept dormant with a
+  note (no single slice param takes it whole), and a width base
+  subscriber crossing 0 / 360 is dropped with a note. A wide old fold
+  (over 180°) looks different; the note says so. Nothing in the library
+  carried the old ids (no factory preset turns the palette on).
+- **Judge it.** Check 271.
+
+### 296. `// @param choice [a|b] n "Label"`: a discrete param, drawn as a picker
+
+- **Built.** An effect file may declare `uniform int u_mode; // @param
+  choice [compress|gradient] 0 "Mode" tip`: the names in brackets, `|`
+  between them, the default's index. `fx.declare` makes it an enum
+  (`Kind.ENUM`), so the strip draws a combo, a desk knob steps through
+  its choices, a route can switch it, and its readout is the choice's
+  name; the uniform gets the index. A float uniform, fewer than two
+  choices or a repeated name is refused with the line. The palette's
+  `mode` is the only one; every other effect file is unchanged.
+- **Other options.** A combo for any integer param of two or three
+  values (guessing); chips instead of a combo.
+- **To reverse.** The `_CHOICE` form in `fx.parse` and the enum branch
+  of `declare`; the palette's header back to `@param 0 1 0`.
+- **Rough edge.** A choice name with `|` or `]` in it cannot be written.
+- **Judge it.** Check 270.
+
+### 297. The strip: mode picker, "compress into" line, hue / sat / val rows `from → to`
+
+- **Built.** The palette's strip in compress mode reads: **mode** (a
+  combo, its label opening the param menu as a row's does), a faint line
+  in the owner's words — `compress into: hue 170° → 230° · sat 0.00 →
+  1.00 · val 0.00 → 1.00` (`turned 90°` after the hue when turned) — then
+  **hue**, **sat** and **val**, each one row of two sliders with `→`
+  between them, the hue row with the small turn slider at its end and a
+  thin bar of the slice's colours (as turned) under it. The packing by
+  name (row 139) gained `_from`/`_to`, which is why `sat_lo`/`_hi` and
+  `val_lo`/`_hi` were renamed (every row of the slice reads the same
+  way). Gradient mode shows mode, anchors and the four anchor rows as
+  before (`HIDDEN_BY_MODE`).
+- **Other options.** Keep `_lo`/`_hi` for sat and val (two words for one
+  idea on one strip); a hue wheel instead of the bar (more drawing for
+  the same information).
+- **To reverse.** `ui_fx.strip`'s choice and pair branches,
+  `compress_line`, `_hue_bar`.
+- **Rough edge.** The bar shows the arc's hues at full saturation and
+  brightness, not the slice's sat and val.
+- **Judge it.** Check 270.
+
+### 298. The gradient map is kept as the second mode
+
+- **Built.** The owner's words describe the compression; the gradient
+  map (brightness through two to four anchor colours) is a different
+  transform — it throws the picture's hues away and paints by
+  brightness — so it stays, as the picker's second choice, unchanged.
+- **Other options.** Remove it (sunset-style ramps lost; `fx` presets
+  that use it would load as compression).
+- **To reverse.** Delete the mode and its fourteen params.
+- **Rough edge.** None known.
+- **Judge it.** Check 270.
