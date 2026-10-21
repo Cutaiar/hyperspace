@@ -31,7 +31,7 @@ explained in the [glossary](#glossary) at the end.
    A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
    use branch `plan-24-26-27-integration`. The shader-node entries
-   (L95–L102, D19–D23) are plan 30's, and the node-editor entries
+   (L95–L102, L129, L130, C9–C11, D19–D23) are plan 30's, and the node-editor entries
    (L103–L128, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`.
    Two windows open: the picture (the *render window*) and the *control
@@ -248,6 +248,8 @@ changes brightness or volume instead).
 | L126 | Tidy says what it did; the details button | 1 | laptop | 264 |
 | L127 | The energy patch from GRAPH alone | 1 | laptop, hand camera, music, the copy | 265 |
 | L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
+| L129 | The palette's Mode is a picker; its rows read as the slice | 1 | laptop | 270 |
+| L130 | An old palette preset (centre and width) loads as the same look | 1 | laptop, the copy | 271 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -337,6 +339,9 @@ changes brightness or volume instead).
 | C6 | A hand across the box pans as far as it did | 2c | projector, hand camera | 199 |
 | C7 | A preset saved before this build keeps its place | 2c | projector, the copy | 201 |
 | C8 | Hands as lines, through the acid, with tracers — by dragging | 2c | projector, hand camera, the copy | 251 |
+| C9 | The whole picture as shades of one red | 2c | projector | 267 |
+| C10 | A yellow slice and its derivations | 2c | projector | 268 |
+| C11 | A slice through red; dark turned bright | 2c | projector | 269 |
 | D1 | Two outputs open where the config says | 2d | glass, projector | 101 |
 | D2 | The eight output states | 2d | glass, projector, camera | 102 |
 | D3 | Hands over or through the effects | 2d | glass, projector, camera | 103, 47 |
@@ -901,21 +906,24 @@ one). Plan 24 (the party fixes).
 1. Any preset. FX page: the **Palette** chip is the last one. Switch it
    on.
 2. Raise its **Mix** slowly to the top.
-3. Move **Centre** all the way round, then **Width** down to 0 and back.
-4. Set **Mode** to 1.
+3. Set the **hue** row to 170 → 230, then both ends to 200. (Since plan
+   30 N8 the palette is a slice — hue, sat and val each `from → to` —
+   not Centre and Width: C9–C11, L129.)
+4. Set **Mode** to gradient.
 5. With the APC40: right-click Mix → **Learn desk**, move track fader 2
    (S2), then sweep S2.
 
-**Right if:** (1) nothing changes: the palette starts at mix 0. (2) the
-colours are pulled onto one slice of the colour wheel around Centre.
-(3) the slice moves round with no jump anywhere; at width 0 the picture
-is one colour, its brightness kept. (4) the picture becomes a greyscale
+**Right if:** (1) nothing changes: the palette starts at mix 0. (2)
+still nothing changes: its slice starts as the whole colour wheel.
+(3) at 170 → 230 the colours are pulled onto a blue-cyan slice with no
+jump anywhere; at 200 → 200 the picture is one colour, its brightness
+kept. (4) the picture becomes a greyscale
 ramp (the default anchors are greys). (5) the footer says the learn
 landed into the preset; S2 then fades the palette in and out once it
 reaches the mix.
 
-**Wrong if:** a jump (a seam) as Centre goes round; the picture changes
-in step 1; S2 refused as "invariant" (the track faders are still the
+**Wrong if:** a jump (a seam) in the colours; the picture changes
+in step 1 or 2; S2 refused as "invariant" (the track faders are still the
 session's: see A28).
 
 *(check 166)*
@@ -927,14 +935,15 @@ session's: see A28).
 **Do:**
 1. Copy `tests/fixtures/palettes/fx/sunset.json` into the copy's `fx/`
    folder (`<home>/fx/`, or the shared library's).
-2. FX page, open Palette. Look at its controls with Mode 0, then Mode 1.
+2. FX page, open Palette. Look at its controls with Mode on compress, then gradient.
 3. From the FX page's preset strip (under its title) load **sunset**.
    Change one anchor colour, save it as your own (**as…**), load another
    effect preset, then yours again.
 
-**Right if:** (2) the page never scrolls; with Mode 0 you see Mode,
-Centre, Width, Sat (low and high on one row) and Val; with Mode 1, Mode,
-Anchors and one row per anchor colour (hue, sat, val on one row). (3)
+**Right if:** (2) the page never scrolls; on compress you see Mode, a
+"compress into" line, then Hue, Sat and Val (each from → to on one
+row); on gradient, Mode, Anchors and one row per anchor colour (hue,
+sat, val on one row). (3)
 sunset paints dark violet → magenta → orange → cream; yours comes back
 with your anchor.
 
@@ -2777,7 +2786,7 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
@@ -3274,6 +3283,46 @@ macros, session and sinks exactly as before; the line opens GRAPH;
 **Wrong if:** anything in the desk section changed.
 
 *(check 266)*
+
+#### L129. The palette's Mode is a picker; its rows read as the slice
+
+**Needs:** laptop. Plan 30 N8.
+
+**Do:** FX page, open **Palette**. Click **Mode**: pick **gradient**,
+then **compress**.
+
+**Right if:** Mode is a drop-down with two words, compress and
+gradient — not a slider. On compress the strip shows a faint line
+"compress into: hue 0° → 360° · sat 0.00 → 1.00 · val 0.00 → 1.00",
+then three rows, **hue**, **sat** and **val**, each two sliders with an
+arrow between them, and a thin coloured bar under the hue row; on
+gradient the anchor rows instead. The page never scrolls.
+
+**Wrong if:** Mode is a slider; the from/to sliders on separate rows.
+
+*(check 270)*
+
+#### L130. An old palette preset (centre and width) loads as the same look (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** copy `palette-glass.json` into `<home>/presets/` as
+`old-glass.json`; in it replace `"fx.palette.hue_from": 170.0,
+"fx.palette.hue_to": 230.0` with `"fx.palette.centre": 200.0,
+"fx.palette.width": 60.0` (the way a preset saved before this build
+reads). Load PALETTE-GLASS, then OLD-GLASS; open the palette. Save
+OLD-GLASS and open its file.
+
+**Right if:** both look the same; no note on the preset strip; the hue
+row reads 170 → 230; the saved file has `hue_from` and `hue_to`, no
+`centre` or `width`.
+
+**Wrong if:** the old one shows the full rainbow, or a note about
+unknown ids.
+
+**Changes:** delete the files.
+
+*(check 271)*
 
 # Part 2 — tests that need hardware
 
@@ -5149,6 +5198,56 @@ dot on the preset and ⌘Z takes it back; the file's `"graph"` is
 
 *(check 251)*
 
+#### C9. The whole picture as shades of one red
+
+**Needs:** the projector. Plan 30 N8.
+
+**Do:** load TRIP (F3). FX page, open **Palette**, switch it on, raise
+its **Mix** to the top (nothing changes yet). Set **hue** 350 → 10,
+**sat** 0.6 → 1, **val** 0.3 → 1.
+
+**Right if:** the whole picture is reds — dark red where it was dark,
+bright red where it was bright — and no other colour anywhere, no hard
+edges between colours. Judge: does it read as "shades of one red"?
+
+**Wrong if:** greens, blues or yellows left; black still black (the
+range cut off rather than squeezed in); the picture changing before you
+set the slice.
+
+*(check 267)*
+
+#### C10. A yellow slice and its derivations
+
+**Needs:** the projector.
+
+**Do:** as C9, then **hue** 45 → 75, **sat** 0.4 → 1, **val** 0.5 → 1;
+then widen the hue to 30 → 90, then 0 → 300.
+
+**Right if:** ambers through yellows to lime-yellows, different parts of
+the picture different yellows (not one flat yellow); widening brings in
+oranges and greens smoothly; at 0 → 300 most colours are back. Judge
+the wide slices.
+
+**Wrong if:** one flat yellow; a seam; a rainbow streak inside red
+areas wider than a thin sliver.
+
+*(check 268)*
+
+#### C11. A slice through red; dark turned bright
+
+**Needs:** the projector.
+
+**Do:** as C9, then **hue** 300 → 60. Then hue back to 0 → 360 and
+**val** 1 → 0.2.
+
+**Right if:** 300 → 60 gives magentas, reds and oranges only (it goes
+up through 0, not the long way); val 1 → 0.2 turns the dark ground
+bright and the bright shape dim.
+
+**Wrong if:** greens and blues at 300 → 60; the val change ignored.
+
+*(check 269)*
+
 ## (d) The glass and the projector together
 
 *The glass* is the Pepper's Ghost screen. Plug both screens in before
@@ -5692,14 +5791,14 @@ its trail follows the heaved shape, not a straight one; LOOKBACK reads
 `two-palettes.json` and replace its `"graph": {"nodes": [` … `]},` part
 with `"graph": {"nodes": [{"kind": "effect", "file": "palette", "into":
 "output.1"}, {"kind": "effect", "file": "palette", "instance": 2,
-"into": "output.2"}]},`; after `"fx.palette.width": 60.0` add `,
+"into": "output.2"}]},`; after `"fx.palette.hue_to": 230.0` add `,
 "fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
-"fx.palette.2.centre": 30.0, "fx.palette.2.width": 60.0`. Load
-TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's centre.
+"fx.palette.2.hue_from": 0.0, "fx.palette.2.hue_to": 60.0`. Load
+TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's hue from.
 
 **Right if:** the glass is blue-cyan and the projector orange-red; FX
 shows two placed chips, "Palette · into output 1" and "Palette 2 · into
-output 2", each with its own controls; dragging Palette 2's centre
+output 2", each with its own controls; dragging Palette 2's hue from
 changes only the projector; ROUTING lists "Palette 2 …" settings; each
 output's "shows:" line ends "· palette on this output only" or "·
 palette 2 on this output only".
@@ -6027,6 +6126,10 @@ what you want changed.
 
 - **Knob smoothing at 80 ms** — does a knob feel late or right? Try 50
   and 200 ms. (A17, B27; checks 78, 79)
+- **The palette as compression** — does a red slice read as shades of
+  one red, a yellow slice as yellows and their derivations, and how do
+  slices wider than 180° look (they slide from the fold towards the
+  whole wheel)? (C9–C11; checks 267–269)
 - **The GRAPH page at a distance** — can you hit a pin and read a box on
   the laptop at the control window's normal size? Is the selected route's
   row better under the canvas or beside it? (L111, L113; checks 245, 247)

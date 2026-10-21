@@ -639,8 +639,8 @@ graph with a note (register row 277).
 
 **The `VALUE` port** (`graph.VALUE = "value"`, plan 30 D2): a fourth port
 type, a scalar or small float vector a node publishes once a frame, for
-the palette's two designed ports — a value out (centre, width, the sat
-and val ranges, the anchors) for a lights sink (plan 29), and an
+the palette's two designed ports — a value out (the slice's hue, sat
+and val ends, the anchors) for a lights sink (plan 29), and an
 image-in `sample` port that would set its params from a bitmap. **No
 node publishes or reads one**
 (`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
@@ -715,17 +715,26 @@ Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
 and `fx.mix` scales it.
 
-**The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
+**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
 so, unplaced, last in the chain, after the look-back and before the dim — and
 before the hands unless an output sends them through the effects; plan
 30: a preset's graph may place it on the hands' layer only, one output
 only, or the scene before the history). Off and at `@mix 0` by default, so switching it on changes
-nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
-triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
-neighbouring hues stay neighbours, no seam) and rescales saturation and
-value linearly into `sat_lo`–`sat_hi` and `val_lo`–`val_hi`. Mode 1
-(**gradient map**) maps brightness through the first `anchors` (2–4) of
-four anchor colours, `a1`–`a4` hue / sat / val, a grey ramp by default.
+nothing until its mix is raised. `mode` is a `@param choice` (an enum,
+drawn as a picker). **compress** (plan 30 N8, the owner's colour
+compression) maps the whole HSV cylinder onto the closed slice `hue_from`
+→ `hue_to` (degrees, up the wheel, through 360 when `to` < `from`;
+`from = to` one hue, 0 → 360 the whole wheel), `sat_from` → `sat_to`,
+`val_from` → `val_to`: saturation and value by a linear map, never a
+clamp (`from > to` inverts); the hue by the triangle fold (red on
+`from`, cyan on `to`, no seam) for arcs up to 180°, its peak sliding
+towards the far red above that so 360° is the identity. The defaults are
+the whole cylinder, so on at mix 1 changes nothing. A document with the
+fold's old ids (`centre`/`width`, `sat_lo`/`_hi`, `val_lo`/`_hi`) is read
+as the slice on load (`fx.palette_slice`, from `Presets.load_doc` and
+`library._module_values`). **gradient** maps brightness through the
+first `anchors` (2–4) of four anchor colours, `a1`–`a4` hue / sat / val,
+a grey ramp by default.
 On a see-through ground the result is scaled by the pixel's alpha. A
 saved palette is an `fx` module preset; no palette ships in
 `library/fx/` (the owner's are made at the venue). The folder is polled every 30 frames; a parse
