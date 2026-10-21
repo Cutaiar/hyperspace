@@ -310,7 +310,7 @@ def test_each_effect_changes_the_frame(ctx, name):
     if name == "glimmer":
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0 (today's picture): turn it up
-        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
+        st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
@@ -1160,14 +1160,17 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
         draw(self, dt)
         over.append(imgui.get_scroll_max_y())
     monkeypatch.setattr(Panel, "_page_fx", measured)
-    drawn = []
-    real_slider = Panel._slider
+    drawn, picked = [], []
+    real_slider, real_combo = Panel._slider, Panel._combo
     monkeypatch.setattr(Panel, "_slider", lambda self, pid, *a, **k: (drawn.append(pid),
                                                                        real_slider(self, pid, *a, **k))[1])
+    monkeypatch.setattr(Panel, "_combo", lambda self, pid, *a, **k: (picked.append(pid),
+                                                                      real_combo(self, pid, *a, **k))[1])
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
     st.select("palette")
     for mode in (0, 1):
         drawn.clear()
+        picked.clear()
         reg["fx.palette.mode"].set(mode)
         reg["fx.palette.on"].set(True)
         for _ in range(3):
@@ -1177,8 +1180,9 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
         assert over[-1] == 0, f"the fx page scrolls with the palette in mode {mode}"
         shown = set(drawn)
         assert ("fx.palette.a4_val" in shown) == (mode == 1)      # the last anchor's slider
-        assert ("fx.palette.val_hi" in shown) == (mode == 0)      # the last fold slider
-        assert "fx.palette.mode" in shown
+        assert ("fx.palette.val_to" in shown) == (mode == 0)      # the last slice slider
+        # plan 30 N8: the mode is a picker (a combo), never a slider
+        assert "fx.palette.mode" in picked and "fx.palette.mode" not in shown
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -1472,7 +1476,7 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     if name == "glimmer":
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0, which the chain skips
-        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
+        st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     img, r = face_frame(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()

@@ -245,19 +245,40 @@ def strip(panel, sel: str) -> None:
     drawn(f"{pre}.order")
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
+    choices = {p.key for p in spec.params if p.choices}
     for label, keys in strip_rows(sel, [p.key for p in spec.params if f"{pre}.{p.key}" in r],
                                   mode):
+        if len(keys) == 1 and keys[0] in choices:
+            # a discrete choice (plan 30 N8, `@param choice`): a picker
+            panel._label_cell(labels[keys[0]])
+            panel._combo(f"{pre}.{keys[0]}")
+            drawn(f"{pre}.{keys[0]}")
+            line = compress_line(fx.values[sel]) if _is_palette(sel) and not mode else None
+            if line is not None:
+                imgui.push_style_color(imgui.Col_.text, ui.FAINT)
+                imgui.text(line)
+                imgui.pop_style_color()
+            continue
         if len(keys) == 1:
             panel._row(f"{pre}.{keys[0]}", label=labels[keys[0]])
             drawn(f"{pre}.{keys[0]}")
             continue
         panel._label_cell(label)
-        w = (imgui.get_content_region_avail().x - sp * (len(keys) - 1)) / len(keys)
+        pair = len(keys) == 2 and keys[0].endswith("_from")
+        gap = imgui.calc_text_size(ARROW).x + 2 * sp if pair else sp
+        w = (imgui.get_content_region_avail().x - gap * (len(keys) - 1)) / len(keys)
         for i, k in enumerate(keys):
-            if i:
+            if i and pair:
+                # a slice's two ends: from → to (plan 30 N8)
+                imgui.same_line()
+                imgui.text_disabled(ARROW)
+                imgui.same_line()
+            elif i:
                 imgui.same_line()
             panel._slider(f"{pre}.{k}", w)
             drawn(f"{pre}.{k}")
+        if pair and _is_palette(sel) and keys[0] == "hue_from":
+            _hue_bar(fx.values[sel])
     if idle is not None:
         _dim(top, imgui.ImVec2(right, imgui.get_cursor_screen_pos().y))
         _relearn_frame(panel, rects)
@@ -268,12 +289,53 @@ def strip(panel, sel: str) -> None:
 # share a stem and end _lo/_hi, or _hue/_sat/_val, share one row (sat_lo +
 # sat_hi -> "sat"; a1_hue + a1_sat + a1_val -> "a1"). Every param is still
 # declared and routable; this only decides what the strip draws
-ROW_SUFFIXES = (("_lo", "_hi"), ("_hue", "_sat", "_val"))
+# plan 30 N8: and _from/_to — a slice's two ends, drawn `from → to`
+ROW_SUFFIXES = (("_lo", "_hi"), ("_from", "_to"), ("_hue", "_sat", "_val"))
+ARROW = "→"
 # and the palette shows one mode's rows at a time: effect -> mode -> key prefixes hidden
 HIDDEN_BY_MODE = {
     "palette": {0: ("anchors", "a1_", "a2_", "a3_", "a4_"),
-                1: ("centre", "width", "sat_", "val_")},
+                1: ("hue_", "sat_", "val_")},
 }
+HUE_BAR_H = 4.0     # px: the hue row's bar of the slice's colours, under its sliders
+HUE_BAR_STEPS = 32  # the bar's segments
+
+
+def _is_palette(name: str) -> bool:
+    return name.partition(".")[0] == "palette"
+
+
+def compress_line(v: dict) -> str:
+    """The palette's compress mode in the owner's words (plan 30 N8):
+    `compress into: hue 170° → 230° · sat 0.00 → 1.00 · val 0.00 → 1.00`."""
+    return (f"compress into: hue {v.get('hue_from', 0.0):.0f}° → {v.get('hue_to', 360.0):.0f}°"
+            f" · sat {v.get('sat_from', 0.0):.2f} → {v.get('sat_to', 1.0):.2f}"
+            f" · val {v.get('val_from', 0.0):.2f} → {v.get('val_to', 1.0):.2f}")
+
+
+def slice_arc(hue_from: float, hue_to: float) -> float:
+    """The hue slice's arc, degrees, as palette.glsl reads it: from up the
+    wheel to to, through 360 when to < from."""
+    return hue_to - hue_from if hue_to >= hue_from else hue_to + 360.0 - hue_from
+
+
+def _hue_bar(v: dict) -> None:
+    """A thin bar under the hue row: the colours of the slice, from → to."""
+    import colorsys
+    lo = float(v.get("hue_from", 0.0))
+    arc = slice_arc(lo, float(v.get("hue_to", 360.0)))
+    pos = imgui.get_cursor_screen_pos()
+    x0 = pos.x + ui.LABEL_W
+    width = max(imgui.get_content_region_avail().x - ui.LABEL_W, 1.0)
+    dl = imgui.get_window_draw_list()
+    seg = width / HUE_BAR_STEPS
+    for i in range(HUE_BAR_STEPS):
+        h = ((lo + arc * (i + 0.5) / HUE_BAR_STEPS) % 360.0) / 360.0
+        r, g, b = colorsys.hsv_to_rgb(h, 1.0, 1.0)
+        dl.add_rect_filled(imgui.ImVec2(x0 + i * seg, pos.y),
+                           imgui.ImVec2(x0 + (i + 1) * seg, pos.y + HUE_BAR_H),
+                           imgui.get_color_u32(imgui.ImVec4(r, g, b, 1.0)))
+    imgui.dummy(imgui.ImVec2(1.0, HUE_BAR_H))
 
 
 def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, list[str]]]:

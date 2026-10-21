@@ -367,7 +367,7 @@ def ctx():
 
 
 def _palette(r, name="palette"):
-    r.fx.state.values[name].update(on=True, mix=1.0, centre=200.0, width=60.0)
+    r.fx.state.values[name].update(on=True, mix=1.0, hue_from=170.0, hue_to=230.0)
 
 
 def _read(tex):

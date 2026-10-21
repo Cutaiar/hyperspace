@@ -125,8 +125,9 @@ whose `RENDER_VALUE` is this name) may read one as a source, like a fed
 lane. Two uses are named so the node editor can draw them later without a
 schema change:
 
-- the palette's ``palette`` value **out** — its centre, width, the sat and
-  val ranges and the ramp's anchors — for a lights sink (plan 29) to take;
+- the palette's ``palette`` value **out** — its slice (the hue, sat and
+  val ends, plan 30 N8) and the ramp's anchors — for a lights sink (plan
+  29) to take;
 - an image-in ``sample`` port on the palette that would set its params
   from a bitmap (a camera frame of a neighbouring install) — an `IMAGE`
   port whose reading becomes values.

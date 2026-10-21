@@ -352,13 +352,13 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
     sw = (S(), S(through=True), S(scene=False, through=True))
     r = rig(ctx, effects=effects)
     if "palette" in effects:
-        r.fx.state.values["palette"]["mix"] = 1.0
+        r.fx.state.values["palette"].update(mix=1.0, hue_from=170.0, hue_to=230.0)
     got = run(ctx, r, views(ctx, *sw), frames=3)
     with monkeypatch.context() as m:
         m.setattr(G.Fx, "paint", _block_paint)
         old = rig(ctx, effects=effects)
         if "palette" in effects:
-            old.fx.state.values["palette"]["mix"] = 1.0
+            old.fx.state.values["palette"].update(mix=1.0, hue_from=170.0, hue_to=230.0)
         # the pre-D0 graph: the ends read their sources, no effect node
         old._graph_for = lambda vs, o=old: G.default_graph(
             vs, getattr(o, "wiring", None) or G.Wiring())

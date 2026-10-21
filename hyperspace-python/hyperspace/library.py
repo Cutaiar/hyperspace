@@ -122,6 +122,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
+from .fx import palette_slice
 from .params import (
     F_KEYS,
     PERFORMANCE_GROUPS,
@@ -617,6 +618,9 @@ def _module_values(group: str, doc: dict) -> dict[str, Any]:
     `defaults`/`resolved`)."""
     if group == "camera":
         doc, _ = pan_world(doc)
+    elif group == "fx":
+        # plan 30 N8: a palette saved as centre/width is read as its slice
+        doc, _ = palette_slice(doc)
     return dict(doc.get("values") or {})
 
 

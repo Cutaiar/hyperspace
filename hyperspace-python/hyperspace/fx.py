@@ -25,7 +25,11 @@ helpers every effect can call)::
     vec4 effect(vec2 uv) { return src(uv + …); }
 
 ``@param lo hi default [log] [wrap] "Label" tip`` — the uniform name
-without its ``u_`` is the id suffix. Every effect also gets six params
+without its ``u_`` is the id suffix. A discrete choice (plan 30 N8) is
+``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
+the names in brackets, ``|`` between them, then the default's index — an
+enum param the strips draw as a picker (a combo), never a slider; the
+uniform gets the index. Every effect also gets six params
 of its own: ``on``, ``mix`` (wet/dry against its input), ``speed`` (the
 rate its clock ``u_phase`` runs at — integrated here, so a lane riding
 the speed never jumps the phase), ``blend``, ``order`` and ``target``.
@@ -59,6 +63,7 @@ effect returning a low alpha never lets the desktop through (plan 14 WP1).
 
 from __future__ import annotations
 
+import copy
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -84,6 +89,9 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
+_CHOICE = re.compile(
+    r"^choice\s+\[(?P<names>[^\]]*)\]\s+(?P<default>\d+)\s+\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+)
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
     r"(?P<flags>(?:(?:log|wrap)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
@@ -116,6 +124,7 @@ class ParamSpec:
     log: bool = False
     wrap: bool = False
     tip: str = ""
+    choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
 
 
 @dataclass
@@ -135,8 +144,20 @@ class EffectSpec:
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
-                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
+                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
+                       p.choices)
                       for p in self.params))
+
+
+def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
+    if key in RESERVED or key in seen:
+        raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+    if key.isdecimal():
+        # the naming rule (plan 26 A0/A4): a purely decimal segment
+        # right after `fx.<file>` is an instance marker — `fx.acid.2`
+        # is the second acid — so no key may be one
+        raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
+                        "instance number (fx.<file>.2 is the second instance)")
 
 
 def parse(name: str, source: str) -> EffectSpec:
@@ -171,20 +192,30 @@ def parse(name: str, source: str) -> EffectSpec:
                 raise SpecError(f"{name}:{n}: @param needs 'uniform float|int u_name;' before it")
             continue
         typ, uniform, body = m.groups()
+        key = uniform[2:]
+        cm = _CHOICE.match(body)
+        if cm or body.startswith("choice"):
+            if not cm:
+                raise SpecError(f'{name}:{n}: @param choice wants [a|b|…] default "Label" tip')
+            if typ != "int":
+                raise SpecError(f"{name}:{n}: u_{key} is a choice, so its uniform is an int")
+            names = tuple(c.strip() for c in cm["names"].split("|"))
+            if len(names) < 2 or not all(names) or len(set(names)) < len(names):
+                raise SpecError(f"{name}:{n}: u_{key} needs two or more distinct choices")
+            _check_key(name, n, key, seen)
+            seen.add(key)
+            spec.params.append(ParamSpec(
+                key=key, uniform=uniform, label=cm["label"], lo=0.0, hi=float(len(names) - 1),
+                default=float(min(int(cm["default"]), len(names) - 1)), integer=True,
+                tip=cm["tip"].strip(), choices=names,
+            ))
+            continue
         pm = _PARAM.match(body + " ")
         if not pm:
             raise SpecError(f'{name}:{n}: @param wants lo hi default [log] [wrap] "Label" tip')
         lo, hi, default = (float(x) for x in pm["nums"].split())
         flags = pm["flags"].split()
-        key = uniform[2:]
-        if key in RESERVED or key in seen:
-            raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
-        if key.isdecimal():
-            # the naming rule (plan 26 A0/A4): a purely decimal segment
-            # right after `fx.<file>` is an instance marker — `fx.acid.2`
-            # is the second acid — so no key may be one
-            raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
-                            "instance number (fx.<file>.2 is the second instance)")
+        _check_key(name, n, key, seen)
         if not lo < hi:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
@@ -536,9 +567,94 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                    "face drawing: the one shader run the render graph does not show, "
                    "and a placement in the preset's graph does not move it.")
         for p in spec.params:
+            if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
+                r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
+                       list(p.choices), group=g, tip=p.tip)
+                continue
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
                          fmt=_fmt(p), group=g, tip=p.tip)
+
+
+# plan 30 N8 (the owner, 2026-10-20): the palette's fold became a colour
+# compression onto a closed HSV slice — `centre`/`width` became `hue_from` /
+# `hue_to`, and `sat_lo/_hi`, `val_lo/_hi` became `_from/_to`. A document
+# saved before carries the old ids; it is read in the new ones here (on every
+# load, like plan 26 A2's camera.pan; the next save writes the new keys), so
+# the look comes back
+PALETTE_RENAMED = {"sat_lo": "sat_from", "sat_hi": "sat_to",
+                   "val_lo": "val_from", "val_hi": "val_to"}
+_PALETTE_OLD = re.compile(r"^(fx\.palette(?:\.\d+)?)\.(centre|width|sat_lo|sat_hi|val_lo|val_hi)$")
+FOLD_EXACT = 180.0      # a slice up to this wide is the old fold to the bit (palette.glsl)
+
+
+def _num(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def palette_slice(doc: dict) -> tuple[dict, list[str]]:
+    """A preset document (a whole preset, or an `fx` module preset) with
+    its palette ids in the slice's form (plan 30 N8). `centre` c and
+    `width` w become `hue_from` = c − w/2 and `hue_to` = c + w/2, both
+    wrapped into 0–360 (centre 200, width 60 → 170 → 230; width 360 → 0 →
+    360, the whole wheel) — a missing one takes its old default (centre 0,
+    width 360); an id the document already carries in the new form wins.
+    The routes and desk rows follow: a rename moves the row, a push on the
+    centre becomes the same push on both ends (the slice turns), a push on
+    the width half of it apart on each end (it widens). Returns (a copy,
+    notes); the document itself when it names no old id."""
+    values = doc.get("values") if isinstance(doc.get("values"), dict) else {}
+    rows = [r for key in ("routes", "desk") if isinstance(doc.get(key), list)
+            for r in doc[key] if isinstance(r, dict)]
+    if not any(_PALETTE_OLD.match(k) for k in values) and \
+            not any(_PALETTE_OLD.match(str(r.get("target", ""))) for r in rows):
+        return doc, []
+    out = copy.deepcopy(doc)
+    notes: list[str] = []
+    vals = out.get("values") if isinstance(out.get("values"), dict) else {}
+    pres = {m[1] for m in map(_PALETTE_OLD.match, list(vals)) if m}
+    for pre in sorted(pres):
+        for old, new in PALETTE_RENAMED.items():
+            if f"{pre}.{old}" in vals:
+                v = vals.pop(f"{pre}.{old}")
+                vals.setdefault(f"{pre}.{new}", v)
+        if f"{pre}.centre" in vals or f"{pre}.width" in vals:
+            c = _num(vals.pop(f"{pre}.centre", 0.0))
+            w = _num(vals.pop(f"{pre}.width", 360.0))
+            c = 0.0 if c is None else c
+            w = 360.0 if w is None else min(max(w, 0.0), 360.0)
+            if w >= 360.0:
+                lo, hi = 0.0, 360.0
+            else:
+                lo, hi = round((c - w / 2) % 360.0, 6), round((c + w / 2) % 360.0, 6)
+            vals.setdefault(f"{pre}.hue_from", lo)
+            vals.setdefault(f"{pre}.hue_to", hi)
+            if w > FOLD_EXACT and int(_num(vals.get(f"{pre}.mode", 0)) or 0) == 0:
+                notes.append(f"{pre}: a fold {w:.0f}° wide reads as a wider slice now "
+                             "(the old fold only to 180°)")
+    for key in ("routes", "desk"):
+        if not isinstance(out.get(key), list):
+            continue
+        new_rows: list = []
+        for r in out[key]:
+            m = _PALETTE_OLD.match(str(r.get("target", ""))) if isinstance(r, dict) else None
+            if m is None:
+                new_rows.append(r)
+                continue
+            pre, old = m.groups()
+            if old in PALETTE_RENAMED:
+                new_rows.append({**r, "target": f"{pre}.{PALETTE_RENAMED[old]}"})
+            elif r.get("op", "push") == "push" and _num(r.get("value", 0.0)) is not None:
+                v = _num(r.get("value", 0.0))
+                a, b = (v, v) if old == "centre" else (-v / 2, v / 2)
+                new_rows.append({**r, "target": f"{pre}.hue_from", "value": a})
+                new_rows.append({**r, "target": f"{pre}.hue_to", "value": b})
+            else:
+                new_rows.append(r)      # dormant: no slice param takes it whole
+                notes.append(f"{r.get('source')} → {pre}.{old} ({r.get('op')}): the "
+                             "palette has no centre/width now; set the slice's ends")
+        out[key] = new_rows
+    return out, notes
 
 
 def _sel_index(fx: FxState) -> int:
