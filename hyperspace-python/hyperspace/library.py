@@ -122,7 +122,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .fx import palette_slice
+from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
     PERFORMANCE_GROUPS,

@@ -95,7 +95,6 @@ from typing import Any
 from . import apc40, modifiers, routing, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
-from .fx import palette_slice
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
@@ -129,6 +128,7 @@ from .lookback import (
     migrate_values,
 )
 from .modifiers import Modifier
+from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
     PAN_IDS,
     PERFORMANCE_GROUPS,

@@ -12,10 +12,14 @@
 // going up the wheel from `from`, through 360 when to < from; from == to is
 // one hue, 0 → 360 the whole wheel), sat_from → sat_to and val_from → val_to
 // (a linear map, never a clamp: the whole input range lands inside the slice,
-// and from > to inverts it). The defaults are the whole cylinder: the identity.
+// and from > to inverts it); hue_turn turns the whole slice round the wheel
+// (it wraps, so the slice keeps its width). The defaults are the whole
+// cylinder: the identity on an opaque ground (on a see-through one the
+// colour is premultiplied, so the round trip scales it by alpha).
 uniform int   u_mode;      // @param choice [compress|gradient] 0 "Mode" Compress maps every colour into the slice below; gradient maps brightness through the ramp.
 uniform float u_hue_from;  // @param 0 360 0 "Hue from" Compress: where the slice of the wheel starts, degrees (0 red, 60 yellow, 120 green, 240 blue).
 uniform float u_hue_to;    // @param 0 360 360 "Hue to" Compress: where it ends, going up the wheel (through 360 when below from); equal to from is one hue, 0 to 360 the whole wheel.
+uniform float u_hue_turn;  // @param 0 360 0 wrap "Hue turn" Compress: turns the whole slice round the wheel, degrees, keeping its width (a hand sweeping the hue rides this).
 uniform float u_sat_from;  // @param 0 1 0 "Sat from" Compress: where the least saturated colour lands.
 uniform float u_sat_to;    // @param 0 1 1 "Sat to" Compress: where the most saturated colour lands (below from inverts).
 uniform float u_val_from;  // @param 0 1 0 "Val from" Compress: where the darkest pixel lands.
@@ -49,7 +53,7 @@ vec4 effect(vec2 uv) {
         vec3 h = rgb2hsv(c.rgb);
         // the arc, degrees: from up the wheel to to, through 360 when to < from
         float arc = u_hue_to >= u_hue_from ? u_hue_to - u_hue_from : u_hue_to + 360.0 - u_hue_from;
-        float centre = u_hue_from + arc * 0.5;
+        float centre = u_hue_from + arc * 0.5 + u_hue_turn;
         float width = arc;
         // the fold (plan 24 C6): a triangle wave over the wheel, 0 at red
         // (lands on from), 1 at cyan (lands on to), back to 0 at red — a

@@ -60,7 +60,8 @@ list with the outputs as nodes, the APC40 as two nodes — and, after the
 owner's first look (N7, 2026-10-20), a legible GRAPH: every node
 collapsed by default, one wire a node pair, the routes and the modifiers
 edited on GRAPH (ROUTING points there; its desk, macros, session and
-sinks stay). About 2380 tests pass (2384, 2 skipped, with N7), ruff is
+sinks stay); then the palette as a colour compression (N8, 2026-10-20).
+About 2410 tests pass (2411, 2 skipped, with N8), ruff is
 clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.

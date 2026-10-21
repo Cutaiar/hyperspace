@@ -3238,10 +3238,10 @@ run of effect nodes).
 **231. Two palettes with different slices on two outputs.** (copy, glass and projector)
 Headless: `tests/test_graph_placement.py::test_into_output_2_folds_one_output_only`, `tests/test_graph_json.py::test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain` (neighbours only: no test loads this configuration, two placed instances of one file into two outputs).
 101's rig; make `two-palettes.json` (above) and load TWO-PALETTES; FX
-page, then ROUTING; drag Palette 2's hue from. *Pass:* the glass folds to
+page, then ROUTING; drag Palette 2's hue turn. *Pass:* the glass folds to
 blue-cyan, the projector to orange-red; the FX page shows two placed
 chips, `Palette · into output 1` and `Palette 2 · into output 2`, each
-with its own strip; dragging Palette 2's hue from moves only the
+with its own strip; dragging Palette 2's hue turn moves only the
 projector's colours; ROUTING lists "Palette 2 …" settings; each
 output's "shows:" line ends `· palette on this output only` / `·
 palette 2 on this output only`. *Fail:* both outputs one colour (one
@@ -3288,10 +3288,14 @@ with val 1 → 0.2 the dark ground turns bright and the bright shape dim
 **270. The mode is a picker; the strip reads as the slice.** (laptop)
 Headless: `tests/test_palette.py::{test_mode_is_a_discrete_choice,test_the_strip_rows_are_the_slice,test_the_choice_form_is_parsed_and_refused_when_bad,test_the_gradient_mode_is_still_there}`, `tests/test_fx.py::test_the_palette_strip_fits_in_both_modes`.
 FX page, open Palette. Click Mode; pick gradient, then compress. Hover
-Mode. *Pass:* Mode is a drop-down of two words, **compress** and
-**gradient**, not a slider; compress shows the "compress into" line and
-three rows — hue, sat, val — each two sliders with `→` between them, a
-thin bar of the slice's colours under the hue row; gradient shows the
+Mode, and right-click its label. Drag the hue row's small turn slider
+round. *Pass:* Mode is a drop-down of two words, **compress** and
+**gradient**, not a slider, and its label opens the param menu (Learn,
+route…); compress shows the "compress into" line and three rows — hue,
+sat, val — each two sliders with `→` between them, the hue row ending in
+the turn, a thin bar of the slice's colours under it; turning moves the
+whole slice round the wheel at the same width, wrapping past 360, and
+the line adds `turned …°`; gradient shows the
 anchors' rows instead; the page does not scroll in either. *Fail:* a
 slider for Mode (the `@param choice` form not read: `fx.parse`); the
 rows unpaired (`ui_fx.ROW_SUFFIXES`).
@@ -3300,12 +3304,16 @@ rows unpaired (`ui_fx.ROW_SUFFIXES`).
 Headless: `tests/test_palette.py::{test_centre_and_width_become_the_slice_s_ends,test_an_old_preset_loads_as_the_same_slice,test_an_old_fx_module_preset_is_read_as_the_slice}`, goldens `palette-hands|*`, `palette-glass|*`, `wired-outputs|*` (the fixtures converted, their frames unmoved).
 On the copy, take `palette-glass.json` and, in its `"values"`, replace
 `"fx.palette.hue_from": 170.0, "fx.palette.hue_to": 230.0` with the old
-`"fx.palette.centre": 200.0, "fx.palette.width": 60.0`; save it as
-`old-glass.json` in `<home>/presets/`. Load PALETTE-GLASS, then
+`"fx.palette.centre": 200.0, "fx.palette.width": 60.0`, and add a route
+`{"source": "lane:0", "target": "fx.palette.centre", "op": "push",
+"value": 0.5}`; save it as `old-glass.json` in `<home>/presets/`. Play
+music. Load PALETTE-GLASS, then
 OLD-GLASS; open the palette's strip; save OLD-GLASS and open the file.
-*Pass:* the two look the same (output 2 blue-cyan); no note on the
-preset strip; the strip reads hue 170 → 230; the saved file has
-`hue_from` / `hue_to` and no `centre` / `width`. *Fail:* the old one
+*Pass:* the two look the same at rest (output 2 blue-cyan); no note on
+the preset strip; the strip reads hue 170 → 230; with music the slice
+swings round the wheel at the same 60° width (the route is on
+`hue_turn`); the saved file has `hue_from` / `hue_to` and no `centre` /
+`width`. Load any preset you saved before this build: no note. *Fail:* the old one
 loads as the whole wheel or with "unknown id(s)" (`fx.palette_slice`
 not on the load: `Presets.load_doc`).
 

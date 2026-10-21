@@ -251,6 +251,7 @@ def strip(panel, sel: str) -> None:
         if len(keys) == 1 and keys[0] in choices:
             # a discrete choice (plan 30 N8, `@param choice`): a picker
             panel._label_cell(labels[keys[0]])
+            panel._ctx_label(r[f"{pre}.{keys[0]}"])   # its label opens the menu, as a row's
             panel._combo(f"{pre}.{keys[0]}")
             drawn(f"{pre}.{keys[0]}")
             line = compress_line(fx.values[sel]) if _is_palette(sel) and not mode else None
@@ -264,18 +265,21 @@ def strip(panel, sel: str) -> None:
             drawn(f"{pre}.{keys[0]}")
             continue
         panel._label_cell(label)
-        pair = len(keys) == 2 and keys[0].endswith("_from")
+        pair = keys[0].endswith("_from")
+        turn = pair and keys[-1].endswith("_turn")      # the slice's turn, small, at the end
+        ends = 2 if pair else len(keys)
         gap = imgui.calc_text_size(ARROW).x + 2 * sp if pair else sp
-        w = (imgui.get_content_region_avail().x - gap * (len(keys) - 1)) / len(keys)
+        room = imgui.get_content_region_avail().x - (TURN_W + sp if turn else 0.0)
+        w = (room - gap * (ends - 1)) / ends
         for i, k in enumerate(keys):
-            if i and pair:
+            if i and pair and i < 2:
                 # a slice's two ends: from → to (plan 30 N8)
                 imgui.same_line()
                 imgui.text_disabled(ARROW)
                 imgui.same_line()
             elif i:
                 imgui.same_line()
-            panel._slider(f"{pre}.{k}", w)
+            panel._slider(f"{pre}.{k}", TURN_W if turn and i == 2 else w)
             drawn(f"{pre}.{k}")
         if pair and _is_palette(sel) and keys[0] == "hue_from":
             _hue_bar(fx.values[sel])
@@ -290,8 +294,11 @@ def strip(panel, sel: str) -> None:
 # sat_hi -> "sat"; a1_hue + a1_sat + a1_val -> "a1"). Every param is still
 # declared and routable; this only decides what the strip draws
 # plan 30 N8: and _from/_to — a slice's two ends, drawn `from → to`
-ROW_SUFFIXES = (("_lo", "_hi"), ("_from", "_to"), ("_hue", "_sat", "_val"))
+# (and a slice's `_turn` after them on the same row)
+ROW_SUFFIXES = (("_lo", "_hi"), ("_from", "_to", "_turn"), ("_from", "_to"),
+                ("_hue", "_sat", "_val"))
 ARROW = "→"
+TURN_W = 64         # px: the hue row's turn slider, after from → to
 # and the palette shows one mode's rows at a time: effect -> mode -> key prefixes hidden
 HIDDEN_BY_MODE = {
     "palette": {0: ("anchors", "a1_", "a2_", "a3_", "a4_"),
@@ -308,8 +315,10 @@ def _is_palette(name: str) -> bool:
 def compress_line(v: dict) -> str:
     """The palette's compress mode in the owner's words (plan 30 N8):
     `compress into: hue 170° → 230° · sat 0.00 → 1.00 · val 0.00 → 1.00`."""
+    turn = float(v.get("hue_turn", 0.0))
     return (f"compress into: hue {v.get('hue_from', 0.0):.0f}° → {v.get('hue_to', 360.0):.0f}°"
-            f" · sat {v.get('sat_from', 0.0):.2f} → {v.get('sat_to', 1.0):.2f}"
+            + (f" turned {turn:.0f}°" if turn else "")
+            + f" · sat {v.get('sat_from', 0.0):.2f} → {v.get('sat_to', 1.0):.2f}"
             f" · val {v.get('val_from', 0.0):.2f} → {v.get('val_to', 1.0):.2f}")
 
 
@@ -324,6 +333,7 @@ def _hue_bar(v: dict) -> None:
     import colorsys
     lo = float(v.get("hue_from", 0.0))
     arc = slice_arc(lo, float(v.get("hue_to", 360.0)))
+    lo += float(v.get("hue_turn", 0.0))       # the slice as turned
     pos = imgui.get_cursor_screen_pos()
     x0 = pos.x + ui.LABEL_W
     width = max(imgui.get_content_region_avail().x - ui.LABEL_W, 1.0)

@@ -23,8 +23,9 @@ import pytest
 from test_presets import boot, put
 
 from hyperspace import ui_fx
-from hyperspace.fx import FX_DIR, FxChain, FxState, SpecError, palette_slice, parse
+from hyperspace.fx import FX_DIR, FxChain, FxState, SpecError, parse
 from hyperspace.library import PRESETS
+from hyperspace.palettecompat import palette_slice
 from hyperspace.params import Kind
 
 moderngl = pytest.importorskip("moderngl")
@@ -96,9 +97,11 @@ def in_arc(h: np.ndarray, lo: float, hi: float, tol: float) -> np.ndarray:
 def test_the_defaults_are_the_whole_cylinder_and_the_identity(ctx):
     v = FxState().values["palette"]
     assert v["on"] is False and v["mix"] == 0.0           # off, and mix 0, as before
-    assert (v["mode"], v["hue_from"], v["hue_to"], v["sat_from"], v["sat_to"],
-            v["val_from"], v["val_to"]) == (0, 0.0, 360.0, 0.0, 1.0, 0.0, 1.0)
-    inp, got = run(ctx)                                   # on, mix 1, the defaults
+    assert (v["mode"], v["hue_from"], v["hue_to"], v["hue_turn"], v["sat_from"], v["sat_to"],
+            v["val_from"], v["val_to"]) == (0, 0.0, 360.0, 0.0, 0.0, 1.0, 0.0, 1.0)
+    # on, mix 1, the defaults, on an opaque ground (alpha 1; on a see-through
+    # one the colour is premultiplied and scaled by alpha once more)
+    inp, got = run(ctx)
     assert np.abs(got - inp).max() <= 1.5 / 255           # the picture as it was
 
 
@@ -215,7 +218,7 @@ def test_the_choice_form_is_parsed_and_refused_when_bad():
 def test_the_strip_rows_are_the_slice():
     keys = [p.key for p in FxState().specs["palette"].params]
     assert ui_fx.strip_rows("palette", keys, 0) == [
-        ("mode", ["mode"]), ("hue", ["hue_from", "hue_to"]),
+        ("mode", ["mode"]), ("hue", ["hue_from", "hue_to", "hue_turn"]),
         ("sat", ["sat_from", "sat_to"]), ("val", ["val_from", "val_to"])]
     assert ui_fx.strip_rows("palette.2", keys, 1) == [
         ("mode", ["mode"]), ("anchors", ["anchors"]), ("a1", ["a1_hue", "a1_sat", "a1_val"]),
@@ -224,11 +227,53 @@ def test_the_strip_rows_are_the_slice():
     v = dict(FxState().values["palette"], hue_from=170.0, hue_to=230.0, val_from=0.25)
     assert ui_fx.compress_line(v) == ("compress into: hue 170° → 230° · sat 0.00 → 1.00 · "
                                       "val 0.25 → 1.00")
+    assert ui_fx.compress_line(dict(v, hue_turn=90.0)).startswith(
+        "compress into: hue 170° → 230° turned 90° · sat")
     assert ui_fx.slice_arc(350.0, 10.0) == 20.0 and ui_fx.slice_arc(0.0, 360.0) == 360.0
     assert ui_fx.slice_arc(200.0, 200.0) == 0.0
 
 
-# ---------------------------------------------------------------- the old documents
+def test_the_turn_moves_the_whole_slice_and_keeps_its_width(ctx):
+    """`hue_turn` (it wraps, as the old centre did) is added to both ends:
+    through a full turn the arc stays 60° wide, wherever it lands."""
+    for turn in (0.0, 90.0, 200.0, 330.0):
+        _, got = run(ctx, hue_from=170.0, hue_to=230.0, hue_turn=turn, sat_from=1.0,
+                     sat_to=1.0, val_from=1.0, val_to=1.0)
+        h, _, _ = hsv(got)
+        lo, hi = (170.0 + turn) % 360.0, (230.0 + turn) % 360.0
+        assert in_arc(h, lo, hi, 1.5).all(), turn
+        spread = (h - lo) % 360.0
+        assert spread.max() >= 58.0, turn                 # still the arc's whole width
+
+
+def test_a_converted_centre_push_turns_the_slice_through_a_full_turn():
+    """The old centre's push lands on `hue_turn`, which wraps: a hand
+    sweeping it round keeps the slice 170 → 230 whole (the old look)."""
+    from types import SimpleNamespace
+
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+    from hyperspace.control import Control
+    from hyperspace.params import build_registry
+    from hyperspace.routing import Binding, Bindings, Router
+    from hyperspace.view import ViewState
+    out, _ = palette_slice({"values": {"fx.palette.centre": 200.0, "fx.palette.width": 60.0},
+                            "routes": [{"source": "ext:0", "target": "fx.palette.centre",
+                                        "op": "push", "value": 1.0}]})
+    (row,) = out["routes"]
+    assert row["target"] == "fx.palette.hue_turn" and row["value"] == 1.0
+    chain = Analyzer(Analyser())
+    st = FxState()
+    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), fx=st)
+    reg.restore(out["values"])
+    router = Router(reg, Bindings([Binding.from_json(row)]))
+    for x in (0.0, 0.25, 0.5, 0.75, 0.99):
+        router.feed("ext", [x])
+        router.modulate(None)
+        reg.apply()
+        v = st.values["palette"]
+        assert (v["hue_from"], v["hue_to"]) == (170.0, 230.0)       # the arc never moves
+        assert v["hue_turn"] == pytest.approx(360.0 * x, abs=0.5)   # the turn does, round
 
 
 def test_centre_and_width_become_the_slice_s_ends():
@@ -252,13 +297,13 @@ def test_centre_and_width_become_the_slice_s_ends():
         "fx.palette.2.hue_from": 350.0, "fx.palette.2.hue_to": 30.0,
         "fx.palette.3.hue_from": 0.0, "fx.palette.3.hue_to": 360.0, "fx.acid.mix": 1.0}
     assert [(r["target"], r["value"]) for r in out["routes"]] == [
-        ("fx.palette.hue_from", 0.2), ("fx.palette.hue_to", 0.2),      # the slice turns
+        ("fx.palette.hue_turn", 0.2),                                  # the slice turns
         ("fx.palette.hue_from", -0.2), ("fx.palette.hue_to", 0.2),     # it widens
         ("fx.palette.sat_to", 0.3), ("fx.acid.bend", 0.3)]
-    assert out["routes"][3]["scale"] == "master.gain"
-    # a fold wider than the slice reproduces is said; the rest is silent
-    assert notes == [("fx.palette.3: a fold 360° wide reads as a wider slice now "
-                      "(the old fold only to 180°)")]
+    assert out["routes"][2]["scale"] == "master.gain"
+    # the third palette is off: its look is never seen, so nothing is said
+    # (the routes here name the first palette only)
+    assert notes == []
     # a document already in the new form is the document itself
     new = {"values": {"fx.palette.hue_from": 1.0}, "routes": []}
     assert palette_slice(new) == (new, [])
@@ -268,22 +313,129 @@ def test_centre_and_width_become_the_slice_s_ends():
     assert both["values"] == {"fx.palette.hue_from": 0.0, "fx.palette.hue_to": 5.0}
 
 
+def test_a_wide_fold_is_said_only_when_it_shows():
+    def notes(**vals):
+        doc = {"values": {f"fx.palette.{k}": v for k, v in vals.items()}}
+        return palette_slice(doc)[1]
+    assert notes(width=360.0, centre=0.0) == []                    # off: never seen
+    assert notes(width=360.0, on=True, mix=0.0) == []              # on, at mix 0
+    assert notes(width=360.0, on=True, mix=1.0, mode=1) == []      # the gradient map
+    assert notes(width=360.0, on=True, mix=1.0) == [
+        ("fx.palette: the old fold doubled the whole wheel; its slice 0 → 360 now leaves "
+         "the colours as they are")]
+    assert notes(width=270.0, on=True, mix=0.5) == [
+        "fx.palette: a fold 270° wide reads as a wider slice now (the fold holds to 180°)"]
+    assert notes(width=180.0, on=True, mix=1.0) == []              # the old fold to the bit
+    # a route that may bring it in counts as showing it
+    doc = {"values": {"fx.palette.width": 300.0},
+           "routes": [{"source": "lane:0", "target": "fx.palette.mix", "op": "push",
+                       "value": 1.0}]}
+    assert len(palette_slice(doc)[1]) == 1
+
+
+def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
+    """What a save on the build before N8 wrote: every performance base,
+    the palette's old ids among them at their defaults, the palette off."""
+    rig = boot(tmp_path)
+    snap = rig.reg.snapshot(part="performance")
+    old = {k: v for k, v in snap.items()
+           if not k.startswith("fx.palette.") or k.rsplit(".", 1)[1] in
+           ("on", "mix", "speed", "blend", "order", "target", "mode", "anchors")
+           or "_" in k.rsplit(".", 1)[1] and k.rsplit(".", 1)[1][:2] in ("a1", "a2", "a3", "a4")}
+    old.update({"fx.palette.on": False, "fx.palette.mix": 0.0, "fx.palette.mode": 0,
+                "fx.palette.centre": 0.0, "fx.palette.width": 360.0,
+                "fx.palette.sat_lo": 0.0, "fx.palette.sat_hi": 1.0,
+                "fx.palette.val_lo": 0.0, "fx.palette.val_hi": 1.0})
+    assert not any(k.endswith(("hue_from", "hue_to", "hue_turn", "_from", "_to"))
+                   for k in old if k.startswith("fx.palette."))
+    put(rig.home, "before-n8", values=old)
+    assert rig.lib.load(PRESETS, "before-n8") == [] and rig.presets.notes == []
+    assert not rig.lib.is_dirty(PRESETS)
+    v = rig.reg.fx_state.values["palette"]
+    assert (v["hue_from"], v["hue_to"], v["hue_turn"], v["sat_from"], v["val_to"]) == (
+        0.0, 360.0, 0.0, 0.0, 1.0)
+
+
+def test_the_macros_follow_their_params_and_routes():
+    doc = {"values": {"fx.palette.centre": 200.0, "fx.palette.width": 60.0},
+           "routes": [{"source": "lane:0", "target": "fx.palette.centre", "op": "push",
+                       "value": 0.2},
+                      {"source": "lane:1", "target": "fx.palette.width", "op": "push",
+                       "value": 0.4},
+                      {"source": "lane:2", "target": "fx.palette.val_hi", "op": "push",
+                       "value": 0.3}],
+           "macros": {"macro.1": {"label": "m", "subs": [
+               {"base": "fx.palette.sat_lo", "from": 0.1, "to": 0.6},
+               {"depth": {"source": "lane:2", "target": "fx.palette.val_hi"}, "from": 0, "to": 1},
+               {"depth": {"source": "lane:0", "target": "fx.palette.centre"}, "from": 0,
+                "to": 2},
+               {"depth": {"source": "lane:1", "target": "fx.palette.width"}, "from": 0.5,
+                "to": 1},
+               {"base": "fx.palette.width", "from": 0.0, "to": 0.5},
+               {"base": "fx.acid.bend", "from": 0.0, "to": 1.0}]}}}
+    out, notes = palette_slice(doc)
+    subs = out["macros"]["macro.1"]["subs"]
+    assert subs == [
+        {"base": "fx.palette.sat_from", "from": 0.1, "to": 0.6},
+        {"depth": {"source": "lane:2", "target": "fx.palette.val_to"}, "from": 0, "to": 1},
+        {"depth": {"source": "lane:0", "target": "fx.palette.hue_turn"}, "from": 0, "to": 2},
+        # the width push was split in two: its depth subscriber scales both halves
+        {"depth": {"source": "lane:1", "target": "fx.palette.hue_from"}, "from": 0.5, "to": 1},
+        {"depth": {"source": "lane:1", "target": "fx.palette.hue_to"}, "from": 0.5, "to": 1},
+        # width 0 → 180 about centre 200: from 200 → 110, to 200 → 290 (in norms)
+        {"base": "fx.palette.hue_from", "from": round(200 / 360, 6), "to": round(110 / 360, 6)},
+        {"base": "fx.palette.hue_to", "from": round(200 / 360, 6), "to": round(290 / 360, 6)},
+        {"base": "fx.acid.bend", "from": 0.0, "to": 1.0}]
+    assert notes == []
+    # a width subscriber whose ends would cross 0 / 360 is dropped, said
+    doc["values"]["fx.palette.centre"] = 20.0
+    out, notes = palette_slice(doc)
+    assert not any(s.get("base", "").startswith("fx.palette.hue")
+                   for s in out["macros"]["macro.1"]["subs"])
+    assert notes == [("macro macro.1: its fx.palette.width subscriber dropped — the slice's "
+                      "ends would cross 0 / 360; set them in the macro again")]
+
+
+def test_a_centre_set_outright_becomes_the_turn():
+    """A position route or a macro base subscriber on the centre: the arc
+    is laid about 0 and the turn holds the centre, so those rows land on
+    `hue_turn` as they are."""
+    doc = {"values": {"fx.palette.centre": 200.0, "fx.palette.width": 60.0},
+           "routes": [{"source": "hand:right.x", "target": "fx.palette.centre",
+                       "op": "position", "value": 1.0}],
+           "macros": {"macro.1": {"label": "m", "subs": [
+               {"base": "fx.palette.centre", "from": 0.2, "to": 0.8}]}}}
+    out, notes = palette_slice(doc)
+    assert out["values"] == {"fx.palette.hue_from": 330.0, "fx.palette.hue_to": 30.0,
+                             "fx.palette.hue_turn": 200.0}
+    assert out["routes"] == [{"source": "hand:right.x", "target": "fx.palette.hue_turn",
+                              "op": "position", "value": 1.0}]
+    assert out["macros"]["macro.1"]["subs"] == [
+        {"base": "fx.palette.hue_turn", "from": 0.2, "to": 0.8}]
+    assert notes == []
+
+
 def test_an_old_preset_loads_as_the_same_slice(tmp_path):
     """A preset saved with centre 200 / width 60 loads with no note, its
-    palette at 170 → 230 and its route on the slice; the next save writes
-    the new keys only."""
+    palette at 170 → 230, its centre route on the turn and its macro with
+    it; the next save writes the new keys only."""
     rig = boot(tmp_path)
     put(rig.home, "old-fold", values={"fx.palette.on": True, "fx.palette.mix": 1.0,
                                       "fx.palette.centre": 200.0, "fx.palette.width": 60.0,
                                       "fx.palette.sat_lo": 0.25},
         routes=[{"source": "lane:0", "target": "fx.palette.centre", "op": "push",
-                 "value": 0.1}])
+                 "value": 0.1}],
+        macros={"macro.1": {"label": "hue", "subs": [
+            {"depth": {"source": "lane:0", "target": "fx.palette.centre"},
+             "from": 0.0, "to": 1.0}]}})
     assert rig.lib.load(PRESETS, "old-fold") == [] and rig.presets.notes == []
+    assert not rig.lib.is_dirty(PRESETS)
     v = rig.reg.fx_state.values["palette"]
     assert (v["on"], v["hue_from"], v["hue_to"], v["sat_from"]) == (True, 170.0, 230.0, 0.25)
-    assert sorted(b.target for b in rig.router.table.routes()
-                  if b.target.startswith("fx.palette")) == ["fx.palette.hue_from",
-                                                            "fx.palette.hue_to"]
+    assert [b.target for b in rig.router.table.routes()
+            if b.target.startswith("fx.palette")] == ["fx.palette.hue_turn"]
+    assert [s.depth for s in rig.router.table.macros["macro.1"].subs] == [
+        ("lane:0", "fx.palette.hue_turn")]
     saved = rig.presets.document("old-fold")
     assert saved["values"]["fx.palette.hue_from"] == 170.0
     assert not any(k.endswith((".centre", ".width", "_lo", "_hi")) for k in saved["values"]

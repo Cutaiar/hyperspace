@@ -489,19 +489,30 @@ Register rows 291–298; hand checks 267–271.
   maps every pixel into the closed slice `hue_from` → `hue_to` (degrees,
   up the wheel, through 360 when `to` < `from`; `from = to` one hue;
   0 → 360 the whole wheel), `sat_from` → `sat_to`, `val_from` → `val_to`
-  (0–1). Saturation and value are a linear map (`mix(from, to, x)`), never
-  a clamp, and `from > to` inverts. The hue map is the old triangle fold
+  (0–1), and `hue_turn` (degrees, wraps) added to both ends — it turns
+  the whole slice round the wheel at its width, as the old `centre` did.
+  Saturation and value are a linear map (`mix(from, to, x)`), never a
+  clamp, and `from > to` inverts. The hue map is the old triangle fold
   (red on `from`, cyan on `to`, no seam) for arcs up to 180° — the same
   expression, bit for bit — and above 180° its peak slides towards the far
   red so that at 360° the map is the identity. Defaults: off, mix 0, the
-  whole cylinder — so on at mix 1 the picture is as it was (row 291–294).
+  whole cylinder — so on at mix 1 the picture is as it was on an opaque
+  ground; on a see-through one the premultiplied colour is scaled by
+  alpha once more (rows 291–294).
 - **The ids.** `centre`/`width` became `hue_from`/`hue_to`; `sat_lo`/`_hi`
   and `val_lo`/`_hi` became `_from`/`_to` (so all three rows read the same
-  way). `fx.palette_slice` reads an old document in the new ids — values
-  (any instance), routes and desk rows — on every whole-preset load
-  (`Presets.load_doc`, beside `pan_world`) and `fx` module load
-  (`library._module_values`); the next save writes the new keys
-  (row 295). Nothing in `hyperspace/library/` carried the old ids.
+  way). `palettecompat.palette_slice` (a leaf: plain dicts) reads an old
+  document in the new ids — values (any instance), routes, desk rows and
+  macros: a row on the centre goes to `hue_turn`; a push on the width
+  splits onto both ends, its depth subscribers with it; a centre set
+  outright (a position route, a base subscriber) becomes the turn, the
+  arc laid about 0 — on every whole-preset load (`Presets.load_doc`,
+  beside `pan_world`) and `fx` module load (`library._module_values`);
+  the next save writes the new keys (row 295). A note only when the
+  palette would show a changed look (on with mix above 0, or a row naming
+  it, and a fold over 180°): a preset saved before, which carries the
+  palette's defaults with it off, loads with no note and no dot. Nothing
+  in `hyperspace/library/` carried the old ids.
 - **A discrete `@param`.** `// @param choice [compress|gradient] 0 "Mode"
   tip` on an int uniform: `fx.parse` reads it into `ParamSpec.choices`,
   `fx.declare` declares an enum (`Kind.ENUM`), the uniform gets the
@@ -509,8 +520,9 @@ Register rows 291–298; hand checks 267–271.
   name (row 296). The palette's `mode` is the only one.
 - **The strip.** Mode is a combo; in compress mode a faint line reads
   `compress into: hue 170° → 230° · sat 0.00 → 1.00 · val 0.00 → 1.00`;
-  hue, sat and val are one row each, `from → to`, with a thin bar of the
-  arc's hues under the hue row. `ROW_SUFFIXES` gained `_from`/`_to`;
+  hue, sat and val are one row each, `from → to`, the hue row ending in
+  a small turn slider and with a thin bar of the arc's hues (as turned)
+  under it; the mode's label opens its param menu. `ROW_SUFFIXES` gained `_from`/`_to`;
   `HIDDEN_BY_MODE` hides `hue_`/`sat_`/`val_` in gradient mode (row 297).
   The gradient map is unchanged as the second mode (row 298).
 - **The fixtures.** `palette-hands`, `palette-glass` and `wired-outputs`
@@ -522,16 +534,20 @@ Register rows 291–298; hand checks 267–271.
   `wired-outputs|present|scene+hands`; the shipped form keeps the old
   expression and moves none).
 - **Code.** `shaders/fx/palette.glsl`; `fx.py` (`_CHOICE`,
-  `ParamSpec.choices`, `_check_key`, `declare`'s enum branch,
-  `palette_slice`, `PALETTE_RENAMED`, `FOLD_EXACT`); `preset.py`
-  (`load_doc` step 0); `library.py` (`_module_values`); `ui_fx.py`
-  (`strip`, `ROW_SUFFIXES`, `HIDDEN_BY_MODE`, `compress_line`,
-  `slice_arc`, `_hue_bar`, `ARROW`).
-- **Tests.** `tests/test_palette.py` (new, 18): the identity at the
+  `ParamSpec.choices`, `_check_key`, `declare`'s enum branch);
+  `palettecompat.py` (new leaf: `palette_slice`, `RENAMED`, `FOLD_EXACT`);
+  `preset.py` (`load_doc` step 0); `library.py` (`_module_values`);
+  `ui_fx.py` (`strip`, `ROW_SUFFIXES`, `HIDDEN_BY_MODE`, `compress_line`,
+  `slice_arc`, `_hue_bar`, `ARROW`, `TURN_W`); `graph.py` (the `VALUE`
+  docstring's words).
+- **Tests.** `tests/test_palette.py` (new, 24): the identity at the
   defaults; a red, a yellow, a wrapping, a one-hue and a wide slice on a
-  synthetic rainbow through the real shader; an inverted val; the
-  gradient mode; the choice form and its refusals; the strip's rows and
-  line; the conversion (values, instances, routes, notes), an old preset
+  synthetic rainbow through the real shader; the turn through a full
+  circle keeping the arc's width, in the shader and through a converted
+  centre route; an inverted val; the gradient mode; the choice form and
+  its refusals; the strip's rows and line; the conversion (values,
+  instances, routes, macros, a centre set outright, when a note is said),
+  a full pre-N8 snapshot loading with no note and no dot, an old preset
   and an old `fx` module through the real loads, the fixtures; no
   factory file names the palette. Changed assertions:
   `tests/test_fx_palette.py` (the new ids and defaults throughout; the
@@ -562,11 +578,12 @@ Register rows 291–298; hand checks 267–271.
 - Near 360° wide, the return from the far red runs through a narrow band
   of input hues just below 360, a short rainbow in the most magenta reds
   (row 292).
-- The hue ends do not wrap, so a route turning both stops at 0 / 360
-  (row 291).
-- A `position` route or a macro subscriber on the old `centre` / `width`
-  is not converted: it stays dormant with a note (row 295). A converted
-  fold wider than 180° looks different and says so.
+- The ends do not wrap: a route on one end alone clamps at 0 / 360;
+  the turn is what goes round (row 291).
+- A non-push row on the old `width` stays dormant with a note, and a
+  width base subscriber whose ends would cross 0 / 360 is dropped with a
+  note (row 295). A converted fold wider than 180° looks different and,
+  when it shows, says so.
 - The hue bar shows the arc at full saturation and brightness, not the
   slice's sat and val (row 297).
 

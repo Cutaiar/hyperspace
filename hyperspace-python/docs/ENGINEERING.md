@@ -724,15 +724,20 @@ nothing until its mix is raised. `mode` is a `@param choice` (an enum,
 drawn as a picker). **compress** (plan 30 N8, the owner's colour
 compression) maps the whole HSV cylinder onto the closed slice `hue_from`
 → `hue_to` (degrees, up the wheel, through 360 when `to` < `from`;
-`from = to` one hue, 0 → 360 the whole wheel), `sat_from` → `sat_to`,
+`from = to` one hue, 0 → 360 the whole wheel) turned by `hue_turn`
+(added to both ends, wraps — what a hand sweeping the hue rides),
+`sat_from` → `sat_to`,
 `val_from` → `val_to`: saturation and value by a linear map, never a
 clamp (`from > to` inverts); the hue by the triangle fold (red on
 `from`, cyan on `to`, no seam) for arcs up to 180°, its peak sliding
 towards the far red above that so 360° is the identity. The defaults are
-the whole cylinder, so on at mix 1 changes nothing. A document with the
-fold's old ids (`centre`/`width`, `sat_lo`/`_hi`, `val_lo`/`_hi`) is read
-as the slice on load (`fx.palette_slice`, from `Presets.load_doc` and
-`library._module_values`). **gradient** maps brightness through the
+the whole cylinder, so on at mix 1 changes nothing on an opaque ground
+(on a see-through one the premultiplied colour is scaled by alpha once
+more). A document with the fold's old ids (`centre`/`width`,
+`sat_lo`/`_hi`, `val_lo`/`_hi`) — values, routes, desk rows, macros — is
+read as the slice on load (`palettecompat.palette_slice`, a leaf, from
+`Presets.load_doc` and `library._module_values`; a row on the centre
+goes to `hue_turn`). **gradient** maps brightness through the
 first `anchors` (2–4) of four anchor colours, `a1`–`a4` hue / sat / val,
 a grey ramp by default.
 On a see-through ground the result is scaled by the pixel's alpha. A

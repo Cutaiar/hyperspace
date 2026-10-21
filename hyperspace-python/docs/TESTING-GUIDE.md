@@ -3295,8 +3295,10 @@ then **compress**.
 gradient — not a slider. On compress the strip shows a faint line
 "compress into: hue 0° → 360° · sat 0.00 → 1.00 · val 0.00 → 1.00",
 then three rows, **hue**, **sat** and **val**, each two sliders with an
-arrow between them, and a thin coloured bar under the hue row; on
-gradient the anchor rows instead. The page never scrolls.
+arrow between them (the hue row ends in a small **turn** slider that
+moves the whole slice round), and a thin coloured bar under the hue row;
+right-clicking MODE opens its menu; on gradient the anchor rows instead.
+The page never scrolls.
 
 **Wrong if:** Mode is a slider; the from/to sliders on separate rows.
 
@@ -3315,7 +3317,8 @@ OLD-GLASS and open its file.
 
 **Right if:** both look the same; no note on the preset strip; the hue
 row reads 170 → 230; the saved file has `hue_from` and `hue_to`, no
-`centre` or `width`.
+`centre` or `width`. A preset you saved before this build loads with no
+note either.
 
 **Wrong if:** the old one shows the full rainbow, or a note about
 unknown ids.
@@ -5794,11 +5797,11 @@ with `"graph": {"nodes": [{"kind": "effect", "file": "palette", "into":
 "into": "output.2"}]},`; after `"fx.palette.hue_to": 230.0` add `,
 "fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
 "fx.palette.2.hue_from": 0.0, "fx.palette.2.hue_to": 60.0`. Load
-TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's hue from.
+TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's hue turn.
 
 **Right if:** the glass is blue-cyan and the projector orange-red; FX
 shows two placed chips, "Palette · into output 1" and "Palette 2 · into
-output 2", each with its own controls; dragging Palette 2's hue from
+output 2", each with its own controls; dragging Palette 2's hue turn
 changes only the projector; ROUTING lists "Palette 2 …" settings; each
 output's "shows:" line ends "· palette on this output only" or "·
 palette 2 on this output only".
