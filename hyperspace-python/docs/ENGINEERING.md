@@ -1258,7 +1258,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
-| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — every node collapsed by default, one wire a node pair; the routes and the modifiers are edited here (below). |
+| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
@@ -1329,6 +1329,33 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   through), and it lands through `Edit.connect` as any drag. Right-click
   a node: expand / collapse and **learn ▸** its params, by group.
 
+- **By concern** (N9, the owner's decision of 2026-10-20). The auto
+  layout lays the canvas in five areas, left to right, each titled
+  faintly on the canvas behind its boxes (30 canvas units, kept 18 px on
+  screen zoomed out, no wider than the area): **CONTROLLERS** (devices,
+  keys, placeholders, a desk template), **AUDIO** (the analyzer and the
+  band, tempo, master, audio and band-scene params; **OTHER** — the
+  preset, ui and desk params, the missing ones — under it in its
+  column), **MODULATION** (LFOs, modifiers, macros), **GEOMETRY** (the
+  shape, the hands, a cloud, the eye, and the scene, cover and hands'
+  layer that draw them) and **SHADERS** (capture, history, effects,
+  composites, outputs last), the render nodes by their depth within
+  theirs and every other area by its own depth (an LFO or macro fed by
+  nothing first, a modifier one past what feeds it), the shaders' chain
+  wrapped in rows of four — so every wire runs left to right but a row's
+  return. One table, `graphview.AREA`. The head's area chips
+  (**CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS**) and a click
+  on a canvas title frame that area. A title stays 18 px on screen
+  zoomed out, never under 12 px, a short word (CTRL, MOD …) when the
+  long one will not fit before the next. A node with nothing in
+  and nothing out (`graphview.is_idle`: a macro with no label and no
+  subscriber, an LFO or a group node no cable reaches, a lost or off
+  device, an effect switched off that no cable reaches — the chain then
+  shows a half-faint through wire over it, which Delete only explains;
+  never a modifier, the analyzer or another render node) is not drawn: its
+  area shows one small box ("8 idle macros · 3 idle LFOs") whose **+**
+  draws them under it to patch one; the picker still offers every idle
+  macro. The head counts "31 nodes (22 idle)" on party-trip.
 - **Nodes**, left to right: each listed device by role — the APC40 as
   *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
   (the global layer's, faint unless SHIFT is latched), the hands folded
@@ -1348,9 +1375,10 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   Hover: from → to, the reading, the depth, the `scale` and the gate; a
   cable a loop keeps off says so.
 - **The head**: **expand all** / **collapse all**, **patched only**,
-  **tidy** — every node collapsed, every position forgotten (one undo
-  step), laid out again by column and the canvas framed on them; it says
-  "laid out 55 nodes, every one collapsed", or "already tidy" — and,
+  **tidy** — every node collapsed, the idle lines shut, every position
+  forgotten (one undo step), laid out again in the areas and the canvas
+  framed on them; it says "laid out 31 nodes in 6 areas, every one
+  collapsed · 22 idle off the canvas", or "already tidy" — and,
   only while something is selected on a page narrower than 720 px,
   **details beside** / **details below** (where the selection's pane
   goes; CONTROLS at 540 px puts it under the canvas, a page 720 px wide

@@ -74,11 +74,20 @@ pushed only once the edit is read back and accepted.
 A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
-node takes `graphview.auto_layout`'s column; **tidy** (`tidy`) collapses
-every node, forgets every position on the canvas and lays them all out
-again — one undo step for the positions (`forget`) — frames the canvas
-on them and says so on the head ("laid out 55 nodes, every one
-collapsed", or "already tidy"). The selection shows under the canvas on
+node takes its place in its **area** (plan 28 N9, `graphview.layout`):
+controllers → audio (the small *other* under it) → modulation → geometry
+→ shaders, left to right, each titled faintly on the canvas behind its
+nodes (`_titles`). A node with nothing in and nothing out — an unused
+macro, an unpatched LFO, a group no cable reaches, a lost device — is
+not drawn (`drawn_node`): its area shows one line in its place ("8 idle
+macros · 3 idle LFOs", `_idle_line`) whose **+** shows them under it so
+one can be patched; patched, it is drawn as any node. The picker still
+offers every idle macro. **Tidy** (`tidy`) collapses every node, closes
+the idle lines, forgets every position on the canvas and lays them all
+out again in their areas — one undo step for the positions (`forget`) —
+frames the canvas on them and says so on the head ("laid out 36 nodes in
+6 areas, every one collapsed · 12 idle off the canvas", or "already
+tidy"). The selection shows under the canvas on
 the panel's narrow page; the **details beside / below** chip, drawn only
 while something is selected, moves it (a page 720 px wide puts it in a
 side column by itself, no chip).
@@ -126,7 +135,21 @@ TIMES = 120              # draws the SYSTEM line's median is over
 PATCHED_TIP = ("Patched only: an expanded node shows just its patched ports — "
                "its own all / patched chip flips it")
 TIDY_TIP = ("Collapse every node, forget every position on the canvas and lay them all "
-            "out again by kind (⌘Z puts the positions back)")
+            "out again in their areas — controllers, audio, modulation, geometry, shaders "
+            "(⌘Z puts the positions back)")
+# plan 28 N9: the areas' titles on the canvas, and the idle lines
+TITLE_SIZE = 30.0        # canvas units: an area's title at full zoom
+TITLE_SCREEN = 18.0      # px: what it stays on screen while the canvas is zoomed out
+TITLE_FLOOR = 12.0       # px: never smaller on screen (review round 1); a short word if need be
+TITLE_GAP = 16.0         # canvas units kept clear before the next title on its row
+THROUGH_ALPHA = 0.5      # a through wire over off effects: drawn, but plainly not a cable
+THROUGH_NO_DELETE = ("a through wire stands for off effects: turn one on (FX) or open the "
+                     "off effects line to edit its cables")
+AREA_TIP = "Frame the canvas on this area's boxes (a click on its title does the same)" 
+TITLE_ALPHA = 0.30       # faint: behind the nodes, never one of them
+IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + shows "
+            "them here to patch one; patched, it is drawn like any node. The picker "
+            "(right-click the canvas) still offers every idle macro.")
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
               "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
@@ -159,6 +182,7 @@ def _state(panel) -> dict:
     # drawn, a drag let go on a collapsed node's stub (its port picker)
     for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None)):
         st.setdefault(k, make())
+    st.setdefault("idle_open", set())       # plan 28 N9: the areas whose idle line is open
     return st
 
 
@@ -301,7 +325,25 @@ def toggle_open(st: dict, nid: str) -> None:
 
 def expand_all(st: dict, view: graphview.View, on: bool) -> None:
     """The head's **expand all** (`on`) / **collapse all**."""
-    st["open"] = {n.id for n in view.nodes} if on else set()
+    st["open"] = {n.id for n in view.nodes if drawn_node(st, n)} if on else set()
+
+
+def drawn_node(st: dict, n: graphview.VNode) -> bool:
+    """Is node `n` drawn (plan 28 N9)? Every node but an idle one
+    (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
+    while its area's idle line is open."""
+    return not n.idle or n.area in st.setdefault("idle_open", set())
+
+
+def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
+    n = view.node(nid)
+    return n is None or drawn_node(st, n)
+
+
+def toggle_idle(st: dict, area: str) -> None:
+    """Open an area's idle line (its idle nodes drawn under it), or close it."""
+    st.setdefault("idle_open", set())
+    st["idle_open"] ^= {area}
 
 
 def drawn_cable(st: dict, c: graphview.VCable) -> bool:
@@ -346,35 +388,55 @@ def forget(panel, view: graphview.View) -> None:
                 del m[nid]
 
 
-TIDIED = "laid out {n} nodes, every one collapsed"
+TIDIED = "laid out {n} nodes in {k} areas, every one collapsed"
+TIDIED_IDLE = " · {i} idle off the canvas"
 ALREADY_TIDY = "already tidy"
 
 
-def layout_of(st: dict, view: graphview.View, stored=None) -> dict:
-    """`graphview.auto_layout` with this page's state: a collapsed node its
-    title and lines, an expanded one its ports."""
-    return graphview.auto_layout(
+def areas_of(st: dict, view: graphview.View, stored=None) -> graphview.Layout:
+    """`graphview.layout` with this page's state: a collapsed node its
+    title and lines, an expanded one its ports, the open idle lines'
+    nodes under them."""
+    return graphview.layout(
         view, stored, lambda nid: full(st, nid) or nid.startswith(f"{graphview.TEMPLATE}:"),
-        st["folds"], collapsed=lambda nid: collapsed(st, nid))
+        st["folds"], collapsed=lambda nid: collapsed(st, nid),
+        idle_open=st.setdefault("idle_open", set()))
+
+
+def layout_of(st: dict, view: graphview.View, stored=None) -> dict:
+    """`areas_of`'s node positions."""
+    return areas_of(st, view, stored).nodes
+
+
+def tidied(view: graphview.View) -> str:
+    """What a tidy that did something says: the nodes it laid out (the
+    drawn ones), in how many areas, and how many idle ones it left off."""
+    shown = [n for n in view.nodes if not n.idle]
+    said = TIDIED.format(n=len(shown), k=len({n.area for n in shown}))
+    idle = len(view.nodes) - len(shown)
+    return said + (TIDIED_IDLE.format(i=idle) if idle else "")
 
 
 def tidy(panel, st: dict, view: graphview.View) -> str:
     """The head's **tidy** (plan 28 N7: it always does something you can
     see, or says why not): every node collapsed, every position on the
     canvas forgotten (`forget`, one undo step), every node laid out again
-    by column — and the head says what it did ("laid out 55 nodes, every
-    one collapsed"), or "already tidy" when nothing moved or folded. The
-    canvas is framed on the nodes after it (`st["frame"]`)."""
-    was_open = bool(st["open"])
+    in its area (plan 28 N9), the idle lines closed — and the head says
+    what it did (`tidied`: "laid out 36 nodes in 6 areas, every one
+    collapsed · 12 idle off the canvas"), or "already tidy" when nothing
+    moved or folded. The canvas is framed on the nodes after it
+    (`st["frame"]`)."""
+    was_open = bool(st["open"]) or bool(st.setdefault("idle_open", set()))
     st["open"] = set()
+    st["idle_open"] = set()
     st["flip"].clear()
     before = dict(st["applied"])
     forget(panel, view)
     auto = layout_of(st, view)
-    moved = sum(1 for n in view.nodes
-                if before.get(n.id) is None or tuple(round(v) for v in before[n.id])
-                != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0))))
-    said = TIDIED.format(n=len(view.nodes)) if (moved or was_open) else ALREADY_TIDY
+    moved = sum(1 for n in view.nodes if drawn_node(st, n) and (
+                before.get(n.id) is None or tuple(round(v) for v in before[n.id])
+                != tuple(round(v) for v in auto.get(n.id, (0.0, 0.0)))))
+    said = tidied(view) if (moved or was_open) else ALREADY_TIDY
     st["note"], st["said"] = "", said
     st["frame"] = True
     return said
@@ -420,10 +482,14 @@ def beside_chip(selected: bool, width: float, beside: bool) -> str | None:
 
 
 def head_line(st: dict, view: graphview.View) -> str:
-    """The head's counts: the nodes, the wires drawn last frame (a bundle is
-    one), the cables they stand for, how many are live."""
+    """The head's counts: the nodes drawn (and how many sit idle, plan 28
+    N9), the wires drawn last frame (a bundle is one), the cables they
+    stand for, how many are live."""
     live = sum(1 for c in view.cables if not c.dormant)
-    return (f"{len(view.nodes)} nodes  ·  {st['wires']} wires  ·  {len(view.cables)} cables"
+    drawn = sum(1 for n in view.nodes if drawn_node(st, n))
+    idle = sum(1 for n in view.nodes if n.idle)
+    nodes = f"{drawn} nodes" + (f" ({idle} idle)" if idle else "")
+    return (f"{nodes}  ·  {st['wires']} wires  ·  {len(view.cables)} cables"
             f"  ·  {live} live")
 
 
@@ -458,6 +524,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
     if imgui.is_item_hovered():
         imgui.set_tooltip(line)
+    _area_chips(st)
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
     elif st["said"]:                        # plan 28 N4: the last render edit
@@ -466,9 +533,26 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         imgui.text_disabled(EDIT_HINT)
 
 
+def _area_chips(st: dict) -> None:
+    """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
+    MODULATION · GEOMETRY · SHADERS, wrapped to the page; a click frames
+    the canvas on that area (`frame_area`, next frame)."""
+    for i, a in enumerate(graphview.AREAS):
+        label = f"{graphview.TITLES[a]}##area"
+        if i:
+            imgui.same_line()
+            if imgui.get_content_region_avail().x < ui.chip_w(label):
+                imgui.new_line()
+        if ui.chip(label):
+            st["frame_area"] = a
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(AREA_TIP)
+
+
 def _place(panel, st: dict, view: graphview.View) -> None:
     """Every node where it belongs this frame: the preset's or the show's
-    position, else the automatic column; set on the canvas only when that
+    position, else its place in its area (`areas_of`) — and each area's
+    idle line; set on the canvas only when that
     differs from what was last set, so a node being dragged is left alone.
     A tidy (`tidy`) collapses every node and forgets the canvas's positions
     in both maps first."""
@@ -478,18 +562,28 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     pre, show = _layouts(panel)
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
-         frozenset(st["folds"]), tuple(sorted((n, tuple(xy)) for n, xy in stored.items())))
+         frozenset(st["folds"]), frozenset(st["idle_open"]),
+         tuple(sorted((n, tuple(xy)) for n, xy in stored.items())))
     held = st.get("auto")
-    if held is None or held[0] != k:          # the columns, kept while nothing moves them
-        held = st["auto"] = (k, layout_of(st, view, stored))
-    auto = held[1]
+    if held is None or held[0] != k:          # the areas, kept while nothing moves them
+        held = st["auto"] = (k, areas_of(st, view, stored))
+    lay = held[1]
+    auto = lay.nodes
     applied = st["applied"]
     for n in view.nodes:
+        if not drawn_node(st, n):              # N9: an idle node is not on the canvas
+            continue
         xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
         target = (float(xy[0]), float(xy[1]))
         if applied.get(n.id) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + n.id)), imgui.ImVec2(*target))
             applied[n.id] = target
+    for area, xy in lay.lines.items():        # plan 28 N9: each area's idle line
+        lid = graphview.idle_id(area)
+        target = (float(xy[0]), float(xy[1]))
+        if applied.get(lid) != target:
+            ed.set_node_position(ed.NodeId(_id(st, "n:" + lid)), imgui.ImVec2(*target))
+            applied[lid] = target
 
 
 def _moved(panel, st: dict, view: graphview.View) -> None:
@@ -500,6 +594,8 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
     pre, show = _layouts(panel)
     applied = st["applied"]
     for n in view.nodes:
+        if not drawn_node(st, n):              # plan 28 N9: an idle node is not on the canvas
+            continue
         p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
         now = (float(round(p.x)), float(round(p.y)))
         was = applied.get(n.id)
@@ -518,9 +614,14 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     ed.set_current_editor(editor(panel))
     ed.begin("##graph", size)
     _place(panel, st, view)
+    lay = st["auto"][1]
+    _titles(st, lay)                    # plan 28 N9: behind the nodes
     drawn: set[str] = set()
     for n in view.nodes:
-        _node(st, n, drawn)
+        if drawn_node(st, n):
+            _node(st, n, drawn)
+    for area in lay.lines:
+        _idle_line(st, view, area, lay.idle.get(area, []))
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
     wires = 0
@@ -540,12 +641,139 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
         reveal(st, view, held)
     if st.pop("frame", False):          # a tidy: the canvas framed on its nodes
         ed.navigate_to_content()
+    area = st.pop("frame_area", None)   # N9: an area chip or a title clicked
+    if area is not None:
+        frame_area(st, view, area)
+    _title_click(st)
     _create(panel, st, view)
     _delete(panel, st, view)
     _menus(panel, st, view)
     _hover(st, view)
     _moved(panel, st, view)
     ed.end()
+
+
+def titles(lay: graphview.Layout) -> list[tuple[str, float, float]]:
+    """The areas' titles to draw (plan 28 N9): (words, x, y) in canvas units,
+    over each area's first column, in `graphview.ORDER`."""
+    return [(graphview.TITLES.get(a, a.upper()), *lay.titles[a])
+            for a in graphview.ORDER if a in lay.titles]
+
+
+def title_room(lay: graphview.Layout, area: str) -> float:
+    """How wide area `area`'s title may be, in canvas units: to the next
+    title on its row (less `TITLE_GAP`), else its own columns."""
+    x, y = lay.titles[area]
+    nxt = [tx for a, (tx, ty) in lay.titles.items() if a != area and ty == y and tx > x]
+    if nxt:
+        return min(nxt) - x - TITLE_GAP
+    return lay.spans.get(area, 1) * graphview.COL_W - (graphview.COL_W - NODE_W)
+
+
+def title_fit(words: str, short: str, room: float, zoom: float, em: float,
+              per_em: float, per_em_short: float) -> tuple[str, float]:
+    """An area title's words and size in canvas units (review round 1):
+    `TITLE_SIZE`, larger while the canvas is zoomed out so it stays
+    `TITLE_SCREEN` px on screen, held to its `room` — and never under
+    `TITLE_FLOOR` px on screen: when the word will not fit at that, its
+    short form (CTRL, MOD …), at the floor if even that will not.
+    `zoom` is the editor's (canvas units a screen pixel: 4 is zoomed out
+    four times); `per_em` / `per_em_short` the words' widths at the font's
+    size `em`."""
+    want = max(TITLE_SIZE, TITLE_SCREEN * zoom)
+    floor = TITLE_FLOOR * zoom
+    for text, w in ((words, per_em), (short, per_em_short)):
+        fits = room * em / w if w > 0 else want
+        if fits >= floor:
+            return text, min(want, fits)
+    return short, floor
+
+
+def _titles(st: dict, lay: graphview.Layout) -> None:
+    """Each area's title, faint and large, on the canvas's own draw list
+    (canvas units inside the editor), its foot on the title row's — drawn
+    before the nodes, so behind them, and no node of its own (nothing to
+    select or drag; a click on it frames its area: `_title_click`)."""
+    dl = imgui.get_window_draw_list()
+    k = ui.TEXT
+    col = ui.u32(imgui.ImVec4(k.x, k.y, k.z, TITLE_ALPHA))
+    font, em = imgui.get_font(), imgui.get_font_size()
+    zoom = ed.get_current_zoom() or 1.0
+    foot = graphview.TITLE_H - 12.0
+    rects = st["title_rects"] = {}
+    for (words, x, y), area in zip(titles(lay), (a for a in graphview.ORDER
+                                                 if a in lay.titles), strict=True):
+        short = graphview.SHORT_TITLES.get(area, words)
+        text, size = title_fit(words, short, title_room(lay, area), zoom, em,
+                               imgui.calc_text_size(words).x, imgui.calc_text_size(short).x)
+        wide = imgui.calc_text_size(text).x * size / em
+        dl.add_text(font, size, imgui.ImVec2(x, y + foot - size), col, text)
+        dl.add_line(imgui.ImVec2(x, y + foot + 2.0), imgui.ImVec2(x + NODE_W, y + foot + 2.0),
+                    col, 1.0)
+        rects[area] = (x, y + foot - size, x + max(wide, NODE_W), y + foot + 2.0)
+
+
+def _title_click(st: dict) -> None:
+    """A click on the canvas's background inside an area's title frames
+    that area (next frame, `frame_area`)."""
+    if not ed.is_background_clicked():
+        return
+    m = imgui.get_mouse_pos()                  # canvas units, inside the editor
+    for area, (x0, y0, x1, y1) in st.get("title_rects", {}).items():
+        if x0 <= m.x <= x1 and y0 <= m.y <= y1:
+            st["frame_area"] = area
+
+
+def area_nodes(st: dict, view: graphview.View, area: str) -> list[str]:
+    """The canvas ids an area's framing selects: its drawn nodes and its
+    idle line (the head's area chips, a click on its title)."""
+    ids = [n.id for n in view.nodes if n.area == area and drawn_node(st, n)]
+    lay = st.get("auto")
+    if lay and area in lay[1].lines:
+        ids.append(graphview.idle_id(area))
+    return ids
+
+
+def frame_area(st: dict, view: graphview.View, area: str) -> list[str]:
+    """Frame the canvas on area `area` (review round 1: how "at a glance"
+    holds on a page 390 px wide): its nodes selected, the view brought to
+    them, the selection cleared again. Inside the editor. Returns the ids."""
+    ids = area_nodes(st, view, area)
+    if not ids:
+        return ids
+    ed.clear_selection()
+    for nid in ids:
+        ed.select_node(ed.NodeId(_id(st, "n:" + nid)), True)
+    ed.navigate_to_selection(True)
+    ed.clear_selection()
+    return ids
+
+
+def idle_line(view: graphview.View, ids) -> str:
+    """An area's idle line's words: its idle nodes by kind."""
+    held = set(ids)
+    return graphview.idle_words(n for n in view.nodes if n.id in held)
+
+
+def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
+    """An area's idle line (plan 28 N9): one small node standing for the
+    nodes with nothing in and nothing out, its **+** drawing them under it
+    (its **-** taking them off again)."""
+    lid = graphview.idle_id(area)
+    ed.begin_node(ed.NodeId(_id(st, "n:" + lid)))
+    imgui.push_id(lid)
+    opened = area in st["idle_open"]
+    imgui.text_disabled(ui.fit_text(idle_line(view, ids), NODE_W - 30))
+    imgui.same_line(NODE_W - 30 - PIN)
+    if imgui.small_button("-" if opened else "+"):
+        toggle_idle(st, area)
+    if imgui.is_item_hovered():
+        ed.suspend()
+        imgui.set_tooltip(IDLE_TIP)
+        ed.resume()
+    imgui.dummy(imgui.ImVec2(NODE_W, 0))
+    imgui.pop_id()
+    ed.end_node()
 
 
 def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[str]) -> None:
@@ -575,11 +803,14 @@ def _pin(st: dict, pin: str, kind, port: graphview.VPort, stub: str, drawn: set[
 def _wiring(st: dict, view: graphview.View):
     """`graphview.wiring` for this frame, kept while the view and the
     expanded nodes hold (only the bundles' readings move each frame)."""
-    k = (id(view), frozenset(st["open"]))
+    lay = st["auto"][1] if st.get("auto") else areas_of(st, view)
+    k = (id(view), frozenset(st["open"]), frozenset(st["idle_open"]), id(lay))
     held = st.get("wiring")
     if held is None or held[0] != k:
-        held = st["wiring"] = (k, graphview.wiring(view, lambda nid: collapsed(st, nid),
-                                                    lambda c: drawn_cable(st, c)))
+        st["throughs"] = {c.id: c for c in lay.throughs}
+        held = st["wiring"] = (k, graphview.wiring(
+            view, lambda nid: collapsed(st, nid), lambda c: drawn_cable(st, c),
+            lambda nid: _drawn_id(st, view, nid), lay.throughs))
     else:
         graphview.readings(held[1][1])
     return held[1]
@@ -691,7 +922,8 @@ def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = 
     """One cable, from pin `a` to pin `b` (its own ends, or a collapsed
     node's stub for a render cable: plan 28 N7)."""
     k = COLOURS.get(c.type, ui.DIM)
-    col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else k.w)
+    col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else
+                       THROUGH_ALPHA if c.kind == graphview.THROUGH else k.w)
     if c.type == graphview.VALUE:
         u = c.live if c.live is not None else 0.0
         thick = THIN + (THICK - THIN) * max(0.0, min(1.0, abs(u)))
@@ -748,8 +980,10 @@ def _hover(st: dict, view: graphview.View) -> None:
         cid = names.get(link, "")[2:]
         bundle = st["bundles"].get(cid)
         c = next((x for x in view.cables if x.id == cid), None) if bundle is None else None
+        through = st.get("throughs", {}).get(cid)
         tip = (graphview.bundle_tip(view, bundle) if bundle is not None
-               else cable_tip(view, c) if c is not None else None)
+               else cable_tip(view, c) if c is not None
+               else f"{through.label}\n{THROUGH_NO_DELETE}" if through is not None else None)
     elif pin and graphview.is_stub(names.get(pin, "")):
         n = view.node(graphview.stub_node(names[pin]))
         if n is not None:
@@ -1372,6 +1606,14 @@ def delete_bundle(st: dict, b: graphview.VBundle) -> str:
     return graphview.EXPAND_TO_EDIT
 
 
+def delete_through(st: dict) -> str:
+    """Delete pressed on a through wire (plan 28 N9): kept — it is no render
+    edge — and the head says what it stands for. Returns the words."""
+    ed.reject_deleted_item()
+    _note(st, THROUGH_NO_DELETE)
+    return THROUGH_NO_DELETE
+
+
 def _delete(panel, st: dict, view: graphview.View) -> None:
     """The widget's delete query: the selection's nodes first, by kind
     (`DELETE_NODE`), then its cables, by kind (`DELETE`). The first
@@ -1393,6 +1635,9 @@ def _delete(panel, st: dict, view: graphview.View) -> None:
                 cid = names.get(lk.id(), "")[2:]
                 if cid in st["bundles"]:                # plan 28 N7: refused in words
                     delete_bundle(st, st["bundles"][cid])
+                    continue
+                if cid in st.get("throughs", {}):       # N9: a through wire, refused
+                    delete_through(st)
                     continue
                 c = next((x for x in view.cables if x.id == cid), None)
                 if c is None:

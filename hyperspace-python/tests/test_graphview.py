@@ -274,10 +274,10 @@ def test_layout_round_trips_through_the_preset_and_the_show(rig):
 
 
 def test_auto_layout_gives_every_unplaced_node_a_column(rig):
-    """Every node not placed gets a position, its column by kind left to
-    right — the sources, the LFOs, the modifiers, the macros, the param
-    groups and the render nodes by their depth, the outputs last; a
-    placed node keeps its own and takes no room."""
+    """Every node not placed gets a position, in its area's columns left to
+    right (plan 28 N9: controllers → audio → modulation → geometry →
+    shaders; the render nodes by their depth within theirs, the outputs
+    last); a placed node keeps its own and takes no room."""
     rig.lib.load("presets", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
     g = G.default_graph(views(Switches()), effects=("acid",))
@@ -286,13 +286,25 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     pos = graphview.auto_layout(view, placed)
     assert set(pos) == {n.id for n in view.nodes} - set(placed)
     x = {nid: xy[0] for nid, xy in pos.items()}
-    col = [x[graphview.ANALYZER], x["lfo.1"], x["mod.1"], x["macro.1"], x["group:tempo"],
-           x["render:scene"], x["render:history"], x["render:acid"], x["render:output.1"]]
+    # N9: the areas' columns, not the kinds' — the analyzer and the tempo
+    # are the audio's; an LFO, a modifier and a macro the modulation's
+    col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"], x["render:eye"],
+           x["render:scene"], x["render:history"], x["render:fx"], x["render:output.1"]]
+    # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
+    # the shaders' idle line, and a through wire from the history to the fx
+    assert view.node("render:acid").idle
+    assert any(c.src_port == "rout:history" and c.dst_port.startswith("rin:fx/")
+               for c in graphview.layout(view).throughs)
     assert col == sorted(col) and len(set(col)) == len(col)
+    assert x["group:tempo"] == x[graphview.ANALYZER]
+    assert x["mod.1"] == x["macro.1"] == x["lfo.1"]
     assert x["render:output.1"] == max(x.values())
-    # a column's nodes are stacked, never on top of one another
-    ys = sorted(xy[1] for nid, xy in pos.items() if xy[0] == x["lfo.1"])
-    assert len(ys) == 4 and len(set(ys)) == 4
+    # a column's drawn nodes are stacked, never on top of one another (N9:
+    # the idle LFOs 3 and 4 sit at the modulation's idle line, drawn by none)
+    drawn = [nid for nid in pos if x[nid] == x["lfo.1"] and not view.node(nid).idle]
+    ys = sorted(pos[nid][1] for nid in drawn)
+    assert {"lfo.1", "lfo.2", "mod.1", "macro.1"} <= set(drawn)
+    assert len(set(ys)) == len(ys)
     # the preset's map and the show's, by home
     pre, ses = graphview.split(view, {**pos, **placed})
     assert "render:shape" in pre and "mod.1" in pre and "macro.1" in pre
@@ -336,6 +348,7 @@ def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""
     rig.lib.load("presets", "party-trip")
+    rig.reg["fx.acid.on"].set(1)        # N9: an off effect with no cable is not drawn
     rig.panel.renderer = type("R", (), {})()
     rig.panel.renderer._graph = G.default_graph(views(Switches(), Switches(through=True)),
                                                 effects=("acid", "palette"))
@@ -345,7 +358,8 @@ def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
     view = st["view"]
     assert st["created"] == 1 and st["editor"] is not None
     assert view.node("render:acid") is not None
-    assert all(n.id in st["applied"] for n in view.nodes)   # every node placed
+    # every drawn node placed (N9: an idle one is not on the canvas)
+    assert all(n.id in st["applied"] for n in view.nodes if ui_graph.drawn_node(st, n))
     # plan 28 N7: every node starts collapsed; expanded, a route is its own cable
     assert not st["open"]
     ui_graph.expand_all(st, view, True)
@@ -395,11 +409,11 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
 
     def move():
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:eye")), imgui.ImVec2(700, 50))
-        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:lfo.2")), imgui.ImVec2(30, 640))
+        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:lfo.1")), imgui.ImVec2(30, 640))
     _in_editor(rig, move)
     frame(rig.panel, "graph")
     assert rig.lib.presets.layout == {"render:eye": [700, 50]}
-    assert rig.lib.project.layout == {"lfo.2": [30, 640]}
+    assert rig.lib.project.layout == {"lfo.1": [30, 640]}   # N9: lfo.2 is idle, not drawn
     assert rig.lib.is_dirty("presets")
     # tidy forgets them both
     st["tidy"] = True

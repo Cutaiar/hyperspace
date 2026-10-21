@@ -488,7 +488,8 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
                                             "_rig_node_cut", "_delete_render_cable",
-                                            "_delete_render_node", "delete_bundle"}
+                                            "_delete_render_node", "delete_bundle",
+                                            "delete_through"}   # N9: a through wire
     assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
     # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
     assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)

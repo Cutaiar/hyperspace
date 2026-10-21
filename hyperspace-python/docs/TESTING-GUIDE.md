@@ -32,7 +32,7 @@ explained in the [glossary](#glossary) at the end.
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
    use branch `plan-24-26-27-integration`. The shader-node entries
    (L95–L102, L129, L130, C9–C11, D19–D23) are plan 30's, and the node-editor entries
-   (L103–L128, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
+   (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -111,7 +111,8 @@ changes brightness or volume instead).
     drag, early: everything else on the GRAPH page builds on it); on the
     copy L117–L121; L122 with two Macs on this build (with L43); the
     legible graph L123–L126 and L128 (the APC40 plugged in), L127 with the
-    hand camera and music on the copy; A34–A36
+    hand camera and music on the copy; the graph by concern L131–L135 on
+    the laptop; A34–A36
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
@@ -250,6 +251,11 @@ changes brightness or volume instead).
 | L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
 | L129 | The palette's Mode is a picker; its rows read as the slice | 1 | laptop | 270 |
 | L130 | An old palette preset (centre and width) loads as the same look | 1 | laptop, the copy | 271 |
+| L131 | The three areas at a glance | 1 | laptop (the APC40 helps) | 272 |
+| L132 | A macro shows up when you patch it | 1 | laptop | 273 |
+| L133 | Tidy puts everything back in its area | 1 | laptop | 274 |
+| L134 | The off effects are one line | 1 | laptop | 275 |
+| L135 | Five buttons frame the areas | 1 | laptop | 276 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2786,7 +2792,7 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
@@ -3238,8 +3244,8 @@ away, click **tidy** again. Click a wire; click **details beside**, then
 **details below**.
 
 **Right if:** first "already tidy"; then every box closed and back in
-its column, the view framed on them, "laid out 55 nodes, every one
-collapsed"; ⌘Z puts the dragged box back; the details button only
+its area, the view framed on them, "laid out 31 nodes in 6 areas, every
+one collapsed · 22 idle off the canvas"; ⌘Z puts the dragged box back; the details button only
 appears once something is selected, and moves the details beside the
 canvas and back.
 
@@ -3326,6 +3332,97 @@ unknown ids.
 **Changes:** delete the files.
 
 *(check 271)*
+
+#### L131. The three areas at a glance
+
+**Needs:** laptop (the APC40 helps).
+
+**Do:** launch on party-trip, open GRAPH. Read it; drag the canvas to
+the left to see the rest; zoom out a few clicks with the wheel.
+
+**Right if:** faint titles over the columns: CONTROLLERS, AUDIO (OTHER
+under it), MODULATION, GEOMETRY, SHADERS. The sound boxes (analyzer,
+band, tempo, master, audio, scene) are all under AUDIO; the shape, the
+camera's *eye* and the hands under GEOMETRY; the history, the effects
+and the outputs under SHADERS, four across, row under row. Every wire
+runs from left to right, but the one that takes the shaders' chain from
+the end of a row to the start of the next.
+
+**Wrong if:** a sound box among the shapes or shaders; a wire that runs
+back to the left.
+
+*(check 272)*
+
+#### L132. A macro shows up when you patch it
+
+**Needs:** laptop.
+
+**Do:** under MODULATION find the small box "8 idle macros · 3 idle
+LFOs"; click its **+**. Drag *Macro 3*'s right dot onto *shape*'s left
+dot and pick **Brightness · base**; click the small box's **−**. Then
+open *Macro 3* and *shape*, click the new cable, press Delete.
+
+**Right if:** **+** shows the eight macros and three LFOs under the small
+box; once patched, *Macro 3* stays on the canvas with one wire into
+*shape* and the box says "7 idle macros · 3 idle LFOs"; after the Delete it goes back
+into the box. Right-clicking the canvas → **macro** still lists all
+eight.
+
+**Wrong if:** a macro with no wire on the canvas; a patched one hidden.
+
+*(check 273)*
+
+#### L133. Tidy puts everything back in its area
+
+**Needs:** laptop.
+
+**Do:** drag *shape* far away, open the idle box, open *apc40*; click
+**tidy**; press ⌘Z.
+
+**Right if:** everything closed and back under its title, the idle box
+shut, the view framed; the line under the buttons says "laid out 31
+nodes in 6 areas, every one collapsed · 22 idle off the canvas"; ⌘Z puts
+*shape* back where you dropped it.
+
+**Wrong if:** idle macros left on the canvas; a box outside its area.
+
+*(check 274)*
+
+#### L134. The off effects are one line
+
+**Needs:** laptop.
+
+**Do:** on party-trip open GRAPH, click the **SHADERS** button. Hover the
+faint red wire leaving *history*; press Delete on it. On the FX page
+switch *warp* on, come back; switch it off again. Then click the small
+"9 off effects" box's **+**.
+
+**Right if:** only the effects that are on are boxes (plasma, kaleido,
+zoomblur, huecycle); the faint wire names the effects it runs over and
+Delete only says what it is; *warp* on is a box in the chain, off it is
+back in the small box; **+** shows every effect in its place.
+
+**Wrong if:** the chain has a gap with no faint wire; *warp* does not
+come back when switched on.
+
+*(check 275)*
+
+#### L135. Five buttons frame the areas
+
+**Needs:** laptop.
+
+**Do:** on party-trip, GRAPH: click **tidy**; then the buttons
+**CONTROLLERS**, **AUDIO**, **MODULATION**, **GEOMETRY**, **SHADERS** one
+after another; then click the faint GEOMETRY title on the canvas.
+
+**Right if:** after tidy everything fits with the titles readable; each
+button fills the canvas with that area's boxes, close enough to read
+them; the title click does the same; the shaders sit four across, row
+under row.
+
+**Wrong if:** a button frames nothing; the shaders in one long row.
+
+*(check 276)*
 
 # Part 2 — tests that need hardware
 

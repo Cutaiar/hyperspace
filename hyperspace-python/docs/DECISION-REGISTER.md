@@ -8,6 +8,7 @@ during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
 run (shader nodes) and rows 233–277 during plan 28's run (the node
 editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
 and rows 291–298 in plan 30's N8 (the palette as compression)
+and rows 299–310 in plan 28's N9 (the graph by concern)
 on 2026-10-20: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
@@ -249,7 +250,7 @@ here; overturn → the change, then the same.
 | 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
 | 250 | What the canvas draws: modulatable params and row targets; no sinks — its timing **superseded in part** (row 290) | 242, 245 | superseded in part |
 | 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step — tidy's behaviour **superseded in part** (row 285) | 244 | superseded in part |
-| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278) | 244 | superseded in part |
+| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278); the columns by kind **superseded** by the areas (row 299) | 244 | superseded in part |
 | 253 | The editor context on the panel, closed before imgui | 246 | |
 | 254 | The selection pane below the canvas; **beside** for a column — the chip **superseded** (row 286) | 245 | superseded in part |
 | 255 | A cable into `mod` is the row a Learn would make | 247, 248 | |
@@ -282,12 +283,12 @@ here; overturn → the change, then the same.
 | 282 | The collapse state is the page's, saved nowhere | 261 | |
 | 283 | A drag onto a collapsed node's stub opens a picker of its ports | 263 | |
 | 284 | Learn from a node's right-click, per param | 263 | |
-| 285 | Tidy collapses everything, lays it out again and says what it did | 264 | |
+| 285 | Tidy collapses everything, lays it out again and says what it did — into the areas, its words **superseded in part** (row 304) | 264, 274 | superseded in part |
 | 286 | The details chip only with a selection on a narrow page | 264 | |
 | 287 | Expand all / collapse all; "patched only" within an expanded node | 262 | |
 | 288 | ROUTING's pointer line; "Route a lane here…" opens GRAPH | 266 | |
 | 289 | A modifier node's side pane: the MODIFIERS strip's block, stacked | 265 | |
-| 290 | A collapsed node reads only what its lines show; wiring and columns kept | 261 | |
+| 290 | A collapsed node reads only what its lines show; wiring and columns kept (the areas' layout since N9, row 299) | 261 | |
 | 291 | The slice: `hue_from` → `hue_to` up the wheel, turned by a wrapping `hue_turn`; from = to one hue, 0 → 360 the whole wheel | 267, 269 | |
 | 292 | The hue map: the old fold up to 180°, sliding to the identity at 360° | 267, 268 | |
 | 293 | Saturation and value mapped linearly, never clamped | 267, 268 | |
@@ -296,6 +297,18 @@ here; overturn → the change, then the same.
 | 296 | `// @param choice [a\|b] n "Label"`: a discrete param, drawn as a picker | 270 | |
 | 297 | The strip: mode picker, "compress into" line, hue / sat / val rows `from → to` (the hue row's turn beside), a hue bar | 270 | |
 | 298 | The gradient map kept as the second mode | 270 | |
+| 299 | Five areas left to right: controllers → audio → modulation → geometry → shaders | 272 | |
+| 300 | The audio before the modulation; the LFOs are modulation | 272 | |
+| 301 | Each area's title: faint words on the canvas, no node | 272 | |
+| 302 | The idle rule by kind: macros, LFOs, group nodes, lost devices | 273 | |
+| 303 | The small "other" area under the audio | 272 | |
+| 304 | One idle line an area; its + shows them; tidy closes it | 273, 274 | |
+| 305 | An off effect with no cable is idle; a through wire spans the hidden run | 275 | |
+| 306 | The shaders' chain wraps in rows of four (Z order) | 276 | |
+| 307 | Frame an area: five chips on the head, or a click on its title | 276 | |
+| 308 | The modulation and the audio laid out by their own depth | 272 | |
+| 309 | Titles never under 12 px on screen; a short word when needed | 272 | |
+| 310 | Open question: GRAPH asking for the whole control window (not built) | — | owner's call |
 
 "—": no hand check shows it; tests only.
 
@@ -4709,6 +4722,9 @@ Folds N0's two delay drafts.
 - **Superseded in part by row 278** (plan 28 N7, 2026-10-20): a collapsed
   node (the default) takes its title and its lines' room, an expanded
   one its ports' and its chip line's.
+- **Superseded by row 299** (plan 28 N9, 2026-10-20): the columns are the
+  concern areas' (controllers → audio → modulation → geometry →
+  shaders), not the kinds'; `graphview.COLUMN` is gone.
 - **Other options.** One render column.
 - **To reverse.** `graphview.COLUMN` / `_columns`.
 - **Rough edge.** Thirteen effects a pipeline make a wide canvas; port
@@ -5373,7 +5389,10 @@ ROUTING's desk, macros, session and sinks sections are untouched.
 - **To reverse.** `ui_graph.tidy`.
 - **Rough edge.** The undo puts the positions back, not the expanded
   nodes.
-- **Judge it.** Check 264.
+- **Superseded in part by row 304** (plan 28 N9): tidy lays every node
+  out in its area, closes the idle lines, and says "laid out 31 nodes in
+  6 areas, every one collapsed · 22 idle off the canvas".
+- **Judge it.** Checks 264, 274.
 
 ### 286. The details chip: only with a selection on a narrow page, named by what it does
 
@@ -5448,6 +5467,8 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   `collapsed`.
 - **Rough edge.** A port's hover on a collapsed node is not reachable,
   so its stale reading is never seen.
+- **Since N9** the cached layout is the areas' (`ui_graph.areas_of`),
+  its key the open idle lines too (row 299).
 - **Judge it.** Check 261.
 
 ## The palette as compression (plan 30, N8)
@@ -5628,3 +5649,257 @@ their frames match as recorded.
 - **To reverse.** Delete the mode and its fourteen params.
 - **Rough edge.** None known.
 - **Judge it.** Check 270.
+
+## The graph by concern (plan 28, N9)
+
+Built on 2026-10-20 after the owner's second look at the GRAPH page
+("The graph looks better. The graph needs to be organized better in
+terms of the concerns: all things audio need to live in one area; all
+things geometry should be grouped in another area; all things shader
+should be grouped in another area. Currently, they all sit clustered
+together in some pattern that I don't really understand. Also, there
+are macros sitting there that don't connect to anything."). The owner's
+decision — the canvas organised by concern, a macro with nothing in and
+nothing out not drawn by default — is in [`DECISIONS.md`](DECISIONS.md)
+"UI" with Who "owner (2026-10-20)"; these rows are what the build chose
+where it left a choice open. It supersedes parts of rows 252, 285 and
+290 (marked there). Review round 1 added the off effects to the idle rule
+(row 305), the shaders' wrap (306), the area chips (307), the depths
+inside the modulation and the audio (308) and the titles' floor (309),
+and asks the owner one question (310). Measured on party-trip in the
+real app at the control window's 960 × 900 after round 1 (53 nodes, 31
+drawn, 22 idle; 50 wires, 233 cables; the canvas 10 columns, the
+shaders 4 in 2 rows): the page draws in **1.42 ms** median collapsed,
+1.71 ms with the whole canvas framed (6.7×), 1.59 ms on SHADERS framed,
+1.61 ms after a tidy (N7: 1.27 ms). On every factory preset, and on
+party-trip with the whole effect chain wired as each graph fixture says,
+no drawn wire runs back or within a column but the shaders' row
+returns. No preset was edited or added; `apc40.py`, `midi.py` and
+ROUTING's desk section are untouched.
+
+### 299. Five areas, left to right: controllers → audio → modulation → geometry → shaders
+
+- **Built.** `graphview.auto_layout` (now `layout`) lays the canvas in
+  areas, each its own columns: **controllers** (the devices, the keys, a
+  placeholder, a desk template) one column; **audio** (the analyzer, the
+  band, tempo, master, audio and scene params' nodes) one; **modulation**
+  (the LFOs, the modifiers, the macros, the `lfo.trigger` group) one;
+  **geometry** (the shape, the hands, a cloud, the camera's *eye*, and
+  the scene, its cover and the hands' layer that draw them) and
+  **shaders** (the capture, the history, the effects, the composites,
+  the outputs last) each as many columns as their render nodes are deep
+  in the render graph, counted from the area's shallowest. A node's area
+  is one table, `graphview.AREA` (by kind, by `group:<g>`, by render
+  class — `area_of`). Saved positions still win (the `layout` keys, the
+  undo marks); a placed node takes no room. On party-trip: controllers
+  column 0, audio 1, modulation 2, geometry 3–5, shaders 6–12 (headless
+  graph; the real app's 14-effect chain runs to column 22).
+- **Other options.** Top to bottom bands (the page is tall and narrow,
+  but the widget draws every wire from a node's right to the next node's
+  left, so a band below its source reads as a loop back); N2's columns
+  by kind (the "pattern I don't really understand").
+- **To reverse.** `graphview.AREA`, `AREAS`, `_columns`, `layout`.
+- **Rough edge.** ~~The shaders area is as wide as the scene pipeline is
+  long~~ — built in review round 1: the chain wraps in rows of four and
+  the off effects are idle (rows 305, 306); the canvas is 10 columns.
+- **Judge it.** Check 272.
+
+### 300. The audio before the modulation; the LFOs are modulation
+
+- **Built.** The audio is the second area, before the modulation: the
+  analyzer is a source the modulation reads (a band into a modifier, a
+  band onto an LFO's rate) as well as the look, so its wires run right;
+  the audio's params (bands, tempo, master, the band scenes) are set
+  only by the controllers, from its left. The LFOs sit with the
+  modifiers and the macros in **modulation**: each is a source like a
+  modifier, and its tempo sync is a knob, not a cable from the audio.
+- **Other options.** The brief's sketch, modulation before the audio (a
+  band into a modifier would then run back); the LFOs in the audio as
+  tempo-synced sources.
+- **To reverse.** `AREAS`' order; `AREA["lfo"]`.
+- **Rough edge.** A route from an LFO or a macro onto a band's param
+  would run back (none in a factory preset).
+- **Judge it.** Check 272.
+
+### 301. Each area's title: faint words on the canvas, no node
+
+- **Built.** **CONTROLLERS**, **AUDIO**, **OTHER**, **MODULATION**,
+  **GEOMETRY**, **SHADERS** drawn on the canvas's own draw list over each
+  area's first column, in a title row above its nodes (`TITLE_H`), at
+  30 % of the text colour, before the nodes (behind them); 30 canvas
+  units tall at full zoom, kept 18 px on screen while zoomed out
+  (`ui_graph.title_size`), never wider than its area's columns. Nothing
+  to select, drag or delete.
+- **Other options.** A node-editor group node (selectable and draggable,
+  and a drag would move it off its area).
+- **To reverse.** `ui_graph._titles`, `titles`, `title_size`.
+- **Rough edge.** The titles stay at the auto layout's place when you
+  drag boxes away. (A long title's shrinking is row 309's: a floor and
+  a short word.)
+- **Judge it.** Check 272.
+
+### 302. The idle rule, by kind: macros, LFOs, group nodes and lost devices
+
+- **Built.** A node is idle (`graphview.is_idle`, `VNode.idle`) when no
+  cable starts or ends on it and no route names one of its params as a
+  `scale` or one of its sources as a `when`; and then: a **macro** only
+  while it has no label and no subscriber; an **LFO** and a **group
+  node** on that alone; a **device** only while lost (grey, not a
+  placeholder — a connected device is drawn even unmapped, it says the
+  rig has it). Never idle: a modifier (one just picked waits to be
+  dropped on a cable), the analyzer, a render node, an output, the keys,
+  a desk template, a placeholder (it has rows). An idle node is not
+  drawn and takes no room. On the factory presets: 8 idle macros on
+  every preset but lfo-breathe (7), 4 idle LFOs (party-trip 3,
+  lfo-breathe 2), the *cloud* group (no point cloud in the default
+  graph); in the real app also the disabled bridge.
+- **Other options.** Macros only (the owner's words; but the unpatched
+  LFOs and the cloud group sat there the same way).
+- **To reverse.** `graphview.IDLE_KINDS`, `is_idle`.
+- **Rough edge.** An unpatched LFO still runs; hidden, its knobs are
+  out of sight (the LFO page keeps them). An effect switched off is idle
+  by row 305's rule. The idle words name an off device ("1 off device":
+  its status says off) apart from a lost one.
+- **Judge it.** Check 273.
+
+### 303. The small "other" area under the audio
+
+- **Built.** A group no area claims — `preset`, `ui`, `desk` and the
+  *missing params* node — goes to **other**, titled under the audio's
+  last box in the audio's column, so the keys' and the desk's wires into
+  it run right from the controllers.
+- **Other options.** A column of its own after the controllers (between
+  them and the audio); the far right (its wires across the canvas).
+- **To reverse.** `graphview.SHARES`, `AREA`'s default.
+- **Rough edge.** The *missing params* node holds `audio.play` /
+  `stop` / `restart` (no param in this build) under OTHER, not AUDIO.
+- **Judge it.** Check 272.
+
+### 304. One idle line an area; its + shows them; tidy closes it
+
+- **Built.** An area with idle nodes draws one small box under its
+  nodes in its first column, saying what it holds ("8 idle macros · 3
+  idle LFOs" under MODULATION, "1 idle param group" under GEOMETRY,
+  "1 lost device" under CONTROLLERS); its **+** draws them under it,
+  stacked, so one can be patched; **−** takes them off. A macro patched
+  leaves the line and is drawn as any node; unpatched, it goes back. The
+  open lines are UI state (`st["idle_open"]`), saved nowhere. The
+  picker's **macro ▸** still offers every idle macro; one picked gets a
+  label, so it is drawn with the line shut. The head counts "31 nodes
+  (22 idle)" (party-trip in the app, after round 1). **tidy** also closes
+  the lines and says "laid out 31 nodes in 6 areas, every one collapsed
+  · 22 idle off the canvas". An idle node is given no place on the
+  canvas while it is not drawn.
+- **Other options.** One collapsed "macros" node holding the idle ones
+  as ports; a line drawn as text with no box.
+- **To reverse.** `ui_graph._idle_line`, `drawn_node`, `toggle_idle`,
+  `tidied`.
+- **Rough edge.** The line is a box of the editor: it can be dragged,
+  but its place is not saved and it goes back on the next layout change.
+- **Judge it.** Checks 273, 274.
+
+### 305. An effect switched off with no cable is idle; a through wire spans the hidden run
+
+- **Built.** (Review round 1.) An effect node is idle while its
+  `fx.<effect>.on` is false when the view is built and no value cable
+  (a route, a desk / pad / key row, a macro subscriber) reaches any node
+  of that effect — so a pad that toggles an effect keeps it drawn. Its
+  render cables do not count. Not `Effect.on(frame)`: a mix at 0 or the
+  stack bypassed would reshape the chain mid-show. `graphview.key` holds
+  every effect's on switch, so turning one on from the FX page draws it
+  next frame. The chain gets a **through wire** (`graphview.throughs`,
+  kind `through`, half-faint, image-coloured) from the node before each
+  hidden run to the next drawn node; its hover names the effects it
+  passes; it is no render edge — Delete on it is refused in words ("a
+  through wire stands for off effects: turn one on (FX) or open the off
+  effects line to edit its cables"), a modifier dropped on it does
+  nothing. SHADERS' idle line says "9 off effects" (party-trip in the
+  app: plasma, kaleido, zoomblur and huecycle on, the other nine off);
+  its **+** lays the whole chain out again with no through wire.
+- **Other options.** `Effect.on(frame)` (moves with the mix and the
+  bypass); keep every effect drawn (the 23-column canvas).
+- **To reverse.** `graphview.effect_off`, `effect_switches`, `throughs`;
+  `build`'s `cabled` set.
+- **Rough edge.** An effect switched on from the FX page moves the chain
+  under the owner's eyes (the layout re-stacks): the price of a canvas
+  that shows only what runs.
+- **Judge it.** Check 275.
+
+### 306. The shaders' chain wraps in rows of four (Z order)
+
+- **Built.** (Review round 1.) Inside SHADERS the chain's depths wrap
+  into rows of `SHADER_ROW` = 4 columns, every row left to right, each
+  row starting under the tallest column of the one before. The only
+  wires that run back are the row returns — a cable from one row to a
+  later one (`graphview.returns`), which the no-back-wire test excuses
+  and nothing else. On party-trip in the app the canvas is 10 columns
+  (was 23), the shaders 4 columns in 2 rows, the whole canvas framed at
+  about 6.7× (was 16×).
+- **Other options.** Snake rows (every other row right to left: half the
+  wires loop back over their own nodes); no wrap.
+- **To reverse.** `graphview.SHADER_ROW`, `_grid`.
+- **Rough edge.** A row return crosses its row from right to left; with
+  two pipelines (the scene's and the scene + hands') two of them do.
+- **Judge it.** Check 276.
+
+### 307. Frame an area: five chips on the head, or a click on its title
+
+- **Built.** (Review round 1.) Under the head's first line,
+  **CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS** as chips
+  (wrapped to the page); a click frames the canvas on that area's drawn
+  boxes and its idle line (`ui_graph.frame_area`: they are selected, the
+  view brought to them, the selection cleared). A click on the canvas
+  background inside an area's title does the same (`_title_click`). This
+  is how "at a glance" holds on a page about 390 px wide.
+- **Other options.** A minimap; the editor's own "frame selection" key
+  (F) only.
+- **To reverse.** `ui_graph._area_chips`, `frame_area`, `_title_click`.
+- **Rough edge.** Framing clears whatever was selected.
+- **Judge it.** Check 276.
+
+### 308. The modulation and the audio laid out by their own depth
+
+- **Built.** (Review round 1.) Every area is laid out by depth over its
+  own cables, as the render nodes always were (`graphview._depths`: the
+  longest path over the cables between the area's drawn nodes, a loop's
+  closing cable left out). In MODULATION an LFO or a macro fed by
+  nothing is at 0, a modifier one past what feeds it, an LFO whose depth
+  another LFO drives one past it, an LFO whose rate a macro sets one
+  past the macro; in AUDIO a band group fed by the analyzer one past it.
+  So an LFO → modifier, a smooth → combine (check 265) and a macro → LFO
+  knob cable run right instead of looping within one column.
+- **Other options.** One column per kind inside the modulation (LFOs,
+  modifiers, macros: a macro into an LFO would still run back).
+- **To reverse.** `graphview._depths`, `_grid`.
+- **Rough edge.** A loop (two LFOs on each other's depth) draws its
+  closing cable back.
+- **Judge it.** Check 272.
+
+### 309. Titles: never under 12 px on screen; a short word when the long one will not fit
+
+- **Built.** (Review round 1.) A title may be as wide as the distance to
+  the next title on its row (`ui_graph.title_room`); its size is 30
+  canvas units, kept 18 px on screen zoomed out, held to that room — and
+  never under 12 px on screen: when the word will not fit at that it
+  falls back to a short one (CTRL, AUD, OTH, MOD, GEO, SHD;
+  `graphview.SHORT_TITLES`). On the whole canvas framed (6.7×) the head
+  reads CTRL · AUDIO · MOD · GEOMETRY · SHADERS.
+- **Other options.** Two-line titles; staggered rows.
+- **To reverse.** `ui_graph.title_fit`, `title_room`, `TITLE_FLOOR`.
+- **Rough edge.** OTHER, on its own row under AUDIO, is held to one
+  column.
+- **Judge it.** Check 272.
+
+### 310. Open question for the owner (not built): GRAPH asking for the whole control window
+
+- **The question.** With the areas, the wrap and the chips, the whole
+  canvas framed still sits at about 6.7× on CONTROLS' 540 px panel (a
+  canvas about 390 px wide): the titles read, the boxes' words do not.
+  The only way the whole canvas reads at the zoom a box's title needs
+  is for GRAPH to take the control window's full width (960 px, about
+  2.5× more canvas) — the desk and the cheat sheet would give way while
+  GRAPH is open.
+- **Built.** Nothing: the panel's width is `ui.PANEL_W`, shared by every
+  page; widening CONTROLS by hand works today.
+- **Other options.** Keep the panel; a GRAPH window of its own.
+- **Judge it.** The owner's call.
