@@ -952,9 +952,21 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 nodes[nid].wires += 1
     # plan 28 N9: each node's area, and which sit with nothing in and out
     named = {b.scale for b in routes if b.scale} | {b.when for b in routes if b.when}
+    # review round 1: an effect switched off whose nodes no value cable
+    # reaches is idle (its render cables do not count: the chain draws a
+    # through wire over it)
+    cabled: set[str] = set()
+    for c in view.cables:
+        if c.kind == "render":
+            continue
+        for nid in (view.pins.get(c.src_port, ("",))[0], view.pins.get(c.dst_port, ("",))[0]):
+            ref = nodes[nid].ref if nid in nodes else None
+            if isinstance(ref, rgraph.Effect):
+                cabled.add(ref.effect)
     for n in nodes.values():
         n.area = area_of(n)
-        n.idle = is_idle(n, macros, named)
+        n.idle = is_idle(n, macros, named) or (
+            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled)
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -1061,7 +1073,8 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
     """What `build` is made of, cheaply compared each frame: the rows (by
     identity and the fields that make cables), the macros' and the
     modifiers' serials, the registry's add / remove serial, each device's
-    status and port count, the render graph and the spec. The page builds
+    status and port count, the render graph and the spec, every effect's
+    on switch (an off effect is idle: review round 1). The page builds
     a new view only when this moves."""
     rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
                  for b in table.bindings)          # not `value`: `refresh` follows a depth
@@ -1081,7 +1094,8 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
             getattr(table, "modifiers_serial", 0), getattr(reg, "serial", len(reg)),
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
             tuple(labels.get("lfo") or ()),
-            frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else ())
+            frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else (),
+            effect_switches(reg))
 
 
 # ---------------------------------------------------------------- layout
@@ -1130,6 +1144,9 @@ AREA: dict[str, str] = {
 }
 TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
           MODULATION: "MODULATION", GEOMETRY: "GEOMETRY", SHADERS: "SHADERS"}
+# a title too long for its room at the floor size (review round 1)
+SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
+                GEOMETRY: "GEO", SHADERS: "SHD"}
 
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
@@ -1160,7 +1177,27 @@ def area_of(n: VNode) -> str:
 IDLE_KINDS = ("macro", "lfo", "group", "device")
 IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
               "group": ("idle param group", "idle param groups"),
-              "device": ("lost device", "lost devices")}
+              "effect": ("off effect", "off effects"),
+              "off": ("off device", "off devices"), "lost": ("lost device", "lost devices")}
+NOUN_ORDER = ("macro", "lfo", "effect", "group", "off", "lost")
+
+
+def effect_off(n: VNode, reg: Registry | None) -> bool:
+    """Is render node `n` an effect switched off (`fx.<effect>.on` false
+    when the view is built)? Not `Effect.on(frame)`: a mix at 0 or the
+    stack bypassed would reshape the chain mid-show."""
+    if not isinstance(n.ref, rgraph.Effect) or reg is None:
+        return False
+    p = reg.get(f"fx.{n.ref.effect}.on")
+    return p is not None and not bool(p.value)
+
+
+def effect_switches(reg: Registry) -> tuple:
+    """Every effect's on switch, for `key`: turning one on or off from the
+    FX page rebuilds the view (an off effect with no cable is idle)."""
+    group = getattr(reg, "group", None)
+    params = group("fx") if group is not None else ()
+    return tuple((p.id, bool(p.value)) for p in params if p.id.endswith(".on"))
 
 
 def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
@@ -1171,8 +1208,11 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
     `when` (`named`: neither is drawn as a cable), and: a macro has no
     label and no subscriber (an idle knob of the rig's eight — the picker
     names one to bring it on); an LFO and a group node are idle on that
-    alone; a device only while it is lost (grey, not a placeholder: a
-    connected device is drawn even unmapped — it says the rig has it)."""
+    alone; a device only while it is lost or off (grey, not a placeholder:
+    a connected device is drawn even unmapped — it says the rig has it).
+    An effect switched off is idle by `build`'s own rule (`effect_off`,
+    review round 1): its render cables do not count, a value cable on any
+    node of that effect does."""
     if n.kind not in IDLE_KINDS or n.wires:
         return False
     names = set(named)
@@ -1186,67 +1226,184 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
     return True
 
 
+def _idle_noun(n: VNode) -> str:
+    if n.kind == "render":
+        return "effect"
+    if n.kind == "device":
+        return "off" if n.status.rpartition(" · ")[2].strip() == "off" else "lost"
+    return n.kind
+
+
 def idle_words(nodes: Iterable[VNode]) -> str:
-    """An idle line's words: how many of each kind ("8 idle macros · 3 idle LFOs")."""
+    """An idle line's words: how many of each kind ("8 idle macros · 3 idle
+    LFOs", "10 off effects", "1 off device")."""
     counts: dict[str, int] = {}
     for n in nodes:
-        counts[n.kind] = counts.get(n.kind, 0) + 1
+        k = _idle_noun(n)
+        counts[k] = counts.get(k, 0) + 1
     words = []
-    for kind in IDLE_KINDS:
+    for kind in NOUN_ORDER:
         k = counts.get(kind, 0)
         if k:
             one, many = IDLE_NOUNS[kind]
             words.append(f"{k} {one if k == 1 else many}")
     return " · ".join(words)
 
-
 def idle_id(area: str) -> str:
     """The page's id for an area's idle line (no node of the view has it)."""
     return f"idle:{area}"
 
 
-def _columns(view: View, render_graph) -> None:
-    """Each node's column: its area's first column (`AREAS`, left to right;
-    `OTHER` in the audio's), a render node of the geometry or the shaders
-    further by its depth in the render graph from the area's shallowest,
-    so its cables run left to right; the outputs the shaders' last."""
-    depth: dict[str, int] = {}
-    for r in (render_graph.order if render_graph is not None else ()):
-        ins = [depth[d.name] + 1 for d in r.inputs.values() if d is not None and d.name in depth]
-        depth[r.name] = max(ins, default=0)
+SHADER_ROW = 4         # the shaders' chain wraps into rows of this many columns (Z rows)
+THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
+
+
+def throughs(view: View, shown: Callable[[VNode], bool]) -> list[VCable]:
+    """The display-only wires over the runs of hidden render nodes (review
+    round 1: an off effect with no cable is idle): from a drawn node's
+    output, through every hidden node its render cables reach, to the
+    input of each drawn node at the end of the run — one wire per (start
+    pin, end pin), kind `THROUGH`, no `ref`. Not a render edge: nothing
+    deletes it, nothing is inserted into it."""
+    out_of: dict[str, list[VCable]] = {}
+    for c in view.cables:
+        if c.kind == "render":
+            out_of.setdefault(node_of(view, c.src_port), []).append(c)
+    made: dict[str, VCable] = {}
+    for c in view.cables:
+        if c.kind != "render":
+            continue
+        s, d = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
+        if s is None or d is None or not shown(s) or shown(d):
+            continue
+        stack, seen = [(d, (d.label,))], set()
+        while stack:
+            m, path = stack.pop()
+            if m.id in seen:
+                continue
+            seen.add(m.id)
+            for c2 in out_of.get(m.id, ()):
+                e = view.node(node_of(view, c2.dst_port))
+                if e is None:
+                    continue
+                if not shown(e):
+                    stack.append((e, (*path, e.label)))
+                    continue
+                cid = f"{THROUGH}:{c.src_port}>{c2.dst_port}"
+                if cid not in made:
+                    k = len(path)
+                    made[cid] = VCable(cid, c.src_port, c2.dst_port, c.type, kind=THROUGH,
+                                       label=f"through {k} off effect{'' if k == 1 else 's'}: "
+                                             f"{', '.join(path)}")
+    return list(made.values())
+
+
+def _links(view: View, cables: Iterable[VCable]) -> list[tuple[str, str]]:
+    return [(node_of(view, c.src_port), node_of(view, c.dst_port)) for c in cables]
+
+
+def _depths(nodes: list[VNode], links: Iterable[tuple[str, str]]) -> dict[str, int]:
+    """Each node's depth inside its own area: 0, or one more than the
+    deepest node of the same area with a cable into it — the longest path
+    over the area's own cables, a loop's closing cable left out (a DFS in
+    view order drops each edge back onto its stack). For the render nodes
+    that is their depth in the render graph; for the modulation an LFO or
+    a macro fed by nothing is 0, a modifier one past what feeds it."""
+    area = {n.id: n.area for n in nodes}
+    succ: dict[str, list[str]] = {}
+    for a, b in links:
+        if a != b and a in area and b in area and area[a] == area[b]:
+            succ.setdefault(a, []).append(b)
+    dag: dict[str, list[str]] = {k: [] for k in area}
+    state: dict[str, int] = {}
+    post: list[str] = []
+    for root in area:
+        if root in state:
+            continue
+        state[root] = 1
+        stack = [(root, iter(succ.get(root, ())))]
+        while stack:
+            v, it = stack[-1]
+            for w in it:
+                if state.get(w) == 1:          # back onto the stack: a loop's cable
+                    continue
+                dag[v].append(w)
+                if w not in state:
+                    state[w] = 1
+                    stack.append((w, iter(succ.get(w, ()))))
+                    break
+            else:
+                state[v] = 2
+                post.append(v)
+                stack.pop()
+    depth = dict.fromkeys(area, 0)
+    for v in reversed(post):
+        for w in dag[v]:
+            depth[w] = max(depth[w], depth[v] + 1)
+    return depth
+
+
+def _grid(view: View, opened: set, extra: Iterable[VCable]):
+    """The canvas's grid: (column, row) for each node laid out by depth —
+    every drawn node but an idle one shown under its line — each area's
+    span in columns and its first column. An area's columns are its
+    depths (`_depths`, over the drawn nodes' cables and the through
+    wires); the shaders' outputs one past their deepest node, and their
+    depths wrapped into rows of `SHADER_ROW` (Z order: every row left to
+    right). The areas follow one another in `AREAS`; `OTHER` takes the
+    audio's first column."""
+    def gridded(n: VNode) -> bool:
+        return not n.idle or (n.area in opened and n.kind == "render")
+
+    nodes = [n for n in view.nodes if n.area and gridded(n)]
+    ids = {n.id for n in nodes}
+    links = [(a, b) for a, b in _links(view, (*view.cables, *extra))
+             if a in ids and b in ids]
+    depth = _depths(nodes, links)
+    sh = [n for n in nodes if n.area == SHADERS]
+    if any(n.kind == "output" for n in sh):
+        last = max((depth[n.id] for n in sh if n.kind != "output"), default=-1) + 1
+        for n in sh:
+            if n.kind == "output":
+                depth[n.id] = last
+    local: dict[str, tuple[int, int]] = {}
+    for n in nodes:
+        d = depth[n.id]
+        if n.area == SHADERS:
+            local[n.id] = (d % SHADER_ROW, d // SHADER_ROW)
+        elif n.area == OTHER:
+            local[n.id] = (0, 0)
+        else:
+            local[n.id] = (d, 0)
+    present = {n.area for n in view.nodes if n.area}
+    width: dict[str, int] = {a: 1 for a in present}
+    for n in nodes:
+        width[n.area] = max(width[n.area], local[n.id][0] + 1)
+    first: dict[str, int] = {}
+    col = 0
+    for a in AREAS:
+        if a in present or any(SHARES.get(b) == a for b in present):
+            first[a] = col
+            col += width.get(a, 1)
+    for a, under in SHARES.items():
+        if a in present:
+            first[a] = first.get(under, 0)
+            width[a] = 1
+    cols = {n.id: first[n.area] + local[n.id][0] for n in nodes}
+    rows = {n.id: local[n.id][1] for n in nodes}
+    return cols, rows, {a: width[a] for a in present}, first
+
+
+def _columns(view: View, render_graph=None) -> None:
+    """Each node's column on the default canvas (every idle line shut):
+    `_grid`'s, an idle node its area's first column."""
     for n in view.nodes:
         if not n.area:
             n.area = area_of(n)
-
-    def deep(n: VNode) -> int | None:
-        return depth.get(n.label) if n.kind == "render" else None
-
-    width: dict[str, int] = {}
-    low: dict[str, int] = {}
-    for a in AREAS:
-        ds = [d for n in view.nodes if n.area == a and (d := deep(n)) is not None]
-        low[a] = min(ds, default=0)
-        width[a] = (max(ds, default=0) - low[a] + 1) if ds else 1
-        if any(n.area == a and n.kind == "output" for n in view.nodes):
-            width[a] += 1 if ds else 0
-    base: dict[str, int] = {}
-    col = 0
-    for a in AREAS:
-        if not any(n.area == a or SHARES.get(n.area) == a for n in view.nodes):
-            continue
-        base[a] = col
-        col += width[a]
-    for a, under in SHARES.items():
-        base[a] = base.get(under, 0)
+    shown = (lambda n: not n.idle)
+    cols, _, _, first = _grid(view, set(), throughs(view, shown))
     for n in view.nodes:
-        b = base.get(n.area, 0)
-        a = n.area
-        if n.kind == "output":
-            n.column = b + width.get(a, 1) - 1
-        elif (d := deep(n)) is not None:
-            n.column = b + d - low.get(a, 0)
-        else:
-            n.column = b
+        n.column = cols.get(n.id, first.get(n.area, 0))
 
 
 @dataclass
@@ -1254,14 +1411,31 @@ class Layout:
     """`layout`'s answer: a position for each node (`nodes`), each area's
     title (`titles`, over its first column), each area's idle line
     (`lines`) and the idle nodes it stands for (`idle`); how many columns
-    each area spans (`spans`: its title may be that wide)."""
+    each area spans (`spans`); each laid-out node's grid column (`cols`)
+    and row (`rows`: only the shaders wrap); the through wires over the
+    hidden effects (`throughs`)."""
 
     nodes: dict[str, tuple[float, float]] = field(default_factory=dict)
     titles: dict[str, tuple[float, float]] = field(default_factory=dict)
     lines: dict[str, tuple[float, float]] = field(default_factory=dict)
     idle: dict[str, list[str]] = field(default_factory=dict)
     spans: dict[str, int] = field(default_factory=dict)
+    cols: dict[str, int] = field(default_factory=dict)
+    rows: dict[str, int] = field(default_factory=dict)
+    throughs: list[VCable] = field(default_factory=list)
 
+
+def returns(view: View, lay: Layout) -> set[str]:
+    """The ids of the wires that run back by design: inside the shaders,
+    from one row of the wrapped chain to a later one (the row's last
+    output to the next row's first input). Every other wire runs right."""
+    out = set()
+    for c in (*view.cables, *lay.throughs):
+        a, b = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
+        if (a is not None and b is not None and a.area == b.area == SHADERS
+                and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0)):
+            out.add(c.id)
+    return out
 
 def visible(n: VNode, full: bool, folds=frozenset()) -> list[VPort]:
     """The ports node `n` draws: a patched port and a render port always;
@@ -1295,14 +1469,17 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
            folds=frozenset(),
            collapsed: Callable[[str], bool] | None = None,
            idle_open: Iterable[str] = ()) -> Layout:
-    """The canvas laid out by area (plan 28 N9): every node `placed` does
-    not hold stacked down its column (`_columns`), the columns starting
-    under a row for the areas' titles; in a column two areas share, the
-    second's title and nodes under the first's. An area's idle nodes
-    (`VNode.idle`) take no room: its idle line goes under its nodes in its
-    first column and they sit at it — unless the area is in `idle_open`,
-    when they stack under the line like any node. The nodes already placed
-    keep their positions and take no room here (a tidy passes none).
+    """The canvas laid out by area (plan 28 N9): area by area in `ORDER`,
+    every node `placed` does not hold stacked down its grid column
+    (`_grid`: an area's depths left to right, the shaders wrapped into
+    rows — each row starting under the tallest column of the one before),
+    the columns starting under a row for the areas' titles; `OTHER`
+    titled and stacked under the audio in its column. An area's idle
+    nodes (`VNode.idle`) take no room: its idle line goes under its nodes
+    in its first column and they sit at it — unless the area is in
+    `idle_open`, when they are laid out (an off effect in its place in
+    the chain, any other under the line). The nodes already placed keep
+    their positions and take no room here (a tidy passes none).
     `expanded(node id)` says which nodes show every port (default none)
     and `folds` which of their groups are folded, so an expanded node
     pushes the column under it down instead of overlapping. `collapsed(node
@@ -1311,16 +1488,10 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
     `expanded` says."""
     placed = placed or {}
     opened = set(idle_open)
-    rank = {a: k for k, a in enumerate(ORDER)}
-    out = Layout()
+    thr = throughs(view, lambda n: not n.idle or n.area in opened)
+    cols, rows, spans, first = _grid(view, opened, thr)
+    out = Layout(spans=spans, cols=cols, rows=rows, throughs=thr)
     tops: dict[int, float] = {}
-    first: dict[str, int] = {}               # an area's first column
-    last: dict[str, int] = {}
-    for n in view.nodes:
-        if n.area:
-            first[n.area] = min(first.get(n.area, n.column), n.column)
-            last[n.area] = max(last.get(n.area, n.column), n.column)
-    out.spans = {a: last[a] - first[a] + 1 for a in first}
 
     def put(n: VNode, col: int) -> None:
         if n.id in placed:
@@ -1332,34 +1503,44 @@ def layout(view: View, placed: Mapping[str, Any] | None = None,
         out.nodes[n.id] = (col * COL_W, tops[col])
         tops[col] += height(n, full, folds, shut) + chip + GAP
 
-    # the nodes by column, by area in `ORDER` within a column, in view order
-    runs: dict[tuple[int, int, str], list[VNode]] = {}
-    for n in view.nodes:
-        runs.setdefault((n.column, rank.get(n.area, len(rank)), n.area), []).append(n)
-    for (col, _, area), nodes in sorted(runs.items(), key=lambda kv: kv[0][:2]):
-        if col not in tops:
-            tops[col] = TITLE_H if area else 0.0
-        elif area:
-            tops[col] += TITLE_H                    # a second area in this column
-        if area and first.get(area) == col:
-            out.titles.setdefault(area, (col * COL_W, tops[col] - TITLE_H))
-        for n in nodes:
-            if not (n.idle and area):
-                put(n, col)
-        idle = [n for n in nodes if n.idle and area]
+    for area in ORDER:
+        mine = [n for n in view.nodes if n.area == area]
+        if not mine:
+            continue
+        f = first[area]
+        span = range(f, f + spans.get(area, 1))
+        tops[f] = tops[f] + TITLE_H if f in tops else TITLE_H   # a second area: under the first
+        for c in span:
+            tops.setdefault(c, TITLE_H)
+        out.titles[area] = (f * COL_W, tops[f] - TITLE_H)
+        grid = [n for n in mine if n.id in cols]
+        for r in range(max((rows[n.id] for n in grid), default=0) + 1):
+            if r:                                   # a wrapped row: under the tallest
+                t = max(tops[c] for c in span)
+                for c in span:
+                    tops[c] = t
+            for n in grid:
+                if rows[n.id] == r:
+                    put(n, cols[n.id])
+        idle = [n for n in mine if n.idle]
         if not idle:
             continue
-        out.idle.setdefault(area, []).extend(n.id for n in idle)
-        line = (col * COL_W, tops[col])
+        out.idle[area] = [n.id for n in idle]
+        line = (f * COL_W, tops[f])
         out.lines[area] = line
-        tops[col] += IDLE_H + GAP
+        tops[f] += IDLE_H + GAP
         for n in idle:
+            if n.id in cols:
+                continue
             if area in opened:
-                put(n, col)
+                put(n, f)
             elif n.id not in placed:
                 out.nodes[n.id] = line
+    for n in view.nodes:                    # a node of no area (a hand-made view)
+        if n.area not in ORDER:
+            tops.setdefault(n.column, 0.0)
+            put(n, n.column)
     return out
-
 
 def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
                 expanded: Callable[[str], bool] | None = None,
@@ -1536,7 +1717,9 @@ def node_of(view: View, pin: str) -> str:
 
 
 def wiring(view: View, collapsed: Callable[[str], bool],
-           drawn: Callable[[VCable], bool] | None = None
+           drawn: Callable[[VCable], bool] | None = None,
+           shown: Callable[[str], bool] | None = None,
+           extra: Iterable[VCable] = ()
            ) -> tuple[list[tuple[VCable, str, str]], list[VBundle]]:
     """What the canvas draws this frame for `view`: the cables drawn one
     wire each, as (cable, the pin it leaves, the pin it lands on), and the
@@ -1544,16 +1727,21 @@ def wiring(view: View, collapsed: Callable[[str], bool],
     bundle of its (source node, target node) pair; a render cable stays
     itself, its collapsed ends moved to the node's stub; a cable between
     two expanded nodes is drawn as it is. `drawn(cable)` (a desk template's
-    closed rows: False) leaves a cable out altogether. Bundles are in the
-    order of their first cable; their readings are this frame's."""
+    closed rows: False) leaves a cable out altogether, and so does
+    `shown(node id)` False for either end (plan 28 N9: an idle node is not
+    drawn); `extra` are the through wires over hidden effects, drawn as
+    render cables are. Bundles are in the order of their first cable;
+    their readings are this frame's."""
     singles: list[tuple[VCable, str, str]] = []
     pairs: dict[tuple[str, str], VBundle] = {}
-    for c in view.cables:
+    for c in (*view.cables, *extra):
         if drawn is not None and not drawn(c):
             continue
         s, d = node_of(view, c.src_port), node_of(view, c.dst_port)
+        if shown is not None and not (shown(s) and shown(d)):
+            continue
         shut_s, shut_d = collapsed(s), collapsed(d)
-        if c.kind == "render" or c.type in RENDER_TYPES:
+        if c.kind in ("render", THROUGH) or c.type in RENDER_TYPES:
             singles.append((c, stub_out(s) if shut_s else c.src_port,
                             stub_in(d) if shut_d else c.dst_port))
         elif shut_s or shut_d:

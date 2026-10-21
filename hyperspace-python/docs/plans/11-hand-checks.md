@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–266; the last group, Y (232–266), is plan 28's (261–266 its N7).
+numbers. They run 1–276; group Y (232–266, 272–276) is plan 28's (261–266 its N7, 272–276 its N9), and 267–271, plan 30's N8, sit at the end of group X.
 
 ## Before you start
 
@@ -76,7 +76,7 @@ number and what you saw.
     the projector (after 101); 259 with two Macs on this build and a
     shared folder (with 139); N7's legible graph 261–264 on the laptop
     (the APC40 plugged in for 261), 265 (copy) with the hand camera and
-    music, 266 with the APC40.
+    music, 266 with the APC40; N9's 272–276 on the laptop.
 
 ## A. Laptop alone
 
@@ -3641,8 +3641,8 @@ about "55 nodes · 64 wires · 238 cables"; the SYSTEM line about 1.3 ms
 (N2's page: 2.3–2.8 ms). *Fail:* a node lists its ports before you
 expand it (the collapse default); two wires between the same two boxes
 on one layer (the bundling); the line over 2.3 ms (the caches). Since N9 (plan 28) the boxes stand in
-the concern areas (check 272) and the head reads about "40 nodes (13
-idle)": the idle macros and LFOs sit in one line (check 273).
+the concern areas (check 272) and the head reads about "31 nodes (22
+idle)": the idle macros, LFOs and off effects sit in lines (checks 273, 275).
 
 **262. Expand the APC40 and the shape: the real cables.** (laptop, APC40)
 Headless: `tests/test_graph_legible.py::{test_a_bundle_splits_into_its_cables_when_both_ends_expand,test_a_bundles_hover_and_side_pane_list_its_rows}`.
@@ -3682,8 +3682,8 @@ every one collapsed"; ⌘Z puts the dragged box back; no details chip
 until something is selected, then "details beside" moves the pane to a
 column and "details below" back under the canvas. *Fail:* tidy leaves a
 node expanded or says nothing; the chip with nothing selected. Since N9
-the second tidy puts each box back in its area and says "laid out 40
-nodes in 6 areas, every one collapsed · 13 idle off the canvas" (check
+the second tidy puts each box back in its area and says "laid out 31
+nodes in 6 areas, every one collapsed · 22 idle off the canvas" (check
 274).
 
 **265. Energy → smooth → combine → acid mix, from GRAPH alone, with a hand.** (hand camera, laptop; copy)
@@ -3731,7 +3731,9 @@ SHADERS; the analyzer, *band*, *tempo*, *master*, *audio* and *scene*
 boxes under AUDIO and nowhere else; *shape*, *ghost*, *eye*, *hands*,
 *scene* and *cover* under GEOMETRY; *history*, the effects and the
 outputs under SHADERS; every wire leaves a box on its right and lands on
-a box further right — none loops back. *Fail:* a band or tempo box among
+a box further right — none loops back, but inside SHADERS the one wire
+a pipeline from a row's end down to the next row's start (the chain wraps
+in rows of four); an LFO into a modifier runs right too. *Fail:* a band or tempo box among
 the geometry or the shaders (`graphview.AREA`); a wire running back to
 the left (`_columns`); no titles (`ui_graph._titles`).
 
@@ -3754,10 +3756,38 @@ Headless: `tests/test_graph_areas.py::test_tidy_relays_into_areas_and_says_so`.
 Drag *shape* far down the canvas, open MODULATION's idle line, expand
 *apc40*; click **tidy**; then ⌘Z. *Pass:* every box collapsed, the idle
 line shut, *shape* back under GEOMETRY, the canvas framed on it all; the
-head says "laid out 40 nodes in 6 areas, every one collapsed · 13 idle
+head says "laid out 31 nodes in 6 areas, every one collapsed · 22 idle
 off the canvas" (numbers as your rig has them); ⌘Z puts *shape* where
 you dropped it. *Fail:* the idle macros left drawn; a box outside its
 area; tidy says nothing.
+
+**275. The off effects are one line; the chain reads through them.** (laptop)
+Headless: `tests/test_graph_areas.py::test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it`.
+On party-trip open GRAPH and click **SHADERS**. Hover the faint red wire
+from *history*; press Delete on it. Then on the FX page switch *warp* on
+and come back; switch it off. Then click the SHADERS line's **+**.
+*Pass:* only the effects that are on (plasma, kaleido, zoomblur,
+huecycle) are boxes; the line under them says "9 off effects"; the faint
+wire's hover names the effects it runs over, and Delete says "a through
+wire stands for off effects …" and deletes nothing; *warp* switched on
+is a box in the chain next frame, off it is in the line again; **+**
+draws every effect in its place and the faint wires go. *Fail:* an
+effect a pad toggles hidden (a desk row is a cable); the chain broken
+with no faint wire (`throughs`); warp not appearing (`graphview.key`).
+
+**276. Five chips frame the areas; the shaders in rows of four.** (laptop)
+Headless: `tests/test_graph_areas.py::{test_the_area_chips_and_a_title_click_frame_an_area,test_the_shader_chain_wraps_in_rows_of_four}`.
+On party-trip, GRAPH: click **tidy**, then each chip in turn —
+**CONTROLLERS**, **AUDIO**, **MODULATION**, **GEOMETRY**, **SHADERS** —
+then click the faint GEOMETRY title on the canvas. Then open the
+SHADERS line (**+**) and click **SHADERS** again. *Pass:* after tidy the
+whole canvas fits with its titles readable (CTRL · AUDIO · MOD ·
+GEOMETRY · SHADERS); each chip brings that area's boxes to fill the
+canvas, close enough to read their titles; the title click does the
+same; the shaders sit in four columns, each row left to right, with one
+wire per pipeline from a row's end back to the next row's start.
+*Fail:* a chip that frames nothing or the wrong boxes; the shaders in one
+long row (`SHADER_ROW`).
 
 ## What no test covers
 

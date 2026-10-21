@@ -38,8 +38,8 @@ untouched (the desk is Dylan's), and every proof is a fixture under
 `tests/fixtures/` loaded through a scratch library.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group Y, checks
-232–274 (N7's 261–266, N9's 272–274). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
-rows 233–304 (N7's 278–290, N9's 299–304). The owner's decisions for this plan (6–16 of the launch
+232–276 (N7's 261–266, N9's 272–276). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
+rows 233–310 (N7's 278–290, N9's 299–310). The owner's decisions for this plan (6–16 of the launch
 prompt) are in [`DECISIONS.md`](../DECISIONS.md) with Who "owner".
 
 Branch `plan-28-30-integration`, in merge order: N1 (PR #209), N0
@@ -607,7 +607,7 @@ concerns: all things audio need to live in one area; all things geometry
 should be grouped in another area; all things shader should be grouped
 in another area … there are macros sitting there that don't connect to
 anything." The owner's decision is in DECISIONS "UI" (Who "owner
-(2026-10-20)"); register rows 299–304, hand checks 272–274.
+(2026-10-20)"); register rows 299–310, hand checks 272–276.
 
 - **What was there.** N2's columns by kind: sources 0, LFOs 1,
   modifiers 2, macros 3, every param-group node 4 (band, tempo, master
@@ -624,9 +624,9 @@ anything." The owner's decision is in DECISIONS "UI" (Who "owner
   box under its own. No unused macro or LFO is drawn: MODULATION shows
   one small box "8 idle macros · 3 idle LFOs" whose **+** draws them
   under it (**−** takes them off); patched, a macro is a box like any;
-  the picker still offers every idle macro. The head reads "40 nodes (13
-  idle) · …"; **tidy** also closes the idle lines and says "laid out 40
-  nodes in 6 areas, every one collapsed · 13 idle off the canvas". No
+  the picker still offers every idle macro. The head reads "31 nodes (22
+  idle) · …"; **tidy** also closes the idle lines and says "laid out 31
+  nodes in 6 areas, every one collapsed · 22 idle off the canvas". No
   wire runs back on any factory preset.
 - **How.** `graphview`: `AREA` (the one table, by kind, `group:<g>`,
   render class), `area_of`, `AREAS` / `ORDER` / `SHARES`, `_columns` (an
@@ -662,11 +662,40 @@ anything." The owner's decision is in DECISIONS "UI" (Who "owner
   *LFO 1* (LFO 2 is idle on party-trip, not drawn);
   `test_graph_legible.py::test_tidy_collapses_all_relays_and_says_what_it_did`
   reads `ui_graph.tidied` (the areas' words).
-- **Rough edges.** The real app's 14-effect scene pipeline makes the
-  shaders area 17 columns wide, so a tidy framing everything zooms out
-  about 16× and reads only the titles; a one-column area's long title
-  is held to a box's width; the idle line can be dragged but its place
-  is not kept.
+- **Review round 1** (rows 305–310, checks 275–276). An effect switched
+  off with no cable is idle (SHADERS' line: "9 off effects" on party-trip
+  in the app), a half-faint **through wire** spanning each hidden run
+  (`graphview.throughs`; no render edge: Delete refused in words, no
+  insert); the shaders' chain wrapped in Z rows of four (`SHADER_ROW`;
+  the row returns, `graphview.returns`, the only wires that run back);
+  every area laid out by its own depth (`_depths`: an LFO → modifier, a
+  smooth → combine, a macro → LFO knob run right); the head's five area
+  chips and a click on a title frame that area (`frame_area`); titles
+  never under 12 px on screen, a short word when the long one will not
+  fit (`title_fit`). The canvas on party-trip in the app: 10 columns
+  (was 23), the shaders 4 in 2 rows, the whole canvas framed at 6.7×
+  (was 16×) with its titles readable (CTRL · AUDIO · MOD · GEOMETRY ·
+  SHADERS). Draw time after round 1: 1.42 ms collapsed, 1.71 ms framed
+  whole, 1.61 ms after a tidy (31 drawn of 53). New tests:
+  `::test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it`,
+  `::test_the_shader_chain_wraps_in_rows_of_four`,
+  `::test_the_modulation_has_its_own_depth`,
+  `::test_the_area_chips_and_a_title_click_frame_an_area`; the
+  no-back-wire test runs over every factory preset and over party-trip
+  with the whole chain wired as each graph fixture says, excusing only
+  the row returns. Changed: `test_graphview.py`'s column test (the acid,
+  off in lfo-breathe, is idle and a through wire spans it), its page test
+  (acid switched on so it is drawn; every *drawn* node placed);
+  `test_graph_legible.py`'s tidy test (the literal words; drawn nodes
+  placed); `test_graph_edit.py`'s dispatch test admits `delete_through`.
+  An open question for the owner (row 310): GRAPH taking the control
+  window's whole width is the only way the whole canvas reads at a
+  box's title zoom.
+
+- **Rough edges.** On CONTROLS' 540 px panel the whole canvas framed
+  reads its titles, not its boxes (row 310 asks the owner about the full
+  window); a row return crosses its row; an effect switched on re-stacks
+  the chain; the idle line can be dragged but its place is not kept.
 
 ## The goldens
 

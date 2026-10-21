@@ -1326,14 +1326,22 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   shape, the hands, a cloud, the eye, and the scene, cover and hands'
   layer that draw them) and **SHADERS** (capture, history, effects,
   composites, outputs last), the render nodes by their depth within
-  theirs — so every wire runs left to right (none runs back on any
-  factory preset). One table, `graphview.AREA`. A node with nothing in
+  theirs and every other area by its own depth (an LFO or macro fed by
+  nothing first, a modifier one past what feeds it), the shaders' chain
+  wrapped in rows of four — so every wire runs left to right but a row's
+  return. One table, `graphview.AREA`. The head's area chips
+  (**CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS**) and a click
+  on a canvas title frame that area. A title stays 18 px on screen
+  zoomed out, never under 12 px, a short word (CTRL, MOD …) when the
+  long one will not fit before the next. A node with nothing in
   and nothing out (`graphview.is_idle`: a macro with no label and no
-  subscriber, an LFO or a group node no cable reaches, a lost device;
-  never a modifier, the analyzer or a render node) is not drawn: its
+  subscriber, an LFO or a group node no cable reaches, a lost or off
+  device, an effect switched off that no cable reaches — the chain then
+  shows a half-faint through wire over it, which Delete only explains;
+  never a modifier, the analyzer or another render node) is not drawn: its
   area shows one small box ("8 idle macros · 3 idle LFOs") whose **+**
   draws them under it to patch one; the picker still offers every idle
-  macro. The head counts "40 nodes (13 idle)".
+  macro. The head counts "31 nodes (22 idle)" on party-trip.
 - **Nodes**, left to right: each listed device by role — the APC40 as
   *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
   (the global layer's, faint unless SHIFT is latched), the hands folded
@@ -1355,8 +1363,8 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
 - **The head**: **expand all** / **collapse all**, **patched only**,
   **tidy** — every node collapsed, the idle lines shut, every position
   forgotten (one undo step), laid out again in the areas and the canvas
-  framed on them; it says "laid out 40 nodes in 6 areas, every one
-  collapsed · 13 idle off the canvas", or "already tidy" — and,
+  framed on them; it says "laid out 31 nodes in 6 areas, every one
+  collapsed · 22 idle off the canvas", or "already tidy" — and,
   only while something is selected on a page narrower than 720 px,
   **details beside** / **details below** (where the selection's pane
   goes; CONTROLS at 540 px puts it under the canvas, a page 720 px wide

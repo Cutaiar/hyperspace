@@ -19,14 +19,14 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–304 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–310 (bar
     109), built on a recommendation and waiting for the owner's keep or
     overturn; row 109 records the owner's plan 25 answers.
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–274, with the automated test behind each.
+    numbered 1–276, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`
@@ -70,11 +70,13 @@ before unchanged. No preset was edited or added; `apc40.py` and
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
   plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
-  220–274. Above all: a cable dragged on the GRAPH page (247), which no
+  220–276 (N8's palette as compression 267–271, N9's graph by concern
+  272–276). Above all: a cable dragged on the GRAPH page (247), which no
   test can do.
-- **The owner's keep or overturn** on register rows 34–304 (the answer
+- **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
-  plans 30 and 28's being rows 214–304 (N7's 278–290, N9's 299–304).
+  plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
+  299–310).
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory

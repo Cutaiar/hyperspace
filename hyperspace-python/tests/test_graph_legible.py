@@ -274,11 +274,13 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     assert st["applied"]["render:eye"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
-    assert st["said"] == ui_graph.tidied(view)          # N9: "… in 6 areas …"
-    assert st["said"].startswith("laid out ") and " areas, every one collapsed" in st["said"]
+    idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
+    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 6 areas, every one "
+                          f"collapsed · {idle} idle off the canvas")
     assert st["open"] == set() and rig.lib.presets.layout == {}
     auto = ui_graph.layout_of(st, view)
-    assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes)
+    assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
+               if not n.idle)                           # N9: an idle node is not placed
     assert st["applied"]["render:eye"] != (900.0, 40.0)
 
 
