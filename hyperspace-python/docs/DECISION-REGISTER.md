@@ -7,7 +7,7 @@ during plan 26's run on 2026-10-14, rows 210–213 during plan 27's B6
 (several gamepads at once) on 2026-10-15, rows 214–232 during plan 30's
 run (shader nodes) and rows 233–277 during plan 28's run (the node
 editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
-on 2026-10-20: the build took its own
+and rows 299–304 in its N9 (the graph by concern) on 2026-10-20: the build took its own
 recommendation and built it. Every one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -248,7 +248,7 @@ here; overturn → the change, then the same.
 | 249 | Params on the render node that owns them (`OWNERS`) | 243 | |
 | 250 | What the canvas draws: modulatable params and row targets; no sinks — its timing **superseded in part** (row 290) | 242, 245 | superseded in part |
 | 251 | Positions: the preset's map and the show's; a drop dirties; tidy one undo step — tidy's behaviour **superseded in part** (row 285) | 244 | superseded in part |
-| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278) | 244 | superseded in part |
+| 252 | The tidy columns — a collapsed node's height **superseded in part** (row 278); the columns by kind **superseded** by the areas (row 299) | 244 | superseded in part |
 | 253 | The editor context on the panel, closed before imgui | 246 | |
 | 254 | The selection pane below the canvas; **beside** for a column — the chip **superseded** (row 286) | 245 | superseded in part |
 | 255 | A cable into `mod` is the row a Learn would make | 247, 248 | |
@@ -281,12 +281,18 @@ here; overturn → the change, then the same.
 | 282 | The collapse state is the page's, saved nowhere | 261 | |
 | 283 | A drag onto a collapsed node's stub opens a picker of its ports | 263 | |
 | 284 | Learn from a node's right-click, per param | 263 | |
-| 285 | Tidy collapses everything, lays it out again and says what it did | 264 | |
+| 285 | Tidy collapses everything, lays it out again and says what it did — into the areas, its words **superseded in part** (row 304) | 264, 274 | superseded in part |
 | 286 | The details chip only with a selection on a narrow page | 264 | |
 | 287 | Expand all / collapse all; "patched only" within an expanded node | 262 | |
 | 288 | ROUTING's pointer line; "Route a lane here…" opens GRAPH | 266 | |
 | 289 | A modifier node's side pane: the MODIFIERS strip's block, stacked | 265 | |
-| 290 | A collapsed node reads only what its lines show; wiring and columns kept | 261 | |
+| 290 | A collapsed node reads only what its lines show; wiring and columns kept (the areas' layout since N9, row 299) | 261 | |
+| 299 | Five areas left to right: controllers → audio → modulation → geometry → shaders | 272 | |
+| 300 | The audio before the modulation; the LFOs are modulation | 272 | |
+| 301 | Each area's title: faint words on the canvas, no node | 272 | |
+| 302 | The idle rule by kind: macros, LFOs, group nodes, lost devices | 273 | |
+| 303 | The small "other" area under the audio | 272 | |
+| 304 | One idle line an area; its + shows them; tidy closes it | 273, 274 | |
 
 "—": no hand check shows it; tests only.
 
@@ -4679,6 +4685,9 @@ Folds N0's two delay drafts.
 - **Superseded in part by row 278** (plan 28 N7, 2026-10-20): a collapsed
   node (the default) takes its title and its lines' room, an expanded
   one its ports' and its chip line's.
+- **Superseded by row 299** (plan 28 N9, 2026-10-20): the columns are the
+  concern areas' (controllers → audio → modulation → geometry →
+  shaders), not the kinds'; `graphview.COLUMN` is gone.
 - **Other options.** One render column.
 - **To reverse.** `graphview.COLUMN` / `_columns`.
 - **Rough edge.** Thirteen effects a pipeline make a wide canvas; port
@@ -5343,7 +5352,10 @@ ROUTING's desk, macros, session and sinks sections are untouched.
 - **To reverse.** `ui_graph.tidy`.
 - **Rough edge.** The undo puts the positions back, not the expanded
   nodes.
-- **Judge it.** Check 264.
+- **Superseded in part by row 304** (plan 28 N9): tidy lays every node
+  out in its area, closes the idle lines, and says "laid out 40 nodes in
+  6 areas, every one collapsed · 13 idle off the canvas".
+- **Judge it.** Checks 264, 274.
 
 ### 286. The details chip: only with a selection on a narrow page, named by what it does
 
@@ -5418,4 +5430,147 @@ ROUTING's desk, macros, session and sinks sections are untouched.
   `collapsed`.
 - **Rough edge.** A port's hover on a collapsed node is not reachable,
   so its stale reading is never seen.
+- **Since N9** the cached layout is the areas' (`ui_graph.areas_of`),
+  its key the open idle lines too (row 299).
 - **Judge it.** Check 261.
+
+## The graph by concern (plan 28, N9)
+
+Built on 2026-10-20 after the owner's second look at the GRAPH page
+("The graph looks better. The graph needs to be organized better in
+terms of the concerns: all things audio need to live in one area; all
+things geometry should be grouped in another area; all things shader
+should be grouped in another area. Currently, they all sit clustered
+together in some pattern that I don't really understand. Also, there
+are macros sitting there that don't connect to anything."). The owner's
+decision — the canvas organised by concern, a macro with nothing in and
+nothing out not drawn by default — is in [`DECISIONS.md`](DECISIONS.md)
+"UI" with Who "owner (2026-10-20)"; these rows are what the build chose
+where it left a choice open. It supersedes parts of rows 252, 285 and
+290 (marked there). Measured on party-trip in the real app at the
+control window's 960 × 900 (53 nodes, 40 drawn, 13 idle; 59 wires, 233
+cables): the page draws in **1.30 ms** median collapsed, 1.38 ms with the
+modulation's idle line open, 1.35 ms after a tidy (N7: 1.27 ms). On
+every one of the 23 factory presets no cable runs back or within a
+column. No preset was edited or added; `apc40.py`, `midi.py` and
+ROUTING's desk section are untouched.
+
+### 299. Five areas, left to right: controllers → audio → modulation → geometry → shaders
+
+- **Built.** `graphview.auto_layout` (now `layout`) lays the canvas in
+  areas, each its own columns: **controllers** (the devices, the keys, a
+  placeholder, a desk template) one column; **audio** (the analyzer, the
+  band, tempo, master, audio and scene params' nodes) one; **modulation**
+  (the LFOs, the modifiers, the macros, the `lfo.trigger` group) one;
+  **geometry** (the shape, the hands, a cloud, the camera's *eye*, and
+  the scene, its cover and the hands' layer that draw them) and
+  **shaders** (the capture, the history, the effects, the composites,
+  the outputs last) each as many columns as their render nodes are deep
+  in the render graph, counted from the area's shallowest. A node's area
+  is one table, `graphview.AREA` (by kind, by `group:<g>`, by render
+  class — `area_of`). Saved positions still win (the `layout` keys, the
+  undo marks); a placed node takes no room. On party-trip: controllers
+  column 0, audio 1, modulation 2, geometry 3–5, shaders 6–12 (headless
+  graph; the real app's 14-effect chain runs to column 22).
+- **Other options.** Top to bottom bands (the page is tall and narrow,
+  but the widget draws every wire from a node's right to the next node's
+  left, so a band below its source reads as a loop back); N2's columns
+  by kind (the "pattern I don't really understand").
+- **To reverse.** `graphview.AREA`, `AREAS`, `_columns`, `layout`.
+- **Rough edge.** The shaders area is as wide as the scene pipeline is
+  long: in the real app 14 effects make it 17 columns, so a tidy's
+  framing of the whole canvas (zoomed out about 16×) reads only the
+  titles; pan or zoom to read the boxes. Wrapping the chain would make
+  wires run back inside it (not built).
+- **Judge it.** Check 272.
+
+### 300. The audio before the modulation; the LFOs are modulation
+
+- **Built.** The audio is the second area, before the modulation: the
+  analyzer is a source the modulation reads (a band into a modifier, a
+  band onto an LFO's rate) as well as the look, so its wires run right;
+  the audio's params (bands, tempo, master, the band scenes) are set
+  only by the controllers, from its left. The LFOs sit with the
+  modifiers and the macros in **modulation**: each is a source like a
+  modifier, and its tempo sync is a knob, not a cable from the audio.
+- **Other options.** The brief's sketch, modulation before the audio (a
+  band into a modifier would then run back); the LFOs in the audio as
+  tempo-synced sources.
+- **To reverse.** `AREAS`' order; `AREA["lfo"]`.
+- **Rough edge.** A route from an LFO or a macro onto a band's param
+  would run back (none in a factory preset).
+- **Judge it.** Check 272.
+
+### 301. Each area's title: faint words on the canvas, no node
+
+- **Built.** **CONTROLLERS**, **AUDIO**, **OTHER**, **MODULATION**,
+  **GEOMETRY**, **SHADERS** drawn on the canvas's own draw list over each
+  area's first column, in a title row above its nodes (`TITLE_H`), at
+  30 % of the text colour, before the nodes (behind them); 30 canvas
+  units tall at full zoom, kept 18 px on screen while zoomed out
+  (`ui_graph.title_size`), never wider than its area's columns. Nothing
+  to select, drag or delete.
+- **Other options.** A node-editor group node (selectable and draggable,
+  and a drag would move it off its area).
+- **To reverse.** `ui_graph._titles`, `titles`, `title_size`.
+- **Rough edge.** A one-column area's long title (CONTROLLERS,
+  MODULATION) is held to a box's width, so it shrinks below reading
+  zoomed out four times; AUDIO, OTHER, GEOMETRY and SHADERS still read.
+  The titles stay at the auto layout's place when you drag boxes away.
+- **Judge it.** Check 272.
+
+### 302. The idle rule, by kind: macros, LFOs, group nodes and lost devices
+
+- **Built.** A node is idle (`graphview.is_idle`, `VNode.idle`) when no
+  cable starts or ends on it and no route names one of its params as a
+  `scale` or one of its sources as a `when`; and then: a **macro** only
+  while it has no label and no subscriber; an **LFO** and a **group
+  node** on that alone; a **device** only while lost (grey, not a
+  placeholder — a connected device is drawn even unmapped, it says the
+  rig has it). Never idle: a modifier (one just picked waits to be
+  dropped on a cable), the analyzer, a render node, an output, the keys,
+  a desk template, a placeholder (it has rows). An idle node is not
+  drawn and takes no room. On the factory presets: 8 idle macros on
+  every preset but lfo-breathe (7), 4 idle LFOs (party-trip 3,
+  lfo-breathe 2), the *cloud* group (no point cloud in the default
+  graph); in the real app also the disabled bridge.
+- **Other options.** Macros only (the owner's words; but the unpatched
+  LFOs and the cloud group sat there the same way).
+- **To reverse.** `graphview.IDLE_KINDS`, `is_idle`.
+- **Rough edge.** An unpatched LFO still runs; hidden, its knobs are
+  out of sight (the LFO page keeps them).
+- **Judge it.** Check 273.
+
+### 303. The small "other" area under the audio
+
+- **Built.** A group no area claims — `preset`, `ui`, `desk` and the
+  *missing params* node — goes to **other**, titled under the audio's
+  last box in the audio's column, so the keys' and the desk's wires into
+  it run right from the controllers.
+- **Other options.** A column of its own after the controllers (between
+  them and the audio); the far right (its wires across the canvas).
+- **To reverse.** `graphview.SHARES`, `AREA`'s default.
+- **Rough edge.** The *missing params* node holds `audio.play` /
+  `stop` / `restart` (no param in this build) under OTHER, not AUDIO.
+- **Judge it.** Check 272.
+
+### 304. One idle line an area; its + shows them; tidy closes it
+
+- **Built.** An area with idle nodes draws one small box under its
+  nodes in its first column, saying what it holds ("8 idle macros · 3
+  idle LFOs" under MODULATION, "1 idle param group" under GEOMETRY,
+  "1 lost device" under CONTROLLERS); its **+** draws them under it,
+  stacked, so one can be patched; **−** takes them off. A macro patched
+  leaves the line and is drawn as any node; unpatched, it goes back. The
+  open lines are UI state (`st["idle_open"]`), saved nowhere. The
+  picker's **macro ▸** still offers every idle macro; one picked gets a
+  label, so it is drawn with the line shut. The head counts "40 nodes
+  (13 idle)". **tidy** also closes the lines and says "laid out 40 nodes
+  in 6 areas, every one collapsed · 13 idle off the canvas".
+- **Other options.** One collapsed "macros" node holding the idle ones
+  as ports; a line drawn as text with no box.
+- **To reverse.** `ui_graph._idle_line`, `drawn_node`, `toggle_idle`,
+  `tidied`.
+- **Rough edge.** The line is a box of the editor: it can be dragged,
+  but its place is not saved and it goes back on the next layout change.
+- **Judge it.** Checks 273, 274.

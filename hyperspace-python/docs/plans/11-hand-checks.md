@@ -3640,7 +3640,9 @@ tempo …); the head reads
 about "55 nodes · 64 wires · 238 cables"; the SYSTEM line about 1.3 ms
 (N2's page: 2.3–2.8 ms). *Fail:* a node lists its ports before you
 expand it (the collapse default); two wires between the same two boxes
-on one layer (the bundling); the line over 2.3 ms (the caches).
+on one layer (the bundling); the line over 2.3 ms (the caches). Since N9 (plan 28) the boxes stand in
+the concern areas (check 272) and the head reads about "40 nodes (13
+idle)": the idle macros and LFOs sit in one line (check 273).
 
 **262. Expand the APC40 and the shape: the real cables.** (laptop, APC40)
 Headless: `tests/test_graph_legible.py::{test_a_bundle_splits_into_its_cables_when_both_ends_expand,test_a_bundles_hover_and_side_pane_list_its_rows}`.
@@ -3679,7 +3681,10 @@ its column, frames the canvas on them and says "laid out 55 nodes,
 every one collapsed"; ⌘Z puts the dragged box back; no details chip
 until something is selected, then "details beside" moves the pane to a
 column and "details below" back under the canvas. *Fail:* tidy leaves a
-node expanded or says nothing; the chip with nothing selected.
+node expanded or says nothing; the chip with nothing selected. Since N9
+the second tidy puts each box back in its area and says "laid out 40
+nodes in 6 areas, every one collapsed · 13 idle off the canvas" (check
+274).
 
 **265. Energy → smooth → combine → acid mix, from GRAPH alone, with a hand.** (hand camera, laptop; copy)
 Headless: `tests/test_graph_legible.py::test_the_smoothed_energy_times_band_patch_from_graph_alone`.
@@ -3707,6 +3712,52 @@ sinks exactly as before (a click frames the control's line, Learn lands
 a desk row, the filter filters them); the pointer opens GRAPH; "Route a
 lane here…" opens GRAPH with the new route there. *Fail:* any change in
 the desk section's lines or Learn; the pointer does nothing.
+
+### The graph by concern (plan 28, N9)
+
+After the owner's second look (2026-10-20): the canvas in titled areas —
+controllers, audio (other under it), modulation, geometry, shaders —
+and a node with nothing in and nothing out (an unused macro, an
+unpatched LFO, a group no cable reaches, a lost device) off the canvas,
+in one idle line an area. The control window at its usual 960 × 900.
+
+**272. The three concern areas at a glance on party-trip.** (laptop, APC40)
+Headless: `tests/test_graph_areas.py::{test_every_node_has_one_area_and_the_three_concerns_are_separate,test_auto_layout_stacks_each_area_and_keeps_saved_positions,test_area_titles_draw}`.
+Launch on party-trip, open GRAPH, click **tidy** once if anything was
+moved. Read the canvas, then pan right along it; zoom out about four
+times with the wheel. *Pass:* faint titles over the columns, left to
+right: CONTROLLERS, AUDIO (OTHER under it), MODULATION, GEOMETRY,
+SHADERS; the analyzer, *band*, *tempo*, *master*, *audio* and *scene*
+boxes under AUDIO and nowhere else; *shape*, *ghost*, *eye*, *hands*,
+*scene* and *cover* under GEOMETRY; *history*, the effects and the
+outputs under SHADERS; every wire leaves a box on its right and lands on
+a box further right — none loops back. *Fail:* a band or tempo box among
+the geometry or the shaders (`graphview.AREA`); a wire running back to
+the left (`_columns`); no titles (`ui_graph._titles`).
+
+**273. An idle macro appears when patched and goes when unpatched.** (laptop)
+Headless: `tests/test_graph_areas.py::{test_an_idle_macro_is_not_drawn_and_a_connected_one_is,test_the_idle_macros_line_expands_to_show_them_and_the_picker_still_offers_them}`.
+On 272's page read the small box under MODULATION; click its **+**, then
+**−**. Click **+** again and drag *Macro 3*'s out dot onto *shape*'s in
+stub, pick Brightness · base; click **−**. Then expand *Macro 3* and
+*shape*, click the new cable and press Delete. Right-click the canvas:
+**macro ▸**. *Pass:* the box says "8 idle macros · 3 idle LFOs"; **+**
+shows them under it, **−** takes them off; patched, *Macro 3* is a box of
+its own above the line with one wire into *shape*, and the line says "7
+idle macros · 3 idle LFOs"; after the Delete it is back in the line; the
+picker lists macro.1–macro.8. *Fail:* a macro with no wire drawn with the
+line shut (`is_idle`); a patched macro still hidden; the picker missing
+the idle macros.
+
+**274. Tidy lays out into the areas.** (laptop)
+Headless: `tests/test_graph_areas.py::test_tidy_relays_into_areas_and_says_so`.
+Drag *shape* far down the canvas, open MODULATION's idle line, expand
+*apc40*; click **tidy**; then ⌘Z. *Pass:* every box collapsed, the idle
+line shut, *shape* back under GEOMETRY, the canvas framed on it all; the
+head says "laid out 40 nodes in 6 areas, every one collapsed · 13 idle
+off the canvas" (numbers as your rig has them); ⌘Z puts *shape* where
+you dropped it. *Fail:* the idle macros left drawn; a box outside its
+area; tidy says nothing.
 
 ## What no test covers
 

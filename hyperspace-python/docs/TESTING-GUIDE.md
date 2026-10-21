@@ -248,6 +248,9 @@ changes brightness or volume instead).
 | L126 | Tidy says what it did; the details button | 1 | laptop | 264 |
 | L127 | The energy patch from GRAPH alone | 1 | laptop, hand camera, music, the copy | 265 |
 | L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
+| L129 | The three areas at a glance | 1 | laptop (the APC40 helps) | 272 |
+| L130 | A macro shows up when you patch it | 1 | laptop | 273 |
+| L131 | Tidy puts everything back in its area | 1 | laptop | 274 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -3229,8 +3232,8 @@ away, click **tidy** again. Click a wire; click **details beside**, then
 **details below**.
 
 **Right if:** first "already tidy"; then every box closed and back in
-its column, the view framed on them, "laid out 55 nodes, every one
-collapsed"; ⌘Z puts the dragged box back; the details button only
+its area, the view framed on them, "laid out 40 nodes in 6 areas, every
+one collapsed · 13 idle off the canvas"; ⌘Z puts the dragged box back; the details button only
 appears once something is selected, and moves the details beside the
 canvas and back.
 
@@ -3274,6 +3277,59 @@ macros, session and sinks exactly as before; the line opens GRAPH;
 **Wrong if:** anything in the desk section changed.
 
 *(check 266)*
+
+#### L129. The three areas at a glance
+
+**Needs:** laptop (the APC40 helps).
+
+**Do:** launch on party-trip, open GRAPH. Read it; drag the canvas to
+the left to see the rest; zoom out a few clicks with the wheel.
+
+**Right if:** faint titles over the columns: CONTROLLERS, AUDIO (OTHER
+under it), MODULATION, GEOMETRY, SHADERS. The sound boxes (analyzer,
+band, tempo, master, audio, scene) are all under AUDIO; the shape, the
+camera's *eye* and the hands under GEOMETRY; the history, the effects
+and the outputs under SHADERS. Every wire runs from left to right.
+
+**Wrong if:** a sound box among the shapes or shaders; a wire that runs
+back to the left.
+
+*(check 272)*
+
+#### L130. A macro shows up when you patch it
+
+**Needs:** laptop.
+
+**Do:** under MODULATION find the small box "8 idle macros · 3 idle
+LFOs"; click its **+**. Drag *Macro 3*'s right dot onto *shape*'s left
+dot and pick **Brightness · base**; click the small box's **−**. Then
+open *Macro 3* and *shape*, click the new cable, press Delete.
+
+**Right if:** **+** shows the eight macros and three LFOs under the small
+box; once patched, *Macro 3* stays on the canvas with one wire into
+*shape* and the box says "7 idle macros"; after the Delete it goes back
+into the box. Right-clicking the canvas → **macro** still lists all
+eight.
+
+**Wrong if:** a macro with no wire on the canvas; a patched one hidden.
+
+*(check 273)*
+
+#### L131. Tidy puts everything back in its area
+
+**Needs:** laptop.
+
+**Do:** drag *shape* far away, open the idle box, open *apc40*; click
+**tidy**; press ⌘Z.
+
+**Right if:** everything closed and back under its title, the idle box
+shut, the view framed; the line under the buttons says "laid out 40
+nodes in 6 areas, every one collapsed · 13 idle off the canvas"; ⌘Z puts
+*shape* back where you dropped it.
+
+**Wrong if:** idle macros left on the canvas; a box outside its area.
+
+*(check 274)*
 
 # Part 2 — tests that need hardware
 

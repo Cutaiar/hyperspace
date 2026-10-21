@@ -22,7 +22,10 @@ collapsible node, a device this rig lacks as a grey placeholder named by
 role. After the owner's first look, **N7** made it legible: every node
 starts collapsed (a title and a few lines), two nodes are one wire
 however many params are mapped between them, and the routes and the
-modifiers are edited on GRAPH (ROUTING points there). **Every one of the 580 goldens recorded before stream N's render
+modifiers are edited on GRAPH (ROUTING points there); after the second,
+**N9** laid the canvas out by concern — controllers, audio, modulation,
+geometry, shaders, each titled — and took the unused macros, LFOs and
+groups off it into one idle line an area. **Every one of the 580 goldens recorded before stream N's render
 work matched unchanged**; N4 added 16 for its two fixtures (596).
 
 Built as stream N of the run in
@@ -35,13 +38,14 @@ untouched (the desk is Dylan's), and every proof is a fixture under
 `tests/fixtures/` loaded through a scratch library.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group Y, checks
-232–266 (N7's 261–266). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
-rows 233–290 (N7's 278–290). The owner's decisions for this plan (6–16 of the launch
+232–274 (N7's 261–266, N9's 272–274). Open decisions: [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
+rows 233–304 (N7's 278–290, N9's 299–304). The owner's decisions for this plan (6–16 of the launch
 prompt) are in [`DECISIONS.md`](../DECISIONS.md) with Who "owner".
 
 Branch `plan-28-30-integration`, in merge order: N1 (PR #209), N0
 (#210), N2 (#215), N3 (#217), N4 (#219), N5 (#220), the review pass's
-fixes (#221), N6 (this file), N7 (a legible graph, 2026-10-20). Stream D (plan 30,
+fixes (#221), N6 (this file), N7 (a legible graph, 2026-10-20), N9 (the
+graph by concern, 2026-10-20). Stream D (plan 30,
 [`30-shader-nodes.md`](30-shader-nodes.md)) merged on the same branch in
 between; the GRAPH page draws its effect nodes and placed effects as
 any render node, and N4's wires extend its placements. The suite went
@@ -594,6 +598,75 @@ ROUTING — the routes and the modifiers now, the rest later.
   `test_ui_shell.py`'s scroll test measures the child with the desk;
   `test_modifiers.py`'s strip test draws the strip's function and checks
   ROUTING's pointer.
+
+### N9 — the GRAPH page organised by concern; idle macros off the canvas
+
+Added after the owner's second look (2026-10-20): "The graph looks
+better. The graph needs to be organized better in terms of the
+concerns: all things audio need to live in one area; all things geometry
+should be grouped in another area; all things shader should be grouped
+in another area … there are macros sitting there that don't connect to
+anything." The owner's decision is in DECISIONS "UI" (Who "owner
+(2026-10-20)"); register rows 299–304, hand checks 272–274.
+
+- **What was there.** N2's columns by kind: sources 0, LFOs 1,
+  modifiers 2, macros 3, every param-group node 4 (band, tempo, master
+  beside preset, ui, cloud, hands, output …), the render nodes from 5 by
+  depth. On party-trip that put the audio's boxes in three columns (the
+  analyzer at 0, the band / tempo / master groups at 4 with the preset
+  and ui groups), the geometry's in three (the eye at 5, the hands and
+  cloud groups at 4) and the eight unused macros, three unpatched LFOs
+  and the cloud group in the middle — 12 of its 48 boxes with no wire.
+  Every factory preset has 8 unused macros (lfo-breathe 7), 2–4
+  unpatched LFOs and the cloud group.
+- **At the machine.** Faint titles over the canvas: CONTROLLERS, AUDIO
+  (OTHER under it), MODULATION, GEOMETRY, SHADERS, left to right; each
+  box under its own. No unused macro or LFO is drawn: MODULATION shows
+  one small box "8 idle macros · 3 idle LFOs" whose **+** draws them
+  under it (**−** takes them off); patched, a macro is a box like any;
+  the picker still offers every idle macro. The head reads "40 nodes (13
+  idle) · …"; **tidy** also closes the idle lines and says "laid out 40
+  nodes in 6 areas, every one collapsed · 13 idle off the canvas". No
+  wire runs back on any factory preset.
+- **How.** `graphview`: `AREA` (the one table, by kind, `group:<g>`,
+  render class), `area_of`, `AREAS` / `ORDER` / `SHARES`, `_columns` (an
+  area's first column; a render node of the geometry or the shaders by
+  its depth from the area's shallowest; outputs the shaders' last),
+  `is_idle` / `IDLE_KINDS` / `idle_words`, `VNode.area` / `VNode.idle`
+  (set in `build`), `layout` → `Layout` (the nodes, each area's title
+  place, its idle line's place and its idle nodes, its span);
+  `auto_layout` is `layout(...).nodes` with an `idle_open` argument.
+  `ui_graph`: `drawn_node`, `toggle_idle`, `st["idle_open"]`, `areas_of`
+  (the page's `layout`), `_titles` / `titles` / `title_size` (draw-list
+  text, before the nodes), `_idle_line`, `tidied`, `head_line`'s idle
+  count; `_place` caches the `Layout` and places the idle lines; `_moved`
+  skips the nodes not drawn; `expand_all` opens only the drawn ones.
+  Every edit still goes through `graphview.Edit`.
+- **Draw time**, the real app on party-trip at 960 × 900 (53 nodes, 40
+  drawn; 59 wires, 233 cables), 80 / 40 draws: **1.30 ms median
+  collapsed** (p90 1.40), 1.38 ms with the idle line open, 1.35 ms after
+  a tidy (N7: 1.27 ms).
+- **Tests.** `tests/test_graph_areas.py` (8):
+  `::test_every_node_has_one_area_and_the_three_concerns_are_separate`
+  (all 23 factory presets), `::test_auto_layout_stacks_each_area_and_keeps_saved_positions`,
+  `::test_tidy_relays_into_areas_and_says_so`,
+  `::test_an_idle_macro_is_not_drawn_and_a_connected_one_is`,
+  `::test_the_idle_macros_line_expands_to_show_them_and_the_picker_still_offers_them`,
+  `::test_idle_rule_per_kind`, `::test_area_titles_draw`,
+  `::test_the_page_draws_with_the_areas_in_every_state`. Changed:
+  `test_graphview.py::test_auto_layout_gives_every_unplaced_node_a_column`
+  orders the areas, not the kinds (the analyzer and the tempo share the
+  audio's column; an LFO, a modifier and a macro the modulation's; the
+  drawn nodes of a column stacked, the idle ones at the line);
+  `::test_a_node_dropped_on_the_canvas_is_saved_in_its_home` drags
+  *LFO 1* (LFO 2 is idle on party-trip, not drawn);
+  `test_graph_legible.py::test_tidy_collapses_all_relays_and_says_what_it_did`
+  reads `ui_graph.tidied` (the areas' words).
+- **Rough edges.** The real app's 14-effect scene pipeline makes the
+  shaders area 17 columns wide, so a tidy framing everything zooms out
+  about 16× and reads only the titles; a one-column area's long title
+  is held to a box's width; the idle line can be dragged but its place
+  is not kept.
 
 ## The goldens
 
