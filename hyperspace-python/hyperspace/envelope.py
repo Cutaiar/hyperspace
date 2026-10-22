@@ -14,7 +14,8 @@ modulatable, Learnable and saved in the preset like an LFO's):
 
   mode      gate · one-shot — one-shot closes its own gate at the end of
             decay (a drum hit: a release does nothing); gate sustains
-            until a release
+            until a release. A note keeps the mode it was fired with:
+            moving the knob mid-note changes the next fire only
   attack    seconds (or beats), log 1 ms – 8 s
   hold      the same, defaulting to 0 so out of the box it reads as ADSR;
             the knob's bottom (1 ms) *is* 0, since a log range cannot
@@ -132,6 +133,10 @@ class Envelope:
     y0: float = field(default=0.0, repr=False)           # the level the stage started from
     vel: float = field(default=1.0, repr=False)          # this note's velocity
     note: int = field(default=0, repr=False)             # counts fires: an auto-release's token
+    # the mode this note was fired with: the knob moving mid-note changes
+    # the next fire, never how this one ends (a one-shot closes at decay's
+    # end, a gate note honours its release whatever the knob says now)
+    nmode: int = field(default=GATE, repr=False)
     at: float | None = field(default=None, repr=False)   # the t this voice last stepped at
     out: float = field(default=REST, repr=False)         # this step's output
     held: bool = field(default=False, repr=False)        # the `gate` param's state
@@ -198,7 +203,7 @@ class Envelope:
             return DECAY
         if s == DECAY:
             # one-shot: the gate closes at decay's end
-            return RELEASE if self.mode == ONE_SHOT else SUSTAIN
+            return RELEASE if self.nmode == ONE_SHOT else SUSTAIN
         return IDLE
 
     def _enter(self, stage: int, t: float, y0: float) -> None:
@@ -231,15 +236,16 @@ class Envelope:
                 y0 = self.level() * self.peak() / new
             self.vel = vel
             self.note += 1
+            self.nmode = self.mode
             self._enter(ATTACK, t, y0)
-            if gate is not None and self.mode == GATE:
+            if gate is not None and self.nmode == GATE:
                 # tokened with this note, so a later fire's note isn't cut short
                 self.seq += 1
                 self.events.append((t + max(float(gate), 0.0), self.seq, _RELEASE, self.note))
             return
         if args is not None and args != self.note:
             return                                         # an earlier note's auto-release
-        if self.mode == ONE_SHOT or self.stage in (IDLE, RELEASE):
+        if self.nmode == ONE_SHOT or self.stage in (IDLE, RELEASE):
             return
         self._enter(RELEASE, t, self.level())
 
