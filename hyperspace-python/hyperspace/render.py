@@ -8,6 +8,15 @@ view.py so nothing has to import moderngl to hold a view. At
 and reusing the proven path is what makes "visually indistinguishable"
 achievable by construction.
 
+The shape is projected once, at zoom 1 about the viewport's centre, and
+drawn once per copy by instanced draws: the instance field (field.py)
+gives each copy a centre, a scale and an alpha, one vec4 a copy, and the
+vertex shaders place it — the camera's zoom and pan are that copy's scale
+and centre too. So a field of thousands costs one projection and a few
+kilobytes of upload a frame; the GPU does the rest. Edge widths and point
+sizes are scaled per copy in the shaders, and fold into alpha below a
+pixel there, so a far or small copy thins out as one close up does.
+
 Blending decision (plan 02 task 2): alpha-over in painter order, not
 additive. The additive suggestion existed to avoid a CPU depth sort, but the
 CPU already computes every edge depth per frame, so the argsort is free and
@@ -61,6 +70,14 @@ from pathlib import Path
 import moderngl
 import numpy as np
 
+from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
+    LAYOUT_GRID,
+    LAYOUT_HEX,
+    LAYOUT_RING,
+    MAX_INSTANCES,
+    field,
+    inst_positions,
+)
 from .fx import FACES, SCREEN, FxChain, FxState
 from .geometry import face_triangles, face_uvs, geom, shape_view
 from .ghost import Ghost, GhostState
@@ -80,18 +97,25 @@ BG = (0.0, 0.0, 0.0)
 # from it on a face and 2048 costs several times as much
 FACE_PIC = 1024
 
+# every scene program reads one copy of the instance field per instance:
+# in_inst = (offset x, offset y, scale, alpha), a vertex at p going to
+# p · scale + offset (Renderer.draw_scene)
 LINE_VS = """
 #version 330
-in vec2 in_pos;      // pixel coordinates, logical space
+in vec2 in_pos;      // the edge's end, pixel coordinates, logical space, zoom 1
+in vec2 in_nrm;      // unit normal to the edge, signed by the quad's side
+in float in_width;   // the edge's width at zoom 1, px (below 1 it folds into alpha)
 in float in_alpha;
 in vec3 in_rgb;      // white, but for a scene's tinted layer (plan 28)
+in vec4 in_inst;     // this copy: offset (xy), scale (z), alpha (w)
 uniform vec2 u_size; // logical viewport size
 out float v_alpha;
 out vec3 v_rgb;
 void main() {
-    gl_Position = vec4(2.0 * in_pos.x / u_size.x - 1.0,
-                       1.0 - 2.0 * in_pos.y / u_size.y, 0.0, 1.0);
-    v_alpha = in_alpha;
+    float wk = in_width * in_inst.z;
+    vec2 p = in_pos * in_inst.z + in_inst.xy + in_nrm * (0.5 * max(wk, 1.0));
+    gl_Position = vec4(2.0 * p.x / u_size.x - 1.0, 1.0 - 2.0 * p.y / u_size.y, 0.0, 1.0);
+    v_alpha = in_alpha * min(wk, 1.0) * in_inst.w;
     v_rgb = in_rgb;
 }
 """
@@ -156,21 +180,23 @@ void main() {
 
 FACE_VS = """
 #version 330
-in vec2 in_pos;      // pixel coordinates, logical space
+in vec2 in_pos;      // pixel coordinates, logical space, zoom 1
 in float in_wc;      // combined homogeneous divisor (perspective-correct uv)
 in vec2 in_uv;       // face-local coordinates
 in float in_alpha;
 in float in_fid;     // face index within the shape
+in vec4 in_inst;     // this copy: offset (xy), scale (z), alpha (w)
 uniform vec2 u_size;
 out vec2 v_uv;
 out float v_alpha;
 out float v_fid;
 void main() {
-    float nx = 2.0 * in_pos.x / u_size.x - 1.0;
-    float ny = 1.0 - 2.0 * in_pos.y / u_size.y;
+    vec2 p = in_pos * in_inst.z + in_inst.xy;
+    float nx = 2.0 * p.x / u_size.x - 1.0;
+    float ny = 1.0 - 2.0 * p.y / u_size.y;
     gl_Position = vec4(nx * in_wc, ny * in_wc, 0.0, in_wc);
     v_uv = in_uv;
-    v_alpha = in_alpha;
+    v_alpha = in_alpha * in_inst.w;
     v_fid = in_fid;
 }
 """
@@ -298,10 +324,12 @@ COVER_VS = """
 #version 330
 in vec2 in_pos;
 in float in_wc;
+in vec4 in_inst;
 uniform vec2 u_size;
 void main() {
-    float nx = 2.0 * in_pos.x / u_size.x - 1.0;
-    float ny = 1.0 - 2.0 * in_pos.y / u_size.y;
+    vec2 p = in_pos * in_inst.z + in_inst.xy;
+    float nx = 2.0 * p.x / u_size.x - 1.0;
+    float ny = 1.0 - 2.0 * p.y / u_size.y;
     gl_Position = vec4(nx * in_wc, ny * in_wc, 0.0, in_wc);
 }
 """
@@ -315,17 +343,19 @@ void main() { f_color = vec4(1.0); }
 POINT_VS = """
 #version 330
 in vec2 in_pos;
-in float in_size;    // diameter in framebuffer pixels
+in float in_size;    // diameter in framebuffer pixels, zoom 1
 in float in_alpha;
 in vec3 in_rgb;      // RED, but for a scene's tinted layer (plan 28)
+in vec4 in_inst;     // this copy: offset (xy), scale (z), alpha (w)
 uniform vec2 u_size;
 out float v_alpha;
 out vec3 v_rgb;
 void main() {
-    gl_Position = vec4(2.0 * in_pos.x / u_size.x - 1.0,
-                       1.0 - 2.0 * in_pos.y / u_size.y, 0.0, 1.0);
-    gl_PointSize = in_size;
-    v_alpha = in_alpha;
+    vec2 p = in_pos * in_inst.z + in_inst.xy;
+    gl_Position = vec4(2.0 * p.x / u_size.x - 1.0, 1.0 - 2.0 * p.y / u_size.y, 0.0, 1.0);
+    float d = in_size * in_inst.z;
+    gl_PointSize = max(d, 1.0);
+    v_alpha = in_alpha * min(d, 1.0) * in_inst.w;
     v_rgb = in_rgb;
 }
 """
@@ -344,65 +374,6 @@ void main() {
 """
 
 
-
-
-# ---- instance layouts (plan 20 WP6): where each copy sits, in cells ----
-
-LAYOUT_GRID, LAYOUT_HEX, LAYOUT_RING = 0, 1, 2     # params.INST_LAYOUT's order
-_HEX_STEPS = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))   # axial (q, r)
-
-
-def _hex_spiral(n: int) -> np.ndarray:
-    """The first `n` cells of a honeycomb spiral as (n, 2) float64 (gx, gy):
-    the centre, then ring 1 (six cells), ring 2 (twelve), ring m (6m), each
-    walked from axial (−m, m) taking m steps along each direction in turn.
-    A cell's place does not depend on `n`."""
-    out = [(0.0, 0.0)]
-    m = 0
-    while len(out) < n:
-        m += 1
-        q, r = -m, m
-        for dq, dr in _HEX_STEPS:
-            for _ in range(m):
-                out.append((q + r / 2, r * math.sqrt(3.0) / 2))
-                q, r = q + dq, r + dr
-    return np.array(out[:n], dtype=np.float64).reshape(-1, 2)
-
-
-def inst_positions(n: int, layout: int) -> tuple[np.ndarray, np.ndarray]:
-    """(gx, gy) for `n` copies, float32, in cells: where each copy sits
-    before `cell` scales it (`Renderer.draw_scene`, which asks only for
-    n ≥ 2). A cell is the spacing between neighbours in every layout. Pure:
-    no GL, no state.
-
-    GRID (and any layout it does not know) — rows of ``ceil(sqrt(n))``,
-    centred; the arithmetic `draw_scene` had inline, in the same order.
-    HEX — a honeycomb spiral from the centre: whole hexagons at 7, 19, 37,
-    61 and 91, and a copy never moves as the count grows.
-    RING — one circle, copy 0 at the top, clockwise on screen (y is down),
-    its radius ``1 / (2 sin(π / n))`` so neighbours stay one cell apart.
-
-    No copies is two empty arrays and one copy is the centre, in every
-    layout."""
-    n = max(0, int(n))
-    if n == 0:
-        return np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32)
-    if layout == LAYOUT_HEX:
-        cells = _hex_spiral(n)
-        return cells[:, 0].astype(np.float32), cells[:, 1].astype(np.float32)
-    if layout == LAYOUT_RING:
-        if n == 1:
-            return np.zeros(1, dtype=np.float32), np.zeros(1, dtype=np.float32)
-        radius = 1.0 / (2.0 * math.sin(math.pi / n))
-        th = 2.0 * math.pi * np.arange(n, dtype=np.float64) / n
-        return ((radius * np.sin(th)).astype(np.float32),
-                (-radius * np.cos(th)).astype(np.float32))
-    cols = math.ceil(math.sqrt(n))
-    rows = math.ceil(n / cols)
-    k = np.arange(n, dtype=np.float32)
-    gx = k % cols - (cols - 1) / 2      # grid position about the centre
-    gy = k // cols - (rows - 1) / 2
-    return gx, gy
 
 
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
@@ -567,11 +538,13 @@ class Renderer:
         self._show_vao: moderngl.VertexArray | None = None
         self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
         self.cover = CoverTarget(ctx)
-        self._face_verts = 0           # face vertices in _fbuf from the last scene pass
+        self._face_verts = 0           # face vertices in _fbuf from the last scene pass (one copy)
+        self._copies = 0               # copies the last scene pass drew (rows in _ibuf)
         self._blank = ctx.texture((1, 1), 4)
-        self._lbuf = ctx.buffer(reserve=1200 * 6 * 6 * 4, dynamic=True)
+        self._lbuf = ctx.buffer(reserve=1200 * 6 * 9 * 4, dynamic=True)
         self._pbuf = ctx.buffer(reserve=600 * 7 * 4, dynamic=True)
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
+        self._ibuf = ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)   # the copies
         self._build_wire_programs()
         # bitmap layer over the faces, loaded from disk on demand
         self.bitmap_error = ""
@@ -612,16 +585,19 @@ class Renderer:
             made.append(lines)
             points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
             made.append(points)
-            lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 1f 3f", "in_pos", "in_alpha",
-                                             "in_rgb")])
+            inst = (self._ibuf, "4f/i", "in_inst")
+            lvao = ctx.vertex_array(lines, [(self._lbuf, "2f 2f 1f 1f 3f", "in_pos",
+                                             "in_nrm", "in_width", "in_alpha",
+                                             "in_rgb"), inst])
             made.append(lvao)
             # the coverage pass reads the face buffer's position and divisor only
             cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
             made.append(cover_prog)
-            cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc")])
+            cvao = ctx.vertex_array(cover_prog, [(self._fbuf, "2f 1f 16x", "in_pos", "in_wc"),
+                                                 inst])
             made.append(cvao)
-            pvao = ctx.vertex_array(points, [(self._pbuf, "2f 1f 1f 3f", "in_pos", "in_size",
-                                              "in_alpha", "in_rgb")])
+            pvao = ctx.vertex_array(points, [(self._pbuf, "2f 1f 1f 3f", "in_pos",
+                                              "in_size", "in_alpha", "in_rgb"), inst])
         except Exception:
             for res in made:
                 res.release()
@@ -638,6 +614,8 @@ class Renderer:
         until a restart, and the reloader reports the AttributeError rather
         than this hook guessing at a value (audit H3)."""
         olds = (self._lvao, self._pvao, self._cvao, self._lines, self._points, self._cover_prog)
+        if getattr(self, "_ibuf", None) is None:     # a renderer from before the instanced draws
+            self._ibuf = self.ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)
         self._build_wire_programs()
         for res in olds:
             res.release()
@@ -721,7 +699,8 @@ class Renderer:
             made.append(seed)
             fvao = ctx.vertex_array(
                 prog,
-                [(self._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid")],
+                [(self._fbuf, "2f 1f 2f 1f 1f", "in_pos", "in_wc", "in_uv", "in_alpha", "in_fid"),
+                 (self._ibuf, "4f/i", "in_inst")],
             )
             made.append(fvao)
             svao = ctx.vertex_array(seed, [])
@@ -1416,10 +1395,11 @@ class Renderer:
         self.cover.fbo.use()
         ctx.viewport = (0, 0, *self.scene.size)
         ctx.clear(0.0, 0.0, 0.0, 0.0)
-        if self._face_verts:
+        if self._face_verts and self._copies:
             ctx.disable(moderngl.BLEND)
             self._cover_prog["u_size"].value = (float(w), float(h))
-            self._cvao.render(moderngl.TRIANGLES, vertices=self._face_verts)
+            self._cvao.render(moderngl.TRIANGLES, vertices=self._face_verts,
+                              instances=self._copies)
             ctx.enable(moderngl.BLEND)
         return self.cover.tex
 
@@ -1440,44 +1420,18 @@ class Renderer:
         # the 3D camera; a 4D shape is turned to its body first, and with
         # the 3D switch holding it (ViewState.held, set by integrate) by
         # its 3D angles alone; a scene, each layer at its own
-        # (geometry.shape_view)
+        # (geometry.shape_view). The one projection is at zoom 1 about the
+        # viewport's centre: the camera's zoom and pan, like every copy's
+        # place, are the copies' (field.py), applied per instance in the
+        # vertex shaders
         px, py, pd, wc = shape_view(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4, w=w, h=h,
                                     flat=getattr(s, "held", False),
                                     body=getattr(s, "body", None))
         # a scene's per-layer weights (geometry._scene_style), else None
         st = g.get("style")
 
-        # camera: zoom about the view centre, then pan (both in logical px)
-        zoom = max(s.zoom, 1e-3)
-        px = (px - w / 2) * zoom + w / 2 + s.pan[0]
-        py = (py - h / 2) * zoom + h / 2 + s.pan[1]
-
-        # synchronized instances in a layout (grid, honeycomb or ring:
-        # inst_positions), spaced pre-zoom so the camera sees a field
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
-        if n_inst > 1:
-            cell = min(w, h) * 0.72 * zoom
-            gx, gy = inst_positions(n_inst, int(s.inst_layout))
-            offs = np.stack([gx * cell, gy * cell], axis=1).astype(np.float32)
-            if s.inst_motion and s.inst_amp > 0.0:
-                # trigonometric motion over the field: each instance's phase
-                # comes from its position, so the field moves as one figure
-                ph = t_m * s.inst_rate
-                if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
-                    th = ph + (gx + gy) * 0.9
-                    dx, dy = np.cos(th), np.sin(th)
-                elif s.inst_motion == 2:  # WAVE — bob by column, sway by row
-                    dx = 0.35 * np.sin(ph * 0.7 + gy * 1.1)
-                    dy = np.sin(ph + gx * 1.1)
-                else:                     # RIPPLE — radial swell from the centre
-                    rr = np.hypot(gx, gy)
-                    u = np.sin(ph - rr * 1.2) / np.maximum(rr, 1.0)
-                    dx, dy = gx * u, gy * u
-                offs[:, 0] += s.inst_amp * cell * dx
-                offs[:, 1] += s.inst_amp * cell * dy
-        else:
-            offs = np.zeros((1, 2), dtype=np.float32)
 
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
@@ -1491,10 +1445,11 @@ class Renderer:
         heavy = g["m"] > 500
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
-        # the reference's depth- and brightness-scaled line width (CSS px),
-        # scaled by the camera so a zoomed-out field thins out naturally
+        # the reference's depth- and brightness-scaled line width (CSS px)
+        # at zoom 1; each copy's scale (the camera's zoom with it) widens or
+        # thins it in LINE_VS, so a zoomed-out field thins out naturally
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
-        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * zoom
+        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
         if st is not None:
             # a scene: each edge's density, weight and width are its own
             # layer's, not the whole compound's
@@ -1502,10 +1457,8 @@ class Renderer:
             edens = np.clip(340 / np.maximum(em, 1), 0.42, 1)
             alpha = np.clip((0.10 + 0.90 * t * t) * s.bright * edens, 0.015, 1)
             alpha = alpha * st["e_alpha"][order]
-            width = np.where(em > 500, 0.35 + 0.85 * t, 0.5 + 1.5 * t) * wscale * zoom
+            width = np.where(em > 500, 0.35 + 0.85 * t, 0.5 + 1.5 * t) * wscale
             width = width * st["e_width"][order]
-        draw_w = np.maximum(width, 1.0)
-        alpha = alpha * np.minimum(width, 1.0)  # sub-pixel width folds into alpha
 
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
@@ -1528,6 +1481,7 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
+        self._copies = 0
         if s.faces:
             self._maybe_reload_patterns()
         if n_inst == 0:
@@ -1535,6 +1489,22 @@ class Renderer:
             # written and nothing is bound here, so the caller's target and
             # the passes after this one are as on any other frame
             return
+        # the copies: where each goes, how big, how bright — far to near,
+        # those wholly off screen dropped. Each row becomes the shader's
+        # (offset, scale, alpha): p → p · k + (centre − c₀ · k), c₀ the
+        # viewport's centre the shape was projected about
+        radius = float(np.hypot(px - w / 2, py - h / 2).max()) + 6.0 * dpr if len(px) else 0.0
+        rows = self._field(s, w, h, t_m, radius)
+        if not len(rows):
+            return                     # every copy is off screen: the ground alone
+        inst = np.empty((len(rows), 4), dtype=np.float32)
+        inst[:, 0] = rows[:, 0] - (w / 2) * rows[:, 2]
+        inst[:, 1] = rows[:, 1] - (h / 2) * rows[:, 2]
+        inst[:, 2:] = rows[:, 2:]
+        self._ibuf.orphan(inst.nbytes)
+        self._ibuf.write(inst.tobytes())
+        copies = len(inst)
+        self._copies = copies
         if s.faces and self._face_prog is not None:
             tris = face_triangles(s.shape)
             if len(tris):
@@ -1557,7 +1527,6 @@ class Renderer:
                     fverts[corner::3, 4] = uv[:, corner, 1]
                     fverts[corner::3, 5] = fa
                     fverts[corner::3, 6] = to[:, 3]
-                fverts = self._tile(fverts, offs)
                 self._fbuf.orphan(fverts.nbytes)
                 self._fbuf.write(fverts.tobytes())
                 p = self._face_prog
@@ -1574,7 +1543,7 @@ class Renderer:
                     screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
                     p["u_pic_on"].value = 2 if screen else 1
                     p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
-                self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
+                self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts), instances=copies)
                 self._face_verts = len(fverts)
 
         if s.lines:
@@ -1583,34 +1552,30 @@ class Renderer:
             x1, y1 = px[eo[:, 1]], py[eo[:, 1]]
             dx, dy = x1 - x0, y1 - y0
             ln = np.maximum(np.hypot(dx, dy), 1e-6)
-            nx, ny = -dy / ln * draw_w * 0.5, dx / ln * draw_w * 0.5
+            nx, ny = -dy / ln, dx / ln     # the unit normal; LINE_VS sets the half-width
 
             m = g["m"]
-            verts = np.empty((m * 6, 6), dtype=np.float32)
-            ax, ay = x0 + nx, y0 + ny
-            bx, by = x0 - nx, y0 - ny
-            cx_, cy_ = x1 + nx, y1 + ny
-            ex, ey = x1 - nx, y1 - ny
-            # two triangles per edge: (a, b, c) and (b, e, c)
-            verts[0::6, 0], verts[0::6, 1] = ax, ay
-            verts[1::6, 0], verts[1::6, 1] = bx, by
-            verts[2::6, 0], verts[2::6, 1] = cx_, cy_
-            verts[3::6, 0], verts[3::6, 1] = bx, by
-            verts[4::6, 0], verts[4::6, 1] = ex, ey
-            verts[5::6, 0], verts[5::6, 1] = cx_, cy_
+            # two triangles per edge: (a, b, c) and (b, e, c) — a, b at the
+            # first end on either side, c, e at the second
+            verts = np.empty((m * 6, 9), dtype=np.float32)
             rgb = st["e_rgb"][order] if st is not None else (1.0, 1.0, 1.0)
-            for k in range(6):
-                verts[k::6, 2] = alpha
-                verts[k::6, 3:6] = rgb
-            verts = self._tile(verts, offs)
+            for k, (end, side) in enumerate(((0, 1), (0, -1), (1, 1), (0, -1), (1, -1),
+                                             (1, 1))):
+                verts[k::6, 0] = x1 if end else x0
+                verts[k::6, 1] = y1 if end else y0
+                verts[k::6, 2] = nx * side
+                verts[k::6, 3] = ny * side
+                verts[k::6, 4] = width
+                verts[k::6, 5] = alpha
+                verts[k::6, 6:9] = rgb
             self._lbuf.orphan(verts.nbytes)
             self._lbuf.write(verts.tobytes())
-            self._lvao.render(moderngl.TRIANGLES, vertices=len(verts))
+            self._lvao.render(moderngl.TRIANGLES, vertices=len(verts), instances=copies)
 
         if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
             tp = (pd - near) / span
             order_p = np.argsort(pd, kind="stable")
-            r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * zoom
+            r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr
             PB = s.bright * clamp(dens * 1.5, 0.55, 1)
             pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1)
             prgb = RED
@@ -1626,23 +1591,16 @@ class Renderer:
             pverts[:, 2] = 2.0 * r[order_p]  # diameter
             pverts[:, 3] = pa[order_p]
             pverts[:, 4:7] = prgb
-            pverts = self._tile(pverts, offs)
             self._pbuf.orphan(pverts.nbytes)
             self._pbuf.write(pverts.tobytes())
             self._points["u_size"].value = (float(w), float(h))
-            self._pvao.render(moderngl.POINTS, vertices=len(pverts))
+            self._pvao.render(moderngl.POINTS, vertices=len(pverts), instances=copies)
 
-    @staticmethod
-    def _tile(verts: np.ndarray, offs: np.ndarray) -> np.ndarray:
-        """Replicate a per-instance vertex array across the instance grid."""
-        if len(offs) == 1 and not offs.any():
-            return verts
-        out = np.tile(verts, (len(offs), 1))
-        per = len(verts)
-        for k, (ox, oy) in enumerate(offs):
-            out[k * per : (k + 1) * per, 0] += ox
-            out[k * per : (k + 1) * per, 1] += oy
-        return out
+    def _field(self, s: ViewState, w: int, h: int, t: float, radius: float) -> np.ndarray:
+        """The copies this scene pass draws: `field.field`'s rows (centre,
+        scale, alpha), far to near, those off screen dropped. Its own
+        method so a test can see what the pass was handed."""
+        return field(s, w, h, t, radius_px=radius)
 
 
 N_PATTERNS = len(MODES)

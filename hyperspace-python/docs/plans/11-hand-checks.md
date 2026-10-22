@@ -1963,6 +1963,41 @@ for the sync. *Pass:* both entries show in the list (one under the
 conflict copy's file name); each loads; delete one. *Fail:* one hides
 the other → `Library._index`.
 
+## T. The instanced field: thousands of copies, 3D lattices, Fit
+
+VIEW page, the 120-cell (or any heavy shape), faces on. The tests draw
+on Mesa's software rasteriser, so they pin what is drawn, not how fast.
+
+**144. Four thousand copies hold the frame rate.**
+Headless: `tests/test_render.py::{test_thousands_of_copies_upload_one,test_a_zoomed_in_field_draws_only_what_it_shows}`.
+Instances to the top (4096), GRID, then CUBIC; scroll out until the
+whole field shows, faces on, then off. *Pass:* the SYSTEM page's frame
+rate stays near the screen's (60) with lines and points, and usable with
+faces; zoomed back in, it is back at full speed. *Fail:* the rate drops
+with the count at a fixed zoom → the instanced draws (`render.draw_scene`,
+`field.cull`); only with faces → the pattern's per-fragment cost (try
+FLAT).
+
+**145. Fit leaves no copy cut by the edge.**
+Headless: `tests/test_render.py::test_fit_leaves_no_copy_cut_by_the_edge tests/test_field.py`.
+12 copies, GRID, Fit on, in the window and fullscreen on the projector;
+then 7, 19 on HEX and 200 on FCC. Scroll in and out, right-drag. *Pass:*
+12 is four by three, evenly spaced, nothing touching an edge; zooming in
+jumps between whole copies (never half a shape at the edge) and the drag
+moves a copy at a time; a lattice stays whole and centred. *Fail:* a
+shape cut → `field._field_snapped` / `field._framed` (and `PAD_PX` for a
+point poking out).
+
+**146. The lattices read as 3D.**
+Headless: `tests/test_field.py::{test_every_lattice_has_its_neighbours_one_cell_apart,test_a_lattice_is_drawn_far_to_near_through_its_perspective}`.
+300 copies of the tesseract; each 3D layout in turn; orbit the camera
+with the mouse; Field depth 0, 0.5, 1; a field motion on. *Pass:* the
+field turns as one solid, near copies larger and brighter and drawn over
+far ones; depth 0 flattens the sizes; motions swing the copies in depth
+too. Say whether the default depth (0.5) and the far fade (to a quarter)
+are right. *Fail:* far copies drawn over near ones → the sort in
+`field._field_3d`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -1978,5 +2013,7 @@ Only a person can settle these:
   tests run with another machine's fonts and Mesa's compiler;
 - the macro candidates (133–136): a listening session, by design;
 - a real cloud client between two Macs (139, 140, 143): the tests write
-  the folder directly.
+  the folder directly;
+- the frame rate of thousands of copies on the Mac's GPU (144): the tests
+  draw on Mesa's software rasteriser.
 

@@ -35,6 +35,7 @@ from imgui_bundle import imgui
 
 from . import (
     apc40,
+    field,
     learn,
     ui_bands,
     ui_desk,
@@ -979,7 +980,8 @@ class Panel:
         return False
 
     def _slider(self, pid: str, width: float = -1) -> bool:
-        """Compact slider with the readout inside — untapered ranges."""
+        """Compact slider with the readout inside. A tapered range slides
+        over its detents (the instance count's), as a fader does."""
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -987,7 +989,13 @@ class Panel:
         # the readout is imgui's printf format: a "%" in it ("60%") is doubled
         text = (self._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
         imgui.push_font(_FONTS["num"], FONT_NUM)
-        if p.integer:
+        if p.taper is not None:
+            steps = p.steps
+            changed, pos = self._track(lambda: imgui.slider_int(
+                f"##{pid}", p.position(), 0, steps, text),
+                p.norm, self._origin(p), steps, knob=False)
+            nv = p.taper.map(pos)
+        elif p.integer:
             steps = int(p.hi) - int(p.lo)
             changed, nv = self._track(lambda: imgui.slider_int(
                 f"##{pid}", int(v), int(p.lo), int(p.hi), text),
@@ -1059,11 +1067,14 @@ class Panel:
                 planes.append(plane)
         return f" → {', '.join(planes)}" if planes else ""
 
-    def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
+    def _combo(self, pid: str, width: float = -1, tip: str | None = None,
+               rows: int = -1) -> bool:
+        """A drop-down of the enum's choices; `rows` the most the list shows
+        before it scrolls (imgui's default, eight, at -1)."""
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
-        changed, i = imgui.combo(f"##{pid}", p.base, p.names)
+        changed, i = imgui.combo(f"##{pid}", p.base, p.names, rows)
         self._tip(a, tip)
         self._ctx(a)
         self._learn_frame(a)
@@ -1730,11 +1741,19 @@ class Panel:
         self._check("view.faces")
         imgui.same_line()
         self._check("view.three_d")
-        self._slider("view.instances")
+        # the count, and Fit beside it: whole copies only, framed to the screen
+        fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(
+            ).item_inner_spacing.x
+        self._slider("view.instances", imgui.get_content_region_avail().x - fit_w
+                     - imgui.get_style().item_spacing.x)
+        imgui.same_line()
+        self._check("view.inst_fit")
         if v.instances > 1:
-            # the field's one row: how the copies are laid out, how they
-            # move, and — while they move — by how much and how fast
-            self._combo("view.inst_layout", 84)
+            # the field's rows: how the copies are laid out, how they move
+            # and — while they move — by how much and how fast; then how far
+            # apart, and a lattice's depth
+            # every layout at once: the flat three and the six lattices
+            self._combo("view.inst_layout", 104, rows=len(field.NAMES))
             imgui.same_line()
             self._combo("view.inst_motion", 96)
             if v.inst_motion:
@@ -1742,6 +1761,13 @@ class Panel:
                 self._slider("view.inst_amp", 84)
                 imgui.same_line()
                 self._slider("view.inst_rate")
+            if field.is_3d(v.inst_layout):
+                half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+                self._slider("view.inst_spacing", half)
+                imgui.same_line()
+                self._slider("view.inst_persp")
+            else:
+                self._slider("view.inst_spacing")
         imgui.spacing()
 
         # per-plane rate: what a lane drives to spin a plane (base 1, signed);

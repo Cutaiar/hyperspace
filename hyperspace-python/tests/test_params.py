@@ -87,7 +87,7 @@ def test_raw_ranges_clamp_int_and_log(rig):
     reg, view, *_ = rig
     inst = reg["view.instances"]
     inst.set_norm(1.0)
-    assert view.instances == 100 and isinstance(view.instances, int)
+    assert view.instances == 4096 and isinstance(view.instances, int)
     inst.set_value(-5)
     assert view.instances == 0          # the floor is zero (plan 16 WP5)
     inst.step(3)
@@ -118,19 +118,38 @@ def test_pitch_wraps_over_the_top_as_yaw_does(rig):
 
 
 def test_instances_read_nothing_drawn_at_zero(rig):
-    """Plan 16 WP5 (fork F3): a plain 0–100 range, zero at the very bottom
-    of the throw, and a readout that says what a black render is."""
+    """Plan 16 WP5 (fork F3): zero at the very bottom of the throw, and a
+    readout that says what a black render is. Since the instanced field:
+    0–4096 on a count taper — every count to 64 one detent apart, then 40
+    detents a doubling — whole numbers only, modulated or not."""
+    from hyperspace.tapers import T_INSTANCES
+
     reg, view, *_ = rig
     inst = reg["view.instances"]
-    assert (inst.lo, inst.hi) == (0, 100) and inst.modulatable and inst.persist
+    assert (inst.lo, inst.hi) == (0, 4096) and inst.modulatable and inst.persist
+    assert inst.taper is T_INSTANCES and inst.integer and inst.steps == 304
     assert view.instances == 1 and inst.text() == "1 instance(s)"     # the default stays 1
     inst.set_norm(0.0)                  # the knob's bottom, the slider's left end
     assert view.instances == 0 and isinstance(view.instances, int)
     assert inst.norm == 0.0 and inst.text() == "0 · nothing drawn"
     inst.step(1)
     assert view.instances == 1 and inst.text() == "1 instance(s)"
-    inst.set_norm(0.5)                  # linear: no taper to bend the throw
-    assert view.instances == 50 and inst.text() == "50 instance(s)"
+    for n in range(65):                 # every count to 64 is a detent
+        inst.set_value(n)
+        assert view.instances == n and inst.position() == n
+    inst.step(40)                       # then 40 detents double it
+    assert view.instances == 128 and inst.text() == "128 instance(s)"
+    counts = [T_INSTANCES.map(p) for p in range(inst.steps + 1)]
+    assert counts == sorted(set(counts)) and counts[-1] == 4096
+    assert all(T_INSTANCES.unmap(c) == p for p, c in enumerate(counts))
+    assert all(isinstance(T_INSTANCES.map(p + 0.37), int) for p in range(0, 304, 7))
+    # a lane rides it in whole copies
+    inst.set_value(10)
+    inst.modulate(0.1)
+    inst.apply()
+    assert isinstance(view.instances, int) and view.instances == T_INSTANCES.map(10 + 30)
+    inst.apply()                        # the lane let go: the base comes back
+    assert view.instances == 10
     assert "0 draws nothing" in inst.tip
     # zero is a value like any other to a snapshot
     inst.set_value(0)
@@ -566,8 +585,11 @@ def test_inst_layout_is_declared(tmp_path):
     from hyperspace.params import INST_LAYOUT
 
     reg, view, *_ = make(tmp_path / "plain")
+    from hyperspace import field
+
     p = reg["view.inst_layout"]
-    assert INST_LAYOUT == ["GRID", "HEX", "RING"]
+    assert INST_LAYOUT == ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM",
+                           "DIAMOND"] == field.NAMES
     assert p.kind is Kind.ENUM and p.names == INST_LAYOUT and p.label == "Layout"
     assert p.base == 0 and view.inst_layout == 0 and ViewState().inst_layout == 0
     assert p.group == "view" and p.persist and p.modulatable
@@ -577,6 +599,14 @@ def test_inst_layout_is_declared(tmp_path):
     assert ids.index("view.inst_layout") + 1 == ids.index("view.inst_motion")
     assert [reg[f"view.inst_{k}"].label for k in ("motion", "amp", "rate")] == [
         "Field motion", "Field amp", "Field rate"]
+    # the instanced field's three: fit, spacing and a lattice's depth, after
+    # the motion's, persisted and modulatable like it, off / 1 / 0.5 at rest
+    fit, sp, de = (reg[f"view.inst_{k}"] for k in ("fit", "spacing", "persp"))
+    assert ids.index("view.inst_rate") + 1 == ids.index("view.inst_fit")
+    assert (fit.kind, sp.kind, de.kind) == (Kind.TOGGLE, Kind.CONTINUOUS, Kind.CONTINUOUS)
+    assert all(q.group == "view" and q.persist and q.modulatable for q in (fit, sp, de))
+    assert (fit.base, sp.base, de.base) == (False, 1.0, 0.5)
+    assert (view.inst_fit, view.inst_spacing, view.inst_persp) == (False, 1.0, 0.5)
     p.set(2)
     assert view.inst_layout == 2 and reg.snapshot()["view.inst_layout"] == 2
 
