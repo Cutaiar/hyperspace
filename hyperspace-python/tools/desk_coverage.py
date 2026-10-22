@@ -47,7 +47,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from hyperspace import apc40, learn, lfo, routing, tempo
+from hyperspace import apc40, envelope, learn, lfo, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -139,6 +139,8 @@ def boot(home: Path) -> SimpleNamespace:
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    envelope.register(reg, envelope.Envelopes(), clock)      # plan 31: seq-demo's ids
+    sequencer.register(reg, sequencer.Sequencer(), clock)
     table = Bindings.load(None, legacy_midi=None)
     routing.register_desk(reg, table)
     lib.attach(reg)

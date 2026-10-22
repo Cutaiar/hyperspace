@@ -270,22 +270,88 @@ def test_a_lane_on_a_missing_envelope_fires_nothing():
 # ---- the transport ----
 
 def test_stopping_releases_gate_mode_envelopes():
+    """A stop closes a gate the pattern opened before its own gate ends:
+    span 4 bars (a 1 s step at 120 BPM) and a full-step gate, so the note
+    would hold until 3.0; the stop at 2.6 releases it there."""
     r = rig([Binding("env:0", "t.x", "push", 1.0)])
     r.reg["env.1.mode"].set(envelope.GATE)
     r.reg["env.1.sustain"].set(0.6)
     r.reg["env.1.release"].set(0.1)
-    r.reg["seq.1.1"].set(True)
+    r.reg["seq.span"].set(sequencer.SPANS.index("4 bars"))
+    r.reg["seq.gate"].set(1.0)
+    r.reg["seq.1.3"].set(True)                    # step 3 of 8: 2.0 s
     r.reg["seq.run"].set(True)
     frame(r, 1.99)
-    for t in (2.0, 2.5, 3.0, 3.5):
+    for t in (2.0, 2.3, 2.5):
         frame(r, t)
     assert r.box.x == pytest.approx(0.6)          # gate open: the sustain holds
     r.reg["seq.run"].set(False)
-    frame(r, 3.6)                                 # the frame that sees the stop releases
-    frame(r, 3.65)
+    frame(r, 2.6)                                 # the frame that sees the stop releases
+    frame(r, 2.65)
     assert r.box.x == pytest.approx(0.3)          # half way through a 100 ms release
-    frame(r, 3.8)
+    frame(r, 2.8)
     assert r.box.x == 0.0 and r.reg["seq.step"].value == 0
+
+
+def _gate_rig():
+    """Env 1 in gate mode, linear, fast attack and decay to a 0.6 sustain
+    and a 100 ms release, pushed onto `t.x`; lane 1 step 1 on at 1 bar."""
+    r = rig([Binding("env:0", "t.x", "push", 1.0)])
+    reg = r.reg
+    reg["env.1.mode"].set(envelope.GATE)
+    reg["env.1.attack"].set(0.01)
+    reg["env.1.decay"].set(0.01)
+    reg["env.1.sustain"].set(0.6)
+    reg["env.1.release"].set(0.1)
+    reg["seq.1.1"].set(True)
+    reg["seq.run"].set(True)
+    return r
+
+
+def test_a_step_releases_a_gate_mode_envelope_after_half_a_step():
+    """At 120 BPM and 1 bar a step is 0.25 s; the default gate, half a
+    step, releases the note 0.125 s after the step's own time (2.0)."""
+    r = _gate_rig()
+    assert r.reg["seq.gate"].value == pytest.approx(sequencer.GATE) == 0.5
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.125)
+    frame(r, 1.99)
+    frame(r, 2.1)
+    assert r.box.x == pytest.approx(0.6)          # sustaining: the gate is open
+    frame(r, 2.125)
+    assert r.box.x == pytest.approx(0.6)          # released exactly now
+    frame(r, 2.175)
+    assert r.box.x == pytest.approx(0.3)          # half way through the release
+    frame(r, 2.23)
+    assert r.box.x == 0.0                         # back before the next step
+
+
+def test_the_gate_follows_the_bpm_and_the_gate_param():
+    r = _gate_rig()
+    r.clock.set_bpm(60.0, 0.0)                    # a step is now 0.5 s, the gate 0.25 s
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.25)
+    frame(r, 3.99)                                # step 0 of the next bar: 4.0 s
+    frame(r, 4.2)
+    assert r.box.x == pytest.approx(0.6)          # 0.2 s in: still open at 60 BPM
+    frame(r, 4.3)
+    assert r.box.x == pytest.approx(0.3)          # released at 4.25
+    r.reg["seq.gate"].set(0.2)
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.1)
+    r.reg["seq.gate"].set(5.0)                    # clamped to a whole step
+    assert r.reg["seq.gate"].value == 1.0
+
+
+def test_a_one_shot_ignores_the_gate():
+    """A one-shot runs its attack and decay whatever the gate: a 0.4 s
+    decay outlasts the 0.125 s gate."""
+    r = rig([Binding("env:0", "t.x", "push", 1.0)])
+    one_shot(r, 1, attack=0.1, decay=0.4)
+    r.reg["seq.1.1"].set(True)
+    r.reg["seq.run"].set(True)
+    frame(r, 1.99)
+    frame(r, 2.1)
+    assert r.box.x == pytest.approx(1.0)
+    frame(r, 2.3)
+    assert r.box.x == pytest.approx(0.5)          # mid-decay, long past the gate
 
 
 # ---- undo ----
@@ -327,6 +393,12 @@ def test_undo_of_a_step_toggle():
 
 @pytest.fixture()
 def app(tmp_path):
+    return make_app(tmp_path)
+
+
+def make_app(tmp_path, plan31: bool = True):
+    """The app's registry, library, router and presets; `plan31` False is
+    a build from before plan 31 — no envelopes, no sequencer."""
     from hyperspace import preset, tempo
     from hyperspace.analysis import Analyser
     from hyperspace.analyzer import Analyzer
@@ -347,18 +419,20 @@ def app(tmp_path):
     lfos, envs, seq = LFOs(), Envelopes(), Sequencer()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
-    envelope.register(reg, envs, clock)
-    sequencer.register(reg, seq, clock)
+    if plan31:
+        envelope.register(reg, envs, clock)
+        sequencer.register(reg, seq, clock)
     table = routing.Bindings.load(routing.bindings_path(tmp_path), legacy_midi=None)
     routing.register_desk(reg, table)
     lib.attach(reg)
     router = routing.Router(reg, table)
     router.use_lfos(lfos, clock)
-    router.use_bank(envs, clock)
-    router.use_sequencer(seq, envs)
+    if plan31:
+        router.use_bank(envs, clock)
+        router.use_sequencer(seq, envs)
     presets = preset.Presets(lib, reg, router)
     return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, lfos=lfos,
-                           envs=envs, seq=seq)
+                           envs=envs, seq=seq, clock=clock)
 
 
 def test_a_preset_carries_the_pattern_and_the_envelopes(app):
@@ -422,3 +496,169 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
     for k in range(1, 30):
         frame(r, k / 60)
     assert r.box.x == 0.0 and not math.isnan(r.reg["t.x"].value)
+
+
+# ---- plan 31 P: the conditional schema, hyperspace.preset/3 ----
+
+V2, V3 = "hyperspace.preset/2", "hyperspace.preset/3"
+
+
+def _new_ids(doc) -> list[str]:
+    return [k for k in doc["values"] if k.startswith(("env.", "seq."))]
+
+
+def test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step(app, tmp_path):
+    """Nothing of plan 31's touched: a /2 file naming no env.* / seq.*
+    value — the file a build from before plan 31 wrote — and a load and a
+    re-save of it are byte for byte the same file."""
+    from hyperspace import preset
+
+    app.reg["seq.run"].set(True)                  # the transport is never the preset's
+    doc = app.presets.document("plain")
+    assert doc["schema"] == V2 and preset.schema_of(doc) == V2
+    assert _new_ids(doc) == [] and "lfos" not in doc and "envs" not in doc
+    every = app.reg.snapshot(part="performance")
+    assert set(doc["values"]) == {k for k in every if not k.startswith(("env.", "seq.", "mod."))}
+    path = app.presets.save_as("plain")
+    first = path.read_bytes()
+    assert first == preset.dumps(doc).encode()
+    # byte for byte what a build without the envelopes and the sequencer writes
+    old = make_app(tmp_path / "old", plan31=False)
+    assert preset.dumps(old.presets.document("plain")).encode() == first
+    # and stable through a load (once a load has read the file's integers
+    # back as floats, as every preset since plan 13 does)
+    assert app.presets.load("plain") == []
+    again = app.presets.save_as("plain").read_bytes()
+    assert app.presets.load("plain") == []
+    assert app.presets.save_as("plain").read_bytes() == again
+    assert app.presets.document("plain")["schema"] == V2
+
+
+@pytest.mark.parametrize("touch", [
+    lambda a: a.reg["seq.2.4"].set(True),                       # one step on
+    lambda a: a.reg["seq.swing"].set(0.2),                      # a sequencer setting
+    lambda a: a.reg["seq.gate"].set(0.8),
+    lambda a: a.reg["env.3.decay"].set(1.0),                    # an envelope's knob
+    lambda a: a.envs.add(),                                     # an extra envelope
+    lambda a: a.lfos.remove(4),                                 # LFO membership
+    lambda a: a.router.table.set_routes([Binding("env:0", "view.bright", "push", 0.5)]),
+    lambda a: a.router.table.set_routes([Binding("lfo:0", "seq.swing", "push", 0.5)]),
+], ids=["step", "swing", "gate", "env-knob", "extra-env", "lfos", "env-route",
+        "seq-target"])
+def test_anything_an_older_build_would_lose_saves_as_3(app, touch):
+    touch(app)
+    doc = app.presets.document("new")
+    assert doc["schema"] == V3 and next(iter(doc)) == "schema"
+    # a /3 file carries every envelope and sequencer value, as /2 carries
+    # every other group's
+    snap = app.reg.snapshot(part="performance")
+    assert set(_new_ids(doc)) == {k for k in snap if k.startswith(("env.", "seq."))}
+
+
+def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
+    reg = app.reg
+    plain = app.presets.document("plain")
+    app.presets.save_as("plain")
+    reg["seq.1.1"].set(True)
+    reg["env.1.attack"].set(0.4)
+    first = app.presets.document("pattern")
+    app.presets.save_as("pattern")
+    reg["seq.1.1"].set(False)
+    reg["env.1.attack"].set(0.01)
+    assert app.presets.load("pattern") == []
+    assert reg["seq.1.1"].value is True and reg["env.1.attack"].value == pytest.approx(0.4)
+    assert app.presets.document("pattern") == first
+    assert app.presets.load("plain") == []
+    assert reg["seq.1.1"].value is False
+    assert reg["env.1.attack"].value == pytest.approx(envelope.Envelope().attack)
+    assert app.presets.document("plain") == plain
+
+
+def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
+    """The library takes /2 and /3 (`preset.VERSIONS`); a build from before
+    plan 31, whose kind takes /2 alone, refuses a /3 file whole instead of
+    loading it and stripping the pattern on its next save."""
+    from dataclasses import replace
+
+    from hyperspace import preset
+    from hyperspace.library import LibraryError
+
+    assert preset.VERSIONS == (2, 3)
+    app.presets.save_as("plain")
+    app.reg["seq.3.3"].set(True)
+    app.presets.save_as("pattern")
+    lib = app.lib
+    assert lib.read("presets", "plain")["schema"] == V2
+    assert lib.read("presets", "pattern")["schema"] == V3
+    kinds = lib._kinds
+    kinds["presets"] = replace(kinds["presets"], versions=(2,))     # the older build
+    try:
+        assert lib.read("presets", "plain")["schema"] == V2
+        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+            lib.read("presets", "pattern")
+    finally:
+        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+
+
+def test_2_to_3_is_the_identity(app):
+    """A /2 document relabelled /3 loads to the same state as the /2."""
+    app.reg["view.bright"].set(1.5)
+    doc = app.presets.document("p")
+    assert doc["schema"] == V2
+    app.presets.load_doc(doc)
+    want = app.reg.snapshot(part="performance")
+    app.reg["view.bright"].set(0.2)
+    assert app.presets.load_doc({**doc, "schema": V3}) == []
+    assert app.reg.snapshot(part="performance") == want
+
+
+# ---- plan 31 P: the factory seq-demo ----
+
+def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
+    """The factory seq-demo: kick 1 and 5, snare 3 and 7, hats on every
+    step at half a bar, one-shot envelopes on brightness, zoom and the
+    deconverge. It loads stopped (decision 8); with play pressed at the
+    golden rig's clock — triggered at T0 = 2.0, play and a restart on the
+    first frame, eight 60 Hz frames — the hashed frame is 117 ms into the
+    kick; the hat that fired with it (70 ms) is over and the snare (step 3,
+    at 2.267) is still to come. tools/golden_frames.py draws that frame;
+    two more 16ths on, the snare and the hat of step 3 are mid-hit too."""
+    from hyperspace import preset
+
+    doc = preset.generated("seq-demo")
+    assert doc["schema"] == V3
+    on = {(ln, s) for ln in range(1, 6) for s in range(1, 9)
+          if doc["values"].get(f"seq.{ln}.{s}")}
+    assert on == {(1, 1), (1, 5), (2, 3), (2, 7), *((3, s) for s in range(1, 9))}
+    app.reg["seq.run"].set(False)
+    assert app.presets.load("seq-demo") == [] and app.presets.notes == []
+    reg, seq, clock = app.reg, app.seq, app.clock
+    assert not seq.run and reg["seq.span"].value == 0 and seq.steps_per_beat == 4
+    assert all(app.envs.voice(n).mode == envelope.ONE_SHOT for n in (1, 2, 3))
+    base = {k: reg[k].value for k in ("view.bright", "camera.zoom", "fx.deconverge.amount")}
+    assert base["view.bright"] == pytest.approx(0.6) and base["fx.deconverge.amount"] == 0.0
+    t0, dt = 2.0, 1 / 60
+    clock.trigger(t0)
+    seq.run = True
+    seq.restart()
+
+    def frames(ks):
+        for k in ks:
+            t = t0 + k * dt
+            clock.tick(t)
+            app.router.modulate(None, dt, t)
+            reg.apply()
+
+    frames(range(1, 9))                           # the golden's frame: 2.1333
+    out = list(app.router.feeds["env"])
+    assert out[0] > 0.5 and out[1] == 0.0 and out[2] == 0.0    # the kick; the hat over
+    assert [app.envs.voice(n).note for n in (1, 2, 3)] == [1, 0, 1]
+    assert reg["view.bright"].value > base["view.bright"]
+    assert reg["camera.zoom"].value == pytest.approx(base["camera.zoom"])
+    assert reg["fx.deconverge.amount"].value == 0.0
+    assert seq.playhead == 0
+    frames(range(9, 19))                          # 2.30: 33 ms after step 3 (2.267)
+    out = list(app.router.feeds["env"])
+    assert out[1] > 0.5 and out[2] > 0.0 and seq.playhead == 2
+    assert reg["camera.zoom"].value > base["camera.zoom"]
+    assert reg["fx.deconverge.amount"].value > 0.0

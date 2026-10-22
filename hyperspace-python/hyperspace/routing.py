@@ -2930,9 +2930,14 @@ class Router:
             return
         envs = self.__dict__.get("seq_envs")
 
+        # each note holds a gate-mode envelope for `seq.gate` of a step at
+        # this frame's bpm and span (a one-shot ignores it), so a pattern
+        # of gate envelopes plays notes rather than one held sustain
+        gate = seq.gate_seconds(clock) if hasattr(seq, "gate_seconds") else None
+
         def fire(lane, env, at, velocity):
             if envs is not None:
-                envs.fire(env, at=at, velocity=velocity)
+                envs.fire(env, at=at, velocity=velocity, gate=gate)
 
         def release(lane, env, at):
             if envs is not None:

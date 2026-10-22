@@ -18,6 +18,8 @@ Per sequencer (all global, decisions 5–6):
           (``steps_per_beat = 8 / (bars · 4)``)
   length  1–8: the pattern wraps after this many steps
   swing   0–0.5 of a step: how late every odd step lands
+  gate    0.05–1 of a step: how long a fired gate-mode envelope holds
+          before it releases (`gate_seconds`; a one-shot ignores it)
   run     the transport; session state, never in a preset (decision 8)
 
 Per lane: the eight steps, `mute`, and `env`, the envelope it fires —
@@ -66,7 +68,8 @@ can close; what releasing means is the host's (wave 2: `envs.release`).
 Callbacks, both 0-based in the lane like the router's addresses
 (``seq:0`` is lane 1, the param ids are 1-based ``seq.1.3``):
 
-  fire(lane, env, at, velocity)    a step on an unmuted lane
+  fire(lane, env, at, velocity)    a step on an unmuted lane (the host
+                                   adds ``gate=gate_seconds(clock)``)
   release(lane, env, at)           `run` went off
 
 Class-level defaults for the runtime state, so a hot-reloaded instance
@@ -87,6 +90,7 @@ SPANS = ["1/2 bar", "1 bar", "2 bars", "4 bars"]
 BARS = {"1/2 bar": 0.5, "1 bar": 1.0, "2 bars": 2.0, "4 bars": 4.0}
 BEATS_PER_BAR = 4            # 4/4, as tempo.py assumes
 SWING_HI = 0.5
+GATE_LO, GATE_HI, GATE = 0.05, 1.0, 0.5   # a fired note's gate, in steps
 ENV_HI = 16                  # the envelope bank's cap (plan 31 decision 3)
 REST = 0.0                   # a trigger lane rests low: a pulse is its rising edge
 REALIGN = STEPS              # a jump back further than this is a re-anchor, not a nudge
@@ -131,12 +135,21 @@ class Sequencer:
         self.span = SPANS.index("1 bar")
         self.length = STEPS
         self.swing = 0.0
+        self.gate = GATE
         self.run = False
 
     @property
     def steps_per_beat(self) -> float:
         """8 steps over the span: 4 (16ths) at 1/2 bar … 0.5 (halves) at 4 bars."""
         return STEPS / (BARS[SPANS[self.span]] * BEATS_PER_BAR)
+
+    def gate_seconds(self, clock) -> float:
+        """How long a step's fire holds a gate-mode envelope open: `gate`
+        of one (unswung) step at the clock's bpm and this span —
+        ``gate · 60 / (bpm · steps_per_beat)``, so a tempo change or a new
+        span changes the next note's gate."""
+        g = float(_clamp(getattr(self, "gate", GATE), GATE_LO, GATE_HI))
+        return g * 60.0 / (clock.bpm * self.steps_per_beat)
 
     @property
     def labels(self) -> list[str]:
@@ -285,6 +298,11 @@ def register(reg, seq: Sequencer, clock=None) -> None:
                    lambda v: setattr(seq, "swing", float(_clamp(v, 0.0, SWING_HI))),
                    lo=0.0, hi=SWING_HI, fmt=lambda v: f"swing {v:.2f}", group=g,
                    tip="How late every odd step lands, as a fraction of a step.")
+    reg.continuous(f"{g}.gate", "Seq gate", lambda: getattr(seq, "gate", GATE),
+                   lambda v: setattr(seq, "gate", float(_clamp(v, GATE_LO, GATE_HI))),
+                   lo=GATE_LO, hi=GATE_HI, fmt=lambda v: f"gate {v:.2f}", group=g,
+                   tip="How long a step holds a gate-mode envelope open, as a fraction "
+                       "of a step. One-shot envelopes ignore it.")
     reg.toggle(f"{g}.run", "Seq run", lambda: seq.run,
                lambda v: setattr(seq, "run", bool(v)), group=g, persist=False,
                tip="The transport. Starting waits for the next step; the grid is "

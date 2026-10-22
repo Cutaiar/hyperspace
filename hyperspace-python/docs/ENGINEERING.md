@@ -939,7 +939,7 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
 | `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
@@ -1019,6 +1019,13 @@ prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
   known corruption risk).
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
+- **Both Macs on one library must be on this build** (plan 31). A preset
+  that uses the step sequencer, the envelopes or more or fewer than four
+  LFOs is saved as `hyperspace.preset/3`; every other preset is still
+  `hyperspace.preset/2`, byte for byte as before. An older build refuses
+  a /3 file with "schema … is not a hyperspace.preset" rather than load
+  it and strip the pattern on its next save, so update both machines
+  before either saves one. This build reads both.
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
