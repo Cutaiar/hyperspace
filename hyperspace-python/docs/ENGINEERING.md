@@ -816,10 +816,25 @@ exactly the held ones that some row on that key names (`SHIFT`, `SUPER`,
 the key names is ignored.
 
 **Gamepad** (Xbox layout, Bluetooth or USB; `gamepad.py` keeps its own
-button map): A pause rotation · B next preset · X points · Y faces ·
-LB / RB previous / next shape · d-pad brightness (↑↓) and speed (←→) ·
-left stick orbit, right stick zoom, a stick click resets · LT / RT 4D
-depth out / in · VIEW panel · MENU cheat sheet.
+button map): A faces · Y lines · B / X next / previous in the preset
+list · LB / RB previous / next shape · d-pad brightness (↑↓) and speed
+(←→) · hold START to save the live state as a new preset · left stick
+orbit, right stick zoom (Y) and the 4D spin (X), a stick click resets
+each · LT / RT 4D depth out / in. BACK is free; Learn pad puts anything
+on it.
+
+**The pad diagram** (`ui_pad.py`) draws that, live, instead of asking
+anyone to trust this table: the pad at the top of the desk's column —
+the switch is on the SYSTEM page, off at every launch — every control
+where it sits on the device, lit where a row maps it and, once a unit is
+40 × 28 px, carrying what it does. A grey label is one of the six axes
+with no route on it, where the app's own hand is (orbit, zoom, the 4D
+spin, the depth); a bright one is a row of `bindings.json`. The live pad
+shows through it — a held button fills red, each stick sits in its well,
+each axis fills its lane — and the picture is the same with no pad
+plugged in. It is read-only: the hover names the control, its param and
+its source, and Learn pad (right-click a param) is still the way onto a
+control.
 
 ## 8. The APC40
 

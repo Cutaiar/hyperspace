@@ -6,7 +6,8 @@ glyph the ROUTING page prints first on a desk or session row and Learn
 prints in its messages — so a row can be found on the device by looking.
 
 **It takes the room it has** (`room`, plan 17 fork 1): the space left of
-the panel, bottom-left, above the cheat sheet when that shows; with the
+the panel, bottom-left, above the cheat sheet when that shows and under
+the pad diagram when that is up (ui_pad.py); with the
 panel hidden (`ui.panel`: H, DEVICE ON/OFF, the header's `big` chip) it is
 the whole control window. There is no DESK page and no param for its
 size. Once a layout unit is `LABEL_UNIT` px wide every lit control also
@@ -358,19 +359,23 @@ def _hover(panel, table, c: apc40.Control, b: Binding | None) -> str:
 # ---------------------------------------------------------------- the room
 
 def room(display: tuple[float, float], panel_x: float | None,
-         sheet: tuple[float, float] | None) -> tuple[float, float, float, float]:
+         sheet: tuple[float, float] | None,
+         pad_h: float = 0.0) -> tuple[float, float, float, float]:
     """(x, y, w, h) of the desk window. `panel_x`: the panel's left edge,
     None while it is hidden. `sheet`: the cheat sheet's (w, h), None
-    while it is off.
+    while it is off. `pad_h`: the height of the pad diagram over it
+    (ui_pad.py), 0 while that is off.
 
     Bottom-left, `EDGE` from the window's edges. Its right edge is `EDGE`
     left of the panel, or of the window's right edge with the panel
     hidden; never narrower than `MIN_W`. The cheat sheet, when on: with
     the panel open the desk sits above it; with the panel hidden, beside
-    it, full height. As tall as there is room for, capped so a layout
-    unit is never taller than it is wide."""
+    it, full height. As tall as there is room for — under the pad
+    diagram, when that is up — capped so a layout unit is never taller
+    than it is wide."""
     dw, dh = display
     x, bottom = EDGE, dh - EDGE
+    top = EDGE + (pad_h + GAP if pad_h else 0.0)
     right = (dw if panel_x is None else panel_x) - EDGE
     if sheet is not None:
         if panel_x is None:
@@ -379,7 +384,7 @@ def room(display: tuple[float, float], panel_x: float | None,
             bottom -= sheet[1] + GAP
     w = max(MIN_W, right - x)
     unit = (w - 2 * PAD) / apc40.LAYOUT_W
-    h = max(MIN_H, min(bottom - EDGE, unit * apc40.LAYOUT_H + 2 * PAD + HEAD_H))
+    h = max(MIN_H, min(bottom - top, unit * apc40.LAYOUT_H + 2 * PAD + HEAD_H))
     w, h = float(int(w)), float(int(h))          # whole pixels, as imgui places a window
     return x, bottom - h, w, h
 
@@ -397,7 +402,10 @@ def _room(panel) -> tuple[float, float, float, float]:
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))
-    return room(display, panel_x, sheet)
+    # the pad diagram sits at the top of the same column, and is drawn
+    # before this (ui.Panel._draw), so its height is this frame's
+    pad_h = getattr(panel, "_pad_h", 0.0) if getattr(panel, "pad_diagram", False) else 0.0
+    return room(display, panel_x, sheet, pad_h)
 
 
 # ---------------------------------------------------------------- what a control says
