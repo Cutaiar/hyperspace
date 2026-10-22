@@ -122,6 +122,21 @@ def test_the_page_draws_with_the_default_bank(rig):
         frame(rig.panel)
 
 
+def test_the_transport_draws_length_swing_and_gate(rig, monkeypatch):
+    """The knobs line: length, swing and the gate length (P1's `seq.gate`),
+    each a half fader."""
+    drawn = []
+    real = type(rig.panel).half
+
+    def half(self, pid, *a, **k):
+        drawn.append(pid)
+        return real(self, pid, *a, **k)
+    monkeypatch.setattr(type(rig.panel), "half", half)
+    _draw_page(rig.panel)
+    assert {"seq.length", "seq.swing", "seq.gate"} <= set(drawn)
+    assert drawn.index("seq.swing") < drawn.index("seq.gate")
+
+
 def test_the_page_says_so_without_a_sequencer(rig):
     rig.panel.seq = rig.panel.envs = None
     frame(rig.panel)
