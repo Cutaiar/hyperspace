@@ -720,12 +720,13 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
                     imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
     monkeypatch.setattr(Panel, "_page_view", measured)
     room = {}
-    for n in (1, 7, 9, 100):
-        for layout in (0, 1, 2):
+    for n in (1, 7, 9, 4096):
+        for layout in (0, 1, 2, 5):         # a 3D lattice adds the field's depth
             for motion in (0, 1):
                 rig.reg["view.instances"].set(n)
                 rig.reg["view.inst_layout"].set(layout)
                 rig.reg["view.inst_motion"].set(motion)
+                rig.reg["view.inst_fit"].set(n == 9)
                 for _ in range(3):          # the window settles its size, then its content
                     frame(rig.panel, "view")
                 room[(n, layout, motion)] = got[-1]
@@ -734,12 +735,12 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
 
 def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
     """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
-    The page test above draws it at one copy, where the field row is
-    hidden; above one the row shows (and the page as it was scrolled by
-    19 px there). Measured with 7, 9 and 100 copies in every layout, still
-    and in motion, and at one copy."""
+    The page test above draws it at one copy, where the field rows are
+    hidden; above one they show (and the page as it was scrolled by 19 px
+    there). Measured with 7, 9 (fitted) and 4096 copies in the flat layouts
+    and a lattice, still and in motion, and at one copy."""
     room = view_page_room(rig, monkeypatch)
-    assert len(room) == 24
+    assert len(room) == 32
     assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
@@ -780,6 +781,17 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     row = [rects[pid] for pid in FIELD_ROW]
     assert len({round(r[1]) for r in row}) == 1                    # one line
     assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    # the count and Fit share a line; spacing and a lattice's depth the next
+    rig.reg["view.inst_layout"].set(5)
+    for _ in range(3):
+        frame(rig.panel, "view")
+    count, depth = rects["view.instances"], (rects["view.inst_spacing"],
+                                             rects["view.inst_persp"])
+    assert count[2] <= CONTROL_SIZE[0] and depth[0][2] < depth[1][0]
+    assert round(depth[0][1]) == round(depth[1][1]) > round(rects["view.inst_layout"][1])
+    rig.reg["view.inst_layout"].set(1)
+    for _ in range(3):
+        frame(rig.panel, "view")
     cells = [rects[pid] for pid in ROT_RATES]
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))

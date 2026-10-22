@@ -26,7 +26,7 @@ preset is still `/2`, byte for byte. One factory preset was added,
 all).
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group Z, checks
-277–292 (283–292 are the APC40 page's, on `plan-31-a1`). Decisions: the
+280–295 (286–295 are the APC40 page's, on `plan-31-a1`). Decisions: the
 ten are rows 311–320 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md),
 each answered "(rec) — accepted 2026-10-22", and their rows in
 [`DECISIONS.md`](../DECISIONS.md) "Tempo, LFOs and the sequencer".
@@ -501,23 +501,23 @@ Everything. Every proof is headless: the tests on a deterministic
 clock, the goldens at one pinned moment, the panel drawn on a headless
 imgui context. In particular:
 
-- **The LFO page at 7 and at 16 LFOs** (277): the folding, the open
+- **The LFO page at 7 and at 16 LFOs** (280): the folding, the open
   strip, the scroll and the cost of sixteen scopes in the live app.
-- **The SEQ page at distance** (278): 36 px cells, the yellow playhead
+- **The SEQ page at distance** (281): 36 px cells, the yellow playhead
   against green, the dimmed columns past `length`, the folded
   envelope strips' micro text.
-- **`seq-demo` against real music** (279): whether 16ths fired at the
+- **`seq-demo` against real music** (282): whether 16ths fired at the
   exact step time *feel* tight at 120–175 BPM — the tests prove the
   time, not the feel — and whether the kick on brightness reads at all
   on a projector.
 - **The global trigger re-aligning the grid** on a running pattern with
-  synced LFOs (280), and the per-sequencer restart leaving the LFOs.
-- **The GRAPH lane cables** (281): the drag onto a `fire` stub, the
+  synced LFOs (283), and the per-sequencer restart leaving the LFOs.
+- **The GRAPH lane cables** (284): the drag onto a `fire` stub, the
   refusals, the faint stopped and muted cables — the tests call the
   functions, never a mouse.
-- **Two Macs on one library** with a `/3` preset (282): no test runs an
+- **Two Macs on one library** with a `/3` preset (285): no test runs an
   older build.
-- **The APC40 page, all of it** (283–292, on `plan-31-a1`): the fake-port
+- **The APC40 page, all of it** (286–295, on `plan-31-a1`): the fake-port
   rig proves the messages, never an mk1 — yellow over green, the mute
   blink on a scene button, no flicker at 180 BPM 16ths, the 24 bank pads
   relit, a power cycle, a desk fallen back to Generic mode (where SEND A
@@ -711,7 +711,11 @@ rest live — with these as built (above): the LED table is `led_shade` +
 - **Registry growth** and **frame time**: see the rough edges; nothing
   has measured the caps.
 - **Numbering.** Register rows 311–320 and hand checks 277–292 were
-  assigned on `plan-31-integration`, after plan 28/30's 310 and 276.
+  assigned on `plan-31-integration`, after plan 28/30's 310 and 276; when
+  `plan-28-30-integration` brought in `main`'s instanced field (its checks
+  renumbered to 277–279, its guide entries to L136–L138), plan 31's
+  checks moved up to 280–295 and its guide entries from L136–L141 to
+  L139–L144. The register rows did not move.
 
 ## Decisions for the owner — all accepted 2026-10-22
 

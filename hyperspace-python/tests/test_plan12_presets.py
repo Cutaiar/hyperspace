@@ -302,7 +302,13 @@ def test_each_hand_axis_moves_its_target_as_the_table_says(name, tmp_path):
         ordered = [sign * x for x in readings]
         assert all(y >= x - 1e-9 for x, y in itertools.pairwise(ordered)), (name, b.target, readings)
         span = ordered[-1] - ordered[0]
-        assert span > 0.1, (name, b.target, readings)       # it reads on screen
+        # it reads on screen: a tenth of the throw, or — on a log range, whose
+        # norm is octaves and whose span the ends can widen (camera.zoom's did,
+        # 2026-10-21) — half an octave, a move of 1.4× or more
+        if p.log:
+            assert span * math.log2(p.hi / p.lo) > 0.5, (name, b.target, readings)
+        else:
+            assert span > 0.1, (name, b.target, readings)
         if b.op == "position":
             assert abs(readings[-1]) == pytest.approx(1.0 - base, abs=2e-3)
         # the hand at u = 1 leaves the box: the base returns over the spring
@@ -387,13 +393,15 @@ def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
             lfos.publish(router)
             router.modulate()
             r.reg.apply()
-            seen.append(zoom.eff_norm - z0)
+            # in octaves, so the pump is measured as the zoom it is and not
+            # as a fraction of a range whose ends may move (2026-10-21)
+            seen.append((zoom.eff_norm - z0) * math.log2(zoom.hi / zoom.lo))
         return seen
 
     still = frames({}, 60)
     assert max(abs(x) for x in still) < 1e-9                      # depth 0: no pump
     pumped = frames({"left": feats("left", y=1.0)}, 60)
-    assert max(pumped) > 0.03 and min(pumped) < -0.03             # ±0.04 at depth 1
+    assert max(pumped) > 0.3 and min(pumped) < -0.3               # ±0.39 octaves (×1.31) at depth 1
     assert r.reg["lfo.1.depth"].value == pytest.approx(1.0, abs=1e-3)
     gone = frames({}, 90)
     assert abs(gone[-1]) < 1e-6 and r.reg["lfo.1.depth"].value == 0.0

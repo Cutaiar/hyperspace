@@ -2509,7 +2509,7 @@ def test_the_router_keeps_two_pads_apart(tmp_path):
     router.pad(one, now=0.0)
     router.pad(two, now=0.0, role="p2")
     assert r.reg["view.faces"].value == faces and r.reg["view.points"].value != points
-    assert router.labels["axis@p2"] == list(gp.AXIS_LABELS) and "axis" in router.labels
+    assert router.labels["axis@p2"] == list(gp.LANE_LABELS) and "axis" in router.labels
     assert float(router.feeds["axis@p2"][5]) == 1.0
     assert router.lane("axis@p2:RT") == ("axis@p2", 5)
     points = r.reg["view.points"].value

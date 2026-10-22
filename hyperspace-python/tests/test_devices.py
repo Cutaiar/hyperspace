@@ -551,7 +551,7 @@ def test_the_pad_shim_polls_learns_and_delivers_rows_as_the_frame_did(monkeypatc
     calls: list = []
     pad = SimpleNamespace(poll=lambda: calls.append("poll"), on=True, source="glfw", usb_pad=None)
     router = SimpleNamespace(pad=lambda p, buttons: calls.append(("rows", p is pad, buttons)))
-    monkeypatch.setattr(gamepad, "learn_from", lambda p, learn: calls.append(("learn", learn)) or
+    monkeypatch.setattr(gamepad, "learn_from", lambda p, learn, **kw: calls.append(("learn", learn)) or
                         learn == "taken")
     d = devices.PadDevice("pad", io=pad)
     d.poll(1 / 60, 0.0)

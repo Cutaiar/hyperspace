@@ -82,7 +82,7 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     assert st["pin_xy"] and all(graphview.is_stub(p) for p in st["pin_xy"])
     desk = graphview.summary(view.node("device:apc40"))
     assert desk[0].endswith("patched") and " ports · " in desk[0]
-    assert graphview.summary(view.node("render:shape"))[0].startswith("51 params · ")
+    assert graphview.summary(view.node("render:shape"))[0].startswith("55 params · ")   # + main's 3D switch, Fit, spacing, depth
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports'
     shape = view.node("render:shape")

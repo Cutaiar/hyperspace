@@ -205,7 +205,7 @@ list; no factory project puts it in a bank slot. Five rows, each a
 | `hand:right.pitch` | `camera.pitch` | +0.5 | −44° … +44° |
 | `hand:left.x` | `camera.pan.x` | +0.1 | −400 px … +400 px |
 | `hand:left.z` | `camera.pan.y` | +0.1 | −400 px … +400 px |
-| `hand:left.y` | `camera.zoom` | +0.12 | base … base × 2.23 |
+| `hand:left.y` | `camera.zoom` | +0.0757 | base … base × 2.23 |
 
 An absent or level hand leaves the camera where the mouse left it. The
 two hands steering relative to each other is not built (it would need a
