@@ -6,7 +6,7 @@ import pytest
 from hyperspace import envelope, graphview, modbank, sequencer
 from hyperspace.envelope import Envelope
 
-from test_plan31_wiring import frame, rig
+from test_plan31_wiring import frame, make_app, rig
 
 
 # ---- 1: a note keeps the mode it was fired with ----
@@ -149,3 +149,25 @@ def test_a_lane_on_a_missing_id_fires_nothing():
     frame(r, 0.0)
     frame(r, 0.05)
     assert all(v.stage == envelope.IDLE for v in r.envs.voices)
+
+
+# ---- 4: a refused load leaves the extra voices exactly as they were ----
+
+def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
+    app = make_app(tmp_path)
+    reg = app.reg
+    doc = app.presets.document("x")            # four LFOs, five envelopes
+    bad = {**doc, "values": {**doc["values"], "view.bright": "fast"}}
+    n = app.lfos.add()
+    reg[f"lfo.{n}.depth"].set(0.9)
+    reg[f"lfo.{n}.rate"].set(7.0)
+    m = app.envs.add()
+    reg[f"env.{m}.decay"].set(3.0)
+    before = reg.snapshot(part="performance")
+    with pytest.raises(ValueError):
+        app.presets.load_doc(bad)
+    assert app.lfos.ids() == [1, 2, 3, 4, 5] and app.envs.ids() == [1, 2, 3, 4, 5, 6]
+    assert reg[f"lfo.{n}.depth"].value == pytest.approx(0.9)
+    assert reg[f"lfo.{n}.rate"].value == pytest.approx(7.0)
+    assert reg[f"env.{m}.decay"].value == pytest.approx(3.0)
+    assert reg.snapshot(part="performance") == before

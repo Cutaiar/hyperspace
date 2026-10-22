@@ -823,6 +823,7 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self._banks().items()}
         # from here to the values landing, anything that raises puts the
@@ -874,9 +875,13 @@ class Presets:
                 bank = self._banks()[scheme]
                 if bank.doc() != ids:
                     bank.set(ids)
-            if gs.mark() != held_graph:          # the graph as it was, and its instances'
-                gs.put(held_graph)               # values as they were
-                lib.restore({k: v for k, v in held_values.items() if k in reg})
+            if gs.mark() != held_graph:          # the graph as it was
+                gs.put(held_graph)
+            # then every value as it was — the graph instances', and a bank
+            # voice's that the load removed and the line above re-added
+            # fresh (`held_values` was taken before `bank.set`): a refused
+            # load leaves LFO 5's depth where it stood, not at its default
+            lib.restore({k: v for k, v in held_values.items() if k in reg})
             raise
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
