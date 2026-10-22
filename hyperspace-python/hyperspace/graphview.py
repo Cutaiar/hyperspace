@@ -2018,6 +2018,16 @@ NO_SUCH_MOD = "no modifier {kind}"
 # plan 31 G1: the banks' nodes and the sequencer's bindings
 LANE_ENV_KEPT = "{label} is a sequencer lane's envelope: it stays (an extra one can go)"
 BANK_FULL = "{k} {what}, the most there can be: delete one to add another"
+
+
+def bank_refusal(bank, scheme: str) -> str | None:
+    """Why the picker may not add a voice to `bank`: `BANK_FULL` at the
+    cap, else the bank's own reason (`modbank.Bank.refusal`: its ids used
+    up), or None."""
+    why = bank.refusal()
+    if why is not None and len(bank) >= bank.MAX:
+        return BANK_FULL.format(k=len(bank), what=BANK_WORDS[scheme][1])
+    return why
 NO_BANK = "no {what} bank on this rig"
 LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
                   "envelope's fire to rebind it")
@@ -2633,8 +2643,9 @@ class Edit:
         bank = bank_of(self.router, scheme)
         if bank is None:
             return Refusal(NO_BANK.format(what=BANK_WORDS[scheme][0]))
-        if not bank.can_add():
-            return Refusal(BANK_FULL.format(k=len(bank), what=BANK_WORDS[scheme][1]))
+        why = bank_refusal(bank, scheme)
+        if why is not None:
+            return Refusal(why)
         return f"{scheme}.{bank.add()}"
 
     def remove_value_node(self, nid: str, kind: str, node: VNode | None = None):

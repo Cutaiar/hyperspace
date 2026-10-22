@@ -1410,9 +1410,7 @@ def add_refusal(panel, scheme: str) -> str | None:
     bank = graphview.bank_of(ui_routing.router_of(panel), scheme)
     if bank is None:
         return graphview.NO_BANK.format(what=graphview.BANK_WORDS[scheme][0])
-    if not bank.can_add():
-        return graphview.BANK_FULL.format(k=len(bank), what=graphview.BANK_WORDS[scheme][1])
-    return None
+    return graphview.bank_refusal(bank, scheme)
 
 
 def add_voice(panel, scheme: str, at=None):

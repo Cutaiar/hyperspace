@@ -2,14 +2,12 @@
 each written to fail before its fix. The rigs are test_plan31_wiring's."""
 
 import pytest
+from test_plan31_wiring import frame, make_app, rig
 
 from hyperspace import envelope, graphview, modbank, preset, sequencer
 from hyperspace.envelope import Envelope
 from hyperspace.sequencer import SPANS, Sequencer
 from hyperspace.tempo import Clock
-
-from test_plan31_wiring import frame, make_app, rig
-
 
 # ---- 1: a note keeps the mode it was fired with ----
 
@@ -249,3 +247,38 @@ def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp
     out = old.presets.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
     assert out["schema"] == preset.SCHEMA
+
+
+# ---- 8: a refused add says why: the count, or the ids used up ----
+
+def test_the_refusal_names_the_count_or_the_ids():
+    from hyperspace.lfo import LFOs
+    full = LFOs()
+    while full.can_add():
+        full.add()
+    assert full.refusal() == f"{modbank.MAX} LFOs is the most"
+    used = LFOs()
+    used.add(modbank.MAX_ID)                   # five voices, the top id taken
+    assert len(used) < modbank.MAX and not used.can_add()
+    why = used.refusal()
+    assert "most" not in why and "ids" in why and str(modbank.MAX_ID) in why
+    assert LFOs().refusal() is None
+
+
+def test_the_tooltips_and_the_graph_picker_say_the_banks_reason():
+    from types import SimpleNamespace
+
+    from hyperspace import ui_graph, ui_lfo, ui_seq
+    r = rig()
+    r.lfos.add(modbank.MAX_ID)
+    r.envs.add(modbank.MAX_ID)
+    assert ui_lfo.add_tip(r.lfos) == r.lfos.refusal()
+    assert ui_seq.add_tip(r.envs) == r.envs.refusal()
+    panel = SimpleNamespace(router=r.router, reg=r.reg, library=None, midi=None)
+    assert ui_graph.add_refusal(panel, "lfo") == r.lfos.refusal()
+    assert ui_graph.add_refusal(panel, "env") == r.envs.refusal()
+    view = graphview.build(r.router.table, r.reg, r.router)
+    e = graphview.Edit(r.router.table, r.reg, r.router, view)
+    assert e.add_voice("env") == r.envs.refusal()
+    # with room, the tip offers the next one
+    assert "LFO" in ui_lfo.add_tip(rig().lfos) and "env 6" in ui_seq.add_tip(rig().envs)

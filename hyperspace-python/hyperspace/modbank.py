@@ -129,7 +129,18 @@ class Bank:
         return self.width + 1
 
     def can_add(self) -> bool:
-        return len(self._voices) < self.MAX and self.next_id() <= MAX_ID
+        return self.refusal() is None
+
+    def refusal(self) -> str | None:
+        """Why `add` would refuse, in the words a tooltip shows — the bank
+        at its cap, or no id left (ids are never reused, so a bank under
+        the cap can still have none: ``MAX_ID`` taken) — or None."""
+        if len(self._voices) >= self.MAX:
+            return f"{self.MAX} {self.LABEL}s is the most"
+        if self.next_id() > MAX_ID:
+            return (f"{self.LABEL} ids are used up ({MAX_ID} is the highest, and a removed "
+                    "one is not reused): remove and re-add in a fresh preset")
+        return None
 
     def add(self, n: int | None = None) -> int:
         """A fresh voice, `n` or `next_id`, its params declared. Its id."""

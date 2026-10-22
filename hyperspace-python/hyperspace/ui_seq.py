@@ -426,12 +426,18 @@ def _add_chip(panel, envs) -> None:
         add_env(panel, envs)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        if can:
-            imgui.set_tooltip(f"Another envelope, env {envs.next_id()} (up to {envs.MAX}); "
-                              "point a lane at it with its picker")
-        else:
-            imgui.set_tooltip(f"{len(envs)} envelopes, the most there can be — remove an "
-                              "extra with its × to add another")
+        imgui.set_tooltip(add_tip(envs))
+
+
+def add_tip(envs) -> str:
+    """`+ env`'s tooltip: the envelope it would add, or the bank's reason
+    not (`modbank.Bank.refusal`)."""
+    why = envs.refusal()
+    if why is not None:
+        return why + (" — remove an extra with its × to add another"
+                      if len(envs) >= envs.MAX else "")
+    return (f"Another envelope, env {envs.next_id()} (up to {envs.MAX}); "
+            "point a lane at it with its picker")
 
 
 def _folds(panel, seq, envs, ids, key: str) -> None:
