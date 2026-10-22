@@ -259,7 +259,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, lfo, modifiers, motion
+from . import apc40, envelope, lfo, modifiers, motion
 from . import patch as patchmod
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
@@ -294,7 +294,14 @@ FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 # (no bank handed in) still draws an LFO route's source as an LFO. A new
 # kind is one entry here, its scheme in patch.KINDS, and its instance
 # handed to `Router.use_bank`
-BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs}
+BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
+                          envelope.Envelopes.SCHEME: envelope.Envelopes}
+
+# the schemes no device feeds — the analyzer, the LFOs, the envelopes and
+# the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
+# BUILTIN_SCHEMES, restated (routing never imports devices), the two held
+# equal by tests/test_plan31_wiring.py
+BUILTIN_LANES = ("lane", "lfo", "env", "seq")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 # the row kinds the table dispatches itself (plan 27 B2): the keys
@@ -2549,10 +2556,11 @@ class Router:
         offers them: the registry's (`continuous_schemes`: the analyzer's
         `lane` and the LFOs' `lfo` first, then each listed device's feeds
         in list order), then any other scheme that has been fed or
-        labelled this run. With no registry, `lane` and `lfo` and then
-        whatever has been fed or labelled."""
+        labelled this run. With no registry, `BUILTIN_LANES` (the
+        analyzer, the LFOs, the envelopes, the sequencer) and then whatever
+        has been fed or labelled."""
         devs = self.__dict__.get("devices")
-        out = list(devs.continuous_schemes()) if devs is not None else ["lane", "lfo"]
+        out = list(devs.continuous_schemes()) if devs is not None else [*BUILTIN_LANES]
         for s in (*self.labels, *self.feeds):
             if s not in out and is_continuous(s):
                 out.append(s)
@@ -2899,6 +2907,40 @@ class Router:
         self.lfos = lfos
         self.use_bank(lfos, clock)
 
+    def use_sequencer(self, seq, envs, clock=None) -> None:
+        """The step sequencer (sequencer.Sequencer, plan 31 S) and the
+        envelope bank its lanes fire (envelope.Envelopes): from now on it
+        steps inside `modulate`, after every bank's `begin` — so a global
+        ``lfo.trigger`` held for this frame has moved the clock's epoch and
+        the grid re-aligns on the same frame — and before the plan, so the
+        envelope nodes later in it see this frame's fires, stamped at each
+        step's exact time. It feeds ``seq:<i>``, trigger lanes resting at 0
+        (decision 10), which a route can take to any trigger param. `clock`
+        None: the one `use_bank` gave."""
+        self.sequencer, self.seq_envs = seq, envs
+        if clock is not None:
+            self.clock = clock
+
+    def _step_sequencer(self, t: float, clock) -> None:
+        """The sequencer's frame (`use_sequencer`): its fires and stop
+        releases go to the envelope bank by id — one the bank lacks (a lane
+        pointed at a removed extra) is a no-op — and its pulses are fed."""
+        seq = self.__dict__.get("sequencer")
+        if seq is None or clock is None:
+            return
+        envs = self.__dict__.get("seq_envs")
+
+        def fire(lane, env, at, velocity):
+            if envs is not None:
+                envs.fire(env, at=at, velocity=velocity)
+
+        def release(lane, env, at):
+            if envs is not None:
+                envs.release(env, at=at)
+
+        seq.step(t, clock, fire, release)
+        seq.publish(self)                        # its lanes as trigger kinds too
+
     def bank(self, scheme: str):
         """The bank handed in for `scheme`, or None."""
         return self._banks().get(scheme)
@@ -3210,7 +3252,8 @@ class Router:
         """The frame's modulation pass — the one path a continuous source
         has to a param — over the patch **in dependency order** (plan 28
         N0, decision 7). Every bank begins first (`use_bank`: a held global
-        trigger lands); at a voice's node — an LFO's — it steps (`now`
+        trigger lands), then the sequencer steps (`use_sequencer`: its
+        fires queued on the envelopes, its pulses fed); at a voice's node — an LFO's — it steps (`now`
         the frame's time, the clock's when None) and its lane is fed; at a
         modifier's, `_step_modifier`; at a param's, every enabled performer
         row on it whose source is live calls modulate on it — depth =
@@ -3233,13 +3276,15 @@ class Router:
         mark = begin() if begin is not None else None
         banks = self._banks()
         fed: dict[str, np.ndarray] = {}
-        if banks:
-            clock = self.__dict__.get("clock")
-            t = now if now is not None else getattr(clock, "t", 0.0)
-            for scheme, bank in banks.items():
-                bank.begin(t, clock)
-                bank.publish(self)                   # names, rests; each lane as its voice steps
-                fed[scheme] = self.feeds[scheme]
+        clock = self.__dict__.get("clock")
+        t = now if now is not None else getattr(clock, "t", 0.0)
+        for scheme, bank in banks.items():
+            bank.begin(t, clock)
+            bank.publish(self)                   # names, rests; each lane as its voice steps
+            fed[scheme] = self.feeds[scheme]
+        # plan 31 W1: after every `begin` (a held global trigger has moved
+        # the epoch), before the plan (the envelopes step at their nodes)
+        self._step_sequencer(t, clock)
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL

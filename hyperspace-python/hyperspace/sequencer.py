@@ -232,6 +232,12 @@ class Sequencer:
         router.feed(GROUP, list(self.pulses))
         router.labels[GROUP] = self.labels
         router.rests[GROUP] = [REST] * LANES
+        # a pulse is a hit, not a level: each lane's signal kind is a
+        # trigger (decision 10), as a threshold modifier's output is — on a
+        # router that keeps kinds (routing.Router.lane_kinds)
+        kinds = getattr(router, "lane_kinds", None)
+        if isinstance(kinds, dict):
+            kinds[GROUP] = ["trigger"] * LANES
 
 
 def register(reg, seq: Sequencer, clock=None) -> None:

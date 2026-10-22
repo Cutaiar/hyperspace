@@ -108,7 +108,9 @@ RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
 WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
-BUILTIN_SCHEMES = ("lane", "lfo")           # fed by the analyzer and the LFOs, not a device
+# fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
+# not a device
+BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
 
 
 def retry_after(misses: int) -> float:
@@ -1318,7 +1320,7 @@ class DeviceRegistry:
 
     def continuous_schemes(self) -> tuple[str, ...]:
         """The schemes a route can read as a lane, in offer order: the
-        built-in `lane` (the analyzer) and `lfo` first, then each listed
+        built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
         device's `feeds` in list order (an `off` device's too, so a preset
         row naming it stays a dormant route, not an unknown one). What the
         Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""

@@ -106,7 +106,7 @@ def test_an_osc_entry_alone_adds_the_device_and_a_fader_moves_a_routed_param(tmp
     assert d.schemes == d.feeds == ("phone",) and d.rows == ("phone",)
     assert s.cfg["notes"] == []
     # the role is the scheme: the page offers it, a Learn can be armed for it
-    assert router.schemes() == ("lane", "lfo", "phone")
+    assert router.schemes() == ("lane", "lfo", "env", "seq", "phone")
     assert s.learn.wants() == ("desk", "phone")
     assert [p.address for p in d.sources] == ["phone:x", "phone:y", "phone:hit", "phone:pad"]
     assert [p.kind for p in d.sources] == ["value", "value", "trigger", "trigger"]
@@ -295,7 +295,7 @@ def test_an_osc_role_on_a_fed_scheme_is_refused_and_an_off_one_still_lists_its_s
     assert refused.status == "error: feeds 'axis', which pad already feeds — not opened"
     off = devices.DeviceRegistry([{"role": "phone", "kind": "osc", "enabled": False,
                                    "hits": ["/hit"]}])
-    assert off.continuous_schemes() == ("lane", "lfo", "phone")
+    assert off.continuous_schemes() == ("lane", "lfo", "env", "seq", "phone")
     assert off.row_schemes() == ("phone",) and off.wants() == ("phone",)
     no_hits = devices.DeviceRegistry([{"role": "phone", "kind": "osc", "enabled": True}])
     assert no_hits.row_schemes() == ()               # no hits: a button row on it is refused
