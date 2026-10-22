@@ -137,6 +137,10 @@ class Envelope:
     # the next fire, never how this one ends (a one-shot closes at decay's
     # end, a gate note honours its release whatever the knob says now)
     nmode: int = field(default=GATE, repr=False)
+    # who opened this note (`fire`'s `owner`): a release naming an owner
+    # closes only a note that owner opened — the sequencer's stop, say,
+    # leaves a held pad's note sounding
+    owner: str | None = field(default=None, repr=False)
     at: float | None = field(default=None, repr=False)   # the t this voice last stepped at
     out: float = field(default=REST, repr=False)         # this step's output
     held: bool = field(default=False, repr=False)        # the `gate` param's state
@@ -154,16 +158,18 @@ class Envelope:
         self.events.append((at, self.seq, kind, args))
 
     def fire(self, at: float | None = None, velocity: float = 1.0,
-             gate: float | None = None) -> None:
+             gate: float | None = None, owner: str | None = None) -> None:
         """A note at time `at` (None: the next step's t). `gate`, in seconds,
         releases it on its own that long after; None leaves the gate open
-        until `release`. A one-shot ignores `gate`: decay's end closes it."""
-        self._queue(at, _FIRE, (float(velocity), gate))
+        until `release`. A one-shot ignores `gate`: decay's end closes it.
+        `owner` tags the note for `release(owner=…)`."""
+        self._queue(at, _FIRE, (float(velocity), gate, owner))
 
-    def release(self, at: float | None = None) -> None:
+    def release(self, at: float | None = None, owner: str | None = None) -> None:
         """The gate closes at `at` (None: the next step's t). A one-shot
-        ignores it, and so does a voice already releasing or at rest."""
-        self._queue(at, _RELEASE, None)
+        ignores it, and so does a voice already releasing or at rest.
+        `owner` given: only if the note sounding then was fired by it."""
+        self._queue(at, _RELEASE, owner)
 
     # ---- the level ----
 
@@ -227,7 +233,8 @@ class Envelope:
 
     def _apply(self, t: float, kind: int, args) -> None:
         if kind == _FIRE:
-            vel, gate = args
+            # a fire queued before a hot reload has no owner
+            vel, gate, owner = (*args, None)[:3]
             new = self.peak(vel)
             if self.retrig == RESET or new <= 0.0:
                 y0 = 0.0
@@ -236,14 +243,17 @@ class Envelope:
                 y0 = self.level() * self.peak() / new
             self.vel = vel
             self.note += 1
-            self.nmode = self.mode
+            self.nmode, self.owner = self.mode, owner
             self._enter(ATTACK, t, y0)
             if gate is not None and self.nmode == GATE:
                 # tokened with this note, so a later fire's note isn't cut short
                 self.seq += 1
                 self.events.append((t + max(float(gate), 0.0), self.seq, _RELEASE, self.note))
             return
-        if args is not None and args != self.note:
+        if isinstance(args, str):
+            if args != self.owner:
+                return                                     # a note someone else opened
+        elif args is not None and args != self.note:
             return                                         # an earlier note's auto-release
         if self.nmode == ONE_SHOT or self.stage in (IDLE, RELEASE):
             return
@@ -407,22 +417,22 @@ class Envelopes(Bank):
         return sorted({*LANE_ENVS, *ids})[:cls.MAX], notes
 
     def fire(self, n: int, *, at: float | None = None, velocity: float = 1.0,
-             gate: float | None = None) -> bool:
+             gate: float | None = None, owner: str | None = None) -> bool:
         """Envelope `n` (1-based) fires at `at` (Envelope.fire). False: no
         such envelope — a lane pointed at a removed extra fires nothing."""
         env = self.voice(n)
         if env is None:
             return False
-        env.fire(at=at, velocity=velocity, gate=gate)
+        env.fire(at=at, velocity=velocity, gate=gate, owner=owner)
         return True
 
-    def release(self, n: int, *, at: float | None = None) -> bool:
-        """Envelope `n`'s gate closes at `at` (Envelope.release). False: no
-        such envelope."""
+    def release(self, n: int, *, at: float | None = None, owner: str | None = None) -> bool:
+        """Envelope `n`'s gate closes at `at` (Envelope.release; `owner`:
+        only a note it opened). False: no such envelope."""
         env = self.voice(n)
         if env is None:
             return False
-        env.release(at=at)
+        env.release(at=at, owner=owner)
         return True
 
 

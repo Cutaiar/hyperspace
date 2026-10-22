@@ -2937,11 +2937,13 @@ class Router:
 
         def fire(lane, env, at, velocity):
             if envs is not None:
-                envs.fire(env, at=at, velocity=velocity, gate=gate)
+                envs.fire(env, at=at, velocity=velocity, gate=gate, owner="seq")
 
         def release(lane, env, at):
+            # only a note the pattern opened: a held pad's, a hand's or a
+            # fire's note on the same envelope sounds on, its gate still live
             if envs is not None:
-                envs.release(env, at=at)
+                envs.release(env, at=at, owner="seq")
 
         seq.step(t, clock, fire, release)
         seq.publish(self)                        # its lanes as trigger kinds too
