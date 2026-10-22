@@ -46,9 +46,10 @@ Two kinds of file, both plain JSON you can open in a text editor:
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
-— the presets, ``hyperspace.preset/2`` under ``presets/``, which
-preset.py's ``Presets`` loads and writes (the one kind since plan 13
-WP5 made the routing presets presets). For such a group the
+— the presets, ``hyperspace.preset/2`` (``/3`` since plan 31, written
+only when needed: a build that takes /2 alone refuses one, `read`)
+under ``presets/``, which preset.py's ``Presets`` loads and writes (the
+one kind since plan 13 WP5 made the routing presets presets). For such a group the
 library does the file half — list, user-shadows-factory, load / save as
 / delete, the dirty dot, the watch — and the kind's hooks do the
 document half: ``load(doc, path)`` applies it, ``document(name)`` is
