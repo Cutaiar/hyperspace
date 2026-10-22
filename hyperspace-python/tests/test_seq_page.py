@@ -79,11 +79,13 @@ def test_a_pad_toggles_a_step_and_loads_no_preset(rig, seq):
     assert seq.lanes[4].steps[0] == 1.0 and pr.active == active
     tap(rig, CLIP[0], channel=4)
     assert seq.lanes[0].steps[4] == 0.0
-    # a preset load (QUANT) leaves the page up, and the pattern with it
+    # a preset load (QUANT) leaves the page up; the pattern is the preset's
+    # (decision 8), so the grid redraws to whatever the loaded one holds
     tap(rig, apc40.N_QUANT)
     assert lib.current("presets") != before
     assert seq_page.page_of(rig.midi.table) is not None
-    assert state(rig)[(0, CLIP[4])] == apc40.GREEN
+    lit = apc40.GREEN if seq.lanes[4].steps[0] else 0
+    assert state(rig)[(0, CLIP[4])] == lit
 
 
 def test_clip_stop_sets_the_length_and_clip_stop_8_does_not_save(rig, seq):
