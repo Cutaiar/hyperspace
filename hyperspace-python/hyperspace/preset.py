@@ -198,7 +198,16 @@ def schema_of(doc: dict) -> str:
     31 would lose — a bank's membership key, an ``env.*``/``seq.*`` value
     (`Presets.document` leaves them all out of a preset that has none
     off its default), or a route, modifier or macro on an envelope or the
-    sequencer — else ``hyperspace.preset/2``."""
+    sequencer — else ``hyperspace.preset/2``.
+
+    The ``desk`` and ``layout`` sections are not read here on purpose: a
+    build from before plan 31 keeps both verbatim — `Bindings.set_desk`
+    checks no row's target against the registry (a desk row on
+    ``env.2.fire`` loads dormant and saves back as it was) and
+    `library.read_layout` keeps any node name, the GRAPH page's tidy
+    forgetting only the nodes it draws — so neither loses anything on a
+    re-save there (tests/test_plan31_review.py). The APC page's
+    ``seq.page`` / ``seq.select`` rows are the session's and never saved."""
     if any(k in doc for k in V3_KEYS):
         return SCHEMA_V3
     if any(str(k).startswith(tuple(f"{g}." for g in V3_GROUPS))
