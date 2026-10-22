@@ -459,12 +459,15 @@ def test_old_midi_map_migrates_into_bindings_json(tmp_path, capsys):
     far = [f"note:{ch}:{n}" for n, ch in apc40.BANK_PADS[routing.F_KEYS:]]
     c1 = [(s, pid) for s, pid, *_ in sorted(routing.TOGGLE_DESK_ROWS)] + [
         (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM)]
+    send_a = routing.SEQ_PAGE_SOURCE                    # plan 31 §A: the sequencer page
     assert again.notes == [
         f"added note:0:{apc40.N_OVERDUB} → preset.home (the APC40 map of plan 15)",
         *[f"added {s} → preset.select (the APC40 map of plan 19)" for s in far],
-        *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1]]
+        *[f"added {s} → {pid} (the APC40 map of plan 24)" for s, pid in c1],
+        f"added {send_a} → seq.page (the APC40 map of plan 31)"]
     assert [b for b in again.to_json()["bindings"]
-            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far, *(s for s, _ in c1))] \
+            if b["source"] not in (f"note:0:{apc40.N_OVERDUB}", *far, *(s for s, _ in c1),
+                                   send_a)] \
         == t.to_json()["bindings"]
     assert Bindings.load(path, legacy_midi=legacy).to_json() == again.to_json()
     # without either file: the factory table, nothing written
@@ -488,9 +491,10 @@ def test_factory_table_binds_only_real_params(tmp_path):
     # + Home (plan 15 WP2)
     assert len(t.of("key")) == 25 + 17 + 4 + 1
     assert len(t.of("pad")) == 9 and len(t.of("hat")) == 4     # BACK free, START saves
-    assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 and t.mods() == []   # + SHIFT, the global track
+    assert len(t.midi()) == 113 + 6 + 1 + 4 + 1 + 1 and t.mods() == []   # + SHIFT, the global track
     # knobs, OVERDUB (plan 15 WP2) (the clip-stop row's eight, plan 15 WP4,
     # retired 2026-10-09), SAVE on track 8's clip stop (plan 24 C1),
+    # SEND A, the sequencer page's latch (plan 31 §A),
     # the preset layer's four SCENE device knobs (plan 19 WP3; the sixteen
     # bank pads of plan 19 WP2 took the sixteen shape pads' place);
     # no performer rows: the house presets carry the lane rows (plan 13 WP5)
@@ -937,7 +941,7 @@ def test_midi_view_shares_the_table(tmp_path):
 
     t = Bindings.factory(path=bindings_path(tmp_path))
     m = MidiIO(rig(tmp_path=tmp_path, full=True).reg, t, inp=Quiet(), out=Quiet())
-    assert len(m.bindings) == 113 + 6 + 1 + 4 + 1 and all(b.is_midi for b in m.bindings)
+    assert len(m.bindings) == 113 + 6 + 1 + 4 + 1 + 1 and all(b.is_midi for b in m.bindings)
     m.table.bind(Binding("cc:0:99", "view.zoom", "abs"))
     assert m.table.for_param("view.zoom").number == 99
     again = Bindings.load(bindings_path(tmp_path))
@@ -1348,7 +1352,8 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # + the track faders' audio strip, eight global rows since plan 24 C2 (decision 17)
     assert f"added cc:0:{apc40.CC_FADER} → band.0.post (the global layer, plan 13 §3.2)" in err
     # + START's hold-to-save (the pad layout of 2026-10-14): one more row changed
-    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 86 rows changed)" in err
+    # + SEND A, the sequencer page (plan 31 §A)
+    assert f"migrated {path} to {SCHEMA} (2 rows dropped, 87 rows changed)" in err
     rows = {(b.source, b.target): b for b in t.bindings}
     assert rows[("key:RIGHT", "view.shape")].op == "step"
     assert rows[("cc:0:48", "view.bright")].op == "abs"                       # MIDI keeps abs
@@ -1367,8 +1372,9 @@ def test_a_schema_1_file_migrates_once_and_names_what_it_dropped(tmp_path, capsy
     # WP4 is retired), the bank's sixteen pads on clip rows 4 and 5 (plan 19 WP2),
     # the four invariant render toggles and SAVE (plan 24 C1), the track
     # faders' audio strip on the global layer (plan 24 C2: the sort adds 8),
-    # START's hold-to-save (the pad layout of 2026-10-14)
-    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 5 + 8 + 1
+    # START's hold-to-save (the pad layout of 2026-10-14), SEND A's
+    # sequencer page (plan 31 §A)
+    assert len(t.notes) == 9 + 17 + 26 + 4 + 2 + 16 + 5 + 8 + 1 + 1
     # the APC40 rows: the old factory rows swapped for the new, the LED kept
     tap = rows[("note:0:99", "tempo.tap")]
     assert (tap.op, tap.feedback) == ("toggle", "led") and ("note:0:99", "theme.next") not in rows
@@ -1838,10 +1844,10 @@ def test_a_user_row_on_a_moved_apc_note_is_kept():
     # + the clip-stop row's eight (plan 15 WP4), + the bank's sixteen pads
     # on clip rows 4 and 5 (plan 19 WP2), + the four invariant render
     # toggles and SAVE (plan 24 C1), + START's hold-to-save (the pad
-    # layout of 2026-10-14)
+    # layout of 2026-10-14), + SEND A's sequencer page (plan 31 §A)
     assert ("pad:MENU", "preset.save_new") in by
     assert [n.split(" ")[0] for n in notes] == (["remapped", "added"]
-                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1))
+                                                + ["added"] * (17 + 4 + 2 + 16 + 5 + 1 + 1))
     # and a second pass has nothing to do
     again, notes2 = routing.remap_factory(out)
     assert notes2 == [] and [b.source for b in again] == [b.source for b in out]

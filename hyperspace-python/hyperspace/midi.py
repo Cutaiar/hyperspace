@@ -119,8 +119,8 @@ from .routing import (
     act,
     bindings_path,
     is_session_id,
-    led_level,
     led_lit,
+    led_shade,
     register_desk,
 )
 
@@ -545,17 +545,39 @@ class MidiIO:
         if seen != self._seen:
             load = seen[1] != self._seen[1]
             switch = seen[0] != self._seen[0]
+            if seen[3:] != self._seen[3:]:
+                self._drop_page_holds()
             self._seen = seen
             self.redraw(load=load, switch=switch)
 
-    def _serials(self) -> tuple[int, int, int]:
-        """(this desk's layer serial, the desk serial, the redraw serial):
-        the layer serial is this role's own (plan 27 B2), so SHIFT on the
-        APC40 never re-arms a second desk's faders."""
+    def _serials(self) -> tuple[int, int, int, int]:
+        """(this desk's layer serial, the desk serial, the redraw serial,
+        the surface page's serial): the layer serial is this role's own
+        (plan 27 B2), so SHIFT on the APC40 never re-arms a second desk's
+        faders; the page is the first role's only (plan 31 §A)."""
         t = self.table
         of = getattr(t, "layer_serial_of", None)
         layer = of(self._role()) if of is not None else t.layer_serial
-        return layer, t.desk_serial, getattr(t, "redraw_serial", 0)
+        page = getattr(t, "page_serial", 0) if t.is_primary(self._role()) else 0
+        return layer, t.desk_serial, getattr(t, "redraw_serial", 0), page
+
+    def _page_rows(self) -> list[Binding]:
+        """The surface page's rows, on the first MIDI role's desk only."""
+        t = self.table
+        return getattr(t, "page_rows", []) if t.is_primary(self._role()) else []
+
+    def _drop_page_holds(self) -> None:
+        """The page went up (plan 31 §A): a hold timing on one of its
+        controls — a bank pad held across SEND A — is forgotten, so it
+        cannot save, and its blink goes with it. Its release still goes to
+        the rows its press went to (D12), and does nothing."""
+        on = {b.control for b in self._page_rows()}
+        holds, blinks = self._hold_state()
+        for key in [k for k in holds if ("note", *k) in on]:
+            del holds[key]
+        for c in [c for c in blinks if c in on]:
+            del blinks[c]
+        self._light_bars()
 
     def _uncatch_moved(self) -> None:
         """A param that moved without us re-arms pickup on its knob."""
@@ -984,6 +1006,9 @@ class MidiIO:
         amber on the clip grid — else its off.
         A control blinking after a hold fired (`_fire_holds`) gets its
         blink velocity, whatever its state, until BLINK_S is up.
+        The light is `led_shade`'s; a surface page's own shades (plan 31
+        §A: a step under the playhead, a muted lane) take the profile's
+        `shade_of` velocity. A playhead moving sends only what changed.
         """
         if self.out is None:
             return
@@ -1015,12 +1040,16 @@ class MidiIO:
                     ))
                     self._rebase(b, p, v)
             elif b.feedback == "led":
-                lit = self._lit(b, p)
-                v = b.on if lit else b.off
-                if not lit and led_level(b, p) == 1:
+                shade = led_shade(b, p)
+                v = b.on if shade == "on" else b.off
+                if shade == "held":
                     filled_of = getattr(self.profile, "filled_of", None)
                     filled = filled_of(b.number, b.on) if filled_of is not None else None
                     v = b.off if filled is None else filled
+                elif shade not in ("on", "off"):     # a page's own (plan 31 §A)
+                    shade_of = getattr(self.profile, "shade_of", None)
+                    hit = shade_of(b.number, shade) if shade_of is not None else None
+                    v = b.on if hit is None else hit
                 if b.control in blinks:
                     v = blink_of(b.number, b.on) if blink_of is not None else b.on
                 if v != b.last_out:
@@ -1088,6 +1117,8 @@ class MidiIO:
         active = self._active()
         drawn = {b.control for b in active if b.feedback}
         hw = self.__dict__.setdefault("_hw", {})
+        for b in self._page_rows():         # the surface page's rows: re-sent too
+            b.last_out = None
         for b in self.bindings:
             b.last_out = None
             if b.kind in ("cc", "pitch") and b.op == "abs" and b.last_hw is None:
@@ -1153,5 +1184,5 @@ class MidiIO:
 
     def on_reload(self) -> None:
         """Hot reload: re-send everything so the surface matches the code."""
-        for b in self.bindings:
+        for b in (*self.bindings, *self._page_rows()):
             b.last_out = None
