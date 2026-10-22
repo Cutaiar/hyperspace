@@ -382,6 +382,14 @@ LAYOUT_KEY = "layout"
 NO_MODULE = ("macro", modifiers.GROUP)
 
 
+def _bank_prefix(pid: str) -> str:
+    """A bank voice's param prefix, ``lfo.7.depth`` → ``lfo.7.``; "" for
+    an id that names no voice (plan 31 B)."""
+    head, _, rest = pid.partition(".")
+    n, dot, _ = rest.partition(".")
+    return f"{head}.{n}." if dot and n.isdigit() else ""
+
+
 def merge_modifiers(template, own) -> tuple[list[dict], list[str]]:
     """The modifier entries a preset lands: the template's (in its order)
     with each one the preset's own list names by id replaced, then the
@@ -637,9 +645,19 @@ class Presets:
         values: dict[str, Any] = {}
         unknown: list[str] = []
         later: dict[str, Any] = {}
+        # plan 31 B: each bank's membership (``"lfos": [1, 3, 7]``; none in
+        # the file, the default four), declared before the values land — so
+        # a knob of a voice this registry lacks yet waits in `later`
+        members: dict[str, list[int]] = {}
+        for scheme, bank in self._banks().items():
+            members[scheme], bank_notes = bank.parse(doc.get(bank.KEY))
+            notes += bank_notes
+        bank_ids = {f"{s}.{n}." for s, ids in members.items() for n in ids}
         for pid, v in dict(doc.get("values") or {}).items():
             p = reg.get(pid)
-            if pid.startswith(modifiers.PREFIX):
+            if p is None and _bank_prefix(pid) in bank_ids:
+                later[pid] = v
+            elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif is_instance_id(pid):
@@ -744,6 +762,7 @@ class Presets:
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
         held_mods = table.modifiers_doc(reg)
+        held_banks = {s: b.doc() for s, b in self._banks().items()}
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -753,6 +772,8 @@ class Presets:
             # values: their entries are their params' values
             notes += table.set_modifiers(mods, reg)
             values.update(reg.snapshot(group=modifiers.GROUP))
+            for scheme, ids in members.items():          # plan 31 B: the banks
+                self._banks()[scheme].set(ids)
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
@@ -787,6 +808,10 @@ class Presets:
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
+            for scheme, ids in held_banks.items():        # the banks as they were
+                bank = self._banks()[scheme]
+                if bank.doc() != ids:
+                    bank.set(ids)
             if gs.mark() != held_graph:          # the graph as it was, and its instances'
                 gs.put(held_graph)               # values as they were
                 lib.restore({k: v for k, v in held_values.items() if k in reg})
@@ -836,6 +861,11 @@ class Presets:
         section = self._graph_section().doc
         if section is not None:
             doc[GRAPH_KEY] = copy.deepcopy(section)
+        # plan 31 B: a bank's membership, only where it is not the default —
+        # a preset of four LFOs writes the file it always did
+        for bank in self._banks().values():
+            if bank.doc() != list(bank.DEFAULT):
+                doc[bank.KEY] = bank.doc()
         doc.update(values=self._values(),
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
@@ -845,6 +875,12 @@ class Presets:
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
         return doc
+
+    def _banks(self) -> dict:
+        """The router's modulator banks by scheme (plan 31 B); none on a
+        router that steps none (the tests' bare ones)."""
+        banks = getattr(self.router, "_banks", None)
+        return banks() if callable(banks) else {}
 
     def _values(self) -> dict[str, Any]:
         """The preset's `values`: every performance base but the modifiers'
@@ -967,6 +1003,8 @@ class Presets:
                 json.dumps(table.macros_doc(), sort_keys=True),
                 None if section is None else json.dumps(section, sort_keys=True),
                 table.modifiers_doc(self.reg),
+                # plan 31 B: an LFO added or removed
+                {s: b.doc() for s, b in self._banks().items()},
                 # plan 28 N2: a node moved on the GRAPH page; none, no part
                 json.dumps(getattr(self, "layout", None) or None, sort_keys=True))
 

@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, ClassVar
 
 MAX = 16          # voices a bank holds at most (plan 31 decision 1)
 MAX_ID = 64       # the highest id a file may name: a hand-edited 10⁹ is no feed vector
@@ -65,7 +65,7 @@ class Bank:
     DEFAULT: tuple[int, ...] = ()  # the membership a file without `KEY` gets
     REST = 0.0                     # where a lane rests (`Router.rests`)
     KNOBS: tuple[str, ...] = ()    # ``<scheme>.<n>.<knob>`` params that feed the voice's node
-    SHARED: dict[str, str] = {}    # bank-wide param id → the port it feeds on every voice
+    SHARED: ClassVar[dict[str, str]] = {}  # bank-wide param id → the port it feeds on every voice
     MAX = MAX
 
     # class-level so an instance from before a hot reload has them
@@ -180,8 +180,8 @@ class Bank:
         if value is None:
             return list(cls.DEFAULT), []
         if not isinstance(value, list | tuple):
-            return list(cls.DEFAULT), [f"{cls.KEY}: not a list of ids, {len(cls.DEFAULT)} "
-                                       f"{cls.LABEL}s"]
+            said = f"{cls.KEY}: not a list of ids, {len(cls.DEFAULT)} {cls.LABEL}s"
+            return list(cls.DEFAULT), [said]
         out: list[int] = []
         notes: list[str] = []
         for v in value:

@@ -1072,8 +1072,9 @@ def main() -> None:
     library.on_load("band", control.scene_loaded)
     control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
-    # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
-    # are params too, so a preset carries a tempo and an LFO arrangement
+    # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
+    # default, up to 16, plan 31 B): their knobs are params too, so a
+    # preset carries a tempo and an LFO arrangement
     clock = tempo.Clock()
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
@@ -1163,7 +1164,10 @@ def main() -> None:
     marks = Marks(library)
     undo_obj = undo.Undo(reg, router.table, marks=marks,
                          tag=lambda: tuple(s.name for s in audio.chain.spec),
-                         on_restore=router.sync_macros)
+                         on_restore=router.sync_macros,
+                         # the LFOs' membership (plan 31 B), read off the
+                         # router at each step, so a re-classed router counts
+                         banks=lambda: router._banks())
     undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
     panel.undo = undo_obj              # the footer's message slot
     # panel state and chain must stay one object even after source changes
@@ -1205,6 +1209,7 @@ def main() -> None:
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
+        # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),

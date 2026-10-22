@@ -1,4 +1,4 @@
-"""The LFO page — the tap-tempo clock and the four LFOs (tempo.py, lfo.py).
+"""The LFO page — the tap-tempo clock and the LFOs (tempo.py, lfo.py).
 
 Top to bottom:
 
@@ -8,7 +8,10 @@ Top to bottom:
                          beats, then tap · trigger · nudge −/+ — the
                          trigger params as buttons — and the bpm and
                          nudge faders on one row
-  lfos   ◀ preset ▶ …    four strips. Each: a small scope of two cycles
+  lfos   ◀ preset ▶ …    a strip per LFO, by id (four by default, plan 31
+                         B; `+ lfo` on the first strip's head adds one, a
+                         strip's `×` removes it — each one undo step). Each:
+                         a small scope of two cycles
                          of the shape at the current depth, a hairline
                          where the wave is now and a dot at the live
                          output; beside it shape · sync · reset on one
@@ -32,7 +35,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
+from . import ui, undo
 from .lfo import GROUP as LFO_GROUP
 from .lfo import REST, SYNCS
 from .tempo import BEATS_PER_BAR
@@ -58,8 +61,37 @@ def page(panel, dt: float) -> None:
     _clock_strip(panel, clock)
     imgui.spacing()
     panel._section("lfos", LFO_GROUP, note="rest 0.5 · every knob ownable")
-    for i in range(len(lfos)):
-        _strip(panel, lfos, clock, i)
+    ids = lfos.ids()
+    if not ids:                       # every LFO removed: only the way back
+        _add_chip(panel, lfos)
+    for k, n in enumerate(ids):
+        _strip(panel, lfos, clock, n, first=k == 0)
+
+
+def add_lfo(panel, lfos) -> int | None:
+    """"+ lfo": a fresh LFO at one past the highest id, its knobs declared
+    (modbank.Bank.add); one undo step. None at the cap."""
+    if not lfos.can_add():
+        return None
+    undo.push("add LFO")
+    return lfos.add()
+
+
+def remove_lfo(panel, lfos, n: int) -> None:
+    """The ×: LFO `n` and its knobs go; the others keep their ids and a
+    route on its lane goes dormant. One undo step."""
+    if n not in lfos:
+        return
+    undo.push(f"delete LFO {n}")
+    lfos.remove(n)
+
+
+def _add_chip(panel, lfos) -> None:
+    if lfos.can_add():
+        if ui.chip("+ lfo##lfo.add"):
+            add_lfo(panel, lfos)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(f"Another LFO, LFO {lfos.next_id()} (up to {lfos.MAX})")
 
 
 # ---- the clock ----
@@ -126,13 +158,25 @@ def _beats(clock, h: float) -> None:
 
 # ---- one LFO ----
 
-def _strip(panel, lfos, clock, i: int) -> None:
-    lf = lfos[i]
-    p = f"{LFO_GROUP}.{i + 1}"
+def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
+    lf = lfos.voice(n)
+    p = f"{LFO_GROUP}.{n}"
     imgui.push_id(p)
-    ui._micro(f"lfo {i + 1}")
+    ui._micro(f"lfo {n}")
     imgui.same_line(SCOPE_W + imgui.get_style().item_spacing.x)
     ui._micro(_where(lf, clock), ui.FAINT)
+    # the head's chips, flush right on the label line: no row of their own
+    chips = (["+ lfo"] if first and lfos.can_add() else []) + ["×"]
+    imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
+                    - ui.chip_w(*chips) - 4)
+    if first:
+        _add_chip(panel, lfos)
+        imgui.same_line()
+    if ui.chip(f"×##{p}.del"):
+        remove_lfo(panel, lfos, n)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"Remove LFO {n} — the others keep their numbers; a route "
+                          "from it waits, dormant")
     _scope(lf)
     imgui.same_line()
     imgui.begin_group()

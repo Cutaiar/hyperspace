@@ -80,6 +80,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from .modbank import MAX, Bank  # noqa: F401 — lfo.MAX: the cap, 16
 
@@ -202,7 +203,7 @@ class LFOs(Bank):
     DEFAULT = tuple(range(1, N + 1))
     REST = REST
     KNOBS = KNOBS
-    SHARED = {f"{GROUP}.trigger": "trigger"}
+    SHARED: ClassVar[dict[str, str]] = {f"{GROUP}.trigger": "trigger"}
 
     # class-level so a hot-reloaded instance from before these existed has them
     pending = False                    # a global trigger held for the next step
