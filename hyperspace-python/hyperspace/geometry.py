@@ -1153,6 +1153,82 @@ def _build_orbit() -> dict:
     return g
 
 
+# ---------------------------------------------------------- vector subjects
+# A subject drawn from a vector source rather than a formula. The Wispr
+# Flow mark is five pill-shaped bars (stadia), read off the paths of
+# wisprflow.ai's own SVG on its 28-unit artboard: each bar's x centre and
+# its top and bottom edge, SVG y running down, and the one end radius
+# (half a bar's width) they share. prototypes/subjects/ in the repository
+# root holds the SVG and a browser prototype of the looks.
+
+FLOW_R = 0.8648
+FLOW_BARS = ((8.8096, 7.9961, 20.0039), (11.4058, 13.4966, 18.7963),
+             (14.0000, 9.9612, 17.9536), (16.5943, 13.4966, 18.7963),
+             (19.1884, 7.9961, 19.9996))
+
+
+def _flow_bars():
+    """Each bar as (x, the lower and the upper end's centre), y up, centred
+    on the artboard's middle (14, 14)."""
+    return [(cx - 14.0, 14.0 - bot + FLOW_R, 14.0 - top - FLOW_R) for cx, top, bot in FLOW_BARS]
+
+
+def _build_flow_mark(n_cap: int = 12) -> dict:
+    """The mark as drawn: five stadium outlines in the z = 0 plane, each one
+    face. A flat vector, so its face UVs are the mark's own plane — a face
+    pattern or a bitmap shows through the five bars as one picture — and
+    it draws no points: its outline's samples are not corners."""
+    V: list = []
+    E: list = []
+    F: list = []
+    for x, y0, y1 in _flow_bars():
+        arc = [(FLOW_R * math.cos(math.pi * k / n_cap), FLOW_R * math.sin(math.pi * k / n_cap))
+               for k in range(n_cap + 1)]
+        # over the top end right to left, then under the bottom end: CCW
+        ring = [(x + c, y1 + s) for c, s in arc] + [(x - c, y0 - s) for c, s in arc]
+        off = len(V)
+        V.extend([px, py, 0.0, 0.0] for px, py in ring)
+        E.extend([off + k, off + (k + 1) % len(ring)] for k in range(len(ring)))
+        F.append(list(range(off, off + len(ring))))
+    P = np.asarray(V)[:, :2]
+    lo, span = P.min(axis=0), np.ptp(P, axis=0).max()
+    uv = (P - lo) / span + (1.0 - np.ptp(P, axis=0) / span) / 2   # centred, square
+    return {"V": V, "E": E, "F": F, "FUV": [uv[c].tolist() for c in F], "curve": True,
+            "flat": True}
+
+
+def _build_flow_capsules(m: int = 16, n_cap: int = 6) -> dict:
+    """The mark lifted into 3D: each bar a capsule round its own axis —
+    a hemisphere, the cylinder between the ends' centres, a hemisphere —
+    m segments round and n_cap rings over each end. Its face UVs wrap each
+    capsule: u round the bar, v along it, so a pattern turns with the bar
+    instead of tiling every quad."""
+    parts, fuv = [], []
+    for x, y0, y1 in _flow_bars():
+        prof = [(FLOW_R * math.sin(p), y0 - FLOW_R * math.cos(p))
+                for p in (math.pi / 2 * k / n_cap for k in range(n_cap + 1))]
+        prof += [(FLOW_R * math.sin(p), y1 - FLOW_R * math.cos(p))
+                 for p in (math.pi / 2 * (1 + k / n_cap) for k in range(n_cap + 1))]
+        grid = [[(x + rho * math.cos(a), y, rho * math.sin(a)) for rho, y in prof]
+                for a in (2 * math.pi * j / m for j in range(m))]
+        g = _mesh3(grid, wrap_u=True, wrap_v=False)[0]
+        Vb = np.asarray(g["V"])
+        lo, hi = y0 - FLOW_R, y1 + FLOW_R
+        for cyc in g["F"]:
+            P = Vb[cyc]
+            rho = np.hypot(P[:, 0] - x, P[:, 2])
+            u = (np.arctan2(P[:, 2], P[:, 0] - x) / (2 * math.pi)) % 1.0
+            side = rho > 1e-9
+            if side.any() and np.ptp(u[side]) > 0.5:   # the seam: 0 is 1 there
+                u = np.where(u < 0.5, u + 1.0, u)
+            u = np.where(side, u, u[side].mean())      # a pole takes its quad's angle
+            fuv.append(np.stack([u, (P[:, 1] - lo) / (hi - lo)], axis=1).tolist())
+        parts.append(g)
+    # a smooth surface's samples are not corners: drawn without points,
+    # which would bunch into a blot at each pole
+    return {**_merge(parts), "FUV": fuv, "curve": True}
+
+
 def _kepler_layers() -> tuple:
     # Kepler's model of the six planets' spheres (Mysterium Cosmographicum,
     # 1596): each Platonic solid inscribed in one planet's sphere and
@@ -1399,6 +1475,12 @@ SHAPES = [
     Shape("Truncated icosahedral prism", "hyperprism", 34, "t{3,5}×{ }",
           lambda: prism([v[:3] for v in _build_trunc_icosa()["V"]]),
           family="Prisms and pyramids"),
+    # -------- vector marks: a subject drawn from an SVG (appended: index is
+    # identity)
+    Shape("Flow mark", "vector · the Wispr Flow mark, five stadia", 0, "5 ⊂⊃ · SVG",
+          _build_flow_mark, dims=3, family="Vector marks"),
+    Shape("Flow capsules", "vector · the Flow mark's bars as capsules", 0, "5 ⊂⊃ × S¹",
+          _build_flow_capsules, dims=3, family="Vector marks"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1409,7 +1491,7 @@ MENU = (
             "600-cell family", "Catalan duals", "Star polychora", "Prisms and pyramids",
             "Surfaces and fibrations")),
     ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
-            "Star polyhedra", "Compounds", "Mathematical toys")),
+            "Star polyhedra", "Compounds", "Mathematical toys", "Vector marks")),
     ("Scenes", ("Scenes",)),
 )
 
@@ -1441,6 +1523,10 @@ def geom(i: int) -> dict:
         _cache[i]["F"] = g["F"]
     if g.get("curve"):  # a curve's samples are not corners: no points drawn
         _cache[i]["curve"] = True
+    if g.get("flat"):  # a plane figure: the depth cue spans the unit sphere (render)
+        _cache[i]["flat"] = True
+    if "FUV" in g:  # a face's UVs given by its builder (a vector subject's)
+        _cache[i]["FUV"] = g["FUV"]
     if "layers" in g:  # a scene: whose rows are whose, and how each draws
         _cache[i].update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
     return _cache[i]
@@ -1755,14 +1841,19 @@ def face_uvs(i: int) -> np.ndarray:
     the circumradius spans 0.5 about a (0.5, 0.5) centre with CCW winding.
     Congruent faces therefore carry identical UV polygons (up to the cycle's
     n-fold starting rotation), which is what makes one pattern land with the
-    same scale and framing on every face.
+    same scale and framing on every face. A builder that gives its own
+    ("FUV": the vector subjects) has them used as given.
     """
     if i in _uv_cache:
         return _uv_cache[i]
     g = geom(i)
     V = g["V"]
     per_face: list[np.ndarray] = []
-    for cyc in faces(i):
+    if "FUV" in g:
+        # the builder's own: one picture across a flat mark, a wrap round a
+        # capsule — each corner's UV, in its face cycle's order
+        per_face = [np.asarray(f, dtype=np.float64) for f in g["FUV"]]
+    for cyc in faces(i)[len(per_face):]:
         xy = _face_xy(V[np.asarray(cyc)])   # the face in its own CCW 2-plane basis
         r = np.linalg.norm(xy, axis=1).max()
         per_face.append(xy / (2 * r) + 0.5)
