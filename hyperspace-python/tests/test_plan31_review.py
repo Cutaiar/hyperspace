@@ -282,3 +282,38 @@ def test_the_tooltips_and_the_graph_picker_say_the_banks_reason():
     assert e.add_voice("env") == r.envs.refusal()
     # with room, the tip offers the next one
     assert "LFO" in ui_lfo.add_tip(rig().lfos) and "env 6" in ui_seq.add_tip(rig().envs)
+
+
+# ---- 9: a removed id is never handed out again in the session ----
+
+def test_removing_the_top_voice_then_adding_does_not_reuse_its_id():
+    import math
+
+    from hyperspace import undo
+    from hyperspace.routing import Binding
+    r = rig([Binding("env:6", "t.x", "push", 1.0)])      # env 7
+    u = undo.Undo(r.reg, r.router.table, banks=lambda: r.router._banks())
+    undo.install(u)
+    t = [0.0]
+
+    def settle():
+        for _ in range(3):
+            t[0] += 1.0
+            u.tick(t[0])
+    try:
+        assert r.envs.add() == 6 and r.envs.add() == 7
+        settle()
+        undo.push("delete env 7")
+        assert r.envs.remove(7)
+        settle()
+        assert r.envs.next_id() == 8
+        assert r.envs.add() == 8 and r.envs.ids() == [1, 2, 3, 4, 5, 6, 8]
+        frame(r, 0.1)
+        assert math.isnan(r.envs.outputs[6])      # env:6's lane stays a gap: dormant
+        settle()
+        r.envs.remove(8)
+        assert r.envs.next_id() == 9
+        # undo of the remove puts the same id back
+        assert u.undo() and 7 in r.envs
+    finally:
+        undo.install(None)

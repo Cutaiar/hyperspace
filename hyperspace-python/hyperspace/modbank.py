@@ -6,10 +6,10 @@ scheme. Voice `n` (1-based, its params ``<scheme>.<n>.<key>``) is the
 lane ``<scheme>:<n-1>`` — the address every route, Learn row and factory
 preset already names (``lfo:0`` is LFO 1). Membership is preset content
 and undoable, the rule plan 28 N1 set for the modifiers: ids are **one
-past the highest** (`next_id`) and **never compact**, so removing LFO 2
-leaves LFO 3 on ``lfo:2`` and a route left on a removed voice's lane is
-never silently picked up by the next one added while a higher one
-stands. The count is capped at `MAX` (decision 1: 16).
+past the highest held this session** (`next_id`) and **never
+compact**, so removing LFO 2 leaves LFO 3 on ``lfo:2`` and a route left
+on a removed voice's lane — the top one's too — is never silently picked
+up by the next one added. The count is capped at `MAX` (decision 1: 16).
 
 What the bank owns, and what a kind supplies:
 
@@ -70,6 +70,7 @@ class Bank:
 
     # class-level so an instance from before a hot reload has them
     stepped_at: float | None = None   # the t of the bank's last step
+    high = 0                          # the session's highest id ever held (`next_id`)
     serial = 0                        # moves on every membership change
     reg = None                        # the registry `bind` gave, or None
     declare: Callable[[Any, int, Any], None] | None = None
@@ -79,6 +80,7 @@ class Bank:
         self.outputs: list[float] = []
         for n in sorted(set(self.DEFAULT if ids is None else ids)):
             self._voices[int(n)] = self.make()
+        self.high = self.width
         self._resize()
 
     # ---- the kind ----
@@ -125,8 +127,13 @@ class Bank:
         return max(self._voices, default=0)
 
     def next_id(self) -> int:
-        """One past the highest: never a removed voice's id while a higher one stands."""
-        return self.width + 1
+        """One past the highest id this bank has held this session (`high`,
+        a high-water mark never lowered): a removed voice's id — the top
+        one too — is never handed out again, so a route left dormant on its
+        lane is not picked up by the next voice added. An explicit `add(n)`
+        (an undo, a preset load) may still bring a removed id back. Not
+        saved: a fresh session starts from the highest id present."""
+        return max(self.width, getattr(self, "high", 0)) + 1
 
     def can_add(self) -> bool:
         return self.refusal() is None
@@ -138,8 +145,8 @@ class Bank:
         if len(self._voices) >= self.MAX:
             return f"{self.MAX} {self.LABEL}s is the most"
         if self.next_id() > MAX_ID:
-            return (f"{self.LABEL} ids are used up ({MAX_ID} is the highest, and a removed "
-                    "one is not reused): remove and re-add in a fresh preset")
+            return (f"{self.LABEL} ids are used up: {MAX_ID} is the highest, and a "
+                    "removed one is not reused this session")
         return None
 
     def add(self, n: int | None = None) -> int:
@@ -152,6 +159,7 @@ class Bank:
         if len(self._voices) >= self.MAX:
             raise ValueError(f"{self.MAX} {self.LABEL}s at most")
         v = self._voices[n] = self.make()
+        self.high = max(getattr(self, "high", 0), n)
         self._declare(n, v)
         self._changed()
         return n
