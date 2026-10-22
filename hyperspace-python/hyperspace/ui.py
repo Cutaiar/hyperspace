@@ -41,6 +41,7 @@ from . import (
     ui_fx,
     ui_lfo,
     ui_lookback,
+    ui_pad,
     ui_patterns,
     ui_presets,
     ui_routing,
@@ -453,6 +454,10 @@ class Panel:
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
         self.desk = True            # the APC40, left of the panel; the whole window without it
+        # the gamepad over the desk in the same column (ui_pad.py): off at
+        # every launch, as the cheat sheet is — the desk keeps its room
+        # until the SYSTEM page's switch asks for the pad
+        self.pad_diagram = False
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -501,6 +506,13 @@ class Panel:
                      "up maps lit, each with the glyph the ROUTING rows print. Hide the "
                      "panel (H, or the desk's big chip) and it fills the window, every lit "
                      "control named.")
+        r.toggle("ui.pad_diagram", "Pad diagram",
+                 lambda: self.pad_diagram,
+                 lambda on: setattr(self, "pad_diagram", bool(on)), group="ui",
+                 persist=False, modulatable=False,
+                 tip="The gamepad drawn over the desk, top-left: every control it sends, "
+                     "lit where a row maps it and named with what it does. A grey label "
+                     "is the app's own hand on a free axis (orbit, zoom, the 4D spin).")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -1300,6 +1312,8 @@ class Panel:
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         if self.cheatsheet:
             self._draw_cheatsheet()
+        # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
+        ui_pad.diagram(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:
@@ -1940,6 +1954,9 @@ class Panel:
         imgui.same_line()
         if "ui.desk" in self.reg:   # (a registry from before a hot reload lacks it)
             self._check("ui.desk")
+            imgui.same_line()
+        if "ui.pad_diagram" in self.reg:
+            self._check("ui.pad_diagram")
             imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:
