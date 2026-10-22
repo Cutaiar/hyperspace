@@ -231,7 +231,7 @@ The D-numbers are cited from code comments.
 | The party show is what the rig opens and the last show opened is remembered. The house moods are a `house` show. | `library.DEFAULT_PROJECT`, `last_show` | owner |
 | The party show's F1–F8 are TUMBLE, FACES, FIELD, WAKE, TRIP, ACID, MANDALA and NOITA, so every effect is in some factory preset; TRACER is on slot 9. | `hyperspace/library/projects/party.hyp.json` | owner |
 | The party presets are composed with six DOF only: every hand row is a push from the axis's rest, with no pinch dependence. Rate-type params under a hand are allowed. | `tests/test_plan12_presets.py` | owner |
-| `hands-orbit` is a factory preset: five pushes onto camera params (zoom depth 0.12). | `preset.hands_orbit_routes` | row 56 |
+| `hands-orbit` is a factory preset: five pushes onto camera params (zoom depth 0.0757: in to 2.2×). | `preset.hands_orbit_routes` | row 56 |
 | **Unwanted presets are hidden or trashed from the list.** × hides a factory preset (`<home>/hidden.json`) and trashes one of yours. | `Library.hide` | owner |
 | Hide, rename and the trash live in the preset list. Rename is refused on a factory preset and repoints every user show. Emptying the trash is the one delete with no copy kept, and it asks twice. | `Library.rename`, `Library.empty_trash` | row 76 |
 

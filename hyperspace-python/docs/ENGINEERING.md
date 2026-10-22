@@ -728,7 +728,7 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–4096) with Fit beside it and, above one copy, the field rows: layout, motion, amp, rate; spacing, and a lattice's field depth; the six plane rates. |
 | FACES | Faces, cut-through and the pattern mix; every pattern as a chip with a live swatch; the pattern on show and its line, ‹ ›; the eight pattern inputs by name, each with what it does on this pattern and what drives it (below). |
 | BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
-| CAMERA | Zoom, yaw, pitch, pan, reset. |
+| CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |

@@ -944,8 +944,14 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     # ---- camera ----
     g = "camera"
-    r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.05, hi=40.0, log=True,
-                 fmt=lambda v: f"{v:.2f}×", group=g)
+    # the field of thousands needs far more zoom-out than one shape did: a
+    # 4096-copy grid at spacing 4 stands 184 screens tall, and 0.005 frames
+    # it (2026-10-21). The ends are geometric about 1×, so the knob's middle,
+    # a fader at noon and a level hand all sit at 1× — and the range's span
+    # (log: 0.005 … 200, 15.3 octaves) is the unit a push's depth is measured
+    # in, so the depths onto zoom moved with it (preset.py)
+    r.continuous("camera.zoom", "Zoom", *_attr(view, "zoom"), lo=0.005, hi=200.0, log=True,
+                 fmt=lambda v: f"{v:.2f}×" if v >= 0.1 else f"{v:.3f}×", group=g)
     r.continuous("camera.yaw", "Yaw", *_attr(view, "yaw"), lo=-math.pi, hi=math.pi,
                  wrap=True, fmt=lambda v: f"{math.degrees(v):.0f}°", group=g)
     # pitch wraps like yaw (2026-10-14): the camera is a turn of the points,

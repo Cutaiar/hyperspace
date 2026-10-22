@@ -58,7 +58,7 @@
   {"source": "lane:4", "target": "pattern.mod.4", "op": "push", "value": 0.35},
   {"source": "lane:5", "target": "pattern.mod.5", "op": "push", "value": 0.35},
   {"source": "hand:right.y", "target": "view.instances", "op": "push", "value": 0.19407894736842105},
-  {"source": "hand:right.y", "target": "camera.zoom", "op": "push", "value": -0.15},
+  {"source": "hand:right.y", "target": "camera.zoom", "op": "push", "value": -0.0946},
   {"source": "hand:right.y", "target": "view.bright", "op": "push", "value": 0.1},
   {"source": "hand:right.roll", "target": "rot.phase.XW", "op": "push", "value": 0.25},
   {"source": "hand:right.yaw", "target": "rot.phase.ZW", "op": "push", "value": 0.25},

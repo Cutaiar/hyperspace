@@ -424,7 +424,8 @@ here; overturn → the change, then the same.
 - **Built.** A factory preset in the list, on no F-key. Right hand:
   sideways orbits up to a quarter turn each way; fingers up tip the camera
   to look down (±44°). Left hand: sideways and reaching in pan; raising it
-  zooms in, to 2.2× at the top (depth 0.12). A level, low or absent hand
+  zooms in, to 2.2× at the top (depth 0.0757, the 0.12 of before zoom's
+  range widened on 2026-10-21 — the same 2.2×). A level, low or absent hand
   adds nothing. The two-hand "steering wheel" (the hands measured against
   each other) is not built.
 - **Other options.** No preset; the steering wheel (two new axes, against

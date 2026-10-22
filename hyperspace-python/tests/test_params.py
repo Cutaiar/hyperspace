@@ -93,10 +93,10 @@ def test_raw_ranges_clamp_int_and_log(rig):
     inst.step(3)
     assert view.instances == 3
     z = reg["camera.zoom"]
-    z.set_norm(0.5)  # log: halfway is the geometric middle
-    assert view.zoom == pytest.approx(math.sqrt(0.05 * 40.0))
+    z.set_norm(0.5)  # log: halfway is the geometric middle — 1×, the range's ends about it
+    assert view.zoom == pytest.approx(math.sqrt(z.lo * z.hi)) == pytest.approx(1.0)
     z.set_value(1.0)
-    assert z.norm == pytest.approx(math.log2(1.0 / 0.05) / math.log2(40.0 / 0.05))
+    assert z.norm == pytest.approx(math.log2(1.0 / z.lo) / math.log2(z.hi / z.lo))
     yaw = reg["camera.yaw"]
     yaw.set_value(math.pi + 0.5)  # wraps, never clamps
     assert view.yaw == pytest.approx(-math.pi + 0.5)
@@ -171,15 +171,15 @@ def test_nudge_and_scale_move_the_base_without_a_detent(rig):
     assert yaw.nudge(0.3) == 0.3
     assert view.yaw == pytest.approx(-math.pi + 0.2)
     # clamp: what the stop let through
-    zoom.set_value(39.0)
-    assert zoom.nudge(5.0) == pytest.approx(1.0) and view.zoom == 40.0
-    assert zoom.scale(2.0) == pytest.approx(1.0) and view.zoom == 40.0
+    zoom.set_value(zoom.hi - 1.0)
+    assert zoom.nudge(5.0) == pytest.approx(1.0) and view.zoom == zoom.hi
+    assert zoom.scale(2.0) == pytest.approx(1.0) and view.zoom == zoom.hi
     zoom.set_value(2.0)
     assert zoom.scale(1.5) == pytest.approx(1.5) and view.zoom == pytest.approx(3.0)
     assert zoom.nudge(-0.5) == pytest.approx(-0.5) and view.zoom == pytest.approx(2.5)
     # a ratio means nothing across zero: yaw's range does, a base of 0 does
     assert yaw.scale(2.0) == 1.0 and view.yaw == pytest.approx(-math.pi + 0.2)
-    zoom.set_value(0.05)
+    zoom.set_value(zoom.lo)
     assert zoom.scale(2.0) == pytest.approx(2.0)          # lo is above zero: fine
     # an integer range stays integer
     inst.set_value(4)

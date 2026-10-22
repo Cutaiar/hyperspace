@@ -57,7 +57,7 @@
   {"source": "hand:left.yaw", "target": "rot.phase.XZ", "op": "push", "value": 0.25},
   {"source": "hand:left.y", "target": "view.bright", "op": "push", "value": 0.14},
   {"source": "hand:right.y", "target": "view.pattern_mix", "op": "push", "value": 0.6},
-  {"source": "hand:right.z", "target": "camera.zoom", "op": "push", "value": -0.3},
+  {"source": "hand:right.z", "target": "camera.zoom", "op": "push", "value": -0.1892},
   {"source": "hand:right.roll", "target": "pattern.mod.2", "op": "push", "value": 0.7},
   {"source": "hand:right.pitch", "target": "camera.pitch", "op": "push", "value": 0.25}
  ],
