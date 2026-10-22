@@ -60,6 +60,11 @@ what a fresh preset starts with; since plan 24 C2 the track faders are a
 preset's too, and the default gives them nothing). A control with no row
 on the layer that is up is dark and does nothing; midi.py dispatches and draws by those rules.
 
+The sequencer page (plan 31 §A, seq_page.py) is not a layer: while SEND A
+(invariant) has it up, its rows shadow clip rows 1–5, the clip stops and
+scene launch 1–5 on both layers, invariant rows included; the rest of the
+desk is as it was. Its lights are `SHADE`'s.
+
 The device and track knobs are endless encoders whose position the host
 sets with the same CC that draws the ring (`RING_REBASES_KNOB`), so a
 knob continues from its ring after a layer switch or a load and needs no
@@ -79,7 +84,7 @@ TRACK_KNOBS = range(0x30, 0x38)
 CC_FADER, CC_MASTER, CC_XFADE, CC_CUE = 0x07, 0x0E, 0x0F, 0x2F
 
 # The protocol table: every note, ring mode and LED velocity the APC40 mk1
-# speaks, whether or not DEFAULT_MAP below uses it (N_DEV_L/R, N_SEND_A/C,
+# speaks, whether or not DEFAULT_MAP below uses it (N_DEV_L/R, N_SEND_B/C,
 # RING_SINGLE / RING_PAN and the red and yellow blinks by name are unused
 # today and kept as the reference for a hand-edited bindings.json or a
 # later map; a blink is sent through `blink_of`).
@@ -214,6 +219,23 @@ def filled_of(number: int, on: int) -> int | None:
     if N_CLIP[0] <= number <= N_CLIP[-1] and on not in (YELLOW, YELLOW_BLINK):
         return YELLOW
     return None
+
+
+# The sequencer page's lights (plan 31 §A): a shade (routing.led_shade) →
+# (its velocity on the clip grid, on any other button). "on" and "off" are
+# the row's own `on` / `off`, and "held" is `filled_of`'s; these two are
+# the page's: a step under the playhead (yellow), a step in a muted lane
+# (red) — a scene button's muted lane blinks. Not hand-checked (group Z)
+SHADE = {"hit": (YELLOW, 1), "muted": (RED, 2)}
+
+
+def shade_of(number: int, shade: str) -> int | None:
+    """The velocity for a page shade on this button (`SHADE`), or None for
+    a shade the row's own `on` / `off` / `filled_of` draws."""
+    v = SHADE.get(shade)
+    if v is None:
+        return None
+    return v[0] if N_CLIP[0] <= number <= N_CLIP[-1] else v[1]
 
 
 # Akai's names for the controls, for the panel ("track knob 3", "clip 4·2")
@@ -573,4 +595,9 @@ DEFAULT_MAP: list[dict] = [
     # overlay: master-select floats the render over the screen, pan sends
     # clicks through to what is underneath (the panel stops being clickable)
     _note("overlay.on", N_MASTER_SEL), _note("overlay.passthrough", N_PAN),
+    # SEND A latches the sequencer page (plan 31 §A, decision 7; seq_page.py):
+    # invariant, lit while the page is up. The page's rows then shadow clip
+    # rows 1–5, the clip stops and scene launch 1–5 — the bank, SAVE and
+    # the render toggles come back when it is let go
+    _note("seq.page", N_SEND_A),
 ]

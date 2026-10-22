@@ -84,7 +84,7 @@ from imgui_bundle import imgui
 from . import apc40, learn, ui, ui_routing
 from .apc40 import GREEN, GREEN_BLINK, RED, RED_BLINK, YELLOW, YELLOW_BLINK
 from .params import PERFORMANCE_GROUPS, Kind
-from .routing import Binding, led_level
+from .routing import Binding, led_shade
 
 MIN_W = 300.0              # the window is never narrower, px
 MIN_H = 120.0              # …or shorter (a control window with no room above the sheet)
@@ -135,9 +135,22 @@ def _state(panel) -> dict:
 
 
 def _key(table) -> tuple:
-    """What changes the lit map: the table's serials and its rows."""
+    """What changes the lit map: the table's serials and its rows — and the
+    surface page's (plan 31 §A: its flips, and its rows, rebuilt when the
+    lane or the length changes)."""
     return (table.layer, table.layer_serial, table.desk_serial,
-            getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings))
+            getattr(table, "redraw_serial", 0), id(table.bindings), len(table.bindings),
+            getattr(table, "page_serial", 0),
+            id(table.page_rows) if getattr(table, "page", None) is not None else None)
+
+
+PAGE_OWNS = "the sequencer page owns this"
+
+
+def on_page(table, c: apc40.Control) -> bool:
+    """Is this control one the surface page that is up holds (plan 31 §A)?"""
+    probe = Binding(c.source, "")
+    return any(probe.overlaps(b) for b in getattr(table, "page_rows", ()))
 
 
 def lit(table) -> dict[str, Binding]:
@@ -170,6 +183,8 @@ def mappable(table, c: apc40.Control) -> str | None:
     (D6), and nothing is mapped while the global layer is up (D5) — what
     `Learn.learn_control` refuses, asked before the click."""
     name = apc40.named(c.source) or c.glyph
+    if on_page(table, c):                       # (learn.blocked says "invariant" too)
+        return f"{name}: {PAGE_OWNS}"
     why = learn.blocked(table, c.source)        # the rule `learn_control` refuses by
     if why == "invariant":
         return f"{name} is invariant (the session's)"
@@ -477,6 +492,9 @@ def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
     lrn = getattr(panel, "learn", None)
     if lrn is None:
         return
+    if on_page(table, c):                   # neither learned nor picked (plan 31 §A)
+        lrn.said(f"{c.glyph}: {PAGE_OWNS}")
+        return
     if getattr(lrn, "learning", None) is not None:
         if lrn.accepts(c.source):
             lrn.learn_control(c.source, apc40)
@@ -608,6 +626,8 @@ def text(reg, b: Binding) -> str:
     target the registry lacks (or a param with no label) → the id. A bank
     pad whose slot is empty says nothing (`empty`): "" — it is drawn as a
     dark control."""
+    if getattr(b, "words", ""):             # a surface page's row: "L1·3"
+        return b.words
     p = reg.get(b.target)
     if p is None:
         return b.target
@@ -715,6 +735,8 @@ def label_px(unit: float) -> float:
 
 
 def _layer_word(table, b: Binding) -> str:
+    if getattr(b, "shade", None) is not None:
+        return "sequencer page"
     if b.layer is None:
         return "invariant"
     return f"{b.layer} layer"
@@ -748,19 +770,24 @@ def _led(panel, b: Binding) -> tuple[float, float, float] | None:
     if p is None or b.feedback != "led":
         return None
     try:
-        level = led_level(b, p)
+        shade = led_shade(b, p)
     except (TypeError, ValueError):
         return None
-    if not level:
+    if shade == "off":
         return None
-    if level == 1:
+    if shade == "held":
         filled = apc40.filled_of(b.number, int(b.on)) if b.kind == "note" else None
         rgb = _LED.get(filled) if filled is not None else None
         return None if rgb is None else tuple(FILLED * x for x in rgb)
-    # the clip grid shows the row's colour (green, red, yellow); every
-    # other button's LED is a plain on, drawn in the panel's red
+    # the clip grid shows the row's colour (green, red, yellow) — a page's
+    # shade its own (apc40.SHADE: the playhead yellow, a muted lane red);
+    # every other button's LED is a plain on, drawn in the panel's red,
+    # and a page's blink (a muted lane's scene) at `FILLED` strength
     grid = b.kind == "note" and b.number in apc40.N_CLIP
-    return _LED.get(int(b.on), _ON) if grid else _ON
+    v = int(b.on) if shade == "on" else apc40.shade_of(b.number, shade)
+    if grid:
+        return _LED.get(v if v is not None else int(b.on), _ON)
+    return _ON if shade in ("on", "hit") else tuple(FILLED * x for x in _ON)
 
 
 def _bright(led) -> bool:
@@ -1049,6 +1076,14 @@ def _header(panel, table) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
                               "something on it; dark ones do nothing.")
+        page = getattr(table, "page", None)
+        if page is not None and hasattr(page, "header"):     # the sequencer page (plan 31 §A)
+            imgui.same_line()
+            ui._micro(page.header(), ui.RED)
+            if imgui.is_item_hovered():
+                imgui.set_tooltip("The sequencer page is up — SEND A lets it go. The clip "
+                                  "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
+                                  "k the length.")
         imgui.same_line()
         room_ = end - imgui.get_cursor_pos_x()
         imgui.text_colored(ui.TEXT, ui.fit_text(_preset_name(panel), max(0.0, room_)))

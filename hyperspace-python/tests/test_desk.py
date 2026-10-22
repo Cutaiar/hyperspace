@@ -456,7 +456,8 @@ def test_the_default_map_is_sorted_as_plan_13_says():
         *[(s, "preset.select", None) for s in far],
         # SAVE on track 8's clip stop, invariant (plan 24 C1, decision 18)
         (f"note:7:{apc40.N_CLIPSTOP}", routing.SAVE_PARAM, None),
-        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None)]   # home (plan 15 WP2)
+        (f"note:0:{apc40.N_OVERDUB}", "preset.home", None),   # home (plan 15 WP2)
+        (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, None)]  # SEND A (plan 31 §A)
     assert not [b for b in rows if b.layer == "global" and b.number in (0x35, 0x36, 0x37)
                 and b.kind == "cc"]
     # the preset layer's device knobs: SCENE on 1–4, 5–8 dark (plan 19 WP3)
