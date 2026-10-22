@@ -79,7 +79,6 @@ THUMB_SAMPLES = 4     # per curved stage of a thumbnail
 NAME_W = 52.0         # a folded strip's name cell; its level bar takes the rest
 FOLD_COLS = 2         # folded strips to a line
 SUS_SHARE = 0.25      # the sustain plateau's width in the drawing, of the other stages
-WAVE = ui_lfo.WAVE
 
 # the APC40's LED colours (ui_desk._LED), so the screen and the pads agree
 GREEN = imgui.ImVec4(0.30, 0.85, 0.40, 1.0)
@@ -552,7 +551,7 @@ def _shape(dl, env, x0: float, y0: float, w: float, h: float, n: int,
     for k in range(1, n + 1):
         f = k / n
         pts.append(imgui.ImVec2(x0 + sx * (t + r * f), y(sus * (1.0 - shape(f, c)))))
-    dl.add_polyline(pts, ui.u32(WAVE), thick, 0)
+    dl.add_polyline(pts, ui.u32(ui_lfo.WAVE), thick, 0)   # read late: ui_lfo → ui → ui_seq is a cycle
     at = now_at(env)
     if at is not None and env.stage != IDLE:
         dl.add_circle_filled(
