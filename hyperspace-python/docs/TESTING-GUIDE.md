@@ -35,6 +35,9 @@ explained in the [glossary](#glossary) at the end.
    (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`. The instanced-field entries
    (L136–L138: thousands of copies, the 3D lattices, Fit) are on `main`.
+   The step-sequencer entries (L139–L144) are plan 31's: use branch
+   `plan-31-integration` until it is merged. Its APC40 entries (A37–A46) need branch
+   `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -49,7 +52,7 @@ explained in the [glossary](#glossary) at the end.
    app re-reads while it runs; the entries that say so edit it live.
 5. **The control window's pages** are the column of names down its left
    edge — OUTPUT, VIEW, FACES, BITMAP, CAMERA, LOOKBACK, FX, AUDIO,
-   ANALYZER, ROUTING, GRAPH, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
+   ANALYZER, ROUTING, GRAPH, LFO, SEQ, HANDS, PRESETS, SYSTEM. Click a name to open
    that page. Messages appear in the *footer*, the line along the bottom.
 
 Below, `<home>` means whichever home folder the app is using. ⌘ is the
@@ -117,6 +120,9 @@ changes brightness or volume instead).
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
+14. Plan 31's step-sequencer entries: L139–L143 on the laptop (L141
+    with music), L144 with two Macs on the copy; then, on branch
+    `plan-31-a1` and with Dylan, A37 first and A38–A46 with the APC40.
 
 ## Summary
 
@@ -260,6 +266,12 @@ changes brightness or volume instead).
 | L136 | Four thousand copies hold the frame rate | 1 | laptop | 277 |
 | L137 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 278 |
 | L138 | The lattices read as 3D | 1 | laptop, a mouse helps | 279 |
+| L139 | Seven LFOs, then sixteen | 1 | laptop, the copy | 280 |
+| L140 | The SEQ page from across the room | 1 | laptop | 281 |
+| L141 | The drum pattern against music | 1 | laptop, music | 282 |
+| L142 | The trigger lines the pattern up | 1 | laptop | 283 |
+| L143 | The lanes on the GRAPH page | 1 | laptop | 284 |
+| L144 | A pattern preset on an older build | 1 | two Macs, the copy | 285 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -296,6 +308,16 @@ changes brightness or volume instead).
 | A34 | Learn from a pin, with the desk | 2a | APC40 | 248 |
 | A35 | The APC40 as two boxes, SHIFT latched and released | 2a | APC40, hand camera | 256 |
 | A36 | Whose cable is it; a missing device | 2a | APC40, the copy | 258 |
+| A37 | SEND A turns the pads into the pattern, and back | 2a | APC40, the copy, `plan-31-a1` | 286 |
+| A38 | Yellow over green | 2a | APC40, `plan-31-a1` | 287 |
+| A39 | No flicker at speed | 2a | APC40, `plan-31-a1` | 288 |
+| A40 | The bottom row is the playhead and the length | 2a | APC40, `plan-31-a1` | 289 |
+| A41 | Scene buttons pick and mute a lane | 2a | APC40, `plan-31-a1` | 290 |
+| A42 | A held bank pad across SEND A saves nothing | 2a | APC40, the copy, `plan-31-a1` | 291 |
+| A43 | SHIFT with the pattern up | 2a | APC40, `plan-31-a1` | 292 |
+| A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 293 |
+| A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
+| A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -3472,6 +3494,131 @@ fade are right.
 
 *(check 279)*
 
+## The step sequencer (L139–L144; plan 31)
+
+The LFOs can now number up to sixteen; there are **envelopes** (a shape
+that rises and falls once each time something fires it) and a **step
+sequencer**: a grid of five lanes by eight steps that fires the lanes'
+envelopes in time with the tapped tempo. The new **SEQ** page, after LFO,
+draws the grid. The factory preset **seq-demo** has a drum pattern: the
+kick brightens the picture, the snare punches the zoom, the hats split
+the colours. It loads stopped: press **run** on the SEQ page.
+
+#### L139. Seven LFOs, then sixteen (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** load LFO BREATHE; open LFO. Click **+ lfo** three times. Click a
+one-line strip's arrow. Click **×** on LFO 2, then ⌘Z. Click **+ lfo**
+until it greys out, hover it, and scroll the page.
+
+**Right if:** with four LFOs the page looks as it always did; from five,
+all but one strip are a single line with a small picture and a moving
+bar, and the arrow opens that strip and closes the other; after ×, LFO 3
+is still called LFO 3; ⌘Z brings LFO 2 back; at sixteen the button is
+grey and says why; the page scrolls and stays smooth.
+
+**Wrong if:** the LFOs renumber after a ×; two strips open at once; the
+app stutters with sixteen.
+
+*(check 280)*
+
+#### L140. The SEQ page from across the room
+
+**Needs:** laptop.
+
+**Do:** load **seq-demo**, open SEQ, press **run**. Step back two
+metres. Then click the number **6** above the grid; click lane 2's **M**;
+click lane 3's number; click any square; ⌘Z.
+
+**Right if:** the green squares (the kick, the snare and the hats) stand
+out from the dark ones; a red-framed column walks across in time, and a
+green square under it turns yellow — still easy to tell from green;
+after **6**, columns 7 and 8 go dim and ignore clicks; lane 2's squares
+turn red; clicking lane 3's number opens envelope 3's strip below; a
+click toggles a square and ⌘Z puts it back. Nothing scrolls.
+
+**Wrong if:** yellow and green hard to tell apart from a distance; a dim
+column that still toggles.
+
+*(check 281)*
+
+#### L141. The drum pattern against music
+
+**Needs:** laptop; music at about 120 BPM, then about 175.
+
+**Do:** tap the tempo in with the music; press ⇧B on a downbeat; load
+**seq-demo**, press **run**. Then the faster track: tap again, ⇧B. On
+envelope 1's strip set **mode** to gate.
+
+**Right if:** the picture flashes on the kick, the zoom punches on the
+snare and the colours split on every hat, all on the music; nothing
+drifts over a minute; at 175 the hats are still separate hits; in gate
+mode the kick still lets go quickly.
+
+**Wrong if:** hits early or late against a good tap; a hit doubled or
+missed when the app stutters; a gate-mode kick that stays lit.
+
+*(check 282)*
+
+#### L142. The trigger lines the pattern up
+
+**Needs:** laptop.
+
+**Do:** on seq-demo, running, set LFO 1's sync to **1 bar** and route it
+onto something you can see. Press ⇧B off the beat a few times; then the
+SEQ page's **restart**; then ⇧B again.
+
+**Right if:** each ⇧B puts the grid on step 1 and LFO 1 at the start of
+its cycle at the same moment, with a kick there; **restart** puts only
+the grid on step 1, LFO 1 carrying on; the next ⇧B lines both up again.
+
+**Wrong if:** the grid ignores ⇧B; a burst of hits on a press; restart
+moves the LFO.
+
+*(check 283)*
+
+#### L143. The lanes on the GRAPH page
+
+**Needs:** laptop.
+
+**Do:** on seq-demo, stopped, open GRAPH, click **MODULATION**; open the
+*sequencer* box and *env 1*–*env 3* (open the idle line's **+** to see
+*env 4*). Press run on SEQ and come back; mute lane 2 there. Drag lane
+1's dot onto *env 4*'s **fire** dot; ⌘Z. Click a lane cable and press
+Delete. Right-click *env 1*; right-click the canvas and add an
+**envelope**, then delete it.
+
+**Right if:** three cables, "lane 1 fires env 1" to "lane 3 fires env 3",
+faint and marked "(stopped)" until run is on, lane 2's faint "(muted)";
+lanes 4 and 5 (no steps) have none; the drag moves lane 1 onto env 4 (the
+SEQ page's picker says env 4) and ⌘Z moves it back; Delete only explains
+how to rebind; env 1 cannot be deleted and says why; the new envelope is
+env 6 and can be deleted.
+
+**Wrong if:** a lane cable deleted; the drag making a route instead.
+
+*(check 284)*
+
+#### L144. A pattern preset on an older build (two Macs, on the copy)
+
+**Needs:** two Macs sharing one library folder, one on this build and one
+on a build from before plan 31; the copy.
+
+**Do:** on this build save TRIP unchanged under a new name; then turn one
+step on in the SEQ grid and save under another name. Open both files in
+a text editor. Load each on the older build.
+
+**Right if:** the unchanged one says `hyperspace.preset/2` and has no
+`env.` or `seq.` lines; the other says `/3`; the older build loads the
+first and refuses the second with a message about the schema, leaving
+the file as it was.
+
+**Wrong if:** the older build opens the `/3` file and, saved there, it
+loses its pattern.
+
+*(check 285)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -4296,6 +4443,170 @@ lights it where it is.
 **Wrong if:** a grey box named `axis@p2`.
 
 *(check 258)*
+
+#### The step sequencer on the desk (A37–A46; branch `plan-31-a1`, with Dylan)
+
+These need branch **`plan-31-a1`**, which holds the APC40 page and waits
+for Dylan's sign-off. **SEND A** (in the track section's top-right
+group) turns the clip-launch pads into the step grid: rows 1–5 are the
+five lanes, the clip-stop row the playhead and the length, scene launch
+1–5 pick a lane. Press SEND A again to get the bank back. Load
+**seq-demo** and press **run** on the SEQ page first, unless the entry
+says otherwise. Run them on the copy.
+
+#### A37. SEND A turns the pads into the pattern, and back (on the copy)
+
+**Needs:** the APC40; the copy; `plan-31-a1`.
+
+**Do:** with the party show loaded, note the colours of the 24 bank pads,
+SAVE (track 8's clip stop) and scene 1–4. Press SEND A; press a few grid
+pads; press SEND A again.
+
+**Right if:** SEND A lights; the grid shows the drum pattern in green
+(lanes 4 and 5 dark), scene 1 lit; a pad turns its step on or off (the
+screen agrees) and loads no preset; SEND A again goes dark and every bank
+pad, SAVE and the scene buttons come back exactly as they were.
+
+**Wrong if:** a bank pad left dark or a step left lit; a pad loading a
+preset while the grid is up.
+
+*(check 286)*
+
+#### A38. Yellow over green
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A up, seq-demo running; look from a metre or two.
+
+**Right if:** the moving yellow on a lit pad is easy to tell from green,
+and red (mute lane 2 on screen) from both.
+
+**Wrong if:** yellow and green look the same on the desk.
+
+*(check 287)*
+
+#### A39. No flicker at speed
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** turn every step of all five lanes on (on screen); SEND A; tempo
+about 175 with span ½ bar; then span 4 bars.
+
+**Right if:** the yellow column steps cleanly across five lit pads; no
+pad flashes dark between steps.
+
+**Wrong if:** flicker or stutter on the grid.
+
+*(check 288)*
+
+#### A40. The bottom row is the playhead and the length
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A, running. Watch the clip-stop row; press clip stop 5, then
+clip stop 8; then stop the transport on screen.
+
+**Right if:** one clip stop is lit, walking along with the playhead;
+after clip stop 5 the pattern repeats after step 5 and columns 6–8 go
+dark and do nothing; clip stop 8 brings back all eight and **does not
+save a preset** (off the grid it is SAVE); stopped, the row is dark.
+
+**Wrong if:** clip stop 8 saves; a dark column still toggles.
+
+*(check 289)*
+
+#### A41. Scene buttons pick and mute a lane
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A. Press scene 2; scene 2 again; scene 3; scene 2 again.
+
+**Right if:** scene 2 lights (the on-screen desk's header says "SEQ ·
+lane 2 · L=8"); the second press mutes lane 2 — its scene button blinks,
+its pads turn red, the snare stops; scene 3 picks lane 3 while scene 2
+keeps blinking; pressing scene 2 then picks it again (it stays muted);
+points, lines, faces and rotate never change.
+
+**Wrong if:** no blink; a scene press switching points or lines.
+
+*(check 290)*
+
+#### A42. A held bank pad across SEND A saves nothing (on the copy)
+
+**Needs:** the APC40; the copy; `plan-31-a1`.
+
+**Do:** grid down. Hold an **empty** bank pad (row 4); while holding,
+press SEND A; keep holding for two seconds; let go.
+
+**Right if:** nothing is saved (the PRESETS page and the slot unchanged),
+no pad blinks, the grid is up.
+
+**Wrong if:** a new preset in that slot.
+
+*(check 291)*
+
+#### A43. SHIFT with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A; press SHIFT (it stays lit); press grid pads, scene
+buttons and clip stops; turn a track knob; press SHIFT again.
+
+**Right if:** the grid, the scene buttons and the clip stops still edit
+the pattern with SHIFT lit; the knobs and faders do their SHIFT jobs;
+with SHIFT off the knobs are the preset's again and the grid still up.
+
+**Wrong if:** a SHIFT-layer action fires from a grid pad or scene button.
+
+*(check 292)*
+
+#### A44. QUANT with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A on seq-demo; press QUANT (next preset) a few times; then
+load seq-demo again from the screen.
+
+**Right if:** the grid stays up through every load and shows each
+preset's pattern (most are empty: dark), the drums again on seq-demo.
+
+**Wrong if:** a load takes the grid down, or the old pattern stays lit.
+
+*(check 293)*
+
+#### A45. Switch the desk off and on with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A up and running; switch the APC40 off and on (or unplug
+it and plug it back in).
+
+**Right if:** within a second or two the desk shows the grid again as it
+was: SEND A lit, the pattern, the lane's scene button, the walking clip
+stop.
+
+**Wrong if:** the bank's lights come back while the screen says the grid
+is up, or the grid stays dark.
+
+*(check 294)*
+
+#### A46. SEND A after the desk fell back to Generic mode
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** with the grid **down**, switch the desk off and on while the app
+runs (it may come back in Akai's Generic mode — see SETUP); press SEND A;
+press it again. Then the same with the grid **up** before switching off.
+
+**Right if:** within a press or two the desk is back in the app's mode
+(the desk log says so); from then on SEND A turns the grid on and off
+once per press, its light matching the screen; at worst the first press
+is lost — press again.
+
+**Wrong if:** SEND A's light and the screen disagree, or SEND A stays
+latched on the desk by itself.
+
+*(check 295)*
 
 ## (b) The hand camera
 
@@ -6325,6 +6636,10 @@ what you want changed.
   as the colour you meant from a distance (the ghost hands are pale), a
   palette per screen, and whether the FX page's placed chip reads
   clearly. (L98, L102, D20, D21, D23; checks 223, 224, 229, 231)
+- **The step sequencer's feel** — whether the drum pattern feels tight
+  against music at 120–175 BPM, and whether the SEQ grid and the yellow
+  playhead read from across the room, on screen and on the desk. (L140,
+  L141, A38, A39; checks 281, 282, 287, 288)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'

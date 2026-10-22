@@ -416,6 +416,28 @@ def test_main_hands_the_router_its_lfos():
     assert calls == ["router.use_lfos(lfos, clock)"]
 
 
+def test_main_hands_the_router_its_envelopes_and_sequencer():
+    """Plan 31 W1: the envelopes are a second bank and the sequencer fires
+    them, both stepped inside `router.modulate` — a main that forgot either
+    call would leave every envelope at rest and the grid silent, with the
+    frame order unchanged. Each is registered before the router takes it,
+    and both are hot-reload targets."""
+    import ast
+    import inspect
+
+    src = inspect.getsource(app.main)
+    tree = ast.parse(src)
+    calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute)
+             and n.func.attr in ("use_bank", "use_sequencer")]
+    assert calls == ["router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)"]
+    assert src.index("envelope.register(reg, envs, clock)") < src.index("library.attach(reg)")
+    assert src.index("sequencer.register(reg, seq, clock)") < src.index("library.attach(reg)")
+    assert src.index("router.use_lfos(lfos, clock)") < src.index("router.use_bank(envs, clock)")
+    assert '(envs, "envelope", "Envelopes")' in src
+    assert '(seq, "sequencer", "Sequencer")' in src
+
+
 def test_an_absent_pad_or_adapter_is_simply_skipped():
     """No registry, or one with nothing listed: the frame runs the same
     order with no device step in it."""

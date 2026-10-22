@@ -177,7 +177,7 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert "pad@p2:A" in [p.address for p in two.sources]
     assert "hat@p2:UP" in [p.address for p in two.sources]
     assert reg.schemes() == ("axis", "pad", "hat", "axis@p2", "pad@p2", "hat@p2")
-    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "axis@p2")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "axis@p2")
     assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
     # Learn pad (whichever pad moves) and "Learn p2" (that pad only)
     assert reg.wants() == ("pad", "p2")
@@ -424,10 +424,10 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
         devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
-    assert devices.BUILTIN_SCHEMES == ("lane", "lfo")
-    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "hand", "hands", "ext")
+    assert devices.BUILTIN_SCHEMES == ("lane", "lfo", "env", "seq")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "hand", "hands", "ext")
     assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "hands", "ext")
-    assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo")
+    assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo", "env", "seq")
 
 
 def test_a_bridge_on_or_off_arms_no_learn():

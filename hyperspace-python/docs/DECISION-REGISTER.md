@@ -10,7 +10,13 @@ editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
 and rows 291–298 in plan 30's N8 (the palette as compression)
 and rows 299–310 in plan 28's N9 (the graph by concern)
 on 2026-10-20: the build took its own
-recommendation and built it. Every one is in the app now (rows 110–213
+recommendation and built it. Rows 311–320 are different: they are plan
+31's ten design decisions (the step sequencer), which the owner
+**accepted as recommended on 2026-10-22, before the build**; each is
+answered "(rec) — accepted 2026-10-22" and says what was built against
+it, kept here so the build's own choices inside each can still be
+overturned (they are on `plan-31-integration`; row 317's page on
+`plan-31-a1`). Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
 for the
@@ -309,6 +315,16 @@ here; overturn → the change, then the same.
 | 308 | The modulation and the audio laid out by their own depth | 272 | |
 | 309 | Titles never under 12 px on screen; a short word when needed | 272 | |
 | 310 | Open question: GRAPH asking for the whole control window (not built) | — | owner's call |
+| 311 | N LFOs, cap 16, removable by stable id (replaces "Four LFOs") | 280 | (rec) — accepted 2026-10-22 |
+| 312 | Envelopes: AHDSR, gate and one-shot; hold 0, legato, seconds, one curve | 282 | (rec) — accepted 2026-10-22 |
+| 313 | Envelopes 1–5 always there, each its lane's; extras to 16 | 281, 284 | (rec) — accepted 2026-10-22 |
+| 314 | Steps as registry params | 281, 286 | (rec) — accepted 2026-10-22 |
+| 315 | Per step on/off only (stored as velocity); one global swing; a global gate built beside | 282 | (rec) — accepted 2026-10-22 |
+| 316 | One global span (½–4 bars) and a global length 1–8 | 281, 289 | (rec) — accepted 2026-10-22 |
+| 317 | The APC40 page on SEND A, latched (on `plan-31-a1`) | 286–295 | (rec) — accepted 2026-10-22 |
+| 318 | The pattern in the preset; `run` not | 282 | (rec) — accepted 2026-10-22 |
+| 319 | Conditional `hyperspace.preset/3` | 285 | (rec) — accepted 2026-10-22 |
+| 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 286–295 | (rec) — accepted 2026-10-22 |
 
 "—": no hand check shows it; tests only.
 
@@ -5928,3 +5944,188 @@ ROUTING's desk section are untouched.
   page; widening CONTROLS by hand works today.
 - **Other options.** Keep the panel; a GRAPH window of its own.
 - **Judge it.** The owner's call.
+
+## The step sequencer (plan 31)
+
+Plan 31 ([`plans/31-step-sequencer.md`](plans/31-step-sequencer.md))
+was designed on 2026-10-22 and its ten decisions were put to the owner
+with a recommended answer each; **the owner accepted all ten as
+recommended the same day**, and the build followed them. These rows say
+what was built against each and where the build chose inside one; the
+settled rule is in [`DECISIONS.md`](DECISIONS.md) "Tempo, LFOs and the
+sequencer", "Library and persistence" and "Presets and the desk" with
+Who "owner (plan 31 decision N)". Everything but A1 is on
+`plan-31-integration` (c81a9d9, 2582 tests passed); **A1, the APC40 page,
+is on `plan-31-a1` and waits for Dylan**. No golden moved; 25 new ones
+are `seq-demo`'s (621).
+
+### 311. N LFOs, cap 16, removable by stable id
+
+- **Answer.** (rec) — accepted 2026-10-22. Replaces DECISIONS' "Four
+  LFOs".
+- **Built.** `modbank.Bank`, with `lfo.LFOs` its first kind: four LFOs by
+  default, `+ lfo` / `×` on the LFO page and the GRAPH picker / delete;
+  ids one past the highest, never compacted (LFO 3 stays `lfo:2` with
+  LFO 2 gone; the gap's lane NaN, a route on it dormant); the cap 16
+  voices, a file's ids 1–64; `"lfos"` in the preset only when not
+  `[1, 2, 3, 4]`; membership an undo part, restored before the bases.
+- **Other options.** A fixed larger N (16 always there: longer menus, and
+  every preset carrying twelve idle LFOs); compacting ids (every route
+  above a removed LFO would move).
+- **To reverse.** `lfo.N` and `modbank.MAX`; the page's chips.
+- **Rough edge.** A removed *top* id is reused by the next add, and a
+  route left on it comes back to life (the rule protects only ids below a
+  standing voice). Frame time at 16 is not measured.
+- **Judge it.** Check 280.
+
+### 312. Envelopes: AHDSR, gate and one-shot
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `envelope.Envelope`: attack, hold, decay, sustain, release
+  (the voice's attribute is `rel`), log 1 ms – 8 s, hold's bottom 0 (so
+  ADSR by default); `mode` gate · one-shot; `sync` s · beats (beats ×
+  60 / bpm, read each step); `retrig` legato (default) · reset; one
+  `curve` −1…1 (the modifiers' `x ** 4 ** curve`); `amount`, `velocity`
+  sensitivity. Event-driven: a fire is stamped (`at=`) and rendered by a
+  closed form, so a sub-frame step is exact; an unstamped fire lands at
+  the next step at level 0. `gate=` (seconds) auto-releases a note,
+  tokened so a later note is never cut short.
+- **Other options.** ADSR without hold; a per-stage curve; a delay stage
+  before the attack.
+- **To reverse.** `envelope.KNOBS`, `declare`.
+- **Rough edge.** Two lanes pointed at one envelope share one voice:
+  they re-attack it (legato) rather than layer.
+- **Judge it.** Check 282.
+
+### 313. Envelopes 1–5 always there, each its lane's; extras to 16
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `Envelopes` always holds 1–5 (`LANE_ENVS`): the constructor
+  adds them, `remove` refuses them (the SEQ page and GRAPH say so), and
+  `parse` re-adds them (a hand-edited `"envs": [6]` loads 1–6). Extras
+  6… up to 16 voices; `"envs"` is written only with extras. **Built
+  beyond**: a lane may be pointed at any envelope (`seq.<l>.env`, default
+  its own, not modulatable), from the SEQ page's picker or by dragging
+  its `lane` cable on GRAPH; one pointed at a removed extra fires nothing
+  and its picker shows the warning colour.
+- **Other options.** No envelopes in a fresh preset, a lane making one on
+  first use (the designs differed); a fixed lane → envelope binding.
+- **To reverse.** `LANE_ENVS`; `seq.<l>.env`.
+- **Rough edge.** A lane on a removed extra is said only on the SEQ page's
+  picker; GRAPH draws no cable for it.
+- **Judge it.** Checks 281, 284.
+
+### 314. Steps as registry params
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq.<l>.<s>`, 40 toggles in group `seq`, each a view of a
+  float (on keeps a velocity it has). The SEQ page's cells, Learn, undo
+  (taps inside undo's settle merge), the preset, a performer and, on
+  `plan-31-a1`, the APC40's clip grid all write the same params.
+- **Other options.** A data blob per pattern (smaller registry; no Learn,
+  no ownership, its own undo and LED code).
+- **To reverse.** `sequencer.register`.
+- **Rough edge.** The sequencer adds 57 params (40 steps, 5 mutes, 5 lane
+  envelopes, span, length, swing, gate, run, step, restart): Learn menus
+  and target combos are longer.
+- **Judge it.** Checks 281, 286.
+
+### 315. Per step on/off only; one global swing
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** On/off per step, stored as a velocity (0 off, > 0 its
+  velocity; the toggle writes 1.0) so velocity can come without a new
+  file format; swing 0–0.5 of a step on every odd step. **Built beside
+  it: a global gate length**, `seq.gate` 0.05–1 of a step (default 0.5),
+  the decision having put gate length "later": without it a gate-mode
+  envelope fired by a step held its sustain until the transport stopped.
+  One-shots ignore it.
+- **Other options.** No gate (gate-mode lanes useless on the grid; only
+  one-shots would play notes); a per-step gate now.
+- **To reverse.** `Sequencer.gate_seconds`, `seq.gate`.
+- **Rough edge.** `seq.gate` is not on the SEQ page: ROUTING, GRAPH or a
+  Learn reach it.
+- **Judge it.** Check 282.
+
+### 316. One global span and a global length 1–8
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq.span` ½ bar · 1 bar (default) · 2 bars · 4 bars (16ths,
+  8ths, quarters, halves); `seq.length` 1–8, set from the SEQ page's
+  step numbers or (on `plan-31-a1`) clip stop k; columns past it dimmed
+  and inert on screen, dark and inert on the desk. A span change
+  re-anchors and starts at the next boundary.
+- **Other options.** Per-lane length (polymeter); 16- and 32-step pages.
+- **To reverse.** `sequencer.SPANS`, `seq.length`.
+- **Rough edge.** None known.
+- **Judge it.** Checks 281, 289.
+
+### 317. The APC40 page on SEND A, latched
+
+- **Answer.** (rec) — accepted 2026-10-22. **Built on `plan-31-a1`,
+  pending Dylan (row 320).**
+- **Built.** `seq.page` on SEND A (note 0x58), an invariant session
+  toggle; a surface page whose in-memory rows shadow clip rows 1–5, clip
+  stop 1–8 and scene launch 1–5 on both layers, invariant rows included
+  (so the bank pads, SAVE and scene 1–4's render toggles are shadowed
+  while it is up, amending D6); a preset load leaves it up; going up
+  drops hold timers on its controls; leaving relights the desk from the
+  params; `led_shade` + `apc40.SHADE` light it; `seq.select` holds the
+  lane; the on-screen desk's header reads "SEQ · lane 2 · L=8". An older
+  `bindings.json` gets the row through `APC_NEW_ROWS`, or a note at
+  launch when SEND A is the owner's.
+- **Other options.** Holding CLIP/TRACK (momentary, a hand tied up); a
+  third layer (invariant rows would beat it; layers spread into Learn,
+  desks and GRAPH).
+- **To reverse.** The `seq.page` row in `apc40.DEFAULT_MAP`; `seq_page.py`.
+- **Rough edge.** The page is the first MIDI role's only; the header has no
+  span; nothing has run on an mk1 (yellow over green, the mute blink,
+  Generic mode).
+- **Judge it.** Checks 286–295.
+
+### 318. The pattern in the preset; `run` not
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `seq` and `env` in `PERFORMANCE_GROUPS`; `seq.run`,
+  `seq.step` and `env.<n>.gate` `persist=False`. Pattern slots are `seq`
+  module presets (the SEQ page's ◀ preset ▶). The factory `seq-demo`
+  loads stopped and plays once run is pressed; its goldens are drawn
+  with run pressed by the golden rig.
+- **Other options.** `run` in the preset (a load would start or stop the
+  pattern mid-set).
+- **To reverse.** `persist=False` on `seq.run`.
+- **Rough edge.** Stopping releases every lane's envelope, even one held
+  open through its `gate` param.
+- **Judge it.** Check 282.
+
+### 319. Conditional `hyperspace.preset/3`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `preset.schema_of`: `/3` when the document has a bank key
+  (`lfos`, `envs`), an `env.*` / `seq.*` value, or a route, modifier or
+  macro on `env` / `seq`; else `/2` with every `env.*` / `seq.*` value
+  left out (all at their load defaults, floats to 1e-9), byte for byte
+  an older registry's file. Load takes `(2, 3)`. ENGINEERING says both
+  Macs on one library must run this build.
+- **Other options.** Always `/3` (every preset refused by an older build
+  at once); never bump (an older build re-saving drops the pattern
+  silently).
+- **To reverse.** `schema_of`, `VERSIONS`.
+- **Rough edge.** An older build's refusal speaks of the schema, not the
+  sequencer.
+- **Judge it.** Check 285.
+
+### 320. A1 only after Dylan agrees
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** A1 was built and tested (`tests/test_seq_page.py`, 14 tests)
+  on its own branch, `plan-31-a1`, which took `plan-31-integration` in but
+  was not taken into it; nothing else waits on it — the SEQ page gives the
+  whole feature without the hardware. A2 (D5–D8 as the selected lane's
+  AHDSR) is not built.
+- **Other options.** Land A1 with the rest and let Dylan review after.
+- **To reverse.** Bring `plan-31-a1` in once Dylan agrees.
+- **Rough edge.** `plan-31-a1` drifts from the integration branch until
+  it lands; it touches `routing.dispatch` / `active`, `midi.py`,
+  `apc40.DEFAULT_MAP` and `ui_desk`.
+- **Judge it.** Checks 286–295, with Dylan.

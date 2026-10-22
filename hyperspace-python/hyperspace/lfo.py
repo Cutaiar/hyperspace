@@ -1,7 +1,7 @@
-"""Four LFOs — performers that own a parameter, and are themselves ownable.
+"""The LFOs — performers that own a parameter, and are themselves ownable.
 
 An LFO is a source like a hand or an audio lane: `LFOs.step` runs once a
-frame and `publish` hands the four outputs to the router as ``lfo:<i>``
+frame and `publish` hands the outputs to the router as ``lfo:<i>``
 (plan 09, decisions 7 and 8). Every knob on an LFO — shape, rate, sync,
 depth, phase — is a registry param, modulatable and persistent, which is
 what makes them chainable: a hand can own LFO 1's depth while LFO 1 owns
@@ -62,9 +62,17 @@ the moment it is chosen.
 Addresses: the router's source addresses are 0-based (``lfo:0`` is
 "LFO 1") while the param ids are 1-based (``lfo.1.depth``).
 
-Nothing here imports from the host: the clock, the registry and the
-router are duck-typed arguments, the boundary rule hands/ has
-(tests/test_lfo_boundary.py).
+**N of them** (plan 31 B): the bank is a `modbank.Bank` — four by
+default (`N`), up to 16, each added or removed by its stable id. Ids
+never compact: with LFO 2 removed, LFO 3 is still ``lfo:2`` and
+``lfo.3.*``, so every route and factory preset keeps its meaning, and
+LFO 2's lane reads NaN (dormant). The membership is the preset's
+``"lfos"`` key and part of undo; `declare` is this kind's half of
+`Bank.bind`.
+
+Nothing here imports from the host but the leaf `modbank`: the clock,
+the registry and the router are duck-typed arguments, the boundary rule
+hands/ has (tests/test_lfo_boundary.py).
 """
 
 from __future__ import annotations
@@ -72,6 +80,9 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+from .modbank import MAX, Bank  # noqa: F401 — lfo.MAX: the cap, 16
 
 SHAPES = ["sine", "tri", "saw", "square", "random"]
 SYNCS = ["Hz", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"]
@@ -79,10 +90,13 @@ SYNCS = ["Hz", "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16"]
 DIVISIONS = {"4 bars": 1 / 16, "2 bars": 1 / 8, "1 bar": 1 / 4, "1/2": 1 / 2,
              "1/4": 1.0, "1/8": 2.0, "1/16": 4.0}
 RATE_LO, RATE_HI = 0.01, 20.0
-N = 4
+N = 4                 # the default bank: LFO 1–4 (a file without "lfos")
 REST = 0.5
 GROUP = "lfo"
 RANDOM = SHAPES.index("random")
+# the knobs that feed an LFO's node in the modulation patch, in the order
+# `declare` makes them (patch.LFO_KNOBS, which the router reads)
+KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")
 
 
 def wave(shape: int, x: float) -> float:
@@ -182,35 +196,32 @@ class LFO:
         self.cycle = None                 # random: a fresh draw
 
 
-class LFOs:
-    """The bank of N: stepped once a frame, published as the ``lfo`` source."""
+class LFOs(Bank):
+    """The bank (modbank.Bank): stepped once a frame, published as the ``lfo`` source."""
+
+    SCHEME, LABEL, KEY = GROUP, "LFO", "lfos"
+    DEFAULT = tuple(range(1, N + 1))
+    REST = REST
+    KNOBS = KNOBS
+    SHARED: ClassVar[dict[str, str]] = {f"{GROUP}.trigger": "trigger"}
 
     # class-level so a hot-reloaded instance from before these existed has them
-    stepped_at: float | None = None   # the t of the last step
     pending = False                    # a global trigger held for the next step
 
     def __init__(self, n: int = N, seed: int | None = None):
-        self.lfos = [LFO() for _ in range(n)]
         self.rng = random.Random(seed)
-        self.outputs = [REST] * n
+        super().__init__(range(1, n + 1))
 
-    def __len__(self) -> int:
-        return len(self.lfos)
-
-    def __getitem__(self, i: int) -> LFO:
-        return self.lfos[i]
+    def make(self) -> LFO:
+        return LFO()
 
     @property
-    def labels(self) -> list[str]:
-        return [f"LFO {i + 1}" for i in range(len(self.lfos))]
+    def lfos(self) -> list[LFO]:
+        """The LFOs in id order (a gap skipped)."""
+        return self.voices
 
-    def step(self, dt: float, t: float, clock) -> list[float]:
-        """One frame: every LFO's output for time t, in [0, 1]. A trigger
-        held since the last step lands first, at this t."""
-        self.begin(t, clock)
-        for i in range(len(self.lfos)):
-            self.step_one(i, dt, t, clock)
-        return self.outputs
+    def step_voice(self, lf: LFO, dt: float, t: float, clock) -> float:
+        return lf.step(dt, t, clock, self.rng)
 
     def begin(self, t: float, clock) -> None:
         """The frame's start for the bank, before any LFO steps: a global
@@ -219,41 +230,25 @@ class LFOs:
         if self.pending:
             self.pending = False
             self._trigger(clock, t)
-        self.outputs = list(self.outputs)
-
-    def step_one(self, i: int, dt: float, t: float, clock) -> float:
-        """LFO `i`'s step for time t — what the modulation pass runs at that
-        LFO's node (plan 28 N0), after the knob params it reads have landed
-        this frame. Its output goes into `outputs[i]` and is returned."""
-        lf = self.lfos[i]
-        self.stepped_at = lf.at = t
-        out = self.outputs[i] = lf.step(dt, t, clock, self.rng)
-        return out
-
-    def _late(self, clock, t: float | None) -> bool:
-        """Did this arrive after the bank already stepped at this frame's t?
-        Then it is held for the next step, which reads it at exactly phase 0."""
-        if t is None:
-            t = getattr(clock, "t", None)
-        return t is not None and t == self.stepped_at
+        super().begin(t, clock)
 
     def reset(self, i: int, clock=None, t: float | None = None) -> None:
-        """One LFO restarts now, in either mode; the clock and the rest stay.
-        Late — held for its next step — only if *this* LFO has stepped at
-        this frame's t: a reset landed by the pass before its LFO's node
-        reads phase 0 that same step (plan 28 N0)."""
+        """The LFO on lane `i` restarts now, in either mode; the clock and
+        the rest stay. Late — held for its next step — only if *this* LFO
+        has stepped at this frame's t: a reset landed by the pass before
+        its LFO's node reads phase 0 that same step (plan 28 N0)."""
         if t is None:
             t = getattr(clock, "t", None)
-        if t is not None and t == getattr(self.lfos[i], "at", self.stepped_at):
-            self.lfos[i].pending = True
+        if self.late_one(i, clock, t):
+            self[i].pending = True
         else:
-            self.lfos[i].restart(clock, t)
+            self[i].restart(clock, t)
 
     def trigger(self, clock=None, t: float | None = None) -> None:
         """The global trigger: the downbeat is now and every synced LFO
         restarts together. Free-running (Hz) ones are untouched. Fired
         after this frame's step, it is held for the next one."""
-        if self._late(clock, t):
+        if self.late(clock, t):
             self.pending = True
         else:
             self._trigger(clock, t)
@@ -261,24 +256,19 @@ class LFOs:
     def _trigger(self, clock, t: float | None) -> None:
         if clock is not None:
             clock.trigger(t)
-        for lf in self.lfos:
+        for lf in self.voices:
             if lf.synced:
                 lf.shift = 0.0
                 lf.cycle = None
                 lf.pending = False        # the global trigger supersedes a held reset
 
-    def publish(self, router) -> None:
-        """This frame's outputs to the router as the ``lfo`` source, with
-        the lane names and the rest a push row on an LFO is centred on."""
-        router.feed(GROUP, self.outputs)
-        router.labels[GROUP] = self.labels
-        router.rests[GROUP] = [REST] * len(self.lfos)
-
 
 def register(reg, lfos: LFOs, clock) -> None:
     """Every LFO knob as a param in the ``lfo`` group, plus the global
     trigger. All of them modulatable and persistent: a performer can own
-    an LFO's depth, and a preset carries the arrangement."""
+    an LFO's depth, and a preset carries the arrangement. The bank is
+    bound to `reg` (modbank.Bank.bind), so an LFO added later declares its
+    knobs the same way and one removed drops them."""
     if f"{GROUP}.trigger" in reg:
         return
     reg.trigger(f"{GROUP}.trigger", "LFO trigger", lambda: lfos.trigger(clock), group=GROUP,
@@ -286,31 +276,35 @@ def register(reg, lfos: LFOs, clock) -> None:
                 tip="The downbeat is now: every synced LFO restarts together, on this "
                     "press (⇧B, the APC's METRONOME — its LED blinks on the beat). "
                     "Free-running Hz LFOs are untouched.")
+    lfos.bind(reg, lambda reg, n, lf: declare(reg, lfos, clock, n, lf))
+
+
+def declare(reg, lfos: LFOs, clock, n: int, lf: LFO) -> None:
+    """LFO `n`'s knobs, ``lfo.<n>.*`` — the bank's `declare` for this kind."""
     hz = lambda v: f"{v:.2f} Hz" if v < 10 else f"{v:.1f} Hz"
-    for i, lf in enumerate(lfos.lfos):
-        p, name = f"{GROUP}.{i + 1}", f"LFO {i + 1}"
-        reg.enum(f"{p}.shape", f"{name} shape", lambda lf=lf: lf.shape,
-                 lambda v, lf=lf: setattr(lf, "shape", int(v)), SHAPES, group=GROUP,
-                 tip="The wave. Random is sample-and-hold: one value per cycle.")
-        reg.continuous(f"{p}.rate", f"{name} rate", lambda lf=lf: lf.rate,
-                       lambda v, lf=lf: setattr(lf, "rate", float(v)),
-                       lo=RATE_LO, hi=RATE_HI, log=True, fmt=hz, group=GROUP,
-                       tip="Cycles per second while Sync is Hz; a division ignores it.")
-        reg.enum(f"{p}.sync", f"{name} sync", lambda lf=lf: lf.sync,
-                 lambda v, lf=lf: setattr(lf, "sync", int(v)), SYNCS, group=GROUP,
-                 tip="Free-running at the rate, or locked to the clock: a division "
-                     "lands on the downbeat and follows the global trigger.")
-        reg.continuous(f"{p}.depth", f"{name} depth", lambda lf=lf: lf.depth,
-                       lambda v, lf=lf: setattr(lf, "depth", float(v)),
-                       lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=GROUP,
-                       tip="How far the output swings about its rest of 0.5; 0 is still.")
-        reg.continuous(f"{p}.phase", f"{name} phase", lambda lf=lf: lf.phase,
-                       lambda v, lf=lf: setattr(lf, "phase", float(v)),
-                       lo=0.0, hi=1.0, wrap=True, fmt=lambda v: f"phase {v:.2f}",
-                       group=GROUP,
-                       tip="An offset into the cycle, on top of the clock or the "
-                           "free-running phase.")
-        reg.trigger(f"{p}.reset", f"{name} reset", lambda i=i: lfos.reset(i, clock),
-                    group=GROUP,
-                    tip="This LFO's cycle restarts now, in either mode — the clock and "
-                        "the other LFOs stay where they are.")
+    p, name = f"{GROUP}.{n}", f"LFO {n}"
+    reg.enum(f"{p}.shape", f"{name} shape", lambda lf=lf: lf.shape,
+             lambda v, lf=lf: setattr(lf, "shape", int(v)), SHAPES, group=GROUP,
+             tip="The wave. Random is sample-and-hold: one value per cycle.")
+    reg.continuous(f"{p}.rate", f"{name} rate", lambda lf=lf: lf.rate,
+                   lambda v, lf=lf: setattr(lf, "rate", float(v)),
+                   lo=RATE_LO, hi=RATE_HI, log=True, fmt=hz, group=GROUP,
+                   tip="Cycles per second while Sync is Hz; a division ignores it.")
+    reg.enum(f"{p}.sync", f"{name} sync", lambda lf=lf: lf.sync,
+             lambda v, lf=lf: setattr(lf, "sync", int(v)), SYNCS, group=GROUP,
+             tip="Free-running at the rate, or locked to the clock: a division "
+                 "lands on the downbeat and follows the global trigger.")
+    reg.continuous(f"{p}.depth", f"{name} depth", lambda lf=lf: lf.depth,
+                   lambda v, lf=lf: setattr(lf, "depth", float(v)),
+                   lo=0.0, hi=1.0, fmt=lambda v: f"depth {v:.2f}", group=GROUP,
+                   tip="How far the output swings about its rest of 0.5; 0 is still.")
+    reg.continuous(f"{p}.phase", f"{name} phase", lambda lf=lf: lf.phase,
+                   lambda v, lf=lf: setattr(lf, "phase", float(v)),
+                   lo=0.0, hi=1.0, wrap=True, fmt=lambda v: f"phase {v:.2f}",
+                   group=GROUP,
+                   tip="An offset into the cycle, on top of the clock or the "
+                       "free-running phase.")
+    reg.trigger(f"{p}.reset", f"{name} reset", lambda n=n: lfos.reset(n - 1, clock),
+                group=GROUP,
+                tip="This LFO's cycle restarts now, in either mode — the clock and "
+                    "the other LFOs stay where they are.")

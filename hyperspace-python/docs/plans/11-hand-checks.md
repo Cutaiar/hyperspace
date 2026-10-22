@@ -5,10 +5,12 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–279; group Z (277–279) is the instanced field from
-`main`, renumbered from its 144–146 when main was merged in; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
-272–276 its N9), and 267–271, plan 30's N8 (the palette as compression), are at
-the end of group X.
+numbers. They run 1–295; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
+the end of group X, and group Z (277–295) is two parts: 277–279 the
+instanced field from `main`, renumbered from its 144–146 when main was
+merged in, and 280–295 plan 31's (286–295 the APC40 page, on
+`plan-31-a1`).
 
 ## Before you start
 
@@ -17,7 +19,10 @@ On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
 (plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
 merged. (V follows W in this file: plan 27's docs landed first.) Groups
 X (plan 30) and Y (plan 28) need `plan-28-30-integration` until it is
-merged. Before
+merged. Group Z's 277–279 (the instanced field) are on `main`; its
+plan 31 checks, 280–295, need `plan-31-integration`, and the APC40
+checks 286–295 `plan-31-a1` (the page waits for Dylan's sign-off).
+Before
 any launch of this build:
 
 ```
@@ -3868,7 +3873,9 @@ wire per pipeline from a row's end back to the next row's start.
 *Fail:* a chip that frames nothing or the wrong boxes; the shaders in one
 long row (`SHADER_ROW`).
 
-## Z. The instanced field: thousands of copies, 3D lattices, Fit (from `main`)
+## Z. The instanced field (from `main`); plan 31: the step sequencer
+
+### The instanced field: thousands of copies, 3D lattices, Fit (from `main`)
 
 VIEW page, the 120-cell (or any heavy shape), faces on. The tests draw
 on Mesa's software rasteriser, so they pin what is drawn, not how fast.
@@ -3902,6 +3909,205 @@ far ones; depth 0 flattens the sizes; motions swing the copies in depth
 too. Say whether the default depth (0.5) and the far fade (to a quarter)
 are right. *Fail:* far copies drawn over near ones → the sort in
 `field._field_3d`.
+
+### Plan 31: the step sequencer
+
+Plan 31 as built is [`31-step-sequencer.md`](31-step-sequencer.md): the
+LFOs a bank of up to 16 by stable id, AHDSR envelopes (`env:`), a step
+sequencer of five lanes × eight steps read off the clock (`seq:`), the
+SEQ page, GRAPH's envelope and sequencer nodes, `hyperspace.preset/3`
+and the factory `seq-demo`. On `plan-31-integration`. The control
+window at its usual 960 × 900. `seq-demo` loads stopped: press **run**
+on the SEQ page (the transport is never in a preset). Checks 286–295 are
+the APC40 page and need **`plan-31-a1`** (`git checkout plan-31-a1`),
+which waits for Dylan's sign-off: run them with him, on the copy.
+
+**280. The LFO page at 7 and at 16 LFOs.** (laptop)
+Headless: `tests/test_ui_lfo.py::{test_the_page_draws_n_strips_and_gaps,test_four_lfos_do_not_fold_and_still_fit,test_sixteen_lfos_scroll_and_one_is_open,test_add_is_refused_at_the_cap,test_add_and_remove_through_the_chips_are_undoable}`, `tests/test_modbank.py::test_removing_lfo_2_keeps_lfo_3_on_lfo_2`.
+On the copy, load LFO BREATHE; open LFO. Click **+ lfo** three times (7
+LFOs); click a folded strip's chevron; then **×** on LFO 2; then ⌘Z.
+Then click **+ lfo** until it greys (16) and hover it; scroll the page;
+watch SYSTEM's frame time. *Pass:* at four nothing folds and the page is
+as before; from five, every strip but one is one line (thumbnail, name,
+a live bar, a chevron) and the open one has the full scope; the
+chevron opens that strip and folds the last; × removes LFO 2 and the
+others keep their numbers (LFO 3 still "LFO 3"), its routes still on
+ROUTING but dormant; ⌘Z brings LFO 2 back with its knobs; at 16 the chip
+is grey with "16 LFOs, the most there can be…" on hover, the page
+scrolls, the frame time is near what it was at four, and legible at
+arm's length. *Fail:* the numbers shuffle after a ×
+(`modbank.Bank.remove`); two strips open; a hitch at 16 (`ui_lfo`'s
+scopes).
+
+**281. The SEQ page reads from a distance.** (laptop)
+Headless: `tests/test_ui_seq.py::{test_the_default_page_fits_the_control_window,test_the_playhead_column_follows_the_sequencer,test_columns_past_length_are_inert,test_the_cells_use_the_apc_palette,test_the_lane_selection_opens_its_envelope}`.
+Load `seq-demo`, open SEQ, press **run**. Stand two metres back. Then
+click step number **6** over the grid; click lane 2's **M**; click lane
+3's number; click a cell; ⌘Z. *Pass:* no scroll at 960 × 900; green
+cells for the kick (1, 5), snare (3, 7) and hats (every step) are
+told apart from the dark ones at distance; the playhead's red-framed
+column marches in time and a lit cell under it is yellow, readable
+against green; after length 6, columns 7–8 are dim and a click on them
+does nothing; muted lane 2's cells are red; clicking lane 3's number
+opens env 3's strip; the click toggles and ⌘Z undoes it; the envelope
+strips' small text (stage, out) is readable at least up close. *Fail:*
+yellow and green hard to tell apart at distance (`ui_seq.YELLOW`,
+`GREEN`); the page scrolls; a dim column toggles.
+
+**282. `seq-demo` feels tight at 120–175 BPM.** (laptop, music, a projector helps)
+Headless: `tests/test_plan31_wiring.py::{test_a_step_fires_its_envelope_at_the_steps_exact_time_and_it_comes_back,test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed,test_a_step_releases_a_gate_mode_envelope_after_half_a_step}`, `tests/test_sequencer.py::test_each_step_fires_exactly_once_at_irregular_dt`.
+Play a track at about 120 BPM; tap the tempo in (TAP or the LFO page);
+⇧B on a downbeat; load `seq-demo`, press **run**. Then a track near 175
+BPM, re-tap, ⇧B. On env 1's strip switch **mode** to gate. *Pass:* the
+kick lights the picture on the beat, the snare punches the zoom on 2 and
+4 of each half bar, the hats split the colours on every 16th; nothing
+drifts over a minute; at 175 the hats still read as separate hits, not
+a smear; with env 1 in gate mode the kick still lets go within half a
+step (`seq.gate`). *Fail:* hits late or early against the music after a
+good tap (`Sequencer.time_of`); a hit doubled or skipped when the frame
+rate dips; a gate-mode kick that holds.
+
+**283. The global trigger re-aligns the grid; restart does not move the LFOs.** (laptop)
+Headless: `tests/test_plan31_wiring.py::test_the_global_trigger_fires_step_0_the_same_frame`, `tests/test_sequencer.py::{test_the_clock_trigger_fires_step_zero_that_call_at_the_trigger_time,test_seq_trigger_keeps_its_offset_until_the_clock_trigger_clears_it}`.
+On `seq-demo`, running, set LFO 1 to sync **1 bar** and route it onto
+something visible (ROUTING or GRAPH). Press ⇧B (the trigger) off the
+beat, a few times; then the SEQ page's **restart** off the beat; then ⇧B
+again. *Pass:* each ⇧B puts the playhead on step 1 and LFO 1 at the top
+of its cycle on the same frame, and the kick fires there; **restart**
+puts the playhead on 1 while LFO 1 runs on; the next ⇧B lines both up
+again. *Fail:* the grid ignores ⇧B (`Clock.epoch`); a burst of steps on a
+trigger; restart moves the LFOs.
+
+**284. GRAPH's lane cables.** (laptop)
+Headless: `tests/test_graph_seq.py::{test_a_lane_with_a_step_on_is_a_binding_cable_to_its_envelope,test_a_lane_rebinds_by_a_drag_onto_an_envelopes_fire_and_cannot_be_deleted,test_a_lane_bound_to_a_removed_envelope_draws_nothing,test_a_lane_envelope_is_refused_an_extra_one_goes}`.
+On `seq-demo`, stopped, open GRAPH and frame MODULATION; expand
+*sequencer* and *env 1*–*env 3* (open MODULATION's idle line to see
+*env 4*). Press run on SEQ and come back; mute lane 2. Drag lane 1's pin
+onto *env 4*'s `fire` stub; ⌘Z. Select a lane cable, press Delete.
+Right-click *env 1* → delete; right-click the canvas → **envelope**, then
+delete the new one. *Pass:* three cables "lane 1 fires env 1" … "lane 3
+fires env 3", faint "(stopped)" until run, bright while running, lane 2's
+faint "(muted)"; lanes 4 and 5 (no steps) have none; the drag rebinds
+lane 1 to env 4 (SEQ's picker says env 4) and ⌘Z puts it back; Delete
+says "a lane always fires an envelope: drag its pin onto another
+envelope's fire to rebind it" and keeps it; env 1's delete is greyed
+("… is a sequencer lane's envelope: it stays"); the new envelope is env 6
+and goes. *Fail:* a lane cable deleted; a drag making a route instead
+(`Edit._binding`); env 1 removable.
+
+**285. A `/3` preset between two Macs.** (two Macs, the copy)
+Headless: `tests/test_plan31_wiring.py::{test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step,test_anything_an_older_build_would_lose_saves_as_3,test_this_build_reads_both_and_an_older_build_refuses_a_3}`.
+On this build, save TRIP untouched under a new name, then turn one step
+on and save again under another; open both files in a text editor. Point
+a build from before plan 31 at the same library and load each.
+*Pass:* the untouched one says `"schema": "hyperspace.preset/2"` and has
+no `env.` or `seq.` value; the other says `/3` and holds the pattern; the
+older build loads the first and refuses the second with "schema … is not
+a hyperspace.preset", the file untouched. *Fail:* an untouched preset
+written as /3 (`preset.schema_of`); the older build loading the /3 file
+and saving it without its pattern.
+
+### The APC40 sequencer page (plan 31 A1, on `plan-31-a1`, pending Dylan)
+
+The APC40 mk1 plugged in, `plan-31-a1` checked out, on the copy (its
+`bindings.json` gets SEND A through `APC_NEW_ROWS` with a backup). Load
+`seq-demo` and press run on the SEQ page unless a check says otherwise.
+The on-screen desk mirrors the page.
+
+**286. SEND A enters and redraws; leaving restores the bank, SAVE and the toggles.** (APC40, the copy)
+Headless: `tests/test_seq_page.py::{test_send_a_enters_and_the_grid_redraws_from_the_steps,test_leaving_restores_the_bank_the_toggles_and_save,test_the_render_toggle_comes_back_on_leaving,test_a_pad_toggles_a_step_and_loads_no_preset}`.
+With a show whose bank fills rows 1, 4 and 5 (party), note the 24 bank
+pads' colours, SAVE and scene 1–4's lights. Press SEND A; press a few
+grid pads; press SEND A again. *Pass:* SEND A lights; the grid shows
+lanes 1–3's steps in green and lanes 4–5 dark, scene 1 lit (lane 1
+selected); a pad toggles its step (on screen too) and loads no preset;
+SEND A again goes dark and the 24 bank pads come back exactly as noted
+(green loaded, amber filled, dark empty), SAVE and the scene toggles
+too. *Fail:* a bank pad left dark or a step light left on
+(`MidiIO.redraw`, `page_serial`); a pad press loading a preset under the
+page.
+
+**287. Yellow over green is legible.** (APC40)
+Headless: `tests/test_seq_page.py::test_an_advancing_playhead_sends_only_the_diff`.
+SEND A up, `seq-demo` running at about 120 BPM, from a metre or two.
+*Pass:* the playhead's yellow on a lit step is told apart from green at a
+glance, on lane 3's hats every step, and red (lane 2 muted on the screen)
+from both. *Fail:* yellow and green look alike on the mk1 (`apc40.SHADE`).
+
+**288. No flicker as the playhead runs.** (APC40)
+Headless: `tests/test_seq_page.py::test_an_advancing_playhead_sends_only_the_diff`.
+Turn on every step of all five lanes on the screen; SEND A; run at 175
+BPM with span ½ bar; then 4 bars. *Pass:* the yellow column steps
+cleanly across five lit pads; no pad flickers dark between steps; the
+desk log is not flooded. *Fail:* a flash of dark or a stutter (the
+`last_out` gate; more than about twelve messages a step).
+
+**289. Clip stop is the playhead and the length.** (APC40)
+Headless: `tests/test_seq_page.py::test_clip_stop_sets_the_length_and_clip_stop_8_does_not_save`.
+SEND A, running. Watch the clip stop row; press clip stop 5; then 8; stop
+the transport. *Pass:* one clip stop is lit, moving across with the
+playhead; after clip stop 5 the pattern wraps after step 5, columns 6–8
+go dark and their pads do nothing, the light moves over 1–5 only; clip
+stop 8 restores eight and **does not save** (it is SAVE off the page);
+stopped, the clip stop row is dark. *Fail:* clip stop 8 saving a preset
+under the page; a column past the length still toggling.
+
+**290. Scene select and the mute blink.** (APC40)
+Headless: `tests/test_seq_page.py::test_scene_1_selects_then_mutes_and_leaves_the_render_toggles`.
+SEND A. Press scene 2; scene 2 again; scene 3; scene 2 again. *Pass:*
+scene 2 lights (lane 2 selected, the desk header "SEQ · lane 2 · L=8");
+the second press mutes lane 2: its scene button blinks, its pads go red,
+its snare stops on the picture; scene 3 selects lane 3 and scene 2 keeps
+blinking; pressing scene 2 then selects it (not unmutes); the render's
+points / lines / faces / rotate do not change. *Fail:* the blink
+unreadable or not blinking on an mk1 (`apc40.SHADE`, velocity 2); a
+scene press toggling `view.points`.
+
+**291. A bank pad held across SEND A does not save.** (APC40, the copy)
+Headless: `tests/test_seq_page.py::test_a_bank_pad_held_across_send_a_never_saves`.
+Page down. Hold an **empty** bank pad (row 4); while holding, press SEND
+A; keep holding past the save time; let go. *Pass:* no preset is saved
+(PRESETS and the slot unchanged), the pad does not blink, the page is up;
+its release does nothing. *Fail:* a new preset in the slot
+(`MidiIO._drop_page_holds`).
+
+**292. SHIFT inside the page.** (APC40)
+Headless: `tests/test_seq_page.py::test_shift_inside_the_page_moves_the_knobs_not_the_grid`.
+SEND A; press SHIFT (it latches); press grid pads, scene buttons and
+clip stops; turn a track knob; SHIFT again. *Pass:* with SHIFT up the
+grid, the scenes and the clip stops still edit the sequencer (no band
+scene, no SHIFT-layer pad action); the knobs and faders are the SHIFT
+layer's; SHIFT off, back to the preset layer's knobs, the page still up.
+*Fail:* a SHIFT-layer row firing under a page control (`Bindings.dispatch`).
+
+**293. QUANT loads a preset with the page up.** (APC40)
+Headless: `tests/test_seq_page.py::test_a_pad_toggles_a_step_and_loads_no_preset` (its QUANT load: the page stays, the grid redraws to the loaded pattern).
+SEND A on `seq-demo`; press QUANT (next preset) a few times, then load
+`seq-demo` again from the screen. *Pass:* the page stays up through
+every load; the grid redraws to each preset's pattern (empty for one
+with none, dark), and back to the drums on `seq-demo`; the knobs follow
+each preset's desk as usual. *Fail:* a load taking the page down, or the
+old pattern left lit.
+
+**294. A power cycle re-sends the page.** (APC40)
+Headless: `tests/test_seq_page.py::test_a_power_cycle_with_the_page_up_resends_the_page`.
+SEND A up and running; switch the APC40 off and on (or unplug and
+replug it). *Pass:* within a second or two the desk is back in the app's
+mode with the page lit as it was — SEND A lit, the steps, the scene and
+the moving clip stop. *Fail:* a dark grid or the bank's lights with the
+page still up on screen (`midi.py`'s reconnect redraw).
+
+**295. SEND A in a desk fallen back to Generic mode.** (APC40)
+Headless: none (the fake-port rig models no Generic mode).
+With the page **down**, make the desk fall back (switch it off and on
+while the app runs, SETUP's "Generic mode"); press SEND A; then press it
+again. Repeat with the page **up** before the fall-back. *Pass:* the app
+puts the desk back in its mode within a press or two (the desk log says
+"back in the app's mode"); after that SEND A toggles the page once per
+press, its light agreeing with the screen; at worst the first press is
+lost (press again). *Fail:* the page and SEND A's light out of step, or
+SEND A latching on the device itself (in Generic mode SEND A is a
+toggle the device keeps; `apc40.fell_back`).
 
 ## What no test covers
 
@@ -3969,6 +4175,15 @@ Only a person can settle these:
   not the feel;
 - two Macs on one shared library with this run's keys (259): no test
   runs an older build against a file this one saved (the review pass did,
-  once, by hand: register row 277);
+  once, by hand: register row 277), nor a `/3` preset (285);
 - the frame rate of thousands of copies on the Mac's GPU (277): the tests
-  draw on Mesa's software rasteriser.
+  draw on Mesa's software rasteriser;
+- whether the sequencer *feels* tight against music (282): the tests prove
+  every step fires once at its exact clock time on a deterministic clock,
+  not what a person hears and sees at 175 BPM;
+- the SEQ page and the 7-to-16-LFO page at distance and their frame time
+  at the caps (280, 281): nothing has measured 16 LFOs and 16 envelopes;
+- the APC40 sequencer page on a real mk1 (286–295, on `plan-31-a1`): the
+  fake-port rig proves the messages, never the yellow, the red, the scene
+  blink or the flicker, and models no Generic-mode fall-back.
+

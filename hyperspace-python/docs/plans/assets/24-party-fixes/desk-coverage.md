@@ -29,6 +29,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | MANDALA | 29 | 8 | 1 | 9 | 5 over |
 | NOITA | 29 | 8 | 1 | 9 | 5 over |
 | PLASMA HEART | 25 | 12 | 1 | 13 | 9 over |
+| seq-demo | 23 | 12 | 3 | 15 | 11 over |
 | SPIRAL SILK | 25 | 12 | 1 | 13 | 9 over |
 | STROBE CAGE | 25 | 12 | 1 | 13 | 9 over |
 | TRACER | 28 | 8 | 2 | 10 | 6 over |
@@ -37,7 +38,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | WAKE | 29 | 8 | 1 | 9 | 5 over |
 | WOVEN LATTICE | 23 | 12 | 3 | 15 | 11 over |
 
-0 of 24 presets meet the bar.
+0 of 25 presets meet the bar.
 
 ## Preset × control
 
@@ -62,6 +63,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | MANDALA | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | NOITA | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | PLASMA HEART | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| seq-demo | ● | ● | ● | ✕ | · | · | · | · | ● | ● | ● | ✕ | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | SPIRAL SILK | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | STROBE CAGE | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | TRACER | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
@@ -101,6 +103,9 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | MANDALA | K7 | `view.bmp_alpha` | no bitmap file |
 | NOITA | K7 | `view.bmp_alpha` | no bitmap file |
 | PLASMA HEART | K7 | `view.bmp_alpha` | no bitmap file |
+| seq-demo | D4 | `view.pattern` | faces off |
+| seq-demo | K4 | `view.pattern_mix` | faces off |
+| seq-demo | K7 | `view.bmp_alpha` | faces off |
 | SPIRAL SILK | K7 | `view.bmp_alpha` | no bitmap file |
 | STROBE CAGE | K7 | `view.bmp_alpha` | no bitmap file |
 | TRACER | K4 | `view.pattern_mix` | faces off |

@@ -73,7 +73,7 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, devices, gamepad, lfo, placement, tempo, undo
+from . import config, devices, envelope, gamepad, lfo, placement, sequencer, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -1114,12 +1114,20 @@ def main() -> None:
     library.on_load("band", control.scene_loaded)
     control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
-    # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
-    # are params too, so a preset carries a tempo and an LFO arrangement
+    # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
+    # default, up to 16, plan 31 B): their knobs are params too, so a
+    # preset carries a tempo and an LFO arrangement
     clock = tempo.Clock()
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
+    # plan 31: the envelope bank (the five lane envelopes, plus extras) and
+    # the step sequencer that fires them — registered beside the LFOs and
+    # before attach, so "default" holds their knobs and an empty pattern
+    envs = envelope.Envelopes()
+    seq = sequencer.Sequencer()
+    envelope.register(reg, envs, clock)
+    sequencer.register(reg, seq, clock)
     # the render window's placement registers before attach, so "default"
     # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
@@ -1142,10 +1150,13 @@ def main() -> None:
     panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
     panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+    panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
+    router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
+    router.use_sequencer(seq, envs)        # after the banks begin, before the plan
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
@@ -1208,7 +1219,10 @@ def main() -> None:
     marks = Marks(library)
     undo_obj = undo.Undo(reg, router.table, marks=marks,
                          tag=lambda: tuple(s.name for s in audio.chain.spec),
-                         on_restore=router.sync_macros)
+                         on_restore=router.sync_macros,
+                         # the LFOs' membership (plan 31 B), read off the
+                         # router at each step, so a re-classed router counts
+                         banks=lambda: router._banks())
     undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
     panel.undo = undo_obj              # the footer's message slot
     # panel state and chain must stay one object even after source changes
@@ -1250,7 +1264,14 @@ def main() -> None:
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
+        # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
+        # the envelopes the same way (plan 31: five lane ones and the
+        # extras), and the sequencer with its lanes
+        (envs, "envelope", "Envelopes"),
+        *[(e, "envelope", "Envelope") for e in envs.voices],
+        (seq, "sequencer", "Sequencer"),
+        *[(ln, "sequencer", "Lane") for ln in seq.lanes],
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):

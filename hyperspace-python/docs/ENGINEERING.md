@@ -1046,7 +1046,7 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
 | `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
@@ -1126,6 +1126,13 @@ prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
   known corruption risk).
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
+- **Both Macs on one library must be on this build** (plan 31). A preset
+  that uses the step sequencer, the envelopes or more or fewer than four
+  LFOs is saved as `hyperspace.preset/3`; every other preset is still
+  `hyperspace.preset/2`, byte for byte as before. An older build refuses
+  a /3 file with "schema … is not a hyperspace.preset" rather than load
+  it and strip the pattern on its next save, so update both machines
+  before either saves one. This build reads both.
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -1348,7 +1355,7 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
-rail of fifteen pages (`ui.PAGES`); the rail shows a red dirty dot
+rail of sixteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
 scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
@@ -1366,7 +1373,8 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
-| LFO | The tap-tempo clock and the four LFOs. |
+| LFO | The tap-tempo clock and the LFOs (four by default, up to 16: `+ lfo`, `×`; above four all but the open strip fold to a line; plan 31). |
+| SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
 | SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |

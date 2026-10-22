@@ -49,6 +49,7 @@ from . import (
     ui_patterns,
     ui_presets,
     ui_routing,
+    ui_seq,
 )
 from .analyzer import N_MAX
 from .audio import AudioEngine
@@ -544,6 +545,7 @@ PAGES = [
     ("routing", "routing", None),
     ("graph", "graph", None),        # plan 28 N2: both graphs on one canvas (ui_graph.py)
     ("lfo", "lfo", ("lfo", "tempo")),
+    ("seq", "seq", ("seq", "env")),       # plan 31 U: the step grid and envelopes (ui_seq.py)
     ("hands", "hands", "hands"),
     ("presets", "presets", "presets"),     # the loaded preset's dirty dot
     ("system", "system", None),
@@ -2135,6 +2137,10 @@ class Panel:
     def _page_lfo(self, dt: float) -> None:
         """The tap-tempo clock and the four LFOs (ui_lfo.py)."""
         ui_lfo.page(self, dt)
+
+    def _page_seq(self, dt: float) -> None:
+        """The step sequencer's grid and the envelopes (ui_seq.py)."""
+        ui_seq.page(self, dt)
 
     def _page_hands(self, dt: float) -> None:
         """The Ultraleap hands: live view and setup (hands/panel.py)."""
