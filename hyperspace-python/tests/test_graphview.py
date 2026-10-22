@@ -146,7 +146,9 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # where each node's position lives
     assert graphview.home(view.node("render:shape")) == graphview.PRESET
     assert graphview.home(view.node("render:output.1")) == graphview.SESSION
-    assert graphview.home(view.node("lfo.1")) == graphview.SESSION
+    # plan 31 G1: an LFO is the preset's (a bank's membership is preset content)
+    assert graphview.home(view.node("lfo.1")) == graphview.PRESET
+    assert graphview.home(view.node(graphview.ANALYZER)) == graphview.SESSION
     assert graphview.home(view.node("group:tempo")) == graphview.SESSION
 
 
@@ -307,8 +309,8 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     assert len(set(ys)) == len(ys)
     # the preset's map and the show's, by home
     pre, ses = graphview.split(view, {**pos, **placed})
-    assert "render:shape" in pre and "mod.1" in pre and "macro.1" in pre
-    assert "lfo.1" in ses and graphview.ANALYZER in ses and "render:output.1" in ses
+    assert "render:shape" in pre and "mod.1" in pre and "macro.1" in pre and "lfo.1" in pre
+    assert graphview.ANALYZER in ses and "render:output.1" in ses
     assert not set(pre) & set(ses)
 
 
@@ -399,8 +401,9 @@ def _in_editor(rig, fn):
 
 def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     """A node moved on the canvas is written where it lives — a render
-    node into the loaded preset's layout (dirtying it), an LFO into the
-    show's — once the mouse lets go; a node left alone is written nowhere."""
+    node and an LFO (plan 31 G1) into the loaded preset's layout (dirtying
+    it), the analyzer into the show's — once the mouse lets go; a node left
+    alone is written nowhere."""
     rig.lib.load("presets", "party-trip")
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
@@ -410,10 +413,12 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     def move():
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:eye")), imgui.ImVec2(700, 50))
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:lfo.1")), imgui.ImVec2(30, 640))
+        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:analyzer")), imgui.ImVec2(40, 20))
     _in_editor(rig, move)
     frame(rig.panel, "graph")
-    assert rig.lib.presets.layout == {"render:eye": [700, 50]}
-    assert rig.lib.project.layout == {"lfo.1": [30, 640]}   # N9: lfo.2 is idle, not drawn
+    # N9: lfo.2 is idle, not drawn
+    assert rig.lib.presets.layout == {"render:eye": [700, 50], "lfo.1": [30, 640]}
+    assert rig.lib.project.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("presets")
     # tidy forgets them both
     st["tidy"] = True
