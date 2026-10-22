@@ -262,8 +262,9 @@ def test_register_declares_the_grid_and_the_globals():
     ids = [p.id for p in reg.group("seq")]
     want = [f"seq.{l}.{s}" for l in range(1, 6) for s in range(1, 9)]
     want += [f"seq.{l}.{k}" for l in range(1, 6) for k in ("mute", "env")]
-    want += ["seq.span", "seq.length", "seq.swing", "seq.run", "seq.step", "seq.trigger"]
-    assert sorted(ids) == sorted(want) and len(ids) == 56
+    want += ["seq.span", "seq.length", "seq.swing", "seq.gate", "seq.run", "seq.step",
+             "seq.trigger"]
+    assert sorted(ids) == sorted(want) and len(ids) == 57
     assert all(reg[f"seq.{l}.{s}"].kind is Kind.TOGGLE for l in range(1, 6) for s in range(1, 9))
     assert reg["seq.span"].names == SPANS
     assert reg["seq.trigger"].kind is Kind.TRIGGER

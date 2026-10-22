@@ -270,22 +270,88 @@ def test_a_lane_on_a_missing_envelope_fires_nothing():
 # ---- the transport ----
 
 def test_stopping_releases_gate_mode_envelopes():
+    """A stop closes a gate the pattern opened before its own gate ends:
+    span 4 bars (a 1 s step at 120 BPM) and a full-step gate, so the note
+    would hold until 3.0; the stop at 2.6 releases it there."""
     r = rig([Binding("env:0", "t.x", "push", 1.0)])
     r.reg["env.1.mode"].set(envelope.GATE)
     r.reg["env.1.sustain"].set(0.6)
     r.reg["env.1.release"].set(0.1)
-    r.reg["seq.1.1"].set(True)
+    r.reg["seq.span"].set(sequencer.SPANS.index("4 bars"))
+    r.reg["seq.gate"].set(1.0)
+    r.reg["seq.1.3"].set(True)                    # step 3 of 8: 2.0 s
     r.reg["seq.run"].set(True)
     frame(r, 1.99)
-    for t in (2.0, 2.5, 3.0, 3.5):
+    for t in (2.0, 2.3, 2.5):
         frame(r, t)
     assert r.box.x == pytest.approx(0.6)          # gate open: the sustain holds
     r.reg["seq.run"].set(False)
-    frame(r, 3.6)                                 # the frame that sees the stop releases
-    frame(r, 3.65)
+    frame(r, 2.6)                                 # the frame that sees the stop releases
+    frame(r, 2.65)
     assert r.box.x == pytest.approx(0.3)          # half way through a 100 ms release
-    frame(r, 3.8)
+    frame(r, 2.8)
     assert r.box.x == 0.0 and r.reg["seq.step"].value == 0
+
+
+def _gate_rig():
+    """Env 1 in gate mode, linear, fast attack and decay to a 0.6 sustain
+    and a 100 ms release, pushed onto `t.x`; lane 1 step 1 on at 1 bar."""
+    r = rig([Binding("env:0", "t.x", "push", 1.0)])
+    reg = r.reg
+    reg["env.1.mode"].set(envelope.GATE)
+    reg["env.1.attack"].set(0.01)
+    reg["env.1.decay"].set(0.01)
+    reg["env.1.sustain"].set(0.6)
+    reg["env.1.release"].set(0.1)
+    reg["seq.1.1"].set(True)
+    reg["seq.run"].set(True)
+    return r
+
+
+def test_a_step_releases_a_gate_mode_envelope_after_half_a_step():
+    """At 120 BPM and 1 bar a step is 0.25 s; the default gate, half a
+    step, releases the note 0.125 s after the step's own time (2.0)."""
+    r = _gate_rig()
+    assert r.reg["seq.gate"].value == pytest.approx(sequencer.GATE) == 0.5
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.125)
+    frame(r, 1.99)
+    frame(r, 2.1)
+    assert r.box.x == pytest.approx(0.6)          # sustaining: the gate is open
+    frame(r, 2.125)
+    assert r.box.x == pytest.approx(0.6)          # released exactly now
+    frame(r, 2.175)
+    assert r.box.x == pytest.approx(0.3)          # half way through the release
+    frame(r, 2.23)
+    assert r.box.x == 0.0                         # back before the next step
+
+
+def test_the_gate_follows_the_bpm_and_the_gate_param():
+    r = _gate_rig()
+    r.clock.set_bpm(60.0, 0.0)                    # a step is now 0.5 s, the gate 0.25 s
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.25)
+    frame(r, 3.99)                                # step 0 of the next bar: 4.0 s
+    frame(r, 4.2)
+    assert r.box.x == pytest.approx(0.6)          # 0.2 s in: still open at 60 BPM
+    frame(r, 4.3)
+    assert r.box.x == pytest.approx(0.3)          # released at 4.25
+    r.reg["seq.gate"].set(0.2)
+    assert r.seq.gate_seconds(r.clock) == pytest.approx(0.1)
+    r.reg["seq.gate"].set(5.0)                    # clamped to a whole step
+    assert r.reg["seq.gate"].value == 1.0
+
+
+def test_a_one_shot_ignores_the_gate():
+    """A one-shot runs its attack and decay whatever the gate: a 0.4 s
+    decay outlasts the 0.125 s gate."""
+    r = rig([Binding("env:0", "t.x", "push", 1.0)])
+    one_shot(r, 1, attack=0.1, decay=0.4)
+    r.reg["seq.1.1"].set(True)
+    r.reg["seq.run"].set(True)
+    frame(r, 1.99)
+    frame(r, 2.1)
+    assert r.box.x == pytest.approx(1.0)
+    frame(r, 2.3)
+    assert r.box.x == pytest.approx(0.5)          # mid-decay, long past the gate
 
 
 # ---- undo ----
