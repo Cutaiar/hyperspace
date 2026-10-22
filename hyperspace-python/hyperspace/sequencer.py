@@ -53,7 +53,8 @@ clears the sequencer's own offset. ``seq.trigger`` is the per-LFO
 offset (`shift`, in beats) from the clock, which stays where it is. It is
 held to the next `step` and lands at that step's t, whichever path fired
 it — a key before the step or the panel after it — so step 0's time is
-always a frame's own.
+always a frame's own. Pressed while stopped it stays held until `run`
+goes on, and step 0 lands on that frame.
 
 **Transport.** `run` gates firing only. While it is off nothing fires and
 `pulses` stay 0, but `k_last` keeps following the clock, so turning it
@@ -182,7 +183,7 @@ class Sequencer:
 
     def restart(self) -> None:
         """``seq.trigger``: step 0 now, the clock untouched — held to the
-        next `step`, which fires it at its own t."""
+        next running `step`, which fires it at its own t."""
         self.pending = True
 
     def step(self, t: float, clock, fire, release=None) -> list[float]:
@@ -197,7 +198,11 @@ class Sequencer:
             self.shift = 0.0             # the global trigger re-aligns the grid to the clock
             restart = True
         self.epoch_seen = epoch
-        if self.pending:                 # after the epoch: a held restart is the later word
+        running = bool(self.run)
+        # after the epoch: a held restart is the later word. While stopped
+        # it stays held — a restart then play puts step 0 on the frame that
+        # starts the transport, not a pattern later
+        if self.pending and running:
             self.pending = False
             self.shift = -clock.beat(t)
             restart = True
@@ -213,7 +218,6 @@ class Sequencer:
             self.k_last = k - 1 if s == self.boundary(k) else k
         self.last_spb = spb
 
-        running = bool(self.run)
         self.stopped = self.was_running and not running
         self.was_running = running
         pulses = [0.0] * LANES
