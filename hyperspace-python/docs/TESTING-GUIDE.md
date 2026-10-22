@@ -33,9 +33,10 @@ explained in the [glossary](#glossary) at the end.
    use branch `plan-24-26-27-integration`. The shader-node entries
    (L95–L102, L129, L130, C9–C11, D19–D23) are plan 30's, and the node-editor entries
    (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
-   merged, use branch `plan-28-30-integration`. The step-sequencer
-   entries (L136–L141) are plan 31's: use branch `plan-31-integration`
-   until it is merged. Its APC40 entries (A37–A46) need branch
+   merged, use branch `plan-28-30-integration`. The instanced-field entries
+   (L136–L138: thousands of copies, the 3D lattices, Fit) are on `main`.
+   The step-sequencer entries (L139–L144) are plan 31's: use branch
+   `plan-31-integration` until it is merged. Its APC40 entries (A37–A46) need branch
    `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
@@ -119,8 +120,8 @@ changes brightness or volume instead).
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
-14. Plan 31's step-sequencer entries: L136–L140 on the laptop (L138
-    with music), L141 with two Macs on the copy; then, on branch
+14. Plan 31's step-sequencer entries: L139–L143 on the laptop (L141
+    with music), L144 with two Macs on the copy; then, on branch
     `plan-31-a1` and with Dylan, A37 first and A38–A46 with the APC40.
 
 ## Summary
@@ -175,7 +176,7 @@ changes brightness or volume instead).
 | L46 | Sending to FL Studio | 1 | laptop, FL Studio | 27 |
 | L47 | Receiving from FL Studio | 1 | laptop, FL Studio | 28 |
 | L48 | The shapes turn through 4D and never go flat | 1 | laptop | 113 |
-| L49 | The Heart turns with the bass, in 3D | 1 | laptop, music | 114 |
+| L49 | The Heart turns with the music, in 3D | 1 | laptop, music | 114 |
 | L50 | The Star, Starfruit, Rose and Möbius strip by eye | 1 | laptop | 115 |
 | L51 | The Klein bottle | 1 | laptop | 116 |
 | L52 | Stepping to the Klein bottle (keys) | 1 | laptop, the copy | 117 |
@@ -262,12 +263,15 @@ changes brightness or volume instead).
 | L133 | Tidy puts everything back in its area | 1 | laptop | 274 |
 | L134 | The off effects are one line | 1 | laptop | 275 |
 | L135 | Five buttons frame the areas | 1 | laptop | 276 |
-| L136 | Seven LFOs, then sixteen | 1 | laptop, the copy | 277 |
-| L137 | The SEQ page from across the room | 1 | laptop | 278 |
-| L138 | The drum pattern against music | 1 | laptop, music | 279 |
-| L139 | The trigger lines the pattern up | 1 | laptop | 280 |
-| L140 | The lanes on the GRAPH page | 1 | laptop | 281 |
-| L141 | A pattern preset on an older build | 1 | two Macs, the copy | 282 |
+| L136 | Four thousand copies hold the frame rate | 1 | laptop | 277 |
+| L137 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 278 |
+| L138 | The lattices read as 3D | 1 | laptop, a mouse helps | 279 |
+| L139 | Seven LFOs, then sixteen | 1 | laptop, the copy | 280 |
+| L140 | The SEQ page from across the room | 1 | laptop | 281 |
+| L141 | The drum pattern against music | 1 | laptop, music | 282 |
+| L142 | The trigger lines the pattern up | 1 | laptop | 283 |
+| L143 | The lanes on the GRAPH page | 1 | laptop | 284 |
+| L144 | A pattern preset on an older build | 1 | two Macs, the copy | 285 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -304,16 +308,16 @@ changes brightness or volume instead).
 | A34 | Learn from a pin, with the desk | 2a | APC40 | 248 |
 | A35 | The APC40 as two boxes, SHIFT latched and released | 2a | APC40, hand camera | 256 |
 | A36 | Whose cable is it; a missing device | 2a | APC40, the copy | 258 |
-| A37 | SEND A turns the pads into the pattern, and back | 2a | APC40, the copy, `plan-31-a1` | 283 |
-| A38 | Yellow over green | 2a | APC40, `plan-31-a1` | 284 |
-| A39 | No flicker at speed | 2a | APC40, `plan-31-a1` | 285 |
-| A40 | The bottom row is the playhead and the length | 2a | APC40, `plan-31-a1` | 286 |
-| A41 | Scene buttons pick and mute a lane | 2a | APC40, `plan-31-a1` | 287 |
-| A42 | A held bank pad across SEND A saves nothing | 2a | APC40, the copy, `plan-31-a1` | 288 |
-| A43 | SHIFT with the pattern up | 2a | APC40, `plan-31-a1` | 289 |
-| A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 290 |
-| A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 291 |
-| A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 292 |
+| A37 | SEND A turns the pads into the pattern, and back | 2a | APC40, the copy, `plan-31-a1` | 286 |
+| A38 | Yellow over green | 2a | APC40, `plan-31-a1` | 287 |
+| A39 | No flicker at speed | 2a | APC40, `plan-31-a1` | 288 |
+| A40 | The bottom row is the playhead and the length | 2a | APC40, `plan-31-a1` | 289 |
+| A41 | Scene buttons pick and mute a lane | 2a | APC40, `plan-31-a1` | 290 |
+| A42 | A held bank pad across SEND A saves nothing | 2a | APC40, the copy, `plan-31-a1` | 291 |
+| A43 | SHIFT with the pattern up | 2a | APC40, `plan-31-a1` | 292 |
+| A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 293 |
+| A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
+| A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -1929,48 +1933,45 @@ VIEW page's **Shape** list (or with ← / →). The six round keys on the
 VIEW page (XY, XZ, YZ, XW, YW, ZW) switch each turning direction on and
 off; XW, YW and ZW are the "fourth dimension" ones, driven by the bass.
 
-#### L48. The shapes turn through 4D and never go flat
+#### L48. A 3D shape ignores the W planes; a 4D shape turns through them
 
 **Needs:** laptop.
 
 **Do:** F1 (TUMBLE). On the VIEW page switch off every round key but
 **XW**. Step through Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
-strip and Klein bottle, watching each turn a full circle. Do the same
-with only **YW** on, then only **ZW**, then all six with music. Look at
-the Clifford torus (shape 18) first, for comparison.
+strip and Klein bottle (all 3D since plan 28). Then look at the Clifford
+torus (shape 18) and the Tesseract. Do the same with only **YW** on,
+then only **ZW**, then all six with music.
 
-**Right if:** no shape ever becomes a flat sheet, a line or a thin
-ribbon; each bends and swaps sides as it turns, the way the Clifford
-torus does; the red line under the name reads "4D lift · …" (the Klein
-bottle's, "4D · one-sided bottle, no self-crossing").
+**Right if:** with only W keys on, every 3D shape holds still and its W
+keys are dimmed (hover one: "does nothing now: a 3D shape has no w"); the
+header line reads "3D · …"; the 4D shapes turn through w. With all six
+on, a 3D shape turns in XY, XZ and YZ only. The Klein bottle crosses
+itself where the neck passes through the body, as it must in 3D.
 
-**Judge:** which shapes look best and worst turning.
+**Judge:** whether the 3D shapes are lively enough on the upper bands
+alone.
 
-**Wrong if:** a shape goes flat at a quarter turn; a seam opens up.
+**Wrong if:** a 3D shape moves with only W keys on; a seam opens up.
 
 *(check 113)*
 
-#### L49. The Heart turns with the bass, in 3D
+#### L49. The Heart turns with the music, in 3D
 
 **Needs:** laptop, music with deep bass.
 
 **Do:** pick the Heart. With only XW on, then only YW, then only ZW,
-watch it turn. Then all keys on, music playing. Switch to the Tesseract
-and back.
+watch it. Then all keys on, music playing. Switch to the Tesseract and
+back.
 
-**Right if:** XW turns the heart side-on (a spin about the up-down
-line), YW tips it forward and back, ZW rolls it like a wheel facing you;
-it never goes flat; with music it clearly moves with the bass; its
-lines are as bright, and its near edges as thick and bright, as the
-Tesseract's.
+**Right if:** with only W keys on it holds still (plan 28: a 3D shape has
+no w); with all keys on it turns with the upper bands; its lines are as
+bright, and its near edges as thick and bright, as the Tesseract's.
 
-**Know:** the XW, YW and ZW keys and readouts still say those planes are
-turning, although the Heart turns in ordinary 3D.
+**Judge:** whether the Heart still reads as moved by the music.
 
-**Judge:** whether the bass's spin reads as the bass.
-
-**Wrong if:** the heart goes flat; it looks dim and flat next to the
-Tesseract; another shape behaves differently after the Heart was shown.
+**Wrong if:** it moves with only W keys on; it looks dim and flat next
+to the Tesseract.
 
 *(check 114)*
 
@@ -1978,13 +1979,11 @@ Tesseract; another shape behaves differently after the Heart was shown.
 
 **Needs:** laptop.
 
-**Do:** FACES on with a pattern. Star: XW only, stop it at a quarter turn
-(**Space** pauses). Starfruit, Rose, Möbius strip: all keys off, then
-turning.
+**Do:** FACES on with a pattern. Star, Starfruit, Rose, Möbius strip:
+all keys off, then turning (XY, XZ, YZ — they are 3D since plan 28).
 
-**Right if:** the Star becomes a box, like a lantern, at a quarter turn,
-and its two star-shaped ends show the pattern whole, with no hole or
-tear; the Starfruit's five ridges are still recognisable; the Rose is
+**Right if:** the Star's two star-shaped ends show the pattern whole,
+with no hole or tear; the Starfruit's five ridges are recognisable; the Rose is
 still a delicate flower (it is a little deeper than before); the Möbius
 strip is a little wider than before and not too wide; the Rose's centre
 and the Möbius strip's join stay closed.
@@ -2001,19 +2000,18 @@ the Möbius strip's join.
 **Needs:** laptop.
 
 **Do:** pick the Klein bottle (shape 26, after the Möbius strip). All
-keys off, then XW, YW and ZW one at a time, slowly (Speed down). Faces
+keys off, then XY, XZ and YZ one at a time, slowly (Speed down). Faces
 on and off.
 
 **Right if:** at rest it looks like a bottle whose neck curls over and
-comes back into its body; as it turns, the neck passes beside the body
-and never through it; no gap where the surface joins itself; the neck
-has enough lines.
+comes back into its body, passing through its side (a Klein bottle in
+3D must cross itself; plan 28 took out the lift that kept them apart in
+w); no gap where the surface joins itself; the neck has enough lines.
 
 **Judge:** whether it reads as a bottle — the build's own look said it
 reads more like a curled horn or a loop. Say what you see.
 
-**Wrong if:** the neck cuts through the body at some angle; a gap or a
-sliver at the join.
+**Wrong if:** a gap or a sliver at the join.
 
 *(check 116)*
 
@@ -2814,7 +2812,7 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern; L136–L138 the instanced field, from `main`)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
@@ -3446,7 +3444,57 @@ under row.
 
 *(check 276)*
 
-## The step sequencer (L136–L141; plan 31)
+#### L136. Four thousand copies hold the frame rate
+
+**Needs:** laptop.
+
+**Do:** VIEW: shape the 120-cell, faces on. Drag Instances to the top
+(4096), Layout GRID, then CUBIC. Scroll out until the whole field
+shows. Turn faces off, then on. Scroll back in.
+
+**Right if:** the frame rate on the SYSTEM page stays near 60 with faces
+off and stays usable with faces on; zoomed in it is back at full speed.
+
+**Wrong if:** the picture stutters more and more as the count rises at
+the same zoom.
+
+*(check 277)*
+
+#### L137. Fit leaves no copy cut by the edge
+
+**Needs:** laptop; the projector or a second screen if you have one.
+
+**Do:** VIEW: Instances 12, Layout GRID, tick **Fit**. Then 7 and 19
+on HEX, and 200 on FCC. Scroll in and out; right-drag.
+
+**Right if:** 12 copies sit four across and three down, evenly spaced,
+none touching an edge. Zooming in jumps between whole copies — never
+half a shape at the screen's edge — and dragging moves one copy at a
+time. A 3D lattice stays whole and centred.
+
+**Wrong if:** any copy is cut by the edge of the screen.
+
+*(check 278)*
+
+#### L138. The lattices read as 3D
+
+**Needs:** laptop; a mouse helps.
+
+**Do:** VIEW: 300 copies of the tesseract. Try each of CUBIC, BCC, FCC,
+HCP, HEX PRISM and DIAMOND; orbit with the mouse. Set Field depth to 0,
+then 0.5, then 1. Turn a field motion on.
+
+**Right if:** the field turns as one solid; nearer copies are larger,
+brighter and drawn over farther ones; at depth 0 every copy is one size.
+
+**Judge:** whether the default depth (0.5) and how far the far copies
+fade are right.
+
+**Wrong if:** a far copy is drawn over a near one.
+
+*(check 279)*
+
+## The step sequencer (L139–L144; plan 31)
 
 The LFOs can now number up to sixteen; there are **envelopes** (a shape
 that rises and falls once each time something fires it) and a **step
@@ -3456,7 +3504,7 @@ draws the grid. The factory preset **seq-demo** has a drum pattern: the
 kick brightens the picture, the snare punches the zoom, the hats split
 the colours. It loads stopped: press **run** on the SEQ page.
 
-#### L136. Seven LFOs, then sixteen (on the copy)
+#### L139. Seven LFOs, then sixteen (on the copy)
 
 **Needs:** laptop; the copy.
 
@@ -3473,9 +3521,9 @@ grey and says why; the page scrolls and stays smooth.
 **Wrong if:** the LFOs renumber after a ×; two strips open at once; the
 app stutters with sixteen.
 
-*(check 277)*
+*(check 280)*
 
-#### L137. The SEQ page from across the room
+#### L140. The SEQ page from across the room
 
 **Needs:** laptop.
 
@@ -3493,9 +3541,9 @@ click toggles a square and ⌘Z puts it back. Nothing scrolls.
 **Wrong if:** yellow and green hard to tell apart from a distance; a dim
 column that still toggles.
 
-*(check 278)*
+*(check 281)*
 
-#### L138. The drum pattern against music
+#### L141. The drum pattern against music
 
 **Needs:** laptop; music at about 120 BPM, then about 175.
 
@@ -3511,9 +3559,9 @@ mode the kick still lets go quickly.
 **Wrong if:** hits early or late against a good tap; a hit doubled or
 missed when the app stutters; a gate-mode kick that stays lit.
 
-*(check 279)*
+*(check 282)*
 
-#### L139. The trigger lines the pattern up
+#### L142. The trigger lines the pattern up
 
 **Needs:** laptop.
 
@@ -3528,9 +3576,9 @@ the grid on step 1, LFO 1 carrying on; the next ⇧B lines both up again.
 **Wrong if:** the grid ignores ⇧B; a burst of hits on a press; restart
 moves the LFO.
 
-*(check 280)*
+*(check 283)*
 
-#### L140. The lanes on the GRAPH page
+#### L143. The lanes on the GRAPH page
 
 **Needs:** laptop.
 
@@ -3550,9 +3598,9 @@ env 6 and can be deleted.
 
 **Wrong if:** a lane cable deleted; the drag making a route instead.
 
-*(check 281)*
+*(check 284)*
 
-#### L141. A pattern preset on an older build (two Macs, on the copy)
+#### L144. A pattern preset on an older build (two Macs, on the copy)
 
 **Needs:** two Macs sharing one library folder, one on this build and one
 on a build from before plan 31; the copy.
@@ -3569,7 +3617,7 @@ the file as it was.
 **Wrong if:** the older build opens the `/3` file and, saved there, it
 loses its pattern.
 
-*(check 282)*
+*(check 285)*
 
 # Part 2 — tests that need hardware
 
@@ -4422,7 +4470,7 @@ pad, SAVE and the scene buttons come back exactly as they were.
 **Wrong if:** a bank pad left dark or a step left lit; a pad loading a
 preset while the grid is up.
 
-*(check 283)*
+*(check 286)*
 
 #### A38. Yellow over green
 
@@ -4435,7 +4483,7 @@ and red (mute lane 2 on screen) from both.
 
 **Wrong if:** yellow and green look the same on the desk.
 
-*(check 284)*
+*(check 287)*
 
 #### A39. No flicker at speed
 
@@ -4449,7 +4497,7 @@ pad flashes dark between steps.
 
 **Wrong if:** flicker or stutter on the grid.
 
-*(check 285)*
+*(check 288)*
 
 #### A40. The bottom row is the playhead and the length
 
@@ -4465,7 +4513,7 @@ save a preset** (off the grid it is SAVE); stopped, the row is dark.
 
 **Wrong if:** clip stop 8 saves; a dark column still toggles.
 
-*(check 286)*
+*(check 289)*
 
 #### A41. Scene buttons pick and mute a lane
 
@@ -4481,7 +4529,7 @@ points, lines, faces and rotate never change.
 
 **Wrong if:** no blink; a scene press switching points or lines.
 
-*(check 287)*
+*(check 290)*
 
 #### A42. A held bank pad across SEND A saves nothing (on the copy)
 
@@ -4495,7 +4543,7 @@ no pad blinks, the grid is up.
 
 **Wrong if:** a new preset in that slot.
 
-*(check 288)*
+*(check 291)*
 
 #### A43. SHIFT with the pattern up
 
@@ -4510,7 +4558,7 @@ with SHIFT off the knobs are the preset's again and the grid still up.
 
 **Wrong if:** a SHIFT-layer action fires from a grid pad or scene button.
 
-*(check 289)*
+*(check 292)*
 
 #### A44. QUANT with the pattern up
 
@@ -4524,7 +4572,7 @@ preset's pattern (most are empty: dark), the drums again on seq-demo.
 
 **Wrong if:** a load takes the grid down, or the old pattern stays lit.
 
-*(check 290)*
+*(check 293)*
 
 #### A45. Switch the desk off and on with the pattern up
 
@@ -4540,7 +4588,7 @@ stop.
 **Wrong if:** the bank's lights come back while the screen says the grid
 is up, or the grid stays dark.
 
-*(check 291)*
+*(check 294)*
 
 #### A46. SEND A after the desk fell back to Generic mode
 
@@ -4558,7 +4606,7 @@ is lost — press again.
 **Wrong if:** SEND A's light and the screen disagree, or SEND A stays
 latched on the desk by itself.
 
-*(check 292)*
+*(check 295)*
 
 ## (b) The hand camera
 
@@ -6557,9 +6605,9 @@ what you want changed.
   L24, C4; checks 9, 96)
 - **The default hand feel** — Steadiness, Response, Catch, Return;
   saved as `factory`. (B5; check 16)
-- **The shapes in 4D** — whether each lifted shape reads as a solid
-  turning, whether the Heart reads as moved by the bass, and the Klein
-  bottle's look. (L48–L51, D14; checks 113–116)
+- **The shapes, 4D and 3D** — whether the 3D shapes are lively enough
+  without the W planes (plan 28), the 3D switch, and the Klein bottle's
+  look. (L48–L51, D14; checks 113–116)
 - **The face patterns** — whether one set of routes reads on every
   pattern, the new patterns as art, METER and PULSE from the audience,
   and whether the factory presets answer quiet and loud music. (L61,
@@ -6590,8 +6638,8 @@ what you want changed.
   clearly. (L98, L102, D20, D21, D23; checks 223, 224, 229, 231)
 - **The step sequencer's feel** — whether the drum pattern feels tight
   against music at 120–175 BPM, and whether the SEQ grid and the yellow
-  playhead read from across the room, on screen and on the desk. (L137,
-  L138, A38, A39; checks 278, 279, 284, 285)
+  playhead read from across the room, on screen and on the desk. (L140,
+  L141, A38, A39; checks 281, 282, 287, 288)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'

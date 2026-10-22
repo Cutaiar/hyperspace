@@ -101,6 +101,25 @@ T_DEPTH = Taper(
     unmap=lambda v: clamp(round(OCT * math.log2(max(v - 1, 1e-6) / 0.05)), 0, 160),
 )
 
+def count(lin: int, top: int, per_oct: int) -> Taper:
+    """A whole-number count: position p is p itself up to `lin` (every
+    count reachable, 0 included), then exponential at `per_oct` steps a
+    doubling up to `top`. `lin` ≥ per_oct / ln 2 keeps every step a new
+    count. map() takes a float position and returns a whole number."""
+    steps = lin + round(per_oct * math.log2(top / lin))
+    return Taper(
+        steps=steps, log=False,
+        map=lambda p: (max(0, round(p)) if p <= lin
+                       else min(top, round(lin * 2.0 ** ((p - lin) / per_oct)))),
+        unmap=lambda v: (clamp(round(v), 0, lin) if v <= lin
+                         else clamp(round(lin + per_oct * math.log2(v / lin)), lin, steps)),
+    )
+
+
+# the instance count (view.instances): 0–64 one at a time, then to 4096 at
+# 40 steps a doubling — 304 detents, every copy count to 64 on the throw
+T_INSTANCES = count(64, 4096, 40)
+
 T_DRIVE = exp_zero(100, 160)   # master audio drive: off, 0.03×–8.00×
 T_DYN = exp_zero(80, 120)      # dynamics: bypass, then 0.06×–4.00×
 T_BRIGHT = exp_pure(60, 100)   # brightness: 0.13×–4.00×, never off

@@ -93,14 +93,14 @@ here; overturn → the change, then the same.
 | 86 | A screen not connected at launch | 101, 111, 112 | |
 | 87 | `ghost.style`: five drawn objects | 109 | |
 | 88 | Ghost mirror / guide / tethers not performable | 110 | |
-| 89 | The Heart masked; the other shapes lifted | 113, 114 | |
-| 90 | The W fold at draw time: XW → XZ, YW → YZ, ZW → XY | 114 | |
+| 89 | The Heart masked; the other shapes lifted | 113, 114 | **overturned, owner 2026-10-17** (plan 28: a shape is 4D or 3D) |
+| 90 | The W fold at draw time: XW → XZ, YW → YZ, ZW → XY | 114 | **overturned, owner 2026-10-17** (plan 28: a shape is 4D or 3D) |
 | 91 | A masked shape cues depth on z | 114 | |
-| 92 | `VOLUME_FLOOR` 0.15, from all 18 4D shapes | 113, 119 | |
-| 93 | How a shape is lifted: the lift rules | 113, 115 | |
-| 94 | The Möbius strip widened and lifted | 115, 118 | |
-| 95 | The Rose deepened and lifted (the orchestrator's call) | 115 | |
-| 96 | The Klein bottle: the bottle, lifted, shape 26 | 116, 117 | |
+| 92 | `VOLUME_FLOOR` 0.15, from all 18 4D shapes | 113, 119 | now for the 4D shapes only (owner, 2026-10-17) |
+| 93 | How a shape is lifted: the lift rules | 113, 115 | **overturned, owner 2026-10-17** (plan 28: a shape is 4D or 3D) |
+| 94 | The Möbius strip widened and lifted | 115, 118 | lift **overturned, owner 2026-10-17**; the size stays |
+| 95 | The Rose deepened and lifted (the orchestrator's call) | 115 | lift **overturned, owner 2026-10-17**; the size stays |
+| 96 | The Klein bottle: the bottle, lifted, shape 26 | 116, 117 | **overturned, owner 2026-10-17** (plan 28: a shape is 4D or 3D) |
 | 97 | A bent cap framed by its least-squares plane | 115 | |
 | 98 | The eight pattern inputs: their meanings and order | 122, 124, 125 | |
 | 99 | SPEED is an integrated clock | 123 | |
@@ -315,16 +315,16 @@ here; overturn → the change, then the same.
 | 308 | The modulation and the audio laid out by their own depth | 272 | |
 | 309 | Titles never under 12 px on screen; a short word when needed | 272 | |
 | 310 | Open question: GRAPH asking for the whole control window (not built) | — | owner's call |
-| 311 | N LFOs, cap 16, removable by stable id (replaces "Four LFOs") | 277 | (rec) — accepted 2026-10-22 |
-| 312 | Envelopes: AHDSR, gate and one-shot; hold 0, legato, seconds, one curve | 279 | (rec) — accepted 2026-10-22 |
-| 313 | Envelopes 1–5 always there, each its lane's; extras to 16 | 278, 281 | (rec) — accepted 2026-10-22 |
-| 314 | Steps as registry params | 278, 283 | (rec) — accepted 2026-10-22 |
-| 315 | Per step on/off only (stored as velocity); one global swing; a global gate built beside | 279 | (rec) — accepted 2026-10-22 |
-| 316 | One global span (½–4 bars) and a global length 1–8 | 278, 286 | (rec) — accepted 2026-10-22 |
-| 317 | The APC40 page on SEND A, latched (on `plan-31-a1`) | 283–292 | (rec) — accepted 2026-10-22 |
-| 318 | The pattern in the preset; `run` not | 279 | (rec) — accepted 2026-10-22 |
-| 319 | Conditional `hyperspace.preset/3` | 282 | (rec) — accepted 2026-10-22 |
-| 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 283–292 | (rec) — accepted 2026-10-22 |
+| 311 | N LFOs, cap 16, removable by stable id (replaces "Four LFOs") | 280 | (rec) — accepted 2026-10-22 |
+| 312 | Envelopes: AHDSR, gate and one-shot; hold 0, legato, seconds, one curve | 282 | (rec) — accepted 2026-10-22 |
+| 313 | Envelopes 1–5 always there, each its lane's; extras to 16 | 281, 284 | (rec) — accepted 2026-10-22 |
+| 314 | Steps as registry params | 281, 286 | (rec) — accepted 2026-10-22 |
+| 315 | Per step on/off only (stored as velocity); one global swing; a global gate built beside | 282 | (rec) — accepted 2026-10-22 |
+| 316 | One global span (½–4 bars) and a global length 1–8 | 281, 289 | (rec) — accepted 2026-10-22 |
+| 317 | The APC40 page on SEND A, latched (on `plan-31-a1`) | 286–295 | (rec) — accepted 2026-10-22 |
+| 318 | The pattern in the preset; `run` not | 282 | (rec) — accepted 2026-10-22 |
+| 319 | Conditional `hyperspace.preset/3` | 285 | (rec) — accepted 2026-10-22 |
+| 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 286–295 | (rec) — accepted 2026-10-22 |
 
 "—": no hand check shows it; tests only.
 
@@ -660,7 +660,8 @@ here; overturn → the change, then the same.
 - **Built.** A factory preset in the list, on no F-key. Right hand:
   sideways orbits up to a quarter turn each way; fingers up tip the camera
   to look down (±44°). Left hand: sideways and reaching in pan; raising it
-  zooms in, to 2.2× at the top (depth 0.12). A level, low or absent hand
+  zooms in, to 2.2× at the top (depth 0.0757, the 0.12 of before zoom's
+  range widened on 2026-10-21 — the same 2.2×). A level, low or absent hand
   adds nothing. The two-hand "steering wheel" (the hands measured against
   each other) is not built.
 - **Other options.** No preset; the steering wheel (two new axes, against
@@ -1231,6 +1232,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 
 ### 89. The Heart is masked; the other shapes are lifted
 
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
+
 - **Built.** The Star, Rose, Torus, Trefoil knot, Starfruit and Möbius
   strip are lifted into the fourth dimension: as XW, YW and ZW turn they
   bend, saddle and swap sides like the Clifford torus, and none goes
@@ -1254,6 +1259,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 - **Judge it.** Checks 113 and 114.
 
 ### 90. The W fold happens where the shape is drawn: XW → XZ, YW → YZ, ZW → XY
+
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
 
 - **Built.** A masked shape cannot turn through W, so each W plane's
   angle is added onto a 3D plane as the frame is drawn
@@ -1323,6 +1332,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 
 ### 93. How a shape is lifted: a function of its own parameters, by four rules
 
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
+
 - **Built.** Every builder takes a lift of its own parameters — w(u, v)
   on a patch, w(θ, φ) on a sphere, w(t, z) on an extruded outline, w(t,
   a) on a tube — and keeps its vertices, edges and faces. Each lift has
@@ -1346,6 +1359,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 
 ### 94. The Möbius strip is widened (0.45 → 0.55) and lifted
 
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
+
 - **Built.** The band is a little wider and lifted by 0.5·sin 2u (0 at
   the seam, which still welds). Through the W planes it keeps
   0.163 / 0.179 / 0.179. A band that thin limits any lift (at 0.45 wide
@@ -1360,6 +1377,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 - **Judge it.** Checks 115 and 118.
 
 ### 95. The Rose is made a seventh shape, deepened (0.12 → 0.16) and lifted
+
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
 
 - **Built.** The brief named six flat shapes; the Rose was a seventh,
   built at w = 0 like them. **The orchestrator added it to the plan — it
@@ -1378,6 +1399,10 @@ as built is [`plans/22-flat-shapes-and-face-patterns.md`](plans/22-flat-shapes-a
 - **Judge it.** Check 115.
 
 ### 96. The Klein bottle: the classic bottle, lifted, shape 26
+
+> **Overturned by the owner, 2026-10-17 (plan 28).** A shape is honestly
+> 4D or 3D (`Shape.dims`): a 3D shape sits at w = 0 and the W planes do
+> nothing to it — no lift, no fold. See DECISIONS, Shapes.
 
 - **Built.** A new shape after the Möbius strip: the textbook "bottle"
   immersion, which in 3D must pass through itself where the neck enters
@@ -5951,7 +5976,7 @@ are `seq-demo`'s (621).
 - **Rough edge.** A removed *top* id is reused by the next add, and a
   route left on it comes back to life (the rule protects only ids below a
   standing voice). Frame time at 16 is not measured.
-- **Judge it.** Check 277.
+- **Judge it.** Check 280.
 
 ### 312. Envelopes: AHDSR, gate and one-shot
 
@@ -5970,7 +5995,7 @@ are `seq-demo`'s (621).
 - **To reverse.** `envelope.KNOBS`, `declare`.
 - **Rough edge.** Two lanes pointed at one envelope share one voice:
   they re-attack it (legato) rather than layer.
-- **Judge it.** Check 279.
+- **Judge it.** Check 282.
 
 ### 313. Envelopes 1–5 always there, each its lane's; extras to 16
 
@@ -5988,7 +6013,7 @@ are `seq-demo`'s (621).
 - **To reverse.** `LANE_ENVS`; `seq.<l>.env`.
 - **Rough edge.** A lane on a removed extra is said only on the SEQ page's
   picker; GRAPH draws no cable for it.
-- **Judge it.** Checks 278, 281.
+- **Judge it.** Checks 281, 284.
 
 ### 314. Steps as registry params
 
@@ -6003,7 +6028,7 @@ are `seq-demo`'s (621).
 - **Rough edge.** The sequencer adds 57 params (40 steps, 5 mutes, 5 lane
   envelopes, span, length, swing, gate, run, step, restart): Learn menus
   and target combos are longer.
-- **Judge it.** Checks 278, 283.
+- **Judge it.** Checks 281, 286.
 
 ### 315. Per step on/off only; one global swing
 
@@ -6020,7 +6045,7 @@ are `seq-demo`'s (621).
 - **To reverse.** `Sequencer.gate_seconds`, `seq.gate`.
 - **Rough edge.** `seq.gate` is not on the SEQ page: ROUTING, GRAPH or a
   Learn reach it.
-- **Judge it.** Check 279.
+- **Judge it.** Check 282.
 
 ### 316. One global span and a global length 1–8
 
@@ -6033,7 +6058,7 @@ are `seq-demo`'s (621).
 - **Other options.** Per-lane length (polymeter); 16- and 32-step pages.
 - **To reverse.** `sequencer.SPANS`, `seq.length`.
 - **Rough edge.** None known.
-- **Judge it.** Checks 278, 286.
+- **Judge it.** Checks 281, 289.
 
 ### 317. The APC40 page on SEND A, latched
 
@@ -6056,7 +6081,7 @@ are `seq-demo`'s (621).
 - **Rough edge.** The page is the first MIDI role's only; the header has no
   span; nothing has run on an mk1 (yellow over green, the mute blink,
   Generic mode).
-- **Judge it.** Checks 283–292.
+- **Judge it.** Checks 286–295.
 
 ### 318. The pattern in the preset; `run` not
 
@@ -6071,7 +6096,7 @@ are `seq-demo`'s (621).
 - **To reverse.** `persist=False` on `seq.run`.
 - **Rough edge.** Stopping releases every lane's envelope, even one held
   open through its `gate` param.
-- **Judge it.** Check 279.
+- **Judge it.** Check 282.
 
 ### 319. Conditional `hyperspace.preset/3`
 
@@ -6088,7 +6113,7 @@ are `seq-demo`'s (621).
 - **To reverse.** `schema_of`, `VERSIONS`.
 - **Rough edge.** An older build's refusal speaks of the schema, not the
   sequencer.
-- **Judge it.** Check 282.
+- **Judge it.** Check 285.
 
 ### 320. A1 only after Dylan agrees
 
@@ -6103,4 +6128,4 @@ are `seq-demo`'s (621).
 - **Rough edge.** `plan-31-a1` drifts from the integration branch until
   it lands; it touches `routing.dispatch` / `active`, `midi.py`,
   `apc40.DEFAULT_MAP` and `ui_desk`.
-- **Judge it.** Checks 283–292, with Dylan.
+- **Judge it.** Checks 286–295, with Dylan.

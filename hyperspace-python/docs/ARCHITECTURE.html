@@ -483,7 +483,7 @@
             amber: the three planes involving W, the fourth axis · teal: the three ordinary 3D planes
           </text>
           <text class="fnt" x="6" y="288" font-size="10" letter-spacing=".8">
-            on a masked 3D shape (the Heart) the amber planes fold at draw time: ZW → XY · XW → XZ · YW → YZ
+            on a 3D shape (the Heart, the solids) the amber planes do nothing: it has no W to turn through
           </text>
           <text class="fnt" x="6" y="306" font-size="10" letter-spacing=".8">
             faces input: the same lane also pushes pattern input i, at depth 0.35 (routing.PATTERN_DEPTH) on a base of 1
@@ -497,11 +497,10 @@
         three-dimensional analogue and reads as the shape turning through itself.
         The <code>dir</code> column flips a band's sense so adjacent bands do not
         visually cancel. The map is six routes onto <code>rot.rate.*</code>
-        (<code>routing.legacy6_routes</code>), so a preset can re-aim it. A shape
-        kept in 3D cannot turn through <code>W</code>, so for it alone the W
-        planes' angles are added onto 3D planes where it is drawn
-        (<code>geometry.view_angles</code>): SUB rolls it, BASS spins it about the
-        vertical, MIDB tumbles it. No parameter changes. Each lane also pushes
+        (<code>routing.legacy6_routes</code>), so a preset can re-aim it. A 3D
+        shape has no <code>W</code>, so the W planes do nothing to it
+        (<code>geometry.view_angles</code>): only the three upper bands turn it.
+        No parameter changes. Each lane also pushes
         the face-pattern input at its own index — SUB swells the pattern's
         scale, BASS flashes its glow, and so on (<code>patterns.py</code>); inputs
         6 and 7, HUE and SPREAD, are left for an LFO, a macro or a knob.
@@ -728,8 +727,8 @@
         <div class="chip c-offset">Feed</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Render stack</div><div class="mods">geometry · view · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
-        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
+        <div><div class="name">Render stack</div><div class="mods">geometry · view · field · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
+        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the instance field, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
@@ -793,7 +792,7 @@
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
@@ -946,11 +945,13 @@
       </div>
       <div class="sub">
         <h4>Shapes in four dimensions</h4>
-        <p>Twenty-six shapes. A cell count of zero marks a surface, not a 3D
-        shape: the Clifford torus is a surface native to 4D. Each shape says how
-        it fills <code>W</code> — native, lifted into it by a function of its own
-        parameters, or masked: kept 3D, its W planes folded onto 3D ones as it is
-        drawn. Only the Heart is masked.</p>
+        <p>Ninety-nine shapes, in families the Shape menu groups under 4D, 3D and
+        Scenes. Each says honestly whether it is 4D or 3D
+        (<code>Shape.dims</code>): a 4D shape turns through <code>W</code>; a 3D
+        shape sits at w = 0 and the W planes leave it alone. A cell count of
+        zero marks a surface, not a 3D shape: the Clifford torus is a surface
+        native to 4D. A scene is several shapes in one frame; the 3D switch
+        holds a 4D shape's pose and turns it rigidly in 3D.</p>
         <span class="path">geometry · render · tools/turntable</span>
       </div>
       <div class="sub">

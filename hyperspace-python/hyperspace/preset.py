@@ -104,7 +104,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, modifiers, routing, undo
+from . import apc40, modifiers, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -1221,9 +1221,17 @@ def party_faces_routes() -> list[Binding]:
     return [*_lane_rows(skip_mods=(2,)), *_grip_rows(),
             _push("L", "y", "view.bright", 0.14),
             _push("R", "y", "view.pattern_mix", 0.6),
-            _push("R", "z", "camera.zoom", -0.3),
+            # 0.1892 of zoom's span: in to 7.4×, as 0.3 was before the
+            # range widened to 0.005 … 200 (2026-10-21)
+            _push("R", "z", "camera.zoom", -0.1892),
             _push("R", "roll", "pattern.mod.2", 0.7),
             _push("R", "pitch", "camera.pitch", PITCH_DEPTH)]
+
+
+# party-field's crowd: right height from the preset's 9 copies to 69, as
+# the push of 0.6 did on the count's old linear 0–100 throw — 59 detents of
+# the count taper (tapers.T_INSTANCES), every one a copy below 64
+FIELD_CROWD = 59 / tapers.T_INSTANCES.steps
 
 
 def party_field_routes() -> list[Binding]:
@@ -1233,8 +1241,8 @@ def party_field_routes() -> list[Binding]:
     XW and ZW. Left hand flies the field — sideways and reaching in pan
     it — and left height pushes how far the copies swing."""
     return [*_lane_rows(),
-            _push("R", "y", "view.instances", 0.6),
-            _push("R", "y", "camera.zoom", -0.15),
+            _push("R", "y", "view.instances", FIELD_CROWD),
+            _push("R", "y", "camera.zoom", -0.0946),   # out to 2.7×, as 0.15 was
             _push("R", "y", "view.bright", 0.1),
             _push("R", "roll", "rot.phase.XW", TURN),
             _push("R", "yaw", "rot.phase.ZW", TURN),
@@ -1303,7 +1311,7 @@ def party_trip_routes() -> list[Binding]:
             _push("R", "yaw", "fx.huecycle.spread", 0.4),
             _push("R", "pitch", "fx.plasma.level", 0.4),
             Binding(hand("L", "y"), "lfo.1.depth", "position"),
-            Binding("lfo:0", "camera.zoom", "push", 0.08),
+            Binding("lfo:0", "camera.zoom", "push", 0.0505),   # 1.7×, as 0.08 was
             _push("L", "x", "fx.zoomblur.cx", 0.8),
             _push("L", "z", "fx.zoomblur.cy", -0.8)]
 
@@ -1588,8 +1596,9 @@ def hands_orbit_routes() -> list[Binding]:
             _push("L", "x", "camera.pan.x", 0.1),      # as FIELD: fly sideways
             _push("L", "z", "camera.pan.y", 0.1),      # as FIELD: reach in
             # raise: zoom in, to 2.2× at the top. The plan's 0.3 (7.4×) put the
-            # frame inside the default shape, near black (the WP4 strip)
-            _push("L", "y", "camera.zoom", 0.12)]
+            # frame inside the default shape, near black (the WP4 strip).
+            # 0.0757 of zoom's wider span (0.005 … 200) is the 0.12 of before
+            _push("L", "y", "camera.zoom", 0.0757)]
 
 
 def effects_on(routes, values: dict[str, Any],
