@@ -54,8 +54,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # a modulator bank's voices (plan 31 B) take the bank's scheme as their
-# kind — ``lfo`` — and routing.BANKS says which schemes those are
-KINDS = ("source", "lfo", "modifier", "macro", "param")
+# kind — ``lfo``, ``env`` — and routing.BANKS says which schemes those are
+KINDS = ("source", "lfo", "env", "modifier", "macro", "param")
 # plan 30 D2: the render graph's port type for a value a node publishes
 # once a frame (`graph.VALUE`; named here, not imported: this module is a
 # leaf). A render node's `VALUE` port would be a `source` here, its id the
@@ -65,7 +65,11 @@ RENDER_VALUE = "value"
 # then the bank's global trigger
 LFO_KNOBS = ("shape", "rate", "sync", "depth", "phase", "reset")
 LFO_PORTS = (*LFO_KNOBS, "trigger")
-PORTS = ("mod", "when", "depth", "base", "in", *LFO_PORTS)
+# the ports an envelope's params feed (plan 31 W1): its knobs in the order
+# envelope.py declares them, then `fire` and `gate` (envelope.Envelopes.KNOBS)
+ENV_KNOBS = ("mode", "attack", "hold", "decay", "sustain", "release", "curve", "sync",
+             "retrig", "amount", "velocity", "fire", "gate")
+PORTS = tuple(dict.fromkeys(("mod", "when", "depth", "base", "in", *LFO_PORTS, *ENV_KNOBS)))
 # the ports that never order the pass (see the module docstring)
 UNORDERED = frozenset({"base"})
 # `cycles` stops listing past this many loops: a pathological table is

@@ -5,9 +5,9 @@ peak, falls to a sustain and lets go on release, and the router reads its
 level as an ``env`` lane that rests at 0.0 (REST), like the modifiers and
 the analyzer lanes, so a push row from it only ever pushes one way and a
 negative row depth pushes down. This module is the leaf voice and its
-params; the bank that holds voices by stable id, publishes them and saves
-membership in the preset is `modbank` (wave 2), which calls `declare` once
-per voice.
+params, and `Envelopes`, the `modbank.Bank` that holds voices by stable
+id, publishes them as the ``env`` scheme and saves membership in the
+preset (``"envs"``), calling `declare` once per voice.
 
 Per envelope (every knob a registry param ``env.<n>.<knob>``, so it is
 modulatable, Learnable and saved in the preset like an LFO's):
@@ -63,13 +63,23 @@ The level is in note units (0 → 1 is rest → peak) and the output is that
 times the note's peak, read live, so `amount` moved mid-note scales the
 envelope the way an LFO's depth does instead of waiting for the next fire.
 
-Nothing here imports from the host: the clock and the registry are
-duck-typed arguments (tests/test_envelope_boundary.py).
+**The bank** (plan 31 W1, decision 3): `Envelopes` always holds the five
+lane envelopes, 1–5 — the sequencer's lanes fire them, so every lane works
+the moment a pad is pressed — and `remove` refuses them. Extras, 6 up to
+the cap of 16, come and go by stable id like the LFOs. Its preset key,
+``"envs"``, is written only when there are extras (`preset.Presets.document`
+compares with `DEFAULT`), so a file saved without any is the file it was.
+
+Nothing here imports from the host but the leaf `modbank`: the clock and
+the registry are duck-typed arguments (tests/test_envelope_boundary.py).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+from .modbank import Bank
 
 MODES = ["gate", "one-shot"]
 SYNCS = ["s", "beats"]
@@ -344,3 +354,75 @@ def declare(reg, n: int, env: Envelope) -> None:
                group=GROUP, persist=False,
                tip="High fires with the gate open, low releases: hold a pad, or let "
                    "a performer own it.")
+
+
+LANE_ENVS = (1, 2, 3, 4, 5)   # the sequencer's lane envelopes: always there (decision 3)
+
+
+class Envelopes(Bank):
+    """The envelope bank (modbank.Bank), published as the ``env`` source:
+    the five lane envelopes, always, plus extras up to the cap."""
+
+    SCHEME, LABEL, KEY = GROUP, "env", "envs"
+    DEFAULT = LANE_ENVS
+    REST = REST
+    # what feeds a voice's node in the modulation patch: every knob, and
+    # `fire` and `gate` too — a route onto ``env.2.fire`` (from ``seq:0``,
+    # say) then lands before envelope 2 steps, so the note starts on this
+    # frame's step rather than being held to the next one
+    KNOBS = (*KNOBS, "fire", "gate")
+    SHARED: ClassVar[dict[str, str]] = {}
+
+    def __init__(self, ids=None):
+        # the lane envelopes whatever `ids` says: a bank without them would
+        # leave a lane firing nothing
+        super().__init__(sorted({*LANE_ENVS, *(LANE_ENVS if ids is None else ids)}))
+
+    def make(self) -> Envelope:
+        return Envelope()
+
+    def step_voice(self, env: Envelope, dt: float, t: float, clock) -> float:
+        # an envelope is event-driven: its level is a closed form of t, so
+        # it takes no dt (Envelope.step)
+        return env.step(t, clock)
+
+    def remove(self, n: int) -> bool:
+        """An extra envelope goes (`Bank.remove`); a lane envelope, 1–5,
+        never does — False, as for no such voice."""
+        if n in LANE_ENVS:
+            return False
+        return super().remove(n)
+
+    @classmethod
+    def parse(cls, value) -> tuple[list[int], list[str]]:
+        """A file's membership (`Bank.parse`), with the lane envelopes in
+        it whatever the file says — a hand-edited ``[6]`` is 1–6."""
+        ids, notes = super().parse(value)
+        return sorted({*LANE_ENVS, *ids})[:cls.MAX], notes
+
+    def fire(self, n: int, *, at: float | None = None, velocity: float = 1.0,
+             gate: float | None = None) -> bool:
+        """Envelope `n` (1-based) fires at `at` (Envelope.fire). False: no
+        such envelope — a lane pointed at a removed extra fires nothing."""
+        env = self.voice(n)
+        if env is None:
+            return False
+        env.fire(at=at, velocity=velocity, gate=gate)
+        return True
+
+    def release(self, n: int, *, at: float | None = None) -> bool:
+        """Envelope `n`'s gate closes at `at` (Envelope.release). False: no
+        such envelope."""
+        env = self.voice(n)
+        if env is None:
+            return False
+        env.release(at=at)
+        return True
+
+
+def register(reg, envs: Envelopes, clock=None) -> None:
+    """Every envelope's knobs as params in the ``env`` group (`declare`),
+    the bank bound to `reg` so an extra added later declares the same way
+    and one removed drops them. `clock` is unused (the voices read it at
+    their step) and taken for the shape of lfo.register."""
+    envs.bind(reg, declare)

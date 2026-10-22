@@ -108,7 +108,11 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 # `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
 # preset's, declared while it holds the modifier (routing.declare_modifiers)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro", "mod")
+# `env` and `seq` (plan 31): the envelopes' knobs and the sequencer's
+# pattern are the look's, like the LFOs' (decision 8: the pattern is the
+# preset's, `seq.run` and the playhead are not persisted at all)
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "env", "seq",
+                      "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
