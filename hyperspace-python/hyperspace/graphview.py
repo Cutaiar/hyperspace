@@ -95,6 +95,7 @@ from typing import Any
 
 from . import graph as rgraph
 from . import learn as learnmod
+from . import modbank
 from . import modifiers as modmod
 from . import patch as patchmod
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
@@ -389,17 +390,18 @@ def _value(p: Param | None, default: float = 1.0) -> float:
 
 # ---------------------------------------------------------------- build
 
-def _lfo_count(router: Router | None, reg: Registry) -> int:
+def _lfo_ids(router: Router | None, reg: Registry) -> list[int]:
+    """The LFOs' ids (1-based, ascending): the router's bank's, else every
+    ``lfo.<n>.depth`` the registry holds. A list, not a count — ids keep
+    their gaps when an LFO is removed (plan 31 B)."""
     lfos = getattr(router, "__dict__", {}).get("lfos") if router is not None else None
-    if lfos is not None:
+    ids = getattr(lfos, "ids", None)
+    if callable(ids):
         try:
-            return len(lfos)
+            return list(ids())
         except TypeError:
             pass
-    n = 0
-    while f"lfo.{n + 1}.depth" in reg:
-        n += 1
-    return n
+    return [n for n in range(1, modbank.MAX_ID + 1) if f"lfo.{n}.depth" in reg]
 
 
 def _lane_key(router: Router | None, addr: str) -> tuple | str:
@@ -676,9 +678,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         add_source(analyzer, f"lane:{i}", f"{i} {name}", group="bands")
 
     lfo_names = list(labels.get("lfo") or [])
-    for i in range(_lfo_count(router, reg)):
-        k = i + 1
-        n = add_node(VNode(f"lfo.{k}", "lfo", lfo_names[i] if i < len(lfo_names) else f"LFO {k}"))
+    for k in _lfo_ids(router, reg):
+        i = k - 1
+        n = add_node(VNode(f"lfo.{k}", "lfo", lfo_names[i] if i < len(lfo_names)
+                           and lfo_names[i] else f"LFO {k}"))
         addr = router.address("lfo", i) if router is not None else f"lfo:{i}"
         add_source(n, addr, "out")
 

@@ -46,6 +46,12 @@ a `band.*` value is put back only when the tag is the same as when the
 state was taken — a strip's values never land on another band. A load
 step carries the layout in its marks and puts it back first.
 
+The modulator banks (plan 31 B: the LFOs) are not that: adding or
+removing an LFO is a step, pushed by the panel's chip like a modifier's.
+Each state holds every bank's ids beside the modifiers, and a restore
+puts the membership back before the bases — a voice that returns is
+declared afresh, then its knobs land.
+
 Imports nothing from the package: the registry and the table arrive as
 arguments and are used duck-typed (the rule lfo.py and tempo.py keep), so
 any module may import this one. `install` holds the app's one `Undo`;
@@ -157,6 +163,7 @@ class State:
     tag: Any = None
     marks: Any = None
     modifiers: Any = None     # the modifiers' document (plan 28 N1); None: not taken
+    banks: Any = None         # each bank's ids by scheme (plan 31 B); None: not taken
 
 
 @dataclass
@@ -189,14 +196,19 @@ class Undo:
     a step that is not a load — a setter's side effect may have moved a
     name (`scene.select` adopts its scene), and `mend` puts those back. `tag` (optional)
     is a callable naming the shape the `tagged` id prefixes live on.
-    `on_restore` is called after every restore's writes.
+    `on_restore` is called after every restore's writes. `banks`
+    (optional) is the modulator banks by scheme (plan 31 B: the LFOs), or
+    a callable returning them: each has `doc()` (its ids) and `set(ids)`;
+    a step holds their membership and a restore puts it back before the
+    bases, so a voice's params exist before their values land.
     """
 
     def __init__(self, reg, table, *, marks=None, tag=None, tagged=("band.",),
-                 on_restore=None):
+                 on_restore=None, banks=None):
         self.reg, self.table = reg, table
         self.marks, self.tag, self.tagged = marks, tag, tuple(tagged)
         self.on_restore = on_restore
+        self.banks = banks
         self.stack: list[Step] = []       # the undo stack, newest last
         self.redos: list[Step] = []       # the redo stack, newest last
         self.status = ""                  # what the last undo / redo did, for the footer
@@ -239,8 +251,19 @@ class Undo:
         doc = getattr(self.table, "modifiers_doc", None)
         return doc(self.reg) if doc is not None else []
 
+    def _banks(self) -> dict:
+        """The banks by scheme; none for an Undo built without (or from
+        before plan 31 B, a hot reload re-classes and never re-inits)."""
+        banks = getattr(self, "banks", None)
+        banks = banks() if callable(banks) else banks
+        return dict(banks or {})
+
+    def _bank_ids(self) -> dict:
+        """Each bank's membership as a preset holds it: scheme → ids."""
+        return {scheme: list(b.doc()) for scheme, b in self._banks().items()}
+
     def _fingerprint(self) -> tuple:
-        """(ids, bases, routes, desk, macros, tag, modifiers) as of now — the cheap
+        """(ids, bases, routes, desk, macros, tag, modifiers, banks) as of now — the cheap
         read `tick` makes every frame. The preset layer is read as the
         table's rows whose `layer` is "preset" (what `table.desk()`
         returns, without asking every row whether it is a MIDI row)."""
@@ -248,7 +271,7 @@ class Undo:
         table = self.table
         return (self._ids, tuple([p.base for p in ps]), _rows(table.routes()),
                 _rows([b for b in table.bindings if b.layer == "preset"]),
-                _macros(table), self._tag(), self._mods())
+                _macros(table), self._tag(), self._mods(), self._bank_ids())
 
     @staticmethod
     def _same_fp(a: tuple, b: tuple) -> bool:
@@ -270,7 +293,7 @@ class Undo:
                      tuple(replace(b) for b in table.desk()), table.macros_doc(),
                      self._tag(),
                      self.marks.take() if marks and self.marks is not None else None,
-                     modifiers=self._mods())
+                     modifiers=self._mods(), banks=self._bank_ids())
 
     def _read_lands(self):
         lands = getattr(self.marks, "lands", None)
@@ -456,6 +479,10 @@ class Undo:
                                          ("macros", then.macros, now.macros)) if a != b]
         if not alike(then.modifiers or [], now.modifiers or []):
             parts.append("modifiers")
+        if then.banks is not None and now.banks is not None:
+            banks = self._banks()
+            parts += [getattr(banks.get(scheme), "KEY", "") or scheme
+                      for scheme, ids in then.banks.items() if now.banks.get(scheme) != ids]
         return ids, parts, left
 
     @staticmethod
@@ -502,6 +529,14 @@ class Undo:
             # 4½. the modifiers and their params (plan 28 N1)
             if state.modifiers is not None and not alike(self._mods(), state.modifiers):
                 table.set_modifiers(state.modifiers, reg)
+            # 4¾. the banks' membership (plan 31 B): a voice that comes back
+            #     is declared fresh here, and step 5 lands its bases
+            if state.banks is not None:
+                banks = self._banks()
+                for scheme, ids in state.banks.items():
+                    bank = banks.get(scheme)
+                    if bank is not None and list(bank.doc()) != ids:
+                        bank.set(ids)
             # 5. the bases that differ, in registry order; again while a
             #    setter's side effect (a scene landing) moved others
             on_tag = state.tag == self._tag()

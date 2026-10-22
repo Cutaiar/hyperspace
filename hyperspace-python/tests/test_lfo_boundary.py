@@ -11,6 +11,9 @@ import pytest
 
 PKG = Path(__file__).resolve().parents[1] / "hyperspace"
 STANDALONE = ("tempo.py", "lfo.py")
+# the leaves a standalone module may import: the LFOs are a modulator bank
+# (plan 31 B), and modbank.py keeps the same rule (test_modbank.py)
+LEAVES = {"lfo.py": {"modbank"}}
 
 
 def _imports(path: Path):
@@ -27,6 +30,8 @@ def _imports(path: Path):
 @pytest.mark.parametrize("name", STANDALONE)
 def test_the_clock_and_the_lfos_import_nothing_from_the_host(name):
     for mod, level in _imports(PKG / name):
+        if level == 1 and mod in LEAVES.get(name, ()):
+            continue
         assert not level, f"{name} imports from the package: {'.' * level}{mod}"
         assert not mod.startswith("hyperspace"), f"{name} imports {mod}"
 

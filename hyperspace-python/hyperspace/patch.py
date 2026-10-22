@@ -53,6 +53,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+# a modulator bank's voices (plan 31 B) take the bank's scheme as their
+# kind — ``lfo`` — and routing.BANKS says which schemes those are
 KINDS = ("source", "lfo", "modifier", "macro", "param")
 # plan 30 D2: the render graph's port type for a value a node publishes
 # once a frame (`graph.VALUE`; named here, not imported: this module is a
