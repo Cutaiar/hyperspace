@@ -569,7 +569,7 @@
           <g font-size="11" class="soft">
             <text x="16" y="186">audio band lanes</text>
             <text x="16" y="203">hands (Ultraleap)</text>
-            <text x="16" y="220">LFOs · clock</text>
+            <text x="16" y="220">LFOs · envelopes · seq</text>
             <text x="16" y="237">DAW in · OSC faders</text>
           </g>
 
@@ -723,8 +723,8 @@
         <div class="chip c-offset">Lanes</div>
       </div>
       <div class="rrow">
-        <div><div class="name">LFOs &amp; clock</div><div class="mods">lfo · tempo</div></div>
-        <div class="what">Four oscillators and one tap-tempo clock. Leaves — the registry, router and clock all arrive as arguments.</div>
+        <div><div class="name">LFOs, envelopes, sequencer &amp; clock</div><div class="mods">modbank · lfo · envelope · sequencer · tempo</div></div>
+        <div class="what">Two modulator banks of voices by stable id, up to sixteen each — the oscillators (four by default) and the AHDSR envelopes (1–5 always there) — a step sequencer of five lanes × eight steps read straight off the clock, firing each lane's envelope at each step's exact time, and one tap-tempo clock. Leaves, or leaves but for the bank — the registry, router and clock all arrive as arguments.</div>
         <div class="chip c-offset">Feed</div>
       </div>
       <div class="rrow">
@@ -739,7 +739,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Panel</div><div class="mods">ui · ui_* · ui_graph · graphview · hands/panel · control</div></div>
-        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, and the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls.</div>
+        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls, and the SEQ page's step grid in the APC40's LED colours.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -788,8 +788,8 @@
       <div class="step"><div class="n">6</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
       <div class="step"><div class="n">7</div><div class="d">Audio step and publish — the band lanes</div><div class="chip c-offset">feed</div></div>
       <div class="step"><div class="n">8</div><div class="d">Devices feed — <b>devices.feed()</b>: the hands, the DAW bridge's external lanes, OSC faders</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">9</div><div class="d">LFOs step inside the patch — at their own nodes of step 10</div><div class="chip c-offset">feed</div></div>
-      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — the patch in dependency order: LFOs, modifiers, then every live performer row at its param's node; a param something later reads lands there and then</div><div class="chip c-offset">offset</div></div>
+      <div class="step"><div class="n">9</div><div class="d">Inside step 10: every bank begins (a held trigger lands), then the sequencer steps — each crossed step fires its envelope at the step's exact time — then each LFO and envelope steps at its own node</div><div class="chip c-offset">feed</div></div>
+      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — the patch in dependency order: LFOs and envelopes, modifiers, then every live performer row at its param's node; a param something later reads lands there and then</div><div class="chip c-offset">offset</div></div>
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
@@ -911,8 +911,8 @@
       </div>
       <div class="sub">
         <h4>Modulation as a graph</h4>
-        <p>Every route, macro subscriber, scale and LFO knob is an edge
-        between sources, LFOs, modifiers, macros and parameters, sorted once
+        <p>Every route, macro subscriber, scale, LFO and envelope knob is an edge
+        between sources, LFOs, envelopes, modifiers, macros and parameters, sorted once
         when the table changes and run each frame in that order. Modifiers —
         curve, scale, smooth, combine, threshold, delay — sit between a
         source and a route, live in the preset, and publish a lane a route
@@ -924,6 +924,7 @@
         <p>One canvas for both graphs: the controllers (the APC40 as two
         nodes, a layer each; a desk template as one collapsible node; a
         missing device as a grey placeholder by role), the LFOs, the
+        envelopes, the sequencer (its lanes' envelopes as cables), the
         modifiers, the macros, the parameters under the render node that
         owns them, the render graph's image cables and the outputs. A cable
         dragged is the row a Learn would make, or a wire in the preset's
@@ -985,10 +986,11 @@
         anything may import them — are named explicitly:
         <code>analysis</code>, <code>tapers</code>, <code>undo</code>,
         <code>placement</code>, <code>geometry</code>,
-        <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
+        <code>tempo</code>, <code>modbank</code>, <code>sequencer</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
         <code>watchdog</code>, <code>patch</code> (the modulation graph's
-        sorter), and the hands package's signal and tape modules.
+        sorter), and the hands package's signal and tape modules; <code>lfo</code>
+        and <code>envelope</code> import only <code>modbank</code>.
       </p>
 
       <h3>The hands package is built to be removed</h3>
@@ -1012,10 +1014,10 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="v">60</div><div class="k">Python modules</div></div>
-      <div class="stat"><div class="v">48,909</div><div class="k">lines of app</div></div>
-      <div class="stat"><div class="v">52,720</div><div class="k">lines of tests</div></div>
-      <div class="stat"><div class="v">90</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">65</div><div class="k">Python modules</div></div>
+      <div class="stat"><div class="v">53,048</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">57,014</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">100</div><div class="k">test files</div></div>
       <div class="stat"><div class="v">26</div><div class="k">shapes</div></div>
       <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
     </div>
@@ -1034,7 +1036,7 @@
     tree (modules and lines: every .py under hyperspace/ and under tests/;
     test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib;
     shapes: geometry.SHAPES; patterns: patterns.MODES, seventeen),
-    re-measured after plan 28 on plan-28-30-integration, at 327e646.
+    re-measured after plan 31 on plan-31-integration, at c81a9d9.
     Band-to-plane map from hyperspace/bands.py and routing.legacy6_routes;
     shapes from geometry.SHAPES; patterns and their inputs from patterns.py; the liftable-package rule
     from hyperspace/hands/__init__.py and tests/test_hands_boundary.py.
