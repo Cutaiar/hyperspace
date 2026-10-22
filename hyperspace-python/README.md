@@ -49,10 +49,12 @@ live render error is a red banner at the bottom of the control window.
   the routing table (`routing`, the referee and the per-frame modulation
   pass; `learn` holds an armed Learn for MIDI and hands alike), the
   sources (`audio` + `analysis` + `analyzer` + `bands`; `lfo` + `tempo`;
+  `modbank`, `envelope` and `sequencer`, the envelopes and the step
+  sequencer;
   `hands/`; `bridge`), the input adapters (`midi` + `apc40`, `gamepad`),
   the render stack (`geometry`, `view`, `render`, `glsl`, `fx`, `lookback`,
   `dream`, `overlay`, `shaders/`), the panel (`ui`, `ui_bands`,
-  `ui_routing`, `ui_lfo`, `ui_fx`, `ui_lookback`, `ui_presets`,
+  `ui_routing`, `ui_graph`, `ui_lfo`, `ui_seq`, `ui_fx`, `ui_lookback`, `ui_presets`,
   `hands/panel`, `control`), the library (`library`, `preset`, `config`,
   `library/` with the factory presets) and the host (`app`, `hotreload`). Who owns
   what and who may write a parameter: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -94,8 +96,8 @@ Chromium.
 Everything the panel can set is a named parameter in `hyperspace/params.py`
 (`view.bright`, `band.2.atk`, …). Keys, the gamepad, MIDI, the hands and
 the analyzer's lanes all drive those parameters through one binding table
-(`hyperspace/routing.py`), so any audio band, hand axis or LFO can
-modulate any parameter. Press `/` in the app for the cheat sheet;
+(`hyperspace/routing.py`), so any audio band, hand axis, LFO, envelope
+or step-sequencer lane can modulate any parameter. Press `/` in the app for the cheat sheet;
 right-click any control in the panel to learn a desk control or a hand
 onto it, or to unbind it.
 
@@ -108,8 +110,8 @@ load them. Factory presets and shows live in `hyperspace/library/`;
 yours go in `~/Hyperspace` (or `$HYPERSPACE_HOME`) in the same tree, as
 plain JSON the running app follows when you edit it.
 
-The control window has fourteen pages — Output · View · Faces · Bitmap ·
-Camera · Lookback · FX · Audio · Analyzer · Routing · LFO · Hands ·
-Presets · System. The render window is pure output; more render outputs,
+The control window has sixteen pages — Output · View · Faces · Bitmap ·
+Camera · Lookback · FX · Audio · Analyzer · Routing · Graph · LFO · Seq ·
+Hands · Presets · System. The render window is pure output; more render outputs,
 overlay mode, the APC40's two layers and everything else are in
 [`docs/ENGINEERING.md`](docs/ENGINEERING.md).

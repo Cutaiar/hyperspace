@@ -66,7 +66,7 @@ def test_add_remove_next_id_and_the_cap():
     assert not bank.remove(2)
     assert bank.next_id() == 4                  # one past the highest, never the gap
     bank.remove(3)
-    assert bank.next_id() == 2                  # nothing higher stands: the id is free again
+    assert bank.next_id() == 4                  # the top id too: never reused this session
     with pytest.raises(ValueError):
         bank.add(1)                             # there already
     while bank.can_add():

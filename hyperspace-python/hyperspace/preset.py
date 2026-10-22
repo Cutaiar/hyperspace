@@ -73,9 +73,21 @@ The factory presets are generated (`python -m hyperspace.preset`,
 the generator's inputs — the house presets' routes (the lane rows),
 plan 12's five party presets' routes and their desk blocks, and whole the five that were routing presets (``legacy6``,
 ``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
-plan 18's ``hands-orbit`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
+plan 18's ``hands-orbit`` and plan 31's ``seq-demo`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
 preset layer unless its entry says otherwise. The house presets' and the
 party presets' values are data in their files.
+
+**``hyperspace.preset/3``** (plan 31 P, decision 9) is the same format,
+written only when the preset uses something a build from before plan 31
+would silently lose on a re-save: a step on or a sequencer setting moved,
+an envelope's knob moved, a route, modifier input or macro subscriber on
+an ``env``/``seq`` lane or param, extra envelopes (``"envs"``), or LFO
+membership other than the four (``"lfos"``) — `schema_of`. Such a build
+refuses a /3 file (`Library.read`'s versions) instead of stripping it.
+Every other save is /2, carrying no ``env.*``/``seq.*`` value (all at
+their defaults, which is what a load lands for a missing value), so it
+is byte for byte the file a build before plan 31 wrote. Reading, /2 →
+/3 is the identity: this build takes both (`VERSIONS`).
 
 The first launch of this build migrates the home folder once
 (`migrate_home`, plan 13 §6): see "the migration" below.
@@ -143,8 +155,67 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
 from .routing import MOD_OPS, Binding, Macro, Sub, is_continuous
 
 SCHEMA = PERFORMANCE_SCHEMA
+# plan 31 P (decision 9): /3 is /2 plus what a build from before plan 31
+# cannot keep — written only when a preset has some (`schema_of`); a load
+# takes both, /2 → /3 being the identity
+SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
+VERSIONS = (2, 3)
+# the registry groups (and lane schemes) a /2 file never names
+V3_GROUPS = ("env", "seq")
+# the preset keys a bank writes only off its default (modbank, plan 31 B)
+V3_KEYS = ("lfos", "envs")
 GROUP = PRESETS                   # the library folder, and the strip's group
 FACTORY_DIR = FACTORY / GROUP
+
+
+_MISSING = object()
+
+
+def _same(a, b) -> bool:
+    """Two saved values equal — floats to a hair, so a value that went out
+    and came back through a param's setter still reads as untouched."""
+    if isinstance(a, float) and isinstance(b, (int, float)) and not isinstance(b, bool):
+        return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
+    return a == b
+
+
+def _names_v3(x) -> bool:
+    """Whether a routes / modifiers / macros section names an ``env``/``seq``
+    lane (``env:0``) or param (``seq.1.3``) anywhere — labels and notes
+    aside."""
+    if isinstance(x, str):
+        return x.startswith(tuple(f"{g}{c}" for g in V3_GROUPS for c in ":."))
+    if isinstance(x, dict):
+        return any(_names_v3(v) for k, v in x.items() if k not in ("label", "name", "note"))
+    if isinstance(x, (list, tuple)):
+        return any(_names_v3(v) for v in x)
+    return False
+
+
+def schema_of(doc: dict) -> str:
+    """The schema a preset document is written as (plan 31 P, decision 9):
+    ``hyperspace.preset/3`` when it carries what a build from before plan
+    31 would lose — a bank's membership key, an ``env.*``/``seq.*`` value
+    (`Presets.document` leaves them all out of a preset that has none
+    off its default), or a route, modifier or macro on an envelope or the
+    sequencer — else ``hyperspace.preset/2``.
+
+    The ``desk`` and ``layout`` sections are not read here on purpose: a
+    build from before plan 31 keeps both verbatim — `Bindings.set_desk`
+    checks no row's target against the registry (a desk row on
+    ``env.2.fire`` loads dormant and saves back as it was) and
+    `library.read_layout` keeps any node name, the GRAPH page's tidy
+    forgetting only the nodes it draws — so neither loses anything on a
+    re-save there (tests/test_plan31_review.py). The APC page's
+    ``seq.page`` / ``seq.select`` rows are the session's and never saved."""
+    if any(k in doc for k in V3_KEYS):
+        return SCHEMA_V3
+    if any(str(k).startswith(tuple(f"{g}." for g in V3_GROUPS))
+           for k in (doc.get("values") or {})):
+        return SCHEMA_V3
+    if any(_names_v3(doc.get(k)) for k in ("routes", MODIFIERS_KEY, "macros")):
+        return SCHEMA_V3
+    return SCHEMA
 
 
 def desk_json(rows) -> list[dict]:
@@ -584,7 +655,7 @@ class Presets:
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
                  signature=lambda: self.signature(),
-                 versions=(int(SCHEMA.rpartition("/")[2]),),
+                 versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
         lib.presets = self
@@ -761,6 +832,7 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self._banks().items()}
         # from here to the values landing, anything that raises puts the
@@ -812,9 +884,13 @@ class Presets:
                 bank = self._banks()[scheme]
                 if bank.doc() != ids:
                     bank.set(ids)
-            if gs.mark() != held_graph:          # the graph as it was, and its instances'
-                gs.put(held_graph)               # values as they were
-                lib.restore({k: v for k, v in held_values.items() if k in reg})
+            if gs.mark() != held_graph:          # the graph as it was
+                gs.put(held_graph)
+            # then every value as it was — the graph instances', and a bank
+            # voice's that the load removed and the line above re-added
+            # fresh (`held_values` was taken before `bank.set`): a refused
+            # load leaves LFO 5's depth where it stood, not at its default
+            lib.restore({k: v for k, v in held_values.items() if k in reg})
             raise
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
@@ -866,7 +942,13 @@ class Presets:
         for bank in self._banks().values():
             if bank.doc() != list(bank.DEFAULT):
                 doc[bank.KEY] = bank.doc()
-        doc.update(values=self._values(),
+        values = self._values()
+        if not self._uses_v3(values):
+            # plan 31 P: the envelopes and the sequencer untouched — a /2
+            # file names none of them, so it is the file it always was
+            values = {k: v for k, v in values.items()
+                      if self.reg[k].group not in V3_GROUPS}
+        doc.update(values=values,
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
@@ -874,7 +956,25 @@ class Presets:
         layout = getattr(self, "layout", None)
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
+        # plan 31 P: /3 only when it carries something new — a route or a
+        # bank's membership as much as a value — and then every envelope
+        # and sequencer value, as every other group's
+        doc["schema"] = schema_of(doc)
+        if doc["schema"] != SCHEMA:
+            doc["values"] = self._values()
         return doc
+
+    def _uses_v3(self, values: dict[str, Any]) -> bool:
+        """Whether any envelope or sequencer value is off what a load would
+        land for it missing (`Library.defaults`: its group's default over
+        the build values) — if not, a save can leave them all out."""
+        lib, reg = self.lib, self.reg
+        for g in V3_GROUPS:
+            defaults = lib.defaults(g)
+            for k, v in values.items():
+                if reg[k].group == g and not _same(v, defaults.get(k, _MISSING)):
+                    return True
+        return False
 
     def _banks(self) -> dict:
         """The router's modulator banks by scheme (plan 31 B); none on a
@@ -1405,6 +1505,41 @@ def lfo_breathe_desk() -> list[Binding]:
     return knob_desk(BREATHE_KNOBS)()
 
 
+# seq-demo (plan 31 P): the drum lanes on the 8 steps of half a bar (16ths)
+SEQ_DEMO_STEPS = {1: (1, 5), 2: (3, 7), 3: tuple(range(1, 9))}   # kick, snare, hats
+# each lane's envelope as a one-shot drum hit, (attack, decay) in seconds:
+# a punchy kick, a shorter snare, a hat that is gone before the next 16th
+SEQ_DEMO_HITS = {1: (0.005, 0.30), 2: (0.005, 0.18), 3: (0.002, 0.07)}
+
+
+def seq_demo_routes() -> list[Binding]:
+    """The kick (env 1) pushes brightness, the snare (env 2) punches the
+    zoom in, the hats (env 3) split the colours (Minecraft's deconverge,
+    whose base amount is 0, so it shows only on a hat)."""
+    return [Binding("env:0", "view.bright", "push", 0.5),
+            Binding("env:1", "camera.zoom", "push", 0.06),
+            Binding("env:2", "fx.deconverge.amount", "push", 0.5)]
+
+
+def seq_demo_values() -> dict[str, Any]:
+    """The pattern (`SEQ_DEMO_STEPS`) at a half-bar span and the lanes'
+    envelopes one-shot (`SEQ_DEMO_HITS`, sustain 0); a dimmed picture for
+    the kick to light. `seq.run` is the session's (decision 8): the pattern
+    plays once the performer starts the transport."""
+    from .envelope import ONE_SHOT
+    from .sequencer import SPANS
+
+    out: dict[str, Any] = {"view.bright": 0.6, "fx.mix": 1.0,
+                           "fx.deconverge.amount": 0.0, "fx.deconverge.radial": 0.0,
+                           "seq.span": SPANS.index("1/2 bar")}
+    for lane, steps in SEQ_DEMO_STEPS.items():
+        out.update({f"seq.{lane}.{k}": True for k in steps})
+    for n, (attack, decay) in SEQ_DEMO_HITS.items():
+        out.update({f"env.{n}.mode": ONE_SHOT, f"env.{n}.attack": attack,
+                    f"env.{n}.decay": decay, f"env.{n}.sustain": 0.0})
+    return out
+
+
 def hands_fx_routes() -> list[Binding]:
     """Plan 08's hand-driven effect: the right hand's height positions the
     fx mix, its tilt (pitch) twists and its yaw bends the Acid shader, the left
@@ -1631,6 +1766,13 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            "brightens and the spin slows as the LFO's swell of the fx mix "
                            "deepens; the right hand's height deepens LFO 1's pulse.",
                            macros=lfo_breathe_macros, desk=lfo_breathe_desk),
+    # plan 31 P: the step sequencer's demo, a hyperspace.preset/3 (its pattern)
+    "seq-demo": Factory(seq_demo_routes, seq_demo_values, "seq-demo",
+                        "The step sequencer's demo: kick, snare and hats on half a bar "
+                        "drive one-shot envelopes — the kick lights the picture, the "
+                        "snare punches the zoom, the hats split the colours. Press play "
+                        "(the SEQ page, or seq.run): the transport is never in a preset.",
+                        desk=None),
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
                         desk=knob_desk(HANDS_FX_KNOBS)),
@@ -1672,6 +1814,7 @@ def generated(key: str) -> dict:
         doc["desk"] = desk_json(spec.desk())
     doc["macros"] = {k: m.to_json() for k, m in spec.macros().items()}
     doc["modules"] = {}
+    doc["schema"] = schema_of(doc)      # plan 31 P: seq-demo's pattern is a /3
     return doc
 
 

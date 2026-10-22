@@ -34,7 +34,11 @@ fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
 factory preset): each copied into the scratch library and loaded like a
 user's preset, its `graph` section landing through the real `Presets`
 onto the rig's renderer, hands present, in the eight states — the
-manifest's `fixture_states` and `fixtures`.
+manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
+envelopes and the step sequencer are stepped through the router as the
+app steps them — at rest and stopped, so they move nothing — but for the
+presets in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
+starts, so their frame is the pattern mid-envelope at the pinned clock.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -148,6 +152,14 @@ FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-gla
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
+# plan 31 P: the presets drawn with the sequencer running (`seq.run` is
+# never in a preset): play pressed as the rig starts, so step 1 fires on
+# the first frame at T0 + DT and the hashed frame, FRAMES − 1 frames
+# later (about 117 ms at 120 BPM), is mid-envelope on its kick (the hat
+# that fired with it is over, the snare still to come: tests/
+# test_plan31_wiring.py's seq-demo test steps the same frames)
+RUNNING: tuple[str, ...] = ("seq-demo",)
+
 CAP = {"preset": "party-trip", "hands": "present", "state": "scene+hands",
        "size": (3840, 2160), "logical": (1920, 1080), "dpr": 2.0}
 
@@ -170,7 +182,7 @@ import numpy as np
 
 from hyperspace import config as config_mod
 from hyperspace import devices as devices_mod
-from hyperspace import lfo, tempo
+from hyperspace import envelope, lfo, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import default_params
@@ -276,6 +288,12 @@ class Rig:
         self.clock = tempo.Clock(now=lambda: self.t)
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
+        # plan 31 P: the envelopes and the sequencer, stepped as the app
+        # steps them — at rest and stopped unless the preset is in
+        # `RUNNING`, so no other golden sees them
+        self.envs, self.seq = envelope.Envelopes(), sequencer.Sequencer()
+        envelope.register(reg, self.envs, self.clock)
+        sequencer.register(reg, self.seq, self.clock)
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
         if slug in FIXTURE_PRESETS:          # a user's preset in the scratch library
             own = Path(self._home.name) / "presets"
@@ -284,6 +302,8 @@ class Rig:
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
+        self.router.use_bank(self.envs, self.clock)
+        self.router.use_sequencer(self.seq, self.envs, self.clock)
         presets = self.presets = Presets(lib, reg, self.router)
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
@@ -297,6 +317,11 @@ class Rig:
                           source=FakeHands(lambda: self.t, hands == "present"),
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(self.t)
+        if slug in RUNNING:
+            # the transport is the session's (decision 8): pressed play,
+            # the pattern restarting at step 1 on the first frame (T0 + DT)
+            self.seq.run = True
+            self.seq.restart()
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
         # plan 26 A4: the preset's graph (none for a factory preset: the
@@ -552,6 +577,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                                 "states": list(names), "presets": list(which)}
                          for name, toml, names, which in CLOUDED},
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
+        "sequencer_running": list(RUNNING),
         "fixture_states": {slug: {"file": f"tests/fixtures/presets/{slug}.json",
                                   "hands": "present", "states": [n for n, _ in STATES]}
                            for slug in FIXTURE_PRESETS},

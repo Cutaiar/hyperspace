@@ -18,6 +18,8 @@ Per sequencer (all global, decisions 5–6):
           (``steps_per_beat = 8 / (bars · 4)``)
   length  1–8: the pattern wraps after this many steps
   swing   0–0.5 of a step: how late every odd step lands
+  gate    0.05–1 of a step: how long a fired gate-mode envelope holds
+          before it releases (`gate_seconds`; a one-shot ignores it)
   run     the transport; session state, never in a preset (decision 8)
 
 Per lane: the eight steps, `mute`, and `env`, the envelope it fires —
@@ -33,9 +35,10 @@ clock time of that boundary found by inverting tempo.py's ``beat``, so an
 envelope fired from a step that fell between two frames renders exactly.
 Three things are not crossings and fire nothing extra:
 
-  * **A stall.** More than `length` steps in one call — a two-second
-    hitch, a laptop lid — fires only the current step: one hit late is a
-    glitch, a burst of sixteen is a drum roll nobody played.
+  * **A stall.** More than a page of eight steps in one call (`STALL`,
+    whatever `length` is, so a slow frame on a short pattern keeps its
+    steps) — a two-second hitch, a laptop lid — fires only the current
+    step: one hit late is a glitch, a burst of sixteen is a drum roll nobody played.
   * **A step backwards** — a backward nudge, a swing turned up past s.
     `k_last` stays where it is, so the steps already fired do not fire
     again on the way back up. A jump back of more than a whole pattern
@@ -51,7 +54,8 @@ clears the sequencer's own offset. ``seq.trigger`` is the per-LFO
 offset (`shift`, in beats) from the clock, which stays where it is. It is
 held to the next `step` and lands at that step's t, whichever path fired
 it — a key before the step or the panel after it — so step 0's time is
-always a frame's own.
+always a frame's own. Pressed while stopped it stays held until `run`
+goes on, and step 0 lands on that frame.
 
 **Transport.** `run` gates firing only. While it is off nothing fires and
 `pulses` stay 0, but `k_last` keeps following the clock, so turning it
@@ -66,7 +70,8 @@ can close; what releasing means is the host's (wave 2: `envs.release`).
 Callbacks, both 0-based in the lane like the router's addresses
 (``seq:0`` is lane 1, the param ids are 1-based ``seq.1.3``):
 
-  fire(lane, env, at, velocity)    a step on an unmuted lane
+  fire(lane, env, at, velocity)    a step on an unmuted lane (the host
+                                   adds ``gate=gate_seconds(clock)``)
   release(lane, env, at)           `run` went off
 
 Class-level defaults for the runtime state, so a hot-reloaded instance
@@ -87,8 +92,14 @@ SPANS = ["1/2 bar", "1 bar", "2 bars", "4 bars"]
 BARS = {"1/2 bar": 0.5, "1 bar": 1.0, "2 bars": 2.0, "4 bars": 4.0}
 BEATS_PER_BAR = 4            # 4/4, as tempo.py assumes
 SWING_HI = 0.5
-ENV_HI = 16                  # the envelope bank's cap (plan 31 decision 3)
+GATE_LO, GATE_HI, GATE = 0.05, 1.0, 0.5   # a fired note's gate, in steps
+# the highest envelope id a lane may name: modbank.MAX_ID, copied (a leaf
+# imports nothing from the host). Not the bank's cap of 16 voices — ids
+# never compact, so a bank of 16 can hold env 17 and up (a lane on an id
+# the bank lacks fires nothing)
+ENV_HI = 64
 REST = 0.0                   # a trigger lane rests low: a pulse is its rising edge
+STALL = STEPS                # more steps than this in one call is a stall, not a slow frame
 REALIGN = STEPS              # a jump back further than this is a re-anchor, not a nudge
 GROUP = "seq"
 
@@ -131,12 +142,21 @@ class Sequencer:
         self.span = SPANS.index("1 bar")
         self.length = STEPS
         self.swing = 0.0
+        self.gate = GATE
         self.run = False
 
     @property
     def steps_per_beat(self) -> float:
         """8 steps over the span: 4 (16ths) at 1/2 bar … 0.5 (halves) at 4 bars."""
         return STEPS / (BARS[SPANS[self.span]] * BEATS_PER_BAR)
+
+    def gate_seconds(self, clock) -> float:
+        """How long a step's fire holds a gate-mode envelope open: `gate`
+        of one (unswung) step at the clock's bpm and this span —
+        ``gate · 60 / (bpm · steps_per_beat)``, so a tempo change or a new
+        span changes the next note's gate."""
+        g = float(_clamp(getattr(self, "gate", GATE), GATE_LO, GATE_HI))
+        return g * 60.0 / (clock.bpm * self.steps_per_beat)
 
     @property
     def labels(self) -> list[str]:
@@ -165,7 +185,7 @@ class Sequencer:
 
     def restart(self) -> None:
         """``seq.trigger``: step 0 now, the clock untouched — held to the
-        next `step`, which fires it at its own t."""
+        next running `step`, which fires it at its own t."""
         self.pending = True
 
     def step(self, t: float, clock, fire, release=None) -> list[float]:
@@ -180,7 +200,11 @@ class Sequencer:
             self.shift = 0.0             # the global trigger re-aligns the grid to the clock
             restart = True
         self.epoch_seen = epoch
-        if self.pending:                 # after the epoch: a held restart is the later word
+        running = bool(self.run)
+        # after the epoch: a held restart is the later word. While stopped
+        # it stays held — a restart then play puts step 0 on the frame that
+        # starts the transport, not a pattern later
+        if self.pending and running:
             self.pending = False
             self.shift = -clock.beat(t)
             restart = True
@@ -196,7 +220,6 @@ class Sequencer:
             self.k_last = k - 1 if s == self.boundary(k) else k
         self.last_spb = spb
 
-        running = bool(self.run)
         self.stopped = self.was_running and not running
         self.was_running = running
         pulses = [0.0] * LANES
@@ -206,7 +229,10 @@ class Sequencer:
             # else a nudge back: hold k_last, so nothing fires twice
         else:
             crossed = range(self.k_last + 1, k + 1)
-            if len(crossed) > length:    # a stall: the current step, no burst
+            # a stall — more than a whole page of eight crossed in one call,
+            # whatever the length, so a slow frame on a 1- or 2-step
+            # pattern keeps its steps — fires the current step, no burst
+            if len(crossed) > STALL:
                 crossed = range(k, k + 1)
             if running:
                 for j in crossed:
@@ -285,6 +311,11 @@ def register(reg, seq: Sequencer, clock=None) -> None:
                    lambda v: setattr(seq, "swing", float(_clamp(v, 0.0, SWING_HI))),
                    lo=0.0, hi=SWING_HI, fmt=lambda v: f"swing {v:.2f}", group=g,
                    tip="How late every odd step lands, as a fraction of a step.")
+    reg.continuous(f"{g}.gate", "Seq gate", lambda: getattr(seq, "gate", GATE),
+                   lambda v: setattr(seq, "gate", float(_clamp(v, GATE_LO, GATE_HI))),
+                   lo=GATE_LO, hi=GATE_HI, fmt=lambda v: f"gate {v:.2f}", group=g,
+                   tip="How long a step holds a gate-mode envelope open, as a fraction "
+                       "of a step. One-shot envelopes ignore it.")
     reg.toggle(f"{g}.run", "Seq run", lambda: seq.run,
                lambda v: setattr(seq, "run", bool(v)), group=g, persist=False,
                tip="The transport. Starting waits for the next step; the grid is "

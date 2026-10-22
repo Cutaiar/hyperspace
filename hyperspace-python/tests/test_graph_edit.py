@@ -426,8 +426,11 @@ def test_nodes_the_picker_adds_and_delete_removes(rig):
     assert table.modifier(m.id) is None and route in table.bindings
     ui_graph.remove_node(panel, "macro.7")
     assert "macro.7" not in table.macros
-    assert ui_graph.remove_node(panel, "lfo.1") == graphview.NOT_REMOVABLE.format(
-        label=view.node("lfo.1").label)
+    assert ui_graph.remove_node(panel, graphview.ANALYZER) == graphview.NOT_REMOVABLE.format(
+        label=view.node(graphview.ANALYZER).label)
+    # an LFO is the preset's since plan 31 (G1): it goes through its bank,
+    # and a rig whose router steps none says so
+    assert ui_graph.remove_node(panel, "lfo.1") == graphview.NO_BANK.format(what="LFO")
 
 
 def test_the_page_draws_with_its_editing_menus(rig):
@@ -484,10 +487,11 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
     # plan 28 N7: a drag onto a collapsed node's stub opens its port picker
     # (`_stub_drag`); a bundle's delete is refused in words (`delete_bundle`)
     assert where["accept_new_item"] == {"_value_drag", "_create_render", "_stub_drag"}
-    assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut",
+    assert where["accept_deleted_item"] == {"_value_cut", "_value_node_cut", "_voice_node_cut",
                                             "_delete_render_cable", "_delete_render_node"}
     assert where["reject_deleted_item"] <= {"_value_cut", "_unknown_cut", "_delete",
                                             "_rig_node_cut", "_delete_render_cable",
+                                            "_voice_node_cut", "_lane_cut",   # plan 31 G1
                                             "_delete_render_node", "delete_bundle",
                                             "delete_through"}   # N9: a through wire
     assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
@@ -566,9 +570,15 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     ui_graph.DELETE_NODE[shape.kind](rig.panel, st, None, shape)
     assert st["note"] == "shape is drawn by the scene, not wired"
     assert ui_graph.DELETE_NODE["output"] is ui_graph._delete_render_node
-    lfo = graphview.VNode("lfo.1", "lfo", "LFO 1")
-    ui_graph.DELETE_NODE.get(lfo.kind, ui_graph._rig_node_cut)(rig.panel, st, None, lfo)
-    assert st["note"] == graphview.NOT_REMOVABLE.format(label="LFO 1")
+    group = graphview.VNode("group:tempo", "group", "tempo")
+    ui_graph.DELETE_NODE.get(group.kind, ui_graph._rig_node_cut)(rig.panel, st, None, group)
+    assert st["note"] == graphview.NOT_REMOVABLE.format(label="tempo")
+    # plan 31 G1: an LFO and an envelope go through their bank; a lane
+    # envelope is kept, said
+    assert ui_graph.DELETE_NODE["lfo"] is ui_graph.DELETE_NODE["env"] is ui_graph._voice_node_cut
+    env = graphview.VNode("env.2", "env", "env 2")
+    ui_graph.DELETE_NODE[env.kind](rig.panel, st, None, env)
+    assert st["note"] == graphview.LANE_ENV_KEPT.format(label="env 2")
     table = rig.router.table
     e, _ = edit(rig)
     e.show_macro("macro.5")
