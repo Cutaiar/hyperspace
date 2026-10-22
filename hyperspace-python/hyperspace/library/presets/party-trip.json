@@ -83,7 +83,7 @@
   {"source": "hand:right.yaw", "target": "fx.huecycle.spread", "op": "push", "value": 0.4},
   {"source": "hand:right.pitch", "target": "fx.plasma.level", "op": "push", "value": 0.4},
   {"source": "hand:left.y", "target": "lfo.1.depth", "op": "position"},
-  {"source": "lfo:0", "target": "camera.zoom", "op": "push", "value": 0.08},
+  {"source": "lfo:0", "target": "camera.zoom", "op": "push", "value": 0.0505},
   {"source": "hand:left.x", "target": "fx.zoomblur.cx", "op": "push", "value": 0.8},
   {"source": "hand:left.z", "target": "fx.zoomblur.cy", "op": "push", "value": -0.8}
  ],

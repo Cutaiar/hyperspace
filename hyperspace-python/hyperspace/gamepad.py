@@ -31,6 +31,7 @@ import atexit
 import math
 import sys
 import threading
+from dataclasses import dataclass
 
 import glfw
 
@@ -80,6 +81,134 @@ ZOOM_OCTAVES_PER_S = 1.2
 W_PLANES = ("XW", "YW", "ZW")
 W_RATE_PER_S = 2.0    # rate units a second at full throw (a plane's default is 1×)
 DEPTH_OCTAVES_PER_S = 2.4
+
+
+# ---------------------------------------------------------------- the layout
+# The pad drawn on screen (ui_pad.py), the APC40's `LAYOUT` for a gamepad:
+# every control a row can name, where it sits on the device, and a short
+# glyph. Two bands, in a unit grid (x right, y down) that draws like an
+# Xbox pad's face: the buttons, the sticks and the D-pad above, the six
+# axes as lanes under them — a trigger is an axis, so LT and RT are
+# lanes, not a shape of their own.
+#
+#   LB RB            the bumpers, over each stick
+#   LS RS            a stick's click (pad:LSTICK), the well drawn round
+#                    with the live stick in it
+#   A B X Y          the face buttons, in their diamond
+#   BACK START       pad:VIEW and pad:MENU, with the Xbox button (XBOX)
+#   SHR              pad:SHARE, on a pad that has one
+#   ↑ ↓ ← →          the D-pad (hat:UP …)
+#   LX LY RX RY      the sticks' axes, and LT RT the triggers' — lanes
+
+
+@dataclass(frozen=True)
+class Control:
+    """One control of the pad: its routing source (``pad:A``, ``hat:UP``,
+    ``axis:LX``), its kind (button, stick, axis), its glyph, and where it
+    sits (x, y, w, h in layout units)."""
+
+    source: str
+    kind: str
+    glyph: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+    @property
+    def name(self) -> str:
+        """The control in words ("left bumper")."""
+        return control_name(self.source) or self.source
+
+    @property
+    def address(self) -> str:
+        return self.source.partition(":")[2]
+
+
+# the buttons in words, for the hovers; a face button is "A button"
+_BUTTON_NAMES = {
+    "LB": "left bumper", "RB": "right bumper", "VIEW": "BACK (View)",
+    "MENU": "START (Menu)", "GUIDE": "Xbox button", "SHARE": "Share",
+    "LSTICK": "left stick click", "RSTICK": "right stick click",
+}
+
+
+def control_name(source: str) -> str | None:
+    """The control a routing source names, in words ("pad:LB" → "left
+    bumper", "hat:UP" → "d-pad up", "axis:LT" → "left trigger"), or None
+    for a source no gamepad sends."""
+    scheme, _, addr = source.partition(":")
+    if scheme == "pad":
+        if addr in ("A", "B", "X", "Y"):
+            return f"{addr} button"
+        return _BUTTON_NAMES.get(addr) if addr in BUTTONS else None
+    if scheme == "hat":
+        return f"d-pad {addr.lower()}" if addr in HATS else None
+    if scheme == "axis":
+        return AXIS_LABELS[AXES.index(addr)] if addr in AXES else None
+    return None
+
+
+def _layout() -> list[Control]:
+    out: list[Control] = []
+
+    def btn(name: str, glyph: str, x: float, y: float, w: float, h: float) -> None:
+        out.append(Control(f"pad:{name}", "button", glyph, x, y, w, h))
+
+    # the bumpers, and the left stick's well under its own
+    btn("LB", "LB", 0.3, 0.0, 2.4, 0.8)
+    btn("RB", "RB", 9.8, 0.0, 2.4, 0.8)
+    out.append(Control("pad:LSTICK", "stick", "LS", 0.3, 1.0, 2.4, 2.6))
+    # the middle: BACK and START, the Xbox button, Share beside it
+    btn("VIEW", "BACK", 3.6, 0.9, 1.5, 0.8)
+    btn("MENU", "START", 5.3, 0.9, 1.5, 0.8)
+    btn("GUIDE", "XBOX", 4.45, 1.75, 1.5, 0.8)
+    btn("SHARE", "SHR", 6.4, 1.75, 1.3, 0.8)
+    # the D-pad, as a cross between the left stick and the middle
+    for name, glyph, dx, dy in (("UP", "↑", 1.15, 0.0), ("LEFT", "←", 0.0, 0.95),
+                                ("RIGHT", "→", 2.3, 0.95), ("DOWN", "↓", 1.15, 1.9)):
+        out.append(Control(f"hat:{name}", "button", glyph, 2.75 + dx, 2.6 + dy, 1.15, 0.9))
+    # the face buttons, in their diamond, and the right stick under them
+    for name, dx, dy in (("Y", 1.25, 0.0), ("X", 0.0, 1.05), ("B", 2.5, 1.05), ("A", 1.25, 2.1)):
+        btn(name, name, 8.6 + dx, 0.95 + dy, 1.25, 1.0)
+    out.append(Control("pad:RSTICK", "stick", "RS", 9.1, 4.2, 2.4, 2.5))
+    # the axes, as lanes across the foot
+    for k, name in enumerate(AXES):
+        out.append(Control(f"axis:{name}", "axis", name, 0.3 + k * 2.05, 6.85, 1.95, 0.65))
+    return out
+
+
+LAYOUT: list[Control] = _layout()
+LAYOUT_W = max(c.x + c.w for c in LAYOUT)
+LAYOUT_H = max(c.y + c.h for c in LAYOUT)
+_BY_SOURCE = {c.source: c for c in LAYOUT}
+
+
+def control(source: str) -> Control | None:
+    """The layout's control a routing source names, or None. An axis row
+    may address its lane by number (``axis:4``, what an older file holds),
+    which names the same control as ``axis:LT``."""
+    c = _BY_SOURCE.get(source)
+    if c is not None:
+        return c
+    scheme, _, addr = source.partition(":")
+    if scheme == "axis" and addr.isdigit() and int(addr) < len(AXES):
+        return _BY_SOURCE.get(f"axis:{AXES[int(addr)]}")
+    return None
+
+
+def glyph(source: str) -> str | None:
+    """The glyph of the control a source names ("pad:LB" → "LB",
+    "hat:UP" → "↑"), None for a source no gamepad sends."""
+    c = control(source)
+    return c.glyph if c is not None else None
+
+
+def named(source: str) -> str | None:
+    """A control in the words a message uses: the glyph, then its name
+    ("LB (left bumper)"), or None when the pad has no such control."""
+    c = control(source)
+    return f"{c.glyph} ({c.name})" if c is not None else None
 
 
 def _unwrap(ret) -> list:

@@ -33,7 +33,8 @@ explained in the [glossary](#glossary) at the end.
    use branch `plan-24-26-27-integration`. The shader-node entries
    (L95–L102, L129, L130, C9–C11, D19–D23) are plan 30's, and the node-editor entries
    (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
-   merged, use branch `plan-28-30-integration`.
+   merged, use branch `plan-28-30-integration`. The instanced-field entries
+   (L136–L138: thousands of copies, the 3D lattices, Fit) are on `main`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -169,7 +170,7 @@ changes brightness or volume instead).
 | L46 | Sending to FL Studio | 1 | laptop, FL Studio | 27 |
 | L47 | Receiving from FL Studio | 1 | laptop, FL Studio | 28 |
 | L48 | The shapes turn through 4D and never go flat | 1 | laptop | 113 |
-| L49 | The Heart turns with the bass, in 3D | 1 | laptop, music | 114 |
+| L49 | The Heart turns with the music, in 3D | 1 | laptop, music | 114 |
 | L50 | The Star, Starfruit, Rose and Möbius strip by eye | 1 | laptop | 115 |
 | L51 | The Klein bottle | 1 | laptop | 116 |
 | L52 | Stepping to the Klein bottle (keys) | 1 | laptop, the copy | 117 |
@@ -256,6 +257,9 @@ changes brightness or volume instead).
 | L133 | Tidy puts everything back in its area | 1 | laptop | 274 |
 | L134 | The off effects are one line | 1 | laptop | 275 |
 | L135 | Five buttons frame the areas | 1 | laptop | 276 |
+| L136 | Four thousand copies hold the frame rate | 1 | laptop | 277 |
+| L137 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 278 |
+| L138 | The lattices read as 3D | 1 | laptop, a mouse helps | 279 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -1907,48 +1911,45 @@ VIEW page's **Shape** list (or with ← / →). The six round keys on the
 VIEW page (XY, XZ, YZ, XW, YW, ZW) switch each turning direction on and
 off; XW, YW and ZW are the "fourth dimension" ones, driven by the bass.
 
-#### L48. The shapes turn through 4D and never go flat
+#### L48. A 3D shape ignores the W planes; a 4D shape turns through them
 
 **Needs:** laptop.
 
 **Do:** F1 (TUMBLE). On the VIEW page switch off every round key but
 **XW**. Step through Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
-strip and Klein bottle, watching each turn a full circle. Do the same
-with only **YW** on, then only **ZW**, then all six with music. Look at
-the Clifford torus (shape 18) first, for comparison.
+strip and Klein bottle (all 3D since plan 28). Then look at the Clifford
+torus (shape 18) and the Tesseract. Do the same with only **YW** on,
+then only **ZW**, then all six with music.
 
-**Right if:** no shape ever becomes a flat sheet, a line or a thin
-ribbon; each bends and swaps sides as it turns, the way the Clifford
-torus does; the red line under the name reads "4D lift · …" (the Klein
-bottle's, "4D · one-sided bottle, no self-crossing").
+**Right if:** with only W keys on, every 3D shape holds still and its W
+keys are dimmed (hover one: "does nothing now: a 3D shape has no w"); the
+header line reads "3D · …"; the 4D shapes turn through w. With all six
+on, a 3D shape turns in XY, XZ and YZ only. The Klein bottle crosses
+itself where the neck passes through the body, as it must in 3D.
 
-**Judge:** which shapes look best and worst turning.
+**Judge:** whether the 3D shapes are lively enough on the upper bands
+alone.
 
-**Wrong if:** a shape goes flat at a quarter turn; a seam opens up.
+**Wrong if:** a 3D shape moves with only W keys on; a seam opens up.
 
 *(check 113)*
 
-#### L49. The Heart turns with the bass, in 3D
+#### L49. The Heart turns with the music, in 3D
 
 **Needs:** laptop, music with deep bass.
 
 **Do:** pick the Heart. With only XW on, then only YW, then only ZW,
-watch it turn. Then all keys on, music playing. Switch to the Tesseract
-and back.
+watch it. Then all keys on, music playing. Switch to the Tesseract and
+back.
 
-**Right if:** XW turns the heart side-on (a spin about the up-down
-line), YW tips it forward and back, ZW rolls it like a wheel facing you;
-it never goes flat; with music it clearly moves with the bass; its
-lines are as bright, and its near edges as thick and bright, as the
-Tesseract's.
+**Right if:** with only W keys on it holds still (plan 28: a 3D shape has
+no w); with all keys on it turns with the upper bands; its lines are as
+bright, and its near edges as thick and bright, as the Tesseract's.
 
-**Know:** the XW, YW and ZW keys and readouts still say those planes are
-turning, although the Heart turns in ordinary 3D.
+**Judge:** whether the Heart still reads as moved by the music.
 
-**Judge:** whether the bass's spin reads as the bass.
-
-**Wrong if:** the heart goes flat; it looks dim and flat next to the
-Tesseract; another shape behaves differently after the Heart was shown.
+**Wrong if:** it moves with only W keys on; it looks dim and flat next
+to the Tesseract.
 
 *(check 114)*
 
@@ -1956,13 +1957,11 @@ Tesseract; another shape behaves differently after the Heart was shown.
 
 **Needs:** laptop.
 
-**Do:** FACES on with a pattern. Star: XW only, stop it at a quarter turn
-(**Space** pauses). Starfruit, Rose, Möbius strip: all keys off, then
-turning.
+**Do:** FACES on with a pattern. Star, Starfruit, Rose, Möbius strip:
+all keys off, then turning (XY, XZ, YZ — they are 3D since plan 28).
 
-**Right if:** the Star becomes a box, like a lantern, at a quarter turn,
-and its two star-shaped ends show the pattern whole, with no hole or
-tear; the Starfruit's five ridges are still recognisable; the Rose is
+**Right if:** the Star's two star-shaped ends show the pattern whole,
+with no hole or tear; the Starfruit's five ridges are recognisable; the Rose is
 still a delicate flower (it is a little deeper than before); the Möbius
 strip is a little wider than before and not too wide; the Rose's centre
 and the Möbius strip's join stay closed.
@@ -1979,19 +1978,18 @@ the Möbius strip's join.
 **Needs:** laptop.
 
 **Do:** pick the Klein bottle (shape 26, after the Möbius strip). All
-keys off, then XW, YW and ZW one at a time, slowly (Speed down). Faces
+keys off, then XY, XZ and YZ one at a time, slowly (Speed down). Faces
 on and off.
 
 **Right if:** at rest it looks like a bottle whose neck curls over and
-comes back into its body; as it turns, the neck passes beside the body
-and never through it; no gap where the surface joins itself; the neck
-has enough lines.
+comes back into its body, passing through its side (a Klein bottle in
+3D must cross itself; plan 28 took out the lift that kept them apart in
+w); no gap where the surface joins itself; the neck has enough lines.
 
 **Judge:** whether it reads as a bottle — the build's own look said it
 reads more like a curled horn or a loop. Say what you see.
 
-**Wrong if:** the neck cuts through the body at some angle; a gap or a
-sliver at the join.
+**Wrong if:** a gap or a sliver at the join.
 
 *(check 116)*
 
@@ -2792,7 +2790,7 @@ drag moving it; the page scrolling.
 
 *(check 229)*
 
-## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern)
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern; L136–L138 the instanced field, from `main`)
 
 Plan 28 (the node editor). Three things changed. **The modulation has no
 one-frame lag any more**: a setting that drives another (an LFO on
@@ -3423,6 +3421,56 @@ under row.
 **Wrong if:** a button frames nothing; the shaders in one long row.
 
 *(check 276)*
+
+#### L136. Four thousand copies hold the frame rate
+
+**Needs:** laptop.
+
+**Do:** VIEW: shape the 120-cell, faces on. Drag Instances to the top
+(4096), Layout GRID, then CUBIC. Scroll out until the whole field
+shows. Turn faces off, then on. Scroll back in.
+
+**Right if:** the frame rate on the SYSTEM page stays near 60 with faces
+off and stays usable with faces on; zoomed in it is back at full speed.
+
+**Wrong if:** the picture stutters more and more as the count rises at
+the same zoom.
+
+*(check 277)*
+
+#### L137. Fit leaves no copy cut by the edge
+
+**Needs:** laptop; the projector or a second screen if you have one.
+
+**Do:** VIEW: Instances 12, Layout GRID, tick **Fit**. Then 7 and 19
+on HEX, and 200 on FCC. Scroll in and out; right-drag.
+
+**Right if:** 12 copies sit four across and three down, evenly spaced,
+none touching an edge. Zooming in jumps between whole copies — never
+half a shape at the screen's edge — and dragging moves one copy at a
+time. A 3D lattice stays whole and centred.
+
+**Wrong if:** any copy is cut by the edge of the screen.
+
+*(check 278)*
+
+#### L138. The lattices read as 3D
+
+**Needs:** laptop; a mouse helps.
+
+**Do:** VIEW: 300 copies of the tesseract. Try each of CUBIC, BCC, FCC,
+HCP, HEX PRISM and DIAMOND; orbit with the mouse. Set Field depth to 0,
+then 0.5, then 1. Turn a field motion on.
+
+**Right if:** the field turns as one solid; nearer copies are larger,
+brighter and drawn over farther ones; at depth 0 every copy is one size.
+
+**Judge:** whether the default depth (0.5) and how far the far copies
+fade are right.
+
+**Wrong if:** a far copy is drawn over a near one.
+
+*(check 279)*
 
 # Part 2 — tests that need hardware
 
@@ -6246,9 +6294,9 @@ what you want changed.
   L24, C4; checks 9, 96)
 - **The default hand feel** — Steadiness, Response, Catch, Return;
   saved as `factory`. (B5; check 16)
-- **The shapes in 4D** — whether each lifted shape reads as a solid
-  turning, whether the Heart reads as moved by the bass, and the Klein
-  bottle's look. (L48–L51, D14; checks 113–116)
+- **The shapes, 4D and 3D** — whether the 3D shapes are lively enough
+  without the W planes (plan 28), the 3D switch, and the Klein bottle's
+  look. (L48–L51, D14; checks 113–116)
 - **The face patterns** — whether one set of routes reads on every
   pattern, the new patterns as art, METER and PULSE from the audience,
   and whether the factory presets answer quiet and loud music. (L61,

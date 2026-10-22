@@ -5,7 +5,8 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–276; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–279; group Z (277–279) is the instanced field from
+`main`, renumbered from its 144–146 when main was merged in; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), and 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X.
 
@@ -3867,6 +3868,41 @@ wire per pipeline from a row's end back to the next row's start.
 *Fail:* a chip that frames nothing or the wrong boxes; the shaders in one
 long row (`SHADER_ROW`).
 
+## Z. The instanced field: thousands of copies, 3D lattices, Fit (from `main`)
+
+VIEW page, the 120-cell (or any heavy shape), faces on. The tests draw
+on Mesa's software rasteriser, so they pin what is drawn, not how fast.
+
+**277. Four thousand copies hold the frame rate.**
+Headless: `tests/test_render.py::{test_thousands_of_copies_upload_one,test_a_zoomed_in_field_draws_only_what_it_shows}`.
+Instances to the top (4096), GRID, then CUBIC; scroll out until the
+whole field shows, faces on, then off. *Pass:* the SYSTEM page's frame
+rate stays near the screen's (60) with lines and points, and usable with
+faces; zoomed back in, it is back at full speed. *Fail:* the rate drops
+with the count at a fixed zoom → the instanced draws (`render.draw_scene`,
+`field.cull`); only with faces → the pattern's per-fragment cost (try
+FLAT).
+
+**278. Fit leaves no copy cut by the edge.**
+Headless: `tests/test_render.py::test_fit_leaves_no_copy_cut_by_the_edge tests/test_field.py`.
+12 copies, GRID, Fit on, in the window and fullscreen on the projector;
+then 7, 19 on HEX and 200 on FCC. Scroll in and out, right-drag. *Pass:*
+12 is four by three, evenly spaced, nothing touching an edge; zooming in
+jumps between whole copies (never half a shape at the edge) and the drag
+moves a copy at a time; a lattice stays whole and centred. *Fail:* a
+shape cut → `field._field_snapped` / `field._framed` (and `PAD_PX` for a
+point poking out).
+
+**279. The lattices read as 3D.**
+Headless: `tests/test_field.py::{test_every_lattice_has_its_neighbours_one_cell_apart,test_a_lattice_is_drawn_far_to_near_through_its_perspective}`.
+300 copies of the tesseract; each 3D layout in turn; orbit the camera
+with the mouse; Field depth 0, 0.5, 1; a field motion on. *Pass:* the
+field turns as one solid, near copies larger and brighter and drawn over
+far ones; depth 0 flattens the sizes; motions swing the copies in depth
+too. Say whether the default depth (0.5) and the far fade (to a quarter)
+are right. *Fail:* far copies drawn over near ones → the sort in
+`field._field_3d`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -3933,5 +3969,6 @@ Only a person can settle these:
   not the feel;
 - two Macs on one shared library with this run's keys (259): no test
   runs an older build against a file this one saved (the review pass did,
-  once, by hand: register row 277).
-
+  once, by hand: register row 277);
+- the frame rate of thousands of copies on the Mac's GPU (277): the tests
+  draw on Mesa's software rasteriser.

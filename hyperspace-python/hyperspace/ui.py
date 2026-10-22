@@ -35,6 +35,7 @@ from imgui_bundle import imgui
 
 from . import (
     apc40,
+    field,
     learn,
     ui_bands,
     ui_desk,
@@ -42,6 +43,7 @@ from . import (
     ui_graph,
     ui_lfo,
     ui_lookback,
+    ui_pad,
     ui_patterns,
     ui_presets,
     ui_routing,
@@ -50,7 +52,7 @@ from .analyzer import N_MAX
 from .audio import AudioEngine
 from .bands import CEIL, KNEE
 from .control import Control
-from .geometry import SHAPES, geom
+from .geometry import SHAPES, geom, menu
 from .graph import (
     Wiring,
     graph_words,
@@ -570,6 +572,10 @@ class Panel:
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
         self.desk = True            # the APC40, left of the panel; the whole window without it
+        # the gamepad over the desk in the same column (ui_pad.py): off at
+        # every launch, as the cheat sheet is — the desk keeps its room
+        # until the SYSTEM page's switch asks for the pad
+        self.pad_diagram = False
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
@@ -625,6 +631,13 @@ class Panel:
                      "up maps lit, each with the glyph the ROUTING rows print. Hide the "
                      "panel (H, or the desk's big chip) and it fills the window, every lit "
                      "control named.")
+        r.toggle("ui.pad_diagram", "Pad diagram",
+                 lambda: self.pad_diagram,
+                 lambda on: setattr(self, "pad_diagram", bool(on)), group="ui",
+                 persist=False, modulatable=False,
+                 tip="The gamepad drawn over the desk, top-left: every control it sends, "
+                     "lit where a row maps it and named with what it does. A grey label "
+                     "is the app's own hand on a free axis (orbit, zoom, the 4D spin).")
         r.enum("ui.page", "Page", lambda: self.page,
                lambda i: setattr(self, "page", int(i)), [lb for _, lb, _ in PAGES],
                group="ui", persist=False, modulatable=False,
@@ -1117,7 +1130,8 @@ class Panel:
         return False
 
     def _slider(self, pid: str, width: float = -1) -> bool:
-        """Compact slider with the readout inside — untapered ranges."""
+        """Compact slider with the readout inside. A tapered range slides
+        over its detents (the instance count's), as a fader does."""
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
@@ -1125,7 +1139,13 @@ class Panel:
         # the readout is imgui's printf format: a "%" in it ("60%") is doubled
         text = (self._mod_text(p) if p.modulated else p.text()).replace("%", "%%")
         imgui.push_font(_FONTS["num"], FONT_NUM)
-        if p.integer:
+        if p.taper is not None:
+            steps = p.steps
+            changed, pos = self._track(lambda: imgui.slider_int(
+                f"##{pid}", p.position(), 0, steps, text),
+                p.norm, self._origin(p), steps, knob=False)
+            nv = p.taper.map(pos)
+        elif p.integer:
             steps = int(p.hi) - int(p.lo)
             changed, nv = self._track(lambda: imgui.slider_int(
                 f"##{pid}", int(v), int(p.lo), int(p.hi), text),
@@ -1197,17 +1217,53 @@ class Panel:
                 planes.append(plane)
         return f" → {', '.join(planes)}" if planes else ""
 
-    def _combo(self, pid: str, width: float = -1, tip: str | None = None) -> bool:
+    def _combo(self, pid: str, width: float = -1, tip: str | None = None,
+               rows: int = -1) -> bool:
+        """A drop-down of the enum's choices; `rows` the most the list shows
+        before it scrolls (imgui's default, eight, at -1)."""
         a = self.reg[pid]
         p = self._real(a)
         imgui.set_next_item_width(width)
-        changed, i = imgui.combo(f"##{pid}", p.base, p.names)
+        changed, i = imgui.combo(f"##{pid}", p.base, p.names, rows)
         self._tip(a, tip)
         self._ctx(a)
         self._learn_frame(a)
         self._mod_dot(p)
         if changed:
             p.set(i)
+        return changed
+
+    def _shape_combo(self) -> bool:
+        """view.shape as a menu grouped by kind (geometry.menu): 4D, 3D and
+        Scenes, each in families — regular polytopes, Platonic solids … —
+        in index order. The index stays the shape's identity — a preset
+        holds it — so only the menu groups them."""
+        a = self.reg["view.shape"]
+        p = self._real(a)
+        cur = int(p.base)
+        changed = False
+        imgui.set_next_item_width(-1)
+        # as tall as the window allows: the groups are the point of it
+        if imgui.begin_combo("##view.shape", p.names[cur], imgui.ComboFlags_.height_largest):
+            section = None
+            for sec, fam, ids in menu():
+                if sec != section:
+                    imgui.separator_text(sec)
+                    section = sec
+                if fam != sec:
+                    imgui.text_colored(FAINT, f"  {fam}")
+                for i in ids:
+                    hit, _ = imgui.selectable(f"    {SHAPES[i].name}##shape{i}", i == cur)
+                    if i == cur:
+                        imgui.set_item_default_focus()
+                    if hit and i != cur:
+                        p.set(i)
+                        changed = True
+            imgui.end_combo()
+        self._tip(a)
+        self._ctx(a)
+        self._learn_frame(a)
+        self._mod_dot(p)
         return changed
 
     def _check(self, pid: str, label: str | None = None) -> bool:
@@ -1417,6 +1473,8 @@ class Panel:
         ui_desk.tick(self)      # a picked control lets go by itself (ui_desk.PICK_S)
         if self.cheatsheet:
             self._draw_cheatsheet()
+        # the pad first: the desk reads its height to keep clear of it (ui_desk.room)
+        ui_pad.diagram(self)
         if getattr(self, "desk", True):     # (a Panel from before a hot reload)
             ui_desk.diagram(self)
         if not self.open:
@@ -1830,12 +1888,12 @@ class Panel:
         imgui.text(sh.name.upper())
         imgui.pop_font()
         _micro(sh.alias, RED)
-        _micro(f"{g['n']}V {g['m']}E  ·  {sh.sym}")
+        _micro(f"{sh.dims}D  ·  {g['n']}V {g['m']}E  ·  {sh.sym}")
         imgui.end_group()
         imgui.spacing()
 
         self._section("view", "view")
-        self._combo("view.shape")
+        self._shape_combo()
         self._fader("view.bright")
         self._fader("view.speed")
         self._fader("view.depth4")
@@ -1843,10 +1901,22 @@ class Panel:
         # the plane keys tile the row, solid red while a plane spins
         kw = (imgui.get_content_region_avail().x
               - imgui.get_style().item_spacing.x * (len(PLANES) - 1)) / len(PLANES)
+        # the W planes cannot act on a 3D shape, nor on a 4D one while the
+        # 3D switch holds its w: their keys dim (still switchable — the
+        # next 4D shape, or the switch going off, picks them up)
+        held = ("a 3D shape has no w" if sh.dims == 3
+                else "the 3D switch holds w" if v.three_d else "")
         for p, name in enumerate(PLANES):
             if p:
                 imgui.same_line()
+            inert = held and name.endswith("W")
+            if inert:
+                imgui.push_style_var(imgui.StyleVar_.alpha, 0.35)
             self._lit_button(f"view.plane.{name}", name, v.planes[p], width=kw)
+            if inert:
+                imgui.pop_style_var()
+                if imgui.is_item_hovered():
+                    imgui.set_tooltip(f"{name} does nothing now: {held}")
         self._check("view.points")
         imgui.same_line()
         self._check("view.lines")
@@ -1854,18 +1924,33 @@ class Panel:
         self._check("view.rotate")
         imgui.same_line()
         self._check("view.faces")
-        # the two layers' opacities (plan 24 C2), side by side
-        half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+        imgui.same_line()
+        self._check("view.three_d")
+        # the two layers' opacities (plan 24 C2), side by side, and at the
+        # row's end the strokes in world space (grow with the zoom) or screen
+        # space (plan 26 A2b) — one row, so a field's rows fit beneath
+        sp = imgui.get_style().item_spacing.x
+        check_w = (imgui.calc_text_size(self.reg["view.screen_strokes"].label).x
+                   + imgui.get_frame_height() + imgui.get_style().item_inner_spacing.x)
+        half = (imgui.get_content_region_avail().x - check_w - 2 * sp) / 2
         self._slider("view.points_alpha", half)
         imgui.same_line()
         self._slider("view.lines_alpha", half)
-        # plan 26 A2b: strokes in world space (grow with the zoom) or screen space
+        imgui.same_line()
         self._check("view.screen_strokes")
-        self._slider("view.instances")
+        # the count, and Fit beside it: whole copies only, framed to the screen
+        fit_w = imgui.calc_text_size("Fit").x + imgui.get_frame_height() + 2 * imgui.get_style(
+            ).item_inner_spacing.x
+        self._slider("view.instances", imgui.get_content_region_avail().x - fit_w
+                     - imgui.get_style().item_spacing.x)
+        imgui.same_line()
+        self._check("view.inst_fit")
         if v.instances > 1:
-            # the field's one row: how the copies are laid out, how they
-            # move, and — while they move — by how much and how fast
-            self._combo("view.inst_layout", 84)
+            # the field's rows: how the copies are laid out, how they move
+            # and — while they move — by how much and how fast; then how far
+            # apart, and a lattice's depth
+            # every layout at once: the flat three and the six lattices
+            self._combo("view.inst_layout", 104, rows=len(field.NAMES))
             imgui.same_line()
             self._combo("view.inst_motion", 96)
             if v.inst_motion:
@@ -1873,6 +1958,13 @@ class Panel:
                 self._slider("view.inst_amp", 84)
                 imgui.same_line()
                 self._slider("view.inst_rate")
+            if field.is_3d(v.inst_layout):
+                half = (imgui.get_content_region_avail().x - imgui.get_style().item_spacing.x) / 2
+                self._slider("view.inst_spacing", half)
+                imgui.same_line()
+                self._slider("view.inst_persp")
+            else:
+                self._slider("view.inst_spacing")
         imgui.spacing()
 
         # per-plane rate: what a lane drives to spin a plane (base 1, signed);
@@ -2119,6 +2211,9 @@ class Panel:
         imgui.same_line()
         if "ui.desk" in self.reg:   # (a registry from before a hot reload lacks it)
             self._check("ui.desk")
+            imgui.same_line()
+        if "ui.pad_diagram" in self.reg:
+            self._check("ui.pad_diagram")
             imgui.same_line()
         self._button("app.restart", "Restart process", small=True)
         if self.reloader is not None:

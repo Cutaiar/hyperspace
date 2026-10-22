@@ -1008,7 +1008,7 @@ def test_a_load_tells_the_listeners_its_name(rig):
 ORBIT = "hands-orbit"
 ORBIT_ROWS = [("hand:right.x", "camera.yaw", 0.5), ("hand:right.pitch", "camera.pitch", 0.25),
               ("hand:left.x", "camera.pan.x", 0.1), ("hand:left.z", "camera.pan.y", 0.1),
-              ("hand:left.y", "camera.zoom", 0.12)]      # not the plan's 0.3: 7.4× blacked the frame
+              ("hand:left.y", "camera.zoom", 0.0757)]    # not the plan's 0.3 (0.1892 now): 7.4× blacked the frame
 # a camera the mouse moved before the hands came in: a scene-setter's bases
 MOUSE = {"camera.yaw": 0.5, "camera.pitch": -0.2, "camera.zoom": 1.6,
          "camera.pan.x": 0.4, "camera.pan.y": -0.2}     # world units since plan 26 A2
@@ -1093,14 +1093,15 @@ def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
     yaw a quarter turn each way, the pitch ±45° (an eighth of the whole
     turn it wraps over since 2026-10-14; ±44° of its old ±1.55), each pan
     ±1.2 shape radii (±400 px before plan 26 A2), the zoom up from 1× to
-    800^0.12 = 2.23× at the top and never
+    40000^0.0757 = 2.23× at the top (the depth moved with the range's span
+    on 2026-10-21, the reach did not) and never
     below the base; the move is monotonic; no other camera param moves;
     the hand leaving brings the base back."""
     ends = {"camera.yaw": (-math.pi / 2, math.pi / 2),
             "camera.pitch": (-math.pi / 4, math.pi / 4),
             # plan 26 A2: world units, ±1.2 (≈ ±390 px on the 1080p screen; ±400 px before)
             "camera.pan.x": (-1.2, 1.2), "camera.pan.y": (-1.2, 1.2),
-            "camera.zoom": (1.0, 2.23)}                  # 800 ** 0.12, as measured
+            "camera.zoom": (1.0, 2.23)}                  # 40000 ** 0.0757, as measured
     assert math.degrees(ends["camera.pitch"][1]) == pytest.approx(45.0)
     for k, (source, target, depth) in enumerate(ORBIT_ROWS):
         side, axis = source.split(":")[1].split(".")
@@ -1121,7 +1122,9 @@ def test_each_orbit_axis_moves_its_camera_param_as_its_row_says(tmp_path):
                     assert offset(r.reg[other]) == pytest.approx(0, abs=1e-6), (source, other)
         rest = 0 if axis == "y" else 2
         assert seen[rest] == pytest.approx(base[target], abs=1e-6), (source, seen)
-        tol = 2e-3 * (p.hi - p.lo)
+        # a log range's throw is its octaves, not its ends apart (camera.zoom's
+        # 0.005 … 200 would make 0.4 of zoom "exact")
+        tol = 2e-3 * (math.log2(p.hi / p.lo) if p.log else p.hi - p.lo)
         assert seen[0] == pytest.approx(ends[target][0], abs=tol), (source, seen)
         assert seen[-1] == pytest.approx(ends[target][1], rel=0.02, abs=tol), (source, seen)
         assert all(b > a - 1e-9 for a, b in itertools.pairwise(seen)), (source, seen)
