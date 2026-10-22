@@ -198,7 +198,16 @@ def schema_of(doc: dict) -> str:
     31 would lose — a bank's membership key, an ``env.*``/``seq.*`` value
     (`Presets.document` leaves them all out of a preset that has none
     off its default), or a route, modifier or macro on an envelope or the
-    sequencer — else ``hyperspace.preset/2``."""
+    sequencer — else ``hyperspace.preset/2``.
+
+    The ``desk`` and ``layout`` sections are not read here on purpose: a
+    build from before plan 31 keeps both verbatim — `Bindings.set_desk`
+    checks no row's target against the registry (a desk row on
+    ``env.2.fire`` loads dormant and saves back as it was) and
+    `library.read_layout` keeps any node name, the GRAPH page's tidy
+    forgetting only the nodes it draws — so neither loses anything on a
+    re-save there (tests/test_plan31_review.py). The APC page's
+    ``seq.page`` / ``seq.select`` rows are the session's and never saved."""
     if any(k in doc for k in V3_KEYS):
         return SCHEMA_V3
     if any(str(k).startswith(tuple(f"{g}." for g in V3_GROUPS))
@@ -823,6 +832,7 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
         held_banks = {s: b.doc() for s, b in self._banks().items()}
         # from here to the values landing, anything that raises puts the
@@ -874,9 +884,13 @@ class Presets:
                 bank = self._banks()[scheme]
                 if bank.doc() != ids:
                     bank.set(ids)
-            if gs.mark() != held_graph:          # the graph as it was, and its instances'
-                gs.put(held_graph)               # values as they were
-                lib.restore({k: v for k, v in held_values.items() if k in reg})
+            if gs.mark() != held_graph:          # the graph as it was
+                gs.put(held_graph)
+            # then every value as it was — the graph instances', and a bank
+            # voice's that the load removed and the line above re-added
+            # fresh (`held_values` was taken before `bank.set`): a refused
+            # load leaves LFO 5's depth where it stood, not at its default
+            lib.restore({k: v for k, v in held_values.items() if k in reg})
             raise
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)

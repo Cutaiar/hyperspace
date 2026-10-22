@@ -242,7 +242,7 @@ def test_an_extra_envelope_routes_and_goes_dormant_when_removed():
     frame(r, 0.6)
     assert len(r.router.feeds["env"]) == 5        # no lane 5: the route is dormant
     assert r.box.x == 0.0 and not r.reg["t.x"].modulated
-    assert r.envs.next_id() == 6
+    assert r.envs.next_id() == 7       # env 6 is not handed out again this session
 
 
 def test_the_lane_envelopes_cannot_be_removed():

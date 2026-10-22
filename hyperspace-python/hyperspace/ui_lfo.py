@@ -133,11 +133,17 @@ def _add_chip(panel, lfos) -> None:
         add_lfo(panel, lfos)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        if can:
-            imgui.set_tooltip(f"Another LFO, LFO {lfos.next_id()} (up to {lfos.MAX})")
-        else:
-            imgui.set_tooltip(f"{len(lfos)} LFOs, the most there can be — remove one "
-                              "with its × to add another")
+        imgui.set_tooltip(add_tip(lfos))
+
+
+def add_tip(lfos) -> str:
+    """`+ lfo`'s tooltip: the LFO it would add, or the bank's reason not
+    (`modbank.Bank.refusal`)."""
+    why = lfos.refusal()
+    if why is not None:
+        return why + (" — remove one with its × to add another"
+                      if len(lfos) >= lfos.MAX else "")
+    return f"Another LFO, LFO {lfos.next_id()} (up to {lfos.MAX})"
 
 
 # ---- the clock ----

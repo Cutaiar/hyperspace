@@ -4,8 +4,8 @@ envelope.py; plan 31 U).
 Top to bottom:
 
   seq   ◀ preset ▶ …     the transport: run · span · restart, the beat
-                         light and the playhead's step on one line; length
-                         and swing as two half faders on the next
+                         light and the playhead's step on one line; length,
+                         swing and gate as three half faders on the next
         the grid         five lanes × eight steps, the APC40's clip grid on
                          screen in its LED palette: a step on is green, on
                          in a muted lane red, a lit step under the playhead
@@ -222,11 +222,14 @@ def _transport(panel, seq) -> None:
     imgui.dummy(imgui.ImVec2(0, max(0.0, (h - ui.FONT_MICRO) / 2 - 4)))
     ui._micro(step, ui.TEXT if seq.playhead is not None else ui.FAINT)
     imgui.end_group()
-    if imgui.begin_table("##seqknobs", 2, imgui.TableFlags_.sizing_stretch_same):
+    if imgui.begin_table("##seqknobs", 3, imgui.TableFlags_.sizing_stretch_same):
         imgui.table_next_column()
         panel.half(f"{g}.length", "length", label_w=ui_lfo.ROW_LABEL_W)
         imgui.table_next_column()
         panel.half(f"{g}.swing", "swing", label_w=ui_lfo.ROW_LABEL_W)
+        imgui.table_next_column()
+        # how long a step holds a gate-mode envelope (P1), a fraction of a step
+        panel.half(f"{g}.gate", "gate", label_w=ui_lfo.ROW_LABEL_W)
         imgui.end_table()
 
 
@@ -426,12 +429,18 @@ def _add_chip(panel, envs) -> None:
         add_env(panel, envs)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        if can:
-            imgui.set_tooltip(f"Another envelope, env {envs.next_id()} (up to {envs.MAX}); "
-                              "point a lane at it with its picker")
-        else:
-            imgui.set_tooltip(f"{len(envs)} envelopes, the most there can be — remove an "
-                              "extra with its × to add another")
+        imgui.set_tooltip(add_tip(envs))
+
+
+def add_tip(envs) -> str:
+    """`+ env`'s tooltip: the envelope it would add, or the bank's reason
+    not (`modbank.Bank.refusal`)."""
+    why = envs.refusal()
+    if why is not None:
+        return why + (" — remove an extra with its × to add another"
+                      if len(envs) >= envs.MAX else "")
+    return (f"Another envelope, env {envs.next_id()} (up to {envs.MAX}); "
+            "point a lane at it with its picker")
 
 
 def _folds(panel, seq, envs, ids, key: str) -> None:
