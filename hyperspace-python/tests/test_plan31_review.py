@@ -5,6 +5,8 @@ import pytest
 
 from hyperspace import envelope, graphview, modbank, sequencer
 from hyperspace.envelope import Envelope
+from hyperspace.sequencer import SPANS, Sequencer
+from hyperspace.tempo import Clock
 
 from test_plan31_wiring import frame, make_app, rig
 
@@ -171,3 +173,59 @@ def test_a_refused_load_keeps_the_extra_voices_and_their_values(tmp_path):
     assert reg[f"lfo.{n}.rate"].value == pytest.approx(7.0)
     assert reg[f"env.{m}.decay"].value == pytest.approx(3.0)
     assert reg.snapshot(part="performance") == before
+
+
+# ---- 5 and 6: the sequencer alone (test_sequencer's rig) ----
+
+def _seq(run=True, span="1 bar"):
+    clock = Clock(bpm=120.0, now=lambda: 0.0)
+    seq = Sequencer()
+    seq.span = SPANS.index(span)
+    seq.run = run
+    seq.lanes[0].steps = [(j + 1) / 10 for j in range(sequencer.STEPS)]
+    calls = []
+    return clock, seq, calls, lambda lane, env, at, v: calls.append((at, round(v * 10) - 1))
+
+
+def _frames(seq, clock, fire, times):
+    for t in times:
+        clock.tick(t)
+        seq.step(t, clock, fire)
+
+
+def test_restart_while_stopped_then_run_fires_the_downbeat_at_the_run_frame():
+    clock, seq, calls, fire = _seq(run=False)
+    _frames(seq, clock, fire, [0.3 + k / 60 for k in range(30)])
+    seq.restart()                              # stopped: held for run
+    _frames(seq, clock, fire, [0.9, 0.95])
+    assert calls == [] and seq.pending
+    seq.run = True
+    t_run = 0.95 + 1 / 60
+    _frames(seq, clock, fire, [t_run, t_run + 0.1, t_run + 0.26])
+    assert calls[0] == (pytest.approx(t_run), 0)
+    assert calls[1] == (pytest.approx(t_run + 0.25), 1)
+    assert not seq.pending
+
+
+def test_run_on_with_no_restart_still_waits_for_the_next_boundary():
+    clock, seq, calls, fire = _seq(run=False)
+    _frames(seq, clock, fire, [0.0, 0.1])
+    seq.run = True
+    _frames(seq, clock, fire, [0.12, 0.2, 0.3])
+    assert calls == [(pytest.approx(0.25), 1)]
+
+
+@pytest.mark.parametrize("length", [1, 2])
+def test_a_short_pattern_keeps_every_step_of_one_slow_frame(length):
+    clock, seq, calls, fire = _seq()
+    seq.length = length
+    _frames(seq, clock, fire, [0.0, 0.8])     # crosses 0.25, 0.5 and 0.75
+    assert [c[0] for c in calls] == pytest.approx([0.0, 0.25, 0.5, 0.75])
+    assert [c[1] for c in calls] == [j % length for j in range(4)]
+
+
+def test_a_two_second_stall_at_length_1_still_fires_one_step():
+    clock, seq, calls, fire = _seq(span="1/2 bar")   # 0.125 s a step
+    seq.length = 1
+    _frames(seq, clock, fire, [0.0, 2.1])
+    assert [c[0] for c in calls] == pytest.approx([0.0, 2.0])

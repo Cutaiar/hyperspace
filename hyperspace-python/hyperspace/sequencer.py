@@ -35,9 +35,10 @@ clock time of that boundary found by inverting tempo.py's ``beat``, so an
 envelope fired from a step that fell between two frames renders exactly.
 Three things are not crossings and fire nothing extra:
 
-  * **A stall.** More than `length` steps in one call — a two-second
-    hitch, a laptop lid — fires only the current step: one hit late is a
-    glitch, a burst of sixteen is a drum roll nobody played.
+  * **A stall.** More than a page of eight steps in one call (`STALL`,
+    whatever `length` is, so a slow frame on a short pattern keeps its
+    steps) — a two-second hitch, a laptop lid — fires only the current
+    step: one hit late is a glitch, a burst of sixteen is a drum roll nobody played.
   * **A step backwards** — a backward nudge, a swing turned up past s.
     `k_last` stays where it is, so the steps already fired do not fire
     again on the way back up. A jump back of more than a whole pattern
@@ -98,6 +99,7 @@ GATE_LO, GATE_HI, GATE = 0.05, 1.0, 0.5   # a fired note's gate, in steps
 # the bank lacks fires nothing)
 ENV_HI = 64
 REST = 0.0                   # a trigger lane rests low: a pulse is its rising edge
+STALL = STEPS                # more steps than this in one call is a stall, not a slow frame
 REALIGN = STEPS              # a jump back further than this is a re-anchor, not a nudge
 GROUP = "seq"
 
@@ -227,7 +229,10 @@ class Sequencer:
             # else a nudge back: hold k_last, so nothing fires twice
         else:
             crossed = range(self.k_last + 1, k + 1)
-            if len(crossed) > length:    # a stall: the current step, no burst
+            # a stall — more than a whole page of eight crossed in one call,
+            # whatever the length, so a slow frame on a 1- or 2-step
+            # pattern keeps its steps — fires the current step, no burst
+            if len(crossed) > STALL:
                 crossed = range(k, k + 1)
             if running:
                 for j in crossed:
