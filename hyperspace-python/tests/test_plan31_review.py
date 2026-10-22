@@ -3,7 +3,7 @@ each written to fail before its fix. The rigs are test_plan31_wiring's."""
 
 import pytest
 
-from hyperspace import envelope
+from hyperspace import envelope, graphview, modbank, sequencer
 from hyperspace.envelope import Envelope
 
 from test_plan31_wiring import frame, rig
@@ -113,3 +113,39 @@ def test_stop_still_releases_a_note_the_pattern_opened():
     frame(r, 0.12)
     frame(r, 0.13)
     assert e.stage == envelope.RELEASE
+
+
+# ---- 3: a lane can fire any envelope id the bank can hold ----
+
+def test_a_lane_takes_an_envelope_id_above_16():
+    r = rig()
+    reg = r.reg
+    while r.envs.can_add():
+        r.envs.add()
+    r.envs.remove(6)
+    n = r.envs.add()
+    assert n == 17
+    reg["seq.1.env"].set(n)
+    assert reg["seq.1.env"].value == 17 and r.seq.lanes[0].env == 17
+    assert sequencer.ENV_HI == modbank.MAX_ID
+    # the GRAPH page's drag onto an envelope's fire sets it too
+    view = graphview.build(r.router.table, reg, r.router)
+    e = graphview.Edit(r.router.table, reg, r.router, view)
+    assert e.bind_lane(1, n) == (1, n) and r.seq.lanes[1].env == n
+    # and the lane fires it
+    reg["seq.2.1"].set(True)
+    reg["seq.run"].set(True)
+    frame(r, 0.0)
+    frame(r, 0.05)
+    assert r.envs.voice(n).stage != envelope.IDLE
+
+
+def test_a_lane_on_a_missing_id_fires_nothing():
+    r = rig()
+    r.reg["seq.1.env"].set(40)                 # no such envelope
+    assert r.seq.lanes[0].env == 40
+    r.reg["seq.1.1"].set(True)
+    r.reg["seq.run"].set(True)
+    frame(r, 0.0)
+    frame(r, 0.05)
+    assert all(v.stage == envelope.IDLE for v in r.envs.voices)

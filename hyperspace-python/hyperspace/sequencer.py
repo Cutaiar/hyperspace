@@ -91,7 +91,11 @@ BARS = {"1/2 bar": 0.5, "1 bar": 1.0, "2 bars": 2.0, "4 bars": 4.0}
 BEATS_PER_BAR = 4            # 4/4, as tempo.py assumes
 SWING_HI = 0.5
 GATE_LO, GATE_HI, GATE = 0.05, 1.0, 0.5   # a fired note's gate, in steps
-ENV_HI = 16                  # the envelope bank's cap (plan 31 decision 3)
+# the highest envelope id a lane may name: modbank.MAX_ID, copied (a leaf
+# imports nothing from the host). Not the bank's cap of 16 voices — ids
+# never compact, so a bank of 16 can hold env 17 and up (a lane on an id
+# the bank lacks fires nothing)
+ENV_HI = 64
 REST = 0.0                   # a trigger lane rests low: a pulse is its rising edge
 REALIGN = STEPS              # a jump back further than this is a re-anchor, not a nudge
 GROUP = "seq"
