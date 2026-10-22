@@ -66,6 +66,13 @@ def _clamp(x, a, b):
 class Clock:
     """Tap tempo, a downbeat, and the phase of any division at any time."""
 
+    # how many triggers this clock has seen (plan 31 S1): a reader that
+    # follows the beat — the step sequencer — compares it with the one it
+    # last saw to tell a re-aligned downbeat from a backward nudge, which
+    # moves `beat` the same way. Class-level so a clock from before a hot
+    # reload has it
+    epoch: int = 0
+
     def __init__(self, bpm: float = 120.0, now=time.perf_counter):
         self.bpm = float(bpm)
         self.nudge = 0.0
@@ -116,6 +123,7 @@ class Clock:
         The burst keeps counting."""
         t = self._t(t)
         self.t0 = t + self.nudge * 60.0 / self.bpm
+        self.epoch += 1
 
     # ---- phase ----
 
