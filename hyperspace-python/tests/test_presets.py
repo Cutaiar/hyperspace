@@ -814,8 +814,9 @@ def test_every_factory_presets_desk_is_the_generators():
     fresh = preset.desk_json(preset.fresh_desk())
     assert fresh == [d for d in desk if d["target"] not in apc40.TOGGLES] and len(fresh) == 26
     paths = sorted(preset.FACTORY_DIR.glob("*.json"))
-    # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit
-    assert len(paths) == 23
+    # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit,
+    # the gamepad dial's prototype
+    assert len(paths) == 24
     for path in paths:
         doc = json.loads(path.read_text())
         want = expected_desk(path.stem)
@@ -833,7 +834,7 @@ def test_every_factory_presets_desk_is_the_generators():
         **{s: scene for s in ("big-blue-wave", "ember-orbit", "hex-engine", "inverse-halo",
                               "plasma-heart", "spiral-silk", "strobe-cage", "woven-lattice",
                               "party-tumble", "party-faces", "party-field",
-                              "legacy6", "hands-play", "hands-orbit")},
+                              "legacy6", "hands-play", "hands-orbit", "dial")},
         "hands-fx": ("fx.mix", "fx.acid.bend", "fx.acid.twist", "fx.acid.reach",
                      "fx.acid.breathe", "fx.acid.speed", "view.depth4", "camera.yaw"),
         "hands-pinch": ("fx.mix", "fx.huecycle.paint", "fx.huecycle.spread", "view.depth4",

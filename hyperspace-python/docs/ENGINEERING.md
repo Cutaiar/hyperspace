@@ -1678,6 +1678,23 @@ allow it. A role that is a row kind or a built-in scheme (`cc`, `pad`,
 `lane`, `lfo`, `cloud`, …) is refused on open. Only a message's first
 number is read; there is no OSC output yet.
 
+**The sticks as dials** (a prototype — [`plans/28-gamepad-dial.md`](plans/28-gamepad-dial.md)).
+Each stick is also read as a clock face of eight sectors, `N` straight up
+then clockwise to `NW`: the angle picks the sector, the distance from
+centre (0 at rest, 1 at the rim, the deadzone cut on the distance) is how
+far that sector's lane reads. The lanes are `axis:L.N` … `axis:L.NW` and
+`axis:R.N` … `axis:R.NW`, resting at 0, so a `push` route on one adds
+nothing while the stick is let go. A route on any dial lane takes its
+whole stick off the camera job. Two readings, per stick: **petal** (hard
+sectors, the whole push to the one pointed into, a sticky border) and
+**blend** (each lane a triangle about its own direction, so a sweep round
+the rim crossfades one route into the next). The gamepad entry's `dial_left` /
+`dial_right` (`[[devices]]`, or the old `[gamepad]` table) set where a launch starts (petal / blend); SYSTEM → gamepad
+draws both faces, names each sector's route, and has the two readings and
+**Swap dials** (`desk.pad.dial.*`, never saved). The **DIAL** factory
+preset fills both clocks. With a Learn armed for the pad, a stick that
+already has a dial route learns the sector it points into.
+
 ## 8. The APC40
 
 Plug in an Akai APC40 (mk1) and it is found by name on launch and after

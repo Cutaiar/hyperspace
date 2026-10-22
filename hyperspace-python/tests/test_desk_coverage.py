@@ -83,7 +83,7 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
     rows in this run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
-    assert len(rows) == 23 and "TRIP" in names and "hands-orbit" in names
+    assert len(rows) == 24 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212)
     n = len(controls)
     for r in rows:
         assert r.count(tool.MAPPED) + r.count(tool.DARK) + r.count(tool.DEAD) == n

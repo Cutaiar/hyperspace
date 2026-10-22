@@ -96,7 +96,8 @@ def test_the_pad_gate_is_open_by_default(tmp_path):
 
     cfg = config.load(tmp_path / "config.toml")
     (pad,) = [e for e in config.devices(cfg) if e["kind"] == "gamepad"]
-    assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True}
+    assert pad == {"role": "pad", "kind": "gamepad", "enabled": True, "usb": True,
+                   "dial_left": "petal", "dial_right": "blend"}
     reg = devices.DeviceRegistry([pad])
     reg.open_all()
     assert isinstance(reg.adapter("gamepad"), gamepad.Pad)
