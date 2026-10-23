@@ -53,6 +53,8 @@ class Transport:
             self.playhead = max(0.0, min(pos, 1.0)) * d
             return self.playhead
         self.scrubbing = False
+        if loop != "pingpong":
+            self.direction = 1.0      # a flipped sign must not outlive pingpong
         p = self.playhead + self.direction * self.speed * dt
         if loop == "pingpong":
             n = math.floor(p / d)          # ends crossed; each odd one reflects

@@ -98,3 +98,14 @@ def test_zero_duration_is_zero():
     t = Transport(0.0)
     assert t.step(DT, 1.0, 0.7, 1.0, "loop") == 0.0
     assert t.step(DT, 1.0, 0.7, 0.0, "pingpong") == 0.0
+
+
+@pytest.mark.parametrize("loop", ["loop", "once"])
+def test_leaving_pingpong_plays_forward(loop):
+    t = Transport(10.0)
+    t.reset(0.99)
+    t.step(0.2, 1.0, 0.99, 0.0, "pingpong")
+    t.step(0.2, 1.0, 0.99, 0.0, "pingpong")
+    assert t.direction == -1.0
+    before = t.playhead
+    assert t.step(0.1, 1.0, 0.99, 0.0, loop) > before
