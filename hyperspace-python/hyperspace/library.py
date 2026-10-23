@@ -1748,6 +1748,13 @@ class Library:
         p = self.path_of(group, name)
         return p is not None and not self._is_user(p)
 
+    def factory_names(self, group: str) -> tuple[frozenset[str], frozenset[str]]:
+        """(the factory names, every name) of the group's index, in one pass
+        — `is_factory` for a whole list without an index per name."""
+        idx = self._index(group)
+        return (frozenset(n for n, p in idx.items() if not self._is_user(p)),
+                frozenset(idx))
+
     def list(self, group: str, *, hidden: bool = False) -> list[str]:
         """Every preset of the group by name, the user's shadowing the
         factory's. A factory preset × hid (`hide`, plan 19 WP4) is left out

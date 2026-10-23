@@ -860,3 +860,27 @@ def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
     ui_presets.invalidate(panel, "presets")
     frame(panel)
     assert st["dangling"] == []
+
+
+def test_the_open_list_does_not_reread_the_library_every_frame(rig, monkeypatch):  # noqa: F811
+    """The open preset list costs what is on the poll cadence, not a full
+    pass over the library per row per frame: on the owner's 79-preset
+    cloud library, `is_factory` per row re-globbed both roots and stat'ed
+    every file each frame (~50 ms, 25 fps with the list open). Ten frames
+    with the list open re-index the library at most a few times, however
+    many rows it draws."""
+    panel = rig.panel
+    st = _open_list(panel)
+    assert len(st["list"]["rows"]) > ui_presets.LIST_ROWS
+    calls = []
+    real = Library._index
+
+    def counted(self, group):
+        calls.append(group)
+        return real(self, group)
+
+    monkeypatch.setattr(Library, "_index", counted)
+    for _ in range(10):
+        frame(panel)
+    assert st["list"]["group"] == "presets"                 # still open
+    assert len(calls) <= 3, f"{len(calls)} library index passes in 10 frames"
