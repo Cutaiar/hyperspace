@@ -26,7 +26,8 @@ IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
 gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
-         "leap", "torch", "pythonosc")
+         "leap", "torch", "pythonosc",
+         "av", "pillow_heif", "syphon", "cyndilib")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
