@@ -8,9 +8,61 @@ clip makes a new proxy rather than reading a stale one."""
 from __future__ import annotations
 
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 MAX_SIZE = (1280, 720)
+
+
+class _Cancelled(Exception):
+    pass
+
+
+# One worker of its own, so a transcode never takes a media.pool thread and
+# only one runs at a time. cancel_all (app exit) must not wait for it.
+_lock = threading.Lock()
+_exec: ThreadPoolExecutor | None = None
+_flags: dict[str, threading.Event] = {}   # queued or running jobs by clip path
+
+
+def submit(path: Path, cache: Path) -> bool:
+    """Queue a proxy for `path` unless one is already queued or running.
+    True when queued."""
+    global _exec
+    key = str(path)
+    with _lock:
+        if key in _flags:
+            return False
+        if _exec is None:
+            _exec = ThreadPoolExecutor(1, thread_name_prefix="media-proxy")
+        flag = _flags[key] = threading.Event()
+        _exec.submit(_job, key, Path(path), Path(cache), flag)
+        return True
+
+
+def _job(key: str, path: Path, cache: Path, flag: threading.Event) -> None:
+    try:
+        if not flag.is_set():
+            make_proxy(path, cache, flag)
+    except Exception:  # noqa: BLE001 — no proxy just means slower seeks
+        pass
+    finally:
+        with _lock:
+            if _flags.get(key) is flag:
+                del _flags[key]
+
+
+def cancel_all() -> None:
+    """Stop every queued and running proxy job and the worker, without
+    waiting (app exit). A later `submit` starts a fresh worker."""
+    global _exec
+    with _lock:
+        for f in _flags.values():
+            f.set()
+        ex, _exec = _exec, None
+    if ex is not None:
+        ex.shutdown(wait=False, cancel_futures=True)
 
 
 def _key(path: Path) -> str:
@@ -27,11 +79,13 @@ def proxy_for(path: Path, cache: Path) -> Path | None:
         return None
 
 
-def make_proxy(path: Path, cache: Path) -> Path:
+def make_proxy(path: Path, cache: Path,
+               cancel: threading.Event | None = None) -> Path | None:
     """Write the proxy for `path` into `cache` and return its path. It is
     written to a temporary name and renamed, so `proxy_for` never sees a
-    half-written file. Runs on the media pool; raises if the clip will not
-    decode."""
+    half-written file. `cancel` is checked every frame: when set, the
+    temporary file is removed and None comes back. Raises if the clip will
+    not decode. Runs on the proxy worker (see `submit`)."""
     import av
 
     cache = Path(cache)
@@ -52,6 +106,8 @@ def make_proxy(path: Path, cache: Path) -> Path:
                 out.options = {"qmin": "2", "qmax": "5"}
                 n = 0
                 for fr in src.decode(vs):
+                    if cancel is not None and cancel.is_set():
+                        raise _Cancelled
                     f = fr.reformat(width=w, height=h, format="yuvj420p")
                     f.pts = n
                     f.time_base = out.codec_context.time_base
@@ -63,6 +119,9 @@ def make_proxy(path: Path, cache: Path) -> Path:
             if n == 0:
                 raise ValueError("no frames")
         os.replace(tmp, final)
+    except _Cancelled:
+        tmp.unlink(missing_ok=True)
+        return None
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise

@@ -6,15 +6,14 @@ it just keeps decoding, anywhere else it seeks to the keyframe before the
 time and decodes forward to it. Only the frame finally chosen is converted
 to RGBA. When a scrub proxy exists (see `proxy.py`) the clip is read from
 that, so every frame is a keyframe; when there is none and the clip is
-short, one is made on the pool for the next open."""
+short, one is queued on the proxy worker for the next open."""
 
 from __future__ import annotations
 
 import threading
-import time
 from pathlib import Path
 
-from . import pool, proxy
+from . import proxy
 from .frame import CAP_FILE, MediaFrame, to_rgba
 from .source import FETCHING, READY, Latest, error
 
@@ -23,9 +22,6 @@ VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".gif", ".avi"}
 PROXY_MAX_S = 600.0     # longer clips get no proxy
 SEQUENTIAL_S = 1.0      # moving forward this far or less: decode on, no seek
 _IDLE_S = 0.05
-
-_making: set[str] = set()   # proxies being made now, so two sources don't both
-_making_lock = threading.Lock()
 
 
 def _probe(container, stream) -> tuple[float, float]:
@@ -38,22 +34,6 @@ def _probe(container, stream) -> tuple[float, float]:
     elif container.duration:
         dur = container.duration / 1_000_000.0
     return max(dur, 0.0), fps
-
-
-def _make_proxy_once(path: Path, cache: Path) -> None:
-    """Pool job: make the proxy unless one is already being made."""
-    key = str(path)
-    with _making_lock:
-        if key in _making:
-            return
-        _making.add(key)
-    try:
-        proxy.make_proxy(path, cache)
-    except Exception:  # noqa: BLE001 — no proxy just means slower seeks
-        pass
-    finally:
-        with _making_lock:
-            _making.discard(key)
 
 
 class VideoSource:
@@ -121,7 +101,7 @@ class VideoSource:
             self.read_path, self.duration, self.fps = read, duration, fps
             if (self.cache is not None and read == self.path
                     and duration <= PROXY_MAX_S):
-                pool.submit(_make_proxy_once, self.path, self.cache)
+                proxy.submit(self.path, self.cache)
             self._play(container, stream)
         except Exception as e:  # noqa: BLE001 — a bad file must not kill the app
             if not self._stop.is_set():
@@ -150,7 +130,8 @@ class VideoSource:
         shown = None   # pts of the frame last published
         while not self._stop.is_set():
             self._wake.clear()
-            t = min(max(self._want, 0.0), self.duration or self._want)
+            want0 = self._want
+            t = min(max(want0, 0.0), self.duration or want0)
             if t == last_t and it is not None:
                 self._wake.wait(_IDLE_S)
                 continue
@@ -160,7 +141,13 @@ class VideoSource:
                 container.seek(int((t + start) / tb), stream=stream, backward=True)
                 it = container.decode(stream)
                 cur = nxt = None
+            moved = False
             while True:
+                if self._stop.is_set():
+                    return
+                if self._want != want0:   # the transport moved on: don't finish this one
+                    moved = True
+                    break
                 if nxt is None:
                     nxt = next(it, None)
                     if nxt is None:
@@ -169,6 +156,9 @@ class VideoSource:
                     cur, nxt = nxt, None
                 else:
                     break
+            if moved:
+                last_t = None
+                continue
             if cur is not None and cur.pts != shown:
                 shown = cur.pts
                 if self._stop.is_set():

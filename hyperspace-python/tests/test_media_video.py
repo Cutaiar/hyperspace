@@ -111,9 +111,9 @@ def test_proxy_made_once_and_used(clip, tmp_path, monkeypatch, opened):
     calls = []
     real = proxy.make_proxy
 
-    def spy(path, cache):
+    def spy(path, cache, cancel=None):
         calls.append(path)
-        return real(path, cache)
+        return real(path, cache, cancel)
 
     monkeypatch.setattr(proxy, "make_proxy", spy)
     cache = tmp_path / "proxies"
@@ -189,3 +189,54 @@ def test_adapter_routes_video(clip):
 
     s = adapters.open_source("file:" + str(clip), R())
     assert isinstance(s, video.VideoSource)
+
+
+@pytest.fixture(scope="module")
+def long_gop_clip(tmp_path_factory):
+    """20 s of 1280x720 with one keyframe: a seek near the end decodes ~600 frames."""
+    p = tmp_path_factory.mktemp("long") / "gop.mp4"
+    with av.open(str(p), "w") as out:
+        s = out.add_stream("libx264", rate=30)
+        s.width, s.height, s.pix_fmt = 1280, 720, "yuv420p"
+        s.options = {"g": "1000", "preset": "ultrafast", "crf": "30"}
+        rng = np.random.default_rng(0)
+        base = rng.integers(0, 255, (720, 1280, 3), np.uint8)
+        for i in range(600):
+            for pk in s.encode(av.VideoFrame.from_ndarray(np.roll(base, i, 1), format="rgb24")):
+                out.mux(pk)
+        for pk in s.encode():
+            out.mux(pk)
+    return p
+
+
+def test_close_during_long_decode_is_quick(long_gop_clip, opened):
+    s = opened(long_gop_clip)
+    assert _until(lambda: s.status == READY)
+    s.want(19.9)
+    time.sleep(0.05)   # let it start decoding forward from the single keyframe
+    t0 = time.monotonic()
+    s.close()
+    assert time.monotonic() - t0 < 0.2
+    assert not any(t.name.startswith("media-video-") for t in threading.enumerate())
+
+
+def test_cancel_all_stops_a_running_proxy(long_gop_clip, tmp_path):
+    cache = tmp_path / "proxies"
+    assert proxy.submit(long_gop_clip, cache)
+    assert not proxy.submit(long_gop_clip, cache)   # already queued
+    assert _until(lambda: any(t.name.startswith("media-proxy") for t in threading.enumerate()))
+    time.sleep(0.2)
+    t0 = time.monotonic()
+    proxy.cancel_all()
+    assert time.monotonic() - t0 < 0.5
+    assert _until(lambda: not any(t.name.startswith("media-proxy") for t in threading.enumerate()), 3.0)
+    assert proxy.proxy_for(long_gop_clip, cache) is None
+    assert not list(cache.glob("*"))
+    assert not proxy._flags
+
+
+def test_make_proxy_cancelled_returns_none(clip, tmp_path):
+    flag = threading.Event()
+    flag.set()
+    assert proxy.make_proxy(clip, tmp_path, flag) is None
+    assert not list(tmp_path.glob("*"))
