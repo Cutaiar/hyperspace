@@ -54,7 +54,7 @@ from pathlib import Path
 # subpackage's modules are named with a dot (tests/test_hotreload.py
 # holds both rules against the package's own imports).
 MODULES = (
-    "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media",
+    "media.frame", "media.ids", "media.source", "media.pool", "media.still", "media.proxy", "media.video", "media.adapters", "media.thumbs", "media.folder", "media",
     "analysis", "tapers", "motion", "media.transport", "modifiers", "palettecompat", "undo", "placement", "geometry", "bands", "analyzer", "audio", "tempo", "lfo", "glsl", "patterns",
     "lookback", "dream", "fx", "ghost", "outputs", "view", "field", "graph", "render", "params", "library", "control", "config",
     "overlay", "gamepad", "apc40", "generic", "patch", "routing", "preset", "learn", "midi", "bridge",
