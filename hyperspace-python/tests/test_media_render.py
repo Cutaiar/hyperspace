@@ -401,6 +401,112 @@ def test_a_texture_frame_through_the_fit_pass(ctx):
     assert tuple(pic[0, 16, :3]) == RED and tuple(pic[31, 16, :3]) == BLUE
 
 
+@pytest.mark.skipif(not __import__("importlib").util.find_spec("syphon"),
+                    reason="syphon-python is not installed")
+def test_a_syphon_frame_samples_through_the_fit_pass(ctx):
+    """Syphon's texture as the server publishes it, sampled by the fit
+    pass: its colours land, the way up GL's (row 0 at the bottom). The
+    spike read it as 2D; it is a rectangle (an IOSurface's), so it is
+    blitted into the channel's own 2D texture on the GPU, never uploaded."""
+    import gc
+
+    import syphon
+    from test_media_live import _gl_context
+
+    from hyperspace.media.frame import TEX_RECT
+    from hyperspace.media.source import READY
+    from hyperspace.media.syphon import SyphonKind
+
+    made = _gl_context()
+    if made is None:
+        pytest.skip("no GL context")
+    glfw, win, gctx = made
+    w, h = 64, 32
+    tex = gctx.texture((w, h), 4)
+    fbo = gctx.framebuffer([tex])
+    fbo.use()
+    gctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, h // 2, w, h // 2))   # the top: red
+    gctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(0, 0, w, h // 2))        # the bottom: blue
+    gctx.finish()
+    srv = syphon.SyphonOpenGLServer("hs-t6-fit")
+    src = f = r = m = None
+    k = SyphonKind("syphon", {})
+    k.open()
+    try:
+        src = None
+        t0 = time.monotonic()
+        while src is None and time.monotonic() - t0 < 6.0:
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            glfw.poll_events()
+            k.poll(0.016, time.monotonic())
+            src = next((s for sid, s in k.media_sources().items()
+                        if sid.endswith("/hs-t6-fit")), None)
+            time.sleep(0.016)
+        assert src is not None, k.media_sources()
+        src.open()
+        f = None
+        t0 = time.monotonic()
+        while f is None and time.monotonic() - t0 < 3.0:
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            f = src.gl_poll()
+            time.sleep(0.016)
+        assert f is not None and src.status == READY
+        assert f.tex_target == TEX_RECT                 # an IOSurface's: not 2D
+
+        class Feed:
+            kind, timed, duration, status = "syphon", False, 0.0, READY
+
+            def open(self):
+                pass
+
+            def close(self):
+                pass
+
+            def want(self, t):
+                pass
+
+            def latest(self):
+                return None
+
+            def gl_poll(self):
+                return src.gl_poll()
+
+        m = _media(e=Feed())
+        m.channels["e"].fit = 2
+        r = _renderer(gctx, m, wires=[G.Wire("media.e", "output.1.image")])
+        out = gctx.framebuffer(color_attachments=[gctx.renderbuffer((32, 32), 4)])
+        vs = [View(Switches(), (32, 32), target=out)]
+        errors = []
+        for k_ in range(3):
+            srv.publish_frame_texture(tex.glo, size=(w, h))
+            _ = gctx.error             # (what Syphon's own calls left: not the frame's)
+            r.draw_outputs(_empty(), 32, 32, 1.0, vs, t_now=2.0 + k_ / 60)
+            errors.append(gctx.error)
+        assert errors == ["GL_NO_ERROR"] * 3
+        pic = _px(out)
+        assert tuple(pic[2, 16, :3]) == RED and tuple(pic[29, 16, :3]) == BLUE
+        mt = r._media_textures()
+        assert mt.uploads == 0 and mt.blits >= 1 and mt.error == ""
+        src.close()
+        src.shut()
+    finally:
+        k.close()
+        srv.stop()
+        # everything holding the window's GL — Syphon's client, server and
+        # image, the renderer — freed while its context is still current:
+        # freed later, their deletes would land in whatever context is
+        # current then (the module's: GL_INVALID_VALUE in the next test)
+        if r is not None:
+            r._media_textures().release()
+        src = f = r = m = srv = k = None
+        gc.collect()
+        gctx.release()
+        glfw.destroy_window(win)
+        # the window's context was current: the module's is again, for the
+        # tests after this one, in any order
+        ctx.__enter__()
+
+
 def test_render_thread_never_waits(ctx):
     """A still whose decode lands 0.3 s from now: twenty frames are drawn
     before it does, black under the scene, none waiting for it — then the
@@ -468,97 +574,3 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
     assert red(pic) > 0.5, red(pic)
     (shaped,) = _draw(ctx, r, _shape(backdrop=1), frames=2)
     assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
-
-
-# (last in the file: it makes a window's context current and releases it,
-# which leaves the module's standalone context no longer current)
-@pytest.mark.skipif(not __import__("importlib").util.find_spec("syphon"),
-                    reason="syphon-python is not installed")
-def test_a_syphon_frame_samples_through_the_fit_pass():
-    """Syphon's texture as the server publishes it, sampled by the fit
-    pass: its colours land, the way up GL's (row 0 at the bottom). The
-    spike read it as 2D; it is a rectangle (an IOSurface's), so it is
-    blitted into the channel's own 2D texture on the GPU, never uploaded."""
-    import syphon
-    from test_media_live import _gl_context
-
-    from hyperspace.media.frame import TEX_RECT
-    from hyperspace.media.source import READY
-    from hyperspace.media.syphon import SyphonKind
-
-    made = _gl_context()
-    if made is None:
-        pytest.skip("no GL context")
-    glfw, win, gctx = made
-    w, h = 64, 32
-    tex = gctx.texture((w, h), 4)
-    fbo = gctx.framebuffer([tex])
-    fbo.use()
-    gctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, h // 2, w, h // 2))   # the top: red
-    gctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(0, 0, w, h // 2))        # the bottom: blue
-    gctx.finish()
-    srv = syphon.SyphonOpenGLServer("hs-t6-fit")
-    k = SyphonKind("syphon", {})
-    k.open()
-    try:
-        src = None
-        t0 = time.monotonic()
-        while src is None and time.monotonic() - t0 < 6.0:
-            srv.publish_frame_texture(tex.glo, size=(w, h))
-            glfw.poll_events()
-            k.poll(0.016, time.monotonic())
-            src = next((s for sid, s in k.media_sources().items()
-                        if sid.endswith("/hs-t6-fit")), None)
-            time.sleep(0.016)
-        assert src is not None, k.media_sources()
-        src.open()
-        f = None
-        t0 = time.monotonic()
-        while f is None and time.monotonic() - t0 < 3.0:
-            srv.publish_frame_texture(tex.glo, size=(w, h))
-            f = src.gl_poll()
-            time.sleep(0.016)
-        assert f is not None and src.status == READY
-        assert f.tex_target == TEX_RECT                 # an IOSurface's: not 2D
-
-        class Feed:
-            kind, timed, duration, status = "syphon", False, 0.0, READY
-
-            def open(self):
-                pass
-
-            def close(self):
-                pass
-
-            def want(self, t):
-                pass
-
-            def latest(self):
-                return None
-
-            def gl_poll(self):
-                return src.gl_poll()
-
-        m = _media(e=Feed())
-        m.channels["e"].fit = 2
-        r = _renderer(gctx, m, wires=[G.Wire("media.e", "output.1.image")])
-        out = gctx.framebuffer(color_attachments=[gctx.renderbuffer((32, 32), 4)])
-        vs = [View(Switches(), (32, 32), target=out)]
-        errors = []
-        for k_ in range(3):
-            srv.publish_frame_texture(tex.glo, size=(w, h))
-            _ = gctx.error             # (what Syphon's own calls left: not the frame's)
-            r.draw_outputs(_empty(), 32, 32, 1.0, vs, t_now=2.0 + k_ / 60)
-            errors.append(gctx.error)
-        assert errors == ["GL_NO_ERROR"] * 3
-        pic = _px(out)
-        assert tuple(pic[2, 16, :3]) == RED and tuple(pic[29, 16, :3]) == BLUE
-        mt = r._media_textures()
-        assert mt.uploads == 0 and mt.blits >= 1 and mt.error == ""
-        src.close()
-        src.shut()
-    finally:
-        k.close()
-        srv.stop()
-        gctx.release()
-        glfw.destroy_window(win)

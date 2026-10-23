@@ -506,6 +506,7 @@ def test_syphon_loopback():
     # round: the bind as 2D failed and read the last 2D texture, this red)
     ctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, 0, w // 2, h))          # left: red
     ctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(w // 2, 0, w - w // 2, h))  # right: blue
+    ctx.clear(0.0, 1.0, 0.0, 1.0, viewport=(0, 0, w, h // 4))           # the bottom: green
     ctx.finish()
     srv = syphon.SyphonOpenGLServer("hs-t8-loop")
     k = SyphonKind("syphon", {})
@@ -549,6 +550,10 @@ def test_syphon_loopback():
         assert ctx.error == "GL_NO_ERROR"
         assert tuple(px[h // 2, w // 4]) == (255, 0, 0, 255)         # left: red
         assert tuple(px[h // 2, 3 * w // 4]) == (0, 0, 255, 255)     # right: blue
+        # which way up: GL's bottom row (read first) green, its top row not
+        assert tuple(px[0, w // 4]) == tuple(px[0, 3 * w // 4]) == (0, 255, 0, 255)
+        assert tuple(px[h - 1, w // 4]) == (255, 0, 0, 255)
+        assert tuple(px[h - 1, 3 * w // 4]) == (0, 0, 255, 255)
         mt.release()
         src.close()
         src.shut()
