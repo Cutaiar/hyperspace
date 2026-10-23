@@ -701,3 +701,21 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
     assert np.array_equal(a, b)                    # the scene, the hands over: once
     assert r.stats["routes"][1:] == [(SCENE, True), (None, True)]
     assert r.stats["chain_runs"] == 1              # no SCENE+HANDS or HANDS run
+
+
+def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
+    """Plan 32 T7: dragging a channel onto a placed effect's `aux` port is
+    a second picture, not a placement — the effect keeps its D1 place and
+    the wire rides beside it; its `image` port still moves it."""
+    rig, stub, edit, _ = _edit_rig(tmp_path)
+    put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "blend",
+                                              "after": "hands"}]})
+    rig.lib.load(PRESETS, "Placed")
+    assert edit.wire("media.a", "blend.aux") is None
+    assert rig.presets.graph.doc == {
+        "nodes": [{"kind": "effect", "file": "blend", "after": "hands"}],
+        "wires": _wires(("media.a", "blend.aux"))}
+    assert stub.wiring.placed == (G.EffectAt("blend", 1, after="hands"),)
+    assert stub.wiring.wires == (G.Wire("media.a", "blend.aux"),)
+    assert edit.wire("scene", "blend.image") is None
+    assert stub.wiring.placed == (G.EffectAt("blend", 1, after="scene"),)

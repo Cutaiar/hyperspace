@@ -12,6 +12,14 @@
 "<name>"`` before ``desk``, and then ``desk`` holds only its overrides —
 "desk templates" below.)
 
+(plan 32 S: a preset that uses the media channels — an id in a bin, or a
+``media.*`` / ``backdrop.*`` / ``view.media*`` value away from its default
+— or a row naming one — is written as ``hyperspace.preset/4`` with a
+``media`` section, the bins: ``{"channels": {"a": ["shared:loops/tunnel.mp4",
+null, …], …}}``. /4 is /3 plus media (D1): it carries every value, the
+envelopes' and the sequencer's too. Every other preset is ``/3`` or ``/2``
+(below), without the media values. A load reads all three.)
+
 One file per preset, ``<root>/presets/<slug>.json``: the factory ones in
 ``hyperspace/library/presets/``, the user's in ``<home>/presets/``
 shadowing by name. `Presets` registers the folder with the library as a
@@ -73,9 +81,22 @@ The factory presets are generated (`python -m hyperspace.preset`,
 the generator's inputs — the house presets' routes (the lane rows),
 plan 12's five party presets' routes and their desk blocks, and whole the five that were routing presets (``legacy6``,
 ``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
-plan 18's ``hands-orbit`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
+plan 18's ``hands-orbit`` and plan 31's ``seq-demo`` (`FACTORY_PRESETS`); every factory preset's ``desk`` is the factory
 preset layer unless its entry says otherwise. The house presets' and the
 party presets' values are data in their files.
+
+**``hyperspace.preset/3``** (plan 31 P, decision 9) is the same format,
+written only when the preset uses something a build from before plan 31
+would silently lose on a re-save: a step on or a sequencer setting moved,
+an envelope's knob moved, a route, modifier input or macro subscriber on
+an ``env``/``seq`` lane or param, extra envelopes (``"envs"``), or LFO
+membership other than the four (``"lfos"``) — `schema_of`. Such a build
+refuses a /3 file (`Library.read`'s versions) instead of stripping it.
+Every other save is /2, carrying no ``env.*``/``seq.*`` value (all at
+their defaults, which is what a load lands for a missing value), so it
+is byte for byte the file a build before plan 31 wrote. Reading, /2 →
+/3 → /4 is the identity: this build takes all three (`VERSIONS`), and
+`schema_of` is the one rule that picks which a save writes.
 
 The first launch of this build migrates the home folder once
 (`migrate_home`, plan 13 §6): see "the migration" below.
@@ -127,6 +148,7 @@ from .lookback import (
     migrate_row,
     migrate_values,
 )
+from .media import channels as media_channels
 from .modifiers import Modifier
 from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
@@ -143,8 +165,172 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
 from .routing import MOD_OPS, Binding, Macro, Sub, is_continuous
 
 SCHEMA = PERFORMANCE_SCHEMA
+# plan 31 P (decision 9): /3 is /2 plus what a build from before plan 31
+# cannot keep — written only when a preset has some (`schema_of`); a load
+# takes both, /2 → /3 being the identity
+SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
+# plan 32 S (row 337) on top (D1, 2026-10-23): /4 is /3 plus media — one
+# ladder, so a build that reads /4 reads every version below it
+MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
+VERSIONS = (2, 3, 4)
+# the registry groups (and lane schemes) a /2 file never names
+V3_GROUPS = ("env", "seq")
+# the preset keys a bank writes only off its default (modbank, plan 31 B)
+V3_KEYS = ("lfos", "envs")
 GROUP = PRESETS                   # the library folder, and the strip's group
+
+# plan 32 S (row 337): the media section, and the schema a preset that
+# uses media is written with (plan 31's conditional /3 is the precedent)
+MEDIA_KEY = "media"
+MEDIA_PREFIXES = ("media.", "backdrop.", "view.media")
+BMP_PREFIX = "view.bmp_"          # the one bitmap file's params, gone in plan 32
+
+
+def _media_defaults() -> dict[str, Any]:
+    """Every media-family param's build default, by id — what `uses_media`
+    compares against (no registry is to hand where a document is judged)."""
+    from .view import ViewState
+    v, ch = ViewState(), media_channels.Channel("a")
+    out: dict[str, Any] = {"view.media": v.media, "view.media_alpha": v.media_alpha,
+                           "view.media_scale": v.media_scale, "view.media_mode": v.media_mode,
+                           "view.media_amp": v.media_amp, "view.media_rate": v.media_rate,
+                           "backdrop.channel": v.backdrop, "backdrop.alpha": v.backdrop_alpha,
+                           "backdrop.history": v.backdrop_history}
+    for c in media_channels.CHANNELS:
+        for k in ("slot", "fit", "rate", "pos", "jog", "loop"):
+            out[f"media.{c}.{k}"] = getattr(ch, k)
+    return out
+
+
+MEDIA_DEFAULTS = _media_defaults()
+
+
+def is_media_id(pid: Any) -> bool:
+    """Whether `pid` names the media family: a ``media.*`` / ``backdrop.*``
+    / ``view.media*`` param, or a channel's graph node (``media.a`` …). A
+    sink row's ``param:<id>`` source counts as its id; a non-string never."""
+    if not isinstance(pid, str):
+        return False
+    return pid.removeprefix("param:").startswith(MEDIA_PREFIXES)
+
+
+def _named_ids(doc: dict):
+    """Every id a preset document's rows name — each route's and desk
+    row's source and target, each modifier's inputs, each macro subscriber's base or depth
+    ends, each graph wire's ends. A malformed section names nothing."""
+    def items(v, kind):
+        return v if isinstance(v, kind) else kind()
+    for row in [*items(doc.get("routes"), list), *items(doc.get("desk"), list)]:
+        if isinstance(row, dict):
+            yield row.get("source")
+            yield row.get("target")
+    for m in items(doc.get(MODIFIERS_KEY), list):
+        if isinstance(m, dict):
+            yield from items(m.get("in"), list)
+    for m in items(doc.get("macros"), dict).values():
+        for sub in items(m.get("subs") if isinstance(m, dict) else None, list):
+            if isinstance(sub, dict):
+                yield sub.get("base")
+                dep = sub.get("depth")
+                if isinstance(dep, dict):
+                    yield dep.get("source")
+                    yield dep.get("target")
+    graph = doc.get(GRAPH_KEY)
+    for w in items(graph.get("wires") if isinstance(graph, dict) else None, list):
+        if isinstance(w, dict):
+            yield w.get("from")
+            yield w.get("to")
+
+
+def build_default(pid: str, v: Any) -> bool:
+    """`schema_of`'s test of a value with no library to hand (a factory
+    preset's document, a test's): a media-family value at its build
+    default (`MEDIA_DEFAULTS`, to a float's hair); any other value present
+    counts as set. `Presets.document` passes the library's test instead."""
+    return pid in MEDIA_DEFAULTS and _same(v, MEDIA_DEFAULTS[pid])
+
+
+def uses_media(doc: dict, at_default: Callable[[str, Any], bool] = build_default) -> bool:
+    """Whether a preset document uses the media channels: its ``media``
+    section names any id, a ``media.*`` / ``backdrop.*`` / ``view.media*``
+    value is away from its default (`at_default`; an id this build does
+    not know counts as away), or a route, desk row, modifier, macro or
+    graph wire names a media-family id or a channel node (`is_media_id`) —
+    a row an older build would drop. Such a preset is written as ``/4``."""
+    bins, _ = media_channels.read_bins(doc.get(MEDIA_KEY))
+    if any(sid is not None for b in bins.values() for sid in b):
+        return True
+    for pid, v in dict(doc.get("values") or {}).items():
+        if is_media_id(pid) and not at_default(pid, v):
+            return True
+    return any(is_media_id(n) for n in _named_ids(doc))
+
+
 FACTORY_DIR = FACTORY / GROUP
+
+
+_MISSING = object()
+
+
+def _same(a, b) -> bool:
+    """Two saved values equal — floats to a hair, so a value that went out
+    and came back through a param's setter still reads as untouched."""
+    if isinstance(a, float) and isinstance(b, (int, float)) and not isinstance(b, bool):
+        return abs(a - b) <= 1e-9 * max(1.0, abs(a), abs(b))
+    return a == b
+
+
+def _names_v3(x) -> bool:
+    """Whether a routes / modifiers / macros section names an ``env``/``seq``
+    lane (``env:0``) or param (``seq.1.3``) anywhere — labels and notes
+    aside."""
+    if isinstance(x, str):
+        return x.startswith(tuple(f"{g}{c}" for g in V3_GROUPS for c in ":."))
+    if isinstance(x, dict):
+        return any(_names_v3(v) for k, v in x.items() if k not in ("label", "name", "note"))
+    if isinstance(x, (list, tuple)):
+        return any(_names_v3(v) for v in x)
+    return False
+
+
+def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default) -> str:
+    """The schema a preset document is written as — the one ladder (D1,
+    2026-10-23), the lowest that loses nothing:
+
+    - ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
+      (`uses_media`): a bin, a media-family value off its default, or a
+      row or wire naming one;
+    - else ``hyperspace.preset/3`` (plan 31 P, decision 9) when it carries
+      what a build from before plan 31 would lose — a bank's membership
+      key, an ``env.*``/``seq.*`` value off its default, or a route,
+      modifier or macro on an envelope or the sequencer;
+    - else ``hyperspace.preset/2``.
+
+    `at_default` says whether a value is untouched: `Presets.document`
+    passes the library's (what a load lands for it missing, D3); the
+    default, for a document with no library to hand, counts any env/seq
+    value present as set and a media value at its build default as not.
+
+    The ``desk`` and ``layout`` sections are not read here on purpose: a
+    build from before plan 31 keeps both verbatim — `Bindings.set_desk`
+    checks no row's target against the registry (a desk row on
+    ``env.2.fire`` loads dormant and saves back as it was) and
+    `library.read_layout` keeps any node name, the GRAPH page's tidy
+    forgetting only the nodes it draws — so neither loses anything on a
+    re-save there (tests/test_plan31_review.py). The APC page's
+    ``seq.page`` / ``seq.select`` rows are the session's and never saved.
+    (The media rule does read the desk: a pre-32 build drops a desk row on
+    a media param it lacks — `uses_media`.)"""
+    if uses_media(doc, at_default):
+        return MEDIA_SCHEMA
+    if any(k in doc for k in V3_KEYS):
+        return SCHEMA_V3
+    if any(str(k).startswith(tuple(f"{g}." for g in V3_GROUPS)) and not at_default(str(k), v)
+           for k, v in (doc.get("values") or {}).items()):
+        return SCHEMA_V3
+    if any(_names_v3(doc.get(k)) for k in ("routes", MODIFIERS_KEY, "macros")):
+        return SCHEMA_V3
+    return SCHEMA
 
 
 def desk_json(rows) -> list[dict]:
@@ -382,6 +568,14 @@ LAYOUT_KEY = "layout"
 NO_MODULE = ("macro", modifiers.GROUP)
 
 
+def _bank_prefix(pid: str) -> str:
+    """A bank voice's param prefix, ``lfo.7.depth`` → ``lfo.7.``; "" for
+    an id that names no voice (plan 31 B)."""
+    head, _, rest = pid.partition(".")
+    n, dot, _ = rest.partition(".")
+    return f"{head}.{n}." if dot and n.isdigit() else ""
+
+
 def merge_modifiers(template, own) -> tuple[list[dict], list[str]]:
     """The modifier entries a preset lands: the template's (in its order)
     with each one the preset's own list names by id replaced, then the
@@ -481,6 +675,12 @@ def dumps(doc: dict) -> str:
             # the GRAPH page's positions (plan 28 N2): one node a line
             rows = ",\n".join(f"  {json.dumps(k)}: {json.dumps(xy)}" for k, xy in v.items())
             text = "{\n" + rows + "\n }"
+        elif (key == MEDIA_KEY and isinstance(v, dict) and set(v) == {"channels"}
+                and isinstance(v["channels"], dict) and v["channels"]):
+            # plan 32: the bins, one channel a line
+            rows = ",\n".join(f"  {json.dumps(c)}: {json.dumps(b)}"
+                               for c, b in v["channels"].items())
+            text = '{"channels": {\n' + rows + '\n }}'
         elif key in ("routes", MODIFIERS_KEY, "desk") and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
@@ -576,13 +776,20 @@ class Presets:
                  load=lambda doc, path: self.load_doc(doc, path),
                  document=lambda name: self.document(name),
                  signature=lambda: self.signature(),
-                 versions=(int(SCHEMA.rpartition("/")[2]),),
+                 versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
     # ---- the API ----
+
+    @property
+    def media(self):
+        """The eight media channels the registry's ``media.*`` params write
+        (`build_registry`'s `media`, plan 32): their bins are this preset's
+        ``media`` section. None on a registry from before plan 32."""
+        return getattr(self.reg, "media", None)
 
     @property
     def current(self) -> str | None:
@@ -637,9 +844,29 @@ class Presets:
         values: dict[str, Any] = {}
         unknown: list[str] = []
         later: dict[str, Any] = {}
+        # plan 31 B: each bank's membership (``"lfos": [1, 3, 7]``; none in
+        # the file, the default four), declared before the values land — so
+        # a knob of a voice this registry lacks yet waits in `later`
+        members: dict[str, list[int]] = {}
+        for scheme, bank in self._banks().items():
+            members[scheme], bank_notes = bank.parse(doc.get(bank.KEY))
+            notes += bank_notes
+        bank_ids = {f"{s}.{n}." for s, ids in members.items() for n in ids}
+        bmp_alpha: dict[str, Any] = {}    # an old view.bmp_alpha, by the id it stands for
         for pid, v in dict(doc.get("values") or {}).items():
             p = reg.get(pid)
-            if pid.startswith(modifiers.PREFIX):
+            if p is None and _bank_prefix(pid) in bank_ids:
+                later[pid] = v
+            elif pid.startswith(BMP_PREFIX):
+                # plan 32 (row 331): the one bitmap file is gone; the faces
+                # read a media channel (view.media). Its values are dropped
+                # and the file it named is said — but for the alpha, whose
+                # alias (params.BMP_ALPHA) lands it on view.media_alpha
+                if p is not None and p.alias:
+                    bmp_alpha[reg.real(p).id] = v
+                elif pid == "view.bmp_file" and v:
+                    notes.append(f"bitmap file {v} is no longer read: put it on a media channel")
+            elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif is_instance_id(pid):
@@ -652,9 +879,15 @@ class Presets:
                 notes.append(f"{pid} is not part of a preset, ignored")
             else:
                 values[pid] = v
+        for pid, v in bmp_alpha.items():      # the file's own new id wins
+            values.setdefault(pid, v)
         if unknown:
             shown = ", ".join(unknown[:4]) + ("…" if len(unknown) > 4 else "")
             notes.append(f"{len(unknown)} unknown id(s): {shown}")
+        # plan 32 S: the media section's bins, read now, landed with the
+        # values; no section is every bin empty
+        bins, media_notes = media_channels.read_bins(doc.get(MEDIA_KEY))
+        notes += media_notes
         routes: list[Binding] = []
         for row in doc.get("routes") or []:
             b = Binding.from_json(row)
@@ -743,7 +976,9 @@ class Presets:
         # 1½. the graph lands first (plan 26 A4): its instances' params
         #     exist before their values do; the ids read for it are sorted now
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
+        # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
+        held_banks = {s: b.doc() for s, b in self._banks().items()}
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -753,6 +988,8 @@ class Presets:
             # values: their entries are their params' values
             notes += table.set_modifiers(mods, reg)
             values.update(reg.snapshot(group=modifiers.GROUP))
+            for scheme, ids in members.items():          # plan 31 B: the banks
+                self._banks()[scheme].set(ids)
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
@@ -787,10 +1024,23 @@ class Presets:
         except BaseException:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
-            if gs.mark() != held_graph:          # the graph as it was, and its instances'
-                gs.put(held_graph)               # values as they were
-                lib.restore({k: v for k, v in held_values.items() if k in reg})
+            for scheme, ids in held_banks.items():        # the banks as they were
+                bank = self._banks()[scheme]
+                if bank.doc() != ids:
+                    bank.set(ids)
+            if gs.mark() != held_graph:          # the graph as it was
+                gs.put(held_graph)
+            # then every value as it was — the graph instances', and a bank
+            # voice's that the load removed and the line above re-added
+            # fresh (`held_values` was taken before `bank.set`): a refused
+            # load leaves LFO 5's depth where it stood, not at its default
+            lib.restore({k: v for k, v in held_values.items() if k in reg})
             raise
+        # 2½. the bins (plan 32): each channel opens what its slot names at
+        #     the next frame's poll
+        media = self.media
+        if media is not None:
+            media.set_bins(bins)
         # 3. every performer row replaced; the referee keeps the first
         table.set_routes(routes)
         notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in table.dropped]
@@ -836,7 +1086,13 @@ class Presets:
         section = self._graph_section().doc
         if section is not None:
             doc[GRAPH_KEY] = copy.deepcopy(section)
-        doc.update(values=self._values(),
+        # plan 31 B: a bank's membership, only where it is not the default —
+        # a preset of four LFOs writes the file it always did
+        for bank in self._banks().values():
+            if bank.doc() != list(bank.DEFAULT):
+                doc[bank.KEY] = bank.doc()
+        values = self._values()
+        doc.update(values=values,
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
                    **self._desk_part(name), macros=table.macros_doc(),
@@ -844,7 +1100,50 @@ class Presets:
         layout = getattr(self, "layout", None)
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
+        # plan 32 S: the channels' bins, judged with the rest
+        media = self.media
+        if media is not None:
+            doc[MEDIA_KEY] = media.to_json()
+        # the schema ladder (decision D1, 2026-10-23): /4 = /3 + media. One
+        # rule (`schema_of`) picks the lowest schema that loses nothing, a
+        # value counting as untouched when it is what a load lands for it
+        # missing (D3); then each family below the schema that introduced
+        # it is left out — /4 keeps every value and the bins, /3 every
+        # value but the media family's, /2 neither family, so it is the
+        # file it always was
+        doc["schema"] = schema_of(doc, at_default=self._at_default())
+        if doc["schema"] != MEDIA_SCHEMA:
+            doc.pop(MEDIA_KEY, None)
+            values = {k: v for k, v in values.items() if not is_media_id(k)}
+        if doc["schema"] == SCHEMA:
+            values = {k: v for k, v in values.items()
+                      if self.reg[k].group not in V3_GROUPS}
+        doc["values"] = values
         return doc
+
+    def _at_default(self) -> Callable[[str, Any], bool]:
+        """Whether a value is what a load would land for it missing
+        (`Library.defaults`: its group's default over the build values),
+        to a float's hair (`_same`) — `schema_of`'s test for the envelopes,
+        the sequencer and the media family alike (D3). An id this registry
+        lacks is never at its default."""
+        lib, reg = self.lib, self.reg
+        cache: dict[str, dict] = {}
+
+        def at(pid: str, v: Any) -> bool:
+            p = reg.get(pid)
+            if p is None:
+                return False
+            if p.group not in cache:
+                cache[p.group] = lib.defaults(p.group)
+            return _same(v, cache[p.group].get(pid, _MISSING))
+        return at
+
+    def _banks(self) -> dict:
+        """The router's modulator banks by scheme (plan 31 B); none on a
+        router that steps none (the tests' bare ones)."""
+        banks = getattr(self.router, "_banks", None)
+        return banks() if callable(banks) else {}
 
     def _values(self) -> dict[str, Any]:
         """The preset's `values`: every performance base but the modifiers'
@@ -967,8 +1266,12 @@ class Presets:
                 json.dumps(table.macros_doc(), sort_keys=True),
                 None if section is None else json.dumps(section, sort_keys=True),
                 table.modifiers_doc(self.reg),
+                # plan 31 B: an LFO added or removed
+                {s: b.doc() for s, b in self._banks().items()},
                 # plan 28 N2: a node moved on the GRAPH page; none, no part
-                json.dumps(getattr(self, "layout", None) or None, sort_keys=True))
+                json.dumps(getattr(self, "layout", None) or None, sort_keys=True),
+                # plan 32: a bin entry assigned or cleared
+                None if self.media is None else json.dumps(self.media.to_json()))
 
     # ---- internals ----
 
@@ -1375,6 +1678,41 @@ def lfo_breathe_desk() -> list[Binding]:
     return knob_desk(BREATHE_KNOBS)()
 
 
+# seq-demo (plan 31 P): the drum lanes on the 8 steps of half a bar (16ths)
+SEQ_DEMO_STEPS = {1: (1, 5), 2: (3, 7), 3: tuple(range(1, 9))}   # kick, snare, hats
+# each lane's envelope as a one-shot drum hit, (attack, decay) in seconds:
+# a punchy kick, a shorter snare, a hat that is gone before the next 16th
+SEQ_DEMO_HITS = {1: (0.005, 0.30), 2: (0.005, 0.18), 3: (0.002, 0.07)}
+
+
+def seq_demo_routes() -> list[Binding]:
+    """The kick (env 1) pushes brightness, the snare (env 2) punches the
+    zoom in, the hats (env 3) split the colours (Minecraft's deconverge,
+    whose base amount is 0, so it shows only on a hat)."""
+    return [Binding("env:0", "view.bright", "push", 0.5),
+            Binding("env:1", "camera.zoom", "push", 0.06),
+            Binding("env:2", "fx.deconverge.amount", "push", 0.5)]
+
+
+def seq_demo_values() -> dict[str, Any]:
+    """The pattern (`SEQ_DEMO_STEPS`) at a half-bar span and the lanes'
+    envelopes one-shot (`SEQ_DEMO_HITS`, sustain 0); a dimmed picture for
+    the kick to light. `seq.run` is the session's (decision 8): the pattern
+    plays once the performer starts the transport."""
+    from .envelope import ONE_SHOT
+    from .sequencer import SPANS
+
+    out: dict[str, Any] = {"view.bright": 0.6, "fx.mix": 1.0,
+                           "fx.deconverge.amount": 0.0, "fx.deconverge.radial": 0.0,
+                           "seq.span": SPANS.index("1/2 bar")}
+    for lane, steps in SEQ_DEMO_STEPS.items():
+        out.update({f"seq.{lane}.{k}": True for k in steps})
+    for n, (attack, decay) in SEQ_DEMO_HITS.items():
+        out.update({f"env.{n}.mode": ONE_SHOT, f"env.{n}.attack": attack,
+                    f"env.{n}.decay": decay, f"env.{n}.sustain": 0.0})
+    return out
+
+
 def hands_fx_routes() -> list[Binding]:
     """Plan 08's hand-driven effect: the right hand's height positions the
     fx mix, its tilt (pitch) twists and its yaw bends the Acid shader, the left
@@ -1602,6 +1940,13 @@ FACTORY_PRESETS: dict[str, Factory] = {
                            "brightens and the spin slows as the LFO's swell of the fx mix "
                            "deepens; the right hand's height deepens LFO 1's pulse.",
                            macros=lfo_breathe_macros, desk=lfo_breathe_desk),
+    # plan 31 P: the step sequencer's demo, a hyperspace.preset/3 (its pattern)
+    "seq-demo": Factory(seq_demo_routes, seq_demo_values, "seq-demo",
+                        "The step sequencer's demo: kick, snare and hats on half a bar "
+                        "drive one-shot envelopes — the kick lights the picture, the "
+                        "snare punches the zoom, the hats split the colours. Press play "
+                        "(the SEQ page, or seq.run): the transport is never in a preset.",
+                        desk=None),
     "hands-fx": Factory(hands_fx_routes, lambda: {"fx.acid.speed": 4.0}, "hands-fx",
                         "Plan 08: both hands play the Acid shader and the fx mix.",
                         desk=knob_desk(HANDS_FX_KNOBS)),
@@ -1643,6 +1988,7 @@ def generated(key: str) -> dict:
         doc["desk"] = desk_json(spec.desk())
     doc["macros"] = {k: m.to_json() for k, m in spec.macros().items()}
     doc["modules"] = {}
+    doc["schema"] = schema_of(doc)      # plan 31 P: seq-demo's pattern is a /3
     return doc
 
 
@@ -1819,7 +2165,9 @@ def same(a: dict, b: dict) -> bool:
     try:
         return (dict(a.get("values") or {}) == dict(b.get("values") or {})
                 and _norm_rows(a.get("routes")) == _norm_rows(b.get("routes"))
-                and desk(a) == desk(b) and macros(a) == macros(b))
+                and desk(a) == desk(b) and macros(a) == macros(b)
+                and (media_channels.read_bins(a.get(MEDIA_KEY))[0]
+                     == media_channels.read_bins(b.get(MEDIA_KEY))[0]))
     except (TypeError, KeyError, ValueError, AttributeError):
         return False
 

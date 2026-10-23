@@ -1046,7 +1046,7 @@ root and `Library.machine` the home.
 
 | Path | What it is | Format |
 |---|---|---|
-| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2` |
+| `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
 | `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
 | `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
@@ -1063,6 +1063,9 @@ root and `Library.machine` the home.
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
+| `media/` | This Mac's media files, ids `local:<relative path>` (plan 32; the shared ones are `<library>/media/`). Subfolders are groups. | any picture or video |
+| `media-cache/thumbs/`, `media-cache/proxies/` | 160 px thumbnails and the MJPEG scrub proxies of clips ≤ 600 s, keyed by id + size + mtime. Never in the shared folder; safe to delete (made again). | PNG, MJPEG |
+| `ndi/ndi-config.v1.json` | Written only when an `ndi` device lists `extra_ips`; NDI reads it through `NDI_CONFIG_DIR`. | NDI's JSON |
 
 A `midi_map.json` or `config.toml` left in the working directory from an
 old build is copied in on the first run; a `midi_map.json` in the home is
@@ -1126,6 +1129,13 @@ prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
   known corruption risk).
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
+- **Both Macs on one library must be on this build** (plan 31). A preset
+  that uses the step sequencer, the envelopes or more or fewer than four
+  LFOs is saved as `hyperspace.preset/3`; every other preset is still
+  `hyperspace.preset/2`, byte for byte as before. An older build refuses
+  a /3 file with "schema … is not a hyperspace.preset" rather than load
+  it and strip the pattern on its next save, so update both machines
+  before either saves one. This build reads both.
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -1230,6 +1240,58 @@ Rules worth knowing:
   the config's folder; anything but text is `""` with a note. A leftover
   `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
+
+### Media
+
+Plan 32. Pictures, videos and live feeds go onto eight channels (`a`–`h`);
+the MEDIA page is where they are picked, and
+[`plans/32-media-channels.md`](plans/32-media-channels.md) is the design
+as built.
+
+- **Folders.** `<library>/media/` is the shared folder (the plan 25 cloud
+  folder, so both Macs see a file dropped into it; with no `[library]
+  path` there is none) and `<home>/media/` is this Mac's. Both are scanned
+  every 2 s: a dropped file appears without a relaunch, a removed one is
+  `missing`, a cloud placeholder is `fetching`. A file added from anywhere
+  (**Add file…**) is `file:<absolute path>`; **Copy to shared** turns it
+  into `shared:`. A preset that names a `local:`, `file:` or live source
+  this Mac lacks loads, shows black for it, and the MEDIA page's banner
+  lists it.
+- **Formats.** Stills: png, jpg, webp, bmp, tiff, heic. Video: mp4, mov,
+  m4v, webm, mkv, avi, gif (see `media.adapters.VIDEO_EXT`).
+  Files are decoded to at most 1920×1080, live feeds to 1280×720.
+  There is no sound.
+- **Live feeds** are `[[devices]]` entries; the factory template lists all
+  three, commented: `kind = "ndi"` (optional `extra_ips = ["10.0.0.5"]` for
+  a sender on another subnet; it is written to `<home>/ndi/ndi-config.v1.json`
+  before `cyndilib` loads, which has not been verified against a real second
+  subnet, and a change after NDI was first loaded needs a restart),
+  `kind = "syphon"` and `kind = "camera"` (macOS asks for the camera on the
+  first open; a refusal is `error: camera permission (System Settings ▸
+  Privacy & Security ▸ Camera)`). NDI over a venue's Wi-Fi is hungry (full
+  NDI ~100 Mb/s at 1080p): bring your own router.
+- **Publishing.** `syphon = "<server name>"` and `ndi = "<sender name>"`
+  on `[output]` or an `[[output.screens]]` entry publish that output's
+  picture (a window at the render cap, `[output] render`); `window = false`
+  on a later output makes it publish-only (no window). Output 1 always
+  has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
+  readback 4.0 ms`, in the warning colour with the error on a failure.
+- **Dependencies** (all in the default install, imported only when a
+  source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
+  `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
+  only), `cyndilib` (its macOS wheel carries `libndi`; check the NDI SDK's
+  licence before shipping a build). A live kind whose library is missing
+  says so in its status (`cyndilib not installed`) instead of raising.
+- **Both Macs on this build.** A preset that uses media is saved as
+  `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
+  or `view.media*` value off its default); a build from before plan 32
+  **refuses** it, so two Macs sharing a library must both run this build
+  before either saves one. A preset that does not use media is the file it
+  was, bar two new effects' default lines. A pre-plan-32 preset's
+  `view.bmp_*` values are dropped on load with a note
+  (`bitmap file <path> is no longer read: put it on a media channel`); put
+  the picture on a channel instead. The APC40's knob 7 still moves the faces'
+  media opacity.
 
 ### The device list
 
@@ -1348,7 +1410,7 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
-rail of fifteen pages (`ui.PAGES`); the rail shows a red dirty dot
+rail of sixteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
 scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
@@ -1366,7 +1428,8 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
 | ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
 | GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
-| LFO | The tap-tempo clock and the four LFOs. |
+| LFO | The tap-tempo clock and the LFOs (four by default, up to 16: `+ lfo`, `×`; above four all but the open strip fold to a line; plan 31). |
+| SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
 | SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
@@ -2631,6 +2694,11 @@ What only a person at the machine can check is
 - **A build from before plans 28 and 30 loses this build's `modifiers` and
   `layout` on a save** and opens a wired or placed `graph` as the
   default graph: both Macs sharing a library must run the same build.
+- **Media (plan 32)**: two Macs sharing a library must both run the build
+  that writes `hyperspace.preset/4`; Resolume and TouchDesigner have never
+  sent us or received a frame, `extra_ips` is unverified, the phone's own
+  page is V2, and output 1 cannot be publish-only (see "Media" in §4 and
+  the plan's "Known rough edges").
 - **The golden frames prove pixels only on "Apple M3 Max"**; on any
   other Mac the test skips.
 - **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`

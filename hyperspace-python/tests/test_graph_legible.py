@@ -82,7 +82,9 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     assert st["pin_xy"] and all(graphview.is_stub(p) for p in st["pin_xy"])
     desk = graphview.summary(view.node("device:apc40"))
     assert desk[0].endswith("patched") and " ports · " in desk[0]
-    assert graphview.summary(view.node("render:shape"))[0].startswith("55 params · ")   # + main's 3D switch, Fit, spacing, depth
+    # + main's 3D switch, Fit, spacing, depth; plan 32: view.media, and the
+    # factory knob 7's row on its alias view.bmp_alpha
+    assert graphview.summary(view.node("render:shape"))[0].startswith("57 params · ")
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports'
     shape = view.node("render:shape")
@@ -275,7 +277,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     st["tidy"] = True
     frame(rig.panel, "graph")
     idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
-    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 6 areas, every one "
+    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 7 areas, every one "
                           f"collapsed · {idle} idle off the canvas")
     assert st["open"] == set() and rig.lib.presets.layout == {}
     auto = ui_graph.layout_of(st, view)

@@ -5,10 +5,13 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–279; group Z (277–279) is the instanced field from
-`main`, renumbered from its 144–146 when main was merged in; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
-272–276 its N9), and 267–271, plan 30's N8 (the palette as compression), are at
-the end of group X.
+numbers. They run 1–317; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
+the end of group X, and group Z (277–295) is two parts: 277–279 the
+instanced field from `main`, renumbered from its 144–146 when main was
+merged in, and 280–295 plan 31's (286–295 the APC40 page, on
+`plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
+together.
 
 ## Before you start
 
@@ -17,7 +20,12 @@ On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
 (plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
 merged. (V follows W in this file: plan 27's docs landed first.) Groups
 X (plan 30) and Y (plan 28) need `plan-28-30-integration` until it is
-merged. Before
+merged. Group Z's 277–279 (the instanced field) are on `main`; its
+plan 31 checks, 280–295, need `plan-31-integration`, and the APC40
+checks 286–295 `plan-31-a1` (the page waits for Dylan's sign-off).
+Group AA (plan 32) and check 317 need `plan-31-32-integration`, where
+plans 31 and 32 land together, and `uv sync` for plan 32's four new
+dependencies. Before
 any launch of this build:
 
 ```
@@ -3868,7 +3876,9 @@ wire per pipeline from a row's end back to the next row's start.
 *Fail:* a chip that frames nothing or the wrong boxes; the shaders in one
 long row (`SHADER_ROW`).
 
-## Z. The instanced field: thousands of copies, 3D lattices, Fit (from `main`)
+## Z. The instanced field (from `main`); plan 31: the step sequencer
+
+### The instanced field: thousands of copies, 3D lattices, Fit (from `main`)
 
 VIEW page, the 120-cell (or any heavy shape), faces on. The tests draw
 on Mesa's software rasteriser, so they pin what is drawn, not how fast.
@@ -3902,6 +3912,481 @@ far ones; depth 0 flattens the sizes; motions swing the copies in depth
 too. Say whether the default depth (0.5) and the far fade (to a quarter)
 are right. *Fail:* far copies drawn over near ones → the sort in
 `field._field_3d`.
+
+### Plan 31: the step sequencer
+
+Plan 31 as built is [`31-step-sequencer.md`](31-step-sequencer.md): the
+LFOs a bank of up to 16 by stable id, AHDSR envelopes (`env:`), a step
+sequencer of five lanes × eight steps read off the clock (`seq:`), the
+SEQ page, GRAPH's envelope and sequencer nodes, `hyperspace.preset/3`
+and the factory `seq-demo`. On `plan-31-integration`. The control
+window at its usual 960 × 900. `seq-demo` loads stopped: press **run**
+on the SEQ page (the transport is never in a preset). Checks 286–295 are
+the APC40 page and need **`plan-31-a1`** (`git checkout plan-31-a1`),
+which waits for Dylan's sign-off: run them with him, on the copy.
+
+**280. The LFO page at 7 and at 16 LFOs.** (laptop)
+Headless: `tests/test_ui_lfo.py::{test_the_page_draws_n_strips_and_gaps,test_four_lfos_do_not_fold_and_still_fit,test_sixteen_lfos_scroll_and_one_is_open,test_add_is_refused_at_the_cap,test_add_and_remove_through_the_chips_are_undoable}`, `tests/test_modbank.py::test_removing_lfo_2_keeps_lfo_3_on_lfo_2`.
+On the copy, load LFO BREATHE; open LFO. Click **+ lfo** three times (7
+LFOs); click a folded strip's chevron; then **×** on LFO 2; then ⌘Z.
+Then click **+ lfo** until it greys (16) and hover it; scroll the page;
+watch SYSTEM's frame time. *Pass:* at four nothing folds and the page is
+as before; from five, every strip but one is one line (thumbnail, name,
+a live bar, a chevron) and the open one has the full scope; the
+chevron opens that strip and folds the last; × removes LFO 2 and the
+others keep their numbers (LFO 3 still "LFO 3"), its routes still on
+ROUTING but dormant; ⌘Z brings LFO 2 back with its knobs; at 16 the chip
+is grey with "16 LFOs, the most there can be…" on hover, the page
+scrolls, the frame time is near what it was at four, and legible at
+arm's length. *Fail:* the numbers shuffle after a ×
+(`modbank.Bank.remove`); two strips open; a hitch at 16 (`ui_lfo`'s
+scopes).
+
+**281. The SEQ page reads from a distance.** (laptop)
+Headless: `tests/test_ui_seq.py::{test_the_default_page_fits_the_control_window,test_the_playhead_column_follows_the_sequencer,test_columns_past_length_are_inert,test_the_cells_use_the_apc_palette,test_the_lane_selection_opens_its_envelope}`.
+Load `seq-demo`, open SEQ, press **run**. Stand two metres back. Then
+click step number **6** over the grid; click lane 2's **M**; click lane
+3's number; click a cell; ⌘Z. *Pass:* no scroll at 960 × 900; green
+cells for the kick (1, 5), snare (3, 7) and hats (every step) are
+told apart from the dark ones at distance; the playhead's red-framed
+column marches in time and a lit cell under it is yellow, readable
+against green; after length 6, columns 7–8 are dim and a click on them
+does nothing; muted lane 2's cells are red; clicking lane 3's number
+opens env 3's strip; the click toggles and ⌘Z undoes it; the envelope
+strips' small text (stage, out) is readable at least up close. *Fail:*
+yellow and green hard to tell apart at distance (`ui_seq.YELLOW`,
+`GREEN`); the page scrolls; a dim column toggles.
+
+**282. `seq-demo` feels tight at 120–175 BPM.** (laptop, music, a projector helps)
+Headless: `tests/test_plan31_wiring.py::{test_a_step_fires_its_envelope_at_the_steps_exact_time_and_it_comes_back,test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed,test_a_step_releases_a_gate_mode_envelope_after_half_a_step}`, `tests/test_sequencer.py::test_each_step_fires_exactly_once_at_irregular_dt`.
+Play a track at about 120 BPM; tap the tempo in (TAP or the LFO page);
+⇧B on a downbeat; load `seq-demo`, press **run**. Then a track near 175
+BPM, re-tap, ⇧B. On env 1's strip switch **mode** to gate. *Pass:* the
+kick lights the picture on the beat, the snare punches the zoom on 2 and
+4 of each half bar, the hats split the colours on every 16th; nothing
+drifts over a minute; at 175 the hats still read as separate hits, not
+a smear; with env 1 in gate mode the kick still lets go within half a
+step (`seq.gate`). *Fail:* hits late or early against the music after a
+good tap (`Sequencer.time_of`); a hit doubled or skipped when the frame
+rate dips; a gate-mode kick that holds.
+
+**283. The global trigger re-aligns the grid; restart does not move the LFOs.** (laptop)
+Headless: `tests/test_plan31_wiring.py::test_the_global_trigger_fires_step_0_the_same_frame`, `tests/test_sequencer.py::{test_the_clock_trigger_fires_step_zero_that_call_at_the_trigger_time,test_seq_trigger_keeps_its_offset_until_the_clock_trigger_clears_it}`.
+On `seq-demo`, running, set LFO 1 to sync **1 bar** and route it onto
+something visible (ROUTING or GRAPH). Press ⇧B (the trigger) off the
+beat, a few times; then the SEQ page's **restart** off the beat; then ⇧B
+again. *Pass:* each ⇧B puts the playhead on step 1 and LFO 1 at the top
+of its cycle on the same frame, and the kick fires there; **restart**
+puts the playhead on 1 while LFO 1 runs on; the next ⇧B lines both up
+again. *Fail:* the grid ignores ⇧B (`Clock.epoch`); a burst of steps on a
+trigger; restart moves the LFOs.
+
+**284. GRAPH's lane cables.** (laptop)
+Headless: `tests/test_graph_seq.py::{test_a_lane_with_a_step_on_is_a_binding_cable_to_its_envelope,test_a_lane_rebinds_by_a_drag_onto_an_envelopes_fire_and_cannot_be_deleted,test_a_lane_bound_to_a_removed_envelope_draws_nothing,test_a_lane_envelope_is_refused_an_extra_one_goes}`.
+On `seq-demo`, stopped, open GRAPH and frame MODULATION; expand
+*sequencer* and *env 1*–*env 3* (open MODULATION's idle line to see
+*env 4*). Press run on SEQ and come back; mute lane 2. Drag lane 1's pin
+onto *env 4*'s `fire` stub; ⌘Z. Select a lane cable, press Delete.
+Right-click *env 1* → delete; right-click the canvas → **envelope**, then
+delete the new one. *Pass:* three cables "lane 1 fires env 1" … "lane 3
+fires env 3", faint "(stopped)" until run, bright while running, lane 2's
+faint "(muted)"; lanes 4 and 5 (no steps) have none; the drag rebinds
+lane 1 to env 4 (SEQ's picker says env 4) and ⌘Z puts it back; Delete
+says "a lane always fires an envelope: drag its pin onto another
+envelope's fire to rebind it" and keeps it; env 1's delete is greyed
+("… is a sequencer lane's envelope: it stays"); the new envelope is env 6
+and goes. *Fail:* a lane cable deleted; a drag making a route instead
+(`Edit._binding`); env 1 removable.
+
+**285. A `/3` preset between two Macs.** (two Macs, the copy)
+Headless: `tests/test_plan31_wiring.py::{test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step,test_anything_an_older_build_would_lose_saves_as_3,test_this_build_reads_both_and_an_older_build_refuses_a_3}`.
+On this build, save TRIP untouched under a new name, then turn one step
+on and save again under another; open both files in a text editor. Point
+a build from before plan 31 at the same library and load each.
+*Pass:* the untouched one says `"schema": "hyperspace.preset/2"` and has
+no `env.` or `seq.` value; the other says `/3` and holds the pattern; the
+older build loads the first and refuses the second with "schema … is not
+a hyperspace.preset", the file untouched. *Fail:* an untouched preset
+written as /3 (`preset.schema_of`); the older build loading the /3 file
+and saving it without its pattern.
+
+### The APC40 sequencer page (plan 31 A1, on `plan-31-a1`, pending Dylan)
+
+The APC40 mk1 plugged in, `plan-31-a1` checked out, on the copy (its
+`bindings.json` gets SEND A through `APC_NEW_ROWS` with a backup). Load
+`seq-demo` and press run on the SEQ page unless a check says otherwise.
+The on-screen desk mirrors the page.
+
+**286. SEND A enters and redraws; leaving restores the bank, SAVE and the toggles.** (APC40, the copy)
+Headless: `tests/test_seq_page.py::{test_send_a_enters_and_the_grid_redraws_from_the_steps,test_leaving_restores_the_bank_the_toggles_and_save,test_the_render_toggle_comes_back_on_leaving,test_a_pad_toggles_a_step_and_loads_no_preset}`.
+With a show whose bank fills rows 1, 4 and 5 (party), note the 24 bank
+pads' colours, SAVE and scene 1–4's lights. Press SEND A; press a few
+grid pads; press SEND A again. *Pass:* SEND A lights; the grid shows
+lanes 1–3's steps in green and lanes 4–5 dark, scene 1 lit (lane 1
+selected); a pad toggles its step (on screen too) and loads no preset;
+SEND A again goes dark and the 24 bank pads come back exactly as noted
+(green loaded, amber filled, dark empty), SAVE and the scene toggles
+too. *Fail:* a bank pad left dark or a step light left on
+(`MidiIO.redraw`, `page_serial`); a pad press loading a preset under the
+page.
+
+**287. Yellow over green is legible.** (APC40)
+Headless: `tests/test_seq_page.py::test_an_advancing_playhead_sends_only_the_diff`.
+SEND A up, `seq-demo` running at about 120 BPM, from a metre or two.
+*Pass:* the playhead's yellow on a lit step is told apart from green at a
+glance, on lane 3's hats every step, and red (lane 2 muted on the screen)
+from both. *Fail:* yellow and green look alike on the mk1 (`apc40.SHADE`).
+
+**288. No flicker as the playhead runs.** (APC40)
+Headless: `tests/test_seq_page.py::test_an_advancing_playhead_sends_only_the_diff`.
+Turn on every step of all five lanes on the screen; SEND A; run at 175
+BPM with span ½ bar; then 4 bars. *Pass:* the yellow column steps
+cleanly across five lit pads; no pad flickers dark between steps; the
+desk log is not flooded. *Fail:* a flash of dark or a stutter (the
+`last_out` gate; more than about twelve messages a step).
+
+**289. Clip stop is the playhead and the length.** (APC40)
+Headless: `tests/test_seq_page.py::test_clip_stop_sets_the_length_and_clip_stop_8_does_not_save`.
+SEND A, running. Watch the clip stop row; press clip stop 5; then 8; stop
+the transport. *Pass:* one clip stop is lit, moving across with the
+playhead; after clip stop 5 the pattern wraps after step 5, columns 6–8
+go dark and their pads do nothing, the light moves over 1–5 only; clip
+stop 8 restores eight and **does not save** (it is SAVE off the page);
+stopped, the clip stop row is dark. *Fail:* clip stop 8 saving a preset
+under the page; a column past the length still toggling.
+
+**290. Scene select and the mute blink.** (APC40)
+Headless: `tests/test_seq_page.py::test_scene_1_selects_then_mutes_and_leaves_the_render_toggles`.
+SEND A. Press scene 2; scene 2 again; scene 3; scene 2 again. *Pass:*
+scene 2 lights (lane 2 selected, the desk header "SEQ · lane 2 · L=8");
+the second press mutes lane 2: its scene button blinks, its pads go red,
+its snare stops on the picture; scene 3 selects lane 3 and scene 2 keeps
+blinking; pressing scene 2 then selects it (not unmutes); the render's
+points / lines / faces / rotate do not change. *Fail:* the blink
+unreadable or not blinking on an mk1 (`apc40.SHADE`, velocity 2); a
+scene press toggling `view.points`.
+
+**291. A bank pad held across SEND A does not save.** (APC40, the copy)
+Headless: `tests/test_seq_page.py::test_a_bank_pad_held_across_send_a_never_saves`.
+Page down. Hold an **empty** bank pad (row 4); while holding, press SEND
+A; keep holding past the save time; let go. *Pass:* no preset is saved
+(PRESETS and the slot unchanged), the pad does not blink, the page is up;
+its release does nothing. *Fail:* a new preset in the slot
+(`MidiIO._drop_page_holds`).
+
+**292. SHIFT inside the page.** (APC40)
+Headless: `tests/test_seq_page.py::test_shift_inside_the_page_moves_the_knobs_not_the_grid`.
+SEND A; press SHIFT (it latches); press grid pads, scene buttons and
+clip stops; turn a track knob; SHIFT again. *Pass:* with SHIFT up the
+grid, the scenes and the clip stops still edit the sequencer (no band
+scene, no SHIFT-layer pad action); the knobs and faders are the SHIFT
+layer's; SHIFT off, back to the preset layer's knobs, the page still up.
+*Fail:* a SHIFT-layer row firing under a page control (`Bindings.dispatch`).
+
+**293. QUANT loads a preset with the page up.** (APC40)
+Headless: `tests/test_seq_page.py::test_a_pad_toggles_a_step_and_loads_no_preset` (its QUANT load: the page stays, the grid redraws to the loaded pattern).
+SEND A on `seq-demo`; press QUANT (next preset) a few times, then load
+`seq-demo` again from the screen. *Pass:* the page stays up through
+every load; the grid redraws to each preset's pattern (empty for one
+with none, dark), and back to the drums on `seq-demo`; the knobs follow
+each preset's desk as usual. *Fail:* a load taking the page down, or the
+old pattern left lit.
+
+**294. A power cycle re-sends the page.** (APC40)
+Headless: `tests/test_seq_page.py::test_a_power_cycle_with_the_page_up_resends_the_page`.
+SEND A up and running; switch the APC40 off and on (or unplug and
+replug it). *Pass:* within a second or two the desk is back in the app's
+mode with the page lit as it was — SEND A lit, the steps, the scene and
+the moving clip stop. *Fail:* a dark grid or the bank's lights with the
+page still up on screen (`midi.py`'s reconnect redraw).
+
+**295. SEND A in a desk fallen back to Generic mode.** (APC40)
+Headless: none (the fake-port rig models no Generic mode).
+With the page **down**, make the desk fall back (switch it off and on
+while the app runs, SETUP's "Generic mode"); press SEND A; then press it
+again. Repeat with the page **up** before the fall-back. *Pass:* the app
+puts the desk back in its mode within a press or two (the desk log says
+"back in the app's mode"); after that SEND A toggles the page once per
+press, its light agreeing with the screen; at worst the first press is
+lost (press again). *Fail:* the page and SEND A's light out of step, or
+SEND A latching on the device itself (in Generic mode SEND A is a
+toggle the device keeps; `apc40.fell_back`).
+
+## AA. Plan 32: media (channels, the media folder, live feeds, publishing out)
+
+Plan 32 as built is [`32-media-channels.md`](32-media-channels.md): eight
+channels `a`–`h`, each a bin of 16 sources and a `slot`; stills, video,
+cameras, Syphon and NDI in; the backdrop, the faces, an effect's `aux` and
+an output reading a channel; Syphon and NDI out; the MEDIA page. On
+`plan-31-32-integration`, where plans 31 and 32 land together (base
+`plan-28-30-integration`). Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync` (four new
+dependencies). Pictures and clips to try go in `~/Hyperspace-try/media/`
+(a still, an iPhone `.heic`, an `.mp4` of about 30 s with motion, a
+`.gif`). A shared folder needs `[library] path` set to the cloud folder.
+Group AA assumes the control window at its usual 960 × 900. None of these
+has been run by a person; the loopback tests (our sender into our
+receiver) are the only evidence for 304–309.
+
+**296. A still as a backdrop.** (laptop)
+Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too,test_the_echoes_show_over_a_bright_backdrop,test_a_static_backdrop_in_the_history_keeps_its_brightness}`, `tests/test_golden_frames.py` (`backdrop-still`).
+MEDIA page: pick the still in the library (This Mac), click bin cell 1 of
+channel A, then set **Backdrop** channel to A and its alpha to 1. Turn the
+look-back on (the echoes), then **history** on and off; turn the faces'
+cut-through on; place an `acid` effect after the scene on the FX page.
+*Pass:* the still sits under the shape and is bent by the effects with
+**history** on, and keeps its own brightness (it never brightens toward
+white as the echoes build); with it off the echoes of the shape lie over
+the still unbent, visible over its bright areas too; alpha 0.5 mixes; with a backdrop and cut-through on, faint fills
+let the backdrop show (say whether that reads right). Setting Backdrop off
+returns the picture exactly as before. *Fail:* the backdrop vanishes when an
+effect is placed after the scene (`graph._place_one`), a seam or flipped
+picture (`media_tex.flipped`).
+
+**297. The faces and `aux`.** (laptop)
+Headless: `tests/test_media_faces_aux.py::{test_faces_show_channel,test_aux_wired_from_channel,test_displace_moves_pixels,test_blend_modes_with_an_aux,test_unwired_aux_reads_black}`, `tests/test_golden_frames.py` (`faces-media`, `displace-luma`, `blend-luma-key`).
+Set **Faces** to channel A (the still), alpha 0.8, then each path (STILL,
+ORBIT, FIG-8, SWAY). Back on GRAPH, wire `media.a` to the `aux` port of
+`displace`, then of `blend`; turn each on; try `blend`'s five modes and the
+luma-key threshold, `displace`'s luma and red/green modes. *Pass:* the
+picture sits on the faces in aspect, upright, and follows the pattern
+per-face or in screen space as the bitmap did; `displace` bends the frame by
+the still's brightness and mid-grey moves nothing; `blend` keys the bright
+parts; unwiring `aux` leaves the effect as if it were off. *Fail:* a flipped
+or stretched picture; an unwired aux that is not transparent
+(`fx.py`'s aux uniforms, `_lib.glsl`).
+
+**298. A video: rate, scrub, loop, the proxy.** (laptop)
+Headless: `tests/test_media_transport.py`, `tests/test_media_video.py`, `tests/test_media_channels.py::test_transport_drives_want`.
+Put the `.mp4` on channel A and the faces or backdrop on A. Watch the
+SYSTEM page for a `media.a` line and the page's playhead bar. Set rate 2,
+−1, 0, 0.5; loop, ping-pong, once; drag **position** while it plays and
+let go; wait a minute and open it again. *Pass:* it plays at native speed
+at 1; double speed at 2; backwards at −1; holds at 0; the position drag
+scrubs and, let go, it plays on from there; ping-pong reverses at each end,
+once holds the last frame; after the first open, `<home>/media-cache/proxies/`
+holds a proxy file and scrubbing is smoother on the next open.
+The frame rate holds with the clip playing (three playing clips on
+three channels: say the frame time). *Fail:* the picture stalls while
+scrubbing or the whole app hitches on a clip switch (`media.video`,
+`channels._switch`).
+
+**299. Jog with the cue knob.** (APC40)
+Headless: `tests/test_media_transport.py::{test_jog_spins_and_coasts,test_pos_latch_scrubs_then_plays_on}`.
+Select channel A on the MEDIA page. Arm Learn on **jog**, turn the APC40's
+CUE knob (relative) so the route is made; then spin the knob either way and
+let go, with the clip at rate 1 and at rate 0. *Pass:* a spin speeds the
+playhead (or runs it backwards) and, let go, it coasts back to `rate`
+within about a second, like a platter; at rate 0 it scrubs and stops. Say
+whether the gain and the coast feel right. Nothing was bound by default
+(row 339). *Fail:* it never settles (`transport.JOG_HZ`) or jumps
+(`JOG_GAIN`).
+
+**300. A dropped file appears.** (laptop; the cloud for the second half)
+Headless: `tests/test_media_folder.py::{test_dropped_file_appears_within_a_scan,test_removed_file_is_missing,test_slow_read_is_fetching,test_dataless_flag_is_fetching}`.
+With the MEDIA page open on This Mac, drop a new picture into
+`~/Hyperspace-try/media/` from Finder; then delete a file that is on a
+channel; then, with `[library] path` set to the Drive folder, drop a file
+into `<drive>/media/` from the other Mac, and one that Drive has not yet
+downloaded. *Pass:* the new file is in the list within about two seconds
+with a thumbnail, no relaunch; the deleted one's channel goes black and
+its status reads `missing` (the app does not hitch); the file from the
+other Mac appears as `shared:…`, `fetching` while Drive streams it, then
+ready. *Fail:* a stall while a placeholder downloads (`folder._probe`),
+a stuck `fetching`.
+
+**301. The missing-local banner; both Macs on `/4`.** (two Macs)
+Headless: `tests/test_media_preset.py::{test_media_preset_is_v4,test_preset_without_media_is_unchanged,test_bins_round_trip,test_v2_and_v4_both_load}`, `tests/test_ui_media.py::test_banner_lists_missing`.
+On Mac 1 save a preset with a `local:` clip, a `camera:` and a `shared:`
+file in its bins; on Mac 2 (running this build) load it from the shared
+library. Then save a preset with no media on Mac 1 and open the file.
+*Pass:* on Mac 2 the MEDIA page shows the banner "`local:…` — not on this
+Mac: shows black" for the local one and the camera if it has none, and the
+channel is black while the shared file plays; a preset with no media is
+`hyperspace.preset/2` and looks as it did. Then open that `/4` preset in a build from before plan 32 (check out
+`plan-28-30-integration`, or use a Mac that has not updated) and read what it
+says: it should refuse the file or note the unknown schema, and load
+nothing of the media. Update both Macs before saving one. *Fail:* the
+banner is missing or lists a source that is present (`channels.missing`).
+
+**302. Junk, mid-show deletes and rapid switching.** (laptop)
+Headless: `tests/test_media_folder.py::{test_junk_does_not_stop_the_scan,test_blocked_read_does_not_stall_the_scan}`, `tests/test_media_channels.py::{test_rapid_switching_with_slow_closes_stays_fast_and_balances,test_close_with_a_hung_source_returns_within_two_seconds}`, `tests/test_app_boundary.py` (the exit test).
+Put a `.txt`, a truncated `.mp4`, a 0-byte `.png` and a renamed
+`.jpg` that is not a picture in the media folder. Put a good clip on
+channel A and, while it plays, rename it in Finder. Map `media.a.slot` to an
+LFO or the sequencer at 16ths over a bin of eight clips and run it for a
+minute; then quit. *Pass:* the junk is listed with `error: …` and nothing
+else stops; the renamed clip's channel goes black and `missing`, the app
+carries on; the slot sweep never hitches the frame rate, memory and the
+thread count settle, and the app quits in about two seconds. *Fail:* a
+frame-time spike at a switch (`MediaState.poll`), a hang on quit
+(`MediaState.close`).
+
+**303. The MEDIA page at distance, and a big library.** (laptop)
+Headless: `tests/test_ui_media.py::{test_the_media_page_fits,test_a_big_library_costs_what_is_in_view,test_a_thumbnail_is_decoded_once_off_the_ui_thread}`.
+Two metres from the screen, with 30 or more files in the library and every
+channel filled. Scroll the library, click a channel's letter, assign and
+empty cells, use **Add file…** and **Copy to shared**. *Pass:* the
+page fits the panel with no scroll beyond the library list; the letters,
+status words and selected channel's transport read from there; the
+selected channel's rate, jog, position, loop, slot and fit are the
+panel's own widgets (right-click for Learn); scrolling a big library does
+not drop the frame rate. Say whether a transport only for the selected
+channel, rather than in each of the eight columns, is acceptable.
+**Add file…** opens the macOS file dialog and the file appears under This
+Mac; **Copy to shared** says where it landed. *Fail:* a stutter while
+scrolling (`ui_media` clipper, `UiTextures`).
+
+**304. Syphon in.** (laptop, a Syphon app)
+Headless: `tests/test_media_live.py::test_syphon_loopback`, `tests/test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass`.
+Run any Syphon server (Syphon Simple Server, Resolume's, a TouchDesigner
+Syphon Spout Out TOP) with a recognisable
+picture; with `kind = "syphon"` in `[[devices]]`, open the MEDIA page's
+Live tab, put `syphon:<app>/<server>` on a channel, then on the backdrop.
+*Pass:* the server appears in under 3 s; the picture is upright, the right
+way round and not scaled wrongly; quitting the server shows `lost` and,
+after a second, black; restarting it brings it back with no relaunch; the
+frame rate stays near 60. *Fail:* upside-down (`u_bmp_flip`,
+`media_tex`), a black picture (the rectangle blit, `MediaTextures.error`).
+
+**305. NDI in from Resolume.** (laptop, Resolume, same router)
+Headless: `tests/test_media_live.py::test_ndi_loopback`.
+In Resolume, turn on NDI output (Output ▸ NDI). With `kind = "ndi"` in
+`[[devices]]`, find `ndi:<Resolume sender>` on the Live tab and put it on a
+backdrop. *Pass:* it appears within a few seconds, runs at the source's
+rate with latency you cannot see in a beat, and survives Resolume quitting
+(held 1 s, then black and `lost`) and coming back. *Fail:* nothing found
+(the router blocking mDNS; try `extra_ips`, check 307), tearing or lag
+(`media.ndi`).
+
+**306. NDI in from TouchDesigner on a second Mac.** (two Macs)
+Headless: as 305.
+On Mac 2 run TouchDesigner with an NDI Out TOP; on Mac 1 use the build
+with `ndi` on. *Pass:* as 305 over the wire; say the bandwidth and the
+latency you see on your network. Note the sender's name as listed
+(`ndi:HOST (stream)` appears only when two hosts send one name). *Fail:*
+as 305.
+
+**307. `extra_ips`.** (two networks)
+Headless: `tests/test_media_live.py::test_extra_ips_go_in_the_apps_ndi_config_before_cyndilib`.
+Where mDNS is blocked (a different subnet, or turn it off on the router),
+add `extra_ips = ["<the sender's address>"]` to the `ndi` entry, relaunch
+and look at the SYSTEM line. *Pass:* the sender is found by address; the
+status reads `extra_ips via NDI config (unverified)`. This is the one that
+rests on the SDK's documentation alone: write down whether it worked. If
+not, `<home>/ndi/ndi-config.v1.json` and `NDI_CONFIG_DIR` are what to
+check. *Fail:* nothing found with the entry set (`media.ndi`).
+
+**308. Syphon out into Resolume.** (laptop, Resolume)
+Headless: `tests/test_media_publish.py::{test_syphon_out_loopback,test_each_published_output_hands_its_picture_to_its_publishers}`.
+Add `syphon = "hs"` to `[output]`; relaunch; in Resolume add a Syphon
+source and pick "hs". *Pass:* our picture arrives upright at the render
+cap's size (not 4K on a retina window), SYSTEM shows `syphon out hs — 60
+fps, readback 0.0 ms`, and the frame rate holds. *Fail:* upside-down or a
+black frame (`SyphonOut`), a dropped frame rate.
+
+**309. NDI out into Resolume and TouchDesigner.** (laptop, both)
+Headless: `tests/test_media_publish.py::{test_ndi_out_loopback,test_ndi_out_never_blocks}`.
+Add `ndi = "hs"` to `[output]` and relaunch; receive it in Resolume (NDI
+source) and in TouchDesigner (NDI In TOP) on a second Mac. *Pass:* the
+picture arrives the right way up, colours within NDI's compression, and the
+SYSTEM line reads about 60 fps and readback around 4 ms; the frame time
+rises by that ~4 ms only. Quitting the receiver does not hitch the
+app; a quit takes about two seconds. *Fail:* a stall when the receiver
+connects or disconnects (`media.publish.NdiOut`), a picture flipped.
+
+**310. A publish-only output; a window resized.** (projector or a second screen)
+Headless: `tests/test_media_publish.py::{test_publish_only_output_has_no_window,test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap}`.
+Make output 2 `window = false` with `syphon` and `ndi` set (the rig can send
+a picture it does not show); then give output 1 an `ndi` name and drag
+the render window to another screen and resize it; try `window = false`
+on output 1. *Pass:* output 2 opens no window and sends at `[output]
+render`; output 1 keeps publishing at the capped size through the resize
+and a retina/non-retina move (this is the one T9 could not see); `window =
+false` on output 1 is a note and a window. *Fail:* the sent size follows
+the window up to 4K, or a black send after a resize (`render._published`).
+
+**311. A webcam; the dependencies.** (laptop)
+Headless: `tests/test_media_live.py::{test_a_refused_camera_says_where_to_allow_it,test_cameras_are_listed_by_name,test_missing_library_is_an_error_status}`.
+On a Mac that has not had the camera allowed to this terminal, `uv sync`,
+add `kind = "camera"`, open the Live tab, put `camera:<FaceTime HD
+Camera>` on a channel. Then refuse the prompt and look at the status. *Pass:*
+macOS asks once; the picture runs at about 30 fps at 1280×720 (the
+author's one run, from a script, read 30.5); a refusal reads `error: camera
+permission (System Settings ▸ Privacy & Security ▸ Camera)`; `uv sync` pulls
+the four new libraries and `uv run hyperspace` starts with no import
+error. *Fail:* a stalled picture (`camera.CameraReader`).
+
+**312. The phone, through an NDI camera app.** (a phone, same Wi-Fi)
+Headless: none (the V1 phone is an `ndi:` source).
+Install an NDI camera app on the phone (NDI HX Camera, say), start its
+sender, find `ndi:<phone name>` on the Live tab and put it on a backdrop.
+*Pass:* it appears and runs; say the delay and the quality, and whether
+it survives the phone sleeping. This is the V1 phone (row 333); the QR
+page is V2. *Fail:* not found (the router, same network).
+
+**313. A feed vanishes and comes back.** (laptop, any live source)
+Headless: `tests/test_media_live.py::{test_live_holds_then_black,test_sender_returns,test_a_held_feed_that_vanishes_is_kept_and_found_again,test_a_channel_follows_its_device_remade_by_a_config_edit}`.
+With a Syphon or NDI feed on the backdrop, quit the sender, wait, restart
+it; then edit `config.toml` (change the `ndi` entry's `extra_ips`) while
+it runs. *Pass:* the last frame holds about a second, then black, status
+`lost`; the feed returns by itself; the config edit does not drop the
+channel for longer than the device's remake. *Fail:* it needs a slot
+switch to come back (`channels._stale`).
+
+**314. An old bitmap preset; knob 7.** (laptop, the copy; APC40 for the knob)
+Headless: `tests/test_media_preset.py::{test_bmp_file_dropped_with_note,test_bmp_alpha_is_an_alias_of_media_alpha}`.
+Copy in a preset saved by the previous build with a bitmap on the faces
+(a `view.bmp_file` value) and load it; turn the APC40's knob 7 on the
+default desk with the faces on a media channel. *Pass:* the load note says
+`bitmap file <path> is no longer read: put it on a media channel` and
+the faces are plain; put the picture on a channel and set **Faces**, and
+knob 7 moves its opacity as it did the bitmap's (the preset's old alpha
+landed on `view.media_alpha`). *Fail:* a crash on load, or knob 7 dead
+(`params`' alias rule).
+
+**315. A frozen Syphon channel.** (laptop, a Syphon app with moving
+picture)
+Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`,
+`::test_a_frozen_live_channel_says_frozen` and
+`tests/test_media_render.py::test_a_frozen_rectangle_frame_is_never_copied_again`
+(no real Syphon surface).
+Put a moving Syphon server on a channel (backdrop), set `rate` to 0, then
+watch for five seconds. *Pass:* the picture stops and the MEDIA page says
+`frozen`. The held frame names Syphon's own texture, but the channel's
+copy of it is made only when the frame moves, so it should hold. The one
+expected exception: save a renderer file (a hot reload) while frozen — the
+copy is made again from the held name, so the picture may jump to the
+live one or to garbage; write down which. An NDI feed at rate 0 should
+freeze exactly (`channels._freeze`, `syphon.SyphonSource.gl_poll`).
+
+**316. A camera without a 1280×720 mode.** (a capture card or Continuity
+Camera)
+Headless: `tests/test_media_live.py::test_a_camera_without_720p_opens_in_a_mode_it_has`
+and `::test_a_camera_with_no_mode_says_what_was_tried` (a fake `av`).
+Put such a device on a channel. *Pass:* it opens (in 1920×1080, 640×480
+or the device's default; `camera.MODES`). *Fail:* `error: …` — write down
+the wording; a device that takes no mode says `error: no supported mode
+(tried …)`.
+
+## AB. Plans 31 and 32 together
+
+**317. A preset with a pattern and a bin, saved and reloaded on the merged
+build.** (laptop, the copy, a picture; a second Mac for the last step)
+Headless: `tests/test_plan31_32_merge.py::{test_a_pattern_and_a_bin_save_as_4_and_round_trip,test_an_older_build_refuses_the_combined_4,test_a_3_only_and_a_media_free_preset_are_what_each_branch_wrote,test_media_at_the_librarys_default_is_untouched}`.
+On `plan-31-32-integration`, load TRIP, turn two steps on in the SEQ grid,
+put a picture in channel a's bin on the MEDIA page and make it the
+backdrop; save under a new name and open the file in a text editor. Load
+another preset, then the new one. Then load it on a Mac on a build from
+before plan 31, or on `plan-32-media` alone. *Pass:* the file says
+`"schema": "hyperspace.preset/4"` and holds the `seq.` values, the
+`media` section and the backdrop values; reloaded, both steps are on and
+the picture is under the scene; the other Mac refuses it ("schema … is
+not a hyperspace.preset"), the file untouched. *Fail:* `/3` or `/2`
+written (`preset.schema_of`), the pattern or the bin gone after the
+reload, or the other Mac opening the file — `plan-32-media` alone reads
+`/4` but not `/3` and would drop the pattern on a re-save (register row
+340).
 
 ## What no test covers
 
@@ -3969,6 +4454,29 @@ Only a person can settle these:
   not the feel;
 - two Macs on one shared library with this run's keys (259): no test
   runs an older build against a file this one saved (the review pass did,
-  once, by hand: register row 277);
+  once, by hand: register row 277), nor a `/3` or `/4` preset (285, 301, 317);
 - the frame rate of thousands of copies on the Mac's GPU (277): the tests
-  draw on Mesa's software rasteriser.
+  draw on Mesa's software rasteriser;
+- whether the sequencer *feels* tight against music (282): the tests prove
+  every step fires once at its exact clock time on a deterministic clock,
+  not what a person hears and sees at 175 BPM;
+- the SEQ page and the 7-to-16-LFO page at distance and their frame time
+  at the caps (280, 281): nothing has measured 16 LFOs and 16 envelopes;
+- the APC40 sequencer page on a real mk1 (286–295, on `plan-31-a1`): the
+  fake-port rig proves the messages, never the yellow, the red, the scene
+  blink or the flicker, and models no Generic-mode fall-back;
+- NDI and Syphon with a real Resolume or TouchDesigner, in and out, and NDI
+  over a network from a second Mac (304–309): the tests run our sender into
+  our receiver in one process; `extra_ips` through the app's own NDI config
+  file is unverified (307);
+- an NDI camera app on a real phone (312), a webcam through the macOS
+  permission prompt on a second Mac (311), and a published window after a
+  resize or a DPI change (310);
+- the look of a backdrop under the scene with the look-back and cut-through
+  (296), and `displace` and `blend` at distance (297): the goldens were
+  checked by eye on one still;
+- scrub and the cue knob's jog as a performer feels them (298, 299), and
+  a Drive placeholder going `fetching` then `ready` (300);
+- the MEDIA page at arm's length with a big library (303), and the frame
+  cost of three playing clips, eight channels and NDI out's ~4 ms (298,
+  303, 309): the smoke runs were on the dev machine only.

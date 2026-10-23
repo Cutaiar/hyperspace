@@ -154,7 +154,7 @@ def blocked(table: Bindings, source: str) -> str | None:
 # preset's own bases (the values a load lands, not this frame's modulation):
 #
 #   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
-#   view.bmp_*                                   the faces are off, or no bitmap file
+#   view.media_*, view.bmp_alpha                 the faces are off, or no media channel
 #   view.points_alpha / view.lines_alpha         points / lines off
 #   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
@@ -166,8 +166,9 @@ def blocked(table: Bindings, source: str) -> str | None:
 # click-to-map (`ranked`) never offers a dead param among a preset's own.
 
 _PATTERN = ("view.pattern", "view.pattern_mix")
-_BITMAP = ("view.bmp_alpha", "view.bmp_scale", "view.bmp_mode", "view.bmp_amp",
-           "view.bmp_rate")
+_MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media_amp",
+          "view.media_rate",      # plan 32: the faces' media channel (was view.bmp_*)
+          "view.bmp_alpha")       # …and the factory knob 7's alias of view.media_alpha
 _ROTATE = ("rot.rate.", "view.plane.")
 
 
@@ -181,11 +182,10 @@ def cannot_show(pid: str, values) -> str | None:
         return v is not None and not bool(v)
     if pid.startswith("pattern.") or pid in _PATTERN:
         return "faces off" if off("view.faces") else None
-    if pid in _BITMAP:
+    if pid in _MEDIA:
         if off("view.faces"):
             return "faces off"
-        f = values.get("view.bmp_file")
-        return "no bitmap file" if f is not None and not str(f) else None
+        return "no media channel" if off("view.media") else None
     if pid == "view.points_alpha":
         return "points off" if off("view.points") else None
     if pid == "view.lines_alpha":
@@ -273,7 +273,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
 def _switched_on(pid: str, values) -> bool:
     """Is `pid` part of a module `cannot_show` knows that is on — its
     switch named in `values` and set? (A param of no such module: False.)"""
-    if pid.startswith("pattern.") or pid in _PATTERN or pid in _BITMAP:
+    if pid.startswith("pattern.") or pid in _PATTERN or pid in _MEDIA:
         return bool(values.get("view.faces"))
     if pid == "view.points_alpha":
         return bool(values.get("view.points"))

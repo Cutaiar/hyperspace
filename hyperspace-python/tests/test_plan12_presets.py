@@ -416,6 +416,10 @@ EFFECTS_IN_NO_PRESET: dict[str, str] = {
     # palettes are made at the venue (fx module presets) and the factory
     # presets keep the picture they have
     "palette": "starts at mix 0 and ships no palette; saved palettes are the owner's",
+    # plan 32 T7: these bend the frame by a picture wired into their aux
+    # input; a factory preset ships no media, so there is nothing to wire
+    "displace": "reads its aux input; factory presets wire no media channel",
+    "blend": "reads its aux input; factory presets wire no media channel",
 }
 
 

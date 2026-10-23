@@ -83,7 +83,7 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
     rows in this run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
-    assert len(rows) == 24 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212)
+    assert len(rows) == 25 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212), seq-demo (plan 31)
     n = len(controls)
     for r in rows:
         assert r.count(tool.MAPPED) + r.count(tool.DARK) + r.count(tool.DEAD) == n
@@ -92,7 +92,8 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
         assert r.count(tool.DARK) + r.count(tool.DEAD) > tool.BAR, r.name
     trip = rows[names.index("TRIP")]
     k7 = next(c for c in trip.cells if c.glyph == "K7")
-    assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no bitmap file")
+    # the factory knob 7: an alias of view.media_alpha since plan 32
+    assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
 def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_path):
@@ -124,14 +125,15 @@ def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_
 def test_cannot_show_is_the_rule_by_group():
     v = {"view.faces": False, "view.points": True, "view.lines": False, "fx.on": True,
          "fx.kaleido.on": False, "fx.plasma.on": True, "dream.on": False,
-         "view.rotate": False, "view.bmp_file": ""}
+         "view.rotate": False, "view.media": 0}
     assert cannot_show("view.pattern", v) == "faces off"
     assert cannot_show("view.pattern_mix", v) == "faces off"
     assert cannot_show("pattern.mod.3", v) == "faces off"
-    assert cannot_show("view.bmp_alpha", v) == "faces off"
-    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True}) == "no bitmap file"
-    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True,
-                                          "view.bmp_file": "a.png"}) is None
+    assert cannot_show("view.media_alpha", v) == "faces off"
+    assert cannot_show("view.media_alpha", {**v, "view.faces": True}) == "no media channel"
+    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True}) == "no media channel"
+    assert cannot_show("view.media_scale", {**v, "view.faces": True,
+                                            "view.media": 2}) is None
     assert cannot_show("view.points_alpha", v) is None
     assert cannot_show("view.lines_alpha", v) == "lines off"
     # the stroke space (plan 26 A2b): dead only with the points and the lines off

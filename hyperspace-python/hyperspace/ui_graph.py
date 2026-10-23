@@ -49,8 +49,12 @@ Keep (ROUTING's prompt, `ui_routing.ask`); a refusal says why on the
 page's head (`st["note"]`) and on the drag. Right-click: a param's `mod`
 pin offers the param menu's Learn items (`Panel._ctx_learn_block`, the same
 function), a cable offers "insert" (a modifier onto it) and delete, the
-canvas the node picker (a modifier of each kind, a macro), a modifier or
-macro node delete. A modifier node dropped onto a cable is inserted into
+canvas the node picker (a modifier of each kind, a macro, and since plan
+31 an LFO or an envelope, up to its bank's cap: `add_voice`), a modifier,
+macro, LFO or extra envelope node delete (an LFO or envelope through its
+bank, one undo step; a lane envelope 1–5 refused). A sequencer lane's
+envelope binding is a ``lane`` cable: it is never deleted, only rebound
+(a lane's pin dragged onto an envelope's ``fire`` base stub). A modifier node dropped onto a cable is inserted into
 it (`dropped`). **The seam with N4** (render edits): `_create` and
 `_delete` dispatch by the pins' type through `CREATE` / `DELETE`; value and
 trigger cables are this file's handlers, image / geometry / mask N4's.
@@ -535,7 +539,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
 
 def _area_chips(st: dict) -> None:
     """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
-    MODULATION · GEOMETRY · SHADERS, wrapped to the page; a click frames
+    MODULATION · MEDIA · GEOMETRY · SHADERS, wrapped to the page; a click frames
     the canvas on that area (`frame_area`, next frame)."""
     for i, a in enumerate(graphview.AREAS):
         label = f"{graphview.TITLES[a]}##area"
@@ -1379,11 +1383,49 @@ def show_macro(panel, mid: str, at=None):
 
 
 def remove_node(panel, nid: str):
-    """Delete a node (`graphview.Edit.remove_node`)."""
+    """Delete a node (`graphview.Edit.remove_node`): a modifier, a macro, a
+    render node, an LFO or an extra envelope (plan 31 G1: through its bank,
+    one undo step — the bank's membership is in the undo state). A lane
+    envelope (1–5) is refused before any undo step is pushed."""
     e = edit_of(panel)
     if e is None:
         return None
-    return _act(panel, f"delete node {nid}", None, lambda: e.remove_node(nid))
+    hit = graphview.voice_of(nid)
+    why = voice_refusal(e.view.node(nid) if e.view is not None else None, nid) if hit else None
+    return _act(panel, f"delete node {nid}", why, lambda: e.remove_node(nid))
+
+
+def voice_refusal(n, nid: str | None = None) -> str | None:
+    """Why a bank voice's node may not be deleted (a lane envelope), or None."""
+    nid = n.id if n is not None else nid or ""
+    hit = graphview.voice_of(nid)
+    if hit is not None and hit[0] == "env" and hit[1] in graphview.LANE_ENVS:
+        return graphview.LANE_ENV_KEPT.format(label=n.label if n is not None else nid)
+    return None
+
+
+def add_refusal(panel, scheme: str) -> str | None:
+    """Why the picker's "+ LFO" / "+ envelope" is greyed: no such bank, or
+    the bank at its cap; None when one can be added."""
+    bank = graphview.bank_of(ui_routing.router_of(panel), scheme)
+    if bank is None:
+        return graphview.NO_BANK.format(what=graphview.BANK_WORDS[scheme][0])
+    return graphview.bank_refusal(bank, scheme)
+
+
+def add_voice(panel, scheme: str, at=None):
+    """The picker's "LFO" / "envelope" (plan 31 G1): a new voice in its
+    bank (`graphview.Edit.add_voice`), one undo step, placed at `at` in the
+    preset's layout (a bank's membership is the preset's). Its node id, or
+    the Refusal at the cap."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    res = _act(panel, f"add {graphview.BANK_WORDS[scheme][0]}", add_refusal(panel, scheme),
+               lambda: e.add_voice(scheme))
+    if isinstance(res, str) and not isinstance(res, graphview.Refusal):
+        _place_new(panel, res, at)
+    return res
 
 
 def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable | None:
@@ -1592,9 +1634,31 @@ def _rig_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> 
     _note(st, graphview.NOT_REMOVABLE.format(label=n.label))
 
 
+def _voice_node_cut(panel, st: dict, view: graphview.View, n: graphview.VNode) -> None:
+    """Delete pressed on an LFO or an envelope node (plan 31 G1): it goes
+    through its bank, without its cables (a route on its lane stays,
+    dormant); a lane envelope is kept, said."""
+    why = voice_refusal(n)
+    if why is not None:
+        ed.reject_deleted_item()
+        _note(st, why)
+    elif ed.accept_deleted_item(False):
+        remove_node(panel, n.id)
+
+
+def _lane_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
+    """Delete pressed on a sequencer lane's binding: kept — a lane always
+    fires an envelope — and the head says how to rebind it."""
+    ed.reject_deleted_item()
+    _note(st, graphview.LANE_NO_DELETE)
+
+
+DELETE["lane"] = _lane_cut
+
 # a node delete's handler by the node's kind (the seam: N4 maps "render"
 # and "output"); a kind not listed is the rig's
 DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
+               "lfo": _voice_node_cut, "env": _voice_node_cut,
                "render": _delete_render_node, "output": _delete_render_node}
 
 
@@ -1784,6 +1848,12 @@ def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
         imgui.end_menu()
     if n.kind in ("modifier", "macro") and imgui.menu_item_simple("delete"):
         remove_node(panel, n.id)
+    if n.kind in graphview.BANK_SCHEMES:          # plan 31 G1: an LFO, an envelope
+        why = voice_refusal(n)
+        if imgui.menu_item_simple("delete", enabled=why is None):
+            remove_node(panel, n.id)
+        if why is not None and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip(why)
     if n.kind in ("render", "output"):
         render_node_menu(panel, n)
 
@@ -1798,6 +1868,12 @@ def picker(panel, view: graphview.View, at=None) -> None:
             if imgui.menu_item_simple(kind):
                 add_modifier(panel, kind, at)
         imgui.end_menu()
+    for scheme in graphview.BANK_SCHEMES:       # plan 31 G1: another LFO, envelope
+        why = add_refusal(panel, scheme)
+        one = graphview.BANK_WORDS[scheme][0]
+        if imgui.menu_item_simple(one if why is None else f"{one}: {why}",
+                                  enabled=why is None):
+            add_voice(panel, scheme, at)
     render_picker(panel)                        # N4: an effect, hands, a composite
     free = macros_free(panel, view)
     if free and imgui.begin_menu("macro"):

@@ -93,10 +93,14 @@ EMPTY_S = 4.0        # how long "empty trash…" stays armed for its second clic
 HIDDEN_KEY = "\0hidden"   # the listings cache: a group's list with the hidden ones
 BANK_KEY = "\0bank"       # …whether each name the bank holds has a file
 TRASH_KEY = "\0trash"     # …the trash
+FACTORY_KEY = "\0factory"  # …a group's factory names, and every name it indexes
 # the module overview: every performance group but the macros (a macro's
-# meaning is its subscribers, which live in the preset), and the band
-# strip's scene, the one session module a project names
-OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS if g not in ("macro", "mod")], "band")
+# meaning is its subscribers, which live in the preset) and the media
+# channels and backdrop (plan 32: a channel's values mean nothing without
+# its bin, the preset's media section; the MEDIA page holds them), and the
+# band strip's scene, the one session module a project names
+OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS
+                     if g not in ("macro", "mod", "media", "backdrop")], "band")
 
 
 # ---- state on the panel, created on first use ----
@@ -142,8 +146,30 @@ def invalidate(panel, key: str) -> None:
     poll — the listing, the one with the hidden presets, whether the
     bank's names have files, and the trash."""
     lists = _state(panel)["lists"]
-    for slot in (key, f"{key}{HIDDEN_KEY}", BANK_KEY, TRASH_KEY):
+    for slot in (key, f"{key}{HIDDEN_KEY}", f"{key}{FACTORY_KEY}", BANK_KEY, TRASH_KEY):
         lists.pop(slot, None)
+
+
+def is_factory(panel, group: str, name: str) -> bool:
+    """``Library.is_factory`` on the poll cadence. Asked per row of the open
+    list, every frame, the library's answer re-indexed the whole group each
+    time — both roots globbed, every file stat'ed — which on a cloud
+    library of 79 presets was ~50 ms a frame (25 fps with the list open).
+    A name the index does not hold (reached by its slug alone) is asked
+    of the library."""
+    st, lib = _state(panel), panel.library
+    now = imgui.get_time()
+    slot = f"{group}{FACTORY_KEY}"
+    hit = st["lists"].get(slot)
+    if hit is None or now - hit[0] >= LIST_POLL:
+        try:
+            known = lib.factory_names(group)
+        except (LibraryError, OSError) as e:
+            lib.error = f"library: {e}"
+            known = hit[1] if hit else (frozenset(), frozenset())
+        st["lists"][slot] = hit = (now, known)
+    factory, indexed = hit[1]
+    return name in factory if name in indexed else lib.is_factory(group, name)
 
 
 def trashed(panel) -> list:
@@ -295,7 +321,7 @@ def strip(panel, group: str) -> None:
     st = _state(panel)
     cur = lib.current(group)
     listing = names(panel, group)
-    factory = cur is not None and lib.is_factory(group, cur)
+    factory = cur is not None and is_factory(panel, group, cur)
     is_dirty = dirty(panel, group)
     kind = group in lib.kinds
 
@@ -464,8 +490,8 @@ def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn
         drawn["rows"].append((name, ("field",), hidden))
         _name_field(panel, key, lambda n, old=name: _rename(panel, old, n))
         return
-    factory = lib.is_factory(group, name)
-    ink = (imgui.ImVec4(0.42, 0.42, 0.45, 1) if hidden else ui.DIM if factory
+    factory = is_factory(panel, group, name)
+    ink =(imgui.ImVec4(0.42, 0.42, 0.45, 1) if hidden else ui.DIM if factory
            else imgui.ImVec4(0.92, 0.92, 0.92, 1))
     imgui.push_style_color(imgui.Col_.text, ink)
     picked, _ = imgui.selectable(f"{name}##pick", name == cur,

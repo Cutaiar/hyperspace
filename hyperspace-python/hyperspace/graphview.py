@@ -24,14 +24,21 @@ this one read the same rows, so an edit on either is on both next frame.
   a subgraph of the preset-layer rows still its own; ``source`` — the
   keys, which are no device; ``analyzer`` — one port per band lane;
 - ``lfo`` — each LFO (``lfo.<n>``), its knobs (`lfo.<n>.*`) as input
-  ports and its lane as the output; ``modifier`` (``mod.<n>``, plan 28
+  ports and its lane as the output; ``env`` (plan 31) — each envelope
+  (``env.<n>``), the same way; ``seq`` — the step sequencer (one node,
+  ``seq``): its params as inputs and a trigger output per lane
+  (``seq:<l>``), each bound lane's envelope drawn as a ``lane`` cable into
+  that envelope's ``fire``; ``modifier`` (``mod.<n>``, plan 28
   N1) — its inputs, its params, its lane; ``macro`` (``macro.<n>``) — a
   bus: its knob in, one output, its subscribers as cables;
 - ``render`` / ``output`` — the render graph's nodes (``render:<name>``),
   with their image / geometry / mask ports and, as input ports, the
   params of the render node that owns them (`OWNERS`, the one table);
   ``render:eye`` — the shared camera (`camera.*`, `eye.*`), which draws
-  through every geometry and so has no image port;
+  through every geometry and so has no image port; ``render:media.<c>``
+  — the eight media channels (plan 32 T10), always, each with its image
+  out and its `media.<c>.*` params, one node per channel however many
+  nodes the render graph made of it (the backdrop's, a wire's);
 - ``group`` — a node per group of params no render node owns
   (``group:tempo``, ``group:master`` …).
 
@@ -55,21 +62,25 @@ pair; `land_choices` is the picker a drag onto a stub opens.
 `Binding`, into ``mod``), ``setter`` (a desk / pad / key row, into
 ``base``), ``sub`` (a macro subscriber, into ``base`` or ``depth``,
 `ref` (macro id, `Sub`)), ``input`` (a modifier's input), ``render`` (a
-render-graph edge, `ref` (source node, node, port)). A route's `scale`
+render-graph edge, `ref` (source node, node, port)), ``lane`` (plan 31: a
+sequencer lane's envelope binding, `ref` (lane, envelope id) — no row:
+dragging a lane's pin onto an envelope's ``base:env.<n>.fire`` rebinds it,
+and it cannot be deleted). A route's `scale`
 and its `when` gate are said on the cable (`label`), not drawn: a param
 has no output pin. Sink rows are not drawn in this plan.
 
 **Layout** (`auto_layout`, `home`): positions live in two maps — the
 preset's (`preset.LAYOUT_KEY`) for the nodes a preset holds (modifiers,
-macros, the render nodes and their params, a performance group's node)
-and the show's for the rig's (devices, sources, the analyzer, LFOs, the
-outputs, a session group's node). An unplaced node is laid out in its
+macros, the render nodes and their params, a performance group's node,
+the LFOs, the envelopes, the sequencer) and the show's for the rig's
+(devices, sources, the analyzer, the outputs, a session group's node). An unplaced node is laid out in its
 **area** (plan 28 N9, the owner's decision of 2026-10-20: the canvas
 organised by concern), left to right: *controllers* (the devices, the
 keys, a placeholder, a desk template) → *audio* (the analyzer, the band,
 tempo, master, audio and scene params; the small *other* area — the
 preset, ui and desk params — stacked under it) → *modulation* (the LFOs,
-the modifiers, the macros) → *geometry* (the shape, the camera, the
+the modifiers, the macros) → *media* (the eight channels and the
+backdrop, plan 32 T10) → *geometry* (the shape, the camera, the
 hands, a cloud, the scene that draws them) → *shaders* (the history, the
 effects, the composites, the outputs). `AREA` is the one table (`area_of`);
 each area's title is drawn on the canvas over its first column
@@ -93,10 +104,13 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from . import envelope as envmod
 from . import graph as rgraph
 from . import learn as learnmod
+from . import modbank
 from . import modifiers as modmod
 from . import patch as patchmod
+from . import sequencer as seqmod
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -120,9 +134,11 @@ VALUE, TRIGGER = "value", "trigger"
 IMAGE, GEOMETRY, MASK = rgraph.IMAGE, rgraph.GEOMETRY, rgraph.MASK
 TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK)
 
-KINDS = ("device", "source", "analyzer", "lfo", "modifier", "macro", "group", "render",
-         "output", "template")
-CABLE_KINDS = ("route", "setter", "sub", "input", "render")
+KINDS = ("device", "source", "analyzer", "lfo", "env", "seq", "modifier", "macro", "group",
+         "render", "output", "template")
+# plan 31 G1: ``lane`` is a sequencer lane's envelope binding (``seq.<l>.env``,
+# a fixed link the sequencer fires directly — no row), drawn as a cable
+CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
 IN, OUT = "in", "out"
 BASE, MOD, DEPTH = "base", "mod", "depth"
 # which layout map a node's position is saved in
@@ -131,6 +147,22 @@ PRESET, SESSION = "preset", "session"
 ANALYZER = "analyzer"
 EYE = "eye"                  # the shared camera's node: `render:eye`
 MISSING = "missing"          # a group node for the cables' targets no registry holds
+# plan 31 G1: the modulator banks the canvas draws a node per voice of
+# (``lfo.<n>``, ``env.<n>``: the scheme is the node's kind and the params'
+# group), in drawing order, and the sequencer's one node
+BANK_SCHEMES = ("lfo", "env")
+SEQ = "seq"
+LANE_ENVS = envmod.LANE_ENVS      # the lanes' own envelopes, never deleted
+# a bank's voice in words (one, many): the picker's entries, the refusals
+BANK_WORDS = {"lfo": ("LFO", "LFOs"), "env": ("envelope", "envelopes")}
+
+
+def voice_of(nid: str) -> tuple[str, int] | None:
+    """``lfo.3`` → ("lfo", 3), ``env.7`` → ("env", 7); None for any other id."""
+    scheme, dot, n = nid.partition(".")
+    if scheme in BANK_SCHEMES and dot and n.isdecimal() and int(n) >= 1:
+        return scheme, int(n)
+    return None
 # the LFO's knobs, in the order its node lists them (patch.py's ports)
 LFO_KNOBS = patchmod.LFO_KNOBS
 # setter ops that move a param in steps or fire it: a trigger cable
@@ -306,6 +338,13 @@ def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
     return ctx.first_cloud
 
 
+def _media_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 32 T10: `media.<c>.<key>` on channel c's node, there whatever the
+    # render graph holds (`build` adds the eight)
+    seg = pid.split(".")
+    return rgraph.media_name(seg[1]) if len(seg) >= 3 else None
+
+
 # a param's group → the render node that owns it: a node name, or a rule
 # over the id (an instance's number, an effect's name). A name the render
 # graph does not hold this frame (no output shows the hands, no scene
@@ -323,6 +362,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "camera": EYE,
     "eye": EYE,
     "output": _output_owner,
+    "media": _media_owner,
 }
 
 
@@ -389,17 +429,72 @@ def _value(p: Param | None, default: float = 1.0) -> float:
 
 # ---------------------------------------------------------------- build
 
-def _lfo_count(router: Router | None, reg: Registry) -> int:
-    lfos = getattr(router, "__dict__", {}).get("lfos") if router is not None else None
-    if lfos is not None:
+def bank_of(router: Router | None, scheme: str):
+    """The modulator bank (modbank.Bank) of `scheme` the router steps, or
+    None: ``lfo`` is also `Router.lfos` (the callers that hand it in
+    alone)."""
+    if router is None:
+        return None
+    d = getattr(router, "__dict__", {})
+    bank = (d.get("banks") or {}).get(scheme)
+    if bank is None and scheme == "lfo":
+        bank = d.get("lfos")
+    return bank
+
+
+# the param each bank's voice always declares: a bare registry's voices
+BANK_PROBE = {"lfo": "depth", "env": "fire"}
+
+
+def bank_ids(router: Router | None, reg: Registry, scheme: str) -> list[int]:
+    """A bank's voice ids (1-based, ascending): the router's bank's, else
+    every ``<scheme>.<n>.<probe>`` the registry holds. A list, not a count —
+    ids keep their gaps when a voice is removed (plan 31 B)."""
+    ids = getattr(bank_of(router, scheme), "ids", None)
+    if callable(ids):
         try:
-            return len(lfos)
+            return list(ids())
         except TypeError:
             pass
-    n = 0
-    while f"lfo.{n + 1}.depth" in reg:
-        n += 1
-    return n
+    probe = BANK_PROBE.get(scheme, "depth")
+    return [n for n in range(1, modbank.MAX_ID + 1) if f"{scheme}.{n}.{probe}" in reg]
+
+
+def _lfo_ids(router: Router | None, reg: Registry) -> list[int]:
+    """The LFOs' ids (`bank_ids`)."""
+    return bank_ids(router, reg, "lfo")
+
+
+def has_sequencer(router: Router | None, reg: Registry) -> bool:
+    """Is there a step sequencer to draw: the router steps one, or the
+    registry holds its params (plan 31 S)."""
+    return (router is not None and getattr(router, "__dict__", {}).get("sequencer")
+            is not None) or f"{seqmod.GROUP}.run" in reg
+
+
+def seq_lanes(reg: Registry) -> list[tuple[int, int, bool, bool]]:
+    """Each sequencer lane's envelope binding as (0-based lane, the 1-based
+    envelope id its steps fire — ``seq.<l>.env`` — whether any of its steps
+    is on, whether it is muted), read off the registry."""
+    out = []
+    for li in range(seqmod.LANES):
+        p = reg.get(f"{seqmod.GROUP}.{li + 1}.env")
+        if p is None:
+            continue
+        try:
+            env = round(float(p.value))
+        except (TypeError, ValueError):
+            continue
+        on = any(bool(getattr(reg.get(f"{seqmod.GROUP}.{li + 1}.{s + 1}"), "value", False))
+                 for s in range(seqmod.STEPS))
+        mute = reg.get(f"{seqmod.GROUP}.{li + 1}.mute")
+        out.append((li, env, on, bool(mute.value) if mute is not None else False))
+    return out
+
+
+def seq_running(reg: Registry) -> bool:
+    p = reg.get(f"{seqmod.GROUP}.run")
+    return bool(p.value) if p is not None else False
 
 
 def _lane_key(router: Router | None, addr: str) -> tuple | str:
@@ -448,7 +543,7 @@ def device_node(d) -> tuple[VNode, list]:
         status = str(d.status)
     except Exception as e:  # noqa: BLE001 — a status line never takes the page down
         status = f"error: {e}"
-    node = VNode(f"device:{role}", "device", role, grey=status != "connected",
+    node = VNode(f"device:{role}", "device", role, grey=not status.startswith("connected"),
                  status=f"{getattr(d, 'kind', '')} · {status}", ref=d)
     try:
         ports = [p for p in d.sources if p.kind in (VALUE, TRIGGER)]
@@ -490,7 +585,7 @@ DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "cli
 SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
                "cc": "apc40", "note": "apc40", "pitch": "apc40"}
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
-NO_DEVICE = ("key", "lane", "lfo", modmod.SCHEME)
+NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
 PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
 
 
@@ -675,12 +770,23 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for i, name in enumerate(band_names):
         add_source(analyzer, f"lane:{i}", f"{i} {name}", group="bands")
 
-    lfo_names = list(labels.get("lfo") or [])
-    for i in range(_lfo_count(router, reg)):
-        k = i + 1
-        n = add_node(VNode(f"lfo.{k}", "lfo", lfo_names[i] if i < len(lfo_names) else f"LFO {k}"))
-        addr = router.address("lfo", i) if router is not None else f"lfo:{i}"
-        add_source(n, addr, "out")
+    # plan 31 G1: a node per bank voice (the LFOs, the envelopes), by id —
+    # ids keep their gaps — then the sequencer's one node, a trigger out
+    # per lane
+    for scheme in BANK_SCHEMES:
+        names = list(labels.get(scheme) or [])
+        word = "LFO" if scheme == "lfo" else scheme
+        for k in bank_ids(router, reg, scheme):
+            i = k - 1
+            n = add_node(VNode(f"{scheme}.{k}", scheme, names[i] if i < len(names)
+                               and names[i] else f"{word} {k}"))
+            addr = router.address(scheme, i) if router is not None else f"{scheme}:{i}"
+            add_source(n, addr, "out")
+    if has_sequencer(router, reg):
+        n = add_node(VNode(SEQ, SEQ, "sequencer"))
+        for li in range(seqmod.LANES):
+            addr = router.address(SEQ, li) if router is not None else f"{SEQ}:{li}"
+            add_source(n, addr, f"lane {li + 1}", TRIGGER, group="lanes")
 
     for m in _modifiers(table):
         n = add_node(VNode(m.id, "modifier", f"{m.id} {m.kind}", ref=m))
@@ -701,9 +807,11 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         owner = None
         if base == "lane":
             owner = analyzer
-        elif base == "lfo":
+        elif base in BANK_SCHEMES:
             scheme_i = router.lane(addr)[1] if router is not None else -1
-            owner = nodes.get(f"lfo.{scheme_i + 1}") if scheme_i >= 0 else None
+            owner = nodes.get(f"{base}.{scheme_i + 1}") if scheme_i >= 0 else None
+        elif base == SEQ:
+            owner = nodes.get(SEQ)
         elif base == modmod.SCHEME:
             owner = nodes.get(modmod.id_of(addr) or "")
         if owner is None and at and role:
@@ -797,7 +905,24 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             ctx.first_cloud = r.name
     ctx.effect_node = effects
     ctx.effects = sorted(effects, key=len, reverse=True)   # `acid.2` before `acid`
+    # plan 32 T10: the eight channels are source nodes whatever the render
+    # graph holds — a channel nothing reads this frame has no node there,
+    # and one that is both the backdrop and a wire's start has two
+    # (`media.a`, `media.a(wire)`): each is drawn as its channel's one node
+    chans: dict[str, rgraph.MediaNode] = {}
     for r in rnodes:
+        if isinstance(r, rgraph.MediaNode) and (r.channel not in chans
+                                                or r.name == rgraph.media_name(r.channel)):
+            chans[r.channel] = r
+    for c in rgraph.MEDIA_CHANNELS:
+        name = rgraph.media_name(c)
+        ctx.names.add(name)
+        r = chans.get(c) or rgraph.MediaNode(name, c)       # a stand-in: never drawn into
+        n = add_node(VNode(f"render:{name}", "render", name, ref=r))
+        add_port(n, VPort(f"rout:{name}", r.OUTPUT, OUT, r.OUTPUT))
+    for r in rnodes:
+        if isinstance(r, rgraph.MediaNode):
+            continue
         kind = "output" if isinstance(r, rgraph.Output) else "render"
         n = add_node(VNode(f"render:{r.name}", kind, r.name, ref=r))
         for port, typ in r.INPUTS.items():
@@ -846,8 +971,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             nid = f"group:{MISSING}"
             owner = nodes.get(nid) or add_node(VNode(nid, "group", "missing params", grey=True,
                                                      status="ids no param has"))
-        elif p.group == "lfo" and pid.startswith("lfo.") and pid.split(".")[1].isdigit():
-            owner = nodes.get(f"lfo.{pid.split('.')[1]}") or _group_node(nodes, p.group, add_node)
+        elif (p.group in BANK_SCHEMES and pid.startswith(f"{p.group}.")
+              and pid.split(".")[1].isdigit()):
+            owner = (nodes.get(f"{p.group}.{pid.split('.')[1]}")
+                     or _group_node(nodes, p.group, add_node))
+        elif p.group == seqmod.GROUP and SEQ in nodes:
+            owner = nodes[SEQ]
         elif p.group == modmod.GROUP:
             mid = ".".join(pid.split(".")[:2])
             owner = nodes.get(mid) or _group_node(nodes, p.group, add_node)
@@ -932,11 +1061,30 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"in:{addr}>{m.id}.{k}"), src, dst,
                                       pin_type.get(src, VALUE), ref=(m, k), kind="input",
                                       off=(addr, m.address) in cut, addr=addr))
+    # plan 31 G1: each sequencer lane's envelope binding, a cable from its
+    # lane's pin to the envelope's `fire` — only for a lane that can fire
+    # (a step on, or the sequencer running); dormant while it is stopped
+    # or the lane muted
+    seq_node = nodes.get(SEQ)
+    if seq_node is not None:
+        running = seq_running(reg)
+        for li, env, on, mute in seq_lanes(reg):
+            dst = f"{BASE}:{envmod.GROUP}.{env}.fire"
+            src = src_pins.get(_lane_key(router, f"{SEQ}:{li}"))
+            if src is None or dst not in view.pins or not (on or running):
+                continue
+            why = "  (muted)" if mute else "" if running else "  (stopped)"
+            view.cables.append(VCable(cable_id(f"lane:{li}>{env}"), src, dst, TRIGGER,
+                                      ref=(li, env), kind="lane", off=mute or not running,
+                                      label=f"lane {li + 1} fires env {env}{why}",
+                                      addr=seq_node.port(src).addr))
     for r in rnodes:
         for port, src in r.inputs.items():
             if src is None:
                 continue
-            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{src.name}",
+            out = (rgraph.media_name(src.channel) if isinstance(src, rgraph.MediaNode)
+                   else src.name)          # a channel's every node is its one node's out
+            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{out}",
                                       f"rin:{r.name}/{port}", r.INPUTS[port],
                                       ref=(src, r, port), kind="render"))
 
@@ -966,7 +1114,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         n.area = area_of(n)
         n.idle = is_idle(n, macros, named) or (
-            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled)
+            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled) or (
+            channel_empty(n, reg))
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -1093,9 +1242,19 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
     return (id(table), rows, getattr(table, "macros_serial", 0), subs,
             getattr(table, "modifiers_serial", 0), getattr(reg, "serial", len(reg)),
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
-            tuple(labels.get("lfo") or ()),
+            tuple(labels.get("lfo") or ()), tuple(labels.get("env") or ()),
             frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else (),
-            effect_switches(reg))
+            effect_switches(reg), seq_key(reg), channel_bins(reg))
+
+
+def seq_key(reg: Registry) -> tuple:
+    """What the sequencer's binding cables are made of (plan 31 G1), for
+    `key`: each lane's envelope, whether a step is on and its mute, and the
+    transport — a step toggled from the grid or the APC40 rebuilds the view
+    only when it moves a lane between empty and not."""
+    if f"{seqmod.GROUP}.run" not in reg:
+        return ()
+    return (seq_running(reg), tuple(seq_lanes(reg)))
 
 
 # ---------------------------------------------------------------- layout
@@ -1110,12 +1269,17 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
 # graph's own order (the shape is drawn by the scene, the scene feeds the
 # effects, the effects the outputs). A group no area claims goes to the
 # small `OTHER` area, stacked under the audio in its column.
-CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS = (
-    "controllers", "audio", "modulation", "geometry", "shaders")
+#
+# Plan 32 T10 adds a sixth, *media*, between the modulation and the
+# geometry: the eight channels are sources of pictures (what the folder
+# and the feeds say), read by the shaders (an output, an effect's aux, the
+# backdrop under the scene) and by the faces; the backdrop's node with them.
+CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS = (
+    "controllers", "audio", "modulation", "media", "geometry", "shaders")
 OTHER = "other"
-AREAS = (CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS)   # left to right
+AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS)   # left to right
 SHARES = {OTHER: AUDIO}       # an area drawn under another's, in its column
-ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, GEOMETRY, SHADERS)
+ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, GEOMETRY, SHADERS)
 
 # the one table: a node's area by its kind, a group node by its id
 # (``group:<param group>``), a render node by its class (or a base class)
@@ -1123,30 +1287,36 @@ AREA: dict[str, str] = {
     # by kind
     "device": CONTROLLERS, "source": CONTROLLERS, "template": CONTROLLERS,
     "analyzer": AUDIO,
-    "lfo": MODULATION, "modifier": MODULATION, "macro": MODULATION,
+    "lfo": MODULATION, "env": MODULATION, SEQ: MODULATION,
+    "modifier": MODULATION, "macro": MODULATION,
     "output": SHADERS,
     # a group node, by its param group
     "group:band": AUDIO, "group:bands": AUDIO, "group:tempo": AUDIO,
     "group:master": AUDIO, "group:audio": AUDIO, "group:scene": AUDIO,
     "group:lfo": MODULATION, "group:mod": MODULATION, "group:macro": MODULATION,
+    "group:env": MODULATION, "group:seq": MODULATION,
     "group:view": GEOMETRY, "group:rot": GEOMETRY, "group:pattern": GEOMETRY,
     "group:camera": GEOMETRY, "group:eye": GEOMETRY, "group:ghost": GEOMETRY,
     "group:hands": GEOMETRY, "group:cloud": GEOMETRY,
     "group:fx": SHADERS, "group:dream": SHADERS, "group:output": SHADERS,
     "group:overlay": SHADERS,
+    "group:media": MEDIA, "group:backdrop": MEDIA,
     # a render node, by its class: the geometry and what draws it
     f"render:{EYE}": GEOMETRY,
     "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
     "HandsLayer": GEOMETRY, "Readout": GEOMETRY, "Cover": GEOMETRY,
+    # the media channels (plan 32 T10)
+    "MediaNode": MEDIA,
     # …and the pictures it goes through
     "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
     "Composite": SHADERS, "Output": SHADERS,
 }
 TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
-          MODULATION: "MODULATION", GEOMETRY: "GEOMETRY", SHADERS: "SHADERS"}
+          MODULATION: "MODULATION", MEDIA: "MEDIA", GEOMETRY: "GEOMETRY",
+          SHADERS: "SHADERS"}
 # a title too long for its room at the floor size (review round 1)
 SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
-                GEOMETRY: "GEO", SHADERS: "SHD"}
+                MEDIA: "MED", GEOMETRY: "GEO", SHADERS: "SHD"}
 
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
@@ -1174,12 +1344,19 @@ def area_of(n: VNode) -> str:
 # which kinds may sit idle (`is_idle`): a node of any other kind is always
 # drawn — the analyzer, a modifier just picked (it is dropped onto a cable
 # next), a render node, a connected device, a placeholder (it has rows)
-IDLE_KINDS = ("macro", "lfo", "group", "device")
+IDLE_KINDS = ("macro", "lfo", "env", SEQ, "group", "device")
 IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
+              "env": ("idle envelope", "idle envelopes"),
+              SEQ: ("idle sequencer", "idle sequencers"),
               "group": ("idle param group", "idle param groups"),
               "effect": ("off effect", "off effects"),
+              "channel": ("empty channel", "empty channels"),
               "off": ("off device", "off devices"), "lost": ("lost device", "lost devices")}
-NOUN_ORDER = ("macro", "lfo", "effect", "group", "off", "lost")
+# plan 32 T10: the backdrop's node (its channel picker, alpha and history
+# switch) is the media area's one setting: drawn with nothing patched, so
+# the area always says what is under the scene
+ALWAYS_DRAWN = ("group:backdrop",)
+NOUN_ORDER = ("macro", "lfo", "env", SEQ, "effect", "channel", "group", "off", "lost")
 
 
 def effect_off(n: VNode, reg: Registry | None) -> bool:
@@ -1190,6 +1367,30 @@ def effect_off(n: VNode, reg: Registry | None) -> bool:
         return False
     p = reg.get(f"fx.{n.ref.effect}.on")
     return p is not None and not bool(p.value)
+
+
+def channel_empty(n: VNode, reg: Registry | None) -> bool:
+    """Is node `n` a media channel with nothing to show and nothing to say
+    (plan 32 T10): no cable at either end, no param of it named by a
+    route, and every entry of its bin empty (`reg.media`, the channels the
+    ``media.*`` params write)? Such a channel sits on its area's idle line,
+    as an unused macro does; one with a source in its bin is drawn though
+    nothing reads it yet — it is what a wire would start from."""
+    if not isinstance(n.ref, rgraph.MediaNode) or n.wires:
+        return False
+    if any(p.patched for p in n.ports):
+        return False
+    media = getattr(reg, "media", None)
+    ch = getattr(media, "channels", {}).get(n.ref.channel) if media is not None else None
+    return ch is None or not any(ch.bin)
+
+
+def channel_bins(reg: Registry) -> tuple:
+    """Which channels hold anything, for `key`: a bin filled or emptied on
+    the MEDIA page rebuilds the view (an empty channel is idle)."""
+    media = getattr(reg, "media", None)
+    chans = getattr(media, "channels", None) or {}
+    return tuple(c for c, ch in chans.items() if any(getattr(ch, "bin", ())))
 
 
 def effect_switches(reg: Registry) -> tuple:
@@ -1213,7 +1414,7 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
     An effect switched off is idle by `build`'s own rule (`effect_off`,
     review round 1): its render cables do not count, a value cable on any
     node of that effect does."""
-    if n.kind not in IDLE_KINDS or n.wires:
+    if n.kind not in IDLE_KINDS or n.wires or n.id in ALWAYS_DRAWN:
         return False
     names = set(named)
     if any(p.param in names or p.addr in names for p in n.ports):
@@ -1227,6 +1428,8 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
 
 
 def _idle_noun(n: VNode) -> str:
+    if isinstance(n.ref, rgraph.MediaNode):
+        return "channel"
     if n.kind == "render":
         return "effect"
     if n.kind == "device":
@@ -1555,10 +1758,12 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
 def home(n: VNode) -> str:
     """Which layout map holds node `n`'s position: the preset's for what
     a preset holds (modifiers, macros, the render nodes, a performance
-    group's node, the desk template it names), the show's for the rig
-    (devices — a layered desk's every node, a placeholder — sources, the
-    analyzer, LFOs, the outputs, a session group's node)."""
-    if n.kind in ("modifier", "macro", "render", TEMPLATE):
+    group's node, the desk template it names, and since plan 31 the LFOs,
+    the envelopes and the sequencer: a bank's membership is preset
+    content), the show's for the rig (devices — a layered desk's every
+    node, a placeholder — sources, the analyzer, the outputs, a session
+    group's node)."""
+    if n.kind in ("modifier", "macro", "render", TEMPLATE, *BANK_SCHEMES, SEQ):
         return PRESET
     if n.kind == "group":
         group = n.id.partition(":")[2]
@@ -1657,9 +1862,12 @@ def summary(n: VNode) -> list[str]:
             lines.append("not in this rig")
         elif n.grey:
             lines.append(n.status.rpartition(" · ")[2] or "not connected")
-    elif n.kind == "lfo":
+    elif n.kind in BANK_SCHEMES:
         lines = [f"out {_short(outs[0].live if outs else None)}",
                  f"{_count(len(params), 'knob')} · {sum(p.patched for p in params)} patched"]
+    elif n.kind == SEQ:
+        lines = [f"{_count(len(outs), 'lane')} · {sum(p.patched for p in outs)} patched",
+                 f"{_count(len(params), 'param')} · {sum(p.patched for p in params)} patched"]
     elif n.kind == "modifier":
         m = n.ref
         ins = [a for a in getattr(m, "inputs", ()) if a]
@@ -1879,9 +2087,27 @@ SESSION_ROW = "{what} is the session's (bindings.json): edit it on ROUTING"
 SHIFT_NODE = "{addr} on the SHIFT node is the session's (bindings.json): map it on ROUTING"
 NOT_REMOVABLE = "{label}: the rig's, not the preset's (nothing to delete)"
 NO_SUCH_MOD = "no modifier {kind}"
+# plan 31 G1: the banks' nodes and the sequencer's bindings
+LANE_ENV_KEPT = "{label} is a sequencer lane's envelope: it stays (an extra one can go)"
+BANK_FULL = "{k} {what}, the most there can be: delete one to add another"
+
+
+def bank_refusal(bank, scheme: str) -> str | None:
+    """Why the picker may not add a voice to `bank`: `BANK_FULL` at the
+    cap, else the bank's own reason (`modbank.Bank.refusal`: its ids used
+    up), or None."""
+    why = bank.refusal()
+    if why is not None and len(bank) >= bank.MAX:
+        return BANK_FULL.format(k=len(bank), what=BANK_WORDS[scheme][1])
+    return why
+NO_BANK = "no {what} bank on this rig"
+LANE_NO_DELETE = ("a lane always fires an envelope: drag its pin onto another "
+                  "envelope's fire to rebind it")
+LANE_BOUND = "lane {lane} fires env {env} already"
 
 # a continuous scheme's noun for the refusals ("a hand sets no base")
 NOUNS = {"hand": "a hand", "hands": "the hands", "lane": "a band", "lfo": "an LFO",
+         "env": "an envelope", SEQ: "a sequencer lane",
          "mod": "a modifier", "axis": "a stick", "ext": "an outside lane"}
 DESK_NOUNS = {"cc": "a desk knob", "note": "a desk button", "pitch": "a desk fader",
               "pad": "a pad button", "hat": "the D-pad", "key": "a key"}
@@ -2045,9 +2271,13 @@ class Edit:
         """A cable dragged from `src_port` to `dst_port` (either order).
         Dispatched by type: a render pin is N4's (`wire`). Between two
         input pins — a cable's end picked up where it lands and dropped on
-        another — the cable moves (`move`)."""
+        another — the cable moves (`move`). A sequencer lane's pin onto an
+        envelope's ``fire`` base stub rebinds the lane (`bind_lane`)."""
         if self.is_render(src_port, dst_port):
             return self._render("wire", *self.ordered(src_port, dst_port))
+        bound = self._binding(*self.ordered(src_port, dst_port))
+        if bound is not None:
+            return self.bind_lane(*bound)
         if is_output(src_port) == is_output(dst_port):
             return self.move(src_port, dst_port)
         return self.connect_value(*self.ordered(src_port, dst_port))
@@ -2062,7 +2292,53 @@ class Edit:
             return check(*self.ordered(src_port, dst_port)) if check is not None else None
         if is_output(src_port) == is_output(dst_port):
             return self._move_refusal(src_port, dst_port)
+        bound = self._binding(*self.ordered(src_port, dst_port))
+        if bound is not None:
+            return self._bind_refusal(*bound)
         return self._value_refusal(*self.ordered(src_port, dst_port))
+
+    # ---- a sequencer lane's envelope (plan 31 G1) ----
+
+    def _binding(self, src: str, dst: str) -> tuple[int, int] | None:
+        """(0-based lane, envelope id) when `src` is a sequencer lane's pin
+        and `dst` an envelope's ``base:env.<n>.fire`` — a binding, not a
+        route (a route from the lane lands on ``mod``); else None."""
+        if pin_kind(dst) != BASE:
+            return None
+        head, n, tail = ([*dst.partition(":")[2].split("."), "", "", ""])[:3]
+        if head != envmod.GROUP or tail != "fire" or not n.isdecimal():
+            return None
+        hit = self.view.owner(src) if self.view is not None else None
+        if hit is None or hit[0].kind != SEQ or hit[1] is None or not hit[1].addr:
+            return None
+        addr = hit[1].addr
+        if self.router is not None:
+            li = self.router.lane(addr)[1]
+        else:
+            tail_i = addr.partition(":")[2]
+            li = int(tail_i) if tail_i.isdecimal() else -1
+        return (li, int(n)) if 0 <= li < seqmod.LANES else None
+
+    def _bind_refusal(self, lane: int, env: int) -> str | None:
+        pid = f"{seqmod.GROUP}.{lane + 1}.env"
+        p = self.reg.get(pid) if self.reg is not None else None
+        if p is None:
+            return NO_PARAM.format(pid=pid)
+        if f"{envmod.GROUP}.{env}.fire" not in self.reg:
+            return NO_PARAM.format(pid=f"{envmod.GROUP}.{env}.fire")
+        if round(float(p.value)) == env:
+            return LANE_BOUND.format(lane=lane + 1, env=env)
+        return None
+
+    def bind_lane(self, lane: int, env: int):
+        """Sequencer lane `lane` (0-based) fires envelope `env` from now on:
+        its ``seq.<l>.env`` param set — the fixed link the sequencer calls,
+        no row. (lane, env), or a Refusal when it may not be."""
+        why = self._bind_refusal(lane, env)
+        if why is not None:
+            return Refusal(why)
+        self.reg[f"{seqmod.GROUP}.{lane + 1}.env"].set(env)
+        return (lane, env)
 
     def _value_refusal(self, src: str, dst: str) -> str | None:
         kind, pid = pin_kind(dst), dst.partition(":")[2]
@@ -2304,9 +2580,12 @@ class Edit:
     # ---- a cable deleted ----
 
     def disconnect(self, cable: VCable):
-        """Delete a cable: dispatched by kind (a render cable is N4's, `unwire`)."""
+        """Delete a cable: dispatched by kind (a render cable is N4's,
+        `unwire`; a sequencer lane's binding is refused: it is rebound)."""
         if cable.kind == "render" or cable.type in RENDER_TYPES:
             return self._render("unwire", cable)
+        if cable.kind == "lane":
+            return Refusal(LANE_NO_DELETE)
         return self.disconnect_value(cable)
 
     def disconnect_value(self, cable: VCable):
@@ -2399,10 +2678,47 @@ class Edit:
             kind = node.kind
         else:
             kind = ("modifier" if modmod.number(nid) else "macro" if is_macro(nid)
-                    else "render" if nid.startswith("render:") else "")
+                    else "render" if nid.startswith("render:")
+                    else nid.partition(".")[0] if voice_of(nid) else "")
         if kind in ("render", "output"):
             return self._render("remove_render_node", nid)
+        if kind in BANK_SCHEMES:
+            return self.remove_voice(nid, node)
         return self.remove_value_node(nid, kind, node)
+
+    # ---- a bank's voices (plan 31 G1) ----
+
+    def remove_voice(self, nid: str, node: VNode | None = None):
+        """Delete an LFO or an extra envelope (``lfo.3``, ``env.7``) through
+        its bank (`Bank.remove`): its params go, the ids above keep theirs,
+        a route on its lane goes dormant. A lane envelope (1–5) is refused.
+        None when it went."""
+        hit = voice_of(nid)
+        label = node.label if node is not None else nid
+        if hit is None:
+            return Refusal(NOT_REMOVABLE.format(label=label))
+        scheme, n = hit
+        if scheme == envmod.GROUP and n in LANE_ENVS:
+            return Refusal(LANE_ENV_KEPT.format(label=label))
+        bank = bank_of(self.router, scheme)
+        if bank is None:
+            return Refusal(NO_BANK.format(what=BANK_WORDS[scheme][0]))
+        if not bank.remove(n):
+            return Refusal(NOT_REMOVABLE.format(label=label))
+        return None
+
+    def add_voice(self, scheme: str):
+        """A new LFO or envelope (`Bank.add`, one past the highest id, its
+        params declared): its node id (``lfo.5``), or a Refusal at the cap."""
+        if scheme not in BANK_SCHEMES:
+            return Refusal(NOT_A_PORT)
+        bank = bank_of(self.router, scheme)
+        if bank is None:
+            return Refusal(NO_BANK.format(what=BANK_WORDS[scheme][0]))
+        why = bank_refusal(bank, scheme)
+        if why is not None:
+            return Refusal(why)
+        return f"{scheme}.{bank.add()}"
 
     def remove_value_node(self, nid: str, kind: str, node: VNode | None = None):
         if kind == "modifier" and self.table.modifier(nid) is not None:
@@ -2533,6 +2849,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
         return spec_name(f"rout:{src.name}", render_graph)
     if isinstance(node, rgraph.Effect):
         name = node.effect
+    elif isinstance(node, rgraph.MediaNode):
+        name = rgraph.media_name(node.channel)      # `media.a(wire)` is channel a's
     elif isinstance(node, (rgraph.Fx, rgraph.Capture, rgraph.Shape, rgraph.Readout,
                            rgraph.PointCloud)):
         return None, _plumbing(built)
@@ -2641,7 +2959,9 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None
     into_effect = dst_kind == "effect"
 
     def moves(name: str, key: str, where: str) -> bool:
-        if name == w.node:                       # the effect is fed by this wire now
+        # the effect is fed by this wire now — but an aux wire (plan 32 T7)
+        # is a second picture: the effect stays where it sits
+        if name == w.node and not rgraph.is_aux(w):
             return True
         target = where if key == "into" or where.startswith("output.") else None
         if target is not None and f"{target}.image" == d:   # its port takes this wire
