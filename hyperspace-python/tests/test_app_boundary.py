@@ -1440,3 +1440,86 @@ def test_the_media_exit_joins_everything_within_two_seconds(tmp_path):
     other = app._open_media("", tmp_path / "home2")      # no [library] path: no shared folder
     assert other.folder.shared is None
     other.close()
+
+
+def test_the_resolver_stamp_moves_when_a_download_lands(tmp_path):
+    """Final review A-I1: the media resolver's stamp carries the scan's
+    status, so a file whose size and mtime stay put while it goes from
+    `fetching` to `ready` still reads as changed; `status` is the folder's."""
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(size=10, mtime=1.0, status="fetching")
+    folder = SimpleNamespace(entry=lambda sid: entry, status=lambda sid: entry.status)
+    r = app.MediaResolver(folder)
+    was = r.stamp("shared:a.png")
+    assert r.status("shared:a.png") == "fetching"
+    entry.status = "ready"
+    assert r.stamp("shared:a.png") != was and r.status("shared:a.png") == "ready"
+
+
+_STUCK_EXIT = r"""
+import sys, threading, time
+from pathlib import Path
+from types import SimpleNamespace
+
+import av
+from hyperspace import app
+from hyperspace.media import pool, proxy
+from hyperspace.media.video import VideoSource
+
+home = Path(sys.argv[1])
+never = threading.Event()
+media = app._open_media(str(home / "lib"), home / "home")
+# three stills mid-download: every pool worker stuck in a read
+for _ in range(pool.WORKERS + 2):
+    pool.submit(never.wait)
+pool.submit_thumb(never.wait)
+# a transcode running on the proxy worker
+started = threading.Event()
+def transcode(path, cache, cancel=None):
+    started.set()
+    never.wait()
+proxy.make_proxy = transcode
+clip = home / "clip.mp4"
+clip.write_bytes(b"x")
+proxy.submit(clip, home / "cache")
+started.wait(2)
+# a video on a channel stuck in av.open
+av.open = lambda *a, **k: never.wait()
+media.state.opener = lambda sid, r: VideoSource(sid, clip)
+media.state.resolver.path = lambda sid: clip
+media.state.assign("a", 0, "local:clip.mp4")
+media.poll(1 / 60, 0.0)
+time.sleep(0.1)
+print("closing", time.time(), flush=True)
+t = time.monotonic()
+app.close_all(SimpleNamespace(stop=lambda: None), media)
+print("closed", time.monotonic() - t, flush=True)
+"""
+
+
+def test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck(tmp_path):
+    """Final review A-I1 / A-m1 / A-m4: with every pool worker stuck in a
+    cloud file's read, a thumbnail job and a transcode running and a
+    video stuck opening, the app's close path (`close_all`, one shared
+    deadline) returns and the interpreter exits — no worker joined at
+    exit — inside 2 s of the close starting."""
+    import subprocess
+    import sys
+    import time
+
+    script = tmp_path / "stuck_exit.py"
+    script.write_text(_STUCK_EXIT)
+    p = subprocess.Popen([sys.executable, str(script), str(tmp_path)], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, cwd=Path(__file__).parent.parent)
+    try:
+        out, err = p.communicate(timeout=20)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        out, err = p.communicate()
+        pytest.fail(f"the process never exited: {out!r} {err[-2000:]!r}")
+    ended = time.time()
+    assert p.returncode == 0, err[-2000:]
+    lines = dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
+    assert float(lines["closed"]) < 2.0, out
+    assert ended - float(lines["closing"]) < 2.0, (ended, out)

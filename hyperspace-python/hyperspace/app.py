@@ -141,11 +141,17 @@ def close_all(audio, *adapters) -> None:
     device, the pad included; plan 27 B1), the dream worker — then the
     audio stream, best-effort, so a broken port never blocks a quit or a
     restart. The one list for both exits (audit P1); `None` for an
-    adapter that was never opened."""
-    for a in adapters:
-        if a is not None:
-            _quiet(a.close)
-    _quiet(audio.stop)
+    adapter that was never opened. Plan 32 (final review A-m1): the
+    closes share one deadline, `media.pool.EXIT_S` from here — each waits
+    what is left of it at most."""
+    _quiet(media_pool.begin_exit)
+    try:
+        for a in adapters:
+            if a is not None:
+                _quiet(a.close)
+        _quiet(audio.stop)
+    finally:
+        _quiet(media_pool.end_exit)     # the deadline is the exit's alone
 
 
 class MediaResolver:
@@ -155,7 +161,9 @@ class MediaResolver:
     scans — `devices` is pointed at the registry once it exists). Both are
     lookups in what a scan already made, never a scan: the MEDIA page asks
     every frame. `stamp` is what tells a replaced file: the scan's size
-    and mtime for the id."""
+    and mtime for the id, and its status, so a file that finishes
+    downloading opens afresh (final review A-I1); `status` is the scan's
+    word on a file (`fetching` is never opened)."""
 
     def __init__(self, folder: MediaFolder, devices=None):
         self.folder = folder
@@ -174,17 +182,22 @@ class MediaResolver:
 
     def stamp(self, sid: str):
         e = self.folder.entry(sid)
-        return None if e is None else (e.size, e.mtime)
+        return None if e is None else (e.size, e.mtime, e.status)
+
+    def status(self, sid: str) -> str:
+        return self.folder.status(sid)
 
 
 class MediaIO:
     """The media side of the app (plan 32): the folder (scanned on its own
     timer), the eight channels, polled once a frame in the scene-setter
     slot, and the close that both exits run — every source closed on the
-    channels' closer thread within a shared 1.5 s budget
+    channels' closer thread within a 1.5 s budget
     (`channels.CLOSE_BUDGET_S`), the folder's timer stopped, the proxy
-    worker and the pool told to stop without waiting (review focus 3: the
-    exit stays under 2 s)."""
+    worker and the pool told to stop without waiting, all inside the
+    exit's one deadline (`media.pool.left`; review focus 3: the exit stays
+    under 2 s). The workers are daemon threads, so one stuck in a read
+    never holds the interpreter's exit."""
 
     def __init__(self, folder: MediaFolder, state: MediaState):
         self.folder, self.state = folder, state

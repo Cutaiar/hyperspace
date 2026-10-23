@@ -17,8 +17,9 @@ Once dropped a source is never read again, so a late decode finishing on a
 closed source (still.py) reaches nothing.
 
 A file the resolver could not find is a `MissingSource` (black,
-`missing`). Every `RECHECK_S` the channel asks the resolver again: a file
-that has arrived opens, one that has gone goes black, and one replaced on
+`missing`); one still downloading is one too (black, `fetching`: a read
+of it would block until it lands). Every `RECHECK_S` the channel asks
+the resolver again: a file that has arrived or finished downloading opens, one that has gone goes black, and one replaced on
 disk (the resolver's optional `stamp(sid)` moved) opens afresh. The
 resolver answers from the folder's last scan, so none of this touches the
 disk on the frame thread."""
@@ -33,13 +34,15 @@ from typing import Any
 from . import adapters, ids
 from .adapters import MissingSource
 from .frame import MediaFrame
-from .source import MISSING, Source, error
+from . import pool
+from .source import FETCHING, MISSING, Source, error
 from .transport import LOOPS, Transport
 
 CHANNELS = "abcdefgh"
 BIN = 16
 FITS = ("cover", "contain", "stretch")
 EMPTY = "empty"          # a bin entry with nothing in it: black
+FROZEN = "frozen"        # a live feed held at rate 0 (row 324)
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
 STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
 CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
@@ -246,11 +249,11 @@ class MediaState:
         except ValueError:
             return False
         r = self.resolver
-        missing = isinstance(src, MissingSource) and src.status == MISSING
+        missing = isinstance(src, MissingSource) and src.status in (MISSING, FETCHING)
         if kind in ids.FILE_KINDS:
             here = r.path(sid) is not None
-            if missing:
-                return here
+            if missing:       # arrived, or `fetching` and `missing` swapped
+                return here or src.status != adapters.file_status(r, sid)
             if not here:
                 return True
             return self._stamp(sid) != ch.stamp
@@ -301,9 +304,14 @@ class MediaState:
             return None
 
     def status(self, c: str) -> str:
+        """The source's status; `frozen` while a live feed is held at rate
+        0 — nobody reads the source then, so its own would drift to
+        `lost` (final review A-m3)."""
         ch = self.channels.get(c)
         if ch is None or ch.source is None:
             return EMPTY
+        if ch.frozen:
+            return FROZEN
         return str(ch.source.status)
 
     def playhead(self, c: str) -> tuple[float, float] | None:
@@ -333,8 +341,9 @@ class MediaState:
             kind = ids.parse(sid).kind
         except ValueError:
             return True          # never in a bin: read_bins and assign refuse it
-        if kind in ids.FILE_KINDS:
-            return self.resolver.path(sid) is not None
+        if kind in ids.FILE_KINDS:   # one still downloading is on its way, not missing
+            return (self.resolver.path(sid) is not None
+                    or adapters.file_status(self.resolver, sid) == FETCHING)
         if kind == "phone":
             return True
         return self.resolver.live(sid) is not None
@@ -379,11 +388,12 @@ class MediaState:
         """App exit: every source dropped and closed, waiting at most
         `budget` s for all the closes together, then returning whatever is
         left (the closer is a daemon: a close still stuck dies with the
-        process). A poll after this opens nothing. True when all closed."""
+        process). A poll after this opens nothing. True when all closed.
+        Within what is left of the app's exit (`pool.left`)."""
         self._closed = True
         for ch in self.channels.values():
             self._switch(ch, None, 0.0)
-        return self.drain(budget)
+        return self.drain(pool.left(budget))
 
 
 def _read(src) -> MediaFrame | None:

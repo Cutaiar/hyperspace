@@ -13,7 +13,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from . import proxy
+from . import pool, proxy
 from .frame import CAP_FILE, MediaFrame, to_rgba
 from .source import FETCHING, READY, Latest, error
 
@@ -22,6 +22,7 @@ VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".gif", ".avi"}
 PROXY_MAX_S = 600.0     # longer clips get no proxy
 SEQUENTIAL_S = 1.0      # moving forward this far or less: decode on, no seek
 _IDLE_S = 0.05
+CLOSE_JOIN_S = 1.0      # how long close waits for the thread; then it is abandoned
 
 
 def _probe(container, stream) -> tuple[float, float]:
@@ -76,12 +77,16 @@ class VideoSource:
         self._wake.set()
 
     def close(self) -> None:
+        """Stop the thread and wait `CLOSE_JOIN_S` at most (less near the
+        app's exit deadline). A thread stuck in `av.open` (a file still
+        downloading) is abandoned: it is a daemon and sees `_stop` when the
+        open returns, so the closer goes on to the next source (A-I1)."""
         t, self._thread = getattr(self, "_thread", None), None
         if t is None:
             return
         self._stop.set()
         self._wake.set()
-        t.join()
+        t.join(pool.left(CLOSE_JOIN_S))
 
     # -- the source's own thread ------------------------------------------
 

@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from .pool import DaemonExecutor
 
 MAX_SIZE = (1280, 720)
 
@@ -20,10 +21,14 @@ class _Cancelled(Exception):
 
 
 # One worker of its own, so a transcode never takes a media.pool thread and
-# only one runs at a time. cancel_all (app exit) must not wait for it.
-_lock = threading.Lock()
-_exec: ThreadPoolExecutor | None = None
-_flags: dict[str, threading.Event] = {}   # queued or running jobs by clip path
+# only one runs at a time. cancel_all (app exit) must not wait for it: the
+# worker is a daemon thread (pool.DaemonExecutor), so a transcode still
+# running never holds the interpreter's exit either (final review A-m4).
+# A hot reload reruns this module: the worker and the flags already made
+# carry over, so cancel_all at exit still reaches a job in flight
+_lock = globals().get("_lock") or threading.Lock()
+_exec: DaemonExecutor | None = globals().get("_exec")
+_flags: dict[str, threading.Event] = globals().get("_flags") or {}   # queued or running, by clip
 
 
 def submit(path: Path, cache: Path) -> bool:
@@ -35,7 +40,7 @@ def submit(path: Path, cache: Path) -> bool:
         if key in _flags:
             return False
         if _exec is None:
-            _exec = ThreadPoolExecutor(1, thread_name_prefix="media-proxy")
+            _exec = DaemonExecutor(1, "media-proxy")
         flag = _flags[key] = threading.Event()
         _exec.submit(_job, key, Path(path), Path(cache), flag)
         return True

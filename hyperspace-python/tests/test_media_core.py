@@ -163,3 +163,40 @@ def test_open_source_picks_still_and_unsupported(tmp_path):
 def test_pool_threads_are_named():
     from hyperspace.media import pool
     assert pool.submit(lambda: threading.current_thread().name).result(2).startswith("media-pool-")
+
+
+def test_a_fetching_file_opens_as_black_fetching():
+    """Final review A-I1: a file the folder says is still downloading is
+    not opened — black, `fetching` — so nothing reads a dataless file."""
+    class Fetching(_Resolver):
+        def status(self, sid):
+            return source.FETCHING
+    s = adapters.open_source("shared:arriving.png", Fetching(None))
+    assert isinstance(s, adapters.MissingSource) and s.status == source.FETCHING
+
+
+def test_pool_workers_are_daemons(tmp_path):
+    """Final review A-I1 / A-m4: no pool, thumbnail or proxy worker can
+    hold the interpreter's exit — each is a daemon thread nothing joins."""
+    from hyperspace.media import pool, proxy
+
+    assert pool.submit(lambda: threading.current_thread().daemon).result(2)
+    assert pool.submit_thumb(lambda: threading.current_thread().daemon).result(2)
+    proxy.submit(tmp_path / "no-such-clip.mp4", tmp_path / "cache")
+    assert proxy._exec is not None and all(t.daemon for t in proxy._exec.threads)
+
+
+def test_the_exit_shares_one_deadline():
+    """A-m1: once the exit begins every close waits what is left of one
+    deadline, not its own bound in full."""
+    from hyperspace.media import pool
+
+    assert pool.left(1.5) == 1.5
+    pool.begin_exit(0.2)
+    try:
+        assert pool.left(1.5) <= 0.2
+        time.sleep(0.25)
+        assert pool.left(1.5) == 0.0
+    finally:
+        pool.end_exit()
+    assert pool.left(1.5) == 1.5

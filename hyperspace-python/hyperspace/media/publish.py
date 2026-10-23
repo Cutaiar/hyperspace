@@ -39,7 +39,7 @@ from typing import Protocol
 
 import numpy as np
 
-from . import live
+from . import live, pool
 from .source import error
 
 NDI_RATE = Fraction(60, 1)    # the frame rate an NDI sender announces (the loop's)
@@ -294,7 +294,7 @@ class NdiOut(_Out):
         self._job.set()
         th, self._thread = self._thread, None
         if th is not None:
-            th.join(1.5)
+            th.join(pool.left(1.5))       # within the app's exit (A-m1)
         self._drop_buffers()
 
 

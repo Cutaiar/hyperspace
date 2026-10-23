@@ -92,8 +92,12 @@ class MediaFolder:
     # thread, so they answer from the last scan. An id the scan has not seen
     # is None / `missing` until the next one.
     def path(self, sid: str) -> Path | None:
+        """The file for `sid`, or None: not seen, gone, or still
+        downloading (`fetching`) — reading a cloud file mid-download blocks
+        until it lands (or for good, offline), so nothing opens one; the
+        scan after it lands says `ready` (final review A-I1)."""
         e = self._info.get(sid)
-        if e is not None and e.status != MISSING:
+        if e is not None and e.status not in (MISSING, FETCHING):
             return e.path
         if sid.startswith("file:") and sid not in self._files:
             self.add_file(sid[5:])   # a preset named it: put it on the books
@@ -288,11 +292,13 @@ class MediaFolder:
             pass
 
     def stop(self) -> None:
-        """Stop the timer thread; a scan already running finishes on its own."""
+        """Stop the timer thread; a scan already running finishes on its own.
+        The join is bounded (by what is left of the app's exit, too): the
+        timer only waits on its stop flag."""
         self._stop.set()
         t, self._thread = self._thread, None
         if t is not None:
-            t.join()
+            t.join(pool.left(1.0))
 
     # -- thumbnails and copies --------------------------------------------
     def _thumb_path(self, e: Entry) -> Path:
@@ -313,7 +319,8 @@ class MediaFolder:
         with self._lock:
             job = self._thumb_jobs.get(out.stem)
             if out.stem not in self._thumb_bad and (job is None or job.done()):
-                self._thumb_jobs[out.stem] = pool.submit(self._make_thumb, e.path, out)
+                # their own worker, behind no still a channel wants (A-m2)
+                self._thumb_jobs[out.stem] = pool.submit_thumb(self._make_thumb, e.path, out)
         return None
 
     def _make_thumb(self, path: Path, out: Path) -> None:

@@ -350,7 +350,7 @@ class LiveKind(devices.Base):
         with self._lock:
             srcs = list(self._sources.values())
             self._sources, self._feeds, self._handles = {}, {}, {}
-        end = time.monotonic() + JOIN_S
+        end = time.monotonic() + pool.left(JOIN_S)   # within the app's exit (A-m1)
         for s in srcs:
             _quiet(lambda s=s: s.shut(max(end - time.monotonic(), 0.0)))
         if scanner is not None:

@@ -280,3 +280,62 @@ def test_video_thumb(mk):
     assert f.status("local:c.mp4") == "ready"
     f.thumb("local:c.mp4")
     assert wait_for(lambda: f.thumb("local:c.mp4") is not None)
+
+
+def test_a_file_still_downloading_is_not_opened_until_it_is_ready(mk, monkeypatch):
+    """Final review A-I1: a `fetching` (cloud-dataless) file has no path,
+    so no channel opens it (a read would block until the download lands);
+    once it is downloaded the next scan says `ready`, gives the path, and
+    moves `changed` — the status is part of what a scan compares."""
+    f = mk()
+    (f.local / "a.png").write_bytes(b"x" * 1000)
+    real = os.stat
+    dataless = {"on": True}
+
+    class St:
+        def __init__(self, st):
+            self._st = st
+            self.st_flags = mf.SF_DATALESS if dataless["on"] else 0
+
+        def __getattr__(self, k):
+            return getattr(self._st, k)
+    monkeypatch.setattr(mf.os, "stat", lambda p, *a, **k: St(real(p, *a, **k)))
+    f.scan()
+    assert f.status("local:a.png") == "fetching" and f.path("local:a.png") is None
+    was = f.changed
+    dataless["on"] = False                     # the download landed
+    f.scan()
+    assert f.status("local:a.png") == "ready" and f.path("local:a.png") == f.local / "a.png"
+    assert f.changed == was + 1
+
+
+def test_thumbnails_have_their_own_worker_and_a_short_queue():
+    """A-m2: thumbnail jobs never queue on the pool a still a channel wants
+    decodes on, and at most `THUMB_QUEUE` wait — the oldest past that are
+    dropped (their rows scrolled past)."""
+    gate = threading.Event()
+    jobs = [pool.submit_thumb(gate.wait)]
+    try:
+        assert wait_for(lambda: jobs[0].running(), 1.0)
+        jobs += [pool.submit_thumb(gate.wait) for _ in range(pool.THUMB_QUEUE + 5)]
+        # a still's decode on the pool runs at once, behind no thumbnail
+        name = pool.submit(lambda: threading.current_thread().name).result(1.0)
+        assert name.startswith("media-pool-")
+        waiting = [j for j in jobs if not j.running() and not j.cancelled()]
+        assert len(waiting) == pool.THUMB_QUEUE
+        assert all(j.cancelled() for j in jobs[1:6])         # the oldest dropped
+    finally:
+        gate.set()
+    assert jobs[-1].result(2.0) is True
+
+
+def test_thumbnail_makes_go_on_the_thumbnail_worker(mk, monkeypatch):
+    """The folder's thumbnail jobs are the thumbnail worker's (A-m2)."""
+    f = mk()
+    png(f.local / "a.png")
+    f.scan()
+    names = []
+    monkeypatch.setattr(mf.thumbs, "make",
+                        lambda p, out: names.append(threading.current_thread().name))
+    f.thumb("local:a.png")
+    assert wait_for(lambda: names) and names[0].startswith("media-thumb-")

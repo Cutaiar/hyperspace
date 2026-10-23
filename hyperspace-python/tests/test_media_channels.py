@@ -340,3 +340,90 @@ def test_bins_json_round_trip_and_bad_ids():
     assert n.channels["h"].bin == [None] * 16   # a load replaces every bin
     assert len(notes) == 4 and any("'nope'" in s for s in notes)
     assert n.from_json({}) == [] and n.to_json() == {"channels": {}}
+
+
+class Fetching(Here):
+    """A resolver whose `arriving` ids are still downloading: no path, the
+    folder's status `fetching` (MediaFolder.path / status)."""
+
+    def __init__(self, *files, arriving=()):
+        super().__init__(*files)
+        self.arriving = set(arriving)
+
+    def status(self, sid):
+        return "fetching" if sid in self.arriving else ("ready" if sid in self.files
+                                                        else MISSING)
+
+
+def test_a_file_still_downloading_is_black_until_it_lands():
+    """Final review A-I1: a channel never opens a file still downloading —
+    black and `fetching`, out of the missing banner — and opens it within a
+    recheck of the folder saying it is ready."""
+    from hyperspace.media import adapters
+
+    here = Fetching(arriving={"shared:x.png"})
+    opened = []
+
+    def opener(sid, resolver):
+        src = adapters.open_source(sid, resolver)
+        if not isinstance(src, adapters.MissingSource):
+            opened.append(sid)
+            return FakeSource(sid, FakeOpener())
+        return src
+    m = MediaState(here, opener=opener)
+    m.assign("a", 0, "shared:x.png")
+    m.poll(1 / 60, 0.0)
+    assert m.status("a") == "fetching" and m.frame("a") is None and not opened
+    assert m.missing() == []                   # on its way, not missing
+    here.arriving.clear()
+    here.files.add("shared:x.png")             # the download landed
+    m.poll(1 / 60, channels.RECHECK_S + 0.1)
+    assert opened == ["shared:x.png"] and m.status("a") == READY
+
+
+def test_a_video_stuck_opening_never_jams_the_closer(monkeypatch, tmp_path):
+    """Final review A-I1: a video whose `av.open` blocks (a file mid-download)
+    closes within about a second — its daemon thread is abandoned — so the
+    closer goes on to the next dropped source."""
+    av = pytest.importorskip("av")
+    from hyperspace.media.video import VideoSource
+
+    gate = threading.Event()
+    monkeypatch.setattr(av, "open", lambda *a, **k: gate.wait() and None)
+    op = FakeOpener()
+
+    def opener(sid, resolver):
+        if sid.endswith(".mp4"):
+            return VideoSource(sid, tmp_path / "stuck.mp4")
+        return op(sid, resolver)
+    m = MediaState(Here("shared:stuck.mp4", "shared:a.png", "shared:b.png"), opener=opener)
+    try:
+        ch = m.channels["a"]
+        ch.bin[:3] = ["shared:stuck.mp4", "shared:a.png", "shared:b.png"]
+        m.poll(1 / 60, 0.0)
+        time.sleep(0.05)                       # the video's thread is in av.open
+        ch.slot = 1
+        m.poll(1 / 60, 0.1)                    # the stuck video dropped
+        ch.slot = 2
+        m.poll(1 / 60, 0.2)                    # and the still after it
+        t = time.perf_counter()
+        assert m.drain(2.0)
+        assert time.perf_counter() - t < 1.5 and op.closes == 1
+    finally:
+        gate.set()
+
+
+def test_a_frozen_live_channel_says_frozen():
+    """A-m3: a live feed held at rate 0 says `frozen`, not the `lost` its
+    unread source drifts to; live again, the source's own status."""
+    op = FakeOpener(kind="syphon")
+    m = MediaState(Here(live={"syphon:app/s": object()}), opener=op)
+    m.assign("a", 0, "syphon:app/s")
+    m.poll(1 / 60, 0.0)
+    m.channels["a"].rate = 0.0
+    m.poll(1 / 60, 0.1)
+    m.channels["a"].source.status = "lost"     # nobody reads it while frozen
+    assert m.status("a") == "frozen"
+    m.channels["a"].rate = 1.0
+    m.poll(1 / 60, 0.2)
+    assert m.status("a") == "lost"
