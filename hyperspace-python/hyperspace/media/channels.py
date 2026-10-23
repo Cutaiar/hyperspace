@@ -31,10 +31,9 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import adapters, ids
+from . import adapters, ids, pool
 from .adapters import MissingSource
 from .frame import MediaFrame
-from . import pool
 from .source import FETCHING, MISSING, Source, error
 from .transport import LOOPS, Transport
 
