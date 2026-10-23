@@ -70,7 +70,10 @@ GAP = 6.0                  # between two channel columns
 CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
-THUMBS_KEPT = 512          # decoded thumbnails held for the renderer; past it they go
+THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
+                           # drawn goes first, one at a time
+DECODES = 4                # thumbnail decodes on the media pool at once, at most
+UPLOADS = 4                # thumbnails handed to the renderer a frame, at most
 MEDIA_FILTER = ["Media", " ".join(f"*{e}" for e in sorted(STILL_EXT | VIDEO_EXT))]
 DEAD = imgui.ImVec4(0.10, 0.10, 0.11, 1.0)       # a picture box with nothing in it
 FULL = imgui.ImVec4(0.42, 0.42, 0.45, 1.0)       # a bin cell holding a source
@@ -94,7 +97,8 @@ def _state(panel) -> dict:
     st = getattr(panel, STATE, None)
     if st is None:
         st = {"tab": 0, "search": "", "pick": None, "sel": "a", "rects": {}, "said": "",
-              "dialog": None, "copy": None, "thumbs": {}}
+              "dialog": None, "copy": None, "thumbs": {}, "decoding": set(),
+              "uploads": 0, "listing": (None, [])}
         setattr(panel, STATE, st)
     return st
 
@@ -140,15 +144,24 @@ def items(panel, tab: int) -> list[Item]:
     if tab == 2:
         for sid, feed in _feeds(panel).items():
             out.append(Item(sid, _name(sid), str(getattr(feed, "status", "") or ""), "live"))
-    else:
-        folder = folder_of(panel)
-        heads = ("shared:",) if tab == 0 else ("local:", "file:")
-        entries = getattr(folder, "entries", ()) if folder is not None else ()
-        mine = [e for e in entries if e.sid.startswith(heads) and e.kind in ("still", "video")]
-        mine.sort(key=lambda e: heads.index(e.sid.partition(":")[0] + ":"))   # stable
-        out = [Item(e.sid, _name(e.sid), e.status, e.kind, e.mtime) for e in mine]
+        if want:
+            out = [i for i in out if want in i.sid.lower()]
+        return out
+    # a folder's rows: made again only when the scan, the tab or the search
+    # moved, so a frame of a big library costs no walk over it
+    folder = folder_of(panel)
+    entries = getattr(folder, "entries", ()) if folder is not None else ()
+    key = (id(folder), id(entries), getattr(folder, "changed", 0), tab, want)
+    made, rows = st.get("listing", (None, []))
+    if made == key:
+        return rows
+    heads = ("shared:",) if tab == 0 else ("local:", "file:")
+    mine = [e for e in entries if e.sid.startswith(heads) and e.kind in ("still", "video")]
+    mine.sort(key=lambda e: heads.index(e.sid.partition(":")[0] + ":"))   # stable
+    out = [Item(e.sid, _name(e.sid), e.status, e.kind, e.mtime) for e in mine]
     if want:
         out = [i for i in out if want in i.sid.lower()]
+    st["listing"] = (key, out)
     return out
 
 
@@ -157,6 +170,7 @@ def items(panel, tab: int) -> list[Item]:
 def draw(panel, dt: float) -> None:
     st = _state(panel)
     st["rects"] = {}
+    st["uploads"] = 0
     _poll_jobs(panel, st)
     state = media_of(panel)
     if state is None:
@@ -238,8 +252,13 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
     if imgui.begin_child("##media.list", imgui.ImVec2(0, rows_shown * ROW_H + 4)):
         if not rows:
             imgui.text_disabled(_empty_words(panel, st["tab"]))
-        for it in rows:
-            _row(panel, st, it)
+        # only the rows in view are drawn — and only they ask for thumbnails
+        clip = imgui.ListClipper()
+        clip.begin(len(rows), ROW_H - 4 + imgui.get_style().item_spacing.y)
+        while clip.step():
+            for k in range(clip.display_start, clip.display_end):
+                _row(panel, st, rows[k])
+        clip.end()
     imgui.end_child()
 
 
@@ -324,22 +343,37 @@ def _thumb(panel, st: dict, it: Item, dl, p0, p1) -> None:
 
 
 def _want_thumb(panel, st: dict, it: Item, key, r) -> None:
-    """The thumbnail for `key`: asked of the folder (which makes it on the
-    pool), decoded on the pool once, then handed to the renderer to upload
-    — again whenever the renderer has let it go."""
+    """The thumbnail for `key`, drawn row by row (only rows in view ask):
+    asked of the folder (which makes it on the pool), decoded on the pool
+    once — at most `DECODES` at a time, so a scroll through a big library
+    never starves the pool the channels' decodes share — then handed to the
+    renderer, at most `UPLOADS` a frame, again whenever the renderer has
+    let it go. A thumbnail that would not decode is remembered (False) and
+    not tried again while it is kept. The cache is least-recently-drawn:
+    past `THUMBS_KEPT` the oldest goes, one at a time."""
     thumbs = st["thumbs"]
-    got = thumbs.get(key)
-    if got is None:
+    got = thumbs.pop(key, None)
+    if got is not None:
+        thumbs[key] = got                       # drawn now: the newest
+    else:
+        busy = st.setdefault("decoding", set())
+        busy -= {k for k in busy if not isinstance(thumbs.get(k), Future) or thumbs[k].done()}
+        if len(busy) >= DECODES:
+            return
         folder = folder_of(panel)
         path = folder.thumb(it.sid) if folder is not None else None
         if path is None:
             return
-        if len(thumbs) >= THUMBS_KEPT:
-            thumbs.clear()
         try:
             thumbs[key] = pool.submit(_decode, path)
         except RuntimeError:            # the pool is shutting down (app exit)
-            pass
+            return
+        busy.add(key)
+        while len(thumbs) > THUMBS_KEPT:
+            old = next(iter(thumbs))
+            gone = thumbs.pop(old)
+            if isinstance(gone, Future):
+                gone.cancel()            # not started yet: never decoded
         return
     if isinstance(got, Future):
         if not got.done():
@@ -349,7 +383,8 @@ def _want_thumb(panel, st: dict, it: Item, key, r) -> None:
         except Exception:  # noqa: BLE001 — a bad thumbnail just stays a dark box
             thumbs[key] = False
             return
-    if got:
+    if got and st["uploads"] < UPLOADS:
+        st["uploads"] += 1
         size, data = got
         r.ui_upload(key, size, data)
 

@@ -228,6 +228,7 @@ class MediaTextures:
 
 
 UI_TEXTURES = 256       # the most thumbnails kept; the least recently drawn goes first
+UI_UPLOADS = 4          # thumbnails uploaded a frame at most; the rest wait their turn
 
 
 class UiTextures:
@@ -239,7 +240,9 @@ class UiTextures:
     control window's context (the share group shares textures, not the
     state moderngl keeps for its context). `get` is the texture once made,
     None until then. At most `limit` are kept: the one drawn least
-    recently is released first."""
+    recently is released first, one at a time; at most `UI_UPLOADS` are
+    uploaded a frame, so a page of new thumbnails costs the frame thread a
+    few small uploads, never all of them at once."""
 
     def __init__(self, ctx: moderngl.Context, limit: int = UI_TEXTURES):
         self.ctx = ctx
@@ -258,10 +261,11 @@ class UiTextures:
         if key not in self._tex:
             self._todo[key] = (tuple(size), data)
 
-    def upload(self) -> None:
-        """On the frame thread, the render context current: what was put."""
-        todo, self._todo = self._todo, {}
-        for key, (size, data) in todo.items():
+    def upload(self, most: int = UI_UPLOADS) -> None:
+        """On the frame thread, the render context current: up to `most` of
+        what was put, oldest first."""
+        for key in list(self._todo)[:most]:
+            size, data = self._todo.pop(key)
             tex = self.ctx.texture(size, 4, data)
             tex.repeat_x = tex.repeat_y = False
             self._tex[key] = tex

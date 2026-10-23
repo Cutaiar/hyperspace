@@ -291,3 +291,76 @@ def test_a_bin_edit_is_one_undo_step(tmp_path):
     assert r.undo.undo() and r.reg.media.channels["a"].bin[2] == "shared:loops/tunnel.mp4"
     settle(r)
     assert r.undo.undo() and r.reg.media.channels["a"].bin[2] is None
+
+
+def test_a_big_library_costs_what_is_in_view(rig, tmp_path, monkeypatch):
+    """2000 items, scrolled for 120 frames: only the rows in view are drawn
+    and ask for thumbnails (a list clipper); decodes are submitted only for
+    rows that were drawn, at most `DECODES` at a time; the renderer is
+    handed at most `UPLOADS` a frame and uploads at most that many
+    (`UiTextures`); no cache is ever cleared wholesale; the listing is not
+    rebuilt while the scan stands still."""
+    from hyperspace.media_tex import UI_UPLOADS, UiTextures
+
+    n = 2000
+    folder = FakeFolder([entry(f"shared:clip{i:04d}.png") for i in range(n)])
+    png = tmp_path / "t.png"
+    png.write_bytes(b"")
+    asked: list[str] = []
+    folder.thumb = lambda sid: (asked.append(sid), png)[1]
+    attach(rig, folder)
+    decodes: list = []
+    monkeypatch.setattr(ui_media, "_decode",
+                        lambda p: (decodes.append(p), ((4, 4), bytes(64)))[1])
+    made: list[int] = []
+
+    class Ctx:
+        def texture(self, size, comps, data):
+            made[-1] += 1
+            return NS(size=size, glo=1, release=lambda: None, repeat_x=0, repeat_y=0)
+
+    ut = UiTextures(Ctx())
+    handed: list[int] = []
+    rig.panel.renderer = NS(media_watch=set(), media_shown=lambda c: None,
+                            ui_texture=ut.get,
+                            ui_upload=lambda key, size, data: (handed.__setitem__(
+                                -1, handed[-1] + 1), ut.put(key, size, data)))
+    drawn: list[list[str]] = []
+    row = ui_media._row
+    monkeypatch.setattr(ui_media, "_row",
+                        lambda panel, st, it: (drawn[-1].append(it.sid), row(panel, st, it)))
+
+    class NoClear(dict):
+        def clear(self):
+            raise AssertionError("a thumbnail cache cleared wholesale")
+
+    st = page_state(rig)
+    st["thumbs"] = NoClear()
+    panel = rig.panel
+    drawn.append([]), handed.append(0), made.append(0)
+    frame(panel, "media")
+    listing = st["listing"][1]
+    x0, y0, x1, y1 = st["rects"][("item", "shared:clip0000.png")]
+    io = imgui.get_io()
+    per_frame_asks = []
+    for _ in range(120):
+        drawn.append([]), handed.append(0), made.append(0)
+        before = len(asked)
+        io.add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
+        io.add_mouse_wheel_event(0.0, -1.0)
+        frame(panel)
+        ut.upload()                                  # the renderer's end of frame
+        ui_media.wait_thumbs(panel)
+        per_frame_asks.append(len(asked) - before)
+        assert len(st["decoding"]) <= ui_media.DECODES
+        assert len(st["thumbs"]) <= ui_media.THUMBS_KEPT
+    visible = ui_media.LIST_ROWS + 2                 # the clipper's partial rows
+    assert max(len(d) for d in drawn) <= visible
+    assert max(per_frame_asks) <= visible
+    seen = {sid for d in drawn for sid in d}
+    first = sorted(seen)
+    assert seen and max(int(s[11:15]) for s in first) < 600   # scrolled, nowhere near 2000
+    assert int(first[-1][11:15]) > visible                     # …but it did scroll
+    assert len(decodes) <= len(seen)                 # one per row that was drawn, once
+    assert max(handed) <= ui_media.UPLOADS and max(made) <= UI_UPLOADS
+    assert st["listing"][1] is listing               # not rebuilt: the scan stood still
