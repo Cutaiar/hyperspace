@@ -164,10 +164,11 @@ class MediaResolver:
 class MediaIO:
     """The media side of the app (plan 32): the folder (scanned on its own
     timer), the eight channels, polled once a frame in the scene-setter
-    slot, and the close that both exits run — every source closed and its
-    thread joined, the folder's timer stopped, the proxy worker and the
-    pool told to stop without waiting (review focus 3: the exit stays
-    under 2 s)."""
+    slot, and the close that both exits run — every source closed on the
+    channels' closer thread within a shared 1.5 s budget
+    (`channels.CLOSE_BUDGET_S`), the folder's timer stopped, the proxy
+    worker and the pool told to stop without waiting (review focus 3: the
+    exit stays under 2 s)."""
 
     def __init__(self, folder: MediaFolder, state: MediaState):
         self.folder, self.state = folder, state

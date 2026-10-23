@@ -6,6 +6,7 @@ opens and closes, and a fake may run a thread of its own (named
 is a dict of the ids "on this Mac"."""
 
 import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -23,8 +24,9 @@ def _frame(n: int = 0) -> MediaFrame:
 
 class FakeSource:
     def __init__(self, sid, opener, *, timed=False, duration=0.0, kind="still",
-                 thread=False):
+                 thread=False, close_s=0.0):
         self.sid, self.opener = sid, opener
+        self.close_s = close_s            # how long close() takes (a stuck read); inf: hangs
         self.kind, self.timed, self.duration = kind, timed, duration
         self.status = READY
         self.frame = _frame()
@@ -41,6 +43,10 @@ class FakeSource:
             self._t.start()
 
     def close(self):
+        if self.close_s == float("inf"):
+            threading.Event().wait()
+        elif self.close_s:
+            time.sleep(self.close_s)
         self.opener.closes += 1
         self._stop.set()
         if self._t is not None:
@@ -112,6 +118,7 @@ def test_slot_switches_source():
     m.channels["a"].slot = 1.0
     m.poll(1 / 60, 0.1)
     y = m.channels["a"].source
+    assert m.drain(2.0)                    # x is closed on the closer, not here
     assert y.sid == "shared:y.png" and (op.opens, op.closes) == (2, 1)
     m.poll(1 / 60, 0.2)                     # unchanged: nothing reopened
     assert m.channels["a"].source is y and op.opens == 2
@@ -127,12 +134,59 @@ def test_rapid_switching_balances():
     for k in range(500):
         m.channels["a"].slot = float(k % 2)
         m.poll(1 / 60, k / 60)
-        alive = [t for t in threading.enumerate() if t.name.startswith("media-fake-")]
-        assert len(alive) <= 1
-    assert op.opens - op.closes == 1
-    m.close()
+    assert m.drain(5.0)
+    assert op.opens - op.closes == 1 and m.closer.done == 499
+    alive = [t for t in threading.enumerate() if t.name.startswith("media-fake-")]
+    assert len(alive) == 1                  # the one on the channel; every other joined
+    assert m.close()
     assert op.opens == op.closes
     assert not [t for t in threading.enumerate() if t.name.startswith("media-fake-")]
+
+
+def test_a_slow_close_never_holds_the_frame_thread():
+    """Review: a source whose close waits on a stuck read (a cloud file
+    still downloading holds `av.open`) is closed on the closer thread: the
+    switch away from it returns at once."""
+    m, op = state("shared:x.mp4", "shared:y.mp4", close_s=1.0)
+    m.assign("a", 0, "shared:x.mp4")
+    m.assign("a", 1, "shared:y.mp4")
+    m.poll(1 / 60, 0.0)
+    m.channels["a"].slot = 1.0
+    t = time.perf_counter()
+    m.poll(1 / 60, 0.1)
+    assert time.perf_counter() - t < 0.01
+    assert m.channels["a"].source.sid == "shared:y.mp4" and op.closes == 0
+    closer = m.closer._thread
+    assert closer is not None and closer.name == "media-closer" and closer.is_alive()
+    assert m.drain(3.0) and op.closes == 1
+
+
+def test_rapid_switching_with_slow_closes_stays_fast_and_balances():
+    m, op = state("shared:x.mp4", "shared:y.mp4", close_s=0.002)
+    m.assign("a", 0, "shared:x.mp4")
+    m.assign("a", 1, "shared:y.mp4")
+    worst = 0.0
+    for k in range(500):
+        m.channels["a"].slot = float(k % 2)
+        t = time.perf_counter()
+        m.poll(1 / 60, k / 60)
+        worst = max(worst, time.perf_counter() - t)
+    assert worst < 0.01, worst
+    assert m.drain(10.0)
+    assert op.opens - op.closes == 1
+
+
+def test_close_with_a_hung_source_returns_within_two_seconds():
+    """App exit: the closes share a 1.5 s budget, then close returns —
+    the closer is a daemon, a close stuck for good dies with the process."""
+    m, _ = state("shared:x.mp4", "shared:y.mp4", close_s=float("inf"))
+    m.assign("a", 0, "shared:x.mp4")
+    m.assign("b", 0, "shared:y.mp4")
+    m.poll(1 / 60, 0.0)
+    t = time.perf_counter()
+    assert m.close() is False
+    assert time.perf_counter() - t < 2.0
+    assert all(ch.source is None for ch in m.channels.values())
 
 
 def test_empty_entry_and_missing_are_black():
@@ -164,9 +218,11 @@ def test_missing_file_appears_and_a_present_one_goes():
     assert m.status("a") == READY and op.opens == 1
     here.stamps["shared:x.png"] = 2.0          # replaced on disk
     m.poll(1 / 60, 2 * channels.RECHECK_S + 0.2)
+    assert m.drain(2.0)
     assert op.opens == 2 and op.closes == 1 and m.status("a") == READY
     here.files.discard("shared:x.png")         # deleted
     m.poll(1 / 60, 3 * channels.RECHECK_S + 0.3)
+    assert m.drain(2.0)
     assert m.frame("a") is None and m.status("a") == MISSING and op.opens == op.closes
 
 

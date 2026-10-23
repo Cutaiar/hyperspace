@@ -9,9 +9,12 @@ section is its bins (`to_json` / `from_json`), the renderer reads
 `missing`. `poll` runs once a frame on the frame thread, right after the
 devices (the scene-setter slot, app.frame): it opens and closes sources as
 slots change and steps the transports. Opening a source starts its own
-thread or a pool job, never a decode here, and closing one joins its
-thread. Once closed a source is dropped and never read again, so a late
-decode finishing on a closed source (still.py) reaches nothing.
+thread or a pool job, never a decode here. Closing one joins its thread,
+which can take as long as the file it is stuck reading (a cloud file still
+downloading holds `av.open`), so a dropped source goes to the `Closer`, a
+thread of its own (``media-closer``), and the frame thread only queues it.
+Once dropped a source is never read again, so a late decode finishing on a
+closed source (still.py) reaches nothing.
 
 A file the resolver could not find is a `MissingSource` (black,
 `missing`). Every `RECHECK_S` the channel asks the resolver again: a file
@@ -22,6 +25,8 @@ disk on the frame thread."""
 
 from __future__ import annotations
 
+import queue
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,6 +42,59 @@ FITS = ("cover", "contain", "stretch")
 EMPTY = "empty"          # a bin entry with nothing in it: black
 RECHECK_S = 1.0          # how often a channel asks the resolver about its id again
 STILL_KINDS = ("still", "missing")   # untimed and not live: rate means nothing
+CLOSE_BUDGET_S = 1.5     # app exit: how long `MediaState.close` waits for the closes
+CLOSER_IDLE_S = 2.0      # the closer thread ends after this long with nothing to close
+
+
+class Closer:
+    """Closes dropped sources on one daemon thread (``media-closer``), in
+    the order they were dropped, so a close that waits on a stuck read
+    never holds the frame thread. Not the media pool: a hung close would
+    sit on one of its three workers. The thread starts with the first
+    close and ends after `CLOSER_IDLE_S` with none. `done` counts the
+    closes finished (raising or not), `pending` the ones queued or running."""
+
+    def __init__(self):
+        self._q: queue.SimpleQueue = queue.SimpleQueue()
+        self._cv = threading.Condition()
+        self._thread: threading.Thread | None = None
+        self.pending = 0
+        self.done = 0
+
+    def put(self, src) -> None:
+        """Queue `src` to be closed; returns at once."""
+        with self._cv:
+            self.pending += 1
+            t = self._thread
+            if t is None or not t.is_alive():
+                t = self._thread = threading.Thread(target=self._run, name="media-closer",
+                                                    daemon=True)
+                t.start()
+        self._q.put(src)
+
+    def _run(self) -> None:
+        while True:
+            try:
+                src = self._q.get(timeout=CLOSER_IDLE_S)
+            except queue.Empty:
+                with self._cv:            # decided under the lock `put` takes
+                    if self.pending == 0:
+                        self._thread = None
+                        return
+                continue
+            try:
+                src.close()
+            except Exception:  # noqa: BLE001, S110 — a source that will not close is dropped anyway
+                pass
+            with self._cv:
+                self.pending -= 1
+                self.done += 1
+                self._cv.notify_all()
+
+    def drain(self, timeout: float) -> bool:
+        """Wait up to `timeout` s for every queued close; True when none is left."""
+        with self._cv:
+            return self._cv.wait_for(lambda: self.pending == 0, timeout)
 
 
 @dataclass
@@ -114,6 +172,15 @@ class MediaState:
         self.opener = opener
         self.channels: dict[str, Channel] = {c: Channel(c) for c in CHANNELS}
         self._closed = False
+        self.closer = Closer()
+
+    def _closer(self) -> Closer:
+        """The closer; made here for a MediaState from before it (a hot
+        reload re-classes, never re-inits)."""
+        c = self.__dict__.get("closer")
+        if c is None:
+            c = self.closer = Closer()
+        return c
 
     # -- the frame thread ---------------------------------------------------
 
@@ -146,10 +213,7 @@ class MediaState:
         old, ch.source, ch.transport = ch.source, None, None
         ch.frozen, ch.held = False, None
         if old is not None:
-            try:
-                old.close()
-            except Exception:  # noqa: BLE001, S110 — a source that will not close is dropped anyway
-                pass
+            self._closer().put(old)     # never joined here: see the module docstring
         ch.sid, ch.checked, ch.stamp = sid, now, None
         if sid is None:
             return
@@ -303,12 +367,19 @@ class MediaState:
         for c, ch in self.channels.items():
             ch.bin = list(bins.get(c) or [None] * BIN)
 
-    def close(self) -> None:
-        """Close every source (joining its thread); a poll after this opens
-        nothing (app exit)."""
+    def drain(self, timeout: float = CLOSE_BUDGET_S) -> bool:
+        """Wait up to `timeout` s for the dropped sources' closes to finish."""
+        return self._closer().drain(timeout)
+
+    def close(self, budget: float = CLOSE_BUDGET_S) -> bool:
+        """App exit: every source dropped and closed, waiting at most
+        `budget` s for all the closes together, then returning whatever is
+        left (the closer is a daemon: a close still stuck dies with the
+        process). A poll after this opens nothing. True when all closed."""
         self._closed = True
         for ch in self.channels.values():
             self._switch(ch, None, 0.0)
+        return self.drain(budget)
 
 
 def _read(src) -> MediaFrame | None:
