@@ -38,6 +38,9 @@ explained in the [glossary](#glossary) at the end.
    The step-sequencer entries (L139–L144) are plan 31's: use branch
    `plan-31-integration` until it is merged. Its APC40 entries (A37–A46) need branch
    `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
+   The media entries (L145–L151) are plan 32's, and L152 is the two
+   plans together: use branch `plan-31-32-integration`, where they land
+   together, until it is merged.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -123,6 +126,9 @@ changes brightness or volume instead).
 14. Plan 31's step-sequencer entries: L139–L143 on the laptop (L141
     with music), L144 with two Macs on the copy; then, on branch
     `plan-31-a1` and with Dylan, A37 first and A38–A46 with the APC40.
+15. Plan 32's media entries: L145–L148 on the laptop (L147 with the cloud
+    and a second Mac), L149–L150 with Resolume or TouchDesigner, L151 with
+    a phone on the copy; then L152, the two plans together, with two Macs.
 
 ## Summary
 
@@ -272,6 +278,14 @@ changes brightness or volume instead).
 | L142 | The trigger lines the pattern up | 1 | laptop | 283 |
 | L143 | The lanes on the GRAPH page | 1 | laptop | 284 |
 | L144 | A pattern preset on an older build | 1 | two Macs, the copy | 285 |
+| L145 | A still as the backdrop; the faces and `aux` (plan 32) | 1 | laptop, a picture | 296, 297 |
+| L146 | A video: speed, scrub, loop; the cue knob as a jog wheel | 1 | laptop; APC40 for the jog | 298, 299 |
+| L147 | A file dropped in the media folder appears; a missing-local banner | 1 | laptop; the cloud and a second Mac | 300, 301 |
+| L148 | Junk files, a renamed clip, rapid switching; the MEDIA page at distance | 1 | laptop | 302, 303 |
+| L149 | Syphon and NDI in from Resolume and TouchDesigner; `extra_ips` | 1 | laptop, Resolume or TouchDesigner, a second Mac | 304–307, 313, 315 |
+| L150 | Syphon and NDI out; a publish-only output | 1 | laptop, Resolume or TouchDesigner, a second screen | 308–310 |
+| L151 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314, 316 |
+| L152 | A preset with a pattern and a bin, saved and reloaded (plans 31 + 32) | 1 | laptop, a picture, the copy; a second Mac | 317 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -3618,6 +3632,161 @@ the file as it was.
 loses its pattern.
 
 *(check 285)*
+
+## Media (plan 32: L145–L151)
+
+Plan 32 gives the app eight media channels (pictures, video, a webcam,
+Syphon, NDI) and the MEDIA page. Run on the copy, after `uv sync`
+(four new libraries). Put a still, a `.heic`, a 30 s `.mp4` and a `.gif`
+in `~/Hyperspace-try/media/`. A preset that uses media is saved in a new
+file format (`/4`, which is `/3` plus media): a build from before plan 32
+will not open it, so both Macs need this build first.
+
+#### L145. A still as the backdrop; the faces and `aux`
+
+**Needs:** laptop; a picture.
+
+**Do:** MEDIA page: pick the picture (This Mac), click cell 1 of channel
+A; set Backdrop to A, alpha 1; turn the look-back on and flip its
+"history" switch; then set Faces to A and try the four paths. On the
+GRAPH page wire `media.a` to the `aux` port of Displace, then Blend.
+
+**Right if:** the picture sits under the shape, bent by effects with
+history on; on the faces it keeps its shape and follows the pattern;
+Displace bends the frame by the picture's brightness and Blend keys its
+bright parts; unwired, each effect does nothing.
+
+**Wrong if:** the picture is upside down, stretched, or vanishes when an
+effect is placed after the scene.
+
+*(checks 296, 297)*
+
+#### L146. A video: speed, scrub, loop; the cue knob as a jog wheel
+
+**Needs:** laptop; an APC40 for the jog.
+
+**Do:** put the `.mp4` on channel A (backdrop A). Set rate 2, −1, 0;
+loops; drag Position while it plays and let go. Learn the cue knob onto
+Jog and spin it.
+
+**Right if:** the clip plays at the rate, scrubs where you drag and plays
+on when you let go; a jog spin speeds it and coasts back like a platter;
+nothing stalls.
+
+**Judge:** whether the jog's gain and coast feel right.
+
+**Wrong if:** the picture hitches while scrubbing or the jog never
+settles.
+
+*(checks 298, 299)*
+
+#### L147. A dropped file; a missing-local banner
+
+**Needs:** laptop; for the second half the shared cloud folder and a
+second Mac.
+
+**Do:** with the MEDIA page open, drop a picture into the media folder in
+Finder; delete one that is on a channel. On Mac 1 save a preset whose
+bins hold a `local:` file; load it on Mac 2.
+
+**Right if:** the new file is listed within about two seconds; the deleted
+one's channel goes black and reads `missing`; Mac 2 shows a banner naming
+the source it lacks and the channel is black.
+
+**Wrong if:** the app stalls, or no banner.
+
+*(checks 300, 301)*
+
+#### L148. Junk files, a renamed clip, rapid switching; the page at distance
+
+**Needs:** laptop.
+
+**Do:** put a `.txt`, a truncated `.mp4`, a 0-byte `.png` in the media
+folder; rename a playing clip; sweep a channel's slot with an LFO over
+eight clips for a minute; quit. Stand two metres back from the MEDIA page
+with 30 files in the library.
+
+**Right if:** the junk is listed with an error and nothing else stops; the
+sweep never hitches; the app quits in about two seconds; the page reads
+from there.
+
+**Wrong if:** a hitch at a switch, a slow quit, or a page too small to
+read.
+
+*(checks 302, 303)*
+
+#### L149. Syphon and NDI in
+
+**Needs:** laptop; Resolume or TouchDesigner; a second Mac for the
+network case. `kind = "syphon"` and `kind = "ndi"` in `[[devices]]`.
+
+**Do:** on the Live tab put a Syphon server, then a Resolume NDI sender,
+then a TouchDesigner sender from the second Mac, on the backdrop. Quit and
+restart each sender. Where mDNS is blocked, add `extra_ips`.
+
+**Right if:** each appears in a few seconds, upright; a quit sender holds
+its last frame a second, goes black and returns by itself.
+
+**Wrong if:** nothing is found, the picture is flipped, or it needs a
+relaunch to return.
+
+*(checks 304–307, 313, 315)*
+
+#### L150. Syphon and NDI out; a publish-only output
+
+**Needs:** laptop; Resolume or TouchDesigner; a second screen.
+
+**Do:** set `syphon = "hs"` and `ndi = "hs"` on `[output]`; receive in
+Resolume and TouchDesigner. Give output 2 `window = false`. Resize and
+move output 1's window.
+
+**Right if:** the picture arrives upright at the render size (not 4K);
+SYSTEM shows both publishers at about 60 fps, NDI's readback near 4 ms;
+output 2 opens no window and still sends.
+
+**Wrong if:** it is flipped, black, or the sent size follows the window.
+
+*(checks 308–310)*
+
+#### L151. A webcam; a phone through an NDI app; an old bitmap preset
+
+**Needs:** laptop; a phone with an NDI camera app; the copy.
+
+**Do:** `kind = "camera"`; put the camera on a channel and accept the
+macOS prompt. Start the phone app's NDI sender; put it on a channel. Load
+a preset saved before plan 32 with a picture on the faces.
+
+**Right if:** the camera runs at about 30 fps; the phone appears as an NDI
+source; the old preset loads with a note that the bitmap is no longer read.
+The APC40's knob 7 still moves the faces' media opacity.
+
+**Wrong if:** a stalled camera, or a crash on the old preset.
+
+*(checks 311, 312, 314, 316)*
+
+## Plans 31 and 32 together (L152)
+
+#### L152. A preset with a pattern and a bin, saved and reloaded
+
+**Needs:** the laptop on branch `plan-31-32-integration` (or later), a
+picture in `~/Hyperspace-try/media/`, the copy; a second Mac on a build
+from before plan 31 or on `plan-32-media` alone, sharing the library.
+
+**Do:** load TRIP. In the SEQ grid turn two steps on; on the MEDIA page
+put the picture in channel a's bin and pick it as the backdrop. Save under
+a new name. Open the file in a text editor. Load another preset, then
+load the new one again. On the second Mac, try to load it.
+
+**Right if:** the file says `hyperspace.preset/4`, has `seq.` lines, the
+`media` section with the picture's id, and the backdrop values; reloaded,
+both steps are on and the picture is behind the scene again; the second
+Mac refuses the file with a message about the schema and leaves it as it
+was.
+
+**Wrong if:** the file says `/3` or `/2`; either the pattern or the
+picture is gone after the reload; the second Mac opens it.
+
+*(check 317)*
 
 # Part 2 — tests that need hardware
 

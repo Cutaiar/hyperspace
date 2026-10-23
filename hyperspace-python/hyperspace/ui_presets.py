@@ -94,9 +94,12 @@ HIDDEN_KEY = "\0hidden"   # the listings cache: a group's list with the hidden o
 BANK_KEY = "\0bank"       # …whether each name the bank holds has a file
 TRASH_KEY = "\0trash"     # …the trash
 # the module overview: every performance group but the macros (a macro's
-# meaning is its subscribers, which live in the preset), and the band
-# strip's scene, the one session module a project names
-OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS if g not in ("macro", "mod")], "band")
+# meaning is its subscribers, which live in the preset) and the media
+# channels and backdrop (plan 32: a channel's values mean nothing without
+# its bin, the preset's media section; the MEDIA page holds them), and the
+# band strip's scene, the one session module a project names
+OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS
+                     if g not in ("macro", "mod", "media", "backdrop")], "band")
 
 
 # ---- state on the panel, created on first use ----

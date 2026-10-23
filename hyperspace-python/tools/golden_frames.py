@@ -39,6 +39,10 @@ envelopes and the step sequencer are stepped through the router as the
 app steps them — at rest and stopped, so they move nothing — but for the
 presets in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
 starts, so their frame is the pattern mid-envelope at the pinned clock.
+Plan 32's five fixtures are media
+presets (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
+channels find under `tests/golden/media/` (`GoldenMedia`), every still
+decoded before the first frame is drawn.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -70,6 +74,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -147,8 +152,18 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # plan 28 N4: the wire list's proof presets — hands 2 wired to output 2's
 # hands alone, the palette wired into output 1's picture and a second acid
 # from the history into output 2's (`graph.Wire`)
+# plan 32 T6: the media channels' proof presets — a still on channel a as
+# the backdrop under the scene, and channel c wired into output 2's picture
+# (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
+# T7's three: the still on the faces (`view.media`), and the still wired into
+# an effect's aux — blend's luma key, displace by its brightness
+MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
+                                   "blend-luma-key", "displace-luma")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
-                                    "acid-scene", "hands-glass-only", "wired-outputs")
+                                    "acid-scene", "hands-glass-only", "wired-outputs",
+                                    *MEDIA_FIXTURES)
+MEDIA = ROOT / "tests" / "golden" / "media"
+MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
@@ -194,6 +209,9 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
 from hyperspace.lookback import DreamState
+from hyperspace.media import ids as media_ids
+from hyperspace.media.channels import MediaState
+from hyperspace.media.source import FETCHING
 from hyperspace.outputs import NAMES, Switches, View, route
 from hyperspace.params import build_registry
 from hyperspace.preset import FACTORY_PRESETS, Presets
@@ -235,6 +253,23 @@ class FakeHands:
 
     def close(self) -> None:
         pass
+
+
+class GoldenMedia:
+    """The rig's media resolver (plan 32 T6): a `local:` id is a file under
+    `tests/golden/media/`; nothing else is on this Mac."""
+
+    proxy_cache = None
+
+    def path(self, sid: str):
+        got = media_ids.parse(sid)
+        if got.kind != "local":
+            return None
+        p = MEDIA / got.ref
+        return p if p.is_file() else None
+
+    def live(self, sid: str):
+        return None
 
 
 class NullOut:
@@ -283,8 +318,12 @@ class Rig:
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
+        # plan 32: the channels the `media.*` params write and the preset's
+        # bins fill, as app.main makes them (here over the golden stills)
+        self.media = MediaState(GoldenMedia())
         self.reg = reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
-                                        None, self.dream, self.fx, ghost=self.ghost)
+                                        None, self.dream, self.fx, ghost=self.ghost,
+                                        media=self.media)
         self.clock = tempo.Clock(now=lambda: self.t)
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
@@ -333,6 +372,17 @@ class Rig:
             raise RuntimeError(f"fx shaders failed to build: {errs}")
         r.ghost.source, r.ghost.router = self.io, self.router
         self.devices = None          # plan 26 A4b: a device registry, polled each frame
+        # plan 32: the channels on the renderer, as app.main hands them; the
+        # stills the preset's slots name opened and decoded before the first
+        # frame (the pool's job: a golden must not catch one half-way)
+        r.media = self.media
+        self.media.poll(0.0, self.t)
+        until = time.monotonic() + MEDIA_WAIT_S
+        while any(ch.source is not None and ch.source.status == FETCHING
+                  for ch in self.media.channels.values()):
+            if time.monotonic() > until:
+                raise RuntimeError(f"{slug}: a media still did not decode in {MEDIA_WAIT_S} s")
+            time.sleep(0.01)
 
     def list_devices(self, toml: str) -> None:
         """A scratch `config.toml` in the rig's home listing `toml`'s
@@ -351,6 +401,7 @@ class Rig:
         self.renderer.cloud_source = self.devices
 
     def close(self) -> None:
+        self.media.close()
         self._home.cleanup()
 
     def frame(self, views: list[View], logical: tuple[int, int], dpr: float) -> None:
@@ -359,6 +410,7 @@ class Rig:
         self.t += DT
         if self.devices is not None:
             self.devices.poll(DT, self.t)
+        self.media.poll(DT, self.t)
         self.io.poll(DT, None, self.router)
         self.clock.tick(self.t)
         self.router.modulate()

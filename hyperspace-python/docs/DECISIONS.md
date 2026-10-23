@@ -220,6 +220,24 @@ replaces a row, rewrite that row instead of adding a new one.
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
 
+## Media
+
+| Decision | Where | Who |
+|---|---|---|
+| **Eight fixed channels, `a`–`h`**, each a bin of up to 16 source ids and a `media.<c>.slot` param; switching a source is a param, so Learn, the pad, the APC40, the sequencer, a macro and undo all do it. The bins are in the preset. | `media.channels`, `params.build_registry`, `preset` | rows 321–323 |
+| **A source id names a place**: `shared:<rel>` (`<library>/media/`), `local:<rel>` (`<home>/media/`), `file:<abs>`, `camera:<name>`, `syphon:<app>/<server>`, `ndi:<stream>`; `phone:` is reserved and never opened. A missing source is black and listed in the MEDIA page's banner; nothing about a missing file reaches the frame thread. | `media.ids`, `media.folder`, `ui_media` | row 324 |
+| **Nothing decodes, resizes, scans or blocks on the frame thread.** A pool (3 workers) for jobs that end; a thread of its own for each video, live feed, NDI out and proxy worker; a dropped source is closed on a closer thread; the frame thread steps transports and uploads textures. Frames are capped at 1920×1080 (files) and 1280×720 (live) on the decoding thread; a channel is uploaded only when a consumer reads it and its frame id moved. | `media.pool`, `media.channels.Closer`, `media_tex.MediaTextures` | rows 328, 329 |
+| **A live source is a device-registry kind that discovers feeds** (`ndi`, `syphon`, `camera`). A feed that stops holds its last frame 1.0 s, then reads black with the status `lost`, and comes back by itself. NDI is received by the frame-sync path on the source's own thread, never `receive(timeout)` (it holds the GIL). | `media.live`, `devices.kinds` | row 325 |
+| **The transport**: `rate` −4…+4 × native speed, `pos` a latch (moving scrubs, resting plays on), `jog` a push whose coast springs back to `rate`, `loop` / `pingpong` / `once`; rate 0 freezes a live feed. The playhead is a readout, never a param. | `media.transport`, `ui_media` | row 326 |
+| **Scrub proxies**: a clip of ≤ 600 s gets an MJPEG proxy (≤ 1280×720) in `<home>/media-cache/proxies/`, on a cancellable worker of its own, never in the shared folder. | `media.proxy` | row 327 |
+| **The backdrop is under the scene, before the history and the effects**; `backdrop.history` (off by default) says whether the look-back captures the composite. A stopgap: plan 33 settles the compositing order. | `graph.default_graph`, `backdrop.*` | row 330 |
+| **The faces read a channel** (`view.media`, with `view.media_alpha / scale / mode / amp / rate`); `view.bmp_*` are gone and an old preset's `view.bmp_file` is dropped with a note. `view.bmp_alpha` is a hidden alias of `view.media_alpha`, kept for the APC40's factory knob 7. | `render._face_media`, `params`, `preset` | rows 331, 339 |
+| **Every effect has an optional `aux` image input**; unwired it reads transparent black; any image node may feed it. `displace` and `blend` use it. | `graph.Effect.INPUTS`, `fx.py`, `shaders/fx/_lib.glsl` | row 332 |
+| **An output can be published** over Syphon and/or NDI (`syphon`, `ndi`, `window = false` on `[output]` / `[[output.screens]]`). A window publishes at the render cap; output 1 always has a window. Publishers are SYSTEM lines, not registry sinks. | `media.publish`, `render._publish`, `config` | row 335 |
+| **The phone's own page is V2**; in V1 a phone is an `ndi:` source through an NDI camera app. | — | rows 333, 334 (owner) |
+| **A preset that uses media is `hyperspace.preset/4`**; any other is unchanged. Both Macs sharing a library must run this build. Rows 319 and 337 combine as one ladder, `/4` = `/3` + media: `schema_of` writes `/4` when the preset uses media (and then every value, the envelopes' and the sequencer's too), else `/3` by row 319's rule, else `/2` — each judged against what a load lands for a missing value. | `preset.uses_media`, `preset.schema_of` | row 337; row 340 |
+| **No desk or APC40 default bindings for media**; Learn reaches every channel param. | `apc40.py` untouched | row 339 |
+
 ## Effects and the look-back
 
 | Decision | Where | Who |
@@ -272,7 +290,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | Decision | Where | Who |
 |---|---|---|
 | The library home is `~/Hyperspace` (or `HYPERSPACE_HOME` / config). Factory files ship read-only in the repo, and a user file shadows a factory file of the same name. | `library.py` | owner |
-| A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` (or `/3`, the next row) and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. A preset may carry a `graph` section (plan 26) and a `units` marker for `camera.pan`; neither bumps the schema. | `library.py`, `preset.py` | owner; rows 183, 196 |
+| A module preset is one group's values (`hyperspace.preset/1`), a preset is `hyperspace.preset/2` (or `/3`, the next row, or `/4`, media) and a show is `*.hyp.json` (`hyperspace.project/2`). Unknown ids are reported, not fatal. A preset may carry a `graph` section (plan 26) and a `units` marker for `camera.pan`; neither bumps the schema. | `library.py`, `preset.py` | owner; rows 183, 196 |
 | **`hyperspace.preset/3` is written only when needed** (plan 31): a preset that uses the sequencer, the envelopes (a value off its default, a route, modifier or macro on `env` / `seq`, extra envelopes) or other than four LFOs is `/3`; every other is `/2` with no `env.*` / `seq.*` value, byte for byte as before. This build reads both (`/2 → /3` is the identity); an older build refuses a `/3` file rather than strip it on a re-save, so both Macs on one library must run this build. | `preset.schema_of`, `preset.VERSIONS` | owner (plan 31 decision 9); row 319 |
 | The library is watched like source: editing a file shows in the running app. The library's own renames and trash moves are never re-applied. | `hotreload.py`, `Library._sync` | owner |
 | `<home>/bindings.json` holds only the session's controls, the sink rows among them (sinks are rig). A show carries no routing of its own. | `routing.FILE` | owner |

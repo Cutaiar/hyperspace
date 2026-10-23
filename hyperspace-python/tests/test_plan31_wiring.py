@@ -518,7 +518,10 @@ def test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step(app, tmp_p
     assert doc["schema"] == V2 and preset.schema_of(doc) == V2
     assert _new_ids(doc) == [] and "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="performance")
-    assert set(doc["values"]) == {k for k in every if not k.startswith(("env.", "seq.", "mod."))}
+    # (plan 32: nor a media-family value — /4's, and this preset uses none)
+    assert set(doc["values"]) == {k for k in every
+                                  if not k.startswith(("env.", "seq.", "mod."))
+                                  and not preset.is_media_id(k)}
     path = app.presets.save_as("plain")
     first = path.read_bytes()
     assert first == preset.dumps(doc).encode()
@@ -575,7 +578,7 @@ def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
 
 
 def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
-    """The library takes /2 and /3 (`preset.VERSIONS`); a build from before
+    """The library takes /2, /3 and /4 (`preset.VERSIONS`); a build from before
     plan 31, whose kind takes /2 alone, refuses a /3 file whole instead of
     loading it and stripping the pattern on its next save."""
     from dataclasses import replace
@@ -583,7 +586,7 @@ def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3)
+    assert preset.VERSIONS == (2, 3, 4)
     app.presets.save_as("plain")
     app.reg["seq.3.3"].set(True)
     app.presets.save_as("pattern")

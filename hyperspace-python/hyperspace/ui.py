@@ -45,6 +45,7 @@ from . import (
     ui_graph,
     ui_lfo,
     ui_lookback,
+    ui_media,
     ui_pad,
     ui_patterns,
     ui_presets,
@@ -66,6 +67,7 @@ from .graph import (
     wire_words,
 )
 from .hands import panel as ui_hands
+from .media import publish
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
@@ -523,8 +525,10 @@ CHEATSHEET = [
 
 # ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
 # One page per registry group where a group is a module of its own; the
-# view group is big enough to split into View / Faces & Pattern / Bitmap,
-# and those two sub-pages say so in their section notes. The audio page
+# view group is big enough to split into View / Faces & Pattern, and the
+# faces' sub-page says so in its section notes. The media page (plan 32 U,
+# ui_media.py) is the eight channels, the library that fills their bins,
+# and the backdrop's and the faces' channel pickers. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
@@ -536,7 +540,7 @@ PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
     ("faces", "faces", "pattern"),
-    ("bitmap", "bitmap", None),
+    ("media", "media", ("media", "backdrop")),   # plan 32 U: the channels (ui_media.py)
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
     ("fx", "fx", "fx"),
@@ -583,7 +587,6 @@ class Panel:
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
-        self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
@@ -595,6 +598,8 @@ class Panel:
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
+        self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
+        self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -1760,7 +1765,7 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring,
+                if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
                                          n=sl.n)[1]
                 not in ("", "master")]
 
@@ -1800,7 +1805,7 @@ class Panel:
         for sl in slots:
             pre = f"output.{sl.n}"
             name = sl.name or ("output" if several else "")
-            if not sl.opened or f"{pre}.scene" not in self.reg:
+            if not getattr(sl, "drawn", sl.opened) or f"{pre}.scene" not in self.reg:
                 imgui.text_disabled(fit_text(f"{sl.n}  {name} — {sl.missing or 'not opened'}",
                                              imgui.get_content_region_avail().x))
                 continue
@@ -1989,47 +1994,25 @@ class Panel:
     def _page_faces(self, dt: float) -> None:
         ui_patterns.page(self, dt)     # the faces, the pattern browser, the eight inputs
 
-    def _page_bitmap(self, dt: float) -> None:
-        """Bitmap layer, composited over the pattern in the face shader."""
-        v = self.view
-        self._section("bitmap", note="saved with view")
-        if imgui.button("Load bitmap"):
-            try:
-                from imgui_bundle import portable_file_dialogs as pfd
+    def _page_media(self, dt: float) -> None:
+        """The media channels (plan 32 U): the missing banner, the library,
+        the eight channels and their bins, the backdrop's and the faces'
+        pickers (ui_media.py). The bitmap page's one file is a channel now."""
+        ui_media.draw(self, dt)
 
-                self._bmp_dialog = pfd.open_file(
-                    "Choose a bitmap", "",
-                    ["Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"],
-                )
-            except Exception as e:  # noqa: BLE001 — dialog is best-effort
-                if self.renderer is not None:
-                    self.renderer.bitmap_error = f"file dialog unavailable: {e}"
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Image layered over the face pattern, with its own alpha "
-                "fader and an oscillation path about the face centre."
-            )
-        if self._bmp_dialog is not None and self._bmp_dialog.ready():
-            picked = self._bmp_dialog.result()
-            self._bmp_dialog = None
-            if picked:
-                self.reg["view.bmp_file"].set(picked[0])
-        imgui.same_line()
-        self._path("view.bmp_file")
-        if self.renderer is not None and self.renderer.bitmap_error:
-            imgui.text_colored(WARN, f"bitmap: {self.renderer.bitmap_error}")
-        if not v.bmp_file:
-            imgui.text_disabled("no bitmap loaded — the faders below wait for one")
-            return
-        self._row("view.bmp_alpha")
-        self._row("view.bmp_scale")
-        self._label_cell("path")
-        self._combo("view.bmp_mode", 140)
-        if v.bmp_mode:
-            imgui.same_line()
-            self._slider("view.bmp_amp", 110)
-            imgui.same_line()
-            self._slider("view.bmp_rate")
+    def open_file_dialog(self, title: str, filters: list[str]):
+        """The native file dialog (portable_file_dialogs), or None with the
+        reason in `self.dialog_error` — best effort: a Mac without it still
+        has the rest of the page. Poll the dialog's `ready()` / `result()`
+        on later frames, as the audio page's Load track does."""
+        self.dialog_error = ""
+        try:
+            from imgui_bundle import portable_file_dialogs as pfd
+
+            return pfd.open_file(title, "", filters)
+        except Exception as e:  # noqa: BLE001 — dialog is best-effort
+            self.dialog_error = f"file dialog unavailable: {e}"
+            return None
 
     def _page_camera(self, dt: float) -> None:
         self._section("camera", "camera")
@@ -2062,14 +2045,10 @@ class Panel:
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
         imgui.same_line()
         if imgui.button("Load track"):
-            try:
-                from imgui_bundle import portable_file_dialogs as pfd
-
-                self._file_dialog = pfd.open_file(
-                    "Choose a track", "", ["Audio", "*.wav *.mp3 *.flac *.ogg"]
-                )
-            except Exception as e:  # noqa: BLE001 — dialog is best-effort
-                a.error = f"file dialog unavailable: {e}"
+            self._file_dialog = self.open_file_dialog(
+                "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
+            if self._file_dialog is None:
+                a.error = self.dialog_error
         if a.on:
             imgui.same_line()
             self._button("audio.stop", "Stop")
@@ -2250,6 +2229,7 @@ class Panel:
         imgui.spacing()
         self._section("devices")
         self._device_lines()
+        self._publish_lines()
         imgui.spacing()
         self._section("midi")
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
@@ -2446,6 +2426,16 @@ class Panel:
                 imgui.text_disabled(line)
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
+
+    def _publish_lines(self) -> None:
+        """Plan 32 T9: one line per output published out (a sink of the
+        rig's): `<kind> out <name> — <fps> fps, readback <ms> ms`, or its
+        error in the warning colour (media/publish.py)."""
+        for line in publish.lines(getattr(self, "outputs", None)):
+            if " — error" in line:
+                imgui.text_colored(WARN, line)
+            else:
+                imgui.text_disabled(line)
 
     def _desk_log(self) -> None:
         """The desk event log (plan 24 C1): the last twenty presses on the

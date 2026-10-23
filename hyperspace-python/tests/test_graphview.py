@@ -228,7 +228,11 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     assert c.src_port == "rout:acid.2" and c.dst_port == "rin:output.1/hands"
     assert view.node("render:acid.2").kind == "render"
     assert view.node("render:output.1").kind == "output"
-    assert all(p.patched for p in view.node("render:acid.2").ports)
+    # plan 32 T7: every port wired but the effect's aux, open until a wire
+    # puts a second picture on it
+    ports = {p.id: p for p in view.node("render:acid.2").ports}
+    assert not ports.pop("rin:acid.2/aux").patched
+    assert all(p.patched for p in ports.values())
 
 
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
@@ -578,3 +582,64 @@ def test_a_tidy_is_one_undo_step(tmp_path):
     assert r.undo.redo() and r.undo.status.endswith("tidy the graph")
     assert presets.layout == {} and pr.layout == {}     # both maps tidied again
     assert not lib.is_dirty(PRESETS)        # (the saved preset holds no positions either)
+
+
+# ---------------------------------------------------------------- plan 32 T10: the media area
+
+def test_graph_has_media_area(rig):
+    """The eight channels are eight source nodes in a titled media area
+    (`render:media.<c>`, an image out each, the channel's params on it),
+    with the backdrop's node beside them, whatever the render graph holds;
+    a channel no cable leaves and whose bin is empty is idle (its area's
+    line). A wire from `media.a` — into an effect's `aux` port, or under
+    the scene as the backdrop — is drawn from the one `media.a` node, and
+    it names `media.a` again when unwired or rewired."""
+    from dataclasses import replace
+
+    from hyperspace.media.channels import CHANNELS
+
+    view = build(rig)
+    media = [n for n in view.nodes if n.area == graphview.MEDIA]
+    chans = [n for n in media if n.id.startswith("render:media.")]
+    assert [n.id for n in chans] == [f"render:media.{c}" for c in CHANNELS]
+    assert all(n.kind == "render" and n.ports[0].id == f"rout:media.{n.id[-1]}"
+               for n in chans)
+    assert owner_of(view, "media.c.jog") == "render:media.c"
+    assert owner_of(view, "backdrop.alpha") == "group:backdrop"
+    assert view.node("group:backdrop").area == graphview.MEDIA
+    assert not view.node("group:backdrop").idle
+    assert all(n.idle for n in chans)                       # nothing in a bin, no cable
+    assert graphview.TITLES[graphview.MEDIA] == "MEDIA"
+    assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.GEOMETRY)
+    lay = graphview.layout(view, collapsed=lambda nid: True)
+    assert graphview.MEDIA in lay.titles and lay.idle[graphview.MEDIA]
+    assert "8 empty channels" in graphview.idle_words(view.node(i) for i in
+                                                       lay.idle[graphview.MEDIA])
+    # a bin with something in it: drawn, though nothing is wired
+    rig.reg.media.assign("b", 0, "shared:loops/tunnel.mp4")
+    assert not build(rig).node("render:media.b").idle
+    # a wire from media.a into an effect's aux, with the backdrop on a as well
+    spec = G.read_graph({"nodes": [], "wires": [{"from": "media.a", "to": "acid.aux"}]})
+    wiring = replace(spec.wiring(), backdrop="a")
+    g = G.default_graph(views(Switches()), wiring, effects=("acid",))
+    assert {"media.a", "media.a(wire)"} <= set(g.nodes)
+    view = build(rig, g)
+    assert view.node("render:media.a(wire)") is None       # one node per channel
+    froms = [c for c in view.cables if c.src_port == "rout:media.a"]
+    assert {c.dst_port for c in froms} == {"rin:acid/aux", f"rin:{G.GROUNDED}/under"}
+    assert all(c.type == graphview.IMAGE for c in froms)
+    assert not view.node("render:media.a").idle
+    wired = next(c for c in froms if c.dst_port == "rin:acid/aux")
+    assert graphview.spec_name(f"rout:{wired.ref[0].name}", g) == ("media.a", None)
+    assert graphview.spec_name("rout:media.e", g) == ("media.e", None)  # not in the graph
+
+
+def test_the_media_area_draws_on_the_page(rig, monkeypatch):
+    """The page draws the media area's title and, a bin filled, its node."""
+    from test_graph_areas import drawn_ids
+
+    rig.reg.media.assign("a", 0, "shared:x.png")
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert "render:media.a" in drawn_ids(rig, monkeypatch)
+    assert "render:media.b" not in drawn_ids(rig, monkeypatch)

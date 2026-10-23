@@ -50,6 +50,13 @@ dream.py, too, is imported only when its gate is open.
     keep_awake = true       # while the app runs, the Mac does not idle into the
                             # screensaver, display sleep or system sleep (macOS
                             # `caffeinate -d -i`, app.Awake); false lets it
+    syphon = ""             # publish output 1 as a Syphon server of this name, for
+                            # Resolume / TouchDesigner on this Mac (plan 32 T9):
+                            # the frame's texture handed over, no copy. "" = not
+    ndi = ""                # …and/or as an NDI sender of this name, for another
+                            # machine on the network: read back a frame behind
+                            # and sent on its own thread. "" = not. Each is a
+                            # line on the SYSTEM page (fps, readback ms)
     on_start = false        # launch straight into overlay mode (needs overlay = true)
     passthrough = true      # clicks go to the window underneath (G / pan toggles)
     bg = 0.0                # ground darkness in overlay: 0 see-through, 1 black
@@ -86,6 +93,17 @@ dream.py, too, is imported only when its gate is open.
                             #   with a note — the config cannot launch an output black
     flip_x = false          #   mirror this output left-right / top-bottom, its last
     flip_y = false          #   step — for a Pepper's Ghost glass (plan 23 WP1)
+    syphon = "td"           # publish this output as a Syphon server / an NDI
+    ndi = "td"              # sender of that name (plan 32 T9; "" = not), as
+                            # [output] syphon / ndi say for output 1
+    window = true           # false: a publish-only output — no window, no screen
+                            # (its monitor / fullscreen are not read); drawn
+                            # offscreen at the render cap's size ([output]
+                            # render; "full" = output 1's framebuffer) and only
+                            # published. One with neither syphon nor ndi is not
+                            # drawn, with a note. Output 1 holds the GL context
+                            # and paces the loop, so it always opens a window
+                            # (false there is a note)
                             # Outputs are numbered by their place in the list,
                             # opened or not. Output 1 sets the frame's size and
                             # paces the loop (its swap waits for its screen, the
@@ -105,7 +123,8 @@ like the rename above. The SYSTEM page shows both.
                             # ignored (one note each)
     role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
     kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out",
-                            # "osc", "cloud"; an unknown kind is an
+                            # "osc", "cloud", "ndi", "syphon", "camera";
+                            # an unknown kind is an
                             # error line on the SYSTEM page, never a dead launch
     enabled = true          # false lists it as `off`: nothing opened, nothing imported
                             # …then the kind's own keys: [midi]'s port / profile /
@@ -152,6 +171,22 @@ like the rename above. The SYSTEM page shows both.
                             #   [bridge] send becomes those rows the first launch
                             #   the bridge is on with none (one note); then the
                             #   rows say
+                            # Live media feeds (plan 32 T8, hyperspace/media): each
+                            # kind finds its feeds every 2 s and offers them to the
+                            # media channels as source ids; nothing connects until
+                            # a channel puts one on. NDI over the network
+                            # (ndi:<sender>, another rig's Resolume / TouchDesigner),
+                            # Syphon from another app on this Mac
+                            # (syphon:<app>/<server>, zero-copy) and the webcams
+                            # (camera:<name>, 1280x720 at 30 fps):
+                            #   [[devices]]  role = "ndi"     kind = "ndi"     enabled = true
+                            #                extra_ips = []   (senders on another
+                            #                subnet: "192.168.1.50"…, written to
+                            #                <home>/ndi/ndi-config.v1.json)
+                            #   [[devices]]  role = "syphon"  kind = "syphon"  enabled = true
+                            #   [[devices]]  role = "camera"  kind = "camera"  enabled = true
+                            #   (a refused camera: System Settings ▸ Privacy &
+                            #   Security ▸ Camera)
 
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
@@ -243,7 +278,8 @@ DEFAULTS: dict = {
     "output": {"overlay": False, "monitor": -1, "control_monitor": -1, "fullscreen": False,
                "on_start": False, "passthrough": True, "bg": 0.0, "alpha": 1.0,
                "keep_awake": True, "render": "1080p",
-               "flip_x": False, "flip_y": False},
+               "flip_x": False, "flip_y": False,
+               "syphon": "", "ndi": "", "window": True},
     # gamepad.py: the Xbox pad — on by default, inert when absent
     "gamepad": {"enabled": True, "usb": True, "dial_left": "petal", "dial_right": "blend"},
     # bridge.py: the analyzer's lanes out to a DAW, external lanes in — off by default
@@ -266,7 +302,13 @@ DEFAULTS: dict = {
 # switches are outputs.Switches' launch values
 SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
                 "scene": True, "hands": True, "through": False, "dim": 1.0,
-                "flip_x": False, "flip_y": False}
+                "flip_x": False, "flip_y": False,
+                "syphon": "", "ndi": "", "window": True}
+# the keys that publish an output (plan 32 T9): a Syphon server's and an
+# NDI sender's name ("" = not published)
+PUBLISH_KEYS = ("syphon", "ndi")
+ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
+              "(publish it, or set a later output's window = false)")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
 
 # `[[devices]]` (plan 27 B1): the old per-adapter tables, in today's poll
@@ -284,6 +326,9 @@ JOYSTICKS = 16           # GLFW's joystick slots (JOYSTICK_1–16): a gamepad's 
 MIDI_OUT: dict = {"port": "", "virtual": True, "carries": "", "encoding": "pitch",
                   "channel": 0, "cc": 16, "rate": 100}
 DAW_ROLE = "hands-daw"     # the entry `[hands] out` becomes
+# an `ndi` entry's own keys (plan 32 T8): addresses of senders on another
+# subnet, written into the app's NDI config (media/ndi.py)
+NDI: dict = {"extra_ips": []}
 
 
 def _note(cfg: dict, note: str) -> None:
@@ -324,6 +369,7 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
             else:
                 _note(cfg, f"{where} {key} = {e[key]!r} is not true or false — "
                            f"{str(SCREEN[key]).lower()}")
+    _publish_keys(out, e, where, cfg, first=n == 1)
     if "dim" in e:
         d = number(e["dim"])
         if d is None:
@@ -334,6 +380,33 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
         else:
             out["dim"] = min(d, 1.0)
     return out
+
+
+def _publish_keys(out: dict, e: dict, where: str, cfg: dict, first: bool) -> None:
+    """An output's `syphon` / `ndi` names and its `window` switch (plan 32
+    T9), from `e` into `out`: a name that is not a string is not
+    published, a window that is not true or false is a window, and output
+    1 (`first`) always has one — each said."""
+    for key in PUBLISH_KEYS:
+        if key in e:
+            if isinstance(e[key], str):
+                out[key] = e[key].strip()
+            else:
+                out[key] = ""
+                _note(cfg, f"{where} {key} = {e[key]!r} is not a name — not published")
+    if "window" in e:
+        if not isinstance(e["window"], bool):
+            out["window"] = True
+            _note(cfg, f"{where} window = {e['window']!r} is not true or false — true")
+        elif not e["window"] and first:
+            out["window"] = True
+            _note(cfg, f"{where} window = false, but {ONE_WINDOW}")
+        else:
+            out["window"] = e["window"]
+
+
+def _and(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
 
 
 def _screens(cfg: dict, file_output) -> None:
@@ -369,9 +442,9 @@ def _screens(cfg: dict, file_output) -> None:
         return
     out = [_screen(k + 1, e, cfg) for k, e in enumerate(entries)]
     file_output = file_output if isinstance(file_output, dict) else {}
-    said = [k for k in ("monitor", "fullscreen") if k in file_output]
+    said = [k for k in ("monitor", "fullscreen", *PUBLISH_KEYS, "window") if k in file_output]
     if said:
-        _note(cfg, f"config: [[output.screens]] is listed, so [output] {' and '.join(said)} "
+        _note(cfg, f"config: [[output.screens]] is listed, so [output] {_and(said)} "
                    f"{'is' if len(said) == 1 else 'are'} ignored — output 1's entry says")
     oc["screens"] = out
     oc["monitor"], oc["fullscreen"] = out[0]["monitor"], out[0]["fullscreen"]
@@ -392,16 +465,20 @@ def screens(cfg: dict) -> list[dict]:
     return [{**SCREEN, "monitor": oc.get("monitor", -1),
              "fullscreen": bool(oc.get("fullscreen", False)),
              "flip_x": oc.get("flip_x", False) is True,
-             "flip_y": oc.get("flip_y", False) is True}]
+             "flip_y": oc.get("flip_y", False) is True,
+             **{k: oc[k] for k in PUBLISH_KEYS if isinstance(oc.get(k), str)}}]
 
 
 def _kind_defaults(kind: str) -> dict:
     """The keys an entry of `kind` carries beyond role / kind / enabled,
     with their defaults: the old table's *defaults* (DEFAULTS, the hands'
     own table), less `enabled` — never the file's old table, which a
-    `[[devices]]` list says is ignored. A `midi-out` entry's are `MIDI_OUT`."""
+    `[[devices]]` list says is ignored. A `midi-out` entry's are `MIDI_OUT`,
+    an `ndi` entry's `NDI`."""
     if kind == "midi-out":
         return copy.deepcopy(MIDI_OUT)
+    if kind == "ndi":
+        return copy.deepcopy(NDI)
     for section, k, _ in DEVICE_TABLES:
         if k != kind:
             continue
@@ -670,6 +747,14 @@ def load(path: Path | None = None) -> dict:
         if not isinstance(v, bool):
             cfg["output"][key] = False
             _note(cfg, f"config: [output] {key} = {v!r} is not true or false — false")
+    # [output] syphon / ndi / window (plan 32 T9, the one-output form):
+    # output 1's publishing, checked as an entry's would be. With a list
+    # the entries say (`_screens` noted these were ignored)
+    if "screens" not in cfg["output"]:
+        one = {k: cfg["output"][k] for k in (*PUBLISH_KEYS, "window") if k in cfg["output"]}
+        checked = dict(SCREEN)
+        _publish_keys(checked, one, "config: [output]", cfg, first=True)
+        cfg["output"].update({k: checked[k] for k in (*PUBLISH_KEYS, "window")})
     # [output] keep_awake is a switch: `keep_awake = "no"` keeps the Mac awake
     # (the show is safer awake), and the SYSTEM page says so
     awake = cfg["output"].get("keep_awake", True)
