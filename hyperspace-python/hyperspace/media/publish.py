@@ -23,10 +23,15 @@ publisher: ``<kind> out <name> — <fps> fps, readback <ms> ms``.
 
 Neither library is imported until a publisher of its kind is made (the
 app's boundary, tests/test_app_boundary.py). A publisher never raises
-into the frame: what goes wrong is its `status` (``error: …``)."""
+into the frame: what goes wrong — on the frame thread, on the sender's,
+or in the renderer's copy for it (`fail`) — is its `status` (``error:
+…``, `media.source.error`), said once on stderr and in its `notes` (the
+config's, which the SYSTEM page lists). Its fps falls to 0 once nothing
+was sent for `RATE_S`, so a stalled publisher never reads as live."""
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from fractions import Fraction
@@ -35,6 +40,7 @@ from typing import Protocol
 import numpy as np
 
 from . import live
+from .source import error
 
 NDI_RATE = Fraction(60, 1)    # the frame rate an NDI sender announces (the loop's)
 RATE_S = 1.0                  # fps is counted over this long
@@ -51,47 +57,86 @@ class Publisher(Protocol):
 
     def publish(self, tex, t: float) -> None: ...
 
+    def fail(self, why: str) -> None: ...
+
     def close(self) -> None: ...
 
 
 class _Rate:
-    """Events per second, counted over `RATE_S` windows of `clock`."""
+    """Events per second, counted over `RATE_S` windows of `clock`; 0
+    once the last event is more than `RATE_S` old."""
 
-    def __init__(self):
-        self.fps = 0.0
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self._fps = 0.0
         self._n = 0
         self._t0: float | None = None
+        self._last: float | None = None
 
-    def tick(self, t: float) -> None:
-        if self._t0 is None:
+    def tick(self) -> None:
+        t = self._last = self.clock()
+        if self._t0 is None:           # the window opens on this event: intervals from here
             self._t0 = t
+            return
         self._n += 1
         dt = t - self._t0
         if dt >= RATE_S:
-            self.fps, self._n, self._t0 = self._n / dt, 0, t
+            self._fps, self._n, self._t0 = self._n / dt, 0, t
+
+    @property
+    def fps(self) -> float:
+        last = self._last
+        if last is None or self.clock() - last > RATE_S:
+            return 0.0
+        return self._fps
 
 
-class SyphonOut:
+class _Out:
+    """What both publishers share: the status, the fps, the failure said once."""
+
+    kind = ""
+
+    def __init__(self, name: str, ctx, clock=time.monotonic):
+        self.name, self.ctx = name, ctx
+        self.status, self.readback_ms = "waiting", 0.0
+        self.notes: list | None = None    # the config's notes (app.py): where a failure is said
+        self._rate = _Rate(clock)
+        self._said: set[str] = set()
+
+    @property
+    def fps(self) -> float:
+        return self._rate.fps
+
+    def fail(self, why: str) -> None:
+        """Something failed for this publisher: its status says so, and
+        each distinct reason is said once (stderr, `notes`)."""
+        self.status = error(why)
+        if why not in self._said:
+            self._said.add(why)
+            note = f"publish: {self.kind} out {self.name}: {why}"
+            print(note, file=sys.stderr)
+            if self.notes is not None:
+                self.notes.append(note)
+
+    def _failed(self, e: Exception) -> None:
+        self.fail(live._said(e))
+
+
+class SyphonOut(_Out):
     """A Syphon server of `name` on the render context `ctx`, made here —
     so made with that context current (app.main does, as the renderer is
     made). `publish` hands the texture over; frame thread only."""
 
     kind = "syphon"
 
-    def __init__(self, name: str, ctx):
-        self.name, self.ctx = name, ctx
-        self.status, self.readback_ms = "waiting", 0.0
-        self._rate = _Rate()
+    def __init__(self, name: str, ctx, clock=time.monotonic):
+        super().__init__(name, ctx, clock)
         self._srv = None
         try:
             syphon = live.need("syphon")
             self._srv = syphon.SyphonOpenGLServer(name)
         except Exception as e:  # noqa: BLE001 — a publisher must not stop the launch
-            self.status = f"error: {live._said(e)}"
-
-    @property
-    def fps(self) -> float:
-        return self._rate.fps
+            self._failed(e)
 
     def publish(self, tex, t: float) -> None:
         srv = self._srv
@@ -100,10 +145,10 @@ class SyphonOut:
         try:
             srv.publish_frame_texture(int(tex.glo), size=tuple(int(v) for v in tex.size))
         except Exception as e:  # noqa: BLE001 — said, and tried again next frame
-            self.status = f"error: {live._said(e)}"
+            self._failed(e)
             return
         self.status = "sending"
-        self._rate.tick(t)
+        self._rate.tick()
 
     def close(self) -> None:
         srv, self._srv = self._srv, None
@@ -126,7 +171,7 @@ def _ndi_sender(name: str, size: tuple[int, int]):
     return snd
 
 
-class NdiOut:
+class NdiOut(_Out):
     """An NDI sender of `name`, fed from textures of `ctx` (see the module
     docstring). `make_sender(name, (w, h))` makes the sender, on the
     publisher's thread — anything with `write_video(flat_uint8)` and
@@ -136,11 +181,9 @@ class NdiOut:
 
     kind = "ndi"
 
-    def __init__(self, name: str, ctx, make_sender=None):
-        self.name, self.ctx = name, ctx
-        self.status, self.readback_ms = "waiting", 0.0
+    def __init__(self, name: str, ctx, make_sender=None, clock=time.monotonic):
+        super().__init__(name, ctx, clock)
         self.dropped = 0
-        self._rate = _Rate()
         self._make = make_sender or _ndi_sender
         self._size: tuple[int, int] | None = None
         self._pbo: list = []
@@ -157,11 +200,8 @@ class NdiOut:
             try:
                 live.need("cyndilib")           # imported here, once: never on the frame thread
             except Exception as e:  # noqa: BLE001 — a publisher must not stop the launch
-                self._fault = self.status = f"error: {live._said(e)}"
-
-    @property
-    def fps(self) -> float:
-        return self._rate.fps
+                self._fault = live._said(e)
+                self._failed(e)
 
     # ---- the frame thread
 
@@ -177,6 +217,13 @@ class NdiOut:
     def publish(self, tex, t: float) -> None:
         if self._fault or tex is None:
             return
+        try:
+            self._read(tex)
+        except Exception as e:  # noqa: BLE001 — a lost buffer, a GL error: said, tried again
+            self._failed(e)
+            self._drop_buffers()          # made again at the next frame
+
+    def _read(self, tex) -> None:
         if self._thread is None:
             self._thread = threading.Thread(target=self._run, name=f"media-ndi-out-{self.name}",
                                             daemon=True)
@@ -223,9 +270,9 @@ class NdiOut:
                     flat = np.ascontiguousarray(self._stage.reshape(h, w, 4)[::-1]).ravel()
                     snd.write_video(flat)
                     self.status = "sending"
-                    self._rate.tick(time.monotonic())
+                    self._rate.tick()
                 except Exception as e:  # noqa: BLE001 — said; the next frame tries again
-                    self.status = f"error: {live._said(e)}"
+                    self._failed(e)
                     if snd is not None:
                         live._quiet(snd.close)
                     snd = made_for = None
@@ -264,13 +311,21 @@ def lines(slots) -> list[str]:
     return [line(p) for sl in slots or () for p in getattr(sl, "publishers", None) or ()]
 
 
-def open_for(slot, ctx, makers=None) -> list:
+def open_for(slot, ctx, makers=None, notes: list | None = None) -> list:
     """`slot`'s publishers, one per name its config gives (`syphon` then
-    `ndi`), made with `ctx` current. `makers` (the tests') maps a kind to
-    a maker taking (name, ctx)."""
+    `ndi`), made with `ctx` current, saying their failures in `notes`.
+    `makers` (the tests') maps a kind to a maker taking (name, ctx)."""
     made = {"syphon": SyphonOut, "ndi": NdiOut, **(makers or {})}
-    return [made[kind](getattr(slot, kind), ctx)
-            for kind in ("syphon", "ndi") if getattr(slot, kind, "")]
+    out = []
+    for kind in ("syphon", "ndi"):
+        if getattr(slot, kind, ""):
+            p = made[kind](getattr(slot, kind), ctx)
+            if notes is not None and hasattr(p, "notes"):
+                p.notes = notes
+                for why in sorted(getattr(p, "_said", ())):   # what its making said already
+                    notes.append(f"publish: {p.kind} out {p.name}: {why}")
+            out.append(p)
+    return out
 
 
 def close_all(slots) -> None:

@@ -528,16 +528,17 @@ def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = 
     glfw.make_context_current(slots[0].win)
 
 
-def _open_publishers(slots: list[Slot], ctx) -> None:
+def _open_publishers(slots: list[Slot], ctx, notes: list | None = None) -> None:
     """Plan 32 T9: each drawn output's publishers (media/publish.py), made
     with the render context current — a Syphon server takes the context
     current as it is made; a publisher that cannot open says so on its
-    SYSTEM line. A publish-only output gets its offscreen target, a
+    SYSTEM line, and every failure is said once in `notes` (the
+    config's). A publish-only output gets its offscreen target, a
     published window its tap (`outputs.Offscreen`)."""
     for slot in slots:
         if not slot.drawn:
             continue
-        slot.publishers = publish.open_for(slot, ctx)
+        slot.publishers = publish.open_for(slot, ctx, notes=notes)
         if slot.publish_only:
             slot.offscreen = Offscreen(ctx)
         elif slot.publishers:
@@ -1225,7 +1226,7 @@ def main() -> None:
     _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
     # the outputs published out (plan 32 T9), output 1's context current
-    _open_publishers(slots, ctx)
+    _open_publishers(slots, ctx, cfg.setdefault("notes", []))
 
     # the control side: imgui on the control window's context. Its swap
     # never waits for a vblank — two vsynced swaps a frame would halve the

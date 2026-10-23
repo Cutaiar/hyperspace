@@ -1260,8 +1260,10 @@ class Renderer:
         — a window's framebuffer resolved into it (multisampled or not),
         a presenter's hand-off presented into it here, as that window's
         context shows it. A publisher (or a copy) that raises costs no
-        view and no other publisher: `stats["publish_errors"]` names it,
-        ``"<kind> out <name>"`` → the error."""
+        view and no other publisher: the publisher is told (`fail`: its
+        status and SYSTEM line say so, and it is said once) and
+        `stats["publish_errors"]` names it, ``"<kind> out <name>"`` → the
+        error."""
         errors: dict[str, str] = {}
         for v in views:
             pubs = getattr(v, "publish", None)
@@ -1272,40 +1274,38 @@ class Renderer:
             except Exception as e:  # noqa: BLE001 — a copy must not take the frame down
                 tex = None
                 for p in pubs:
-                    errors[_pub_name(p)] = f"{type(e).__name__}: {e}"
+                    _pub_failed(p, f"{type(e).__name__}: {e}", errors)
             if tex is None:
                 continue
             for p in pubs:
                 try:
                     p.publish(tex, t)
                 except Exception as e:  # noqa: BLE001 — one publisher must not stop the rest
-                    errors[_pub_name(p)] = f"{type(e).__name__}: {e}"
+                    _pub_failed(p, f"{type(e).__name__}: {e}", errors)
         stats = getattr(self, "stats", None)
         if isinstance(stats, dict):
             stats["publish_errors"] = errors
 
     def _published(self, v: View) -> moderngl.Texture | None:
-        """`v`'s picture as a texture (`_publish`), or None with none to give."""
+        """`v`'s picture as a texture (`_publish`), or None with none to give.
+        A window's (output 1's or a presenter's) is its hand-off presented
+        into its tap at the window's size under the render cap
+        (`capped`, as the frame is): a 2× retina window publishes the
+        frame, not a 4K upscale of it."""
         tgt = v.target
         own = getattr(tgt, "color_attachments", None) if tgt is not None else None
-        if own and isinstance(own[0], moderngl.Texture):
+        if own and isinstance(own[0], moderngl.Texture) and getattr(v, "tap", None) is None:
             return own[0]
-        tap = getattr(v, "tap", None)
-        if tap is None:
+        tap, ho = getattr(v, "tap", None), v.handoff
+        if tap is None or ho is None or v.size[0] <= 0 or v.size[1] <= 0:
             return None
-        size = (int(v.size[0]), int(v.size[1]))
-        if size[0] <= 0 or size[1] <= 0:
-            return None
-        if tgt is not None:
-            self.ctx.copy_framebuffer(tap.fit(size), tgt)    # resolves a multisampled window
-            return tap.tex
-        if v.handoff is not None:
-            pres = getattr(self, "_tap_presenter", None)
-            if pres is None:
-                pres = self._tap_presenter = Presenter(self.ctx)
-            pres.present(v.handoff, size, target=tap.fit(size))
-            return tap.tex
-        return None
+        size = capped(v.size, getattr(self, "max_frame", None))
+        ho = replace(ho, rect=fit(ho.frame_size, size))
+        pres = getattr(self, "_tap_presenter", None)
+        if pres is None:
+            pres = self._tap_presenter = Presenter(self.ctx)
+        pres.present(ho, size, target=tap.fit(size))
+        return tap.tex
 
     def _pass_timer(self) -> PassTimer:
         """The GPU node timer (getattr: a renderer from before a hot reload
@@ -1567,9 +1567,12 @@ class Renderer:
         flip = (bool(getattr(v.switches, "flip_x", False)),
                 bool(getattr(v.switches, "flip_y", False)))
         frame = None if key is None or key in failed else frames.get(key)
-        if v.target is None:
-            if v.presenter is None:
+        if v.target is None or getattr(v, "tap", None) is not None:
+            if v.target is None and v.presenter is None:
                 raise RuntimeError("a view needs a target or a presenter")
+            # a presenter's hand-off — and (plan 32 T9) a published
+            # window's, which `_published` presents into its tap at the
+            # capped size (the window itself is drawn below as ever)
             rx, ry, rw, rh = v.rect
             ix, iy, iw, ih = fit(size, (rw, rh))
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
@@ -1578,7 +1581,8 @@ class Renderer:
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
                                 blend="add" if blend == "add" else "over")
-            return
+            if v.target is None:
+                return
         tgt, rect = v.target, v.rect
         opaque = v.bg_alpha >= 1.0
         fx_, fy, fw, fh = fit(size, rect[2:])
@@ -2524,6 +2528,18 @@ class Renderer:
 
 def _pub_name(p) -> str:
     return f"{getattr(p, 'kind', '?')} out {getattr(p, 'name', '?')}"
+
+
+def _pub_failed(p, why: str, errors: dict) -> None:
+    """`Renderer._publish`: publisher `p` failed for `why` — told
+    (`fail`, when it has one: its status, said once) and recorded."""
+    errors[_pub_name(p)] = why
+    fail = getattr(p, "fail", None)
+    if callable(fail):
+        try:
+            fail(why)
+        except Exception:  # noqa: BLE001, S110 — telling it must not take the frame down
+            pass
 
 
 class _PanPx:

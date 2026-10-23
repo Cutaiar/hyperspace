@@ -310,6 +310,112 @@ def test_publish_lines_and_a_missing_library_is_an_error_status(ctx, monkeypatch
     n.close()
 
 
+# ---------------------------------------------------------------- fix round 1
+
+
+def test_a_windowed_output_publishes_at_the_capped_size(ctx):
+    """A window whose framebuffer is 2× the render cap — output 1's,
+    multisampled, and a presenter's — publishes the frame at the capped
+    size, not an upscale at the window's: the picture a publish-only view
+    of that size shows, byte for byte."""
+    from test_outputs import H, W, fbo, rig, scene_view
+
+    r = rig(ctx, effects=("warp",), dim=0.8)
+    r.max_frame = (W // 2, H // 2)
+    win = fbo(ctx, W, H, samples=4)
+    a, b, c = Grab("one"), Grab("pres"), Grab("ref")
+    off, tap1, tap2 = Offscreen(ctx), Offscreen(ctx), Offscreen(ctx)
+    pres = Presenter(ctx)
+    sw = Switches()
+    vs = [View(sw, (W, H), target=win, publish=[a], tap=tap1),
+          View(sw, (W, H), presenter=pres, publish=[b], tap=tap2),
+          View(sw, (W // 2, H // 2), target=off.fit((W // 2, H // 2)), publish=[c])]
+    r.draw_outputs(scene_view(), W, H, 1.0, vs, t_now=2.0)
+    assert ctx.error == "GL_NO_ERROR"
+    assert a.sizes == b.sizes == c.sizes == [(W // 2, H // 2)]
+    assert np.array_equal(a.got, c.got) and np.array_equal(b.got, c.got)
+    assert c.got[..., :3].max() > 50
+    for o in (off, tap1, tap2):
+        o.release()
+    pres.release()
+
+
+class _GlLost:
+    """A texture whose read back fails, as a lost buffer's does."""
+
+    size = (64, 36)
+    glo = 1
+
+    def read_into(self, *a, **k):
+        raise RuntimeError("GL_INVALID_OPERATION")
+
+
+class _BadTap(Offscreen):
+    def fit(self, size):
+        raise RuntimeError("out of memory")
+
+
+def test_a_frame_half_failure_is_the_publishers_error_said_once(ctx, capsys):
+    """A failure on the frame thread — NdiOut's own read back, or the
+    renderer's copy for it — is the publisher's status, its SYSTEM line
+    says so, and it is said once on stderr and in the notes, however many
+    frames it fails."""
+    from test_outputs import H, W, fbo, rig, scene_view
+
+    notes: list[str] = []
+    out = publish.NdiOut("RIG", ctx, make_sender=lambda name, size: SlowSender())
+    out.notes = notes
+    for k in range(3):
+        out.publish(_GlLost(), k / 60)
+    assert out.status == "error: RuntimeError: GL_INVALID_OPERATION"
+    assert publish.line(out) == "ndi out RIG — error: RuntimeError: GL_INVALID_OPERATION"
+    assert notes == ["publish: ndi out RIG: RuntimeError: GL_INVALID_OPERATION"]
+    assert capsys.readouterr().err.count("GL_INVALID_OPERATION") == 1
+    out.close()
+
+    # the renderer's copy for a published window fails: the publisher is told
+    r = rig(ctx, effects=())
+    out = publish.NdiOut("TAP", ctx, make_sender=lambda name, size: SlowSender())
+    out.notes = notes
+    tap = _BadTap(ctx)
+    vs = [View(Switches(), (W, H), target=fbo(ctx, W, H), publish=[out], tap=tap)]
+    for k in range(3):
+        r.draw_outputs(scene_view(), W, H, 1.0, vs, t_now=2.0 + k / 60)
+    assert vs[0].error == "" and out.status == "error: RuntimeError: out of memory"
+    assert "error: RuntimeError: out of memory" in publish.line(out)
+    assert notes[-1] == "publish: ndi out TAP: RuntimeError: out of memory" and len(notes) == 2
+    assert r.stats["publish_errors"] == {"ndi out TAP": "RuntimeError: out of memory"}
+    out.close()
+
+
+def test_fps_falls_to_zero_when_nothing_was_sent_for_a_second(ctx, monkeypatch):
+    from hyperspace.media import live
+
+    class Server:
+        def __init__(self, name):
+            self.n = 0
+
+        def publish_frame_texture(self, glo, size=None):
+            self.n += 1
+
+        def stop(self):
+            pass
+
+    monkeypatch.setattr(live, "need", lambda lib: SimpleNamespace(SyphonOpenGLServer=Server))
+    now = [100.0]
+    out = publish.SyphonOut("RIG", ctx, clock=lambda: now[0])
+    tex = SimpleNamespace(glo=1, size=(64, 36))
+    for _ in range(90):
+        out.publish(tex, now[0])
+        now[0] += 1 / 60
+    assert 55 < out.fps < 65 and publish.line(out).startswith("syphon out RIG — 60 fps")
+    now[0] += 1.1                                       # nothing sent for over a second
+    assert out.fps == 0.0 and publish.line(out) == "syphon out RIG — 0 fps, readback 0.0 ms"
+    out.publish(tex, now[0])                            # sending again: counted afresh
+    assert out.status == "sending"
+    out.close()
+
+
 # ---------------------------------------------------------------- loopbacks
 
 

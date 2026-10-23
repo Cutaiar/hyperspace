@@ -2504,7 +2504,10 @@ class Fx(Node):
         # the mirror is `_show`'s, at the output stage
         # plan 30 D1: an output whose picture goes through an effect placed
         # into it folds the frame texture, so it is never painted direct
+        # plan 32 T9: nor is a published window's (its tap is presented
+        # from the frame texture)
         direct = (len(users) == 1 and only.target is not None
+                  and getattr(only, "tap", None) is None
                   and tuple(only.rect[2:]) == frame.size
                   and not getattr(only.switches, "flip_x", False)
                   and not getattr(only.switches, "flip_y", False)
