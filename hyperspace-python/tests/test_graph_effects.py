@@ -46,7 +46,7 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_chain_order():
         assert _run_of(g, end) == list(RUN)
         assert [e.name for e in fx.effects] == names
         assert all(isinstance(e, G.Effect) and e.KIND == "effect" for e in fx.effects)
-        assert fx.effects[0].inputs == {"image": g.nodes[src]}
+        assert fx.effects[0].inputs == {"image": g.nodes[src], "aux": None}
         assert fx.inputs["image"] is fx.effects[-1] and fx.source is g.nodes[src]
         order = [n.name for n in g.order]
         assert [order.index(n) for n in names] == sorted(order.index(n) for n in names)
@@ -83,8 +83,9 @@ def test_an_effect_named_like_another_node_is_kept_apart():
 
 def test_an_effect_node_takes_an_image_and_makes_one():
     e = G.Effect("palette")
-    assert e.name == e.effect == "palette" and e.INPUTS == {"image": G.IMAGE}
-    assert e.OUTPUT == G.IMAGE and e.inputs == {"image": None}
+    # plan 32 T7: and a second picture, aux, unwired by default
+    assert e.name == e.effect == "palette" and e.INPUTS == {"image": G.IMAGE, "aux": G.IMAGE}
+    assert e.OUTPUT == G.IMAGE and e.inputs == {"image": None, "aux": None}
     with pytest.raises(TypeError):
         G.Effect("palette", image=G.Shape("shape"))     # a geometry is not an image
 

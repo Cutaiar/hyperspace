@@ -111,9 +111,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             and clouded <= keys and fixture <= keys)
     # (plan 30 D1: + 3 × 8, the three placement fixtures' eight states;
     # plan 28 N4: + 2 × 8, the two wire fixtures'; plan 32 T6: + 2 × 8, the
-    # two media fixtures')
+    # two media fixtures'; plan 32 T7: + 3 × 8, the faces' and the aux's)
     assert len(doc["goldens"]) == (23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2 + 2 * 2 + 8 + 3 * 8
-                                   + 2 * 8 + 2 * 8)
+                                   + 2 * 8 + 2 * 8 + 3 * 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain

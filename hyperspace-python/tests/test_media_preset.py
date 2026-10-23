@@ -73,16 +73,24 @@ def test_build_registry_takes_a_media_state(rig):
     assert m.channels["a"].rate == -2.0
 
 
+# the effect files added after the base was written (plan 32 T7)
+LATER_EFFECTS = ('  "fx.displace.', '  "fx.blend.')
+
+
 @pytest.mark.parametrize("name", ["party-faces", "lfo-breathe"])
 def test_preset_without_media_is_unchanged(tmp_path, name):
     """A preset that uses no media is written byte for byte as the base
     wrote it (fixtures/media-preset-base/, saved by the writer before T5)
-    but for the six `view.bmp_*` values this build no longer has."""
+    but for the six `view.bmp_*` values this build no longer has — and the
+    values of the effect files added since (plan 32 T7's displace and blend:
+    a preset holds every effect's params, as it did each file before them)."""
     r = boot(tmp_path)
     assert r.presets.load(name) == []
     want = "".join(line for line in (BASE / f"{name}.json").read_text().splitlines(True)
                    if not line.startswith('  "view.bmp_'))
-    assert save_text(r, name) == want
+    got = save_text(r, name).splitlines(True)
+    assert any(line.startswith(LATER_EFFECTS) for line in got)
+    assert "".join(line for line in got if not line.startswith(LATER_EFFECTS)) == want
     assert preset.uses_media(r.presets.document(name)) is False
 
 

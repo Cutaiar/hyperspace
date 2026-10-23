@@ -302,7 +302,13 @@ def test_off_is_the_old_frame_exactly(ctx):
     assert np.array_equal(render(ctx, dry), base)
 
 
-@pytest.mark.parametrize("name", sorted(FxState().specs))
+# plan 32 T7: displace and blend bend the frame by the picture wired into
+# their aux input; with none (here) they leave it as it is, by design —
+# tests/test_media_faces_aux.py holds them with an aux
+AUX_ONLY = {"displace", "blend"}
+
+
+@pytest.mark.parametrize("name", sorted(set(FxState().specs) - AUX_ONLY))
 def test_each_effect_changes_the_frame(ctx, name):
     base = render(ctx, FxState())
     st = FxState()
@@ -845,12 +851,15 @@ class PageRig:
 
 def without_palette(st, reg) -> None:
     """The twelve effects whose orders the drag tests spell out (the
-    palette, plan 24 C6, is the thirteenth and sits last at 95). Only the
-    drag / reorder tests use it: the page-fit tests keep the palette."""
-    st.specs.pop("palette", None)
-    st.values.pop("palette", None)
-    st.phase.pop("palette", None)
-    declare(reg, st, {"palette"})
+    palette, plan 24 C6, sits last at 95; plan 32 T7's displace and blend,
+    at 22 and 90, came later still). Only the drag / reorder tests use it:
+    the page-fit tests keep them all."""
+    later = {"palette", "displace", "blend"}
+    for name in later:
+        st.specs.pop(name, None)
+        st.values.pop(name, None)
+        st.phase.pop(name, None)
+    declare(reg, st, later)
 
 
 @pytest.fixture()
@@ -1960,8 +1969,9 @@ def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
 # ---------------------------------------------------------------- drag a chip to reorder (plan 20 WP3)
 
 FACTORY_ORDERS = {"plasma": 5, "acid": 10, "kaleido": 15, "zoomblur": 17, "warp": 20,
-                  "wobble": 25, "doublevision": 30, "deconverge": 40, "fractals": 60,
-                  "glimmer": 70, "tripcolour": 80, "huecycle": 85, "palette": 95}
+                  "displace": 22, "wobble": 25, "doublevision": 30, "deconverge": 40,
+                  "fractals": 60, "glimmer": 70, "tripcolour": 80, "huecycle": 85,
+                  "blend": 90, "palette": 95}
 
 
 def _moved_to(names: list[str], moved: str, place: int) -> list[str]:

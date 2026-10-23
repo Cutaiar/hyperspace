@@ -619,6 +619,9 @@ uniform float u_mix;       // its mix × fx.mix
 uniform int u_blend;       // index into BLENDS
 uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha stays 1
                            // (always 0 on the faces' chain: there alpha is a face's intensity)
+uniform sampler2D u_aux;   // plan 32 R: the second picture (unit 1), wired by `<effect>.aux`
+uniform int u_aux_on;      // 1 while one is wired; 0 and `aux(uv)` is transparent black
+uniform vec2 u_aux_size;   // its size, px (0, 0 with none)
 in vec2 v_uv;
 out vec4 f_color;
 """
@@ -822,6 +825,9 @@ class FxChain:
         self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
         self._set(prog, "u_blend", int(v["blend"]))
         self._set(prog, "u_opaque", opaque)
+        self._set(prog, "u_aux", 1)
+        self._set(prog, "u_aux_on", 0)
+        self._set(prog, "u_aux_size", (0.0, 0.0))
         for p in st.specs[name].params:
             x = v[p.key]
             self._set(prog, p.uniform, round(x) if p.integer else float(x))
@@ -832,7 +838,8 @@ class FxChain:
         return self._program(name) is not None
 
     def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
-                t: float, opaque: int | None = None) -> None:
+                t: float, opaque: int | None = None,
+                aux: moderngl.Texture | None = None) -> None:
         """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
         program over `src` into `dst`'s viewport, every uniform set as
         `run` sets it, the clocks moved first (once per frame time,
@@ -840,7 +847,10 @@ class FxChain:
         across, so `dst` always holds the picture (the node reads such an
         effect through and never asks). `opaque` (plan 30 D1): `u_opaque`
         for this pass when not the chain's — 0 for an effect placed on a
-        hands' layer, whose ground is see-through whatever the window's."""
+        hands' layer, whose ground is see-through whatever the window's.
+        `aux` (plan 32 R): the picture wired into the effect's `aux` port,
+        bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
+        reads transparent black."""
         self.state.advance_to(t)
         pv = self._program(name)
         ctx = self.ctx
@@ -854,6 +864,10 @@ class FxChain:
             prog, vao = pv
             self._uniforms(prog, name, src.size, t,
                            self._opaque() if opaque is None else int(opaque))
+            if aux is not None:
+                aux.use(location=1)
+                self._set(prog, "u_aux_on", 1)
+                self._set(prog, "u_aux_size", tuple(float(x) for x in aux.size))
             vao.render(moderngl.TRIANGLES, vertices=3)
         finally:
             ctx.enable(moderngl.BLEND)

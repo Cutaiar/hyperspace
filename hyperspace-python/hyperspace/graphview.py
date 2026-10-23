@@ -2641,7 +2641,9 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None
     into_effect = dst_kind == "effect"
 
     def moves(name: str, key: str, where: str) -> bool:
-        if name == w.node:                       # the effect is fed by this wire now
+        # the effect is fed by this wire now — but an aux wire (plan 32 T7)
+        # is a second picture: the effect stays where it sits
+        if name == w.node and not rgraph.is_aux(w):
             return True
         target = where if key == "into" or where.startswith("output.") else None
         if target is not None and f"{target}.image" == d:   # its port takes this wire

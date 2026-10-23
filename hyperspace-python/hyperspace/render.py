@@ -361,6 +361,7 @@ uniform int u_bmp_on;
 uniform float u_bmp_alpha;
 uniform vec2 u_bmp_pos;      // path offset about the face centre, UV units
 uniform vec2 u_bmp_scale;    // (w, h) in face-UV units, aspect preserved
+uniform int u_bmp_flip;      // 1: the texture is in GL's row order (a feed's own), drawn as it is
 """
 
 FACE_FS_HEAD = """
@@ -403,7 +404,7 @@ void face_px(vec2 uv, float fid, out vec3 rgb, out float shade) {
     if (u_bmp_on != 0) {
         vec2 q = (uv - 0.5 - u_bmp_pos) / u_bmp_scale + 0.5;
         if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) {
-            vec4 b = texture(u_bitmap, vec2(q.x, 1.0 - q.y));
+            vec4 b = texture(u_bitmap, vec2(q.x, u_bmp_flip != 0 ? q.y : 1.0 - q.y));
             float ba = b.a * u_bmp_alpha;
             rgb = mix(rgb, b.rgb, ba);
             shade = mix(shade, 2.8, ba);
@@ -1090,11 +1091,20 @@ class Renderer:
                 res.release()
         self._fit_prog = self._fit_vao = None
 
-    def _face_media(self, s: ViewState) -> moderngl.Texture | None:
-        """The texture the faces draw over their pattern: the channel
-        `view.media` names. None until plan 32 T7 uploads channels (the
-        layer stays compiled and off: ``u_bmp_on`` 0)."""
-        return None
+    def _face_media(self, s: ViewState) -> tuple[moderngl.Texture, bool] | None:
+        """The texture the faces draw over their pattern (plan 32 T7, row
+        331: where the one bitmap file was) and whether it is in GL's row
+        order: the raw texture of the channel `view.media` names (1–8 = a–h,
+        `media_texture`), at its own size and aspect. None — the layer off —
+        with no channel named, no media state, or nothing on the channel."""
+        k = int(getattr(s, "media", 0) or 0)
+        if not 1 <= k <= len(MEDIA_CHANNELS):
+            return None
+        c = MEDIA_CHANNELS[k - 1]
+        tex = self.media_texture(c)
+        if tex is None:
+            return None
+        return tex, not self._media_textures().flipped(c)
 
     def _build_face_program(self) -> None:
         """The face program and the seed program (the face picture's first
@@ -1808,16 +1818,25 @@ class Renderer:
         u_mod = p["u_mod"]
         u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
         # the media layer (plan 32, row 331: a channel where the bitmap file
-        # was), with the bitmap's alpha, size and path
-        tex = self._face_media(s) if s.media else None
-        bmp_on = tex is not None and s.media_alpha > 0.0
-        p["u_bmp_on"].value = int(bmp_on)
-        if bmp_on:
+        # was), with the bitmap's alpha, size and path. Each uniform guarded:
+        # a program that never reads the layer (an edit, a frozen test
+        # program) has had them trimmed
+        def put(name, value):
+            try:
+                p[name].value = value
+            except KeyError:
+                pass
+
+        got = self._face_media(s) if s.media and s.media_alpha > 0.0 else None
+        put("u_bmp_on", int(got is not None))
+        if got is not None:
+            tex, upright = got
             tex.use(location=0)
-            p["u_bitmap"].value = 0
+            put("u_bitmap", 0)
+            put("u_bmp_flip", int(upright))
             tw, th = tex.size
-            p["u_bmp_scale"].value = (s.media_scale, s.media_scale * th / tw)
-            p["u_bmp_alpha"].value = float(s.media_alpha)
+            put("u_bmp_scale", (s.media_scale, s.media_scale * th / tw))
+            put("u_bmp_alpha", float(s.media_alpha))
             # the layer's own path about the face centre — independent
             # of the instance-grid motion
             ph = t * s.media_rate
@@ -1829,7 +1848,7 @@ class Renderer:
                 ox, oy = math.sin(ph), 0.0
             else:                      # still
                 ox = oy = 0.0
-            p["u_bmp_pos"].value = (s.media_amp * ox, s.media_amp * oy)
+            put("u_bmp_pos", (s.media_amp * ox, s.media_amp * oy))
 
     def _tile_program(self) -> tuple:
         """The program and vao a pattern tile or swatch is drawn with: the
@@ -2478,17 +2497,20 @@ uniform float v_fid;
 
 def render_offscreen(
     s: ViewState, w: int = 1200, h: int = 800, ctx: moderngl.Context | None = None,
-    t_now: float = 0.0,
+    t_now: float = 0.0, media=None,
 ) -> np.ndarray:
     """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools.
-    Pattern time defaults to 0.0 so offscreen renders are deterministic."""
+    Pattern time defaults to 0.0 so offscreen renders are deterministic.
+    `media`: the channels the frame reads (`Renderer.media`), None for none."""
     own = ctx is None
     if own:
         ctx = moderngl.create_context(standalone=True)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h))])
     fbo.use()
     ctx.viewport = (0, 0, w, h)
-    Renderer(ctx).draw(s, w, h, t_now=t_now)
+    r = Renderer(ctx)
+    r.media = media
+    r.draw(s, w, h, t_now=t_now)
     data = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()
     if own:

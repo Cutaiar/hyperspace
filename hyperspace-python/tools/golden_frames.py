@@ -34,7 +34,7 @@ fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
 factory preset): each copied into the scratch library and loaded like a
 user's preset, its `graph` section landing through the real `Presets`
 onto the rig's renderer, hands present, in the eight states — the
-manifest's `fixture_states` and `fixtures`. Plan 32 T6's two are media
+manifest's `fixture_states` and `fixtures`. Plan 32's five are media
 presets (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
 channels find under `tests/golden/media/` (`GoldenMedia`), every still
 decoded before the first frame is drawn.
@@ -149,8 +149,11 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # from the history into output 2's (`graph.Wire`)
 # plan 32 T6: the media channels' proof presets — a still on channel a as
 # the backdrop under the scene, and channel c wired into output 2's picture
-# (`graph.MediaNode`); their stills are under tests/golden/media/
-MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2")
+# (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
+# T7's three: the still on the faces (`view.media`), and the still wired into
+# an effect's aux — blend's luma key, displace by its brightness
+MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
+                                   "blend-luma-key", "displace-luma")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES)

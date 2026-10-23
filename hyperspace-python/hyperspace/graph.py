@@ -537,7 +537,7 @@ WIRE_MAKES = {"scene": IMAGE, "history": IMAGE, "layer": IMAGE, "effect": IMAGE,
 WIRE_TAKES: dict[str, dict[str, str]] = {
     "output": {"image": IMAGE, "hands": IMAGE, "readout": IMAGE},
     "history": {"image": IMAGE, "cover": MASK},
-    "effect": {"image": IMAGE},
+    "effect": {"image": IMAGE, "aux": IMAGE},      # plan 32 R: aux, its second picture
     "composite": {"under": IMAGE, "over": IMAGE},
     "scene": {"geometry": GEOMETRY},
     "layer": {"geometry": GEOMETRY},
@@ -546,7 +546,8 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
 TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", None: "nothing"}
 WIRE_FROM_WORDS = "scene, hands …, history, an effect, a composite or a channel (media.a …)"
 WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, an effect's image "
-                 "or a composite's under / over")
+                 "or aux, or a composite's under / over")
+AUX = "aux"     # plan 32 R: an effect's second picture port (`Effect.INPUTS`)
 
 
 def wire_node_kind(name: Any) -> str | None:
@@ -562,6 +563,13 @@ def wire_node_kind(name: Any) -> str | None:
     if _PLACE_EFFECT.fullmatch(name):
         return "effect"
     return None
+
+
+def is_aux(w: Wire) -> bool:
+    """Whether wire `w` goes into an effect's `aux` port (plan 32 R): an
+    input beside the picture, never a placement — the effect stays where
+    it sits (its run, D1's place, its own wires) and reads `w.src` there."""
+    return w.port == AUX and wire_node_kind(w.node) == "effect"
 
 
 def split_instance(name: str) -> tuple[str, int]:
@@ -711,7 +719,8 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     if kind == "output" and port == "hands" and src_kind == "history":
         return ("the history paints into what reads it, so it is not laid over: "
                 "wire it into the output's image, or an effect after it over")
-    for name, k, into in ((node, kind, True), (w.src, src_kind, False)):
+    # (an aux wire places nothing: a placed effect takes one where it sits)
+    for name, k, into in ((node, kind, port != AUX), (w.src, src_kind, False)):
         if k == "effect" and name in ctx.placed and (into or kind != "effect"):
             key, where = ctx.placed[name]
             return f"{name} sits {key} {where!r} already (its node says so): one place"
@@ -786,7 +795,7 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
                                  f"it ({srcs}): it keeps its default")
     # an effect no wire feeds sits into one port (D1's `into`); to feed
     # more, wire its input
-    fed = {w.node for w in (*d1, *ok) if wire_node_kind(w.node) == "effect"}
+    fed = {w.node for w in (*d1, *ok) if wire_node_kind(w.node) == "effect" and not is_aux(w)}
     outs: dict[str, list[Wire]] = {}
     for w in ok:
         if wire_node_kind(w.src) == "effect" and wire_node_kind(w.node) != "effect":
@@ -814,6 +823,9 @@ def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...
     image, a composite's, or an effect both fed and wired on). `placed`:
     D1's own placements (an effect they place is not placed again)."""
     own = {e.name for e in placed}
+    # plan 32 R: an aux wire is always an edge (`is_aux`), never a placement
+    aux = tuple(w for w in wires if is_aux(w))
+    wires = [w for w in wires if not is_aux(w)]
     is_fx = {w.node: True for w in wires if wire_node_kind(w.node) == "effect"}
     ins: dict[str, Wire] = {w.node: w for w in wires if is_fx.get(w.node)}
     outs: dict[str, list[Wire]] = {}
@@ -837,7 +849,7 @@ def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...
     for w in wires:
         if wire_node_kind(w.src) != "effect" and not is_fx.get(w.node):
             edges.add(w)
-    return tuple(synth), tuple(w for w in wires if w in edges)
+    return tuple(synth), tuple(w for w in wires if w in edges) + aux
 
 
 @dataclass(frozen=True)
@@ -2232,9 +2244,12 @@ class Effect(Node):
     (`fold`), on the frame texture the output settles on."""
 
     KIND = "effect"
-    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "aux": IMAGE}
     OUTPUT = IMAGE
     TIMED = False            # a line on SYSTEM only in a frame it ran (`Graph.timed_in`)
+    # plan 32 R: `aux` is a second picture the pass reads, not the one it
+    # bends — an effect placed after a node leaves an aux reading that node
+    REFS: ClassVar[frozenset[str]] = frozenset({"aux"})
 
     def __init__(self, name: str, *, image: Node | None = None, node: str | None = None,
                  after: tuple[Node, ...] = (), placed: str | None = None):
@@ -2304,10 +2319,42 @@ class Effect(Node):
             frame.data[self.name] = out
         return frame.data[self.name]
 
+    def _aux(self, frame: Frame, avoid: moderngl.Framebuffer | None) -> moderngl.Texture | None:
+        """The picture on the `aux` port this frame (plan 32 R), or None with
+        nothing wired: the source's texture when it made one, else painted
+        once into a pool texture held for the frame — never `avoid`'s (the
+        framebuffer this effect's pass writes: no pass reads the texture it
+        writes)."""
+        src = self.inputs.get(AUX)
+        if src is None:
+            return None
+        key = self.name + "#aux"
+        if key not in frame.data:
+            held = frame.data.setdefault("fx#held", set())
+            # `avoid`'s texture held while the aux is made, so neither the
+            # source's own passes nor the paint below can take it
+            guard: set[int] = set()
+            if avoid is not None:
+                guard = {id(t) for t, f in frame.r.fx.pool(frame.size, 0)
+                         if f is avoid} - held
+            held |= guard
+            try:
+                tex = src.image(frame)
+                if tex is None:
+                    tex, fbo = _spare(frame, avoid, hold=True)
+                    src.paint(frame, fbo)
+            finally:
+                held -= guard
+            frame.data[key] = tex
+        return frame.data[key]
+
     def _one(self, frame: Frame, src: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """This effect's pass from texture `src` into `dst`, timed and
         counted; a layer's keeps its see-through ground."""
         kw = {"opaque": 0} if self.see_through else {}
+        aux = self._aux(frame, dst)
+        if aux is not None:
+            kw["aux"] = aux
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
@@ -2366,10 +2413,12 @@ class Effect(Node):
         into `dst`; counted in `frame.stats["effects"]`. The timer brackets
         the pass alone (queries never nest: the input's own nodes time
         themselves before it)."""
+        aux = self._aux(frame, dst)          # first: making it may take a spare
         tex, fbo = _spare(frame, dst)
         self.inputs["image"].paint(frame, fbo)
+        kw = {"aux": aux} if aux is not None else {}
         with frame.timed(self.name):
-            frame.r.fx.run_one(self.effect, tex, dst, frame.t)
+            frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
 
 
@@ -2768,8 +2817,10 @@ class Graph:
         if self._pool is None:
             effects = [n for n in self.order if isinstance(n, Effect)]
             folded = {id(e) for out in self.outputs for e in out.folds}
+            # plan 32 R: and one for each aux a pass paints (`Effect._aux`)
             self._pool = (2 + sum(1 for n in effects
                                   if self.readers(n) > 1 or n.makes or id(n) in folded)
+                          + sum(1 for n in effects if n.inputs.get(AUX) is not None)
                           ) if effects else 0
         return self._pool
 
@@ -2950,7 +3001,8 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     out_of_run = {e.name for e in placed}
     # plan 28 N4: the effects the wires build as edges are not of the run
     # either, and a wire from the layer wants it built whatever the switches
-    out_of_run |= {name for w in wiring.wires for name in (w.src, w.node)
+    # (plan 32 R: an aux wire moves neither of its ends out of the run)
+    out_of_run |= {name for w in wiring.wires if not is_aux(w) for name in (w.src, w.node)
                    if wire_node_kind(name) == "effect"}
     wired_layer = any(w.src == layer_name(from_layer.n) for w in wiring.wires)
 
@@ -3061,6 +3113,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     wiring_left.run(final=False)
     _place(g, placed)
     wiring_left.run(final=True)
+    wiring_left.aux()
     return g
 
 
@@ -3082,7 +3135,10 @@ class _Wiring:
         self.g, self.layer, self.depth = g, layer, depth
         self.media = media or {}          # plan 32 R: a wire's channel name → its node
         self.blends = {c.name: c.blend for c in wiring.composites}
-        self.wires = list(wiring.wires)
+        # plan 32 R: the aux wires are put on last (`aux`), once every node
+        # of the effects they feed is in the graph
+        self.aux_wires = [w for w in wiring.wires if is_aux(w)]
+        self.wires = [w for w in wiring.wires if not is_aux(w)]
         self.makers = {name for w in self.wires for name in (w.src, w.node)
                        if wire_node_kind(name) in ("effect", "composite")}
         self.made: dict[str, Node | None] = {}
@@ -3157,6 +3213,33 @@ class _Wiring:
                 self._dormant(w, why)
             changed = True
         if changed:
+            g.relink()
+
+    def aux(self) -> None:
+        """Each aux wire on its effect's `aux` port (plan 32 R): every node
+        of the instance — one per pipeline's run, or the one placed or
+        wired — reads the wire's source there. A source this graph lacks,
+        an effect with no node, or a node the source already reads (a loop:
+        an effect later in the run as the aux of one before it) is dormant,
+        in words."""
+        g = self.g
+        for w in self.aux_wires:
+            src = self.node(w.src)
+            if src is None:
+                self._dormant(w, self._lacks(w.src))
+                continue
+            nodes = _placed_nodes(g, w.node)
+            if not nodes:
+                self._dormant(w, self._lacks(w.node))
+                continue
+            ups = _upstream(src)
+            fed = [n for n in nodes if n is not src and id(n) not in ups]
+            for n in fed:
+                n.inputs[AUX] = src
+            self.done.add(w)
+            if len(fed) < len(nodes):
+                self._dormant(w, f"{w.node} feeds {w.src}: that makes a loop")
+        if self.aux_wires:
             g.relink()
 
     def _make(self, name: str, ins: list[Wire], srcs: dict[str, Node | None]) -> None:
@@ -3305,6 +3388,18 @@ def _place_one(g: Graph, e: EffectAt) -> str | None:
         except ValueError:                    # (never, past `placement_loops`)
             return "that makes a loop"
     return None
+
+
+def _upstream(node: Node) -> set[int]:
+    """The ids of every node `node` depends on, through its inputs and `after`."""
+    ups: set[int] = set()
+    todo = [node]
+    while todo:
+        for d in todo.pop().deps():
+            if id(d) not in ups:
+                ups.add(id(d))
+                todo.append(d)
+    return ups
 
 
 def _consumers(g: Graph, node: Node) -> list[tuple[Node, str]]:

@@ -226,7 +226,11 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     assert c.src_port == "rout:acid.2" and c.dst_port == "rin:output.1/hands"
     assert view.node("render:acid.2").kind == "render"
     assert view.node("render:output.1").kind == "output"
-    assert all(p.patched for p in view.node("render:acid.2").ports)
+    # plan 32 T7: every port wired but the effect's aux, open until a wire
+    # puts a second picture on it
+    ports = {p.id: p for p in view.node("render:acid.2").ports}
+    assert not ports.pop("rin:acid.2/aux").patched
+    assert all(p.patched for p in ports.values())
 
 
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
