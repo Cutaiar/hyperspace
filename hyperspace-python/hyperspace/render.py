@@ -142,6 +142,11 @@ from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
 
+# plan 32 (final review B-I2): the MEDIA page's previews of channels nothing
+# in the frame reads — each at most this often, at most this many a frame
+PREVIEW_HZ = 10.0
+PREVIEWS_PER_FRAME = 2
+
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
@@ -1457,18 +1462,40 @@ class Renderer:
     # ---- plan 32 T10: what the control panel draws of the media ----
 
     def _for_the_panel(self) -> None:
-        """The end of a frame, this context current: each channel the MEDIA
+        """The end of a frame, this context current: the channels the MEDIA
         page asked for (`media_watch`, emptied here, so a page no longer
-        drawn stops costing uploads after one frame) read into its texture,
-        as any consumer would; the thumbnails it handed over uploaded. Never
-        raises: the panel's pictures must not take the frame down."""
+        drawn stops costing after one frame) and the thumbnails it handed
+        over uploaded. A channel the frame read already has its texture,
+        shown as it is; one nothing read gets a small preview
+        (`MediaTextures.preview`), each at most `PREVIEW_HZ` a second and
+        `PREVIEWS_PER_FRAME` a frame, round robin — eight clips playing
+        under an open page cost two small copies a frame, not eight full
+        uploads (final review B-I2). Never raises: the panel's pictures
+        must not take the frame down."""
         watch = getattr(self, "media_watch", None) or ()
         self.media_watch = set()
-        for c in sorted(watch):
-            try:
-                self.media_texture(c)
-            except Exception:  # noqa: BLE001, S110 — media_texture says nothing; black
-                pass
+        media = getattr(self, "media", None)
+        now = self._media_frame_now()
+        idle = sorted(c for c in watch if ("raw", c) not in now)
+        if media is not None and idle:
+            at = self.__dict__.setdefault("_preview_at", {})
+            last = getattr(self, "_preview_last", "")
+            idle.sort(key=lambda c: (c <= last, c))      # round robin: after the last one
+            t = time.monotonic()
+            mt = self._media_textures()
+            made = 0
+            for c in idle:
+                if made >= PREVIEWS_PER_FRAME:
+                    break
+                if t - at.get(c, -1e9) < 1.0 / PREVIEW_HZ:
+                    continue
+                at[c] = t
+                try:
+                    if mt.preview(c, media.frame(c)):
+                        made += 1
+                        self._preview_last = c
+                except Exception:  # noqa: BLE001, S110 — a preview not made stays dark
+                    pass
         ui = getattr(self, "ui_tex", None)
         if ui is not None:
             try:
@@ -1481,10 +1508,11 @@ class Renderer:
         rows are top first (`MediaTextures.flipped`) — or None: nothing read
         it this frame, or it had no picture. Reads nothing itself: the MEDIA
         page draws it after the frame (`media_watch` asks for it)."""
-        tex = self._media_frame_now().get(("raw", c))
-        if tex is None:
-            return None
-        return tex, self._media_textures().flipped(c)
+        now = self._media_frame_now()
+        if ("raw", c) in now:            # the frame read it: its own texture
+            tex = now[("raw", c)]
+            return None if tex is None else (tex, self._media_textures().flipped(c))
+        return self._media_textures().shown(c)        # else the page's preview
 
     def _ui_textures(self) -> UiTextures:
         ui = getattr(self, "ui_tex", None)

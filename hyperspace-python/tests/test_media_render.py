@@ -608,3 +608,57 @@ def test_the_echoes_show_over_a_bright_backdrop(ctx, history):
     bare = _trails(ctx, _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200))))),
                    _shape(), _empty())
     assert abs(int((bare[..., :2] > 8).any(axis=-1).sum()) - int(trail)) <= trail // 4
+
+
+# ---------------------------------------------------------------- the MEDIA page's previews
+
+class Playing(Still):
+    """A clip playing: a new 1280×720 frame on every read."""
+
+    def __init__(self):
+        super().__init__(_rgba(1280, 720))
+        self.n = 0
+
+    def latest(self):
+        self.reads += 1
+        self.n += 1
+        return MediaFrame(self.f.pixels, 1.0 + self.n / 60, self.n)
+
+
+def test_the_media_page_previews_cost_two_small_uploads_a_frame(ctx):
+    """Final review B-I2: with the MEDIA page open and eight clips playing
+    that nothing on the outputs reads, at most `PREVIEWS_PER_FRAME` (2)
+    previews are uploaded a frame, each at most `PREVIEW_W` wide — never
+    the full frame — each channel at most `PREVIEW_HZ` a second, round
+    robin so every one shows. A channel the frame reads (the backdrop's)
+    keeps its own upload, and the page shows that texture."""
+    from hyperspace.media_tex import PREVIEW_W
+    from hyperspace.render import PREVIEW_HZ, PREVIEWS_PER_FRAME
+
+    fakes = {c: Playing() for c in channels.CHANNELS}
+    r = _renderer(ctx, _media(**fakes))
+    mt = r._media_textures()
+    seen: set[str] = set()
+    per_frame = []
+    t0 = time.monotonic()
+    for _ in range(12):
+        was = mt.uploads + mt.previews
+        r.media_watch = set(channels.CHANNELS)
+        _draw(ctx, r, _empty())
+        per_frame.append(mt.uploads + mt.previews - was)
+        seen |= {c for c in channels.CHANNELS if r.media_shown(c) is not None}
+        time.sleep(0.02)
+    took = time.monotonic() - t0
+    assert max(per_frame) <= PREVIEWS_PER_FRAME and mt.uploads == 0, per_frame
+    assert mt.preview_bytes_max <= PREVIEW_W * (PREVIEW_W * 720 // 1280 + 1) * 4
+    assert seen == set(channels.CHANNELS)
+    assert mt.previews <= len(channels.CHANNELS) * (took * PREVIEW_HZ + 1)
+    tex, flipped = r.media_shown("a")
+    assert tex.size[0] <= PREVIEW_W and flipped
+    # channel a under the scene: read and uploaded in full as the frame
+    # needs it, and that is what the page shows
+    r.media_watch = set(channels.CHANNELS)
+    _draw(ctx, r, _empty(backdrop=1))
+    tex, _ = r.media_shown("a")
+    assert tex.size == (1280, 720) and mt.uploads == 1
+    mt.release()

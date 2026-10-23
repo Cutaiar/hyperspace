@@ -26,6 +26,14 @@ GPU frame is in GL's own row order (row 0 at the bottom) and is drawn as
 it is. Uploading the rows reversed would be a copy of every frame on the
 frame thread, which the plan forbids.
 
+The MEDIA page's previews (final review B-I2): a channel the page shows
+that nothing in the frame reads gets a small texture of its own
+(`preview`), at most `PREVIEW_W` wide, written from every k-th row and
+column of the frame — a copy of at most 320 × 180 pixels, against the
+8 MB and the mipmaps of a full upload. The renderer decides how often
+(`Renderer._for_the_panel`); a GPU frame is not copied at all, it goes
+through `texture` as a consumer's would.
+
 Plan 32 T6 found the Syphon spike's "read as 2D" wrong: binding the
 client's texture as 2D is GL_INVALID_OPERATION and reads whatever 2D
 texture was bound before (`test_a_syphon_frame_samples_through_the_fit_pass`
@@ -40,8 +48,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import moderngl
+import numpy as np
 
 TEX_2D, TEX_RECT = 0x0DE1, 0x84F5      # = media.frame's (a GPU frame's `tex_target`)
+PREVIEW_W = 320                        # the widest a MEDIA page preview is uploaded
 
 # how a channel's picture fills a frame of another shape: `channels.FITS`,
 # by index (`media.<c>.fit`); a test holds the two equal
@@ -104,7 +114,8 @@ class MediaTextures:
     counts the frames written from the CPU and `blits` the rectangle
     frames copied on the GPU, for the tests and the SYSTEM page; `error`
     says why the last rectangle frame could not be copied ("" when it
-    could)."""
+    could). `previews` counts the MEDIA page's small uploads and
+    `preview_bytes_max` the largest of them."""
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
@@ -113,6 +124,10 @@ class MediaTextures:
         self.error = ""
         self._slots: dict[str, _Slot] = {}
         self._read_fbo: int | None = None     # GL's name: the blit's read framebuffer
+        self.previews = 0
+        self.preview_bytes_max = 0
+        self._previews: dict[str, _Slot] = {}  # the page's small textures, by channel
+        self._shown: dict[str, tuple] = {}     # channel -> (texture, flipped) the page shows
 
     def texture(self, c: str, f: Any) -> moderngl.Texture | None:
         """Channel `c`'s texture holding frame `f` (a `MediaFrame`), or None
@@ -203,6 +218,47 @@ class MediaTextures:
         self.error = ""
         return tex
 
+    def preview(self, c: str, f: Any, width: int = PREVIEW_W) -> bool:
+        """The MEDIA page's picture of channel `c` from frame `f`: a pixel
+        frame written, shrunk to at most `width` wide, into the channel's
+        small texture when it moved; a GPU frame through `texture` (no
+        copy). True when it wrote pixels. `shown(c)` has the result."""
+        if f is None:
+            self._shown.pop(c, None)
+            return False
+        if getattr(f, "texture", None) is not None:
+            tex = self.texture(c, f)
+            if tex is None:
+                self._shown.pop(c, None)
+            else:
+                self._shown[c] = (tex, self.flipped(c))
+            return False
+        slot = self._previews.setdefault(c, _Slot())
+        key = (f.frame, f.t)
+        if slot.key == key and slot.tex is not None:
+            self._shown[c] = (slot.tex, True)
+            return False
+        px = f.pixels
+        k = max(1, -(-px.shape[1] // max(int(width), 1)))
+        small = np.ascontiguousarray(px[::k, ::k])
+        size = (small.shape[1], small.shape[0])
+        if slot.tex is None or tuple(slot.tex.size) != size:
+            if slot.tex is not None:
+                slot.tex.release()
+            slot.tex = self.ctx.texture(size, 4)
+            slot.tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+            slot.tex.repeat_x = slot.tex.repeat_y = False
+        slot.tex.write(small)
+        slot.key = key
+        self.previews += 1
+        self.preview_bytes_max = max(self.preview_bytes_max, small.nbytes)
+        self._shown[c] = (slot.tex, True)
+        return True
+
+    def shown(self, c: str) -> tuple | None:
+        """(texture, flipped) of channel `c`'s last preview, or None."""
+        return getattr(self, "_shown", {}).get(c)
+
     def flipped(self, c: str) -> bool:
         """Whether channel `c`'s texture, as `texture` last returned it, holds
         the picture top row first (an upload: flip v to sample it upright)."""
@@ -212,11 +268,11 @@ class MediaTextures:
     def release(self) -> None:
         """Every texture made here, and every wrapper, released; the next
         `texture` uploads afresh."""
-        for slot in self._slots.values():
+        for slot in [*self._slots.values(), *getattr(self, "_previews", {}).values()]:
             for res in (slot.fbo, slot.tex, slot.ext):
                 if res is not None:
                     res.release()
-        self._slots = {}
+        self._slots, self._previews, self._shown = {}, {}, {}
         if self._read_fbo is not None:
             try:
                 from OpenGL import GL
