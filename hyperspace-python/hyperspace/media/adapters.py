@@ -11,6 +11,8 @@ from . import ids
 from .source import MISSING, Source, error
 from .still import STILL_EXT, StillSource
 
+VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".gif", ".avi"}   # = video.VIDEO_EXT
+
 
 class Resolver(Protocol):
     def path(self, sid: str) -> Path | None: ...
@@ -53,7 +55,9 @@ def open_source(sid: str, resolver: Resolver) -> Source:
             return MissingSource(sid)
         if Path(path).suffix.lower() in STILL_EXT:
             return StillSource(sid, path)
-        # video extensions are routed here by plan 32 T3
+        if Path(path).suffix.lower() in VIDEO_EXT:
+            from .video import VideoSource   # lazily: pulls in nothing heavy itself
+            return VideoSource(sid, path, cache=getattr(resolver, "proxy_cache", None))
         return MissingSource(sid, error("unsupported"))
     if parsed.kind == "phone":   # reserved (V2): parsed, never opened
         return MissingSource(sid, error("unsupported"))
