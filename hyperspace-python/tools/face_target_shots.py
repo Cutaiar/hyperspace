@@ -77,7 +77,7 @@ def test_card(path: Path) -> None:
 
 def view(bitmap: str = "", pattern: int = 0) -> ViewState:
     s = ViewState(shape=TESSERACT, faces=True, pattern=pattern, bright=1.3, speed=0.6,
-                  zoom=1.7, bmp_file=bitmap)
+                  zoom=1.7, media=1 if bitmap else 0)   # plan 32: a channel, drawn from T7
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     s.yaw, s.pitch = 0.4, 0.25
     return s

@@ -613,7 +613,11 @@ def test_a_preset_round_trips(rig):
     assert doc["schema"] == "hyperspace.preset/2" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"fx": "acid"}
-    assert doc["values"] == rig.reg.snapshot(part="performance")
+    # every performance base — but a /2 preset (no media used, plan 32 S)
+    # writes none of the media family's, all at their defaults
+    snap = rig.reg.snapshot(part="performance")
+    assert all(v == preset.MEDIA_DEFAULTS[k] for k, v in snap.items() if preset.is_media_id(k))
+    assert doc["values"] == {k: v for k, v in snap.items() if not preset.is_media_id(k)}
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
     rig.presets.load("Round Trip")

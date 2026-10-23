@@ -19,6 +19,12 @@ from hyperspace.view import ViewState
 
 GOLDEN = Path(__file__).parent / "golden"
 
+# plan 32 T5 removed the one bitmap file (view.bmp_*); the faces draw a media
+# channel from T7 (`view.media`, the renderer's channel texture). A test whose
+# subject is a picture on the faces waits for it
+NEEDS_FACE_MEDIA = pytest.mark.skip(
+    reason="plan 32 T7: the faces draw view.media's channel; until then no picture")
+
 
 @pytest.fixture(scope="module")
 def ctx():
@@ -125,6 +131,7 @@ def test_instance_motion(ctx):
         )
 
 
+@NEEDS_FACE_MEDIA
 def test_bitmap_layer(ctx, tmp_path):
     import numpy as np
     from PIL import Image
@@ -135,7 +142,7 @@ def test_bitmap_layer(ctx, tmp_path):
         ViewState(shape=3, ang=list(VIEW["ang"]), faces=True), 600, 400, ctx=ctx
     )
     lit = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f)),
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1),
         600, 400, ctx=ctx,
     )
     assert np.abs(lit.astype(int) - base.astype(int)).mean() > 0.005, (
@@ -143,8 +150,8 @@ def test_bitmap_layer(ctx, tmp_path):
     )
     # the alpha fader at 0 removes the layer entirely
     faded = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f),
-                  bmp_alpha=0.0),
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1,
+                  media_alpha=0.0),
         600, 400, ctx=ctx,
     )
     assert np.array_equal(faded, base)
@@ -152,12 +159,13 @@ def test_bitmap_layer(ctx, tmp_path):
     bad = tmp_path / "bad.png"
     bad.write_text("not an image")
     junk = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(bad)),
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1),
         600, 400, ctx=ctx,
     )
     assert np.array_equal(junk, base)
 
 
+@NEEDS_FACE_MEDIA
 def test_bitmap_path_oscillates(ctx, tmp_path):
     import numpy as np
     from PIL import Image
@@ -167,8 +175,8 @@ def test_bitmap_path_oscillates(ctx, tmp_path):
 
     def shot(mode, t):
         return render_offscreen(
-            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, bmp_file=str(f),
-                      bmp_mode=mode, bmp_amp=0.25, bmp_scale=0.4),
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1,
+                      media_mode=mode, media_amp=0.25, media_scale=0.4),
             600, 400, ctx=ctx, t_now=t,
         )
 
@@ -1031,10 +1039,13 @@ def _hue(px):
 
 
 def _face_view(bitmap="", **kw) -> ViewState:
-    """A tesseract's faces alone, big in the window: no lines, no points."""
+    """A tesseract's faces alone, big in the window: no lines, no points.
+    `bitmap` (a card) puts channel a on the faces (`view.media`, plan 32):
+    until T7 hands the faces a channel's texture that draws nothing, so a
+    test that needs the card on the faces is skipped (`NEEDS_FACE_MEDIA`)."""
     s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
                   faces=True, lines=False, points=False, bright=2.0, zoom=1.6,
-                  bmp_file=bitmap, bmp_scale=1.0)
+                  media=1 if bitmap else 0, media_scale=1.0)
     for k, v in kw.items():
         setattr(s, k, v)
     return s
@@ -1096,7 +1107,7 @@ def test_nothing_aimed_at_the_faces_is_the_old_frame_exactly(ctx, tmp_path):
 
     card = _card(tmp_path)
     views = ({"pattern": 2}, {"pattern": 5, "shape": 10},
-             {"bitmap": card, "bmp_scale": 0.9}, {"bitmap": card, "pattern": 2, "bmp_mode": 1},
+             {"bitmap": card, "media_scale": 0.9}, {"bitmap": card, "pattern": 2, "media_mode": 1},
              {"pattern": 2, "instances": 4, "zoom": 0.6, "inst_motion": 1},
              {"pattern": 3, "lines": True, "points": True, "cut_through": False})
     for bg_alpha, samples in ((1.0, 0), (0.0, 0), (1.0, 4)):
@@ -1195,6 +1206,7 @@ def test_a_face_effect_changes_the_faces_and_nothing_else(ctx):
                                == base[inside][:, :3].min(axis=1)).all()
 
 
+@NEEDS_FACE_MEDIA
 def test_per_face_puts_the_picture_at_the_faces_own_uv(ctx, tmp_path):
     """Per face, the picture sits on a face as the pattern and the bitmap
     always have: a bitmap seen through the face target (a pass that changes
@@ -1217,6 +1229,7 @@ def test_per_face_puts_the_picture_at_the_faces_own_uv(ctx, tmp_path):
         assert {"r", "g", "b", "y"} <= set(np.unique(b))
 
 
+@NEEDS_FACE_MEDIA
 def test_screen_mapping_is_a_cover_fit_window_onto_the_picture(ctx, tmp_path):
     """Screen mapping: the square picture, centred, covers the window's
     longer side and is cropped on the shorter (fork F3), upright. Every
@@ -1249,6 +1262,7 @@ def test_screen_mapping_is_a_cover_fit_window_onto_the_picture(ctx, tmp_path):
     assert (got[top] == "g").all() and (got[bottom] == "b").all()
 
 
+@NEEDS_FACE_MEDIA
 def test_per_face_turns_with_the_shape_and_screen_stays_still(ctx, tmp_path):
     """Two rotations of the shape, the effect's clock stopped. In screen
     mapping a pixel both frames cover shows the same colour: the faces are
@@ -1483,6 +1497,7 @@ def test_draw_scene_alone_shows_no_face_picture(ctx, tmp_path):
     fbo.release()
 
 
+@NEEDS_FACE_MEDIA
 def test_the_face_picture_follows_instances_and_zero(ctx, tmp_path):
     """Nine copies: per face every copy's faces carry the picture; in screen
     mapping there is one picture behind the whole field. No copies: no
@@ -1875,6 +1890,7 @@ def test_every_layout_and_motion_draws_any_count(ctx):
                     layout, motion, n)
 
 
+@NEEDS_FACE_MEDIA
 def test_the_face_picture_follows_a_honeycomb(ctx, tmp_path):
     """HEX with seven copies: per face every copy's faces carry the
     picture; in screen mapping there is one picture behind the field."""

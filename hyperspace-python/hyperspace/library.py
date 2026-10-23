@@ -1340,8 +1340,9 @@ class Marks:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
         its load left for the panel, the loaded preset's graph — plan 26
-        A4, `preset.GraphSection.mark`, None with no presets), and the
-        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)."""
+        A4, `preset.GraphSection.mark`, None with no presets), the
+        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)
+        and the media channels' bins (plan 32, `Presets.media`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
@@ -1349,7 +1350,14 @@ class Marks:
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
                  list(getattr(pre, "desk_notes", ()))),
                 gs.mark() if gs is not None else None,
-                copy.deepcopy(getattr(pre, "layout", None) or {}))
+                copy.deepcopy(getattr(pre, "layout", None) or {}),
+                self._bins(pre))
+
+    @staticmethod
+    def _bins(pre):
+        """The media channels' bins (plan 32), None without them."""
+        media = getattr(pre, "media", None)
+        return media.to_json() if media is not None else None
 
     def lands(self) -> dict:
         """{group: landed} — every group's name, reference and re-apply
@@ -1417,6 +1425,9 @@ class Marks:
                 note[0], list(note[1]), list(note[2]))
             if len(mark) > 5:            # the GRAPH page's positions (plan 28 N2)
                 lib.presets.layout = copy.deepcopy(mark[5])
+            media = getattr(lib.presets, "media", None)
+            if len(mark) > 6 and mark[6] is not None and media is not None:
+                media.from_json(mark[6])     # the bins (plan 32)
         pr.follow()
 
 

@@ -197,10 +197,11 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off) twice
-    assert sum(n.idle for n in view.nodes) == 16
-    assert st["said"] == (f"laid out {len(view.nodes) - 16} nodes in 6 areas, every one "
-                          "collapsed · 16 idle off the canvas")
+    # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
+    # twice — and the media channels' and the backdrop's groups (plan 32)
+    assert sum(n.idle for n in view.nodes) == 18
+    assert st["said"] == (f"laid out {len(view.nodes) - 18} nodes in 6 areas, every one "
+                          "collapsed · 18 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)

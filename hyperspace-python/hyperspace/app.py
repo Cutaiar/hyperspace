@@ -82,6 +82,10 @@ from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
 from .library import home as library_home
+from .media import pool as media_pool
+from .media import proxy as media_proxy
+from .media.channels import MediaState
+from .media.folder import MediaFolder
 from .outputs import Presenter, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
@@ -131,6 +135,62 @@ def close_all(audio, *adapters) -> None:
         if a is not None:
             _quiet(a.close)
     _quiet(audio.stop)
+
+
+class MediaResolver:
+    """The app's `media.adapters.Resolver` (plan 32): the file kinds from
+    the media folder's last scan, live feeds from the devices (plan 32 T8
+    fills `live`; none yet). `stamp` is what tells a replaced file: the
+    scan's size and mtime for the id."""
+
+    def __init__(self, folder: MediaFolder):
+        self.folder = folder
+
+    @property
+    def proxy_cache(self) -> Path:
+        return self.folder.proxy_cache
+
+    def path(self, sid: str) -> Path | None:
+        return self.folder.path(sid)
+
+    def live(self, sid: str):
+        return None
+
+    def stamp(self, sid: str):
+        e = self.folder.entry(sid)
+        return None if e is None else (e.size, e.mtime)
+
+
+class MediaIO:
+    """The media side of the app (plan 32): the folder (scanned on its own
+    timer), the eight channels, polled once a frame in the scene-setter
+    slot, and the close that both exits run — every source closed and its
+    thread joined, the folder's timer stopped, the proxy worker and the
+    pool told to stop without waiting (review focus 3: the exit stays
+    under 2 s)."""
+
+    def __init__(self, folder: MediaFolder, state: MediaState):
+        self.folder, self.state = folder, state
+
+    def poll(self, dt: float, now: float) -> None:
+        self.state.poll(dt, now)
+
+    def close(self) -> None:
+        _quiet(self.state.close)
+        _quiet(self.folder.stop)
+        _quiet(media_proxy.cancel_all)
+        _quiet(lambda: media_pool.shutdown(wait=False))
+
+
+def _open_media(lib_path: str, home: Path) -> MediaIO:
+    """The media folder — `<library>/media/` shared when ``[library] path``
+    is set, `<home>/media/` this Mac's own, the proxies and thumbnails in
+    `<home>/media-cache/` — and the channels over it. The folder's scans
+    start now, on the pool."""
+    folder = MediaFolder(Path(lib_path) / "media" if lib_path else None,
+                         home / "media", home / "media-cache")
+    folder.start()
+    return MediaIO(folder, MediaState(MediaResolver(folder)))
 
 
 def _destroy_windows(windows) -> None:
@@ -866,6 +926,7 @@ class Host:
     devices: devices.DeviceRegistry | None = None
     dream_io: object | None = None    # the look-back's worker: not a device
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
+    media: MediaIO | None = None      # the media folder and channels (plan 32)
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
     undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
     # every opened render output's window settings, output 1's (`output`)
@@ -874,9 +935,11 @@ class Host:
 
     @property
     def adapters(self) -> tuple:
-        """What `close_all` closes, in shutdown order: the registry (every
-        device, last listed first — the pad included) and the dream worker."""
-        return (self.devices, self.dream_io)
+        """What `close_all` closes, in shutdown order: the media channels
+        and folder (plan 32: their sources go before the devices that may
+        feed them), the registry (every device, last listed first — the pad
+        included) and the dream worker."""
+        return (getattr(self, "media", None), self.devices, self.dream_io)
 
     @property
     def pad(self):
@@ -936,6 +999,16 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         devs.poll(dt, now, router=router, learn=h.learn)
         if devs.error:
             ok, reloader.runtime_error = False, devs.error
+
+    # ---- the media channels (plan 32): each follows its slot — a source
+    # opened or closed, never decoded here — and a clip's transport steps
+    # on the bases the devices just wrote ----
+    media = getattr(h, "media", None)
+    if media is not None:
+        try:
+            media.poll(dt, now)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("media", e)
 
     # ---- the macros' base subscribers: the last scene-setter — a macro
     # whose base moved (a knob just now, the panel last frame, a restore)
@@ -1099,11 +1172,17 @@ def main() -> None:
     # (config, bindings, windows, logs, last_show) stay in the home either way
     lp = cfg.get("library", {}).get("path", "")
     library = Library(Path(lp), machine=home) if lp else Library()
+    # the media folder and the eight channels (plan 32): the channels'
+    # params are declared over this one `MediaState`, the preset's bins are
+    # its, and the renderer reads its frames
+    media = _open_media(lp, home)
+    renderer.media = media.state
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
                          fx=renderer.fx.state, ghost=renderer.ghost.state,
+                         media=media.state,
                          restart=lambda: [setattr(p, "restart_requested", True) for p in panels])
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
@@ -1225,6 +1304,9 @@ def main() -> None:
         (renderer.ghost, "ghost", "Ghost"),
         (renderer.ghost.state, "ghost", "GhostState"),
         (s, "view", "ViewState"),
+        (media.state, "media.channels", "MediaState"),        # plan 32
+        *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
+        (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
@@ -1320,7 +1402,7 @@ def main() -> None:
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
-                undo=undo_obj,
+                undo=undo_obj, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None])
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames

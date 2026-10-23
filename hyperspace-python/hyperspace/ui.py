@@ -581,7 +581,6 @@ class Panel:
         self.page = 1               # index into PAGES; the view page opens first
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
-        self._bmp_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
         self.config_error = ""  # set by app.py: config.toml failed to parse (SYSTEM page)
         self.config_notes: list[str] = []  # set by app.py: config.toml wants a rename
@@ -1988,46 +1987,11 @@ class Panel:
         ui_patterns.page(self, dt)     # the faces, the pattern browser, the eight inputs
 
     def _page_bitmap(self, dt: float) -> None:
-        """Bitmap layer, composited over the pattern in the face shader."""
-        v = self.view
-        self._section("bitmap", note="saved with view")
-        if imgui.button("Load bitmap"):
-            try:
-                from imgui_bundle import portable_file_dialogs as pfd
-
-                self._bmp_dialog = pfd.open_file(
-                    "Choose a bitmap", "",
-                    ["Images", "*.png *.jpg *.jpeg *.bmp *.gif *.webp"],
-                )
-            except Exception as e:  # noqa: BLE001 — dialog is best-effort
-                if self.renderer is not None:
-                    self.renderer.bitmap_error = f"file dialog unavailable: {e}"
-        if imgui.is_item_hovered():
-            imgui.set_tooltip(
-                "Image layered over the face pattern, with its own alpha "
-                "fader and an oscillation path about the face centre."
-            )
-        if self._bmp_dialog is not None and self._bmp_dialog.ready():
-            picked = self._bmp_dialog.result()
-            self._bmp_dialog = None
-            if picked:
-                self.reg["view.bmp_file"].set(picked[0])
-        imgui.same_line()
-        self._path("view.bmp_file")
-        if self.renderer is not None and self.renderer.bitmap_error:
-            imgui.text_colored(WARN, f"bitmap: {self.renderer.bitmap_error}")
-        if not v.bmp_file:
-            imgui.text_disabled("no bitmap loaded — the faders below wait for one")
-            return
-        self._row("view.bmp_alpha")
-        self._row("view.bmp_scale")
-        self._label_cell("path")
-        self._combo("view.bmp_mode", 140)
-        if v.bmp_mode:
-            imgui.same_line()
-            self._slider("view.bmp_amp", 110)
-            imgui.same_line()
-            self._slider("view.bmp_rate")
+        """The bitmap layer is a media channel now (plan 32, row 331): the
+        MEDIA page (plan 32 T10) fills the channels; `view.media` picks the
+        one on the faces."""
+        self._section("bitmap")
+        imgui.text_disabled("moved to MEDIA")
 
     def _page_camera(self, dt: float) -> None:
         self._section("camera", "camera")

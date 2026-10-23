@@ -928,10 +928,9 @@ class Renderer:
         self._fbuf = ctx.buffer(reserve=2160 * 3 * 8 * 4, dynamic=True)
         self._ibuf = ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)   # the copies
         self._build_wire_programs()
-        # bitmap layer over the faces, loaded from disk on demand
-        self.bitmap_error = ""
-        self._bmp_tex: moderngl.Texture | None = None
-        self._bmp_file = ""
+        # the media channels (plan 32, media/channels.MediaState): app.main
+        # hands the app's own; None draws no media anywhere
+        self.media = None
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
@@ -1059,26 +1058,11 @@ class Renderer:
                 res.release()
         self._ptile = None
 
-    def _sync_bitmap(self, path: str) -> None:
-        """(Re)load the overlay texture when the selected file changes."""
-        if path == self._bmp_file:
-            return
-        self._bmp_file = path
-        if self._bmp_tex is not None:
-            self._bmp_tex.release()
-            self._bmp_tex = None
-        self.bitmap_error = ""
-        if not path:
-            return
-        try:
-            from PIL import Image
-
-            img = Image.open(path).convert("RGBA")
-            self._bmp_tex = self.ctx.texture(img.size, 4, img.tobytes())
-            self._bmp_tex.build_mipmaps()
-            self._bmp_tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
-        except Exception as e:  # noqa: BLE001 — a bad file must not kill the app
-            self.bitmap_error = str(e).strip().splitlines()[-1][:160]
+    def _face_media(self, s: ViewState) -> moderngl.Texture | None:
+        """The texture the faces draw over their pattern: the channel
+        `view.media` names. None until plan 32 T7 uploads channels (the
+        layer stays compiled and off: ``u_bmp_on`` 0)."""
+        return None
 
     def _build_face_program(self) -> None:
         """The face program and the seed program (the face picture's first
@@ -1678,27 +1662,29 @@ class Renderer:
         # reads; upload exactly that many
         u_mod = p["u_mod"]
         u_mod.value = tuple(float(v) for v in s.pattern_mod[: u_mod.array_length])
-        self._sync_bitmap(s.bmp_file)
-        bmp_on = self._bmp_tex is not None and s.bmp_alpha > 0.0
+        # the media layer (plan 32, row 331: a channel where the bitmap file
+        # was), with the bitmap's alpha, size and path
+        tex = self._face_media(s) if s.media else None
+        bmp_on = tex is not None and s.media_alpha > 0.0
         p["u_bmp_on"].value = int(bmp_on)
         if bmp_on:
-            self._bmp_tex.use(location=0)
+            tex.use(location=0)
             p["u_bitmap"].value = 0
-            tw, th = self._bmp_tex.size
-            p["u_bmp_scale"].value = (s.bmp_scale, s.bmp_scale * th / tw)
-            p["u_bmp_alpha"].value = float(s.bmp_alpha)
-            # the bitmap's own path about the face centre — independent
+            tw, th = tex.size
+            p["u_bmp_scale"].value = (s.media_scale, s.media_scale * th / tw)
+            p["u_bmp_alpha"].value = float(s.media_alpha)
+            # the layer's own path about the face centre — independent
             # of the instance-grid motion
-            ph = t * s.bmp_rate
-            if s.bmp_mode == 1:      # orbit
+            ph = t * s.media_rate
+            if s.media_mode == 1:      # orbit
                 ox, oy = math.cos(ph), math.sin(ph)
-            elif s.bmp_mode == 2:    # figure-8
+            elif s.media_mode == 2:    # figure-8
                 ox, oy = math.sin(ph), math.sin(2.0 * ph) * 0.5
-            elif s.bmp_mode == 3:    # sway
+            elif s.media_mode == 3:    # sway
                 ox, oy = math.sin(ph), 0.0
-            else:                    # still
+            else:                      # still
                 ox = oy = 0.0
-            p["u_bmp_pos"].value = (s.bmp_amp * ox, s.bmp_amp * oy)
+            p["u_bmp_pos"].value = (s.media_amp * ox, s.media_amp * oy)
 
     def _tile_program(self) -> tuple:
         """The program and vao a pattern tile or swatch is drawn with: the
@@ -1803,7 +1789,7 @@ class Renderer:
                 tex = self.ctx.texture((SWATCH, SWATCH), 4)
                 tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
                 got = self._swatches[mode] = (tex, self.ctx.framebuffer(color_attachments=[tex]))
-            one = replace(s, pattern=mode, pattern_mix=1.0, bmp_alpha=0.0)
+            one = replace(s, pattern=mode, pattern_mix=1.0, media_alpha=0.0)
             self._tile_draw(got[1], SWATCH, one, t, self._ptime, 0.0, opaque=True)
             self.swatch_error = ""
         except Exception as e:  # noqa: BLE001 — a swatch must not take the frame down

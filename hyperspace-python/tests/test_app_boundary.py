@@ -353,7 +353,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_render=lambda dt: log.append("render.draw"),
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
-        devices=rig, dream_io=None, undo=Stub("undo", log),
+        devices=rig, dream_io=None, undo=Stub("undo", log), media=Stub("media", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -377,6 +377,7 @@ ORDER = [
     "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
     "bridge.reconnect",                              #   …the bridge's ports, looked for again
+    "media.poll",                                    # the media channels follow their slots (plan 32)
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
     "output.apply",                                  # reads last frame's objects
@@ -560,13 +561,15 @@ def test_the_loop_keys_outside_the_table():
 
 
 def test_the_host_close_list_is_every_adapter_in_shutdown_order():
-    """The one close list (audit P1) is the registry — every device, last
-    listed first, the pad included (plan 27 B1) — then the dream worker."""
+    """The one close list (audit P1) is the media channels and folder
+    (plan 32), the registry — every device, last listed first, the pad
+    included (plan 27 B1) — then the dream worker."""
     log: list[str] = []
     h = _host(log)
-    assert h.adapters == (h.devices, None)
+    assert h.adapters == (h.media, h.devices, None)
     app.close_all(SimpleNamespace(stop=lambda: log.append("audio")), *h.adapters)
-    assert log == ["bridge.close", "hands.close", "midi.close", "pad.close", "audio"]
+    assert log == ["media.close", "bridge.close", "hands.close", "midi.close", "pad.close",
+                   "audio"]
     assert all(d.io is None for d in h.devices) and h.pad is None
 
 
@@ -1404,3 +1407,36 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     r = _Renderer(log)
     app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
     assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene
+
+
+def test_the_media_exit_joins_everything_within_two_seconds(tmp_path):
+    """Plan 32 review focus 3: the app's media close — every channel's
+    source closed and its thread joined, the folder's timer stopped, the
+    proxy worker and the pool let go — ends well inside 2 s, and leaves no
+    media thread of the channels' or the folder's running."""
+    import threading
+    import time
+
+    from test_media_channels import FakeOpener
+
+    lib = tmp_path / "lib"
+    media = app._open_media(str(lib), tmp_path / "home")
+    assert media.folder.shared == lib / "media" and media.folder.local == tmp_path / "home" / "media"
+    assert media.state.resolver.proxy_cache == tmp_path / "home" / "media-cache" / "proxies"
+    op = FakeOpener(thread=True)
+    media.state.opener = op
+    media.state.resolver.path = lambda sid: Path("/x")
+    for c in "abcd":
+        media.state.assign(c, 0, f"local:{c}.png")
+    media.poll(1 / 60, 0.0)
+    assert op.opens == 4
+    t = time.monotonic()
+    media.close()
+    assert time.monotonic() - t < 2.0
+    assert op.closes == 4
+    left = [th.name for th in threading.enumerate()
+            if th.name.startswith(("media-fake-", "media-folder-watch"))]
+    assert left == []
+    other = app._open_media("", tmp_path / "home2")      # no [library] path: no shared folder
+    assert other.folder.shared is None
+    other.close()

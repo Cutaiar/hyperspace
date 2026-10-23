@@ -102,6 +102,11 @@ class MediaFolder:
     def live(self, sid: str):
         return None   # live feeds come from the app's resolver (plan 32 T8)
 
+    def entry(self, sid: str) -> Entry | None:
+        """The last scan's entry for `sid` (its size and mtime say whether
+        the file was replaced), or None. No disk access."""
+        return self._info.get(sid)
+
     # -- scanning ----------------------------------------------------------
     def add_file(self, path) -> str:
         """Put an absolute path on the books: listed (group `added`) and
