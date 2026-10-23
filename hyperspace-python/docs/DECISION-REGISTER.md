@@ -6144,10 +6144,14 @@ These rows follow plan 31's rows 311–320, which are on
 - **Answer.** (rec) — accepted 2026-10-22. "Stopgap is fine."
 - **Built.** `backdrop.channel` (off / a–h), `backdrop.alpha`,
   `backdrop.history`. The scene clears to alpha 0 and is laid over the
-  channel (`grounded`); echoes and the dream are drawn over the backdrop,
-  held back by the scene alone (the history's `occluder` port — not by the
-  backdrop's brightness, which hid them; final review B-I1); with `history`
-  on the capture takes the composite. An effect placed
+  channel (`grounded`); echoes and the dream are drawn over the backdrop.
+  With `history` off they are held back by the scene alone (the history's
+  `occluder` port — not by the backdrop's brightness, which hid them;
+  final review B-I1). With `history` on the capture takes the composite,
+  so the echoes hold the backdrop too and the history occludes from its own
+  picture as before: occluded by the scene alone, a still backdrop added
+  onto itself and washed to white (re-review). So with `history` on, the
+  shape's echoes show over the backdrop's dark areas only. An effect placed
   `after scene` is retargeted to the backdrop's composite. The hands-only
   pipeline has none. With no backdrop the graph is unchanged node for node.
 - **Other options.** The backdrop inside the history by default; a

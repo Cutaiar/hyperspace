@@ -592,12 +592,38 @@ def _trails(ctx, r, s_on, s_off):
     return _px(v.target)
 
 
-@pytest.mark.parametrize("history", [False, True])
-def test_the_echoes_show_over_a_bright_backdrop(ctx, history):
-    """Final review B-I1: the echoes and the dream are drawn over the
-    backdrop. The wake is occluded by the scene alone — never by the
-    backdrop's brightness, which (a blue still at 200) would cover every
-    trail. With `backdrop.history` on or off."""
+def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
+    """Re-review: with `backdrop.history` on, the echoes hold the backdrop
+    too, so the history occludes from its own input (the scene over the
+    backdrop): a still mid-blue backdrop under an empty scene stays at its
+    own blue over 60 frames at the default echo settings — it must not
+    add onto itself and wash to white. Off, it is the still's blue too."""
+    blue = 120
+    got = {}
+    for history in (False, True):
+        r = _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue)))))
+        r.lookback.state.on = True                      # the default echoes
+        size = (96, 64)
+        v = View(Switches(), size, target=_fbo(ctx, *size))
+        for k in range(60):
+            r.draw_outputs(_empty(backdrop=1, backdrop_history=history), *size, 1.0, [v],
+                           t_now=2.0 + k / 60)
+        assert ctx.error == "GL_NO_ERROR"
+        pic = _px(v.target)
+        got[history] = int(pic[..., 2].max())
+        assert abs(got[history] - blue) <= 3, (history, got[history])
+        assert abs(int(pic[..., 2].min()) - blue) <= 3, (history, pic[..., 2].min())
+        # on, the history occludes from its own input; off, from the scene
+        assert ("occluder" in r._graph.nodes["history"].inputs) is not history
+    assert abs(got[True] - got[False]) <= 3, got
+
+
+def test_the_echoes_show_over_a_bright_backdrop(ctx):
+    """Final review B-I1: with `backdrop.history` off the echoes and the
+    dream are drawn over the backdrop. The wake is occluded by the scene
+    alone — never by the backdrop's brightness, which (a blue still at
+    200) would cover every trail."""
+    history = False
     r = _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200)))))
     pic = _trails(ctx, r, _shape(backdrop=1, backdrop_history=history),
                   _empty(backdrop=1, backdrop_history=history))

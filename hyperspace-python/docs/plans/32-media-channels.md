@@ -198,7 +198,11 @@ waited for 0.5 s). `file:` ids are listed as group `added`.
 - The backdrop: with `backdrop.channel` set the scene clears to alpha 0
   and `grounded = Composite(over=scene, under=media.<c>)` feeds the
   history; the capture reads `grounded` when `backdrop.history` is on,
-  else the scene. The hands-only pipeline has none. An effect placed
+  else the scene. With it off the history occludes the wake by the scene
+  alone (its `occluder` port: final review B-I1); on, by its own input,
+  as without a backdrop — the echoes hold the backdrop then, and occluded
+  by the scene alone a still backdrop added onto itself and washed to
+  white (re-review). The hands-only pipeline has none. An effect placed
   `after scene` is retargeted to `grounded`, so it bends both. Without a
   backdrop the graph is unchanged node for node. SYSTEM times `media.<c>`
   and `grounded`.

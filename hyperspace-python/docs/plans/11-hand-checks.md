@@ -3923,14 +3923,15 @@ has been run by a person; the loopback tests (our sender into our
 receiver) are the only evidence for 304–309.
 
 **296. A still as a backdrop.** (laptop)
-Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too}`, `tests/test_golden_frames.py` (`backdrop-still`).
+Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too,test_the_echoes_show_over_a_bright_backdrop,test_a_static_backdrop_in_the_history_keeps_its_brightness}`, `tests/test_golden_frames.py` (`backdrop-still`).
 MEDIA page: pick the still in the library (This Mac), click bin cell 1 of
 channel A, then set **Backdrop** channel to A and its alpha to 1. Turn the
 look-back on (the echoes), then **history** on and off; turn the faces'
 cut-through on; place an `acid` effect after the scene on the FX page.
 *Pass:* the still sits under the shape and is bent by the effects with
-**history** on; with it off the echoes of the shape lie over the still
-unbent; alpha 0.5 mixes; with a backdrop and cut-through on, faint fills
+**history** on, and keeps its own brightness (it never brightens toward
+white as the echoes build); with it off the echoes of the shape lie over
+the still unbent, visible over its bright areas too; alpha 0.5 mixes; with a backdrop and cut-through on, faint fills
 let the backdrop show (say whether that reads right). Setting Backdrop off
 returns the picture exactly as before. *Fail:* the backdrop vanishes when an
 effect is placed after the scene (`graph._place_one`), a seam or flipped

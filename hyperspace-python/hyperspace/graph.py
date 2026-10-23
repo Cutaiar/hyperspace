@@ -2056,8 +2056,12 @@ class History(Node):
 
     Plan 32 (final review B-I1): `occluder`, whose brightness holds the
     wake back — the scene alone when the history's picture is the scene
-    over a backdrop, so the echoes and the dream show over the backdrop
-    rather than under its brightness. The port is there only when given,
+    over a backdrop the history keeps out of (`backdrop_history` off), so
+    the echoes and the dream show over the backdrop rather than under its
+    brightness. With `backdrop_history` on the echoes hold the backdrop
+    too and the history occludes from its own picture, as without a
+    backdrop: by the scene alone a still backdrop would add onto itself
+    and wash to white. The port is there only when given,
     so a history without a backdrop is the one it always was, port for
     port."""
 
@@ -3063,9 +3067,13 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         first = inside[0]
         scene_readout = (layer if layer is not None and from_layer == first else
                          g.add(Readout(readout_name(first.n), geometry=geo[first.n])))
-    # B-I1: over a backdrop the scene alone holds the wake back
+    # B-I1: over a backdrop the history keeps out of, the scene alone holds
+    # the wake back. With `backdrop_history` the echoes hold the backdrop
+    # too, so the history occludes from its own input as it always did —
+    # by the scene alone, a still backdrop would add onto itself to white
     history = g.add(History("history", image=grounded or scene, cover=cover,
-                            occluder=scene if grounded is not None else None))
+                            occluder=scene if grounded is not None
+                            and not wiring.backdrop_history else None))
     depth = scene if depth_aware else None
     ends: dict[int, Fx] = {}
     # every pipeline end runs after the hands' layer: whether a hand shows
