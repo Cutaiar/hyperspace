@@ -3269,6 +3269,13 @@ def _place_one(g: Graph, e: EffectAt) -> str | None:
         targets = [(out.inputs["image"], [(out, "image")], "")]
     elif where in ("scene", "history") or where == "hands" or where.startswith("hands."):
         node = g.nodes.get(where)
+        if where == "scene" and key == "after" and GROUNDED in g.nodes:
+            # plan 32 R: over a backdrop the scene is a see-through layer an
+            # effect would fold opaque (hiding the backdrop); the effect sits
+            # after the scene laid over it instead, so it bends both — what
+            # reads the scene alone (the capture without backdrop.history)
+            # reads it unbent
+            node = g.nodes[GROUNDED]
         if node is None or (where.startswith("hands") and not isinstance(node, HandsLayer)):
             return (f"no {where} layer this frame" if where.startswith("hands")
                     else f"no {where} this frame")

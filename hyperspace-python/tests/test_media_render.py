@@ -423,6 +423,55 @@ def test_render_thread_never_waits(ctx):
     assert (pic[..., :3] == RED).all()
 
 
+# ---------------------------------------------------------------- an effect after the scene
+
+def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
+    """D1's `after: scene` (the acid-scene fixture's placement) over a
+    backdrop sits after `grounded` — the scene laid over the channel — so
+    it bends both rather than folding the see-through scene opaque; with no
+    backdrop the graph is the base's, node for node."""
+    placed = (G.EffectAt("acid", 2, after="scene"),)
+    effects = ("acid", "acid.2")
+    vs = [_view()]
+    base = G.default_graph(vs, G.Wiring(placed=placed), effects=effects)
+    assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
+    on = G.default_graph(vs, G.Wiring(placed=placed, backdrop="a"), effects=effects)
+    a2 = on.nodes["acid.2"]
+    assert a2.inputs["image"] is on.nodes["grounded"]
+    assert on.nodes["grounded"].inputs["over"] is on.nodes["scene"]
+    assert on.nodes["history"].inputs["image"] is a2
+    assert on.nodes["capture"].inputs["image"] is on.nodes["scene"]   # the scene alone
+    hist = G.default_graph(vs, G.Wiring(placed=placed, backdrop="a", backdrop_history=True),
+                           effects=effects)
+    assert hist.nodes["capture"].inputs["image"] is hist.nodes["acid.2"]
+    off = G.default_graph(vs, G.Wiring(placed=placed, backdrop=""), effects=effects)
+    assert _names(off) == _names(base)
+
+
+def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
+    """A red still under the scene with a second acid after the scene: the
+    effect runs, and its picture still carries the red — bent, not
+    covered by an opaque fold of the scene."""
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
+    st = r.fx.state
+    st.set_instances({"acid": 2})
+    st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
+    assert not r.fx.compile_all()
+    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))
+
+    def red(pic):
+        return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
+
+    (pic,) = _draw(ctx, r, _empty(backdrop=1), frames=2)
+    assert "acid.2" in r.stats["effects"]
+    assert r._graph.nodes["acid.2"].inputs["image"] is r._graph.nodes["grounded"]
+    assert red(pic) > 0.5, red(pic)
+    (shaped,) = _draw(ctx, r, _shape(backdrop=1), frames=2)
+    assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
+
+
+# (last in the file: it makes a window's context current and releases it,
+# which leaves the module's standalone context no longer current)
 @pytest.mark.skipif(not __import__("importlib").util.find_spec("syphon"),
                     reason="syphon-python is not installed")
 def test_a_syphon_frame_samples_through_the_fit_pass():

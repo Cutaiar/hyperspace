@@ -502,7 +502,10 @@ def test_syphon_loopback():
     tex = ctx.texture((w, h), 4)
     fbo = ctx.framebuffer([tex])
     fbo.use()
-    ctx.clear(1.0, 0.0, 0.0, 1.0)
+    # not one colour: a read of the wrong texture must not pass (T6 fix
+    # round: the bind as 2D failed and read the last 2D texture, this red)
+    ctx.clear(1.0, 0.0, 0.0, 1.0, viewport=(0, 0, w // 2, h))          # left: red
+    ctx.clear(0.0, 0.0, 1.0, 1.0, viewport=(w // 2, 0, w - w // 2, h))  # right: blue
     ctx.finish()
     srv = syphon.SyphonOpenGLServer("hs-t8-loop")
     k = SyphonKind("syphon", {})
@@ -531,9 +534,22 @@ def test_syphon_loopback():
             time.sleep(0.016)
         assert f is not None, src.status
         assert f.pixels is None and f.texture and f.size == (w, h) and src.status == READY
-        ext = ctx.external_texture(f.texture, f.size, 4, 0, "f1")
-        px = np.frombuffer(ext.read(), np.uint8).reshape(h, w, 4)
-        assert tuple(px[h // 2, w // 2]) == (255, 0, 0, 255)     # zero-copy, our pixels
+        # the real path (T6): an IOSurface's rectangle texture, copied on the
+        # GPU into a 2D texture of our own — never uploaded — and read back
+        from hyperspace.media.frame import TEX_RECT
+        from hyperspace.media_tex import MediaTextures
+
+        assert f.tex_target == TEX_RECT
+        _ = ctx.error                          # (what Syphon's own calls left)
+        mt = MediaTextures(ctx)
+        got = mt.texture("a", f)
+        assert ctx.error == "GL_NO_ERROR" and mt.error == ""
+        assert got is not None and got.size == (w, h) and mt.blits == 1 and mt.uploads == 0
+        px = np.frombuffer(got.read(), np.uint8).reshape(h, w, 4)     # GL rows: row 0 the bottom
+        assert ctx.error == "GL_NO_ERROR"
+        assert tuple(px[h // 2, w // 4]) == (255, 0, 0, 255)         # left: red
+        assert tuple(px[h // 2, 3 * w // 4]) == (0, 0, 255, 255)     # right: blue
+        mt.release()
         src.close()
         src.shut()
         assert src._client is None
