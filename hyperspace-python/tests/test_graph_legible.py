@@ -277,7 +277,7 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     st["tidy"] = True
     frame(rig.panel, "graph")
     idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
-    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 6 areas, every one "
+    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 7 areas, every one "
                           f"collapsed · {idle} idle off the canvas")
     assert st["open"] == set() and rig.lib.presets.layout == {}
     auto = ui_graph.layout_of(st, view)

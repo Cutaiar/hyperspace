@@ -31,7 +31,10 @@ this one read the same rows, so an edit on either is on both next frame.
   with their image / geometry / mask ports and, as input ports, the
   params of the render node that owns them (`OWNERS`, the one table);
   ``render:eye`` — the shared camera (`camera.*`, `eye.*`), which draws
-  through every geometry and so has no image port;
+  through every geometry and so has no image port; ``render:media.<c>``
+  — the eight media channels (plan 32 T10), always, each with its image
+  out and its `media.<c>.*` params, one node per channel however many
+  nodes the render graph made of it (the backdrop's, a wire's);
 - ``group`` — a node per group of params no render node owns
   (``group:tempo``, ``group:master`` …).
 
@@ -69,7 +72,8 @@ organised by concern), left to right: *controllers* (the devices, the
 keys, a placeholder, a desk template) → *audio* (the analyzer, the band,
 tempo, master, audio and scene params; the small *other* area — the
 preset, ui and desk params — stacked under it) → *modulation* (the LFOs,
-the modifiers, the macros) → *geometry* (the shape, the camera, the
+the modifiers, the macros) → *media* (the eight channels and the
+backdrop, plan 32 T10) → *geometry* (the shape, the camera, the
 hands, a cloud, the scene that draws them) → *shaders* (the history, the
 effects, the composites, the outputs). `AREA` is the one table (`area_of`);
 each area's title is drawn on the canvas over its first column
@@ -306,6 +310,13 @@ def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
     return ctx.first_cloud
 
 
+def _media_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 32 T10: `media.<c>.<key>` on channel c's node, there whatever the
+    # render graph holds (`build` adds the eight)
+    seg = pid.split(".")
+    return rgraph.media_name(seg[1]) if len(seg) >= 3 else None
+
+
 # a param's group → the render node that owns it: a node name, or a rule
 # over the id (an instance's number, an effect's name). A name the render
 # graph does not hold this frame (no output shows the hands, no scene
@@ -323,6 +334,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "camera": EYE,
     "eye": EYE,
     "output": _output_owner,
+    "media": _media_owner,
 }
 
 
@@ -797,7 +809,24 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             ctx.first_cloud = r.name
     ctx.effect_node = effects
     ctx.effects = sorted(effects, key=len, reverse=True)   # `acid.2` before `acid`
+    # plan 32 T10: the eight channels are source nodes whatever the render
+    # graph holds — a channel nothing reads this frame has no node there,
+    # and one that is both the backdrop and a wire's start has two
+    # (`media.a`, `media.a(wire)`): each is drawn as its channel's one node
+    chans: dict[str, rgraph.MediaNode] = {}
     for r in rnodes:
+        if isinstance(r, rgraph.MediaNode) and (r.channel not in chans
+                                                or r.name == rgraph.media_name(r.channel)):
+            chans[r.channel] = r
+    for c in rgraph.MEDIA_CHANNELS:
+        name = rgraph.media_name(c)
+        ctx.names.add(name)
+        r = chans.get(c) or rgraph.MediaNode(name, c)       # a stand-in: never drawn into
+        n = add_node(VNode(f"render:{name}", "render", name, ref=r))
+        add_port(n, VPort(f"rout:{name}", r.OUTPUT, OUT, r.OUTPUT))
+    for r in rnodes:
+        if isinstance(r, rgraph.MediaNode):
+            continue
         kind = "output" if isinstance(r, rgraph.Output) else "render"
         n = add_node(VNode(f"render:{r.name}", kind, r.name, ref=r))
         for port, typ in r.INPUTS.items():
@@ -936,7 +965,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         for port, src in r.inputs.items():
             if src is None:
                 continue
-            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{src.name}",
+            out = (rgraph.media_name(src.channel) if isinstance(src, rgraph.MediaNode)
+                   else src.name)          # a channel's every node is its one node's out
+            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{out}",
                                       f"rin:{r.name}/{port}", r.INPUTS[port],
                                       ref=(src, r, port), kind="render"))
 
@@ -966,7 +997,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         n.area = area_of(n)
         n.idle = is_idle(n, macros, named) or (
-            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled)
+            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled) or (
+            channel_empty(n, reg))
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -1095,7 +1127,7 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
             devs, id(render_graph), id(spec), len(labels.get("lane") or ()),
             tuple(labels.get("lfo") or ()),
             frozenset(getattr(router, "patch_cut", ()) or ()) if router is not None else (),
-            effect_switches(reg))
+            effect_switches(reg), channel_bins(reg))
 
 
 # ---------------------------------------------------------------- layout
@@ -1110,12 +1142,17 @@ def key(table: Bindings, reg: Registry, router: Router | None, devices,
 # graph's own order (the shape is drawn by the scene, the scene feeds the
 # effects, the effects the outputs). A group no area claims goes to the
 # small `OTHER` area, stacked under the audio in its column.
-CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS = (
-    "controllers", "audio", "modulation", "geometry", "shaders")
+#
+# Plan 32 T10 adds a sixth, *media*, between the modulation and the
+# geometry: the eight channels are sources of pictures (what the folder
+# and the feeds say), read by the shaders (an output, an effect's aux, the
+# backdrop under the scene) and by the faces; the backdrop's node with them.
+CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS = (
+    "controllers", "audio", "modulation", "media", "geometry", "shaders")
 OTHER = "other"
-AREAS = (CONTROLLERS, AUDIO, MODULATION, GEOMETRY, SHADERS)   # left to right
+AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS)   # left to right
 SHARES = {OTHER: AUDIO}       # an area drawn under another's, in its column
-ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, GEOMETRY, SHADERS)
+ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, GEOMETRY, SHADERS)
 
 # the one table: a node's area by its kind, a group node by its id
 # (``group:<param group>``), a render node by its class (or a base class)
@@ -1134,19 +1171,23 @@ AREA: dict[str, str] = {
     "group:hands": GEOMETRY, "group:cloud": GEOMETRY,
     "group:fx": SHADERS, "group:dream": SHADERS, "group:output": SHADERS,
     "group:overlay": SHADERS,
+    "group:media": MEDIA, "group:backdrop": MEDIA,
     # a render node, by its class: the geometry and what draws it
     f"render:{EYE}": GEOMETRY,
     "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
     "HandsLayer": GEOMETRY, "Readout": GEOMETRY, "Cover": GEOMETRY,
+    # the media channels (plan 32 T10)
+    "MediaNode": MEDIA,
     # …and the pictures it goes through
     "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
     "Composite": SHADERS, "Output": SHADERS,
 }
 TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
-          MODULATION: "MODULATION", GEOMETRY: "GEOMETRY", SHADERS: "SHADERS"}
+          MODULATION: "MODULATION", MEDIA: "MEDIA", GEOMETRY: "GEOMETRY",
+          SHADERS: "SHADERS"}
 # a title too long for its room at the floor size (review round 1)
 SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
-                GEOMETRY: "GEO", SHADERS: "SHD"}
+                MEDIA: "MED", GEOMETRY: "GEO", SHADERS: "SHD"}
 
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
@@ -1178,8 +1219,13 @@ IDLE_KINDS = ("macro", "lfo", "group", "device")
 IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
               "group": ("idle param group", "idle param groups"),
               "effect": ("off effect", "off effects"),
+              "channel": ("empty channel", "empty channels"),
               "off": ("off device", "off devices"), "lost": ("lost device", "lost devices")}
-NOUN_ORDER = ("macro", "lfo", "effect", "group", "off", "lost")
+# plan 32 T10: the backdrop's node (its channel picker, alpha and history
+# switch) is the media area's one setting: drawn with nothing patched, so
+# the area always says what is under the scene
+ALWAYS_DRAWN = ("group:backdrop",)
+NOUN_ORDER = ("macro", "lfo", "effect", "channel", "group", "off", "lost")
 
 
 def effect_off(n: VNode, reg: Registry | None) -> bool:
@@ -1190,6 +1236,30 @@ def effect_off(n: VNode, reg: Registry | None) -> bool:
         return False
     p = reg.get(f"fx.{n.ref.effect}.on")
     return p is not None and not bool(p.value)
+
+
+def channel_empty(n: VNode, reg: Registry | None) -> bool:
+    """Is node `n` a media channel with nothing to show and nothing to say
+    (plan 32 T10): no cable at either end, no param of it named by a
+    route, and every entry of its bin empty (`reg.media`, the channels the
+    ``media.*`` params write)? Such a channel sits on its area's idle line,
+    as an unused macro does; one with a source in its bin is drawn though
+    nothing reads it yet — it is what a wire would start from."""
+    if not isinstance(n.ref, rgraph.MediaNode) or n.wires:
+        return False
+    if any(p.patched for p in n.ports):
+        return False
+    media = getattr(reg, "media", None)
+    ch = getattr(media, "channels", {}).get(n.ref.channel) if media is not None else None
+    return ch is None or not any(ch.bin)
+
+
+def channel_bins(reg: Registry) -> tuple:
+    """Which channels hold anything, for `key`: a bin filled or emptied on
+    the MEDIA page rebuilds the view (an empty channel is idle)."""
+    media = getattr(reg, "media", None)
+    chans = getattr(media, "channels", None) or {}
+    return tuple(c for c, ch in chans.items() if any(getattr(ch, "bin", ())))
 
 
 def effect_switches(reg: Registry) -> tuple:
@@ -1213,7 +1283,7 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
     An effect switched off is idle by `build`'s own rule (`effect_off`,
     review round 1): its render cables do not count, a value cable on any
     node of that effect does."""
-    if n.kind not in IDLE_KINDS or n.wires:
+    if n.kind not in IDLE_KINDS or n.wires or n.id in ALWAYS_DRAWN:
         return False
     names = set(named)
     if any(p.param in names or p.addr in names for p in n.ports):
@@ -1227,6 +1297,8 @@ def is_idle(n: VNode, macros: Mapping[str, Macro] | None = None,
 
 
 def _idle_noun(n: VNode) -> str:
+    if isinstance(n.ref, rgraph.MediaNode):
+        return "channel"
     if n.kind == "render":
         return "effect"
     if n.kind == "device":
@@ -2533,6 +2605,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
         return spec_name(f"rout:{src.name}", render_graph)
     if isinstance(node, rgraph.Effect):
         name = node.effect
+    elif isinstance(node, rgraph.MediaNode):
+        name = rgraph.media_name(node.channel)      # `media.a(wire)` is channel a's
     elif isinstance(node, (rgraph.Fx, rgraph.Capture, rgraph.Shape, rgraph.Readout,
                            rgraph.PointCloud)):
         return None, _plumbing(built)

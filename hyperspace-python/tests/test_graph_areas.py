@@ -198,10 +198,11 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     st["tidy"] = True
     frame(rig.panel, "graph")
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
-    # twice — and the media channels' and the backdrop's groups (plan 32)
-    assert sum(n.idle for n in view.nodes) == 18
-    assert st["said"] == (f"laid out {len(view.nodes) - 18} nodes in 6 areas, every one "
-                          "collapsed · 18 idle off the canvas")
+    # twice — and the eight media channels, their bins empty (plan 32 T10:
+    # the channels' params on their own nodes, the backdrop's always drawn)
+    assert sum(n.idle for n in view.nodes) == 24
+    assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in 7 areas, every one "
+                          "collapsed · 24 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -370,14 +371,15 @@ def test_the_shader_chain_wraps_in_rows_of_four(rig):
     shaders take four columns, their depths in Z rows — every row left to
     right, a render cable inside a row running right, one from a row's end
     to the next row's start the only kind that runs back (`returns`); the
-    whole canvas about ten columns, not twenty-three."""
+    whole canvas about eleven columns (plan 32 T10's media area one of
+    them), not twenty-three."""
     st = load(rig, "party-trip", real_graph())
     view = st["view"]
     for opened in ((), (graphview.SHADERS,)):
         lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=opened)
         assert lay.spans[graphview.SHADERS] <= graphview.SHADER_ROW
         cols = 1 + max(lay.cols.values())
-        assert cols <= 10, (opened, cols)
+        assert cols <= 11, (opened, cols)
     lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.SHADERS,))
     assert lay.spans[graphview.SHADERS] == graphview.SHADER_ROW
     assert max(lay.rows.values()) >= 2
@@ -465,7 +467,7 @@ def test_the_area_chips_and_a_title_click_frame_an_area(rig, monkeypatch):
 
 def test_area_titles_draw(rig, monkeypatch):
     """Each area's title is drawn on the canvas, large and faint, over its
-    first column — six on party-trip (OTHER under AUDIO) — behind the nodes
+    first column — seven on party-trip (OTHER under AUDIO) — behind the nodes
     (before the first node is begun); sized to stay readable zoomed out,
     never under the floor on screen, a short word when the long one will
     not fit its room (to the next title on its row)."""
@@ -494,7 +496,8 @@ def test_area_titles_draw(rig, monkeypatch):
                                                                 begin(nid)))
     frame(rig.panel, "graph")
     assert [t[0] for t in texts] == [graphview.TITLES[a] for a in graphview.ORDER]
-    assert order[:6] == ["title"] * 6 and order[6] == "node"
+    n = len(graphview.ORDER)
+    assert order[:n] == ["title"] * n and order[n] == "node"
     lay = st["auto"][1]
     audio = next(t for t in texts if t[0] == "AUDIO")
     assert audio[1] == lay.titles[graphview.AUDIO][0]

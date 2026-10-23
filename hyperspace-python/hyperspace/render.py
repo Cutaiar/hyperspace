@@ -136,7 +136,7 @@ from .graph import (
     graph_key,
 )
 from .lookback import DreamState, Lookback
-from .media_tex import FIT_FS, MediaTextures, fit_scale
+from .media_tex import FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
@@ -952,6 +952,11 @@ class Renderer:
         self._fit_prog: moderngl.Program | None = None
         self._fit_vao: moderngl.VertexArray | None = None
         self.scene_ground: float | None = None
+        # plan 32 T10: what the MEDIA page shows — the channels whose live
+        # picture it draws (`media_watch`, read once at the end of the next
+        # frame, `_for_the_panel`) and its thumbnails (`ui_upload`)
+        self.media_watch: set[str] = set()
+        self.ui_tex: UiTextures | None = None
         self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
@@ -1246,6 +1251,7 @@ class Renderer:
                 ctx.viewport = vp
             self._draw_frame(s, w, h, dpr, t, views)
             self._publish(views, t)
+            self._for_the_panel()
         finally:
             target.use()
             ctx.viewport = vp
@@ -1447,6 +1453,52 @@ class Renderer:
                 == (letter, hist):
             return wiring
         return replace(wiring, backdrop=letter, backdrop_history=hist)
+
+    # ---- plan 32 T10: what the control panel draws of the media ----
+
+    def _for_the_panel(self) -> None:
+        """The end of a frame, this context current: each channel the MEDIA
+        page asked for (`media_watch`, emptied here, so a page no longer
+        drawn stops costing uploads after one frame) read into its texture,
+        as any consumer would; the thumbnails it handed over uploaded. Never
+        raises: the panel's pictures must not take the frame down."""
+        watch = getattr(self, "media_watch", None) or ()
+        self.media_watch = set()
+        for c in sorted(watch):
+            try:
+                self.media_texture(c)
+            except Exception:  # noqa: BLE001, S110 — media_texture says nothing; black
+                pass
+        ui = getattr(self, "ui_tex", None)
+        if ui is not None:
+            try:
+                ui.upload()
+            except Exception:  # noqa: BLE001, S110 — a thumbnail not made stays a dark box
+                pass
+
+    def media_shown(self, c: str) -> tuple[moderngl.Texture, bool] | None:
+        """Channel `c`'s raw texture as this frame read it, and whether its
+        rows are top first (`MediaTextures.flipped`) — or None: nothing read
+        it this frame, or it had no picture. Reads nothing itself: the MEDIA
+        page draws it after the frame (`media_watch` asks for it)."""
+        tex = self._media_frame_now().get(("raw", c))
+        if tex is None:
+            return None
+        return tex, self._media_textures().flipped(c)
+
+    def _ui_textures(self) -> UiTextures:
+        ui = getattr(self, "ui_tex", None)
+        if ui is None:
+            ui = self.ui_tex = UiTextures(self.ctx)
+        return ui
+
+    def ui_texture(self, key):
+        """A picture the panel handed over (`ui_upload`), once uploaded; else None."""
+        return self._ui_textures().get(key)
+
+    def ui_upload(self, key, size: tuple[int, int], data: bytes) -> None:
+        """RGBA8 pixels for the panel, uploaded at the end of the next frame."""
+        self._ui_textures().put(key, size, data)
 
     # ---- plan 32 R: the media channels' pictures ----
 

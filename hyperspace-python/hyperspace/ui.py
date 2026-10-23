@@ -45,6 +45,7 @@ from . import (
     ui_graph,
     ui_lfo,
     ui_lookback,
+    ui_media,
     ui_pad,
     ui_patterns,
     ui_presets,
@@ -523,8 +524,10 @@ CHEATSHEET = [
 
 # ---- the pages: (key, rail label, the group — or groups — whose dirty dot the rail shows) ----
 # One page per registry group where a group is a module of its own; the
-# view group is big enough to split into View / Faces & Pattern / Bitmap,
-# and those two sub-pages say so in their section notes. The audio page
+# view group is big enough to split into View / Faces & Pattern, and the
+# faces' sub-page says so in its section notes. The media page (plan 32 U,
+# ui_media.py) is the eight channels, the library that fills their bins,
+# and the backdrop's and the faces' channel pickers. The audio page
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
@@ -536,7 +539,7 @@ PAGES = [
     ("output", "output", "output"),
     ("view", "view", "view"),
     ("faces", "faces", "pattern"),
-    ("bitmap", "bitmap", None),
+    ("media", "media", ("media", "backdrop")),   # plan 32 U: the channels (ui_media.py)
     ("camera", "camera", "camera"),
     ("lookback", "lookback", "dream"),
     ("fx", "fx", "fx"),
@@ -593,6 +596,8 @@ class Panel:
         self.learn = None     # set by app.py: the armed param and the held question (learn.Learn)
         self.undo = None      # set by app.py (undo.Undo): its status shows in the footer
         self.devices = None   # set by app.py (devices.DeviceRegistry): the SYSTEM page's lines
+        self.media = None     # set by app.py (app.MediaIO): the MEDIA page's folder and channels
+        self.dialog_error = ""   # why the file dialog would not open (`open_file_dialog`)
         self.router = None    # set by app.py (routing.Router); else found via midi's table
         self.output = None    # set by app.py (overlay.Output); its params draw below
         self.hands = None          # set by app.py when the tracker is on (hands.HandsIO)
@@ -1987,12 +1992,25 @@ class Panel:
     def _page_faces(self, dt: float) -> None:
         ui_patterns.page(self, dt)     # the faces, the pattern browser, the eight inputs
 
-    def _page_bitmap(self, dt: float) -> None:
-        """The bitmap layer is a media channel now (plan 32, row 331): the
-        MEDIA page (plan 32 T10) fills the channels; `view.media` picks the
-        one on the faces."""
-        self._section("bitmap")
-        imgui.text_disabled("moved to MEDIA")
+    def _page_media(self, dt: float) -> None:
+        """The media channels (plan 32 U): the missing banner, the library,
+        the eight channels and their bins, the backdrop's and the faces'
+        pickers (ui_media.py). The bitmap page's one file is a channel now."""
+        ui_media.draw(self, dt)
+
+    def open_file_dialog(self, title: str, filters: list[str]):
+        """The native file dialog (portable_file_dialogs), or None with the
+        reason in `self.dialog_error` — best effort: a Mac without it still
+        has the rest of the page. Poll the dialog's `ready()` / `result()`
+        on later frames, as the audio page's Load track does."""
+        self.dialog_error = ""
+        try:
+            from imgui_bundle import portable_file_dialogs as pfd
+
+            return pfd.open_file(title, "", filters)
+        except Exception as e:  # noqa: BLE001 — dialog is best-effort
+            self.dialog_error = f"file dialog unavailable: {e}"
+            return None
 
     def _page_camera(self, dt: float) -> None:
         self._section("camera", "camera")
@@ -2025,14 +2043,10 @@ class Panel:
         self._button("audio.mic", "Stop mic" if mic_on else "Listen to mic")
         imgui.same_line()
         if imgui.button("Load track"):
-            try:
-                from imgui_bundle import portable_file_dialogs as pfd
-
-                self._file_dialog = pfd.open_file(
-                    "Choose a track", "", ["Audio", "*.wav *.mp3 *.flac *.ogg"]
-                )
-            except Exception as e:  # noqa: BLE001 — dialog is best-effort
-                a.error = f"file dialog unavailable: {e}"
+            self._file_dialog = self.open_file_dialog(
+                "Choose a track", ["Audio", "*.wav *.mp3 *.flac *.ogg"])
+            if self._file_dialog is None:
+                a.error = self.dialog_error
         if a.on:
             imgui.same_line()
             self._button("audio.stop", "Stop")

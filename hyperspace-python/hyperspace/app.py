@@ -1346,6 +1346,7 @@ def main() -> None:
     rig.listeners.append(point_at_devices)
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
+    panel.media = media                        # the MEDIA page: the folder and the channels
     renderer.ghost.router = router           # the guide lights what the table routes
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)

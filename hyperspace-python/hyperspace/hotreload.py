@@ -59,7 +59,7 @@ MODULES = (
     "lookback", "dream", "fx", "ghost", "outputs", "view", "field", "graph", "media_tex", "render", "params", "library", "control", "config",
     "overlay", "gamepad", "apc40", "generic", "patch", "routing", "preset", "learn", "midi", "bridge",
     "hands.signal", "hands.tape", "hands.core", "hands", "devices", "media.live", "media.ndi", "media.syphon", "media.camera", "media.publish", "hands.device", "osc", "graphview", "ui_presets", "ui_lookback", "ui_bands", "ui_routing", "ui_fx", "ui_patterns",
-    "ui_lfo", "ui_desk", "ui_pad", "hands.panel", "ui_graph", "ui",
+    "ui_lfo", "ui_media", "ui_desk", "ui_pad", "hands.panel", "ui_graph", "ui",
 )
 
 

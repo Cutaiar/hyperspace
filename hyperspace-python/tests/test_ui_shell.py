@@ -1333,7 +1333,7 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
 # ------------------------------------------------- plan 17: the right-click menu
 
 def _a_file_path(rig, monkeypatch) -> str:
-    """A file-path param (Kind.TEXT) drawn on the bitmap page by the
+    """A file-path param (Kind.TEXT) drawn on the media page by the
     panel's own widget (`Panel._path`), as `view.bmp_file` was until plan
     32 took the one bitmap file away — no page draws a TEXT param of its
     own now, and the widget's contract still holds. Returns its id."""
@@ -1341,7 +1341,7 @@ def _a_file_path(rig, monkeypatch) -> str:
     view.test_file = ""
     rig.reg.text(pid, "Test file", lambda: view.test_file,
                  lambda v: setattr(view, "test_file", v), group="view")
-    monkeypatch.setattr(type(rig.panel), "_page_bitmap", lambda self, dt: self._path(pid))
+    monkeypatch.setattr(type(rig.panel), "_page_media", lambda self, dt: self._path(pid))
     return pid
 
 
@@ -1536,7 +1536,7 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     # a file path: nothing to learn (a knob cannot set a path)
     path = _a_file_path(rig, monkeypatch)
     assert rig.reg[path].kind is Kind.TEXT
-    lines, items = menu(panel, monkeypatch, path, "bitmap")
+    lines, items = menu(panel, monkeypatch, path, "media")
     assert items == [] and "not modulatable" in lines
     # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
     panel.hands = None
@@ -1908,7 +1908,7 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
         assert lrn.control is None and reg[pid].base == before, pid
         assert any(b.source == "cc:*:19" and b.target == pid for b in table.desk()), pid
     path = _a_file_path(rig, monkeypatch)
-    frame(panel, "bitmap")
+    frame(panel, "media")
     frame(panel)
     lrn.pick(_control("D5").source)
     frame(panel)

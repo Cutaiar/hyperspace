@@ -225,3 +225,51 @@ class MediaTextures:
             except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
                 pass
             self._read_fbo = None
+
+
+UI_TEXTURES = 256       # the most thumbnails kept; the least recently drawn goes first
+
+
+class UiTextures:
+    """Small pictures the control panel draws — the MEDIA page's library
+    thumbnails (plan 32 T10) — as textures of the render context. The page
+    decodes a thumbnail's PNG on the media pool and hands the pixels here
+    (`put`); the renderer makes the texture in its own frame (`upload`),
+    with its context current, so the panel never makes a GL object on the
+    control window's context (the share group shares textures, not the
+    state moderngl keeps for its context). `get` is the texture once made,
+    None until then. At most `limit` are kept: the one drawn least
+    recently is released first."""
+
+    def __init__(self, ctx: moderngl.Context, limit: int = UI_TEXTURES):
+        self.ctx = ctx
+        self.limit = limit
+        self._tex: dict[Any, moderngl.Texture] = {}   # oldest first (insertion order)
+        self._todo: dict[Any, tuple[tuple[int, int], bytes]] = {}
+
+    def get(self, key) -> moderngl.Texture | None:
+        tex = self._tex.pop(key, None)
+        if tex is not None:
+            self._tex[key] = tex          # drawn now: the newest
+        return tex
+
+    def put(self, key, size: tuple[int, int], data: bytes) -> None:
+        """Queue RGBA8 pixels `data` of `size`, rows top first, for `upload`."""
+        if key not in self._tex:
+            self._todo[key] = (tuple(size), data)
+
+    def upload(self) -> None:
+        """On the frame thread, the render context current: what was put."""
+        todo, self._todo = self._todo, {}
+        for key, (size, data) in todo.items():
+            tex = self.ctx.texture(size, 4, data)
+            tex.repeat_x = tex.repeat_y = False
+            self._tex[key] = tex
+        while len(self._tex) > self.limit:
+            old = next(iter(self._tex))
+            self._tex.pop(old).release()
+
+    def release(self) -> None:
+        for tex in self._tex.values():
+            tex.release()
+        self._tex, self._todo = {}, {}
