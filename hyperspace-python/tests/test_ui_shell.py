@@ -100,6 +100,7 @@ def build_rig(tmp_path, renderer=None):
     try:
         yield r
     finally:
+        panel.close()                   # the GRAPH page's node editor context, if drawn
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
 
@@ -719,12 +720,13 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
                     imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
     monkeypatch.setattr(Panel, "_page_view", measured)
     room = {}
-    for n in (1, 7, 9, 100):
-        for layout in (0, 1, 2):
+    for n in (1, 7, 9, 4096):
+        for layout in (0, 1, 2, 5):         # a 3D lattice adds the field's depth
             for motion in (0, 1):
                 rig.reg["view.instances"].set(n)
                 rig.reg["view.inst_layout"].set(layout)
                 rig.reg["view.inst_motion"].set(motion)
+                rig.reg["view.inst_fit"].set(n == 9)
                 for _ in range(3):          # the window settles its size, then its content
                     frame(rig.panel, "view")
                 room[(n, layout, motion)] = got[-1]
@@ -733,12 +735,12 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
 
 def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
     """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
-    The page test above draws it at one copy, where the field row is
-    hidden; above one the row shows (and the page as it was scrolled by
-    19 px there). Measured with 7, 9 and 100 copies in every layout, still
-    and in motion, and at one copy."""
+    The page test above draws it at one copy, where the field rows are
+    hidden; above one they show (and the page as it was scrolled by 19 px
+    there). Measured with 7, 9 (fitted) and 4096 copies in the flat layouts
+    and a lattice, still and in motion, and at one copy."""
     room = view_page_room(rig, monkeypatch)
-    assert len(room) == 24
+    assert len(room) == 32
     assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
@@ -779,6 +781,17 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     row = [rects[pid] for pid in FIELD_ROW]
     assert len({round(r[1]) for r in row}) == 1                    # one line
     assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    # the count and Fit share a line; spacing and a lattice's depth the next
+    rig.reg["view.inst_layout"].set(5)
+    for _ in range(3):
+        frame(rig.panel, "view")
+    count, depth = rects["view.instances"], (rects["view.inst_spacing"],
+                                             rects["view.inst_persp"])
+    assert count[2] <= CONTROL_SIZE[0] and depth[0][2] < depth[1][0]
+    assert round(depth[0][1]) == round(depth[1][1]) > round(rects["view.inst_layout"][1])
+    rig.reg["view.inst_layout"].set(1)
+    for _ in range(3):
+        frame(rig.panel, "view")
     cells = [rects[pid] for pid in ROT_RATES]
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
@@ -851,9 +864,12 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the preset
-    strip and the header stay put (by design; audit U1)."""
+    strip and the header stay put (by design; audit U1). Plan 28 N7: the
+    routes are GRAPH's now — forty of them draw no line here — and the
+    child holds the desk, the macros, the session and the sinks, which
+    overflow it on their own."""
     reg, table = rig.reg, rig.router.table
-    for p in reg:                       # enough rows to overflow: one per free target
+    for p in reg:                       # forty routes: none of them a line here now
         if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
@@ -862,17 +878,18 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
         if len(table.routes()) >= 40:
             break
     assert len(table.routes()) >= 40
-    inner = []
-    row = ui_routing._row
+    inner, rows = [], []
+    sinks, row = ui_routing.sinks, ui_routing._row
 
-    def measured(panel, router, b, k):
-        out = row(panel, router, b, k)
-        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child
-        return out
-    monkeypatch.setattr(ui_routing, "_row", measured)
+    def measured(panel, router):
+        sinks(panel, router)
+        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child, at its end
+    monkeypatch.setattr(ui_routing, "sinks", measured)
+    monkeypatch.setattr(ui_routing, "_row", lambda *a: rows.append(a) or row(*a))
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page itself scrolled"
-    assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+    assert inner and inner[-1] > 0, "the child did not scroll with the factory desk"
+    assert rows == []
 
 
 def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):

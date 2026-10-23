@@ -12,30 +12,17 @@ import json
 
 import numpy as np
 import pytest
-from test_camera import _draw, _view, ctx  # noqa: F401  (the GL context fixture)
+from test_camera import _draw, _rows, _view, ctx  # noqa: F401  (the GL context fixture)
 from test_presets import boot, boot_registry
 
-from hyperspace.geometry import geom, view_angles, w_masked, world_points
+from hyperspace.geometry import geom, is_3d, view_angles, world_points
 from hyperspace.params import part_of
 from hyperspace.view import ViewState
 
 
 def _strokes(ctx, monkeypatch, **kw):  # noqa: F811
-    """One draw; the edges' and the points' vertex rows as `_tile` saw them
-    (edges: column 8 the drawn width, 9 the alpha; points: 5 the radius)."""
-    from hyperspace.render import Renderer
-
-    seen = {}
-    real = Renderer._tile
-
-    def spy(verts, offs, **k):
-        seen[verts.shape[1]] = verts.copy()
-        return real(verts, offs, **k)
-
-    monkeypatch.setattr(Renderer, "_tile", staticmethod(spy))
-    _draw(ctx, _view(lines=True, **kw))
-    monkeypatch.setattr(Renderer, "_tile", staticmethod(real))
-    return seen[10], seen[7]
+    """One draw: what it uploaded (test_camera._rows)."""
+    return _rows(ctx, monkeypatch, _view(lines=True, **kw))
 
 
 def test_the_default_is_world_space_a_preset_performance_switch():
@@ -75,16 +62,22 @@ def test_at_zoom_1_both_modes_draw_the_same_frame(ctx, lines, points):  # noqa: 
 def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, zoom):  # noqa: F811
     """World space is the pre-A2 arithmetic: width × zoom before the 1 px
     floor (the sub-pixel part folded into alpha), radius × zoom before the
-    whole-pixel rounding; screen space is the same at every zoom."""
-    l1, p1 = _strokes(ctx, monkeypatch, zoom=1.0, bright=1.6)
-    ls, ps = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6, screen_strokes=True)
-    lw, pw = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6)
+    whole-pixel rounding; screen space is the same at every zoom. On one
+    copy (the field as it always was) the CPU does it, as before; the
+    shaders' own per-copy scaling is off."""
+    l1 = _strokes(ctx, monkeypatch, zoom=1.0, bright=1.6)
+    ls = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6, screen_strokes=True)
+    lw = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6)
+    assert l1["wscale"] == ls["wscale"] == lw["wscale"] == (0.0, 0.0)
+    l1, p1 = l1["lines"], l1["points"]
+    ls, ps = ls["lines"], ls["points"]
+    lw, pw = lw["lines"], lw["points"]
     # screen space: A2's strokes, whatever the zoom
     assert np.array_equal(l1, ls) and np.array_equal(p1, ps)
     # the raw widths, the reference's formula from each edge's depth: the
     # drawn width is ≥ 1 px, the sub-pixel part folded into the alpha
     s = _view()
-    assert not w_masked(s.shape)
+    assert not is_3d(s.shape)
     g = geom(s.shape)
     _, _, pd = world_points(g["V"], view_angles(s.shape, s.ang), s.yaw, s.pitch, d4=s.depth4)
     near, span = pd.min(), max(pd.max() - pd.min(), 1e-6)
@@ -109,3 +102,28 @@ def test_world_space_scales_the_width_and_radius_by_the_zoom(ctx, monkeypatch, z
         assert (pw[:, 5] < p1[:, 5]).all()            # every dot smaller
     else:
         assert (pw[:, 5] > p1[:, 5]).all()            # every dot bigger
+
+
+@pytest.mark.parametrize("zoom", [0.5, 2.0])
+def test_on_the_fitted_field_the_shaders_scale_the_strokes(ctx, monkeypatch, zoom):  # noqa: F811
+    """On field.py's path (Fit, a 3D lattice) each copy has its own scale,
+    the camera's zoom in it: the rows carry the reference's width and
+    radius at scale 1 whatever the zoom, and LINE_VS / POINT_VS scale them
+    by the copy in world space only — heavier above scale 1, lighter below."""
+    l1 = _strokes(ctx, monkeypatch, zoom=1.0, bright=1.6, inst_fit=True)
+    lw = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6, inst_fit=True)
+    ls = _strokes(ctx, monkeypatch, zoom=zoom, bright=1.6, inst_fit=True, screen_strokes=True)
+    for got in (lw, ls):
+        assert np.array_equal(l1["lines"], got["lines"])
+        assert np.array_equal(l1["points"], got["points"])
+    assert lw["wscale"] == (1.0, 1.0) and ls["wscale"] == (0.0, 0.0)
+    assert np.array_equal(lw["model"], np.eye(4, dtype=np.float32))
+    world, _ = _draw(ctx, _view(lines=True, zoom=zoom, bright=1.6, inst_fit=True))
+    screen, _ = _draw(ctx, _view(lines=True, zoom=zoom, bright=1.6, inst_fit=True,
+                                 screen_strokes=True))
+    # Fit frames the copy (its scale is never under the framed size, as a
+    # zoom under 1 does not shrink a fitted field): heavier past scale 1
+    k = float(lw["copies"][0, 2])
+    assert k != 1.0
+    ink_w, ink_s = world[..., :3].sum(), screen[..., :3].sum()
+    assert (ink_w > ink_s) if k > 1 else (ink_w < ink_s), (k, ink_w, ink_s)

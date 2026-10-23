@@ -25,7 +25,11 @@ helpers every effect can call)::
     vec4 effect(vec2 uv) { return src(uv + …); }
 
 ``@param lo hi default [log] [wrap] "Label" tip`` — the uniform name
-without its ``u_`` is the id suffix. Every effect also gets six params
+without its ``u_`` is the id suffix. A discrete choice (plan 30 N8) is
+``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
+the names in brackets, ``|`` between them, then the default's index — an
+enum param the strips draw as a picker (a combo), never a slider; the
+uniform gets the index. Every effect also gets six params
 of its own: ``on``, ``mix`` (wet/dry against its input), ``speed`` (the
 rate its clock ``u_phase`` runs at — integrated here, so a lane riding
 the speed never jumps the phase), ``blend``, ``order`` and ``target``.
@@ -84,6 +88,9 @@ RELOAD_EVERY = 30               # frames between mtime checks of the folder
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
+_CHOICE = re.compile(
+    r"^choice\s+\[(?P<names>[^\]]*)\]\s+(?P<default>\d+)\s+\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+)
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
     r"(?P<flags>(?:(?:log|wrap)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
@@ -116,6 +123,7 @@ class ParamSpec:
     log: bool = False
     wrap: bool = False
     tip: str = ""
+    choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
 
 
 @dataclass
@@ -135,8 +143,20 @@ class EffectSpec:
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
-                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
+                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
+                       p.choices)
                       for p in self.params))
+
+
+def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
+    if key in RESERVED or key in seen:
+        raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+    if key.isdecimal():
+        # the naming rule (plan 26 A0/A4): a purely decimal segment
+        # right after `fx.<file>` is an instance marker — `fx.acid.2`
+        # is the second acid — so no key may be one
+        raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
+                        "instance number (fx.<file>.2 is the second instance)")
 
 
 def parse(name: str, source: str) -> EffectSpec:
@@ -171,20 +191,30 @@ def parse(name: str, source: str) -> EffectSpec:
                 raise SpecError(f"{name}:{n}: @param needs 'uniform float|int u_name;' before it")
             continue
         typ, uniform, body = m.groups()
+        key = uniform[2:]
+        cm = _CHOICE.match(body)
+        if cm or body.startswith("choice"):
+            if not cm:
+                raise SpecError(f'{name}:{n}: @param choice wants [a|b|…] default "Label" tip')
+            if typ != "int":
+                raise SpecError(f"{name}:{n}: u_{key} is a choice, so its uniform is an int")
+            names = tuple(c.strip() for c in cm["names"].split("|"))
+            if len(names) < 2 or not all(names) or len(set(names)) < len(names):
+                raise SpecError(f"{name}:{n}: u_{key} needs two or more distinct choices")
+            _check_key(name, n, key, seen)
+            seen.add(key)
+            spec.params.append(ParamSpec(
+                key=key, uniform=uniform, label=cm["label"], lo=0.0, hi=float(len(names) - 1),
+                default=float(min(int(cm["default"]), len(names) - 1)), integer=True,
+                tip=cm["tip"].strip(), choices=names,
+            ))
+            continue
         pm = _PARAM.match(body + " ")
         if not pm:
             raise SpecError(f'{name}:{n}: @param wants lo hi default [log] [wrap] "Label" tip')
         lo, hi, default = (float(x) for x in pm["nums"].split())
         flags = pm["flags"].split()
-        key = uniform[2:]
-        if key in RESERVED or key in seen:
-            raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
-        if key.isdecimal():
-            # the naming rule (plan 26 A0/A4): a purely decimal segment
-            # right after `fx.<file>` is an instance marker — `fx.acid.2`
-            # is the second acid — so no key may be one
-            raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
-                            "instance number (fx.<file>.2 is the second instance)")
+        _check_key(name, n, key, seen)
         if not lo < hi:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
@@ -532,8 +562,14 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
                lambda x, v=v: v.__setitem__("target", x), TARGETS, group=g,
                modulatable=False,
                tip="What the effect runs on: the whole frame, or the picture in the "
-                   "faces (Faces must be on).")
+                   "faces (Faces must be on). On the faces it runs inside the shape's "
+                   "face drawing: the one shader run the render graph does not show, "
+                   "and a placement in the preset's graph does not move it.")
         for p in spec.params:
+            if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
+                r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
+                       list(p.choices), group=g, tip=p.tip)
+                continue
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
                          fmt=_fmt(p), group=g, tip=p.tip)
@@ -622,6 +658,11 @@ def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
 class FxChain:
     """The ping-pong textures and one program per effect, on one GL context.
 
+    Plan 30 D0: the frame's effects are the render graph's `Effect` nodes,
+    one pass each (`run_one`) between textures of this chain's `pool`;
+    `run` (the whole stack as one block, from `begin`'s texture) is the
+    faces' chain's.
+
     A chain runs the effects aimed at its `target`: the frame's (the
     default — with every effect aimed at the frame it is the whole stack)
     or the faces'. A chain made with `programs=` another chain borrows that
@@ -674,16 +715,36 @@ class FxChain:
         return bool(self.state.chain(getattr(self, "target", FRAME)))
 
     def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
-        """The framebuffer the frame should be composited into this frame."""
-        if size != self.size or not self._tex:
+        """The framebuffer the frame should be composited into this frame
+        (`run`'s first texture: the faces' chain, and anything else that
+        still runs the stack as one block)."""
+        return self.pool(size, max(2, len(self._tex)))[0][1]
+
+    def pool(self, size: tuple[int, int], n: int = 2
+             ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
+        """The chain's half-float textures at `size`, at least `n` of them
+        (plan 30 D0): `run`'s two ping-pong textures, and the textures the
+        frame's `graph.Effect` nodes paint into — two for a straight run
+        of effects, one more for each effect held for the frame
+        (`graph.Graph.pool`). Made again, all of them, when the size
+        changes; grown by appending (a texture handed out this frame stays
+        what it is); shrunk only by `fit_pool` and `release_targets`."""
+        if size != self.size:
             self.release_targets()
             self.size = size
-            for _ in range(2):
-                tex = self.ctx.texture(size, 4, dtype="f2")
-                tex.repeat_x = tex.repeat_y = False
-                self._tex.append(tex)
-                self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
-        return self._fbo[0]
+        while len(self._tex) < n:
+            tex = self.ctx.texture(size, 4, dtype="f2")
+            tex.repeat_x = tex.repeat_y = False
+            self._tex.append(tex)
+            self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
+        return list(zip(self._tex, self._fbo, strict=True))
+
+    def fit_pool(self, n: int) -> None:
+        """Release the pool when it holds more than `n` textures — a graph
+        that needs fewer was built (`Renderer._graph_for`); the next use
+        makes what that graph asks for."""
+        if len(self._tex) > n:
+            self.release_targets()
 
     def release_targets(self) -> None:
         for res in (*self._fbo, *self._tex):
@@ -718,8 +779,7 @@ class FxChain:
         st = self.state
         st.advance_to(t)
         aim = getattr(self, "target", FRAME)
-        # in the faces' picture alpha is a face's intensity, never the window's
-        opaque = int(aim == FRAME and getattr(self, "opaque", False))
+        opaque = self._opaque()
         passes = [(n, self._program(n)) for n in st.chain(aim)]
         passes = [(n, pv) for n, pv in passes if pv is not None]
         ctx = self.ctx
@@ -734,21 +794,69 @@ class FxChain:
             last = k == len(passes) - 1
             (target if last else self._fbo[1 - src]).use()
             self._tex[src].use(location=0)
-            v = st.values[name]
-            self._set(prog, "u_src", 0)
-            self._set(prog, "u_res", (float(w), float(h)))
-            self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
-            self._set(prog, "u_time", float(t))
-            self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
-            self._set(prog, "u_blend", int(v["blend"]))
-            self._set(prog, "u_opaque", opaque)
-            for p in st.specs[name].params:
-                x = v[p.key]
-                self._set(prog, p.uniform, round(x) if p.integer else float(x))
+            self._uniforms(prog, name, (w, h), t, opaque)
             vao.render(moderngl.TRIANGLES, vertices=3)
             src = 1 - src
         ctx.enable(moderngl.BLEND)
         return [n for n, _ in passes]
+
+    def _opaque(self) -> int:
+        """u_opaque for this chain's passes: 1 on the frame's chain over an
+        opaque ground; never on the faces' (there alpha is a face's
+        intensity, never the window's)."""
+        aim = getattr(self, "target", FRAME)
+        return int(aim == FRAME and getattr(self, "opaque", False))
+
+    def _uniforms(self, prog: moderngl.Program, name: str, size: tuple[int, int],
+                  t: float, opaque: int) -> None:
+        """Every uniform of effect `name`'s pass over a source of `size`:
+        one program serves every instance of a file and both chains, so all
+        of them are set before each pass."""
+        st = self.state
+        w, h = size
+        v = st.values[name]
+        self._set(prog, "u_src", 0)
+        self._set(prog, "u_res", (float(w), float(h)))
+        self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
+        self._set(prog, "u_time", float(t))
+        self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
+        self._set(prog, "u_blend", int(v["blend"]))
+        self._set(prog, "u_opaque", opaque)
+        for p in st.specs[name].params:
+            x = v[p.key]
+            self._set(prog, p.uniform, round(x) if p.integer else float(x))
+
+    def ready(self, name: str) -> bool:
+        """Whether effect `name` has a program to run (built now if it has
+        not been tried): False for a file that never compiled."""
+        return self._program(name) is not None
+
+    def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
+                t: float, opaque: int | None = None) -> None:
+        """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
+        program over `src` into `dst`'s viewport, every uniform set as
+        `run` sets it, the clocks moved first (once per frame time,
+        `FxState.advance_to`). An effect with no program copies `src`
+        across, so `dst` always holds the picture (the node reads such an
+        effect through and never asks). `opaque` (plan 30 D1): `u_opaque`
+        for this pass when not the chain's — 0 for an effect placed on a
+        hands' layer, whose ground is see-through whatever the window's."""
+        self.state.advance_to(t)
+        pv = self._program(name)
+        ctx = self.ctx
+        ctx.disable(moderngl.BLEND)
+        try:
+            dst.use()
+            src.use(location=0)
+            if pv is None:
+                self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
+                return
+            prog, vao = pv
+            self._uniforms(prog, name, src.size, t,
+                           self._opaque() if opaque is None else int(opaque))
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
 
     @staticmethod
     def _set(prog: moderngl.Program, name: str, value) -> None:

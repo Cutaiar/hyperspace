@@ -406,8 +406,8 @@ def test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job(build):
     y0 = yaw.base
     pad.frame(axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
     frame(r)
-    assert r.router.labels["axis"] == list(gp.AXIS_LABELS)
-    assert r.router.rests["axis"] == list(gp.AXIS_RESTS)
+    assert r.router.labels["axis"] == list(gp.LANE_LABELS)   # the six, then the dials
+    assert r.router.rests["axis"] == list(gp.LANE_RESTS)
     assert float(r.router.feeds["axis"][0]) == pytest.approx(1.0)
     assert yaw.base > y0                                     # the left stick orbits
     r.table.add(Binding("axis:LX", "view.inst_amp", "position", 1.0))

@@ -63,6 +63,7 @@ import gc
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -136,7 +137,14 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # landing through the real `Presets` (`GraphSection`) onto the rig's
 # renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines",)
+# plan 30 D1: the three placements' proof presets — the palette after the
+# hands' layer, the palette into output 2's picture, a second acid after
+# the scene (`graph.EffectAt.after` / `into`)
+# plan 28 N4: the wire list's proof presets — hands 2 wired to output 2's
+# hands alone, the palette wired into output 1's picture and a second acid
+# from the history into output 2's (`graph.Wire`)
+FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
+                                    "acid-scene", "hands-glass-only", "wired-outputs")
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
@@ -236,15 +244,19 @@ class Shot:
     sha256: str
     size: tuple[int, int]
     pixels: np.ndarray   # (h, w, 4) uint8, top row first: for the PNG and a diff
+    wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
 
     @property
     def key(self) -> str:
         return f"{self.preset}|{self.hands}|{self.state}"
 
     def entry(self) -> dict:
-        return {"preset": self.preset, "hands": self.hands, "state": self.state,
-                "route": self.route, "hands_over": self.over, "size": list(self.size),
-                "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        out = {"preset": self.preset, "hands": self.hands, "state": self.state,
+               "route": self.route, "hands_over": self.over, "size": list(self.size),
+               "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        if self.wired is not None:          # (only a wired output's entry has it)
+            out["wired"] = self.wired
+        return out
 
 
 class Rig:
@@ -276,6 +288,11 @@ class Rig:
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
         reg["ghost.on"].set(True)
+        # plan 28 N4: a second hands node the graph declares shows too (its
+        # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture
+        # declares one, so no other golden sees this
+        for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
+            reg[pid].set(True)
         self.io = HandsIO(HandSettings.from_config({}), {"enabled": True},
                           source=FakeHands(lambda: self.t, hands == "present"),
                           out=NullOut(), clock=lambda: self.t)
@@ -390,9 +407,21 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             if wiring is None and rig.renderer.wiring == Wiring():    # (a fixture's graph: its own)
                 assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
             raw = _read(ctx, f, size)
-            shots.append(Shot(slug, hands, name, NAMES[key] if key is not None else "none",
+            # plan 28 N4: an output whose picture is a wire's shows no
+            # pipeline of `outputs.route`'s table (its end is its own,
+            # `graph.Wired`, keyed `wire(output.<n>)`): its route reads
+            # "none" and its entry says what feeds the wire (`wired`); any
+            # other key not in the table is a bug, and raises here
+            wired = None
+            if isinstance(key, str) and key.startswith("wire("):
+                port = f"{key[len('wire('):-1]}.image"
+                wired = next(w.src for w in rig.renderer.wiring.wires if w.dst == port)
+                route_name = "none"
+            else:
+                route_name = NAMES[key] if key is not None else "none"
+            shots.append(Shot(slug, hands, name, route_name,
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
-                              tuple(size), raw[::-1].copy()))
+                              tuple(size), raw[::-1].copy(), wired))
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed

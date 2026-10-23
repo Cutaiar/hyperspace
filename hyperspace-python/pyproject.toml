@@ -73,6 +73,17 @@ extend-exclude = ["vendor/"]   # upstream code, kept in upstream's style
 [project.scripts]
 hyperspace = "hyperspace.app:main"
 
+[tool.uv]
+# The interpreter is uv's own, not whatever Python the machine happens to
+# have (.python-version pins the series, 3.14). A python.org framework
+# build ships no CA bundle until its Install Certificates.command is run,
+# and the dream's first-use weights download then dies in urllib with
+# CERTIFICATE_VERIFY_FAILED; uv's builds use the system store. 3.15 is not
+# reachable yet: torch publishes no cp315 wheel. requires-python stays
+# >=3.12 (and ruff's target with it) — the package still runs there; this
+# only fixes what a sync builds the venv on.
+python-preference = "managed"
+
 [tool.uv.sources]
 # Ultraleap's Python wrapper, pinned by commit (see the dependency's note)
 leap = { git = "https://github.com/ultraleap/leapc-python-bindings", rev = "2341c6c3db5dc08236bb52890d8c43a224139694", subdirectory = "leapc-python-api" }

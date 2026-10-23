@@ -58,76 +58,35 @@ not mean 3D: the Clifford torus (18) is a surface native to 4D. Shapes
 19–26 are surfaces from trig equations, each built with its own face
 cycles.
 
-**How a shape fills the fourth dimension** (`Shape.w`, one of
-`geometry.W_KINDS`; any other value raises):
+**4D or 3D** (`Shape.dims`, 4 or 3; any other value raises — plan 28,
+which replaced plan 22's lifts and masks). A shape says honestly what it
+is:
 
-| `Shape.w` | Means | Shapes |
+| `Shape.dims` | Means | Shapes |
 |---|---|---|
-| `native` | built with real w-extent: a 4-polytope or a 4D surface | 1–18 |
-| `lift` | a 3D surface given w-extent by a lift of its own parameters | Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip, Klein bottle |
-| `mask` | a 3D shape kept at w = 0, its W planes folded onto 3D planes where it is drawn | Heart |
-| `flat` | a 3D shape at w = 0 with nothing done: a quarter turn of XW, YW or ZW carries a whole axis into w, the 4D→3D divide drops it, and the shape draws as a plane | none (the tests use it to show the collapse) |
+| 4 | real w-extent: a 4-polytope or a 4D surface. Every plane turns it, the W planes through w | 1–18, Hopf fibration, Celestial tesseract |
+| 3 | a 3D shape at w = 0, nothing invented for a w it does not have. XY, XZ and YZ turn it; XW, YW and ZW — and whatever drives them — do nothing to it | Heart … Klein bottle, and the rest of the catalog |
 
-A surface built without a lift sits at w = 0; that is what shapes 19–25
-were before plan 22, and why they went flat whenever the bass bands
-turned a W plane.
+`geometry.view_angles(i, ang)` returns `ang` itself for a 4D shape and,
+for a 3D one, the view's 3D angles with every W angle at 0; nothing
+writes the result back, so `ViewState.ang`, the integrator and every
+`rot.*` param are untouched. A 3D shape's depth cue (`pd`: the line
+fade, width and draw order) reads its depth toward the 3D camera —
+`geometry.view_depth`, z after the camera's yaw and pitch — since its w
+is 0. On the VIEW page the header says 3D or 4D, the Shape menu lists
+the 4D shapes and then the 3D ones under their own headings (the index
+stays the identity), and the W plane keys dim while they can do nothing.
 
-**A lift** is a function of the builder's own parameters, passed as
-`w=`; each builder hands it to `_mesh3`, which takes 3- or 4-tuples and
-merges coincident points on every coordinate given. Without a lift every
-shape is what it was, vertex for vertex
-(`tests/golden/shape_digests.json`).
+So a factory preset on a 3D shape moves only through its 3D planes:
+`plasma-heart` (XZ, YZ), `spiral-silk` (YZ) and `inverse-halo` (XZ)
+keep turning; their bass → W routes no longer move them.
 
-| Builder | The lift it takes |
-|---|---|
-| `param_surface` | `w(u, v)`; or `fn` returns (x, y, z, w) itself |
-| `spherical_surface` | `w(θ, φ)`, φ from the +y pole |
-| `ring_prism`, `curve_prism`, `polar_prism` | `w(t, z)` or `w(θ, z)`: t the outline's parameter, z = ±depth/2 the cap |
-| `tube` | `w(t, a)`: t along the curve, a = 2π·j/m round the tube |
-
-The rules a lift follows (the comment above `geometry._build_heart`):
-
-- **No linear part of x, y or z.** w = a·x only tilts the shape into
-  another flat 3-space, which some W turn still flattens.
-- **Odd under each mirror of the shape that flips one axis.** At a
-  quarter turn of a W plane, w takes that axis's place; a lift that is
-  the same on both sides folds the halves onto each other into a sheet,
-  which neither measure below sees.
-- **An extruded outline's lift depends on z**, or every wall goes
-  edge-on at once when ZW turns z away.
-- **It agrees wherever the surface welds**: poles (w independent of θ
-  there), the Rose's pinch, the Möbius seam (w(2π, 1 − v) = w(0, v)). A
-  lift that disagrees leaves the seam open.
-- A lift cannot make a shape fatter than its own 3D proportions, since at
-  rest the divide drops w; a shape too thin for the floor must change
-  size (the Rose went 0.12 → 0.16 deep, the Möbius band 0.45 → 0.55
-  wide).
-
-| Shape | `Shape.w` | Lift |
-|---|---|---|
-| Heart | mask | — |
-| Star | lift | 0.6·(z/h)·sin t, h = 0.175: the caps tip opposite ways |
-| Rose | lift | z·(3 sin 4θ + sin 8θ): 0 where the petals meet |
-| Torus | lift | 0.7·sin v·sin 2u |
-| Trefoil knot | lift | 1.5·cos 3t |
-| Starfruit | lift | 0.6·sin 2φ·sin 2θ: 0 at the poles |
-| Möbius strip | lift | 0.5·sin 2u: 0 at the seam |
-| Klein bottle | lift | sin 2u + ½·sin v·cos 2u |
-
-**A mask** keeps the shape 3D. `geometry.view_angles(i, ang)` returns
-`ang` itself for every shape that is not masked; for a masked one, a new
-list with each W angle added onto a 3D plane (`W_REMAP`: XW → XZ,
-YW → YZ, ZW → XY) and the W planes at 0. `Renderer.draw_scene` draws
-through it and is its one call site; nothing writes the result back, so
-`ViewState.ang`, the integrator and every `rot.*` param are untouched
-and a rate or a phase route on a W plane lands on the 3D plane alike.
-With the factory band map (SUB → ZW, BASS → XW, MIDB → YW) SUB rolls a
-masked shape in the screen plane, BASS spins it about y and MIDB tumbles
-it about x. Its depth cue (`pd`: the line fade, width and draw order)
-reads its depth toward the 3D camera — `geometry.view_depth`, z after
-the camera's yaw and pitch, the depth the 3D divide reads — since its w
-is 0 at every angle. The VIEW page and
-`rot.phase.*` still show the W planes turning.
+Plan 22 lifted seven of these shapes into w (each builder took a lift of
+its own parameters) and folded the Heart's W planes onto 3D planes, so
+the bass bands, which drive the W planes, would move them without
+flattening them. Plan 28 took both out: a 3D shape is simply 3D. The
+Rose (0.16 deep) and the Möbius band (0.55 wide) keep the proportions
+plan 22 gave them.
 
 **The volume measures.** `project3(V, ang)` is the rotated, divided 3D
 cloud the camera views. `volume_ratio(P)` is its smallest singular value
@@ -135,30 +94,23 @@ over its largest, centred: 1 a ball, 0 a plane or a line.
 `sweep_ratios(i, plane, steps=72, pose=None)` measures it round one full
 turn of one plane, the others at `pose`, through `view_angles` as the
 renderer draws. `edge_on_share` is the share of face area drawn at under
-a tenth of its 4D area, and `sweep_edge_on` its sweep: a cloud can keep
-its volume while its faces still read as a sheet.
+a tenth of its 4D area, and `sweep_edge_on` its sweep.
 
-**`VOLUME_FLOOR = 0.15`.** Every lifted or masked shape keeps at least
-this ratio through a full turn of each W plane, from rest and from
-`GENERIC_POSE`, and turns at most 0.15 of its face area edge-on
-(`tests/test_shapes4d.py::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`,
-`::test_a_lifted_or_masked_shape_never_turns_much_of_itself_edge_on`).
-It is calibrated on the 18 native shapes, which already draw as volumes:
-their worst ratios through the W planes are cubic pyramid 0.30,
-4,8-duoprism 0.53, dodecahedral prism 0.64, 5-cell 0.65, tesseract 0.94,
-Clifford torus 0.97, 24-cell, 120-cell and 600-cell 1.00 (single-plane
-sweeps reach the same worst case as 2000 random poses of all six
-planes). The floor is half the cubic pyramid's, so no surface is asked
-to be rounder than a polytope is; every native shape clears it
-(`::test_every_4d_shape_clears_the_volume_floor`). A flat shape reads
-0.000 at 90° and 270°.
+**`VOLUME_FLOOR = 0.15`.** Every 4D shape keeps at least this ratio
+through a full turn of each W plane, from rest and from `GENERIC_POSE`
+(`tests/test_shapes4d.py::test_every_4d_shape_clears_the_volume_floor`):
+cubic pyramid 0.30, 4,8-duoprism 0.53, dodecahedral prism 0.64, 5-cell
+0.65, tesseract 0.94, Clifford torus 0.97, 24-cell, 120-cell and
+600-cell 1.00 (single-plane sweeps reach the same worst case as 2000
+random poses of all six planes). A 3D shape is the same at every W angle
+(`::test_a_3d_shape_is_the_same_through_every_w_plane`).
 
 **The turntable** (`tools/turntable.py`) is the same sweep with
 pictures:
 
 ```bash
-uv run python tools/turntable.py --prefix after              # every shape, numbers and sheets
-uv run python tools/turntable.py --prefix check --shapes 18-25 --no-png
+uv run python tools/turntable.py --prefix after              # every 4D shape, numbers and sheets
+uv run python tools/turntable.py --prefix check --shapes 0-17 --no-png
 ```
 
 It writes `<prefix>-ratios.json` / `.csv` (per shape, plane and pass:
@@ -170,36 +122,163 @@ labelled with its angle and ratio, red under the floor — into
 prefix there. `--shapes` takes indices (`18-24`, `17,21`); `--steps`
 the sweep's resolution (72 = 5°).
 
-**Faces on a lifted shape.** The grids' quads stay quads; a lift bends
-them slightly out of plane, which `_face_xy` already framed
-best-effort. A cap — the Star's two pentagram faces, which its lift
-bends through w — is a polygon of more than four corners that is not
-planar, and `_face_xy` frames it by its least-squares plane, where the
-outline stays simple and the ear clip tiles it exactly; every planar
-face keeps the basis it had
-(`tests/test_shapes4d.py::test_a_lifted_cap_is_triangulated_over_its_own_outline`).
+**Faces.** A face of more than four corners that is not planar is
+framed by its least-squares plane, where the outline stays simple and
+the ear clip tiles it exactly; every planar face keeps its basis
+(`geometry._face_xy`).
 
 **The Klein bottle** (26). `_klein_xyz(u, v)` is the classic "bottle"
 immersion, u ∈ [0, π], v ∈ [0, 2π): the body swells up from the base,
 the neck curls over and comes back down through the body's side, where
-in 3D the surface must cross itself. The lift sin 2u + ½·sin v·cos 2u
-holds the two crossing sheets (the body at u ≈ 0.49, the neck at
-u ≈ 2.56) at least 1.56 apart in w, so in 4D it never crosses; the
-½·sin v·cos 2u term is odd in v, so the z-mirror cannot fold it at a
-quarter turn of ZW. The seam u = π meets u = 0 with v flipped to π − v,
-where the lift agrees, and welds by `kkey` like the Möbius strip's: 37 ×
-16 samples, 36 × 16 vertices, 576 quads, every edge on two faces,
-V − E + F = 0. It is centred on its bounding box
+in 3D the surface must cross itself — and does. The seam u = π meets
+u = 0 with v flipped to π − v and welds by `kkey` like the Möbius
+strip's: 37 × 16 samples, 36 × 16 vertices, 576 quads, every edge on two
+faces, V − E + F = 0. It is centred on its bounding box
 (`tests/test_shapes3d.py::test_the_klein_bottle_seam_welds_into_a_closed_grid`,
-`::test_the_klein_bottle_crosses_itself_in_3d_and_not_in_4d`). Its own
-3D ratio is 0.23; through the W planes it keeps 0.20.
+`::test_the_klein_bottle_crosses_itself_in_3d`).
+
+**The catalog** (plan 28, an art-direction spike — see
+[`plans/28-catalog-and-scenes.md`](plans/28-catalog-and-scenes.md)). After
+the Klein bottle: closed 3D solids, mathematical toys, scenes, and every
+4-polytope plan 22's shortlist drew or gave a recipe for
+([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)) —
+the 5-cell family through one `perm5` helper, the tesseract and 24-cell
+families through `expand`, the snub 24-cell and grand antiprism, the
+rectified 600-cell (the 600-cell's edge midpoints; its faces take about
+8 s to build the first time they are drawn), the disphenoidal 288-cell
+(`edges_by_classes`: two edge lengths) and the dual runcinated 5-cell
+(its cells' polar points), four star polychora on the 600-cell's and
+120-cell's corners (`_star`: one distance class; the two with {5/2}
+pentagram faces drawn as lines only, since a pentagram needs points the
+face pipeline does not have), and more duoprisms and prisms. A solid's
+faces come from the polytope extraction; a star (drawn as what shows: its
+spikes, the core buried) or a compound brings its own. A curve (the toys
+with F 0) draws no points: its samples are not corners.
+
+**Families and the Shape menu.** Every shape has a `Shape.family`, and
+`geometry.MENU` orders them into the menu's sections: **4D** (regular
+polytopes; the 5-cell, tesseract, 24-cell and 600-cell families;
+Catalan duals; star polychora; prisms and pyramids; surfaces and
+fibrations), **3D** (surfaces, Platonic, Archimedean and
+Catalan solids, star polyhedra, compounds, mathematical toys) and
+**Scenes**. `geometry.menu()` lists them; within a family, index order.
+The index stays the identity, so the menu's order never reaches a preset
+(`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
+
+| # | Shape | Family | F | V | E |
+|---|---|---|---|---|---|
+| 27 | Tetrahedron | Platonic solids | 4 | 4 | 6 |
+| 28 | Cube | Platonic solids | 6 | 8 | 12 |
+| 29 | Octahedron | Platonic solids | 8 | 6 | 12 |
+| 30 | Dodecahedron | Platonic solids | 12 | 20 | 30 |
+| 31 | Icosahedron | Platonic solids | 20 | 12 | 30 |
+| 32 | Cuboctahedron | Archimedean solids | 14 | 12 | 24 |
+| 33 | Truncated octahedron | Archimedean solids | 14 | 24 | 36 |
+| 34 | Rhombicuboctahedron | Archimedean solids | 26 | 24 | 48 |
+| 35 | Snub cube | Archimedean solids | 38 | 24 | 60 |
+| 36 | Icosidodecahedron | Archimedean solids | 32 | 30 | 60 |
+| 37 | Truncated icosahedron | Archimedean solids | 32 | 60 | 90 |
+| 38 | Rhombic dodecahedron | Catalan solids | 12 | 14 | 24 |
+| 39 | Rhombic triacontahedron | Catalan solids | 30 | 32 | 60 |
+| 40 | Small stellated dodecahedron | Star polyhedra | 60 | 32 | 90 |
+| 41 | Great stellated dodecahedron | Star polyhedra | 60 | 32 | 90 |
+| 42 | Moravian star | Star polyhedra | 96 | 50 | 144 |
+| 43 | Starburst | Star polyhedra | 60 | 32 | 90 |
+| 44 | Stella octangula | Compounds | 8 | 8 | 12 |
+| 45 | Five tetrahedra | Compounds | 20 | 20 | 30 |
+| 46 | Five cubes | Compounds | 30 | 20 | 60 |
+| 47 | Cube + octahedron | Compounds | 14 | 14 | 24 |
+| 48 | Dodecahedron + icosahedron | Compounds | 32 | 32 | 60 |
+| 49 | Hopf fibration | Surfaces and fibrations | 0 | 864 | 864 |
+| 50 | Armillary sphere | Mathematical toys | 0 | 374 | 384 |
+| 51 | Geodesic sphere | Mathematical toys | 180 | 92 | 270 |
+| 52 | Sierpinski tetrahedron | Mathematical toys | 256 | 130 | 384 |
+| 53 | Lissajous knot | Mathematical toys | 0 | 240 | 240 |
+| 54 | Loxodrome | Mathematical toys | 0 | 240 | 240 |
+| 55 | Orbit | Mathematical toys | 0 | 64 | 64 |
+| 56 | Celestial tesseract | Scenes | 84 | 912 | 986 |
+| 57 | Celestial cube | Scenes | 66 | 414 | 486 |
+| 58 | Mysterium Cosmographicum | Scenes | 50 | 744 | 794 |
+| 59 | Snub 24-cell | 24-cell family | 480 | 96 | 432 |
+| 60 | Rectified 24-cell | 24-cell family | 240 | 96 | 288 |
+| 61 | Bitruncated 5-cell | 5-cell family | 40 | 30 | 60 |
+| 62 | Omnitruncated 5-cell | 5-cell family | 150 | 120 | 240 |
+| 63 | Grand antiprism | 600-cell family | 720 | 100 | 500 |
+| 64 | Disphenoidal 288-cell | Catalan duals | 576 | 48 | 336 |
+| 65 | Truncated 5-cell | 5-cell family | 30 | 20 | 40 |
+| 66 | Cantellated 5-cell | 5-cell family | 80 | 30 | 90 |
+| 67 | Runcinated 5-cell | 5-cell family | 70 | 20 | 60 |
+| 68 | Cantitruncated 5-cell | 5-cell family | 80 | 60 | 120 |
+| 69 | Runcitruncated 5-cell | 5-cell family | 120 | 60 | 150 |
+| 70 | Rectified tesseract | Tesseract family | 88 | 32 | 96 |
+| 71 | Truncated 16-cell | Tesseract family | 96 | 48 | 120 |
+| 72 | Cantellated tesseract | Tesseract family | 248 | 96 | 288 |
+| 73 | Runcinated tesseract | Tesseract family | 208 | 64 | 192 |
+| 74 | Bitruncated tesseract | Tesseract family | 120 | 96 | 192 |
+| 75 | Cantitruncated tesseract | Tesseract family | 248 | 192 | 384 |
+| 76 | Runcitruncated tesseract | Tesseract family | 368 | 192 | 480 |
+| 77 | Runcitruncated 16-cell | Tesseract family | 368 | 192 | 480 |
+| 78 | Omnitruncated tesseract | Tesseract family | 464 | 384 | 768 |
+| 79 | Truncated 24-cell | 24-cell family | 240 | 192 | 384 |
+| 80 | Cantellated 24-cell | 24-cell family | 720 | 288 | 864 |
+| 81 | Runcinated 24-cell | 24-cell family | 672 | 144 | 576 |
+| 82 | Bitruncated 24-cell | 24-cell family | 336 | 288 | 576 |
+| 83 | Cantitruncated 24-cell | 24-cell family | 720 | 576 | 1152 |
+| 84 | Rectified 600-cell | 600-cell family | 3600 | 720 | 3600 |
+| 85 | Dual runcinated 5-cell | Catalan duals | 60 | 30 | 70 |
+| 86 | Grand 600-cell | Star polychora | 1200 | 120 | 720 |
+| 87 | Great 120-cell | Star polychora | 720 | 120 | 720 |
+| 88 | Small stellated 120-cell | Star polychora | 0 | 120 | 1200 |
+| 89 | Great grand stellated 120-cell | Star polychora | 0 | 600 | 1200 |
+| 90 | 3,4-duoprism | Prisms and pyramids | 19 | 12 | 24 |
+| 91 | 5,5-duoprism | Prisms and pyramids | 35 | 25 | 50 |
+| 92 | 3,8-duoprism | Prisms and pyramids | 35 | 24 | 48 |
+| 93 | 5,10-duoprism | Prisms and pyramids | 65 | 50 | 100 |
+| 94 | 8,8-duoprism | Prisms and pyramids | 80 | 64 | 128 |
+| 95 | Pentagonal antiprism prism | Prisms and pyramids | 44 | 20 | 50 |
+| 96 | Heptagonal antiprism prism | Prisms and pyramids | 60 | 28 | 70 |
+| 97 | Octagonal antiprism prism | Prisms and pyramids | 68 | 32 | 80 |
+| 98 | Icosidodecahedral prism | Prisms and pyramids | 124 | 60 | 150 |
+| 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
+
+**Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
+in one frame sharing a centre — a glome round a tesseract round a star.
+Each layer names a shape and has its own scale, line / face / point
+weights, line width, tint and **spin** (a multiple of the view's angles:
+−1 counter-turns, 0 holds still). A layer keeps its shape's `dims`, so
+a 3D star turns in 3D inside a tesseract turning in 4D; a scene is 4D
+when any layer is.
+`geometry.shape_view` is what the renderer projects through: one shape is
+`project_h` at `view_angles` (the old path, to the bit); a scene projects
+each layer at its own angles. The scene's geometry is its layers' rows in
+order (`geom()["layers"]`, `["style"]`); its faces are the layers' own.
+Each edge's line density is its own layer's, so a 864-edge glome thins
+out without thinning the star inside it.
+
+**The 3D switch** (`view.three_d`, VIEW page "3D"). Holds a 4D shape's
+4D pose and turns it as a rigid 3D body. The renderer draws a 4D shape
+as R(ang)·body — `ViewState.body` a 4×4 turn applied first, None for
+none — and, while the switch holds it (`ViewState.held`), as T(ang)·body,
+T the 3D planes alone (`view_angles(i, ang, flat=True)`). On the frame
+the switch changes, `ViewState.integrate` folds the pose into the body so
+it is the same either side: going on, body ← T(ang)ᵀ·R(ang)·body; going
+off, body ← R(ang)ᵀ·T(ang)·body. While it holds, every corner keeps its
+w, so the 4D divide scales it by a fixed factor and the 3D turn is
+rigid; the W planes stop, and a route on a W angle moves nothing. Off,
+the shape goes on in 4D from where it is. Nothing jumps either way
+(`tests/test_shapes4d.py::test_the_3d_switch_never_jumps_on_or_off`,
+`::test_while_it_holds_a_4d_shape_turns_rigidly_in_3d`). Holding the W
+angles alone would not do: the engine turns the 3D planes before the W
+planes, so a 3D turn under held W angles still moves w. `camera.reset`
+and `rot.reset_w` take the body back out. A 3D shape is the same with
+the switch on or off.
 
 **A new shape** goes at the end of `SHAPES` (the index is its identity),
-says how it fills w, and gets a row in the V/E table above. A 3D shape is
-`lift` or `mask`, never `flat`: the acceptance tests take it in through
-`Shape.w`. Record its digest with `uv run python tests/test_shapes4d.py
---record`, and say so in the commit; a polytope's digest must never
-move.
+says whether it is 4D or 3D (`dims`), and gets a row in the V/E table
+above. A 3D shape is built at w = 0; a 4D one must clear `VOLUME_FLOOR`
+through each W plane. Record its digest with `uv run python
+tests/test_shapes4d.py --record`, and say so in the commit; a polytope's
+digest must never move.
 
 ## 2. Rendering
 
@@ -353,13 +432,41 @@ KALEIDO six wedges, whatever the inputs. FLAT reads none.
   FACES page from a hidden real window. `Renderer.pattern_tile(s, size,
   t_now, fid)` renders one face's pattern alone, for tools and tests.
 
-**Instances** (`view.instances`, 0–100): copies laid out by
-`view.inst_layout` — **GRID** (rows of ⌈√n⌉), **HEX** (a honeycomb
-spiral from the centre; a copy never moves as the count grows), **RING**
-(one circle, neighbours one cell apart) — and moved by
-`view.inst_motion` (STILL, ORBIT, WAVE, RIPPLE) with `inst_amp` and
-`inst_rate`. At 0 nothing is drawn but the ground, the echoes, the
-effects and the hands carry on.
+**Instances** (`view.instances`, 0–4096 on a count taper: every count
+to 64 one detent apart, then 40 detents a doubling): copies laid out by
+`view.inst_layout` and moved by `view.inst_motion` (STILL, ORBIT, WAVE,
+RIPPLE) with `inst_amp` and `inst_rate`. At 0 nothing is drawn but the
+ground, the echoes, the effects and the hands carry on.
+
+- *Flat layouts*, in the screen's plane: **GRID** (rows of ⌈√n⌉),
+  **HEX** (a honeycomb spiral from the centre; a copy never moves as the
+  count grows), **RING** (one circle, neighbours one cell apart).
+- *3D lattices*, nearest neighbours one cell apart: **CUBIC**, **BCC**
+  (body-centred), **FCC** (face-centred), **HCP** (hexagonal
+  close-packed), **HEX PRISM** (stacked honeycombs) and **DIAMOND**.
+  The camera's yaw and pitch turn the lattice as they turn each copy;
+  `view.inst_persp` (Field depth, 0–1) is the field's own perspective —
+  0 every copy one size, 1 the nearest drawn 2.5× the middle's. Far
+  copies draw first and fade to a quarter. Fit off, a lattice grows as a
+  ball from the centre; motion runs in 3D.
+- `view.inst_spacing` (0.5–4 cells, log): the room between neighbours.
+- **Fit** (`view.inst_fit`): every copy whole on the screen, none cut by
+  its edge. A grid or honeycomb takes the rows and columns that give a
+  copy the most room at the screen's aspect (a full rectangle when one is
+  nearly as roomy — 12 is 4 × 3 at 16:9; a part row is centred) and
+  partitions the screen into even cells, a copy in each. Zoom past 1
+  snaps to whole cells — the screen shows k columns by j rows, its edges
+  on cell boundaries — and pan moves the window a whole cell at a time;
+  zoom below 1 shows the whole field. A ring or a lattice is framed whole
+  and centred (a lattice as a brick of the screen's shape); zoom past 1
+  magnifies it. One copy with Fit on fills the screen.
+
+The copies are GPU instances (`field.py` places them, `render.py` draws
+them): the shape is projected once a frame and each copy is one vec4 —
+its centre, scale and alpha — so 4096 copies of the 120-cell upload what
+one does (~0.4 MB a frame; 100 copies were 28 MB before) and copies wholly
+off screen are not drawn. Edge widths and point sizes scale per copy and
+fold into alpha below a pixel.
 
 **The frame is a render graph** (`graph.py`, plan 26). `Renderer.draw_outputs`
 settles the frame's size under the render cap, ticks the effect folder,
@@ -372,18 +479,20 @@ it; each render output gets its picture (§14). The node kinds:
 | **Scene** | `Scene` (`scene`) | any number of geometries (`geometry`, `geometry.2` … ports) | one colour + depth target: the solid geometries first (the hands, a cloud: depth written), then the see-through shape, painter-sorted and depth-tested against them |
 | **Layer** | `HandsLayer` (`hands`, `hands.2`), `Readout` (`readout`), `Cover` (`cover`) | one geometry (the cover: the scene) | its own target: the hands alone with their own colour and depth; the guide and tethers' labels; the faces' coverage mask (`mask`) |
 | **Composite** | `Composite` (`composite(scene+hands)`, `composite(hands)`, `composite(history)`) | `under`, `over` (and the scene's `depth`) | `over` laid on `under`: over, add or depth-aware |
-| **FX** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image | the effect chain (`fx.FxChain`), one node per pipeline; inactive, its input passes through |
+| **Effect** | `Effect` (`acid`, `acid.2`, `palette` … in the scene's pipeline; `acid(scene+hands)`, `acid(hands)` in the others) | an image | one effect instance's pass (`fx.FxChain.run_one`) over its input; off this frame, its input read through (plan 30) |
+| **Pipeline end** | `Fx` (`fx`, `fx(scene+hands)`, `fx(hands)`) | an image (the last effect of its run) | where the pipeline's picture lands: straight into its one output, or once into a frame texture; the stand-down, the error path |
 | **History** | `History` (`history`), `Capture` (`capture`) | an image (+ the cover) | the echoes and the dream laid over its input; the capture into the ring, once a frame after every pipeline |
 | **Output** | `Output` (`output.1` …) | `image`, `hands`, `readout`, `depth` | `Renderer._compose`: fit, flips, the hands over, the readout, the dim — or the five-step `outputs.Handoff` for a later output |
 
-Ports are typed (`image`, `mask`, `geometry`); the graph refuses a wrong
+Ports are typed (`image`, `mask`, `geometry`, and `value`, declared and
+used by no node: below); the graph refuses a wrong
 type, an unknown port, a dependency outside the graph and a duplicate
 name when it is built. A Scene or Layer *makes* a texture
-(`image(frame)`, and `depth`); History, Composite and FX *paint*
+(`image(frame)`, and `depth`); History, Composite and an Effect *paint*
 (`paint(frame, dst)`) into the framebuffer their consumer hands them, so
-the look-back composites straight into the chain's half-float input and
-the chain writes straight into the window — no texture quantises the
-picture between them. A pipeline's end (`Fx`) decides where the picture
+the look-back composites straight into the first effect's half-float
+input and the last effect writes straight into the window — no texture
+quantises the picture between them. A pipeline's end (`Fx`) decides where the picture
 lands: straight into its one output when that output is at the frame's
 size, unflipped and on this context; otherwise once into a frame texture
 every output of it shows. Node methods are `run`, `paint`, `draw`,
@@ -396,18 +505,25 @@ dependencies first, ties in insertion order — computed when the graph is
 built, never per frame; `Graph.evaluate` runs every node once.
 `Renderer._graph_for` keeps the last graph and builds a new one
 (`graph.default_graph`) only when its key changes: each output's scene /
-hands / through switches (`graph_key`), the renderer's `Wiring` (below)
-and the roles of the listed `cloud` devices. What is per frame: whether
-an effect is on and whether a hand drew decide which pipeline end each
+hands / through switches (`graph_key`), the renderer's `Wiring` (below;
+its placements included), the roles of the listed `cloud` devices and
+the effect stack's list in order (`FxState.names()`: an order, an
+instance or a file changed). What is per frame: whether an effect of a
+chain run is on (`frame.fx_on`: a placed effect does not count), whether
+each effect runs, and whether a hand drew decide which pipeline end each
 output takes (`Output.settle`); a pipeline no output takes is skipped and
 its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
-427 goldens. (The *modulation* graph is not evaluated this way: the
-one-frame lag of ARCHITECTURE §2 stands until plan 28.) For one default
-output the order is `shape → ghost → scene → cover → hands → history → fx
-→ capture → output.1`.
+427 goldens. (Since plan 28 the *modulation* is a graph evaluated in
+dependency order too, in `Router.modulate`: ARCHITECTURE §2.) For one default
+output the order is `shape → ghost → scene → cover → hands → history →
+plasma → acid → kaleido → … → huecycle → palette → fx → capture →
+output.1`: one effect node per instance in the stack's order (`order`,
+then name: thirteen with the factory files at their `@order`), on or
+off.
 
 **The default graph** is today's frame, wired from each output's
-switches: **scene** on, its `image` is the SCENE chain (`history → fx`);
+switches: **scene** on, its `image` is the SCENE chain (`history → the
+effects' run → fx`);
 **hands** on, the hands' layer is laid over at the output, and its
 readout on top; **through** with scene and hands, the layer is
 composited onto the history before the effects (`composite(scene+hands)
@@ -469,8 +585,9 @@ and the history on the scene with the hands:
 | Kind | Keys | Left out |
 |---|---|---|
 | `hands` | `instance` (1, 2 …), `into` (`layer` / `scene`), `draw` (`solid` / `lines`), `laid` (`over` / `add` / `depth`, only on the node that makes the layer) | hands 1, a solid layer laid over |
-| `effect` | `file`, `instance` (2 or more) | every effect file once |
+| `effect` | `file`, `instance` (2 or more; 1 allowed when placed), `after` or `into` (a node's name: below) | every effect file once, in the chain |
 | `history` | `holds` (`scene` / `scene+hands`) | the scene |
+| `composite` (plan 28 N4) | `instance` (1, 2 …), `blend` (`over` / `add` / `depth`) | none: built only once a wire feeds it |
 
 The kinds are `graph.NODE_KINDS` — the one place a kind is named. No
 section, or `{"nodes": []}`, is the default graph; nothing that is a
@@ -479,9 +596,11 @@ in `values` or the show); a save writes it back in a fixed order. A
 section this build cannot read — an unknown kind, a key a node does not
 take, a value out of its choices, two nodes of one instance, two layers
 — is a note on the preset strip and the default graph, and the section is
-kept as the file had it and written back on save. A point cloud is not a
+kept as the file had it and written back on save. (A placement it cannot
+honour costs only that effect its place: below.) A point cloud is not a
 kind here: clouds follow the device list (below), and `{"kind":
-"cloud"}` is an unknown kind until plan 28. Undoing a load puts the
+"cloud"}` is an unknown kind (plan 28 added none). Since plan 28 the
+section may also carry a `wires` list (below). Undoing a load puts the
 loaded preset's graph back before its values (`library.Marks`).
 
 **Two of a node.** `{"kind": "effect", "file": "acid", "instance": 2}`
@@ -499,6 +618,140 @@ scene. A show holds `ghost.<n>.*` back until a preset's graph declares
 the node, then seeds it. `draw: "lines"` draws a style's meshes as their
 triangles' edges, one pixel wide (`ctx.wireframe`); the guide stays
 solid.
+
+**The effect nodes** (`graph.Effect`, plan 30 D0). Every effect instance
+is an image node: one `image` port in, an image out, its params
+`fx.<name>.*`, its pass `FxChain.run_one` on the file's one compiled
+program (hot reload as before). Each pipeline's chain is a **run** of
+them, one per instance in `FxState.names()` — every instance, on or off,
+whatever its target — between the pipeline's source and its end, so
+switching a chip on or off changes no node and rebuilds nothing.
+Whether an effect runs is asked once a frame (`Effect.on`: in
+`FxState.chain(FRAME)` and compiled). **Off**, it is read through: it
+paints its input straight into its consumer's framebuffer and its
+`image` is its input's — no pass, no texture. **On**, it paints its
+input into a texture of the effects' pool and runs its pass from there
+into its consumer's framebuffer; read by two nodes, its picture is made
+once into a pool texture held for the frame and shown 1:1 into each.
+The pool (`FxChain.pool`, `Graph.pool`) is the chain's half-float
+textures: none without an effect node, two for straight runs (they
+alternate however long the run), one more per held picture; a held
+texture is never handed to a consumer that paints into it
+(`graph._spare`, `Effect._make(frame, avoid=dst)`). `FxChain.fit_pool`
+releases it when a new graph needs fewer. The pipeline's **end**, `Fx`,
+keeps the old node's name and jobs: it moves the clocks once a frame,
+paints its input, counts `chain_runs`, and decides where the picture
+lands (above). The faces' chain (`render.face_fx`) still runs the old
+way, `FxChain.run` over `begin`'s textures, inside the shape's face
+drawing: the one shader run the graph does not show.
+
+**Placement** (plan 30 D1). An effect entry may say where it sits:
+`after` a node — on that node's picture, every consumer of it reading
+the effect — or `into` one — on that node's `image` input alone; one of
+the two, never both. A placed entry may name instance 1 (the file
+itself, then out of the chain). The proof fixtures (test fixtures, never
+factory presets):
+
+```text
+{"kind": "effect", "file": "palette", "after": "hands"}                  // palette-hands.json
+{"kind": "effect", "file": "palette", "into": "output.2"}                // palette-glass.json
+{"kind": "effect", "file": "acid", "instance": 2, "after": "scene"}      // acid-scene.json
+```
+
+- **The names** (`graph.placement_error`): `scene`, `hands`, `hands.<n>`,
+  `history`, `output.<n>` and an effect instance this build has (a file
+  on disk, or an extra instance the same section declares). `into`
+  takes only the history, an output or an effect (the scene's and a
+  layer's inputs are geometry); `after: "output.<n>"` means `into`; an
+  effect never sits after or into itself.
+- **Refusals** — both keys, a non-string (`null` included), a name
+  outside the vocabulary, a loop of placed effects
+  (`graph.placement_loops`, at read and again at build) — are a note on
+  the preset strip ending "; the default placement" (`graph: palette
+  after 'teapot' — this build places after scene, hands, hands.2 …,
+  history, output.1 …, or an effect; the default placement`): that effect
+  goes back to the chain at its order, the rest of the graph lands, and
+  the section is kept as written (`GraphSpec.notes`).
+- **Dormant.** A placement on a node the built graph lacks this frame
+  (no hands layer, output 3 with two outputs, an output showing nothing,
+  a file not on disk) builds no node and says why in `Graph.dormant`
+  (`palette after hands — no hands layer this frame`); it never falls
+  back into the chain, and the OUTPUT page lists it under the output
+  blocks (`dormant: …`).
+- **How it sits.** A placed effect is not in the run. After the scene or
+  a layer it folds that texture once in its own `run`, before any
+  pipeline paints, into a held pool texture every consumer reads; on a
+  layer its pass keeps the ground see-through (`run_one(…, opaque=0)`),
+  it is laid on at the layer's `ghost.alpha` with the layer's depth, and
+  the layer's readout is split always (the guide and labels are never
+  folded). Into an output, the output folds the frame texture it settled
+  on (`Output.folds`) and that pipeline is never painted direct. After
+  the history or an effect of the run it paints like any effect (one
+  placed node per pipeline after a run's effect). `after` leaves the
+  ports that read something else of the node alone (`Node.REFS`). A
+  presenter is handed the folded hands or frame — possibly a half-float
+  pool texture (the `Handoff` docstring). `frame.fx_on` is "an effect
+  of a chain run is on" (`Graph.placed_names` left out), so a placed
+  effect alone bends no pipeline: a through output stands down.
+- **The words.** The OUTPUT "shows:" line adds the placements on what
+  each output shows (`· palette on this output only`), its hover the
+  graph line (`graph: palette on the hands`, `graph: acid ×2 · acid 2
+  before the history`, or the dormant words), and the LOOKBACK line those
+  on the history's way (`history: the scene · acid 2 before the
+  history`) — `graph.placement_words`, `output_placement_words`,
+  `history_words`, `graph_words(spec, dormant)`. The FX page's chips say
+  it the JSON's way (`after hands`, `graph.placed_chips`).
+
+**The wire list; outputs as nodes** (plan 28 N4). A section may carry
+`wires` beside `nodes`, one `{"from": "<node>", "to": "<node>.<port>"}`
+per line, kept in the file's order:
+
+```json
+"graph": {"nodes": [
+ {"kind": "hands", "into": "scene", "draw": "lines"},
+ {"kind": "hands", "instance": 2}
+],
+"wires": [
+ {"from": "hands.2", "to": "output.2.hands"}
+]}
+```
+
+`from` is a node's one output — `scene`, `hands`, `hands.<n>`,
+`history`, an effect instance (`palette`, `acid.2`), a composite; `to`
+is one of the ports a preset may wire: `output.<n>.image`, `.hands`,
+`.readout`, `history.image`, an effect's `image`, a composite's `under`
+/ `over` (`graph.WIRE_TAKES`; geometry and mask ports are typed but not
+wireable — a hands node's place stays its `into`). D1's placements are
+the same wires written short (`after X` = `X → E.image`, `into Y` = `E
+→ Y.image`); a section with only those is still written short, byte for
+byte, and one read as wires is written as wires. **An output is a
+node**: a wire into `output.<n>.image` shows that picture through the
+output's own end (`graph.Wired`, `wire(output.<n>)` on SYSTEM), ignoring
+its scene and through switches; into `.hands` it lays that node over
+(depth-aware when the blend says so; on a through output it replaces the
+switch's hands, which the effects then no longer bend); into `.readout`
+that layer's guide. **An output no wire names keeps the session's
+switches** — the rig's, not the look's — and a load never writes a
+switch. The wires ride in `Wiring.wires`, so `Renderer._graph_for`
+rebuilds when they change. A refused wire (a port of another type, a
+node or port that does not exist, two wires into one port, the history
+into `.hands`, a loop) is a note — `graph: wire ghost → output.1.image —
+ghost makes geometry, output.1.image takes a picture; the default
+wiring` — and that port keeps its default; the rest stands and the
+section is kept as written. A malformed wire is an unreadable section
+(the default graph). A wire on a node this frame lacks is dormant and
+said. The canvas edits it (§6, the GRAPH page). An older build refuses
+the `wires` key, and D1's keys, and opens such a preset as the default
+graph with a note (register row 277).
+
+**The `VALUE` port** (`graph.VALUE = "value"`, plan 30 D2): a fourth port
+type, a scalar or small float vector a node publishes once a frame, for
+the palette's two designed ports — a value out (the slice's hue, sat
+and val ends, the anchors) for a lights sink (plan 29), and an
+image-in `sample` port that would set its params from a bitmap. **No
+node publishes or reads one**
+(`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
+`patch.RENDER_VALUE` names it on the modulation side.
 
 **The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
 the renderer the device registry (`Renderer.cloud_source`); each listed
@@ -569,15 +822,31 @@ Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
 effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
 and `fx.mix` scales it.
 
-**The palette fold** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
-so last in the chain, after the look-back and before the dim — and
-before the hands unless an output sends them through the effects). Off and at `@mix 0` by default, so switching it on changes
-nothing until its mix is raised. Mode 0 (**fold**) maps every hue by a
-triangle wave over the wheel onto a slice `centre` ± `width`/2 (degrees;
-neighbouring hues stay neighbours, no seam) and rescales saturation and
-value linearly into `sat_lo`–`sat_hi` and `val_lo`–`val_hi`. Mode 1
-(**gradient map**) maps brightness through the first `anchors` (2–4) of
-four anchor colours, `a1`–`a4` hue / sat / val, a grey ramp by default.
+**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
+so, unplaced, last in the chain, after the look-back and before the dim — and
+before the hands unless an output sends them through the effects; plan
+30: a preset's graph may place it on the hands' layer only, one output
+only, or the scene before the history). Off and at `@mix 0` by default, so switching it on changes
+nothing until its mix is raised. `mode` is a `@param choice` (an enum,
+drawn as a picker). **compress** (plan 30 N8, the owner's colour
+compression) maps the whole HSV cylinder onto the closed slice `hue_from`
+→ `hue_to` (degrees, up the wheel, through 360 when `to` < `from`;
+`from = to` one hue, 0 → 360 the whole wheel) turned by `hue_turn`
+(added to both ends, wraps — what a hand sweeping the hue rides),
+`sat_from` → `sat_to`,
+`val_from` → `val_to`: saturation and value by a linear map, never a
+clamp (`from > to` inverts); the hue by the triangle fold (red on
+`from`, cyan on `to`, no seam) for arcs up to 180°, its peak sliding
+towards the far red above that so 360° is the identity. The defaults are
+the whole cylinder, so on at mix 1 changes nothing on an opaque ground
+(on a see-through one the premultiplied colour is scaled by alpha once
+more). A document with the fold's old ids (`centre`/`width`,
+`sat_lo`/`_hi`, `val_lo`/`_hi`) — values, routes, desk rows, macros — is
+read as the slice on load (`palettecompat.palette_slice`, a leaf, from
+`Presets.load_doc` and `library._module_values`; a row on the centre
+goes to `hue_turn`). **gradient** maps brightness through the
+first `anchors` (2–4) of four anchor colours, `a1`–`a4` hue / sat / val,
+a grey ramp by default.
 On a see-through ground the result is scaled by the pixel's alpha. A
 saved palette is an `fx` module preset; no palette ships in
 `library/fx/` (the owner's are made at the venue). The folder is polled every 30 frames; a parse
@@ -597,6 +866,21 @@ effect presets are `library/fx/*.json`.
   `_hue`/`_sat`/`_val` onto one row (`ui_fx.strip_rows`), and the
   palette shows only its open mode's rows (`ui_fx.HIDDEN_BY_MODE`; the
   hidden ones stay routable), so the page fits without scrolling.
+- **Placed effects** (plan 30 D2). The page edits the default chain. An
+  effect the loaded preset's graph places (`Panel.graph_now`'s spec)
+  leaves the chain's grid for a second grid under it, three to a row:
+  `Palette · after hands`, `Palette · into output 2` (`graph.placed_chips`,
+  cut to the chip by `placed_label`). It is no drag source and no drop
+  target, and a drop never rewrites its order; its LED switches it, its
+  name opens its strip (any effect's), whose title hover gives the
+  place in place of the order; the name's hover adds "placed by the
+  preset's graph, not in the chain …" and `dormant: …` while the built
+  graph has it dormant. The status line keeps the chain's labels and
+  adds the placed effects that run: `Acid → Palette · 1 placed`,
+  `nothing in the chain · 1 placed` (on, aimed at the frame, not
+  dormant). One placed and aimed at the faces reads `· on the faces`, is
+  on the faces row and is not counted. The page still never scrolls
+  (`tests/test_fx.py::test_the_page_fits_with_three_placed_effects`).
 - **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
   (the default) or `faces`: the **ONTO frame · faces** chips at the
   right end of the open strip's title line, the lit one where it runs
@@ -608,7 +892,10 @@ effect presets are `library/fx/*.json`.
   still picture seen through the faces), `fx.face_map`. A chip aimed at
   the faces has a diamond LED. With an effect on the faces, every face
   shows face 0's pattern phase; the echoes and the dream carry the
-  faces' effects, never the frame's.
+  faces' effects, never the frame's. The faces' chain is not on the
+  render graph (it runs inside the shape's face drawing; SYSTEM times it
+  inside `scene`), and a placement does not move it: an effect both
+  placed and aimed at the faces runs there.
 
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
@@ -645,8 +932,17 @@ that did not run counts 0; queries never nest), read 3 frames late
 60 frames (`WINDOW`) in `Renderer.stats["gpu_ms"]`, in the graph's
 order. The SYSTEM page shows "gpu per node, ms (median of the last
 frames):" and one line per node (`Graph.timed`: every node that times
-itself and every solid geometry a scene draws); a node that leaves the
-graph leaves the list. Without timer queries `stats["gpu_note"]` says
+itself and every solid geometry a scene draws) plus, since plan 30, one
+per effect that ran a pass that frame (`Graph.timed_in(frame)`, from
+`frame.stats["effects"]`: `acid`, `huecycle` …, a placed one under its
+source); a node that leaves the graph, or an effect switched off, leaves
+the list a few frames later. The pipeline end's own `fx` line reads 0.00:
+it runs no pass of its own, and its effects' time is on their lines. On
+Apple's tile GPU a query is charged for whatever is flushed inside it,
+so the per-effect split is indicative (party-acid: the old `fx` line
+0.225 ms, the effects' lines summing to 0.078–0.089 ms; the frame's
+wall time 1.34 → 1.44 ms median, about +0.1 ms, within the base's
+spread but not nothing). Without timer queries `stats["gpu_note"]` says
 why ("gpu: no GPU timer queries on this context …") and the pixels are
 the same. Apple's driver reads some tiny nodes as 0.00; the figures are
 GPU time, not the CPU's.
@@ -663,17 +959,23 @@ frame (output 1 4× MSAA like the window); `solo` (output 1 alone, drawn
 direct) and, for the presets with an effect on,
 `solo-scene+hands+through`; party-trip once at 3840×2160 (2×, 1080p
 logical) under the 1080p cap; the other wirings (`in-scene/…`,
-`depth/…`, `history+hands/…`); the fixture presets
-(`FIXTURE_PRESETS`: `hands-lines`); and a recorded cloud listed in a
-scratch config (`cloud/…`). A golden is the SHA-256 of the
-full-resolution RGBA frame, with a quarter-size PNG per distinct picture
-and the route each state reached: **556 goldens, 130 distinct
-pictures**, recorded on `GL_RENDERER` "Apple M3 Max" (GL_VERSION "4.1
-Metal - 90.5"). `tests/test_golden_frames.py` compares every hash
-exactly there and skips with a note on any other renderer. The tool:
+`depth/…`, `history+hands/…`); the fixture presets, hands present, in
+the eight states (`FIXTURE_PRESETS`: `hands-lines` and plan 30's three
+placements, `palette-hands`, `palette-glass`, `acid-scene`, and plan
+28's two wire fixtures, `hands-glass-only` and `wired-outputs`); and a
+recorded cloud listed in a scratch config (`cloud/…`). A golden is the
+SHA-256 of the full-resolution RGBA frame, with a quarter-size PNG per
+distinct picture and the route each state reached (a wired output's
+route reads `none`, with a `"wired"` key naming its source): **596
+goldens, 140 distinct pictures** (556 before plan 30, which recorded 24
+for its fixtures, and plan 28's N4 16 for its own; neither moved one
+recorded before it), recorded on `GL_RENDERER` "Apple
+M3 Max" (GL_VERSION "4.1 Metal - 90.5"). `tests/test_golden_frames.py`
+compares every hash exactly there and skips with a note on any other
+renderer. The tool:
 
 ```bash
-uv run python tools/golden_frames.py                          # diff; "all 556 frames match their goldens (…)"
+uv run python tools/golden_frames.py                          # diff; "all 596 frames match their goldens (…)"
 uv run python tools/golden_frames.py --only party-trip,legacy6 # those presets only
 uv run python tools/golden_frames.py --record                 # re-record every golden
 uv run python tools/golden_frames.py --only hands-lines --record   # re-record those, keep the rest
@@ -686,7 +988,9 @@ refuses to diff on another renderer. Re-record only what a change moved,
 on the gate Mac, and name each moved frame and its one reason in the
 commit and the PR; a moved frame for a change that should move nothing
 means the change is wrong. Which WPs moved which frames, and why, is in
-[`plans/26-render-graph.md`](plans/26-render-graph.md).
+[`plans/26-render-graph.md`](plans/26-render-graph.md) (plan 30's and
+plan 28's, none: [`plans/30-shader-nodes.md`](plans/30-shader-nodes.md),
+[`plans/28-node-editor.md`](plans/28-node-editor.md)).
 
 ## 3. Running it
 
@@ -1044,7 +1348,7 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 ## 6. The control window
 
 The panel is built to be read from a few feet back in a dark room. A
-rail of fourteen pages (`ui.PAGES`); the rail shows a red dirty dot
+rail of fifteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
 scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
@@ -1052,15 +1356,16 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 | Page | What is on it |
 |---|---|
 | OUTPUT | The master dim; one block per render output (scene / hands / through ticks, its dim, what it shows in words); the screen and fullscreen of output 1; overlay and its click-through, ground and opacity (greyed, with the reason, unless `[output] overlay = true`). |
-| VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–100) and, above one copy, the field row: layout, motion, amp, rate; the six plane rates. |
+| VIEW | The cell-count readout and shape name, the shape, the six rotation planes, points / lines / rotate / faces, brightness, speed, 4D depth, instances (0–4096) with Fit beside it and, above one copy, the field rows: layout, motion, amp, rate; spacing, and a lattice's field depth; the six plane rates. |
 | FACES | Faces, cut-through and the pattern mix; every pattern as a chip with a live swatch; the pattern on show and its line, ‹ ›; the eight pattern inputs by name, each with what it does on this pattern and what drives it (below). |
 | BITMAP | A bitmap textured onto the faces: file, opacity, scale, mode. |
-| CAMERA | Zoom, yaw, pitch, pan, reset. |
+| CAMERA | Zoom (0.005–200×, log, so 1× sits at the knob's noon — far enough out to frame a field of thousands), yaw, pitch, pan, reset. |
 | LOOKBACK | The look-back switch and three sections: ECHOES, DREAM, BOTH (§2). |
 | FX | The effect stack (§2). |
 | AUDIO | Listen to mic / Load track / Stop, the device and **rescan**, the transport, the master faders (gain, dynamics, trim). |
 | ANALYZER | The band scene and Reset all, the meters, the band editor (spectrogram with the bands over it, the selected band's strip). |
-| ROUTING | One page over the loaded preset: routes, desk rows, macros, the session's MIDI rows read-only, and a filter (§9). |
+| ROUTING | One page over the loaded preset: a pointer to GRAPH (where the routes and the modifiers are edited since plan 28 N7), desk rows, macros, the session's MIDI rows read-only, the sinks, and a filter (§9). |
+| GRAPH | Both graphs on one canvas — devices, the analyzer, LFOs, modifiers, macros, params under their render nodes, the render graph, the outputs — laid out in titled areas by concern, every node collapsed by default, one wire a node pair, the idle macros off the canvas; the routes and the modifiers are edited here (below). |
 | LFO | The tap-tempo clock and the four LFOs. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
 | PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
@@ -1096,6 +1401,135 @@ scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
 Its fit at the control size is held by
 `tests/test_ui_patterns.py::test_the_page_fits_with_every_row_driven_and_flat_or_the_longest_mode`,
 but in font metrics that are not the Mac's (hand check 120).
+
+**The GRAPH page** (`ui_graph.py` over the model `graphview.py`, plan
+28; `imgui_bundle.imgui_node_editor`, its settings file off). One canvas
+for the modulation and the render graph, rebuilt from the live table,
+registry, Router, device registry and render graph whenever one changes
+(`graphview.key`), its readings refreshed each frame. ROUTING and GRAPH
+show one table: GRAPH edits the routes and the modifiers, ROUTING keeps
+the desk, the macros, the session's rows and the sinks until it is
+retired (plan 28 N7, the owner's decision of 2026-10-20).
+
+- **Collapsed by default** (N7). Every node starts collapsed: its title
+  and at most five short lines (`graphview.summary`: "137 ports · 97
+  patched", its loudest patched port "> right y 0.83", its layer, "51
+  params · 32 patched", a modifier's kind and output, a macro's knob), no
+  row per port, an ``in`` stub at the left of its title and an ``out``
+  stub at its right. Its **+** expands it (N2's ports: **patched only**
+  on the head and the node's own **all ports / patched only** chip within;
+  its port groups fold); **−** collapses it; the head's **expand all** /
+  **collapse all** does every node. Which nodes are expanded is UI state
+  only (not in the preset or the show; every node collapsed at launch).
+- **One wire a node pair** (N7). While either end is collapsed, every
+  value and trigger cable from one node to another is one wire
+  (`graphview.VBundle`, `graphview.wiring`) from stub to stub: coloured
+  by what it carries (trigger only when all are), 2.5 px plus 0.5 px a
+  cable up to 7 px, faint while every cable is dormant. Hover: "<n>
+  cables: <source port> → <param>, …" (ten, then "+ k more"). Selected,
+  the side pane lists its rows (each route as ROUTING's row); Delete is
+  refused: "expand a node to edit its cables". Both ends expanded, the
+  real cables. Render cables stay one each, ending on a collapsed node's
+  stub. On party-trip at 960 × 900: 64 wires for 238 cables, 1.27 ms.
+- **Patching a collapsed node** (N7): drag a cable onto its stub; let go
+  and pick one of its ports from the menu (only what `Edit.refusal` lets
+  through), and it lands through `Edit.connect` as any drag. Right-click
+  a node: expand / collapse and **learn ▸** its params, by group.
+
+- **By concern** (N9, the owner's decision of 2026-10-20). The auto
+  layout lays the canvas in five areas, left to right, each titled
+  faintly on the canvas behind its boxes (30 canvas units, kept 18 px on
+  screen zoomed out, no wider than the area): **CONTROLLERS** (devices,
+  keys, placeholders, a desk template), **AUDIO** (the analyzer and the
+  band, tempo, master, audio and band-scene params; **OTHER** — the
+  preset, ui and desk params, the missing ones — under it in its
+  column), **MODULATION** (LFOs, modifiers, macros), **GEOMETRY** (the
+  shape, the hands, a cloud, the eye, and the scene, cover and hands'
+  layer that draw them) and **SHADERS** (capture, history, effects,
+  composites, outputs last), the render nodes by their depth within
+  theirs and every other area by its own depth (an LFO or macro fed by
+  nothing first, a modifier one past what feeds it), the shaders' chain
+  wrapped in rows of four — so every wire runs left to right but a row's
+  return. One table, `graphview.AREA`. The head's area chips
+  (**CONTROLLERS · AUDIO · MODULATION · GEOMETRY · SHADERS**) and a click
+  on a canvas title frame that area. A title stays 18 px on screen
+  zoomed out, never under 12 px, a short word (CTRL, MOD …) when the
+  long one will not fit before the next. A node with nothing in
+  and nothing out (`graphview.is_idle`: a macro with no label and no
+  subscriber, an LFO or a group node no cable reaches, a lost or off
+  device, an effect switched off that no cable reaches — the chain then
+  shows a half-faint through wire over it, which Delete only explains;
+  never a modifier, the analyzer or another render node) is not drawn: its
+  area shows one small box ("8 idle macros · 3 idle LFOs") whose **+**
+  draws them under it to patch one; the picker still offers every idle
+  macro. The head counts "31 nodes (22 idle)" on party-trip.
+- **Nodes**, left to right: each listed device by role — the APC40 as
+  *apc40* (every control, the invariant ones first) and *apc40 (SHIFT)*
+  (the global layer's, faint unless SHIFT is latched), the hands folded
+  as axes, pinches, grab, presence, dance; a device the rig lacks a grey
+  placeholder named by role, its cables waiting; a preset's desk template
+  one collapsed node (**+** opens it); the keys; the analyzer (a port per
+  band); each LFO (its knobs as input ports); the modifiers; the macros
+  (bus nodes); a node per param group no render node owns (`tempo`,
+  `master` …); the render nodes with their params as input ports
+  (`graphview.OWNERS`: `view` / `rot` / `pattern` on `shape`, `fx.acid.*`
+  on `acid`, `dream.*` on `history`, `camera.*` on `eye`); the outputs.
+- **Ports and cables.** A param has a round `mod` stub (one performer: a
+  route's solid cable) and a square `base` stub (the setters: desk, pad
+  and key rows, faint; a macro's base subscriber), and a `depth` stub
+  while a route lands on it. Render cables join typed image / geometry /
+  mask ports. Colour by kind, thickness by reading, faint when dormant.
+  Hover: from → to, the reading, the depth, the `scale` and the gate; a
+  cable a loop keeps off says so.
+- **The head**: **expand all** / **collapse all**, **patched only**,
+  **tidy** — every node collapsed, the idle lines shut, every position
+  forgotten (one undo step), laid out again in the areas and the canvas
+  framed on them; it says "laid out 31 nodes in 6 areas, every one
+  collapsed · 22 idle off the canvas", or "already tidy" — and,
+  only while something is selected on a page narrower than 720 px,
+  **details beside** / **details below** (where the selection's pane
+  goes; CONTROLS at 540 px puts it under the canvas, a page 720 px wide
+  beside); then the counts (nodes, wires drawn, cables, live) and the
+  last edit's or refusal's words.
+- **Selection**: a route shows its ROUTING row, a bundle its rows, an
+  effect's node its FX strip, a modifier's node the MODIFIERS strip's
+  editor for it, stacked (`ui_routing.modifier_block`: inputs, params,
+  live output, × remove).
+- **Editing the modulation.** Drag a source onto a `mod` stub: the route
+  a Learn would make (push or position, `learn.row_for`), Replace / Keep
+  if the param is taken. A desk control onto a `base` stub: a desk learn
+  (a preset-layer row); a pad button: the pad learn's session row. A
+  macro onto `base` or a `depth` stub: a subscriber. A lane onto a
+  modifier's `in`: its input. Drag from a patched input pin to another
+  input pin to move a cable's end. Refused in words on the head: "a hand
+  sets no base; aim at mod", "a macro sets a base or scales a depth; aim
+  at base or a depth stub", "keys are the session's rows: map them on
+  ROUTING", a SHIFT-node port into `base`. A free modifier let go over a
+  cable is inserted into it (or a cable's right-click **insert ▸**).
+- **Editing the render graph**: an image cable between two ports is a
+  wire in the preset (§2), red with the file's words while it is wrong;
+  a geometry cable from a hands node into the scene or layer sets its
+  `into`.
+- **Right-click**: on a `mod` stub, the param menu's Learn items (Learn
+  desk, hand ▸, pad, a role, sink) — the completed row is a cable next
+  frame; on a cable, insert and delete; on a node, delete (a modifier,
+  a macro, an extra effect / hands node / composite), `draw solid` /
+  `draw lines`, `laid over` / `add` / `depth`; on the canvas, the picker:
+  **modifier ▸** a kind, **effect ▸** a file, **hands**, **composite**,
+  **macro ▸** an idle one. Delete takes the selection: a session row's
+  cable and the rig's nodes are refused in words; a default render cable
+  too. Every edit is one undo step and dirties the preset.
+- **Positions**: where a node is dropped is saved — in the preset's
+  `layout` for the look's nodes (modifiers, macros, render nodes,
+  performance groups, the template), in the show's for the rig's
+  (devices, the analyzer, LFOs, outputs, session groups); an unplaced
+  node takes its column by kind (a collapsed node its lines' height).
+  SYSTEM shows `graph page: X ms median (N nodes, M cables)` (1.27 ms on
+  party-trip at 960 × 900, collapsed; 2.66 ms with every node expanded;
+  N2's page drew 2.3–2.8 ms).
+- **The editor context** is held on the panel (a hot reload of
+  `ui_graph` keeps it) and destroyed on quit and ⌘R before imgui; no
+  `NodeEditor.json` is written.
 
 Every page that is a registry group carries a preset strip for its
 module presets.
@@ -1185,7 +1619,21 @@ lines · B / X next / previous preset in the PRESETS list · LB / RB
 previous / next shape · d-pad brightness (↑↓) and speed (←→) · left
 stick orbit, its click resets the camera · right stick ↕ zoom, ↔ the
 spin of the W planes, its click resets the 4D spin · LT / RT 4D depth
-out / in · START and BACK unbound (hand check 144).
+out / in · hold START to save the live state as a new preset. BACK is
+free; Learn pad puts anything on it.
+
+**The pad diagram** (`ui_pad.py`) draws that, live, instead of asking
+anyone to trust this table: the pad at the top of the desk's column —
+the switch is on the SYSTEM page, off at every launch — every control
+where it sits on the device, lit where a row maps it and, once a unit is
+40 × 28 px, carrying what it does. A grey label is one of the six axes
+with no route on it, where the app's own hand is (orbit, zoom, the 4D
+spin, the depth); a bright one is a row of `bindings.json`. The live pad
+shows through it — a held button fills red, each stick sits in its well,
+each axis fills its lane — and the picture is the same with no pad
+plugged in. It is read-only: the hover names the control, its param and
+its source, and Learn pad (right-click a param) is still the way onto a
+control.
 
 **The pad is a device** (plan 27): a `[[devices]] kind = "gamepad"`
 entry (`role = "pad"` from the old `[gamepad]` table). It finds a pad
@@ -1229,6 +1677,23 @@ frees. macOS asks once whether Python may accept incoming connections:
 allow it. A role that is a row kind or a built-in scheme (`cc`, `pad`,
 `lane`, `lfo`, `cloud`, …) is refused on open. Only a message's first
 number is read; there is no OSC output yet.
+
+**The sticks as dials** (a prototype — [`plans/28-gamepad-dial.md`](plans/28-gamepad-dial.md)).
+Each stick is also read as a clock face of eight sectors, `N` straight up
+then clockwise to `NW`: the angle picks the sector, the distance from
+centre (0 at rest, 1 at the rim, the deadzone cut on the distance) is how
+far that sector's lane reads. The lanes are `axis:L.N` … `axis:L.NW` and
+`axis:R.N` … `axis:R.NW`, resting at 0, so a `push` route on one adds
+nothing while the stick is let go. A route on any dial lane takes its
+whole stick off the camera job. Two readings, per stick: **petal** (hard
+sectors, the whole push to the one pointed into, a sticky border) and
+**blend** (each lane a triangle about its own direction, so a sweep round
+the rim crossfades one route into the next). The gamepad entry's `dial_left` /
+`dial_right` (`[[devices]]`, or the old `[gamepad]` table) set where a launch starts (petal / blend); SYSTEM → gamepad
+draws both faces, names each sector's route, and has the two readings and
+**Swap dials** (`desk.pad.dial.*`, never saved). The **DIAL** factory
+preset fills both clocks. With a Learn armed for the pad, a stick that
+already has a dial route learns the sector it points into.
 
 ## 8. The APC40
 
@@ -1498,34 +1963,105 @@ learn takes that axis's other routes with it (the line says "moved
 from …"; one ⌘Z puts them back). An armed learn never times out.
 
 **The ROUTING page** is one page over the loaded preset: its head (the
-preset, its dirty dot, save / as…, which desk layer is up), the routes,
-the desk with its dark controls, the macros and their subscribers, the
-session's MIDI rows read-only, and the **sinks** (plan 27: each sink row
-with a checkbox and a ×, both writing `bindings.json`). A route's source
-list is the analyzer's lanes, LFO 1–4, then each listed device's sources
-in the `[[devices]]` order (`Router.schemes()`; a scheme a route names
-is offered too). **The filter** (left of `+ route`)
-keeps only the lines that contain every typed word, matched anywhere —
-a route's sentence, source, target and label; a desk line's glyph, Akai's
-name and target; a macro's id, label and subscribers. It is UI state:
+preset, its dirty dot, save / as…, which desk layer is up), then a
+pointer line, "routes and modifiers: the GRAPH page" (a click opens
+GRAPH: since plan 28 N7 the routes and the MODIFIERS strip are drawn and
+edited there, ROUTING's own `_row` in GRAPH's side pane; their functions
+stay in `ui_routing`; while the filter holds text its red count takes the
+pointer's place), the desk with its dark controls, the macros and
+their subscribers, the session's MIDI rows read-only, and the **sinks**
+(plan 27: each sink row with a checkbox and a ×, both writing
+`bindings.json`). "Route a lane here…" adds its route and opens GRAPH. A
+route's source list (its row's combo) is the analyzer's lanes, LFO 1–4,
+then each listed device's sources in the `[[devices]]` order
+(`Router.schemes()`; a scheme a route names is offered too). **The
+filter** (on the pointer line) keeps only the lines that contain every
+typed word, matched anywhere — a desk line's glyph, Akai's name and
+target; a macro's id, label and subscribers; a session or sink row. It is UI state:
 not saved, no undo step, empty at launch, left alone by a preset load;
 its × and a click on a desk control clear it. A route's `scale` can only
 be a session param; a route may perform a session param, marked
 "session" on its row.
 
+**The order the routes run in** (plan 28 N0). `Router.modulate` runs
+the table as a graph (`patch.py`, ARCHITECTURE §2), each node after
+everything it reads: the LFOs step inside it, a `scale`, a macro's depth
+or an LFO knob a route moves lands before the route that reads it, so an
+LFO on another LFO's depth, a macro scaling a push or a hand on a
+modifier's release act **the same frame** — there is no one-frame lag.
+A **loop** through no delay modifier (`lfo:0 → lfo.2.rate` and `lfo:1 →
+lfo.1.depth`; an LFO pushing its own depth) keeps its last cable in table
+order off: a warning line under ROUTING's head names it, `loop: lfo:0 →
+lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay — lfo:1 →
+lfo.1.depth is off until it has one`; the row stays in the table (its
+checkbox still on) and in the file, and the rest runs. Put a `delay`
+modifier in the loop and it runs, one frame late.
+
+**Modifiers** (plan 28 N1, `modifiers.py`): value nodes between a source
+and a route, saved in the preset beside its routes (never in
+`bindings.json`). Each publishes a lane `mod:<n>` that a route sources
+like any other.
+
+| Kind | Inputs | Params (default) | Out |
+|---|---|---|---|
+| `curve` | 1 | `shape` −1…1 (0 straight; + slow to start, − fast), `invert` | value |
+| `scale` | 1 | `mul` −4…4 (1), `offset` −1…1 (0), `clamp` (on) | value |
+| `smooth` | 1 | `attack` 0…2 s (0.05), `release` 0…4 s (0.35), `spring` (off: a spring at ω = 1/attack) | value |
+| `combine` | 2 | `how` add · mul · min · max · cross, `balance` (0.5, the crossfade) | value |
+| `threshold` | 1 | `on` 0.6, `off` 0.4, `hold` 0…2 s (0.1): 1 on the rising edge for the hold | trigger (also a gate) |
+| `delay` | 1 | — | last frame's input |
+
+Their params `mod.<n>.<p>` are performance params (the `mod` group),
+routable and modulatable. A modifier whose input is not live (a hand out
+of the box, a device the rig lacks, no input picked) is **dormant**: its
+lane reads absent, so a route on it lets go and the base returns.
+Removing one leaves the routes on its lane, dormant; ids are one past
+the highest (`mod.1`, `mod.2` …). A desk template may carry a
+`modifiers` list; a preset that names it gets them, its own overriding
+by id.
+
+**The MODIFIERS strip** (`ui_routing.modifiers`; since plan 28 N7 not
+drawn on ROUTING — a modifier is added from GRAPH's right-click picker
+and edited in GRAPH's side pane, the strip's own block stacked): a
+kind combo and **+ modifier**; per modifier `MOD n`, its kind, a combo
+per input (the route sources and the other modifiers' lanes), its live
+output ("dormant" while not live) and ×, then its params as ordinary
+widgets (right-click for Learn). Each add, remove, input picked and
+param drag is an undo step. "Right hand energy, smoothed, times band 0,
+into acid mix": + smooth on `hand R energy`; + combine on `mod 1 smooth`
+and `0 sub`, how mul; + route from `mod 2 combine` onto `fx.acid.mix`.
+On GRAPH (§6): the picker's smooth and combine, cables into their
+inputs (or onto their collapsed stubs, picking the input), the combine's
+how in its side pane, a cable from it onto acid's `fx.acid.mix` mod.
+
 ## 10. Presets, shows and the bank
 
 A **preset** (`presets/<slug>.json`) is one whole performance moment:
 the performance groups' values (`view rot camera pattern dream fx lfo
-macro`, `params.PERFORMANCE_GROUPS`), the performer routes, the desk's
-preset layer, the macros and the module labels. **A load replaces all of
+macro mod`, `params.PERFORMANCE_GROUPS`), the performer routes, the
+desk's preset layer, the macros and the module labels — and, when it has
+them, a `graph` section (§2: its nodes and, since plan 28, its `wires`),
+its `modifiers` (after `routes`: one entry each, `{"id": "mod.1",
+"kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05,
+"release": 0.6}`, its params at their bases; no `mod.*` id in `values`)
+and its `layout` (last: `{"<node id>": [x, y]}` for the GRAPH page's
+nodes the preset holds, whole canvas units, sorted, written only for a
+node dropped by hand). None of the three is written when empty, so a
+preset without them saves byte for byte as before, and none bumps the
+schema. The show keeps the rig's nodes' positions in its own `layout`.
+A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
+note and **drops them when it saves**, and opens a `graph` with wires or
+placements as the default graph with a note: keep both Macs of a shared
+library on the same build (register row 277). **A load replaces all of
 it** — every performance param lands from the file or its group default,
 every route and preset-layer row is replaced — and never touches a
 session param (`tempo hands ghost band master scene audio output overlay
 ui desk`): a tapped BPM, the hands' feel and the ghost hands survive any
 preset. Anything a file names that it may not (a session id, an unknown
 id, a route onto a param that is not modulatable, a desk row on an
-invariant control) is dropped with a note and the file is left as it is.
+invariant control, a route onto a modifier the file does not hold, a
+`mod.*` id in `values`, an unreadable `layout` entry) is dropped with a
+note and the file is left as it is.
 
 **The factory presets are generated**: `uv run python -m hyperspace.preset`
 (`preset.write_factory`) writes `hyperspace/library/presets/` from
@@ -1942,7 +2478,12 @@ broken save keeps the last good version and shows the error on the
 SYSTEM page. `app.py`, `hotreload.py`, `offline.py` and `watchdog.py`
 are cold: changing them needs Cmd+R. A changed `__init__` does not
 re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
-`shaders/fx/`) and the library's JSON files reload too.
+`shaders/fx/`) and the library's JSON files reload too. Plan 28's
+modules are on the list in dependency order: `modifiers` after
+`motion`, `patch` before `routing`, `graphview` after `osc`, `ui_graph`
+before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
+context (it is held on the panel, not in the module), so the page goes
+on drawing with its zoom and selection.
 
 **The watchdog** (`watchdog.py`) appends to `<home>/stall.log` a `===
 <kind>` header — the time, the loaded preset, what happened — and every
@@ -1997,7 +2538,7 @@ uv run ruff check .
   this machine's font metrics: in the cloud container test_fx's own two
   fit tests miss by 18 px, so a pass or a fail there says nothing about
   the Mac.
-- The golden frames: `tests/test_golden_frames.py` compares 556
+- The golden frames: `tests/test_golden_frames.py` compares 596
   full-resolution frames — every factory preset in every output state,
   hands absent and present, the other wirings, the fixture presets and a
   recorded cloud — to the byte, on `GL_RENDERER` "Apple M3 Max" only
@@ -2008,16 +2549,40 @@ uv run ruff check .
   `tests/test_camera.py`, `tests/test_hands_node.py`,
   `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
   `tests/test_stroke_space.py`.
+- The modulation graph and the node editor (plan 28), all headless:
+  `tests/test_patch.py` (the sort, the loops, the edges the design
+  names, a param applied once a frame), `tests/test_modifiers.py` (each
+  kind on a scripted input, the preset key, templates, undo, the
+  MODIFIERS strip), `tests/test_graphview.py` (the model with no imgui,
+  and the page drawn once on the real `imgui_node_editor` under the test
+  imgui harness), `tests/test_graph_edit.py` (every edit through the
+  page's functions — no test can drag a mouse on the widget),
+  `tests/test_graph_wires.py` (the wire list, outputs as nodes, the
+  canvas's render edits) and `tests/test_graphview_devices.py` (the
+  APC40's two nodes, templates, placeholders). **The equivalence test**,
+  `tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`,
+  plays every factory preset with a synthetic hand tape through the base
+  build's `modulate` (kept verbatim as `_lagged_modulate`) and through
+  today's, and asserts every modulatable param identical or exactly as
+  many frames earlier as the base was late.
+- A test-order dependence from before plan 28:
+  `tests/test_app_boundary.py::test_a_broken_adapter_is_a_note_not_a_crash`
+  fails when `tests/test_dream.py` runs before it (its
+  `monkeypatch.setitem(sys.modules, "hyperspace.dream", …)` is bypassed
+  once `hyperspace.dream` is an attribute of the package). The full
+  suite's alphabetical order hides it; it reproduces on the base build.
 - The shapes: `tests/test_shapes4d.py` holds every shape to its
   recorded digest (`tests/golden/shape_digests.json`, floats rounded to
-  1e-9) and every lifted or masked shape to `VOLUME_FLOOR` through each
-  W plane; `tools/turntable.py` draws the same sweeps (§1).
+  1e-9) and every 4D shape to `VOLUME_FLOOR` through each W plane;
+  `tools/turntable.py` draws the same sweeps (§1).
 - Fixtures: `tests/fixtures/` holds the test-only presets, templates
   and palettes a test copies into a scratch library (plan 24's
   `desk-trust/`, `desk-faders/`, `desk-templates/`, `dance-sources/`,
   `grab-follow/` and `palettes/`, plan 27's `osc/` and `clouds/`, plan
-  26's `presets/hands-lines.json` and `camera/`, and
-  `macro-candidates/`). The folder
+  26's `presets/hands-lines.json` and `camera/`, plan 30's
+  `presets/palette-hands.json`, `palette-glass.json`, `acid-scene.json`,
+  plan 28's `presets/hands-glass-only.json`, `wired-outputs.json` and
+  `modifiers/`, and `macro-candidates/`). The folder
   is gitignored at the repo root, so a new fixture is added with
   `git add -f`. No test proves a mechanism by editing a factory preset.
 - The desk coverage report: `tests/test_desk_coverage.py` regenerates
@@ -2056,17 +2621,21 @@ What only a person at the machine can check is
 - **With no desk connected the app keeps looking** — every 2 s five
   times, then every 10 s. Each look creates a CoreMIDI client; `enabled
   = false` on the desk's entry (or `[midi] enabled = false`) stops it.
-- **The render graph's wiring is the default graph's choices, not
-  cables.** A preset's `graph` section picks where the hands go, how
-  their layer is laid on and what the history holds; it cannot say which
-  output gets which hands node (the outputs are the session's switches),
-  and at most one hands node makes the layer. A node editor is plan 28.
+- **At most one hands node makes the layer.** Since plan 28 a preset's
+  `graph` section can wire which output gets which hands node and which
+  effects it alone takes (§2, the wire list); an output no wire names
+  keeps the session's switches.
+- **No mouse drag on the GRAPH page has been tested**: the tests drive
+  its functions and draw the real widget headless, never a real drag
+  (plan 28's hand checks 247–258).
+- **A build from before plans 28 and 30 loses this build's `modifiers` and
+  `layout` on a save** and opens a wired or placed `graph` as the
+  default graph: both Macs sharing a library must run the same build.
 - **The golden frames prove pixels only on "Apple M3 Max"**; on any
   other Mac the test skips.
-- **On the masked Heart, the W planes' readouts keep counting**: the
-  VIEW page's XW / YW / ZW keys, `rot.phase.*` and ROUTING show the W
-  planes turning while the picture turns in XZ, YZ and XY. Nothing says
-  the planes are folded.
+- **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`
+  and ROUTING show the W planes turning though the shape does not; only
+  the VIEW page's dimmed W keys say they do nothing.
 - **The FACES page's fit and `patterns.glsl` on Apple's GL are
   unverified**: both were checked only in a container with Mesa and
   other font metrics (hand checks 120, 121).

@@ -14,6 +14,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | --- | ---: | ---: | ---: | ---: | --- |
 | ACID | 29 | 8 | 1 | 9 | 5 over |
 | BIG BLUE WAVE | 25 | 12 | 1 | 13 | 9 over |
+| DIAL | 25 | 12 | 1 | 13 | 9 over |
 | EMBER ORBIT | 25 | 12 | 1 | 13 | 9 over |
 | FACES | 25 | 12 | 1 | 13 | 9 over |
 | FIELD | 25 | 12 | 1 | 13 | 9 over |
@@ -36,7 +37,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | WAKE | 29 | 8 | 1 | 9 | 5 over |
 | WOVEN LATTICE | 23 | 12 | 3 | 15 | 11 over |
 
-0 of 23 presets meet the bar.
+0 of 24 presets meet the bar.
 
 ## Preset × control
 
@@ -46,6 +47,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
 | ACID | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | BIG BLUE WAVE | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| DIAL | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | EMBER ORBIT | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | FACES | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | FIELD | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
@@ -74,6 +76,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | --- | --- | --- | --- |
 | ACID | K7 | `view.bmp_alpha` | no bitmap file |
 | BIG BLUE WAVE | K7 | `view.bmp_alpha` | no bitmap file |
+| DIAL | K7 | `view.bmp_alpha` | no bitmap file |
 | EMBER ORBIT | K7 | `view.bmp_alpha` | no bitmap file |
 | FACES | K7 | `view.bmp_alpha` | no bitmap file |
 | FIELD | K7 | `view.bmp_alpha` | no bitmap file |

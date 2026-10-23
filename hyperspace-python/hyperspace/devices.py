@@ -568,6 +568,7 @@ class PadDevice(Base):
         super().__init__(role, entry, ctx, io=io)
         self._taken = False      # this frame's press completed a learn
         self._dt = 0.0
+        self._dialed: set[str] = set()   # the sticks a route reads as a dial (last `act`)
 
     @property
     def joystick(self) -> int | None:
@@ -577,8 +578,13 @@ class PadDevice(Base):
         return j if isinstance(j, int) and not isinstance(j, bool) and j >= 0 else None
 
     def open(self) -> None:
-        from .gamepad import Claims, Pad
+        from .gamepad import DIAL_MODES, Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
+        # where each stick's dial reading starts (`dial_left` / `dial_right`)
+        for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+            mode = self.entry.get(key)
+            if mode in DIAL_MODES:
+                self.io.dial_modes[stick] = mode
         claims = getattr(self.ctx, "pads", None)
         if claims is None:
             claims = self.ctx.pads = Claims()
@@ -645,8 +651,11 @@ class PadDevice(Base):
             return False
         from . import gamepad
         q = self.qualifier
-        self._taken = bool(gamepad.learn_from(self.io, learn, role=q) if q else
-                           gamepad.learn_from(self.io, learn))
+        # a stick a route already reads as a dial learns its sectors (the
+        # routes as the last frame's `act` saw them: Learn runs before it)
+        dialed = self.__dict__.get("_dialed", set())
+        self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed)
+                           if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed))
         return self._taken
 
     def act(self, router) -> None:
@@ -658,15 +667,22 @@ class PadDevice(Base):
         if io is None:
             return
         q = self.qualifier
+        from . import gamepad
+        # the sticks a route reads as a dial, for the next frame's Learn
+        # (gamepad.dialed); asked only while the pad is there, once a frame
+        claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         if q:
             router.pad(io, buttons=not self._taken, role=q)
+            if io.on and claimed is not None:
+                self._dialed = gamepad.dialed(claimed(f"axis@{q}") or ())
             return
         router.pad(io, buttons=not self._taken)
         if io.on:
-            from . import gamepad
+            routed = (claimed("axis") or ()) if claimed is not None else ()
+            self._dialed = gamepad.dialed(routed)
             reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
             if reg is not None:
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0))
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []

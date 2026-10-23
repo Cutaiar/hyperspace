@@ -591,6 +591,48 @@ def _open_dream(reg: Registry, cfg: dict) -> tuple[object | None, str]:
         return None, dream_error(e)
 
 
+def _register_dial(reg: Registry, pad) -> None:
+    """The sticks' dial readings (gamepad.dial, a prototype) as session
+    params on the pad: one enum per stick, and a trigger that swaps the
+    two — the same routes felt the other way, to compare them. Never
+    saved, never performed: the gamepad entry's `dial_left` / `dial_right`
+    set where a launch starts. `pad` is a `gamepad.Pad` or a callable
+    returning the one that is current (the device registry's primary pad,
+    which a config edit may replace); None, no pad: nothing registered."""
+    pad_of = pad if callable(pad) else (lambda: pad)
+    if pad_of() is None or "desk.pad.dial.left" in reg:
+        return
+    modes = list(gamepad.DIAL_MODES)
+
+    def mode_of(stick: str) -> str:
+        p = pad_of()
+        return (p.dial_modes if p is not None else gamepad.DIAL_DEFAULT).get(
+            stick, gamepad.DIAL_DEFAULT[stick])
+
+    def set_mode(stick: str, i) -> None:
+        p = pad_of()
+        if p is not None:
+            p.dial_modes[stick] = modes[int(i) % len(modes)]
+
+    tip = ("How the {} stick reads as a dial (its axis:{}.* lanes): petal, the "
+           "sector it points into gets the whole push; blend, neighbouring sectors "
+           "crossfade as it sweeps round.")
+    for stick, side in (("L", "left"), ("R", "right")):
+        reg.enum(f"desk.pad.dial.{side}", f"{side.capitalize()} dial",
+                 lambda s=stick: modes.index(mode_of(s)),
+                 lambda i, s=stick: set_mode(s, i),
+                 modes, group="desk", persist=False, modulatable=False,
+                 tip=tip.format(side, stick))
+
+    def swap():
+        p = pad_of()
+        if p is not None:
+            m = p.dial_modes
+            m["L"], m["R"] = m.get("R", "blend"), m.get("L", "petal")
+    reg.trigger("desk.pad.dial.swap", "Swap dials", swap, group="desk", modulatable=False,
+                tip="Swap the two sticks' dial readings — petal ↔ blend.")
+
+
 class Awake:
     """The Mac kept out of the screensaver, display sleep and idle system
     sleep while the app runs: macOS's own `caffeinate -d -i`, tied to this
@@ -848,8 +890,9 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     (keys, loop keys, the devices polled — pad, MIDI — the macros' base
     subscribers) write bases, and the undo watcher compares them
     (`undo.tick`, plan 15); the sources feed the table (output, mouse,
-    audio, the devices' feeds — hands, bridge — LFOs); the pass lands
-    offsets (`router.modulate`, `reg.apply`), the sinks send (`devices.send`,
+    audio, the devices' feeds — hands, bridge); the pass lands offsets in
+    dependency order, the LFOs stepping inside it (`router.modulate`, plan
+    28 N0), then `reg.apply`; the sinks send (`devices.send`,
     plan 27 B3), `integrate`; then the two windows draw. Returns False
     when a guarded block raised — the error is on `reloader.runtime_error`
     and the loop goes on, so the next save can fix it. `imgui.new_frame()`
@@ -943,14 +986,13 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
             devs.feed(router)
             if devs.error and ok:
                 ok, reloader.runtime_error = False, devs.error
-        # the LFOs are a source like any other: stepped on the frame's
-        # clock, fed to the table as `lfo` before the modulation pass
-        h.lfos.step(dt, now, h.clock)
-        h.lfos.publish(router)
         # the lanes are a modulation source like any other (routing.py);
-        # once every source has spoken for this frame, land base +
-        # offsets on the objects before the integrator reads them
-        router.modulate(chain, dt)   # dt: the rows' motion
+        # once every source has spoken for this frame, the pass runs the
+        # patch in dependency order — the LFOs step inside it, on the
+        # frame's clock, each after the knobs it reads (plan 28 N0) — and
+        # `reg.apply` lands base + offsets on the rest before the
+        # integrator reads them
+        router.modulate(chain, dt, now)   # dt: the rows' motion; now: the LFOs'
         reg.apply()
         if devs is not None:        # the sinks read effective values out (plan 27 B3)
             devs.send(reg, chain)
@@ -1103,6 +1145,7 @@ def main() -> None:
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
+    router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
@@ -1150,6 +1193,9 @@ def main() -> None:
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
         renderer.lookback.source = dream_io
+    # the sticks as dials (gamepad.dial, a prototype): session params on
+    # whichever pad is the primary now
+    _register_dial(reg, lambda: rig.adapter("gamepad"))
     awake = _open_awake(cfg)               # no screensaver over the show
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
@@ -1269,7 +1315,8 @@ def main() -> None:
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, awake, *host.adapters), impl, ctrl_win,
+                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters), impl,
+                                         ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
@@ -1317,7 +1364,9 @@ def main() -> None:
         watchdog.pet(now)          # a frame completed: one float write
 
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
-    close_all(audio, watchdog, awake, *host.adapters)   # the watchdog first: teardown is no stall
+    # the watchdog first: teardown is no stall; the panel before imgui goes
+    # (its GRAPH page's node editor context, plan 28 N2)
+    close_all(audio, watchdog, awake, panel, *host.adapters)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

@@ -1,15 +1,31 @@
 """moderngl renderer — port of the draw() pipeline of hyperspace.html.
 
 Plan 26 A2, one camera: the CPU takes the shape to 3D
-(geometry.world_points: rotate4, the 4D divide, the yaw/pitch turntable)
-and the vertex shaders take it to the clip through one shared 4×4, the
-eye (`u_vp`, geometry.eye_matrix, the `eye.*` params), after the shape's
-world transform (`u_model`: camera.zoom and camera.pan). The default eye
+(geometry.shape_world: per layer, world_points' rotate4, the 4D divide
+and the yaw/pitch turntable) and the vertex shaders take it to the clip
+through one shared 4×4, the eye (`u_vp`, geometry.eye_matrix, the `eye.*`
+params), after each copy's place in the world (`in_inst`, below: the
+camera's zoom and pan are a copy's scale and centre). The default eye
 is project_h's old 3D divide, so at zoom 1 and pan 0 every vertex lands
 within a ten-thousandth of a pixel of where project_h — the renderer's
 path until A2, and geometry.project's, the parity oracle — puts it
 (tests/test_camera.py). The dataclass it draws, ViewState, lives in
 view.py so nothing has to import moderngl to hold a view.
+
+The shape is taken to 3D once and drawn once per copy by instanced draws:
+each copy is one vec4 (`in_inst`: its centre in the world, its scale, its
+alpha) and the vertex shaders place it — a copy's point is the shape's
+point × its scale + its centre, before the world transform and the eye.
+A flat layout (or one copy) with Fit off is the field as it always was,
+the same arithmetic (`Renderer._legacy_field`): the copies at scale 1, the
+camera's zoom and pan the world transform (`u_model`), the strokes scaled
+by the zoom on the CPU, so its frames are byte for byte what they were.
+Fit and the 3D lattices are field.py's (`Renderer._field`): each copy's
+scale and centre carry the camera, `u_model` is the identity, and edge
+widths and point sizes are scaled per copy in the shaders (in world-space
+strokes), folding into alpha below a pixel there. Either way a field of
+thousands costs one 3D pass and a few kilobytes of upload a frame, and a
+copy wholly off screen is not drawn.
 
 Blending decision (plan 02 task 2): alpha-over in painter order, not
 additive. The additive suggestion existed to avoid a CPU depth sort, but the
@@ -84,6 +100,16 @@ from typing import Self
 import moderngl
 import numpy as np
 
+from . import field as _field_mod
+from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
+    LAYOUT_GRID,
+    LAYOUT_HEX,
+    LAYOUT_RING,
+    MAX_INSTANCES,
+    field,
+    inst_positions,
+)
+from .field import is_3d as is_3d_layout
 from .fx import FACES, SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
@@ -96,10 +122,7 @@ from .geometry import (
     face_uvs,
     geom,
     model_matrix,
-    view_angles,
-    view_depth,
-    w_masked,
-    world_points,
+    shape_world,
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
@@ -121,9 +144,10 @@ FACE_PIC = 1024
 
 # Plan 26 A2, the one camera: the scene's vertices arrive in 3D — the
 # shape after the 4D tumble, the 4D divide and the yaw/pitch turntable
-# (geometry.world_points), plus its copy's cell offset — and the vertex
-# shaders take them to the clip through the shape's world transform
-# (u_model: camera.zoom and camera.pan, geometry.model_matrix) and the
+# (geometry.shape_world) — and the vertex shaders place each copy (in_inst:
+# the point × the copy's scale + its centre, in the world; field.py, with
+# the camera's zoom and pan) and take it to the clip through the world
+# transform (u_model: the identity since the instanced field) and the
 # eye (u_vp: the one shared 4×4, geometry.eye_matrix; the same matrix the
 # ghost hands' Geometry takes). Edges and points are quads expanded here,
 # in screen space, so they keep their pixel widths and carry a real depth.
@@ -146,20 +170,27 @@ LAYER_DEPTH_BIAS = 0.05
 
 LINE_VS = """
 #version 330
-in vec3 in_a;        // the edge's two ends, the shape's 3D points + the copy's offset
+in vec3 in_a;        // the edge's two ends, the shape's 3D points
 in vec3 in_b;
 in vec2 in_corner;   // x: which end (0 a, 1 b); y: which side of the edge (±1)
-in float in_width;   // logical px
+in float in_width;   // logical px at scale 1 (below 1 it folds into alpha)
 in float in_alpha;
+in vec3 in_rgb;      // white, but for a scene's tinted layer (plan 28 catalog)
+in vec4 in_inst;     // this copy: centre (xy, world), scale (z), alpha (w)
 uniform mat4 u_vp;   // the eye
-uniform mat4 u_model; // the shape's world transform
+uniform mat4 u_model; // the world transform
 uniform vec2 u_size; // logical viewport size
+uniform float u_wscale; // 1: strokes scale with the copy (world space); 0: screen space
 out float v_alpha;
+out vec3 v_rgb;
 void main() {
-    vec4 ca = u_vp * (u_model * vec4(in_a, 1.0));
-    vec4 cb = u_vp * (u_model * vec4(in_b, 1.0));
+    vec3 o = vec3(in_inst.xy, 0.0);
+    vec4 ca = u_vp * (u_model * vec4(in_a * in_inst.z + o, 1.0));
+    vec4 cb = u_vp * (u_model * vec4(in_b * in_inst.z + o, 1.0));
     const float W = """ + EYE_W + """;
-    v_alpha = in_alpha;
+    float wk = in_width * mix(1.0, in_inst.z, u_wscale);
+    v_alpha = in_alpha * min(wk, 1.0) * in_inst.w;
+    v_rgb = in_rgb;
     if (ca.w < W && cb.w < W) {          // wholly behind the eye: nothing
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
@@ -171,7 +202,7 @@ void main() {
     vec2 sb = cb.xy / cb.w * half_size;
     vec2 d = sb - sa;
     float ln = max(length(d), 1e-6);
-    vec2 n = vec2(-d.y, d.x) / ln * (0.5 * in_width * in_corner.y);
+    vec2 n = vec2(-d.y, d.x) / ln * (0.5 * max(wk, 1.0) * in_corner.y);
     vec4 c = in_corner.x < 0.5 ? ca : cb;
     gl_Position = vec4(c.xy + n / half_size * c.w, c.z, c.w);
 }
@@ -180,11 +211,12 @@ void main() {
 LINE_FS = """
 #version 330
 in float v_alpha;
+in vec3 v_rgb;
 uniform float u_depth_alpha;   // < 0 the colour pass; else the depth pass's threshold
 out vec4 f_color;
 void main() {
     if (u_depth_alpha >= 0.0 && v_alpha <= u_depth_alpha) discard;
-    f_color = vec4(1.0, 1.0, 1.0, v_alpha);
+    f_color = vec4(v_rgb, v_alpha);
 }
 """
 
@@ -280,21 +312,23 @@ void main() {
 
 FACE_VS = """
 #version 330
-in vec3 in_pos;      // the shape's 3D point + the copy's offset (see LINE_VS)
+in vec3 in_pos;      // the shape's 3D point (see LINE_VS)
 in float in_w4;      // the 4D divisor: × the clip w, so the uv is perspective-correct
                      // across both divides, as the old combined divisor made it
 in vec2 in_uv;       // face-local coordinates
 in float in_alpha;
 in float in_fid;     // face index within the shape
+in vec4 in_inst;     // this copy: centre (xy, world), scale (z), alpha (w)
 uniform mat4 u_vp;
 uniform mat4 u_model;
 out vec2 v_uv;
 out float v_alpha;
 out float v_fid;
 void main() {
-    gl_Position = (u_vp * (u_model * vec4(in_pos, 1.0))) * in_w4;
+    vec4 q = vec4(in_pos * in_inst.z + vec3(in_inst.xy, 0.0), 1.0);
+    gl_Position = (u_vp * (u_model * q)) * in_w4;
     v_uv = in_uv;
-    v_alpha = in_alpha;
+    v_alpha = in_alpha * in_inst.w;
     v_fid = in_fid;
 }
 """
@@ -423,10 +457,12 @@ COVER_VS = """
 #version 330
 in vec3 in_pos;
 in float in_w4;
+in vec4 in_inst;
 uniform mat4 u_vp;
 uniform mat4 u_model;
 void main() {
-    gl_Position = (u_vp * (u_model * vec4(in_pos, 1.0))) * in_w4;
+    vec4 q = vec4(in_pos * in_inst.z + vec3(in_inst.xy, 0.0), 1.0);
+    gl_Position = (u_vp * (u_model * q)) * in_w4;
 }
 """
 
@@ -438,24 +474,33 @@ void main() { f_color = vec4(1.0); }
 
 POINT_VS = """
 #version 330
-in vec3 in_pos;      // the shape's 3D point + the copy's offset (see LINE_VS)
+in vec3 in_pos;      // the shape's 3D point (see LINE_VS)
 in vec2 in_corner;   // the quad's corner, (±1, ±1)
-in float in_size;    // radius in framebuffer pixels
+in float in_size;    // radius in framebuffer pixels at scale 1
 in float in_alpha;
+in vec3 in_rgb;      // RED, but for a scene's tinted layer (plan 28 catalog)
+in vec4 in_inst;     // this copy: centre (xy, world), scale (z), alpha (w)
 uniform mat4 u_vp;
 uniform mat4 u_model;
 uniform vec2 u_px;   // the framebuffer viewport, px
+uniform float u_wscale; // 1: dots scale with the copy (world space); 0: screen space
 out float v_alpha;
 out vec2 v_corner;
+out vec3 v_rgb;
 void main() {
-    vec4 c = u_vp * (u_model * vec4(in_pos, 1.0));
-    v_alpha = in_alpha;
+    vec4 c = u_vp * (u_model * vec4(in_pos * in_inst.z + vec3(in_inst.xy, 0.0), 1.0));
+    // the diameter a whole number of pixels, as the point sprites the quads
+    // replace were rasterised (the driver rounded gl_PointSize); under one
+    // pixel the dot stays a pixel and folds into alpha
+    float d = floor(2.0 * in_size * mix(1.0, in_inst.z, u_wscale) + 0.5);
+    v_alpha = in_alpha * min(d, 1.0) * in_inst.w;
     v_corner = in_corner;
+    v_rgb = in_rgb;
     if (c.w < """ + EYE_W + """) {        // behind the eye: nothing
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         return;
     }
-    gl_Position = vec4(c.xy + in_corner * in_size / (0.5 * u_px) * c.w, c.z, c.w);
+    gl_Position = vec4(c.xy + in_corner * (0.5 * max(d, 1.0)) / (0.5 * u_px) * c.w, c.z, c.w);
 }
 """
 
@@ -464,23 +509,25 @@ POINT_FS = """
 #version 330
 in float v_alpha;
 in vec2 v_corner;
+in vec3 v_rgb;
 out vec4 f_color;
-uniform vec3 u_color;
 uniform float u_depth_alpha;   // < 0 the colour pass; else the depth pass's threshold
 void main() {
     float a = v_alpha * (1.0 - smoothstep(0.8, 1.0, length(v_corner)));
     if (a <= 0.0 || (u_depth_alpha >= 0.0 && a <= u_depth_alpha)) discard;
-    f_color = vec4(u_color, a);
+    f_color = vec4(v_rgb, a);
 }
 """
 
-# the three vertex buffers' layouts, one row per vertex:
+# the three vertex buffers' layouts, one row per vertex, and the copies':
 #   face  — position (3), 4D divisor, uv (2), alpha, face id
-#   edge  — end a (3), end b (3), corner (end, side), width (logical px), alpha
-#   point — position (3), corner (2), radius (framebuffer px), alpha
+#   edge  — end a (3), end b (3), corner (end, side), width (logical px), alpha, rgb (3)
+#   point — position (3), corner (2), radius (framebuffer px), alpha, rgb (3)
+#   inst  — per copy: centre (2, world), scale, alpha
 FACE_FORMAT = "3f 1f 2f 1f 1f"
-LINE_FORMAT = "3f 3f 2f 1f 1f"
-POINT_FORMAT = "3f 2f 1f 1f"
+LINE_FORMAT = "3f 3f 2f 1f 1f 3f"
+POINT_FORMAT = "3f 2f 1f 1f 3f"
+INST_FORMAT = "4f/i"
 
 # a point's quad: two triangles over its four corners
 _POINT_CORNERS = np.array([(-1, -1), (1, -1), (-1, 1), (1, -1), (1, 1), (-1, 1)],
@@ -493,67 +540,11 @@ _EDGE_CORNERS = np.array([(0, 1), (0, -1), (1, 1), (0, -1), (1, -1), (1, 1)],
 
 
 
-# ---- instance layouts (plan 20 WP6): where each copy sits, in cells ----
-
-LAYOUT_GRID, LAYOUT_HEX, LAYOUT_RING = 0, 1, 2     # params.INST_LAYOUT's order
-# a cell — the spacing between neighbouring copies — in the world, shape
-# radii: the old 0.72·min(w, h) px through the default eye (SCALE·min(w, h)
-# px a unit at the origin), so a field at zoom 1 is spaced as it was
+# a field's pixels in the world: through the default eye a unit at the
+# origin is SCALE·min(w, h) px, so the field (field.py, laid out in px)
+# keeps the world spacing it had — a cell is field.CELL / SCALE shape radii
+# — whatever the eye (`Renderer._copies_of`)
 CELL = 0.72 / SCALE
-_HEX_STEPS = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))   # axial (q, r)
-
-
-def _hex_spiral(n: int) -> np.ndarray:
-    """The first `n` cells of a honeycomb spiral as (n, 2) float64 (gx, gy):
-    the centre, then ring 1 (six cells), ring 2 (twelve), ring m (6m), each
-    walked from axial (−m, m) taking m steps along each direction in turn.
-    A cell's place does not depend on `n`."""
-    out = [(0.0, 0.0)]
-    m = 0
-    while len(out) < n:
-        m += 1
-        q, r = -m, m
-        for dq, dr in _HEX_STEPS:
-            for _ in range(m):
-                out.append((q + r / 2, r * math.sqrt(3.0) / 2))
-                q, r = q + dq, r + dr
-    return np.array(out[:n], dtype=np.float64).reshape(-1, 2)
-
-
-def inst_positions(n: int, layout: int) -> tuple[np.ndarray, np.ndarray]:
-    """(gx, gy) for `n` copies, float32, in cells: where each copy sits
-    before `cell` scales it (`Renderer.draw_scene`, which asks only for
-    n ≥ 2). A cell is the spacing between neighbours in every layout. Pure:
-    no GL, no state.
-
-    GRID (and any layout it does not know) — rows of ``ceil(sqrt(n))``,
-    centred; the arithmetic `draw_scene` had inline, in the same order.
-    HEX — a honeycomb spiral from the centre: whole hexagons at 7, 19, 37,
-    61 and 91, and a copy never moves as the count grows.
-    RING — one circle, copy 0 at the top, clockwise on screen (y is down),
-    its radius ``1 / (2 sin(π / n))`` so neighbours stay one cell apart.
-
-    No copies is two empty arrays and one copy is the centre, in every
-    layout."""
-    n = max(0, int(n))
-    if n == 0:
-        return np.zeros(0, dtype=np.float32), np.zeros(0, dtype=np.float32)
-    if layout == LAYOUT_HEX:
-        cells = _hex_spiral(n)
-        return cells[:, 0].astype(np.float32), cells[:, 1].astype(np.float32)
-    if layout == LAYOUT_RING:
-        if n == 1:
-            return np.zeros(1, dtype=np.float32), np.zeros(1, dtype=np.float32)
-        radius = 1.0 / (2.0 * math.sin(math.pi / n))
-        th = 2.0 * math.pi * np.arange(n, dtype=np.float64) / n
-        return ((radius * np.sin(th)).astype(np.float32),
-                (-radius * np.cos(th)).astype(np.float32))
-    cols = math.ceil(math.sqrt(n))
-    rows = math.ceil(n / cols)
-    k = np.arange(n, dtype=np.float32)
-    gx = k % cols - (cols - 1) / 2      # grid position about the centre
-    gy = k // cols - (rows - 1) / 2
-    return gx, gy
 
 
 def _samples_of(ctx: moderngl.Context, fbo: moderngl.Framebuffer) -> int:
@@ -928,12 +919,14 @@ class Renderer:
         # while their switches do not change (graph.graph_key)
         self._graph: Graph | None = None
         self.cover = CoverTarget(ctx)
-        self._face_verts = 0           # face vertices in _fbuf from the last scene pass
+        self._face_verts = 0           # face vertices in _fbuf from the last scene pass (one copy)
+        self._copies = 0               # copies the last scene pass drew (rows in _ibuf)
         self._scene_mats = (b"", b"")  # …and the camera they were drawn in (u_vp, u_model)
         self._blank = ctx.texture((1, 1), 4)
-        self._lbuf = ctx.buffer(reserve=1200 * 2 * 3 * 4, dynamic=True)
-        self._pbuf = ctx.buffer(reserve=600 * 4 * 4, dynamic=True)
-        self._fbuf = ctx.buffer(reserve=2160 * 3 * 7 * 4, dynamic=True)
+        self._lbuf = ctx.buffer(reserve=1200 * 6 * 13 * 4, dynamic=True)
+        self._pbuf = ctx.buffer(reserve=600 * 6 * 10 * 4, dynamic=True)
+        self._fbuf = ctx.buffer(reserve=2160 * 3 * 8 * 4, dynamic=True)
+        self._ibuf = ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)   # the copies
         self._build_wire_programs()
         # bitmap layer over the faces, loaded from disk on demand
         self.bitmap_error = ""
@@ -974,18 +967,19 @@ class Renderer:
             made.append(lines)
             points = ctx.program(vertex_shader=POINT_VS, fragment_shader=POINT_FS)
             made.append(points)
-            points["u_color"].value = RED
+            inst = (self._ibuf, INST_FORMAT, "in_inst")
             lvao = ctx.vertex_array(lines, [(self._lbuf, LINE_FORMAT, "in_a", "in_b",
-                                             "in_corner", "in_width", "in_alpha")])
+                                             "in_corner", "in_width", "in_alpha", "in_rgb"),
+                                            inst])
             made.append(lvao)
             # the coverage pass reads the face buffer's position and divisor only
             cover_prog = ctx.program(vertex_shader=COVER_VS, fragment_shader=COVER_FS)
             made.append(cover_prog)
             cvao = ctx.vertex_array(cover_prog,
-                                    [(self._fbuf, "3f 1f 16x", "in_pos", "in_w4")])
+                                    [(self._fbuf, "3f 1f 16x", "in_pos", "in_w4"), inst])
             made.append(cvao)
             pvao = ctx.vertex_array(points, [(self._pbuf, POINT_FORMAT, "in_pos", "in_corner",
-                                              "in_size", "in_alpha")])
+                                              "in_size", "in_alpha", "in_rgb"), inst])
         except Exception:
             for res in made:
                 res.release()
@@ -1002,6 +996,8 @@ class Renderer:
         until a restart, and the reloader reports the AttributeError rather
         than this hook guessing at a value (audit H3)."""
         olds = (self._lvao, self._pvao, self._cvao, self._lines, self._points, self._cover_prog)
+        if getattr(self, "_ibuf", None) is None:     # a renderer from before the instanced draws
+            self._ibuf = self.ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)
         self._build_wire_programs()
         for res in olds:
             res.release()
@@ -1101,7 +1097,8 @@ class Renderer:
             made.append(seed)
             fvao = ctx.vertex_array(
                 prog,
-                [(self._fbuf, FACE_FORMAT, "in_pos", "in_w4", "in_uv", "in_alpha", "in_fid")],
+                [(self._fbuf, FACE_FORMAT, "in_pos", "in_w4", "in_uv", "in_alpha", "in_fid"),
+                 (self._ibuf, INST_FORMAT, "in_inst")],
             )
             made.append(fvao)
             svao = ctx.vertex_array(seed, [])
@@ -1287,18 +1284,25 @@ class Renderer:
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
         stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
-                 "layer": False, "readout": False,
+                 "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
-        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
-                      target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx.active(),
-                      stats=stats)
         graph = self._graph_for(views)
+        # plan 30 D1: "an effect is on" means one of the chain's runs: an
+        # effect the preset placed on an edge runs there (and moves its
+        # clock in `run_one`) but bends no pipeline, so with only placed
+        # effects on a through output stands down as with none
+        placed = getattr(graph, "placed_names", frozenset())
+        fx_on = any(n not in placed for n in fx.state.chain(getattr(fx, "target", 0)))
+        stats["fx_on"] = fx_on
+        frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
+                      target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
+                      stats=stats)
         timer = self._pass_timer()
         try:
             graph.evaluate(frame)
         finally:
-            timer.end_frame(graph.timed)
+            timer.end_frame(graph.timed_in(frame))
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
 
@@ -1309,14 +1313,27 @@ class Renderer:
         (`graph.default_graph`). getattr: a renderer from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
-        one adds its point-cloud node to the scene."""
+        one adds its point-cloud node to the scene. Plan 30 D0: so is the
+        effect stack's list in order (`FxState.names()`): each pipeline's
+        run of effect nodes is built from it, and an effect switched on or
+        off changes nothing here (an off node reads through). A new graph
+        fits the effects' texture pool to what it needs (`Graph.pool`).
+        Plan 28 N4: the preset's wires are part of the key — they ride in
+        the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
+        so an edit on the GRAPH page that lands a new `GraphSpec` builds
+        the graph again, with the same refusals (a dormant wire, a loop)."""
         key = graph_key(views)
         wiring = getattr(self, "wiring", None) or Wiring()
         clouds = cloud_roles(getattr(self, "cloud_source", None))
+        fx = getattr(self, "fx", None)
+        effects = tuple(fx.state.names()) if fx is not None else ()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
-                or getattr(graph, "clouds", ()) != clouds):
-            graph = self._graph = default_graph(views, wiring, clouds)
+                or getattr(graph, "clouds", ()) != clouds
+                or getattr(graph, "effects", ()) != effects):
+            graph = self._graph = default_graph(views, wiring, clouds, effects)
+            if fx is not None and hasattr(fx, "fit_pool"):
+                fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
             # not hold goes with the old graph
             self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
@@ -1326,7 +1343,8 @@ class Renderer:
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
                  lay=None, blend: str = "over", ghost: Ghost | None = None,
-                 readout_ghost: Ghost | None = None) -> None:
+                 readout_ghost: Ghost | None = None,
+                 hands_tex: moderngl.Texture | None = None) -> None:
         """One view's picture: the pipeline's frame (`key`, the pipeline its
         end node closes, `outputs.SCENE` …; already there when it was drawn
         direct), the hands over it in the same rect, the readout layer over
@@ -1336,7 +1354,10 @@ class Renderer:
         honours add, and lays a depth-aware layer plain over (the depths
         stay in this context). `ghost` is the Ghost whose layer is laid
         over and `readout_ghost` the one whose readout goes on (plan 26 A4:
-        each hands node's own; the renderer's when None)."""
+        each hands node's own; the renderer's when None). `hands_tex` (plan
+        30 D1): the picture of the hands laid over when it is not the
+        Ghost's own layer — an effect placed after the hands folds it — for
+        a presenter's hand-off (a target view lays it through `lay`)."""
         ctx = self.ctx
         gh = ghost if ghost is not None else self.ghost
         rg = readout_ghost if readout_ghost is not None else gh
@@ -1353,7 +1374,8 @@ class Renderer:
             rx, ry, rw, rh = v.rect
             ix, iy, iw, ih = fit(size, (rw, rh))
             v.handoff = Handoff(frame, size, (rx + ix, ry + iy, iw, ih),
-                                hands=gh.tex if after else None, readout=readout,
+                                hands=((hands_tex if hands_tex is not None else gh.tex)
+                                       if after else None), readout=readout,
                                 alpha=float(gh.state.alpha), factor=factor,
                                 bg_alpha=float(v.bg_alpha), flip=flip,
                                 blend="add" if blend == "add" else "over")
@@ -1848,13 +1870,14 @@ class Renderer:
         self.cover.fbo.use()
         ctx.viewport = (0, 0, *self.scene.size)
         ctx.clear(0.0, 0.0, 0.0, 0.0)
-        if self._face_verts:
+        if self._face_verts and self._copies:
             ctx.disable(moderngl.BLEND)
             # the scene pass's camera, as it drew those vertices
             vp, model = self._scene_mats
             self._cover_prog["u_vp"].write(vp)
             self._cover_prog["u_model"].write(model)
-            self._cvao.render(moderngl.TRIANGLES, vertices=self._face_verts)
+            self._cvao.render(moderngl.TRIANGLES, vertices=self._face_verts,
+                              instances=self._copies)
             ctx.enable(moderngl.BLEND)
         return self.cover.tex
 
@@ -1879,9 +1902,9 @@ class Renderer:
         for the one scene pass it wraps).
 
         Plan 26 A2, the one camera: the CPU takes the shape to 3D
-        (`geometry.world_points`), the GPU on to the clip through the
-        shape's world transform (camera.zoom / camera.pan,
-        `geometry.model_matrix`) and the eye (`eye.*`,
+        (`geometry.shape_world`), the GPU on to the clip through each
+        copy's place (its scale and centre, the camera's zoom and pan with
+        them: `_copies_of`, field.py) and the eye (`eye.*`,
         `geometry.eye_matrix`). The see-through shape is painter-sorted
         as before and drawn with the depth test on but no depth written
         (whatever solid geometry is already in the depth buffer hides it;
@@ -1892,58 +1915,37 @@ class Renderer:
         cleared it and drew the solid geometry (the hands) first, whose
         depth hides the shape behind them."""
         g = geom(s.shape)
-        # a shape whose W planes are masked is drawn at its own angles
-        # (geometry.view_angles); every other shape at the view's
-        ang = view_angles(s.shape, s.ang)
-        P, w4, pd = world_points(g["V"], ang, s.yaw, s.pitch, d4=s.depth4)
-        if w_masked(s.shape):
-            # its w is 0 at every angle, so the depth cue (pd: fade, width,
-            # draw order) would sit flat at its dimmest; it cues on its
-            # depth toward the 3D camera (yaw and pitch included, so a
-            # camera turned round never puts the far side on top), as a 4D
-            # shape cues on its depth toward the 4D eye
-            pd = view_depth(g["V"], ang, s.yaw, s.pitch, d4=s.depth4)
+        # a 3D shape is drawn with no W turn and cues on its depth toward
+        # the 3D camera; a 4D shape is turned to its body first, and with
+        # the 3D switch holding it (ViewState.held, set by integrate) by
+        # its 3D angles alone; a scene, each layer at its own
+        # (geometry.shape_world, plan 28's catalog)
+        P, w4, pd = shape_world(s.shape, s.ang, s.yaw, s.pitch, d4=s.depth4,
+                                flat=getattr(s, "held", False), body=getattr(s, "body", None))
+        # a scene's per-layer weights (geometry._scene_style), else None
+        st = g.get("style")
 
-        # the camera: the shape's world transform and the eye, as the
-        # vertex shaders take them (column-major)
+        # the camera: the shape's world transform and the eye, as the vertex
+        # shaders take them (column-major). Two ways to place the copies:
+        # a flat layout (or one copy) with Fit off is the field it always was — the
+        # copies' offsets in the world at scale 1, the camera's zoom and pan
+        # the world transform (`model_matrix`), the strokes scaled on the
+        # CPU — so its frames are byte for byte what they were; Fit and the
+        # 3D lattices are field.py's, each copy's own scale and centre with
+        # the camera in them, the world transform the identity, the strokes
+        # scaled per copy in the shaders (`_copies_of`)
         zoom = max(s.zoom, 1e-3)
-        model = model_matrix(zoom, s.pan)
+        legacy = not getattr(s, "inst_fit", False) and (
+            int(s.instances) <= 1 or not is_3d_layout(int(getattr(s, "inst_layout", 0))))
+        model = model_matrix(zoom, s.pan) if legacy else model_matrix(1.0, (0.0, 0.0))
         vp = eye_matrix(w, h, getattr(s, "eye_fov", EYE_FOV),
                         getattr(s, "eye_distance", EYE_DISTANCE))
         mats = (np.asarray(vp, dtype="f4").T.tobytes(),
                 np.asarray(model, dtype="f4").T.tobytes())
         self._scene_mats = mats
 
-        # synchronized instances in a layout (grid, honeycomb or ring:
-        # inst_positions), in the world: a cell is CELL shape radii, and the
-        # field is scaled and moved as one by the world transform, so
-        # zooming out shows a field as it always did
         n_inst = max(0, int(s.instances))   # 0: the ground alone (returns below)
         t_m = self.now(t_now)
-        if n_inst > 1:
-            gx, gy = inst_positions(n_inst, int(s.inst_layout))
-            gx, gy = gx.astype(np.float64), gy.astype(np.float64)
-            ox, oy = gx * CELL, gy * CELL
-            if s.inst_motion and s.inst_amp > 0.0:
-                # trigonometric motion over the field: each instance's phase
-                # comes from its position, so the field moves as one figure
-                ph = t_m * s.inst_rate
-                if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
-                    th = ph + (gx + gy) * 0.9
-                    dx, dy = np.cos(th), np.sin(th)
-                elif s.inst_motion == 2:  # WAVE — bob by column, sway by row
-                    dx = 0.35 * np.sin(ph * 0.7 + gy * 1.1)
-                    dy = np.sin(ph + gx * 1.1)
-                else:                     # RIPPLE — radial swell from the centre
-                    rr = np.hypot(gx, gy)
-                    u = np.sin(ph - rr * 1.2) / np.maximum(rr, 1.0)
-                    dx, dy = gx * u, gy * u
-                ox = ox + s.inst_amp * CELL * dx
-                oy = oy + s.inst_amp * CELL * dy
-            # the cells are laid out y down the screen; the world's y is up
-            offs = np.stack([ox, -oy], axis=1).astype(np.float32)
-        else:
-            offs = np.zeros((1, 2), dtype=np.float32)
 
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
@@ -1957,25 +1959,44 @@ class Renderer:
         B = s.bright * dens
         alpha = np.clip((0.10 + 0.90 * t * t) * B, 0.015, 1)
 
-        # the reference's depth- and brightness-scaled line width (CSS px).
-        # Plan 26 A2b (view.screen_strokes): in world space (the default)
-        # the width is × the zoom, so a stroke grows and shrinks with the
-        # shape as it did before A2; in screen space it keeps its weight
-        # whatever the shape's size in the world (A2). The shape's strokes
-        # only: the hands are not drawn here — A3's tubes are world-sized
-        # geometry (ghost.py WIRE_R / BONE_R) that never follows
-        # camera.zoom (the zoom is the shape's scale, not the hands'), and
-        # A4's hand lines are 1 px edges drawn by ghost.Geometry, not by
-        # this width, in both modes
-        sz = 1.0 if getattr(s, "screen_strokes", False) else zoom
+        # the reference's depth- and brightness-scaled line width (CSS px)
+        # at scale 1. Plan 26 A2b (view.screen_strokes): in world space (the
+        # default) LINE_VS scales it by the copy's scale — the camera's zoom
+        # with it — so a stroke grows and shrinks with the shape as it did
+        # before A2 and a zoomed-out field thins out naturally; in screen
+        # space it keeps its weight whatever the shape's size in the world
+        # (A2). The shape's strokes only: the hands are not drawn here —
+        # A3's tubes are world-sized geometry (ghost.py WIRE_R / BONE_R) that
+        # never follows camera.zoom, and A4's hand lines are 1 px edges drawn
+        # by ghost.Geometry, not by this width, in both modes
+        screen_strokes = getattr(s, "screen_strokes", False)
+        # the shaders scale a stroke by its copy (field path, world space);
+        # the legacy path scales it here, by the zoom, as before
+        wsc = 0.0 if screen_strokes or legacy else 1.0
+        sz = 1.0 if screen_strokes or not legacy else zoom
         wscale = clamp(0.75 + 0.35 * s.bright, 0.6, 1.35)
-        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale * sz
-        draw_w = np.maximum(width, 1.0)
-        # the edges' alpha, final: depth × brightness × density (floored
-        # above), sub-pixel width folded in, × the lines opacity (plan 24
-        # C2) — after the floor and before the vertex fill, so the depth
-        # pass's skip test (`draws`) sees the faded alpha
-        alpha = alpha * np.minimum(width, 1.0) * s.lines_alpha
+        width = ((0.35 + 0.85 * t) if heavy else (0.5 + 1.5 * t)) * wscale
+        if st is not None:
+            # a scene: each edge's density, weight and width are its own
+            # layer's, not the whole compound's
+            em = st["e_m"][order]
+            edens = np.clip(340 / np.maximum(em, 1), 0.42, 1)
+            alpha = np.clip((0.10 + 0.90 * t * t) * s.bright * edens, 0.015, 1)
+            alpha = alpha * st["e_alpha"][order]
+            width = np.where(em > 500, 0.35 + 0.85 * t, 0.5 + 1.5 * t) * wscale
+            width = width * st["e_width"][order]
+        # the edges' alpha: depth × brightness × density (floored above),
+        # a sub-pixel width folded in, × the lines opacity (plan 24 C2) —
+        # before the vertex fill, so the depth pass's skip test (`draws`)
+        # sees the faded alpha. On the legacy path the zoom (`sz`) is in the
+        # width and the fold is done here, as before; on the field path
+        # LINE_VS folds per copy (this alpha an upper bound)
+        if legacy:
+            width = width * sz
+            alpha = alpha * np.minimum(width, 1.0) * s.lines_alpha
+            width = np.maximum(width, 1.0)
+        else:
+            alpha = alpha * s.lines_alpha
 
         # premultiplied ground: black at bg_alpha, so SRC_ALPHA/ONE_MINUS
         # blending leaves the framebuffer correctly composited for a
@@ -2000,6 +2021,7 @@ class Renderer:
 
         # ---- face fills, under the wireframe (agent-validated prototype) ----
         self._face_verts = 0
+        self._copies = 0
         if s.faces:
             self._maybe_reload_patterns()
         if n_inst == 0:
@@ -2007,6 +2029,15 @@ class Renderer:
             # written and nothing is bound here, so the caller's target and
             # the passes after this one are as on any other frame
             return
+        # the copies: where each goes, how big, how bright — far to near,
+        # those wholly off screen dropped (`_copies_of`)
+        inst = self._copies_of(s, w, h, t_m, P, vp, dpr, legacy)
+        if not len(inst):
+            return                     # every copy is off screen: the ground alone
+        self._ibuf.orphan(inst.nbytes)
+        self._ibuf.write(inst.tobytes())
+        copies = len(inst)
+        self._copies = copies
         # the see-through shape: tested against what depth is there, never
         # writing any (the painter order is its own order); `_depth_pass`
         # writes its visible surface afterwards
@@ -2028,6 +2059,8 @@ class Renderer:
                     fdens = min(1.0, 24.0 / max(nfaces, 1))
                     fa = (0.010 + 0.055 * tt * tt) * s.bright * (0.35 + 0.65 * fdens)
                     to = tris[torder]
+                    if st is not None:
+                        fa = fa * st["f_alpha"][to[:, 3]]
                     uv = face_uvs(s.shape).reshape(-1, 3, 2)[torder]
                     fverts = np.empty((len(tris) * 3, 8), dtype=np.float32)
                     for corner in range(3):
@@ -2037,7 +2070,6 @@ class Renderer:
                         fverts[corner::3, 5] = uv[:, corner, 1]
                         fverts[corner::3, 6] = fa
                         fverts[corner::3, 7] = to[:, 3]
-                    fverts = self._tile(fverts, offs)
                     self._fbuf.orphan(fverts.nbytes)
                     self._fbuf.write(fverts.tobytes())
                     p = self._face_prog
@@ -2054,7 +2086,7 @@ class Renderer:
                         screen = int(getattr(self.fx.state, "face_map", 0)) == SCREEN
                         p["u_pic_on"].value = 2 if screen else 1
                         p["u_pic_fb"].value = tuple(float(x) for x in self.scene.size)
-                    self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts))
+                    self._fvao.render(moderngl.TRIANGLES, vertices=len(fverts), instances=copies)
                     self._face_verts = len(fverts)
                     # a fill is at most 2.8× its vertex alpha: the face shader's
                     # shade is mix(1, 2.8·v.a, mix) with v clamped to [0, 1] in
@@ -2066,54 +2098,67 @@ class Renderer:
             if s.lines:
                 eo = E[order]
                 m = g["m"]
-                verts = np.empty((m * 6, 10), dtype=np.float32)
+                rgb = st["e_rgb"][order] if st is not None else (1.0, 1.0, 1.0)
+                verts = np.empty((m * 6, 13), dtype=np.float32)
                 for k in range(6):
                     verts[k::6, 0:3] = P[eo[:, 0]]
                     verts[k::6, 3:6] = P[eo[:, 1]]
                     verts[k::6, 6:8] = _EDGE_CORNERS[k]
-                    verts[k::6, 8] = draw_w
+                    verts[k::6, 8] = width
                     verts[k::6, 9] = alpha
-                verts = self._tile(verts, offs, cols=(0, 3))   # both ends
+                    verts[k::6, 10:13] = rgb
                 self._lbuf.orphan(verts.nbytes)
                 self._lbuf.write(verts.tobytes())
                 self._camera_uniforms(self._lines, mats, -1.0)
                 self._lines["u_size"].value = (float(w), float(h))
-                self._lvao.render(moderngl.TRIANGLES, vertices=len(verts))
+                self._lines["u_wscale"].value = wsc
+                self._lvao.render(moderngl.TRIANGLES, vertices=len(verts), instances=copies)
                 draws.append((self._lvao, len(verts), self._lines, float(alpha.max())))
 
-            if s.points:
+            if s.points and not g.get("curve"):   # a curve (plan 28) has no corners to dot
                 tp = (pd - near) / span
                 order_p = np.argsort(pd, kind="stable")
-                # radius in framebuffer px (× dpr), × the zoom in world space
-                # (plan 26 A2b, `sz` above; 1 in screen space) — before the
-                # rounding: the diameter is a whole number of pixels, as the
-                # point sprites the quads replace were rasterised (the driver
-                # rounded gl_PointSize — measured: with it the quads draw the
-                # sprites' frame byte for byte, without it every dot grows)
-                r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr * sz
-                r = np.floor(2.0 * r + 0.5) / 2.0
+                # radius in framebuffer px (× dpr) at scale 1; POINT_VS scales
+                # it by the copy in world space (plan 26 A2b) and rounds the
+                # diameter to whole pixels, as the point sprites the quads
+                # replace were rasterised (the driver rounded gl_PointSize —
+                # measured: with it the quads draw the sprites' frame byte for
+                # byte, without it every dot grows)
+                r = ((1.0 if heavy else 1.7) + 2.3 * tp * tp) * dpr
+                if legacy:
+                    # × the zoom in world space, rounded here as before: the
+                    # shader's own rounding of a whole diameter is the identity
+                    r = np.floor(2.0 * r * sz + 0.5) / 2.0
                 # the points' alpha: depth × brightness, floored, × the points
                 # opacity (plan 24 C2) after the floor — the one place it is derived
                 PB = s.bright * clamp(dens * 1.5, 0.55, 1)
                 pa = np.clip((0.32 + 0.68 * tp) * PB, 0.05, 1) * s.points_alpha
+                prgb = RED
+                if st is not None:
+                    # a layer's weight scales its points' alpha and size; a
+                    # tinted layer's points take its tint, the rest stay red
+                    pa = pa * st["p_alpha"]
+                    r = r * np.sqrt(st["p_alpha"])
+                    prgb = np.where(st["p_tinted"][:, None], st["p_rgb"], RED)[order_p]
                 n = g["n"]
-                pverts = np.empty((n * 6, 7), dtype=np.float32)
+                pverts = np.empty((n * 6, 10), dtype=np.float32)
                 for k in range(6):
                     pverts[k::6, 0:3] = P[order_p]
                     pverts[k::6, 3:5] = _POINT_CORNERS[k]
                     pverts[k::6, 5] = r[order_p]
                     pverts[k::6, 6] = pa[order_p]
-                pverts = self._tile(pverts, offs)
+                    pverts[k::6, 7:10] = prgb
                 self._pbuf.orphan(pverts.nbytes)
                 self._pbuf.write(pverts.tobytes())
                 self._camera_uniforms(self._points, mats, -1.0)
                 vpx = self.ctx.viewport
                 self._points["u_px"].value = (float(max(vpx[2], 1)), float(max(vpx[3], 1)))
-                self._pvao.render(moderngl.TRIANGLES, vertices=len(pverts))
+                self._points["u_wscale"].value = wsc
+                self._pvao.render(moderngl.TRIANGLES, vertices=len(pverts), instances=copies)
                 draws.append((self._pvao, len(pverts), self._points, float(pa.max())))
 
             if has_depth:
-                self._depth_pass(fbo, draws, mats, blend)
+                self._depth_pass(fbo, draws, mats, blend, copies)
         finally:
             if has_depth:
                 self.ctx.disable(moderngl.DEPTH_TEST)
@@ -2121,7 +2166,7 @@ class Renderer:
                 fbo.use()
 
     def _depth_pass(self, fbo: moderngl.Framebuffer, draws: list[tuple], mats: tuple,
-                    blend: tuple) -> None:
+                    blend: tuple, copies: int = 1) -> None:
         """The shape's depth, after its colour (plan 26 A2): the same draws
         again with the colour left as it is (the blend keeps the
         destination) and depth written, only by fragments whose alpha is
@@ -2138,7 +2183,7 @@ class Renderer:
         try:
             for vao, n, prog, _ in live:
                 prog["u_depth_alpha"].value = DEPTH_ALPHA
-                vao.render(moderngl.TRIANGLES, vertices=n)
+                vao.render(moderngl.TRIANGLES, vertices=n, instances=copies)
         finally:
             for _, _, prog, _ in live:
                 prog["u_depth_alpha"].value = -1.0
@@ -2146,27 +2191,129 @@ class Renderer:
 
     @staticmethod
     def _camera_uniforms(prog: moderngl.Program, mats: tuple, depth_alpha: float) -> None:
-        """The one camera on a scene program: the eye and the shape's world
+        """The one camera on a scene program: the eye and the world
         transform, and which pass (the colour pass: no depth threshold)."""
         prog["u_vp"].write(mats[0])
         prog["u_model"].write(mats[1])
         prog["u_depth_alpha"].value = depth_alpha
 
-    @staticmethod
-    def _tile(verts: np.ndarray, offs: np.ndarray, cols: tuple[int, ...] = (0,)) -> np.ndarray:
-        """Replicate a per-instance vertex array across the instance field:
-        each copy's (x, y) world offset added to every 3D point in the row,
-        the points starting at the columns `cols` names — (0,) for a face
-        or a point, (0, 3) for an edge's two ends (`LINE_FORMAT`)."""
-        if len(offs) == 1 and not offs.any():
-            return verts
-        out = np.tile(verts, (len(offs), 1))
-        per = len(verts)
-        for k, (ox, oy) in enumerate(offs):
-            for c in cols:
-                out[k * per : (k + 1) * per, c] += ox
-                out[k * per : (k + 1) * per, c + 1] += oy
-        return out
+    def _field(self, s: ViewState, w: int, h: int, t: float) -> np.ndarray:
+        """The copies this scene pass lays out: `field.field`'s rows
+        (centre px, scale, alpha), far to near, none culled — the camera's
+        pan handed over in px through the default eye (`CELL`). Its own
+        method so a test can see what the pass was handed."""
+        return field(_PanPx(s, SCALE * min(w, h)), w, h, t)
+
+    def _legacy_field(self, s: ViewState, t: float) -> np.ndarray:
+        """The copies of a flat layout with Fit off, as the field was laid out
+        before the instanced draws — the same float arithmetic: (m, 4) rows
+        of (x, y) in the world at scale 1 (a cell CELL shape radii, y up),
+        scale 1, alpha 1, before the world transform; none culled. Its own
+        method so a test can see what the pass was handed."""
+        n = max(0, int(s.instances))
+        if n == 0:
+            return np.zeros((0, 4), dtype=np.float64)
+        inst = np.zeros((max(n, 1), 4), dtype=np.float64)
+        inst[:, 2:] = 1.0
+        if n > 1:
+            gx, gy = _field_mod.inst_positions(n, int(getattr(s, "inst_layout", 0)))
+            gx, gy = gx.astype(np.float64), gy.astype(np.float64)
+            spacing = max(float(getattr(s, "inst_spacing", 1.0)), 0.05)
+            ox, oy = gx * CELL, gy * CELL
+            if spacing != 1.0:
+                ox, oy = ox * spacing, oy * spacing
+            if s.inst_motion and s.inst_amp > 0.0:
+                # trigonometric motion over the field: each instance's
+                # phase comes from its position, so the field moves as
+                # one figure (field._motion's flat formulas)
+                ph = t * s.inst_rate
+                if s.inst_motion == 1:    # ORBIT — circles in a traveling wave
+                    th = ph + (gx + gy) * 0.9
+                    dx, dy = np.cos(th), np.sin(th)
+                elif s.inst_motion == 2:  # WAVE — bob by column, sway by row
+                    dx = 0.35 * np.sin(ph * 0.7 + gy * 1.1)
+                    dy = np.sin(ph + gx * 1.1)
+                else:                     # RIPPLE — radial swell from the centre
+                    rr = np.hypot(gx, gy)
+                    u = np.sin(ph - rr * 1.2) / np.maximum(rr, 1.0)
+                    dx, dy = gx * u, gy * u
+                ox = ox + s.inst_amp * CELL * dx
+                oy = oy + s.inst_amp * CELL * dy
+            # the cells are laid out y down the screen; the world's y is up
+            inst[:, 0] = ox.astype(np.float32)
+            inst[:, 1] = (-oy).astype(np.float32)
+        return inst
+
+    def _copies_of(self, s: ViewState, w: int, h: int, t: float, P: np.ndarray,
+                   vp: np.ndarray, dpr: float, legacy: bool = False) -> np.ndarray:
+        """The instance rows for the scene pass, (m, 4) float32: each copy's
+        centre in the world (x, y on the plane through the origin, y up),
+        its scale and its alpha. A copy wholly off screen through the eye
+        is dropped (its bounding box's corners, projected).
+
+        `legacy` (a flat layout, Fit off): the field as it was before the
+        instanced draws, the same float arithmetic — a cell CELL shape
+        radii, the motion's formulas — at scale 1 and alpha 1, before the
+        world transform (the camera's zoom and pan, `model_matrix`).
+        Otherwise `_field`'s px through the default eye (SCALE·min(w, h)
+        px a unit), so the field keeps its world spacing whatever the eye;
+        the camera is in the rows and the world transform is the identity."""
+        if legacy:
+            inst = self._legacy_field(s, t)
+            if not len(inst):
+                return np.zeros((0, 4), dtype=np.float32)
+            # where the copies land in the world, for the cull alone
+            zoom = max(float(s.zoom), 1e-3)
+            seen = inst.copy()
+            seen[:, 0] = inst[:, 0] * zoom + float(s.pan[0])
+            seen[:, 1] = inst[:, 1] * zoom - float(s.pan[1])
+            seen[:, 2] = zoom
+        else:
+            rows = self._field(s, w, h, t)
+            if not len(rows):
+                return np.zeros((0, 4), dtype=np.float32)
+            ppu0 = SCALE * min(w, h)
+            inst = np.empty((len(rows), 4), dtype=np.float64)
+            inst[:, 0] = (rows[:, 0] - w / 2) / ppu0
+            inst[:, 1] = -(rows[:, 1] - h / 2) / ppu0
+            inst[:, 2:] = rows[:, 2:]
+            seen = inst
+        if len(P):
+            # each copy's box (the shape's bounding box × its scale + its
+            # centre) through the eye: a box in front of the eye projects
+            # inside its corners' projections, so this reach is exact for
+            # the box; a corner at or behind the eye keeps the copy. The pad
+            # is a stroke's reach past its vertices (a dot's radius, half a
+            # line), × the copy's scale in world-space strokes
+            lo, hi = P.min(axis=0), P.max(axis=0)
+            box = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1])
+                            for z in (lo[2], hi[2])])
+            k = seen[:, 2]
+            q = k[:, None, None] * box[None] + np.c_[seen[:, :2], np.zeros(len(seen))][:, None]
+            c = q @ np.asarray(vp)[:3, :3].T + np.asarray(vp)[:, 3][:3]
+            cw = q @ np.asarray(vp)[3, :3] + np.asarray(vp)[3, 3]
+            front = (cw > EYE_NEAR).all(axis=1)
+            cw = np.where(cw > EYE_NEAR, cw, 1.0)
+            x = (c[..., 0] / cw + 1.0) * (w / 2)
+            y = (1.0 - c[..., 1] / cw) * (h / 2)
+            scale = 1.0 if getattr(s, "screen_strokes", False) else np.maximum(k, 1.0)
+            pad = 6.0 * dpr * scale
+            keep = ~front | ((x.max(axis=1) + pad >= 0) & (x.min(axis=1) - pad <= w)
+                             & (y.max(axis=1) + pad >= 0) & (y.min(axis=1) - pad <= h))
+            inst = inst[keep]
+        return inst.astype(np.float32)
+
+
+class _PanPx:
+    """A view whose camera.pan is in px (field.py's unit) — the world pan ×
+    `ppu` — and is otherwise the view itself."""
+
+    def __init__(self, s, ppu: float):
+        self._s = s
+        self.pan = (float(s.pan[0]) * ppu, float(s.pan[1]) * ppu)
+
+    def __getattr__(self, name):
+        return getattr(self._s, name)
 
 
 N_PATTERNS = len(MODES)

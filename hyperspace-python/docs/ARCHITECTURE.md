@@ -43,14 +43,14 @@ runs the one frame loop.
 | Component | Modules | Owns | Writes | Boundary (held by) |
 |---|---|---|---|---|
 | **Registry** | `params.py`, `tapers.py` | every `Param`: id, kind, taper, flags, base, this frame's offsets | the live objects, once a frame, in `Registry.apply()` | never imports `midi`, `bridge` or `dream` (`tests/test_params.py::test_core_does_not_import_the_midi_adapter`, `tests/test_bridge.py::test_core_does_not_import_the_bridge`, `tests/test_dream.py::test_core_does_not_import_the_worker`). It does import `fx`, `ghost`, `lookback`, `geometry`, `analyzer` and `bands` for their state classes and constants |
-| **Routing table** | `routing.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the per-frame modulation pass | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `glfw` and `gamepad` only lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
+| **Routing table** | `routing.py`, `patch.py`, `modifiers.py` | `Binding` rows, `<home>/bindings.json` (the session's controls), the referee, the desk's layers, the macros, the preset's modifiers (`Bindings.modifiers`), the per-frame modulation pass — the table as a graph in dependency order (`Router.patch`; `patch.py` the leaf that sorts it, `modifiers.py` the leaf that steps a modifier) | offsets, through `Router.modulate` → `Param.modulate` (the only call site in the package); bases for key / pad rows (`routing.act`) and macro base subscribers | imports nothing above it — no `ui`, `app`, `hands`, `midi`, `bridge`, `learn`, `dream`, `hotreload`, `library`; `glfw` and `gamepad` only lazily, to resolve key and pad names (`tests/test_routing_boundary.py::test_routing_imports_nothing_above_it`, `::test_importing_routing_pulls_in_no_adapter_or_panel`, `::test_only_router_modulate_calls_param_modulate`) |
 | **Learn** | `learn.py` | the armed param and what it waits for, the held Replace / Keep question, the picked desk control, Unbind | table rows, through the table's edit doors | imports only `undo`, `params`, `routing`; the device profile and the device registry (what can be armed, the sink ports) arrive as arguments (`tests/test_learn.py::test_learn_control_needs_no_adapter`) |
 | **Devices** | `devices.py` (the `Device` protocol, `Port`, `DeviceRegistry`, the kind table, `PointCloud`), each kind's adapter: `midi.py` + `apc40.py` / `generic.py`, `gamepad.py`, `hands/` (`hands/device.py` the wrapper), `bridge.py`, `osc.py`; and the host's own `app.Keys` / `app.Mouse` | every input and output the rig lists in `config.toml`'s `[[devices]]`, each opened behind its entry with its pickup state and a status line; the device list's watch and retry; the point clouds (`DeviceRegistry.clouds`) | MIDI rows / pad buttons / OSC hits / keys / mouse: the **base** (scene-setter slot); hands, bridge `ext`, the pad's axes, OSC axes: only `Router.feed` (feed slot); sinks read effective values after `reg.apply` and send them out, writing nothing | `devices.py` is the one importer of every adapter module, each inside its device's `open`; the core never imports `midi`, `bridge`, `osc` (above, and `tests/test_app_boundary.py`); routing and learn are handed the registry as an argument (`Router.use`, `Learn.devices`); `hands/core.py`, `signal.py`, `tape.py` import nothing from the package and `hands/device.py` and `hands/panel.py` are the only pieces that know the host (`tests/test_hands_boundary.py`); only `osc.py` and `devices.kinds()` name the OSC device (`tests/test_osc.py::test_only_osc_py_and_the_kind_table_name_the_osc_device`) |
 | **Audio source** | `audio.py`, `analysis.py`, `analyzer.py`, `bands.py` (and the tests' `offline.py`) | capture or file playback, the FFT, the N band lanes | `Analyzer.lanes` (read by `Router.modulate`), the lanes' names (`AudioEngine.publish`) | imports only itself, `tapers` and `motion` (`tests/test_audio_boundary.py`) |
 | **LFOs and clock** | `lfo.py`, `tempo.py` | four oscillators, one tap-tempo clock | `Router.feed("lfo", …)`, its labels and rests | import nothing from the package; registry, router and clock arrive as arguments (`tests/test_lfo_boundary.py`) |
-| **Render stack** | `geometry.py`, `view.py`, `graph.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the shared camera (the eye, `eye.*`), the render graph (below), the frame history, the dream worker, the faces' picture, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
-| **Graph** (in the render stack) | `graph.py` | the frame as nodes — geometries (the shape, the hands, a point cloud), the scene, layers, composites, the effect chain, the history, the outputs — wired by `default_graph` from the outputs' switches, the renderer's `Wiring` (a preset's `graph` section) and the listed clouds, evaluated once a frame in dependency order; node instances (`ghost.2`, `fx.acid.2`), the graph JSON's reader (`read_graph`, `NODE_KINDS`) | the screens, through the render stack's passes; nothing in the registry | imports `moderngl`, `numpy`, `geometry` and `outputs` only — no `params`, `routing`, `library`, `preset`, `undo`, `control`, `devices`; node methods are `run` / `paint` / `draw` / `image` / `depth`, never `apply`, `modulate`, `snapshot`, `set_value` (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`); the device registry reaches it duck-typed (`Renderer.cloud_source`) |
-| **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it |
+| **Render stack** | `geometry.py`, `view.py`, `field.py`, `graph.py`, `render.py`, `glsl.py`, `fx.py`, `lookback.py`, `dream.py`, `ghost.py`, `outputs.py`, `overlay.py`, `shaders/` | GL resources, `ViewState`, the shared camera (the eye, `eye.*`), the render graph (below), the instance field, the frame history, the dream worker, the faces' picture, the one wall clock (`Renderer.now`) | the screen; `ViewState.integrate` writes `ang` directly | reads parameters, never writes one: `render.py` and `fx.py` import no `params`, `routing`, `library`, `preset`, `undo`, `control` (`tests/test_render.py::test_the_render_stack_imports_no_registry`); `outputs.py` imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `dream` is imported only by `app._open_dream` behind `[dream] enabled` and is the one module that imports `torch` (`tests/test_dream.py::test_core_does_not_import_the_worker`) |
+| **Graph** (in the render stack) | `graph.py` | the frame as nodes — geometries (the shape, the hands, a point cloud), the scene, layers, composites, one effect node per effect instance (each pipeline's chain a run of them, ending in its `Fx` end; a placed effect on any image edge), the history, the outputs — wired by `default_graph` from the outputs' switches, the renderer's `Wiring` (a preset's `graph` section, its placements included), the listed clouds and the effect stack's list, evaluated once a frame in dependency order; node instances (`ghost.2`, `fx.acid.2`), the graph JSON's reader (`read_graph`, `NODE_KINDS`) | the screens, through the render stack's passes; nothing in the registry | imports `moderngl`, `numpy`, `geometry` and `outputs` only — no `params`, `routing`, `library`, `preset`, `undo`, `control`, `devices`; node methods are `run` / `paint` / `draw` / `image` / `depth`, never `apply`, `modulate`, `snapshot`, `set_value` (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`); the device registry reaches it duck-typed (`Renderer.cloud_source`) |
+| **Panel** | `ui.py`, `ui_*.py`, `hands/panel.py`, `control.py`, `graphview.py` | imgui state, page selection, the Replace / Keep modal, the routing page's edits, the GRAPH page (`ui_graph.py` drawing `graphview.py`'s model on `imgui_node_editor`; its editor context held on the panel) | param **bases** through `Param.set*`; table rows through the table's edit doors and `Learn` | only `app`, `hands/panel.py` and the `ui*` modules import `ui*`. By convention: no test holds it; `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`) and edits only through the table's own calls and the preset's `graph` section |
 | **Library** | `library.py`, `preset.py`, `config.py`, `library/` | the library root (`Library.home`: module presets, presets, shows (projects), the trash, `hidden.json` — the home, or the folder `[library] path` names), the machine home (`Library.machine`: `last_show`), the bank of twenty-four, `config.toml` (its `[[devices]]` list checked per entry, the old device tables translated; `config.read_devices` for the registry's watch) | bases through `Registry.restore`; a preset load replaces the table's performer rows, desk layer and macros | `library` imports `params` and `undo` (and `routing`, `preset` lazily), never `config` (`tests/test_app_boundary.py::test_the_library_never_imports_config`) |
 | **Undo** | `undo.py` | the undo and redo stacks, the last settled state | bases (`Registry.restore`) and the table's preset parts, on ⌘Z / Ctrl+Z only | a leaf: imports nothing from the package and never touches `modulate` or `feed` (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`) |
 | **Host** | `app.py`, `hotreload.py`, `placement.py`, `watchdog.py` | construction order, the frame loop, the windows and render outputs, the reload watch list, the stall log, where the library is (`[library] path` → `Library(path, machine=home)`) | bases for the relative writers (↑ / ↓; the pad's sticks are the pad device's own, `gamepad.steer`); no key of its own but `app.LOOP_KEYS` | builds the device registry (`app._open_devices`: every device behind its own `[[devices]]` entry) and the dream worker behind `[dream] enabled` (`_open_dream`, the one gate left); `Host.devices`, one close list `Host.adapters == (devices, dream_io)`; importing `app` imports no gated adapter, no `osc`, no `pythonosc`, no `torch`, no `leap` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); `placement` is a leaf (`tests/test_placement.py::test_placement_imports_nothing_from_the_package`) |
@@ -63,10 +63,13 @@ stack only reads.
 **Leaves** — modules that import nothing from the package, so anything
 may import them: `analysis`, `tapers`, `motion`, `undo`, `placement`,
 `geometry`, `patterns`, `tempo`, `lfo`, `glsl`, `gamepad`, `apc40`,
-`generic`, `watchdog`, `hands/signal.py`, `hands/tape.py`. `devices`
-imports nothing from the package at load: every adapter, and `routing`,
-only inside a function. Near-leaves: `outputs`, `fx` and
-`lookback` import only `glsl`; `view` only `geometry`.
+`generic`, `watchdog`, `patch`, `hands/signal.py`, `hands/tape.py`.
+`devices` imports nothing from the package at load: every adapter, and
+`routing`, only inside a function. Near-leaves: `outputs`, `fx` and
+`lookback` import only `glsl`; `view` and `field` only `geometry`;
+`modifiers` only `motion` and `tapers` (`patch` is held by
+`tests/test_patch.py::test_patch_is_a_leaf`; `modifiers` by convention
+and the hot reloader's order test).
 
 ---
 
@@ -90,28 +93,57 @@ pins this order over stubs:
 | 6 | `mouse.poll(shift)` — orbit, pan, zoom through `nudge` / `scale` | bases |
 | 7 | `audio.step(dt)`, `audio.publish(router)` | lanes |
 | 8 | `devices.feed(router)` — **the feed slot**: the hands feed `hand` and `hands` (`HandsIO.poll`, which may complete a hand Learn and makes the frame's DAW messages); the bridge feeds `ext` and publishes its labels and rests; an OSC device feeds its role's axes | feed |
-| 9 | `lfos.step(dt, now, clock)`, `lfos.publish(router)` — feeds `lfo` | feed |
-| 10 | `router.modulate(chain, dt)` — every live performer row calls `p.modulate(offset)` | offsets |
-| 11 | `reg.apply()` — base + offsets onto every live object | objects |
+| 9 | the LFOs step **inside the patch** (step 10): `LFOs.begin`, then `LFOs.step_one` at each LFO's node, feeding `lfo` (plan 28 N0) | feed |
+| 10 | `router.modulate(chain, dt, now)` — the modulation patch (`Router.patch`, `patch.order`) in dependency order: at an LFO's node it steps; at a modifier's it steps the modifier and writes its `mod` lane; at a param's, every live performer row on it calls `p.modulate(offset)`, and a param a later node reads (a `scale`, a macro behind a depth subscriber, an LFO knob, a modifier's own param) is landed there and then (`Param.apply` under the frame's mark) | offsets; the `lfo` and `mod` lanes; the objects of the params the pass reads |
+| 11 | `reg.apply()` — base + offsets onto every other live object (a param the pass landed under this frame's mark is skipped) | objects |
 | 12 | `devices.send(reg, chain)` — **the sink slot**: the bridge sends its sink rows (`routing.sink_values`: effective values, the lanes) through `Bridge.send_values`; `hands-daw` sends the hands' DAW messages and its own sink rows | nothing in the app (MIDI out) |
-| 13 | `view.integrate(dt)` — `ang += rate · dt` | an object, directly |
+| 13 | `view.integrate(dt)` — `ang += rate · dt`; on the frame the 3D switch changes, the 4D pose folded into `body` (`held`) | an object, directly |
 | 14 | `renderer.bands = app._bands(audio)` — the analyzer's lanes, out / CEIL, handed to the renderer as a read-only input; then `draw_render` — the render graph evaluated, every render output (below) | the screens |
 | 15 | `draw_panel` — the control window | bases, rows |
 
 Rules that follow from the order:
 
-- **One-frame lag.** Everything a performer moves lands once, in
-  `reg.apply()`. A source that reads a parameter — an LFO reading its own
-  `depth`, a route scaled by a macro's depth subscriber or by
-  `master.gain`, `output.apply` — reads what `apply()` wrote **last**
-  frame. There is no recursion, because nothing in the pass reads a value
-  it is about to write
-  (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame`,
-  `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later`).
-  The sinks are the exception that proves it: they run **after**
-  `apply()` (step 12) and read this frame's effective values, so a param
-  sent to the DAW is not a frame behind
-  (`tests/test_sinks.py::test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply`).
+- **Dependency order, no lag** (plan 28, decision 7). Everything a
+  performer moves lands in this frame's pass in dependency order:
+  `Router.modulate` runs the table as a graph (`patch.py`;
+  `Router.build_patch`, cached as `Router.patch` and rebuilt only when
+  the table's rows, macros or modifiers, the LFO list or the registry's
+  params change), each node after everything it reads. Its nodes are the
+  fed lanes, the LFOs, the modifiers, the macros and the params; its
+  edges a performer row (into a param's `mod`), a row's gate, a `scale`
+  or a macro's depth subscriber (into the cable's `depth`), an LFO's knob
+  params, a modifier's inputs and params. An LFO is a source with
+  inputs — its knobs land, then it steps; a modifier likewise; a `scale`
+  param or a macro behind a depth subscriber lands before the cable that
+  reads it. So an LFO owning
+  another LFO's depth, a macro scaling a push, a `scale` that is itself
+  modulated all land **this frame**
+  (`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`,
+  `tests/test_routing.py::test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame`),
+  and every factory preset lands the same values as before, a frame
+  earlier where it was late
+  (`tests/test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier`).
+  **Nothing reads a stale value but through a delay node**: a loop that
+  passes through no `delay` modifier is refused — its last cable in table
+  order is kept off (a loop of modifiers alone: its last modifier's input
+  on the loop), the row left in the table and the file, a note on
+  ROUTING's head (`Router.patch_notes`;
+  `tests/test_routing.py::test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note`,
+  `tests/test_patch.py::test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note`).
+  A delay that closes a loop runs first and emits its input's lane as it
+  stood last frame, so the loop is exactly one frame late; a delay on no
+  loop runs after its input and holds it for the next frame
+  (`tests/test_patch.py::test_a_loop_through_a_delay_runs_exactly_one_frame_late`).
+  A macro's base subscribers are scene-setters (step 3), not part of the
+  order. Only the params something later in the pass reads are landed in
+  it; every other param lands in step 11, in registry order, as before. `Param.apply` is idempotent within a frame (`Registry.begin_frame`
+  opens a mark, `Registry.apply` closes it): a param the pass landed is
+  never applied twice. The readers outside the pass still read last
+  frame's objects: `output.apply` (step 5) and the analyzer (step 7). The
+  sinks run **after** `apply()` (step 12) and read this frame's effective
+  values, so a param sent to the DAW is not a frame behind
+  (`tests/test_sinks.py::test_a_param_routed_to_the_bridge_sends_its_effective_value_after_apply`,
+  `tests/test_routing.py::test_sinks_still_send_after_apply`).
 - **Devices poll with the scene-setters, feed with the sources, send
   after `apply()`** — the three slots of the registry, each over the open
   devices in `[[devices]]` order
@@ -182,11 +214,15 @@ SCENE      scene      the solid geometries first (a cloud, in-scene hands: depth
 LAYER      cover      the faces' mask, only while the look-back occludes
            hands      Ghost.layer: the hands alone, own colour + depth — only if a view lays them on
 HISTORY    history    the look-back composite over its input (the echoes' clock, the dream pulled)
-FX         fx         the effect chain → the view itself when it is the pipeline's only
+EFFECT     plasma … palette   one node per effect instance, in the stack's order, on or off:
+                      on, its pass over its input into a pool texture or its consumer;
+                      off, its input read through (no pass, no texture)
+END        fx         the pipeline's end → the view itself when it is the pipeline's only
                       consumer at the frame size, else a frame texture
-                      [composite(scene+hands) → fx(scene+hands), composite(hands) → fx(hands):
-                       per reachable through pipeline; a through pipeline with no effect on or
-                       no hand drawn stands down for its fallback this frame]
+                      [composite(scene+hands) → acid(scene+hands) … → fx(scene+hands),
+                       composite(hands) → acid(hands) … → fx(hands):
+                       per reachable through pipeline; a through pipeline with no effect of
+                       its run on, or no hand drawn, stands down for its fallback this frame]
 HISTORY    capture    the ring takes its input — the scene by default — exactly once, after
                       every pipeline
 OUTPUT     output.N   the picture (direct | 1:1 | letterboxed by outputs.fit) — or an
@@ -197,23 +233,65 @@ THEN in app._draw_render: glFlush (only with a later output); each later output
   Presenter.present then swap; output 1 swapped last
 ```
 
-A Scene or Layer node *makes* a texture; the history, composite and FX
-nodes *paint* into the framebuffer their consumer hands them, so nothing
-is quantised between the look-back and the chain. The `Wiring` (a
-preset's `graph` section) can put the hands inside the scene, lay their
-layer added or depth-aware, and wire the capture to the scene with the
-hands' layer; a second hands node or effect instance is a node of its
-own. Evaluating the frame as a graph moved no pixel of the 427 golden
-frames recorded before it (`tests/test_golden_frames.py`). The
-*modulation* is not a graph: the one-frame lag above stands (plan 28).
+A Scene or Layer node *makes* a texture; the history, composite and
+effect nodes *paint* into the framebuffer their consumer hands them, so
+nothing is quantised between the look-back and the first effect. The
+`Wiring` (a preset's `graph` section) can put the hands inside the
+scene, lay their layer added or depth-aware, and wire the capture to
+the scene with the hands' layer; a second hands node or effect instance
+is a node of its own. Evaluating the frame as a graph moved no pixel of
+the 427 golden frames recorded before it, and making each effect its
+own node (plan 30) moved none of the 556 recorded before that, nor did
+the modulation graph and the wire list (plan 28) move any of the 580
+recorded before them (`tests/test_golden_frames.py`).
+
+**Effects as nodes; placement** (plan 30). Every effect instance is an
+`Effect` node (one `image` in, an image out, its params `fx.<name>.*`,
+its pass `FxChain.run_one`). Each pipeline's chain is a run of them
+between its source and its end, `Fx` — the old node's name, now only the
+end: where the picture lands, the stand-down, the error path. Every
+instance is in every run, on or off, so a toggle changes no node; an
+order, an instance or a file changed rebuilds the graph
+(`Renderer._graph_for`'s key holds `FxState.names()`). A preset's graph
+may **place** an effect on any image edge by name: `after` a node — the
+scene, a hands layer, the history, an output, an effect: every consumer
+of that node's picture reads the effect — or `into` one (the history,
+an output, an effect: its `image` input alone). A placed effect is not
+in the run; on a node the graph lacks this frame it is dormant (no node,
+the words in `Graph.dormant`); one this build cannot honour is a note
+and that effect's default placement. The textures the effects paint
+into are one pool (`FxChain.pool`, sized by `Graph.pool`), and a held
+picture is never handed to the consumer that paints into it. The faces'
+chain is not on the graph: an effect aimed at the faces still runs
+inside the shape's face drawing (`render.face_fx`). The ports are typed
+`image`, `mask`, `geometry` and `value`; `graph.VALUE` is declared for
+the palette's lights-out and camera-in ports and no node uses it.
+
+**Wires; outputs as nodes** (plan 28 N4). A preset's graph may also carry
+a wire list, `{"from": "<node>", "to": "<node>.<port>"}`: into an
+effect's `image`, the history's, a composite's `under` / `over`, or an
+output's `image`, `hands` or `readout`. D1's `after` / `into` are wires
+written short. A wire into `output.<n>.image` gives that output an end
+of its own (`graph.Wired`, `wire(output.<n>)`) showing that picture;
+into `.hands` it lays that node over; into `.readout` that layer's
+guide. An output no wire names is node for node the default graph's,
+following the session's switches, and a load never writes a switch. The
+wires ride in `Wiring`, so the graph is rebuilt when they change. A
+refused wire (another type, a missing node or port, two into one port, a
+loop) is a note and that port's default
+(`tests/test_graph_wires.py::test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_them`,
+`::test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_default`,
+`::test_a_cycle_of_wires_is_refused`). The GRAPH page edits both this
+graph and the modulation (§5).
 
 What the order guarantees, each held by tests in `tests/test_render.py`,
 `tests/test_outputs.py`, `tests/test_ghost.py`, `tests/test_graph.py` and
 `tests/test_golden_frames.py`:
 
-- **Every golden frame is drawn byte for byte**: 556 frames — every
+- **Every golden frame is drawn byte for byte**: 596 frames — every
   factory preset in every output state, hands absent and present, the
-  other wirings, the fixture preset and a recorded cloud — on the gate
+  other wirings, the fixture presets (plan 30's three placements and
+  plan 28's two wire fixtures among them) and a recorded cloud — on the gate
   Mac's renderer ("Apple M3 Max"); elsewhere the test skips
   (`tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`).
 - **The graph is built once per set of switches and reused**, its order
@@ -232,6 +310,20 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   `test_the_default_graphs_history_holds_what_todays_does_never_the_dim`).
 - **The effects' clocks advance once a frame** however many chains run
   (`FxState.advance_to`; `test_both_chains_in_a_frame_run_the_clocks_once`).
+- **An off effect costs nothing**: it is read through, no pass and no
+  texture, and the run draws what the one-block chain drew
+  (`tests/test_graph_effects.py::test_an_off_effect_is_read_through_and_runs_no_pass`,
+  `::test_the_run_draws_what_the_one_block_chain_drew`); a held effect's
+  texture is never its consumer's target
+  (`::test_a_held_effect_read_through_the_pool_is_never_its_consumers_target`).
+- **A placed effect folds only its edge**: after the hands the layer
+  and not the scene, into output 2 that output alone, after the scene
+  what the history captures; a placement the graph lacks is dormant,
+  never in the chain
+  (`tests/test_graph_placement.py::test_after_hands_folds_the_hands_layer_and_not_the_shape`,
+  `::test_into_output_2_folds_one_output_only`,
+  `::test_after_scene_feeds_the_history_the_folded_picture`,
+  `::test_a_placement_the_graph_lacks_is_dormant_and_said_in_words`).
 - **Two outputs with the same switches share one chain run**
   (`test_two_outputs_with_the_same_switches_run_the_chain_once`); one
   default output is byte for byte the single-window frame
@@ -267,19 +359,25 @@ What the order guarantees, each held by tests in `tests/test_render.py`,
   named `apply`, `modulate`, `snapshot` or `set_value`, and `graph.py`
   imports no registry, routing, library, preset, undo, control or device
   module (`tests/test_graph.py::test_graph_imports_only_the_render_stack_and_names_no_write`).
-- **A masked shape is folded where it is drawn, and nowhere else.**
-  `Renderer.draw_scene` draws the shape at `geometry.view_angles(shape,
-  ang)`: the view's own angles for every shape but a masked one (§5,
-  Shapes), whose W planes' angles are added onto 3D planes. The fold is a
-  pure function read in the scene pass. It writes no param and not
-  `ViewState.ang`; the integrator (step 13) and every `rot.*` param are
-  as they were. So it changes no boundary, no step of the frame and
-  nothing in the control model: modulation stays non-destructive, a rate
-  or a phase route on a W plane still lands on that plane's param, and
-  the fold happens only on the way to the screen
-  (`tests/test_shapes4d.py::test_a_masked_shape_turns_in_3d_where_its_w_planes_would_have_turned_it`,
-  `::test_no_shape_but_a_masked_one_has_its_angles_touched`,
-  `::test_the_renderer_draws_a_masked_shape_through_view_angles`).
+- **A 3D shape's W angles are dropped where it is drawn, and nowhere
+  else.** `Renderer.draw_scene` draws through `geometry.shape_world` (the
+  rules `geometry.shape_view` projects by), which takes `geometry.view_angles(shape, ang)`: the view's own angles
+  for a 4D shape, the 3D angles with every W angle at 0 for a 3D one
+  (§5, Shapes). It is a pure function read in the scene pass. It writes
+  no param and not `ViewState.ang`; the integrator (step 13) and every
+  `rot.*` param are as they were, and a rate or a phase route on a W
+  plane still lands on that plane's param — it just turns nothing a 3D
+  shape has (`tests/test_shapes4d.py::test_the_w_planes_leave_a_3d_shape_alone`,
+  `::test_a_4d_shape_takes_the_views_angles_as_they_are`,
+  `::test_the_renderer_draws_a_3d_shape_without_its_w_turns`).
+- **The 3D switch's hold lives on the view, written by the integrator.**
+  `view.three_d` is a plain toggle; on the frame it changes,
+  `ViewState.integrate` (step 13, already the one direct writer of
+  `ang`) folds the 4D pose into `ViewState.body` and sets
+  `ViewState.held`, and while held it stops the W planes. The renderer
+  reads `held` and `body` and writes neither, so a frame drawn between a
+  toggle and step 13 shows the pose as it was
+  (`tests/test_shapes4d.py::test_the_3d_switch_never_jumps_on_or_off`).
 - **The FACES page's swatches cost nothing unless the page is open.**
   While a page calls `Renderer.want_swatches` (and for `SWATCH_HOLD` = 30
   frames after), `draw_outputs` draws one pattern's swatch a frame, round
@@ -435,13 +533,14 @@ desk).
 |---|---|---|---|
 | `key:` | a GLFW key name, with modifiers `SHIFT+` / `SUPER+` / `CONTROL+` (`routing.MODIFIERS`) | `Router.keys`, reading `app.Keys` | a discrete op on the base |
 | `pad:` / `hat:` | a `gamepad` button / hat name (`gamepad.BUTTONS`, `HATS`). A pad other than the first listed writes its role after `@`: `pad@p2:A` (plan 27 B6) | `Router.pad(…, role)` (times `hold`, lets `momentary` go on the release; each pad fires only its own rows) | a discrete op on the base |
-| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES`; a second pad's are `axis@p2:LX`, its own Router key | the pad device: `Router.pad` → `Router.feed("axis")` (`"axis@p2"`), from `Pad.lanes`; names, labels and rests from `gamepad.publish` | performer; a stick or trigger with a route leaves its default camera job (`gamepad.steer`, the first pad's only) |
+| `axis:` | `LX` `LY` `RX` `RY` (sticks, rest 0.5) / `LT` `RT` (triggers, rest 0) — `gamepad.AXES`; the sticks as dials, `L.N` … `L.NW` / `R.N` … `R.NW` (rest 0) — `gamepad.DIAL_LANES`, a prototype; a second pad's are `axis@p2:LX`, its own Router key | the pad device: `Router.pad` → `Router.feed("axis")` (`"axis@p2"`), from `Pad.lanes`; names, labels and rests from `gamepad.publish` | performer; a stick or trigger with a route leaves its default camera job (`gamepad.steer`, the first pad's only), a dial lane's route its whole stick (`gamepad.claims`) |
 | `cc:` / `note:` / `pitch:` | `channel:number` (`pitch:` channel only; `*` any channel). A desk other than the one that owns the unqualified rows writes its role after `@`: `cc@launch:0:21` (`routing.QUALIFIER`, `Binding.device`; any scheme takes the qualifier since plan 27 B6) | each MIDI desk: `MidiIO._handle` → `Bindings.dispatch(…, role)` → `MidiIO._apply` | `abs` (soft pickup), `rel`, `rel64`, `step`, `toggle`, `set`, `momentary`, `fire`, `hold` — all base |
 | `lane:` | analyzer band index | `Analyzer.lanes / CEIL` inside `Router.modulate`; names and rests from `AudioEngine.publish` | **performer** |
 | `hand:` | a name: `left.x` … `right.yaw` as `[hands] dofs` spells them, `left.present`, `left.pinch.index` … `right.pinch.pinky`, the dance sources and the grab (plan 24); a number still reads as that lane | the hands device's feed (`hands.device.HandsDevice` → `HandsIO.poll`) → `Router.feed("hand")`; the name → lane map in `router.names["hand"]` (`hands.core.Layout`) | performer; a pinch or a grab may also gate |
 | `hands:` | `gap`, `twist` (both hands) | the same call → `Router.feed("hands")` | performer |
 | `ext:` | DAW lane 0 … `in_lanes` − 1 (16 by default) | the bridge device's feed: `Bridge.receive` → `Router.feed("ext")`, `Bridge.publish` (labels "ext 0" …, rests 0) | performer |
-| `lfo:` | 0–3 (`lfo:0` is LFO 1) | `LFOs.publish` → `Router.feed("lfo")` | performer |
+| `lfo:` | 0–3 (`lfo:0` is LFO 1) | `LFOs.publish`, then each LFO's node in the pass (`LFOs.step_one`, plan 28) | performer |
+| `mod:` | a modifier's number (`mod:2` is `mod.2`; plan 28 N1) | the modifier's node in the pass (`Router._step_modifier` → `feeds["mod"]`); labels `<n> <kind>`, rests 0; NaN while its input is not live; a `threshold`'s lane is a trigger and a gate (`Router.lane_kinds`) | performer |
 | `<role>:` (a new device's) | an OSC address without its `/`: `phone:x`, `phone:1/fader3` | the OSC device's feed → `Router.feed("<role>")`, names, labels, rests; its `hits` as rows under the same scheme in its `act` | performer (axes); a hit row: `fire`, `toggle`, `step`, `set`, `abs`, `momentary` on the base (`osc.fire`) |
 
 A **sink row** runs the other way: its source is `param:<id>` (the
@@ -494,7 +593,9 @@ that reorders `[hands] dofs` keeps every preset on its axes
 
 Every continuous source reaches a parameter through one pass,
 `Router.modulate`, once a frame, over the enabled performer rows
-(`Bindings.mods`) in table order:
+(`Bindings.mods`) in **the patch's order** (plan 28: a param's rows run
+at its node, after every node it reads — §2's dependency order; ties in
+table order). Per row:
 
 1. **Find the lane** (`Router.lane`): a number is the index; a name is
    looked up in `router.names[scheme]`, cached against the map's
@@ -665,7 +766,24 @@ base subscribers follow the knob, the panel or a restore
 (`tests/test_macros.py::test_a_performer_on_a_macro_moves_only_its_depth_subscribers`).
 Two macros on one param: the later id wins. The subscribers and the
 macros' values belong to the loaded preset; `bindings.json` never holds
-them.
+them. Since plan 28 the chain lands **the same frame**: an LFO owning
+another's depth, a macro scaling a push and a modulated `scale` are read
+after they land (§2).
+
+**Modifiers** (plan 28 N1; `modifiers.py`, `Bindings.modifiers`) are the
+other way to chain: a value node between sources and a route —
+`curve`, `scale`, `smooth`, `combine` (two inputs: the explicit way to
+combine two performers, since a param still has one), `threshold` (a
+trigger lane, also a gate), `delay` (last frame's input; the one place
+a loop may close). Each reads one or two lanes and publishes `mod:<n>`,
+which a route sources like any lane, so the Router, Learn, the referee
+and ROUTING need no other path. Its params `mod.<n>.<p>` are ordinary
+performance params (group `mod`), ownable like an LFO's knobs. They
+live in the loaded preset (`preset.MODIFIERS_KEY`), never in
+`bindings.json`; a desk template may carry them. A modifier whose input
+is not live is dormant: its lane reads NaN and a route on it lets go
+(`tests/test_modifiers.py::test_a_modifier_publishes_a_lane_a_route_can_source`,
+`::test_modifiers_live_in_the_preset_and_never_in_bindings_json`).
 
 ### 3.7 Where a controller's value goes
 
@@ -695,7 +813,9 @@ them.
 | right-click → Learn sink ▸ `<role>:<channel>` | `Learn.learn_sink`: a sink row; the sink device sends the param's effective value after `reg.apply` | `bindings.json` (no param) |
 | right-click → Unbind | `Learn.unbind` | the loaded preset's table |
 | a ROUTING-page edit | the table in place: the loaded preset, its dirty dot | the table |
-| a preset | `Presets.load`: every performance base in one `Library.restore`, then `Bindings.set_routes`, `set_desk`, `set_macros`, the base subscribers landed (`Router.follow_macros(force=True)`); session params never | bases and the preset's table |
+| a modifier (ROUTING's MODIFIERS strip, or the GRAPH page) | its node in the pass → its `mod:<n>` lane → the route sourcing it → `Router.modulate` | offset; the modifier itself is the loaded preset's table |
+| a cable dragged on the GRAPH page | `graphview.Edit` → the table's own calls (`Bindings.add` / `move_route` / `remove`, a Learn, a macro subscriber, a modifier input) or, for an image cable, a new `graph` section read back and landed (`GraphSection.land`) | the loaded preset's table or graph (a pad setter: `bindings.json`) |
+| a preset | `Presets.load`: every performance base in one `Library.restore`, then the modifiers (`Bindings.set_modifiers`, their params declared), `Bindings.set_routes`, `set_desk`, `set_macros`, the GRAPH page's `layout`, the base subscribers landed (`Router.follow_macros(force=True)`); session params never | bases and the preset's table |
 | a module preset or show | `Library.restore` (a show: its session part) | base |
 
 ### 3.8 The binding file
@@ -707,8 +827,8 @@ and the sink rows (plan 27; with `"sinks_seeded"`, the roles whose old
 `send` list has been translated). Its top-level `"profile"` says which
 MIDI profile its unqualified rows were written for; the desk listed with
 that profile owns them (`DeviceRegistry.midi_roles`). Performer
-rows, preset-layer rows, macros and values are the loaded preset's and
-are never written there (`routing.is_session_row`;
+rows, preset-layer rows, macros, modifiers and values are the loaded
+preset's and are never written there (`routing.is_session_row`;
 `tests/test_routing.py::test_the_live_table_writes_only_the_sessions_controls`).
 Learn pad (a pad button or an OSC hit) and Learn sink add session rows,
 and ROUTING's sinks section switches and removes sink rows, each writing
@@ -739,16 +859,24 @@ LFOs are untouched. Tempo is session state: a preset never moves it
 
 `lfo.LFOs` holds four: `shape`, `rate`, `sync` (Hz or a bar division),
 `depth`, `phase`, `reset`. Output `u = 0.5 + 0.5 · depth · wave`, rest
-0.5. An LFO reads its knobs from its own fields — last frame's effective
-values — which is the one-frame lag (§2). A trigger or reset that arrives
-after this frame's step lands at exactly phase 0 at the start of the next
-step.
+0.5. Each LFO steps inside `Router.modulate`, at its own node of the
+patch (`LFOs.step_one`, after `LFOs.begin` and `publish`; plan 28), so it
+reads its knobs from its own fields **after** every performer on them has
+landed this frame (§2); every LFO is a node, so each steps once a frame
+whether or not a cable touches it
+(`tests/test_lfo.py::test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame`).
+A reset that arrives before its LFO's node this frame lands at phase 0
+on that step; one that arrives after its LFO has stepped (`LFO.at`), or a
+trigger after the step, lands at exactly phase 0 at the start of the
+next step.
 
 ### 3.10 What the model does not promise
 
 Behaviour the code has today that the model does not guard:
 
 - `Router.modulate` checks no ownership at run time (§3.2).
+- A loop's cut cable keeps its row enabled in the table: ROUTING's
+  checkbox reads on while only the note says it is off (§2).
 - A `hand:<i>` row still reads by index, so one saved by number re-points
   on a rig that reorders `dofs`; and the table compares sources as
   strings, so a depth subscriber written for `hand:7` does not scale a row
@@ -790,27 +918,31 @@ docstring has the rest.
 | `params.py` | the registry: ids, base vs effective, the once-a-frame `apply()` | `Param`, `Registry`, `Kind`, `build_registry`, `PERFORMANCE_GROUPS` / `SESSION_GROUPS`, `F_KEYS` | never imports an adapter; every persisted group is performance or session (`tests/test_params.py::test_every_persisted_group_is_performance_or_session`); `Kind` keeps its identity across a reload (`tests/test_hotreload.py::test_reloading_params_keeps_kind_identity`) |
 | `motion.py` | the envelope followers the analyzer is made of, and a damped spring, for any signal | `pole`, `follow`, `spring`, `Motion`, `Follower` | the chain still matches the frozen oracle (`tests/test_golden.py`); the spring is exact at any dt (`tests/test_motion.py`) |
 | `tapers.py` | position ↔ value for every fader | `Taper` | exact round trip on every detent (`tests/test_control.py::test_taper_round_trip`) |
-| `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modulation pass | `Binding`, `Bindings`, `Router`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
+| `routing.py` | the table, the file, the referee, the desk's layers, the macros, the modifiers, the modulation pass in dependency order | `Binding`, `Bindings` (`modifiers`, `set_modifiers`, `set_modifier_input`), `Router` (`patch`, `build_patch`, `patch_notes`, `use_lfos`, `modulate`), `declare_modifiers`, `Macro` / `Sub`, `Owned`, `act`, `referee`, `register_desk`, `led_level`, `LOOP_KEY_ROWS`, `backup`, `remap_factory` | §3.3–§3.8; imports nothing above it (`tests/test_routing_boundary.py`); `tests/test_routing.py`, `tests/test_desk.py`, `tests/test_macros.py`, `tests/test_hand_names.py` |
+| `patch.py` | the modulation graph as data and the order it runs in (plan 28 N0) | `PatchNode`, `PatchEdge`, `Patch`, `KINDS`, `PORTS`, `LFO_KNOBS`, `ordering`, `order`, `cycles`, `RENDER_VALUE` | a leaf (`tests/test_patch.py::test_patch_is_a_leaf`); dependencies first, ties in insertion order, no loop but through a delay (`tests/test_patch.py`) |
+| `modifiers.py` | the six modifier kinds as pure steps (plan 28 N1) | `Modifier`, `KINDS`, `PARAMS`, `INPUTS`, `OUT`, `ModState`, `step`, `next_id`, `param_id` | imports only `motion` and `tapers`; the Router declares their params (`routing.declare_modifiers`) and steps them; never in `bindings.json` (`tests/test_modifiers.py`) |
 | `learn.py` | arming, completing and refusing a Learn; pick-then-map; a sink pick; Unbind | `Learn` (`arm`, `wants`, `accepts`, `learn_control`, `learn_source`, `learn_pad_button`, `learn_sink`, `sinks`, `pick`, `map_picked`, `unbind`, `pending`, `last`, `devices`), `BARE_WANTS`, `blocked`, `bound`, `centred_target`, `PUSH_DEPTH` | nothing completes a learn its `want` does not name; a refused desk learn stays armed; a non-modulatable target is refused for a hand; no learn writes a file (`tests/test_learn.py`) |
 | `midi.py` + `apc40.py` + `generic.py` | the MIDI adapter, one `MidiIO` per desk with its role and profile (ports, per-desk layered dispatch, feedback, soft pickup, knob glides, holds), the APC40 profile (the default map, `LAYOUT` of every control, LED colours) and the `generic` profile (plain CC / note / pitch, nothing sent back) | `MidiIO` (`role`, `qualifier`), `Ports`, `Slew`, `retry_after`, `HOLD_S`, `BLINK_S`, `PROFILES`; `apc40.DEFAULT_MAP`, `BANK_PADS`, `SCENE`, `LAYOUT`, `named`; `generic.PORT_MATCH`, `FEEDBACK` | every write is a base write; a note-off goes where its note-on went; a message a row did not apply (a disabled row, a learn candidate) makes that pickup row pick up again (`MidiIO._passed_over`); a lost port is looked for at `retry_after`'s pace (`tests/test_midi.py`, `tests/test_desk.py`). Every test runs with no real MIDI port (`tests/conftest.py::_no_real_midi`) |
 | `hands/` | the Ultraleap instrument: twelve shaped axes, presence, eight pinch switches, the dance sources and the grab, the DAW messages (carried out by the `hands-daw` sink; the instrument opens no port), calibration and the interaction box, hand tapes, the HANDS page, the device wrapper | `HandsIO` (`poll`, `outbox`, `carry`, `resync`), `HandSettings`, `Layout`, `LeapSource`, `Box`, `inside`, `DEFAULTS` (`core.py`); `signal.py` (shaping, MIDI encoding); `tape.py` (`TapeSource`, `record`); `panel.py` (`page`); `device.py` (`HandsDevice`) | `core.py`, `signal.py`, `tape.py` import nothing from the host; `device.py` and `panel.py` alone know it (`tests/test_hands_boundary.py`); a hand outside the box is absent for every consumer; the layout is published to the router only on a change (`tests/test_hands.py`) |
 | `lfo.py` + `tempo.py` | four LFOs and the tap-tempo clock | `LFOs`, `LFO`, `Clock`, `register` | import nothing from the package (`tests/test_lfo_boundary.py`); §3.9 (`tests/test_lfo.py`, `tests/test_tempo.py`) |
 | `audio.py` + `analysis.py` + `analyzer.py` + `bands.py` | capture or file playback, the FFT, the N-band analyzer whose output is `lanes`; `bands.py` is its parts bin | `AudioEngine`, `Analyser`, `Analyzer`, `CEIL` | imports only the stack and `tapers` (`tests/test_audio_boundary.py`); the legacy six-band layout matches the frozen oracle to the bit (`tests/test_analyzer.py::test_legacy_layout_is_bit_exact`) |
-| `geometry.py` | the shapes as vertex, edge and face arrays; how each fills the fourth dimension; the 4D → 3D transform and the shared camera (the eye, the shape's world transform); the old 4D → 2D transform as the parity oracle; the volume measures | `SHAPES`, `Shape` (`cells`, `w`), `W_KINDS`, `geom`, `faces`, `world_points`, `model_matrix`, `eye_matrix`, `eye_project`, `EYE_FOV`, `EYE_DISTANCE`, `PAN_REF_PX`, `project_h`, `project3`, `PLANES`, `view_angles`, `w_masked`, `W_REMAP`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it drew unless its builder is given a lift (`tests/test_shapes4d.py::test_every_shape_draws_what_it_drew_before_the_lift_existed`); only a masked shape's angles are changed, and never in place (`::test_no_shape_but_a_masked_one_has_its_angles_touched`); every lifted or masked shape keeps `VOLUME_FLOOR` through each W plane (`::test_a_lifted_or_masked_shape_keeps_its_volume_through_each_w_plane`) |
+| `geometry.py` | the shapes as vertex, edge and face arrays; whether each is 4D or 3D; scenes of several; the 4D → 3D transform and the shared camera (the eye, the shape's world transform); the old 4D → 2D transform as the parity oracle; the volume measures | `SHAPES`, `Shape` (`cells`, `dims`, `family`, `layers`), `Layer`, `geom`, `faces`, `world_points`, `shape_world`, `model_matrix`, `eye_matrix`, `eye_project`, `EYE_FOV`, `EYE_DISTANCE`, `PAN_REF_PX`, `project_h`, `project3`, `shape_view`, `PLANES`, `view_angles`, `is_3d`, `rot_matrix`, `view_depth`, `volume_ratio`, `sweep_ratios`, `edge_on_share`, `VOLUME_FLOOR` | the list is append-only and the first 18 shapes' order never changes — the golden traces key on it (`tests/test_core.py::test_construction_exact`, `tests/test_golden.py`); a shape draws what it was recorded drawing (`tests/test_shapes4d.py::test_every_shape_draws_what_it_was_recorded_drawing`); a 3D shape sits at w = 0 and only its W angles are dropped, never in place (`::test_a_3d_shape_sits_at_w_0`, `::test_the_w_planes_leave_a_3d_shape_alone`); every 4D shape keeps `VOLUME_FLOOR` through each W plane (`::test_every_4d_shape_clears_the_volume_floor`) |
 | `patterns.py` | the face patterns' eight inputs and seventeen modes as data: names, meanings, what each input does in each mode | `INPUTS`, `MODES`, `NAMES`, `SCALE` … `SPREAD`, `effect`, `ignores`, `label`, `tip` | imports nothing (by convention); `params`, `render` and `ui_patterns` read it; `shaders/patterns.glsl`'s accessors and header are held to it, and modes are appended, never inserted (`tests/test_patterns.py`) |
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
-| `graph.py` | the render graph (§2): node kinds and ports, evaluation in dependency order, the default graph from the switches and the `Wiring`, the hands node, the point-cloud node, the preset's `graph` section, the wiring in words | `Node`, `Graph` (`order`, `evaluate`, `timed`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Fx`, `History`, `Capture`, `Output`, `Wiring`, `default_graph`, `graph_key`, `GraphSpec`, `read_graph`, `NODE_KINDS`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and the default graph (`tests/test_graph_json.py`) |
-| `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches | `Renderer` (`draw`, `draw_outputs`, `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `face_fx`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions`, `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
-| `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; a chain over the frame and one over the faces' picture | `FxState` (`chain(target)`, `select`, `advance_to`, `face_map`), `FxChain`, `FRAME` / `FACES`, `TARGETS`, `FACE_MAPS`, `declare`, `reordered` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `fx.<name>.target` is not modulatable, `fx.face_map` is (`tests/test_fx.py`) |
+| `field.py` | the instance field: where each copy goes — the flat layouts, the six 3D lattices, the fit to the screen and its snapped zoom and pan, the painter's order between copies, the cull | `field` (per frame: a row of centre, scale, alpha per drawn copy), `lattice`, `inst_positions`, `fit_dims`, `NAMES`, `LAYOUTS_3D` | pure numpy, imports only `geometry`; no GL, no state but caches (`tests/test_field.py`) |
+| `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the default graph from the switches and the `Wiring`, the effect nodes and their runs, placement on an image edge, the hands node, the point-cloud node, the preset's `graph` section, the wiring and the placements in words | `Node`, `Graph` (`order`, `evaluate`, `timed`, `timed_in`, `pool`, `insert`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Fx` (the pipeline end), `History`, `Capture`, `Output`, `Wired`, `Wiring`, `default_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `Wire`, `wire_error`, `read_graph`, `placement_words`, `placed_chips`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and the default graph (`tests/test_graph_json.py`) |
+| `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches; the scene's instanced draws (one 3D pass, one vec4 a copy) | `Renderer` (`draw`, `draw_outputs`, `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `face_fx`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions` (re-exported from `field`), `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
+| `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; one effect's pass for a graph node (the frame's effects are `graph.Effect` nodes), and a chain over the faces' picture | `FxState` (`names`, `chain(target)`, `select`, `advance_to`, `face_map`), `FxChain` (`run_one`, `pool`, `fit_pool`, `ready`; `run` for the faces), `FRAME` / `FACES`, `TARGETS`, `FACE_MAPS`, `declare`, `reordered` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `fx.<name>.target` is not modulatable, `fx.face_map` is (`tests/test_fx.py`) |
 | `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |
 | `ghost.py` | the ghost hands — a display, not a source: drawn in the shared camera (the eye and the Leap calibration), as their own layer or solid in the scene | `Ghost` (`settle`, `layer`, `draw_solid`, `composite`, `readout`, `composite_readout`, `depth`, `error`), `GhostState`, `Geometry`, `HandPose`, `STYLES`, `PARTS`, `box_of`, `calibration`, `shared_camera`, `CAL_ASPECT`, `prefix`, `register` | writes no param; off or with no hand it touches no GL state; in the history only when the graph wires it there; `ghost.style` / `.mirror` / `.guide` / `.tethers` not modulatable (`tests/test_ghost.py`, `tests/test_hands_node.py`) |
 | `outputs.py` | the render outputs as the renderer sees them | `Switches`, `route`, `fit`, `View`, `Handoff`, `Slot`, `Presenter`, `PIPELINES`, `MAX_OUTPUTS` | imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `route` and `fit` are pure |
 | `glsl.py` + `shaders/_common.glsl` | the GLSL every shader shares | `QUAD_VS`, `common`, `FALLBACK` | a helper is defined once; a broken edit falls back to `FALLBACK` (`tests/test_fx.py::test_the_shared_helpers_are_written_once`) |
 | `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; rig settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
-| `ui.py` + `ui_*.py` + `hands/panel.py` | the control window: fourteen pages (`ui.PAGES`), widgets as views onto params, the right-click menu, the modal, the on-screen desk (`ui_desk.py`); the FACES page is `ui_patterns.py` (`page`, `drivers`, `suggest`, `neutral_all`) | `Panel`, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; `ui_desk.click` | a widget writes only bases; nothing here calls `modulate`; no page scrolls at the control size (`tests/test_ui_shell.py::test_every_page_fits_the_control_window`); no conflicting imgui ids (`tests/test_ui_routing.py`, `tests/test_ui_lfo.py`) |
+| `ui.py` + `ui_*.py` + `hands/panel.py` | the control window: fifteen pages (`ui.PAGES`), widgets as views onto params, the right-click menu, the modal, the on-screen desk (`ui_desk.py`) and gamepad (`ui_pad.py`); the FACES page is `ui_patterns.py` (`page`, `drivers`, `suggest`, `neutral_all`) | `Panel`, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; `ui_desk.click` | a widget writes only bases; nothing here calls `modulate`; no page scrolls at the control size (`tests/test_ui_shell.py::test_every_page_fits_the_control_window`); no conflicting imgui ids (`tests/test_ui_routing.py`, `tests/test_ui_lfo.py`) |
+| `graphview.py` + `ui_graph.py` | the GRAPH page (plan 28): the model of both graphs as nodes, ports and cables, its layout and its edits (`graphview`, no imgui); the canvas on `imgui_node_editor`, its menus and the drag / delete dispatch (`ui_graph`) | `View`, `VNode`, `VPort`, `VCable`, `build`, `refresh`, `key`, `OWNERS`, `auto_layout`, `home`, `device_nodes`, `Edit` (`connect`, `move`, `disconnect`, `insert_modifier`, `wire`, `unwire`, `add_node`, `drop_node`, `set_node`), `Refusal`, `Ask`, `cable_near`; `ui_graph.page`, `editor`, `close`, `CREATE`, `DELETE`, `DELETE_NODE`, `picker`, `render_edit` | `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`); one table for ROUTING and GRAPH (`::test_the_routing_page_and_the_graph_page_show_one_table`); every edit through the table's own calls or a `graph` section read back (`tests/test_graph_edit.py`, `tests/test_graph_wires.py`); the APC40 drawn, never changed (`tests/test_graphview_devices.py`) |
 | `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
 | `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
-| `preset.py` | the preset document kind: values, routes, desk, macros, module labels; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`), `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
+| `preset.py` | the preset document kind: values, routes, desk, macros, module labels, the `graph` section (nodes and wires), the modifiers, the GRAPH page's layout; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`, `layout`, `template_at_load`), `GraphSection`, `GRAPH_KEY`, `MODIFIERS_KEY`, `LAYOUT_KEY`, `merge_modifiers`, `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
 | `config.py` | `config.toml`: defaults, reading, `[[output.screens]]`, `[[devices]]` (checked per entry; the old device tables translated; `[hands] out` → `hands-daw`) | `DEFAULTS`, `load`, `screens`, `number`, `devices`, `read_devices`, `DEVICE_TABLES`, `MIDI_OUT`, `DAW_ROLE` | a bad value is its default with a note, never a raise (`tests/test_config.py`) |
 | `undo.py` | undo and redo with no write hook | `Undo`, `watched`, `alike`, `install`, `push`, `SETTLE_S`, `LIMIT` | a leaf (`tests/test_undo.py::test_undo_imports_nothing_from_the_package`); §3.2 (`tests/test_undo.py`) |
 | `devices.py` | the device registry: the protocol, the ports, today's devices (MIDI, the pad, the bridge, `midi-out`), the point-cloud type, file and device, the list's open / retry / watch / close | `Device`, `Port`, `Context`, `Base`, `OffDevice`, `RefusedDevice`, `MidiDevice`, `PadDevice`, `BridgeDevice`, `MidiOutDevice`, `CloudDevice`, `PointCloud`, `write_clouds`, `read_clouds`, `kinds`, `make`, `DeviceRegistry` (`poll`, `feed`, `send`, `continuous_schemes`, `row_schemes`, `midi_roles`, `primaries`, `wants`, `sink_ports`, `clouds`, `lines`, `watch`, `apply`), `retry_after`, `WATCH_FRAMES` | the one importer of every adapter module, each inside its device's `open` (`tests/test_app_boundary.py::test_importing_app_leaves_every_gated_adapter_unimported`); one device's exception never stops the frame; two enabled devices never feed one Router key — a second pad publishes under its role, a second hands device is refused (`tests/test_devices.py`) |
@@ -841,32 +973,68 @@ planes), MID → XY, UPR → XZ, AIR → YZ — with each band's `dir` as the
 sign. Most factory presets carry those six rows (the hands and LFO
 presets do not), and a preset may re-aim them.
 
-**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 26
-shapes, append-only. Two fields say what each one is:
+**The modulation patch** (plan 28). `Router.build_patch` reads the table
+— the performer rows, their gates and `scale`s, the macros' subscribers,
+the LFOs' knob params, the preset's modifiers — into a `patch.Patch`;
+`patch.order` sorts it, `patch.cycles` finds the loops, and
+`Router._rebuild_patch` cuts each loop through no delay (its last cable
+in table order off, a note for ROUTING's head) and turns the order into
+a plan of steps: step an LFO (`LFOs.step_one`), step a modifier
+(`modifiers.step` → its `mod:<n>` lane), run a param's rows and, if a
+later step reads it, land it (`Param.apply` under
+`Registry.begin_frame`'s mark). The plan is cached until `_patch_key`
+moves. A modifier is declared into the registry when it is added
+(`routing.declare_modifiers`: `mod.<n>.<p>`, group `mod`), held in
+`Bindings.modifiers`, saved by the preset (`preset.MODIFIERS_KEY`, after
+`routes`), watched by undo as one table part, and edited on ROUTING's
+MODIFIERS strip or the GRAPH page.
 
-- `Shape.cells` is the polytope's cell count, and **0 marks a surface,
-  not a polytope** — not "3D". The Clifford torus (shape 18) has cells 0
-  and is a native 4D surface; shapes 19–26 are surfaces built from trig
-  equations, each with explicit face cycles (`"F"`).
-- `Shape.w` says how the shape fills the fourth dimension
-  (`geometry.W_KINDS`): `native` — built with real w-extent, shapes 1–18;
-  `lift` — a 3D surface given w-extent by a lift of its own parameters,
-  the Star, Rose, Torus, Trefoil knot, Starfruit, Möbius strip and Klein
-  bottle; `mask` — a 3D shape kept at w = 0, the Heart alone; `flat` —
-  a 3D shape at w = 0 with nothing done, which a quarter turn of any W
-  plane flattens. No shape ships `flat`; the tests use it to show the
-  collapse.
+**The GRAPH page** (plan 28). `graphview.build` makes one `View` from
+the table, the registry, the Router, the device registry (read through
+the `Device` protocol: `role`, `status`, `sources`, `layers`) and the
+render graph the renderer last built (`renderer._graph`); `ui_graph.page`
+draws it on one `imgui_node_editor` canvas and rebuilds it only when
+`graphview.key` moves, refreshing the readings each frame. A device
+with layers is one node per layer (the APC40 as *apc40* and *apc40
+(SHIFT)*, its latch read from `Bindings.layer_of`); a preset's desk
+template is one subgraph node; a role the rig lacks is a grey
+placeholder. A drag or a delete is dispatched by its pins' type
+(`ui_graph.CREATE`, `DELETE`, `DELETE_NODE`) to `graphview.Edit`: a
+value or trigger cable becomes the table's own call (`Bindings.add`,
+`move_route`, `remove`, a desk or pad Learn, a macro subscriber, a
+modifier input), so undo, the preset's dirt, the referee and the
+session / preset split are the table's; an image cable becomes a new
+`graph` section, read back through `read_graph` and landed by
+`GraphSection.land` (one undo step, the renderer rebuilt). Positions
+live in the preset's `layout` (the look's nodes) and the show's (the
+rig's). The page writes no param but through those calls and draws
+nothing of the render (it reads `Renderer._graph`).
 
-So 25 of the 26 carry real w-extent, and the Heart does not. A masked
-shape's W planes are folded at draw time (`view_angles`, `W_REMAP`):
-XW's angle is added onto XZ, YW's onto YZ, ZW's onto XY, and the W
-planes are drawn at 0. With the map above, SUB rolls the Heart in the
-screen plane, BASS spins it about y and MIDB tumbles it about x. Its
-depth cue reads its depth toward the 3D camera (`view_depth`: z after
-the camera's yaw and pitch), since its w is 0 at every angle.
-`render.py` imports `view_angles`, `w_masked` and `view_depth` and
-nothing else new from `geometry`; the fold never reaches a param (§2,
-Drawing).
+**Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 99
+shapes, append-only. Three fields say what each one is:
+
+- `Shape.cells` is the polytope's cell count, and **0 marks a surface
+  or a 3D shape, not a polytope**. The Clifford torus (shape 18) has
+  cells 0 and is a native 4D surface; shapes 19–26 are surfaces built
+  from trig equations, each with explicit face cycles (`"F"`).
+- `Shape.dims` says, honestly, whether it is 4D or 3D (plan 28): 4 —
+  real w-extent, shapes 1–18, the 4-polytopes from plan 22's
+  shortlist, the Hopf fibration and the Celestial tesseract scene; 3 — a 3D shape at w = 0, shapes 19–26 and the rest
+  of the catalog. Nothing is invented for a w a shape does not have.
+- `Shape.family` is every shape's kind (regular polytopes, Platonic
+  solids, scenes …); `geometry.MENU` orders the families into the Shape
+  menu's sections, 4D, 3D and Scenes. `Shape.layers` makes a shape a
+  scene of several.
+
+A 3D shape is turned by XY, XZ and YZ only: `view_angles` drops its W
+angles, so whatever drives the W planes (SUB, BASS and MIDB, with the
+map above) does nothing to it. Its depth cue reads its depth toward the
+3D camera (`view_depth`: z after the camera's yaw and pitch), since its
+w is 0. `render.py` imports `shape_world` (`shape_view`'s rules through
+the one camera: it reads `view_angles`, `is_3d` and `view_depth`); nothing
+it draws reaches a param (§2, Drawing). Plan 22's lifts (seven shapes
+given an invented w) and its mask (the Heart's W planes folded onto 3D
+planes) are gone.
 
 **The desk (APC40).** Two layers in one table: the **preset** layer (the
 loaded preset's `desk`) and the **global** layer (the session's), plus
@@ -956,10 +1124,16 @@ swatch of each mode in turn for its chips.
 **Effects.** Each `shaders/fx/*.glsl` file is an effect; its uniforms
 become `fx.<name>.*` params (`fx.declare`). `fx.<name>.target` aims it at
 the frame or the faces; `fx.face_map` says whether the faces show the
-picture per face or in screen space. The frame's chain
-(`FxState.chain(FRAME)`) runs in each pipeline; the faces' chain
-(`Renderer.face_fx`, borrowing the frame chain's programs) runs before the
-scene pass.
+picture per face or in screen space. On the frame each effect instance
+is a `graph.Effect` node (plan 30): each pipeline runs one per instance
+in the stack's order, the ones in `FxState.chain(FRAME)` each running
+their pass (`FxChain.run_one`) and the rest reading through, and a
+preset's graph may place an effect on another image edge. The faces'
+chain (`Renderer.face_fx`, `FxChain.run`, borrowing the frame chain's
+programs) runs before the scene pass, inside the shape's face drawing:
+the one shader run the graph does not show. The FX page edits the
+default chain and shows a placed effect's chip apart, with where it
+sits.
 
 **Look-back and dream.** `Lookback` keeps a history of scene textures and
 composites echoes over the frame; `DreamWorker` (only with
@@ -971,7 +1145,9 @@ the scene with the hands when a preset's graph says so.
 **Render graph.** `graph.default_graph` builds the frame as nodes from
 each output's `Switches` (scene, hands, through: which pipeline end
 feeds the output, whether the hands' layer is laid over it), the
-renderer's `Wiring` and the listed clouds; `Renderer._graph_for` keeps it
+renderer's `Wiring`, the listed clouds and the effect stack's list (one
+`Effect` node per instance in each pipeline's run, ending in its `Fx`);
+`Renderer._graph_for` keeps it
 until one of those changes, and `Graph.evaluate` runs it (§2). The shape
 and the hands share one camera: the CPU takes the shape to 3D
 (`geometry.world_points`: `rot.*`, the 4D divide, the yaw/pitch
@@ -984,12 +1160,15 @@ surface after its colour. A preset's `graph` section
 (`preset.GraphSection` → `graph.read_graph` → a `GraphSpec`) sets the
 renderer's `Wiring` — the hands in the scene or as a layer, solid or as
 lines; the layer over, added or depth-aware; the history with or without
-the hands — and the effect instances the chain holds
-(`FxState.set_instances`); a second hands node is its own `Ghost`
+the hands — the effect instances the chain holds
+(`FxState.set_instances`), where an effect is placed (`after` /
+`into` a node, `Wiring.placed`: plan 30) and the wires (`Wiring.wires`,
+outputs as nodes, composites: plan 28); a second hands node is its own `Ghost`
 (`Renderer.ghost_of`) over a `GhostState` the preset section keeps, so
 the render stack never declares a param. The golden frames
 (`tools/golden_frames.py`) pin every factory preset's picture in every
-state to the byte on the gate Mac.
+state to the byte on the gate Mac, and the fixture presets' (the
+placements and the wires among them).
 
 **Outputs.** `config.toml`'s `[[output.screens]]` lists up to
 `outputs.MAX_OUTPUTS` render outputs (no list is one). `app._windows`

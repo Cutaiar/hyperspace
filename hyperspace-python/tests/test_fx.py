@@ -310,7 +310,7 @@ def test_each_effect_changes_the_frame(ctx, name):
     if name == "glimmer":
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0 (today's picture): turn it up
-        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
+        st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     img = render(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     diff = np.abs(img[..., :3].astype(int) - base[..., :3]).sum()
@@ -1160,14 +1160,17 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
         draw(self, dt)
         over.append(imgui.get_scroll_max_y())
     monkeypatch.setattr(Panel, "_page_fx", measured)
-    drawn = []
-    real_slider = Panel._slider
+    drawn, picked = [], []
+    real_slider, real_combo = Panel._slider, Panel._combo
     monkeypatch.setattr(Panel, "_slider", lambda self, pid, *a, **k: (drawn.append(pid),
                                                                        real_slider(self, pid, *a, **k))[1])
+    monkeypatch.setattr(Panel, "_combo", lambda self, pid, *a, **k: (picked.append(pid),
+                                                                      real_combo(self, pid, *a, **k))[1])
     reg["ui.page"].set(PAGE_KEYS.index("fx"))
     st.select("palette")
     for mode in (0, 1):
         drawn.clear()
+        picked.clear()
         reg["fx.palette.mode"].set(mode)
         reg["fx.palette.on"].set(True)
         for _ in range(3):
@@ -1177,8 +1180,9 @@ def test_the_palette_strip_fits_in_both_modes(fxpage, monkeypatch):
         assert over[-1] == 0, f"the fx page scrolls with the palette in mode {mode}"
         shown = set(drawn)
         assert ("fx.palette.a4_val" in shown) == (mode == 1)      # the last anchor's slider
-        assert ("fx.palette.val_hi" in shown) == (mode == 0)      # the last fold slider
-        assert "fx.palette.mode" in shown
+        assert ("fx.palette.val_to" in shown) == (mode == 0)      # the last slice slider
+        # plan 30 N8: the mode is a picker (a combo), never a slider
+        assert "fx.palette.mode" in picked and "fx.palette.mode" not in shown
 
 
 def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
@@ -1472,7 +1476,7 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
     if name == "glimmer":
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0, which the chain skips
-        st.values[name].update(mix=1.0, width=90.0, centre=200.0)
+        st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
     img, r = face_frame(ctx, st)
     assert ctx.error == "GL_NO_ERROR"
     assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()
@@ -2366,3 +2370,182 @@ def test_a_drop_moves_the_effect_the_drag_began_on(fxpage_twelve, monkeypatch):
     assert st.names()[-1] == "acid" and pushes == [("reorder effects",)]
     # an effect whose file went away mid-drag: no raise
     ui_fx._drop(panel, st, "no_such_effect", "acid")
+
+
+def test_a_placed_effects_chip_says_where_it_sits_and_is_not_reorderable(fxpage, monkeypatch):
+    """Plan 30 D2: with the loaded preset's graph placing Warp (order 20,
+    a chip early in the grid) after the hands, the FX page still edits the default
+    chain — Warp's chip leaves the grid and is drawn under it, on its own
+    row, with "after hands" beside it; it is neither a drag source nor a
+    place to drop, and a drop among the chain's chips never rewrites its
+    order. Its LED and its strip are any effect's. The status line counts
+    it apart from the chain. The words come from one function over the
+    GraphSpec (`graph.placed_chips`)."""
+    from hyperspace import graph as G
+    from hyperspace import undo
+    from hyperspace.ui_fx import NO_CHAIN, RESET_NOTE
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    pushes = []
+    monkeypatch.setattr(undo, "push", lambda *a, **k: pushes.append(a))
+    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]})
+    # the words, one function over the spec (N4 extends it for wires)
+    assert G.placed_chips(spec) == {"warp": "after hands"}
+    assert G.placed_chips(None) == {}
+    two = G.read_graph({"nodes": [
+        {"kind": "effect", "file": "palette", "instance": 2, "into": "output.2"},
+        {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"},
+        {"kind": "effect", "file": "acid", "instance": 3}]})
+    assert G.placed_chips(two) == {"palette.2": "into output 2", "acid.2": "after scene"}
+    others = [n for n in st.names() if n != "warp"]
+    from hyperspace import ui
+    labels = []
+    real_lit = ui.lit_chip
+
+    def lit(label, *a, **k):
+        labels.append(label.split("##", 1)[0])
+        return real_lit(label, *a, **k)
+    monkeypatch.setattr(ui, "lit_chip", lit)
+
+    def chip(n):
+        return fxpage.rects[f"chip.fx.{n}.on"]
+
+    def said():
+        return [t for t in labels if "after hands" in t or "on the faces" in t]
+
+    # no graph: Warp is a chip in the grid (not its last row), like any other
+    fxpage.frame()
+    last = max(chip(n)[1] for n in others)
+    assert chip("warp")[1] < last and not said()
+
+    panel.graph_now = lambda: (G.Wiring(), spec)
+    fxpage.frame()
+    # under the grid, in a grid of its own, its place after its name
+    assert chip("warp")[1] > max(chip(n)[1] for n in others)
+    assert chip("warp")[0] == chip(others[0])[0]
+    assert said() == [f"{st.specs['warp'].label} · after hands"]
+    # the status line: the chain apart, the placed counted (only those that run)
+    reg["fx.acid.on"].set(True)
+    fxpage.frame()
+    assert fxpage.wrapped[:2] == [st.specs["acid"].label, RESET_NOTE]
+    reg["fx.warp.on"].set(True)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == f"{st.specs['acid'].label} · 1 placed"
+    reg["fx.acid.on"].set(False)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == f"{NO_CHAIN} · 1 placed"
+
+    def orders():
+        return {n: reg[f"fx.{n}.order"].base for n in st.names()}
+    was = orders()
+    # the placed chip is no drag source …
+    fxpage.drag("chip.fx.warp.on", "chip.fx.plasma.on", release=False)
+    assert imgui.get_drag_drop_payload_py_id() is None
+    fxpage.release()
+    # … and no drop target: a chain chip let go on it moves nothing
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.warp.on")
+    assert orders() == was and not pushes
+    # a drop among the chain's chips rewrites chain orders only
+    fxpage.drag("chip.fx.huecycle.on", "chip.fx.plasma.on")
+    now = orders()
+    assert now != was and now["warp"] == was["warp"]
+    assert pushes == [("reorder effects",)]
+    # its LED switches it; its name opens its strip, which is any effect's
+    fxpage.click("led.fx.warp.on")
+    assert reg["fx.warp.on"].base is False
+    fxpage.click("chip.fx.warp.on")
+    assert st.selected() == "warp"
+    fxpage.frame()
+    assert {"fx.warp.on", "fx.warp.mix", "fx.warp.order"} <= set(fxpage.rects)
+
+    # dormant in the built graph: on, but not counted as running
+    reg["fx.warp.on"].set(True)
+    reg["fx.acid.on"].set(True)
+    fxpage.frame()
+    assert fxpage.wrapped[0] == f"{st.specs['acid'].label} · 1 placed"
+    panel.renderer._graph = SimpleNamespace(
+        dormant={"warp": "warp after hands — no hands layer this frame"})
+    fxpage.frame()
+    assert fxpage.wrapped[0] == st.specs["acid"].label
+    panel.renderer._graph = None
+    # aimed at the faces: the chip says where it runs, and the frame's count leaves it out
+    from hyperspace.fx import FACES
+    panel.view.faces = True
+    reg["fx.warp.target"].set(FACES)
+    labels.clear()
+    fxpage.frame()
+    assert said() == [f"{st.specs['warp'].label} · on the faces"]
+    assert fxpage.wrapped[0] == f"frame  {st.specs['acid'].label}"
+
+
+def test_the_page_fits_with_three_placed_effects(fxpage, monkeypatch):
+    """Plan 30 D2, review: three effects placed (the first three of the
+    stack, after the hands) pack three to a row under the chain's grid, so
+    the page is no taller than with none — every strip open, an error line
+    on every strip, on the frame and then aimed at the faces (the faces'
+    status row shown too) — and never scrolls at the control size."""
+    from hyperspace import graph as G
+    from hyperspace.fx import FACES
+    from hyperspace.ui import PAGE_KEYS, Panel
+    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
+    panel.renderer.fx.error = lambda n: "line 3: made up"
+    first = st.names()[:3]
+    spec = G.read_graph({"nodes": [{"kind": "effect", "file": n, "after": "hands"}
+                                   for n in first]})
+    panel.graph_now = lambda: (G.Wiring(), spec)
+    panel.view.faces = True
+    over = []
+    draw = Panel._page_fx
+
+    def measured(self, dt):
+        draw(self, dt)
+        over.append(imgui.get_scroll_max_y())
+    monkeypatch.setattr(Panel, "_page_fx", measured)
+    reg["ui.page"].set(PAGE_KEYS.index("fx"))
+    for name in st.names():
+        st.select(name)
+        reg[f"fx.{name}.on"].set(True)
+        for target in (0, FACES):
+            reg[f"fx.{name}.target"].set(target)
+            for _ in range(3):
+                fxpage.texts.clear()
+                imgui.new_frame()
+                panel.draw(1 / 60, 60.0)
+                imgui.end_frame()
+            assert any(t.startswith("faces  ") for t in fxpage.texts) == (target == FACES)
+            assert over[-1] == 0, f"the fx page scrolls with {name} open, target {target}"
+        reg[f"fx.{name}.target"].set(0)
+        reg[f"fx.{name}.on"].set(False)
+
+
+def test_a_placed_effects_strip_says_its_place_wherever_it_is_drawn(fxpage, monkeypatch):
+    """Plan 30 D2 after N2: `ui_fx.strip` — the FX page's open strip and
+    the GRAPH page's side column for a selected effect node — reads the
+    place itself, so a placed effect's title hover says `warp.glsl · after
+    hands` in place of its order however the strip is reached."""
+    from hyperspace import graph as G
+    from hyperspace import ui_fx
+    imgui, st, panel = fxpage.imgui, fxpage.st, fxpage.panel
+    seen = []
+    real = ui_fx._strip_header
+
+    def header(panel_, fx, name, place=None):
+        seen.append((name, place))
+        return real(panel_, fx, name, place)
+    monkeypatch.setattr(ui_fx, "_strip_header", header)
+
+    def side(name):                     # what ui_graph's side column does
+        imgui.new_frame()
+        imgui.begin("side")
+        ui_fx.strip(panel, name)
+        imgui.end()
+        imgui.end_frame()
+    side("warp")
+    assert seen[-1] == ("warp", None)
+    panel.graph_now = lambda: (G.Wiring(), G.read_graph(
+        {"nodes": [{"kind": "effect", "file": "warp", "after": "hands"}]}))
+    side("warp")
+    side("acid")
+    assert seen[-2:] == [("warp", "after hands"), ("acid", None)]
+    st.select("warp")
+    fxpage.frame()
+    assert seen[-1] == ("warp", "after hands")

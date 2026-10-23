@@ -109,7 +109,10 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     fixture = {(p, f["hands"], s) for p, f in doc["fixture_states"].items() for s in f["states"]}
     assert (keys - capped - wired - clouded - fixture == want and wired <= keys
             and clouded <= keys and fixture <= keys)
-    assert len(doc["goldens"]) == 23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2 + 2 * 2 + 8
+    # (plan 30 D1: + 3 × 8, the three placement fixtures' eight states;
+    # plan 28 N4: + 2 × 8, the two wire fixtures')
+    assert len(doc["goldens"]) == (23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2 + 2 * 2 + 8 + 3 * 8
+                                   + 2 * 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -260,8 +263,10 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    assert list(ms) == r._graph.timed == ["scene", "cover", "hands", "history", "fx",
-                                          "capture", "output.1"]
+    assert r._graph.timed == ["scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
+    assert list(ms) == ["scene", "cover", "hands", "history", "warp", "fx",
+                        "capture", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

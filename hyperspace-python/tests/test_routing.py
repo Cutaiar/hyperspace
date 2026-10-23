@@ -34,7 +34,7 @@ from hyperspace.geometry import RATE
 from hyperspace.library import FACTORY, Library
 from hyperspace.offline import load_wav
 from hyperspace.overlay import Output
-from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, build_registry, part_of
+from hyperspace.params import DRIVE, PLANES, ROT_RATE_MAX, Kind, build_registry, part_of
 from hyperspace.routing import (
     MOD_OPS,
     PATTERN_DEPTH,
@@ -80,10 +80,11 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         Output(None, None).register(reg)
         clock = tempo.Clock(now=lambda: 0.0)
         tempo.register(reg, clock)
-        lfo.register(reg, lfo.LFOs(), clock)
+        lfos = lfo.LFOs(seed=1)
+        lfo.register(reg, lfos, clock)
         hands.register(reg, hands.HandSettings.from_config({}))  # the global track knobs
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain,
-                           lib=lib)
+                           lib=lib, lfos=lfos if full else None, clock=clock if full else None)
 
 
 def legacy6(router: Router) -> list[str]:
@@ -1904,14 +1905,14 @@ def test_rests_are_read_through_rest_of():
     assert router.rest_of("hand:9") == 0.0 and router.rest_of("hand:x") == 0.0
 
 
-def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
-    """Chaining, not stacking (plan 09, decision 7): `hand:0` positions
+def test_a_macro_owned_by_a_hand_scales_a_lanes_push_the_same_frame():
+    """Chaining, not stacking (plan 09, decision 7 of plan 09), in
+    dependency order (plan 28 N0, decision 7): `hand:0` positions
     `macro.2`, and `lane:0` pushes brightness at a depth × macro.2. The
-    modulation pass reads a scale param's *effective* value — what the
-    last apply() wrote — so the hand lands on the macro this frame and
-    reaches brightness on the next, and when the hand leaves the macro's
-    base is back a frame before the push is. The one-frame lag every
-    modulated value has; the model's documented cost of a chain."""
+    pass runs the macro's node first and lands it, so the push reads the
+    macro's effective value **this frame** — the hand reaches brightness
+    the frame it lands on the macro, and when the hand leaves, the macro's
+    base and the push's return come back together. No lag."""
     r = rig()
     bright, macro = r.reg["view.bright"], r.reg["macro.2"]
     bright.set_value(1.0)
@@ -1926,17 +1927,16 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
     router.feed("hand", [0.6])
     router.modulate(r.chain)
     r.reg.apply()
-    # frame 1: the macro reads the hand; brightness was pushed × the macro's
-    # value going in — its untouched base of 1
+    # frame 1: the macro reads the hand, and brightness is pushed × 0.6 already
     assert macro.modulated and macro.value == pytest.approx(0.6) and macro.base == 1.0
-    assert bright.modulated and r.view.bright == at(0.5 * 1.0 * 0.5)
+    assert bright.modulated and r.view.bright == at(0.5 * 0.6 * 0.5)
     router.modulate(r.chain)
     r.reg.apply()
-    assert r.view.bright == at(0.5 * 0.6 * 0.5)      # frame 2: × 0.6
+    assert r.view.bright == at(0.5 * 0.6 * 0.5)      # frame 2: still × 0.6
     router.feed("hand", [0.2])
     router.modulate(r.chain)
     r.reg.apply()
-    assert macro.value == pytest.approx(0.2) and r.view.bright == at(0.5 * 0.6 * 0.5)
+    assert macro.value == pytest.approx(0.2) and r.view.bright == at(0.5 * 0.2 * 0.5)
     router.modulate(r.chain)
     r.reg.apply()
     assert r.view.bright == at(0.5 * 0.2 * 0.5)
@@ -1944,7 +1944,7 @@ def test_a_macro_owned_by_a_hand_scales_a_lanes_push_one_frame_later():
     router.modulate(r.chain)
     r.reg.apply()
     assert not macro.modulated and macro.value == 1.0
-    assert r.view.bright == at(0.5 * 0.2 * 0.5)      # …the push still × 0.2 this frame
+    assert r.view.bright == at(0.5 * 1.0 * 0.5)      # …and the push is × 1 this frame
     router.modulate(r.chain)
     r.reg.apply()
     assert r.view.bright == at(0.5 * 1.0 * 0.5)
@@ -2500,7 +2500,7 @@ def test_the_router_keeps_two_pads_apart(tmp_path):
     router.pad(one, now=0.0)
     router.pad(two, now=0.0, role="p2")
     assert r.reg["view.faces"].value == faces and r.reg["view.points"].value != points
-    assert router.labels["axis@p2"] == list(gp.AXIS_LABELS) and "axis" in router.labels
+    assert router.labels["axis@p2"] == list(gp.LANE_LABELS) and "axis" in router.labels
     assert float(router.feeds["axis@p2"][5]) == 1.0
     assert router.lane("axis@p2:RT") == ("axis@p2", 5)
     points = r.reg["view.points"].value
@@ -2575,3 +2575,273 @@ def test_a_row_qualified_with_the_primary_pads_own_role_is_its(tmp_path):
     r.reg.apply()
     amp = r.reg["view.inst_amp"]
     assert amp.value == pytest.approx(amp.hi)             # TwoPadsPad's RT is all the way
+
+
+# ------------------------------------------------------------- plan 28 N0
+
+def _lagged_modulate(self: Router, analyzer=None, dt: float | None = None) -> None:
+    """The base build's `Router.modulate` (5d18192, before plan 28 N0),
+    verbatim but for living here: every enabled performer row in table
+    order, a `scale` and a macro's depth subscriber read at what the last
+    `reg.apply()` wrote — the one-frame lag decision 7 removes. Kept for
+    one test only (`test_every_factory_preset_lands_the_same_values_one_frame_earlier`),
+    the reference the new pass is held to; a test file, so the boundary
+    walk (`test_only_router_modulate_calls_param_modulate`, the package
+    only) never sees its `p.modulate`."""
+    from hyperspace.routing import _NO_LANES
+
+    dt = 1 / 60 if dt is None else dt
+    movers = self.__dict__.setdefault("_lagged_movers", {})
+    moved: set = set()
+    lanes = None if analyzer is None else analyzer.lanes / CEIL
+    names = self.names
+    cache = self.__dict__.get("_lanes", _NO_LANES)
+    for b in self.table.mods():
+        hit = cache.get(b.source)
+        if hit is None or names.get(hit[0]) is not hit[1]:
+            hit = self._resolve_lane(b.source)
+            cache = self.__dict__["_lanes"]
+        scheme, _, i = hit
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None or not 0 <= i < len(vec):
+            continue
+        u = float(vec[i])
+        if math.isnan(u):
+            continue
+        if not self.gated(b):
+            continue
+        p = self.reg.get(b.target)
+        if p is None:
+            continue
+        depth = b.value
+        if b.scale is not None:
+            sp = self.reg.get(b.scale)
+            if sp is None:
+                continue
+            depth *= float(sp.value)
+        dormant = False
+        for mid, s in self.table.depth_subs(b):
+            mp = self.reg.get(mid)
+            if mp is None:
+                dormant = True
+                break
+            depth *= s.at(float(mp.value))
+        if dormant:
+            continue
+        m = self.feel_of(b)
+        if m.on:
+            u = self._move(b, m, u, p, depth, dt, movers)
+            moved.add((b.source, b.target))
+        if b.op == "push":
+            rest = b.rest if b.rest is not None else self.rest_of(b.source)
+            x = depth * (u - rest)
+        else:
+            if p.kind is Kind.TEXT or not p.modulatable:
+                continue
+            x = min(1.0, max(0.0, depth * u)) - p.norm
+        p.modulate(x)
+    for key in [k for k in movers if k not in moved]:
+        del movers[key]
+
+
+TAPE_FRAMES = 90
+TAPE_DT = 1 / 60
+
+
+def _hand_tape(lay, k: int) -> tuple[list[float], list[float]]:
+    """A synthetic hand tape, frame `k`: every axis a slow sine of its own
+    (rates and phases apart, so no two lanes move together), each hand
+    present, each pinch switch on for a stretch and off for another — and
+    the two-hand pair lanes the same way. Deterministic: both builds see
+    the same frames."""
+    from hyperspace.hands import PINCHES, SIDES
+
+    t = k * TAPE_DT
+    axes = [0.5 + 0.45 * math.sin(2 * math.pi * (0.35 + 0.11 * i) * t + 0.7 * i)
+            for i in range(lay.n_axes)]
+    presence = [1.0] * len(SIDES)
+    gates = [1.0 if ((k // (11 + 3 * i)) % 2 == 0) else 0.0
+             for i in range(len(SIDES) * len(PINCHES))]
+    pair = [0.5 + 0.4 * math.sin(2 * math.pi * 0.27 * t + j) for j in range(len(lay.pair_index))]
+    return axes + presence + gates, pair
+
+
+def _lag_of(table: Bindings) -> tuple[dict[str, int], dict[int, int]]:
+    """How many frames late the base build lands each param and each LFO's
+    output, from the table alone (not patch.py): a param read in the pass
+    — a `scale`, a macro behind a depth subscriber, an LFO's knob — that a
+    performer moves reaches its reader one frame late, and a chain of them
+    adds up. Params no row reaches are 0."""
+    rows = table.mods()
+    moved = {b.target for b in rows}
+    knobs = ("shape", "rate", "sync", "depth", "phase", "reset")
+    lag_p: dict[str, int] = {}
+    lag_l: dict[int, int] = {}
+    for _ in range(8):                                   # to the fixpoint (no loops here)
+        for i in range(4):
+            reads = [f"lfo.{i + 1}.{k}" for k in knobs] + ["lfo.trigger"]
+            lag_l[i] = max([lag_p.get(r, 0) + 1 for r in reads if r in moved] or [0])
+        for b in rows:
+            src = 0
+            if b.source.startswith("lfo:"):
+                src = lag_l.get(int(b.source.split(":")[1]), 0)
+            reads = ([b.scale] if b.scale else []) + [mid for mid, _ in table.depth_subs(b)]
+            lag = max([src] + [lag_p.get(r, 0) + 1 for r in reads if r in moved])
+            lag_p[b.target] = max(lag_p.get(b.target, 0), lag)
+    return lag_p, lag_l
+
+
+def _play_tape(tmp_path: Path, name: str, *, lagged: bool):
+    """Preset `name` through a scratch library, the hand tape and the
+    analyzer's lanes fed, LFO 1 on, for TAPE_FRAMES frames. What a lagged
+    read multiplies is held still, so a lagged param's sequence moves only
+    with the value it was late on and the shift is exact: the analyzer's
+    lanes are held, each at its own level (a lane row scaled by a gain a
+    hand rides — party-tumble's — moves with the hand alone), and LFO 1 is
+    a square wave at 0.01 Hz, +1 over the whole tape (party-trip's and
+    lfo-breathe's LFO chains move with the hand on its depth alone). The
+    hands move every frame. Run as app.frame runs steps 3 and 9–11: on the base
+    build's arithmetic (`lagged`: the LFOs stepped and published, then
+    `_lagged_modulate`, then `reg.apply`) or on today's (the LFOs step
+    inside `Router.modulate`). Every modulatable param's effective value and
+    every LFO's output, per frame."""
+    from hyperspace.hands import HandSettings, Layout
+
+    r = rig(tmp_path=tmp_path, full=True)
+    router = Router(r.reg, Bindings())
+    assert load_preset(r, router, name) == []
+    lfos, clock = r.lfos, r.clock
+    reg = r.reg
+    reg["lfo.1.sync"].set(0)
+    reg["lfo.1.shape"].set(lfo.SHAPES.index("square"))
+    reg["lfo.1.rate"].set(0.01)
+    reg["lfo.1.phase"].set(0.0)
+    reg["lfo.1.depth"].set(0.8)
+    lay = Layout(HandSettings.from_config({}).axes)
+    router.names["hand"] = lay.index
+    router.names["hands"] = lay.pair_index
+    hand0, _ = _hand_tape(lay, 0)
+    router.rests["hand"] = [0.5] * lay.n_axes + [0.0] * (len(hand0) - lay.n_axes)
+    if not lagged:
+        router.use_lfos(lfos, clock)
+    params = [p for p in reg if p.modulatable]
+    seq: dict[str, list] = {p.id: [] for p in params}
+    outs: list[list[float]] = []
+    for k in range(TAPE_FRAMES):
+        t = 1.0 + k * TAPE_DT
+        clock.tick(t)
+        router.follow_macros()
+        hand, pair = _hand_tape(lay, k)
+        router.feed("hand", hand)
+        router.feed("hands", pair)
+        r.chain.out[:] = [CEIL * (0.5 + 0.4 * math.sin(1.3 * j)) for j in range(len(r.chain.out))]
+        if lagged:
+            lfos.step(TAPE_DT, t, clock)
+            lfos.publish(router)
+            _lagged_modulate(router, r.chain, TAPE_DT)
+        else:
+            router.modulate(r.chain, TAPE_DT, now=t)
+        reg.apply()
+        for p in params:
+            seq[p.id].append(p.get())
+        outs.append(list(lfos.outputs))
+    return seq, outs, router.table
+
+
+def test_every_factory_preset_lands_the_same_values_one_frame_earlier(tmp_path):
+    """Decision 7, the gate on the lag's removal: every factory preset,
+    played through a scratch library with the synthetic hand tape, the
+    analyzer's lanes and LFO 1 on, lands every modulatable param on the
+    same value as the base build's arithmetic (`_lagged_modulate`, the
+    reference kept for this test) — at the same frame for every param
+    whose value no lagged read reaches (most of them, every one no
+    performer moves among them), and exactly as many frames earlier as
+    the base build was late for the rest (`_lag_of`: an LFO whose depth a
+    hand owns, and what that LFO drives). A sequence that differs in any
+    other way is a value the change moved, not its timing."""
+    shifted_somewhere = []
+    for name in sorted(preset.FACTORY_PRESETS):
+        old, old_out, table = _play_tape(tmp_path / f"{name}-old", name, lagged=True)
+        new, new_out, _ = _play_tape(tmp_path / f"{name}-new", name, lagged=False)
+        lag_p, lag_l = _lag_of(table)
+        for pid, seq in new.items():
+            k = lag_p.get(pid, 0)
+            assert seq[:TAPE_FRAMES - k] == old[pid][k:], (name, pid, k)
+            if k and len(set(seq)) > 1:
+                shifted_somewhere.append((name, pid))
+        for i in range(len(new_out[0])):                 # every LFO steps, cables or none
+            k = lag_l.get(i, 0)
+            assert [o[i] for o in new_out][:TAPE_FRAMES - k] == \
+                [o[i] for o in old_out][k:], (name, i, k)
+            assert len({o[i] for o in new_out}) > 1 or i > 0 or k == 0, (name, i)
+    # not vacuous: the two presets whose hand owns LFO 1's depth moved
+    # what that LFO drives, one frame earlier
+    assert ("party-trip", "camera.zoom") in shifted_somewhere
+    assert ("lfo-breathe", "view.bright") in shifted_somewhere
+    assert ("party-tumble", "rot.rate.ZW") in shifted_somewhere   # the scale path
+
+
+def test_a_cycle_without_a_delay_disables_its_last_cable_with_a_note(tmp_path):
+    """Decision 7: a loop closes only through a delay modifier. LFO 1
+    pushes LFO 2's rate and LFO 2 pushes LFO 1's depth: the later cable in
+    table order is kept off — its row still in the table, enabled, saved
+    as written — with a note ROUTING's head shows; the rest of the patch
+    runs. Take the loop away and the cable runs again, no note."""
+    r = rig(tmp_path=tmp_path, full=True)
+    first = Binding("lfo:0", "lfo.2.rate", "push", 0.5)
+    second = Binding("lfo:1", "lfo.1.depth", "push", 0.5)
+    other = Binding("lane:0", "view.bright", "push", 0.5)
+    table = Bindings([first, other, second])
+    router = Router(r.reg, table)
+    router.use_lfos(r.lfos, r.clock)
+    assert router.patch_cut == {("lfo:1", "lfo.1.depth")}
+    (note,) = router.patch_notes
+    assert note == ("loop: lfo:0 → lfo.2.rate → lfo:1 → lfo.1.depth → lfo:0 needs a delay"
+                    " — lfo:1 → lfo.1.depth is off until it has one")
+    assert second in table.routes() and second.enabled          # nothing removed
+    assert [d["target"] for d in (b.to_json() for b in table.routes())] == [
+        "lfo.2.rate", "view.bright", "lfo.1.depth"]
+    depth, rate, bright = r.reg["lfo.1.depth"], r.reg["lfo.2.rate"], r.reg["view.bright"]
+    r.lfos[0].shape = r.lfos[1].shape = lfo.SHAPES.index("square")
+    r.chain.out[:] = 0
+    r.chain.out[0] = CEIL * 0.5
+    router.modulate(r.chain, 1 / 60, now=1.0)
+    r.reg.apply()
+    assert rate.modulated and not depth.modulated               # the cut cable never ran
+    assert bright.modulated                                     # the rest of the patch did
+    # in the file as written: a preset saved now carries the row
+    assert any(d == second.to_json() for d in (b.to_json() for b in table.routes()))
+    table.remove(first)                                         # no loop: it runs
+    assert router.patch_cut == set() and router.patch_notes == []
+    router.modulate(r.chain, 1 / 60, now=1.0 + 1 / 60)
+    r.reg.apply()
+    assert depth.modulated
+
+
+def test_sinks_still_send_after_apply(tmp_path):
+    """The sinks read this frame's effective values after `reg.apply()`,
+    as before (ARCHITECTURE §2 step 12): a param the pass lands early
+    (LFO 1's depth, which LFO 1 reads) and a param `reg.apply` lands (the
+    brightness LFO 1 pushes) both reach a sink row at this frame's value."""
+    r = rig(tmp_path=tmp_path, full=True)
+    table = Bindings([Binding("hand:0", "lfo.1.depth", "position"),
+                      Binding("lfo:0", "view.bright", "push", 0.5),
+                      Binding("param:lfo.1.depth", routing.sink_target("daw", 0), "send"),
+                      Binding("param:view.bright", routing.sink_target("daw", 1), "send")])
+    router = Router(r.reg, table)
+    router.use_lfos(r.lfos, r.clock)
+    one = r.lfos[0]
+    one.shape, one.sync, one.phase = lfo.SHAPES.index("square"), 0, 0.0
+    depth, bright = r.reg["lfo.1.depth"], r.reg["view.bright"]
+    bright.set_value(0.5)
+    router.feed("hand", [0.6])
+    r.clock.tick(1.0)
+    router.modulate(None, 1 / 60, now=1.0)
+    landed_early = depth.value
+    r.reg.apply()
+    sent = routing.sink_values(table.sinks("daw"), r.reg)
+    assert landed_early == pytest.approx(0.6)                   # in the pass, before LFO 1
+    assert r.lfos.outputs[0] == pytest.approx(0.5 + 0.5 * 0.6)  # LFO 1 read it this frame
+    assert sent[0] == pytest.approx(depth.eff_norm) and sent[0] == pytest.approx(0.6)
+    assert sent[1] == pytest.approx(bright.eff_norm)            # this frame's push, after apply
+    assert bright.value != pytest.approx(0.5)

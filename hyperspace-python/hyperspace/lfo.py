@@ -32,11 +32,15 @@ Hz LFOs are untouched by it. A per-LFO `reset` in a division keeps its
 own offset from the clock (`shift`), so one LFO can be restarted without
 moving the clock or the others; the global trigger clears those offsets.
 
-Frame order (app.py): the LFOs step after the bridge and before
-`Router.modulate`, so an LFO that owns another LFO's depth lands one frame
-before that LFO's output does — the same one-frame lag every modulated
-value has, and no recursion. `publish` also hands the router the rest
-(0.5) a push row from an LFO is centred on (`Router.rests`).
+Frame order (plan 28 N0): the LFOs step **inside** `Router.modulate`, one
+at a time in the modulation patch's order (`LFOs.begin`, then
+`LFOs.step_one` per LFO node): an LFO is a source with inputs, its knob
+params land before it steps, so an LFO that owns another LFO's depth moves
+that LFO's output **the same frame** (decision 7). An LFO with no cable
+still steps and publishes. `LFOs.step` — begin, then every LFO in index
+order — is the whole bank at once, for a caller without a router.
+`publish` also hands the router the rest (0.5) a push row from an LFO is
+centred on (`Router.rests`).
 
 **Exactly phase 0, on every path.** A key fires the trigger before the
 frame's step, so the step reads the new downbeat at once. The panel's
@@ -114,6 +118,7 @@ class LFO:
     last_sync: int | None = field(default=None, repr=False)  # the mode last stepped in
     pending: bool = field(default=False, repr=False)  # a reset held for the next step
     fresh: bool = field(default=False, repr=False)    # restarted: the next step begins the cycle
+    at: float | None = field(default=None, repr=False)  # the t this LFO last stepped at
 
     @property
     def synced(self) -> bool:
@@ -202,12 +207,28 @@ class LFOs:
     def step(self, dt: float, t: float, clock) -> list[float]:
         """One frame: every LFO's output for time t, in [0, 1]. A trigger
         held since the last step lands first, at this t."""
+        self.begin(t, clock)
+        for i in range(len(self.lfos)):
+            self.step_one(i, dt, t, clock)
+        return self.outputs
+
+    def begin(self, t: float, clock) -> None:
+        """The frame's start for the bank, before any LFO steps: a global
+        trigger held since the last step lands now, at this t; `outputs`
+        becomes this frame's list (last frame's values until each LFO steps)."""
         if self.pending:
             self.pending = False
             self._trigger(clock, t)
-        self.stepped_at = t
-        self.outputs = [lf.step(dt, t, clock, self.rng) for lf in self.lfos]
-        return self.outputs
+        self.outputs = list(self.outputs)
+
+    def step_one(self, i: int, dt: float, t: float, clock) -> float:
+        """LFO `i`'s step for time t — what the modulation pass runs at that
+        LFO's node (plan 28 N0), after the knob params it reads have landed
+        this frame. Its output goes into `outputs[i]` and is returned."""
+        lf = self.lfos[i]
+        self.stepped_at = lf.at = t
+        out = self.outputs[i] = lf.step(dt, t, clock, self.rng)
+        return out
 
     def _late(self, clock, t: float | None) -> bool:
         """Did this arrive after the bank already stepped at this frame's t?
@@ -217,8 +238,13 @@ class LFOs:
         return t is not None and t == self.stepped_at
 
     def reset(self, i: int, clock=None, t: float | None = None) -> None:
-        """One LFO restarts now, in either mode; the clock and the rest stay."""
-        if self._late(clock, t):
+        """One LFO restarts now, in either mode; the clock and the rest stay.
+        Late — held for its next step — only if *this* LFO has stepped at
+        this frame's t: a reset landed by the pass before its LFO's node
+        reads phase 0 that same step (plan 28 N0)."""
+        if t is None:
+            t = getattr(clock, "t", None)
+        if t is not None and t == getattr(self.lfos[i], "at", self.stepped_at):
             self.lfos[i].pending = True
         else:
             self.lfos[i].restart(clock, t)

@@ -30,7 +30,11 @@ explained in the [glossary](#glossary) at the end.
    A24–A32, B30–B36, C5) need plan 24, and the device entries (L72–L81,
    A33, B37, B38, F5, G1–G6) plan 27, and the render-graph entries
    (L82–L94, B39, B40, C6, C7, D16–D18) plan 26: until they are merged,
-   use branch `plan-24-26-27-integration`.
+   use branch `plan-24-26-27-integration`. The shader-node entries
+   (L95–L102, L129, L130, C9–C11, D19–D23) are plan 30's, and the node-editor entries
+   (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
+   merged, use branch `plan-28-30-integration`. The instanced-field entries
+   (L136–L138: thousands of copies, the 3D lattices, Fit) are on `main`.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -45,7 +49,7 @@ explained in the [glossary](#glossary) at the end.
    app re-reads while it runs; the entries that say so edit it live.
 5. **The control window's pages** are the column of names down its left
    edge — OUTPUT, VIEW, FACES, BITMAP, CAMERA, LOOKBACK, FX, AUDIO,
-   ANALYZER, ROUTING, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
+   ANALYZER, ROUTING, GRAPH, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
    that page. Messages appear in the *footer*, the line along the bottom.
 
 Below, `<home>` means whichever home folder the app is using. ⌘ is the
@@ -101,6 +105,18 @@ changes brightness or volume instead).
     L92–L94 with the hand camera or recorded hands, and L84 after L76;
     B39 and B40 with the hand camera; C6 and C7 on the projector; D16
     after D2, then D17 and D18.
+12. Plan 30's shader-node entries: L95–L97 on the laptop; on the copy
+    L98 (with the hand camera or recorded hands), then L99–L102; D19–D23
+    with the glass and the projector, after D1.
+13. Plan 28's node-editor entries: L103–L116 on the laptop (L113, the
+    drag, early: everything else on the GRAPH page builds on it); on the
+    copy L117–L121; L122 with two Macs on this build (with L43); the
+    legible graph L123–L126 and L128 (the APC40 plugged in), L127 with the
+    hand camera and music on the copy; the graph by concern L131–L135 on
+    the laptop; A34–A36
+    with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
+    the projector; D24 and D25 with the glass and the projector, after
+    D1.
 
 ## Summary
 
@@ -154,7 +170,7 @@ changes brightness or volume instead).
 | L46 | Sending to FL Studio | 1 | laptop, FL Studio | 27 |
 | L47 | Receiving from FL Studio | 1 | laptop, FL Studio | 28 |
 | L48 | The shapes turn through 4D and never go flat | 1 | laptop | 113 |
-| L49 | The Heart turns with the bass, in 3D | 1 | laptop, music | 114 |
+| L49 | The Heart turns with the music, in 3D | 1 | laptop, music | 114 |
 | L50 | The Star, Starfruit, Rose and Möbius strip by eye | 1 | laptop | 115 |
 | L51 | The Klein bottle | 1 | laptop | 116 |
 | L52 | Stepping to the Klein bottle (keys) | 1 | laptop, the copy | 117 |
@@ -200,6 +216,50 @@ changes brightness or volume instead).
 | L92 | Hands inside the shape | 1 | laptop, the copy, recorded hands (hand camera for the last part) | 204, 205 |
 | L93 | A hands layer that goes behind the shape | 1 | laptop, the copy, recorded hands | 207 |
 | L94 | Hands as lines | 1 | laptop, the copy, recorded hands | 214 |
+| L95 | A time for each effect on the SYSTEM page | 1 | laptop | 220 |
+| L96 | Switching effects changes only the picture | 1 | laptop | 221 |
+| L97 | An effect on the faces still bends only the faces | 1 | laptop | 230 |
+| L98 | The palette on the hands only | 1 | laptop, the copy, recorded hands | 223 |
+| L99 | A placement the app cannot follow is a note | 1 | laptop, the copy | 225 |
+| L100 | A placement with nothing to sit on says so | 1 | laptop, the copy | 226 |
+| L101 | The placements in words | 1 | laptop, the copy | 228 |
+| L102 | The FX page's placed chip | 1 | laptop, the copy | 229 |
+| L103 | An LFO on another LFO's depth, the same frame | 1 | laptop | 232 |
+| L104 | A loop is refused in words | 1 | laptop | 233 |
+| L105 | A delay lets a loop run | 1 | laptop | 234 |
+| L106 | Every LFO still runs | 1 | laptop | 235 |
+| L107 | Each modifier with music | 1 | laptop, music | 236 |
+| L108 | Modifier edits are undo steps | 1 | laptop | 240 |
+| L109 | The GRAPH page shows what ROUTING shows | 1 | laptop | 242 |
+| L110 | Settings sit on the part of the picture they belong to | 1 | laptop | 243 |
+| L111 | Hover and select | 1 | laptop | 245 |
+| L112 | Quit, restart and a code edit with GRAPH open | 1 | laptop, a terminal | 246 |
+| L113 | Drag a cable on the laptop's screen | 1 | laptop | 247 |
+| L114 | Delete on the canvas | 1 | laptop | 250 |
+| L115 | A wrong picture cable is refused in words | 1 | laptop, the copy | 253 |
+| L116 | Add and delete an effect on the canvas | 1 | laptop | 255 |
+| L117 | A preset holds its modifiers | 1 | laptop, the copy | 238 |
+| L118 | A desk template's modifiers | 1 | laptop, the copy | 239 |
+| L119 | Boxes stay where you put them | 1 | laptop, the copy | 244 |
+| L120 | A desk template as one box | 1 | laptop, the copy | 257 |
+| L121 | A preset from before this build loads with no note | 1 | laptop, the copy | 260 |
+| L122 | A patch shared between two Macs | 1 | two Macs on this build, a shared folder | 259 |
+| L123 | The closed graph reads at a glance | 1 | laptop (the APC40 helps) | 261 |
+| L124 | Open two boxes: the real cables | 1 | laptop | 262 |
+| L125 | Drop a cable on a closed box | 1 | laptop | 263 |
+| L126 | Tidy says what it did; the details button | 1 | laptop | 264 |
+| L127 | The energy patch from GRAPH alone | 1 | laptop, hand camera, music, the copy | 265 |
+| L128 | ROUTING points to GRAPH; the desk lines as before | 1 | laptop, APC40 | 266 |
+| L129 | The palette's Mode is a picker; its rows read as the slice | 1 | laptop | 270 |
+| L130 | An old palette preset (centre and width) loads as the same look | 1 | laptop, the copy | 271 |
+| L131 | The three areas at a glance | 1 | laptop (the APC40 helps) | 272 |
+| L132 | A macro shows up when you patch it | 1 | laptop | 273 |
+| L133 | Tidy puts everything back in its area | 1 | laptop | 274 |
+| L134 | The off effects are one line | 1 | laptop | 275 |
+| L135 | Five buttons frame the areas | 1 | laptop | 276 |
+| L136 | Four thousand copies hold the frame rate | 1 | laptop | 277 |
+| L137 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 278 |
+| L138 | The lattices read as 3D | 1 | laptop, a mouse helps | 279 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -233,6 +293,9 @@ changes brightness or volume instead).
 | A31 | A desk template | 2a | laptop, the copy | 156 |
 | A32 | Click a control: this preset's settings first | 2a | laptop (APC40 helps) | 157 |
 | A33 | The desk plugged in after the app started | 2a | APC40 | 175 |
+| A34 | Learn from a pin, with the desk | 2a | APC40 | 248 |
+| A35 | The APC40 as two boxes, SHIFT latched and released | 2a | APC40, hand camera | 256 |
+| A36 | Whose cable is it; a missing device | 2a | APC40, the copy | 258 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -273,6 +336,11 @@ changes brightness or volume instead).
 | B38 | A tracker that would not start comes up later | 2b | hand camera, a tape, the copy | 172 |
 | B39 | The hands where you are, through the shape's camera | 2b | hand camera, the copy (projector helps) | 202, 203 |
 | B40 | `hands-orbit` turns only the shape | 2b | hand camera | 200 |
+| B41 | A hand on an LFO's depth acts the same frame | 2b | hand camera | 232 |
+| B42 | A modifier whose hand goes away lets go | 2b | hand camera | 237 |
+| B43 | Hand energy, smoothed, times the kick, into the acid — on ROUTING | 2b | hand camera, music | 241 |
+| B44 | The same patch, dragged on the GRAPH page | 2b | hand camera, music, the copy | 249 |
+| B45 | Learn from a pin, with a hand | 2b | hand camera | 248 |
 | C1 | Choosing the screen; the see-through mode locked | 2c | projector | 26 |
 | C2 | A black ground, never see-through | 2c | projector | 43 |
 | C3 | Windows reopen on the right screen | 2c | projector | 61 |
@@ -280,6 +348,10 @@ changes brightness or volume instead).
 | C5 | The hands on the projector | 2c | projector, hand camera | 165 |
 | C6 | A hand across the box pans as far as it did | 2c | projector, hand camera | 199 |
 | C7 | A preset saved before this build keeps its place | 2c | projector, the copy | 201 |
+| C8 | Hands as lines, through the acid, with tracers — by dragging | 2c | projector, hand camera, the copy | 251 |
+| C9 | The whole picture as shades of one red | 2c | projector | 267 |
+| C10 | A yellow slice and its derivations | 2c | projector | 268 |
+| C11 | A slice through red; dark turned bright | 2c | projector | 269 |
 | D1 | Two outputs open where the config says | 2d | glass, projector | 101 |
 | D2 | The eight output states | 2d | glass, projector, camera | 102 |
 | D3 | Hands over or through the effects | 2d | glass, projector, camera | 103, 47 |
@@ -298,6 +370,13 @@ changes brightness or volume instead).
 | D16 | Every picture as on earlier builds, on the rig | 2d | glass, projector, camera, APC40 | 195, 208 |
 | D17 | The hands in the shape on the projector, clean on the glass | 2d | glass, projector, camera, the copy | 206 |
 | D18 | Two hands, one in the shape, one on the glass | 2d | glass, projector, camera, the copy | 213 |
+| D19 | Each output still gets its own effects | 2d | glass, projector, camera | 222 |
+| D20 | The palette on the hands, on both screens | 2d | glass, projector, camera, the copy | 223 |
+| D21 | One screen recoloured | 2d | glass, projector, the copy | 224 |
+| D22 | The trail holds the bent shape | 2d | glass, projector, the copy | 227 |
+| D23 | Two palettes, a different colour on each screen | 2d | glass, projector, the copy | 231 |
+| D24 | A second pair of hands on the glass alone | 2d | glass, projector, hand camera, the copy | 252 |
+| D25 | Two outputs, two pictures, by wires | 2d | glass, projector, the copy | 254 |
 | E1 | Drag an effect with a mouse | 2e | mouse | 94 |
 | F1 | A wired Xbox 360 pad is found | 2f | gamepad | 144 |
 | F2 | Learn pad — a button | 2f | gamepad | 145 |
@@ -522,7 +601,7 @@ top with a blinking warning in a quiet room; rescan losing the choice.
 
 **Needs:** laptop.
 
-**Do:** click through all fourteen pages. Stand about two metres back.
+**Do:** click through all fifteen pages. Stand about two metres back.
 
 **Right if:** every label and number is readable from there; no page
 shows a scrollbar of its own (the ROUTING page's list of rows scrolls
@@ -837,21 +916,24 @@ one). Plan 24 (the party fixes).
 1. Any preset. FX page: the **Palette** chip is the last one. Switch it
    on.
 2. Raise its **Mix** slowly to the top.
-3. Move **Centre** all the way round, then **Width** down to 0 and back.
-4. Set **Mode** to 1.
+3. Set the **hue** row to 170 → 230, then both ends to 200. (Since plan
+   30 N8 the palette is a slice — hue, sat and val each `from → to` —
+   not Centre and Width: C9–C11, L129.)
+4. Set **Mode** to gradient.
 5. With the APC40: right-click Mix → **Learn desk**, move track fader 2
    (S2), then sweep S2.
 
-**Right if:** (1) nothing changes: the palette starts at mix 0. (2) the
-colours are pulled onto one slice of the colour wheel around Centre.
-(3) the slice moves round with no jump anywhere; at width 0 the picture
-is one colour, its brightness kept. (4) the picture becomes a greyscale
+**Right if:** (1) nothing changes: the palette starts at mix 0. (2)
+still nothing changes: its slice starts as the whole colour wheel.
+(3) at 170 → 230 the colours are pulled onto a blue-cyan slice with no
+jump anywhere; at 200 → 200 the picture is one colour, its brightness
+kept. (4) the picture becomes a greyscale
 ramp (the default anchors are greys). (5) the footer says the learn
 landed into the preset; S2 then fades the palette in and out once it
 reaches the mix.
 
-**Wrong if:** a jump (a seam) as Centre goes round; the picture changes
-in step 1; S2 refused as "invariant" (the track faders are still the
+**Wrong if:** a jump (a seam) in the colours; the picture changes
+in step 1 or 2; S2 refused as "invariant" (the track faders are still the
 session's: see A28).
 
 *(check 166)*
@@ -863,14 +945,15 @@ session's: see A28).
 **Do:**
 1. Copy `tests/fixtures/palettes/fx/sunset.json` into the copy's `fx/`
    folder (`<home>/fx/`, or the shared library's).
-2. FX page, open Palette. Look at its controls with Mode 0, then Mode 1.
+2. FX page, open Palette. Look at its controls with Mode on compress, then gradient.
 3. From the FX page's preset strip (under its title) load **sunset**.
    Change one anchor colour, save it as your own (**as…**), load another
    effect preset, then yours again.
 
-**Right if:** (2) the page never scrolls; with Mode 0 you see Mode,
-Centre, Width, Sat (low and high on one row) and Val; with Mode 1, Mode,
-Anchors and one row per anchor colour (hue, sat, val on one row). (3)
+**Right if:** (2) the page never scrolls; on compress you see Mode, a
+"compress into" line, then Hue, Sat and Val (each from → to on one
+row); on gradient, Mode, Anchors and one row per anchor colour (hue,
+sat, val on one row). (3)
 sunset paints dark violet → magenta → orange → cream; yours comes back
 with your anchor.
 
@@ -1468,7 +1551,10 @@ the end of its name.
 folder in a cloud drive shared between you (set up as in
 [`SETUP.md`](SETUP.md), "Share presets with someone"). Try the missing
 folder (step 4) on a copy: `HYPERSPACE_HOME` pointed at a scratch
-folder.
+folder. **Both Macs must be on the same build** — since plans 28 and 30
+a preset can carry modifiers, box positions and picture wiring that an
+older build ignores or refuses, and an older build that saves it throws
+them away (L122).
 
 **Do:**
 1. Both Macs pointed at the same folder (`[library] path`). On Mac A,
@@ -1825,48 +1911,45 @@ VIEW page's **Shape** list (or with ← / →). The six round keys on the
 VIEW page (XY, XZ, YZ, XW, YW, ZW) switch each turning direction on and
 off; XW, YW and ZW are the "fourth dimension" ones, driven by the bass.
 
-#### L48. The shapes turn through 4D and never go flat
+#### L48. A 3D shape ignores the W planes; a 4D shape turns through them
 
 **Needs:** laptop.
 
 **Do:** F1 (TUMBLE). On the VIEW page switch off every round key but
 **XW**. Step through Star, Rose, Torus, Trefoil knot, Starfruit, Möbius
-strip and Klein bottle, watching each turn a full circle. Do the same
-with only **YW** on, then only **ZW**, then all six with music. Look at
-the Clifford torus (shape 18) first, for comparison.
+strip and Klein bottle (all 3D since plan 28). Then look at the Clifford
+torus (shape 18) and the Tesseract. Do the same with only **YW** on,
+then only **ZW**, then all six with music.
 
-**Right if:** no shape ever becomes a flat sheet, a line or a thin
-ribbon; each bends and swaps sides as it turns, the way the Clifford
-torus does; the red line under the name reads "4D lift · …" (the Klein
-bottle's, "4D · one-sided bottle, no self-crossing").
+**Right if:** with only W keys on, every 3D shape holds still and its W
+keys are dimmed (hover one: "does nothing now: a 3D shape has no w"); the
+header line reads "3D · …"; the 4D shapes turn through w. With all six
+on, a 3D shape turns in XY, XZ and YZ only. The Klein bottle crosses
+itself where the neck passes through the body, as it must in 3D.
 
-**Judge:** which shapes look best and worst turning.
+**Judge:** whether the 3D shapes are lively enough on the upper bands
+alone.
 
-**Wrong if:** a shape goes flat at a quarter turn; a seam opens up.
+**Wrong if:** a 3D shape moves with only W keys on; a seam opens up.
 
 *(check 113)*
 
-#### L49. The Heart turns with the bass, in 3D
+#### L49. The Heart turns with the music, in 3D
 
 **Needs:** laptop, music with deep bass.
 
 **Do:** pick the Heart. With only XW on, then only YW, then only ZW,
-watch it turn. Then all keys on, music playing. Switch to the Tesseract
-and back.
+watch it. Then all keys on, music playing. Switch to the Tesseract and
+back.
 
-**Right if:** XW turns the heart side-on (a spin about the up-down
-line), YW tips it forward and back, ZW rolls it like a wheel facing you;
-it never goes flat; with music it clearly moves with the bass; its
-lines are as bright, and its near edges as thick and bright, as the
-Tesseract's.
+**Right if:** with only W keys on it holds still (plan 28: a 3D shape has
+no w); with all keys on it turns with the upper bands; its lines are as
+bright, and its near edges as thick and bright, as the Tesseract's.
 
-**Know:** the XW, YW and ZW keys and readouts still say those planes are
-turning, although the Heart turns in ordinary 3D.
+**Judge:** whether the Heart still reads as moved by the music.
 
-**Judge:** whether the bass's spin reads as the bass.
-
-**Wrong if:** the heart goes flat; it looks dim and flat next to the
-Tesseract; another shape behaves differently after the Heart was shown.
+**Wrong if:** it moves with only W keys on; it looks dim and flat next
+to the Tesseract.
 
 *(check 114)*
 
@@ -1874,13 +1957,11 @@ Tesseract; another shape behaves differently after the Heart was shown.
 
 **Needs:** laptop.
 
-**Do:** FACES on with a pattern. Star: XW only, stop it at a quarter turn
-(**Space** pauses). Starfruit, Rose, Möbius strip: all keys off, then
-turning.
+**Do:** FACES on with a pattern. Star, Starfruit, Rose, Möbius strip:
+all keys off, then turning (XY, XZ, YZ — they are 3D since plan 28).
 
-**Right if:** the Star becomes a box, like a lantern, at a quarter turn,
-and its two star-shaped ends show the pattern whole, with no hole or
-tear; the Starfruit's five ridges are still recognisable; the Rose is
+**Right if:** the Star's two star-shaped ends show the pattern whole,
+with no hole or tear; the Starfruit's five ridges are recognisable; the Rose is
 still a delicate flower (it is a little deeper than before); the Möbius
 strip is a little wider than before and not too wide; the Rose's centre
 and the Möbius strip's join stay closed.
@@ -1897,19 +1978,18 @@ the Möbius strip's join.
 **Needs:** laptop.
 
 **Do:** pick the Klein bottle (shape 26, after the Möbius strip). All
-keys off, then XW, YW and ZW one at a time, slowly (Speed down). Faces
+keys off, then XY, XZ and YZ one at a time, slowly (Speed down). Faces
 on and off.
 
 **Right if:** at rest it looks like a bottle whose neck curls over and
-comes back into its body; as it turns, the neck passes beside the body
-and never through it; no gap where the surface joins itself; the neck
-has enough lines.
+comes back into its body, passing through its side (a Klein bottle in
+3D must cross itself; plan 28 took out the lift that kept them apart in
+w); no gap where the surface joins itself; the neck has enough lines.
 
 **Judge:** whether it reads as a bottle — the build's own look said it
 reads more like a curled horn or a loop. Say what you see.
 
-**Wrong if:** the neck cuts through the body at some angle; a gap or a
-sliver at the join.
+**Wrong if:** a gap or a sliver at the join.
 
 *(check 116)*
 
@@ -2264,7 +2344,7 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 556 frames match their goldens (Apple M3 Max,
+**Right if:** it ends "all 596 frames match their goldens (Apple M3 Max,
 4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
@@ -2345,8 +2425,9 @@ and off. On OUTPUT tick **through effects**, then untick it.
 **Right if:** under the stall status, "gpu per node, ms (median of the
 last frames):" and one line each for `scene`, `cover`, `hands`,
 `history`, `fx`, `capture`, `output.1`, a few milliseconds or less and
-steady; `fx` drops near 0 with the effects off and comes back within a
-second; `history` changes with the look-back; ticking **through effects**
+steady, and a line for each effect that is running just above `fx`
+(`fx` itself always reads 0.00 now: see L95); the effects' lines go
+with the effects off and come back within a second; `history` changes with the look-back; ticking **through effects**
 adds `composite(scene+hands)` and `fx(scene+hands)`, which go again a
 moment after unticking. No `ghost` line.
 
@@ -2532,6 +2613,864 @@ whether you want a skeleton of bone lines instead.
 **Changes:** tick **scene** again.
 
 *(check 214)*
+
+## Shader nodes (L95–L97 on the laptop; L98–L102 on the copy)
+
+Plan 30 (shader nodes). Each effect on the FX page is now its own part
+of the picture's wiring, and a preset can put one somewhere other than
+the end of the chain: the colour palette on the hands only, on one
+screen only, or a second acid before the trail. **No factory preset
+does it**: these entries copy test presets into the copy's library, as
+for the render graph above (delete any `[library] path` line on the
+copy first). The test presets are in
+`hyperspace-python/tests/fixtures/presets/`:
+
+- `palette-hands.json` — PARTY TRACER's look with the palette on the
+  hands only;
+- `palette-glass.json` — PARTY ACID with the palette on output 2 only;
+- `acid-scene.json` — PARTY MANDALA with a second acid before the trail
+  (the look-back on).
+
+Two variants of `palette-hands.json`, made as above (copy it under the
+new name and replace the `"graph": {"nodes": [` … `]},` part):
+
+- `palette-teapot.json`: `"graph": {"nodes": [{"kind": "effect",
+  "file": "palette", "after": "teapot"}]},`
+- `palette-both.json`: `"graph": {"nodes": [{"kind": "effect", "file":
+  "palette", "after": "hands", "into": "output.2"}]},`
+
+The screens-together entries are D19–D23 in Part 2 (d).
+
+#### L95. A time for each effect on the SYSTEM page
+
+**Needs:** laptop.
+
+**Do:** SYSTEM page; load ACID (F6). On the FX page switch Kaleido on
+and Acid off.
+
+**Right if:** under "gpu per node, ms", lines `acid`, `wobble`,
+`deconverge` and `huecycle` just above `fx`. The `fx` line itself reads
+0.00 — that is by design (it only hands the picture on); the effects'
+cost is on their own lines. After the switch, `kaleido` appears and
+`acid` goes within a few frames. No line for an effect that is off.
+(The split between the lines jumps about on the Mac's graphics chip:
+look for the lines, not their exact share.)
+
+**Wrong if:** one `fx` line carrying everything; a line for every
+effect, on or off.
+
+*(check 220)*
+
+#### L96. Switching effects changes only the picture
+
+**Needs:** laptop.
+
+**Do:** ACID; on the FX page click effects on and off quickly; drag one
+chip to another place; then untick **Effects**.
+
+**Right if:** each click changes the picture as on earlier builds, with
+no flash, no black frame and no stall line on SYSTEM; the drag reorders
+as before; with **Effects** off the picture is the plain shape and
+SYSTEM shows no effect lines.
+
+**Wrong if:** a black or frozen frame on a click; a stall on every
+click.
+
+*(check 221)*
+
+#### L97. An effect on the faces still bends only the faces
+
+**Needs:** laptop.
+
+**Do:** load FACES (F2). FX page: open Warp, click ONTO **faces**,
+switch it on. Hold the pointer over the ONTO **faces** chip.
+
+**Right if:** the pictures inside the faces warp and the rest of the
+frame does not; the pop-up ends "On the faces it runs inside the
+shape's face drawing: the one shader run the render graph does not
+show, and a placement in the preset's graph does not move it."; the
+faces row lists Warp; SYSTEM has no `warp` line.
+
+**Wrong if:** the whole frame warps.
+
+**Changes:** click ONTO **frame** and switch Warp off again.
+
+*(check 230)*
+
+#### L98. The palette on the hands only (on the copy, tape)
+
+**Needs:** laptop; the copy; hands (the hand camera, or the recorded
+hands of L44), **Ghost hands** ticked.
+
+**Do:** copy `palette-hands.json` into `<home>/presets/` and load
+PALETTE-HANDS; SYSTEM page; move the hands; then take them out of view.
+
+**Right if:** the hands turn a slice of blue-cyan (they are pale, so it
+may read grey-teal) while the shape and its trail keep their colours;
+the guide and labels are not recoloured; SYSTEM shows a `palette` line
+under `hands` while the hands show, and none without them.
+
+**Judge:** whether the blue-cyan reads as you meant at a distance.
+
+**Wrong if:** the whole picture turns blue; a dark rim around the hands.
+
+*(check 223)*
+
+#### L99. A placement the app cannot follow is a note (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** make `palette-teapot.json` and `palette-both.json` (above). Load
+each; save it (the preset strip's save); open the file again.
+
+**Right if:** the preset strip says, for the teapot, "graph: palette
+after 'teapot' — this build places after scene, hands, hands.2 …,
+history, output.1 …, or an effect; the default placement", and for the
+other "graph: palette after 'hands' and into 'output.2' at once — one
+of the two; the default placement"; the palette then recolours the whole
+picture (it went back to the end of the chain); the preset loads with
+no red dot; after saving, the file still says what you wrote.
+
+**Wrong if:** the load refused; the file changed by the save.
+
+**Changes:** delete the two files.
+
+*(check 225)*
+
+#### L100. A placement with nothing to sit on says so (on the copy)
+
+**Needs:** laptop; the copy; L98's preset.
+
+**Do:** PALETTE-HANDS; OUTPUT page: untick **hands** on every output;
+then tick it again.
+
+**Right if:** OUTPUT lists "dormant: palette after hands — no hands
+layer this frame"; nothing is recoloured and SYSTEM has no palette
+line; ticking **hands** brings the recolouring back.
+
+**Wrong if:** the shape turns blue (the palette fell back into the
+chain).
+
+*(check 226)*
+
+#### L101. The placements in words (on the copy)
+
+**Needs:** laptop; the copy; the three test presets copied in.
+
+**Do:** load each in turn; OUTPUT page: hold the pointer over the
+"shows:" line.
+
+**Right if:** the pop-up's last line reads "graph: palette on the
+hands", "graph: palette on output 2 only", "graph: acid ×2 · acid 2
+before the history"; no page scrolls.
+
+**Wrong if:** words that disagree with the picture.
+
+*(check 228)*
+
+#### L102. The FX page's placed chip (on the copy)
+
+**Needs:** laptop; the copy; L98's preset.
+
+**Do:** PALETTE-HANDS; FX page. Drag the Palette chip; drop another chip
+onto it. Click its name and hold the pointer over the open strip's
+title. Untick every output's **hands** and hold the pointer over the
+chip's name. Load TRIP.
+
+**Right if:** the Palette chip sits in a second row of chips under the
+others, reading "Palette · after hands", readable from where you stand;
+the line under **Effects** reads "nothing in the chain · 1 placed"; the
+drag and the drop do nothing; its dot switches it and its name opens
+its controls, whose title pop-up reads "palette.glsl · after hands";
+with the hands off the "1 placed" goes and the pop-up says "dormant: …";
+on TRIP the Palette chip is back in the main grid, last.
+
+**Wrong if:** the Palette chip in the main grid on PALETTE-HANDS; a
+drag moving it; the page scrolling.
+
+*(check 229)*
+
+## The node editor (L103–L116 on the laptop; L117–L121 on the copy; L122 with two Macs; L123–L128 the legible graph; L129–L130 the palette as compression, plan 30 N8; L131–L135 the graph by concern; L136–L138 the instanced field, from `main`)
+
+Plan 28 (the node editor). Three things changed. **The modulation has no
+one-frame lag any more**: a setting that drives another (an LFO on
+another LFO's depth, a macro scaling a route) acts in the same frame.
+**Modifiers**: small boxes between a source and a route — curve, scale,
+smooth, combine two sources, threshold to a trigger, a one-frame delay —
+built on GRAPH (right-click the canvas → modifier; click one for its
+settings; ROUTING's MODIFIERS strip did this before the legible graph)
+and saved in the preset. And
+a new page, **GRAPH** (after ROUTING): everything wired to everything,
+drawn as boxes and cables, which you can rewire by dragging. **No
+automated test can drag the mouse on that page**, so every drag below is
+new to anyone. No factory preset has modifiers or wires: build your own,
+on the copy when you save. Two pins on a setting's box: the round one
+(**mod**) takes one performer (a hand, a band, an LFO); the square one
+(**base**) takes the desk's knobs and the pad.
+
+**Since the legible graph (L123–L128), ROUTING has no routes and no
+MODIFIERS strip any more.** Wherever an entry below says "on ROUTING add
+a route" or "the MODIFIERS strip", do it on GRAPH: drag from the source's
+dot onto the setting's round dot (or onto a closed box's small left dot
+and pick the setting), right-click the empty canvas → modifier, click a
+modifier's box to set its inputs and knobs, click a wire to see its rows.
+Right-click a slider → Route a lane here… also works and opens GRAPH.
+
+#### L103. An LFO on another LFO's depth, the same frame
+
+**Needs:** laptop.
+
+**Do:** load TRIP (F5); open the LFO page; set LFO 2's depth to 0.5. On
+GRAPH drag from *LFO 1*'s right-hand dot onto *LFO 2*'s left-hand dot and
+pick **depth · mod**; click the new wire and set the row to push. Watch
+LFO 2's scope.
+
+**Right if:** LFO 2's swing breathes in and out with LFO 1's wave,
+smoothly, both ways; the frame rate on SYSTEM is as before.
+
+**Wrong if:** the scope stutters, doubles or freezes.
+
+**Changes:** remove the route (or load TRIP again).
+
+*(check 232; the hand part is B41)*
+
+#### L104. A loop is refused in words
+
+**Needs:** laptop.
+
+**Do:** on GRAPH drag *LFO 1*'s right-hand dot onto *LFO 2*'s left-hand
+dot and pick **rate · mod**, then *LFO 2*'s onto *LFO 1*'s and pick
+**depth · mod** (both rows push, from their wires). Look under the
+preset's name at the top of ROUTING. Then delete the first route on
+GRAPH (open both LFO boxes, click its cable, Delete).
+
+**Right if:** a warning line: "loop: lfo:0 → lfo.2.rate → lfo:1 →
+lfo.1.depth → lfo:0 needs a delay — lfo:1 → lfo.1.depth is off until it
+has one"; LFO 1's depth does not move; everything else runs; with the
+first route gone the warning goes and LFO 2 moves LFO 1's depth.
+
+**Wrong if:** no warning; the app stutters; a route disappears.
+
+*(check 233)*
+
+#### L105. A delay lets a loop run
+
+**Needs:** laptop.
+
+**Do:** on GRAPH right-click the canvas → **modifier ▸ delay**; click it
+and set its input to **LFO 1**. Drag its right-hand dot onto *LFO 1*'s
+left-hand dot and pick **depth · mod** (push, from the wire's row).
+
+**Right if:** no warning; LFO 1's scope swells and shrinks with itself,
+smoothly.
+
+**Wrong if:** the loop warning; a scope that flickers between two shapes.
+
+*(check 234)*
+
+#### L106. Every LFO still runs
+
+**Needs:** laptop.
+
+**Do:** load TUMBLE (no LFO routes); LFO page; tap a tempo, then ⇧B.
+
+**Right if:** all four scopes move at their own rates; ⇧B puts every
+synced LFO on its downbeat.
+
+**Wrong if:** a scope frozen or racing.
+
+*(check 235)*
+
+#### L107. Each modifier with music
+
+**Needs:** laptop; music.
+
+**Do:** on GRAPH add one modifier at a time (right-click the canvas →
+modifier), drag band 0 (the kick) onto its left-hand dot, drag its
+right-hand dot onto *shape*'s and pick **Brightness · mod**; click it to
+try its settings; remove it (× remove) before the next. Curve: move **shape**, tick
+**invert**. Scale: **mul** 2, then **clamp**. Smooth: a long **release**;
+then **spring** on with attack 0.2. Combine: inputs band 0 and band 3,
+**how** mul, then cross and move **balance**. Threshold. Delay.
+
+**Right if:** curve bends how the brightness answers, invert flips it;
+scale doubles it, clamp holds it at full; smooth makes it fall slowly
+after each kick, the spring overshoots and settles; combine mul is darker
+than either band, cross fades between them; threshold flashes once per
+kick; delay looks like the plain route. Each modifier's bar (click it)
+and its box's "out" line move with the music.
+
+**Wrong if:** a bar that does not move (its input not set); a threshold
+lit all the time.
+
+*(check 236)*
+
+#### L108. Modifier edits are undo steps
+
+**Needs:** laptop.
+
+**Do:** add a modifier, drag its release, pick another input; ⌘Z three
+times, then ⇧⌘Z three times.
+
+**Right if:** each ⌘Z takes back one change, the last one removes the
+modifier; redo puts them back.
+
+**Wrong if:** the add cannot be undone; one ⌘Z takes two changes.
+
+*(check 240)*
+
+#### L109. The GRAPH page shows what ROUTING shows
+
+**Needs:** laptop.
+
+**Do:** load TRIP; open GRAPH; click **expand all**. Then right-click a
+slider on another page → Route a lane here…. Click **collapse all**.
+Look at SYSTEM.
+
+**Right if:** with everything open every route is one solid cable into a
+setting's round pin, the desk's and keys' rows faint cables into square
+pins; the new route is selected on GRAPH, its row first in the details;
+with everything closed two boxes are one wire, whose hover counts its
+cables; SYSTEM has a line "graph page: … ms median (N nodes, M
+cables)", about 1.3 ms closed.
+
+**Wrong if:** a cable missing or doubled; the app slows down with the
+page open.
+
+*(check 242)*
+
+#### L110. Settings sit on the part of the picture they belong to
+
+**Needs:** laptop.
+
+**Do:** load ACID; GRAPH; click **expand all**, untick **patched only**.
+
+**Right if:** the view settings are on the `shape` box, the acid's on
+`acid`, the trail's on `history`, the camera's on `eye`; tempo and the
+master faders have boxes of their own.
+
+**Wrong if:** everything in loose boxes by group.
+
+*(check 243)*
+
+#### L111. Hover and select
+
+**Needs:** laptop.
+
+**Do:** load lfo-breathe; GRAPH; open (**+**) the two boxes a route
+joins. Hold the pointer over its cable; click it; click **details
+beside**, then **details below**; click an effect's box.
+
+**Right if:** the pop-up says from → to, the reading and the depth; the
+click shows that route's ROUTING row under the canvas; **details beside**
+(only there while something is selected) moves it to a column at the
+side and **details below** back; changing the depth there changes the
+cable's thickness; an effect's box shows its FX controls.
+
+**Wrong if:** the pop-up somewhere else on the screen.
+
+*(check 245)*
+
+#### L112. Quit, restart and a code edit with GRAPH open
+
+**Needs:** laptop; a terminal.
+
+**Do:** GRAPH open, zoomed in; `touch hyperspace-python/hyperspace/ui_graph.py`;
+then ⌘R; then quit.
+
+**Right if:** the page keeps drawing at its zoom; ⌘R and quit close
+cleanly.
+
+**Wrong if:** a crash when quitting; two canvases.
+
+*(check 246)*
+
+#### L113. Drag a cable on the laptop's screen
+
+**Needs:** laptop alone, the control window at its normal size.
+
+**Do:** load TRIP; GRAPH; open (**+**) the analyzer and `shape` and untick
+**patched only**. 1. Drag from band 2's pin to `view.bright`'s round pin. 2. Drag
+that cable's end, from the round pin, onto `view.speed`'s round pin. 3.
+Drag a band onto a setting a route already drives: answer **Keep**, then
+again and **Replace**. 4. Right-click the empty canvas → **modifier ▸
+smooth**; drag the new box over the band 2 cable and let go. 5. ⌘Z four
+times.
+
+**Right if:** the cable appears when you let go and clicking it shows the
+route's row; it then ends on `view.speed`; Replace / Keep comes up; the smooth
+sits between band 2 and `view.speed`; each ⌘Z takes one step back; a
+drop on a wrong pin turns red with words and makes nothing.
+
+**Wrong if:** a drag that never makes a cable; pins too small to hit;
+the drop on the cable doing nothing.
+
+*(check 247)*
+
+#### L114. Delete on the canvas
+
+**Needs:** laptop.
+
+**Do:** load lfo-breathe; GRAPH. 1. Click the route a macro's depth cable
+scales; press Delete; ⌘Z. 2. Click a key's faint cable; Delete. 3.
+Right-click a macro's box → **delete**; ⌘Z. 4. Add a modifier with a
+route on it; select its box; Delete.
+
+**Right if:** 1: the route and the macro's cable go together and ⌘Z
+brings both back; 2: the cable stays and the top line says it is the
+session's (bindings.json); 3: the macro's label and every cable from it
+go, the knob stays, ⌘Z puts them back; 4: the box goes, its route stays
+and does nothing.
+
+**Wrong if:** deleting a modifier deletes its routes.
+
+*(check 250)*
+
+#### L115. A wrong picture cable is refused in words
+
+**Needs:** laptop; the copy for step 3.
+
+**Do:** GRAPH. 1. Drag `ghost` (the hands) onto `output.1`'s image pin.
+2. Drag `acid` onto `palette`'s image pin, then `palette` onto `acid`'s.
+3. On the copy, in a saved preset's `"graph": {…}` add `, "wires":
+[{"from": "teapot", "to": "output.1.image"}]` and load it.
+
+**Right if:** 1: red, "wire ghost → output.1.image — ghost makes
+geometry, output.1.image takes a picture"; 2: the second turns red with
+"that makes a loop (…)"; 3: a note "graph: wire teapot → … ; the default
+wiring", the rest of the look loads, no red dot.
+
+**Wrong if:** a refused cable lands; one bad wire costs the whole look.
+
+*(check 253)*
+
+#### L116. Add and delete an effect on the canvas
+
+**Needs:** laptop.
+
+**Do:** GRAPH; right-click the empty canvas → **effect ▸ acid**; select
+the new `acid.2` box → Delete; ⌘Z. Try Delete on `output.1`, on `acid`
+and on a cable nobody wired.
+
+**Right if:** "Acid 2" settings appear on FX and ROUTING, off; Delete
+removes them, ⌘Z brings them back; the last three are refused in words.
+
+**Wrong if:** the settings stay after the delete.
+
+*(check 255)*
+
+#### L117. A preset holds its modifiers (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** build two modifiers on GRAPH; save as a new preset; load
+another, then this one; open `<home>/bindings.json` and the preset's
+file in a text editor.
+
+**Right if:** the modifiers come back as they were; the preset file has
+a `"modifiers"` list after `"routes"`; `bindings.json` says nothing of
+modifiers; a factory preset loads with no note and no modifiers.
+
+**Wrong if:** modifiers in `bindings.json`; a red dot on a factory
+preset just loaded.
+
+*(check 238)*
+
+#### L118. A desk template's modifiers (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** copy `tests/fixtures/modifiers/desk/mod-rig.json` into
+`<home>/desk/` and `tests/fixtures/modifiers/presets/mod-templated.json`
+into `<home>/presets/`; load MOD-TEMPLATED; save a copy and give the
+copy's first modifier a longer release; save. Change the release in the
+template file and load each preset again.
+
+**Right if:** both show the template's modifiers; the copy keeps its own
+release; the template's change reaches the other.
+
+**Wrong if:** the saved copy holds every template modifier.
+
+*(check 239)*
+
+#### L119. Boxes stay where you put them (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** load TRIP and save it as a new preset; GRAPH. Drag the `shape`
+box; save; load another preset and this one again. Drag an LFO's box.
+Press **tidy**, then ⌘Z and ⇧⌘Z.
+
+**Right if:** dragging `shape` puts a red dot on the preset and it comes
+back where you dropped it; the preset file ends with a `"layout"`;
+dragging the LFO marks the show instead; **tidy** lines everything up
+left to right (controllers, LFOs, modifiers, macros, settings, the
+picture, the outputs) and is one undo step each way.
+
+**Wrong if:** a box jumps back while you drag it; a red dot on a factory
+preset just loaded.
+
+*(check 244)*
+
+#### L120. A desk template as one box (on the copy)
+
+**Needs:** laptop; the copy. The APC40 not needed.
+
+**Do:** copy `tests/fixtures/desk-templates/desk/fixture-shape.json`
+into `<home>/desk/` and `tests/fixtures/desk-templates/presets/templated.json`
+into `<home>/presets/`; load TEMPLATED; GRAPH. Find the box *template
+fixture shape* and click its **+**. Delete D1's cable. Drag D3's pin on
+the template box onto `view.speed`'s square pin. Save as a new preset
+and open its file.
+
+**Right if:** closed, the box lists 7 controls and no cables; opened, 5
+cables; the saved file says `"desk_template": "fixture shape"` and its
+`"desk"` has D1 dark and D3 on `view.speed`; the template file is
+unchanged.
+
+**Wrong if:** no template box; the template file changed.
+
+*(check 257)*
+
+#### L121. A preset from before this build loads with no note (on the copy)
+
+**Needs:** laptop; the copy and its own presets saved before this build.
+
+**Do:** load each of your own presets; open ROUTING and GRAPH; save one.
+
+**Right if:** no note and no red dot on any load; ROUTING's desk lines as before;
+GRAPH draws every route; the saved file gains no `"modifiers"`,
+`"layout"` or `"wires"` unless you added one.
+
+**Wrong if:** a note or a red dot from a load.
+
+*(check 260)*
+
+#### L122. A patch shared between two Macs
+
+**Needs:** two Macs **both on this build** (the branch above, or `main`
+once merged), sharing a library folder as in L43.
+
+**Do:** on Mac A build B43's patch (or any two modifiers and a route),
+drag its boxes about, and save it as a new preset. Load it on Mac B;
+change a modifier's release there and save; load it again on A.
+
+**Right if:** B shows the same modifiers, routes and box positions, no
+note; A gets B's change after the sync.
+
+**Wrong if:** a note on B; the modifiers or positions missing.
+
+**Important:** a Mac on an **older build** opens such a preset with the
+default picture wiring and a note, silently ignores its modifiers and
+box positions, and **throws them away if it saves the preset**. Update
+both Macs before you share patches, and never save one on an older build.
+
+*(check 259)*
+
+**A legible graph (L123–L128, plan 28 N7).** After the owner's first look the GRAPH page was too busy, so now **every
+box starts closed**: its name and at most five short lines (how many
+ports it has, how many are wired, what is loudest right now), and **one
+wire between two boxes** however many settings are mapped between them.
+Click a box's **+** to open it (its ports, as before) — the real cables
+appear only when both boxes are open. The routes and the modifiers are
+edited on GRAPH now; ROUTING keeps the desk, the macros, the session's
+rows and the sinks, with a line at the top pointing to GRAPH.
+
+#### L123. The closed graph reads at a glance
+
+**Needs:** laptop; the APC40 plugged in helps (its box says "off"
+without it).
+
+**Do:** load party-trip; open GRAPH; stand back at your usual distance.
+Then open SYSTEM and read the `graph page:` line.
+
+**Right if:** a handful of boxes, each a name and one to four short
+lines; one wire from *apc40* to *shape*, one to *fx*, one to *eye* (and
+one to each other box the desk maps into — the two APC40 boxes have 19
+wires between them, most into the small setting boxes on the right); the
+top line says about "55 nodes · 64 wires · 238 cables"; SYSTEM says
+about 1.3 ms (it was 2.3–2.8 ms before).
+
+**Wrong if:** a box lists its ports before you open it; two wires
+between the same two boxes; SYSTEM over 2.3 ms.
+
+*(check 261)*
+
+#### L124. Open two boxes: the real cables
+
+**Needs:** laptop.
+
+**Do:** hover the *apc40* → *shape* wire; click it. Click *apc40*'s
+**+**, then *shape*'s **+**. Then **collapse all**.
+
+**Right if:** the hover says "24 cables: …", ten of them and "+ 14
+more"; the click lists those rows under the canvas; with only *apc40*
+open it is still one wire; with both open each control has its own
+cable; **collapse all** brings the boxes back. (A wire of desk rows
+lists them as plain lines in the details: the desk's own lines on
+ROUTING edit them.) Pressing Delete on a
+wire says "expand a node to edit its cables" and deletes nothing.
+
+**Wrong if:** cables while one box is closed; a wire ending in mid-air.
+
+*(check 262)*
+
+#### L125. Drop a cable on a closed box
+
+**Needs:** laptop.
+
+**Do:** open *analyzer* only. Drag from band 3's dot onto the small dot
+left of *shape*'s name; let go; pick **Brightness · mod**. Press ⌘Z. Then
+right-click *shape* → **learn** → a group → a setting → Learn hand →
+right, and move your hand (or skip without the camera).
+
+**Right if:** while dragging: "let go: pick one of shape's ports"; the
+list offers only what a band can drive; the pick makes the route
+(the wire's pop-up counts one cable more; Brightness pulses with band 3), ⌘Z removes it; the Learn works without
+opening *shape*.
+
+**Wrong if:** no list; a square **base** entry offered for a band.
+
+*(check 263)*
+
+#### L126. Tidy says what it did; the details button
+
+**Needs:** laptop.
+
+**Do:** click **tidy** on a fresh page. Open two boxes, drag one far
+away, click **tidy** again. Click a wire; click **details beside**, then
+**details below**.
+
+**Right if:** first "already tidy"; then every box closed and back in
+its area, the view framed on them, "laid out 31 nodes in 6 areas, every
+one collapsed · 22 idle off the canvas"; ⌘Z puts the dragged box back; the details button only
+appears once something is selected, and moves the details beside the
+canvas and back.
+
+**Wrong if:** tidy says nothing or leaves a box open; the details button
+with nothing selected.
+
+*(check 264)*
+
+#### L127. The energy patch from GRAPH alone
+
+**Needs:** laptop, the hand camera, music; the copy.
+
+**Do:** on GRAPH only (never ROUTING): right-click the canvas → modifier
+→ smooth, then → combine. Open *leap*; drag **right energy** onto the
+smooth's small left dot, pick its input. Drag the smooth's right dot onto
+the combine's left dot, pick **in 1**; open *analyzer*, drag band 0 onto
+the combine, pick **in 2**. Click the combine and set **how** to mul in
+the details. Drag the combine's right dot onto *acid*'s left dot, pick
+**acid mix mod** (acid on in the chain). Dance with the right hand.
+
+**Right if:** every step works on GRAPH; the acid's mix swells with your
+energy, smoothly, and pumps with the bass; it settles when the hand
+leaves.
+
+**Wrong if:** a step needs ROUTING; the combine's details are cut off.
+
+*(check 265)*
+
+#### L128. ROUTING points to GRAPH; the desk lines as before
+
+**Needs:** laptop, the APC40.
+
+**Do:** open ROUTING. Click a control on the desk diagram; right-click a
+desk line → Learn, move a knob. Click "routes and modifiers: the GRAPH
+page". Then right-click any slider → Route a lane here….
+
+**Right if:** no route rows and no MODIFIERS strip on ROUTING; the desk,
+macros, session and sinks exactly as before; the line opens GRAPH;
+"Route a lane here…" opens GRAPH too.
+
+**Wrong if:** anything in the desk section changed.
+
+*(check 266)*
+
+#### L129. The palette's Mode is a picker; its rows read as the slice
+
+**Needs:** laptop. Plan 30 N8.
+
+**Do:** FX page, open **Palette**. Click **Mode**: pick **gradient**,
+then **compress**.
+
+**Right if:** Mode is a drop-down with two words, compress and
+gradient — not a slider. On compress the strip shows a faint line
+"compress into: hue 0° → 360° · sat 0.00 → 1.00 · val 0.00 → 1.00",
+then three rows, **hue**, **sat** and **val**, each two sliders with an
+arrow between them (the hue row ends in a small **turn** slider that
+moves the whole slice round), and a thin coloured bar under the hue row;
+right-clicking MODE opens its menu; on gradient the anchor rows instead.
+The page never scrolls.
+
+**Wrong if:** Mode is a slider; the from/to sliders on separate rows.
+
+*(check 270)*
+
+#### L130. An old palette preset (centre and width) loads as the same look (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** copy `palette-glass.json` into `<home>/presets/` as
+`old-glass.json`; in it replace `"fx.palette.hue_from": 170.0,
+"fx.palette.hue_to": 230.0` with `"fx.palette.centre": 200.0,
+"fx.palette.width": 60.0` (the way a preset saved before this build
+reads). Load PALETTE-GLASS, then OLD-GLASS; open the palette. Save
+OLD-GLASS and open its file.
+
+**Right if:** both look the same; no note on the preset strip; the hue
+row reads 170 → 230; the saved file has `hue_from` and `hue_to`, no
+`centre` or `width`. A preset you saved before this build loads with no
+note either.
+
+**Wrong if:** the old one shows the full rainbow, or a note about
+unknown ids.
+
+**Changes:** delete the files.
+
+*(check 271)*
+
+#### L131. The three areas at a glance
+
+**Needs:** laptop (the APC40 helps).
+
+**Do:** launch on party-trip, open GRAPH. Read it; drag the canvas to
+the left to see the rest; zoom out a few clicks with the wheel.
+
+**Right if:** faint titles over the columns: CONTROLLERS, AUDIO (OTHER
+under it), MODULATION, GEOMETRY, SHADERS. The sound boxes (analyzer,
+band, tempo, master, audio, scene) are all under AUDIO; the shape, the
+camera's *eye* and the hands under GEOMETRY; the history, the effects
+and the outputs under SHADERS, four across, row under row. Every wire
+runs from left to right, but the one that takes the shaders' chain from
+the end of a row to the start of the next.
+
+**Wrong if:** a sound box among the shapes or shaders; a wire that runs
+back to the left.
+
+*(check 272)*
+
+#### L132. A macro shows up when you patch it
+
+**Needs:** laptop.
+
+**Do:** under MODULATION find the small box "8 idle macros · 3 idle
+LFOs"; click its **+**. Drag *Macro 3*'s right dot onto *shape*'s left
+dot and pick **Brightness · base**; click the small box's **−**. Then
+open *Macro 3* and *shape*, click the new cable, press Delete.
+
+**Right if:** **+** shows the eight macros and three LFOs under the small
+box; once patched, *Macro 3* stays on the canvas with one wire into
+*shape* and the box says "7 idle macros · 3 idle LFOs"; after the Delete it goes back
+into the box. Right-clicking the canvas → **macro** still lists all
+eight.
+
+**Wrong if:** a macro with no wire on the canvas; a patched one hidden.
+
+*(check 273)*
+
+#### L133. Tidy puts everything back in its area
+
+**Needs:** laptop.
+
+**Do:** drag *shape* far away, open the idle box, open *apc40*; click
+**tidy**; press ⌘Z.
+
+**Right if:** everything closed and back under its title, the idle box
+shut, the view framed; the line under the buttons says "laid out 31
+nodes in 6 areas, every one collapsed · 22 idle off the canvas"; ⌘Z puts
+*shape* back where you dropped it.
+
+**Wrong if:** idle macros left on the canvas; a box outside its area.
+
+*(check 274)*
+
+#### L134. The off effects are one line
+
+**Needs:** laptop.
+
+**Do:** on party-trip open GRAPH, click the **SHADERS** button. Hover the
+faint red wire leaving *history*; press Delete on it. On the FX page
+switch *warp* on, come back; switch it off again. Then click the small
+"9 off effects" box's **+**.
+
+**Right if:** only the effects that are on are boxes (plasma, kaleido,
+zoomblur, huecycle); the faint wire names the effects it runs over and
+Delete only says what it is; *warp* on is a box in the chain, off it is
+back in the small box; **+** shows every effect in its place.
+
+**Wrong if:** the chain has a gap with no faint wire; *warp* does not
+come back when switched on.
+
+*(check 275)*
+
+#### L135. Five buttons frame the areas
+
+**Needs:** laptop.
+
+**Do:** on party-trip, GRAPH: click **tidy**; then the buttons
+**CONTROLLERS**, **AUDIO**, **MODULATION**, **GEOMETRY**, **SHADERS** one
+after another; then click the faint GEOMETRY title on the canvas.
+
+**Right if:** after tidy everything fits with the titles readable; each
+button fills the canvas with that area's boxes, close enough to read
+them; the title click does the same; the shaders sit four across, row
+under row.
+
+**Wrong if:** a button frames nothing; the shaders in one long row.
+
+*(check 276)*
+
+#### L136. Four thousand copies hold the frame rate
+
+**Needs:** laptop.
+
+**Do:** VIEW: shape the 120-cell, faces on. Drag Instances to the top
+(4096), Layout GRID, then CUBIC. Scroll out until the whole field
+shows. Turn faces off, then on. Scroll back in.
+
+**Right if:** the frame rate on the SYSTEM page stays near 60 with faces
+off and stays usable with faces on; zoomed in it is back at full speed.
+
+**Wrong if:** the picture stutters more and more as the count rises at
+the same zoom.
+
+*(check 277)*
+
+#### L137. Fit leaves no copy cut by the edge
+
+**Needs:** laptop; the projector or a second screen if you have one.
+
+**Do:** VIEW: Instances 12, Layout GRID, tick **Fit**. Then 7 and 19
+on HEX, and 200 on FCC. Scroll in and out; right-drag.
+
+**Right if:** 12 copies sit four across and three down, evenly spaced,
+none touching an edge. Zooming in jumps between whole copies — never
+half a shape at the screen's edge — and dragging moves one copy at a
+time. A 3D lattice stays whole and centred.
+
+**Wrong if:** any copy is cut by the edge of the screen.
+
+*(check 278)*
+
+#### L138. The lattices read as 3D
+
+**Needs:** laptop; a mouse helps.
+
+**Do:** VIEW: 300 copies of the tesseract. Try each of CUBIC, BCC, FCC,
+HCP, HEX PRISM and DIAMOND; orbit with the mouse. Set Field depth to 0,
+then 0.5, then 1. Turn a field motion on.
+
+**Right if:** the field turns as one solid; nearer copies are larger,
+brighter and drawn over farther ones; at depth 0 every copy is one size.
+
+**Judge:** whether the default depth (0.5) and how far the far copies
+fade are right.
+
+**Wrong if:** a far copy is drawn over a near one.
+
+*(check 279)*
 
 # Part 2 — tests that need hardware
 
@@ -3301,6 +4240,63 @@ crossfader, the knobs and the pads work at once, with no restart.
 
 *(check 175)*
 
+#### A34. Learn from a pin, with the desk
+
+**Needs:** the APC40.
+
+**Do:** GRAPH; right-click `view.bright`'s round pin → **Learn desk**;
+turn a track knob. Then drag a macro's box output onto a round pin.
+
+**Right if:** a faint cable from the knob lands on `view.bright`'s
+square pin (a desk learn always sets the setting itself); the macro drag
+is refused: "a macro sets a base or scales a depth; aim at base or a
+depth stub".
+
+**Wrong if:** nothing lands; the cable only after reopening the page.
+
+*(check 248; the hand part is B45)*
+
+#### A35. The APC40 as two boxes, SHIFT latched and released
+
+**Needs:** the APC40; the hand camera for the last step.
+
+**Do:** load TRIP; GRAPH; untick **patched only** on both desk boxes.
+Press SHIFT (it latches), then again. Drag a pin of *apc40 (SHIFT)* onto
+a square pin. With the hand camera on, open the hands box's folds.
+
+**Right if:** two boxes, *apc40* (its first fold `invariant`: SHIFT, the
+bank pads, transport, TAP, the crossfader, MASTER; then knobs, faders,
+the clip grid, buttons) and *apc40 (SHIFT)* (no invariant control); the
+band strip's cables leave the SHIFT box, the preset's knobs *apc40*;
+latched, the SHIFT box is bright and *apc40*'s preset pins faint, its
+invariant pins unchanged; released, back; the drag is refused ("… on the
+SHIFT node is the session's (bindings.json): map it on ROUTING"); the
+desk's own rings and lights behave as before; the hands fold as axes,
+pinches, grab, presence, dance.
+
+**Wrong if:** nothing changes on SHIFT; a control on both boxes that
+should be on the first only.
+
+*(check 256)*
+
+#### A36. Whose cable is it; a missing device (on the copy)
+
+**Needs:** the APC40; the copy.
+
+**Do:** GRAPH. 1. Select a `band.sel.*` cable on *apc40 (SHIFT)*; press
+Delete. 2. Select a preset knob's cable on *apc40*; Delete; ⌘Z. 3.
+Unplug the pad (or add a route from `axis@p2:LX` with no second pad).
+
+**Right if:** 1 is refused ("… is the session's (bindings.json): edit it
+on ROUTING") and `bindings.json` is untouched; 2 removes the row from
+the preset (red dot) and ⌘Z puts it back; 3: the row hangs off a grey
+box named by its role (`pad`, `p2`), faint; plugging the device in
+lights it where it is.
+
+**Wrong if:** a grey box named `axis@p2`.
+
+*(check 258)*
+
 ## (b) The hand camera
 
 Plug in the hand camera (Ultraleap Leap Motion Controller 2) by USB
@@ -3461,8 +4457,8 @@ the left hand…" on every page and only the left hand can complete it; a
 prompt appears whichever page you are on — "ONE PERFORMER PER
 PARAMETER", "Brightness is already performed by R height positions.",
 "L height positions asks for it.", **Replace** / **Keep**; moving hands while it is up
-learns nothing more; Keep changes nothing on ROUTING; Replace makes the
-row read "L height positions", the line ends "moved from view.speed"
+learns nothing more; Keep changes nothing (the route's row, on GRAPH);
+Replace makes the row read "L height positions", the line ends "moved from view.speed"
 (the preset's own left-height row on Speed is gone), the unsaved dot
 lights, and `<home>/bindings.json` is not written. (Had a tilt moved
 most, the row would read "pushes +0.25" — also fine.) With MIDI off it
@@ -4088,6 +5084,94 @@ with the shape.
 
 *(check 200)*
 
+#### B41. A hand on an LFO's depth acts the same frame
+
+**Needs:** the hand camera.
+
+**Do:** load TRIP (the left hand's height owns LFO 1's depth, and LFO 1
+drives the zoom); raise and drop the left hand quickly.
+
+**Right if:** the zoom's pulse grows and dies with the hand, with the
+same feel and range as before.
+
+**Wrong if:** the zoom stutters, doubles or sticks after the hand
+leaves.
+
+*(check 232)*
+
+#### B42. A modifier whose hand goes away lets go
+
+**Needs:** the hand camera.
+
+**Do:** load ACID; on GRAPH right-click → **modifier ▸ smooth**, drag
+**right energy** onto its left-hand dot (pick its input), and its
+right-hand dot onto *acid*'s, picking **acid mix · mod**. Move the right
+hand, then take it out of the box. Then add a second modifier, route
+something from it, click it and **× remove**, and ⌘Z.
+
+**Right if:** with the hand out the smooth's box says "out not live" (its
+details "dormant") and the acid mix goes back to its setting at once;
+the removed modifier's route stays (a faint wire) and does nothing until
+⌘Z brings the modifier back.
+
+**Wrong if:** the mix sticks or drops to zero; the route vanishes with
+the modifier.
+
+*(check 237)*
+
+#### B43. Hand energy, smoothed, times the kick, into the acid — from the modifiers' details
+
+**Needs:** the hand camera; music.
+
+**Do:** load ACID and set the acid's mix to 0.2. On GRAPH: right-click →
+**modifier ▸ smooth**; click it and set input **hand R energy**, release
+0.6; **modifier ▸ combine**, inputs **mod 1 smooth** and **0 sub**, how
+mul; drag the combine's right-hand dot onto *acid*'s left-hand dot and
+pick **acid mix · mod** (click the wire: op pos, depth 1).
+
+**Right if:** the acid comes in as the right hand moves fast and pulses
+with the kick, and fades over about half a second when the hand stops;
+both modifiers' bars move.
+
+**Wrong if:** the combine reads 0; **mod 1** missing from the combine's
+input list a moment after adding it.
+
+*(check 241)*
+
+#### B44. The same patch, dragged on the GRAPH page (on the copy)
+
+**Needs:** the hand camera; music; the copy.
+
+**Do:** load ACID (mix 0.2) and save it as a new preset; GRAPH.
+Right-click the canvas: add a **smooth** and a **combine**. Drag
+**right energy** onto the smooth's input; the smooth's output onto the
+combine's first input, band 0 onto its second; set the combine's **how**
+to mul (click it: its details); drag the combine's output onto
+`fx.acid.mix`'s round pin (or *acid*'s left-hand dot). Save; load another
+preset; load this one again.
+
+**Right if:** it feels as B43; the same modifiers and route come back
+(click the wire for its row); the boxes come back where you put them.
+
+**Wrong if:** the combine reads 0; the route missing.
+
+*(check 249)*
+
+#### B45. Learn from a pin, with a hand
+
+**Needs:** the hand camera.
+
+**Do:** GRAPH; right-click `camera.zoom`'s round pin → **Learn hand ▸
+right**; lift the right hand. Then drag a hand's pin onto a square pin.
+
+**Right if:** the menu is the same as a slider's right-click menu; a
+cable from the right hand lands on `camera.zoom` at once; the drag onto
+the square pin is refused: "a hand sets no base; aim at mod".
+
+**Wrong if:** an empty menu; the cable only after reopening the page.
+
+*(check 248; the desk part is A34)*
+
 ## (c) One projector, or any second screen
 
 Plug it in before launching. For C1–C4 the config has no
@@ -4243,6 +5327,74 @@ re-loaded save drifting.
 **Changes:** delete the preset you saved.
 
 *(check 201)*
+
+#### C8. Hands as lines, through the acid, with tracers — by dragging (on the copy)
+
+**Needs:** the projector as output 1; the hand camera; the copy.
+
+**Do:** load ACID with the look-back on (LOOKBACK: **Dream** or echoes
+on); GRAPH. Drag from the `ghost` box's geometry pin onto `scene`'s
+geometry pin. Right-click `ghost` → **draw lines**. Save as a new
+preset; open its file.
+
+**Right if:** after the drag the hands are inside the shape, bent by
+the acid, trailing tracers; then they are lines; each step puts a red
+dot on the preset and ⌘Z takes it back; the file's `"graph"` is
+`{"nodes": [{"kind": "hands", "into": "scene", "draw": "lines"}]}`.
+
+**Wrong if:** the drag does nothing; solid hands; no tracers.
+
+*(check 251)*
+
+#### C9. The whole picture as shades of one red
+
+**Needs:** the projector. Plan 30 N8.
+
+**Do:** load TRIP (F3). FX page, open **Palette**, switch it on, raise
+its **Mix** to the top (nothing changes yet). Set **hue** 350 → 10,
+**sat** 0.6 → 1, **val** 0.3 → 1.
+
+**Right if:** the whole picture is reds — dark red where it was dark,
+bright red where it was bright — and no other colour anywhere, no hard
+edges between colours. Judge: does it read as "shades of one red"?
+
+**Wrong if:** greens, blues or yellows left; black still black (the
+range cut off rather than squeezed in); the picture changing before you
+set the slice.
+
+*(check 267)*
+
+#### C10. A yellow slice and its derivations
+
+**Needs:** the projector.
+
+**Do:** as C9, then **hue** 45 → 75, **sat** 0.4 → 1, **val** 0.5 → 1;
+then widen the hue to 30 → 90, then 0 → 300.
+
+**Right if:** ambers through yellows to lime-yellows, different parts of
+the picture different yellows (not one flat yellow); widening brings in
+oranges and greens smoothly; at 0 → 300 most colours are back. Judge
+the wide slices.
+
+**Wrong if:** one flat yellow; a seam; a rainbow streak inside red
+areas wider than a thin sliver.
+
+*(check 268)*
+
+#### C11. A slice through red; dark turned bright
+
+**Needs:** the projector.
+
+**Do:** as C9, then **hue** 300 → 60. Then hue back to 0 → 360 and
+**val** 1 → 0.2.
+
+**Right if:** 300 → 60 gives magentas, reds and oranges only (it goes
+up through 0, not the long way); val 1 → 0.2 turns the dark ground
+bright and the bright shape dim.
+
+**Wrong if:** greens and blues at 300 → 60; the val change ignored.
+
+*(check 269)*
 
 ## (d) The glass and the projector together
 
@@ -4556,7 +5708,8 @@ Turn the device knobs on each.
   TRACER: echo brightness, echo fade time, echo count, echo time apart,
   darken, contrast, shape hides, 4D depth; on TUMBLE, FACES and FIELD
   D1–D4 are 4D depth, yaw, pitch and pattern and D5–D8 dark; TUMBLE's
-  left height still pushes the sound drive, marked "session" on ROUTING.
+  left height still pushes the sound drive, marked "session" in its row
+  (click the leap → master wire on GRAPH).
 
 **Wrong if:** a look off (a number in the preset); a knob on the wrong
 setting; an axis flipped on every preset (then flip it on the HANDS page
@@ -4698,6 +5851,152 @@ show has no red dot.
 mirrored too; the cage lost after the restart.
 
 *(check 213)*
+
+#### D19. Each output still gets its own effects (shader nodes)
+
+**Needs:** glass and projector (D1); the hand camera; the SYSTEM page.
+
+**Do:** OUTPUT page: the projector with **scene**, **hands** and
+**through effects** ticked; the glass with **scene** unticked and
+**hands** and **through effects** ticked. Load ACID; a hand in the box.
+Then tick **Flip X** on the glass.
+
+**Right if:** the projector bends the hands with the shape, the glass
+bends the hands alone, both as on earlier builds; SYSTEM shows
+`acid(scene+hands)` and `acid(hands)` lines; the flip mirrors the glass
+only.
+
+**Wrong if:** the glass showing the projector's picture; an effect
+applied twice; the flip on both.
+
+**Changes:** untick **Flip X** and the two **through effects**.
+
+*(check 222)*
+
+#### D20. The palette on the hands, on both screens (on the copy)
+
+**Needs:** glass and projector (D1: the glass is output 1, the projector
+output 2); the hand camera; the copy with `palette-hands.json` (Part 1,
+"Shader nodes").
+
+**Do:** OUTPUT page: **hands** ticked on both outputs. Load
+PALETTE-HANDS; move your hands in front of the shape on both screens.
+
+**Right if:** on both screens the hands are recoloured blue-cyan and the
+shape is not, at the hands' usual see-through look; the guide is not
+recoloured.
+
+**Wrong if:** the hands recoloured on the glass but plain on the
+projector (the second screen did not get the recoloured hands); a dark
+rim round the hands.
+
+*(check 223)*
+
+#### D21. One screen recoloured (on the copy)
+
+**Needs:** glass and projector (D1); the copy with `palette-glass.json`
+copied in (Part 1, "Shader nodes").
+
+**Do:** load PALETTE-GLASS. OUTPUT page: untick output 2's **scene**
+and **hands**, then tick them again. Then edit the copy's
+`palette-glass.json`: change `"output.2"` to `"output.1"`; load it
+again.
+
+**Right if:** the projector (output 2) shows the acid recoloured to
+blue-cyan while the glass keeps the rainbow; output 2's "shows:" line
+ends "· palette on this output only"; with its scene and hands unticked,
+OUTPUT lists "dormant: palette into output.2 — output 2 shows no picture
+this frame", and ticking them brings the colour back; after the edit,
+the glass is recoloured and the projector is not.
+
+**Wrong if:** both screens recoloured; output 2 black; the projector
+plain where it should be recoloured.
+
+**Changes:** delete the file.
+
+*(check 224)*
+
+#### D22. The trail holds the bent shape (on the copy)
+
+**Needs:** glass and projector; the copy with `acid-scene.json` copied
+in (Part 1, "Shader nodes").
+
+**Do:** load ACID-SCENE; LOOKBACK page.
+
+**Right if:** the mandala heaves with the second acid on both screens;
+its trail follows the heaved shape, not a straight one; LOOKBACK reads
+"history: the scene · acid 2 before the history".
+
+**Wrong if:** the trail straight while the shape heaves.
+
+*(check 227)*
+
+#### D23. Two palettes, a different colour on each screen (on the copy)
+
+**Needs:** glass and projector (D1); the copy.
+
+**Do:** copy `palette-glass.json` into `<home>/presets/` as
+`two-palettes.json` and replace its `"graph": {"nodes": [` … `]},` part
+with `"graph": {"nodes": [{"kind": "effect", "file": "palette", "into":
+"output.1"}, {"kind": "effect", "file": "palette", "instance": 2,
+"into": "output.2"}]},`; after `"fx.palette.hue_to": 230.0` add `,
+"fx.palette.2.on": true, "fx.palette.2.mix": 1.0,
+"fx.palette.2.hue_from": 0.0, "fx.palette.2.hue_to": 60.0`. Load
+TWO-PALETTES; FX page; then ROUTING, and drag Palette 2's hue turn.
+
+**Right if:** the glass is blue-cyan and the projector orange-red; FX
+shows two placed chips, "Palette · into output 1" and "Palette 2 · into
+output 2", each with its own controls; dragging Palette 2's hue turn
+changes only the projector; ROUTING lists "Palette 2 …" settings; each
+output's "shows:" line ends "· palette on this output only" or "·
+palette 2 on this output only".
+
+**Wrong if:** both screens one colour; the colours on the wrong
+screens; one chip.
+
+**Changes:** delete the file.
+
+*(check 231)*
+
+#### D24. A second pair of hands on the glass alone (on the copy)
+
+**Needs:** glass and projector (D1: the glass is output 1); the hand
+camera; the copy.
+
+**Do:** copy `tests/fixtures/presets/hands-glass-only.json` into
+`<home>/presets/` as `hands-glass-1.json` and change its wire's
+`"output.2.hands"` to `"output.1.hands"`. Both outputs on scene + hands.
+Load HANDS-GLASS-1; on HANDS tick **Ghost hands 2**. Then untick the
+projector's hands; then put the glass on **through**.
+
+**Right if:** the projector shows the hands as lines inside the shape and
+no solid hands; the glass shows the same plus a solid pair laid over;
+OUTPUT's line for output 1 ends "· hands 2 over output 1"; the
+projector's hands switch changes nothing on the glass; on through the
+glass still shows the solid pair once.
+
+**Wrong if:** solid hands on the projector while it shows the shape; no
+solid hands on the glass (Ghost hands 2 off); the hands doubled or gone
+on through.
+
+*(check 252)*
+
+#### D25. Two outputs, two pictures, by wires (on the copy)
+
+**Needs:** glass and projector (D1); the copy.
+
+**Do:** the projector (output 2) on **through**. Copy
+`tests/fixtures/presets/wired-outputs.json` into `<home>/presets/` and
+load WIRED-OUTPUTS; look at SYSTEM and FX.
+
+**Right if:** the glass shows the acid look folded to blue-cyan; the
+projector shows the shape through a second acid only — no wobble, no
+colour cycling, no hands; output 2's "shows:" line reads "acid 2 by a
+wire"; SYSTEM lists `wire(output.2)`.
+
+**Wrong if:** both screens blue; the projector showing the whole chain.
+
+*(check 254)*
 
 ## (e) A mouse
 
@@ -4975,6 +6274,16 @@ what you want changed.
 
 - **Knob smoothing at 80 ms** — does a knob feel late or right? Try 50
   and 200 ms. (A17, B27; checks 78, 79)
+- **The palette as compression** — does a red slice read as shades of
+  one red, a yellow slice as yellows and their derivations, and how do
+  slices wider than 180° look (they slide from the fold towards the
+  whole wheel)? (C9–C11; checks 267–269)
+- **The GRAPH page at a distance** — can you hit a pin and read a box on
+  the laptop at the control window's normal size? Is the selected route's
+  row better under the canvas or beside it? (L111, L113; checks 245, 247)
+- **The modifiers' defaults** — a smooth's 0.35 s release, a threshold
+  at 0.6 / 0.4, a curve's shape range: do they feel right on music?
+  (L107, B43; checks 236, 241)
 - **The dream-layer menu's words** — each of the 25 layers has a few
   words on what it draws, written from offscreen pictures and depth;
   which are wrong, and are 25 too many? (L23; check 95)
@@ -4985,9 +6294,9 @@ what you want changed.
   L24, C4; checks 9, 96)
 - **The default hand feel** — Steadiness, Response, Catch, Return;
   saved as `factory`. (B5; check 16)
-- **The shapes in 4D** — whether each lifted shape reads as a solid
-  turning, whether the Heart reads as moved by the bass, and the Klein
-  bottle's look. (L48–L51, D14; checks 113–116)
+- **The shapes, 4D and 3D** — whether the 3D shapes are lively enough
+  without the W planes (plan 28), the 3D switch, and the Klein bottle's
+  look. (L48–L51, D14; checks 113–116)
 - **The face patterns** — whether one set of routes reads on every
   pattern, the new patterns as art, METER and PULSE from the audience,
   and whether the factory presets answer quiet and loud music. (L61,
@@ -5012,6 +6321,10 @@ what you want changed.
   whether the wire hands read as "hands as lines"; the point cloud's
   dots. (L83, L87, L92, L94, L84, B39; checks 192, 197, 198, 203, 204,
   214, 216–218)
+- **The shader nodes' looks** — whether the palette on the hands reads
+  as the colour you meant from a distance (the ghost hands are pale), a
+  palette per screen, and whether the FX page's placed chip reads
+  clearly. (L98, L102, D20, D21, D23; checks 223, 224, 229, 231)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
@@ -5194,8 +6507,12 @@ the pad grid (G6 is the clip-stop row), B-numbers the single buttons
 (B11 OVERDUB, B20 TAP TEMPO…).
 
 **Golden picture (golden frame)** — a picture of a factory preset the
-automated tests draw and compare to the last byte; 556 of them, kept in
+automated tests draw and compare to the last byte; 596 of them, kept in
 `hyperspace-python/tests/golden/frames/`.
+
+**GRAPH page** — the page (after ROUTING) that draws every control,
+route, modifier and part of the picture as boxes joined by cables, and
+lets you rewire them by dragging.
 
 **Ground** — the empty background of the picture. The OUTPUT page's
 Ground setting is how see-through it is in overlay mode.
@@ -5275,6 +6592,11 @@ messages.
 
 **Modulatable** — able to be moved by a lane; "not modulatable" settings
 can be set but not performed.
+
+**Modifier** — a small box between a source (a hand, a band, an LFO) and
+a route: curve, scale, smooth, combine two sources, threshold (turns a
+level into a trigger), delay (one frame). Built on the GRAPH page
+(ROUTING's MODIFIERS strip before the legible graph); saved in the preset.
 
 **OSC** — Open Sound Control: messages a phone app or a music program
 sends over the network (Wi-Fi); a phone app can be a device.
