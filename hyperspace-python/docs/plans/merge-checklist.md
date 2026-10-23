@@ -216,3 +216,4 @@ the next PR. `main` takes one merge. Then close #230, #232, #204, #205.
 - [ ] **316** A camera without a 1280×720 mode
 
 ### AB. Plans 31 and 32 together
+- [ ] **317** A preset with a pattern and a bin, saved and reloaded on the merged build — _laptop, the copy, a picture; a second Mac for the last step_
