@@ -4,8 +4,10 @@
 `CameraKind` is a ``kind = "camera"`` device entry. Its scan (on the media
 pool) lists AVFoundation's video devices by name (pyobjc's
 `AVCaptureDevice`) and checks the camera permission; a source's thread
-opens its device with PyAV's ``avfoundation`` input at `FPS` and `SIZE`
-and decodes each frame as it comes (between frames the input says it has
+opens its device with PyAV's ``avfoundation`` input in the first of
+`MODES` it takes — FFmpeg refuses a size or rate the device does not list
+(EINVAL), and a capture card often offers only its input's 1080p — and
+decodes each frame as it comes (between frames the input says it has
 none, and the thread waits `live.IDLE_S`).
 A camera the user has refused is ``error: camera permission (System
 Settings ▸ Privacy & Security ▸ Camera)`` on the kind and on the source;
@@ -19,6 +21,19 @@ from . import live
 
 FPS = 30
 SIZE = "1280x720"
+# what an open tries, in order: 720p, 1080p, 480p at FPS, then the
+# device's own default (no options). The one that opened is tried first
+# next time (final review A-I2)
+MODES: tuple[dict[str, str], ...] = (
+    {"framerate": str(FPS), "video_size": SIZE},
+    {"framerate": str(FPS), "video_size": "1920x1080"},
+    {"framerate": str(FPS), "video_size": "640x480"},
+    {},
+)
+
+
+def _mode_name(opts: dict[str, str]) -> str:
+    return f"{opts['video_size']}@{opts['framerate']}" if opts else "default"
 PERMISSION = "camera permission (System Settings ▸ Privacy & Security ▸ Camera)"
 _DENIED = (1, 2)     # AVAuthorizationStatusRestricted, AVAuthorizationStatusDenied
 
@@ -36,13 +51,26 @@ class CameraReader:
         self.name = name
         self._c = None
         self._packets = None
+        self.mode: dict[str, str] | None = None    # the one that opened
 
     def open(self) -> None:
+        """Open the device in the first mode it takes (`MODES`, the last
+        one that worked first); `Fault("no supported mode (tried …)")`
+        when it takes none."""
         _check_permission(live.need("AVFoundation"))
         av = live.need("av")
-        self._c = av.open(self.name, format="avfoundation",
-                          options={"framerate": str(FPS), "video_size": SIZE})
-        self._packets = self._c.demux(video=0)
+        mode = getattr(self, "mode", None)
+        order = ([mode] if mode is not None else []) + [m for m in MODES if m != mode]
+        for opts in order:
+            try:
+                self._c = av.open(self.name, format="avfoundation", options=dict(opts))
+            except Exception:  # noqa: BLE001, S112 — a mode it lacks: the next
+                continue
+            self.mode = opts
+            self._packets = self._c.demux(video=0)
+            return
+        raise live.Fault("no supported mode (tried "
+                         + ", ".join(_mode_name(m) for m in MODES) + ")")
 
     def read(self) -> np.ndarray | None:
         """The next frame, or None when the camera has none ready: the

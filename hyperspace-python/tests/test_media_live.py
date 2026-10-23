@@ -268,6 +268,52 @@ def test_cameras_are_listed_by_name(monkeypatch):
         k.close()
 
 
+def _fake_av(monkeypatch, takes):
+    """AVFoundation allowing the camera, and an `av` whose avfoundation
+    input opens only with the options in `takes` (EINVAL otherwise, as
+    FFmpeg says for a mode the device does not list); the tries in order."""
+    from hyperspace.media import camera
+
+    dev = SimpleNamespace(authorizationStatusForMediaType_=lambda t: 3)
+    monkeypatch.setitem(sys.modules, "AVFoundation",
+                        SimpleNamespace(AVCaptureDevice=dev, AVMediaTypeVideo="vide"))
+    tried = []
+
+    def open_(name, format=None, options=None):
+        tried.append(dict(options or {}))
+        if dict(options or {}) not in takes:
+            raise OSError(22, "Invalid argument")
+        return SimpleNamespace(demux=lambda video=0: iter(()), close=lambda: None)
+    monkeypatch.setitem(sys.modules, "av", SimpleNamespace(open=open_))
+    return camera, tried
+
+
+def test_a_camera_without_720p_opens_in_a_mode_it_has(monkeypatch):
+    """Final review A-I2: a capture card offering only 1080p opens at it —
+    the modes are tried in order, and the one that opened is kept for the
+    next open."""
+    camera, tried = _fake_av(monkeypatch, [{"framerate": "30", "video_size": "1920x1080"}])
+    r = camera.CameraReader("Cam Link")
+    r.open()
+    assert [t.get("video_size") for t in tried] == ["1280x720", "1920x1080"]
+    r.close()
+    tried.clear()
+    r.open()
+    assert [t.get("video_size") for t in tried] == ["1920x1080"]
+
+
+def test_a_camera_with_no_mode_says_what_was_tried(monkeypatch):
+    """A-I2: when every mode is refused the status says so, not EINVAL;
+    the device's default (no options) is the last try."""
+    camera, tried = _fake_av(monkeypatch, [])
+    r = camera.CameraReader("Odd Cam")
+    with pytest.raises(live.Fault) as e:
+        r.open()
+    assert str(e.value).startswith("no supported mode (tried 1280x720@30")
+    assert "default" in str(e.value) and tried[-1] == {}
+    assert len(tried) == len(camera.MODES)
+
+
 # ---- NDI's names and its config ----
 
 def test_ndi_ids_are_the_stream_names():
