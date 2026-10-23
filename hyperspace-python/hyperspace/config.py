@@ -105,7 +105,8 @@ like the rename above. The SYSTEM page shows both.
                             # ignored (one note each)
     role = "apc40"          # the name rows and the SYSTEM page use; unique; no ":"
     kind = "midi"           # "midi", "gamepad", "hands", "bridge", "midi-out",
-                            # "osc", "cloud"; an unknown kind is an
+                            # "osc", "cloud", "ndi", "syphon", "camera";
+                            # an unknown kind is an
                             # error line on the SYSTEM page, never a dead launch
     enabled = true          # false lists it as `off`: nothing opened, nothing imported
                             # …then the kind's own keys: [midi]'s port / profile /
@@ -152,6 +153,22 @@ like the rename above. The SYSTEM page shows both.
                             #   [bridge] send becomes those rows the first launch
                             #   the bridge is on with none (one note); then the
                             #   rows say
+                            # Live media feeds (plan 32 T8, hyperspace/media): each
+                            # kind finds its feeds every 2 s and offers them to the
+                            # media channels as source ids; nothing connects until
+                            # a channel puts one on. NDI over the network
+                            # (ndi:<sender>, another rig's Resolume / TouchDesigner),
+                            # Syphon from another app on this Mac
+                            # (syphon:<app>/<server>, zero-copy) and the webcams
+                            # (camera:<name>, 1280x720 at 30 fps):
+                            #   [[devices]]  role = "ndi"     kind = "ndi"     enabled = true
+                            #                extra_ips = []   (senders on another
+                            #                subnet: "192.168.1.50"…, written to
+                            #                <home>/ndi/ndi-config.v1.json)
+                            #   [[devices]]  role = "syphon"  kind = "syphon"  enabled = true
+                            #   [[devices]]  role = "camera"  kind = "camera"  enabled = true
+                            #   (a refused camera: System Settings ▸ Privacy &
+                            #   Security ▸ Camera)
 
     [gamepad]               # the Xbox pad polled through GLFW (gamepad.py)
     enabled = true          # false never polls for one
@@ -284,6 +301,9 @@ JOYSTICKS = 16           # GLFW's joystick slots (JOYSTICK_1–16): a gamepad's 
 MIDI_OUT: dict = {"port": "", "virtual": True, "carries": "", "encoding": "pitch",
                   "channel": 0, "cc": 16, "rate": 100}
 DAW_ROLE = "hands-daw"     # the entry `[hands] out` becomes
+# an `ndi` entry's own keys (plan 32 T8): addresses of senders on another
+# subnet, written into the app's NDI config (media/ndi.py)
+NDI: dict = {"extra_ips": []}
 
 
 def _note(cfg: dict, note: str) -> None:
@@ -399,9 +419,12 @@ def _kind_defaults(kind: str) -> dict:
     """The keys an entry of `kind` carries beyond role / kind / enabled,
     with their defaults: the old table's *defaults* (DEFAULTS, the hands'
     own table), less `enabled` — never the file's old table, which a
-    `[[devices]]` list says is ignored. A `midi-out` entry's are `MIDI_OUT`."""
+    `[[devices]]` list says is ignored. A `midi-out` entry's are `MIDI_OUT`,
+    an `ndi` entry's `NDI`."""
     if kind == "midi-out":
         return copy.deepcopy(MIDI_OUT)
+    if kind == "ndi":
+        return copy.deepcopy(NDI)
     for section, k, _ in DEVICE_TABLES:
         if k != kind:
             continue

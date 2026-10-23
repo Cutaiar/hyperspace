@@ -448,7 +448,7 @@ def device_node(d) -> tuple[VNode, list]:
         status = str(d.status)
     except Exception as e:  # noqa: BLE001 — a status line never takes the page down
         status = f"error: {e}"
-    node = VNode(f"device:{role}", "device", role, grey=status != "connected",
+    node = VNode(f"device:{role}", "device", role, grey=not status.startswith("connected"),
                  status=f"{getattr(d, 'kind', '')} · {status}", ref=d)
     try:
         ports = [p for p in d.sources if p.kind in (VALUE, TRIGGER)]

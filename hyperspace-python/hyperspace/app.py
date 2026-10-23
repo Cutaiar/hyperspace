@@ -139,12 +139,16 @@ def close_all(audio, *adapters) -> None:
 
 class MediaResolver:
     """The app's `media.adapters.Resolver` (plan 32): the file kinds from
-    the media folder's last scan, live feeds from the devices (plan 32 T8
-    fills `live`; none yet). `stamp` is what tells a replaced file: the
-    scan's size and mtime for the id."""
+    the media folder's last scan, live feeds from the device registry's
+    `media_feeds` (plan 32 T8: the ndi / syphon / camera entries' last
+    scans — `devices` is pointed at the registry once it exists). Both are
+    lookups in what a scan already made, never a scan: the MEDIA page asks
+    every frame. `stamp` is what tells a replaced file: the scan's size
+    and mtime for the id."""
 
-    def __init__(self, folder: MediaFolder):
+    def __init__(self, folder: MediaFolder, devices=None):
         self.folder = folder
+        self.devices = devices
 
     @property
     def proxy_cache(self) -> Path:
@@ -154,7 +158,8 @@ class MediaResolver:
         return self.folder.path(sid)
 
     def live(self, sid: str):
-        return None
+        reg = getattr(self, "devices", None)
+        return None if reg is None else reg.media_feeds().get(sid)
 
     def stamp(self, sid: str):
         e = self.folder.entry(sid)
@@ -1269,6 +1274,7 @@ def main() -> None:
     panel.devices = rig                        # the SYSTEM page's device lines
     renderer.ghost.router = router           # the guide lights what the table routes
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+    media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
