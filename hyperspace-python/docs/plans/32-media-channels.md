@@ -2,6 +2,8 @@
 
 **Status: built (2026-10-22)** on `plan-32-media` (base
 `plan-28-30-integration` @ 1a5cc2e; 3105 tests passed, 2 skipped).
+Plans 31 and 32 landed together via `plan-31-32-integration`
+(2026-10-23; register row 340: `/4` = `/3` + media).
 Designed with the owner in one session; rows 321–339 answered the same
 day (below). **The phone's own page (HTTPS, WebRTC) is V2 and is not
 built**; in V1 a phone joins through an NDI camera app, as an `ndi:`

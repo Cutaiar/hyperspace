@@ -1,5 +1,7 @@
 # Plan 31 × plan 32 merge: conflicts and silent clashes
 
+**Resolved 2026-10-23** on `plan-31-32-integration` with the owner's D1–D3 as recommended below (register row 340); the TESTING-GUIDE renumbering is L145–L151, the combined check is 317 / L152.
+
 What was merged: `origin/plan-31-integration` (PR #230, "ours") with `d580d06` (`plan-32-media`, PR #232, "theirs"). Their common base is `1a5cc2e`. The trial tree is `5f9565eb7cd901c57e1ebbb039f601e17facab69`. Line numbers below are in that conflicted tree.
 
 The merge conflicts in 10 files (19 hunks). 25 files were touched by both sides; the other 15 merged cleanly. The merged `tests/golden/frames/frames.json` is valid JSON with 661 goldens.
