@@ -336,8 +336,10 @@ Deferred by the reviews (each task's reviewer judged them minor):
    190 MB transient at 8000×6000; PIL's `draft()` would cut it).
 3. **`MediaFrame` freezes only a view** of a writable caller array; the
    caller can still mutate it.
-4. **`media.pool` reloaded** orphans the live executor (threads idle,
-   harmless); `media` modules are first in hotreload's order.
+4. **`media.pool` reloaded** keeps its executors, and `media.proxy` its
+   worker and flags (final review A-m4: an orphaned proxy job once held
+   Quit for a whole transcode); `media` modules are first in hotreload's
+   order.
 5. **Video:** the proxy retimes VFR clips and GIFs (pts = frame number); a
    failed proxy retries at every open; a mid-stream decode error ends the
    thread for good; `VIDEO_EXT` is duplicated in `adapters.py`;
@@ -350,8 +352,11 @@ Deferred by the reviews (each task's reviewer judged them minor):
    (thousands of iCloud placeholders would be thousands of threads);
    `_watch` sets `_scan_job` outside its lock (worst case two queued
    scans). T4's tests were written after its code (no RED run).
-7. **Closer:** it is serial — one close hung forever blocks later closes
-   for the run (sources leak; the frame thread is unaffected).
+7. **Closer:** it is serial. A video's close waits 1 s at most (a thread
+   stuck in `av.open` is abandoned, final review A-I1), and a file still
+   downloading is never opened, so the hang the reviews found is gone; a
+   close of another kind hung forever would still block later closes
+   (sources leak; the frame thread is unaffected).
 8. **Live:** `LiveKind.close` joins threads and closes the finder on the
    frame thread during a config edit (about 1 s at worst, usually tens of
    ms); the Syphon release (`client.stop()`) runs inline on the frame
@@ -381,16 +386,22 @@ Deferred by the reviews (each task's reviewer judged them minor):
 11. **Panel:** the media and backdrop groups are left out of the presets
     page's module overview; unused empty channels sit on GRAPH's idle line;
     with four thumbnail decodes in flight other visible rows show a dark
-    box briefly.
+    box briefly. The page's previews of channels nothing reads are at most
+    320 px wide and 10 fps (final review B-I2), so a playing clip looks
+    stepped there; the outputs are unaffected.
 12. **Frozen Syphon, camera mode, coverage, cost.** (a) A rate-0 Syphon
-    channel holds a frame whose texture is Syphon's own IOSurface-backed
-    one, which the server keeps writing: "freeze" probably keeps animating
-    (or samples a recycled name once the client's image is replaced); a
-    true freeze needs a GPU copy (check 315). NDI and camera freezes hold a
-    CPU frame and are exact. (b) The camera's `video_size` is fixed at
-    1280×720: a device without that mode (a capture card, Continuity
-    Camera) makes `av.open` raise every 2 s, shown as `error: …` that does
-    not say "mode not supported" (check 316). (c) Some live logic is
+    channel holds: the held frame names Syphon's own IOSurface-backed
+    texture, but T6 copies a rectangle frame into the channel's own 2D
+    texture only when (texture, frame, t) moves, so the copy of the held
+    frame stays put however the server keeps writing
+    (`test_a_frozen_rectangle_frame_is_never_copied_again`). The exception
+    is a renderer hot reload while frozen: the new `MediaTextures` copies
+    the held name again, from the live surface or a recycled name (check
+    315). A frozen live channel says `frozen` (final review A-m3). NDI and
+    camera freezes hold a CPU frame and are exact. (b) Fixed in the final
+    review (A-I2): the camera tries 1280×720, 1920×1080 and 640×480 at 30
+    fps, then the device's default, keeps the one that opened, and says
+    `error: no supported mode (tried …)` when none does (check 316). (c) Some live logic is
     covered only by the real loopbacks: Syphon's uuid change, failed-client
     retry and hold-then-black; the camera's EAGAIN regenerate path (no
     fake-`av` test); NDI's stride and RGBX-to-opaque handling; graphview's
@@ -841,7 +852,7 @@ instruction to execute.
      built; the map is `media_sources()`, not `feeds()`.
 326. **The transport: `pos` latch scrub, `rate` −4…+4 × native, `jog`
      a push with coast, `loop` three modes, rate 0 freezes a live
-     feed.** (rec) — built (a Syphon channel's freeze is not exact, rough edge 12); only the jog's part of the speed springs.
+     feed.** (rec) — built (a Syphon channel's freeze holds, except across a renderer hot reload, rough edge 12); only the jog's part of the speed springs.
 327. **Scrub proxies for clips ≤ 10 min.** (rec) — "I can't imagine
      we'd have longer clips than that". Built on a worker of its own.
 328. **Threads**: a pool for jobs that end, a thread per blocking

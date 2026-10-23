@@ -4140,22 +4140,27 @@ landed on `view.media_alpha`). *Fail:* a crash on load, or knob 7 dead
 
 **315. A frozen Syphon channel.** (laptop, a Syphon app with moving
 picture)
-Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`
-(a fake frame only).
+Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`,
+`::test_a_frozen_live_channel_says_frozen` and
+`tests/test_media_render.py::test_a_frozen_rectangle_frame_is_never_copied_again`
+(no real Syphon surface).
 Put a moving Syphon server on a channel (backdrop), set `rate` to 0, then
-watch for five seconds. *Pass:* the picture stops. Expected *fail*, by the
-reviewer's reading of the code: it keeps moving, because the held frame is
-Syphon's own texture and the server keeps writing it; write down which,
-and whether it flickers. An NDI feed at rate 0 should freeze exactly
-(`channels._freeze`, `syphon.SyphonSource.gl_poll`).
+watch for five seconds. *Pass:* the picture stops and the MEDIA page says
+`frozen`. The held frame names Syphon's own texture, but the channel's
+copy of it is made only when the frame moves, so it should hold. The one
+expected exception: save a renderer file (a hot reload) while frozen — the
+copy is made again from the held name, so the picture may jump to the
+live one or to garbage; write down which. An NDI feed at rate 0 should
+freeze exactly (`channels._freeze`, `syphon.SyphonSource.gl_poll`).
 
 **316. A camera without a 1280×720 mode.** (a capture card or Continuity
 Camera)
-Headless: none (`CameraReader` asks for `video_size` 1280x720 always).
-Put such a device on a channel. *Pass:* it opens. Expected *fail*: the
-status is `error: …` and is retried every 2 s without saying "mode not
-supported"; write down the wording and whether the app is otherwise
-unharmed (`camera.py:44`).
+Headless: `tests/test_media_live.py::test_a_camera_without_720p_opens_in_a_mode_it_has`
+and `::test_a_camera_with_no_mode_says_what_was_tried` (a fake `av`).
+Put such a device on a channel. *Pass:* it opens (in 1920×1080, 640×480
+or the device's default; `camera.MODES`). *Fail:* `error: …` — write down
+the wording; a device that takes no mode says `error: no supported mode
+(tried …)`.
 
 ## What no test covers
 

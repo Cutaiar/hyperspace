@@ -6022,8 +6022,10 @@ These rows follow plan 31's rows 311–320, which are on
   ids the loaded preset names that this Mac lacks, three lines and "and n
   more". A file that is deleted, renamed or replaced mid-show turns its
   channel black and `missing` (a new mtime reloads it); a placeholder is
-  `fetching`; a junk file is `error: …`; none of it reaches the frame
-  thread. **Copy to shared** turns a `local:` or `file:` pick into a
+  `fetching` — black, never opened (a read would block until the download
+  lands), out of the banner, opened within a second of the scan that says
+  `ready` (final review A-I1); a junk file is `error: …`; none of it
+  reaches the frame thread. **Copy to shared** turns a `local:` or `file:` pick into a
   `shared:` one.
 - **Other options.** Content hashes instead of paths; a manifest.
 - **To reverse.** `media.ids`, `MediaFolder`, the banner in `ui_media`.
@@ -6066,9 +6068,10 @@ These rows follow plan 31's rows 311–320, which are on
 - **Other options.** `pos` as an absolute param only; jog as a speed
   multiplier; a rate that springs too.
 - **To reverse.** `Transport.step`, `JOG_GAIN`, `JOG_HZ` in `transport.py`.
-- **Rough edge.** Rate 0 freezes an NDI or camera feed exactly, but a Syphon
-  channel holds Syphon's own texture, which the server keeps writing: it
-  probably keeps animating (check 315). `once` never re-arms by itself (a new scrub moves it);
+- **Rough edge.** Rate 0 freezes an NDI or camera feed exactly, and a Syphon
+  channel holds too — its copy of the held frame is made only when the
+  frame moves — except across a renderer hot reload, which copies the held
+  texture name again (check 315). A frozen live channel says `frozen`. `once` never re-arms by itself (a new scrub moves it);
   a proxy retimes VFR clips; scrubbing a clip without a proxy is coarse
   (keyframes).
 - **Judge it.** Checks 298, 299, 315.
@@ -6093,8 +6096,12 @@ These rows follow plan 31's rows 311–320, which are on
 ### 328. Threads: a pool for jobs that end, a thread per blocking source, the render thread only uploads
 
 - **Answer.** (rec) — accepted 2026-10-22.
-- **Built.** `media.pool` (3 workers) for still decode, thumbnails, folder
-  scans, live discovery and joins; a thread of its own per video
+- **Built.** `media.pool` (3 workers) for still decode, folder scans, live
+  discovery and joins, and `media-thumb` (1 worker, at most 16 jobs
+  waiting, the oldest dropped) for thumbnails; all daemon threads
+  (`pool.DaemonExecutor`: `concurrent.futures` joins its own at
+  interpreter exit, so one stuck read held Quit — final review A-I1); a
+  thread of its own per video
   (`media-video-<name>`), live feed (`media-live-<id>`), NDI out
   (`media-ndi-out-<name>`), plus `media-proxy`, `media-closer` (a dropped
   source is closed there, so a close stuck in a cloud download cannot
@@ -6102,13 +6109,17 @@ These rows follow plan 31's rows 311–320, which are on
   threads. `MediaState.poll` steps transports and opens/queues closes;
   `MediaTextures` uploads. Tests: a fake adapter sleeping 200 ms leaves the
   frame untouched; 500 rapid switches balance opens and closes and leave one
-  thread; app exit joins everything within 2 s; a huge image reads None
-  until ready.
+  thread; app exit joins everything within 2 s — one deadline shared by
+  every close (`pool.begin_exit` / `left`), proved in a subprocess with
+  every pool worker stuck in a read, a transcode running and a video stuck
+  opening; a huge image reads None until ready.
 - **Other options.** One pool for all (a blocking read starves it);
   asyncio.
 - **To reverse.** The adapters' thread starts, `Closer`.
-- **Rough edge.** Syphon's client release runs on the frame thread, and a
-  hung close blocks later closes (leak, not stall).
+- **Rough edge.** Syphon's client release runs on the frame thread. A
+  video's close waits 1 s at most and abandons a thread stuck opening; a
+  close of another kind hung for good still blocks later closes (leak, not
+  stall).
 - **Judge it.** Checks 302, 303.
 
 ### 329. Caps: 1080p files, 720p live; upload only consumed channels with a new frame
@@ -6118,7 +6129,10 @@ These rows follow plan 31's rows 311–320, which are on
   decoding thread. `MediaTextures.texture` writes only for a channel a
   consumer reads this frame whose `(frame, t)` moved. Syphon textures
   arrive at the server's size and are sampled scaled (a cap would need a
-  GPU pass).
+  GPU pass). The MEDIA page's preview of a channel nothing reads is a copy
+  at most 320 px wide, each at most 10 a second and two a frame, round
+  robin (final review B-I2); a channel the frame reads shows its own
+  texture.
 - **Other options.** Resize on the GPU; a lower file cap.
 - **To reverse.** `frame.CAP_FILE`, `CAP_LIVE`.
 - **Rough edge.** Eight consumed 1080p channels at 30 fps is ~2 GB/s of
@@ -6130,8 +6144,10 @@ These rows follow plan 31's rows 311–320, which are on
 - **Answer.** (rec) — accepted 2026-10-22. "Stopgap is fine."
 - **Built.** `backdrop.channel` (off / a–h), `backdrop.alpha`,
   `backdrop.history`. The scene clears to alpha 0 and is laid over the
-  channel (`grounded`); echoes and the dream are drawn over the backdrop;
-  with `history` on the capture takes the composite. An effect placed
+  channel (`grounded`); echoes and the dream are drawn over the backdrop,
+  held back by the scene alone (the history's `occluder` port — not by the
+  backdrop's brightness, which hid them; final review B-I1); with `history`
+  on the capture takes the composite. An effect placed
   `after scene` is retargeted to the backdrop's composite. The hands-only
   pipeline has none. With no backdrop the graph is unchanged node for node.
 - **Other options.** The backdrop inside the history by default; a

@@ -610,6 +610,26 @@ def test_the_echoes_show_over_a_bright_backdrop(ctx, history):
     assert abs(int((bare[..., :2] > 8).any(axis=-1).sum()) - int(trail)) <= trail // 4
 
 
+def test_a_frozen_rectangle_frame_is_never_copied_again(ctx):
+    """Final review (T8 M2, B-M5): a Syphon channel frozen at rate 0 holds
+    one frame (`MediaState.frame` returns `held`), and the channel's own 2D
+    copy of a rectangle frame is made only when (texture, frame, t) moves
+    — so the frozen picture holds, however long the server keeps writing
+    its surface. Only a fresh `MediaTextures` (a renderer reload) copies
+    the held name again."""
+    from hyperspace.media_tex import TEX_RECT, MediaTextures, _Slot
+
+    mt = MediaTextures(ctx)
+    held = MediaFrame(None, 1.0, 7, texture=99, tex_size=(4, 2), tex_target=TEX_RECT)
+    slot = mt._slots.setdefault("e", _Slot())
+    copy = mt._owned(slot, (4, 2))
+    slot.key = ("rect", 99, 7, 1.0)                 # what the freeze's one blit left
+    for _ in range(5):
+        assert mt.texture("e", held) is copy
+    assert mt.blits == 0 and mt.uploads == 0
+    mt.release()
+
+
 # ---------------------------------------------------------------- the MEDIA page's previews
 
 class Playing(Still):
