@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–279, then 296–314 (plan 32's group AA, on `plan-32-media`; 280–295 are
+numbers. They run 1–279, then 296–316 (plan 32's group AA, on `plan-32-media`; 280–295 are
 plan 31's, on `plan-31-integration`); group Z (277–279) is the instanced field from
 `main`, renumbered from its 144–146 when main was merged in; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), and 267–271, plan 30's N8 (the palette as compression), are at
@@ -3996,9 +3996,10 @@ library. Then save a preset with no media on Mac 1 and open the file.
 *Pass:* on Mac 2 the MEDIA page shows the banner "`local:…` — not on this
 Mac: shows black" for the local one and the camera if it has none, and the
 channel is black while the shared file plays; a preset with no media is
-`hyperspace.preset/2` and looks as it did. **A build from before this plan
-refuses the `/4` file** (try it on a Mac that has not updated, or accept
-the register's word); update both Macs before saving one. *Fail:* the
+`hyperspace.preset/2` and looks as it did. Then open that `/4` preset in a build from before this branch (check out
+`plan-28-30-integration`, or use a Mac that has not updated) and read what it
+says: it should refuse the file or note the unknown schema, and load
+nothing of the media. Update both Macs before saving one. *Fail:* the
 banner is missing or lists a source that is present (`channels.missing`).
 
 **302. Junk, mid-show deletes and rapid switching.** (laptop)
@@ -4136,6 +4137,25 @@ the faces are plain; put the picture on a channel and set **Faces**, and
 knob 7 moves its opacity as it did the bitmap's (the preset's old alpha
 landed on `view.media_alpha`). *Fail:* a crash on load, or knob 7 dead
 (`params`' alias rule).
+
+**315. A frozen Syphon channel.** (laptop, a Syphon app with moving
+picture)
+Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`
+(a fake frame only).
+Put a moving Syphon server on a channel (backdrop), set `rate` to 0, then
+watch for five seconds. *Pass:* the picture stops. Expected *fail*, by the
+reviewer's reading of the code: it keeps moving, because the held frame is
+Syphon's own texture and the server keeps writing it; write down which,
+and whether it flickers. An NDI feed at rate 0 should freeze exactly
+(`channels._freeze`, `syphon.SyphonSource.gl_poll`).
+
+**316. A camera without a 1280×720 mode.** (a capture card or Continuity
+Camera)
+Headless: none (`CameraReader` asks for `video_size` 1280x720 always).
+Put such a device on a channel. *Pass:* it opens. Expected *fail*: the
+status is `error: …` and is retried every 2 s without saying "mode not
+supported"; write down the wording and whether the app is otherwise
+unharmed (`camera.py:44`).
 
 ## What no test covers
 

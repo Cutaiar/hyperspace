@@ -29,7 +29,7 @@ unmoved: 636 in all). Four new dependencies (and one small one), each
 imported only when a source opens.
 
 Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group AA, checks
-296–314. **Numbering note:** plan 31 holds preset `/3`, register rows
+296–316. **Numbering note:** plan 31 holds preset `/3`, register rows
 311–320 and hand checks 280–295 on its own branch
 (`plan-31-integration`); this branch has none of them, so rows 321–339
 and checks 296+ leave a gap here that closes when plan 31 lands. The
@@ -61,6 +61,10 @@ Syphon hands a texture across with no CPU copy both ways (publish
 for the whole timeout (so the build uses `rx.frame_sync.capture_video()`,
 non-blocking, on the source's own thread); `Finder()` takes no
 `extra_ips` (so the build writes NDI's own config file, below).
+
+**Dependency ruling (T0/T1):** `syphon-python[opengl]>=0.2`, not plain
+`syphon-python`: its OpenGL server and client raise `ImportError` without
+PyOpenGL (already a dependency), which the extra names.
 
 ### T1 — the core and stills (`hyperspace/media/`)
 
@@ -378,7 +382,23 @@ Deferred by the reviews (each task's reviewer judged them minor):
     page's module overview; unused empty channels sit on GRAPH's idle line;
     with four thumbnail decodes in flight other visible rows show a dark
     box briefly.
-12. **The phone** is V2 and `phone:` ids are never listed in
+12. **Frozen Syphon, camera mode, coverage, cost.** (a) A rate-0 Syphon
+    channel holds a frame whose texture is Syphon's own IOSurface-backed
+    one, which the server keeps writing: "freeze" probably keeps animating
+    (or samples a recycled name once the client's image is replaced); a
+    true freeze needs a GPU copy (check 315). NDI and camera freezes hold a
+    CPU frame and are exact. (b) The camera's `video_size` is fixed at
+    1280×720: a device without that mode (a capture card, Continuity
+    Camera) makes `av.open` raise every 2 s, shown as `error: …` that does
+    not say "mode not supported" (check 316). (c) Some live logic is
+    covered only by the real loopbacks: Syphon's uuid change, failed-client
+    retry and hold-then-black; the camera's EAGAIN regenerate path (no
+    fake-`av` test); NDI's stride and RGBX-to-opaque handling; graphview's
+    `startswith("connected")`. (d) `DeviceRegistry.media_feeds()` builds a
+    merged dict per call and `MediaResolver.live` calls it per id (the MEDIA
+    page every frame, each channel's 1 s recheck): cheap at today's counts,
+    tidier cached per scan.
+13. **The phone** is V2 and `phone:` ids are never listed in
     `missing()`.
 
 ## The design, as agreed (2026-10-22), corrected where the build differs
@@ -682,7 +702,9 @@ kept for V2.
   buffers, a frame behind) and sends it on the NDI sender's own
   thread, so the render thread never waits on the network.
 - Each published output is a SYSTEM line (sender name, fps, readback
-  ms) and a sink on the device registry's list.
+  ms) and a sink on the device registry's list. *(Corrected by the build:
+  publishers are SYSTEM lines only, not registry sinks — see T9's ruling
+  and row 335.)*
 
 ### U — the panel
 
@@ -819,7 +841,7 @@ instruction to execute.
      built; the map is `media_sources()`, not `feeds()`.
 326. **The transport: `pos` latch scrub, `rate` −4…+4 × native, `jog`
      a push with coast, `loop` three modes, rate 0 freezes a live
-     feed.** (rec) — built; only the jog's part of the speed springs.
+     feed.** (rec) — built (a Syphon channel's freeze is not exact, rough edge 12); only the jog's part of the speed springs.
 327. **Scrub proxies for clips ≤ 10 min.** (rec) — "I can't imagine
      we'd have longer clips than that". Built on a worker of its own.
 328. **Threads**: a pool for jobs that end, a thread per blocking

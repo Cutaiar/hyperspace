@@ -264,9 +264,9 @@ changes brightness or volume instead).
 | L140 | A video: speed, scrub, loop; the cue knob as a jog wheel | 1 | laptop; APC40 for the jog | 298, 299 |
 | L141 | A file dropped in the media folder appears; a missing-local banner | 1 | laptop; the cloud and a second Mac | 300, 301 |
 | L142 | Junk files, a renamed clip, rapid switching; the MEDIA page at distance | 1 | laptop | 302, 303 |
-| L143 | Syphon and NDI in from Resolume and TouchDesigner; `extra_ips` | 1 | laptop, Resolume or TouchDesigner, a second Mac | 304–307, 313 |
+| L143 | Syphon and NDI in from Resolume and TouchDesigner; `extra_ips` | 1 | laptop, Resolume or TouchDesigner, a second Mac | 304–307, 313, 315 |
 | L144 | Syphon and NDI out; a publish-only output | 1 | laptop, Resolume or TouchDesigner, a second screen | 308–310 |
-| L145 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314 |
+| L145 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314, 316 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -3576,7 +3576,7 @@ its last frame a second, goes black and returns by itself.
 **Wrong if:** nothing is found, the picture is flipped, or it needs a
 relaunch to return.
 
-*(checks 304–307, 313)*
+*(checks 304–307, 313, 315)*
 
 #### L144. Syphon and NDI out; a publish-only output
 
@@ -3608,7 +3608,7 @@ The APC40's knob 7 still moves the faces' media opacity.
 
 **Wrong if:** a stalled camera, or a crash on the old preset.
 
-*(checks 311, 312, 314)*
+*(checks 311, 312, 314, 316)*
 
 # Part 2 — tests that need hardware
 

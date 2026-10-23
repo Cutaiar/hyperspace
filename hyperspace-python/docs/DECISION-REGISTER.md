@@ -5956,7 +5956,7 @@ ROUTING's desk section are untouched.
 Rows 321–339 were answered by the owner on 2026-10-22, in the session that
 designed plan 32, before the build: "(rec)" is the recommendation accepted,
 "(owner)" the owner's own. Each row says what the build did; "Rough edge"
-and "Judge it" are for the hand checks of group AA (checks 296–314).
+and "Judge it" are for the hand checks of group AA (checks 296–316).
 These rows follow plan 31's rows 311–320, which are on
 `plan-31-integration`; the gap closes when that lands.
 
@@ -6050,7 +6050,7 @@ These rows follow plan 31's rows 311–320, which are on
 - **Rough edge.** A GRAPH device node is grey unless its status starts with
   `connected` (changed from "connected"); the camera kind lists Continuity
   Camera.
-- **Judge it.** Checks 304, 305, 311, 313.
+- **Judge it.** Checks 304, 305, 311, 313, 316.
 
 ### 326. The transport: `pos` latch scrub, `rate` −4…+4, `jog` a push with coast, `loop` three modes, rate 0 freezes a live feed
 
@@ -6066,10 +6066,12 @@ These rows follow plan 31's rows 311–320, which are on
 - **Other options.** `pos` as an absolute param only; jog as a speed
   multiplier; a rate that springs too.
 - **To reverse.** `Transport.step`, `JOG_GAIN`, `JOG_HZ` in `transport.py`.
-- **Rough edge.** `once` never re-arms by itself (a new scrub moves it);
+- **Rough edge.** Rate 0 freezes an NDI or camera feed exactly, but a Syphon
+  channel holds Syphon's own texture, which the server keeps writing: it
+  probably keeps animating (check 315). `once` never re-arms by itself (a new scrub moves it);
   a proxy retimes VFR clips; scrubbing a clip without a proxy is coarse
   (keyframes).
-- **Judge it.** Checks 298, 299.
+- **Judge it.** Checks 298, 299, 315.
 
 ### 327. Scrub proxies for clips ≤ 10 minutes
 
