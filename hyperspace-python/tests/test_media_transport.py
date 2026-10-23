@@ -28,7 +28,7 @@ def test_double_and_reverse():
     assert run(t, 60, rate=2.0) == pytest.approx(2.0, abs=1e-6)
     t = Transport(10.0)
     t.reset(0.5)
-    assert run(t, 60, rate=-1.0) == pytest.approx(4.0, abs=1e-6)
+    assert run(t, 60, rate=-1.0, pos=0.5) == pytest.approx(4.0, abs=1e-6)
 
 
 def test_rate_zero_holds():
