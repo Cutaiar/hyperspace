@@ -84,9 +84,10 @@ from .library import Library, Marks
 from .library import home as library_home
 from .media import pool as media_pool
 from .media import proxy as media_proxy
+from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .outputs import Presenter, Slot, Switches, View
+from .outputs import Offscreen, Presenter, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
@@ -123,6 +124,16 @@ def _quiet(fn) -> None:
         fn()
     except Exception:  # noqa: BLE001, S110 — teardown is best-effort
         pass
+
+
+@dataclass
+class _Closer:
+    """Something `close_all` closes that is a function, not an object."""
+
+    fn: Callable[[], None]
+
+    def close(self) -> None:
+        self.fn()
 
 
 def close_all(audio, *adapters) -> None:
@@ -269,8 +280,13 @@ def _slots(cfg: dict | None) -> list[Slot]:
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
                         monitor=placement.index(e["monitor"]),
-                        fullscreen=bool(e["fullscreen"])))
+                        fullscreen=bool(e["fullscreen"]),
+                        window=bool(e.get("window", True)) or k == 0,
+                        syphon=str(e.get("syphon", "") or ""), ndi=str(e.get("ndi", "") or "")))
     return out
+
+
+NOTHING_TO_PUBLISH = "window = false and nothing to publish (no syphon or ndi)"
 
 
 CASCADE = 40     # px: a later output's default spot, down and right of the one before
@@ -330,6 +346,13 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
+    # plan 32 T9: a publish-only output never has a window, so no screen
+    # or spot is looked for; one with nothing to publish is not drawn either
+    idle = []
+    for slot in slots[1:]:
+        if slot.publish_only and not (slot.syphon or slot.ndi):
+            slot.missing = NOTHING_TO_PUBLISH
+            idle.append(f"output: {slot.label}: {slot.missing} — not drawn")
     if scr:
         try:
             seen = placement.load(home) if home is not None else {}
@@ -341,6 +364,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             notes += [n1, n2]
             taken = [tuple(render_rect[:2])]
             for k, slot in enumerate(slots[1:], start=1):
+                if slot.publish_only:
+                    continue
                 later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
                 notes.append(n)
         except Exception as e:  # noqa: BLE001 — a file nobody foresaw must not stop a launch
@@ -348,15 +373,18 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
             notes = [_err("placement", e) + " — the windows open at their default spots"]
             for k, slot in enumerate(slots[1:], start=1):
+                if slot.publish_only:
+                    continue
                 if slot.monitor >= len(scr):        # fork F9 holds here too (review of #123)
                     slot.missing = f"screen {slot.monitor} is not connected"
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
                     later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
-        for note in filter(None, notes):
-            print(note, file=sys.stderr)
-            if cfg is not None:
-                cfg.setdefault("notes", []).append(note)
+    for note in filter(None, [*notes, *idle]):
+        print(note, file=sys.stderr)
+        if cfg is not None:
+            cfg.setdefault("notes", []).append(note)
+    if scr:
         # …and the config is left saying what was done: an index no screen
         # has (or no number at all) is −1 from here on, as the note above
         # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
@@ -405,7 +433,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     # another window takes focus — the hints above still hold
     # (TRANSPARENT_FRAMEBUFFER off, SAMPLES 0, AUTO_ICONIFY off)
     for k, slot in enumerate(slots[1:], start=1):
-        if slot.missing:
+        if slot.missing or slot.publish_only:
             continue
         rect = later_rects[k]
         size = rect[2:] if rect else RENDER_SIZE
@@ -500,6 +528,35 @@ def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = 
     glfw.make_context_current(slots[0].win)
 
 
+def _open_publishers(slots: list[Slot], ctx) -> None:
+    """Plan 32 T9: each drawn output's publishers (media/publish.py), made
+    with the render context current — a Syphon server takes the context
+    current as it is made; a publisher that cannot open says so on its
+    SYSTEM line. A publish-only output gets its offscreen target, a
+    published window its tap (`outputs.Offscreen`)."""
+    for slot in slots:
+        if not slot.drawn:
+            continue
+        slot.publishers = publish.open_for(slot, ctx)
+        if slot.publish_only:
+            slot.offscreen = Offscreen(ctx)
+        elif slot.publishers:
+            slot.tap = Offscreen(ctx)
+
+
+def _close_publishers(win, slots: list[Slot]) -> None:
+    """Both exits: every publisher closed (an NDI sender's thread joined)
+    and the offscreen targets freed, with the render context current —
+    their GL objects are its."""
+    _quiet(lambda: glfw.make_context_current(win))
+    publish.close_all(slots)
+    for slot in slots:
+        for off in (slot.offscreen, slot.tap):
+            if off is not None:
+                _quiet(off.release)
+        slot.publishers, slot.offscreen, slot.tap = [], None, None
+
+
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
@@ -528,7 +585,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     1. output 1 current; the stranded-target check; its window bound;
     2. a `View` per output — output 1 on its window's framebuffer (the
        `View` `Renderer.draw` builds, so one output is today's frame), each
-       later one with its presenter and its framebuffer's size;
+       later one with its presenter and its framebuffer's size, or (plan
+       32 T9) a publish-only one on its offscreen target at the render
+       cap's size ("full": output 1's framebuffer), in their list order;
+       each published one carries its publishers (and its tap);
     3. `renderer.draw_outputs`: output 1 drawn whole, a `Handoff` left for
        the others;
     4. glFlush in output 1's context;
@@ -557,16 +617,27 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     ctx.viewport = (0, 0, fbw, fbh)
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
+    offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
     try:
         views = [View(first.switches, (fbw, fbh), target=ctx.screen,
-                      bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh))]
-        for sl in later:
-            sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
-            views.append(View(sl.switches, sl.size, presenter=sl.presenter))
+                      bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
+                      publish=first.publishers, tap=first.tap)]
+        shown = []                      # (slot, view): the presented ones
+        pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
+        for sl in slots[1:]:
+            if sl in later:
+                sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
+                views.append(View(sl.switches, sl.size, presenter=sl.presenter,
+                                  publish=sl.publishers, tap=sl.tap))
+                shown.append((sl, views[-1]))
+            elif sl in offscreen:
+                sl.size = (int(pub_size[0]), int(pub_size[1]))
+                views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
+                                  publish=sl.publishers))
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
         if later:
             (flush or _gl_flush)()
-        for sl, v in zip(later, views[1:], strict=True):
+        for sl, v in shown:
             try:
                 glfw.make_context_current(sl.win)
                 if v.handoff is not None and sl.size[0] > 0 and sl.size[1] > 0:
@@ -1153,6 +1224,8 @@ def main() -> None:
     # each later output: a presenter on its own context, never waiting
     _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
+    # the outputs published out (plan 32 T9), output 1's context current
+    _open_publishers(slots, ctx)
 
     # the control side: imgui on the control window's context. Its swap
     # never waits for a vblank — two vsynced swaps a frame would halve the
@@ -1394,6 +1467,9 @@ def main() -> None:
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 
+    # both exits close the publishers, in output 1's context (plan 32 T9)
+    publishers = _Closer(lambda: _close_publishers(render_win, slots))
+
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
 
@@ -1404,7 +1480,8 @@ def main() -> None:
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters), impl,
+                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
+                                                 publishers), impl,
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
@@ -1455,7 +1532,7 @@ def main() -> None:
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
     # (its GRAPH page's node editor context, plan 28 N2)
-    close_all(audio, watchdog, awake, panel, *host.adapters)
+    close_all(audio, watchdog, awake, panel, *host.adapters, publishers)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

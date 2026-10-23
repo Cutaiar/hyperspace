@@ -137,7 +137,7 @@ from .graph import (
 )
 from .lookback import DreamState, Lookback
 from .media_tex import FIT_FS, MediaTextures, fit_scale
-from .outputs import Handoff, Switches, View, capped, fit
+from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
 from .view import N_MOD, RED, ViewState  # re-exported for callers that had them from here
@@ -1226,7 +1226,10 @@ class Renderer:
         views, which show their ground; the hands failing never costs the
         frame or the dim (`Ghost.error`). Every exit — a raise in the
         once-a-frame passes included — binds `views[0].target` again with
-        its rect and blending. `stats` says what ran."""
+        its rect and blending. `stats` says what ran.
+
+        Plan 32 T9: then each view's publishers (`View.publish`) are handed
+        its picture (`_publish`)."""
         if not views or views[0].target is None:
             raise RuntimeError("Renderer.draw_outputs: the first view needs a target "
                                "on this context")
@@ -1242,10 +1245,67 @@ class Renderer:
                 target.use()
                 ctx.viewport = vp
             self._draw_frame(s, w, h, dpr, t, views)
+            self._publish(views, t)
         finally:
             target.use()
             ctx.viewport = vp
             ctx.enable(moderngl.BLEND)
+
+    # ---- plan 32 T9: the outputs published out
+
+    def _publish(self, views: list[View], t: float) -> None:
+        """Each view's publishers (media/publish.py) handed its picture, a
+        texture of this context with GL's rows: a publish-only view's own
+        target texture (an `outputs.Offscreen`'s), else a copy in its `tap`
+        — a window's framebuffer resolved into it (multisampled or not),
+        a presenter's hand-off presented into it here, as that window's
+        context shows it. A publisher (or a copy) that raises costs no
+        view and no other publisher: `stats["publish_errors"]` names it,
+        ``"<kind> out <name>"`` → the error."""
+        errors: dict[str, str] = {}
+        for v in views:
+            pubs = getattr(v, "publish", None)
+            if not pubs:
+                continue
+            try:
+                tex = self._published(v)
+            except Exception as e:  # noqa: BLE001 — a copy must not take the frame down
+                tex = None
+                for p in pubs:
+                    errors[_pub_name(p)] = f"{type(e).__name__}: {e}"
+            if tex is None:
+                continue
+            for p in pubs:
+                try:
+                    p.publish(tex, t)
+                except Exception as e:  # noqa: BLE001 — one publisher must not stop the rest
+                    errors[_pub_name(p)] = f"{type(e).__name__}: {e}"
+        stats = getattr(self, "stats", None)
+        if isinstance(stats, dict):
+            stats["publish_errors"] = errors
+
+    def _published(self, v: View) -> moderngl.Texture | None:
+        """`v`'s picture as a texture (`_publish`), or None with none to give."""
+        tgt = v.target
+        own = getattr(tgt, "color_attachments", None) if tgt is not None else None
+        if own and isinstance(own[0], moderngl.Texture):
+            return own[0]
+        tap = getattr(v, "tap", None)
+        if tap is None:
+            return None
+        size = (int(v.size[0]), int(v.size[1]))
+        if size[0] <= 0 or size[1] <= 0:
+            return None
+        if tgt is not None:
+            self.ctx.copy_framebuffer(tap.fit(size), tgt)    # resolves a multisampled window
+            return tap.tex
+        if v.handoff is not None:
+            pres = getattr(self, "_tap_presenter", None)
+            if pres is None:
+                pres = self._tap_presenter = Presenter(self.ctx)
+            pres.present(v.handoff, size, target=tap.fit(size))
+            return tap.tex
+        return None
 
     def _pass_timer(self) -> PassTimer:
         """The GPU node timer (getattr: a renderer from before a hot reload
@@ -2460,6 +2520,10 @@ class Renderer:
                              & (y.max(axis=1) + pad >= 0) & (y.min(axis=1) - pad <= h))
             inst = inst[keep]
         return inst.astype(np.float32)
+
+
+def _pub_name(p) -> str:
+    return f"{getattr(p, 'kind', '?')} out {getattr(p, 'name', '?')}"
 
 
 class _PanPx:

@@ -65,6 +65,7 @@ from .graph import (
     wire_words,
 )
 from .hands import panel as ui_hands
+from .media import publish
 from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
@@ -1757,7 +1758,7 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         wiring, _ = self.graph_now()
         return [sl.n for sl in (getattr(self, "outputs", None) or [])
-                if sl.opened and output_shows(sl.switches, fx_on, visible, master, wiring,
+                if getattr(sl, "drawn", sl.opened) and output_shows(sl.switches, fx_on, visible, master, wiring,
                                          n=sl.n)[1]
                 not in ("", "master")]
 
@@ -1797,7 +1798,7 @@ class Panel:
         for sl in slots:
             pre = f"output.{sl.n}"
             name = sl.name or ("output" if several else "")
-            if not sl.opened or f"{pre}.scene" not in self.reg:
+            if not getattr(sl, "drawn", sl.opened) or f"{pre}.scene" not in self.reg:
                 imgui.text_disabled(fit_text(f"{sl.n}  {name} — {sl.missing or 'not opened'}",
                                              imgui.get_content_region_avail().x))
                 continue
@@ -2208,6 +2209,7 @@ class Panel:
         imgui.spacing()
         self._section("devices")
         self._device_lines()
+        self._publish_lines()
         imgui.spacing()
         self._section("midi")
         if "desk.slew" in self.reg:     # knob smoothing (a registry with no table lacks it)
@@ -2404,6 +2406,16 @@ class Panel:
                 imgui.text_disabled(line)
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
+
+    def _publish_lines(self) -> None:
+        """Plan 32 T9: one line per output published out (a sink of the
+        rig's): `<kind> out <name> — <fps> fps, readback <ms> ms`, or its
+        error in the warning colour (media/publish.py)."""
+        for line in publish.lines(getattr(self, "outputs", None)):
+            if " — error" in line:
+                imgui.text_colored(WARN, line)
+            else:
+                imgui.text_disabled(line)
 
     def _desk_log(self) -> None:
         """The desk event log (plan 24 C1): the last twenty presses on the
