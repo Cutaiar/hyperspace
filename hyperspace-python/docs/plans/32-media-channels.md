@@ -746,10 +746,14 @@ kept for V2.
 - A `media` section: `{"channels": {"a": ["shared:loops/tunnel.mp4",
   "camera:FaceTime HD Camera", null, …], …}}` — the bins. The params
   (`media.*`, `backdrop.*`, `view.media*`) are values as ever.
-- Saved as `hyperspace.preset/4` only when it has a `media` section or
-  a `media.*` / `backdrop.*` / `view.media` value away from its
-  default; every other preset unchanged byte for byte (row 337, plan
-  31's conditional `/3` precedent).
+- Saved as `hyperspace.preset/4` only when it has a `media` section, a
+  `media.*` / `backdrop.*` / `view.media` value away from its default,
+  or a route, modifier, macro or graph wire that names a media-family
+  id or a channel node (`media.a` …) — an LFO on `media.a.pos`, a macro
+  on `backdrop.alpha`, a wire `media.a → acid.aux`: an older build
+  would drop that row silently (`preset.is_media_id`, one rule for the
+  values and the names). Every other preset unchanged byte for byte
+  (row 337, plan 31's conditional `/3` precedent).
 
 ## Not in this plan
 
@@ -888,7 +892,8 @@ instruction to execute.
      built, plus `pyobjc-framework-avfoundation` (macOS) for the
      camera list.
 337. **Conditional preset `/4`**, after plan 31's `/3`. (rec) — built;
-     both Macs must run this build.
+     both Macs must run this build. A route, modifier, macro or graph
+     wire naming a media id or channel node counts, as a value does.
 338. **Base `plan-28-30-integration`**, taking it in as it moves. (rec) —
      @ 1a5cc2e; nothing was taken in.
 339. **No desk or APC40 default bindings**; Learn for all. (rec) — built;

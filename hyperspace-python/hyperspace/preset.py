@@ -180,22 +180,57 @@ def _media_defaults() -> dict[str, Any]:
 MEDIA_DEFAULTS = _media_defaults()
 
 
-def is_media_id(pid: str) -> bool:
-    return pid.startswith(MEDIA_PREFIXES)
+def is_media_id(pid: Any) -> bool:
+    """Whether `pid` names the media family: a ``media.*`` / ``backdrop.*``
+    / ``view.media*`` param, or a channel's graph node (``media.a`` …). A
+    sink row's ``param:<id>`` source counts as its id; a non-string never."""
+    if not isinstance(pid, str):
+        return False
+    return pid.removeprefix("param:").startswith(MEDIA_PREFIXES)
+
+
+def _named_ids(doc: dict):
+    """Every id a preset document's rows name — each route's source and
+    target, each modifier's inputs, each macro subscriber's base or depth
+    ends, each graph wire's ends. A malformed section names nothing."""
+    def items(v, kind):
+        return v if isinstance(v, kind) else kind()
+    for row in items(doc.get("routes"), list):
+        if isinstance(row, dict):
+            yield row.get("source")
+            yield row.get("target")
+    for m in items(doc.get(MODIFIERS_KEY), list):
+        if isinstance(m, dict):
+            yield from items(m.get("in"), list)
+    for m in items(doc.get("macros"), dict).values():
+        for sub in items(m.get("subs") if isinstance(m, dict) else None, list):
+            if isinstance(sub, dict):
+                yield sub.get("base")
+                dep = sub.get("depth")
+                if isinstance(dep, dict):
+                    yield dep.get("source")
+                    yield dep.get("target")
+    graph = doc.get(GRAPH_KEY)
+    for w in items(graph.get("wires") if isinstance(graph, dict) else None, list):
+        if isinstance(w, dict):
+            yield w.get("from")
+            yield w.get("to")
 
 
 def uses_media(doc: dict) -> bool:
     """Whether a preset document uses the media channels: its ``media``
-    section names any id, or a ``media.*`` / ``backdrop.*`` /
-    ``view.media*`` value is away from its default (an id this build does
-    not know counts as away). Such a preset is written as ``/4``."""
+    section names any id, a ``media.*`` / ``backdrop.*`` / ``view.media*``
+    value is away from its default (an id this build does not know counts
+    as away), or a route, modifier, macro or graph wire names a
+    media-family id or a channel node (`is_media_id`) — a row an older
+    build would drop. Such a preset is written as ``/4``."""
     bins, _ = media_channels.read_bins(doc.get(MEDIA_KEY))
     if any(sid is not None for b in bins.values() for sid in b):
         return True
     for pid, v in dict(doc.get("values") or {}).items():
         if is_media_id(pid) and (pid not in MEDIA_DEFAULTS or v != MEDIA_DEFAULTS[pid]):
             return True
-    return False
+    return any(is_media_id(n) for n in _named_ids(doc))
 FACTORY_DIR = FACTORY / GROUP
 
 

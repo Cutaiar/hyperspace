@@ -123,6 +123,52 @@ def test_uses_media_rule():
     assert preset.uses_media({"values": {"media.h.loop": 1}})
 
 
+def test_uses_media_counts_names_in_rows():
+    """A preset whose only media is a row naming a media-family id or a
+    channel node — a route, a modifier's input, a macro's subscriber, a
+    graph wire — is /4: an older build would drop that row silently."""
+    assert preset.uses_media({"routes": [{"source": "lfo:0", "target": "media.a.pos",
+                                          "op": "push", "value": 0.2}]})
+    assert preset.uses_media({"routes": [{"source": "param:backdrop.alpha",
+                                          "target": "bridge:3", "op": "send"}]})
+    assert preset.uses_media({"macros": {"macro.1": {"subs": [{"base": "backdrop.alpha",
+                                                               "from": 0, "to": 1}]}}})
+    assert preset.uses_media({"macros": {"macro.2": {"subs": [
+        {"depth": {"source": "hand:right.y", "target": "view.media_alpha"},
+         "from": 0, "to": 1}]}}})
+    assert preset.uses_media({"modifiers": [{"id": "mod.1", "kind": "smooth",
+                                             "in": ["param:media.b.rate"]}]})
+    assert preset.uses_media({"graph": {"nodes": [], "wires": [{"from": "media.a",
+                                                                "to": "acid.aux"}]}})
+    # rows that name no media id leave the preset /2
+    assert not preset.uses_media({
+        "routes": [{"source": "lfo:0", "target": "camera.zoom", "op": "push"}],
+        "modifiers": [{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}],
+        "macros": {"macro.1": {"subs": [{"base": "dream.decay", "from": 0, "to": 1}]}},
+        "graph": {"nodes": [], "wires": [{"from": "hands.2", "to": "output.2.hands"}]}})
+    # a malformed section is not media, and never raises
+    assert not preset.uses_media({"routes": "x", "macros": [], "graph": {"wires": 3},
+                                  "modifiers": [7, {"in": "media.a.pos"}]})
+
+
+def test_preset_whose_only_media_is_a_route_or_macro_is_v4(rig):
+    from test_presets import put
+    put(rig.home, "LFOPOS", routes=[{"source": "lfo:0", "target": "media.a.pos",
+                                     "op": "push", "value": 0.2}])
+    assert rig.presets.load("LFOPOS") == []
+    doc = rig.presets.document("LFOPOS")
+    assert doc["schema"] == preset.MEDIA_SCHEMA
+    assert any(r["target"] == "media.a.pos" for r in doc["routes"])
+    put(rig.home, "MACROALPHA", macros={"macro.1": {"subs": [
+        {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
+    assert rig.presets.load("MACROALPHA") == []
+    assert rig.presets.document("MACROALPHA")["schema"] == preset.MEDIA_SCHEMA
+    put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
+                                    "op": "push", "value": 0.1}])
+    assert rig.presets.load("PLAIN") == []
+    assert rig.presets.document("PLAIN")["schema"] == preset.SCHEMA
+
+
 def test_bins_round_trip(rig, tmp_path):
     m = rig.reg.media
     m.assign("a", 0, "shared:loops/tunnel.mp4")

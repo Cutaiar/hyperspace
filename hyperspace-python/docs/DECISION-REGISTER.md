@@ -328,7 +328,7 @@ here; overturn → the change, then the same.
 | 334 | Phone join (V2): a token in the QR, ≤ 4, approved on the host | — | (rec), not built — 2026-10-22 |
 | 335 | Resolume / TouchDesigner both ways in V1; publishers are SYSTEM lines | 304–310 | owner — 2026-10-22 |
 | 336 | Dependencies: `av`, `pillow-heif`, `syphon-python`, `cyndilib` (+ avfoundation) | 311 | (rec) — accepted 2026-10-22 |
-| 337 | Conditional preset `/4`; both Macs on this build | 301 | (rec) — accepted 2026-10-22 |
+| 337 | Conditional preset `/4` (a media value, bin, or route / modifier / macro / wire naming a media id); both Macs on this build | 301 | (rec) — accepted 2026-10-22 |
 | 338 | Base `plan-28-30-integration` | — | (rec) — accepted 2026-10-22 |
 | 339 | No desk or APC40 default bindings; Learn for all | 299 | (rec) — accepted 2026-10-22 |
 
