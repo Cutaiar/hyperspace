@@ -30,6 +30,18 @@ the next PR. `main` takes one merge. Then close #230, #232, #204, #205.
 - [ ] Dillon's #214 and #223 are into `main`; after #195 lands they rebase onto it (one superficial hunk for #214; superficial hunks + the devices question for #223).
 - [ ] Optional: the compositing-order reconciliation session (plan 33) — the backdrop's place in the look-back is a stopgap until then.
 
+## Without the hand camera
+
+The synthetic hands tape stands in for the camera:
+`uv run python tools/hands_tape.py synth ~/Hyperspace-try/hands-synth.json`,
+then in the copy's `config.toml` `[hands]` set `enabled = true` and
+`tape = "hands-synth.json"` (relative to the config's folder; remove `tape`
+when the camera is back). No real recorded tape is committed yet.
+
+- **On the tape (the guide says so):** 184; 200, 203–207, 209, 210, 213, 214; 223.
+- **On the tape, judged (the guide names the camera, but nothing in the check needs a real hand):** 169, 180, 237, 251, 252, 256. Re-run them with the camera if anything looks off.
+- **Need the real camera, so wait for it:** 158–165 (the dance sources, grab, hands on the projector), 172 (the tracker reconnecting), 241, 248, 249, 265 (a hand felt, or learned, live). Thirteen in all: eight in #195 (U), one in #195 (W), four in #224 (Y).
+
 ## Hand checks
 
 ### U. Plan 24: the party fixes
