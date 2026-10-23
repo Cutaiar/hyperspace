@@ -6,6 +6,17 @@ open that file for each check's steps and its *Pass:* line. No person has
 run any of them yet. Every PR's automated suite and golden frames are green
 (#233: 3308 passed, 661 goldens).
 
+## Which branch to run them on
+
+**`plan-31-32-integration` (#233) for everything** — it sits on top of the
+whole stack (main → #195 → #224 → plans 31 + 32), so groups U, W, V, X, Y,
+Z, AA and AB all run on it (`uv sync` first). The guide's "Before you
+start" names each plan's own branch; that was for running them before the
+stack existed. Exceptions:
+
+- **286–295** (the APC40 sequencer page) need `plan-31-a1` (#231, with Dillon).
+- **285, 301, 317** each have a last step on an *older* build (to see it refuse a `/3` or `/4` preset): use the other Mac on `main`, or a second checkout.
+
 ## The PRs and what each needs
 
 | PR | Into | What it needs before merging |
