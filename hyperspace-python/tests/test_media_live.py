@@ -379,6 +379,45 @@ def test_media_feeds_and_the_resolver(monkeypatch):
     assert not src.running and reg.media_feeds() == {}
 
 
+def test_a_channel_follows_its_device_remade_by_a_config_edit(monkeypatch):
+    """Review I1: an edit to the entry (extra_ips added) closes the device
+    and opens a new one with new source objects; a channel holding the old
+    one picks up the new one at its next recheck, with no slot switch."""
+    real = devices.kinds
+    monkeypatch.setattr(devices, "kinds", lambda: {**real(), "fake": FakeKind})
+    entry = {"role": "net", "kind": "fake", "enabled": True}
+    reg = devices.DeviceRegistry([entry])
+    reg.open_all()
+    first = reg.get("net")
+    first._scan()
+    ms = MediaState(app.MediaResolver(SimpleNamespace(path=lambda sid: None), reg))
+    ms.assign("a", 0, "ndi:X")
+    ms.poll(0.016, 0.0)
+    old = ms.channels["a"].source
+    assert old is first.media_sources()["ndi:X"]
+    assert until(lambda: ms.frame("a") is not None)
+
+    assert reg.apply([{**entry, "extra_ips": ["10.0.0.7"]}])     # closed and made again
+    second = reg.get("net")
+    assert second is not first and not old.running
+    second._scan()
+    ms.poll(0.016, 0.5)                   # before the recheck: still the old one
+    assert ms.channels["a"].source is old
+    ms.poll(0.016, 0.5 + 1.0)             # channels.RECHECK_S later
+    new = ms.channels["a"].source
+    assert new is second.media_sources()["ndi:X"] and new is not old and new.held == 1
+    assert until(lambda: ms.frame("a") is not None) and ms.status("a") == READY
+    assert ms.drain(2.0) and old.held == 0       # the old one went through the closer
+
+    # a feed that has only gone (not remade) stays held, to be found again
+    second.found = {}
+    second._scan()
+    ms.poll(0.016, 3.0)
+    assert ms.channels["a"].source is new
+    ms.close()
+    reg.close()
+
+
 # ---- loopbacks through the real libraries ----
 
 def test_ndi_loopback():

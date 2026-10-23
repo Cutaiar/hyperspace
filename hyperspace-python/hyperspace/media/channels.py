@@ -256,7 +256,11 @@ class MediaState:
             return self._stamp(sid) != ch.stamp
         if kind == "phone":
             return False
-        return missing and r.live(sid) is not None
+        # a live id: arrived, or now another object — its device was closed
+        # and made again by a [[devices]] edit, so the held one is dead. A
+        # feed that has only gone stays held (`lost`), to be found again
+        live = r.live(sid)
+        return live is not None and live is not src
 
     def _step(self, ch: Channel, src, dt: float) -> None:
         tr = ch.transport
