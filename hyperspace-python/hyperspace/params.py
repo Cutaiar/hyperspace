@@ -82,6 +82,8 @@ from .lookback import (
     TINT_FROM,
     DreamState,
 )
+from .media import channels as media_channels
+from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 
@@ -89,7 +91,10 @@ PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
 INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
-BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
+MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
+# a media channel picker (view.media, backdrop.channel): off, then the channels
+MEDIA_CHANNELS = ["off", *media_channels.CHANNELS]
+BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
@@ -109,7 +114,8 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 # `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
 # preset's, declared while it holds the modifier (routing.declare_modifiers)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro", "mod")
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
+                      "lfo", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -942,7 +948,7 @@ def dream_speed_text(k: float) -> str:
 
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
-                   restart=None, ghost=None) -> Registry:
+                   restart=None, ghost=None, media=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -954,7 +960,9 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
     renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
-    renderer's ghost hands). `bank` is the open project
+    renderer's ghost hands), and `media` (media.channels.MediaState, the
+    eight channels the ``media.*`` params write; kept as ``r.media``, the
+    one the preset's bins and the renderer read). `bank` is the open project
     (library.Project), whose preset slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
@@ -963,6 +971,8 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
+    media = media if media is not None else media_channels.MediaState()
+    r.media = media
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -1055,19 +1065,31 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                + ", ".join(i.name for i in patterns.INPUTS) + ".")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
-    r.continuous("view.bmp_alpha", "Bitmap alpha", *_attr(view, "bmp_alpha"),
-                 lo=0.0, hi=1.0, fmt=lambda v: f"bitmap alpha {v:.2f}", group=g)
-    r.continuous("view.bmp_scale", "Bitmap size", *_attr(view, "bmp_scale"),
-                 lo=0.05, hi=2.0, fmt=lambda v: f"bitmap size {v:.2f}", group=g)
-    r.enum("view.bmp_mode", "Bitmap path", *_attr(view, "bmp_mode"), BMP_PATHS, group=g,
-           tip="The bitmap's own path about the face centre — independent of the "
+    # plan 32 (row 331): the faces draw a media channel where the one
+    # bitmap file was; alpha, size and path as the bitmap's were
+    r.enum("view.media", "Face media", *_attr(view, "media"), MEDIA_CHANNELS, group=g,
+           tip="The media channel drawn over the face pattern (the MEDIA page fills "
+               "the channels); off for none.")
+    r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
+    # the factory desk's knob 7 (apc40.DEFAULT_MAP, every factory preset's
+    # desk) is `view.bmp_alpha`: kept as a view onto `view.media_alpha`, so
+    # the row means what it always meant — the opacity of the picture on
+    # the faces. An alias: never saved (a preset writes view.media_alpha),
+    # and an old preset's value lands on the real one (preset.load_doc)
+    r.continuous(BMP_ALPHA, "Media alpha (knob 7)", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g, alias=True,
+                 tip="The factory desk's knob 7 from before plan 32: Media alpha.")
+    r.aliases[BMP_ALPHA] = lambda p: r.get("view.media_alpha")
+    r.continuous("view.media_scale", "Media size", *_attr(view, "media_scale"),
+                 lo=0.05, hi=2.0, fmt=lambda v: f"media size {v:.2f}", group=g)
+    r.enum("view.media_mode", "Media path", *_attr(view, "media_mode"), MEDIA_PATHS, group=g,
+           tip="The media's own path about the face centre — independent of the "
                "instance-grid motion.")
-    r.continuous("view.bmp_amp", "Bitmap amp", *_attr(view, "bmp_amp"), lo=0.0, hi=0.5,
+    r.continuous("view.media_amp", "Media amp", *_attr(view, "media_amp"), lo=0.0, hi=0.5,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.bmp_rate", "Bitmap rate", *_attr(view, "bmp_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.media_rate", "Media rate", *_attr(view, "media_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
-    r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
-           tip="Image drawn over the face pattern; empty for none.")
     # the face pattern's eight inputs — what the shaders read as u_mod[8],
     # named by the convention in patterns.py (SCALE GLOW WARP SPEED COLOUR
     # SHARP HUE SPREAD). Base 1.0 is the un-driven look; a routed lane rides on it.
@@ -1075,6 +1097,49 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.continuous(f"pattern.mod.{k}", patterns.label(k),
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
                      fmt=lambda v: f"{v:.2f}", group="pattern", tip=patterns.tip(k))
+
+    # ---- the media channels (plan 32 C, media/channels.py): the bin entry
+    # on each, how it fits a frame, and its transport — all performance,
+    # all routable; the bins themselves are the preset's `media` section ----
+    g = "media"
+    fmt_rate = lambda v: "hold" if v == 0 else f"×{v:.2f}"
+    for c, ch in media.channels.items():
+        r.continuous(f"media.{c}.slot", f"{c.upper()} slot", *_attr(ch, "slot"),
+                     lo=0, hi=media_channels.BIN - 1, integer=True,
+                     fmt=lambda v: f"slot {int(v) + 1}", group=g,
+                     tip="Which of the channel's sixteen bin entries is on it; an empty "
+                         "entry, or a source not on this Mac, is black.")
+        r.enum(f"media.{c}.fit", f"{c.upper()} fit", *_attr(ch, "fit"),
+               list(media_channels.FITS), group=g,
+               tip="How the picture fills a frame of another shape: cover crops, "
+                   "contain letterboxes, stretch distorts.")
+        r.continuous(f"media.{c}.rate", f"{c.upper()} rate", *_attr(ch, "rate"),
+                     lo=-4.0, hi=4.0, fmt=fmt_rate, group=g,
+                     tip="× the clip's own speed; negative plays backwards, 0 holds. "
+                         "On a live feed, 0 freezes the frame.")
+        r.continuous(f"media.{c}.pos", f"{c.upper()} position", *_attr(ch, "pos"),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"pos {v:.3f}", group=g,
+                     tip="The scrub: while it moves the playhead is put there; when it "
+                         "rests the clip plays on at the rate from where it was left.")
+        r.continuous(f"media.{c}.jog", f"{c.upper()} jog", *_attr(ch, "jog"),
+                     lo=-1.0, hi=1.0, fmt=lambda v: f"jog {v:+.2f}", group=g,
+                     tip="A push of playhead speed that coasts back to the rate, like a "
+                         "platter spun and let go — learn a relative encoder (the cue "
+                         "knob) to it.")
+        r.enum(f"media.{c}.loop", f"{c.upper()} loop", *_attr(ch, "loop"), list(MEDIA_LOOPS),
+               group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
+                            "last frame (once).")
+
+    # ---- the backdrop (plan 32 R, row 330): a channel under the scene ----
+    g = "backdrop"
+    r.enum("backdrop.channel", "Backdrop", *_attr(view, "backdrop"), MEDIA_CHANNELS, group=g,
+           tip="The media channel laid under the scene, before the look-back and the "
+               "effects; off for none.")
+    r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
+    r.toggle("backdrop.history", "Backdrop in the look-back", *_attr(view, "backdrop_history"),
+             group=g, tip="On, the look-back captures the backdrop with the scene; off, the "
+                          "echoes and the dream are drawn over the backdrop.")
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane

@@ -79,12 +79,18 @@ class ViewState:
     inst_rate: float = 1.0       # motion angular rate, rad/s
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
-    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
-    bmp_alpha: float = 1.0       # bitmap opacity fader
-    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
-    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
-    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
-    bmp_rate: float = 1.0        # path angular rate, rad/s
+    # plan 32 (row 331): a media channel over the face pattern, where the
+    # one bitmap file (view.bmp_*) was; the same alpha, size and path
+    media: int = 0               # the channel on the faces: 0 off, 1–8 = a–h
+    media_alpha: float = 1.0     # its opacity fader
+    media_scale: float = 0.9     # its width, face-UV units (face spans 1.0)
+    media_mode: int = 0          # its path: 0 still, 1 orbit, 2 fig-8, 3 sway
+    media_amp: float = 0.15      # path amplitude about the face centre, UV units
+    media_rate: float = 1.0      # path angular rate, rad/s
+    # the backdrop (row 330): a channel under the scene
+    backdrop: int = 0            # 0 off, 1–8 = a–h
+    backdrop_alpha: float = 1.0
+    backdrop_history: bool = False   # the look-back captures the backdrop too
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

@@ -407,6 +407,7 @@ uniform sampler2D u_ring;    // the history atlas, MAX_ECHOES slots stacked in v
 uniform sampler2D u_dream;   // the dream buffer D
 uniform sampler2D u_cover;   // the faces' coverage mask at the scene's size (render.py)
 uniform int u_has_cover;     // 0 = no mask this frame: brightness alone covers
+uniform sampler2D u_occ;     // whose brightness covers: the scene (u_scene but over a backdrop)
 uniform ivec2 u_origin;      // the target viewport's origin (gl_FragCoord is window-relative)
 uniform int u_n;             // echoes this frame, oldest first
 uniform float u_w[MAX_ECHOES];    // echo weight: echo_mix · ½^(age / fade)
@@ -460,7 +461,8 @@ void main() {{
     // the render over the wake: where this frame drew, the wake beneath is
     // held back — by the faces' geometry (drawn at a few percent alpha, so
     // their brightness would barely cover) and by brightness (the wireframe)
-    float cover = min(max(scene.r, max(scene.g, scene.b)) * OCCLUDE_GAIN, 1.0);
+    vec3 occ = texelFetch(u_occ, ivec2(gl_FragCoord.xy) - u_origin, 0).rgb;
+    float cover = min(max(occ.r, max(occ.g, occ.b)) * OCCLUDE_GAIN, 1.0);
     if (u_has_cover != 0)
         cover = max(cover, texelFetch(u_cover, ivec2(gl_FragCoord.xy) - u_origin, 0).r);
     cover *= u_occlude;
@@ -568,6 +570,7 @@ class Lookback:
         self._post["u_ring"].value = 1
         self._post["u_dream"].value = 2
         self._post["u_cover"].value = 3
+        self._post["u_occ"].value = 4
         self._post["u_slot"].value = 1.0 / MAX_ECHOES
         self._down["u_scene"].value = 0
 
@@ -682,16 +685,22 @@ class Lookback:
         return bool(self.state.on) and float(self.state.occlude) > 0.0
 
     def composite(self, scene: moderngl.Texture, target: moderngl.Framebuffer,
-                  cover: moderngl.Texture | None = None) -> None:
+                  cover: moderngl.Texture | None = None,
+                  occluder: moderngl.Texture | None = None) -> None:
         """The post pass into `target`'s viewport: scene ⊕ wake, or a copy when
         off. `cover` is the faces' coverage mask at the scene's size (render.py
-        draws it when wants_cover()); without it brightness alone occludes."""
+        draws it when wants_cover()); without it brightness alone occludes.
+        `occluder` is whose brightness that is, at the scene's size: `scene`
+        itself when None. Plan 32: over a backdrop `scene` is the scene laid
+        on the channel and the occluder the scene alone, so the backdrop's
+        own brightness never hides the echoes and the dream."""
         s, ctx, p = self.state, self.ctx, self._post
         x, y, _, _ = target.viewport
         target.use()
         ctx.disable(moderngl.BLEND)      # the texture is already composited; write it
         scene.use(location=0)
         (cover if cover is not None else scene).use(location=3)
+        (occluder if occluder is not None else scene).use(location=4)
         p["u_has_cover"].value = int(cover is not None)
         n = 0
         dream_w = 0.0

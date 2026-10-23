@@ -535,7 +535,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
 
 def _area_chips(st: dict) -> None:
     """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
-    MODULATION · GEOMETRY · SHADERS, wrapped to the page; a click frames
+    MODULATION · MEDIA · GEOMETRY · SHADERS, wrapped to the page; a click frames
     the canvas on that area (`frame_area`, next frame)."""
     for i, a in enumerate(graphview.AREAS):
         label = f"{graphview.TITLES[a]}##area"

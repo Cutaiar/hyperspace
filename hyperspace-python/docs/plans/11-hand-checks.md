@@ -5,7 +5,8 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–279; group Z (277–279) is the instanced field from
+numbers. They run 1–279, then 296–316 (plan 32's group AA, on `plan-32-media`; 280–295 are
+plan 31's, on `plan-31-integration`); group Z (277–279) is the instanced field from
 `main`, renumbered from its 144–146 when main was merged in; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), and 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X.
@@ -17,7 +18,8 @@ On `main` (`git pull`, `uv sync`); group R needs plan 22, which is on
 (plan 27) and V (plan 26), on `plan-24-26-27-integration` until it is
 merged. (V follows W in this file: plan 27's docs landed first.) Groups
 X (plan 30) and Y (plan 28) need `plan-28-30-integration` until it is
-merged. Before
+merged. Group AA (plan 32) needs `plan-32-media`, and
+`uv sync` for its four new dependencies. Before
 any launch of this build:
 
 ```
@@ -3903,6 +3905,264 @@ too. Say whether the default depth (0.5) and the far fade (to a quarter)
 are right. *Fail:* far copies drawn over near ones → the sort in
 `field._field_3d`.
 
+## AA. Plan 32: media (channels, the media folder, live feeds, publishing out)
+
+Plan 32 as built is [`32-media-channels.md`](32-media-channels.md): eight
+channels `a`–`h`, each a bin of 16 sources and a `slot`; stills, video,
+cameras, Syphon and NDI in; the backdrop, the faces, an effect's `aux` and
+an output reading a channel; Syphon and NDI out; the MEDIA page. On
+`plan-32-media` (base `plan-28-30-integration`). **Numbering:** plan 31
+holds checks 280–295 on `plan-31-integration`, so 296 follows a gap on this
+branch that closes when plan 31 lands. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync` (four new
+dependencies). Pictures and clips to try go in `~/Hyperspace-try/media/`
+(a still, an iPhone `.heic`, an `.mp4` of about 30 s with motion, a
+`.gif`). A shared folder needs `[library] path` set to the cloud folder.
+Group AA assumes the control window at its usual 960 × 900. None of these
+has been run by a person; the loopback tests (our sender into our
+receiver) are the only evidence for 304–309.
+
+**296. A still as a backdrop.** (laptop)
+Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too,test_the_echoes_show_over_a_bright_backdrop,test_a_static_backdrop_in_the_history_keeps_its_brightness}`, `tests/test_golden_frames.py` (`backdrop-still`).
+MEDIA page: pick the still in the library (This Mac), click bin cell 1 of
+channel A, then set **Backdrop** channel to A and its alpha to 1. Turn the
+look-back on (the echoes), then **history** on and off; turn the faces'
+cut-through on; place an `acid` effect after the scene on the FX page.
+*Pass:* the still sits under the shape and is bent by the effects with
+**history** on, and keeps its own brightness (it never brightens toward
+white as the echoes build); with it off the echoes of the shape lie over
+the still unbent, visible over its bright areas too; alpha 0.5 mixes; with a backdrop and cut-through on, faint fills
+let the backdrop show (say whether that reads right). Setting Backdrop off
+returns the picture exactly as before. *Fail:* the backdrop vanishes when an
+effect is placed after the scene (`graph._place_one`), a seam or flipped
+picture (`media_tex.flipped`).
+
+**297. The faces and `aux`.** (laptop)
+Headless: `tests/test_media_faces_aux.py::{test_faces_show_channel,test_aux_wired_from_channel,test_displace_moves_pixels,test_blend_modes_with_an_aux,test_unwired_aux_reads_black}`, `tests/test_golden_frames.py` (`faces-media`, `displace-luma`, `blend-luma-key`).
+Set **Faces** to channel A (the still), alpha 0.8, then each path (STILL,
+ORBIT, FIG-8, SWAY). Back on GRAPH, wire `media.a` to the `aux` port of
+`displace`, then of `blend`; turn each on; try `blend`'s five modes and the
+luma-key threshold, `displace`'s luma and red/green modes. *Pass:* the
+picture sits on the faces in aspect, upright, and follows the pattern
+per-face or in screen space as the bitmap did; `displace` bends the frame by
+the still's brightness and mid-grey moves nothing; `blend` keys the bright
+parts; unwiring `aux` leaves the effect as if it were off. *Fail:* a flipped
+or stretched picture; an unwired aux that is not transparent
+(`fx.py`'s aux uniforms, `_lib.glsl`).
+
+**298. A video: rate, scrub, loop, the proxy.** (laptop)
+Headless: `tests/test_media_transport.py`, `tests/test_media_video.py`, `tests/test_media_channels.py::test_transport_drives_want`.
+Put the `.mp4` on channel A and the faces or backdrop on A. Watch the
+SYSTEM page for a `media.a` line and the page's playhead bar. Set rate 2,
+−1, 0, 0.5; loop, ping-pong, once; drag **position** while it plays and
+let go; wait a minute and open it again. *Pass:* it plays at native speed
+at 1; double speed at 2; backwards at −1; holds at 0; the position drag
+scrubs and, let go, it plays on from there; ping-pong reverses at each end,
+once holds the last frame; after the first open, `<home>/media-cache/proxies/`
+holds a proxy file and scrubbing is smoother on the next open.
+The frame rate holds with the clip playing (three playing clips on
+three channels: say the frame time). *Fail:* the picture stalls while
+scrubbing or the whole app hitches on a clip switch (`media.video`,
+`channels._switch`).
+
+**299. Jog with the cue knob.** (APC40)
+Headless: `tests/test_media_transport.py::{test_jog_spins_and_coasts,test_pos_latch_scrubs_then_plays_on}`.
+Select channel A on the MEDIA page. Arm Learn on **jog**, turn the APC40's
+CUE knob (relative) so the route is made; then spin the knob either way and
+let go, with the clip at rate 1 and at rate 0. *Pass:* a spin speeds the
+playhead (or runs it backwards) and, let go, it coasts back to `rate`
+within about a second, like a platter; at rate 0 it scrubs and stops. Say
+whether the gain and the coast feel right. Nothing was bound by default
+(row 339). *Fail:* it never settles (`transport.JOG_HZ`) or jumps
+(`JOG_GAIN`).
+
+**300. A dropped file appears.** (laptop; the cloud for the second half)
+Headless: `tests/test_media_folder.py::{test_dropped_file_appears_within_a_scan,test_removed_file_is_missing,test_slow_read_is_fetching,test_dataless_flag_is_fetching}`.
+With the MEDIA page open on This Mac, drop a new picture into
+`~/Hyperspace-try/media/` from Finder; then delete a file that is on a
+channel; then, with `[library] path` set to the Drive folder, drop a file
+into `<drive>/media/` from the other Mac, and one that Drive has not yet
+downloaded. *Pass:* the new file is in the list within about two seconds
+with a thumbnail, no relaunch; the deleted one's channel goes black and
+its status reads `missing` (the app does not hitch); the file from the
+other Mac appears as `shared:…`, `fetching` while Drive streams it, then
+ready. *Fail:* a stall while a placeholder downloads (`folder._probe`),
+a stuck `fetching`.
+
+**301. The missing-local banner; both Macs on `/4`.** (two Macs)
+Headless: `tests/test_media_preset.py::{test_media_preset_is_v4,test_preset_without_media_is_unchanged,test_bins_round_trip,test_v2_and_v4_both_load}`, `tests/test_ui_media.py::test_banner_lists_missing`.
+On Mac 1 save a preset with a `local:` clip, a `camera:` and a `shared:`
+file in its bins; on Mac 2 (running this build) load it from the shared
+library. Then save a preset with no media on Mac 1 and open the file.
+*Pass:* on Mac 2 the MEDIA page shows the banner "`local:…` — not on this
+Mac: shows black" for the local one and the camera if it has none, and the
+channel is black while the shared file plays; a preset with no media is
+`hyperspace.preset/2` and looks as it did. Then open that `/4` preset in a build from before this branch (check out
+`plan-28-30-integration`, or use a Mac that has not updated) and read what it
+says: it should refuse the file or note the unknown schema, and load
+nothing of the media. Update both Macs before saving one. *Fail:* the
+banner is missing or lists a source that is present (`channels.missing`).
+
+**302. Junk, mid-show deletes and rapid switching.** (laptop)
+Headless: `tests/test_media_folder.py::{test_junk_does_not_stop_the_scan,test_blocked_read_does_not_stall_the_scan}`, `tests/test_media_channels.py::{test_rapid_switching_with_slow_closes_stays_fast_and_balances,test_close_with_a_hung_source_returns_within_two_seconds}`, `tests/test_app_boundary.py` (the exit test).
+Put a `.txt`, a truncated `.mp4`, a 0-byte `.png` and a renamed
+`.jpg` that is not a picture in the media folder. Put a good clip on
+channel A and, while it plays, rename it in Finder. Map `media.a.slot` to an
+LFO or the sequencer at 16ths over a bin of eight clips and run it for a
+minute; then quit. *Pass:* the junk is listed with `error: …` and nothing
+else stops; the renamed clip's channel goes black and `missing`, the app
+carries on; the slot sweep never hitches the frame rate, memory and the
+thread count settle, and the app quits in about two seconds. *Fail:* a
+frame-time spike at a switch (`MediaState.poll`), a hang on quit
+(`MediaState.close`).
+
+**303. The MEDIA page at distance, and a big library.** (laptop)
+Headless: `tests/test_ui_media.py::{test_the_media_page_fits,test_a_big_library_costs_what_is_in_view,test_a_thumbnail_is_decoded_once_off_the_ui_thread}`.
+Two metres from the screen, with 30 or more files in the library and every
+channel filled. Scroll the library, click a channel's letter, assign and
+empty cells, use **Add file…** and **Copy to shared**. *Pass:* the
+page fits the panel with no scroll beyond the library list; the letters,
+status words and selected channel's transport read from there; the
+selected channel's rate, jog, position, loop, slot and fit are the
+panel's own widgets (right-click for Learn); scrolling a big library does
+not drop the frame rate. Say whether a transport only for the selected
+channel, rather than in each of the eight columns, is acceptable.
+**Add file…** opens the macOS file dialog and the file appears under This
+Mac; **Copy to shared** says where it landed. *Fail:* a stutter while
+scrolling (`ui_media` clipper, `UiTextures`).
+
+**304. Syphon in.** (laptop, a Syphon app)
+Headless: `tests/test_media_live.py::test_syphon_loopback`, `tests/test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass`.
+Run any Syphon server (Syphon Simple Server, Resolume's, a TouchDesigner
+Syphon Spout Out TOP) with a recognisable
+picture; with `kind = "syphon"` in `[[devices]]`, open the MEDIA page's
+Live tab, put `syphon:<app>/<server>` on a channel, then on the backdrop.
+*Pass:* the server appears in under 3 s; the picture is upright, the right
+way round and not scaled wrongly; quitting the server shows `lost` and,
+after a second, black; restarting it brings it back with no relaunch; the
+frame rate stays near 60. *Fail:* upside-down (`u_bmp_flip`,
+`media_tex`), a black picture (the rectangle blit, `MediaTextures.error`).
+
+**305. NDI in from Resolume.** (laptop, Resolume, same router)
+Headless: `tests/test_media_live.py::test_ndi_loopback`.
+In Resolume, turn on NDI output (Output ▸ NDI). With `kind = "ndi"` in
+`[[devices]]`, find `ndi:<Resolume sender>` on the Live tab and put it on a
+backdrop. *Pass:* it appears within a few seconds, runs at the source's
+rate with latency you cannot see in a beat, and survives Resolume quitting
+(held 1 s, then black and `lost`) and coming back. *Fail:* nothing found
+(the router blocking mDNS; try `extra_ips`, check 307), tearing or lag
+(`media.ndi`).
+
+**306. NDI in from TouchDesigner on a second Mac.** (two Macs)
+Headless: as 305.
+On Mac 2 run TouchDesigner with an NDI Out TOP; on Mac 1 use the build
+with `ndi` on. *Pass:* as 305 over the wire; say the bandwidth and the
+latency you see on your network. Note the sender's name as listed
+(`ndi:HOST (stream)` appears only when two hosts send one name). *Fail:*
+as 305.
+
+**307. `extra_ips`.** (two networks)
+Headless: `tests/test_media_live.py::test_extra_ips_go_in_the_apps_ndi_config_before_cyndilib`.
+Where mDNS is blocked (a different subnet, or turn it off on the router),
+add `extra_ips = ["<the sender's address>"]` to the `ndi` entry, relaunch
+and look at the SYSTEM line. *Pass:* the sender is found by address; the
+status reads `extra_ips via NDI config (unverified)`. This is the one that
+rests on the SDK's documentation alone: write down whether it worked. If
+not, `<home>/ndi/ndi-config.v1.json` and `NDI_CONFIG_DIR` are what to
+check. *Fail:* nothing found with the entry set (`media.ndi`).
+
+**308. Syphon out into Resolume.** (laptop, Resolume)
+Headless: `tests/test_media_publish.py::{test_syphon_out_loopback,test_each_published_output_hands_its_picture_to_its_publishers}`.
+Add `syphon = "hs"` to `[output]`; relaunch; in Resolume add a Syphon
+source and pick "hs". *Pass:* our picture arrives upright at the render
+cap's size (not 4K on a retina window), SYSTEM shows `syphon out hs — 60
+fps, readback 0.0 ms`, and the frame rate holds. *Fail:* upside-down or a
+black frame (`SyphonOut`), a dropped frame rate.
+
+**309. NDI out into Resolume and TouchDesigner.** (laptop, both)
+Headless: `tests/test_media_publish.py::{test_ndi_out_loopback,test_ndi_out_never_blocks}`.
+Add `ndi = "hs"` to `[output]` and relaunch; receive it in Resolume (NDI
+source) and in TouchDesigner (NDI In TOP) on a second Mac. *Pass:* the
+picture arrives the right way up, colours within NDI's compression, and the
+SYSTEM line reads about 60 fps and readback around 4 ms; the frame time
+rises by that ~4 ms only. Quitting the receiver does not hitch the
+app; a quit takes about two seconds. *Fail:* a stall when the receiver
+connects or disconnects (`media.publish.NdiOut`), a picture flipped.
+
+**310. A publish-only output; a window resized.** (projector or a second screen)
+Headless: `tests/test_media_publish.py::{test_publish_only_output_has_no_window,test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap}`.
+Make output 2 `window = false` with `syphon` and `ndi` set (the rig can send
+a picture it does not show); then give output 1 an `ndi` name and drag
+the render window to another screen and resize it; try `window = false`
+on output 1. *Pass:* output 2 opens no window and sends at `[output]
+render`; output 1 keeps publishing at the capped size through the resize
+and a retina/non-retina move (this is the one T9 could not see); `window =
+false` on output 1 is a note and a window. *Fail:* the sent size follows
+the window up to 4K, or a black send after a resize (`render._published`).
+
+**311. A webcam; the dependencies.** (laptop)
+Headless: `tests/test_media_live.py::{test_a_refused_camera_says_where_to_allow_it,test_cameras_are_listed_by_name,test_missing_library_is_an_error_status}`.
+On a Mac that has not had the camera allowed to this terminal, `uv sync`,
+add `kind = "camera"`, open the Live tab, put `camera:<FaceTime HD
+Camera>` on a channel. Then refuse the prompt and look at the status. *Pass:*
+macOS asks once; the picture runs at about 30 fps at 1280×720 (the
+author's one run, from a script, read 30.5); a refusal reads `error: camera
+permission (System Settings ▸ Privacy & Security ▸ Camera)`; `uv sync` pulls
+the four new libraries and `uv run hyperspace` starts with no import
+error. *Fail:* a stalled picture (`camera.CameraReader`).
+
+**312. The phone, through an NDI camera app.** (a phone, same Wi-Fi)
+Headless: none (the V1 phone is an `ndi:` source).
+Install an NDI camera app on the phone (NDI HX Camera, say), start its
+sender, find `ndi:<phone name>` on the Live tab and put it on a backdrop.
+*Pass:* it appears and runs; say the delay and the quality, and whether
+it survives the phone sleeping. This is the V1 phone (row 333); the QR
+page is V2. *Fail:* not found (the router, same network).
+
+**313. A feed vanishes and comes back.** (laptop, any live source)
+Headless: `tests/test_media_live.py::{test_live_holds_then_black,test_sender_returns,test_a_held_feed_that_vanishes_is_kept_and_found_again,test_a_channel_follows_its_device_remade_by_a_config_edit}`.
+With a Syphon or NDI feed on the backdrop, quit the sender, wait, restart
+it; then edit `config.toml` (change the `ndi` entry's `extra_ips`) while
+it runs. *Pass:* the last frame holds about a second, then black, status
+`lost`; the feed returns by itself; the config edit does not drop the
+channel for longer than the device's remake. *Fail:* it needs a slot
+switch to come back (`channels._stale`).
+
+**314. An old bitmap preset; knob 7.** (laptop, the copy; APC40 for the knob)
+Headless: `tests/test_media_preset.py::{test_bmp_file_dropped_with_note,test_bmp_alpha_is_an_alias_of_media_alpha}`.
+Copy in a preset saved by the previous build with a bitmap on the faces
+(a `view.bmp_file` value) and load it; turn the APC40's knob 7 on the
+default desk with the faces on a media channel. *Pass:* the load note says
+`bitmap file <path> is no longer read: put it on a media channel` and
+the faces are plain; put the picture on a channel and set **Faces**, and
+knob 7 moves its opacity as it did the bitmap's (the preset's old alpha
+landed on `view.media_alpha`). *Fail:* a crash on load, or knob 7 dead
+(`params`' alias rule).
+
+**315. A frozen Syphon channel.** (laptop, a Syphon app with moving
+picture)
+Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`,
+`::test_a_frozen_live_channel_says_frozen` and
+`tests/test_media_render.py::test_a_frozen_rectangle_frame_is_never_copied_again`
+(no real Syphon surface).
+Put a moving Syphon server on a channel (backdrop), set `rate` to 0, then
+watch for five seconds. *Pass:* the picture stops and the MEDIA page says
+`frozen`. The held frame names Syphon's own texture, but the channel's
+copy of it is made only when the frame moves, so it should hold. The one
+expected exception: save a renderer file (a hot reload) while frozen — the
+copy is made again from the held name, so the picture may jump to the
+live one or to garbage; write down which. An NDI feed at rate 0 should
+freeze exactly (`channels._freeze`, `syphon.SyphonSource.gl_poll`).
+
+**316. A camera without a 1280×720 mode.** (a capture card or Continuity
+Camera)
+Headless: `tests/test_media_live.py::test_a_camera_without_720p_opens_in_a_mode_it_has`
+and `::test_a_camera_with_no_mode_says_what_was_tried` (a fake `av`).
+Put such a device on a channel. *Pass:* it opens (in 1920×1080, 640×480
+or the device's default; `camera.MODES`). *Fail:* `error: …` — write down
+the wording; a device that takes no mode says `error: no supported mode
+(tried …)`.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -3972,3 +4232,18 @@ Only a person can settle these:
   once, by hand: register row 277);
 - the frame rate of thousands of copies on the Mac's GPU (277): the tests
   draw on Mesa's software rasteriser.
+- NDI and Syphon with a real Resolume or TouchDesigner, in and out, and NDI
+  over a network from a second Mac (304–309): the tests run our sender into
+  our receiver in one process; `extra_ips` through the app's own NDI config
+  file is unverified (307);
+- an NDI camera app on a real phone (312), a webcam through the macOS
+  permission prompt on a second Mac (311), and a published window after a
+  resize or a DPI change (310);
+- the look of a backdrop under the scene with the look-back and cut-through
+  (296), and `displace` and `blend` at distance (297): the goldens were
+  checked by eye on one still;
+- scrub and the cue knob's jog as a performer feels them (298, 299), and
+  a Drive placeholder going `fetching` then `ready` (300);
+- the MEDIA page at arm's length with a big library (303), and the frame
+  cost of three playing clips, eight channels and NDI out's ~4 ms (298,
+  303, 309): the smoke runs were on the dev machine only.
