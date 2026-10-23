@@ -748,7 +748,7 @@ kept for V2.
   (`media.*`, `backdrop.*`, `view.media*`) are values as ever.
 - Saved as `hyperspace.preset/4` only when it has a `media` section, a
   `media.*` / `backdrop.*` / `view.media` value away from its default,
-  or a route, modifier, macro or graph wire that names a media-family
+  or a route, desk row, modifier, macro or graph wire that names a media-family
   id or a channel node (`media.a` …) — an LFO on `media.a.pos`, a macro
   on `backdrop.alpha`, a wire `media.a → acid.aux`: an older build
   would drop that row silently (`preset.is_media_id`, one rule for the
@@ -892,7 +892,7 @@ instruction to execute.
      built, plus `pyobjc-framework-avfoundation` (macOS) for the
      camera list.
 337. **Conditional preset `/4`**, after plan 31's `/3`. (rec) — built;
-     both Macs must run this build. A route, modifier, macro or graph
+     both Macs must run this build. A route, desk row, modifier, macro or graph
      wire naming a media id or channel node counts, as a value does.
 338. **Base `plan-28-30-integration`**, taking it in as it moves. (rec) —
      @ 1a5cc2e; nothing was taken in.

@@ -131,6 +131,8 @@ def test_uses_media_counts_names_in_rows():
                                           "op": "push", "value": 0.2}]})
     assert preset.uses_media({"routes": [{"source": "param:backdrop.alpha",
                                           "target": "bridge:3", "op": "send"}]})
+    assert preset.uses_media({"desk": [{"source": "cc:0:48", "target": "media.c.jog"}]})
+    assert not preset.uses_media({"desk": [{"source": "cc:*:21", "dark": True}]})
     assert preset.uses_media({"macros": {"macro.1": {"subs": [{"base": "backdrop.alpha",
                                                                "from": 0, "to": 1}]}}})
     assert preset.uses_media({"macros": {"macro.2": {"subs": [
@@ -163,6 +165,12 @@ def test_preset_whose_only_media_is_a_route_or_macro_is_v4(rig):
         {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
     assert rig.presets.load("MACROALPHA") == []
     assert rig.presets.document("MACROALPHA")["schema"] == preset.MEDIA_SCHEMA
+    put(rig.home, "DESKALPHA", desk=[{"source": "cc:0:48", "target": "backdrop.alpha",
+                                      "op": "set"}])
+    assert rig.presets.load("DESKALPHA") == []
+    doc = rig.presets.document("DESKALPHA")
+    assert doc["schema"] == preset.MEDIA_SCHEMA
+    assert any(r.get("target") == "backdrop.alpha" for r in doc["desk"])
     put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
                                     "op": "push", "value": 0.1}])
     assert rig.presets.load("PLAIN") == []

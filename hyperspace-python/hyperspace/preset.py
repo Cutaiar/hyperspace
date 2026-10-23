@@ -190,12 +190,12 @@ def is_media_id(pid: Any) -> bool:
 
 
 def _named_ids(doc: dict):
-    """Every id a preset document's rows name — each route's source and
-    target, each modifier's inputs, each macro subscriber's base or depth
+    """Every id a preset document's rows name — each route's and desk
+    row's source and target, each modifier's inputs, each macro subscriber's base or depth
     ends, each graph wire's ends. A malformed section names nothing."""
     def items(v, kind):
         return v if isinstance(v, kind) else kind()
-    for row in items(doc.get("routes"), list):
+    for row in [*items(doc.get("routes"), list), *items(doc.get("desk"), list)]:
         if isinstance(row, dict):
             yield row.get("source")
             yield row.get("target")
@@ -221,7 +221,7 @@ def uses_media(doc: dict) -> bool:
     """Whether a preset document uses the media channels: its ``media``
     section names any id, a ``media.*`` / ``backdrop.*`` / ``view.media*``
     value is away from its default (an id this build does not know counts
-    as away), or a route, modifier, macro or graph wire names a
+    as away), or a route, desk row, modifier, macro or graph wire names a
     media-family id or a channel node (`is_media_id`) — a row an older
     build would drop. Such a preset is written as ``/4``."""
     bins, _ = media_channels.read_bins(doc.get(MEDIA_KEY))
