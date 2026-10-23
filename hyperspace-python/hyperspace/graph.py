@@ -2052,10 +2052,24 @@ class History(Node):
     a copy of the input when the look-back is off. `run` moves the
     echoes' clock and pulls a finished dream once a frame; the picture
     is painted into each consumer's framebuffer (the chain's input, or
-    the output itself with no effect on)."""
+    the output itself with no effect on).
+
+    Plan 32 (final review B-I1): `occluder`, whose brightness holds the
+    wake back — the scene alone when the history's picture is the scene
+    over a backdrop, so the echoes and the dream show over the backdrop
+    rather than under its brightness. The port is there only when given,
+    so a history without a backdrop is the one it always was, port for
+    port."""
 
     KIND = "history"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "cover": MASK}
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
+        if inputs.get("occluder") is not None:
+            self.INPUTS = {**type(self).INPUTS, "occluder": IMAGE}
+        else:
+            inputs.pop("occluder", None)
+        super().__init__(name, after, **inputs)
     OUTPUT = IMAGE
 
     def run(self, frame: Frame) -> None:
@@ -2066,8 +2080,10 @@ class History(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"].image(frame)
         cover = self.inputs["cover"].image(frame) if self.inputs["cover"] is not None else None
+        occ = self.inputs.get("occluder")
+        occ = occ.image(frame) if occ is not None else None
         with frame.timed(self.name):
-            frame.r.lookback.composite(src, dst, cover)
+            frame.r.lookback.composite(src, dst, cover, occ)
 
 
 class Capture(Node):
@@ -3047,7 +3063,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         first = inside[0]
         scene_readout = (layer if layer is not None and from_layer == first else
                          g.add(Readout(readout_name(first.n), geometry=geo[first.n])))
-    history = g.add(History("history", image=grounded or scene, cover=cover))
+    # B-I1: over a backdrop the scene alone holds the wake back
+    history = g.add(History("history", image=grounded or scene, cover=cover,
+                            occluder=scene if grounded is not None else None))
     depth = scene if depth_aware else None
     ends: dict[int, Fx] = {}
     # every pipeline end runs after the hands' layer: whether a hand shows

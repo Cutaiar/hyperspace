@@ -574,3 +574,37 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
     assert red(pic) > 0.5, red(pic)
     (shaped,) = _draw(ctx, r, _shape(backdrop=1), frames=2)
     assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
+
+
+# ---------------------------------------------------------------- the echoes over a backdrop
+
+def _trails(ctx, r, s_on, s_off):
+    """`s_on` (the shape) drawn four frames with the echoes on, then a
+    frame of `s_off` (nothing of it drawn): what is left is the echoes."""
+    st = r.lookback.state
+    st.on, st.echoes, st.gap, st.echo_mix, st.fade = True, 4, 0.0, 1.0, 10.0
+    size = (96, 64)
+    v = View(Switches(), size, target=_fbo(ctx, *size))
+    for k in range(4):
+        r.draw_outputs(s_on, *size, 1.0, [v], t_now=2.0 + k / 60)
+    r.draw_outputs(s_off, *size, 1.0, [v], t_now=2.0 + 4 / 60)
+    assert ctx.error == "GL_NO_ERROR"
+    return _px(v.target)
+
+
+@pytest.mark.parametrize("history", [False, True])
+def test_the_echoes_show_over_a_bright_backdrop(ctx, history):
+    """Final review B-I1: the echoes and the dream are drawn over the
+    backdrop. The wake is occluded by the scene alone — never by the
+    backdrop's brightness, which (a blue still at 200) would cover every
+    trail. With `backdrop.history` on or off."""
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200)))))
+    pic = _trails(ctx, r, _shape(backdrop=1, backdrop_history=history),
+                  _empty(backdrop=1, backdrop_history=history))
+    assert (pic[..., 2] >= 199).all()                        # the backdrop everywhere
+    trail = (pic[..., :2] > 8).any(axis=-1).sum()
+    assert trail > 20, trail                                 # and the echoes over it
+    # the same trails as with no backdrop at all: where they are, not hidden
+    bare = _trails(ctx, _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200))))),
+                   _shape(), _empty())
+    assert abs(int((bare[..., :2] > 8).any(axis=-1).sum()) - int(trail)) <= trail // 4
