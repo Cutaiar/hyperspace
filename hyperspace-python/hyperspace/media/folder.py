@@ -80,41 +80,48 @@ class MediaFolder:
         self._lock = threading.Lock()
         self._scan_lock = threading.Lock()
         self._scan_job: Future | None = None
+        self._inflight: set[Path] = set()
+        self._thumbs: dict[str, Path] = {}    # key -> made thumbnail, filled by scan / thumb jobs
         self._thumb_jobs: dict[str, Future] = {}
         self._thumb_bad: set[str] = set()
-        self.copy_jobs: dict[str, Future] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
     # -- the Resolver ------------------------------------------------------
+    # Nothing here touches the disk: these are called from the frame / UI
+    # thread, so they answer from the last scan. An id the scan has not seen
+    # is None / `missing` until the next one.
     def path(self, sid: str) -> Path | None:
         e = self._info.get(sid)
-        if e is not None:
+        if e is not None and e.status != MISSING:
             return e.path
-        try:
-            p = self._locate(sid)
-        except ValueError:
-            return None
-        return p if p is not None and p.is_file() else None
+        if sid.startswith("file:") and sid not in self._files:
+            self.add_file(sid[5:])   # a preset named it: put it on the books
+        return None
 
     def live(self, sid: str):
         return None   # live feeds come from the app's resolver (plan 32 T8)
 
-    def _locate(self, sid: str) -> Path | None:
-        k = ids.parse(sid)
-        if k.kind == "file":
-            return Path(k.ref)
-        root = self.shared if k.kind == "shared" else self.local if k.kind == "local" else None
-        if root is None or ".." in Path(k.ref).parts or Path(k.ref).is_absolute():
-            return None
-        return root / k.ref
-
     # -- scanning ----------------------------------------------------------
     def add_file(self, path) -> str:
-        """Put an absolute path on the books (checked by each scan, not listed)."""
-        sid = f"file:{Path(path).expanduser().resolve()}"
-        self._files[sid] = Path(sid[5:])
+        """Put an absolute path on the books: listed (group `added`) and
+        checked by every scan. Records the id and queues a scan on the pool;
+        no disk access here."""
+        p = os.path.abspath(os.path.expanduser(str(path)))
+        sid = f"file:{p}"
+        self._files[sid] = Path(p)
+        self._kick()
         return sid
+
+    def _kick(self) -> None:
+        """Queue a scan now unless one is already queued or running."""
+        with self._lock:
+            job = self._scan_job
+            if job is None or job.done():
+                try:
+                    self._scan_job = pool.submit(self._safe_scan)
+                except RuntimeError:
+                    pass
 
     def _walk(self, root: Path):
         """Yield (relative dir with trailing slash, real name, path on disk,
@@ -139,6 +146,26 @@ class MediaFolder:
                 except OSError:
                     continue
 
+    def _read(self, path: Path, out: list) -> None:
+        try:
+            out.append(_probe(path))
+        except OSError as e:
+            out.append(e)
+        finally:
+            with self._lock:
+                self._inflight.discard(path)
+
+    def _start_read(self, path: Path, out: list) -> bool:
+        """Start a probe read for `path` on its own thread, unless one is
+        already in flight (a blocked read must not pile up threads)."""
+        with self._lock:
+            if path in self._inflight:
+                return False
+            self._inflight.add(path)
+        threading.Thread(target=self._read, args=(path, out), name="media-folder-probe",
+                         daemon=True).start()
+        return True
+
     def _status_of(self, path: Path, st: os.stat_result | None, placeholder: bool) -> tuple[str, int, float]:
         if st is None:
             return MISSING, 0, 0.0
@@ -148,25 +175,26 @@ class MediaFolder:
         if self._probed.get(key) == READY:
             return READY, st.st_size, st.st_mtime
         if dataless:
-            pool.submit(self._wake, path)   # reading it asks the cloud client to download it
+            self._start_read(path, [])   # reading it asks the cloud client to download it
             return FETCHING, st.st_size, st.st_mtime
         if st.st_size == 0:
             return error("empty file"), 0, st.st_mtime
-        try:
-            slow = _probe(path) > SLOW_READ
-        except OSError as e:
-            return error(e.strerror or "unreadable"), st.st_size, st.st_mtime
-        if slow:
+        out: list = []
+        if not self._start_read(path, out):
+            return FETCHING, st.st_size, st.st_mtime      # a read is still stuck on it
+        # the read has its own thread; wait a little for it, never longer
+        end = time.monotonic() + SLOW_READ
+        while not out and time.monotonic() < end:
+            time.sleep(0.005)
+        if not out:
+            return FETCHING, st.st_size, st.st_mtime
+        got = out[0]
+        if isinstance(got, OSError):
+            return error(got.strerror or "unreadable"), st.st_size, st.st_mtime
+        if got > SLOW_READ:
             return FETCHING, st.st_size, st.st_mtime
         self._probed[key] = READY
         return READY, st.st_size, st.st_mtime
-
-    @staticmethod
-    def _wake(path: Path) -> None:
-        try:
-            _probe(path)
-        except OSError:
-            pass
 
     def scan(self, all: bool = False) -> list[Entry]:
         """Walk both folders. Updates `entries`, `changed` and the status
@@ -194,6 +222,7 @@ class MediaFolder:
             found.sort(key=lambda e: e.sid)
             listed = tuple(e for e in found if e.kind != "other")
             info = {e.sid: e for e in listed}
+            added: list[Entry] = []
             for sid, p in list(self._files.items()):
                 try:
                     st = os.stat(p)
@@ -204,7 +233,15 @@ class MediaFolder:
                     status, size, mt = error("unsupported"), st.st_size, st.st_mtime
                 else:
                     status, size, mt = self._status_of(p, st, False)
-                info[sid] = Entry(sid, p, kind, size, mt, "", status)
+                added.append(Entry(sid, p, kind, size, mt, "added", status))
+                info[sid] = added[-1]
+            listed = tuple(sorted(listed + tuple(e for e in added if e.kind != "other"),
+                                  key=lambda e: e.sid))
+            for e in listed:
+                if e.status == READY:
+                    out = self._thumb_path(e)
+                    if out.exists():
+                        self._thumbs[out.stem] = out
             def sig(d):
                 return {s: (e.size, e.mtime, e.status) for s, e in d.items()}
             if sig(info) != sig(self._info):
@@ -253,53 +290,57 @@ class MediaFolder:
             t.join()
 
     # -- thumbnails and copies --------------------------------------------
+    def _thumb_path(self, e: Entry) -> Path:
+        key = hashlib.sha1(f"{e.sid}|{e.mtime}|{e.size}".encode()).hexdigest()[:20]
+        return self.thumb_dir / f"{key}.png"
+
     def thumb(self, sid: str) -> Path | None:
         """The thumbnail if it is made; otherwise queue it and return None.
         The name carries the file's mtime and size, so a changed file gets a
-        new thumbnail."""
+        new thumbnail. Answers from a cache; no disk access."""
         e = self._info.get(sid)
         if e is None or e.status != READY:
             return None
-        key = hashlib.sha1(f"{sid}|{e.mtime}|{e.size}".encode()).hexdigest()[:20]
-        out = self.thumb_dir / f"{key}.png"
-        if out.exists():
-            return out
+        out = self._thumb_path(e)
+        got = self._thumbs.get(out.stem)
+        if got is not None:
+            return got
         with self._lock:
-            job = self._thumb_jobs.get(key)
-            if key not in self._thumb_bad and (job is None or job.done()):
-                self._thumb_jobs[key] = pool.submit(self._make_thumb, e.path, out, key)
+            job = self._thumb_jobs.get(out.stem)
+            if out.stem not in self._thumb_bad and (job is None or job.done()):
+                self._thumb_jobs[out.stem] = pool.submit(self._make_thumb, e.path, out)
         return None
 
-    def _make_thumb(self, path: Path, out: Path, key: str) -> None:
+    def _make_thumb(self, path: Path, out: Path) -> None:
         try:
-            thumbs.make(path, out)
+            if not out.exists():
+                thumbs.make(path, out)
+            self._thumbs[out.stem] = out
         except Exception:  # noqa: BLE001 — a bad file just gets no thumbnail
-            self._thumb_bad.add(key)
+            self._thumb_bad.add(out.stem)
 
-    def copy_to_shared(self, sid: str) -> str:
-        """Copy a file into the shared folder on the pool and return the new
-        `shared:` id at once; the entry appears in a scan after the job
-        (kept in `copy_jobs[new_id]`) finishes. The copy lands under a
-        `.part` name and is renamed, so a scan never lists half a file. A
-        name clash gets a ` (n)` suffix."""
+    def copy_to_shared(self, sid: str) -> Future:
+        """Copy a file into the shared folder on the pool; the Future's
+        result is the new `shared:` id. Every disk step (name choice, mkdir,
+        copy) is in the job. The copy lands under a `.part` name and is
+        renamed, so a scan never lists half a file. A name clash gets a
+        ` (n)` suffix."""
         if self.shared is None:
             raise ValueError("no shared folder: set [library] path")
         src = self.path(sid)
         if src is None:
             raise FileNotFoundError(sid)
+        return pool.submit(self._copy, src)
+
+    def _copy(self, src: Path) -> str:
         self.shared.mkdir(parents=True, exist_ok=True)
         stem, ext = os.path.splitext(src.name)
-        dest, n = self.shared / src.name, 1
         with self._lock:
-            while dest.exists() or f"shared:{dest.name}" in self.copy_jobs:
+            dest, n = self.shared / src.name, 1
+            while dest.exists():
                 dest = self.shared / f"{stem} ({n}){ext}"
                 n += 1
-            new = f"shared:{dest.name}"
-            self.copy_jobs[new] = pool.submit(self._copy, src, dest)
-        return new
-
-    @staticmethod
-    def _copy(src: Path, dest: Path) -> None:
-        tmp = dest.with_name(dest.name + ".part")
-        shutil.copyfile(src, tmp)
-        os.replace(tmp, dest)
+            tmp = dest.with_name(dest.name + ".part")
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dest)
+        return f"shared:{dest.name}"

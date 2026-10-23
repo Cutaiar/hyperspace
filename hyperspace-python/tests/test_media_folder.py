@@ -148,14 +148,14 @@ def test_add_file_and_copy_to_shared(mk, tmp_path):
     assert sid == f"file:{src.resolve()}"
     f.scan()
     assert f.status(sid) == "ready" and f.path(sid) == src.resolve()
-    new = f.copy_to_shared(sid)
+    new = f.copy_to_shared(sid).result(5)
     assert new == "shared:pic.png"
-    f.copy_jobs[new].result(5)
     assert (f.shared / "pic.png").is_file()
     assert not list(f.shared.glob("*.part"))
     f.scan()
     assert f.status(new) == "ready"
-    assert f.copy_to_shared(sid) == "shared:pic (1).png"
+    assert f.copy_to_shared(sid).result(5) == "shared:pic (1).png"
+    assert {e.sid: e.group for e in f.entries}[sid] == "added"
 
 
 def test_no_library_means_no_shared(mk):
@@ -176,3 +176,107 @@ def test_stop_joins_the_timer_promptly(mk):
     assert time.monotonic() - t < 1.0
     assert not any(th.name == "media-folder-watch" for th in threading.enumerate())
     pool.shutdown()
+
+
+def test_blocked_read_does_not_stall_the_scan(mk, monkeypatch):
+    f = mk()
+    png(f.local / "a.png")
+    png(f.local / "b.png")
+    gate, calls = threading.Event(), []
+
+    def stuck(p):
+        calls.append(p)
+        if p.name == "a.png":
+            gate.wait(10)
+        return 0.0
+    monkeypatch.setattr(mf, "_probe", stuck)
+    t = time.monotonic()
+    f.scan()
+    assert time.monotonic() - t < 1.0
+    assert f.status("local:a.png") == "fetching" and f.status("local:b.png") == "ready"
+    n = len([c for c in calls if c.name == "a.png"])
+    f.scan()
+    assert len([c for c in calls if c.name == "a.png"]) == n   # no second probe
+    assert f.status("local:a.png") == "fetching"
+    gate.set()
+    assert wait_for(lambda: (f.scan(), f.status("local:a.png"))[1] == "ready")
+
+
+def test_dataless_file_wakes_once(mk, monkeypatch):
+    f = mk()
+    (f.local / "a.mp4").write_bytes(b"")
+    gate, calls = threading.Event(), []
+    monkeypatch.setattr(mf, "_probe", lambda p: (calls.append(p), gate.wait(10), 0.0)[2])
+    real = os.stat
+
+    class St:
+        def __init__(self, st):
+            self._st = st
+            self.st_flags = mf.SF_DATALESS
+
+        def __getattr__(self, k):
+            return getattr(self._st, k)
+    monkeypatch.setattr(mf.os, "stat", lambda p, *a, **k: St(real(p, *a, **k)))
+    for _ in range(4):
+        f.scan()
+    assert wait_for(lambda: len(calls) >= 1)
+    assert len(calls) == 1
+    gate.set()
+
+
+def test_added_file_is_listed_and_goes_missing(mk, tmp_path):
+    f = mk()
+    src = png(tmp_path / "away" / "p.png")
+    sid = f.add_file(src)
+    f.scan()
+    e = [e for e in f.entries if e.sid == sid][0]
+    assert e.group == "added" and e.status == "ready"
+    src.unlink()
+    f.scan()
+    assert f.status(sid) == "missing" and f.path(sid) is None
+
+
+def test_replaced_file_gets_a_new_mtime(mk):
+    f = mk()
+    p = png(f.local / "a.png")
+    f.scan()
+    m0 = f.entries[0].mtime
+    png(p, color=(0, 255, 0))
+    st = p.stat()
+    os.utime(p, (st.st_atime, st.st_mtime + 5))
+    f.scan()
+    assert f.entries[0].mtime != m0
+
+
+def test_unseen_id_makes_no_disk_access(mk, monkeypatch):
+    f = mk()
+    png(f.local / "a.png")
+
+    def boom(*a, **k):
+        raise AssertionError("disk touched")
+    monkeypatch.setattr(mf.Path, "is_file", boom)
+    monkeypatch.setattr(mf.Path, "exists", boom)
+    monkeypatch.setattr(mf.os, "stat", boom)
+    assert f.path("local:a.png") is None
+    assert f.status("local:a.png") == "missing"
+    assert f.thumb("local:a.png") is None
+
+
+def test_video_thumb(mk):
+    av = pytest.importorskip("av")
+    import numpy as np
+    f = mk()
+    p = f.local / "c.mp4"
+    with av.open(str(p), "w") as c:
+        s = c.add_stream("mpeg4", rate=10)
+        s.width, s.height, s.pix_fmt = 64, 48, "yuv420p"
+        for _ in range(3):
+            fr = av.VideoFrame.from_ndarray(np.full((48, 64, 3), 128, np.uint8), format="rgb24")
+            for pk in s.encode(fr):
+                c.mux(pk)
+        for pk in s.encode():
+            c.mux(pk)
+    f.scan()
+    assert f.status("local:c.mp4") == "ready"
+    f.thumb("local:c.mp4")
+    assert wait_for(lambda: f.thumb("local:c.mp4") is not None)
