@@ -209,6 +209,24 @@ replaces a row, rewrite that row instead of adding a new one.
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
 
+## Media
+
+| Decision | Where | Who |
+|---|---|---|
+| **Eight fixed channels, `a`–`h`**, each a bin of up to 16 source ids and a `media.<c>.slot` param; switching a source is a param, so Learn, the pad, the APC40, the sequencer, a macro and undo all do it. The bins are in the preset. | `media.channels`, `params.build_registry`, `preset` | rows 321–323 |
+| **A source id names a place**: `shared:<rel>` (`<library>/media/`), `local:<rel>` (`<home>/media/`), `file:<abs>`, `camera:<name>`, `syphon:<app>/<server>`, `ndi:<stream>`; `phone:` is reserved and never opened. A missing source is black and listed in the MEDIA page's banner; nothing about a missing file reaches the frame thread. | `media.ids`, `media.folder`, `ui_media` | row 324 |
+| **Nothing decodes, resizes, scans or blocks on the frame thread.** A pool (3 workers) for jobs that end; a thread of its own for each video, live feed, NDI out and proxy worker; a dropped source is closed on a closer thread; the frame thread steps transports and uploads textures. Frames are capped at 1920×1080 (files) and 1280×720 (live) on the decoding thread; a channel is uploaded only when a consumer reads it and its frame id moved. | `media.pool`, `media.channels.Closer`, `media_tex.MediaTextures` | rows 328, 329 |
+| **A live source is a device-registry kind that discovers feeds** (`ndi`, `syphon`, `camera`). A feed that stops holds its last frame 1.0 s, then reads black with the status `lost`, and comes back by itself. NDI is received by the frame-sync path on the source's own thread, never `receive(timeout)` (it holds the GIL). | `media.live`, `devices.kinds` | row 325 |
+| **The transport**: `rate` −4…+4 × native speed, `pos` a latch (moving scrubs, resting plays on), `jog` a push whose coast springs back to `rate`, `loop` / `pingpong` / `once`; rate 0 freezes a live feed. The playhead is a readout, never a param. | `media.transport`, `ui_media` | row 326 |
+| **Scrub proxies**: a clip of ≤ 600 s gets an MJPEG proxy (≤ 1280×720) in `<home>/media-cache/proxies/`, on a cancellable worker of its own, never in the shared folder. | `media.proxy` | row 327 |
+| **The backdrop is under the scene, before the history and the effects**; `backdrop.history` (off by default) says whether the look-back captures the composite. A stopgap: plan 33 settles the compositing order. | `graph.default_graph`, `backdrop.*` | row 330 |
+| **The faces read a channel** (`view.media`, with `view.media_alpha / scale / mode / amp / rate`); `view.bmp_*` are gone and an old preset's `view.bmp_file` is dropped with a note. `view.bmp_alpha` is a hidden alias of `view.media_alpha`, kept for the APC40's factory knob 7. | `render._face_media`, `params`, `preset` | rows 331, 339 |
+| **Every effect has an optional `aux` image input**; unwired it reads transparent black; any image node may feed it. `displace` and `blend` use it. | `graph.Effect.INPUTS`, `fx.py`, `shaders/fx/_lib.glsl` | row 332 |
+| **An output can be published** over Syphon and/or NDI (`syphon`, `ndi`, `window = false` on `[output]` / `[[output.screens]]`). A window publishes at the render cap; output 1 always has a window. Publishers are SYSTEM lines, not registry sinks. | `media.publish`, `render._publish`, `config` | row 335 |
+| **The phone's own page is V2**; in V1 a phone is an `ndi:` source through an NDI camera app. | — | rows 333, 334 (owner) |
+| **A preset that uses media is `hyperspace.preset/4`**; any other is unchanged. Both Macs sharing a library must run this build. | `preset.uses_media` | row 337 |
+| **No desk or APC40 default bindings for media**; Learn reaches every channel param. | `apc40.py` untouched | row 339 |
+
 ## Effects and the look-back
 
 | Decision | Where | Who |

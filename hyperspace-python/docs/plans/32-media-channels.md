@@ -1,19 +1,407 @@
 # Plan 32 — media: sources, the media folder, eight channels, and what reads them
 
-**Status: designed, decisions answered (2026-10-22), being built.**
+**Status: built (2026-10-22)** on `plan-32-media` (base
+`plan-28-30-integration` @ 1a5cc2e; 3105 tests passed, 2 skipped).
 Designed with the owner in one session; rows 321–339 answered the same
-day (below). **The phone's own page (HTTPS, WebRTC) is V2**; in V1 a
-phone joins through an NDI camera app, as an `ndi:` source. **Resolume
-and TouchDesigner both ways** is in V1, *in* first: their finished
-picture, over the network (NDI) or on this Mac (Syphon), on a channel.
-The build plan is [`32-media-build.md`](32-media-build.md).
+day (below). **The phone's own page (HTTPS, WebRTC) is V2 and is not
+built**; in V1 a phone joins through an NDI camera app, as an `ndi:`
+source (`phone:` ids are parsed and never opened). **Resolume and
+TouchDesigner both ways** is in V1 and built: their finished picture over
+the network (NDI) or on this Mac (Syphon) on a channel, and any output
+published back out over Syphon and NDI. The build plan was
+[`32-media-build.md`](32-media-build.md).
 
-**Base: `plan-28-30-integration` @ 1a5cc2e** (row 338). `main` (fec80ee)
-has no `graph.py` and no `devices.py`: the render graph (plan 26), the
-device registry (plan 27) and the effect nodes (plan 30) this plan plugs
-into exist only on the #195 → #224 stack. Plan 31 (`plan-31-integration`)
-is independent of this one; the one place they meet is the preset
-schema number (row 337).
+Files, pictures and live feeds go onto **eight channels** (`a`–`h`), each a
+bin of up to 16 source ids and a `media.<c>.slot` param; a video has a
+transport (`rate`, `pos`, `jog`, `loop`). A channel is read by the
+**backdrop** under the scene, by the **faces** (`view.media`, replacing
+`view.bmp_*`), by an effect's new **`aux`** input (two effects use it,
+`displace` and `blend`) and by an output. Sources are a still (PIL, HEIC),
+a video (PyAV, with a scrub proxy), a camera, a Syphon server, an NDI
+sender; the media folder is the shared `<library>/media/` plus this Mac's
+`<home>/media/`, watched every 2 s. Nothing decodes, resizes, scans or
+blocks on the frame thread. A **MEDIA** page replaces the bitmap page and
+GRAPH has a media area. A preset that uses media is saved as
+`hyperspace.preset/4` (**both Macs must run this build** to load one);
+every other preset is the file it was, byte for byte except two effects'
+default lines (rough edge 1). 40 new goldens (the 596 before are
+unmoved: 636 in all). Four new dependencies (and one small one), each
+imported only when a source opens.
+
+Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group AA, checks
+296–314. **Numbering note:** plan 31 holds preset `/3`, register rows
+311–320 and hand checks 280–295 on its own branch
+(`plan-31-integration`); this branch has none of them, so rows 321–339
+and checks 296+ leave a gap here that closes when plan 31 lands. The
+preset schema is `/4` either way (row 337). Decisions: rows 321–339 of
+[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) and the "Media" section
+of [`DECISIONS.md`](../DECISIONS.md). M0's findings:
+[`assets/32-media/m0-findings.md`](assets/32-media/m0-findings.md).
+
+Commits on `plan-32-media`, by task: T0 = M0, the Syphon/NDI spike
+(ae64214); T1 = M1, the core and stills (997c736); T2 = the transport
+(f6aada8, 46b701c, 4c4b5e7); T3 = video and proxies (4fb8fa4, 356dd63);
+T4 = M3, the folder (b8964ee, 726de2c); T5 = M4, channels and the preset
+(303e9a0, 2d65f22); T8 = M6, live sources (00a3847, ade60b9); T6 = M5's
+render half (0e020b8, 603f76d, c0db276); T7 = faces, `aux`, `displace`,
+`blend` (c9d28c4); T9 = M8, publishing (eafcaa2, f173984); T10 = M9, the
+MEDIA page and GRAPH's media area (31730c6, 6125ab5); T11 = M10, this
+documentation. (T8 was built before T6, so the render side could sample a
+live frame.)
+
+## What was built
+
+### T0 — the spike (`assets/32-media/m0-findings.md`)
+
+Throwaway, on the dev MacBook (M3 Max). It fixed T8 and T9's approach:
+Syphon hands a texture across with no CPU copy both ways (publish
+0.32 ms at 1080p); `cyndilib`'s macOS wheel carries the NDI runtime
+(6.3.2.0), 1080p30 loopback received at 29.4 fps, about 15 ms old, about
+35 % of a core for both ends; `Receiver.receive(timeout)` holds the GIL
+for the whole timeout (so the build uses `rx.frame_sync.capture_video()`,
+non-blocking, on the source's own thread); `Finder()` takes no
+`extra_ips` (so the build writes NDI's own config file, below).
+
+### T1 — the core and stills (`hyperspace/media/`)
+
+- `frame.MediaFrame`: H×W×4 uint8, C-contiguous, read-only; `t`, `frame`
+  (id), `size`. **Ruling:** it has a GPU variant — `pixels` is None when
+  `texture` (a GL texture name in the renderer's share group), `tex_size`
+  and `tex_target` are set; a source may expose `gl_poll()`, called only
+  on the frame thread (Syphon's `textureName()` must run on the GL
+  thread).
+- `source.Source` protocol and `Latest` (a one-slot reference swap; drop,
+  never queue). `ids` parses `shared:`, `local:`, `file:`, `camera:`,
+  `syphon:`, `ndi:`; `phone:` is parsed and never opened. `pool`: one
+  `ThreadPoolExecutor` (3 workers, `media-pool*`) for jobs that end.
+  `adapters.open_source` imports each adapter inside the call; an
+  unparseable or unsupported id is a `MissingSource` with an `error:`
+  status, never an exception.
+- `still`: PIL plus `pillow-heif` (png, jpg, webp, bmp, tiff, heic),
+  decoded on the pool and capped to 1920×1080 (`CAP_FILE`); a huge image
+  reads None until it is ready, so the frame thread never waits.
+- `tests/test_app_boundary.py` now also asserts `import hyperspace.app`
+  pulls in none of `av`, `pillow_heif`, `syphon`, `cyndilib`,
+  `AVFoundation`.
+
+### T2 — the transport (`media/transport.py`)
+
+`Transport.step(dt, rate, pos, jog, loop)`. **Ruling:** the playhead speed
+is `rate + coast`; only the jog's contribution springs (`motion.spring`,
+2 Hz, critically damped, target 8 × jog), and a `rate` change acts at
+once. The pos latch: while `pos` moves the playhead is put there; when it
+rests the playhead runs on at `rate`. `loop`, `pingpong` (direction
+resets on leaving it) and `once` (clamps at the end, a new scrub moves
+it).
+
+### T3 — video (`media/video.py`, `media/proxy.py`)
+
+PyAV decoding on the source's own thread (`media-video-<name>`), driven by
+the transport, `close()` returning within one frame decode. A clip of
+≤ 600 s gets an MJPEG proxy (≤ 1280×720) in `<home>/media-cache/proxies/`
+made on a single cancellable worker of its own (`media-proxy`, not the
+pool: a transcode cannot be cancelled there); the original plays until it
+exists, forward only, scrubbing by keyframe. `proxy.cancel_all()` runs at
+app exit.
+
+### T4 — the media folder (`media/folder.py`, `media/thumbs.py`)
+
+`MediaFolder` scans `<library>/media/` and `<home>/media/` every 2 s on
+the pool: a dropped file is listed within one scan, a removed one goes
+`missing`, a cloud placeholder (dataless, or an iCloud `.icloud` file) is
+`fetching`, a slow or unreadable file is `error: …` or `fetching` and
+never stops the scan (each probe is a 64 KiB read on a daemon thread
+waited for 0.5 s). `file:` ids are listed as group `added`.
+`path`/`status`/`thumb`/`add_file` never touch the disk (an unseen id is
+`missing` and queues a scan). `copy_to_shared` returns a Future of the new
+`shared:` id (copied as `.part`, then renamed). Thumbnails: 160 px,
+`<home>/media-cache/thumbs/`, keyed by id + size + mtime.
+
+### T5 — channels, params, the preset (`media/channels.py`, `params.py`, `preset.py`)
+
+- `MediaState`: the eight `Channel`s, each a bin and a source opened when
+  the id at `round(slot)` changes; every 1 s a channel asks the resolver
+  again (a file that arrived opens, one that went turns black and reads
+  `missing`, a replaced one — a new mtime/size — reopens). **Ruling:** a
+  dropped source is closed on a thread of its own (`Closer`, one daemon
+  thread, `media-closer`), never on the frame thread — a video's close
+  joins a thread that can sit in `av.open` while a cloud file downloads;
+  `close()` shares one 1.5 s budget so app exit joins everything within
+  2 s.
+- Params: 48 `media.<c>.slot/fit/rate/pos/jog/loop`, `backdrop.channel /
+  alpha / history`, `view.media` and `view.media_alpha/scale/mode/amp/
+  rate`. `view.bmp_*` are gone. **Ruling:** the APC40's factory knob 7
+  row (`cc:0:54 → view.bmp_alpha`) is kept by registering `view.bmp_alpha`
+  as a hidden alias of `view.media_alpha` (`alias=True`: not saved, not
+  modulatable, not in a snapshot) — `apc40.py` and the factory files
+  untouched.
+- The `media` section and the conditional `/4` (row 337, below). A
+  non-empty `view.bmp_file` in an old preset is dropped with the note
+  `bitmap file <path> is no longer read: put it on a media channel`.
+  `Marks` carries the bins, so an undo of a load puts them back.
+- `app.py`: `MediaResolver` (folder paths, `live` ids, a change stamp, the
+  proxy cache), `MediaIO` polled right after the devices each frame and
+  closed first on both exits. `Host.adapters` is `(media, devices,
+  dream_io)`.
+
+### T8 — live sources (`media/live.py`, `ndi.py`, `syphon.py`, `camera.py`)
+
+- Each live kind is a device-registry kind (`ndi`, `syphon`, `camera`) on
+  `LiveKind(devices.Base)`; **Ruling:** its source map is
+  `media_sources() -> dict[str, LiveSource]` (`Base.feeds` is already the
+  tuple of fed Router schemes). `DeviceRegistry.media_feeds()` merges the
+  open devices' maps, the first device to find an id keeping it.
+  Discovery (`discover()`) runs on the pool every 2 s (Syphon on its own
+  thread: its directory scan spins a run loop).
+- `LiveSource` runs a reader on a thread of its own (`media-live-<id>`),
+  caps to 1280×720, holds the last frame 1.0 s and then reads None
+  (`lost`); a reader that raises is `error: …` and is opened again after
+  2 s; one object is shared by every channel holding it (holders are
+  counted; a feed nobody holds for 5 s is let go). A channel whose device
+  is remade by a `config.toml` edit follows it.
+- NDI in: `Finder` kept open with its change callback; frames by
+  `frame_sync.capture_video()` in `RGBX_RGBA`; ids `ndi:<stream>` from
+  `HOST (stream)` (`ndi:HOST (stream)` when two hosts send one name).
+  **Ruling:** `extra_ips` is written to an app-owned
+  `<home>/ndi/ndi-config.v1.json` with `NDI_CONFIG_DIR` set before
+  `cyndilib` is first imported; the status says `extra_ips via NDI config
+  (unverified)`.
+- Syphon in: ids `syphon:<app>/<server>`; `SyphonSource.gl_poll` makes the
+  client on the frame thread and returns the client's texture. Syphon
+  discovery needs the main thread's run loop pumped (`glfw.poll_events()`
+  every frame, which the app does); the scan thread only reads the list.
+- Camera: the AVFoundation device list by name, permission checked (`error:
+  camera permission (System Settings ▸ Privacy & Security ▸ Camera)`),
+  opened through PyAV's `avfoundation` input at 1280×720, 30 fps — run on
+  the real FaceTime camera: 30.5 fps. The device raises `BlockingIOError`
+  between frames, which kills PyAV's demux generator, so the reader makes
+  a new one each time.
+- The factory `config.toml` template lists all three kinds (commented
+  `[[devices]]` entries, `enabled = true`).
+
+### T6 — textures, the media node, the backdrop (`media_tex.py`, `graph.py`, `render.py`)
+
+- `MediaTextures`: one texture per channel, (re)allocated on a size change,
+  written and mip-mapped only when a consumer reads the channel and its
+  `(frame, t)` moved. **Ruling (corrected by the build):** Syphon client
+  textures are `GL_TEXTURE_RECTANGLE`, not 2D as T0's note assumed; a
+  rectangle frame (`MediaFrame.tex_target`) is blitted on the GPU into the
+  channel's own 2D texture (PyOpenGL, imported only for such a frame); a 2D
+  GPU frame is wrapped with `ctx.external_texture`.
+- `graph.MediaNode` (`media.<c>`, kind `media`, `OUTPUT = IMAGE`): the
+  channel fitted (`media.<c>.fit`) into one pool texture, once a frame
+  however many read it. `media.a`…`media.h` are wire ends.
+- The backdrop: with `backdrop.channel` set the scene clears to alpha 0
+  and `grounded = Composite(over=scene, under=media.<c>)` feeds the
+  history; the capture reads `grounded` when `backdrop.history` is on,
+  else the scene. The hands-only pipeline has none. An effect placed
+  `after scene` is retargeted to `grounded`, so it bends both. Without a
+  backdrop the graph is unchanged node for node. SYSTEM times `media.<c>`
+  and `grounded`.
+- Goldens: `backdrop-still` and `media-to-output-2`, 16 frames, from a
+  checked-in 256×144 still (`tests/golden/media/backdrop-still.png`);
+  `tools/golden_frames.py` runs a real `MediaState` over a `GoldenMedia`
+  resolver.
+
+### T7 — faces, `aux`, `displace`, `blend` (`render.py`, `fx.py`, `graph.py`, `shaders/fx/`)
+
+- The faces read the raw texture of the channel `view.media` names
+  (`_face_media`); `u_bmp_flip` draws a Syphon/GPU frame upright. Placement
+  (`media_scale`, `media_mode/amp/rate`) is the old bitmap's maths.
+- Every effect has an optional `aux` image port
+  (`Effect.INPUTS = {"image", "aux"}`); `_lib.glsl` declares `u_aux`,
+  `u_aux_on`, `u_aux_size`, `aux(uv)` and `aux_luma(uv)`; unwired, `aux()`
+  is transparent black. An `aux` wire is never a placement; one that
+  would make a loop, or whose source is missing, is dormant with the
+  reason in words. `Graph.pool` counts one more texture per wired aux.
+- `displace` (the picture moved by the aux's luma or its red/green; amount,
+  mode, angle) and `blend` (over / multiply / screen / difference / luma
+  key; key, soft; the mix fader is the amount). No factory preset turns
+  either on.
+- Goldens: `faces-media`, `blend-luma-key`, `displace-luma`, 24 frames, all
+  from `local:backdrop-still.png`. With T6's 16: 40 new goldens, 636 in
+  all; `tools/golden_frames.py` reports "all 636 frames match their
+  goldens" and the 596 before are byte-for-byte unmoved. The seven face
+  tests the T5 interim skipped run again.
+
+### T9 — publishing out (`media/publish.py`, `outputs.py`, `render.py`, `config.py`)
+
+- `[output]` and each `[[output.screens]]` entry take `syphon = "<name>"`,
+  `ndi = "<name>"` and `window = false` (publish-only). Output 1 always
+  opens a window (it holds the GL context and paces the loop): `window =
+  false` there is a note.
+- Syphon out: the server is made once with the render context current and
+  `publish_frame_texture(tex.glo)` runs on the frame thread, no readback
+  (0 ms in the smoke run). NDI out: two pixel-pack buffers in turn, the
+  buffer filled a frame ago copied to a staging array only when the sender
+  is idle (else the frame is dropped, never queued); the send runs on
+  `media-ndi-out-<name>`, unclocked (the render loop is the clock). Smoke
+  run of the real app, 180 frames, a publish-only output 2: `syphon out
+  hs-smoke — 60 fps, readback 0.0 ms`, `ndi out hs-smoke — 60 fps,
+  readback 4.1 ms`, closed in 0.002 s.
+- A window publishes at the render cap (a tap is resolved or presented
+  into an `Offscreen` at `capped(size, max_frame)`, so a retina window is
+  not a 4K stream); a publish-only output draws offscreen at the cap
+  (`full` = output 1's framebuffer size). A publisher that raises costs
+  nothing else: the error is its SYSTEM line (`stats["publish_errors"]`)
+  and its fps decays to 0 after a second without a send.
+- **Ruling:** publishers are SYSTEM lines (`<kind> out <name> — <fps> fps,
+  readback <ms> ms`), not device-registry sink entries as the design's
+  "O" had it. A registry sink with an empty `send()` adds nothing a
+  performer can use.
+
+### T10 — the MEDIA page and GRAPH's media area (`ui_media.py`, `graphview.py`)
+
+- `ui.PAGES`: the bitmap page becomes `media`. A banner while
+  `MediaState.missing()` is non-empty ("`<id>` — not on this Mac: shows
+  black", three lines, then "and n more"); the library (Shared / This Mac
+  / Live, thumbnails, status words, search, **Add file…**, **Copy to
+  shared**); the eight channels as columns (picture with a status outline,
+  a "B"/"F" tag for the backdrop's and faces' channel, playhead bar, the
+  bin as two columns of eight); the backdrop's and faces' pickers.
+  **Ruling:** the transport (rate, jog, position, loop, slot, fit) is
+  drawn full size for the selected channel (click a column's letter), not
+  in each of the eight ~45 px columns — the panel's rule is legibility at
+  a distance (PR #24). They are the panel's own widgets, so Learn, the
+  context menu and undo work. The page suggests Learning the cue knob to
+  `media.<c>.jog`; no binding is made (row 339).
+- Clicking a bin cell with a library pick assigns it; with none it cues
+  that slot (writes `media.<c>.slot`); right-click empties it. A bin edit
+  is an undo step (`undo.push(label, load=True)`).
+- The page never opens or reads a source: the live picture is the
+  renderer's (`renderer.media_watch`, drawn from `Renderer.media_shown`),
+  thumbnails are decoded once on the pool and uploaded in the renderer's
+  frame (`UiTextures`, LRU 256), and the library list draws only the rows
+  in view (an imgui clipper), so a big library costs what is visible.
+- GRAPH: a new MEDIA area between MODULATION and GEOMETRY: eight
+  `render:media.<c>` nodes (a channel with an empty bin and no cable sits
+  on the area's idle line, "8 empty channels"), the backdrop's node always
+  drawn, the `aux` ports from `Effect.INPUTS`. A channel that is both the
+  backdrop and a wire's start is one node with two cables.
+
+## What no person has verified
+
+Every test is headless. The hand checks (group AA) are for what only a
+person at the machine can judge:
+
+- **Resolume and TouchDesigner, both ways**, and **NDI over the
+  network from a second Mac**: the loopback tests run our sender into our
+  receiver in one process; no third-party app has seen a frame of ours or
+  sent one to us (checks 304–309);
+- **`extra_ips`** through the app's own NDI config file: loopback cannot
+  show it, nothing has tested a sender on another subnet, and the NDI
+  runtime reading a config file from `NDI_CONFIG_DIR` is the spike's
+  expectation from the SDK docs, not something seen (check 307);
+- **an NDI camera app on a phone** (the V1 phone), never tried with a real
+  phone (check 312);
+- **the look**: a backdrop under the scene with the look-back on and off,
+  cut-through with a backdrop (never eyeballed), the faces' picture
+  through the face patterns, `displace` and `blend` at distance — the
+  goldens were checked by eye on one still (checks 296, 297);
+- **the feel** of scrub, jog and the cue knob on the encoder (checks 298, 299);
+- **the cloud**: a Drive placeholder going `fetching` then `ready`, a file
+  dropped into the shared folder from the other Mac, the missing-local
+  banner on the other Mac (checks 300–302);
+- **a webcam and the macOS permission prompt** (the FaceTime camera ran
+  once, at 30.5 fps, from a script; check 311);
+- **frame cost**: three playing clips, eight channels, NDI out's ~4 ms of
+  frame time at 1080p, the MEDIA page open with a big library — measured
+  on the dev machine's smoke runs only, never in a show;
+- **a publish-only output on the rig**, and output 1's published picture
+  after a resize or DPI change (T9 could not check it; check 310);
+- **the MEDIA page at distance**: whether eight 45 px columns plus a
+  full-size transport for the selected channel reads from arm's length
+  (check 303).
+
+## Known rough edges
+
+Deferred by the reviews (each task's reviewer judged them minor):
+
+1. **Every saved preset gains `fx.displace.*` and `fx.blend.*` value lines.**
+   Adding two effect files adds their params to every file the writer
+   emits, so "byte-for-byte what the base writes" is true of everything
+   but those lines (a preset without media loads in this build exactly as
+   before; the base build loads such a file with a note per unknown id and
+   lands the rest, as plan 30's palette addition did). The test
+   `test_preset_without_media_is_unchanged` ignores those lines. A writer
+   that skipped an off effect's default values would remove the gap.
+2. **A still's late decode.** `still.close()` only cancels the future; a
+   decode already running still publishes after close (harmless: a closed
+   source is dropped and never read again). `open()` twice submits two
+   decodes. The decode is full-resolution RGBA before the cap (about
+   190 MB transient at 8000×6000; PIL's `draft()` would cut it).
+3. **`MediaFrame` freezes only a view** of a writable caller array; the
+   caller can still mutate it.
+4. **`media.pool` reloaded** orphans the live executor (threads idle,
+   harmless); `media` modules are first in hotreload's order.
+5. **Video:** the proxy retimes VFR clips and GIFs (pts = frame number); a
+   failed proxy retries at every open; a mid-stream decode error ends the
+   thread for good; `VIDEO_EXT` is duplicated in `adapters.py`;
+   `cancel_all` leaves queued-job flags (matters only if the app ran on);
+   one `container.seek` is not interruptible; the backward-seek tolerance
+   is loose. `once` clamps at the end and never re-arms (a new scrub moves
+   it).
+6. **Folder:** a new unreadable path costs a scan up to 0.5 s once
+   (serial); wake threads for dataless cloud files are not capped
+   (thousands of iCloud placeholders would be thousands of threads);
+   `_watch` sets `_scan_job` outside its lock (worst case two queued
+   scans). T4's tests were written after its code (no RED run).
+7. **Closer:** it is serial — one close hung forever blocks later closes
+   for the run (sources leak; the frame thread is unaffected).
+8. **Live:** `LiveKind.close` joins threads and closes the finder on the
+   frame thread during a config edit (about 1 s at worst, usually tens of
+   ms); the Syphon release (`client.stop()`) runs inline on the frame
+   thread in the kind's poll, with whatever GL context is current;
+   Syphon textures arrive at the server's size, uncapped; if
+   `LiveSource.open()` ever raised, the `MissingSource` would be retried
+   every 1 s; the camera kind lists every AVFoundation video device
+   (Continuity Camera included).
+9. **Render:** with the backdrop on and `backdrop.history` off, echoes are
+   not bent by an effect placed after the scene (the capture reads the
+   unbent scene); a `grounded` composite failure is reported as a hands
+   error (Composite's catch-all); an aux from an in-run effect reads the
+   scene pipeline's node in every pipeline, and a partial loop applies the
+   wire to some pipelines while reported dormant; `Graph.pool` over-counts
+   one texture when the aux source has one; no graph test of an aux into a
+   D1-placed effect or of `u_bmp_flip` with a live texture; `displace` and
+   `blend` are in decision 24's `EFFECTS_IN_NO_PRESET` (no factory preset
+   uses them); the Syphon test's context restore is skipped if its own
+   setup fails before its `try`.
+10. **Publishing:** NDI out's ~4 ms on the frame thread is an 8 MB copy out
+    of a finished buffer (avoidable by copying on the sender thread or
+    flipping on the GPU); the NDI sender is unclocked; `_said` grows per
+    distinct error text; the windowed tap's presenter is never released
+    with the renderer; output 1 cannot be publish-only; a change of
+    `extra_ips` after `cyndilib` was imported (by NDI out, say) needs a
+    restart.
+11. **Panel:** the media and backdrop groups are left out of the presets
+    page's module overview; unused empty channels sit on GRAPH's idle line;
+    with four thumbnail decodes in flight other visible rows show a dark
+    box briefly.
+12. **The phone** is V2 and `phone:` ids are never listed in
+    `missing()`.
+
+## The design, as agreed (2026-10-22), corrected where the build differs
+
+What the build changed from the design below:
+
+- **Publishers are SYSTEM lines, not device-registry sinks** (section O).
+- **Syphon in is a `GL_TEXTURE_RECTANGLE`**, copied on the GPU into the
+  channel's 2D texture, not a plain 2D texture (sections R and L).
+- **A frame may be a GPU texture** (`MediaFrame.texture`), not only a numpy
+  picture (section M).
+- **`extra_ips`** goes through an app-owned NDI config file (section L).
+- **The transport is full-size for the selected channel** on the MEDIA page
+  (section U).
+- **Scrub proxies** are made on a worker of their own, ≤ 600 s, MJPEG
+  ≤ 1280×720 (section F; the design said the pool and ≤ 720p).
+- **`view.bmp_alpha` survives as a hidden alias** of `view.media_alpha`
+  (section R's faces paragraph).
+- **A publish-only output 1 is refused** (section O).
+- **The compositing reconciliation (plan 33) is not done**; the backdrop's
+  place is the default the design names.
+
+The rest is as written.
 
 ## What the owner wants (2026-10-22)
 
@@ -413,45 +801,58 @@ only M1 and M0; M8 needs M5.
 
 ## Decisions — answered by the owner 2026-10-22
 
-Rows 321–339 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md).
-"(rec)" is the recommendation accepted; rows the owner did not speak to
-were accepted as recommended with the instruction to execute.
+Rows 321–339 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), each
+with what was built, the other options, how to reverse it, its rough edge
+and the check that judges it. "(rec)" is the recommendation accepted;
+rows the owner did not speak to were accepted as recommended with the
+instruction to execute.
 
-321. **Eight fixed channels, `a`–`h`**, params `media.<c>.*`. (rec)
+321. **Eight fixed channels, `a`–`h`**, params `media.<c>.*`. (rec) —
+     built as written.
 322. **A channel's choice is a bin of ≤ 16 sources plus a `slot`
-     param.** (rec)
+     param.** (rec) — built; bin edits on the MEDIA page are undo steps.
 323. **Bins live in the preset.** (rec) — "source lists in the preset
-     are fine".
+     are fine". Built.
 324. **Source ids and places**: `shared:`, `local:`, `file:`, the live
-     kinds; a missing source is black plus the banner. (rec)
-325. **Live kinds are device-registry kinds that discover feeds.** (rec)
+     kinds; a missing source is black plus the banner. (rec) — built.
+325. **Live kinds are device-registry kinds that discover feeds.** (rec) —
+     built; the map is `media_sources()`, not `feeds()`.
 326. **The transport: `pos` latch scrub, `rate` −4…+4 × native, `jog`
      a push with coast, `loop` three modes, rate 0 freezes a live
-     feed.** (rec)
+     feed.** (rec) — built; only the jog's part of the speed springs.
 327. **Scrub proxies for clips ≤ 10 min.** (rec) — "I can't imagine
-     we'd have longer clips than that".
+     we'd have longer clips than that". Built on a worker of its own.
 328. **Threads**: a pool for jobs that end, a thread per blocking
-     source, the render thread only uploads. (rec)
+     source, the render thread only uploads. (rec) — built; dropped
+     sources close on a closer thread.
 329. **Caps** 1080p files / 720p live; upload only consumed channels
-     with a new frame. (rec)
+     with a new frame. (rec) — built; Syphon textures uncapped.
 330. **Backdrop under the scene, before the history and the effects;
      `backdrop.history` off by default; plan 33 settles the order.**
-     (rec) — "stopgap is fine".
+     (rec) — "stopgap is fine". Built.
 331. **Faces read a channel (`view.media`); `view.bmp_*` dropped on
-     load with a note.** (rec)
+     load with a note.** (rec) — built; `view.bmp_alpha` kept as a
+     hidden alias for the APC40's knob 7.
 332. **Every effect gets an optional `aux` input; `displace` and
-     `blend`.** (rec)
+     `blend`.** (rec) — built.
 333. **The phone's own HTTPS page is V2.** V1 leaves the door open for
      an NDI camera app (an `ndi:` source); its check with a real phone
-     comes after this sprint. (owner)
+     comes after this sprint. (owner) — as decided; nothing built.
 334. **Phone join (V2): a per-rig token in the QR, at most 4, each
-     approved on the host.** (rec)
+     approved on the host.** (rec) — V2, not built.
 335. **Resolume / TouchDesigner both ways in V1, in first**: NDI in
      (over the network, `extra_ips`) and Syphon in, then Syphon out and
-     NDI out from any output, publish-only outputs allowed. (owner)
+     NDI out from any output, publish-only outputs allowed. (owner) —
+     built; publishers are SYSTEM lines, output 1 cannot be
+     publish-only, `extra_ips` unverified.
 336. **Dependencies**: `av`, `pillow-heif`, `syphon-python`,
      `cyndilib` in the default install, each imported only when used;
-     the phone's (`aiohttp`, `aiortc`, `segno`) come with V2. (rec)
-337. **Conditional preset `/4`**, after plan 31's `/3`. (rec)
-338. **Base `plan-28-30-integration`**, taking it in as it moves. (rec)
-339. **No desk or APC40 default bindings**; Learn for all. (rec)
+     the phone's (`aiohttp`, `aiortc`, `segno`) come with V2. (rec) —
+     built, plus `pyobjc-framework-avfoundation` (macOS) for the
+     camera list.
+337. **Conditional preset `/4`**, after plan 31's `/3`. (rec) — built;
+     both Macs must run this build.
+338. **Base `plan-28-30-integration`**, taking it in as it moves. (rec) —
+     @ 1a5cc2e; nothing was taken in.
+339. **No desk or APC40 default bindings**; Learn for all. (rec) — built;
+     `apc40.py` and `midi.py` untouched.

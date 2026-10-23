@@ -1063,6 +1063,9 @@ root and `Library.machine` the home.
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
+| `media/` | This Mac's media files, ids `local:<relative path>` (plan 32; the shared ones are `<library>/media/`). Subfolders are groups. | any picture or video |
+| `media-cache/thumbs/`, `media-cache/proxies/` | 160 px thumbnails and the MJPEG scrub proxies of clips ≤ 600 s, keyed by id + size + mtime. Never in the shared folder; safe to delete (made again). | PNG, MJPEG |
+| `ndi/ndi-config.v1.json` | Written only when an `ndi` device lists `extra_ips`; NDI reads it through `NDI_CONFIG_DIR`. | NDI's JSON |
 
 A `midi_map.json` or `config.toml` left in the working directory from an
 old build is copied in on the first run; a `midi_map.json` in the home is
@@ -1230,6 +1233,58 @@ Rules worth knowing:
   the config's folder; anything but text is `""` with a note. A leftover
   `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
+
+### Media
+
+Plan 32. Pictures, videos and live feeds go onto eight channels (`a`–`h`);
+the MEDIA page is where they are picked, and
+[`plans/32-media-channels.md`](plans/32-media-channels.md) is the design
+as built.
+
+- **Folders.** `<library>/media/` is the shared folder (the plan 25 cloud
+  folder, so both Macs see a file dropped into it; with no `[library]
+  path` there is none) and `<home>/media/` is this Mac's. Both are scanned
+  every 2 s: a dropped file appears without a relaunch, a removed one is
+  `missing`, a cloud placeholder is `fetching`. A file added from anywhere
+  (**Add file…**) is `file:<absolute path>`; **Copy to shared** turns it
+  into `shared:`. A preset that names a `local:`, `file:` or live source
+  this Mac lacks loads, shows black for it, and the MEDIA page's banner
+  lists it.
+- **Formats.** Stills: png, jpg, webp, bmp, tiff, heic. Video: mp4, mov,
+  m4v, webm, mkv, avi, gif (see `media.adapters.VIDEO_EXT`).
+  Files are decoded to at most 1920×1080, live feeds to 1280×720.
+  There is no sound.
+- **Live feeds** are `[[devices]]` entries; the factory template lists all
+  three, commented: `kind = "ndi"` (optional `extra_ips = ["10.0.0.5"]` for
+  a sender on another subnet; it is written to `<home>/ndi/ndi-config.v1.json`
+  before `cyndilib` loads, which has not been verified against a real second
+  subnet, and a change after NDI was first loaded needs a restart),
+  `kind = "syphon"` and `kind = "camera"` (macOS asks for the camera on the
+  first open; a refusal is `error: camera permission (System Settings ▸
+  Privacy & Security ▸ Camera)`). NDI over a venue's Wi-Fi is hungry (full
+  NDI ~100 Mb/s at 1080p): bring your own router.
+- **Publishing.** `syphon = "<server name>"` and `ndi = "<sender name>"`
+  on `[output]` or an `[[output.screens]]` entry publish that output's
+  picture (a window at the render cap, `[output] render`); `window = false`
+  on a later output makes it publish-only (no window). Output 1 always
+  has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
+  readback 4.0 ms`, in the warning colour with the error on a failure.
+- **Dependencies** (all in the default install, imported only when a
+  source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
+  `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
+  only), `cyndilib` (its macOS wheel carries `libndi`; check the NDI SDK's
+  licence before shipping a build). A live kind whose library is missing
+  says so in its status (`cyndilib not installed`) instead of raising.
+- **Both Macs on this build.** A preset that uses media is saved as
+  `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
+  or `view.media*` value off its default); a build from before plan 32
+  **refuses** it, so two Macs sharing a library must both run this build
+  before either saves one. A preset that does not use media is the file it
+  was, bar two new effects' default lines. A pre-plan-32 preset's
+  `view.bmp_*` values are dropped on load with a note
+  (`bitmap file <path> is no longer read: put it on a media channel`); put
+  the picture on a channel instead. The APC40's knob 7 still moves the faces'
+  media opacity.
 
 ### The device list
 
@@ -2631,6 +2686,11 @@ What only a person at the machine can check is
 - **A build from before plans 28 and 30 loses this build's `modifiers` and
   `layout` on a save** and opens a wired or placed `graph` as the
   default graph: both Macs sharing a library must run the same build.
+- **Media (plan 32)**: two Macs sharing a library must both run the build
+  that writes `hyperspace.preset/4`; Resolume and TouchDesigner have never
+  sent us or received a frame, `extra_ips` is unverified, the phone's own
+  page is V2, and output 1 cannot be publish-only (see "Media" in §4 and
+  the plan's "Known rough edges").
 - **The golden frames prove pixels only on "Apple M3 Max"**; on any
   other Mac the test skips.
 - **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`
