@@ -1,10 +1,12 @@
 # Plan 32 — media: sources, the media folder, eight channels, and what reads them
 
-**Status: designed, not built (2026-10-22).** Designed with the owner in
-one session; the decisions below (rows 321–339) carry a recommendation
-each and wait for the owner's answer. Nothing here is code yet. Once the
-rows are answered, the work packages become an executable plan (briefs
-per WP, as `28-30-orchestrator-prompt.md` did).
+**Status: designed, decisions answered (2026-10-22), being built.**
+Designed with the owner in one session; rows 321–339 answered the same
+day (below). **The phone's own page (HTTPS, WebRTC) is V2**; in V1 a
+phone joins through an NDI camera app, as an `ndi:` source. **Resolume
+and TouchDesigner both ways** is in V1, *in* first: their finished
+picture, over the network (NDI) or on this Mac (Syphon), on a channel.
+The build plan is [`32-media-build.md`](32-media-build.md).
 
 **Base: `plan-28-30-integration` @ 1a5cc2e** (row 338). `main` (fec80ee)
 has no `graph.py` and no `devices.py`: the render graph (plan 26), the
@@ -23,9 +25,13 @@ schema number (row 337).
   A preset that names a local source another Mac lacks is fine: a clear
   banner on the media page says so.
 - **Live feeds**: anything giving frames at a resolution and rate — a
-  local webcam, **Syphon** and **NDI** (to talk to Resolume and
-  TouchDesigner), and **a phone streaming into the show after scanning
-  a QR code**. Bringing our own router for that is acceptable.
+  local webcam, **Syphon** and **NDI**, and **a phone streaming into the
+  show after scanning a QR code** (bringing our own router is
+  acceptable; the phone's own page is V2, an NDI camera app the V1 road).
+- **Resolume and TouchDesigner, both ways — in first** (2026-10-22): "we
+  keep running into people with really cool Resolume/TouchDesigner
+  setups": take their finished picture, possibly over the network, pipe
+  it through ours — and send ours to them.
 - **A bus of channels**: a source is put on a channel; consumers (the
   backdrop, the faces, an effect) subscribe to a channel; swapping what
   is on channel A while things read channel A *is the point*. **Eight
@@ -63,7 +69,7 @@ Adapters (`hyperspace/media/`, each imported lazily) turn inputs into
 `devices.PointCloud` pattern — decoded **off the render thread** into a
 one-slot "latest" holder. File sources come from the media folder,
 scanned and watched by the pool; live sources are device-registry kinds
-that discover their feeds (`camera:`, `syphon:`, `ndi:`, `phone:`). Each
+that discover their feeds (`camera:`, `syphon:`, `ndi:`; `phone:` in V2). Each
 of the eight **channels** holds a **bin** of up to 16 source ids and a
 `media.<c>.slot` param picking one, so switching is a param: Learn, the
 pad, the APC40, the sequencer, a macro and undo all switch it, and the
@@ -80,8 +86,8 @@ into an output.
  adapters ──► sources ──────────► channels a–h ──► consumers (graph nodes)
  PIL/HEIF     shared:/local:/file:  bin[16] + slot   backdrop (under the scene)
  PyAV         camera:/syphon:       transport        faces (view.media)
- aiortc       ndi:/phone:           (rate pos jog)   effect image / aux
- syphon, NDI     ▲                                   output image
+ syphon, NDI  ndi:                  (rate pos jog)   effect image / aux
+ (in and out)    ▲                                   output image ──► Syphon / NDI out
                  └── the media folder (watched) + live discovery
 ```
 
@@ -132,9 +138,9 @@ into an output.
   - `video.py` — PyAV (ffmpeg): mp4, mov, m4v, webm, mkv, animated GIF,
     HAP. Decoded on its own thread; the transport (below) drives it.
   - `camera.py` — AVFoundation through PyAV's `avfoundation` input.
-  - `syphon.py` — `syphon-python`, client (and server: row 335).
-  - `ndi.py` — `cyndilib`, receive (send later: row 335).
-  - `phone/` — the phone stream (below).
+  - `syphon.py` — `syphon-python`: client (in) and server (out).
+  - `ndi.py` — `cyndilib`: receive (in) and send (out).
+  - `phone/` — V2 (below).
 - Size cap: frames are resized on the decoding thread to ≤ 1920×1080
   for files and ≤ 1280×720 for live feeds (row 329), keeping aspect.
 
@@ -172,16 +178,24 @@ Each live kind is a device-registry kind (row 325) whose one entry
 **discovers** feeds and publishes each as a source: `camera`
 (`camera:<device name>`), `syphon` (`syphon:<app>/<server>`), `ndi`
 (`ndi:<sender name>`), `phone` (`phone:<n>`, the n-th approved phone of
-this run). An entry in `[[devices]]` turns a kind on (the factory
-config: camera and syphon on; ndi on when `cyndilib` imports; phone
-off). Each gets the registry's status line, its retry schedule and its
+this run; V2). An entry in `[[devices]]` turns a kind on (the factory
+config: camera, syphon and ndi on, each only if its library imports).
+**NDI is the headline** (the other rig's picture over the network): it
+finds senders by mDNS on the router; an `ndi` entry may list
+`extra_ips` (NDI's own "extra IPs" for finding) where a network blocks
+mDNS, so a sender on another subnet is found by address. Each gets the registry's status line, its retry schedule and its
 config watch for free. A feed that drops holds its last frame for 1 s,
 then shows black, with the reason in its status; it comes back on its
 own when the sender returns. macOS asks for camera permission on the
 first `camera` open; a refusal is `error: camera permission` with the
 System Settings path in words.
 
-### P — the phone
+### P — the phone (V2: not this sprint)
+
+**V1:** a phone running an NDI camera app is an `ndi:` source; nothing
+else is built for phones. Checking that with a real phone and app is a
+hand check after this sprint (owner, 2026-10-22). The design below is
+kept for V2.
 
 - The app runs an HTTPS server on the rig (`aiohttp`, port 8443): one
   page (`media/phone/page.html`: front/back camera, a name, Send) and
@@ -269,6 +283,19 @@ System Settings path in words.
   (`{"from": "media.a", "to": "acid.2.aux"}`, `{"from": "media.c",
   "to": "output.2.image"}`); refusals are notes, as plan 28 N4's are.
 
+### O — out to Resolume and TouchDesigner
+
+- An **output** can also be published: `[[output.screens]]` (and `[output]`) gains `syphon =
+  "<server name>"` and `ndi = "<sender name>"` (either, both or neither),
+  and a publish-only output (no window) is allowed, so the rig can send
+  a picture it does not show. Syphon out hands the output's frame
+  texture to a Syphon server in our share group (no copy, if M0 shows
+  it can); NDI out reads it back asynchronously (two pixel-pack
+  buffers, a frame behind) and sends it on the NDI sender's own
+  thread, so the render thread never waits on the network.
+- Each published output is a SYSTEM line (sender name, fps, readback
+  ms) and a sink on the device registry's list.
+
 ### U — the panel
 
 - **MEDIA page** (replaces the bitmap page):
@@ -281,8 +308,8 @@ System Settings path in words.
   - the eight channels as columns: the live picture, the bin (assign
     from the library), the slot, the transport (rate, a pos bar with
     the playhead, jog, loop), fit, status;
-  - phones: the QR code, pending phones to approve, connected phones
-    to drop;
+  - (V2: phones — the QR code, pending phones to approve, connected
+    phones to drop);
   - the backdrop's and the faces' channel pickers.
 - **GRAPH**: the channels as eight source nodes in a titled "media"
   area, the backdrop node, the `aux` ports.
@@ -310,28 +337,30 @@ System Settings path in words.
   look-back, the backdrop, the effects, the shape, the hands and the
   outputs, worked through with the owner as its own plan (33). This
   plan's backdrop order and its `history` toggle are the stopgap.
+- **The phone's own page** (HTTPS, WebRTC, the QR join): V2.
+  Checking an NDI camera app with a real phone: after this sprint.
 - Google Photos, iCloud Photos (above); tempo-synced clip length (a
-  clip spanning N bars); recording a channel to a file; NDI out (row
-  335); desk defaults (row 339).
+  clip spanning N bars); recording a channel to a file; desk defaults
+  (row 339).
 
 ## Work packages
 
 | WP | Size | What | Depends on |
 |---|---|---|---|
-| M0 | S | **Spike, throwaway**: phone camera over HTTPS on iOS Safari and Android Chrome through our own router (both certificate roads); `aiortc` receiving a phone's track; `syphon-python` in and out beside our GL context (copy cost at 1080p); `cyndilib` receive. Findings answer rows 333 and 335. | — |
+| M0 | S | **Spike, throwaway**: `syphon-python` in and out beside our GL context (a texture in our share group, or the copy cost at 1080p); `cyndilib` send → receive on loopback at 1080p (fps, latency, CPU). Findings fix M6 and M8's approach. | — |
 | M1 | M | `media/`: `MediaFrame`, `Source`, `Latest`, `pool`, ids, adapter kinds, `still` (PIL + HEIF); boundary test | — |
 | M2 | M | `video` (PyAV) on its own thread; `transport.py` (rate, the pos latch, jog coast, loop modes) on a fake clock; GIF; proxies | M1 |
 | M3 | M | the media folder: scan + watch (shared, this Mac, `file:`), thumbnails, `fetching`, `missing` | M1 |
 | M4 | M | channels: bins, `media.<c>.*` params, preset `media` section, conditional `/4`, undo | M1 |
 | M5 | L | render: `MediaTextures` + upload rule, `media.<c>` nodes, backdrop + history toggle, faces moved to `view.media`, `aux` port + `_lib.glsl` + `displace` / `blend`, wires, new goldens | M2, M4 |
-| M6 | M | live kinds on the device registry: `camera`, `syphon` in, `ndi` in; status lines; permission | M1, M0 |
-| M7 | L | the phone: server, page, `aiortc`, approval, QR, `tools/phone_cert.py` | M1, M0 |
-| M8 | S | Syphon out: an output published as a Syphon server (row 335) | M5, M0 |
-| M9 | L | MEDIA page, GRAPH's media area | M3, M4 (library and channels), M5–M7 (the rest) |
+| M6 | M | live kinds on the device registry: **`ndi` in first** (with `extra_ips`), `syphon` in, `camera`; status lines; permission | M1, M0 |
+| M7 | — | the phone: **V2, not this sprint** | — |
+| M8 | M | out: an output published as a Syphon server and/or an NDI sender, publish-only outputs, async readback (row 335) | M5, M0 |
+| M9 | L | MEDIA page, GRAPH's media area | M3, M4 (library and channels), M5, M6 (the rest) |
 | M10 | M | docs: this file as built, ARCHITECTURE, DECISIONS, register rows, hand checks group AA, ENGINEERING (both Macs on this build) | all |
 
-M0, M1 start together; M2, M3, M4 run in parallel after M1; M6, M7, M8
-in parallel after M5 (M6 and M7 need only M1 and M0 to start).
+M0, M1 start together; M2, M3, M4 run in parallel after M1; M6 needs
+only M1 and M0; M8 needs M5.
 
 ### Tests (headless, the headline ones)
 
@@ -354,15 +383,16 @@ in parallel after M5 (M6 and M7 need only M1 and M0 to start).
   tiny generated clip; **no existing golden moves** except any that
   draw today's bitmap (none known).
 - Video: a clip generated by PyAV in the test, decoded and sought.
-- Phone: signalling and approval against an `aiortc` loopback peer;
-  the real phone is a hand check. Syphon / NDI: skipped unless the
-  library imports; hand checks with Resolume and TouchDesigner.
+- Syphon / NDI: loopback tests (our sender → our receiver) when the
+  library imports, skipped otherwise; hand checks with Resolume and
+  TouchDesigner both ways, and over the network from a second Mac.
 
 ## Risks
 
-- **Phone TLS** is the riskiest piece and is why M0 runs first. If
-  neither certificate road gets a guest's camera reliably, the NDI
-  camera app is the fallback and the page waits.
+- **NDI's runtime**: `cyndilib`'s wheels are expected to carry the NDI
+  library (M0 confirms); where one does not, NDI is off with its status saying what to install.
+  NDI over a busy venue Wi-Fi is bandwidth-hungry (full NDI ~100 Mb/s
+  at 1080p; NDI|HX far less): the own-router caveat applies.
 - **Upload cost**: eight 1080p RGBA channels at 30 fps is ~2 GB/s of
   `texture.write`. The rule (consumed + new frame only) and the caps
   keep a normal show to two or three channels; M5 measures it on the
@@ -381,58 +411,47 @@ in parallel after M5 (M6 and M7 need only M1 and M0 to start).
 - **The moving base**: `plan-28-30-integration` may move again while
   its merge agent finishes; this branch takes it in.
 
-## Decisions for the owner
+## Decisions — answered by the owner 2026-10-22
 
-Each has a recommendation (rec). Rows 321–339 of
-[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) once answered.
+Rows 321–339 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md).
+"(rec)" is the recommendation accepted; rows the owner did not speak to
+were accepted as recommended with the instruction to execute.
 
-321. **Eight fixed channels, `a`–`h`**, params `media.<c>.*`. (rec) Or
-     numbered 1–8, or a bank of N.
+321. **Eight fixed channels, `a`–`h`**, params `media.<c>.*`. (rec)
 322. **A channel's choice is a bin of ≤ 16 sources plus a `slot`
-     param.** (rec) Or a free-text source param per channel (not
-     routable, not switchable from a controller).
-323. **Bins live in the preset** — a look carries its media. (rec) Or
-     in the project/session (the rig), shared by every preset.
-324. **Source ids and places**: `shared:` (`<library>/media/`),
-     `local:` (`<home>/media/`), `file:` (anywhere), and the live
+     param.** (rec)
+323. **Bins live in the preset.** (rec) — "source lists in the preset
+     are fine".
+324. **Source ids and places**: `shared:`, `local:`, `file:`, the live
      kinds; a missing source is black plus the banner. (rec)
-325. **Live kinds are device-registry kinds that discover feeds.**
-     (rec) Or one `[[devices]]` entry per feed (rig-stable names, more
-     config).
-326. **The transport: `pos` is a latch scrub, `rate` −4…+4 × native,
-     `jog` a push with coast, `loop` three modes, rate 0 freezes a live
+325. **Live kinds are device-registry kinds that discover feeds.** (rec)
+326. **The transport: `pos` latch scrub, `rate` −4…+4 × native, `jog`
+     a push with coast, `loop` three modes, rate 0 freezes a live
      feed.** (rec)
-327. **Scrub proxies**: MJPEG ≤ 720p for clips ≤ 10 min, cached on
-     the Mac. (rec) Or no proxies (scrubbing coarse, no reverse play
-     on long-GOP files).
-328. **Threads**: one pool for jobs that end, one thread per blocking
+327. **Scrub proxies for clips ≤ 10 min.** (rec) — "I can't imagine
+     we'd have longer clips than that".
+328. **Threads**: a pool for jobs that end, a thread per blocking
      source, the render thread only uploads. (rec)
-329. **Caps**: 1920×1080 for files, 1280×720 for live; upload only a
-     consumed channel with a new frame. (rec)
+329. **Caps** 1080p files / 720p live; upload only consumed channels
+     with a new frame. (rec)
 330. **Backdrop under the scene, before the history and the effects;
      `backdrop.history` off by default; plan 33 settles the order.**
-     (rec)
-331. **The faces read a channel (`view.media`); `view.bmp_*` removed,
-     dropped on load with a note.** (rec) Or migrate them onto
-     channel a.
-332. **Every effect gets an optional `aux` image input; two new
-     effects, `displace` and `blend`.** (rec)
-333. **Phone TLS: the owner's hostname + a Let's Encrypt certificate +
-     our router's local DNS entry**, confirmed by M0. (rec) Or
-     self-signed, or a public tunnel. *Needs: a domain the owner
-     controls, and the router.*
-334. **Phone join: a per-rig token in a printable QR, operator approval
-     per phone, at most 4, 720p30.** (rec) Or open (anyone on the
-     Wi-Fi), or a token per run (no printed code).
-335. **Out to Resolume / TouchDesigner: Syphon out in this plan, NDI
-     out later.** (rec) Or both now, or neither (in only).
-336. **Dependencies**: `av` and `pillow-heif` in the default install;
-     `aiohttp` + `aiortc` + `segno` (QR), `syphon-python` and
-     `cyndilib` as well, each imported only when its kind is on. (rec,
-     the repo's precedent: torch is default and imported lazily) Or
-     the live and phone ones as an optional extra.
+     (rec) — "stopgap is fine".
+331. **Faces read a channel (`view.media`); `view.bmp_*` dropped on
+     load with a note.** (rec)
+332. **Every effect gets an optional `aux` input; `displace` and
+     `blend`.** (rec)
+333. **The phone's own HTTPS page is V2.** V1 leaves the door open for
+     an NDI camera app (an `ndi:` source); its check with a real phone
+     comes after this sprint. (owner)
+334. **Phone join (V2): a per-rig token in the QR, at most 4, each
+     approved on the host.** (rec)
+335. **Resolume / TouchDesigner both ways in V1, in first**: NDI in
+     (over the network, `extra_ips`) and Syphon in, then Syphon out and
+     NDI out from any output, publish-only outputs allowed. (owner)
+336. **Dependencies**: `av`, `pillow-heif`, `syphon-python`,
+     `cyndilib` in the default install, each imported only when used;
+     the phone's (`aiohttp`, `aiortc`, `segno`) come with V2. (rec)
 337. **Conditional preset `/4`**, after plan 31's `/3`. (rec)
-338. **Base `plan-28-30-integration`**, taking it in as it moves;
-     to `main` once #224 and #195 land. (rec) Or wait for them to land.
-339. **No desk or APC40 default bindings** (Dylan's); Learn for all.
-     (rec)
+338. **Base `plan-28-30-integration`**, taking it in as it moves. (rec)
+339. **No desk or APC40 default bindings**; Learn for all. (rec)
