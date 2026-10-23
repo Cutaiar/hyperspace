@@ -15,6 +15,10 @@ from PIL import Image
 
 CAP_FILE = (1920, 1080)   # files are decoded no larger than this
 CAP_LIVE = (1280, 720)    # live feeds likewise
+# a GPU frame's texture target (plan 32 T6): GL_TEXTURE_2D, or
+# GL_TEXTURE_RECTANGLE — what a Syphon client's IOSurface-backed texture is
+# on macOS GL (CGLTexImageIOSurface2D binds rectangles only)
+TEX_2D, TEX_RECT = 0x0DE1, 0x84F5
 
 
 def to_rgba(arr: np.ndarray) -> np.ndarray:
@@ -50,13 +54,15 @@ class MediaFrame:
     source's time for the frame (seconds into a clip; the wall clock for a
     live feed); `frame` its id, counting up, so a reader uploads only when
     it moved. A GPU frame carries `texture` (a GL texture name in the
-    renderer's share group) and `tex_size` instead of `pixels`."""
+    renderer's share group) and `tex_size` instead of `pixels`, and its
+    `tex_target` (`TEX_2D`, or `TEX_RECT` for a Syphon feed's)."""
 
     pixels: np.ndarray | None
     t: float
     frame: int
     texture: int | None = None
     tex_size: tuple[int, int] | None = None
+    tex_target: int = TEX_2D
 
     def __post_init__(self):
         if (self.pixels is None) == (self.texture is None):

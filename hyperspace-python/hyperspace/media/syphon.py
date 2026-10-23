@@ -30,7 +30,7 @@ from __future__ import annotations
 import time
 
 from . import live
-from .frame import MediaFrame
+from .frame import TEX_RECT, MediaFrame
 
 RUN_LOOP_S = 0.05     # how long one directory ask spins the scan thread's run loop
 
@@ -95,7 +95,8 @@ class SyphonSource(live.LiveSource):
                 self._n += 1
                 self._latest.put(MediaFrame(None, self.clock(), self._n,
                                             texture=int(img.textureName()),
-                                            tex_size=(int(sz.width), int(sz.height))))
+                                            tex_size=(int(sz.width), int(sz.height)),
+                                            tex_target=TEX_RECT))   # an IOSurface's (T6)
                 self._fault = ""
         return self.latest()
 

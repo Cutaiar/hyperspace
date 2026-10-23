@@ -126,8 +126,17 @@ from .geometry import (
 )
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
-from .graph import Frame, Graph, Wiring, cloud_roles, default_graph, graph_key
+from .graph import (
+    MEDIA_CHANNELS,
+    Frame,
+    Graph,
+    Wiring,
+    cloud_roles,
+    default_graph,
+    graph_key,
+)
 from .lookback import DreamState, Lookback
+from .media_tex import FIT_FS, MediaTextures, fit_scale
 from .outputs import Handoff, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
@@ -929,8 +938,20 @@ class Renderer:
         self._ibuf = ctx.buffer(reserve=MAX_INSTANCES * 4 * 4, dynamic=True)   # the copies
         self._build_wire_programs()
         # the media channels (plan 32, media/channels.MediaState): app.main
-        # hands the app's own; None draws no media anywhere
+        # hands the app's own; None draws no media anywhere. Their textures
+        # (`media_tex.MediaTextures`) and the fit pass's program are made on
+        # first use; `_media_now` is what this frame read and fitted, so a
+        # channel is read (a Syphon feed's `gl_poll`) and fitted once a frame
+        # however many nodes read it. `scene_ground`: the alpha the scene
+        # clears to while a scene node says so (0 over the backdrop), None
+        # the window's ground
         self.media = None
+        self.media_tex: MediaTextures | None = None
+        self._media_now: dict = {}
+        self._fit_prog: moderngl.Program | None = None
+        self._fit_vao: moderngl.VertexArray | None = None
+        self.scene_ground: float | None = None
+        self._view_now: ViewState | None = None    # the frame's (`_draw_frame`)
         # face program is assembled around the user-editable patterns.glsl
         self.pattern_error = ""
         self._face_prog: moderngl.Program | None = None
@@ -1057,6 +1078,17 @@ class Renderer:
             if res is not None:
                 res.release()
         self._ptile = None
+        # plan 32 R: the channels' textures and the fit pass's program, made
+        # again from media_tex.py as it is now on the next frame that reads
+        # a channel (a still uploads again; a feed's next frame would anyway)
+        if getattr(self, "media_tex", None) is not None:
+            self.media_tex.release()
+        self.media_tex = None
+        self._media_now = {}
+        for res in (getattr(self, "_fit_vao", None), getattr(self, "_fit_prog", None)):
+            if res is not None:
+                res.release()
+        self._fit_prog = self._fit_vao = None
 
     def _face_media(self, s: ViewState) -> moderngl.Texture | None:
         """The texture the faces draw over their pattern: the channel
@@ -1192,6 +1224,7 @@ class Renderer:
         t = self.now(t_now)
         for v in views:
             v.error, v.exc, v.handoff = "", None, None
+        self._media_now = {}          # plan 32 R: nothing read or fitted yet this frame
         first = views[0]
         target, vp = first.target, first.rect
         try:
@@ -1271,6 +1304,9 @@ class Renderer:
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
+        # (the frame's view state, for the backdrop the graph is built with:
+        # kept on the renderer so `_graph_for` keeps its one-argument shape)
+        self._view_now = s
         graph = self._graph_for(views)
         # plan 30 D1: "an effect is on" means one of the chain's runs: an
         # effect the preset placed on an edge runs there (and moves its
@@ -1290,7 +1326,7 @@ class Renderer:
             stats["gpu_ms"] = timer.medians()
             stats["gpu_note"] = timer.note
 
-    def _graph_for(self, views: list[View]) -> Graph:
+    def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
         """The render graph for these views: the last one while their
         switches and the wiring have not changed (`graph.graph_key`,
         `Renderer.wiring`), else the default graph built from them
@@ -1305,9 +1341,13 @@ class Renderer:
         Plan 28 N4: the preset's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
         so an edit on the GRAPH page that lands a new `GraphSpec` builds
-        the graph again, with the same refusals (a dormant wire, a loop)."""
+        the graph again, with the same refusals (a dormant wire, a loop).
+        Plan 32 R: so are the frame's backdrop channel and whether the
+        history holds it (`backdrop_wiring`), laid onto the preset's wiring
+        for the graph alone — `Renderer.wiring` stays the preset's."""
         key = graph_key(views)
-        wiring = getattr(self, "wiring", None) or Wiring()
+        s = s if s is not None else getattr(self, "_view_now", None)
+        wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
         fx = getattr(self, "fx", None)
         effects = tuple(fx.state.names()) if fx is not None else ()
@@ -1322,6 +1362,111 @@ class Renderer:
             # not hold goes with the old graph
             self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
         return graph
+
+    def backdrop_wiring(self, wiring: Wiring, s: ViewState | None) -> Wiring:
+        """`wiring` with the frame's backdrop (plan 32 R, row 330): the
+        channel `backdrop.channel` names (`ViewState.backdrop`, 1–8 = a–h)
+        and `backdrop.history` — none while there are no media channels to
+        read (`media` None) or no view state (a caller from before)."""
+        letter, hist = "", False
+        n = int(getattr(s, "backdrop", 0) or 0) if s is not None else 0
+        if getattr(self, "media", None) is not None and 1 <= n <= len(MEDIA_CHANNELS):
+            letter = MEDIA_CHANNELS[n - 1]
+            hist = bool(getattr(s, "backdrop_history", False))
+        if (getattr(wiring, "backdrop", ""), getattr(wiring, "backdrop_history", False)) \
+                == (letter, hist):
+            return wiring
+        return replace(wiring, backdrop=letter, backdrop_history=hist)
+
+    # ---- plan 32 R: the media channels' pictures ----
+
+    def _media_textures(self) -> MediaTextures:
+        """The channels' textures, made on first use (getattr: a renderer
+        from before the media, or after a reload, has none)."""
+        mt = getattr(self, "media_tex", None)
+        if mt is None:
+            mt = self.media_tex = MediaTextures(self.ctx)
+        return mt
+
+    def _media_frame_now(self) -> dict:
+        now = getattr(self, "_media_now", None)
+        if now is None:
+            now = self._media_now = {}
+        return now
+
+    def media_texture(self, c: str) -> moderngl.Texture | None:
+        """Channel `c`'s raw texture this frame — the picture at its own
+        size and aspect, for the faces — or None (black). The channel is
+        read once a frame however often this is asked (`MediaState.frame`:
+        a Syphon feed through its `gl_poll`, here on the frame thread) and
+        uploaded only when its frame moved. Never waits: a frame not
+        decoded yet is None. Rows are top first unless the texture is a
+        feed's own (`MediaTextures.flipped`)."""
+        media = getattr(self, "media", None)
+        if media is None:
+            return None
+        now = self._media_frame_now()
+        key = ("raw", c)
+        if key not in now:
+            try:
+                f = media.frame(c)
+            except Exception:  # noqa: BLE001 — a channel must not take the frame down
+                f = None
+            now[key] = self._media_textures().texture(c, f)
+        return now[key]
+
+    def _media_fit(self, c: str, size: tuple[int, int],
+                   alpha: float = 1.0) -> moderngl.Texture | None:
+        """Channel `c` fitted to a frame of `size` (`media.<c>.fit`: cover,
+        contain, stretch), premultiplied by `alpha`: one pass into a
+        texture of the renderer's (`_frame_target`, one per channel and
+        alpha 1 or not), once a frame per (channel, size, alpha, fit). With
+        no picture it is transparent black — a texture all the same, so an
+        `IMAGE` port always has one. Leaves its target bound."""
+        ch = getattr(getattr(self, "media", None), "channels", {}).get(c)
+        fit = int(getattr(ch, "fit", 0) or 0)
+        size = (int(size[0]), int(size[1]))
+        alpha = min(max(float(alpha), 0.0), 1.0)
+        now = self._media_frame_now()
+        key = ("fit", c, size, alpha, fit)
+        if key in now:
+            return now[key]
+        src = self.media_texture(c)
+        out, fbo = self._frame_target(f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha",
+                                      size)
+        ctx = self.ctx
+        fbo.use()
+        ctx.viewport = (0, 0, *size)
+        if src is None or alpha <= 0.0:
+            ctx.clear(0.0, 0.0, 0.0, 0.0)
+        else:
+            prog, vao = self._fit_program()
+            ctx.disable(moderngl.BLEND)
+            try:
+                src.use(location=0)
+                prog["u_src"].value = 0
+                prog["u_scale"].value = fit_scale(fit, tuple(src.size), size)
+                prog["u_flip"].value = int(self._media_textures().flipped(c))
+                prog["u_alpha"].value = alpha
+                vao.render(moderngl.TRIANGLES, vertices=3)
+            finally:
+                ctx.enable(moderngl.BLEND)
+        now[key] = out
+        return out
+
+    def _fit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
+        """The fit pass's program (`media_tex.FIT_FS`), built on first use."""
+        prog, vao = getattr(self, "_fit_prog", None), getattr(self, "_fit_vao", None)
+        if prog is not None and vao is not None:
+            return prog, vao
+        prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=FIT_FS)
+        try:
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception:
+            prog.release()
+            raise
+        self._fit_prog, self._fit_vao = prog, vao
+        return prog, vao
 
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
@@ -1871,8 +2016,16 @@ class Renderer:
         """The scene's clear, into whatever is bound: the premultiplied
         ground (black at `bg_alpha`) and the depth to the far plane. The
         scene node clears before its solid geometry (plan 26 A3); a scene
-        of the shape alone clears inside `draw_scene`, as it always did."""
-        self.ctx.clear(*BG, getattr(self, "bg_alpha", 1.0))
+        of the shape alone clears inside `draw_scene`, as it always did.
+        Plan 32 R: at `scene_ground` instead while a scene node sets it
+        (0 over the backdrop)."""
+        self.ctx.clear(*BG, self._scene_ground())
+
+    def _scene_ground(self) -> float:
+        """The scene's ground alpha: `scene_ground` while a scene node sets
+        it (plan 32 R: 0, see-through over the backdrop), else `bg_alpha`."""
+        g = getattr(self, "scene_ground", None)
+        return float(g) if g is not None else float(getattr(self, "bg_alpha", 1.0))
 
     def draw_scene(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -1988,7 +2141,7 @@ class Renderer:
         # blending leaves the framebuffer correctly composited for a
         # transparent window (colour = Σ c·a, alpha = 1 − Π(1 − a)). The
         # clear clears the depth too (to the far plane)
-        bg_alpha = getattr(self, "bg_alpha", 1.0)
+        bg_alpha = self._scene_ground()       # (plan 32 R: 0 over the backdrop)
         if clear:
             self.ctx.clear(*BG, bg_alpha)
         # cut-through: the plain blend also blends alpha (a² + (1 − a)·dst),
