@@ -54,7 +54,7 @@ T7 and T9 both touch `render.py`; the orchestrator merges T7 first.
 
 ---
 
-### Task T0: Spike — Syphon and NDI beside our GL (throwaway)
+### Task 0 (T0): Spike — Syphon and NDI beside our GL (throwaway)
 
 **Files:**
 - Create: `docs/plans/assets/32-media/m0-findings.md` (kept); scratch scripts under `$CLAUDE_JOB_DIR/tmp` (not committed).
@@ -65,7 +65,7 @@ T7 and T9 both touch `render.py`; the orchestrator merges T7 first.
 
 ---
 
-### Task T1: Media core — frames, sources, ids, the pool, stills
+### Task 1 (T1): Media core — frames, sources, ids, the pool, stills
 
 **Files:**
 - Create: `hyperspace/media/__init__.py`, `frame.py`, `source.py`, `ids.py`, `pool.py`, `adapters.py`, `still.py`
@@ -101,7 +101,7 @@ T7 and T9 both touch `render.py`; the orchestrator merges T7 first.
 
 ---
 
-### Task T2: The transport
+### Task 2 (T2): The transport
 
 **Files:** Create `hyperspace/media/transport.py`; Test `tests/test_media_transport.py`
 
@@ -114,7 +114,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T3: Video files and scrub proxies
+### Task 3 (T3): Video files and scrub proxies
 
 **Files:** Create `hyperspace/media/video.py`, `hyperspace/media/proxy.py`; Modify `hyperspace/media/adapters.py` (route `VIDEO_EXT`); Test `tests/test_media_video.py`
 
@@ -128,7 +128,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T4: The media folder
+### Task 4 (T4): The media folder
 
 **Files:** Create `hyperspace/media/folder.py`, `hyperspace/media/thumbs.py`; Modify `hyperspace/config.py` only if needed to expose the library root (it exists: `[library] path`); Test `tests/test_media_folder.py`
 
@@ -144,7 +144,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T5: Channels, their params, the preset
+### Task 5 (T5): Channels, their params, the preset
 
 **Files:** Create `hyperspace/media/channels.py`; Modify `hyperspace/view.py` (remove `bmp_*`, add the fields below), `hyperspace/params.py` (register), `hyperspace/preset.py` (section, schema, the note), `hyperspace/learn.py` (`_BITMAP` → media ids), `hyperspace/app.py` (build `MediaState`, poll it each frame in the scene-setter slot after the devices, close on exit, hand it to the renderer as `renderer.media`); Test `tests/test_media_channels.py`, `tests/test_media_preset.py`
 
@@ -171,7 +171,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T6: Textures, the media node, the backdrop
+### Task 6 (T6): Textures, the media node, the backdrop
 
 **Files:** Create `hyperspace/media_tex.py`; Modify `hyperspace/graph.py` (`MediaNode`, `Wiring.backdrop`, `Wiring.backdrop_history`, `default_graph`, wire names), `hyperspace/render.py` (`MediaTextures`, the fit pass, the graph key, SYSTEM timing lines); Test `tests/test_media_render.py`, new goldens.
 
@@ -190,7 +190,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T7: The faces read a channel; the `aux` input; displace and blend
+### Task 7 (T7): The faces read a channel; the `aux` input; displace and blend
 
 **Files:** Modify `hyperspace/render.py` (`FACE_UNIFORMS`/`FACE_PX`/`_face_uniforms`: `u_bitmap` → the channel `view.media`'s raw texture via `media_texture`), `hyperspace/fx.py` (header declares `u_aux`, `u_aux_on`, `u_aux_size`; `run_one(..., aux: Texture | None = None)` binds it on unit 1), `hyperspace/graph.py` (`Effect.INPUTS = {"image": IMAGE, "aux": IMAGE}`, `aux` in `REFS`, wire `to: "<effect>.aux"`), `hyperspace/shaders/fx/_lib.glsl` (helpers), Create `hyperspace/shaders/fx/displace.glsl`, `hyperspace/shaders/fx/blend.glsl`; Test `tests/test_media_faces_aux.py`, goldens.
 
@@ -206,7 +206,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T8: Live sources — NDI in (first), Syphon in, cameras
+### Task 8 (T8): Live sources — NDI in (first), Syphon in, cameras
 
 **Files:** Create `hyperspace/media/live.py` (shared base), `hyperspace/media/ndi.py`, `hyperspace/media/syphon.py`, `hyperspace/media/camera.py`; Modify `hyperspace/devices.py` (`kinds()` gains `"ndi"`, `"syphon"`, `"camera"`; `DeviceRegistry.media_feeds() -> dict[str, Source]` beside `clouds()`), the factory `config.toml` template in `config.py` (commented entries for all three, `enabled = true`); Test `tests/test_media_live.py`.
 
@@ -223,7 +223,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T9: Out — outputs published over Syphon and NDI
+### Task 9 (T9): Out — outputs published over Syphon and NDI
 
 **Files:** Create `hyperspace/media/publish.py`; Modify `hyperspace/config.py` (`[output]` / `[[output.screens]]` keys `syphon: str`, `ndi: str`, `window: bool = true`), `hyperspace/outputs.py` (publish-only views: an offscreen target at the configured size), `hyperspace/render.py` (after each output is composed, hand its frame texture to its publishers); Test `tests/test_media_publish.py`.
 
@@ -234,7 +234,7 @@ Rules (the spec's C section): if `abs(pos - last_pos) > 1e-6` the playhead is pu
 
 ---
 
-### Task T10: The MEDIA page and GRAPH's media area
+### Task 10 (T10): The MEDIA page and GRAPH's media area
 
 **Files:** Create `hyperspace/ui_media.py`; Modify `hyperspace/ui.py` (the `bitmap` tab becomes `media`, drawn by `ui_media.draw(ui, dt)`), `hyperspace/graphview.py` / `hyperspace/ui_graph.py` (a titled "media" area: eight `media.<c>` source nodes, the backdrop, `aux` ports); Test `tests/test_ui_media.py`, extend `tests/test_graphview.py`.
 
@@ -247,7 +247,7 @@ Layout (spec section U): the missing banner (one line per id, "not on this Mac �
 
 ---
 
-### Task T11: Docs
+### Task 11 (T11): Docs
 
 **Files:** Modify `docs/plans/32-media-channels.md` (status "built", what was built per WP with commits, rough edges), `docs/DECISION-REGISTER.md` (rows 321–339 in the house format: Answer / Built / Other options / To reverse / Rough edge / Judge it), `docs/DECISIONS.md` (a "Media" section), `docs/ARCHITECTURE.md` (the media package and its threads), `docs/ENGINEERING.md` (both Macs on this build for `/4` presets; the dependency list), `docs/plans/11-hand-checks.md` (group AA from 296: a still/video backdrop, scrub and jog with the cue knob, a dropped file appearing, a missing-local banner on the other Mac, NDI in from Resolume and from TouchDesigner on a second Mac, Syphon in, Syphon/NDI out into Resolume, a webcam, the phone through an NDI camera app — after the sprint), `docs/TESTING-GUIDE.md` if it lists suites, `docs/plans/README.md` entry updated.
 
