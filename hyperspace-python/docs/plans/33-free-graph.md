@@ -316,8 +316,9 @@ their shape (Not in this plan).
 ## Decisions
 
 Rows 341–352 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), written
-there when the build lands. "(owner)" is answered; "(rec)" is the
-recommendation, to accept or change before the build starts.
+there when the build lands. "(owner)" is answered in the owner's words;
+"(rec)" is a recommendation **accepted by the owner on 2026-10-24**
+("accept the rest of the recs, start building").
 
 341. **Retire the FX stack** (owner, 2026-10-24): no `order`, no `target`,
      no FX page; effects are edited on GRAPH.

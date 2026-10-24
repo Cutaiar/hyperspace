@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.14 (`.python-version`), moderngl, numpy, imgui-bundle (`imgui_node_editor`); pytest via `uv run pytest`.
 
-**Spec:** [`33-free-graph.md`](33-free-graph.md) (rows 341–352; 341, 342, 346, 348 and 350 answered by the owner on 2026-10-24, the rest recommendations to confirm before Task 1). Read it first; this plan does not repeat its reasons.
+**Spec:** [`33-free-graph.md`](33-free-graph.md) (rows 341–352; 341, 342, 346, 348 and 350 answered by the owner on 2026-10-24, the rest recommendations the owner accepted the same day). Read it first; this plan does not repeat its reasons.
 
 ## Global Constraints
 
