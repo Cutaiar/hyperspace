@@ -18,9 +18,12 @@ from hyperspace.library import LibraryError
 ROOT = Path(__file__).parent.parent / "hyperspace"
 FILES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
                 *(ROOT / "library" / "fx").glob("*.json")])
-FIXTURES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
-                   *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
-                   *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")])
+# the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
+# is the free graph's own: nothing to migrate, nothing `/4` can say)
+FIXTURES = sorted(p for p in [*(ROOT / "library" / "presets").glob("*.json"),
+                              *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
+                              *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")]
+                  if json.loads(p.read_text()).get("schema") != M.FREE_SCHEMA)
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
 SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}

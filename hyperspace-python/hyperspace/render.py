@@ -127,6 +127,7 @@ from .geometry import (
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
+    FACE_PIC,
     MEDIA_CHANNELS,
     Frame,
     Graph,
@@ -151,10 +152,10 @@ PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
 BG = (0.0, 0.0, 0.0)
 
-# the side, in texels, of the picture the faces' effects run over (plan 20
-# fork F2): square, fixed, a constant and not a param — 512 cannot be told
-# from it on a face and 2048 costs several times as much
-FACE_PIC = 1024
+# FACE_PIC (graph.py's, imported above): the side, in texels, of the
+# picture the faces show while something other than the pattern is wired
+# into them (plan 20 fork F2; plan 33 R: what `shape.faces` asks)
+_UNSET = object()        # `_face_uniforms`: no media layer handed in
 
 # Plan 26 A2, the one camera: the scene's vertices arrive in 3D — the
 # shape after the 4D tumble, the 4D divide and the yaw/pitch turntable
@@ -703,10 +704,13 @@ class CoverTarget:
 
 
 class FaceTarget:
-    """The picture the faces show while an effect is aimed at them (plan
-    20): one RGBA8 texture, FACE_PIC square, premultiplied with alpha as
-    the face's intensity, mipmapped — per face it lands on a face a
-    hundred or so pixels across. Made on first use, never resized."""
+    """The picture the faces show while something other than the pattern
+    is wired into them (plan 20; plan 33 R: `shape.faces`), or the
+    pattern's own picture for a consumer that binds one
+    (`Renderer._pattern_picture`): one RGBA8 texture, FACE_PIC square,
+    premultiplied with alpha as the face's intensity, mipmapped — per face
+    it lands on a face a hundred or so pixels across. Made on first use,
+    never resized."""
 
     def __init__(self, ctx: moderngl.Context):
         self.ctx = ctx
@@ -889,16 +893,21 @@ class Renderer:
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
         self.fx = FxChain(ctx, fx)      # the effect stack after the post pass
-        # the effects aimed at the faces: a second chain over the same
-        # state, borrowing the first's programs, and the picture it ends
-        # on. Nothing is allocated until an effect is aimed at the faces.
-        # face_error says why a face pass could not run (the frame is then
-        # drawn as with no face effect); _pic is the picture _draw_frame
-        # hands the one scene pass it wraps
+        # the picture the faces show while something other than the
+        # pattern is wired into them (plan 33 R: `shape.faces`, painted by
+        # the graph at FACE_PIC², `graph.Shape.prepare`). Nothing is
+        # allocated until then. face_error says why it could not be made
+        # (the frame is then drawn as with the faces unwired); _pic is the
+        # picture the graph hands the one scene pass it wraps, _face_layer
+        # what the pattern's media layer reads that pass (False: no frame
+        # running — the wiring's channel, `_face_media`). `face_fx` is the
+        # retired faces chain, no longer drawn with (plan 33 T7 deletes it)
         self.face_fx = FxChain(ctx, self.fx.state, target=FACES, programs=self.fx)
         self.face_pic = FaceTarget(ctx)
+        self.pattern_pic = FaceTarget(ctx)
         self.face_error = ""
         self._pic: moderngl.Texture | None = None
+        self._face_layer = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
         # plan 21: the outputs. A pipeline with more than one consumer (or
         # one not drawn here) ends in a frame texture, one per pipeline key,
@@ -1038,13 +1047,18 @@ class Renderer:
         # hold a copy program and three textures, rebuilt on next use. A
         # renderer from before the face target existed gets them here
         old_fx, old_pic = getattr(self, "face_fx", None), getattr(self, "face_pic", None)
+        old_pat = getattr(self, "pattern_pic", None)
         self.face_fx = FxChain(self.ctx, self.fx.state, target=FACES, programs=self.fx)
         self.face_pic = FaceTarget(self.ctx)
+        self.pattern_pic = FaceTarget(self.ctx)
         self.face_error = ""
         self._pic = None
-        for res in (old_fx, old_pic):
+        self._face_layer = False
+        for res in (old_fx, old_pic, old_pat):
             if res is not None:
                 res.release()
+        # plan 33 R: the effects' textures at other sizes (`pool_at`)
+        self._release_pools()
         # not the ghost hands': their programs live in ghost.py, and the
         # reloader calls `Ghost.on_reload` itself whenever ghost.py (or a
         # module before it) changed — calling it here too rebuilt them twice
@@ -1104,13 +1118,28 @@ class Renderer:
     def _face_media(self, s: ViewState) -> tuple[moderngl.Texture, bool] | None:
         """The texture the faces draw over their pattern (plan 32 T7, row
         331: where the one bitmap file was) and whether it is in GL's row
-        order: the raw texture of the channel `view.media` names (1–8 = a–h,
-        `media_texture`), at its own size and aspect. None — the layer off —
-        with no channel named, no media state, or nothing on the channel."""
-        k = int(getattr(s, "media", 0) or 0)
-        if not 1 <= k <= len(MEDIA_CHANNELS):
+        order. Plan 33 R: what the preset's graph wires into `pattern.media`
+        — not `view.media`. In a frame, what the graph's pattern node read
+        for this scene pass (`graph.PatternNode.layer`, handed over as
+        `_face_layer`: a channel's raw texture, or a branch's picture at its
+        head's size). Outside one (the FACES page's swatches, a tool) the
+        channel the wiring puts straight in (`_channel_layer`). None — the
+        layer off — with nothing wired, no media state, or nothing on the
+        channel."""
+        got = getattr(self, "_face_layer", False)
+        if got is not False:
+            return got
+        wiring = getattr(self, "wiring", None)
+        src = next((w.src for w in getattr(wiring, "wires", ()) if w.dst == "pattern.media"),
+                   "")
+        return self._channel_layer(src.partition(".")[2]) if src.startswith("media.") else None
+
+    def _channel_layer(self, c: str) -> tuple[moderngl.Texture, bool] | None:
+        """Channel `c`'s raw texture (`media_texture`: at its own size and
+        aspect) and whether it is in GL's row order — the layer a channel
+        wired straight into `pattern.media` draws — or None (nothing on it)."""
+        if not c or c not in MEDIA_CHANNELS:
             return None
-        c = MEDIA_CHANNELS[k - 1]
         tex = self.media_texture(c)
         if tex is None:
             return None
@@ -1388,6 +1417,11 @@ class Renderer:
         # (the frame's view state, for the backdrop the graph is built with:
         # kept on the renderer so `_graph_for` keeps its one-argument shape)
         self._view_now = s
+        # plan 33 R: the frame's size (what `_media_fit` keys its targets
+        # by), and the textures made last frame at another size kept only
+        # while something still asks for them
+        self._frame_size = size
+        self._prune_sized()
         graph = self._graph_for(views)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
@@ -1430,7 +1464,8 @@ class Renderer:
         the graph again, with the same refusals (a dormant wire, a loop).
         Plan 32 R: so are the frame's backdrop channel and whether the
         history holds it (`backdrop_wiring`), laid onto the preset's wiring
-        for the graph alone — `Renderer.wiring` stays the preset's."""
+        for the graph alone — `Renderer.wiring` stays the preset's (plan
+        33 R: whose `backdrop` is the section's wire into `backdrop.image`)."""
         key = graph_key(views)
         s = s if s is not None else getattr(self, "_view_now", None)
         wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
@@ -1458,13 +1493,17 @@ class Renderer:
 
     def backdrop_wiring(self, wiring: Wiring, s: ViewState | None) -> Wiring:
         """`wiring` with the frame's backdrop (plan 32 R, row 330): the
-        channel `backdrop.channel` names (`ViewState.backdrop`, 1–8 = a–h)
-        and `backdrop.history` — none while there are no media channels to
-        read (`media` None) or no view state (a caller from before)."""
+        channel the preset's graph wires into `backdrop.image` (plan 33 R:
+        `Wiring.backdrop`, the section's — not `backdrop.channel`) and the
+        frame's `backdrop.history` — no channel while there are no media
+        channels to read (`media` None) or no view state (a caller from
+        before). A branch into `backdrop.image` takes `backdrop.history`
+        as the channel does."""
         letter, hist = "", False
-        n = int(getattr(s, "backdrop", 0) or 0) if s is not None else 0
-        if getattr(self, "media", None) is not None and 1 <= n <= len(MEDIA_CHANNELS):
-            letter = MEDIA_CHANNELS[n - 1]
+        if s is not None and getattr(self, "media", None) is not None:
+            letter = getattr(wiring, "backdrop", "")
+        branch = any(w.dst == "backdrop.image" for w in getattr(wiring, "wires", ()))
+        if s is not None and (letter or branch):
             hist = bool(getattr(s, "backdrop_history", False))
         if (getattr(wiring, "backdrop", ""), getattr(wiring, "backdrop_history", False)) \
                 == (letter, hist):
@@ -1594,8 +1633,12 @@ class Renderer:
         if key in now:
             return now[key]
         src = self.media_texture(c)
-        out, fbo = self._frame_target(f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha",
-                                      size)
+        # (plan 33 R: fitted at another size than the frame's — a branch on
+        # the faces — it is a target of its own, `(name, size)`)
+        name = f"media.{c}" if alpha >= 1.0 else f"media.{c}@alpha"
+        at = getattr(self, "_frame_size", None)
+        out, fbo = self._frame_target(name if at is None or size == tuple(at)
+                                      else (name, size), size)
         ctx = self.ctx
         fbo.use()
         ctx.viewport = (0, 0, *size)
@@ -1812,10 +1855,14 @@ class Renderer:
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
         """The frame texture for a pipeline: RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
-        again when the frame's size changes."""
+        again when the frame's size changes. Plan 33 R: a key that is
+        `(name, size)` (a picture made at another size, `graph.Frame.key`)
+        lives while some frame asks for it (`_prune_sized`)."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
+        if isinstance(key, tuple):
+            self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if have is not None and have[0].size == size:
             return have
@@ -1839,6 +1886,58 @@ class Renderer:
             fbo.release()
             tex.release()
         self._frames = {}
+
+    def pool_at(self, size: tuple[int, int], n: int
+                ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
+        """The effects' half-float textures at `size`, at least `n` (plan 33
+        R, `graph.Frame.pool`): a branch made at a size not the frame's —
+        the faces' FACE_PIC², the pattern's layer at its channel's — paints
+        through these, as one at the frame's size does through the chain's
+        pool (`FxChain.pool`), so neither is made again for the other. Grown
+        by appending; a size no frame asked for is released
+        (`_prune_sized`)."""
+        size = (int(size[0]), int(size[1]))
+        pools = self.__dict__.setdefault("_pools", {})
+        self.__dict__.setdefault("_pools_used", set()).add(size)
+        pool = pools.setdefault(size, [])
+        while len(pool) < n:
+            tex = self.ctx.texture(size, 4, dtype="f2")
+            try:
+                tex.repeat_x = tex.repeat_y = False
+                fbo = self.ctx.framebuffer(color_attachments=[tex])
+            except Exception:
+                tex.release()
+                raise
+            pool.append((tex, fbo))
+        return list(pool)
+
+    def _release_pools(self) -> None:
+        for pool in (getattr(self, "_pools", None) or {}).values():
+            for tex, fbo in pool:
+                fbo.release()
+                tex.release()
+        self._pools = {}
+        self._pools_used = set()
+
+    def _prune_sized(self) -> None:
+        """Once a frame, first: release the pools (`pool_at`) and the frame
+        textures keyed `(name, size)` that the last frame did not ask for —
+        a channel whose clip changed size, a branch unwired — so pictures
+        made at other sizes never pile up."""
+        pools = getattr(self, "_pools", None) or {}
+        used = getattr(self, "_pools_used", None) or set()
+        for size in [k for k in pools if k not in used]:
+            for tex, fbo in pools.pop(size):
+                fbo.release()
+                tex.release()
+        self._pools_used = set()
+        frames = getattr(self, "_frames", None) or {}
+        used = getattr(self, "_sized_used", None) or set()
+        for key in [k for k in frames if isinstance(k, tuple) and k not in used]:
+            tex, fbo = frames.pop(key)
+            fbo.release()
+            tex.release()
+        self._sized_used = set()
 
     def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple,
                       ghost: Ghost | None = None) -> None:
@@ -1890,38 +1989,33 @@ class Renderer:
         ctx.enable(moderngl.BLEND)
         ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
-    def _face_picture(self, s: ViewState, t: float) -> moderngl.Texture | None:
-        """The picture the faces show this frame, or None for "as ever":
-        the seed (what face 0 shows: pattern and bitmap, premultiplied by
-        its intensity) into the faces' chain, every effect aimed at the
-        faces over it, the last one into the picture's texture, then its
-        mipmaps.
+    def _face_picture(self, s: ViewState, t: float, paint=None) -> moderngl.Texture | None:
+        """The picture the faces show this frame, or None for "as ever"
+        (the pattern per face). Plan 33 R: `paint` paints what the graph
+        wires into `shape.faces` at FACE_PIC² into a framebuffer
+        (`graph.Shape.prepare`) — from the pattern through effects, the
+        faces' chain as it always ran: the seed (what face 0 shows: pattern
+        and bitmap, premultiplied by its intensity) into the first texture,
+        the effects one after another, the last into the picture — then
+        the picture's mipmaps. The retired faces chain (`face_fx`, every
+        effect aimed at the faces) no longer draws.
 
-        None, with nothing run and nothing allocated, unless an effect
-        aimed at the faces is running, the faces are on, there is a copy to
-        draw and the face program built. A pass that raises is caught
-        here: `face_error` says why, the frame is drawn as with no face
-        effect, and the caller binds the scene's framebuffer next whatever
-        this left bound."""
-        # getattr: a renderer from before a hot reload has no face chain
-        chain = getattr(self, "face_fx", None)
+        None, with nothing run and nothing allocated, unless something is
+        to be painted, the faces are on, there is a copy to draw and the
+        face program built. A pass that raises is caught here: `face_error`
+        says why, the frame is drawn as with the faces unwired, and the
+        caller binds the scene's framebuffer next whatever this left bound."""
+        # getattr: a renderer from before a hot reload has no face picture
         pic = getattr(self, "face_pic", None)
         seed, vao = getattr(self, "_seed_prog", None), getattr(self, "_seed_vao", None)
-        if (chain is None or pic is None or seed is None or vao is None
-                or self._face_prog is None or not s.faces or int(s.instances) <= 0
-                or not chain.active()):
+        if (paint is None or pic is None or seed is None or vao is None
+                or self._face_prog is None or not s.faces or int(s.instances) <= 0):
             self.face_error = ""     # no pass asked for: nothing is wrong with it
             return None
         ctx = self.ctx
         try:
-            first = chain.begin((FACE_PIC, FACE_PIC))
             pic.ensure()
-            first.use()
-            ctx.viewport = (0, 0, FACE_PIC, FACE_PIC)
-            ctx.disable(moderngl.BLEND)
-            self._face_uniforms(seed, s, t)
-            vao.render(moderngl.TRIANGLES, vertices=3)
-            chain.run(pic.fbo, t)
+            paint(pic.fbo)
             pic.tex.build_mipmaps()
         except Exception as e:  # noqa: BLE001 — the faces' effects must not take the frame down
             self.face_error = f"faces: {type(e).__name__}: {e}"[:160]
@@ -1929,6 +2023,40 @@ class Renderer:
         finally:
             ctx.enable(moderngl.BLEND)
         self.face_error = ""
+        return pic.tex
+
+    def _pattern_into(self, dst: moderngl.Framebuffer, s: ViewState, t: float,
+                      media) -> None:
+        """The pattern as a picture (plan 33 R, `graph.PatternNode`): the
+        seed — what face 0 shows, the pattern and `media` (the layer's
+        (texture, GL row order) or None) over it, premultiplied by its
+        intensity — into `dst` at its own viewport, blending off, as the
+        faces' chain always seeded its first texture. Transparent black
+        while the seed did not build. Leaves `dst` bound."""
+        ctx = self.ctx
+        seed, vao = getattr(self, "_seed_prog", None), getattr(self, "_seed_vao", None)
+        dst.use()
+        if seed is None or vao is None:
+            ctx.clear(0.0, 0.0, 0.0, 0.0, viewport=tuple(dst.viewport))
+            return
+        ctx.disable(moderngl.BLEND)
+        try:
+            self._face_uniforms(seed, s, t, media=media)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            ctx.enable(moderngl.BLEND)
+
+    def _pattern_picture(self, s: ViewState, t: float, media) -> moderngl.Texture:
+        """The pattern's picture as a texture (plan 33 R): `_pattern_into` a
+        FACE_PIC² `FaceTarget` of its own (`pattern_pic`), mipmapped — what
+        a consumer that binds the pattern's picture reads (a composite, an
+        output's hands port). getattr: a renderer from before plan 33."""
+        pic = getattr(self, "pattern_pic", None)
+        if pic is None:
+            pic = self.pattern_pic = FaceTarget(self.ctx)
+        pic.ensure()
+        self._pattern_into(pic.fbo, s, t, media)
+        pic.tex.build_mipmaps()
         return pic.tex
 
     def _pattern_clock(self, s: ViewState, t: float) -> float:
@@ -1948,11 +2076,13 @@ class Renderer:
         return self._ptime
 
     def _face_uniforms(self, p: moderngl.Program, s: ViewState, t: float,
-                       ptime: float | None = None) -> None:
+                       ptime: float | None = None, media=_UNSET) -> None:
         """What the pattern and the bitmap read, on `p` — the face program
         or the seed — with the bitmap's texture on unit 0. The patterns'
         clock is the live one unless a still pins it (`ptime`); the clocks
-        are set only if the patterns read them (an edit may not)."""
+        are set only if the patterns read them (an edit may not). `media`:
+        the media layer's (texture, GL row order) or None, as the pattern
+        node read it (plan 33 R); left out, `_face_media`'s."""
         if ptime is None:
             ptime = self._pattern_clock(s, t)
         bands = tuple(float(v) for v in (getattr(self, "bands", ()) or ())[:N_BANDS])
@@ -1983,7 +2113,12 @@ class Renderer:
             except KeyError:
                 pass
 
-        got = self._face_media(s) if s.media and s.media_alpha > 0.0 else None
+        # (plan 33 R: the layer is what `pattern.media` reads — `media`,
+        # handed in by the pattern node, else `_face_media` — never
+        # `view.media`)
+        if media is _UNSET:
+            media = self._face_media(s) if s.media_alpha > 0.0 else None
+        got = media if s.media_alpha > 0.0 else None
         put("u_bmp_on", int(got is not None))
         if got is not None:
             tex, upright = got
@@ -2669,11 +2804,13 @@ uniform float v_fid;
 
 def render_offscreen(
     s: ViewState, w: int = 1200, h: int = 800, ctx: moderngl.Context | None = None,
-    t_now: float = 0.0, media=None,
+    t_now: float = 0.0, media=None, wiring: Wiring | None = None,
 ) -> np.ndarray:
     """Render one frame to an FBO; returns (h, w, 3) uint8. For tests/tools.
     Pattern time defaults to 0.0 so offscreen renders are deterministic.
-    `media`: the channels the frame reads (`Renderer.media`), None for none."""
+    `media`: the channels the frame reads (`Renderer.media`), None for none;
+    `wiring`: the graph's (`Renderer.wiring` — plan 33 R: a channel on the
+    faces is the wire `media.<c> → pattern.media`), None the default."""
     own = ctx is None
     if own:
         ctx = moderngl.create_context(standalone=True)
@@ -2682,6 +2819,8 @@ def render_offscreen(
     ctx.viewport = (0, 0, w, h)
     r = Renderer(ctx)
     r.media = media
+    if wiring is not None:
+        r.wiring = wiring
     r.draw(s, w, h, t_now=t_now)
     data = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()

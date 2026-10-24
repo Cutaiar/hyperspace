@@ -43,8 +43,11 @@ from hyperspace.routing import Binding
 FACTORY = sorted(p.stem for p in (Path(graphview.__file__).parent / "library" / "presets")
                  .glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
+# (a `/5` fixture — plan 33 T4's proofs — wires a shader back into the faces,
+# a geometry: the canvas's layout of that cable is plan 33 T6's, not yet built)
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
-               if "graph" in json.loads(p.read_text()))
+               if "graph" in json.loads(p.read_text())
+               and json.loads(p.read_text()).get("schema") != "hyperspace.preset/5")
 REAL = tuple(FxState().names())          # every effect file: the app's chain
 CONCERNS = (graphview.AUDIO, graphview.GEOMETRY, graphview.SHADERS)
 

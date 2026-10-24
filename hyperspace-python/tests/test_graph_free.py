@@ -125,9 +125,10 @@ SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
 def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
     """A section that says a run: `Wiring.run` is it, in wire order, and
     its wires are no edge (a middle effect is not shortened to D1's
-    `after`); the faces' and the backdrop's wires are T4's, not built yet;
-    an effect that reaches nothing has no wire built. A section with no
-    run's head says none (None: the stack, until T7)."""
+    `after`); the faces' run is edges (T4) and a channel straight into the
+    backdrop is the wiring's backdrop; an effect that reaches nothing has no
+    wire built. A section with no run's head says none (None: the stack,
+    until T7)."""
     spec = G.read_graph(section(("frame", "a.image"), ("a", "b.image"), ("b", "c.image"),
                                 ("c", "fx.image"), ("media.b", "backdrop.image"),
                                 ("pattern", "kaleido.image"), ("kaleido", "shape.faces"),
@@ -136,8 +137,9 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
                                 nodes=[{"kind": "effect", "file": "acid", "instance": 2}]))
     assert not spec.notes
     w = spec.wiring()
-    assert w.run == ("a", "b", "c") and w.placed == ()
-    assert w.wires == (G.Wire("history", "palette.image"), G.Wire("palette", "output.2.image"))
+    assert w.run == ("a", "b", "c") and w.placed == () and w.backdrop == "b"
+    assert w.wires == (G.Wire("pattern", "kaleido.image"), G.Wire("kaleido", "shape.faces"),
+                       G.Wire("history", "palette.image"), G.Wire("palette", "output.2.image"))
     assert G.read_graph(section(("frame", "fx.image"))).wiring().run == ()
     assert G.read_graph(section(("hands", "output.2.hands"))).wiring().run is None
     assert G.Wiring().run is None
@@ -145,11 +147,26 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
 
 def v4_sources() -> list[tuple[str, Path]]:
     """Every factory preset file (dial's too) and every fixture under
-    tests/fixtures/presets/ and tests/fixtures/merge-31-32/, as (kind, path)."""
+    tests/fixtures/presets/ and tests/fixtures/merge-31-32/, as (kind, path)
+    — but a `/5` fixture (plan 33 T4's proofs), which no build before plan
+    33 reads and `test_a_free_fixture_saves_as_five` holds instead."""
     out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in SOURCES.items():
-        out += [(kind, p) for p in sorted(folder.glob("*.json"))]
+        out += [(kind, p) for p in sorted(folder.glob("*.json"))
+                if json.loads(p.read_text()).get("schema") != "hyperspace.preset/5"]
     return out
+
+
+def test_a_free_fixture_saves_as_five(tmp_path):
+    """Plan 33 T4's proof presets say what `/4` cannot (a channel through
+    effects onto the faces, under the scene, at two sizes): loaded and saved
+    untouched they stay `/5`, their graph section as written."""
+    for k, name in enumerate(("media-chain-faces", "media-chain-backdrop",
+                              "branch-two-sizes")):
+        path = SOURCES["presets"] / f"{name}.json"
+        doc = json.loads(saved_bytes(tmp_path / str(k), "presets", path))
+        assert doc["schema"] == "hyperspace.preset/5", name
+        assert doc["graph"] == json.loads(path.read_text())["graph"], name
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:

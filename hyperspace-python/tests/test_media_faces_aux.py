@@ -146,13 +146,16 @@ def _renderer(ctx, media=None, wires=()):
 
 
 def test_faces_show_channel(ctx):
-    """A red still on channel c, `view.media = 3`: the faces are red where
-    the bitmap was drawn; `view.media = 0` is the frame with no media."""
-    r = _renderer(ctx, _media(c=Still(_rgba(16, 9))))
+    """A red still on channel c wired into the pattern's layer (plan 33 R:
+    `media.c → pattern.media`, where `view.media = 3` was): the faces are
+    red where the bitmap was drawn; unwired is the frame with no media —
+    whatever `view.media` says, which nothing draws any more."""
+    m = _media(c=Still(_rgba(16, 9)))
     plain = _draw(ctx, _renderer(ctx), _faces(), size=(160, 120))
-    off = _draw(ctx, r, _faces(media=0), size=(160, 120))
+    off = _draw(ctx, _renderer(ctx, m), _faces(media=3), size=(160, 120))
     assert np.array_equal(off, plain)
-    on = _draw(ctx, r, _faces(media=3), size=(160, 120))
+    r = _renderer(ctx, m, wires=[G.Wire("media.c", "pattern.media")])
+    on = _draw(ctx, r, _faces(media=0), size=(160, 120))
     h, w = on.shape[:2]
     centre = on[h // 2 - 4: h // 2 + 4, w // 2 - 4: w // 2 + 4, :3].reshape(-1, 3)
     assert (centre[:, 0] > 2 * centre[:, 1] + 20).all(), centre[:4]
@@ -161,7 +164,8 @@ def test_faces_show_channel(ctx):
     base = plain[h // 2, w // 2, :3]
     assert abs(int(base[0]) - int(base[1])) < 10
     # a channel with nothing on it draws the plain faces
-    assert np.array_equal(_draw(ctx, r, _faces(media=5), size=(160, 120)), plain)
+    r = _renderer(ctx, m, wires=[G.Wire("media.e", "pattern.media")])
+    assert np.array_equal(_draw(ctx, r, _faces(), size=(160, 120)), plain)
 
 
 def _chain(ctx):

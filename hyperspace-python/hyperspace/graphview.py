@@ -1305,8 +1305,9 @@ AREA: dict[str, str] = {
     f"render:{EYE}": GEOMETRY,
     "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
     "HandsLayer": GEOMETRY, "Readout": GEOMETRY, "Cover": GEOMETRY,
-    # the media channels (plan 32 T10)
-    "MediaNode": MEDIA,
+    # the media channels (plan 32 T10), and (plan 33 R) the backdrop they
+    # lie under the scene as and the pattern the faces draw
+    "MediaNode": MEDIA, "BackdropNode": MEDIA, "PatternNode": GEOMETRY,
     # …and the pictures it goes through
     "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
     "Composite": SHADERS, "Output": SHADERS,

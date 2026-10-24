@@ -1454,12 +1454,23 @@ def test_the_face_chain_never_forces_alpha(ctx, fxdir):
     assert px[4, 4, 3] == 255
 
 
-def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2):
-    """`render` with the renderer handed back: the frame, the renderer."""
+def faces_run(*names):
+    """The faces' run as the wiring holds it (plan 33 R): `pattern → names…
+    → shape.faces`, the frame's effects the stack's (no run said)."""
+    from hyperspace import graph as G
+    chain = ["pattern", *names]
+    wires = [G.Wire(a, f"{b}.image") for a, b in zip(chain, names)]
+    return G.Wiring(wires=(*wires, G.Wire(chain[-1], "shape.faces")) if names else ())
+
+
+def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2, faces: tuple = ()):
+    """`render` with the renderer handed back: the frame, the renderer.
+    `faces`: the effects of the faces' run (`faces_run`)."""
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
+    r.wiring = faces_run(*faces)
     s = ViewState(shape=10, faces=True, pattern=pattern, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
@@ -1473,9 +1484,10 @@ def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2):
 
 @pytest.mark.parametrize("name", sorted(FxState().specs))
 def test_every_effect_runs_on_the_face_target(ctx, name):
-    """Aimed at the faces alone, every factory effect compiles, the frame
-    draws with no GL error, the picture is not the seed, and the frame is
-    not the frame without it. No effect is adapted and none is refused."""
+    """On the faces alone (plan 33 R: wired `pattern → name → shape.faces`),
+    every factory effect compiles, the frame draws with no GL error, the
+    picture is not the seed, and the frame is not the frame without it. No
+    effect is adapted and none is refused."""
     from hyperspace.fx import FACES
     from hyperspace.render import FACE_PIC
     base, r0 = face_frame(ctx, FxState())
@@ -1486,12 +1498,13 @@ def test_every_effect_runs_on_the_face_target(ctx, name):
         st.values[name]["density"] = 1.0
     if name == "palette":                  # it starts at mix 0, which the chain skips
         st.values[name].update(mix=1.0, hue_from=155.0, hue_to=245.0)
-    img, r = face_frame(ctx, st)
+    img, r = face_frame(ctx, st, faces=(name,))
     assert ctx.error == "GL_NO_ERROR"
     assert r.face_error == "" and r.fx.errors == {} and not r.fx.active()
-    assert r.face_fx.size == (FACE_PIC, FACE_PIC) and r.face_pic.tex.size == (FACE_PIC, FACE_PIC)
-    # the chain's first texture still holds the seed (one pass: read, never written)
-    seed = np.frombuffer(r.face_fx._tex[0].read(), dtype=np.float16).astype(np.float32)
+    pool = r._pools[(FACE_PIC, FACE_PIC)]
+    assert r.face_pic.tex.size == (FACE_PIC, FACE_PIC) and r.face_fx._tex == []
+    # the faces' first texture still holds the seed (one pass: read, never written)
+    seed = np.frombuffer(pool[0][0].read(), dtype=np.float16).astype(np.float32)
     seed = np.clip(seed * 255.0, 0, 255).reshape(FACE_PIC, FACE_PIC, 4)
     pic = np.frombuffer(r.face_pic.tex.read(), dtype=np.uint8).reshape(FACE_PIC, FACE_PIC, 4)
     assert seed[..., 3].max() > 100                          # the pattern is in the seed

@@ -58,6 +58,14 @@ And plan 32 R's: **Media** (`MediaNode`, `media.a` … `media.h`), a media
 channel fitted to the frame — the backdrop the scene is laid over
 (`grounded`), or any picture port a wire names.
 
+And plan 33 R's: **Pattern** (`PatternNode`, `pattern`), the face pattern
+as a picture with its media layer's input (`pattern.media`), and the
+**Backdrop** sink (`BackdropNode`, `backdrop.image`) — with the shape's
+`faces` port (`shape.faces`), the three ends a channel's own shaders reach
+the faces and the scene's ground by. A branch is made at the size its
+consumer asks (`Node.size_for`, `Frame.at`): the faces' `FACE_PIC`², the
+pattern's layer at its channel's own, the frame's for everything else.
+
 **Materialised and painted images.** A Scene or Layer node *makes* a
 texture that lives until the next frame (`image(frame)`); the History,
 Composite and FX nodes *paint* into whatever framebuffer their consumer
@@ -167,6 +175,12 @@ DRAWS = ("solid", "lines")
 MEDIA_CHANNELS = "abcdefgh"
 # the scene laid over the backdrop, before the history (`Wiring.backdrop`)
 GROUNDED = "grounded"
+# the side, in texels, of the picture the faces show while something other
+# than the pattern is wired into them (plan 20 fork F2; plan 33 R: the size
+# `shape.faces` asks of what feeds it, `Node.size_for`): square, fixed, a
+# constant and not a param — 512 cannot be told from it on a face and 2048
+# costs several times as much. render.py takes it from here
+FACE_PIC = 1024
 
 
 def media_name(c: str) -> str:
@@ -237,6 +251,8 @@ class Wiring:
 
     Plan 32 R: `backdrop`, the channel laid under the scene (`GROUNDED`),
     and `backdrop_history`, whether the capture takes it with the scene.
+    Plan 33 R: the channel is the section's (`media.<c> → backdrop.image`,
+    `GraphSpec.wiring`); a branch into `backdrop.image` is one of `wires`.
 
     Plan 33 R: `run`, the effects wired from `frame` into `fx.image`, in
     wire order — each pipeline's run (`default_graph`); `()` is the empty
@@ -255,9 +271,10 @@ class Wiring:
     composites: tuple[CompositeAt, ...] = ()
     # plan 32 R (row 330): the media channel laid under the scene before the
     # history ("" none, else a letter of `MEDIA_CHANNELS`), and whether the
-    # history captures it too. Not the preset's graph: the renderer sets
-    # them from the frame's `backdrop.*` (`Renderer._graph_for`), so the
-    # graph is built again only when one changes
+    # history captures it too. Plan 33 R: the channel is the preset's graph
+    # (the wire `media.<c> → backdrop.image`); `backdrop_history` stays a
+    # value the renderer lays on per frame (`Renderer.backdrop_wiring`), so
+    # the graph is built again only when one changes
     backdrop: str = ""
     backdrop_history: bool = False
     run: tuple[str, ...] | None = None
@@ -1005,17 +1022,23 @@ class GraphSpec:
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every preset loaded on
             # this build does, `graphmigrate`): its wires are the run, not
-            # edges, and the wires the faces and the backdrop take are
-            # plan 33 T4's — until then `view.media`, `backdrop.channel`
-            # and the faces chain draw them
+            # edges. The faces', the pattern's and the backdrop's wires are
+            # edges like any other (T4); a switch's are plan 33 T5's
             run = run_of(self)
             wires = tuple(w for w in wires if w not in _run_wires(run) and not _later(w))
+        # plan 33 R: a channel straight into the backdrop is the plan 32
+        # backdrop, node for node (`MediaNode(alpha_of="backdrop_alpha")`)
+        back = next((w for w in wires if w.dst == "backdrop.image"
+                     and wire_node_kind(w.src) == "media"), None)
+        if back is not None:
+            wires = tuple(w for w in wires if w != back)
         synth, edges = split_wires(wires, placed)
         if run is not None:
             edges = _reached_edges(edges, run, placed + synth)
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
                       draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                       placed=placed + synth, wires=edges, composites=self.composites(),
+                      backdrop=back.src.partition(".")[2] if back is not None else "",
                       run=run)
 
     def composites(self) -> tuple[CompositeAt, ...]:
@@ -1258,28 +1281,30 @@ def _run_wires(run: tuple[str, ...]) -> set[Wire]:
 
 
 def _later(w: Wire) -> bool:
-    """A wire plan 33 T4 renders: into the faces, the pattern's media or
-    the backdrop, from the pattern, or into or out of a switch."""
-    return (w.dst in ("shape.faces", "pattern.media", "backdrop.image")
-            or wire_node_kind(w.src) in ("pattern", "switch")
-            or wire_node_kind(w.node) == "switch")
+    """A wire plan 33 T5 renders: into or out of a switch."""
+    return wire_node_kind(w.src) == "switch" or wire_node_kind(w.node) == "switch"
+
+
+# the sinks a wire's picture is drawn at (plan 33 R): an output, the
+# history, and the faces, the pattern's layer and the backdrop (T4)
+_DRAWN_AT = ("output", "history", "shape", "pattern", "backdrop")
 
 
 def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
                    placed: tuple[EffectAt, ...]) -> tuple[Wire, ...]:
     """`edges` without the wires into an effect or composite that reaches
     nothing this graph draws (plan 33 R: an unreached node has no node and
-    never runs). What is drawn: an output's or the history's port, an
-    effect of the run, and a placed effect where it sits (D1's own and the
-    wires D1 would write short) — and whatever feeds one of those through
-    a picture port."""
+    never runs). What is drawn: an output's or the history's port, the
+    faces, the pattern's layer, the backdrop (T4), an effect of the run,
+    and a placed effect where it sits (D1's own and the wires D1 would
+    write short) — and whatever feeds one of those through a picture port."""
     wires = [*d1_wires(placed), *edges]
     into: dict[str, list[str]] = {}
     for w in wires:
         if w.port in _PICTURE_PORTS:
             into.setdefault(w.node, []).append(w.src)
     todo = [*run, *(e.name for e in placed),
-            *(w.src for w in wires if wire_node_kind(w.node) in ("output", "history"))]
+            *(w.src for w in wires if wire_node_kind(w.node) in _DRAWN_AT)]
     got: set[str] = set()
     while todo:
         name = todo.pop()
@@ -1493,6 +1518,36 @@ def output_wires(wiring: Wiring, n: int) -> dict[str, Wire]:
     return {w.port: w for w in wiring.wires if w.node == f"output.{n}"}
 
 
+class _SizedData:
+    """A frame's per-frame `data` at another size (plan 33 R): the root
+    frame's own dict, each key stored as `(key, size)` — so a node read at
+    two sizes is made once at each, and what it made at the frame's size
+    (keyed by its bare name, as before) is never the other's."""
+
+    __slots__ = ("data", "size")
+
+    def __init__(self, data: dict, size: tuple[int, int]):
+        self.data, self.size = data, size
+
+    def __contains__(self, key) -> bool:
+        return (key, self.size) in self.data
+
+    def __getitem__(self, key):
+        return self.data[(key, self.size)]
+
+    def __setitem__(self, key, value) -> None:
+        self.data[(key, self.size)] = value
+
+    def get(self, key, default=None):
+        return self.data.get((key, self.size), default)
+
+    def setdefault(self, key, default=None):
+        return self.data.setdefault((key, self.size), default)
+
+    def pop(self, key, *default):
+        return self.data.pop((key, self.size), *default)
+
+
 @dataclass
 class Frame:
     """One frame as the nodes see it: the renderer and what
@@ -1500,7 +1555,15 @@ class Frame:
     under the cap, the first output's target to bind again after a
     failure, the chain's state), and what the nodes fill in as they run
     (the cover, the hands' layer, the readout, each pipeline's frame
-    texture, the failures, `stats`, each node's per-frame `data`)."""
+    texture, the failures, `stats`, each node's per-frame `data`).
+
+    Plan 33 R: a branch is made at the size its consumer asks
+    (`Node.size_for`): `at(size)` is this frame at another size — the
+    faces' `FACE_PIC`², the pattern's layer at its channel's own — with
+    its own `data` (the root's, keyed `(name, size)`: `_SizedData`), its
+    own pool of effect textures (`pool`), a see-through ground and every
+    effect pass at `u_opaque` 0 (`opaque`): a picture made there is one
+    whose alpha is a face's intensity, never the window's."""
 
     r: Any                                   # the Renderer (duck-typed: graph.py never imports render)
     ctx: moderngl.Context
@@ -1526,6 +1589,42 @@ class Frame:
     data: dict[str, Any] = field(default_factory=dict)    # a node's per-frame values, by name
     graph: Graph | None = None
     _users: dict[str, list[int]] | None = None
+    # plan 33 R: `u_opaque` for the effects' passes painted for this frame
+    # (None: the chain's own, the window's ground), the frame this one is
+    # at another size of (None: the frame itself), and those it has made
+    opaque: int | None = None
+    parent: Frame | None = None
+    _at: dict[tuple[int, int], Frame] = field(default_factory=dict)
+
+    @property
+    def root(self) -> Frame:
+        """The frame itself: what `at` made this one from, or this one."""
+        return self.parent if self.parent is not None else self
+
+    def at(self, size: tuple[int, int]) -> Frame:
+        """This frame at `size` (see the class): made once a frame per
+        size, however many consumers ask it."""
+        size = (int(size[0]), int(size[1]))
+        root = self.root
+        got = root._at.get(size)
+        if got is None:
+            got = root._at[size] = replace(root, size=size, bg_alpha=0.0, opaque=0,
+                                           data=_SizedData(root.data, size), parent=root,
+                                           _at={}, _users=None)
+        return got
+
+    def key(self, name: str):
+        """A renderer's texture key for node `name` at this frame's size:
+        the name itself at the frame's, `(name, size)` at another."""
+        return name if self.parent is None else (name, self.size)
+
+    def pool(self, n: int) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
+        """The effects' textures at this frame's size, at least `n`: the
+        chain's pool (`FxChain.pool`) at the frame's size, the renderer's
+        pool for that size at another (`Renderer.pool_at`)."""
+        if self.parent is None:
+            return self.r.fx.pool(self.size, n)
+        return self.r.pool_at(self.size, n)
 
     def users(self, end: Node) -> list[int]:
         """The views pipeline end `end` feeds this frame (indexes into
@@ -1572,6 +1671,15 @@ class Node:
     # (a depth, a readout, the face buffer): an effect placed `after` a node
     # leaves these reading the node itself
     REFS: ClassVar[frozenset[str]] = frozenset()
+    # plan 33 R: the image ports that ask a size of their own, not the
+    # frame's (`size_for`: the faces, the pattern's layer) — an effect that
+    # only they read is made there and never folded at the frame's size
+    SIZED: ClassVar[frozenset[str]] = frozenset()
+    # plan 33 R: a node that makes a texture (`MAKES`) but draws itself
+    # straight into any framebuffer at that framebuffer's size (the
+    # pattern's seed): an effect after it paints it, as the faces' chain
+    # always seeded its first texture, rather than folding its texture
+    PAINTS = False
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -1605,6 +1713,20 @@ class Node:
         """The opacity this node's picture is laid on at (a layer's)."""
         return 1.0
 
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        """The size port `port` asks of what feeds it this frame (plan 33
+        R): the frame's (`frame.size` — an effect's is its consumer's, the
+        frame it is painted for); the faces and the pattern's layer say
+        their own (`SIZED`)."""
+        return tuple(frame.size)
+
+    def reads(self, frame: Frame) -> bool:
+        """Whether this node's picture comes from something this frame
+        (plan 33 R): False only for a channel with nothing on it, and what
+        reads only such (`MediaNode`, an `Effect`, a `Composite`) — the
+        faces then show the pattern, not black."""
+        return True
+
     def lay(self, frame: Frame, dst: moderngl.Framebuffer, rect: tuple, blend: str,
             opaque: bool, flip: tuple[bool, bool] = (False, False),
             scene_depth: moderngl.Texture | None = None) -> None:
@@ -1636,24 +1758,77 @@ class Shape(Node):
     """The 4D shape (`Renderer.draw_scene`): the faces, the edges, the
     points, instanced, painter-sorted, in the shared camera — see-through:
     depth-tested against the solid geometry already drawn, its visible
-    surface written after. `prepare` makes the faces' picture while an
-    effect is aimed at them (`Renderer._face_picture`, before the scene's
-    target is bound); `draw` draws into whatever is bound — clearing it
-    first when it is the scene's only geometry (`clear`), as it always
-    did."""
+    surface written after. `draw` draws into whatever is bound — clearing
+    it first when it is the scene's only geometry (`clear`), as it always
+    did.
+
+    Plan 33 R: `faces`, the faces' one input (`shape.faces`). Unwired, or
+    wired straight from the `pattern` (or through effects of it all off
+    this frame), the faces draw the pattern per face as they always did —
+    no `FACE_PIC` pass. Wired from anything else, `prepare` paints that
+    picture at `FACE_PIC`² (`size_for`, `Frame.at`) into the faces'
+    picture (`Renderer._face_picture`, before the scene's target is
+    bound), shown per face or in screen space by `fx.face_map`: from the
+    pattern through effects that is the faces' chain as it always ran (the
+    pattern seeded into the first texture, the effects one after another).
+    A picture that reads nothing this frame (a channel empty or lost:
+    `Node.reads`) leaves the faces the pattern for that frame, never
+    black. `prepare` also hands the scene pass what the pattern's layer
+    reads (`PatternNode.layer`, `Renderer._face_layer`)."""
 
     KIND = "geometry"
+    INPUTS: ClassVar[dict[str, str]] = {"faces": IMAGE}
     OUTPUT = GEOMETRY
     TIMED = False
+    SIZED: ClassVar[frozenset[str]] = frozenset({"faces"})
+
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        if port == "faces":
+            return (FACE_PIC, FACE_PIC)
+        return super().size_for(port, frame)
+
+    def faces(self, frame: Frame) -> Node | None:
+        """What the faces' picture is painted from this frame, or None —
+        the faces draw the pattern per face: unwired, the pattern itself
+        (or effects of it each off this frame), or a picture that reads
+        nothing."""
+        src = self.inputs.get("faces")
+        head = src
+        while isinstance(head, Effect) and not head.on(frame):
+            head = head.inputs["image"]
+        if head is None or isinstance(head, PatternNode):
+            return None
+        at = frame.at(self.size_for("faces", frame))
+        return src if src.reads(at) else None
 
     def prepare(self, frame: Frame) -> None:
-        frame.r._pic = frame.r._face_picture(frame.s, frame.t)
+        r = frame.r
+        pattern = frame.graph.nodes.get("pattern") if frame.graph is not None else None
+        r._face_layer = None
+        try:
+            # (the layer read only for faces that draw: a channel nothing
+            # shows is not read, as before plan 33)
+            if isinstance(pattern, PatternNode) and getattr(frame.s, "faces", True):
+                r._face_layer = pattern.layer(frame)
+            src = self.faces(frame)
+        except Exception as e:  # noqa: BLE001 — the faces' picture must not take the frame down
+            r.face_error = f"faces: {type(e).__name__}: {e}"[:160]
+            r._pic = None
+            return
+        paint = None
+        if src is not None:
+            at = frame.at(self.size_for("faces", frame))
+
+            def paint(dst: moderngl.Framebuffer, src: Node = src, at: Frame = at) -> None:
+                src.paint(at, dst)
+        r._pic = r._face_picture(frame.s, frame.t, paint)
 
     def draw(self, frame: Frame, clear: bool = True) -> None:
         try:
             frame.r.draw_scene(frame.s, frame.w, frame.h, frame.dpr, frame.t, clear=clear)
         finally:
             frame.r._pic = None          # handed to that one scene pass only
+            frame.r._face_layer = False  # (and the layer: outside a frame, the wiring's)
 
 
 class Hands(Node):
@@ -2006,20 +2181,21 @@ class Scene(Node):
             r._blank.use(location=unit)
         geometries = self.geometries()
         solids = [g for g in geometries if g.SOLID]
+        # plan 33 R: the faces' picture is made before the scene's timer
+        # starts — a branch on the faces times its own nodes (queries never
+        # nest), and its passes are its own lines on SYSTEM
+        rest = [g for g in geometries if not g.SOLID]
+        for g in rest:
+            g.prepare(frame)
         if not solids:                    # A2's scene pass, byte for byte
             with frame.timed(self.name):
-                for g in geometries:
-                    g.prepare(frame)
                 r.scene.draw_fbo.use()
                 ctx.viewport = (0, 0, *frame.size)
                 for g in geometries:
                     g.draw(frame)
                 r.scene.resolve()
             return
-        rest = [g for g in geometries if not g.SOLID]
         with frame.timed(self.name):
-            for g in rest:
-                g.prepare(frame)
             r.scene.draw_fbo.use()
             ctx.viewport = (0, 0, *frame.size)
             r.clear_scene()
@@ -2104,6 +2280,127 @@ class MediaNode(Node):
         dst.use()
         frame.ctx.viewport = rect
         frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+
+    def reads(self, frame: Frame) -> bool:
+        get = getattr(frame.r, "media_texture", None)
+        return get is not None and get(self.channel) is not None
+
+
+def picture(frame: Frame, node: Node) -> moderngl.Texture | None:
+    """`node`'s picture at `frame`'s size as a texture (plan 33 R): the
+    one it made, else painted once a frame into a texture of the
+    renderer's under its name (`Frame.key`) — what a consumer that binds a
+    picture reads (the pattern's layer, a branch under the scene)."""
+    tex = node.image(frame)
+    if tex is not None:
+        return tex
+    key = node.name + "#picture"
+    if key not in frame.data:
+        tex, fbo = frame.r._frame_target(frame.key(key), frame.size)
+        fbo.viewport = (0, 0, *frame.size)
+        node.paint(frame, fbo)
+        frame.data[key] = tex
+    return frame.data[key]
+
+
+def _head(node: Node | None) -> Node | None:
+    """The node a run of effects starts from (`node` itself if no effect)."""
+    while isinstance(node, Effect):
+        node = node.inputs["image"]
+    return node
+
+
+class PatternNode(Node):
+    """The face pattern as a picture (plan 33 G, R): `pattern`, a wire's
+    source — what face 0 shows, the pattern and its media layer over it,
+    premultiplied by its intensity (the faces' chain's seed) — and the
+    layer's one input, `media` (`pattern.media`, where `view.media` chose a
+    channel). `view.media_alpha / scale / mode / amp / rate` stay the
+    layer's params.
+
+    `channel`: the channel wired straight into `media` — read raw, as the
+    faces always read it (`Renderer._channel_layer`: the texture at its
+    own size, no fit pass, no node of its own). Any other picture on
+    `media` is a branch, made at its head's own size (`size_for`: a
+    channel's texture size, else `FACE_PIC`²) so its aspect is the
+    channel's.
+
+    It paints itself straight into any framebuffer (`PAINTS`: the seed
+    drawn there, `Renderer._pattern_into`) — so the faces' run from it is
+    the faces' chain as it always ran — and makes `FACE_PIC`² for a
+    consumer that binds a texture (`image`, `Renderer._pattern_picture`)."""
+
+    KIND = "pattern"
+    INPUTS: ClassVar[dict[str, str]] = {"media": IMAGE}
+    OUTPUT = IMAGE
+    MAKES = True
+    PAINTS = True
+    TIMED = False                 # its time is the scene's, or its consumer's
+    SIZED: ClassVar[frozenset[str]] = frozenset({"media"})
+
+    def __init__(self, name: str = "pattern", after: tuple[Node, ...] = (),
+                 channel: str = "", **inputs: Node | None):
+        if channel and (channel not in MEDIA_CHANNELS or len(channel) != 1):
+            raise ValueError(f"pattern node {name!r}: channel {channel!r}, one of "
+                             f"{MEDIA_CHANNELS}")
+        super().__init__(name, after, **inputs)
+        self.channel = channel
+
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        if port != "media":
+            return super().size_for(port, frame)
+        head = _head(self.inputs["media"])
+        get = getattr(frame.r, "media_texture", None)
+        tex = get(head.channel) if isinstance(head, MediaNode) and get is not None else None
+        return tuple(tex.size) if tex is not None else (FACE_PIC, FACE_PIC)
+
+    def layer(self, frame: Frame) -> tuple[moderngl.Texture, bool] | None:
+        """What the pattern's media layer draws this frame — (the texture,
+        whether its rows are in GL's order) — or None, the layer off: the
+        raw channel `channel` names, or the branch's picture at its head's
+        size (rendered: GL's order). Once a frame (the root frame's)."""
+        root = frame.root
+        key = self.name + "#layer"
+        if key not in root.data:
+            got = None
+            src = self.inputs["media"]
+            if float(getattr(root.s, "media_alpha", 1.0)) <= 0.0:
+                pass                       # the layer off: nothing read for it
+            elif self.channel:
+                get = getattr(root.r, "_channel_layer", None)
+                got = get(self.channel) if get is not None else None
+            elif src is not None:
+                at = root.at(self.size_for("media", root))
+                if src.reads(at):
+                    tex = picture(at, src)
+                    got = (tex, True) if tex is not None else None
+            root.data[key] = got
+        return root.data[key]
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        key = self.name + "#image"
+        if key not in frame.data:
+            frame.data[key] = frame.r._pattern_picture(frame.s, frame.t, self.layer(frame))
+        return frame.data[key]
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        frame.r._pattern_into(dst, frame.s, frame.t, self.layer(frame))
+
+
+class BackdropNode(Node):
+    """The backdrop (plan 33 G): `backdrop`, the sink whose `image` input
+    takes the place of `backdrop.channel`. It draws nothing itself — the
+    picture on `image` is laid under the scene by `grounded` (a channel
+    straight in: the plan 32 `MediaNode(alpha_of="backdrop_alpha")`; any
+    other picture: `Composite(…, under_alpha_of="backdrop_alpha")`). Built
+    only when `backdrop.image` is wired; `backdrop.alpha` and
+    `backdrop.history` stay params."""
+
+    KIND = "backdrop"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = None
+    TIMED = False
 
 
 # ---------------------------------------------------------------- layers
@@ -2352,16 +2649,33 @@ class Composite(Node):
     REFS: ClassVar[frozenset[str]] = frozenset({"depth"})
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), blend: str = "over",
-                 **inputs: Node | None):
+                 under_alpha_of: str | None = None, **inputs: Node | None):
         if blend not in BLENDS:
             raise ValueError(f"composite {name!r}: blend {blend!r}, one of {', '.join(BLENDS)}")
         super().__init__(name, after, **inputs)
         self.blend = blend
+        # plan 33 R: the `ViewState` field `under` is laid on at (the
+        # backdrop's `backdrop_alpha`, a branch under the scene), over the
+        # ground; None paints `under` as it is
+        self.under_alpha_of = under_alpha_of
+
+    def reads(self, frame: Frame) -> bool:
+        return any(n is not None and n.reads(frame)
+                   for n in (self.inputs["under"], self.inputs["over"]))
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         r, ctx, size = frame.r, frame.ctx, frame.size
         under = self.inputs["under"]
-        if under is None:
+        if under is not None and self.under_alpha_of is not None:
+            # (made before the lay: its own passes time themselves)
+            tex = picture(frame, under)
+            dst.use()
+            ctx.viewport = (0, 0, *size)
+            ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
+            a = min(max(float(getattr(frame.s, self.under_alpha_of, 1.0)), 0.0), 1.0)
+            if tex is not None and a > 0.0:
+                r.lay(tex, dst, (0, 0, *size), blend="over", alpha=a, opaque=r.fx.opaque)
+        elif under is None:
             dst.use()
             ctx.viewport = (0, 0, *size)
             ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
@@ -2385,7 +2699,7 @@ class Composite(Node):
         frame texture under this node's name) for a consumer that needs a
         texture — the capture."""
         if self.name not in frame.data:
-            tex, fbo = frame.r._frame_target(self.name, frame.size)
+            tex, fbo = frame.r._frame_target(frame.key(self.name), frame.size)
             fbo.viewport = (0, 0, *frame.size)
             self.paint(frame, fbo)
             frame.data[self.name] = tex
@@ -2428,15 +2742,15 @@ def _spare(frame: Frame, dst: moderngl.Framebuffer | None, hold: bool = False
     other one, which the effect before it wrote from `dst`'s — so two are
     enough however long the run; one is added if none is free. `hold`
     keeps the texture for the rest of the frame."""
-    fx = frame.r.fx
     held = frame.data.setdefault("fx#held", set())
     need = frame.graph.pool if frame.graph is not None else 2
-    pool = fx.pool(frame.size, max(need, 2))
+    # (plan 33 R: the pool at this frame's size — `Frame.pool`)
+    pool = frame.pool(max(need, 2))
     for tex, fbo in pool:
         if fbo is not dst and id(tex) not in held:
             break
     else:
-        tex, fbo = fx.pool(frame.size, len(pool) + 1)[-1]
+        tex, fbo = frame.pool(len(pool) + 1)[-1]
     if hold:
         held.add(id(tex))
     return tex, fbo
@@ -2498,7 +2812,10 @@ class Effect(Node):
         """Its source makes a texture in `run` (the scene, a layer, or an
         effect folding one): this effect folds it once in its own `run`."""
         src = self.inputs["image"]
-        return src is not None and (src.MAKES or (isinstance(src, Effect) and src.makes))
+        # (plan 33 R: a source that paints itself straight in — the
+        # pattern's seed, `PAINTS` — is painted, as the faces' chain was)
+        return src is not None and ((src.MAKES and not src.PAINTS)
+                                    or (isinstance(src, Effect) and src.makes))
 
     @property
     def see_through(self) -> bool:
@@ -2508,8 +2825,16 @@ class Effect(Node):
             src = src.inputs["image"]
         return src is not None and src.KIND == "layer"
 
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return src is not None and src.reads(frame)
+
     def run(self, frame: Frame) -> None:
-        if self.makes and self.on(frame):
+        # plan 33 R: folded here only where something reads it at the
+        # frame's size — one only the faces or the pattern's layer read is
+        # made at their size, when they pull it (`Graph.at_frame`)
+        if (self.makes and self.on(frame)
+                and (frame.graph is None or frame.graph.at_frame(self))):
             self._made(frame)
 
     def alpha(self, frame: Frame) -> float:
@@ -2571,8 +2896,7 @@ class Effect(Node):
             # source's own passes nor the paint below can take it
             guard: set[int] = set()
             if avoid is not None:
-                guard = {id(t) for t, f in frame.r.fx.pool(frame.size, 0)
-                         if f is avoid} - held
+                guard = {id(t) for t, f in frame.pool(0) if f is avoid} - held
             held |= guard
             try:
                 tex = src.image(frame)
@@ -2587,13 +2911,21 @@ class Effect(Node):
     def _one(self, frame: Frame, src: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
         """This effect's pass from texture `src` into `dst`, timed and
         counted; a layer's keeps its see-through ground."""
-        kw = {"opaque": 0} if self.see_through else {}
+        kw = {"opaque": 0} if self.see_through else self._opaque(frame)
         aux = self._aux(frame, dst)
         if aux is not None:
             kw["aux"] = aux
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, src, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
+
+    @staticmethod
+    def _opaque(frame: Frame) -> dict:
+        """`run_one`'s `opaque` for a pass painted for `frame`: the frame's
+        own (0 at another size: a face's intensity, `Frame.at`), or
+        nothing — the chain's, the window's ground."""
+        opaque = getattr(frame, "opaque", None)
+        return {} if opaque is None else {"opaque": opaque}
 
     def on(self, frame: Frame) -> bool:
         """Whether this effect runs a pass this frame (see the class)."""
@@ -2653,6 +2985,7 @@ class Effect(Node):
         tex, fbo = _spare(frame, dst)
         self.inputs["image"].paint(frame, fbo)
         kw = {"aux": aux} if aux is not None else {}
+        kw.update(self._opaque(frame))
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
@@ -2984,6 +3317,7 @@ class Graph:
         self.stack: tuple[str, ...] | None = None
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
+        self._framed: frozenset[str] | None = None     # plan 33 R: `at_frame`, settled
 
     def insert(self, node: Effect, edges: list[tuple[Node, str]]) -> Effect:
         """Add placed effect `node` (its input already wired) and make each
@@ -3025,7 +3359,7 @@ class Graph:
                 if src is not None:
                     self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
-        self._pool = None
+        self._pool = self._framed = None
 
     def folds(self, index: int) -> bool:
         """Whether output `index`'s picture goes through an effect placed
@@ -3043,8 +3377,34 @@ class Graph:
             if src is not None:
                 self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
-        self._pool = None
+        self._pool = self._framed = None
         return node
+
+    def at_frame(self, node: Node) -> bool:
+        """Whether `node`'s picture is read at the frame's size (plan 33
+        R): some port reads it that is not one asking a size of its own
+        (`Node.SIZED`: the faces, the pattern's layer) — through an effect,
+        whatever reads the effect. A node nothing reads counts as read
+        there (as before plan 33). Settled with the graph."""
+        if self._framed is None:
+            readers: dict[str, list[tuple[Node, str]]] = {}
+            for c in self.nodes.values():
+                for port, src in c.inputs.items():
+                    if src is not None:
+                        readers.setdefault(src.name, []).append((c, port))
+            memo: dict[str, bool] = {}
+
+            def framed(n: Node) -> bool:
+                if n.name not in memo:
+                    memo[n.name] = False           # (a loop reads it nowhere new)
+                    got = readers.get(n.name, [])
+                    memo[n.name] = not got or any(
+                        port not in c.SIZED and (not isinstance(c, Effect) or framed(c))
+                        for c, port in got)
+                return memo[n.name]
+
+            self._framed = frozenset(n.name for n in self.nodes.values() if framed(n))
+        return node.name in self._framed
 
     def readers(self, node: Node) -> int:
         """How many input ports of this graph's nodes read `node`."""
@@ -3233,7 +3593,19 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     hands' layer on for "scene+hands"). The hands-only pipeline has no
     backdrop. Without one the graph is the one above, node for node. A
     channel a wire leaves (`media.c → output.2.image`) is a `media.<c>`
-    node of its own (`media.<c>(wire)` beside the backdrop's)."""
+    node of its own (`media.<c>(wire)` beside the backdrop's).
+
+    Plan 33 R: the faces, the pattern's layer and the backdrop are wire
+    ends. A wire touching the pattern makes its node (`PatternNode`,
+    `pattern`): a channel straight into `pattern.media` is read raw, with
+    no node of its own, as the faces always read `view.media`'s; anything
+    else wired there is a branch. A wire into `shape.faces` is the shape's
+    `faces` port. A branch into `backdrop.image` lays under the scene in
+    `grounded` at `backdrop.alpha` (`Composite.under_alpha_of`), as the
+    channel does; either way `backdrop` (`BackdropNode`) is the sink. A
+    branch is made where its consumer asks (`Node.size_for`): an effect
+    only the faces read is made at `FACE_PIC`², never folded at the
+    frame's size (`Graph.at_frame`)."""
     wiring = wiring if wiring is not None else Wiring()
     switches = [v.switches for v in views]
     inside = wiring.in_scene()
@@ -3260,6 +3632,12 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     out_of_run |= {name for w in wiring.wires if not is_aux(w) for name in (w.src, w.node)
                    if wire_node_kind(name) == "effect"}
     wired_layer = any(w.src == layer_name(from_layer.n) for w in wiring.wires)
+    # plan 33 R: the pattern's node, the channel read raw into its layer,
+    # and a branch under the scene
+    straight = next((w for w in wiring.wires if w.dst == "pattern.media"
+                     and wire_node_kind(w.src) == "media"), None)
+    want_pattern = any(w.src == "pattern" or w.dst == "pattern.media" for w in wiring.wires)
+    under_branch = any(w.dst == "backdrop.image" for w in wiring.wires)
 
     def layered(sw: Switches) -> bool:
         return bool(sw.hands) and (not in_scene or not sw.scene)
@@ -3282,6 +3660,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
             g.dormant[e] = f"{e} in the run — no {e} effect in this build"
     g.run = tuple(e for e in names if e in have)   # the effects of every pipeline's run
     points = cloud_nodes(g, g.clouds)
+    if want_pattern:
+        g.add(PatternNode("pattern",
+                          channel=straight.src.partition(".")[2] if straight is not None else ""))
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
     for h in wiring.nodes():
@@ -3289,7 +3670,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
             geo[h.n] = g.add(Hands(hands_name(h.n), draw=h.draw))
     # plan 32 R: with a backdrop the scene clears see-through (`Scene.ground`)
     scene = g.add(Scene("scene", geometries=[*points, *(geo[h.n] for h in inside), shape],
-                        ground=0.0 if wiring.backdrop else None))
+                        ground=0.0 if wiring.backdrop or under_branch else None))
     cover = g.add(Cover("cover", scene=scene))
     # plan 32 R (row 330): the scene laid over the backdrop's channel before
     # the history, so the echoes, the dream and the effects are over both
@@ -3298,6 +3679,13 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         under = g.add(MediaNode(media_name(wiring.backdrop), wiring.backdrop,
                                 alpha_of="backdrop_alpha"))
         grounded = g.add(Composite(GROUNDED, blend="over", over=scene, under=under))
+        g.add(BackdropNode("backdrop", image=under))
+    elif under_branch:
+        # plan 33 R: a branch's picture under the scene — `under` is the
+        # wire's (`_Wiring._put`), laid on at `backdrop.alpha`
+        grounded = g.add(Composite(GROUNDED, blend="over", over=scene,
+                                   under_alpha_of="backdrop_alpha"))
+        g.add(BackdropNode("backdrop"))
     layer = (g.add(HandsLayer(layer_name(from_layer.n),
                               readout="always" if from_layer.into == "scene" or on_layer
                               else "through",
@@ -3376,7 +3764,7 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     # beside the backdrop's when the backdrop is the same channel
     media: dict[str, MediaNode] = {}
     for w in wiring.wires:
-        if wire_node_kind(w.src) == "media" and w.src not in media:
+        if wire_node_kind(w.src) == "media" and w.src not in media and w != straight:
             name = w.src if w.src not in g.nodes else f"{w.src}(wire)"
             media[w.src] = g.add(MediaNode(name, w.src.partition(".")[2]))
     wiring_left = _Wiring(g, wiring, layer, depth, media)
@@ -3408,7 +3796,12 @@ class _Wiring:
         # plan 32 R: the aux wires are put on last (`aux`), once every node
         # of the effects they feed is in the graph
         self.aux_wires = [w for w in wiring.wires if is_aux(w)]
-        self.wires = [w for w in wiring.wires if not is_aux(w)]
+        # (plan 33 R: a channel straight into the pattern's layer is the
+        # pattern node's own `channel`, read raw — no edge)
+        pattern = g.nodes.get("pattern")
+        raw = getattr(pattern, "channel", "")
+        self.wires = [w for w in wiring.wires if not is_aux(w)
+                      and not (raw and w.dst == "pattern.media" and w.src == media_name(raw))]
         # plan 33 R: an effect of the run has its nodes already (one per
         # pipeline): a wire on from it reads the scene pipeline's
         self.makers = {name for w in self.wires for name in (w.src, w.node)
@@ -3539,6 +3932,35 @@ class _Wiring:
         self.made[name] = node
         self.done.update(ins)
 
+    def _sink(self, w: Wire, src: Node) -> str | None:
+        """`src` into the faces, the pattern's layer or the backdrop (plan
+        33 R); None, or why it is dormant — a picture drawn from the faces
+        (the scene, the history, what reads them) cannot go back into
+        them, nor one drawn from the backdrop (the history over it) under
+        the scene."""
+        g = self.g
+        ups = _upstream(src) | {id(src)}
+        if w.node in ("shape", "pattern"):
+            shape = g.nodes.get("shape")
+            if shape is None or id(shape) in ups:
+                return f"{w.src} is drawn from the faces: that makes a loop"
+            if w.node == "shape":
+                shape.inputs["faces"] = src
+                return None
+            pattern = g.nodes.get("pattern")
+            if not isinstance(pattern, PatternNode):
+                return self._lacks("pattern")
+            pattern.inputs["media"] = src
+            return None
+        grounded, back = g.nodes.get(GROUNDED), g.nodes.get("backdrop")
+        if grounded is None or not isinstance(back, BackdropNode):
+            return self._lacks("backdrop")
+        if id(grounded) in ups:
+            return f"{w.src} is drawn from what lies on the backdrop: that makes a loop"
+        grounded.inputs["under"] = src
+        back.inputs["image"] = src
+        return None
+
     def _reads(self, w: Wire) -> Node | None:
         """What port `w.dst` reads in the graph as built (its default)."""
         out = self.g.nodes.get(w.node)
@@ -3550,6 +3972,8 @@ class _Wiring:
         if w.node == "history":
             g.nodes["history"].inputs["image"] = src
             return None
+        if w.node in ("shape", "pattern", "backdrop"):
+            return self._sink(w, src)
         out = g.nodes.get(w.node)
         if not isinstance(out, Output):
             return self._lacks(w.node)

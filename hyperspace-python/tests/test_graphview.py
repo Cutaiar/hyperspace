@@ -626,7 +626,9 @@ def test_graph_has_media_area(rig):
     view = build(rig, g)
     assert view.node("render:media.a(wire)") is None       # one node per channel
     froms = [c for c in view.cables if c.src_port == "rout:media.a"]
-    assert {c.dst_port for c in froms} == {"rin:acid/aux", f"rin:{G.GROUNDED}/under"}
+    # (plan 33 R: and into the backdrop's sink, the wire `media.a → backdrop.image`)
+    assert {c.dst_port for c in froms} == {"rin:acid/aux", f"rin:{G.GROUNDED}/under",
+                                           "rin:backdrop/image"}
     assert all(c.type == graphview.IMAGE for c in froms)
     assert not view.node("render:media.a").idle
     wired = next(c for c in froms if c.dst_port == "rin:acid/aux")
