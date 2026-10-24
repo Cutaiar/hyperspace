@@ -538,11 +538,12 @@ def test_the_page_has_no_conflicting_ids(tmp_path, monkeypatch):
                 # plan 16 WP2: every chip is two items, the LED and the name
                 for n in st.names():
                     assert f"led.fx.{n}.on" in ids and f"chip.fx.{n}.on" in ids, n
-                # the strip header's ONTO chips and a menu each, always;
-                # the two map chips, a menu each, and "faces on" while aimed
+                # plan 33 U: the strip header has no ONTO chips (an effect's
+                # place is its wires); the two map chips, a menu each, and
+                # "faces on" while aimed
                 for i in (0, 1):
-                    assert f"onto.fx.{name}.target.{i}" in ids
-                    assert f"ctx.fx.{name}.target.onto{i}" in ids
+                    assert f"onto.fx.{name}.target.{i}" not in ids
+                    assert f"ctx.fx.{name}.target.onto{i}" not in ids
                 faces_ids = {"map.fx.face_map.0", "map.fx.face_map.1", "ctx.fx.face_map.map0",
                              "ctx.fx.face_map.map1", "idle.view.faces"}
                 assert (faces_ids <= set(ids)) if aimed else not (faces_ids & set(ids)), name
@@ -1065,15 +1066,11 @@ def test_the_idle_strips_controls_stay_live(fxpage):
     st.select("warp")
     fxpage.frame()
     assert reg["fx.warp.on"].base is False and fxpage.veils
-    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    # (plan 33 U: no order slider, no ONTO chips — an effect's place is its wires)
+    rows = ["fx.warp.mix", "fx.warp.speed", "fx.warp.blend",
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)]
     for pid in ("fx.warp.on", *rows):                # no begin_disabled wraps a row
         assert fxpage.disabled[pid] == 0, pid
-    # the ONTO chips are in the header, over the veil: an idle effect can be re-aimed
-    veil_top = fxpage.veils[1][1]
-    for i in (0, 1):
-        assert fxpage.rects[f"onto.fx.warp.target.{i}"][3] <= veil_top
-        assert fxpage.disabled[f"onto.fx.warp.target.{i}"] == 0
     lo, hi = fxpage.veils[0], fxpage.veils[1]
     assert lo == pytest.approx(fxpage.rects["fx.warp.mix"])      # the mix beside the check
     on = fxpage.rects["fx.warp.on"]
@@ -1108,7 +1105,7 @@ def test_an_armed_rows_learn_frame_is_drawn_over_the_veil(fxpage, monkeypatch):
     panel.learn = SimpleNamespace(learning="fx.warp.speed", arm=lambda pid: None)
     fxpage.frame()
     assert len(seen) == 1 and fxpage.veils          # idle: after the veil, once
-    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend", "fx.warp.order",
+    rows = {"fx.warp.mix", "fx.warp.speed", "fx.warp.blend",      # (plan 33 U: no order)
             *(f"fx.warp.{p.key}" for p in st.specs["warp"].params)}
     assert set(seen[0]) == rows
     r0, r1 = seen[0]["fx.warp.speed"]
@@ -1678,71 +1675,9 @@ def test_the_map_chips_set_fx_face_map(fxpage, monkeypatch):
     assert tips and tips[-1].startswith(p.tip + "\n") and "per face" in tips[-1]
 
 
-def test_the_strips_onto_chips_move_an_effect_between_chains(fxpage, monkeypatch):
-    """The owner's report of 2026-10-05: "I'm not seeing how to route the FX
-    shader output into the faces" — the target was an unlabelled combo
-    under BLEND. Now every open strip's header carries ONTO and two chips,
-    frame and faces, on the title's line at its right end, whatever the
-    effect's state and whether Faces is on; the lit one is where it runs.
-    A click is Param.set on fx.<name>.target, which is structure (not
-    modulatable); each chip has the param's menu."""
-    from hyperspace import ui
-    from hyperspace.fx import FACES, FRAME, TARGETS
-    from hyperspace.ui_fx import FAINT_FACES, ONTO
-    imgui, st, reg, panel = fxpage.imgui, fxpage.st, fxpage.reg, fxpage.panel
-    p = reg["fx.warp.target"]
-    assert p.names == TARGETS == ["frame", "faces"] and not p.modulatable and p.persist
-    popups, lit = [], []
-    real_popup = imgui.begin_popup_context_item
-    monkeypatch.setattr(imgui, "begin_popup_context_item",
-                        lambda label, *a, **k: (popups.append(label), real_popup(label, *a, **k))[1])
-    real_lit = ui.lit_chip
-    monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k: (
-        lit.append((label.split("##", 1)[-1], bool(on))), real_lit(label, on, *a, **k))[1])
-    st.select("warp")
-    # drawn in every state a newcomer meets: the effect off or on, Faces off or on
-    for on, faces_on in ((False, False), (True, False), (False, True), (True, True)):
-        reg["fx.warp.on"].set(on)
-        panel.view.faces = faces_on
-        lit.clear()
-        fxpage.frame()
-        a, b = fxpage.rects["onto.fx.warp.target.0"], fxpage.rects["onto.fx.warp.target.1"]
-        assert a[1] == b[1] and a[2] <= b[0]                        # one row: frame, then faces
-        assert b[2] == pytest.approx(fxpage.rects["fx.warp.mix"][2], abs=1.5)   # the right end
-        assert b[3] <= fxpage.rects["fx.warp.on"][1]                # over the strip's rows
-        assert b[1] >= fxpage.rects["chip.fx.huecycle.on"][3]        # under the chip grid
-        assert ONTO.upper() in fxpage.texts and "WARP" in " ".join(fxpage.texts).upper()
-        assert ("onto.fx.warp.target.0", True) in lit and ("onto.fx.warp.target.1", False) in lit
-    assert "fx.warp.target" not in fxpage.rects                     # no combo any more
-    assert {"##ctx.fx.warp.target.onto0", "##ctx.fx.warp.target.onto1"} <= set(popups)
-    blend, order = fxpage.rects["fx.warp.blend"], fxpage.rects["fx.warp.order"]
-    assert blend[1] == order[1] and blend[2] <= order[0]            # the blend row: blend, order
-    reg["fx.plasma.on"].set(True)
-    order_was = st.names()
-    assert st.chain(FRAME) == st.chain() and st.chain(FACES) == []
-    fxpage.click("onto.fx.warp.target.1")                           # the mouse: "faces"
-    assert p.base == FACES and st.values["warp"]["target"] == FACES
-    assert st.chain(FACES) == ["warp"] and st.chain(FRAME) == ["plasma"]
-    lit.clear()
-    fxpage.frame()
-    assert ("onto.fx.warp.target.1", True) in lit and ("onto.fx.warp.target.0", False) in lit
-    assert "faces  Trip warp" in fxpage.texts and fxpage.wrapped[0] == "frame  Plasma"
-    # running on the faces: the faint line where the idle line would be, one line wide
-    assert FAINT_FACES in fxpage.texts and fxpage.colors[FAINT_FACES] == (
-        ui.FAINT.x, ui.FAINT.y, ui.FAINT.z, ui.FAINT.w)
-    imgui.new_frame()
-    assert imgui.calc_text_size(FAINT_FACES).x < 392    # the page's width in the panel
-    imgui.end_frame()
-    # nothing else moved: the stack order, the open strip, every other target
-    assert st.names() == order_was and st.selected() == "warp"
-    assert [n for n in st.names() if st.values[n]["target"] == FACES] == ["warp"]
-    fxpage.click("onto.fx.warp.target.1")                           # the lit one again: no change
-    assert p.base == FACES
-    fxpage.click("onto.fx.warp.target.0")                           # …and back
-    assert p.base == FRAME and st.chain(FACES) == [] and st.chain(FRAME) == st.chain()
-    fxpage.frame()
-    assert not [t for t in fxpage.texts if t.startswith("faces")]
-    assert FAINT_FACES not in fxpage.texts
+# (plan 33 T6: the strip's ONTO chips are gone — an effect's place is its
+# wires, edited on GRAPH; tests/test_graph_edit.py's
+# test_the_strip_has_no_order_or_onto holds that)
 
 
 def test_a_chip_aimed_at_the_faces_is_marked(fxpage, monkeypatch):
@@ -1941,9 +1876,10 @@ def test_the_page_fits_with_the_faces_row_showing(fxpage, monkeypatch):
 
 
 def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
-    """The ONTO chips and the map chips write a base through Param.set and
-    push nothing: undo's watcher makes each change one step ("Scene-setters
-    write the base")."""
+    """A target set through Param.set (what the strip's ONTO chips did
+    before plan 33 T6) and the map chips write a base and push nothing:
+    undo's watcher makes each change one step ("Scene-setters write the
+    base")."""
     from test_undo import boot, frames, labels, settle
 
     from hyperspace import undo
@@ -1961,7 +1897,7 @@ def test_the_target_and_the_map_are_one_undo_step_each(tmp_path, monkeypatch):
         r.reg["fx.face_map"].set(PER_FACE)
         settle(r)
         start = labels(r)
-        rig.click(f"onto.fx.warp.target.{FACES}")
+        r.reg["fx.warp.target"].set(FACES)
         settle(r)
         assert r.reg["fx.warp.target"].base == FACES
         assert len(labels(r)) == len(start) + 1 and not pushes
@@ -2313,21 +2249,9 @@ def test_a_drag_never_changes_a_target_or_a_switch(fxpage_twelve, monkeypatch):
     assert not bars
 
 
-def test_the_order_slider_still_reorders(fxpage_twelve):
-    """Fork F7's fallback: the strip's order slider is still there and still
-    moves its effect through the stack, the strip staying open on it."""
-    st, reg = fxpage_twelve.st, fxpage_twelve.reg
-    st.select("plasma")
-    fxpage_twelve.frame()
-    assert "fx.plasma.order" in fxpage_twelve.rects and st.names()[0] == "plasma"
-    fxpage_twelve.click("fx.plasma.order", 0.95)
-    assert reg["fx.plasma.order"].base > 85 and st.names()[-1] == "plasma"
-    assert st.selected() == "plasma"
-    fxpage_twelve.click("fx.plasma.order", 0.05)
-    assert reg["fx.plasma.order"].base < 10 and st.names()[0] == "plasma"
-    # and after a drag the slider reads what the drop wrote
-    fxpage_twelve.drag("chip.fx.plasma.on", "chip.fx.warp.on")
-    assert st.values["plasma"]["order"] == reg["fx.plasma.order"].base == 18
+# (plan 33 T6: the strip's order slider is gone — the run is reordered by
+# rewiring on GRAPH, tests/test_graph_edit.py's
+# test_reordering_the_run_is_rewiring)
 
 
 def test_a_drop_moves_the_effect_the_drag_began_on(fxpage_twelve, monkeypatch):
@@ -2478,7 +2402,7 @@ def test_a_placed_effects_chip_says_where_it_sits_and_is_not_reorderable(fxpage,
     fxpage.click("chip.fx.warp.on")
     assert st.selected() == "warp"
     fxpage.frame()
-    assert {"fx.warp.on", "fx.warp.mix", "fx.warp.order"} <= set(fxpage.rects)
+    assert {"fx.warp.on", "fx.warp.mix", "fx.warp.blend"} <= set(fxpage.rects)   # (plan 33 U: no order)
 
     # dormant in the built graph: on, but not counted as running
     reg["fx.warp.on"].set(True)

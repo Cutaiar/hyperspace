@@ -493,7 +493,8 @@ def test_create_and_delete_open_only_in_the_typed_dispatch():
                                             "_rig_node_cut", "_delete_render_cable",
                                             "_voice_node_cut", "_lane_cut",   # plan 31 G1
                                             "_delete_render_node", "delete_bundle",
-                                            "delete_through"}   # N9: a through wire
+                                            "delete_through",   # N9: a through wire
+                                            "_feeds_cut"}   # plan 33 U: frame's picture
     assert where["reject_new_item"] <= {"_value_drag", "_create_render", "_stub_drag"}
     # plan 28 N4: the render types and kinds are in the dispatch, to N4's handlers
     assert set(graphview.RENDER_TYPES) <= set(ui_graph.CREATE)
@@ -661,3 +662,194 @@ def test_a_selection_delete_keeps_its_first_refusal_s_words(rig, monkeypatch):
     view.nodes.append(graphview.VNode(m2.id, "modifier", "threshold"))
     ui_graph._delete(panel, st, view)
     assert table.modifier(m2.id) is None and st["note"] == ""
+
+
+# ---------------------------------------------------------------- plan 33 T6: the free graph
+
+def _section(*pairs, nodes=()):
+    return {"nodes": list(nodes), "wires": [{"from": a, "to": b} for a, b in pairs]}
+
+
+def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
+    """A headless rig over a scratch library with preset "Free" loaded —
+    its graph section the free graph's wires `pairs` and `nodes` — the
+    section attached to a stub renderer, and an Edit on it whose undo steps
+    are counted (`undo_rig`: test_undo's boot, its Undo real)."""
+    from test_graph_json import Stub
+    from test_presets import boot, put
+
+    from hyperspace import undo
+    from hyperspace.library import PRESETS
+    if undo_rig:
+        from test_undo import boot as undo_boot
+        from test_undo import settle
+        rig = undo_boot(tmp_path / "home")
+        settle(rig)
+    else:
+        rig = boot(tmp_path)
+    put(rig.home, "Free", graph=_section(*pairs, nodes=nodes))
+    rig.lib.load(PRESETS, "Free")
+    stub = Stub()
+    rig.presets.graph.attach(stub)
+    pushed: list[str] = []
+    if undo_rig:
+        settle(rig)
+        rig.undo.clear()
+
+        def push(label):
+            pushed.append(label)
+            undo.push(label, load=True)
+    else:
+        push = pushed.append
+    return rig, graphview.Edit(graph=rig.presets.graph, push=push), pushed
+
+
+def wires_of(rig) -> set[tuple[str, str]]:
+    return {(w.src, w.dst) for w in rig.presets.graph.spec.wires}
+
+
+def test_the_picker_adds_an_effect_unwired(tmp_path):
+    """Plan 33 U: the picker's effect is the next instance, in the section
+    and on no wire — it reaches nothing, so the canvas draws it faint with
+    "reaches nothing" (`VNode.faint`), never idle — and a switch is added
+    the same way (`switch`, its `select` declared); the run is untouched."""
+    from test_graphview import views
+
+    from hyperspace import graph as G
+    from hyperspace.outputs import Switches
+    rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "fx.image"))
+    before = wires_of(rig)
+    assert ("switch", None, "switch") in graphview.picker(e)
+    assert e.add_node("effect", "acid") is None and e.added == "acid.2"
+    spec = rig.presets.graph.spec
+    assert G.EffectAt("acid", 2) in spec.effects and wires_of(rig) == before
+    assert "acid.2" not in G.reaches(spec) and G.run_of(spec) == ("acid",)
+    assert e.add_node("switch") is None and e.added == "switch"
+    spec = rig.presets.graph.spec
+    assert [s.name for s in spec.switches] == ["switch"] and "switch.select" in rig.reg
+    assert wires_of(rig) == before and pushed == ["add acid.2", "add switch"]
+    # on the canvas: faint, drawn, saying so
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    for nid in ("render:acid.2", "render:switch"):
+        n = view.node(nid)
+        assert n is not None and n.faint and not n.idle, nid
+        assert graphview.summary(n)[0] == graphview.REACHES_NOTHING == "reaches nothing"
+    assert not view.node("render:acid").faint
+
+
+def test_insert_effect_on_a_render_cable(tmp_path):
+    """"insert effect ▸ kaleido" on the cable `media.a → shape.faces`: the
+    next kaleido instance, wired `media.a → kaleido.2.image`,
+    `kaleido.2 → shape.faces` in one landing; one undo puts the one wire
+    back. Inserted into the empty run `frame → fx.image`, the run is
+    `frame → new → fx.image` (R9)."""
+    from test_undo import settle
+
+    from hyperspace import graph as G
+    rig, e, pushed = free_rig(tmp_path, ("frame", "fx.image"), ("media.a", "shape.faces"),
+                              undo_rig=True)
+    cable = graphview.VCable("c", "rout:media.a", "rin:shape/faces", graphview.IMAGE,
+                             kind="render")
+    assert e.insert_effect(cable, "kaleido") is None and e.added == "kaleido.2"
+    got = wires_of(rig)
+    assert ("media.a", "kaleido.2.image") in got and ("kaleido.2", "shape.faces") in got
+    assert ("media.a", "shape.faces") not in got and len(pushed) == 1
+    settle(rig)
+    assert rig.undo.undo()
+    assert ("media.a", "shape.faces") in wires_of(rig)
+    assert "kaleido.2" not in {x.name for x in rig.presets.graph.spec.effects}
+    # into the empty run: frame → acid.2 → fx.image
+    assert e.insert_effect(("frame", "fx.image"), "acid") is None
+    assert G.run_of(rig.presets.graph.spec) == ("acid.2",)
+    assert ("frame", "fx.image") not in wires_of(rig)
+    assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
+
+
+def test_the_run_keeps_its_frame_head(tmp_path):
+    """R9 / R20: the section always keeps a `frame` run. Deleting a cable
+    of the run takes the effect it leads into out of the run (the last
+    cable's, the effect it leaves), the run closed over it; taking the
+    last effect out leaves `frame → fx.image`; deleting `frame → fx.image`
+    itself is refused in words, nothing changed; a run effect deleted
+    closes the run over it too."""
+    from hyperspace import graph as G
+    rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "wobble.image"),
+                              ("wobble", "fx.image"))
+    assert e.unwire("acid", "wobble.image") is None
+    assert G.run_of(rig.presets.graph.spec) == ("acid",)
+    assert ("wobble", "fx.image") not in wires_of(rig)
+    assert e.unwire("acid", "fx.image") is None
+    assert G.run_of(rig.presets.graph.spec) == ()
+    assert wires_of(rig) == {("frame", "fx.image")}
+    n = len(pushed)
+    assert e.unwire("frame", "fx.image") == graphview.RUN_KEPT == (
+        "the run starts at frame and ends at fx.image — insert effects into it")
+    assert wires_of(rig) == {("frame", "fx.image")} and len(pushed) == n
+    assert e.insert_effect(("frame", "fx.image"), "acid") is None
+    assert e.drop_node("acid.2") is None and wires_of(rig) == {("frame", "fx.image")}
+
+
+def test_reordering_the_run_is_rewiring(tmp_path):
+    """`frame → acid → wobble → fx.image`: acid dragged onto the cable
+    `wobble → fx.image` — out of its place, the run closed over it, then
+    in after wobble — is one landing, one undo step: the run is wobble,
+    acid."""
+    from hyperspace import graph as G
+    rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "wobble.image"),
+                              ("wobble", "fx.image"))
+    assert e.place_effect(("wobble", "fx.image"), "acid") is None
+    assert G.run_of(rig.presets.graph.spec) == ("wobble", "acid")
+    assert pushed == ["move acid onto wobble → fx.image"]
+    assert e.place_effect(("wobble", "acid.image"), "acid") == "acid is on that cable already"
+
+
+def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
+    """A free effect node (`wobble.2`: in the section, no cable in or out)
+    let go on the canvas over the cable `frame → fx.image` is inserted into
+    it (`ui_graph.dropped`, as a modifier is into a value cable) — it is in
+    the run; one let go over nothing stays where it is."""
+    from types import SimpleNamespace as NS
+
+    from test_graphview import views
+    from test_presets import put
+
+    from hyperspace import graph as G
+    from hyperspace.outputs import Switches
+    put(rig.lib.home, "Free", graph=_section(
+        ("frame", "fx.image"), nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
+    rig.lib.load("presets", "Free")
+    gs = rig.lib.presets.graph
+    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.spec.wiring(),
+                                                   effects=("wobble", "wobble.2")))
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    assert view.node("render:wobble.2").faint and view.node("render:frame") is not None
+    cable = next(c for c in view.cables
+                 if (c.src_port, c.dst_port) == ("rout:frame", "rin:fx/image"))
+    st["pin_xy"].update({graphview.stub_out("render:frame"): (0.0, 0.0),
+                         graphview.stub_in("render:fx"): (400.0, 0.0)})
+    assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
+    assert G.run_of(gs.spec) == ()
+    assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (200.0, 0.0)) is cable
+    assert G.run_of(gs.spec) == ("wobble.2",)
+
+
+def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
+    """Plan 33 U: the strip (the FX page's open effect, GRAPH's side pane)
+    draws no order slider and no ONTO chips — an effect's place is its
+    wires — and no faces line; on, mix, speed and blend stay."""
+    from test_fx import PageRig
+
+    from hyperspace import ui_fx
+    page = PageRig(tmp_path, monkeypatch)
+    try:
+        page.frame()
+        name = page.st.selected()
+        ids = set(page.rects)
+        assert f"fx.{name}.mix" in ids and f"fx.{name}.blend" in ids
+        assert not [k for k in ids if k.endswith(".order") or k.startswith("onto.")], ids
+        assert not hasattr(ui_fx, "FAINT_FACES") and not hasattr(ui_fx, "ORDER_W")
+    finally:
+        page.close()

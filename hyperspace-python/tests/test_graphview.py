@@ -605,9 +605,9 @@ def test_graph_has_media_area(rig):
     assert all(n.kind == "render" and n.ports[0].id == f"rout:media.{n.id[-1]}"
                for n in chans)
     assert owner_of(view, "media.c.jog") == "render:media.c"
-    assert owner_of(view, "backdrop.alpha") == "group:backdrop"
-    assert view.node("group:backdrop").area == graphview.MEDIA
-    assert not view.node("group:backdrop").idle
+    assert owner_of(view, "backdrop.alpha") == "render:backdrop"   # plan 33 U: its node
+    assert view.node("render:backdrop").area == graphview.MEDIA
+    assert not view.node("render:backdrop").idle
     assert all(n.idle for n in chans)                       # nothing in a bin, no cable
     assert graphview.TITLES[graphview.MEDIA] == "MEDIA"
     assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.GEOMETRY)
@@ -645,3 +645,77 @@ def test_the_media_area_draws_on_the_page(rig, monkeypatch):
     frame(rig.panel, "graph")
     assert "render:media.a" in drawn_ids(rig, monkeypatch)
     assert "render:media.b" not in drawn_ids(rig, monkeypatch)
+
+
+# ---------------------------------------------------------------- plan 33 T6: the free graph
+
+def test_the_new_nodes_sit_in_their_areas(rig):
+    """Plan 33 U: `frame`, `fx`, `pattern`, `backdrop` and a switch are
+    render nodes on the canvas — the pattern and the backdrop always, as
+    the channels are; `frame` and `fx` in the shaders, the pattern, the
+    backdrop and the switch with the channels in the media — and the
+    params go to the node that owns them: `view.pattern*` and
+    `view.media_*` to the pattern, `backdrop.*` to the backdrop,
+    `switch.select` to its switch, `fx.face_map` to the shape (whose
+    `faces` port is a picture input). The run's first cable leaves
+    `frame`; each pipeline's own picture feeds `frame` (a cable nothing
+    deletes)."""
+    from hyperspace.params import declare_switches
+    spec = G.read_graph({"nodes": [{"kind": "switch"}],
+                         "wires": [{"from": "frame", "to": "acid.image"},
+                                   {"from": "acid", "to": "fx.image"},
+                                   {"from": "media.a", "to": "switch.in1"},
+                                   {"from": "switch", "to": "pattern.media"}]},
+                        effects={"acid"})
+    declare_switches(rig.reg, ["switch"])
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    area = {n.id: n.area for n in view.nodes}
+    for nid in ("render:pattern", "render:backdrop", "render:switch"):
+        assert area[nid] == graphview.MEDIA, nid
+    for nid in ("render:frame", "render:fx"):
+        assert area[nid] == graphview.SHADERS, nid
+    assert owner_of(view, "view.pattern_mix") == "render:pattern"
+    assert owner_of(view, "view.media_alpha") == "render:pattern"
+    assert owner_of(view, "backdrop.alpha") == "render:backdrop"
+    assert owner_of(view, "switch.select") == "render:switch"
+    assert owner_of(view, "fx.face_map") == "render:shape"
+    assert owner_of(view, "view.bright") == "render:shape"
+    assert view.node("render:shape").port("rin:shape/faces").type == graphview.IMAGE
+    renders = {(c.src_port, c.dst_port) for c in view.cables if c.kind == "render"}
+    assert ("rout:frame", "rin:acid/image") in renders
+    assert ("rout:acid", "rin:fx/image") in renders
+    assert ("rout:switch", "rin:pattern/media") in renders
+    assert ("rout:history", "rin:acid/image") not in renders
+    feeds = [c for c in view.cables if c.kind == graphview.FEEDS]
+    assert [(c.src_port, c.dst_port) for c in feeds] == [("rout:history", "nin:render:frame")]
+    # the stand-ins with no render graph at all
+    bare = build(rig)
+    assert bare.node("render:pattern") is not None and bare.node("render:backdrop") is not None
+    assert not bare.node("render:backdrop").idle
+    # names a wire uses, from the canvas's pins
+    assert graphview.spec_name("rout:frame", g) == ("frame", None)
+    assert graphview.spec_name("rin:fx/image", g) == ("fx.image", None)
+    assert graphview.spec_name("rin:shape/faces", g) == ("shape.faces", None)
+    assert graphview.spec_name("rin:backdrop/image", g) == ("backdrop.image", None)
+    assert graphview.spec_name("rout:shape", g)[0] is None       # still drawn by the scene
+
+
+def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):
+    """An effect wired from a channel into nothing (`media.a → acid.2`) has
+    no render node — it never runs — but the canvas draws it from the
+    spec: a faint node saying "reaches nothing", its cable in, laid out
+    with the media (a picture made of the media alone)."""
+    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+                         "wires": [{"from": "frame", "to": "fx.image"},
+                                   {"from": "media.a", "to": "acid.2.image"}]},
+                        effects={"acid"})
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
+    assert "acid.2" not in g.nodes
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    n = view.node("render:acid.2")
+    assert n is not None and n.faint and n.area == graphview.MEDIA
+    assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
+    assert any((c.src_port, c.dst_port) == ("rout:media.a", "rin:acid.2/image")
+               for c in view.cables if c.kind == "render")
+    assert not view.node("render:media.a").idle

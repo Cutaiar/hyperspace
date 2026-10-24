@@ -6,16 +6,14 @@ the effect's strip and never switches it; the LED at its left end — a
 dot while on, a ring while off — switches it and never opens it. The
 open effect's chip carries an outline, so "open" and "on" read apart.
 Right-clicking either part binds the effect's switch (MIDI learn) like
-any widget. The open strip is the effect's own six (on, mix, speed,
-blend, order, and where it goes in its header) and a row per annotated
-uniform, with the file's parse or compile error under it.
+any widget. The open strip is the effect's own four (on, mix, speed,
+blend) and a row per annotated uniform, with the file's parse or compile
+error under it — the GRAPH page's side pane for a selected effect node
+too. Plan 33 T6: the strip has no order slider and no ONTO chips (and so
+no faces line): an effect's place is its wires, edited on GRAPH.
 
 An effect runs on the frame or on the picture in the faces (plan 20:
-`fx.<name>.target`). The open strip's header says which: its title,
-then at the right end of the same line ONTO and two chips, frame and
-faces, the lit one where it runs — a click on the other moves it. While
-the open effect runs on the faces, the line under the header says it
-reads faint there (the faces are translucent; Brightness lifts them). A
+`fx.<name>.target`, until plan 33 T7 retires it). A
 chip aimed at the faces has a diamond for its LED — filled while on,
 outlined while off. While any effect is aimed at the faces the status
 under the bypass is two rows, the running chain per target, and the
@@ -35,9 +33,7 @@ dragged by its name and dropped on another goes before that one (a white
 bar on the left edge of the chip under the drag says where; the right
 half of the last chip's name is "to the end"). A drop rewrites the fewest
 `fx.<name>.order` it can (`fx.reordered`) as one undo step, "reorder
-effects", and opens the dragged effect's strip. It changes order only: an
-effect is re-aimed by the ONTO chips in its strip's header. The order slider in the
-strip stays, and does the same one effect at a time.
+effects", and opens the dragged effect's strip. It changes order only.
 
 Plan 30 D2: the page edits the **default chain**. An effect the loaded
 preset's graph places on an edge (`"after": "hands"`, `"into":
@@ -68,21 +64,15 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui, undo
-from .fx import FACE_MAPS, FACES, FRAME, FX_DIR, PER_FACE, TARGETS, reordered
+from .fx import FACE_MAPS, FACES, FRAME, FX_DIR, PER_FACE, reordered
 from .graph import placed_chips
 
 # three to a row since plan 16 WP2: the LED takes a chip-height square of
 # each chip, and at four the names of seven of the twelve factory effects
 # were cut short ("Kaleidosc", "Trip colou"); at three the longest loses 3 px
 CHIPS_PER_ROW = 3
-ORDER_W = 96        # the order slider at the end of the blend row
-ONTO = "onto"       # the strip header's label before its frame / faces chips
-ONTO_TIPS = ("Run this effect on the whole frame.",
-             ("Run this effect on the picture in the shape's faces, and nowhere else. "
-              "Faces must be on. The faces are translucent, so it reads faint; "
-              "Brightness lifts them."))
-# the open strip's line while its effect runs on the faces, where the idle line would be
-FAINT_FACES = "faint on the translucent faces — Brightness lifts them"
+# (plan 33 U: the strip's order slider, its ONTO chips and its faces line
+# are gone — an effect's place is its wires, edited on GRAPH)
 LED_GAP = 2.0       # px between a chip's LED and its name
 DIAMOND = 0.27      # a face-aimed chip's diamond: centre to point, in chip heights
 LED_ON_TIP = "on — click to switch off"
@@ -218,10 +208,6 @@ def strip(panel, sel: str) -> None:
     idle = why_idle(fx, sel, bool(getattr(panel.view, "faces", True)))
     if idle is not None:
         _idle_line(panel, sel, idle)
-    elif _faces(fx, sel):
-        # running on the faces: they are translucent, so it reads faint —
-        # said where the idle line would be, so the strip is no taller
-        imgui.text_colored(ui.FAINT, FAINT_FACES)
     panel._check(f"{pre}.on")
     imgui.same_line()
     panel._slider(f"{pre}.mix")
@@ -238,11 +224,9 @@ def strip(panel, sel: str) -> None:
     panel._label_cell("blend")
     panel._tip(r[f"{pre}.blend"])
     sp = imgui.get_style().item_spacing.x
-    panel._combo(f"{pre}.blend", -(ORDER_W + sp))
+    # plan 33 U: no order slider — an effect's place is its wires (GRAPH)
+    panel._combo(f"{pre}.blend")
     drawn(f"{pre}.blend")
-    imgui.same_line()
-    panel._slider(f"{pre}.order", ORDER_W)
-    drawn(f"{pre}.order")
     mode = fx.values[sel].get("mode", 0)
     labels = {p.key: p.label.lower() for p in spec.params}
     choices = {p.key for p in spec.params if p.choices}
@@ -369,41 +353,12 @@ def strip_rows(name: str, keys: list[str], mode: int = 0) -> list[tuple[str, lis
 
 
 def _strip_header(panel, fx, name: str, place: str | None = None) -> None:
-    """The open strip's title, and at the right end of the same line where
-    the effect goes: ONTO and a chip per target — frame, faces — the lit
-    one where it runs. A chip click is Param.set on `fx.<name>.target`
-    (structure, not modulatable: one undo step by itself, as the map chips
-    are); each chip's right-click is the param's menu. The file name and
-    the order are the title's hover. A registry from before plan 20 has no
-    target: the title is the plain section it was. A placed effect's
-    hover says where it sits (`place`, plan 30 D2) in place of its order,
-    which means nothing off the chain."""
+    """The open strip's title; its hover the file name and, for a placed
+    effect, where it sits (`place`, plan 30 D2). Plan 33 U: no ONTO chips
+    and no order — where an effect runs is its wires, edited on GRAPH."""
     spec = fx.specs[name]
-    note = f"{spec.name}.glsl · " + (place or f"#{fx.values[name]['order']}")
-    p = panel.reg.get(f"fx.{name}.target")
-    if p is None:
-        panel._section(spec.label.lower(), note=note)
-        return
-    labels = [f"{t}##onto.{p.id}.{i}" for i, t in enumerate(TARGETS)]
-    sp = imgui.get_style().item_spacing.x
-    avail = imgui.get_content_region_avail().x
-    left = imgui.get_cursor_pos_x()             # same_line's offset is from the window's edge
-    _chip_baseline()
-    ui._micro(spec.label.lower(), ui.TEXT)
-    if imgui.is_item_hovered():
-        imgui.set_tooltip(note)
-    imgui.same_line(left + avail - ui.chip_w(*labels) - sp - ui._micro_width(ONTO))
-    _chip_baseline()
-    ui._micro(ONTO, ui.DIM)
-    now = FACES if _faces(fx, name) else FRAME
-    for i, label in enumerate(labels):
-        imgui.same_line()
-        if ui.lit_chip(label, i == now) and i != now:
-            p.set(i)
-        panel._tip(p, f"{ONTO_TIPS[i]}\n{p.tip}")
-        panel._ctx(p, key=f".onto{i}")          # a key each: one popup id per item
-        panel._learn_frame(p)
-    imgui.separator()
+    note = f"{spec.name}.glsl" + (f" · {place}" if place else "")
+    panel._section(spec.label.lower(), note=note)
 
 
 def _faint(text: str) -> None:

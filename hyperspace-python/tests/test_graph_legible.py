@@ -83,8 +83,9 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     desk = graphview.summary(view.node("device:apc40"))
     assert desk[0].endswith("patched") and " ports · " in desk[0]
     # + main's 3D switch, Fit, spacing, depth; plan 32: view.media, and the
-    # factory knob 7's row on its alias view.bmp_alpha
-    assert graphview.summary(view.node("render:shape"))[0].startswith("57 params · ")
+    # factory knob 7's row on its alias view.bmp_alpha; plan 33 U: less the
+    # pattern's seven (view.pattern*, view.media_*), plus fx.face_map
+    assert graphview.summary(view.node("render:shape"))[0].startswith("51 params · ")
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports'
     shape = view.node("render:shape")
@@ -570,3 +571,33 @@ def test_the_page_draws_in_every_state(rig):
     assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
     assert view is not None
     frame(rig.panel, "system")
+
+
+# ---------------------------------------------------------------- plan 33 T6: one selection
+
+def test_selecting_an_effect_node_sets_the_shared_selection(rig):
+    """Plan 33 U: the effect selected on GRAPH is the panel's one selection
+    (`Panel.fx_selected`, shared with the FX page, saved nowhere), and
+    `select_effect` — the FX page's "show on GRAPH" — selects that node on
+    the canvas next frame (the side pane its strip) — one on its area's
+    idle line (an off effect) too: the line opens to draw it."""
+    st = party(rig)
+    rig.reg["fx.acid.on"].set(1)                 # drawn …
+    rig.reg["fx.palette.on"].set(0)              # … and off, on the shaders' idle line
+    frame(rig.panel, "graph")
+    view = st["view"]
+    on, off = view.node("render:acid"), view.node("render:palette")
+    assert not on.idle and off.idle
+    assert rig.panel.fx_selected is None
+    _in_editor(rig, lambda: (ed.clear_selection(),
+                             ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + on.id)))))
+    frame(rig.panel, "graph")
+    assert rig.panel.fx_selected == on.ref.effect
+    ui_graph.select_effect(rig.panel, off.ref.effect)
+    assert rig.panel.fx_selected == off.ref.effect
+    for _ in range(3):
+        frame(rig.panel, "graph")
+    sel = ui_graph._selection(st, st["view"])
+    assert sel is not None and sel[1].id == off.id
+    assert rig.panel.fx_selected == off.ref.effect
+    assert graphview.SHADERS in st["idle_open"]
