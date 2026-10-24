@@ -38,7 +38,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4)
+    assert preset.VERSIONS == (2, 3, 4, 5)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     # the document-only rule (factory presets, `generated`) knows /4 too
     assert preset.schema_of({"values": {"seq.1.1": True}}) == V3

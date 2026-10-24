@@ -113,7 +113,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, modifiers, routing, tapers, undo
+from . import apc40, graphmigrate, modifiers, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -172,7 +172,10 @@ SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 # plan 32 S (row 337) on top (D1, 2026-10-23): /4 is /3 plus media — one
 # ladder, so a build that reads /4 reads every version below it
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
-VERSIONS = (2, 3, 4)
+# plan 33 M (row 347): /5 is /4 plus a graph /4 cannot say (a branch, a
+# switch, an unreached effect …) — written only then (`schema_of`)
+FREE_SCHEMA = graphmigrate.FREE_SCHEMA
+VERSIONS = (2, 3, 4, 5)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -297,7 +300,10 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default)
     """The schema a preset document is written as — the one ladder (D1,
     2026-10-23), the lowest that loses nothing:
 
-    - ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
+    - ``hyperspace.preset/5`` (plan 33 M, row 347) when its ``graph`` uses
+      the free graph's words and ``/4`` cannot say it
+      (`graphmigrate.needs_free`);
+    - else ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
       (`uses_media`): a bin, a media-family value off its default, or a
       row or wire naming one;
     - else ``hyperspace.preset/3`` (plan 31 P, decision 9) when it carries
@@ -321,6 +327,8 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default)
     ``seq.page`` / ``seq.select`` rows are the session's and never saved.
     (The media rule does read the desk: a pre-32 build drops a desk row on
     a media param it lacks — `uses_media`.)"""
+    if graphmigrate.needs_free(doc.get(GRAPH_KEY), dict(doc.get("values") or {})):
+        return FREE_SCHEMA
     if uses_media(doc, at_default):
         return MEDIA_SCHEMA
     if any(k in doc for k in V3_KEYS):
@@ -1112,7 +1120,7 @@ class Presets:
         # value but the media family's, /2 neither family, so it is the
         # file it always was
         doc["schema"] = schema_of(doc, at_default=self._at_default())
-        if doc["schema"] != MEDIA_SCHEMA:
+        if doc["schema"] not in (MEDIA_SCHEMA, FREE_SCHEMA):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
         if doc["schema"] == SCHEMA:

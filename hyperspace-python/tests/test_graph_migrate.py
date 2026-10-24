@@ -1,0 +1,297 @@
+"""Plan 33 M: old presets as wires, and wires back as /4 values (graphmigrate)."""
+
+from __future__ import annotations
+
+import copy
+import json
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+from test_plan31_wiring import make_app
+
+from hyperspace import fx, preset
+from hyperspace import graph as G
+from hyperspace import graphmigrate as M
+from hyperspace.library import LibraryError
+
+ROOT = Path(__file__).parent.parent / "hyperspace"
+FILES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
+                *(ROOT / "library" / "fx").glob("*.json")])
+FIXTURES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
+                   *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
+                   *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")])
+EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
+           for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
+SPECS = {n: s.order for n, s in EFFECTS.items()}
+
+
+def load(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def old_run(doc: dict, side: int = 0) -> list[str]:
+    """The old rule: sorted by (order, name), on and mix > 0, aimed at `side`."""
+    v = doc.get("values") or {}
+    names = set(SPECS) | {n for n in (M.effect_of(k) for k in v) if n}
+    section = doc.get("graph")
+    if section:                                    # a placed or wired effect leaves the stack
+        names -= M._wired_effects(G.read_graph(section))
+    live = [n for n in names if v.get(f"fx.{n}.on")
+            and v.get(f"fx.{n}.mix", EFFECTS[n.partition('.')[0]].mix) > 0
+            and (1 if v.get(f"fx.{n}.target", 0) == 1 else 0) == side]
+    return sorted(live, key=lambda n: (v.get(f"fx.{n}.order", SPECS[n.partition('.')[0]]), n))
+
+
+def runs(section: dict):
+    spec = G.read_graph(section)
+    return list(G.run_of(spec)), list(G.run_of(spec, "pattern", "shape.faces"))
+
+
+def wires_of(section: dict) -> set[tuple[str, str]]:
+    return {(w["from"], w["to"]) for w in section.get("wires", [])}
+
+
+def test_the_zero_mix_files_are_the_ones_on_disk():
+    assert {n for n, s in EFFECTS.items() if s.mix == 0} == set(M.ZERO_MIX_FILES)
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_every_library_preset_migrates_without_a_note(path):
+    doc = load(path)
+    section, notes = M.to_free(doc, SPECS)
+    assert notes == []
+    frame, faces = runs(section)
+    assert frame == old_run(doc, 0)
+    assert faces == old_run(doc, 1)
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_no_library_preset_routes_an_effect_it_leaves_out(path):
+    """The owner's reading (row 346): no preset routes an off effect. A
+    failure is a preset to look at, not a test to loosen."""
+    doc = load(path)
+    section, _ = M.to_free(doc, SPECS)
+    frame, faces = runs(section)
+    left = sorted({n for n in (M.effect_of(p) for p in M.targets(doc)) if n}
+                  - {*frame, *faces})
+    assert left == [], f"{path.name} routes {left}, which the migration leaves out"
+
+
+def test_mandala_keeps_kaleido_first():
+    """`fx.kaleido.order = 8` is read: kaleido sits where it did, right
+    after the plasma (order 5) it folds and before the fractals (60)."""
+    doc = load(ROOT / "library" / "fx" / "mandala.json")
+    assert doc["values"]["fx.kaleido.order"] == 8
+    section, _ = M.to_free(doc, SPECS)
+    assert G.run_of(G.read_graph(section)) == ("plasma", "kaleido", "fractals", "glimmer")
+    doc["values"]["fx.kaleido.order"] = 1                  # and a lower order is read too
+    section, _ = M.to_free(doc, SPECS)
+    assert G.run_of(G.read_graph(section))[0] == "kaleido"
+
+
+def base(**values) -> dict:
+    return {"schema": "hyperspace.preset/2", "name": "t", "values": values}
+
+
+@pytest.mark.parametrize("how", ["route", "desk", "macro", "modifier", "sequencer"])
+def test_an_off_effect_left_out_says_so_when_something_drives_it(how):
+    doc = base(**{"fx.warp.on": False, "fx.acid.on": True})
+    target = "fx.warp.mix"
+    if how == "route":
+        doc["routes"] = [{"source": "lfo:0", "target": target, "op": "push"}]
+    elif how == "desk":
+        doc["desk"] = [{"source": "midi:cc:1", "target": target, "op": "abs"}]
+    elif how == "macro":
+        doc["macros"] = {"macro.1": {"subs": [{"base": target}]}}
+    elif how == "modifier":
+        doc["modifiers"] = [{"id": "mod.1", "kind": "smooth", "in": ["lfo:0"]}]
+        doc["routes"] = [{"source": "mod:1", "target": target, "op": "push"}]
+    else:
+        doc["routes"] = [{"source": "env:0", "target": target, "op": "push"}]
+    section, notes = M.to_free(doc, SPECS)
+    assert "warp" not in G.run_of(G.read_graph(section))
+    assert notes == ["warp was off, so it is not in the run: wire it in on GRAPH to use it"]
+
+
+def test_faces_aimed_effects_become_the_faces_run():
+    doc = base(**{"fx.acid.on": True, "fx.acid.target": 1})
+    section, notes = M.to_free(doc, SPECS)
+    assert notes == []
+    assert wires_of(section) == {("pattern", "acid.image"), ("acid", "shape.faces")}
+
+
+def test_a_run_is_sorted_and_an_instance_is_declared():
+    doc = base(**{"fx.acid.on": True, "fx.wobble.on": True, "fx.acid.2.on": True,
+                  "fx.acid.2.order": 12, "fx.wobble.mix": 0.0, "fx.warp.on": True})
+    section, _ = M.to_free(doc, SPECS)
+    assert G.run_of(G.read_graph(section)) == ("acid", "acid.2", "warp")
+    assert {"kind": "effect", "file": "acid", "instance": 2} in section["nodes"]
+
+
+def test_a_wired_effect_is_not_given_to_the_run():
+    doc = base(**{"fx.acid.on": True, "fx.warp.on": True})
+    doc["graph"] = {"nodes": [], "wires": [{"from": "media.a", "to": "warp.image"},
+                                           {"from": "warp", "to": "output.2.image"}]}
+    section, _ = M.to_free(doc, SPECS)
+    assert G.run_of(G.read_graph(section)) == ("acid",)
+
+
+def test_a_section_with_a_frame_run_is_unchanged():
+    doc = base(**{"fx.acid.on": True, "fx.warp.on": True, "view.media": 2})
+    doc["graph"] = {"nodes": [], "wires": [{"from": "frame", "to": "warp.image"},
+                                           {"from": "warp", "to": "fx.image"},
+                                           {"from": "media.c", "to": "pattern.media"}]}
+    assert M.to_free(doc, SPECS)[0] == doc["graph"]
+
+
+def test_view_media_and_backdrop_channel_become_wires():
+    doc = base(**{"view.media": 3, "backdrop.channel": 2})
+    section, _ = M.to_free(doc, SPECS)
+    assert wires_of(section) == {("media.c", "pattern.media"), ("media.b", "backdrop.image")}
+    out, _ = M.migrate(doc, SPECS)
+    assert not any(M.retired(k) for k in out["values"])
+
+
+def test_a_route_onto_view_media_becomes_a_switch():
+    doc = base(**{"view.media": 2, "backdrop.channel": 4})
+    doc["routes"] = [{"source": "lfo:0", "target": "view.media", "op": "push"},
+                     {"source": "lfo:1", "target": "backdrop.channel", "op": "push"}]
+    doc["desk"] = [{"source": "midi:cc:1", "target": "view.media", "op": "abs"}]
+    out, notes = M.migrate(doc, SPECS)
+    section = out["graph"]
+    assert notes == []
+    assert {"kind": "switch"} in section["nodes"]
+    assert {"kind": "switch", "instance": 2} in section["nodes"]
+    w = wires_of(section)
+    for sw, end in (("switch", "pattern.media"), ("switch.2", "backdrop.image")):
+        assert {(f"media.{c}", f"{sw}.in{i}") for i, c in enumerate("abcdefgh", 1)} <= w
+        assert (sw, end) in w
+    assert out["values"]["switch.select"] == 2
+    assert out["values"]["switch.2.select"] == 4
+    assert out["routes"][0]["target"] == "switch.select"
+    assert out["routes"][1]["target"] == "switch.2.select"
+    assert out["desk"][0]["target"] == "switch.select"
+    spec = G.read_graph(section)
+    assert not spec.notes and [s.name for s in spec.switches] == ["switch", "switch.2"]
+
+
+def test_a_route_onto_only_the_backdrop_takes_the_first_switch():
+    doc = base(**{"backdrop.channel": 1})
+    doc["macros"] = {"macro.1": {"subs": [{"base": "backdrop.channel"}]}}
+    out, _ = M.migrate(doc, SPECS)
+    assert out["macros"]["macro.1"]["subs"][0]["base"] == "switch.select"
+    assert ("switch", "backdrop.image") in wires_of(out["graph"])
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_legacy_values_inverts_to_free(path):
+    doc = load(path)
+    values = doc.get("values") or {}
+    section, _ = M.to_free(doc, SPECS)
+    got = M.legacy_values(section, values, SPECS)
+    assert got is not None
+    frame, faces = runs(section)
+    for n in [*frame, *faces]:
+        for key in (f"fx.{n}.order", f"fx.{n}.target"):
+            if key in values:
+                assert got[key] == values[key], key
+    for key in ("view.media", "backdrop.channel"):
+        if key in values:
+            assert got[key] == values[key]
+    # and applied, the old rule gives the same runs
+    back = {**values, **got}
+    back = {"values": back, "graph": doc.get("graph")}
+    assert old_run(back, 0) == frame and old_run(back, 1) == faces
+
+
+def test_legacy_values_moves_the_fewest_orders():
+    section = {"nodes": [], "wires": [{"from": "frame", "to": "wobble.image"},
+                                      {"from": "wobble", "to": "acid.image"},
+                                      {"from": "acid", "to": "fx.image"}]}
+    values = {"fx.wobble.on": True, "fx.acid.on": True}
+    got = M.legacy_values(section, values, SPECS)
+    assert got is not None and len(got) == 1          # one move is enough
+    assert old_run({"values": {**values, **got}}) == ["wobble", "acid"]
+
+
+@pytest.mark.parametrize("section", [
+    # a branch
+    {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+     "wires": [{"from": "media.a", "to": "acid.2.image"}, {"from": "acid.2", "to": "shape.faces"}]},
+    # an unreached effect
+    {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+     "wires": [{"from": "media.a", "to": "acid.2.image"}]},
+    # a switch
+    {"nodes": [{"kind": "switch"}], "wires": [{"from": "switch", "to": "pattern.media"}]},
+    # a non-channel into the pattern's media
+    {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
+                            {"from": "acid", "to": "pattern.media"}]},
+    # two runs from the frame
+    {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
+                            {"from": "acid", "to": "fx.image"},
+                            {"from": "frame", "to": "warp.image"},
+                            {"from": "warp", "to": "output.2.image"}]},
+])
+def test_legacy_values_is_none_for_what_four_cannot_say(section):
+    values = {"fx.acid.on": True, "fx.warp.on": True, "fx.acid.2.on": True}
+    assert M.legacy_values(section, values, SPECS) is None
+
+
+def test_an_effect_on_outside_every_run_is_not_a_four():
+    section = {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
+                                      {"from": "acid", "to": "fx.image"}]}
+    assert M.legacy_values(section, {"fx.acid.on": True, "fx.warp.on": True}, SPECS) is None
+    assert M.legacy_values(section, {"fx.acid.on": True}, SPECS) is not None
+
+
+BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+          "wires": [{"from": "media.a", "to": "acid.2.image"},
+                    {"from": "acid.2", "to": "shape.faces"}]}
+
+
+def test_a_branch_saves_as_v5_and_reloads(tmp_path):
+    doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
+    assert preset.schema_of(doc) == M.FREE_SCHEMA == "hyperspace.preset/5"
+    assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
+    app = make_app(tmp_path)
+    assert app.presets.load_doc(copy.deepcopy(doc)) == []
+    saved = app.presets.document("t")
+    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == BRANCH
+
+
+def test_a_preset_with_no_free_words_keeps_its_schema():
+    assert preset.schema_of({"values": {"fx.acid.on": True}}) == preset.SCHEMA
+    hands = {"graph": {"nodes": [{"kind": "effect", "file": "palette", "after": "hands"}]},
+             "values": {"fx.palette.on": True}}
+    assert preset.schema_of(hands) == preset.SCHEMA
+    comp = {"graph": {"nodes": [{"kind": "composite"}],
+                      "wires": [{"from": "scene", "to": "composite.under"},
+                                {"from": "history", "to": "composite.over"},
+                                {"from": "composite", "to": "output.2.image"}]}}
+    assert preset.schema_of(comp) == preset.SCHEMA
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_no_existing_preset_changes_schema(path):
+    doc = load(path)
+    assert preset.schema_of(doc) == doc["schema"] or doc["schema"] not in (
+        preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA)
+    assert preset.schema_of(doc) != M.FREE_SCHEMA
+
+
+def test_v5_is_refused_by_the_ladder_below(tmp_path):
+    app = make_app(tmp_path)
+    app.presets.load_doc({"schema": "hyperspace.preset/2", "name": "five", "graph": BRANCH,
+                          "values": {}})
+    app.presets.save_as("five")
+    lib = app.lib
+    assert lib.read("presets", "five")["schema"] == M.FREE_SCHEMA
+    kinds = lib._kinds
+    assert preset.VERSIONS == (2, 3, 4, 5)
+    try:
+        kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4))
+        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+            lib.read("presets", "five")
+    finally:
+        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
