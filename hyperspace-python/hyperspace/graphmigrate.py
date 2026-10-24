@@ -486,16 +486,20 @@ def _free_end(w: Any) -> bool:
     return (G.wire_node_kind(src) in _FREE_SRCS or G.wire_node_kind(node) in _FREE_DSTS)
 
 
-def _run_entries(section: dict) -> set[tuple[str, str]]:
+RUN_ENDS = (("frame", "fx.image"), ("pattern", "shape.faces"))
+
+
+def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
     """The (from, to) of every wire of the section's runs — `frame → … →
-    fx.image` and `pattern → … → shape.faces`, the wires between their
-    effects too — that `legacy_values` says as orders and targets."""
+    fx.image` and `pattern → … → shape.faces` (or those of `ends`), the
+    wires between their effects too — that `legacy_values` says as orders
+    and targets."""
     try:
         spec = G.read_graph(section)
     except G.GraphError:
         return set()
     out: set[tuple[str, str]] = set()
-    for head, end in (("frame", "fx.image"), ("pattern", "shape.faces")):
+    for head, end in ends:
         run = G.run_of(spec, head, end)
         if not run:
             continue
@@ -538,3 +542,35 @@ def legacy_section(section: Any) -> dict | None:
     if not out.get("nodes") and "wires" not in out and set(out) <= {"nodes", "wires"}:
         return None
     return out
+
+
+# ---------------------------------------------------------------- an fx module's run
+
+def _entry(w: Any) -> tuple[Any, Any] | None:
+    return (w.get("from"), w.get("to")) if isinstance(w, dict) else None
+
+
+def module_runs(section: Any, values: dict, specs: Specs,
+                rows: dict | None = None) -> tuple[dict, list[str]]:
+    """`section` with an fx module's runs in place of its own (plan 33
+    R12): the module's values (`values`, the fx group as the module landed
+    it) read as `migrate` reads a preset's — the main run `frame → … →
+    fx.image` always replaced (the bare `frame → fx.image` when the module
+    has none), the faces run `pattern → … → shape.faces` replaced only when
+    the module has one. Every other wire, branch, composite, switch and
+    placement stays, and an effect one of them wires is in no run (one
+    `image` input). `rows`: the routes, desk and macros that drive what
+    (R5's membership). Returns the section and `migrate`'s notes."""
+    base = copy.deepcopy(section) if isinstance(section, dict) else {"nodes": []}
+    wires = list(base.get("wires") or [])
+    main = _run_entries(base, RUN_ENDS[:1]) | {("frame", "fx.image")}
+    faces = _run_entries(base, RUN_ENDS[1:])
+    stripped = {**base, "wires": [w for w in wires if _entry(w) not in main | faces]}
+    doc = {**(rows or {}), "values": dict(values), "graph": stripped}
+    out, notes = migrate(doc, specs, keep=True)
+    sec = out.get("graph") if isinstance(out.get("graph"), dict) else stripped
+    got = list(sec.get("wires") or [])
+    if faces and not any(isinstance(w, dict) and w.get("from") == "pattern" for w in got):
+        got += [w for w in wires if _entry(w) in faces]      # the module has none: kept
+    return {**sec, "wires": got}, notes
+

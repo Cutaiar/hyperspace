@@ -206,6 +206,81 @@ def test_an_untouched_v4_preset_saves_byte_identical(tmp_path):
             assert w["to"].rpartition(".")[0] not in ("fx", "shape", "pattern", "backdrop")
 
 
+def _module_run(app, module: str) -> tuple[str, ...]:
+    """The run an fx module says alone: its values over the fx group's
+    defaults, read as the migration reads a preset's."""
+    from hyperspace import graphmigrate as M
+    from hyperspace.library import _module_values
+
+    doc = app.lib.read("fx", module)
+    values = app.lib.resolved("fx", _module_values("fx", doc))
+    out, _ = M.migrate({"values": values}, app.presets.graph.specs())
+    return G.run_of(G.read_graph(out["graph"]))
+
+
+def test_loading_an_fx_module_replaces_the_run(tmp_path):
+    """R12: a party preset, then the mandala module — the graph's main run
+    is mandala's (its effects on, in its order), not the preset's; the
+    module's values landed; the save says it in /4 terms."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    app.lib.load("presets", "party-acid")
+    gs = app.presets.graph
+    acid_run = G.run_of(gs.spec)
+    want = _module_run(app, "mandala")
+    assert want and want != acid_run and {"plasma", "kaleido"} <= set(want)
+    app.lib.load("fx", "mandala")
+    assert G.run_of(gs.spec) == want
+    assert gs.spec.wiring().run == want
+    assert app.reg["fx.kaleido.order"].value == 8 and app.lib.current("fx") == "mandala"
+    # the save says it in /4 terms: no free word, the run as orders
+    doc = app.presets.document("after")
+    assert doc["schema"] != "hyperspace.preset/5"
+    assert "graph" not in doc
+
+
+def test_loading_an_fx_module_keeps_branches(tmp_path):
+    """R12: a section with a branch (`media.a → acid.2 → output.2.image`)
+    and a run, then a module — the run is the module's and the branch, its
+    node and every other wire stay."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    branch = [("media.a", "acid.2.image"), ("acid.2", "output.2.image")]
+    doc = {"schema": "hyperspace.preset/4", "name": "t",
+           "graph": section(*branch, ("frame", "warp.image"), ("warp", "fx.image"),
+                            nodes=[{"kind": "effect", "file": "acid", "instance": 2}]),
+           "values": {"fx.acid.2.on": True, "fx.warp.on": True}}
+    assert app.presets.load_doc(doc) == []
+    gs = app.presets.graph
+    assert G.run_of(gs.spec) == ("warp",)
+    app.lib.load("fx", "mandala")
+    assert G.run_of(gs.spec) == _module_run(app, "mandala")
+    for a, b in branch:
+        assert G.Wire(a, b) in gs.spec.wires
+    assert {"kind": "effect", "file": "acid", "instance": 2} in gs.free_doc()["nodes"]
+    assert G.Wire("warp", "fx.image") not in gs.spec.wires
+
+
+def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path):
+    """R13 (row 341): an effect switched on that no wire puts in a run draws
+    nothing and is said nowhere in /4 — a later save is /5, the run as it
+    was."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    app.lib.load("presets", "party-acid")
+    gs = app.presets.graph
+    run = G.run_of(gs.spec)
+    off = next(n for n in sorted(app.reg.fx_state.specs)
+               if n not in run and not app.reg[f"fx.{n}.on"].value)
+    app.reg[f"fx.{off}.on"].set(True)
+    assert G.run_of(gs.spec) == run
+    doc = app.presets.document("after")
+    assert doc["schema"] == "hyperspace.preset/5" and G.run_of(G.read_graph(doc["graph"])) == run
+
+
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
     """The app's presets over a scratch library, a renderer attached as
     app.py attaches it, and `slug` (or `doc`) loaded."""

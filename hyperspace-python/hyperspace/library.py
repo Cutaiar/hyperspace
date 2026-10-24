@@ -1606,6 +1606,13 @@ class Library:
         if self.reg is not None and group not in self._fresh_extra:
             self._fresh_extra[group] = hook()
 
+    def on_apply(self, group: str, hook) -> None:
+        """Register who is handed a module preset of this group as it lands
+        — ``hook(name, doc)``, after its values, inside its undo step (plan
+        33 R12: an fx module's run replaces the loaded graph's). A load
+        through the strip, a step or a file watch: not a rename, not a show."""
+        self.__dict__.setdefault("_apply_hooks", {})[group] = hook
+
     def on_load(self, group: str, hook) -> None:
         """Register who is told the name a load of this group landed — the
         scene combo, so a strip load moves the selected scene."""
@@ -2024,6 +2031,10 @@ class Library:
             missing = [k for k in values if k not in self.reg]
             resolved = self.resolved(group, values)
             self.restore(resolved)
+            # (getattr: a Library from before a hot reload has no apply hooks)
+            apply = getattr(self, "_apply_hooks", {}).get(group)
+            if apply is not None:
+                apply(name, doc)
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:

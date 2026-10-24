@@ -400,6 +400,7 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
 # ---- the render graph (plan 26 A4) ----
 
 GRAPH_KEY = "graph"
+FX_GROUP = "fx"          # the effects' module group (`library/fx/*.json`): plan 33 R12
 
 
 class GraphSection:
@@ -832,6 +833,9 @@ class Presets:
                  versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
+        # plan 33 R12: an fx module loaded replaces the graph's runs
+        if hasattr(lib, "on_apply"):
+            lib.on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -1294,6 +1298,25 @@ class Presets:
             theirs[m.id] = m.to_json()
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
+
+    def _fx_module(self, name: str, doc: dict) -> None:
+        """An fx module just landed (plan 33 R12, `Library.on_apply`): its
+        run replaces the loaded graph's main run, and its faces run the
+        faces' when it has one (`graphmigrate.module_runs`); every branch,
+        composite, switch and placement stays. Its values are the fx group
+        as the module landed them. A graph this build cannot read is left
+        as it is; one that comes out the same is not landed again."""
+        gs = self._graph_section()
+        table = self.router.table
+        rows = {"routes": [b.to_json() for b in table.routes()],
+                "desk": desk_json(table.desk()), "macros": table.macros_doc()}
+        before = gs.free_doc()
+        new, _ = graphmigrate.module_runs(before, self.reg.snapshot(FX_GROUP), gs.specs(),
+                                          rows)
+        spec, section, notes = gs.read(new)
+        if spec is None or notes or section == before:
+            return
+        gs.land(spec, section)
 
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),
