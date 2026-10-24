@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_graphview import _in_editor, views
+from test_graphview import _in_editor, stacked, views
 from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -46,6 +46,7 @@ def party(rig):
     APC40 listed. Returns the page's state after two frames."""
     rig.lib.load("presets", "party-trip")
     rig.panel.renderer = NS(_graph=G.default_graph(views(Switches(), Switches(through=True)),
+                                                   stacked(("acid", "palette")),
                                                    effects=("acid", "palette")))
     rig.panel.devices = rig_devices(rig)
     frame(rig.panel, "graph")
@@ -83,8 +84,10 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     desk = graphview.summary(view.node("device:apc40"))
     assert desk[0].endswith("patched") and " ports · " in desk[0]
     # + main's 3D switch, Fit, spacing, depth; plan 32: view.media, and the
-    # factory knob 7's row on its alias view.bmp_alpha
-    assert graphview.summary(view.node("render:shape"))[0].startswith("57 params · ")
+    # factory knob 7's row on its alias view.bmp_alpha; plan 33 U: less the
+    # pattern's seven (view.pattern*, view.media_*), plus fx.face_map; plan
+    # 33 T7: less view.media (retired: the wire into pattern.media)
+    assert graphview.summary(view.node("render:shape"))[0].startswith("50 params · ")
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports'
     shape = view.node("render:shape")
@@ -109,7 +112,8 @@ def test_the_apc40_to_one_shader_is_one_bundle_while_collapsed(rig):
     b = next(b for b in bundles if (b.src, b.dst) == ("device:apc40", "render:shape"))
     assert b.cables == desk_to_shape and b.count == len(desk_to_shape)
     assert (b.src_port, b.dst_port) == ("nout:device:apc40", "nin:render:shape")
-    assert all(c.kind == "render" for c, _, _ in singles)   # only render cables stay single
+    # only render cables (and the frame's feeds, which are theirs) stay single
+    assert all(c.kind in ("render", graphview.FEEDS) for c, _, _ in singles)
     # on the page: that bundle is what is drawn, and none of its cables
     assert b.id in st["bundles"]
     assert ui_graph.bundle_thickness(b.count) == ui_graph.BUNDLE_MAX
@@ -570,3 +574,33 @@ def test_the_page_draws_in_every_state(rig):
     assert ui_graph.timing_line(rig.panel).startswith("graph page: ")
     assert view is not None
     frame(rig.panel, "system")
+
+
+# ---------------------------------------------------------------- plan 33 T6: one selection
+
+def test_selecting_an_effect_node_sets_the_shared_selection(rig):
+    """Plan 33 U: the effect selected on GRAPH is the panel's one selection
+    (`Panel.fx_selected`, shared with the FX page, saved nowhere), and
+    `select_effect` — the FX page's "show on GRAPH" — selects that node on
+    the canvas next frame (the side pane its strip) — one on its area's
+    idle line (an off effect) too: the line opens to draw it."""
+    st = party(rig)
+    rig.reg["fx.acid.on"].set(1)                 # drawn …
+    rig.reg["fx.palette.on"].set(0)              # … and off, on the shaders' idle line
+    frame(rig.panel, "graph")
+    view = st["view"]
+    on, off = view.node("render:acid"), view.node("render:palette")
+    assert not on.idle and off.idle
+    assert rig.panel.fx_selected is None
+    _in_editor(rig, lambda: (ed.clear_selection(),
+                             ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + on.id)))))
+    frame(rig.panel, "graph")
+    assert rig.panel.fx_selected == on.ref.effect
+    ui_graph.select_effect(rig.panel, off.ref.effect)
+    assert rig.panel.fx_selected == off.ref.effect
+    for _ in range(3):
+        frame(rig.panel, "graph")
+    sel = ui_graph._selection(st, st["view"])
+    assert sel is not None and sel[1].id == off.id
+    assert rig.panel.fx_selected == off.ref.effect
+    assert graphview.SHADERS in st["idle_open"]

@@ -75,6 +75,19 @@ their handlers (`_create_render`, `_delete_render_cable`,
 `_delete_render_node`) land through `render_edit`, whose undo step is
 pushed only once the edit is read back and accepted.
 
+**The free graph** (plan 33 U): `frame`, `fx`, the pattern, the backdrop,
+the switches and the shape's `faces` port are drawn like the other render
+nodes (`graphview.build`). The picker adds an effect or a switch on no
+wire, where the menu opened (`add_render`): faint, "reaches nothing",
+until it is wired in. A render cable's menu offers "insert effect ▸
+<file>" (`insert_effect`); a free effect node let go on a picture cable is
+inserted into it (`dropped`, `Edit.place_effect`); a cable of the run
+deleted takes its effect out, the run closed over it, and `frame →
+fx.image` itself is kept (`graphview.RUN_KEPT`). A compile error colours
+an effect node's title and is its hover (`effect_errors`). The selected
+effect is the panel's one selection, shared with the FX page
+(`Panel.fx_selected`, `share`, `select_effect`).
+
 A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
@@ -157,6 +170,9 @@ IDLE_TIP = ("Nothing in, nothing out: not drawn so the canvas stays readable. + 
 BESIDE_TIP = ("Where the selection's details go: beside the canvas or under it — widen "
               "CONTROLS to give both room (on a page this wide they sit beside by themselves)")
 # plan 28 N7: a bundle's thickness follows how many cables it holds, capped
+FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, the faces, "
+             "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
+             "it on a picture cable")
 BUNDLE_STEP = 0.5        # px a cable, past the first
 BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more (2.5 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
@@ -458,6 +474,7 @@ def page(panel, dt: float) -> None:
         return
     st = _state(panel)
     sel = _selection(st, view)
+    share(panel, st, sel)
     _head(panel, st, view, sel is not None)
     imgui.separator()
     avail = imgui.get_content_region_avail()
@@ -474,6 +491,60 @@ def page(panel, dt: float) -> None:
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
+
+
+def share(panel, st: dict, sel) -> None:
+    """Plan 33 U: the one effect selection (`Panel.fx_selected`) both ways.
+    Moved elsewhere since this page last looked (the FX page's row, its
+    "show on GRAPH": `select_effect`), the canvas selects that effect's node
+    (next frame, `_select`); an effect node selected on the canvas is the
+    panel's selection."""
+    shared = getattr(panel, "fx_selected", None)
+    if shared != st.get("fx_seen"):
+        st["fx_seen"] = shared
+        if shared:
+            st["select"] = shared
+        return
+    if st.get("select"):                    # the canvas has yet to move to it
+        return
+    n = sel[1] if sel is not None and sel[0] == "node" else None
+    if n is not None and isinstance(n.ref, Effect) and n.ref.effect != shared:
+        panel.fx_selected = st["fx_seen"] = n.ref.effect
+
+
+def select_effect(panel, name: str) -> None:
+    """Select effect instance `name` (plan 33 U, the FX page's "show on
+    GRAPH"): the panel's selection, and its node selected and centred on the
+    canvas next frame — its area's idle line opened if it sits there."""
+    st = _state(panel)
+    panel.fx_selected = st["fx_seen"] = name
+    st["select"] = name
+
+
+def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
+    """The node effect instance `name` is drawn as: its scene pipeline's
+    (named by the instance), else its first."""
+    hits = [n for n in view.nodes if isinstance(n.ref, Effect) and n.ref.effect == name]
+    return next((n for n in hits if n.ref.name == name), hits[0] if hits else None)
+
+
+def _select(st: dict, view: graphview.View) -> None:
+    """Inside the editor, the nodes drawn: the selection `select_effect` (or
+    the FX page) asked for, selected and brought on screen."""
+    name = st.get("select")
+    if not name:
+        return
+    n = effect_node(view, name)
+    if n is None:
+        st.pop("select", None)
+        return
+    if not drawn_node(st, n):               # on its area's idle line: opened, then next frame
+        st.setdefault("idle_open", set()).add(n.area)
+        return
+    st.pop("select", None)
+    ed.clear_selection()
+    ed.select_node(ed.NodeId(_id(st, "n:" + n.id)))
+    ed.navigate_to_selection(False)
 
 
 def beside_chip(selected: bool, width: float, beside: bool) -> str | None:
@@ -609,7 +680,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         m = pre if graphview.home(n) == graphview.PRESET else show
         if m is not None:
             m[n.id] = [int(now[0]), int(now[1])]
-        if n.kind == "modifier":
+        if n.kind == "modifier" or isinstance(n.ref, Effect):   # (plan 33 U: an effect too)
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
 
@@ -620,10 +691,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
+    st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
+    _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
         _idle_line(st, view, area, lay.idle.get(area, []))
     # plan 28 N7: one wire per node pair while either end is collapsed
@@ -655,6 +728,26 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     _hover(st, view)
     _moved(panel, st, view)
     ed.end()
+
+
+def effect_errors(panel, view: graphview.View) -> dict[str, str]:
+    """Plan 33 U: each effect node whose file did not compile, by node id →
+    the error (`ui_fx`'s words): its title is drawn in the error colour and
+    its hover says it."""
+    chain = getattr(getattr(panel, "renderer", None), "fx", None)
+    fx = getattr(chain, "state", None)
+    if fx is None:
+        return {}
+    out = {}
+    for n in view.nodes:
+        if isinstance(n.ref, Effect) and n.ref.effect in fx.specs:
+            try:
+                err = ui_fx._error(chain, fx, n.ref.effect)
+            except Exception:  # noqa: BLE001 — a chain that cannot say draws no error
+                err = ""
+            if err:
+                out[n.id] = err
+    return out
 
 
 def titles(lay: graphview.Layout) -> list[tuple[str, float, float]]:
@@ -855,14 +948,19 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
     shut = collapsed(st, n.id)
-    has_in = any(p.direction == graphview.IN for p in n.ports)
+    # (plan 33 U: `frame` takes no wire, but each pipeline's picture feeds it)
+    has_in = (any(p.direction == graphview.IN for p in n.ports)
+              or isinstance(n.ref, graphview.FrameNode))
     has_out = any(p.direction == graphview.OUT for p in n.ports)
     # the title line: [in stub] label [+ / -] [out stub]
     if has_in:
         _stub(st, graphview.stub_in(n.id), ed.PinKind.input, n.wires > 0, drawn)
         imgui.same_line()
-    # a desk layer that is down (plan 28 N5) reads like a lost device: faint
-    imgui.push_style_color(imgui.Col_.text, ui.FAINT if n.grey or not n.up else ui.TEXT)
+    # a desk layer that is down (plan 28 N5) reads like a lost device: faint;
+    # (plan 33 U) so does a node that reaches nothing; a compile error is red
+    err = st.get("errors", {}).get(n.id)
+    imgui.push_style_color(imgui.Col_.text, ui.WARN if err else ui.FAINT if (
+        n.grey or not n.up or n.faint) else ui.TEXT)
     imgui.text(ui.fit_text(n.label, NODE_W - 40 - 2 * PIN))
     imgui.pop_style_color()
     imgui.same_line(NODE_W - 30 - PIN)          # the + clear of the out stub
@@ -1004,7 +1102,12 @@ def _hover(st: dict, view: graphview.View) -> None:
             tip += hidden_by(st, view, names.get(pin, ""))
     elif node:
         n = view.node(names.get(node, "")[2:])
-        if n is not None and n.status:
+        err = st.get("errors", {}).get(n.id) if n is not None else None
+        if err:                             # plan 33 U: a compile error is its hover
+            tip = f"{n.label}\n{err}"
+        elif n is not None and n.faint:
+            tip = f"{n.label}\n{FAINT_TIP}"
+        elif n is not None and n.status:
             tip = f"{n.label}\n{n.status}"
     if tip:
         ed.suspend()
@@ -1107,20 +1210,61 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
         ed.reject_deleted_item()
 
 
-def render_picker(panel) -> None:
-    """The picker's render items: an effect instance per file, a hands
-    node, a composite (`graphview.picker`)."""
+def render_picker(panel, at=None) -> None:
+    """The picker's render items: an effect instance per file, a switch,
+    (R28) a switch over the channels into the faces' media or the backdrop,
+    a hands node, a composite (`graphview.picker`). Plan 33 U: an effect or
+    a switch lands unwired (faint, "reaches nothing") where the menu opened
+    (`at`, canvas units); the channels' switch lands wired."""
     e = render_edit(panel)
     items = graphview.picker(e)
     effects = [(f, label) for kind, f, label in items if kind == "effect"]
     if effects and imgui.begin_menu("effect"):
         for f, label in effects:
             if imgui.menu_item_simple(label):
-                _render_said(panel, e, lambda e, f=f: e.add_node("effect", f))
+                add_render(panel, e, "effect", f, at)
         imgui.end_menu()
     for kind, _, label in items:
-        if kind != "effect" and imgui.menu_item_simple(label):
-            _render_said(panel, e, lambda e, kind=kind: e.add_node(kind))
+        if kind not in ("effect", "channels") and imgui.menu_item_simple(label):
+            add_render(panel, e, kind, None, at)
+        if kind == "switch":
+            _channels_menu(panel, e, items, at)
+
+
+def _channels_menu(panel, e: graphview.Edit, items, at=None) -> None:
+    """R28: "switch over the channels ▸ faces media / backdrop", under the
+    picker's switch: one undo step (`Edit.switch_channels`), the new switch
+    put where the menu opened."""
+    ports = [(port, label) for kind, port, label in items if kind == "channels"]
+    if ports and imgui.begin_menu("switch over the channels"):
+        for port, label in ports:
+            if imgui.menu_item_simple(label):
+                switch_channels(panel, e, port, at)
+        imgui.end_menu()
+
+
+def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
+    """R28: a switch over the eight channels into `port`, one undo step,
+    put where the menu opened. Returns the refusal, or None."""
+    why = _render_said(panel, e, lambda e: e.switch_channels(port))
+    if why is None and e.added:
+        _place_new(panel, f"render:{e.added}", at)
+    return why
+
+
+def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):
+    """A render node the picker adds (`Edit.add_node`), one undo step, put
+    where the menu opened. Returns the refusal, or None."""
+    why = _render_said(panel, e, lambda e: e.add_node(kind, file))
+    if why is None and e.added:
+        _place_new(panel, f"render:{e.added}", at)
+    return why
+
+
+def insert_effect(panel, cable: graphview.VCable, file: str) -> str | None:
+    """A render cable's "insert effect ▸ <file>" (plan 33 U): the next
+    instance of `file` onto it, one undo step. Returns the refusal, or None."""
+    return _render_said(panel, render_edit(panel), lambda e: e.insert_effect(cable, file))
 
 
 def render_node_menu(panel, n) -> None:
@@ -1432,11 +1576,29 @@ def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable |
     """A modifier node let go at `centre` (canvas units): if it is still
     free — no cable in or out — and lands on a route or a modifier's input
     cable (`graphview.cable_near`, by the curve the widget draws), it is
-    inserted there. Returns the cable it went into, or None."""
+    inserted there. Plan 33 U: an effect node let go on a picture cable is
+    put onto it the same way (`Edit.place_effect`, one undo step) — a free
+    one (in the section, no cable in or out) inserted; (R22) one already
+    wired moved there, out of its place, the wires either side of it closed
+    over it: reordering the run is dragging a node to another cable. Its
+    own cables (any pipeline's node of it) are passed over, so a node let
+    go where it was, or on nothing, stays. Returns the cable it went into,
+    or None."""
     n = view.node(nid)
-    if n is None or n.kind != "modifier" or view.cables_of(nid):
+    if n is None:
         return None
-    c = graphview.cable_near(view, _state(panel)["pin_xy"], centre, skip=(nid,))
+    pins = _state(panel)["pin_xy"]
+    if n.kind == "render" and isinstance(n.ref, Effect):
+        name = n.ref.effect
+        mine = {m.id for m in view.nodes if isinstance(m.ref, Effect) and m.ref.effect == name}
+        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip=mine)
+        if c is None or c.type != graphview.IMAGE:
+            return None
+        why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, name))
+        return None if why is not None else c
+    if n.kind != "modifier" or view.cables_of(nid):
+        return None
+    c = graphview.cable_near(view, pins, centre, skip=(nid,))
     if c is None:
         return None
     res = insert_modifier(panel, c, nid)
@@ -1655,6 +1817,16 @@ def _lane_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> Non
 
 DELETE["lane"] = _lane_cut
 
+
+def _feeds_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
+    """Delete pressed on a pipeline's picture into `frame` (plan 33 U): kept —
+    it is what frame is, no wire — and the head says so."""
+    ed.reject_deleted_item()
+    _note(st, graphview.FEEDS_NO_DELETE)
+
+
+DELETE[graphview.FEEDS] = _feeds_cut
+
 # a node delete's handler by the node's kind (the seam: N4 maps "render"
 # and "output"); a kind not listed is the rig's
 DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
@@ -1799,6 +1971,16 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
             if imgui.menu_item_simple(kind):
                 insert_modifier(panel, c, kind)
         imgui.end_menu()
+    if c.kind == graphview.FEEDS:               # plan 33 U: what frame is, no wire
+        imgui.text_disabled(graphview.FEEDS_NO_DELETE)
+        return
+    if c.kind == "render" and c.type == graphview.IMAGE:
+        files = [f for kind, f, _ in graphview.picker(render_edit(panel)) if kind == "effect"]
+        if files and imgui.begin_menu("insert effect"):     # plan 33 U
+            for f in files:
+                if imgui.menu_item_simple(f):
+                    insert_effect(panel, c, f)
+            imgui.end_menu()
     if imgui.menu_item_simple("delete"):
         if c.kind == "render":                  # N4: unwire, its own undo step
             _render_said(panel, render_edit(panel), lambda e: e.unwire(c))
@@ -1874,7 +2056,7 @@ def picker(panel, view: graphview.View, at=None) -> None:
         if imgui.menu_item_simple(one if why is None else f"{one}: {why}",
                                   enabled=why is None):
             add_voice(panel, scheme, at)
-    render_picker(panel)                        # N4: an effect, hands, a composite
+    render_picker(panel, at)                    # N4 (and plan 33 U): an effect, a switch …
     free = macros_free(panel, view)
     if free and imgui.begin_menu("macro"):
         for mid in free:

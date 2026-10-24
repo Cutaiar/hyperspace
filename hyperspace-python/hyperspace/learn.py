@@ -85,6 +85,7 @@ table are all it needs.
 from __future__ import annotations
 
 from . import modifiers, undo
+from .graph import source_into
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -154,7 +155,8 @@ def blocked(table: Bindings, source: str) -> str | None:
 # preset's own bases (the values a load lands, not this frame's modulation):
 #
 #   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
-#   view.media_*, view.bmp_alpha                 the faces are off, or no media channel
+#   view.media_*, view.bmp_alpha                 the faces are off, or nothing wired into
+#                                                their layer (`pattern.media`, plan 33 T7)
 #   view.points_alpha / view.lines_alpha         points / lines off
 #   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
@@ -172,11 +174,24 @@ _MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media
 _ROTATE = ("rot.rate.", "view.plane.")
 
 
-def cannot_show(pid: str, values) -> str | None:
+def faces_media(spec, selects=None) -> bool | None:
+    """Whether the graph `spec` (a `graph.GraphSpec`) wires a picture into
+    the faces' media layer, `pattern.media` — straight, or through a switch
+    at its pick (`selects`, `ViewState.switch`) — what `view.media` said
+    before plan 33 T7 retired it. None with no graph to ask."""
+    if spec is None:
+        return None
+    return source_into(spec.all_wires(), "pattern.media", selects) is not None
+
+
+def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
     """Why the preset whose bases are `values` ({id: base}; `.get` is all
     that is asked) cannot show `pid`, in a few words ("faces off",
     "kaleido off"), or None when it can — the rule above. A switch the
-    values do not name counts as on."""
+    values do not name counts as on. `media`: whether its graph wires a
+    picture into the faces' layer (`faces_media`); None (no graph to ask)
+    counts as wired — `view.media`, which said it before plan 33 T7, is no
+    param any more."""
     def off(sw: str) -> bool:
         v = values.get(sw)
         return v is not None and not bool(v)
@@ -185,7 +200,7 @@ def cannot_show(pid: str, values) -> str | None:
     if pid in _MEDIA:
         if off("view.faces"):
             return "faces off"
-        return "no media channel" if off("view.media") else None
+        return "no media channel" if media is False else None
     if pid == "view.points_alpha":
         return "points off" if off("view.points") else None
     if pid == "view.lines_alpha":
@@ -226,7 +241,8 @@ ROUTED, MOVED, ON, DESKED = "routed", "moved", "on", "on the desk"
 
 
 def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
-           shows=None) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+           shows=None, media: bool | None = None
+           ) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
     """Click-to-map's offer (plan 24 C3): the params this preset uses,
     ranked, then the rest by group. A pure function.
 
@@ -236,7 +252,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     what a load fills an id the file does not name with). `routed`: the
     ids a route or a macro subscriber drives. `on_desk`: the ids a
     preset-layer row already holds. `shows(pid)`: why it cannot show, or
-    None (`cannot_show` over `values` when not given).
+    None (`cannot_show` over `values` and `media` when not given).
 
     Returns (used, rest). `used` is [(id, why)], in tiers — ``routed`` (a
     route or a macro moves it), ``moved`` (its base is off the group
@@ -246,7 +262,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     meant) — each tier in registry order. A param the preset cannot show is
     never used. `rest` is every other param as [(group, [id, …])], the
     performance groups first, then the session's, each in registry order."""
-    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values))
+    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values, media))
     tiers: dict[str, list[str]] = {ROUTED: [], MOVED: [], ON: [], DESKED: []}
     rest: dict[str, list[str]] = {}
     for pid, group in params:

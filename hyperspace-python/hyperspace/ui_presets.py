@@ -97,10 +97,11 @@ FACTORY_KEY = "\0factory"  # …a group's factory names, and every name it index
 # the module overview: every performance group but the macros (a macro's
 # meaning is its subscribers, which live in the preset) and the media
 # channels and backdrop (plan 32: a channel's values mean nothing without
-# its bin, the preset's media section; the MEDIA page holds them), and the
+# its bin, the preset's media section; the MEDIA page holds them) and (plan
+# 33 S) the switches' picks (nothing without the preset's graph), and the
 # band strip's scene, the one session module a project names
 OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS
-                     if g not in ("macro", "mod", "media", "backdrop")], "band")
+                     if g not in ("macro", "mod", "media", "backdrop", "switch")], "band")
 
 
 # ---- state on the panel, created on first use ----

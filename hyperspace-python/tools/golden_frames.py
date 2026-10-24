@@ -75,7 +75,7 @@ import re
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -156,9 +156,16 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # the backdrop under the scene, and channel c wired into output 2's picture
 # (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
 # T7's three: the still on the faces (`view.media`), and the still wired into
-# an effect's aux — blend's luma key, displace by its brightness
+# an effect's aux — blend's luma key, displace by its brightness. Plan 33
+# T4's three (`hyperspace.preset/5`): the still through its own shaders onto
+# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`), under the scene
+# (`media.a → kaleido.2 → backdrop.image`), and one branch read at two sizes
+# (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
+# one: a switch onto the faces at select 2, the still (in1 an empty channel,
+# in3 the still through acid.2: never made)
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
-                                   "blend-luma-key", "displace-luma")
+                                   "blend-luma-key", "displace-luma", "media-chain-faces",
+                                   "media-chain-backdrop", "branch-two-sizes", "switch-faces")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES)
@@ -462,7 +469,10 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
     ctx = context()
     rig = Rig(slug, hands, ctx)
     if wiring is not None:
-        rig.renderer.wiring = Wiring(**wiring)
+        # plan 33 R23: the other wiring keeps the preset's run — the run the
+        # load migrated (`graphmigrate`), which the order-built stack these
+        # goldens were recorded on drew; a wiring that says none runs none
+        rig.renderer.wiring = replace(Wiring(**wiring), run=rig.renderer.wiring.run)
     if config is not None:
         rig.list_devices(config)
     try:
@@ -474,7 +484,9 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         for v in views:
             if v.error:
                 raise RuntimeError(f"{slug} {hands}: an output failed: {v.error}")
-        fx_on = rig.renderer.fx.active()
+        # the recorded `effects_on`: an effect is live, wherever it is wired
+        # (plan 33 T7: what the stack's `chain()` said, with no target left)
+        fx_on = any(rig.fx.live(n) for n in rig.fx.specs)
         visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):

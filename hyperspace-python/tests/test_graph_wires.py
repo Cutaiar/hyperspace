@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_graph_json import Stub
+from test_graph_json import Stub, _bare
 from test_presets import boot, put
 
 from hyperspace import graph as G
@@ -161,7 +161,8 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
         (("Teapot", "output.1.image"), "no node 'Teapot': a wire leaves"),
         (("teapot", "output.1.image"), "no teapot effect in this build"),
         (("palette", "teapot.image"), "no teapot effect in this build"),
-        (("palette", "fx.image"), "no fx effect in this build"),
+        # plan 33 G: `fx` is the pipeline end now, not an effect file
+        (("palette", "fx.image"), "fx.image takes the run from frame; to replace"),
         (("output.1", "output.2.image"), "output.1 is an output: it makes nothing"),
         (("hands.2", "output.1.hands"), "no hands.2 layer in this graph (hands makes"),
         (("ghost", "scene.geometry"), "a hands node's place is its into"),
@@ -210,7 +211,8 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
     assert rig.presets.notes == [
         ("graph: wire ghost → output.1.image — ghost makes geometry, output.1.image takes a "
          "picture; the default wiring")]
-    assert stub.wiring == G.Wiring(hands="scene", wires=(G.Wire("hands", "output.2.hands"),))
+    assert _bare(stub.wiring) == G.Wiring(hands="scene",
+                                          wires=(G.Wire("hands", "output.2.hands"),))
     assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(PRESETS)
 
@@ -273,13 +275,14 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
         "nodes": [], "wires": _wires(("hands", "output.2.hands"))}
     assert edit.wire("history", "output.2.hands").endswith("or an effect after it over")
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
-    assert rig.presets.graph.spec.wires == (G.Wire("scene", "output.2.hands"),)
+    assert rig.presets.graph.spec.wires == (G.Wire("frame", "fx.image"),   # (plan 33: the run)
+                                            G.Wire("scene", "output.2.hands"))
     # an effect wired after a node, then moved into an output's port
     assert edit.wire("hands", "palette.image") is None
     assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
     assert edit.unwire("hands", "palette.image") is None
     assert edit.unwire("scene", "output.2.hands") is None
-    assert rig.presets.graph.doc is None and stub.wiring == G.Wiring()
+    assert rig.presets.graph.doc is None and _bare(stub.wiring) == G.Wiring()
     assert not rig.lib.is_dirty(PRESETS)
     # the default graph's own edge is refused in words
     assert edit.unwire("history", "output.1.image").startswith(
@@ -377,9 +380,10 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
 
 def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     """The right-click picker lists every effect file, a hands node and a
-    composite; an effect picked is the next instance (`EffectAt(file,
-    n + 1)`) with its own `fx.<file>.<n+1>.*` params, at their defaults,
-    in the chain; deleting the node drops it and its params; a hands node
+    composite; an effect picked is the file itself while nothing holds it
+    (R25: switched on), then the next instance (`EffectAt(file, n + 1)`)
+    with its own `fx.<file>.<n+1>.*` params, at their defaults but `on`,
+    on no wire; deleting the node drops it and its params; a hands node
     is the next instance, drawn in the scene while another makes the
     layer; a composite is the first; the frame's own nodes stay."""
     rig, stub, edit, pushed = _edit_rig(tmp_path)
@@ -388,20 +392,25 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
         ("hands", None, "hands"), ("composite", None, "composite")]
     assert "fx.acid.2.on" not in rig.reg
     assert edit.add_node("effect", "acid") is None
+    assert edit.said == "acid added: its params are fx.acid.*"
+    assert rig.reg["fx.acid.on"].value is True                    # R25: on, to show
+    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 1),)
+    assert edit.add_node("effect", "acid") is None
     assert edit.said == "acid.2 added: its params are fx.acid.2.*"
-    assert rig.reg["fx.acid.2.on"].value is False                 # off, as a new effect is
+    assert rig.reg["fx.acid.2.on"].value is True
     assert {"fx.acid.2.mix", "fx.acid.2.twist"} <= {p.id for p in rig.reg}
-    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 2),)
+    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 1), G.EffectAt("acid", 2))
     assert edit.add_node("effect", "acid") is None and "fx.acid.3.on" in rig.reg
     assert edit.add_node("effect", "teapot") == "no teapot effect in this build"
     assert edit.drop_node("acid.3") is None and "fx.acid.3.on" not in rig.reg
-    assert edit.drop_node("acid") == ("acid is a file: it is always in the chain (switch "
-                                      "it off on FX; unwire it to put it back in the chain)")
-    # … placed or not: deleting instance 1 is refused, its placement kept
+    # plan 33 T7 (R21): instance 1 is in the graph where it is wired, and
+    # deleting it takes it out like any instance — not in it, it says so
+    assert edit.drop_node("zoomblur") == "zoomblur is not in the preset's graph"
+    # … placed: deleting it takes it, and its placement, out of the graph
     assert edit.wire("hands", "palette.image") is None
-    assert edit.drop_node("palette").startswith("palette is a file")
     assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
-    assert edit.unwire("hands", "palette.image") is None
+    assert edit.drop_node("palette") is None and edit.said == "palette deleted"
+    assert stub.wiring.placed == ()
     assert edit.add_node("hands") is None and edit.said == "ghost.2 added, drawn in the scene"
     assert "ghost.2.alpha" in rig.reg
     assert edit.add_node("composite") is None
@@ -418,7 +427,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.drop_node("output.1") == "output.1 is the frame's own: it stays"
     assert edit.drop_node("ghost") == ("hands 1 is the frame's own hands: it stays "
                                        "(switch it off on HANDS)")
-    assert len(pushed) == 10
+    assert len(pushed) == 11
 
 
 def test_an_edit_is_one_undo_step(tmp_path):
@@ -439,7 +448,7 @@ def test_an_edit_is_one_undo_step(tmp_path):
     settle(r)
     assert stub.wiring.wires == (G.Wire("hands", "output.2.hands"),)
     assert r.undo.undo() and r.undo.status.endswith("wire hands → output.2.hands")
-    assert r.presets.graph.spec is None and stub.wiring == G.Wiring()
+    assert r.presets.graph.doc is None and _bare(stub.wiring) == G.Wiring()
 
 
 def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_path):
@@ -460,10 +469,10 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     # with the hands in the scene the history holds them whatever it says;
     # the fixture says so too, and a set_node on the history is the JSON's
     want = G.read_graph(_fixture("hands-lines")["graph"])
-    assert stub.wiring == G.Wiring(hands="scene", draw="lines")
+    assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
     assert want.wiring() == G.Wiring(hands="scene", draw="lines", history="scene+hands")
     vs = _views(S(), S(through=True), S(scene=False))
-    assert repr(G.default_graph(vs, stub.wiring, effects=("acid",))) == repr(
+    assert repr(G.default_graph(vs, _bare(stub.wiring), effects=("acid",))) == repr(
         G.default_graph(vs, want.wiring(), effects=("acid",)))
 
     def picture(wiring):
@@ -471,7 +480,7 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
         r.wiring = wiring
         return run(ctx, r, views(ctx, S(), S(through=True)), frames=3)
 
-    got, fixture = picture(stub.wiring), picture(want.wiring())
+    got, fixture = picture(_bare(stub.wiring)), picture(want.wiring())
     assert all(np.array_equal(a, b) for a, b in zip(got, fixture))
     plain = picture(G.Wiring())
     assert not np.array_equal(got[0], plain[0])               # the lines, in the scene
@@ -550,12 +559,13 @@ def test_the_words_say_the_wires():
     assert G.graph_words(spec) == ("graph: acid ×2 · palette on output 1 only · acid 2 reads "
                                    "the history · output 2 shows acid 2")
     assert output_shows(S(through=True), True, True, 1.0, w, n=2)[0] == "acid 2 by a wire"
-    # the FX page's chips (plan 30 D2's `placed_chips`) say where a wire puts each
-    assert G.placed_chips(spec) == {"palette": "into output 1",
-                                    "acid.2": "after history into output 2"}
-    assert G.placed_chips(G.read_graph({"wires": _wires(("hands", "palette.image"),
-                                                        ("palette", "output.2.hands"))})
-                          ) == {"palette": "after hands into output 2 hands"}
+    # the FX page's groups (plan 33 T7, `ui_fx.groups`; plan 30 D2's
+    # `placed_chips` went with the placed grid) say where a wire puts each
+    from hyperspace.ui_fx import groups
+    assert groups(spec) == [("→ output 1", ["palette"]), ("→ output 2", ["acid.2"])]
+    assert groups(G.read_graph({"wires": _wires(("hands", "palette.image"),
+                                                ("palette", "output.2.hands"))})
+                  ) == [("→ output 2", ["palette"])]
     assert output_shows(S(), True, True, 1.0, w, n=1)[0].endswith(
         "palette on this output only")
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])
@@ -587,17 +597,17 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     and output 2's route is its own end."""
     import numpy as np
     from test_outputs import rig as gl_rig
-    from test_outputs import run, views
+    from test_outputs import run, views, wired
 
-    def frame(effects, wiring):
+    def frame(effects, section):
         r = gl_rig(ctx, effects=effects, hands=False)
-        r.wiring = wiring
+        if section is not None:          # (plan 33 R23: the rig's run kept)
+            r.wiring = wired(r, section)
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 
-    w = G.read_graph({"wires": _wires(("history", "output.2.image"))}).wiring()
-    r, (a1, a2) = frame(("warp",), w)
-    _, (b1, _) = frame(("warp",), G.Wiring())
-    _, (c1, _) = frame((), G.Wiring())
+    r, (a1, a2) = frame(("warp",), {"wires": _wires(("history", "output.2.image"))})
+    _, (b1, _) = frame(("warp",), None)
+    _, (c1, _) = frame((), None)
     assert np.array_equal(a1, b1) and np.array_equal(a2, c1) and not np.array_equal(a1, a2)
     assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("wire(output.2)", False)
     assert r.stats["routes"][0] == (SCENE, False)
@@ -685,17 +695,16 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
     the hands are never drawn twice and the wire is never dropped."""
     import numpy as np
     from test_outputs import rig as gl_rig
-    from test_outputs import run, views
+    from test_outputs import run, views, wired
 
-    w = G.read_graph({"wires": _wires(("hands", "output.2.hands"),
-                                      ("hands", "output.3.hands"))}).wiring()
+    section = {"wires": _wires(("hands", "output.2.hands"), ("hands", "output.3.hands"))}
+    r = gl_rig(ctx, effects=("warp",))
+    w = r.wiring = wired(r, section)                 # (plan 33 R23: warp's run with it)
     vs = _views(S(), S(through=True), S(scene=False, through=True))
     g = G.default_graph(vs, w, effects=("warp",))
     o2, o3 = g.nodes["output.2"], g.nodes["output.3"]
     assert o2.inputs["image"] is g.nodes["fx"] and o2.inputs["hands"] is g.nodes["hands"]
     assert o3.inputs["image"] is None and o3.inputs["hands"] is g.nodes["hands"]
-    r = gl_rig(ctx, effects=("warp",))
-    r.wiring = w
     a, b, _ = run(ctx, r, views(ctx, S(), S(through=True), S(scene=False, through=True)),
                   frames=2)
     assert np.array_equal(a, b)                    # the scene, the hands over: once

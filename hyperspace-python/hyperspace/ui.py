@@ -532,7 +532,7 @@ CHEATSHEET = [
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
-# page the effect stack (ui_fx.py); the faces page the pattern browser
+# page a browser of the graph's effects (ui_fx.py); the faces page the pattern browser
 # and its eight inputs (ui_patterns.py); the hands page is the Ultraleap live
 # view and setup (hands/panel.py); the lfo page the clock and the four
 # LFOs (ui_lfo.py).
@@ -567,6 +567,9 @@ class Panel:
         # app.restart (the SYSTEM page's button, Cmd+R's param) sets it; app.frame
         # polls it after the panel draws and restarts the process
         self.restart_requested = False
+        # plan 33 U: the effect instance selected — on GRAPH (its node) or on
+        # the FX page (its row): one selection both pages show; saved nowhere
+        self.fx_selected: str | None = None
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 preset bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
@@ -1736,15 +1739,12 @@ class Panel:
         what `output_shows` reads, from the renderer as it last drew. Any
         piece missing (no renderer, a stand-in) reads as off / full."""
         r = self.renderer
-        try:
-            fx_on = bool(r.fx.active())
-        except Exception:  # noqa: BLE001 — no renderer, or a stand-in
-            fx_on = False
-        # plan 30 D1: as the renderer drew it — a placed effect bends no
-        # pipeline (`stats["fx_on"]` leaves it out)
+        # as the renderer drew it (`Frame.fx_on`, its `stats["fx_on"]`: an
+        # effect of a pipeline's run is live — plan 30 D1, a placed effect
+        # bends no pipeline; plan 33 T7, the run is the wires, so no
+        # effect's own state says it)
         drawn = (getattr(r, "stats", None) or {}).get("fx_on")
-        if isinstance(drawn, bool):
-            fx_on = fx_on and drawn
+        fx_on = drawn if isinstance(drawn, bool) else False
         visible = bool((getattr(r, "stats", None) or {}).get("layer", False))
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)
@@ -2036,7 +2036,7 @@ class Panel:
         ui_lookback.page(self, dt)     # the frame history and its composite
 
     def _page_fx(self, dt: float) -> None:
-        ui_fx.page(self, dt)           # the effect stack over the frame
+        ui_fx.page(self, dt)           # the graph's effects, by where each ends
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio

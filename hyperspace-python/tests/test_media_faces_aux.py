@@ -78,12 +78,14 @@ def test_an_aux_wire_leaves_the_effect_in_its_run():
     `image` as before; nothing else of the graph moves."""
     assert G.Effect.INPUTS == {"image": G.IMAGE, "aux": G.IMAGE}
     assert "aux" in G.Effect.REFS
+    from test_graphview import stacked
+
     effects = ("acid", "blend", "palette")
     vs = [View(Switches(), (96, 64)), View(Switches(through=True), (96, 64))]
-    base = G.default_graph(vs, effects=effects)
+    base = G.default_graph(vs, stacked(effects), effects=effects)
     spec = G.read_graph({"wires": [{"from": "media.a", "to": "blend.aux"}]})
     assert spec.notes == ()
-    g = G.default_graph(vs, spec.wiring(), effects=effects)
+    g = G.default_graph(vs, stacked(effects, spec.wiring()), effects=effects)
     blends = [n for n in g.order if isinstance(n, G.Effect) and n.effect == "blend"]
     assert len(blends) == 2
     assert {n.name for n in blends} == {n.name for n in base.order
@@ -146,13 +148,16 @@ def _renderer(ctx, media=None, wires=()):
 
 
 def test_faces_show_channel(ctx):
-    """A red still on channel c, `view.media = 3`: the faces are red where
-    the bitmap was drawn; `view.media = 0` is the frame with no media."""
-    r = _renderer(ctx, _media(c=Still(_rgba(16, 9))))
+    """A red still on channel c wired into the pattern's layer (plan 33 R:
+    `media.c → pattern.media`, where `view.media = 3` was): the faces are
+    red where the bitmap was drawn; unwired is the frame with no media (plan
+    33 T7: `view.media` is retired — the wire is the layer)."""
+    m = _media(c=Still(_rgba(16, 9)))
     plain = _draw(ctx, _renderer(ctx), _faces(), size=(160, 120))
-    off = _draw(ctx, r, _faces(media=0), size=(160, 120))
+    off = _draw(ctx, _renderer(ctx, m), _faces(), size=(160, 120))
     assert np.array_equal(off, plain)
-    on = _draw(ctx, r, _faces(media=3), size=(160, 120))
+    r = _renderer(ctx, m, wires=[G.Wire("media.c", "pattern.media")])
+    on = _draw(ctx, r, _faces(), size=(160, 120))
     h, w = on.shape[:2]
     centre = on[h // 2 - 4: h // 2 + 4, w // 2 - 4: w // 2 + 4, :3].reshape(-1, 3)
     assert (centre[:, 0] > 2 * centre[:, 1] + 20).all(), centre[:4]
@@ -161,7 +166,8 @@ def test_faces_show_channel(ctx):
     base = plain[h // 2, w // 2, :3]
     assert abs(int(base[0]) - int(base[1])) < 10
     # a channel with nothing on it draws the plain faces
-    assert np.array_equal(_draw(ctx, r, _faces(media=5), size=(160, 120)), plain)
+    r = _renderer(ctx, m, wires=[G.Wire("media.e", "pattern.media")])
+    assert np.array_equal(_draw(ctx, r, _faces(), size=(160, 120)), plain)
 
 
 def _chain(ctx):
@@ -226,8 +232,12 @@ def test_aux_wired_from_channel(ctx):
     """`media.a → blend.aux`, blend over at mix 1: the frame is the still."""
     m = _media(a=Still(_rgba(16, 9)))
     m.channels["a"].fit = 2                                  # stretch: fills
-    r = _renderer(ctx, m, wires=[G.Wire("media.a", "blend.aux")])
+    from test_outputs import wired
+
+    r = _renderer(ctx, m)
     r.fx.state.values["blend"].update(on=True, mix=1.0, mode=0)
+    # (plan 33 R23: blend in the run, as a load lands it, its aux wired)
+    r.wiring = wired(r, {"wires": [{"from": "media.a", "to": "blend.aux"}]})
     from hyperspace.view import ViewState
 
     pic = _draw(ctx, r, ViewState(lines=False, points=False, faces=False), frames=2)

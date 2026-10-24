@@ -146,6 +146,14 @@ def test_instance_motion(ctx):
         )
 
 
+def _on_faces(c: str):
+    """The wiring with channel `c` on the faces (plan 33 R: `media.<c> →
+    pattern.media`, where `view.media` chose it)."""
+    from hyperspace import graph as G
+
+    return G.Wiring(wires=(G.Wire(f"media.{c}", "pattern.media"),))
+
+
 def test_bitmap_layer(ctx):
     import numpy as np
 
@@ -154,26 +162,26 @@ def test_bitmap_layer(ctx):
         ViewState(shape=3, ang=list(VIEW["ang"]), faces=True), 600, 400, ctx=ctx
     )
     lit = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1),
-        600, 400, ctx=ctx, media=card,
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True),
+        600, 400, ctx=ctx, media=card, wiring=_on_faces("a"),
     )
     assert np.abs(lit.astype(int) - base.astype(int)).mean() > 0.005, (
         "bitmap layer invisible"
     )
     # the alpha fader at 0 removes the layer entirely
     faded = render_offscreen(
-        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1,
-                  media_alpha=0.0),
-        600, 400, ctx=ctx, media=card,
+        ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media_alpha=0.0),
+        600, 400, ctx=ctx, media=card, wiring=_on_faces("a"),
     )
     assert np.array_equal(faded, base)
     # a channel with nothing on it (b), and no channels at all: the plain faces
     for media in (card, None):
         empty = render_offscreen(
-            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=2),
-            600, 400, ctx=ctx, media=media,
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True),
+            600, 400, ctx=ctx, media=media, wiring=_on_faces("b"),
         )
         assert np.array_equal(empty, base)
+    # (plan 33 T7: no `view.media` — the wire is the layer)
 
 
 def test_bitmap_path_oscillates(ctx):
@@ -183,9 +191,9 @@ def test_bitmap_path_oscillates(ctx):
 
     def shot(mode, t):
         return render_offscreen(
-            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True, media=1,
+            ViewState(shape=3, ang=list(VIEW["ang"]), faces=True,
                       media_mode=mode, media_amp=0.25, media_scale=0.4),
-            600, 400, ctx=ctx, t_now=t, media=card,
+            600, 400, ctx=ctx, t_now=t, media=card, wiring=_on_faces("a"),
         )
 
     # STILL is time-invariant; every path mode moves the layer
@@ -260,7 +268,10 @@ def test_one_clock_reaches_the_patterns_and_the_effects(ctx):
     r = Renderer(ctx)
     seen = []
     # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+    # — plan 33 R23: in the run, as a load lands it
+    from hyperspace.graphmigrate import wiring_of
     r.fx.state.values["warp"]["on"] = True
+    r.wiring = wiring_of(r.fx.state)
     r.fx.run_one = lambda name, src, dst, t: seen.append(t)
     fbo = ctx.framebuffer(color_attachments=[ctx.texture((64, 48), 4)])
     fbo.use()
@@ -548,11 +559,12 @@ def _hands():
 def _dim_renderer(ctx, *, effect=True, hands=True, bg_alpha=1.0, echoes=False):
     """A renderer with an effect on and the ghost hands over it."""
     from hyperspace.fx import FxState
+    from hyperspace.graphmigrate import wiring_of
     from hyperspace.render import Renderer
-
     fx = FxState()
     fx.values["warp"]["on"] = effect
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
     r.bg_alpha = bg_alpha
     r.ghost.state.on, r.ghost.state.alpha = hands, 1.0
     r.ghost.source = _hands() if hands else None
@@ -600,7 +612,7 @@ def test_dim_at_one_is_the_old_frame_exactly(ctx, monkeypatch):
                         lambda self, *a, **k: calls.append(a) or real(self, *a, **k))
     r = _dim_renderer(ctx)
     got = _dim_frames(ctx, r, 1.0)
-    assert want[..., :3].max() > 100 and r.fx.active()
+    assert want[..., :3].max() > 100 and r.stats["fx_on"]
     assert np.array_equal(got, want)
     assert calls == [] and r._dim_prog is None and r.dim_error == ""
     # and the pass leaves the GL state as it found it: after dimmed frames,
@@ -860,14 +872,16 @@ def test_zero_instances_still_runs_the_look_back_and_the_effects(ctx):
     echoes of the last drawn frames fade over the empty scene); the ghost
     hands and the dim run; every frame ends on its target."""
     from hyperspace.fx import FxState
-    from hyperspace.render import Renderer
 
     # a generator on an empty scene: the frame is not black
+    from hyperspace.graphmigrate import wiring_of
+    from hyperspace.render import Renderer
     fx = FxState()
     fx.values["plasma"]["on"] = True
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
     plasma = _inst_frames(ctx, r, [0, 0])
-    assert r.fx.active() and r._face_verts == 0
+    assert r.stats["fx_on"] and r._face_verts == 0
     assert plasma[..., :3].mean() > 5 and (plasma[..., :3].max(axis=2) > 20).mean() > 0.5
 
     # the look-back with the cover pass wanted
@@ -1045,24 +1059,31 @@ def _hue(px):
 
 def _face_view(bitmap="", **kw) -> ViewState:
     """A tesseract's faces alone, big in the window: no lines, no points.
-    `bitmap` (a card) puts channel a on the faces (`view.media`, plan 32):
-    the renderer drawing it holds the card as its channels (`_carded`)."""
+    `bitmap` (a card) puts channel a on the faces — the wire `media.a →
+    pattern.media` `_wire` makes of this view's `media` (an old preset's
+    `view.media`, plan 32; this file's note of it since plan 33 T7 retired
+    the param): the renderer drawing it holds the card as its channels
+    (`_carded`)."""
     s = ViewState(shape=3, ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"],
                   faces=True, lines=False, points=False, bright=2.0, zoom=1.6,
-                  media=1 if bitmap else 0, media_scale=1.0)
+                  media_scale=1.0)
+    s.media = 1 if bitmap else 0
     for k, v in kw.items():
         setattr(s, k, v)
     return s
 
 
 def _aimed(*names, face_map=0, **values):
-    """An FxState with `names` on and aimed at the faces."""
-    from hyperspace.fx import FACES, FxState
+    """An FxState with `names` on, for the faces: `_wire` wires them there,
+    as a load of an old preset aiming them at the faces (`target` 1) does —
+    `aimed`, this file's own note of them (plan 33 T7: no target param)."""
+    from hyperspace.fx import FxState
 
     fx = FxState()
     fx.face_map = face_map
     for n in names:
-        fx.values[n].update(on=True, target=FACES, **values)
+        fx.values[n].update(on=True, **values)
+    fx.aimed = tuple(names)
     return fx
 
 
@@ -1072,9 +1093,26 @@ def _shown(face_map=0):
     return _aimed("huecycle", face_map=face_map, mix=1e-6, speed=0.0)
 
 
+def _wire(r, s):
+    """`r`'s wiring as a load lands it for these values (plan 33 R23,
+    `graphmigrate.wiring_for`): the effects `_aimed` for the faces that are
+    on, by order, wired `pattern → … → shape.faces`; the view's channel
+    (`_face_view`) wired into `pattern.media`; the others on in the run."""
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
+
+    st = r.fx.state
+    values = state_values(st)
+    values.update({f"fx.{n}.target": 1 for n in getattr(st, "aimed", ())})
+    values["view.media"] = int(getattr(s, "media", 0) or 0)
+    r.wiring = wiring_for(values, specs_of(st))
+    return r
+
+
 def _fdraw(ctx, r, s, w=FW, h=FH, t=2.0, frames=1, spin=0.0, samples=0):
     """`frames` frames on a stand-in window; the last as (h, w, 4) ints,
-    top row first. Every frame has to end on the window."""
+    top row first. Every frame has to end on the window. The renderer is
+    wired for its values first (`_wire`)."""
+    _wire(r, s)
     win = ctx.framebuffer(color_attachments=[ctx.renderbuffer((w, h), 4, samples=samples)])
     for k in range(frames):
         s.ang = [a + spin for a in s.ang]
@@ -1094,10 +1132,24 @@ def _cover(ctx, r, w=FW, h=FH):
     return np.frombuffer(tex.read(), dtype=np.uint8).reshape(h, w)[::-1] > 0
 
 
+def _count_pictures(r, calls: list) -> None:
+    """Every faces' picture `r` makes from now on, appended to `calls`."""
+    real = r._face_picture
+
+    def spy(*a, **k):
+        got = real(*a, **k)
+        if got is not None:
+            calls.append(got)
+        return got
+
+    r._face_picture = spy
+
+
 def _unused(r) -> bool:
-    """Nothing of the face target is allocated."""
-    return (r.face_pic.tex is None and r.face_pic.fbo is None and r.face_fx._tex == []
-            and r.face_fx._fbo == [] and r.face_fx.size == (0, 0) and r._pic is None)
+    """Nothing of the face target is allocated (plan 33 R: no picture, no
+    texture at FACE_PIC², and the retired faces chain never used)."""
+    return (r.face_pic.tex is None and r.face_pic.fbo is None and not hasattr(r, "face_fx")
+            and not getattr(r, "_pools", {}) and r._pic is None)
 
 
 def test_nothing_aimed_at_the_faces_is_the_old_frame_exactly(ctx):
@@ -1106,7 +1158,7 @@ def test_nothing_aimed_at_the_faces_is_the_old_frame_exactly(ctx):
     frame a face program built from the frozen pre-plan source draws. And
     it is that frame again with an effect aimed at the faces but off, with
     the stack bypassed, with fx.mix at 0 and with the faces off."""
-    from hyperspace.fx import FACES, FxState
+    from hyperspace.fx import FxState
     from hyperspace.render import Renderer
 
     card = _card()
@@ -1146,7 +1198,6 @@ def test_nothing_aimed_at_the_faces_is_the_old_frame_exactly(ctx):
         r = _carded(Renderer(ctx, fx=_aimed("plasma")), card)
         assert np.array_equal(_fdraw(ctx, r, _face_view(card, **kw)), want), kw
         assert _unused(r), kw
-    assert FACES == 1
 
 
 def test_the_old_frame_holds_under_frame_effects_the_hands_and_the_dim(ctx):
@@ -1157,14 +1208,15 @@ def test_the_old_frame_holds_under_frame_effects_the_hands_and_the_dim(ctx):
         new = _dim_renderer(ctx, bg_alpha=bg_alpha, echoes=True)
         want = _dim_frames(ctx, old, 0.6, frames=5, spin=0.05)
         got = _dim_frames(ctx, new, 0.6, frames=5, spin=0.05)
-        assert new.fx.active() and want[..., :3].max() > 60
+        assert new.stats["fx_on"] and want[..., :3].max() > 60
         assert np.array_equal(got, want), bg_alpha
         assert _unused(new)
 
 
 def test_the_face_target_costs_nothing_while_unused(ctx):
-    """No texture and no ping-pong pair until an effect is aimed at the
-    faces — and the first such frame makes exactly the picture and the pair."""
+    """No texture and no ping-pong pair until an effect on the faces' run
+    is on — and the first such frame makes exactly the picture and the
+    pair (plan 33 R: FACE_PIC² textures of their own, `Renderer.pool_at`)."""
     from hyperspace.render import FACE_PIC, Renderer
 
     fx = _aimed("plasma")
@@ -1172,15 +1224,14 @@ def test_the_face_target_costs_nothing_while_unused(ctx):
     fx.values["warp"]["on"] = True                 # the frame chain runs meanwhile
     r = Renderer(ctx, fx=fx)
     calls = []
-    real = r.face_fx.run
-    r.face_fx.run = lambda *a, **k: calls.append(a) or real(*a, **k)
+    _count_pictures(r, calls)
     _fdraw(ctx, r, _face_view(pattern=2), frames=3)
     assert _unused(r) and calls == [] and r.fx.size == (FW, FH)
     fx.values["plasma"]["on"] = True
     _fdraw(ctx, r, _face_view(pattern=2), frames=2)
     assert len(calls) == 2
     assert r.face_pic.tex.size == (FACE_PIC, FACE_PIC) and r.face_pic.tex.components == 4
-    assert r.face_fx.size == (FACE_PIC, FACE_PIC) and len(r.face_fx._tex) == 2
+    assert list(r._pools) == [(FACE_PIC, FACE_PIC)] and len(r._pools[(FACE_PIC, FACE_PIC)]) == 2
     assert FACE_PIC == 1024
     pic = r.face_pic.tex
     _fdraw(ctx, r, _face_view(pattern=2), w=200, h=120)      # never resized with the window
@@ -1198,7 +1249,7 @@ def test_a_face_effect_changes_the_faces_and_nothing_else(ctx):
     assert 0.1 < inside.mean() < 0.9
     r = Renderer(ctx, fx=_aimed("plasma"))
     got = _fdraw(ctx, r, _face_view())
-    assert r.face_error == "" and not r.fx.active() and r.face_fx.active()
+    assert r.face_error == "" and not r.stats["fx_on"] and r.stats["effects"] == ["plasma"]
     assert np.array_equal(_cover(ctx, r), inside)
     assert np.array_equal(got[~inside], base[~inside])
     assert not got[~inside][:, :3].any()                     # the ground, untouched
@@ -1375,10 +1426,10 @@ def test_a_face_pass_that_raises_leaves_the_frame_and_the_window_bound(ctx):
         ctx.disable(moderngl.BLEND)                  # blending off
         raise RuntimeError("the chain broke")
 
-    r.face_fx.run = broken
+    r.fx.run_one = broken                            # (plan 33 R: the faces' run's pass)
     got = _fdraw(ctx, r, _face_view(card, pattern=2), frames=2)
     assert np.array_equal(got, want) and r.face_error.startswith("faces: RuntimeError: the chain")
-    del r.face_fx.run
+    del r.fx.run_one
 
     # a raise let through the frame (the scene pass, a face effect running)
     win = _window(ctx)
@@ -1432,7 +1483,7 @@ def test_the_echoes_carry_the_faces_effects(ctx):
 def test_a_frame_effect_runs_over_a_face_effect(ctx):
     """One of each: both chains run, each over its own effects, and the
     frame is neither alone."""
-    from hyperspace.fx import FRAME, FxState
+    from hyperspace.fx import FxState
     from hyperspace.render import Renderer
 
     def run(faces: bool, frame: bool):
@@ -1440,17 +1491,16 @@ def test_a_frame_effect_runs_over_a_face_effect(ctx):
         fx.values["kaleido"]["on"] = frame
         r = Renderer(ctx, fx=fx)
         ran = {}
-        real = r.face_fx.run
-        r.face_fx.run = lambda *a, _real=real, **k: ran.setdefault("faces", _real(*a, **k))
-        # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+        # plan 30 D0 / plan 33 R: every effect runs one pass (`FxChain.run_one`),
+        # the faces' at FACE_PIC², the frame's at its size
         one = r.fx.run_one
-        r.fx.run_one = lambda name, *a, _one=one: (ran.setdefault("frame", []).append(name),
-                                                   _one(name, *a))
+        r.fx.run_one = lambda name, src, *a, _one=one, **k: (
+            ran.setdefault("faces" if src.size == (1024, 1024) else "frame", []).append(name),
+            _one(name, src, *a, **k))
         return _fdraw(ctx, r, _face_view()), ran, fx
 
-    both, ran, fx = run(True, True)
+    both, ran, _ = run(True, True)
     assert ran == {"faces": ["plasma"], "frame": ["kaleido"]}
-    assert fx.chain() == ["plasma", "kaleido"] and fx.chain(FRAME) == ["kaleido"]
     only_faces, ran_a, _ = run(True, False)
     only_frame, ran_b, _ = run(False, True)
     assert ran_a == {"faces": ["plasma"]} and ran_b == {"frame": ["kaleido"]}
@@ -1470,7 +1520,7 @@ def test_both_chains_in_a_frame_run_the_clocks_once(ctx):
         fx.values["warp"].update(on=True, speed=-2.0)
         r = Renderer(ctx, fx=fx)
         _fdraw(ctx, r, _face_view(), frames=7, t=3.0)
-        assert r.face_fx.active() is split
+        assert bool(getattr(r, "_pools", {})) is split       # a faces' run ran (plan 33 R)
         return dict(fx.phase)
 
     one, two = phases(False), phases(True)
@@ -1487,7 +1537,7 @@ def test_draw_scene_alone_shows_no_face_picture(ctx):
     card = _card()
     s = _face_view(card, pattern=2)
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((FW, FH))])
-    plain = _carded(Renderer(ctx), card)
+    plain = _wire(_carded(Renderer(ctx), card), s)
     _direct(ctx, plain, s, fbo, FW, FH, 2.0)
     want = _rgba(ctx, fbo, FW, FH)
     r = _carded(Renderer(ctx, fx=_aimed("plasma", "kaleido")), card)
@@ -1533,8 +1583,7 @@ def test_the_face_picture_follows_instances_and_zero(ctx):
 
     r = _carded(Renderer(ctx, fx=_aimed("plasma")), card)
     calls = []
-    real = r.face_fx.run
-    r.face_fx.run = lambda *a, **k: calls.append(a) or real(*a, **k)
+    _count_pictures(r, calls)
     zero = _fdraw(ctx, r, _face_view(instances=0), frames=2)
     assert calls == [] and _unused(r) and not zero[..., :3].any()
     one = _fdraw(ctx, r, _face_view(instances=1))
@@ -1544,19 +1593,20 @@ def test_the_face_picture_follows_instances_and_zero(ctx):
 def test_on_reload_rebuilds_the_seed_with_the_face_program(ctx, monkeypatch):
     """The face program and the seed are one build: replaced together on a
     reload, kept together on a bad edit. A reload also makes the faces'
-    chain and picture again (app.py's reloader does not re-class them), and
-    a renderer from before the face target — no `face_fx`, no seed — draws
-    without raising, and gets them on its next reload."""
+    picture again (app.py's reloader does not re-class it) — and lets a
+    faces chain from before plan 33 T7 (`face_fx`) go — and a renderer from
+    before the face target — no picture, no seed — draws without raising,
+    and gets them on its next reload."""
     import hyperspace.render as R
 
     r = R.Renderer(ctx, fx=_aimed("plasma"))
     want = _fdraw(ctx, r, _face_view(pattern=2))
-    face, seed, chain, pic = r._face_prog, r._seed_prog, r.face_fx, r.face_pic
+    face, seed, pic = r._face_prog, r._seed_prog, r.face_pic
     assert seed is not None and pic.tex is not None
+    r.face_fx = R.FxChain(ctx, r.fx.state)          # a renderer from before plan 33 T7
     r.on_reload()
     assert r._face_prog is not face and r._seed_prog is not seed
-    assert r.face_fx is not chain and r.face_pic is not pic and pic.tex is None
-    assert r.face_fx.programs is r.fx and r.face_fx.state is r.fx.state
+    assert r.face_pic is not pic and pic.tex is None and not hasattr(r, "face_fx")
     assert np.array_equal(_fdraw(ctx, r, _face_view(pattern=2)), want)
 
     # a bad edit to the seed's source: both last good programs stay
@@ -1572,13 +1622,16 @@ def test_on_reload_rebuilds_the_seed_with_the_face_program(ctx, monkeypatch):
     # a renderer made before the face target existed
     plain = _fdraw(ctx, R.Renderer(ctx), _face_view(pattern=2))
     old = R.Renderer(ctx, fx=_aimed("plasma"))
-    for name in ("face_fx", "face_pic", "face_error", "_pic", "_seed_prog", "_seed_vao"):
+    for name in ("face_pic", "face_error", "_pic", "_seed_prog", "_seed_vao"):
         delattr(old, name)
-    del old.fx.target, old.fx.programs, old.fx.state.face_map, old.fx.state._t_last
+    del old.fx.state.face_map, old.fx.state._t_last
     got = _fdraw(ctx, old, _face_view(pattern=2), frames=2)
     assert np.array_equal(got, _fdraw(ctx, R.Renderer(ctx), _face_view(pattern=2), frames=2))
-    assert not hasattr(old, "face_fx") and plain.any()
+    assert not hasattr(old, "face_pic") and plain.any()
     old.on_reload()                                  # the reload brings the face target
+    # (plan 33 R: plasma is a node of the faces' run, so its clock moved on
+    # the frames without the target, as any wired effect's does: back to 0)
+    old.fx.state.phase.clear()
     assert np.array_equal(_fdraw(ctx, old, _face_view(pattern=2)), want)
     assert old.face_error == ""
 

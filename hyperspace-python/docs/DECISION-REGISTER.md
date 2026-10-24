@@ -17,7 +17,11 @@ recommended on 2026-10-22, before their builds**; each is answered
 against it, kept here so the build's own choices inside each can still
 be overturned (the two plans land together on `plan-31-32-integration`;
 row 317's page on `plan-31-a1`). Row 340 is the owner's 2026-10-23
-answer on how the two combine. Every other one is in the app now (rows 110–213
+answer on how the two combine. Rows 341–352 (plan 33, the free graph) are
+the same kind as 311–339: the owner answered 341, 342, 346, 348 and 350 in
+his own words on 2026-10-24 and accepted the rest as recommended, before
+the build (on `plan-33-free-graph`, PR #235, into `plan-31-32-integration`).
+Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
 for the
@@ -346,6 +350,18 @@ here; overturn → the change, then the same.
 | 338 | Base `plan-28-30-integration` | — | (rec) — accepted 2026-10-22 |
 | 339 | No desk or APC40 default bindings; Learn for all | 299 | (rec) — accepted 2026-10-22 |
 | 340 | Plans 31 and 32 together: one schema ladder `/4` = `/3` + media; land together; "at its default" is the library's | 317 | owner — 2026-10-23 |
+| 341 | Retire the FX stack: no `order`, no `target`; effects edited on GRAPH | 318, 320 | owner — 2026-10-24 |
+| 342 | One picture input for all faces (`shape.faces`); per instance is next | 318 | owner — 2026-10-24 |
+| 343 | The run is wires `frame → … → fx.image`, drawn by every pipeline | 320, 322 | (rec) — accepted 2026-10-24 |
+| 344 | A `pattern` node with a `media` input replaces `view.media` | 318, 323 | (rec) — accepted 2026-10-24 |
+| 345 | A `backdrop` node with an `image` input replaces `backdrop.channel` | 318 | (rec) — accepted 2026-10-24 |
+| 346 | The migration keeps only effects that are on (mix > 0), and those something drives | 322 | owner — 2026-10-24 |
+| 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it | 322, 328 | (rec) — accepted 2026-10-24 |
+| 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
+| 349 | An unreached effect is kept, drawn faint, never run | 325, 326 | (rec) — accepted 2026-10-24 |
+| 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
+| 351 | The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
+| 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
 
 "—": no hand check shows it; tests only.
 
@@ -6534,3 +6550,237 @@ These rows follow plan 31's rows 311–320; the two plans land together on
   drop the pattern on a re-save. Never run that branch against the shared
   library once the merged build has saved.
 - **Judge it.** Check 317.
+
+## Plan 33 — the free graph (rows 341–352)
+
+Rows 341–352 were answered by the owner on 2026-10-24, in the session that
+designed plan 33, before the build: "(owner)" is his own answer, quoted,
+"(rec)" a recommendation he accepted ("accept the rest of the recs, start
+building"). Each row says what the build did; "Rough edge" and "Judge it"
+are for the hand checks of group AC (checks 318–328). The ledger's
+rulings R1–R29 are folded into "Built" where they changed what you see.
+The plan lands on `plan-31-32-integration` (PR #235).
+
+### 341. Retire the FX stack: no `order`, no `target`, effects are edited on GRAPH
+
+- **Answer.** (owner) — 2026-10-24: "Retire the main chain fx stack, we can
+  edit it directly in the graph."
+- **Built.** `fx.<n>.order`, `fx.<n>.target` and `fx.select` are not
+  params (`fx.RESERVED` keeps `order` and `target` as names, so an old
+  preset's ids are not read as uniforms). `TARGETS`, `FRAME`, `FACES`,
+  `chain()`, `FxChain.run`, the faces chain (`face_fx`) and the order-built
+  fallback run are gone; `Wiring.run is None` is the empty run (R23).
+  `@order` in an effect file is parsed and read only by the migration.
+  An old preset's orders and targets are read as wires on load
+  (`graphmigrate.migrate`) and, on a save below `/5`, written back where
+  the base build put them (`with_retired`). Three demo tools of the
+  retired UI and 30 stack-only tests were deleted.
+- **Other options.** Keep the stack as the default run and let the graph
+  add branches beside it.
+- **To reverse.** Large: the T3 run-from-wires and T7 removals. The
+  migration's inverse (`legacy_values`) is the way back to `order`.
+- **Rough edge.** A pad or key that switches on an effect in no run does
+  nothing (R13) and a later save is `/5`. An fx module load replaces the
+  run rather than appending (R12).
+- **Judge it.** Checks 318, 320.
+
+### 342. One picture input for all faces: `shape.faces`
+
+- **Answer.** (owner) — 2026-10-24: "I'm fine with one input for all faces
+  right now, per instance is the next place I would go with this though."
+- **Built.** `Shape.INPUTS = {"faces": IMAGE}`. Unwired, or fed straight
+  from `pattern`, the faces draw per face with no 1024² pass (every
+  golden without a face effect). Through effects from `pattern`: the old
+  ping-pong into `face_pic` (1024²). From anything else: that picture at
+  1024² as `u_pic`, mapped per face or in screen space by `fx.face_map`.
+  A source that reads nothing (a lost channel) makes the faces show the
+  pattern for that frame. 24 goldens added (`media-chain-faces` and the
+  two beside it).
+- **Other options.** A picture per shape instance now.
+- **To reverse.** n/a (a later plan adds `shape.faces.<k>`; the port name
+  leaves room).
+- **Rough edge.** Every face shows face 0's pattern phase when a picture
+  is wired in, as it did with an effect aimed at the faces.
+- **Judge it.** Check 318.
+
+### 343. The run is wires from `frame` to `fx.image`, drawn by every pipeline
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Wiring.run`, from `graph.run_of`; every pipeline (scene,
+  scene+hands, hands) draws the same run on its own picture, as each drew
+  the chain. An effect in no run and on no reached branch has no node.
+  A run member whose file is gone reads through and says so
+  (`Graph.dormant`). The graph's rebuild key takes the effect files
+  present, not their order. Into `fx.image` only from `frame` or an effect
+  chain leading back to it; anything else is refused in words.
+- **Other options.** A run per pipeline in the preset.
+- **To reverse.** `Wiring.run`, `default_graph`'s run, `wire_error`.
+- **Rough edge.** An emptied run keeps its bare `frame → fx.image` wire
+  (R9), and deleting that wire is refused (R20), so "no run" is never
+  expressible; an empty run is the same picture.
+- **Judge it.** Checks 320, 322.
+
+### 344. A `pattern` node with a `media` input replaces `view.media`; `shape.faces` unwired draws as today
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.PatternNode`. A channel straight into `pattern.media`
+  is read raw (`Renderer._channel_layer`), as `view.media` was, so
+  `faces-media`'s graph and goldens are unchanged; a branch is made at
+  its head's size and keeps the channel's aspect. `view.media_alpha /
+  scale / mode / amp / rate` stay params. `view.media` is not a param;
+  its readers (`render._face_media`, the FACES and MEDIA pages, Learn)
+  follow the wires, through a switch's pick.
+- **Other options.** The media layer dropped for a composite over the
+  pattern (loses the layer's scale and orbit).
+- **To reverse.** `PatternNode`, `render._face_media`.
+- **Rough edge.** The MEDIA page's faces picker is read-only words
+  ("channel C (switch)", "wired on GRAPH"); the choice is made on GRAPH or
+  by a knob on a switch.
+- **Judge it.** Checks 318, 323.
+
+### 345. A `backdrop` node with an `image` input replaces `backdrop.channel`; `backdrop.alpha` and `backdrop.history` stay params
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.BackdropNode`, the sink. A channel straight in becomes
+  `Wiring.backdrop` and is plan 32's `MediaNode` under the scene, byte for
+  byte; a branch is laid under the scene in `grounded` by
+  `Composite(under_alpha_of="backdrop_alpha")` at the frame size.
+  `backdrop.*` params belong to the `backdrop` node on GRAPH.
+- **Other options.** Keep `backdrop.channel` as a param beside the wire.
+- **To reverse.** `BackdropNode`, `Composite.under_alpha_of`.
+- **Rough edge.** A backdrop branch has one extra reader, so one extra
+  pool texture a frame.
+- **Judge it.** Check 318.
+
+### 346. The migration keeps only the effects that are on (mix > 0), and the ones something drives
+
+- **Answer.** (owner) — 2026-10-24: "effects that are toggled off right now
+  really are not used in any presets." The driven-at-mix-0 clause is the
+  build's ruling R5, taken for `dial`.
+- **Built.** An effect joins the run when it is `on` and (`mix > 0` or an
+  id of its own is driven by a route, desk row, macro, modifier or step).
+  `presets/dial.json` has `acid`, `huecycle` and `kaleido` on at mix 0,
+  pushed up by axis routes; they stay. An effect that is off stays out and
+  a load note says so when something drives it. A test fails the build if
+  a library preset routes an effect the migration leaves out
+  (`test_no_library_preset_routes_an_effect_it_leaves_out`). All 661
+  goldens before the plan are unmoved.
+- **Other options.** Keep every effect, off ones read through (an idle node
+  each); keep only the on, mix > 0 ones and lose `dial`'s three.
+- **To reverse.** `graphmigrate.migrate`'s membership rule.
+- **Rough edge.** A person's own preset that drives an effect which was
+  off loses it, with a note.
+- **Judge it.** Check 322.
+
+### 347. Save writes the lowest schema that loses nothing; `/5` only for a graph `/4` cannot say
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `preset.schema_of` writes `/5` (`FREE_SCHEMA`, `VERSIONS =
+  (2, 3, 4, 5)`) when `graphmigrate.needs_free` says the graph uses a word
+  `/4` cannot: a branch, a switch, an unwired node, an effect on outside
+  every run, a faces run `/4` cannot order. Otherwise the section is
+  stripped of plan-33 words (`legacy_section`) and `legacy_values` lays
+  the orders, targets and channel choices back, so a build from before the
+  plan never meets `frame` or `fx.image` (R10). An untouched `/4`, `/3` or
+  `/2` saves byte-identical (38 sources in
+  `tests/fixtures/plan33-v4-saves/`). **Both Macs must run this build**
+  before a `/5` file is saved; an older build refuses it.
+- **Other options.** Always `/5` (both Macs update at once).
+- **To reverse.** `preset.schema_of`, `graphmigrate.legacy_values`.
+- **Rough edge.** A person's own preset that drives a channel choice
+  becomes a switch and saves `/5` on its first re-save (R19); none is in
+  the library. A `/4` save after a reorder writes the moved effect's
+  `order` as an int among floats.
+- **Judge it.** Checks 322, 328.
+
+### 348. The FX page stays as a browser of the effect nodes in the graph
+
+- **Answer.** (owner) — 2026-10-24: "a kind of dynamic representation of
+  the things that are in the graph. It's kind of like a file explorer way
+  of exploring what is in the graph."
+- **Built.** `ui_fx.groups(spec)`: **Run**, **→ faces**, **→ pattern
+  media**, **→ backdrop**, **→ output N**, **→ <effect> aux**, any other
+  end, **reaches nothing** last; an effect that ends in two places is
+  listed in each. A row is a name, an `on` check, a small `mix` and a
+  state word; a click opens the strip, **Show on GRAPH**
+  (`ui_graph.select_effect`) selects and centres the node. The selection
+  (`Panel.fx_selected`) is shared with GRAPH's side pane. The head keeps
+  `fx.on` and `fx.mix`; the `→ faces` header carries `fx.face_map`. The
+  page adds, removes, wires and reorders nothing.
+- **Other options.** Remove the page; the strip in GRAPH's side pane only.
+- **To reverse.** `ui_fx.page`, `ui_fx.groups`.
+- **Rough edge.** `groups()` is computed twice a frame on the page and
+  again in GRAPH's side pane; with a big graph the list is long.
+- **Judge it.** Checks 321, 327.
+
+### 349. An unreached effect is kept in the preset, drawn faint, never run
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.reaches(spec)`; an effect, composite or switch with no
+  path to a sink has no render node and is drawn faint on GRAPH with
+  "reaches nothing" (`REACHES_NOTHING`). The right-click picker adds
+  effects and switches this way; an added or inserted effect is instance
+  1 when nothing holds it, else the lowest free instance, and starts on
+  (R25). An instance 1 taken out of the run is kept as `{"kind":
+  "effect", "file": f}` (R21) and the section is `/5` while the effect is
+  on; switched off, it saves below `/5` again (R26).
+- **Other options.** Drop it on save.
+- **To reverse.** `graph.reaches`, `graphview.unreached`, R21's node form,
+  `graphview._new_instance` / `_switch_on` (R25).
+- **Rough edge.** An effect added or inserted shows at once (R25): switch
+  it off if it was meant to wait.
+- **Judge it.** Checks 325, 326.
+
+### 350. A switch node in this plan: eight inputs, `switch.select` modulatable; a route on `view.media` or `backdrop.channel` migrates to one
+
+- **Answer.** (owner) — 2026-10-24: "If a switch node would be the right
+  solution for long-term use, it can be added to this plan."
+- **Built.** `graph.SwitchNode` (`switch`, `switch.2`, …), `in1` … `in8`;
+  `params.declare_switches` declares `switch[.n].select` (off, 1–8,
+  modulatable, group `switch`) from the graph's switches; the picks live in
+  `ViewState.switch`. A driven `view.media` or `backdrop.channel` loads as
+  `media.a … media.h` into a switch, the switch into `pattern.media` (or
+  `backdrop.image`), the pick at the old value, the rows retargeted to
+  `switch.select` (R14, R19). The switch sits in the MEDIA area. On
+  GRAPH the picker's "switch over the channels ▸ faces media / backdrop"
+  builds the same wires in one undo step, `select` at the channel that fed
+  the port, else 1 (R28, `Edit.switch_channels`).
+- **Other options.** No switch; such routes dropped.
+- **To reverse.** `SwitchNode`, `declare_switches`, the migration's switch
+  half, `graphview.render_channel_switch`.
+- **Rough edge.** A registry from before a hot reload into this build has
+  no `switch_state`, so switches read off until a restart (R24; dev only).
+- **Judge it.** Check 319.
+
+### 351. The default graph keeps plan 32's compositing order
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Nothing moved: the backdrop is under the scene, before the
+  history and the effects, and every golden before the plan is unmoved.
+  Changing the order is now a graph edit.
+- **Other options.** Settle the order in this plan.
+- **To reverse.** n/a.
+- **Rough edge.** The backdrop's place in the look-back is still plan 32's
+  stopgap (row 330) until the compositing session.
+- **Judge it.** Check 322 (an old party preset looks the same).
+
+### 352. The switch is a cut, eight inputs, only the selected one runs
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** No pass and no texture of its own; `Graph.pulled(frame)` walks
+  back from every node with no readers following only each switch's pick;
+  `Graph.evaluate` skips a `MAKES` node or `Effect` that is not pulled, and
+  a channel no picked path reads is not uploaded. Changing `select`
+  rebuilds nothing (a cache of 256 pick-tuples). A pick of off, or on an
+  unwired input, reads nothing: the faces show the pattern, the backdrop
+  shows nothing. 8 goldens (`switch-faces`). A texture made at another
+  size is kept `render.SIZED_KEEP_FRAMES` (30) frames after its last use,
+  so a switch flicked every frame between branches of other sizes
+  allocates nothing per flick (R29).
+- **Other options.** A crossfade time; a variable input count.
+- **To reverse.** `SwitchNode`, `Graph.pulled`.
+- **Rough edge.** An unpulled effect's clock stands still, where a wired
+  effect whose picture is not made keeps running (R17); `pulled` treats an
+  `after`-only reader as a root; up to a few idle sized textures are held
+  half a second (R29).
+- **Judge it.** Checks 319, 324.

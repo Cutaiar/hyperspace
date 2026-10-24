@@ -34,6 +34,7 @@ for p in (ROOT, ROOT / "tests"):
 from fake_hands import hand  # tests/fake_hands.py
 
 from hyperspace.fx import FxState
+from hyperspace.graphmigrate import wiring_of
 from hyperspace.hands import skeleton
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -65,6 +66,7 @@ def shot(ctx, dim: float, effect: str, frames: int) -> np.ndarray:
     if effect:
         fx.values[effect]["on"] = True
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     r.ghost.state.on, r.ghost.state.alpha, r.ghost.source = True, 1.0, hands()
     r.dim = dim
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
