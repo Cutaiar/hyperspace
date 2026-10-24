@@ -350,6 +350,33 @@ def test_a_selection_never_resizes_the_canvas(rig, monkeypatch):
     assert (pos, size) == ((10.0, 20.0 + 600.0 - ui_graph.BELOW_H), (500.0, ui_graph.BELOW_H))
 
 
+def test_a_right_click_on_the_details_opens_no_graph_menu(rig, monkeypatch):
+    """The owner (2026-10-24): a right-click on the details laid over the
+    canvas opened the canvas's menu, not the control's Learn menu. The node
+    editor still sees a right-click there (the details are over its canvas),
+    so the page notes that the mouse is over them (`st["over_details"]`)
+    and `_menus` opens no graph menu then; off them it does as before."""
+    st = party(rig)
+    _in_editor(rig, link(st, next(iter(st["bundles"]))))
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, rig.view) is not None
+    monkeypatch.setattr(ui_graph.ed, "show_background_context_menu", lambda: True)
+    opened = []
+    real_open = imgui.open_popup
+    monkeypatch.setattr(imgui, "open_popup", lambda name, *a: (opened.append(name),
+                                                               real_open(name, *a))[1])
+    io = imgui.get_io()
+    (x, y), (w, h) = st["details_rect"]
+    io.add_mouse_pos_event(x + w / 2, y + h / 2)     # over the details
+    frame(rig.panel, "graph")
+    assert st["over_details"] and ui_graph.MENU not in opened
+    opened.clear()
+    io.add_mouse_pos_event(x - 200.0, y + h / 2)     # over the canvas, left of them
+    frame(rig.panel, "graph")
+    assert not st["over_details"] and ui_graph.MENU in opened
+
+
 def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
         rig, monkeypatch):
     """ROUTING draws a pointer line where its routes and its MODIFIERS strip

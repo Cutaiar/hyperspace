@@ -495,9 +495,16 @@ def page(panel, dt: float) -> None:
     # top-left), so a selection that narrowed it panned every node (the
     # owner, 2026-10-24). The details are laid over its edge instead.
     origin = imgui.get_cursor_screen_pos()
+    pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide)
+    # the node editor still sees a right-click over the details (they lie on
+    # its canvas): noted here, before it draws, so `_menus` opens no graph
+    # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
+    mouse = imgui.get_mouse_pos()
+    st["details_rect"] = (pos, size) if sel else None
+    st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
+                                        and pos[1] <= mouse.y < pos[1] + size[1])
     _canvas(panel, st, view, imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0)))
     if sel:                             # its bottom is the canvas's: the page ends where it did
-        pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide)
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
         if imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders):
@@ -2189,6 +2196,8 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
         subject = ("node", names.get(node.id(), "")[2:])
     elif ed.show_background_context_menu():
         subject = ("picker", "")
+    if st.get("over_details"):              # a right-click on the details: theirs, not the canvas's
+        subject = None
     if subject is not None:
         st["menu"], st["menu_at"] = subject, (at.x, at.y)
         imgui.open_popup(MENU)
