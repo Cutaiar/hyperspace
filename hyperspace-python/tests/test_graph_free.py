@@ -117,7 +117,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
 LIBRARY = ROOT / "hyperspace" / "library" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
-           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32"}
+           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
+           # R14: a route on each channel choice (a /4 and a /2)
+           "plan33": ROOT / "tests" / "fixtures" / "plan33-v4-sources"}
 
 
 def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
@@ -192,7 +194,7 @@ def test_an_untouched_v4_preset_saves_byte_identical(tmp_path):
     worktree removed after). The sources are this tree's: no library file
     or fixture changed since 3547a7a."""
     sources = v4_sources()
-    assert len(sources) >= 25 + 11 + 2
+    assert len(sources) >= 25 + 11 + 2 + 2
     assert sorted(p.name for p in SAVES.glob("*.json")) == sorted(
         f"{kind}--{path.name}" for kind, path in sources)
     for k, (kind, path) in enumerate(sources):
@@ -201,9 +203,13 @@ def test_an_untouched_v4_preset_saves_byte_identical(tmp_path):
         assert got == want, f"{kind}/{path.name}"
         doc = json.loads(got)
         assert doc["schema"] != "hyperspace.preset/5", path.name
-        for w in (doc.get("graph") or {}).get("wires", []):
+        graph = doc.get("graph") or {}
+        assert not [n for n in graph.get("nodes", []) if n.get("kind") == "switch"], path.name
+        for w in graph.get("wires", []):
             assert G.wire_node_kind(w["from"]) not in ("frame", "pattern", "switch"), path.name
-            assert w["to"].rpartition(".")[0] not in ("fx", "shape", "pattern", "backdrop")
+            into = G.wire_node_kind(w["to"].rpartition(".")[0])
+            assert into not in ("fx", "shape", "pattern", "backdrop", "switch"), path.name
+        assert "switch" not in json.dumps(doc.get("routes", [])), path.name
 
 
 def _module_run(app, module: str) -> tuple[str, ...]:
@@ -261,6 +267,63 @@ def test_loading_an_fx_module_keeps_branches(tmp_path):
         assert G.Wire(a, b) in gs.spec.wires
     assert {"kind": "effect", "file": "acid", "instance": 2} in gs.free_doc()["nodes"]
     assert G.Wire("warp", "fx.image") not in gs.spec.wires
+
+
+def test_a_module_lands_its_run_over_a_refused_wire_and_says_when_it_cannot(tmp_path):
+    """A loaded graph with a refused wire (said at its load) still takes an
+    fx module's run, the refused wire kept in the section as the file had
+    it; a graph this build cannot read at all takes none, and a note says
+    so plainly."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    doc = {"schema": "hyperspace.preset/4", "name": "t", "values": {"fx.warp.on": True},
+           "graph": section(("frame", "warp.image"), ("warp", "fx.image"),
+                            ("ghost", "output.1.image"))}
+    app.presets.load_doc(doc)
+    assert any("ghost makes geometry" in n for n in app.presets.notes)
+    gs = app.presets.graph
+    app.lib.load("fx", "mandala")
+    assert G.run_of(gs.spec) == _module_run(app, "mandala")
+    assert {"from": "ghost", "to": "output.1.image"} in gs.free_doc()["wires"]
+    app.presets.load_doc({"schema": "hyperspace.preset/4", "name": "u", "values": {},
+                          "graph": {"nodes": [{"kind": "teapot"}]}})
+    app.lib.load("fx", "mandala")
+    assert gs.spec is None
+    assert app.presets.notes[-1] == ("fx module mandala: its run is not applied — the "
+                                     "preset's graph is not one this build reads")
+
+
+def test_the_module_hook_survives_a_hot_reload(tmp_path):
+    """A `Presets` re-classed by a hot reload is never re-initialised (and a
+    Library from before has no apply hooks): the next preset load registers
+    the fx module hook again, so a module after it still replaces the run."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    app.lib.__dict__.pop("_apply_hooks", None)          # as before the hook existed
+    app.lib.load("presets", "party-acid")
+    app.lib.load("fx", "mandala")
+    assert G.run_of(app.presets.graph.spec) == _module_run(app, "mandala")
+
+
+def test_a_driven_channel_choice_keeps_its_rows_and_value_while_keep_is_set(tmp_path):
+    """R14: while the load keeps the retired values (T3–T4) a route on
+    `view.media` or `backdrop.channel` makes no switch and is retargeted
+    nowhere — no `switch.select` unknown, the routes as the file has them,
+    the channel a plain wire — and the save is the base build's /4."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    src = json.loads((SOURCES["plan33"] / "driven-channels.json").read_text())
+    assert app.presets.load_doc(src) == [] and app.presets.notes == []
+    assert [b.target for b in app.router.table.routes()] == ["view.media", "backdrop.channel"]
+    assert app.reg["view.media"].value == 2 and app.reg["backdrop.channel"].value == 3
+    free = app.presets.graph.free_doc()
+    assert not [n for n in free["nodes"] if n.get("kind") == "switch"]
+    assert {"from": "media.b", "to": "pattern.media"} in free["wires"]
+    assert {"from": "media.c", "to": "backdrop.image"} in free["wires"]
+    assert app.presets.document("driven-channels")["schema"] == "hyperspace.preset/4"
 
 
 def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path):

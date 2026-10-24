@@ -834,8 +834,7 @@ class Presets:
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
         # plan 33 R12: an fx module loaded replaces the graph's runs
-        if hasattr(lib, "on_apply"):
-            lib.on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
+        self._watch_fx_modules()
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -870,6 +869,9 @@ class Presets:
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
+        # plan 33 R12: (again on every load — a Presets from before a hot
+        # reload brought this method never ran the __init__ that registers it)
+        self._watch_fx_modules()
         # 0. the look-back's per-frame ids, read as 60 Hz frames (plan 14
         #    WP6) — a file the launch's migration has not rewritten
         doc, converted = echo_seconds(doc)
@@ -1299,13 +1301,26 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
+    def _watch_fx_modules(self) -> None:
+        """Hand the library's fx module loads to `_fx_module` (plan 33 R12,
+        `Library.on_apply`): idempotent, so `load_doc` calls it as well as
+        `__init__` and a hot reload that re-classes this object (never
+        re-inits it) is registered at its next preset load. The hook looks
+        the method up at call time, so a re-class reaches it."""
+        on_apply = getattr(self.lib, "on_apply", None)
+        if on_apply is not None:
+            on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
+
     def _fx_module(self, name: str, doc: dict) -> None:
         """An fx module just landed (plan 33 R12, `Library.on_apply`): its
         run replaces the loaded graph's main run, and its faces run the
         faces' when it has one (`graphmigrate.module_runs`); every branch,
         composite, switch and placement stays. Its values are the fx group
-        as the module landed them. A graph this build cannot read is left
-        as it is; one that comes out the same is not landed again."""
+        as the module landed them. A wire the loaded graph had refused stays
+        refused, as the load said, and the rest lands with the module's run
+        (the load's own landing: the spec without it, the section with it).
+        A graph this build cannot read at all is left as it is, said in a
+        note; one that comes out the same is not landed again."""
         gs = self._graph_section()
         table = self.router.table
         rows = {"routes": [b.to_json() for b in table.routes()],
@@ -1313,10 +1328,15 @@ class Presets:
         before = gs.free_doc()
         new, _ = graphmigrate.module_runs(before, self.reg.snapshot(FX_GROUP), gs.specs(),
                                           rows)
-        spec, section, notes = gs.read(new)
-        if spec is None or notes or section == before:
+        spec, section, _ = gs.read(new)
+        if spec is None:
+            note = (f"fx module {name}: its run is not applied — the preset's graph is "
+                    "not one this build reads")
+            self.notes = [*getattr(self, "notes", []), note]
+            self.lib.say(warning=note)
             return
-        gs.land(spec, section)
+        if section != before:
+            gs.land(spec, section)
 
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),

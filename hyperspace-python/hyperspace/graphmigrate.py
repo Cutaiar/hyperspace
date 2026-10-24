@@ -306,7 +306,10 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
         k = k if 0 <= k <= len(CHANNELS) else 0
         if has:
             continue
-        if old in driven:
+        if old in driven and not keep:
+            # (R14: while `keep` is set — T3, T4 — a driven channel choice
+            # keeps its value and its rows as the file has them: no switch
+            # until T5 declares `switch.select`; the plain wire below says it)
             n = _next_switch(nodes)
             sw = G.SwitchAt(n).name
             nodes.append({"kind": "switch", **({"instance": n} if n != 1 else {})})

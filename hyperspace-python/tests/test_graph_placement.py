@@ -18,6 +18,7 @@ captures the folded scene. The fixtures' pictures are
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -36,8 +37,16 @@ RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
 FILES = {"warp", "acid", "palette", "kaleido"}
 
 
+def _run(placed=(), effects=RUN) -> tuple[str, ...]:
+    """The run a preset's wires give these effects (plan 33 R: the
+    migration's, every effect not placed, in the order given)."""
+    names = {e.name for e in placed}
+    return tuple(e for e in effects if e not in names)
+
+
 def _graph(views, *placed, effects=RUN):
-    return G.default_graph(views, G.Wiring(placed=tuple(placed)), effects=effects)
+    return G.default_graph(views, G.Wiring(placed=tuple(placed), run=_run(placed, effects)),
+                           effects=effects)
 
 
 def _fixture(slug: str) -> dict:
@@ -120,9 +129,10 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
         "acid.2 into 'palette' — that makes a loop (acid.2 into palette after acid.2)")
     assert spec.wiring().placed == (G.EffectAt("warp", 1, after="hands"),)
     assert G.EffectAt("acid", 2) in spec.effects
-    # refused at build too, same shape: the effect back in the run at its order
+    # refused at build too, same shape: the run is its wires (plan 33 R),
+    # the two placements in a loop take no other place
     w = G.Wiring(placed=(G.EffectAt("palette", 1, after="acid.2"),
-                         G.EffectAt("acid", 2, into="palette")))
+                         G.EffectAt("acid", 2, into="palette")), run=RUN)
     g = G.default_graph([View(S(), (10, 10))], w, effects=RUN)
     assert g.notes == [
         ("palette after 'acid.2' — that makes a loop (palette after acid.2 into palette); "
@@ -195,7 +205,7 @@ def test_no_factory_preset_changes_and_the_default_graph_is_identical():
         assert "graph" not in json.loads(path.read_text()), path.name
     vs = [View(S(through=True), (10, 10)), View(S(scene=False, through=True), (10, 10)),
           View(S(), (10, 10))]
-    plain = G.default_graph(vs, G.Wiring(), effects=RUN)
+    plain = G.default_graph(vs, G.Wiring(run=RUN), effects=RUN)     # (plan 33: by wires)
     assert G.Wiring().placed == () and plain.dormant == {} and plain.notes == []
     assert not [n for n in plain.order if isinstance(n, G.Effect) and n.placed]
     assert plain.nodes["hands"].readout == "through" and plain.pool == 2
@@ -205,7 +215,7 @@ def test_no_factory_preset_changes_and_the_default_graph_is_identical():
     assert plain.nodes["output.3"].inputs["hands"] is plain.nodes["hands"]
     refused = G.read_graph({"nodes": [{"kind": "effect", "file": "palette",
                                        "after": "teapot"}]}, effects=FILES)
-    again = G.default_graph(vs, refused.wiring(), effects=RUN)
+    again = G.default_graph(vs, replace(refused.wiring(), run=RUN), effects=RUN)
     assert repr(again) == repr(plain) and refused.wiring() == G.Wiring()
 
 
@@ -268,9 +278,9 @@ def test_after_scene_and_into_the_history_in_the_graph():
     assert g.nodes["capture"].inputs["image"] is a2
     assert g.nodes["cover"].inputs["scene"] is scene
     assert g.readers(a2) == 2
-    g = G.default_graph(vs, G.Wiring(blend="depth", history="scene+hands",
-                                     placed=(G.EffectAt("acid", 2, after="scene"),)),
-                        effects=RUN)
+    at = (G.EffectAt("acid", 2, after="scene"),)
+    g = G.default_graph(vs, G.Wiring(blend="depth", history="scene+hands", placed=at,
+                                     run=_run(at)), effects=RUN)
     a2 = g.nodes["acid.2"]
     assert g.nodes["composite(history)"].inputs["under"] is a2
     assert g.nodes["composite(history)"].inputs["depth"] is g.nodes["scene"]
