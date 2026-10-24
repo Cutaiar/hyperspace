@@ -1059,3 +1059,179 @@ def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
         assert not hasattr(ui_fx, "FAINT_FACES") and not hasattr(ui_fx, "ORDER_W")
     finally:
         page.close()
+
+
+# ---------------------------------------------------------------- Route from ▸ (the owner, 2026-10-24)
+#
+# The param menu's "Route from ▸": every LFO and envelope of the banks, then
+# "new LFO" / "new envelope" — a pick is the cable a drag on GRAPH makes
+# (`Edit.connect_value` from the voice's ``out:`` pin into the param's
+# ``mod`` stub), its Ask, its Refusal and its undo step.
+
+@pytest.fixture()
+def banks():
+    """test_plan31_wiring's rig (four LFOs, five envelopes, the router
+    stepping them) with a real undo carrying the banks' membership, and a
+    bare panel over it, as test_graph_seq's page."""
+    from test_plan31_wiring import rig as wiring_rig
+
+    from hyperspace import undo
+    r = wiring_rig()
+    u = undo.Undo(r.reg, r.router.table, banks=lambda: r.router._banks())
+    undo.install(u)
+    t = [0.0]
+
+    def settle():
+        for _ in range(3):
+            t[0] += 1.0
+            u.tick(t[0])
+
+    panel = SimpleNamespace(router=r.router, reg=r.reg, library=None, midi=None,
+                            learn=None)
+    settle()
+    yield SimpleNamespace(r=r, u=u, settle=settle, panel=panel)
+    undo.install(None)
+
+
+def drawn_route_from(panel, p, monkeypatch, pick=None):
+    """Draw the Route from submenu of `p` with imgui's calls recorded:
+    (the submenus opened, the items as (label, checked, enabled)); `pick`
+    is the label of the item that is clicked."""
+    opened, items = [], []
+
+    def begin_menu(label, *a, **k):
+        opened.append(label)
+        return True
+
+    def menu_item(label, shortcut="", selected=False, enabled=True):
+        items.append((label.split("##")[0], bool(selected), bool(enabled)))
+        return (label.split("##")[0] == pick, selected)
+
+    def menu_item_simple(label, shortcut="", selected=False, enabled=True):
+        return menu_item(label, shortcut, selected, enabled)[0]
+
+    monkeypatch.setattr(imgui, "begin_menu", begin_menu)
+    monkeypatch.setattr(imgui, "end_menu", lambda: None)
+    monkeypatch.setattr(imgui, "menu_item", menu_item)
+    monkeypatch.setattr(imgui, "menu_item_simple", menu_item_simple)
+    monkeypatch.setattr(imgui, "separator", lambda: None)
+    try:
+        ui_graph.route_from_menu(panel, p)
+    finally:
+        monkeypatch.undo()
+    return opened, items
+
+
+VOICES = ["LFO 1", "LFO 2", "LFO 3", "LFO 4", "env 1", "env 2", "env 3", "env 4", "env 5"]
+
+
+def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, rig,
+                                                                         monkeypatch):
+    """On a modulatable param the submenu is every LFO, then every
+    envelope, by its bank's label, then new LFO / new envelope; a trigger
+    and a param no lane may drive have none. The shared param menu
+    (`Panel._ctx_learn`) draws it — on fx.glimmer.mix, between the Learn
+    items and Learn sink."""
+    panel, reg = banks.panel, banks.r.reg
+    opened, items = drawn_route_from(panel, reg["t.x"], monkeypatch)
+    assert opened == [ui_graph.ROUTE_FROM]
+    assert [i[0] for i in items] == VOICES + ["new LFO", "new envelope"]
+    assert all(enabled and not checked for _, checked, enabled in items)
+    assert ui_graph.route_from_items(panel, reg["t.hit"]) is None          # a trigger
+    reg.continuous("t.fixed", "fixed", lambda: 0.0, lambda v: None, group="view",
+                   modulatable=False)
+    assert ui_graph.route_from_items(panel, reg["t.fixed"]) is None
+    assert drawn_route_from(panel, reg["t.fixed"], monkeypatch) == ([], [])
+    # the shared menu: the panel's own Learn items draw it, on the FX page's glimmer
+    from hyperspace.learn import Learn
+    p = rig.panel
+    p.learn = Learn(rig.reg, rig.router.table, lane=rig.router.lane)
+    rig.router.use_lfos(p.lfos, p.clock)
+    seen = []
+    real = ui_graph.route_from_menu
+    monkeypatch.setattr(ui_graph, "route_from_menu",
+                        lambda pan, q: (seen.append(q.id), real(pan, q)))
+    monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: False)
+    monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: False)
+    g = rig.reg["fx.glimmer.mix"]
+    imgui.new_frame()
+    imgui.begin("menu")
+    p._ctx_learn(g, g)
+    p._ctx_learn(rig.reg["view.bmp_alpha"], rig.reg["view.bmp_alpha"])
+    imgui.end()
+    imgui.end_frame()
+    monkeypatch.undo()
+    assert seen == ["fx.glimmer.mix", "view.bmp_alpha"]
+    assert ui_graph.route_from_items(p, rig.reg["view.bmp_alpha"]) is None
+    assert [i[0] for i in ui_graph.route_from_items(p, g)][:4] == VOICES[:4]
+
+
+def test_route_from_an_lfo_makes_the_route_a_graph_cable_makes(banks, monkeypatch):
+    """LFO 1 picked on a free param: one route lfo… → it, the row
+    `Edit.connect_value` makes for the same pins, as one undo step."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    before = list(table.bindings)
+    drawn_route_from(panel, r.reg["t.x"], monkeypatch, pick="LFO 1")
+    new = [b for b in table.bindings if b not in before]
+    assert len(new) == 1 and new[0].source.startswith("lfo:") and new[0].target == "t.x"
+    # the same pins through the GRAPH page's edit, on a twin table
+    from hyperspace.routing import Bindings, Router
+    twin = Router(r.reg, Bindings(before))
+    twin.use_lfos(r.lfos, r.clock)
+    e = graphview.Edit(twin.table, r.reg, twin, graphview.build(twin.table, r.reg, twin))
+    src = f"out:{r.router.address('lfo', 0)}"
+    made = e.connect_value(src, "mod:t.x")
+    assert (new[0].source, new[0].target, new[0].op, new[0].value) == (
+        made.source, made.target, made.op, made.value)
+    banks.settle()
+    assert banks.u.undo() and list(table.bindings) == before     # one step takes it back
+    assert banks.u.status.endswith(f"connect {src.partition(':')[2]} → t.x")   # GRAPH's label
+
+
+def test_route_from_on_a_taken_param_asks_replace_or_keep(banks, monkeypatch):
+    """The param already has a performer: the pick holds ROUTING's
+    Replace / Keep prompt and the table is untouched until it is answered;
+    Replace puts the LFO there."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    old = Binding("lane:2", "t.x", "position", 1.0)
+    table.add(old)
+    before = list(table.bindings)
+    drawn_route_from(panel, r.reg["t.x"], monkeypatch, pick="LFO 2")
+    held = ui_routing._state(panel)["prompt"]
+    assert held is not None and held[0] is old and held[1].source == r.router.address("lfo", 1)
+    assert list(table.bindings) == before
+    ui_routing.answer(panel, True)
+    assert table.owner("t.x").source == r.router.address("lfo", 1) and old not in table.bindings
+
+
+def test_route_from_new_lfo_adds_one_and_routes_it(banks, monkeypatch):
+    """"new LFO": the bank grows by one and the new LFO drives the param —
+    GRAPH's picker (`add_voice`) then its cable, in one frame, so one undo
+    step (the picker's "add LFO") takes both back. At the cap the item is
+    greyed with the bank's words."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    before, ids = list(table.bindings), r.lfos.ids()
+    drawn_route_from(panel, r.reg["t.x"], monkeypatch, pick="new LFO")
+    assert r.lfos.ids() == ids + [5]
+    owner = table.owner("t.x")
+    assert owner is not None and r.router.lane(owner.source) == ("lfo", 4)
+    banks.settle()
+    assert banks.u.undo() and banks.u.status.endswith("add LFO")
+    assert r.lfos.ids() == ids and list(table.bindings) == before
+    # full: greyed, in the bank's words, and a click does nothing
+    while r.lfos.can_add():
+        r.lfos.add()
+    _, items = drawn_route_from(panel, r.reg["t.x"], monkeypatch)
+    full = graphview.BANK_FULL.format(k=r.lfos.MAX, what="LFOs")
+    assert (full, False, False) in items
+
+
+def test_an_lfo_already_driving_is_checked(banks, monkeypatch):
+    """The LFO whose route lands on the param is drawn checked; a click on
+    it does nothing — no prompt, no new row."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    table.add(Binding(r.router.address("lfo", 2), "t.x", "position", 1.0))
+    before = list(table.bindings)
+    _, items = drawn_route_from(panel, r.reg["t.x"], monkeypatch, pick="LFO 3")
+    assert [label for label, checked, _ in items if checked] == ["LFO 3"]
+    assert list(table.bindings) == before and ui_routing.prompt(panel) is None

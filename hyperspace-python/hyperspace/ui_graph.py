@@ -1867,6 +1867,120 @@ def add_voice(panel, scheme: str, at=None):
     return res
 
 
+# ---- the param menu's "Route from ▸" (the owner, 2026-10-24) ----
+#
+# "There is no Learn option for routing one of the LFOs there or any of the
+# envelopes there, and I do want to have that ability." Not a Learn — a
+# Learn arms and waits for a gesture, and an LFO makes none — but a
+# submenu of its own in the one param menu (`Panel._ctx_learn`), so every
+# page has it: each LFO and envelope of the banks, then a new one of
+# either. A pick is exactly the cable a drag on this page makes: the
+# voice's ``out:`` pin into the param's ``mod`` stub through
+# `Edit.connect_value`, its refusal, its Ask (ROUTING's Replace / Keep)
+# and its undo step named as `connect` names it.
+
+ROUTE_FROM = "Route from"
+NEW_VOICE = "new {what}"
+
+
+def voice_label(router, scheme: str, k: int) -> str:
+    """Voice `k` (1-based) of bank `scheme` as its node is titled: the
+    router's published label, else "LFO 3" / "env 3" (`graphview.build`)."""
+    names = list((getattr(router, "labels", {}) or {}).get(scheme) or [])
+    if k - 1 < len(names) and names[k - 1]:
+        return names[k - 1]
+    return f"{'LFO' if scheme == 'lfo' else scheme} {k}"
+
+
+def voice_pin(router, scheme: str, k: int) -> str:
+    """The ``out:`` pin voice `k` of `scheme` leaves from: ``out:lfo:0``
+    for LFO 1 — the address the router names lane k − 1 by
+    (`Router.address`), as `graphview.build` gives the node's port."""
+    addr = router.address(scheme, k - 1) if router is not None else f"{scheme}:{k - 1}"
+    return f"out:{addr}"
+
+
+def route_from_items(panel, p) -> list[tuple] | None:
+    """The submenu's items for the real param `p`, or None when it is not
+    offered (no router; a trigger; a param no lane may drive). Each item is
+    ``(label, pin, checked, why)``: a voice by its label and ``out:`` pin,
+    checked when a route from it already lands on `p`; then one
+    ``(label, scheme, False, why)`` per bank for its "new" item, `why` the
+    refusal words that grey it (the bank full, no bank), else None."""
+    router = ui_routing.router_of(panel)
+    if router is None or p is None or not p.modulatable or p.kind is Kind.TRIGGER:
+        return None
+    on = {router.lane(b.source) for b in router.table.routes_to(p.id)}
+    items: list[tuple] = []
+    for scheme in graphview.BANK_SCHEMES:
+        for k in graphview.bank_ids(router, panel.reg, scheme):
+            items.append((voice_label(router, scheme, k), voice_pin(router, scheme, k),
+                          (scheme, k - 1) in on, None))
+    for scheme in graphview.BANK_SCHEMES:
+        why = add_refusal(panel, scheme)
+        items.append((why or NEW_VOICE.format(what=graphview.BANK_WORDS[scheme][0]),
+                      scheme, False, why))
+    return items
+
+
+def _footer_refusal(panel, res):
+    """A refusal said where any page shows it: GRAPH's head (`_settle`
+    put it there) and the footer's slot (`Library.say`) — the menu is
+    open on every page, and only GRAPH draws its head."""
+    if isinstance(res, graphview.Refusal):
+        lib = getattr(panel, "library", None)
+        if lib is not None and hasattr(lib, "say"):
+            lib.say(warning=str(res))
+    return res
+
+
+def route_from(panel, src: str, pid: str):
+    """The cable `src` → `pid`'s ``mod`` stub, as a drag on the page
+    makes it (`connect`'s label, refusal and settling) through
+    `Edit.connect_value`: the route, an Ask (the prompt held), or a
+    Refusal said (`_footer_refusal`)."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    dst = f"mod:{pid}"
+    res = _act(panel, f"connect {_name(e.view, src)} → {_name(e.view, dst)}",
+               e.refusal(src, dst), lambda: e.connect_value(src, dst))
+    return _footer_refusal(panel, res)
+
+
+def route_from_new(panel, scheme: str, pid: str):
+    """"new LFO" / "new envelope": GRAPH's picker (`add_voice`), then the
+    new voice's cable into `pid` (`route_from`). In one frame, so the two
+    are one undo step (`undo.Undo.push`: a second push before a tick is
+    the same action) under the picker's label, "add LFO"."""
+    nid = add_voice(panel, scheme)
+    if not isinstance(nid, str) or isinstance(nid, graphview.Refusal):
+        return _footer_refusal(panel, nid)
+    hit = graphview.voice_of(nid)
+    return route_from(panel, voice_pin(ui_routing.router_of(panel), *hit), pid)
+
+
+def route_from_menu(panel, p) -> None:
+    """Draw "Route from ▸" for the real param `p` inside the open param
+    menu (`Panel._ctx_learn`); nothing where it is not offered
+    (`route_from_items`). A checked voice already drives `p`: a click on
+    it does nothing. Every `begin_menu` here is closed here."""
+    items = route_from_items(panel, p)
+    if not items or not imgui.begin_menu(ROUTE_FROM):
+        return
+    voices = [it for it in items if it[1] not in graphview.BANK_SCHEMES]
+    for i, (label, pin, checked, _) in enumerate(voices):
+        clicked, _ = imgui.menu_item(f"{label}##route_from.{i}", "", checked)
+        if clicked and not checked:
+            route_from(panel, pin, p.id)
+    imgui.separator()
+    for label, scheme, _, why in items[len(voices):]:
+        if imgui.menu_item_simple(f"{label}##route_from.new.{scheme}", enabled=why is None) \
+                and why is None:
+            route_from_new(panel, scheme, p.id)
+    imgui.end_menu()
+
+
 def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable | None:
     """A modifier node let go at `centre` (canvas units): if it is still
     free — no cable in or out — and lands on a route or a modifier's input

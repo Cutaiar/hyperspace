@@ -1507,10 +1507,11 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
                                    "Learn hand/right"]
     assert "Learn" not in items
     # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    # (and, the owner 2026-10-24, Route from ▸ after the Learn items)
     rig.router.table.unbind("view.speed")
     _, items = menu(panel, monkeypatch, "view.speed", "view")
     assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
-                                                  "Route a lane here…"]
+                                                  "Route from ▸", "Route a lane here…"]
     # each arms with its want
     menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
     assert (lrn.learning, lrn.want) == ("view.speed", "desk")
@@ -1545,7 +1546,8 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
     panel.hands = None
     _, items = menu(panel, monkeypatch, "view.speed", "view")
-    assert items == ["Learn desk", "Route a lane here…"]
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Route from ▸",
+                                                  "Route a lane here…"]
     # a rig whose axes are one hand's: that side only
     panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
     assert panel._hand_sides() == ["right"]

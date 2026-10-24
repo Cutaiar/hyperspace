@@ -4590,6 +4590,27 @@ steps, the wrong page or channel, a chip that does nothing, or the
 canvas moving when a node is clicked (`ui_graph._param_rows`, `home_page`,
 `_switch_block`).
 
+**330. Route from ▸ an LFO, a new LFO, and a taken param.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param,test_route_from_an_lfo_makes_the_route_a_graph_cable_makes,test_route_from_on_a_taken_param_asks_replace_or_keep,test_route_from_new_lfo_adds_one_and_routes_it,test_an_lfo_already_driving_is_checked}`.
+The owner, 2026-10-24: "There is no Learn option for routing one of the
+LFOs there or any of the envelopes there." On the FX page open Glimmer
+and right-click its **mix**: **Route from ▸ LFO 1**. Right-click mix
+again; then right-click its **speed** and pick **Route from ▸ new LFO**.
+Then right-click a param a hand or a band already performs and pick
+**Route from ▸ LFO 2**; press **Keep**, then do it again and press
+**Replace**. Open the same menu on GRAPH's side panel and on the VIEW page.
+*Pass:* mix breathes with LFO 1 and GRAPH shows the cable `LFO 1 → mix`;
+the second menu shows **LFO 1** checked, and clicking it does nothing;
+new LFO adds one LFO (the LFO page and GRAPH show it) that drives speed,
+and one ⌘Z takes both the LFO and its route back; the taken param puts up
+the Replace / Keep prompt, Keep leaves the old performer and Replace puts
+LFO 2 there; the submenu is the same on every page, sits after the Learn
+items and before Learn sink, and is absent on a toggle or a trigger.
+*Fail:* a route that differs from the one a GRAPH drag makes (op, depth),
+an undo that takes two steps for new LFO, a pick on a taken param that
+replaces with no prompt, or a page whose menu lacks it
+(`ui_graph.route_from_menu`, `Panel._ctx_learn`).
+
 ## What no test covers
 
 Only a person can settle these:

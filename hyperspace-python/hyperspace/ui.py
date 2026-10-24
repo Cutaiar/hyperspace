@@ -855,7 +855,13 @@ class Panel:
         modulatable), for the sides the rig's axes have. **Learn pad**:
         while a gamepad is connected, wherever Learn desk is offered — a
         button, the D-pad, a stick or a trigger completes it
-        (`gamepad.learn_from`)."""
+        (`gamepad.learn_from`). **Route from ▸** (the owner, 2026-10-24:
+        "there is no Learn option for routing one of the LFOs there"): on
+        a modulatable param that is no trigger, every LFO and envelope of
+        the banks — the one already driving it checked — then new LFO /
+        new envelope; a pick is the cable a drag on GRAPH makes
+        (`ui_graph.route_from_menu`). It sits after the Learn items, before
+        Learn sink, and is no Learn: an LFO has no gesture to wait for."""
         lrn = self.learn
         if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
@@ -876,6 +882,10 @@ class Panel:
             for want in learn_wants(lrn):
                 if imgui.menu_item_simple(f"Learn {want}"):
                     lrn.arm(a.id, want)
+        # the owner, 2026-10-24: an LFO or an envelope onto the param — no
+        # gesture to wait for, so not a Learn; the cable a drag on GRAPH
+        # makes (`ui_graph.route_from_menu`)
+        ui_graph.route_from_menu(self, p)
         # plan 27 B3: the param *out* to a sink port — the rig's ports
         # (`Learn.sinks`), a pick lands at once as a session row
         # (`Learn.learn_sink`): no prompt, no undo step, no preset dirt
