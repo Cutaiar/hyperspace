@@ -327,6 +327,43 @@ Tests:
 `tests/test_graph_switch.py::{test_a_route_on_a_removed_switch_select_goes_dormant_without_raising,test_a_switch_flicked_every_frame_reallocates_nothing}`,
 `tests/test_graph_faces.py::test_a_solid_draw_that_raises_leaves_no_face_layer_behind`.
 
+### After the owner's first look (2026-10-24)
+
+- **Opening a node's details no longer pans the graph** (685786e). The
+  node editor re-centres whenever its canvas changes size, so the canvas
+  keeps the page's whole size and the details are an opaque panel laid
+  over its right edge (`SIDE_W`) or, on a narrow page, its bottom
+  (`BELOW_H`): `ui_graph.details_rect`.
+- **Every node's params are editable in the side panel.** The owner could
+  see a media node's ports (position, jog …) but not edit them. A selected
+  node now draws each param port as the panel's own row (`Panel._row`: a
+  slider or a combo, its label's Learn / Unbind; a toggle's checkbox, a
+  trigger's chip), patched ports first in each group, aliases left out
+  (`ui_graph.side_groups`, `_param_rows`). An edit is the param's, so
+  undo, the preset's dirt and the modulation behave as on every page.
+  Past `FOLD_AT` (12) rows (the shape's fifty) each group folds under a
+  header, a group holding a patched port open at first, kept per node
+  while the page is open. A node with no params (a controller, the
+  analyzer) keeps its readings in words.
+- **open on <PAGE>.** A node with a home page has a chip at the top of its
+  side panel (`ui_graph.home_page`, pure): a media channel opens MEDIA
+  with it selected, an effect FX (`fx_selected`), the pattern FACES, the
+  backdrop MEDIA, the shape VIEW, an LFO its LFO, an envelope SEQ with
+  its strip open, the hands HANDS, an output OUTPUT; a group node the page
+  of its params (`ui.PAGES`), the eye CAMERA, the history LOOKBACK. A
+  modifier, a macro, a controller and a switch have none.
+- **A switch has a control by mouse.** The owner found it could only be
+  Learned onto a controller. Its side panel opens on chips — `off`, then
+  `1 · media.a` … `8 · —`, each named by what feeds that input, the pick
+  lit, an unwired input faint but still a pick — and a click sets
+  `switch[.n].select` through the param (one undo step), its `select` row
+  with Learn below (`ui_graph._switch_block`, `switch_feeds`). The
+  canvas's summary says the pick ("picks in3", `graphview.switch_pick`).
+
+Tests:
+`tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_every_nodes_side_panel_draws,test_home_page_maps_each_node_kind,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click,test_a_selection_never_resizes_the_canvas}`;
+hand check 329.
+
 ## What no person has verified
 
 Every headless test passes (3528 passed, 2 skipped on the build machine,

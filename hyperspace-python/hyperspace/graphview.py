@@ -1400,8 +1400,10 @@ def refresh(view: View, reg: Registry, router: Router | None, lanes=None,
             for port in n.ports:
                 port.up = not port.layer or port.layer == up
         shut = collapsed is not None and n.kind != "macro" and collapsed(n.id)
+        pick = isinstance(n.ref, rgraph.SwitchNode)     # its summary says its pick
         for port in n.ports:
-            if shut and not port.patched and port.direction != OUT:
+            if shut and not port.patched and port.direction != OUT and not (
+                    pick and port.param is not None):
                 continue
             if port.addr is not None:
                 port.live = reading(router, port.addr, lanes)
@@ -2116,9 +2118,21 @@ def summary(n: VNode) -> list[str]:
             lines.append(_count(len(pics), "picture port"))
         if params:
             lines.append(_loudest(p for p in params if p.patched))
+        if isinstance(n.ref, rgraph.SwitchNode):
+            lines.insert(0, switch_pick(n))
         if n.faint:                         # plan 33 U: unreached, said first
             lines.insert(0, REACHES_NOTHING)
     return lines[:SUMMARY_LINES]
+
+
+def switch_pick(n: VNode) -> str:
+    """A switch node's pick in words, from its `select` port's reading
+    (the owner, 2026-10-24: the canvas says which input passes): "picks
+    in3", "off" — "off" too while it reads nothing."""
+    port = next((p for p in n.ports if p.param is not None), None)
+    live = port.live if port is not None else None
+    k = 0 if live is None else round(live * len(rgraph.SWITCH_PORTS))
+    return f"picks in{k}" if 1 <= k <= len(rgraph.SWITCH_PORTS) else "off"
 
 
 @dataclass

@@ -5,13 +5,13 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–328; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–329; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
 merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
-together; group AC (318–328) is plan 33's, the free graph, on
+together; group AC (318–329) is plan 33's, the free graph, on
 `plan-33-free-graph`.
 
 ## Before you start
@@ -4569,6 +4569,26 @@ the second, with only a run, says `/4` (or the lowest schema that fits)
 with `order` and `target` values and opens on the old Mac. *Fail:* the
 old Mac opens the `/5` file or drops part of it, or the run-only file is
 `/5` (`preset.schema_of`, `graphmigrate.legacy_values`).
+
+**329. A node's controls in the side panel, and a switch by mouse.**
+(laptop, the copy, a clip)
+Headless: `tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click}`.
+Put the clip on channel A (MEDIA page) and wire `media.a → shape.faces`.
+On GRAPH click the `media.a` node: drag its **position** slider in the
+side panel, then its **jog**, and right-click a label for Learn. Press
+**open on MEDIA**. Back on GRAPH, add a **switch over the channels ▸ faces
+media** (right-click the canvas), click the switch and press its chips
+`3 · media.c`, `1 · media.a`, `off` with the mouse; click the shape.
+*Pass:* the clip seeks with position and scrubs with jog as it does on
+the MEDIA page, one ⌘Z undoes one drag; the chip opens MEDIA with
+channel A selected; each switch chip changes the faces at once, the pick
+lit, an unwired input faint, and the switch's canvas line says "picks
+in3"; the shape's groups are folded, the patched ones open, and the panel
+scrolls; the graph never pans. Say whether 320 px reads at arm's length.
+*Fail:* a row that does not move its param, an undo that takes two
+steps, the wrong page or channel, a chip that does nothing, or the
+canvas moving when a node is clicked (`ui_graph._param_rows`, `home_page`,
+`_switch_block`).
 
 ## What no test covers
 

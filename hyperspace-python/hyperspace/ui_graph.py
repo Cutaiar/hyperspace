@@ -39,6 +39,16 @@ the canvas — below it while the page is narrow — selecting an effect's
 node shows its strip (`ui_fx.strip`), and a modifier's node the
 MODIFIERS strip's editor for it (`ui_routing.modifier_block`, plan 28
 N7: GRAPH edits the routes and the modifiers; ROUTING points here).
+Any other node shows its params as the panel's own rows (the owner,
+2026-10-24: "I can see the ports … but I can't actually edit those
+things"): `_param_rows`, `Panel._row` per param port — patched first in
+each group, an alias left out — so an edit is the param's (undo, dirt,
+modulation as on every page); past `FOLD_AT` rows each group folds, a
+group holding a patched port open at first. A node with a page has an
+**open on <PAGE>** chip at the top (`home_page`, `open_on`: a media
+channel's MEDIA with it selected, an effect's FX, an LFO's LFO …); a
+switch has none — its side panel is its control: a chip per input named
+by what feeds it, the pick lit, a click its pick (`_switch_block`).
 
 **Editing the modulation** (plan 28 N3): a cable dragged between two
 pins (`_create`) and a cable or node deleted (`_delete`) go through
@@ -126,10 +136,11 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, modifiers, ui, ui_fx, ui_routing, undo
+from . import graphview, modifiers, params, ui, ui_fx, ui_routing, undo
 from .bands import CEIL
 from .graph import Effect
 from .library import LibraryError
+from .params import Kind
 from .view import RED as RED_RGB
 
 STATE = "_graph"         # the panel's attribute: survives a reload of this module
@@ -1354,6 +1365,20 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         _route_row(panel, router, view, c)
         return
     n = obj
+    imgui.push_id(f"graph.side.{n.id}")
+    try:
+        _node_side(panel, st, view, router, n)
+    finally:
+        imgui.pop_id()
+
+
+def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode) -> None:
+    """A selected node's side panel (the owner, 2026-10-24): its page's
+    chip (`home_page`), then an effect's strip, a modifier's editor, or its
+    label and status, a switch's chips (`_switch_block`) and a row per
+    param (`_param_rows`); a node with no param keeps its patched ports'
+    readings in words."""
+    _open_chip(panel, n)
     if isinstance(n.ref, Effect):
         ui_fx.strip(panel, n.ref.effect)
         return
@@ -1367,9 +1392,256 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
     imgui.text(n.label)
     if n.status:
         imgui.text_disabled(n.status)
+    if isinstance(n.ref, rgraph.SwitchNode):
+        _switch_block(panel, view, n)
+    if _param_rows(panel, st, n):
+        return
     for port in n.ports:
         if port.patched:
             imgui.text_disabled(f"{port.name}: {_said(port.live)}")
+
+
+# ---------------------------------------------------------------- a node's controls (2026-10-24)
+
+FOLD_AT = 12             # more param rows than this: each group under its own header
+UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
+OPEN_TIP = "Open this node's page, with it selected there"
+
+
+def side_groups(panel, n: graphview.VNode) -> list[tuple[str, list[str]]]:
+    """The node's param rows for the side panel, as (group, [param id]) in
+    the order its ports are drawn: within a group the patched ports first,
+    then the rest in port order. A param is drawn once (a macro's knob is
+    two ports); an alias is left out (the param behind it is the row), and
+    so is one the registry does not hold."""
+    reg = panel.reg
+    groups: dict[str, list[graphview.VPort]] = {}
+    seen: set[str] = set()
+    for port in n.ports:
+        pid = port.param
+        if pid is None or pid in seen or pid not in reg or reg[pid].alias:
+            continue
+        seen.add(pid)
+        groups.setdefault(port.group, []).append(port)
+    return [(g, [p.param for p in sorted(ports, key=lambda p: not p.patched)])
+            for g, ports in groups.items()]
+
+
+def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
+    """Every param of node `n` as the panel's own row (the owner,
+    2026-10-24: "I can see the ports … but I can't actually edit those
+    things"): the same widgets, so an edit is the param's — undo, the
+    preset's dirt and the modulation as on every page. Several groups get a
+    small header each; more than `FOLD_AT` rows fold each group under a
+    collapsing header, a group holding a patched port open at first, the
+    open state kept per node (``st["side_open"]``). False: no param."""
+    groups = side_groups(panel, n)
+    if not groups:
+        return False
+    imgui.separator()
+    fold = sum(len(pids) for _, pids in groups) > FOLD_AT
+    opened = st.setdefault("side_open", {}).setdefault(n.id, {})
+    patched = {p.group for p in n.ports if p.param is not None and p.patched}
+    for g, pids in groups:
+        name = g or "params"
+        if fold:
+            if g not in opened:
+                opened[g] = g in patched
+            imgui.set_next_item_open(opened[g], imgui.Cond_.always)
+            opened[g] = imgui.collapsing_header(f"{name} · {len(pids)}##fold.{g}")
+            if not opened[g]:
+                continue
+        elif len(groups) > 1:
+            ui._micro(name)
+        for pid in pids:
+            _param_row(panel, pid)
+    return True
+
+
+def _param_row(panel, pid: str) -> None:
+    """One param in the side panel: `Panel._row` (a slider, or a combo for
+    an enum) — a toggle its checkbox, a trigger its fire chip, a path its
+    name, each beside the same label (whose menu is Learn / Unbind)."""
+    p = panel.reg[pid]
+    kind = panel._real(p).kind
+    if kind in (Kind.CONTINUOUS, Kind.ENUM):
+        panel._row(pid)
+        return
+    panel._label_cell(p.label)
+    panel._ctx_label(p)
+    if kind is Kind.TOGGLE:
+        panel._check(pid, label="")
+    elif kind is Kind.TRIGGER:
+        panel._button(pid, label="fire", small=True)
+    else:
+        panel._path(pid)
+
+
+def _page_of_group(group: str) -> str | None:
+    """The page whose params are group `group` (`ui.PAGES`' third field)."""
+    for key, _, groups in ui.PAGES:
+        if group == groups or (isinstance(groups, tuple) and group in groups):
+            return key
+    return None
+
+
+def _media_sel(c: str):
+    def sel(panel) -> None:
+        from . import ui_media
+        ui_media._state(panel)["sel"] = c
+    return sel
+
+
+def _fx_sel(name: str):
+    def sel(panel) -> None:
+        select_effect(panel, name)
+    return sel
+
+
+def _lfo_sel(k: int):
+    def sel(panel) -> None:
+        from . import ui_lfo
+        ui_lfo.select(panel, k)
+    return sel
+
+
+def _env_sel(k: int):
+    def sel(panel) -> None:
+        from . import ui_seq
+        ui_seq.open_strip(panel, k)
+    return sel
+
+
+def home_page(n: graphview.VNode):
+    """The page node `n`'s controls live on, as (page key, selector): the
+    selector, called with the panel, selects the node's item there (None:
+    nothing to select) — the side panel's "open on <PAGE>" chip (the
+    owner, 2026-10-24). None for a node with no page: a switch (the side
+    panel is its control), a modifier (GRAPH is its editor), a macro, a
+    controller. Pure: no imgui."""
+    r = n.ref
+    voice = graphview.voice_of(n.id)
+    if voice is not None:
+        scheme, k = voice
+        return ("lfo", _lfo_sel(k)) if scheme == "lfo" else ("seq", _env_sel(k))
+    if n.kind == graphview.SEQ:
+        return ("seq", None)
+    if n.kind == "analyzer":
+        return ("analyzer", None)
+    if n.kind == "device" and (n.role == "leap" or n.id == "device:leap"):
+        return ("hands", None)
+    if n.kind == "group":
+        key = _page_of_group(n.label)
+        return (key, None) if key is not None else None
+    if n.id == f"render:{graphview.EYE}":
+        return ("camera", None)
+    if isinstance(r, rgraph.MediaNode):
+        return ("media", _media_sel(r.channel))
+    if isinstance(r, Effect):
+        return ("fx", _fx_sel(r.effect))
+    if isinstance(r, rgraph.Fx):
+        return ("fx", None)
+    if isinstance(r, rgraph.PatternNode):
+        return ("faces", None)
+    if isinstance(r, rgraph.BackdropNode):
+        return ("media", None)
+    if isinstance(r, rgraph.Shape):
+        return ("view", None)
+    if isinstance(r, rgraph.History):
+        return ("lookback", None)
+    if isinstance(r, (rgraph.Hands, rgraph.HandsLayer)):
+        return ("hands", None)
+    if isinstance(r, rgraph.Output) or n.kind == "output":
+        return ("output", None)
+    return None
+
+
+def open_on(panel, home) -> None:
+    """Turn the panel to `home`'s page (through ``ui.page``, as a page tab
+    does) with its item selected there."""
+    key, sel = home
+    if sel is not None:
+        sel(panel)
+    k = ui.PAGE_KEYS.index(key)
+    if "ui.page" in panel.reg:
+        panel.reg["ui.page"].set(k)
+    else:
+        panel.page = k
+
+
+def _open_chip(panel, n: graphview.VNode) -> None:
+    home = home_page(n)
+    if home is None:
+        return
+    if ui.chip(f"open on {home[0].upper()}##graph.side.open"):
+        open_on(panel, home)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(OPEN_TIP)
+
+
+def switch_feeds(view: graphview.View, n: graphview.VNode) -> list[str | None]:
+    """What feeds each of switch node `n`'s inputs, in1 … in8: the label
+    of the node its render cable comes from (`media.c`, `acid.2`), None
+    for an input nothing is wired to."""
+    name = getattr(n.ref, "name", n.label)
+    ports = {f"rin:{name}/{p}": k for k, p in enumerate(rgraph.SWITCH_PORTS)}
+    out: list[str | None] = [None] * len(rgraph.SWITCH_PORTS)
+    for c in view.cables:
+        k = ports.get(c.dst_port) if c.kind == "render" else None
+        if k is None:
+            continue
+        hit = view.owner(c.src_port)
+        out[k] = hit[0].label if hit is not None else c.src_port.partition(":")[2]
+    return out
+
+
+def switch_chips(feeds: list[str | None]) -> list[tuple[int, str, str]]:
+    """The switch block's chips as (pick, label, hover): off, then
+    ``k · <what feeds in<k>>`` (``—`` for nothing)."""
+    chips = [(0, "off", "off: the faces show the pattern, the backdrop nothing")]
+    for k, feed in enumerate(feeds, 1):
+        tip = (f"in{k}: {feed}" if feed else
+               f"in{k}: nothing wired — picked, the faces show the pattern, "
+               "the backdrop nothing")
+        chips.append((k, f"{k} · {feed or '—'}", tip))
+    return chips
+
+
+def _switch_block(panel, view: graphview.View, n: graphview.VNode) -> None:
+    """A switch's control by mouse (the owner, 2026-10-24: "the switch
+    node actually doesn't seem to have any controls anywhere"): `off` on
+    its own line, then the eight inputs two to a line, each named by what
+    feeds it and fitted to its chip, the pick lit; an unwired input faint
+    but still a pick. A click is the param's write (`Param.set`, as its
+    combo does), so it is one undo step. Its `select` row follows with the
+    other rows."""
+    pid = params.switch_id(n.ref.name)
+    if pid not in panel.reg:
+        return
+    p = panel._real(panel.reg[pid])
+    try:
+        cur = int(p.value)
+    except (TypeError, ValueError):
+        cur = 0
+    feeds = switch_feeds(view, n)
+    gap = imgui.get_style().item_spacing.x
+    w = max((imgui.get_content_region_avail().x - gap) / 2, 40.0)
+    pad = 2 * ui.CHIP_PAD.x
+    imgui.separator()
+    for k, label, tip in switch_chips(feeds):
+        if k == 0:
+            size = imgui.ImVec2(2 * w + gap, 0)
+        else:
+            size = imgui.ImVec2(w, 0)
+            if k % 2 == 0:
+                imgui.same_line()
+        unwired = k > 0 and feeds[k - 1] is None
+        text = ui.fit_text(label, size.x - pad)
+        if ui.lit_chip(f"{text}##graph.side.{n.ref.name}.{k}", cur == k,
+                       UNWIRED if unwired else None, size):
+            p.set(k)
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(tip)
 
 
 def _route_row(panel, router, view: graphview.View, c: graphview.VCable) -> None:

@@ -635,3 +635,217 @@ def test_selecting_an_effect_node_sets_the_shared_selection(rig):
     assert sel is not None and sel[1].id == off.id
     assert rig.panel.fx_selected == off.ref.effect
     assert graphview.SHADERS in st["idle_open"]
+
+
+# ---------------------------------------------------------------- the owner, 2026-10-24: a node's controls
+
+def pick(rig, st, nid):
+    """Select node `nid` as a click on the canvas does — its area's idle
+    line opened first if it sits there — and draw the page twice (the side
+    panel reads last frame's selection)."""
+    n = st["view"].node(nid)
+    if n.idle:
+        st.setdefault("idle_open", set()).add(n.area)
+        frame(rig.panel, "graph")
+    _in_editor(rig, lambda: (ed.clear_selection(),
+                             ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + nid)))))
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    sel = ui_graph._selection(st, st["view"])
+    assert sel is not None and sel[1].id == nid
+    return sel[1]
+
+
+def spy_rows(monkeypatch):
+    rows = []
+    row = ui.Panel._row
+    monkeypatch.setattr(ui.Panel, "_row", lambda self, pid, *a, **k: rows.append(pid)
+                        or row(self, pid, *a, **k))
+    return rows
+
+
+def undo_watch(rig):
+    """An undo watcher over the rig's registry and table (app.main's, without
+    the marks), ticked by hand: `tick()` one frame on, `settle()` past
+    `SETTLE_S`."""
+    from hyperspace import undo
+    u = undo.Undo(rig.reg, rig.router.table)
+    t = [100.0]
+
+    def tick(dt=1 / 60):
+        t[0] += dt
+        u.tick(t[0])
+
+    def settle():
+        tick(undo.SETTLE_S + 0.1)
+        tick()
+    return u, tick, settle
+
+
+def test_a_media_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
+    """The owner (2026-10-24): a media node's ports showed its params but
+    nothing edited them. Selected, the side panel draws each of its params
+    as the panel's own row (`Panel._row`: the slider or the combo, its
+    label's Learn menu) — rate, jog, position, loop, slot and fit."""
+    st = party(rig)
+    rows = spy_rows(monkeypatch)
+    pick(rig, st, "render:media.a")
+    for key in ("rate", "jog", "pos", "loop", "slot", "fit"):
+        assert f"media.a.{key}" in rows, key
+
+
+def test_a_side_panel_row_edits_through_the_param(rig, monkeypatch):
+    """A drag on the side panel's rate slider is the slider's own write
+    (`Param.set_value`): the param moves, and the undo watcher makes one
+    step of it, as on the MEDIA page."""
+    st = party(rig)
+    pick(rig, st, "render:media.a")
+    u, tick, settle = undo_watch(rig)
+    settle()
+    u.stack.clear()
+    p = rig.reg["media.a.rate"]
+    want = p.lo + 0.75 * (p.hi - p.lo)
+    real = ui.imgui.slider_float
+    monkeypatch.setattr(ui.imgui, "slider_float",
+                        lambda label, v, *a: (True, want) if label == "##media.a.rate"
+                        else real(label, v, *a))
+    frame(rig.panel, "graph")
+    monkeypatch.setattr(ui.imgui, "slider_float", real)
+    assert p.base == pytest.approx(want)
+    tick()
+    settle()
+    assert len(u.stack) == 1
+
+
+def test_a_big_node_folds_its_groups(rig, monkeypatch):
+    """The shape holds about fifty params: more than `FOLD_AT` rows, so each
+    group folds under its own header — a group holding a patched port open,
+    the rest closed (kept per node in the page's state) — and only the open
+    groups' rows are drawn; within a group the patched ports come first."""
+    st = party(rig)
+    rows = []                       # every row: a slider, a combo, a toggle's checkbox
+    one = ui_graph._param_row
+    monkeypatch.setattr(ui_graph, "_param_row", lambda pn, pid: rows.append(pid) or one(pn, pid))
+    shape = pick(rig, st, "render:shape")
+    groups = ui_graph.side_groups(rig.panel, shape)
+    assert sum(len(pids) for _, pids in groups) > ui_graph.FOLD_AT
+    folds = st["side_open"][shape.id]
+    patched = {p.group for p in shape.ports if p.param and p.patched}
+    assert patched and set(folds) == {g for g, _ in groups}
+    assert any(not v for v in folds.values())
+    by_param = {p.param: p for p in shape.ports if p.param}
+    for g, pids in groups:
+        assert folds[g] == (g in patched), g
+        drawn = [pid for pid in pids if pid in rows]
+        assert drawn == (pids if folds[g] else []), g
+        flags = [by_param[pid].patched for pid in pids]
+        assert flags == sorted(flags, reverse=True), g
+
+
+def test_every_nodes_side_panel_draws(rig):
+    """Each node of party-trip selected in turn, its idle line opened: the
+    side panel draws (its rows, its folds, its chip) without an imgui error
+    — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
+    st = party(rig)
+    st["idle_open"] = set(graphview.AREAS) | {graphview.OTHER}
+    frame(rig.panel, "graph")
+    drawn = [n.id for n in st["view"].nodes if ui_graph.drawn_node(st, n)]
+    assert len(drawn) > 40
+    for nid in drawn:
+        pick(rig, st, nid)
+
+
+def test_home_page_maps_each_node_kind(rig):
+    """`home_page(node)`: the page that node's controls live on, and what to
+    select there — None for a node with none (a switch, a modifier)."""
+    from hyperspace import ui_media
+    st = party(rig)
+    view = st["view"]
+    panel = rig.panel
+
+    def home(n):
+        got = ui_graph.home_page(n)
+        return None if got is None else got[0]
+    key, sel = ui_graph.home_page(view.node("render:media.c"))
+    assert key == "media"
+    sel(panel)
+    assert ui_media._state(panel)["sel"] == "c"
+    key, sel = ui_graph.home_page(view.node("render:acid"))
+    assert key == "fx"
+    sel(panel)
+    assert panel.fx_selected == "acid"
+    assert home(view.node("render:pattern")) == "faces"
+    assert home(view.node("render:backdrop")) == "media"
+    assert home(view.node("render:shape")) == "view"
+    key, sel = ui_graph.home_page(view.node("lfo.3"))
+    assert key == "lfo"
+    sel(panel)
+    assert panel._lfo_open == 3
+    key, sel = ui_graph.home_page(graphview.VNode("env.7", "env", "env 7"))
+    assert key == "seq"
+    sel(panel)
+    assert panel._seq_env == 7
+    assert home(graphview.VNode(graphview.SEQ, graphview.SEQ, "sequencer")) == "seq"
+    assert home(view.node("render:ghost")) == "hands"
+    assert home(view.node("render:output.1")) == "output"
+    assert home(graphview.VNode("render:switch", "render", "switch",
+                                ref=G.SwitchNode("switch"))) is None
+    assert home(graphview.VNode("smooth.1", "modifier", "smooth")) is None
+    assert home(view.node("macro.1")) is None
+    assert all(k in ui.PAGE_KEYS for k in map(home, view.nodes) if k is not None)
+
+
+def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
+    """The side panel's "open on MEDIA" chip: the panel turns to MEDIA with
+    the node's channel selected there."""
+    from hyperspace import ui_media
+    st = party(rig)
+    pick(rig, st, "render:media.c")
+    chips = []
+    chip = ui.chip
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
+                        or label.startswith("open on MEDIA") or chip(label, *a, **k))
+    frame(rig.panel, "graph")
+    monkeypatch.setattr(ui, "chip", chip)
+    assert any(c.startswith("open on MEDIA") for c in chips)
+    assert rig.panel.page == ui.PAGE_KEYS.index("media")
+    assert ui_media._state(rig.panel)["sel"] == "c"
+    frame(rig.panel)
+
+
+def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
+    """The owner (2026-10-24): a switch had no control but Learn. Its side
+    panel opens on a row of chips — off, then 1 … 8, each named by what
+    feeds that input ("3 · media.c", "2 · —" for nothing) — the pick lit;
+    one click sets `switch.select` through the param, one undo step. The
+    select row with its Learn menu sits under them, and the canvas's
+    summary says the pick."""
+    st = party(rig)
+    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    assert e.add_node("switch") is None and e.added == "switch"
+    assert e.wire("rout:media.a", "rin:switch/in1") is None
+    assert e.wire("rout:media.c", "rin:switch/in3") is None
+    frame(rig.panel, "graph")
+    sw = st["view"].node("render:switch")
+    assert ui_graph.switch_feeds(st["view"], sw)[:3] == ["media.a", None, "media.c"]
+    rows = spy_rows(monkeypatch)
+    pick(rig, st, "render:switch")
+    u, tick, settle = undo_watch(rig)
+    settle()
+    u.stack.clear()
+    labels = []
+    lit = ui.lit_chip
+    monkeypatch.setattr(ui, "lit_chip", lambda label, on, *a, **k: labels.append(label)
+                        or label.startswith("3 · ") or lit(label, on, *a, **k))
+    frame(rig.panel, "graph")
+    monkeypatch.setattr(ui, "lit_chip", lit)
+    shown = [x.partition("##")[0] for x in labels if "##graph.side." in x]
+    assert "off" in shown and "3 · media.c" in shown and "2 · —" in shown
+    assert "1 · media.a" in shown and len(shown) == 9
+    assert rig.reg["switch.select"].value == 3
+    tick()
+    settle()
+    assert len(u.stack) == 1
+    assert "switch.select" in rows
+    frame(rig.panel, "graph")
+    assert "picks in3" in graphview.summary(st["view"].node("render:switch"))
