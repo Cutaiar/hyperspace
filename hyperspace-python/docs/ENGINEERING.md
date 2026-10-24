@@ -1412,8 +1412,13 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 The panel is built to be read from a few feet back in a dark room. A
 rail of sixteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
-scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
+scrolls at the control size (2372 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
+The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
+the desk diagram left of it a 4:3 slice of the height and the panel
+the rest (never under `ui.PANEL_W`, 540). On a screen narrower than
+that the window opens as wide as the screen (`placement.default_rect`),
+the panel at 540 and the desk takes what is left.
 
 | Page | What is on it |
 |---|---|

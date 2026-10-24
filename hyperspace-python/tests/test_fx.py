@@ -1591,7 +1591,7 @@ def test_the_status_reads_per_target(fxpage):
     fxpage.frame()
     assert faces_rows() == ["faces: RuntimeError: seed pass failed"]
     assert fxpage.colors[faces_rows()[0]] == warn
-    panel.renderer.face_error = "faces: RuntimeError: " + "long " * 30
+    panel.renderer.face_error = "faces: RuntimeError: " + "long " * 120
     fxpage.frame()
     row, = faces_rows()
     assert row.endswith("…") and row.startswith("faces: RuntimeError: long")

@@ -17,6 +17,10 @@ from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
+
+# the narrowest control window that opens the panel at ui.PANEL_W (the
+# default before the 4:3 split): the small desk, glyphs only, beside it
+NARROW_CONTROL = (960, 900)
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.outputs import Slot
