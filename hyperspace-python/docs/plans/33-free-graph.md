@@ -5,10 +5,13 @@ where it is **wired** and nowhere else: no `order`, no `target`, no
 implicit stack every effect file sits in. The **faces** on the geometry
 and the **backdrop** become graph inputs, so a channel can run through
 its own shader branch and land on the faces, behind the scene, on an
-output, or into another effect's `aux`. The FX page's linear stack is
-retired; the GRAPH page is where effects are added, wired, reordered and
-edited. Every preset made before this plan loads as the graph it always
-drew: **no existing golden moves**.
+output, or into another effect's `aux`. A **switch** node picks one of
+its inputs by a param, so a knob still chooses which channel the faces or
+the backdrop read. The FX page's linear stack is retired: GRAPH is where
+effects are added, wired and reordered, and the FX page becomes a
+**browser of the effect nodes in the graph** — a list, grouped by where
+each one sits, to pick one and play its params. Every preset made before
+this plan loads as the graph it always drew: **no existing golden moves**.
 
 Design agreed with the owner on 2026-10-24 (this file); the build plan
 is [`33-free-graph-build.md`](33-free-graph-build.md). Base: branch
@@ -37,6 +40,18 @@ this plan).
 > Retire the main chain fx stack, we can edit it directly in the graph.
 > And I'm fine with one input for all faces right now, per instance is
 > the next place I would go with this though.
+
+> If a switch node would be the right solution for long-term use, it can
+> be added to this plan. Effects that are toggled off right now really
+> are not used in any presets. […] I think the FX page can stay. It
+> should be used as an easy way to view all the parameters for a given
+> FX, like a given node in the graph that would be under the FX umbrella
+> today. That tab should be where you can go and look at a list of the
+> existing nodes in the graph that are "FX", and then choose which one
+> you want to mess with and control it that way. That's what I see this
+> control panel being more of: a kind of dynamic representation of the
+> things that are in the graph. It's kind of like a file explorer way of
+> exploring what is in the graph.
 
 ## Why the graph cannot do it today
 
@@ -84,6 +99,8 @@ cables, undo for graph edits, the per-pipeline runs.
 - **Unreached** — an effect or composite no path leads from to a sink. It
   is kept in the preset, drawn faint on the canvas with "reaches nothing",
   and never run.
+- **Switch** — a node with eight picture inputs and one `select` param
+  (off, 1–8): its picture is the selected input's, passed through.
 
 ## The shape in one paragraph
 
@@ -99,7 +116,10 @@ one input: unwired, the faces draw the pattern as today. `backdrop` is a
 new node whose `image` input takes the place of `backdrop.channel`. The
 owner's headline graph is then `media.a → acid.2 → tripcolour.2 →
 shape.faces`, or `media.b → kaleido.2 → backdrop.image`, and any branch
-may also feed an effect's `aux`, a composite or an output.
+may also feed an effect's `aux`, a composite or an output. To choose the
+faces' channel from the desk, the eight channels go into a `switch` and
+the switch into `pattern.media`; a knob on `switch.select` does what a
+knob on `view.media` did.
 
 ## Components
 
@@ -162,22 +182,48 @@ may also feed an effect's `aux`, a composite or an output.
   (`FxChain.run`, `face_fx`, `chain(FACES)`): the faces' effects are graph
   nodes like any other.
 
+### S — the switch (`graph.py`, `params.py`, `render.py`)
+
+- **The node.** Kind `switch`, instances `switch`, `switch.2`, … by the
+  naming rule (ENGINEERING §2). Eight `IMAGE` inputs `in1` … `in8`
+  (`switch.2.in3` as a wire's end), one `IMAGE` out. Its picture is the
+  selected input's, passed through at the size its consumer asks: no pass,
+  no texture of its own. A **cut**, no crossfade (row 352).
+- **The param.** `switch[.n].select`: an enum, off / 1–8, modulatable —
+  a route, a desk row, a macro, an LFO or a sequencer step can drive it
+  like any param. Declared per instance from the preset's graph, as the
+  effect instances are (`set_instances`); saved with the preset's values.
+- **Only the selected input runs.** A branch behind an unselected input
+  is not made that frame, and a channel no selected path reads is not
+  uploaded (plan 32's upload rule holds through a switch). Changing
+  `select` never rebuilds the graph. The selected input unwired, or
+  `select` off, reads nothing: the faces show the pattern, the backdrop
+  shows nothing.
+- On GRAPH the inputs are the node's port rows, the selected one marked;
+  the switch sits in the MEDIA area beside the channels.
+
 ### M — the old presets (`hyperspace/graphmigrate.py`, `preset.py`)
 
 - **Load.** A preset whose `graph` section has no `frame`/`fx` run is
   given one from its values: the effects aimed at the frame, not placed or
-  wired by the section, that are **on with mix > 0, or named by anything
-  that can turn them on** (a route's, a desk row's, a macro's, a modifier's
-  or a sequencer step's destination under `fx.<n>.`), in today's
-  `(order, name)` order. The same for the effects aimed at the faces, as
-  `pattern → … → shape.faces`. `view.media = k` becomes
+  wired by the section, that are **on with mix > 0**, in today's
+  `(order, name)` order (row 346: effects that are off are not used by any
+  preset, and nothing binds them). The same for the effects aimed at the
+  faces, as `pattern → … → shape.faces`. `view.media = k` becomes
   `media.<c> → pattern.media`, `backdrop.channel = k` becomes
-  `media.<c> → backdrop.image`. An effect left out was off and unreachable,
-  so it drew nothing: the picture is the same.
+  `media.<c> → backdrop.image`. An effect left out was off, so it drew
+  nothing: the picture is the same.
+- **A route onto a channel choice becomes a switch.** When anything (a
+  route, a desk row, a macro, a modifier, a sequencer step) drives
+  `view.media`, the migration wires `media.a … media.h` into a new
+  switch's `in1 … in8`, the switch into `pattern.media`, sets
+  `switch.select` to the old value and retargets those rows to
+  `switch.select`; the same for `backdrop.channel` with its own switch.
+  None in the library does this; the migration exists so a person's own
+  preset keeps its knob.
 - **Retired values** (`fx.<n>.order`, `fx.<n>.target`, `fx.select`,
   `view.media`, `backdrop.channel`) are read by the migration and then
-  dropped. A route whose destination is one of them is dropped with the
-  load note "<id> is a wire now: route dropped".
+  dropped.
 - **Save: the lowest schema that loses nothing** (row 340's rule). A graph
   `/4` can say — one run from `frame`, at most one faces run from
   `pattern`, `pattern.media` and `backdrop.image` fed straight by a
@@ -191,23 +237,41 @@ may also feed an effect's `aux`, a composite or an output.
   factory presets go through the same load. `mandala`'s
   `fx.kaleido.order = 8` is read there.
 
-### U — the panel (`ui_graph.py`, `graphview.py`, `ui_fx.py`, `ui.py`)
+### U — the panel (`ui_fx.py`, `ui_graph.py`, `graphview.py`)
 
-- **The FX page is removed** from the tabs. `ui_fx.strip` stays as the
-  GRAPH side pane's editor for a selected effect, without the order slider,
-  the ONTO chips and the faces lines.
-- **On GRAPH:** `frame`, `fx`, `pattern`, `backdrop` and the faces port
-  are drawn like the other render nodes (`pattern` and `backdrop` always,
-  as the media channels are). The right-click picker adds an effect
-  **unwired** (faint, "reaches nothing") where the menu opened. An effect
-  node dropped on a render cable is **inserted** into it (as a modifier
-  dropped on a value cable is, `ui_graph.dropped`); right-click on a render
-  cable offers "insert effect ▸ <file>". Reordering the run is rewiring or
-  dragging a node to another cable.
-- `fx.on` and `fx.mix` (every effect's bypass and wet) sit in the GRAPH
-  head; `fx.face_map` on the shape node, beside the faces port. A compile
-  error colours the effect's node title and is its hover; the strip shows
-  it as now.
+The owner's direction for the control panel: **a page is a view of what
+is in the graph**, a file explorer over its nodes, not a second place the
+structure lives. This plan does it for the FX page; the other pages keep
+their shape (Not in this plan).
+
+- **The FX page: a browser of the effect nodes in the graph.** It lists
+  every effect instance in the loaded graph — in the run, on a branch,
+  unreached — grouped by where its path ends: **Run** (in wire order),
+  **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
+  **→ <effect> aux**, **reaches nothing** last. An effect that feeds two
+  places is listed under each. Each row: its name, an `on` toggle, a small
+  `mix`, and its state in a word (running, off, idle — why, as
+  `ui_fx.why_idle` says now — or the compile error). Clicking a row opens
+  its **strip** below the list: every param of that node (`on`, `mix`,
+  `speed`, `blend` and each uniform). **Show on GRAPH** selects and
+  centres it on the canvas. The selection is one panel state shared with
+  GRAPH's side pane, so picking a node on either page picks it on both.
+  The head keeps `fx.on` and `fx.mix`; the **→ faces** group's header
+  carries `fx.face_map`. The page adds, removes, wires and reorders
+  nothing: that is GRAPH's.
+- **Gone from the FX page:** the chip grid and its drag-to-reorder, the
+  placed grid, the order slider, the ONTO chips, the faces lines,
+  `fx.select`.
+- **On GRAPH:** `frame`, `fx`, `pattern`, `backdrop`, the switches and the
+  faces port are drawn like the other render nodes (`pattern` and
+  `backdrop` always, as the media channels are). The right-click picker
+  adds an effect or a switch **unwired** (faint, "reaches nothing") where
+  the menu opened. An effect node dropped on a render cable is
+  **inserted** into it (as a modifier dropped on a value cable is,
+  `ui_graph.dropped`); right-click on a render cable offers "insert effect
+  ▸ <file>". Reordering the run is rewiring or dragging a node to another
+  cable. A selected effect's side pane is the same strip as the FX page's.
+  A compile error colours the effect's node title and is its hover.
 
 ## Not in this plan
 
@@ -215,10 +279,10 @@ may also feed an effect's `aux`, a composite or an output.
   instance or per face group. The port is named `shape.faces` so a later
   plan can add `shape.faces.<k>` or an assignment node without a schema
   change; wires are already a list.
-- **A switch node** (N inputs, one `select` param): choosing *which*
-  channel the faces or the backdrop read from a knob was a param
-  (`view.media`, `backdrop.channel`) and becomes a wire. A channel's own
-  `slot` still switches its source from the desk and the sequencer. Row 350.
+- **The other pages as views of the graph** (the owner's direction, U):
+  MEDIA, FACES, LOOKBACK and OUTPUT listing their nodes the way the FX
+  page will. Each is its own small plan once this one shows the pattern.
+- **A crossfading switch** (a `fade` time on the switch): a cut first.
 - **The compositing order** of the default graph (look-back, backdrop,
   effects, hands) with the owner: a session of its own on top of this.
   The default graph keeps plan 32's order.
@@ -233,11 +297,14 @@ may also feed an effect's `aux`, a composite or an output.
 - **Two Macs, one library.** A `/5` preset refuses to open on an older
   build (the schema ladder does its job); the save rule keeps every preset
   that does not need `/5` readable there.
-- **Off-but-reachable effects.** The migration's "named by anything that
-  can turn it on" must see every way a preset can switch an effect on; a
-  miss is an effect a knob no longer brings in. The test enumerates the
-  route kinds from `routing`, the desk, macros, modifiers and the
-  sequencer.
+- **An off effect a preset does switch on.** The owner's reading is that
+  none does (row 346); a test fails the build if any library preset
+  routes an effect the migration leaves out, so a surprise is found, not
+  shipped. A person's own preset with such a route loses that effect and
+  says so in a load note.
+- **A switch must not make what it does not show.** The cost win of a
+  switch over eight wired channels depends on unselected branches not
+  running; a test counts the makes.
 - **Frame cost.** A branch is one more made texture per frame per size;
   the faces through a branch add today's 1024² face-chain cost. Fewer
   effect nodes overall (only the wired ones, not 13 per pipeline).
@@ -248,7 +315,7 @@ may also feed an effect's `aux`, a composite or an output.
 
 ## Decisions
 
-Rows 341–351 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), written
+Rows 341–352 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), written
 there when the build lands. "(owner)" is answered; "(rec)" is the
 recommendation, to accept or change before the build starts.
 
@@ -264,19 +331,25 @@ recommendation, to accept or change before the build starts.
      scale and orbit).
 345. **A `backdrop` node with an `image` input replaces `backdrop.channel`;
      `backdrop.alpha` and `backdrop.history` stay params** (rec).
-346. **The migration keeps an effect that is on, or that anything in the
-     preset can turn on** (rec). Other: keep every effect, off ones read
-     through (13+ nodes in every run, as today).
+346. **The migration keeps only the effects that are on (mix > 0)**
+     (owner, 2026-10-24: "effects that are toggled off right now really
+     are not used in any presets"). Others: also keep those a route can
+     turn on; keep every effect, off ones read through.
 347. **Save writes the lowest schema that loses nothing; `/5` only for a
      graph `/4` cannot say** (rec). Other: always `/5` (both Macs must
      update at once).
-348. **The FX page goes; the strip lives in GRAPH's side pane; `fx.on` and
-     `fx.mix` in GRAPH's head** (rec). Other: keep a flat page of every
-     instance's strip, no order.
+348. **The FX page stays as a browser of the effect nodes in the graph**,
+     grouped by where each sits, a row picked to play its params; it edits
+     no structure (owner, 2026-10-24: "a file explorer way of exploring
+     what is in the graph"). Other: remove the page, the strip in GRAPH's
+     side pane only.
 349. **An unreached effect is kept in the preset, drawn faint, never
      run** (rec). Other: drop it on save.
-350. **No switch node in this plan; a route on `view.media` or
-     `backdrop.channel` is dropped with a note** (rec; none in the
-     library). Other: build the switch node here.
+350. **A switch node in this plan**: eight inputs, `switch.select`
+     modulatable; a route on `view.media` or `backdrop.channel` migrates to
+     one (owner, 2026-10-24: "it can be added to this plan"). Other: no
+     switch, such routes dropped.
 351. **The default graph keeps plan 32's compositing order** (rec); the
      reconciliation is its own session.
+352. **The switch is a cut, eight inputs, only the selected one runs**
+     (rec). Others: a crossfade time; a variable input count.
