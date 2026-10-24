@@ -161,7 +161,8 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
         (("Teapot", "output.1.image"), "no node 'Teapot': a wire leaves"),
         (("teapot", "output.1.image"), "no teapot effect in this build"),
         (("palette", "teapot.image"), "no teapot effect in this build"),
-        (("palette", "fx.image"), "no fx effect in this build"),
+        # plan 33 G: `fx` is the pipeline end now, not an effect file
+        (("palette", "fx.image"), "fx.image takes the run from frame; to replace"),
         (("output.1", "output.2.image"), "output.1 is an output: it makes nothing"),
         (("hands.2", "output.1.hands"), "no hands.2 layer in this graph (hands makes"),
         (("ghost", "scene.geometry"), "a hands node's place is its into"),

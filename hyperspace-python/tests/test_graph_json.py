@@ -719,3 +719,20 @@ def test_hands_as_lines_draw_their_edges(ctx):
         # the edges: inside a solid hand some pixels are the ground now
         assert (drawn(solid) & ~drawn(lines)).sum() > 0
     assert ctx.wireframe is False
+
+
+def test_the_new_ends_round_trip():
+    """Plan 33 G: frame, fx.image, pattern, shape.faces, backdrop.image and
+    switch.2 read and write back equal."""
+    section = {"nodes": [{"kind": "switch"}, {"kind": "switch", "instance": 2}],
+               "wires": [{"from": "frame", "to": "acid.image"},
+                         {"from": "acid", "to": "fx.image"},
+                         {"from": "media.a", "to": "switch.in1"},
+                         {"from": "switch", "to": "pattern.media"},
+                         {"from": "pattern", "to": "shape.faces"},
+                         {"from": "media.b", "to": "switch.2.in1"},
+                         {"from": "switch.2", "to": "backdrop.image"}]}
+    spec = G.read_graph(section)
+    assert not spec.notes
+    assert spec.to_json() == section
+    assert G.read_graph(spec.to_json()) == spec

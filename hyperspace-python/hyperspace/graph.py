@@ -313,7 +313,12 @@ class GraphError(ValueError):
 PLACE_KEYS = ("after", "into")
 _INSTANCE = r"(?:[2-9]|[1-9][0-9]+)"
 _PLACE_NODE = re.compile(rf"scene|history|hands(?:\.{_INSTANCE})?|output\.[1-9][0-9]*")
-_PLACE_EFFECT = re.compile(rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
+# plan 33 G: the wire ends that are no effect — `frame`, the pipeline end
+# `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
+# file may take them, and no effect's place is one of them
+RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch")
+_PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
+                           rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
                "into": "history, output.1 …, or an effect"}
 
@@ -370,6 +375,9 @@ class EffectAt:
         if not isinstance(self.file, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", self.file):
             raise ValueError(f"effect file {self.file!r}: an effect's file name, "
                              "lower_snake_case")
+        if self.file in RESERVED:
+            raise ValueError(f"effect file {self.file!r}: a name the graph's wires keep "
+                             f"({', '.join(RESERVED)})")
         if self.after is not None and self.into is not None:
             raise ValueError(f"{self.file} after {self.after!r} and into {self.into!r} at "
                              "once — one of the two")
@@ -527,13 +535,20 @@ _GHOST = re.compile(rf"ghost(?:\.{_INSTANCE})?")
 _OUTPUT = re.compile(r"output\.[1-9][0-9]*")
 _COMPOSITE = re.compile(rf"composite(?:\.{_INSTANCE})?")
 _MEDIA = re.compile(rf"media\.[{MEDIA_CHANNELS}]")     # plan 32 R: a channel, a wire's end
+_SWITCH = re.compile(rf"switch(?:\.{_INSTANCE})?")       # plan 33 S: `switch`, `switch.2` …
+SWITCH_PORTS = tuple(f"in{i}" for i in range(1, 9))
 # what each kind of wireable node makes, and the ports a wire may go into
 # (port → type). The scene's and a layer's geometry ports and the
 # history's mask port are typed so a drag can say why it is refused: a
 # hands node's place is its `into`, the cover is the history's own
 WIRE_MAKES = {"scene": IMAGE, "history": IMAGE, "layer": IMAGE, "effect": IMAGE,
               "composite": IMAGE, "ghost": GEOMETRY, "cover": MASK, "output": None,
-              "media": IMAGE}
+              "media": IMAGE,
+              # plan 33 G: the pipeline's picture before its effects, the
+              # face pattern as a picture, a switch's selected input; the
+              # pipeline end, the faces and the backdrop make nothing
+              "frame": IMAGE, "pattern": IMAGE, "switch": IMAGE,
+              "fx": None, "shape": None, "backdrop": None}
 WIRE_TAKES: dict[str, dict[str, str]] = {
     "output": {"image": IMAGE, "hands": IMAGE, "readout": IMAGE},
     "history": {"image": IMAGE, "cover": MASK},
@@ -541,12 +556,23 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
     "composite": {"under": IMAGE, "over": IMAGE},
     "scene": {"geometry": GEOMETRY},
     "layer": {"geometry": GEOMETRY},
-    "ghost": {}, "cover": {}, "media": {},
+    "ghost": {}, "cover": {}, "media": {}, "frame": {},
+    # plan 33 G: the run's end, the pattern's media layer, the faces, the
+    # backdrop, and a switch's eight pictures
+    "fx": {"image": IMAGE}, "pattern": {"media": IMAGE}, "shape": {"faces": IMAGE},
+    "backdrop": {"image": IMAGE}, "switch": {p: IMAGE for p in SWITCH_PORTS},
 }
 TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", None: "nothing"}
-WIRE_FROM_WORDS = "scene, hands …, history, an effect, a composite or a channel (media.a …)"
-WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, an effect's image "
-                 "or aux, or a composite's under / over")
+WIRE_FROM_WORDS = ("scene, hands …, history, frame, pattern, an effect, a composite, "
+                   "a switch or a channel (media.a …)")
+WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, fx.image, "
+                 "shape.faces, backdrop.image, pattern.media, an effect's image or aux, "
+                 "a composite's under / over, or a switch's in1 … in8")
+# plan 33 G: the kinds whose input ports end a path — what a picture is
+# for. `reaches` follows the picture ports back from these
+SINKS = ("output", "fx", "shape", "pattern", "backdrop", "history")
+# a node that takes a picture and puts it outside the graph makes none
+NO_SOURCE = ("output", "fx", "shape", "backdrop")
 AUX = "aux"     # plan 32 R: an effect's second picture port (`Effect.INPUTS`)
 
 
@@ -556,8 +582,10 @@ def wire_node_kind(name: Any) -> str | None:
         return None
     if name in ("scene", "history", "cover"):
         return name
+    if name in ("frame", "fx", "pattern", "shape", "backdrop"):
+        return name
     for kind, pat in (("layer", _LAYER), ("ghost", _GHOST), ("output", _OUTPUT),
-                      ("composite", _COMPOSITE), ("media", _MEDIA)):
+                      ("composite", _COMPOSITE), ("media", _MEDIA), ("switch", _SWITCH)):
         if pat.fullmatch(name):
             return kind
     if _PLACE_EFFECT.fullmatch(name):
@@ -646,6 +674,38 @@ def _composite_entry(e: dict) -> CompositeAt:
 NODE_KINDS["composite"] = _composite_entry
 
 
+@dataclass(frozen=True)
+class SwitchAt:
+    """A switch node the preset's graph adds (plan 33 S): eight picture
+    inputs `in1` … `in8` and one picture out — the selected input's, by
+    the param `switch[.n].select` (off, 1–8; a value, not the graph) —
+    `switch`, `switch.2` … One no wire feeds or reads is kept, unreached."""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"switch instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "switch" if self.n == 1 else f"switch.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "switch"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _switch_entry(e: dict) -> SwitchAt:
+    _entry_keys(e, "switch", ("instance",))
+    return SwitchAt(_instance(e))
+
+
+NODE_KINDS["switch"] = _switch_entry
+
+
 def d1_wires(effects) -> list[Wire]:
     """D1's placements (`EffectAt.after` / `into`) as the wires they are
     short for: `after X` is `X → E.image`, `into Y` is `E → Y.image`
@@ -673,6 +733,30 @@ class _WireCtx:
     effects: set[str] | frozenset[str] | None = None
     composites: frozenset[str] = frozenset()
     placed: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # plan 33 G: the switches declared, and every wire of the section (D1's
+    # placements too) — what `fx.image`'s source is followed through. None:
+    # the wires are not known, the run is not checked (a drag on the canvas)
+    switches: frozenset[str] = frozenset()
+    wires: tuple[Wire, ...] | None = None
+
+
+FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
+                    "wire it into output.N.image")
+
+
+def _run_from_frame(src: str, wires) -> bool:
+    """Whether `src` is `frame`, or an effect whose `image` chain of effects
+    leads back to `frame` (plan 33 G: what `fx.image` takes)."""
+    seen: set[str] = set()
+    while src != "frame":
+        if wire_node_kind(src) != "effect" or src in seen:
+            return False
+        seen.add(src)
+        into = [w.src for w in wires if w.dst == f"{src}.image"]
+        if len(into) != 1:
+            return False
+        src = into[0]
+    return True
 
 
 def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
@@ -687,13 +771,16 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
         return f"no node {w.src!r}: a wire leaves {WIRE_FROM_WORDS}"
     if src_kind == "output":
         return f"{w.src} is an output: it makes nothing to wire on"
+    if src_kind in NO_SOURCE:
+        return f"{w.src} takes a picture and makes nothing to wire on"
     node, port = w.node, w.port
     kind = wire_node_kind(node)
     if kind is None or kind in ("ghost", "cover"):
         return f"no input {w.dst!r}: a wire goes into {WIRE_TO_WORDS}"
     takes = WIRE_TAKES[kind]
     if port not in takes:
-        said = f"it takes {', '.join(takes)}" if takes else "nothing is wired into it"
+        names = list(takes) if len(takes) < 4 else [next(iter(takes)), "…", [*takes][-1]]
+        said = f"it takes {', '.join(names)}" if takes else "nothing is wired into it"
         return f"{node} has no port {port!r} ({said})"
     makes, want = WIRE_MAKES[src_kind], takes[port]
     if makes != want:
@@ -707,6 +794,10 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
             return f"no {name} effect in this build"
         if k == "composite" and name not in ctx.composites:
             return f'no {name} node in this graph (add one: {{"kind": "composite"}})'
+        if k == "switch" and name not in ctx.switches:
+            return f'no {name} node in this graph (add one: {{"kind": "switch"}})'
+    if kind == "fx" and ctx.wires is not None and not _run_from_frame(w.src, ctx.wires):
+        return FX_IMAGE_REFUSAL
     if src_kind == "layer" and w.src != ctx.layer:
         return f"no {w.src} layer in this graph ({ctx.layer} makes the layer)"
     if w.src == node:
@@ -774,6 +865,7 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
         wires.append(w)
     notes: list[str] = []
     ok: list[Wire] = []
+    ctx.wires = (*d1, *wires)          # plan 33 G: what `fx.image`'s run is followed through
     for w in wires:
         why = wire_error(w, ctx)
         if why is not None:
@@ -839,7 +931,10 @@ def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...
         if name in own:                      # (refused at read)
             continue
         file, n = split_instance(name)
-        if i is not None and not o and wire_node_kind(i.src) != "composite":
+        # plan 33 G: a wire is shortened only from a place D1 has a word
+        # for; from a channel, `frame`, a switch … it is a branch, an edge
+        if (i is not None and not o and wire_node_kind(i.src) != "composite"
+                and placement_error(name, "after", i.src) is None):
             synth.append(EffectAt(file, n, after=i.src))
         elif (i is None and len(o) == 1 and o[0].port == "image"
               and (o[0].node == "history" or o[0].node.startswith("output."))):
@@ -906,6 +1001,12 @@ class GraphSpec:
         """The composite nodes the section adds (plan 28 N4), by instance."""
         return tuple(sorted((got for kind, got in self.others if kind == "composite"),
                             key=lambda c: c.n))
+
+    @property
+    def switches(self) -> tuple[SwitchAt, ...]:
+        """The switch nodes the section adds (plan 33 S), by instance."""
+        return tuple(sorted((got for kind, got in self.others if kind == "switch"),
+                            key=lambda s: s.n))
 
     def all_wires(self) -> list[Wire]:
         """Every wire this graph says (plan 28 N4): D1's placements as the
@@ -1022,8 +1123,9 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                 raise GraphError("two history nodes")
             history = got
         else:
-            if kind == "composite" and any(k == kind and o.n == got.n for k, o in others):
-                raise GraphError(f"two composite nodes of instance {got.n}")
+            if kind in ("composite", "switch") and any(
+                    k == kind and o.n == got.n for k, o in others):
+                raise GraphError(f"two {kind} nodes of instance {got.n}")
             others.append((kind, got))
     # D1: a placement on an effect this build does not have (an instance
     # the section does not hold, a file not on disk) …
@@ -1067,6 +1169,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                    ghosts=frozenset(hands_name(h.n) for h in wiring.nodes()),
                    effects=None if known is None else known | names,
                    composites=frozenset(c.name for c in spec.composites()),
+                   switches=frozenset(s.name for s in spec.switches),
                    placed={e.name: e.where for e in effects_at if e.placed})
     wires, wire_notes = _read_wires(section["wires"], ctx, d1_wires(effects_at))
     spec = replace(spec, wires=wires, notes=spec.notes + tuple(wire_notes))
@@ -1075,6 +1178,51 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     except ValueError as err:
         raise GraphError(str(err)) from err
     return spec
+
+
+# the ports a picture goes into (a geometry port or the history's cover is no
+# picture): what `reaches` follows
+_PICTURE_PORTS = frozenset({"image", "aux", "under", "over", "media", "faces",
+                            "hands", "readout", *SWITCH_PORTS})
+
+
+def reaches(spec: GraphSpec) -> frozenset[str]:
+    """Every node with a path, through wires into picture ports, to a sink
+    port (`SINKS`: an output, the pipeline end, the faces, the pattern's
+    media, the backdrop, the history) — plan 33 G. A node outside it is
+    unreached: kept in the preset, drawn faint ("reaches nothing") and
+    never run. Reads D1's placements as the wires they are short for."""
+    wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS]
+    into: dict[str, list[str]] = {}
+    for w in wires:
+        into.setdefault(w.node, []).append(w.src)
+    todo = [src for node, srcs in into.items() if wire_node_kind(node) in SINKS
+            for src in srcs]
+    got: set[str] = set()
+    while todo:
+        name = todo.pop()
+        if name in got:
+            continue
+        got.add(name)
+        todo.extend(into.get(name, ()))
+    return frozenset(got)
+
+
+def run_of(spec: GraphSpec, head: str = "frame", end: str = "fx.image") -> tuple[str, ...]:
+    """The effects wired one after another from `head` to the input `end`,
+    in order (plan 33 G): `("acid", "wobble")` for `frame → acid → wobble →
+    fx.image`. `()` with no such path — a run is effects only, so a switch
+    or a composite on the way ends it. The faces' run is
+    `run_of(spec, "pattern", "shape.faces")`."""
+    wires = spec.all_wires()
+    run: list[str] = []
+    src = next((w.src for w in wires if w.dst == end), None)
+    while src is not None and src != head:
+        if wire_node_kind(src) != "effect" or src in run:
+            return ()
+        run.insert(0, src)
+        src = next((w.src for w in wires if w.dst == f"{src}.image"), None)
+    return tuple(run) if src == head else ()
 
 
 # ---------------------------------------------------------------- in words
