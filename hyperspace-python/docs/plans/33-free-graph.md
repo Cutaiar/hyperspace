@@ -377,13 +377,28 @@ Tests:
   golden moved) and an explicit `after` / `into` stays `/4` vocabulary.
   Dragging an effect's `image` from a node, or its output into an
   output's `image`, on GRAPH is now that wire, not a placement.
+- **An envelope pushes about the param's base.** The owner: "the
+  envelopes have no way for me to set a baseline … they all reduce the
+  base to 0 in between fires no matter what I set the base to be." A
+  cable or Route from ▸ into a param's `mod` makes `learn.row_for`'s row
+  (`graphview.Edit.route_for`), and an envelope — resting at 0, not
+  declared centred — took the `position` fader at 1, so between fires the
+  param sat at its minimum. An envelope (`env`) into a continuous,
+  non-integer param is now a `push` with no rest of its own (centred on
+  the envelope's rest of 0, `Router.rest_of`) at depth `max(1 - p.norm,
+  learn.PUSH_DEPTH)` when the row is made: the base shows between fires
+  and a full fire reaches the top of the range. A stepped param (an enum,
+  a toggle, a whole number) keeps `position`; LFOs and hands are as
+  before; saved routes are untouched, and ROUTING's op chip still flips
+  one (`pos` ↔ `push`). Hand check 331.
 
 Tests:
 `tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_every_nodes_side_panel_draws,test_home_page_maps_each_node_kind,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click,test_a_selection_never_resizes_the_canvas}`,
 `tests/test_graph_free.py::{test_the_owners_glimmer_with_no_output_is_unreached_and_not_drawn,test_wiring_its_output_then_draws_it,test_an_explicit_after_still_places_in_a_free_section}`
 (the owner's preset is `tests/fixtures/presets/glimmer-bug.json`),
-`tests/test_graph_migrate.py::test_a_legacy_shortened_placement_migrates_to_an_explicit_after`;
-hand check 329.
+`tests/test_graph_migrate.py::test_a_legacy_shortened_placement_migrates_to_an_explicit_after`,
+`tests/test_graph_edit.py::{test_an_envelope_route_is_a_push_about_the_base,test_an_envelope_on_a_toggle_stays_position,test_an_lfo_route_is_unchanged}`;
+hand checks 329 and 331.
 
 ## What no person has verified
 

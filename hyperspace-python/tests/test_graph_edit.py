@@ -1235,3 +1235,74 @@ def test_an_lfo_already_driving_is_checked(banks, monkeypatch):
     _, items = drawn_route_from(panel, r.reg["t.x"], monkeypatch, pick="LFO 3")
     assert [label for label, checked, _ in items if checked] == ["LFO 3"]
     assert list(table.bindings) == before and ui_routing.prompt(panel) is None
+
+
+# ---------------------------------------------------------------- an envelope's row
+# The owner, 2026-10-24: "the envelopes have no way for me to set a
+# baseline … they all reduce the base to 0 in between fires no matter what I
+# set the base to be." An envelope rests at 0, so `row_for` made it the
+# `position` fader at 1: the param sat at its minimum between fires.
+
+def _glimmer_mix(r, base: float = 0.4):
+    box = SimpleNamespace(v=0.0)
+    p = r.reg.continuous("fx.glimmer.mix", "mix", lambda: box.v,
+                         lambda v: setattr(box, "v", float(v)), group="fx")
+    p.set(base)
+    return p, box
+
+
+def test_an_envelope_route_is_a_push_about_the_base(banks, monkeypatch):
+    from test_plan31_wiring import frame, one_shot
+
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    p, box = _glimmer_mix(r)
+    row = learn.row_for("env:0", p)
+    assert (row.op, row.rest) == ("push", None) and row.value == pytest.approx(0.6)
+    # the push's depth never drops below PUSH_DEPTH, however high the base
+    p.set(0.9)
+    assert learn.row_for("env:0", p).value == pytest.approx(learn.PUSH_DEPTH)
+    p.set(0.4)
+    # Route from ▸ env 1 makes that row (`connect_value` → `route_for`)
+    drawn_route_from(panel, p, monkeypatch, pick="env 1")
+    made = table.owner(p.id) or next(b for b in table.bindings if b.target == p.id)
+    assert made.source.startswith("env:") and made.op == "push"
+    assert made.value == pytest.approx(0.6) and made.rest is None
+    # between fires the base, at the peak the top of the range
+    one_shot(r, 1)
+    frame(r, 0.5)
+    assert box.v == pytest.approx(0.4)
+    r.envs.fire(1, at=1.0)
+    frame(r, 1.1)                                    # the peak of a 100 ms attack
+    assert r.envs.outputs[0] == pytest.approx(1.0) and box.v == pytest.approx(1.0)
+    for t in (1.3, 1.6, 1.9, 2.2):
+        frame(r, t)
+    assert r.envs.outputs[0] == 0.0 and box.v == pytest.approx(0.4)
+
+
+def test_an_envelope_on_a_toggle_stays_position(banks):
+    r = banks.r
+    box = SimpleNamespace(on=False, n=1)
+    t = r.reg.toggle("fx.glimmer.on", "on", lambda: box.on,
+                     lambda v: setattr(box, "on", bool(v)), group="fx")
+    n = r.reg.continuous("fx.zoomblur.taps", "taps", lambda: box.n,
+                         lambda v: setattr(box, "n", int(v)), lo=1, hi=16, integer=True,
+                         group="fx")
+    for q in (t, n):
+        row = learn.row_for("env:0", q)
+        assert (row.op, row.value) == ("position", 1.0), q.id
+
+
+def test_an_lfo_route_is_unchanged(banks, monkeypatch):
+    """The envelope's row is the envelope's alone: an LFO into the same
+    param makes the row it made before (the table's: its out port is not
+    declared centred, so a plain param takes the fader; a centred pin a
+    push at PUSH_DEPTH)."""
+    r, panel, table = banks.r, banks.panel, banks.r.router.table
+    p, _ = _glimmer_mix(r)
+    drawn_route_from(panel, p, monkeypatch, pick="LFO 1")
+    made = next(b for b in table.bindings if b.target == p.id)
+    assert made.source.startswith("lfo:")
+    assert (made.op, made.value) == ("position", 1.0)
+    assert learn.row_for("lfo:0", p) == Binding("lfo:0", p.id, "position", 1.0)
+    assert learn.row_for("lfo:0", p, centred=True) == Binding(
+        "lfo:0", p.id, "push", learn.PUSH_DEPTH)

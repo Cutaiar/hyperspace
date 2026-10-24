@@ -85,6 +85,7 @@ table are all it needs.
 from __future__ import annotations
 
 from . import modifiers, undo
+from .envelope import GROUP as ENV_SCHEME
 from .graph import source_into
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
@@ -309,13 +310,20 @@ def row_for(source: str, p: Param, when: str | None = None, *,
             centred: bool = False, depth: float | None = None) -> Binding:
     """The row a hand learn makes (plan 18 WP3): its op and depth.
 
-        the target                       a centred axis   a one-sided axis
-        continuous, centred on zero      push, depth D    push, depth D
-        any other continuous param       push, depth D    position, depth 1
+        the target                       a centred axis   a one-sided axis   an envelope
+        continuous, centred on zero      push, depth D    push, depth D      push, depth H
+        any other continuous param       push, depth D    position, depth 1  push, depth H
         an enum, a toggle, a trigger,
-        a whole-number param             position, 1      position, 1
+        a whole-number param             position, 1      position, 1        position, 1
 
-    D is `depth`, or `PUSH_DEPTH` when the caller named none. A push
+    D is `depth`, or `PUSH_DEPTH` when the caller named none. An envelope
+    (the ``env`` scheme, `envelope.GROUP`) rests at 0 and only rises, so as
+    the fader it pinned the param to its minimum between fires (the owner,
+    2026-10-24: "they all reduce the base to 0 in between fires no matter
+    what I set the base to be"): it is a push about the base instead, H
+    the headroom above the base when the row is made, `1 - p.norm`, and
+    at least `PUSH_DEPTH` — a full fire reaches the top of the range, and
+    between fires the base shows. A push
     carries no `rest` of its own, so it is centred where the axis
     rests, resolved every frame (`Router.rest_of`): a level hand, or
     a height at the bottom, adds nothing and the preset's value shows
@@ -326,6 +334,8 @@ def row_for(source: str, p: Param, when: str | None = None, *,
     Nothing reads the target's id or group and nothing is refused: a
     rate-type param lands by the same table as any other."""
     stepped = p.kind is not Kind.CONTINUOUS or p.integer
+    if not stepped and base_scheme(source.partition(":")[0]) == ENV_SCHEME:
+        return Binding(source, p.id, "push", max(1.0 - p.norm, PUSH_DEPTH), when=when)
     if not stepped and (centred or centred_target(p)):
         d = PUSH_DEPTH if depth is None else float(depth)
         return Binding(source, p.id, "push", d, when=when)

@@ -11,7 +11,7 @@ the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
 merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
-together; group AC (318–329) is plan 33's, the free graph, on
+together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`.
 
 ## Before you start
@@ -4610,6 +4610,23 @@ items and before Learn sink, and is absent on a toggle or a trigger.
 an undo that takes two steps for new LFO, a pick on a taken param that
 replaces with no prompt, or a page whose menu lacks it
 (`ui_graph.route_from_menu`, `Panel._ctx_learn`).
+
+**331. An envelope pushes up from the base and comes back to it.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_an_envelope_route_is_a_push_about_the_base,test_an_envelope_on_a_toggle_stays_position,test_an_lfo_route_is_unchanged}`.
+The owner, 2026-10-24: "the envelopes have no way for me to set a
+baseline … they all reduce the base to 0 in between fires no matter what
+I set the base to be." Wire a glimmer into the run and set its **mix** to
+0.4 on the FX page. Right-click mix: **Route from ▸ env 1**. On SEQ set
+envelope 1 to one-shot with a short attack and decay, and fire it (its
+fire chip, or a sequencer step) a few times; watch the mix slider's
+modulated mark and the picture. Then open ROUTING and read the new row.
+*Pass:* between fires mix sits at 0.4 and the glints show at that level;
+each fire lifts mix to the top (1.0) and it falls back to 0.4; the row
+reads `push` at depth 0.60, and its op chip flips it to `pos` and back.
+The same cable dragged on GRAPH from env 1's out into mix's `mod` makes
+the same row. *Fail:* mix drops to 0 between fires, a fire reaches less
+than the top, or the GRAPH cable makes another row (`learn.row_for`,
+`graphview.Edit.route_for`).
 
 ## What no test covers
 
