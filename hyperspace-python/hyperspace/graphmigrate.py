@@ -18,6 +18,9 @@ Rows 346 and 350 are what it keeps and what it makes:
   reads the library as using no effect that is switched off, so an off
   effect drew nothing and leaving it out changes no picture. One left out
   while something in the preset drives its params is said in a load note.
+- `migrate(doc, specs)` is the whole-document entry point (the section, the
+  values with the retired ones dropped, any switch's select, the retargeted
+  rows, the notes); `to_free(doc, specs)` is its section and notes alone.
 - A route onto `view.media` or `backdrop.channel` becomes a switch over the
   eight channels (row 350), the rows retargeted onto `switch.select`.
 """
@@ -34,11 +37,9 @@ from .fx import reordered
 FREE_SCHEMA = "hyperspace.preset/5"
 RETIRED = ("fx.select", "view.media", "backdrop.channel")
 CHANNELS = "abcdefgh"
-# the effect files whose `@mix` default is 0 (a pass that starts as a no-op):
-# a preset that leaves `fx.<file>.mix` out has them at 0. tests/test_graph_migrate.py
-# keeps this equal to the files on disk
-ZERO_MIX_FILES = frozenset({"palette"})
-DEFAULT_ORDER = 50          # EffectSpec.order, for an effect no spec is to hand for
+# an effect no spec is to hand for: EffectSpec's own defaults
+DEFAULT_ORDER, DEFAULT_MIX = 50, 1.0
+Specs = dict[str, tuple[int, float]]   # effect name -> its file's (@order, @mix)
 
 _RETIRED_FX = re.compile(r"fx\..+\.(order|target)")
 
@@ -112,8 +113,13 @@ def _values(doc: dict) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def _mix_of(values: dict, name: str) -> float:
-    default = 0.0 if name.partition(".")[0] in ZERO_MIX_FILES else 1.0
+def _spec_of(specs: Specs | None, name: str) -> tuple[int, float]:
+    specs = specs or {}
+    return specs.get(name, specs.get(name.partition(".")[0], (DEFAULT_ORDER, DEFAULT_MIX)))
+
+
+def _mix_of(values: dict, name: str, specs: Specs | None = None) -> float:
+    default = float(_spec_of(specs, name)[1])
     try:
         return float(values.get(f"fx.{name}.mix", default))
     except (TypeError, ValueError):
@@ -124,18 +130,28 @@ def _is_on(values: dict, name: str) -> bool:
     return bool(values.get(f"fx.{name}.on", False))
 
 
-def _file_order(specs: dict[str, int] | None, name: str) -> int:
-    specs = specs or {}
-    return int(specs.get(name, specs.get(name.partition(".")[0], DEFAULT_ORDER)))
+def _file_order(specs: Specs | None, name: str) -> int:
+    return int(_spec_of(specs, name)[0])
 
 
-def _order_of(values: dict, specs: dict[str, int] | None, name: str) -> int:
+def _driven_fx(driven: frozenset[str]) -> set[str]:
+    return {n for n in (effect_of(p) for p in driven) if n}
+
+
+def _live(values: dict, specs: Specs | None, driven_fx: set[str], name: str) -> bool:
+    """Whether an effect is in a run's membership (row 346, R5): `on`, and
+    either mix above 0 or something driving one of its params — an effect
+    toggled on at mix 0 and ridden up by a route is used."""
+    return _is_on(values, name) and (_mix_of(values, name, specs) > 0 or name in driven_fx)
+
+
+def _order_of(values: dict, specs: Specs | None, name: str) -> int:
     got = values.get(f"fx.{name}.order")
     return int(got) if isinstance(got, (int, float)) and not isinstance(got, bool) \
         else _file_order(specs, name)
 
 
-def _candidates(values: dict, specs: dict[str, int] | None) -> list[str]:
+def _candidates(values: dict, specs: Specs | None) -> list[str]:
     """Every effect instance the values or the specs name."""
     names = set(specs or ())
     names.update(n for n in (effect_of(k) for k in values) if n)
@@ -172,7 +188,7 @@ def _next_switch(nodes: list) -> int:
     return next(i for i in range(1, len(taken) + 2) if i not in taken)
 
 
-def migrate(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
+def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     """`doc` read as the free graph: (a copy with the graph section holding
     the runs and channel wires, the retired values dropped, any switch's
     `select` set and the rows that drove a channel choice retargeted; the
@@ -180,8 +196,12 @@ def migrate(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
 
     Run membership (row 346): aimed at the frame (`target` absent or 0)
     or the faces (1), not placed or wired by the section, and `on` with
-    `mix` > 0; in `(order, name)` order, the `order` from the document else
-    `specs` (name → the file's `@order`; an instance takes its file's). A
+    (`mix` > 0, or something drives the effect: R5); in `(order, name)`
+    order, the `order` from the document else `specs` (name → the file's
+    `(@order, @mix)`; an instance takes its file's, and a value the document
+    leaves out takes its file's too). The frame run is always written, bare
+    `frame → fx.image` when empty, so a migrated section is recognisable
+    (`needs_free`). A
     section that already has a run from `frame` (or `pattern`), or a wire
     into `pattern.media` / `backdrop.image`, is not given another."""
     out = copy.deepcopy(doc)
@@ -209,11 +229,11 @@ def migrate(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
     runs: dict[int, list[str]] = {0: [], 1: []}
     left_out: list[str] = []
     driven = targets(out)
-    driven_fx = {n for n in (effect_of(p) for p in driven) if n}
+    driven_fx = _driven_fx(driven)
     for name in _candidates(values, specs):
         if name in wired or name in placed:
             continue
-        if _is_on(values, name) and _mix_of(values, name) > 0:
+        if _live(values, specs, driven_fx, name):
             side = 1 if values.get(f"fx.{name}.target", 0) == 1 else 0
             runs[side].append(name)
         elif name in driven_fx:
@@ -221,8 +241,9 @@ def migrate(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
     for run in runs.values():
         run.sort(key=lambda n: (_order_of(values, specs, n), n))
     new_wires: list[dict] = []
-    if runs[0] and not has_frame:
-        new_wires += _chain("frame", runs[0], "fx.image")
+    if not has_frame:           # an empty run is the bare `frame → fx.image`: always a head
+        new_wires += _chain("frame", runs[0], "fx.image") if runs[0] else [
+            {"from": "frame", "to": "fx.image"}]
     if runs[1] and not has_faces:
         new_wires += _chain("pattern", runs[1], "shape.faces")
     declared = {(n.get("file"), int(n.get("instance", 1))) for n in nodes
@@ -263,8 +284,8 @@ def migrate(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
     return out, notes
 
 
-def to_free(doc: dict, specs: dict[str, int]) -> tuple[dict, list[str]]:
-    """`doc`'s `graph` section with its runs and channel wires added
+def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
+    """The section half of `migrate`: `doc`'s `graph` section with its runs and channel wires added
     (unchanged when it already has them; `{}` for a preset with no section
     and nothing to add), and the load notes. `migrate` is the rest of the
     document: the values and rows this changes."""
@@ -308,8 +329,8 @@ def _expected(head: str, run: tuple[str, ...], end: str) -> set[G.Wire]:
     return {G.Wire(head, f"{run[0]}.image"), G.Wire(run[-1], end)}
 
 
-def legacy_values(section: dict, values: dict,
-                  specs: dict[str, int] | None = None) -> dict | None:
+def legacy_values(section: dict, values: dict, specs: Specs | None = None,
+                  driven: frozenset[str] = frozenset()) -> dict | None:
     """The `order` / `target` / `view.media` / `backdrop.channel` values
     that say `section` in `/4` terms, or None when `/4` cannot: a branch,
     an unreached effect, more than one run from a head, anything but a
@@ -320,7 +341,9 @@ def legacy_values(section: dict, values: dict,
     is where the run already sorts by `(order, name)`, else
     `fx.reordered`'s fewest changes), its `target`, and the two channel
     choices. A key the document does not hold and that needs no change is
-    left out. `specs` gives an absent order its file's default."""
+    left out. `specs` gives an absent order or mix its file's default;
+    `driven` is `targets(doc)`, so an effect on at mix 0 and driven is a
+    member as `migrate` has it (R5)."""
     try:
         spec = G.read_graph(section if isinstance(section, dict) else {})
     except G.GraphError:
@@ -331,6 +354,7 @@ def legacy_values(section: dict, values: dict,
     runs = {"frame": G.run_of(spec), "pattern": G.run_of(spec, "pattern", "shape.faces")}
     ends = {"frame": "fx.image", "pattern": "shape.faces"}
     members = {n for r in runs.values() for n in r}
+    driven_fx = _driven_fx(driven)
     for head, end in ends.items():
         touching = {w for w in wires if w.src == head or w.dst == end}
         want = _expected(head, runs[head], end)
@@ -339,7 +363,7 @@ def legacy_values(section: dict, values: dict,
     for name in members:
         if sum(1 for w in wires if w.src == name) != 1:
             return None
-        if not (_is_on(values, name) and _mix_of(values, name) > 0):
+        if not _live(values, specs, driven_fx, name):
             return None
     for end in ("pattern.media", "backdrop.image"):
         for w in wires:
@@ -351,7 +375,7 @@ def legacy_values(section: dict, values: dict,
     placed = {e.name for e in spec.wiring().placed}
     for name in _candidates(values, specs):
         if (name not in members and name not in wired and name not in placed
-                and _is_on(values, name) and _mix_of(values, name) > 0):
+                and _live(values, specs, driven_fx, name)):
             return None
     out: dict[str, Any] = {}
     for head, run in runs.items():
@@ -376,13 +400,21 @@ def legacy_values(section: dict, values: dict,
     return out
 
 
-def needs_free(section: Any, values: dict) -> bool:
+def has_frame_run(spec: G.GraphSpec) -> bool:
+    """Whether the section has a run's head: a wire from `frame` or into
+    `fx.image` (what `to_free` always writes)."""
+    return any(w.src == "frame" or w.dst == "fx.image" for w in spec.all_wires())
+
+
+def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset()) -> bool:
     """Whether a preset's graph section must be written as `/5` (row 347):
-    it uses the free graph's words and `/4` cannot say it."""
+    it has a `frame` run or uses the free graph's words, and `/4` cannot
+    say it. A section with neither (plan 26-32's) never is."""
     if not isinstance(section, dict) or not section:
         return False
     try:
         spec = G.read_graph(section)
     except G.GraphError:
         return False
-    return uses_free_words(spec) and legacy_values(section, values) is None
+    return ((has_frame_run(spec) or uses_free_words(spec))
+            and legacy_values(section, values, None, driven) is None)

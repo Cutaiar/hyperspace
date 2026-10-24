@@ -327,7 +327,8 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default)
     ``seq.page`` / ``seq.select`` rows are the session's and never saved.
     (The media rule does read the desk: a pre-32 build drops a desk row on
     a media param it lacks — `uses_media`.)"""
-    if graphmigrate.needs_free(doc.get(GRAPH_KEY), dict(doc.get("values") or {})):
+    if graphmigrate.needs_free(doc.get(GRAPH_KEY), dict(doc.get("values") or {}),
+                              graphmigrate.targets(doc)):
         return FREE_SCHEMA
     if uses_media(doc, at_default):
         return MEDIA_SCHEMA

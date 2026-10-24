@@ -23,7 +23,7 @@ FIXTURES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
                    *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")])
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
-SPECS = {n: s.order for n, s in EFFECTS.items()}
+SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}
 
 
 def load(path: Path) -> dict:
@@ -33,14 +33,15 @@ def load(path: Path) -> dict:
 def old_run(doc: dict, side: int = 0) -> list[str]:
     """The old rule: sorted by (order, name), on and mix > 0, aimed at `side`."""
     v = doc.get("values") or {}
+    driven = {n for n in (M.effect_of(p) for p in M.targets(doc)) if n}
     names = set(SPECS) | {n for n in (M.effect_of(k) for k in v) if n}
     section = doc.get("graph")
     if section:                                    # a placed or wired effect leaves the stack
         names -= M._wired_effects(G.read_graph(section))
     live = [n for n in names if v.get(f"fx.{n}.on")
-            and v.get(f"fx.{n}.mix", EFFECTS[n.partition('.')[0]].mix) > 0
+            and (v.get(f"fx.{n}.mix", EFFECTS[n.partition('.')[0]].mix) > 0 or n in driven)
             and (1 if v.get(f"fx.{n}.target", 0) == 1 else 0) == side]
-    return sorted(live, key=lambda n: (v.get(f"fx.{n}.order", SPECS[n.partition('.')[0]]), n))
+    return sorted(live, key=lambda n: (v.get(f"fx.{n}.order", SPECS[n.partition('.')[0]][0]), n))
 
 
 def runs(section: dict):
@@ -50,10 +51,6 @@ def runs(section: dict):
 
 def wires_of(section: dict) -> set[tuple[str, str]]:
     return {(w["from"], w["to"]) for w in section.get("wires", [])}
-
-
-def test_the_zero_mix_files_are_the_ones_on_disk():
-    assert {n for n, s in EFFECTS.items() if s.mix == 0} == set(M.ZERO_MIX_FILES)
 
 
 @pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
@@ -118,7 +115,8 @@ def test_faces_aimed_effects_become_the_faces_run():
     doc = base(**{"fx.acid.on": True, "fx.acid.target": 1})
     section, notes = M.to_free(doc, SPECS)
     assert notes == []
-    assert wires_of(section) == {("pattern", "acid.image"), ("acid", "shape.faces")}
+    assert wires_of(section) == {("frame", "fx.image"), ("pattern", "acid.image"),
+                                 ("acid", "shape.faces")}
 
 
 def test_a_run_is_sorted_and_an_instance_is_declared():
@@ -148,7 +146,8 @@ def test_a_section_with_a_frame_run_is_unchanged():
 def test_view_media_and_backdrop_channel_become_wires():
     doc = base(**{"view.media": 3, "backdrop.channel": 2})
     section, _ = M.to_free(doc, SPECS)
-    assert wires_of(section) == {("media.c", "pattern.media"), ("media.b", "backdrop.image")}
+    assert wires_of(section) == {("frame", "fx.image"), ("media.c", "pattern.media"),
+                                 ("media.b", "backdrop.image")}
     out, _ = M.migrate(doc, SPECS)
     assert not any(M.retired(k) for k in out["values"])
 
@@ -189,7 +188,7 @@ def test_legacy_values_inverts_to_free(path):
     doc = load(path)
     values = doc.get("values") or {}
     section, _ = M.to_free(doc, SPECS)
-    got = M.legacy_values(section, values, SPECS)
+    got = M.legacy_values(section, values, SPECS, M.targets(doc))
     assert got is not None
     frame, faces = runs(section)
     for n in [*frame, *faces]:
@@ -201,7 +200,8 @@ def test_legacy_values_inverts_to_free(path):
             assert got[key] == values[key]
     # and applied, the old rule gives the same runs
     back = {**values, **got}
-    back = {"values": back, "graph": doc.get("graph")}
+    back = {"values": back, "graph": doc.get("graph"), "routes": doc.get("routes"),
+            "desk": doc.get("desk"), "macros": doc.get("macros")}
     assert old_run(back, 0) == frame and old_run(back, 1) == faces
 
 
@@ -295,3 +295,27 @@ def test_v5_is_refused_by_the_ladder_below(tmp_path):
             lib.read("presets", "five")
     finally:
         kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
+
+
+def test_an_empty_run_is_written_as_frame_to_fx():
+    section, notes = M.to_free(base(**{"fx.acid.on": False}), SPECS)
+    assert notes == [] and wires_of(section) == {("frame", "fx.image")}
+    assert runs(section) == ([], [])
+    assert M.to_free({"values": {}, "graph": section}, SPECS)[0] == section      # and stays
+
+
+def test_a_driven_effect_on_at_mix_zero_stays_in_the_run():
+    doc = base(**{"fx.acid.on": True, "fx.acid.mix": 0.0, "fx.warp.on": True, "fx.warp.mix": 0.0})
+    doc["routes"] = [{"source": "lfo:0", "target": "fx.acid.mix", "op": "push"}]
+    section, notes = M.to_free(doc, SPECS)
+    assert G.run_of(G.read_graph(section)) == ("acid",) and notes == []
+
+
+def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v5():
+    doc = base(**{"fx.acid.on": True})
+    cleared = {"nodes": [], "wires": [{"from": "frame", "to": "fx.image"}]}
+    assert preset.schema_of({**doc, "graph": cleared}) == M.FREE_SCHEMA
+    migrated, _ = M.to_free(doc, SPECS)
+    assert preset.schema_of({**doc, "graph": migrated}) != M.FREE_SCHEMA     # a /4 can say it
+    off = base(**{"fx.acid.on": False})
+    assert preset.schema_of({**off, "graph": cleared}) != M.FREE_SCHEMA
