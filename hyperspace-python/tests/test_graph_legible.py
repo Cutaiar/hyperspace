@@ -319,6 +319,37 @@ def test_beside_shows_only_with_a_selection(rig, monkeypatch):
     assert "details below##graph" in chips
 
 
+def test_a_selection_never_resizes_the_canvas(rig, monkeypatch):
+    """The owner (2026-10-24): opening the details must not pan the graph.
+    The node editor re-centres its view whenever its canvas changes size
+    (`CanvasSizeMode` has no "keep the top-left"), so the canvas is always
+    the page's whole size and the details are laid over its right edge —
+    or its bottom on a narrow page — and every node stays where it was."""
+    st = party(rig)
+    sizes = []
+    begin = ui_graph.ed.begin
+    monkeypatch.setattr(ui_graph.ed, "begin",
+                        lambda name, size, *a: sizes.append((size.x, size.y))
+                        or begin(name, size, *a))
+    frame(rig.panel, "graph")
+    alone = sizes[-1]
+    _in_editor(rig, link(st, next(iter(st["bundles"]))))
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, rig.view) is not None
+    assert sizes[-1] == alone                       # beside: the canvas keeps its size
+    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    frame(rig.panel, "graph")
+    narrow = sizes[-1]
+    st["beside"] = False                            # below, on the narrow page
+    frame(rig.panel, "graph")
+    assert sizes[-1] == narrow
+    pos, size = ui_graph.details_rect((10.0, 20.0), (1000.0, 600.0), wide=True)
+    assert (pos, size) == ((10.0 + 1000.0 - ui_graph.SIDE_W, 20.0), (ui_graph.SIDE_W, 600.0))
+    pos, size = ui_graph.details_rect((10.0, 20.0), (500.0, 600.0), wide=False)
+    assert (pos, size) == ((10.0, 20.0 + 600.0 - ui_graph.BELOW_H), (500.0, ui_graph.BELOW_H))
+
+
 def test_routing_no_longer_draws_routes_or_modifiers_but_their_functions_stay(
         rig, monkeypatch):
     """ROUTING draws a pointer line where its routes and its MODIFIERS strip

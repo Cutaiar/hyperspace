@@ -479,18 +479,34 @@ def page(panel, dt: float) -> None:
     imgui.separator()
     avail = imgui.get_content_region_avail()
     wide = st["beside"] or avail.x >= WIDE
-    cw = avail.x - (SIDE_W + imgui.get_style().item_spacing.x if sel and wide else 0.0)
-    ch = avail.y - (BELOW_H if sel and not wide else 0.0)
-    _canvas(panel, st, view, imgui.ImVec2(max(cw, 80.0), max(ch, 80.0)))
-    if sel:
-        if wide:
-            imgui.same_line()
-        if imgui.begin_child("##graph.side", imgui.ImVec2(SIDE_W if wide else 0.0, 0.0)):
+    # the canvas is always the page's whole size: the node editor re-centres
+    # its view whenever its canvas changes size (no `CanvasSizeMode` keeps the
+    # top-left), so a selection that narrowed it panned every node (the
+    # owner, 2026-10-24). The details are laid over its edge instead.
+    origin = imgui.get_cursor_screen_pos()
+    _canvas(panel, st, view, imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0)))
+    if sel:                             # its bottom is the canvas's: the page ends where it did
+        pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide)
+        imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
+        imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
+        if imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders):
             _side(panel, st, view, sel)
         imgui.end_child()
+        imgui.pop_style_color()
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
+
+
+def details_rect(origin: tuple[float, float], avail: tuple[float, float],
+                 wide: bool) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where the selection's details are laid over the canvas (screen
+    position, size): a `SIDE_W` column on its right edge when `wide`, else a
+    `BELOW_H` band along its bottom. The canvas keeps its size underneath."""
+    (x, y), (w, h) = origin, avail
+    if wide:
+        return (x + w - SIDE_W, y), (SIDE_W, h)
+    return (x, y + h - BELOW_H), (w, BELOW_H)
 
 
 def share(panel, st: dict, sel) -> None:
