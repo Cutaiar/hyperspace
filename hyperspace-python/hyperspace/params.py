@@ -57,7 +57,8 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Callable, Iterator
+import re
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -117,8 +118,10 @@ F_KEYS = 8
 # `env` and `seq` (plan 31): the envelopes' knobs and the sequencer's
 # pattern are the look's, like the LFOs' (decision 8: the pattern is the
 # preset's, `seq.run` and the playhead are not persisted at all)
+# `switch` (plan 33 S): each switch node's `select`, the preset's, declared
+# while its graph holds the switch (declare_switches)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "lfo", "env", "seq", "macro", "mod")
+                      "switch", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -924,6 +927,68 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
+# ---- plan 33 S: the switches' picks ----
+SWITCH_GROUP = "switch"
+# off, then the eight inputs (R11: choice k is the input `in<k>`)
+SWITCH_CHOICES = ["off", *(str(i) for i in range(1, 9))]
+_SWITCH_ID = re.compile(r"(switch(?:\.(?:[2-9]|[1-9][0-9]+))?)\.select")
+
+
+def switch_id(name: str) -> str:
+    """The `select` param of switch node `name` (`switch.2` → `switch.2.select`)."""
+    return f"{name}.select"
+
+
+def is_switch_id(pid: str) -> bool:
+    """Is `pid` a switch's `select` — one that exists only while a preset's
+    graph holds that switch (plan 33 S)? A preset load sorts such ids
+    against the graph it lands, as it does an effect instance's."""
+    return bool(_SWITCH_ID.fullmatch(pid))
+
+
+def _switch_state(r: Registry) -> dict[str, int]:
+    """The picks the `select` params write, switch name → 0–8: the view
+    state's (`ViewState.switch`, which the renderer reads once a frame),
+    kept by `build_registry` as `r.switch_state`; a dict of the registry's
+    own for one built without a view (a test, a registry from before a hot
+    reload brought the switch)."""
+    state = getattr(r, "switch_state", None)
+    if not isinstance(state, dict):
+        state = r.switch_state = {}
+    return state
+
+
+def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
+    """The switches' params (plan 33 S), as `FxState.set_instances` and
+    `fx.declare` do the effect instances': `switch[.<n>].select` for each
+    switch `names` holds — an enum off / 1–8 (`SWITCH_CHOICES`), off when
+    first declared, group `switch` (a performance group: the preset's),
+    modulatable, so a route, a desk row, a macro, an LFO or a sequencer
+    step drives it like any param — and those of every switch no longer
+    named dropped (a route on one goes dormant, as for a deleted band). A
+    switch still named keeps its pick. Returns the ids that appeared or
+    went."""
+    state = _switch_state(r)
+    want = {switch_id(n): n for n in names}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SWITCH_GROUP and p.id not in want]:
+        r.remove(p.id)
+        state.pop(p.id[:-len(".select")], None)
+        changed.append(p.id)
+    for pid, name in want.items():
+        if pid in r:
+            continue
+        state[name] = 0
+        r.enum(pid, f"{name} select", (lambda n=name: int(state.get(n, 0))),
+               (lambda v, n=name: state.__setitem__(n, int(v))), SWITCH_CHOICES,
+               group=SWITCH_GROUP,
+               tip=f"Which of {name}'s eight inputs it passes on (in1 … in8), or off: "
+                   "the faces then show the pattern, the backdrop nothing. Only the "
+                   "picked input's picture is made.")
+        changed.append(pid)
+    return changed
+
+
 def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
@@ -976,6 +1041,16 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     dream = dream if dream is not None else DreamState()
     media = media if media is not None else media_channels.MediaState()
     r.media = media
+    # plan 33 S: the switches' picks live on the view state the renderer
+    # reads (`ViewState.switch`); their params come with the preset's graph
+    picks = getattr(view, "switch", None)
+    if not isinstance(picks, dict):
+        picks = {}
+        try:
+            view.switch = picks
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.switch_state = picks
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 

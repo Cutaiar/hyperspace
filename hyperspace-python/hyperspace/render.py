@@ -1430,9 +1430,14 @@ class Renderer:
         # the runs are the graph's (its wires), each effect asked `live`
         fx_on = any(fx.state.live(n) for n in getattr(graph, "run", ()))
         stats["fx_on"] = fx_on
+        # plan 33 S: each switch's `select`, read once for the frame
+        # (`ViewState.switch`, the `switch[.n].select` params' — getattr: a
+        # view state from before the switch has none): what the switches
+        # pass and what the graph pulls, never a rebuild
+        selects = dict(getattr(s, "switch", None) or {})
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
-                      stats=stats)
+                      stats=stats, selects=selects)
         timer = self._pass_timer()
         try:
             graph.evaluate(frame)

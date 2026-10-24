@@ -117,9 +117,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
 LIBRARY = ROOT / "hyperspace" / "library" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
-           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
-           # R14: a route on each channel choice (a /4 and a /2)
-           "plan33": ROOT / "tests" / "fixtures" / "plan33-v4-sources"}
+           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32"}
+# R14 → R19: a route on each channel choice (a /4 and a /2). Since T5 they
+# load with a switch and save as /5 (row 347), so they are not byte sources
+DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
 
 
 def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
@@ -159,10 +160,11 @@ def v4_sources() -> list[tuple[str, Path]]:
 
 def test_a_free_fixture_saves_as_five(tmp_path):
     """Plan 33 T4's proof presets say what `/4` cannot (a channel through
-    effects onto the faces, under the scene, at two sizes): loaded and saved
-    untouched they stay `/5`, their graph section as written."""
+    effects onto the faces, under the scene, at two sizes), and T5's a
+    switch: loaded and saved untouched they stay `/5`, their graph section
+    as written."""
     for k, name in enumerate(("media-chain-faces", "media-chain-backdrop",
-                              "branch-two-sizes")):
+                              "branch-two-sizes", "switch-faces")):
         path = SOURCES["presets"] / f"{name}.json"
         doc = json.loads(saved_bytes(tmp_path / str(k), "presets", path))
         assert doc["schema"] == "hyperspace.preset/5", name
@@ -211,7 +213,7 @@ def test_an_untouched_v4_preset_saves_byte_identical(tmp_path):
     worktree removed after). The sources are this tree's: no library file
     or fixture changed since 3547a7a."""
     sources = v4_sources()
-    assert len(sources) >= 25 + 11 + 2 + 2
+    assert len(sources) >= 25 + 11 + 2
     assert sorted(p.name for p in SAVES.glob("*.json")) == sorted(
         f"{kind}--{path.name}" for kind, path in sources)
     for k, (kind, path) in enumerate(sources):
@@ -324,23 +326,42 @@ def test_the_module_hook_survives_a_hot_reload(tmp_path):
     assert G.run_of(app.presets.graph.spec) == _module_run(app, "mandala")
 
 
-def test_a_driven_channel_choice_keeps_its_rows_and_value_while_keep_is_set(tmp_path):
-    """R14: while the load keeps the retired values (T3–T4) a route on
-    `view.media` or `backdrop.channel` makes no switch and is retargeted
-    nowhere — no `switch.select` unknown, the routes as the file has them,
-    the channel a plain wire — and the save is the base build's /4."""
+def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
+    """R19 (R14 → T5, row 350): a route on `view.media` or `backdrop.channel`
+    loads as a switch over the eight channels into `pattern.media` /
+    `backdrop.image`, the route retargeted onto its `select`, the select at
+    the old choice — and, saved untouched, the preset is /5 (row 347: /4
+    cannot say a switch), its graph the switches and their wires and its
+    routes on the selects. These two sources left the byte-identical set
+    for this; the pictures are tests/test_graph_switch.py's."""
     from test_plan31_wiring import make_app
 
-    app = make_app(tmp_path)
-    src = json.loads((SOURCES["plan33"] / "driven-channels.json").read_text())
-    assert app.presets.load_doc(src) == [] and app.presets.notes == []
-    assert [b.target for b in app.router.table.routes()] == ["view.media", "backdrop.channel"]
-    assert app.reg["view.media"].value == 2 and app.reg["backdrop.channel"].value == 3
-    free = app.presets.graph.free_doc()
-    assert not [n for n in free["nodes"] if n.get("kind") == "switch"]
-    assert {"from": "media.b", "to": "pattern.media"} in free["wires"]
-    assert {"from": "media.c", "to": "backdrop.image"} in free["wires"]
-    assert app.presets.document("driven-channels")["schema"] == "hyperspace.preset/4"
+    want = {"driven-channels": (("switch", "pattern.media", "view.media", 2),
+                                ("switch.2", "backdrop.image", "backdrop.channel", 3)),
+            "driven-media-v2": (("switch", "pattern.media", "view.media", 2),)}
+    for k, (name, switches) in enumerate(want.items()):
+        app = make_app(tmp_path / str(k))
+        src = json.loads((DRIVEN / f"{name}.json").read_text())
+        assert app.presets.load_doc(src) == [] and app.presets.notes == [], name
+        assert [b.target for b in app.router.table.routes()] == [
+            f"{sw}.select" for sw, *_ in switches]
+        free = app.presets.graph.free_doc()
+        for sw, end, old, pick in switches:
+            assert app.reg[f"{sw}.select"].value == pick, (name, sw)
+            assert {"from": sw, "to": end} in free["wires"]
+            for i, c in enumerate("abcdefgh", 1):
+                assert {"from": f"media.{c}", "to": f"{sw}.in{i}"} in free["wires"]
+            assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
+        doc = app.presets.document(name)
+        assert doc["schema"] == "hyperspace.preset/5", name
+        assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
+            {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
+            for sw, *_ in switches]
+        assert [r["target"] for r in doc["routes"]] == [f"{sw}.select" for sw, *_ in switches]
+        for sw, _, _, pick in switches:
+            assert doc["values"][f"{sw}.select"] == pick
+    assert sorted(p.name for p in DRIVEN.glob("*.json")) == [f"{n}.json" for n in sorted(want)]
+    assert not [p for p in SAVES.glob("plan33--*.json")]
 
 
 def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path):

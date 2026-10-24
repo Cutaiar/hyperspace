@@ -160,10 +160,12 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # T4's three (`hyperspace.preset/5`): the still through its own shaders onto
 # the faces (`media.a → acid.2 → huecycle.2 → shape.faces`), under the scene
 # (`media.a → kaleido.2 → backdrop.image`), and one branch read at two sizes
-# (acid.2 on the faces at 1024² and as output 2's picture)
+# (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
+# one: a switch onto the faces at select 2, the still (in1 an empty channel,
+# in3 the still through acid.2: never made)
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
-                                   "media-chain-backdrop", "branch-two-sizes")
+                                   "media-chain-backdrop", "branch-two-sizes", "switch-faces")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES)

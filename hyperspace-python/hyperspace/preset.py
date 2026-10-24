@@ -156,9 +156,12 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     PERFORMANCE_GROUPS,
     PLANES,
     SESSION_GROUPS,
+    SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_switches,
     is_instance_id,
+    is_switch_id,
     pan_world,
     part_of,
 )
@@ -422,7 +425,9 @@ class GraphSection:
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
       session's, like `ghost.*`, on a `GhostState` of its own that is
       kept while the app runs, so a preset that drops the node and one
-      that brings it back find its settings as they were);
+      that brings it back find its settings as they were); and (plan 33
+      S) each switch's `switch[.n].select` (`params.declare_switches`: a
+      performance param, its pick in the preset's `values`);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
       the default graph is built from) and `Renderer.ghost_states` (the
       extra hands nodes' states, each drawn by its own `Ghost`).
@@ -525,6 +530,8 @@ class GraphSection:
             changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
             if changed:
                 declare_fx(reg, self.fx, changed)
+        # plan 33 S: each switch's `select`, as the effect instances' params
+        declare_switches(reg, [sw.name for sw in spec.switches] if spec is not None else [])
         if free is None and graphmigrate.says_free(doc):
             free, doc = doc, graphmigrate.legacy_section(doc)
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -619,7 +626,8 @@ MODIFIERS_KEY = "modifiers"
 LAYOUT_KEY = "layout"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
-NO_MODULE = ("macro", modifiers.GROUP)
+# (plan 33 S: a switch's pick means nothing without the preset's graph)
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -941,7 +949,8 @@ class Presets:
             elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
-            elif is_instance_id(pid):
+            elif is_instance_id(pid) or is_switch_id(pid):
+                # (plan 33 S: a switch's `select` too — its graph declares it)
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)

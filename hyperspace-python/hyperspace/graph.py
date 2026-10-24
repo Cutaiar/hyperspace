@@ -65,6 +65,9 @@ as a picture with its media layer's input (`pattern.media`), and the
 the faces and the scene's ground by. A branch is made at the size its
 consumer asks (`Node.size_for`, `Frame.at`): the faces' `FACE_PIC`², the
 pattern's layer at its channel's own, the frame's for everything else.
+Plan 33 S's **Switch** (`SwitchNode`, `switch`, `switch.2` …): eight
+pictures in, the one its `select` picks out (`Frame.selects`) — a cut; only
+the picked input's branch is made (`Graph.pulled`).
 
 **Materialised and painted images.** A Scene or Layer node *makes* a
 texture that lives until the next frame (`image(frame)`); the History,
@@ -1023,9 +1026,9 @@ class GraphSpec:
             # plan 33 R: the section says the run (every preset loaded on
             # this build does, `graphmigrate`): its wires are the run, not
             # edges. The faces', the pattern's and the backdrop's wires are
-            # edges like any other (T4); a switch's are plan 33 T5's
+            # edges like any other (T4), and so are a switch's (T5)
             run = run_of(self)
-            wires = tuple(w for w in wires if w not in _run_wires(run) and not _later(w))
+            wires = tuple(w for w in wires if w not in _run_wires(run))
         # plan 33 R: a channel straight into the backdrop is the plan 32
         # backdrop, node for node (`MediaNode(alpha_of="backdrop_alpha")`)
         back = next((w for w in wires if w.dst == "backdrop.image"
@@ -1280,11 +1283,6 @@ def _run_wires(run: tuple[str, ...]) -> set[Wire]:
     return out
 
 
-def _later(w: Wire) -> bool:
-    """A wire plan 33 T5 renders: into or out of a switch."""
-    return wire_node_kind(w.src) == "switch" or wire_node_kind(w.node) == "switch"
-
-
 # the sinks a wire's picture is drawn at (plan 33 R): an output, the
 # history, and the faces, the pattern's layer and the backdrop (T4)
 _DRAWN_AT = ("output", "history", "shape", "pattern", "backdrop")
@@ -1292,8 +1290,8 @@ _DRAWN_AT = ("output", "history", "shape", "pattern", "backdrop")
 
 def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
                    placed: tuple[EffectAt, ...]) -> tuple[Wire, ...]:
-    """`edges` without the wires into an effect or composite that reaches
-    nothing this graph draws (plan 33 R: an unreached node has no node and
+    """`edges` without the wires into an effect, a composite or (plan 33
+    S) a switch that reaches nothing this graph draws (plan 33 R: an unreached node has no node and
     never runs). What is drawn: an output's or the history's port, the
     faces, the pattern's layer, the backdrop (T4), an effect of the run,
     and a placed effect where it sits (D1's own and the wires D1 would
@@ -1313,7 +1311,8 @@ def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
         got.add(name)
         todo.extend(into.get(name, ()))
     return tuple(w for w in edges
-                 if wire_node_kind(w.node) not in ("effect", "composite") or w.node in got)
+                 if wire_node_kind(w.node) not in ("effect", "composite", "switch")
+                 or w.node in got)
 
 
 # ---------------------------------------------------------------- in words
@@ -1595,6 +1594,10 @@ class Frame:
     opaque: int | None = None
     parent: Frame | None = None
     _at: dict[tuple[int, int], Frame] = field(default_factory=dict)
+    # plan 33 S: each switch's `select` this frame (switch name → 0 off,
+    # 1–8 the input), read once by the renderer (`ViewState.switch`): what
+    # `SwitchNode.selected` and `Graph.pulled` read — never a rebuild
+    selects: dict[str, int] = field(default_factory=dict)
 
     @property
     def root(self) -> Frame:
@@ -1791,11 +1794,17 @@ class Shape(Node):
         """What the faces' picture is painted from this frame, or None —
         the faces draw the pattern per face: unwired, the pattern itself
         (or effects of it each off this frame), or a picture that reads
-        nothing."""
+        nothing — a switch at off, or picking an unwired input, among them
+        (plan 33 S)."""
         src = self.inputs.get("faces")
         head = src
-        while isinstance(head, Effect) and not head.on(frame):
-            head = head.inputs["image"]
+        while True:
+            if isinstance(head, Effect) and not head.on(frame):
+                head = head.inputs["image"]
+            elif isinstance(head, SwitchNode):     # plan 33 S: the input it picks
+                head = head.selected(frame)
+            else:
+                break
         if head is None or isinstance(head, PatternNode):
             return None
         at = frame.at(self.size_for("faces", frame))
@@ -2304,11 +2313,17 @@ def picture(frame: Frame, node: Node) -> moderngl.Texture | None:
     return frame.data[key]
 
 
-def _head(node: Node | None) -> Node | None:
-    """The node a run of effects starts from (`node` itself if no effect)."""
-    while isinstance(node, Effect):
-        node = node.inputs["image"]
-    return node
+def _head(node: Node | None, frame: Frame | None = None) -> Node | None:
+    """The node a run of effects starts from (`node` itself if no effect)
+    — and, given the `frame`, through each switch to the input it picks
+    then (plan 33 S; None at off)."""
+    while True:
+        if isinstance(node, Effect):
+            node = node.inputs["image"]
+        elif frame is not None and isinstance(node, SwitchNode):
+            node = node.selected(frame)
+        else:
+            return node
 
 
 class PatternNode(Node):
@@ -2350,7 +2365,7 @@ class PatternNode(Node):
     def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
         if port != "media":
             return super().size_for(port, frame)
-        head = _head(self.inputs["media"])
+        head = _head(self.inputs["media"], frame)
         get = getattr(frame.r, "media_texture", None)
         tex = get(head.channel) if isinstance(head, MediaNode) and get is not None else None
         return tuple(tex.size) if tex is not None else (FACE_PIC, FACE_PIC)
@@ -2358,8 +2373,9 @@ class PatternNode(Node):
     def layer(self, frame: Frame) -> tuple[moderngl.Texture, bool] | None:
         """What the pattern's media layer draws this frame — (the texture,
         whether its rows are in GL's order) — or None, the layer off: the
-        raw channel `channel` names, or the branch's picture at its head's
-        size (rendered: GL's order). Once a frame (the root frame's)."""
+        raw channel `channel` names (or a switch picks: plan 33 S), or the
+        branch's picture at its head's size (rendered: GL's order). Once a
+        frame (the root frame's)."""
         root = frame.root
         key = self.name + "#layer"
         if key not in root.data:
@@ -2371,10 +2387,19 @@ class PatternNode(Node):
                 get = getattr(root.r, "_channel_layer", None)
                 got = get(self.channel) if get is not None else None
             elif src is not None:
-                at = root.at(self.size_for("media", root))
-                if src.reads(at):
-                    tex = picture(at, src)
-                    got = (tex, True) if tex is not None else None
+                # plan 33 S: through a switch, the input it picks — a channel
+                # picked is read raw, as one wired straight in (the migrated
+                # `view.media` knob draws what the old one drew)
+                while isinstance(src, SwitchNode):
+                    src = src.selected(root)
+                if isinstance(src, MediaNode):
+                    get = getattr(root.r, "_channel_layer", None)
+                    got = get(src.channel) if get is not None else None
+                elif src is not None:
+                    at = root.at(self.size_for("media", root))
+                    if src.reads(at):
+                        tex = picture(at, src)
+                        got = (tex, True) if tex is not None else None
             root.data[key] = got
         return root.data[key]
 
@@ -2401,6 +2426,70 @@ class BackdropNode(Node):
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
     OUTPUT = None
     TIMED = False
+
+
+class SwitchNode(Node):
+    """A switch (plan 33 S, rows 350 and 352): `switch`, `switch.2` …, eight
+    picture inputs `in1` … `in8` and one picture out — the input its
+    `switch[.n].select` picks this frame (`Frame.selects`: 0 off, k the
+    input `in<k>`, R11), passed through at the size its consumer asks. A
+    cut: no pass, no texture of its own — `image`, `paint`, `alpha`,
+    `depth` and `reads` are the picked input's.
+
+    Off, or picking an input nothing is wired to, it reads nothing
+    (`reads` False, `image` None): the faces then show the pattern, the
+    backdrop nothing, an output its ground. Only the picked input's branch
+    is made: what feeds the others is pulled by no consumer this frame,
+    and `Graph.evaluate` runs none of their folds (`Graph.pulled`)."""
+
+    KIND = "switch"
+    INPUTS: ClassVar[dict[str, str]] = {p: IMAGE for p in SWITCH_PORTS}
+    OUTPUT = IMAGE
+    TIMED = False                 # no pass of its own: its time is its input's
+
+    def index(self, frame: Frame) -> int:
+        """The input picked this frame, 1–8, or 0 (off; a value out of
+        range is off)."""
+        sel = getattr(frame, "selects", None) or {}
+        try:
+            k = int(sel.get(self.name, 0))
+        except (TypeError, ValueError):
+            return 0
+        return k if 1 <= k <= len(SWITCH_PORTS) else 0
+
+    def selected(self, frame: Frame) -> Node | None:
+        """The node on the picked input this frame, or None (off, or that
+        input unwired)."""
+        k = self.index(frame)
+        return self.inputs[SWITCH_PORTS[k - 1]] if k else None
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.selected(frame)
+        return src is not None and src.reads(frame)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.selected(frame)
+        return src.image(frame) if src is not None else None
+
+    def depth(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.selected(frame)
+        return src.depth(frame) if src is not None else None
+
+    def alpha(self, frame: Frame) -> float:
+        src = self.selected(frame)
+        return src.alpha(frame) if src is not None else 1.0
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """The picked input painted into `dst` — or the ground with none,
+        so a consumer never shows what `dst` held (as an empty channel)."""
+        src = self.selected(frame)
+        if src is not None:
+            src.paint(frame, dst)
+            return
+        rect = tuple(dst.viewport)
+        dst.use()
+        frame.ctx.viewport = rect
+        frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
 
 
 # ---------------------------------------------------------------- layers
@@ -2667,8 +2756,11 @@ class Composite(Node):
         r, ctx, size = frame.r, frame.ctx, frame.size
         under = self.inputs["under"]
         if under is not None and self.under_alpha_of is not None:
-            # (made before the lay: its own passes time themselves)
-            tex = picture(frame, under)
+            # (made before the lay: its own passes time themselves; plan 33
+            # S: a switch at off, or on an unwired input, is not painted:
+            # the ground alone)
+            tex = (None if isinstance(under, SwitchNode) and under.selected(frame) is None
+                   else picture(frame, under))
             dst.use()
             ctx.viewport = (0, 0, *size)
             ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha)
@@ -3318,6 +3410,8 @@ class Graph:
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
         self._framed: frozenset[str] | None = None     # plan 33 R: `at_frame`, settled
+        # plan 33 S: `pulled`, by the switches' picks (None: not yet asked)
+        self._pulled: dict[tuple[int, ...], frozenset[str]] | None = None
 
     def insert(self, node: Effect, edges: list[tuple[Node, str]]) -> Effect:
         """Add placed effect `node` (its input already wired) and make each
@@ -3360,6 +3454,7 @@ class Graph:
                     self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
         self._pool = self._framed = None
+        self._pulled = None
 
     def folds(self, index: int) -> bool:
         """Whether output `index`'s picture goes through an effect placed
@@ -3378,13 +3473,14 @@ class Graph:
                 self._readers[src.name] = self._readers.get(src.name, 0) + 1
         self.order = self._sort()
         self._pool = self._framed = None
+        self._pulled = None
         return node
 
     def at_frame(self, node: Node) -> bool:
         """Whether `node`'s picture is read at the frame's size (plan 33
         R): some port reads it that is not one asking a size of its own
-        (`Node.SIZED`: the faces, the pattern's layer) — through an effect,
-        whatever reads the effect. A node nothing reads counts as read
+        (`Node.SIZED`: the faces, the pattern's layer) — through an effect
+        or a switch (plan 33 S), whatever reads it. A node nothing reads counts as read
         there (as before plan 33). Settled with the graph."""
         if self._framed is None:
             readers: dict[str, list[tuple[Node, str]]] = {}
@@ -3399,7 +3495,8 @@ class Graph:
                     memo[n.name] = False           # (a loop reads it nowhere new)
                     got = readers.get(n.name, [])
                     memo[n.name] = not got or any(
-                        port not in c.SIZED and (not isinstance(c, Effect) or framed(c))
+                        port not in c.SIZED
+                        and (not isinstance(c, (Effect, SwitchNode)) or framed(c))
                         for c, port in got)
                 return memo[n.name]
 
@@ -3473,12 +3570,53 @@ class Graph:
     def outputs(self) -> list[Output]:
         return [n for n in self.order if isinstance(n, Output)]
 
+    def pulled(self, frame: Frame) -> frozenset[str]:
+        """The nodes some consumer pulls this frame (plan 33 S): every node
+        on a path from one nothing reads (an output, the capture, the
+        pattern, the backdrop) that runs through each switch's picked input
+        alone. A branch only an unpicked input reads is not made: its folds
+        do not run (`evaluate`) and nothing pulls its picture, so its
+        channels are not read or uploaded. Every node with no switch in the
+        graph; with switches, settled once per set of picks — `select`
+        moving is a lookup, never a rebuild."""
+        switches = [n for n in self.order if isinstance(n, SwitchNode)]
+        cache = getattr(self, "_pulled", None)          # (a graph from before a reload)
+        if cache is None:
+            cache = self._pulled = {}
+        key = tuple(sw.index(frame) for sw in switches)
+        got = cache.get(key)
+        if got is not None:
+            return got
+        todo = [n for n in self.nodes.values() if self.readers(n) == 0]
+        seen: set[str] = set()
+        while todo:
+            n = todo.pop()
+            if n.name in seen:
+                continue
+            seen.add(n.name)
+            if isinstance(n, SwitchNode):
+                picked = n.selected(frame)
+                todo.extend([picked, *n.after] if picked is not None else n.after)
+            else:
+                todo.extend(n.deps())
+        if len(cache) >= 256:         # (eight switches flicked at random: bounded)
+            cache.clear()
+        got = cache[key] = frozenset(seen)
+        return got
+
     def evaluate(self, frame: Frame) -> None:
+        """Run the frame: each node once, in order — but a node that makes
+        its picture in `run` (`MAKES`, an effect folding a made texture)
+        that no consumer pulls this frame (`pulled`: behind a switch's
+        unpicked input), which makes nothing."""
         frame.graph = self
         for name in self.stood:                   # last frame's run-time words
             self.dormant.pop(name, None)
         self.stood.clear()
+        pulled = self.pulled(frame)
         for node in self.order:
+            if node.name not in pulled and (node.MAKES or isinstance(node, Effect)):
+                continue
             node.run(frame)
 
     def __repr__(self) -> str:
@@ -3775,6 +3913,11 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     return g
 
 
+# the wire ends `_Wiring` makes as nodes of their own, once what they read
+# is in the graph (plan 28 N4; plan 33 S: the switch)
+MAKERS = ("effect", "composite", "switch")
+
+
 class _Wiring:
     """The wire list's edges built into graph `g` (plan 28 N4,
     `default_graph`). Each effect or composite a wire feeds or takes from
@@ -3804,8 +3947,10 @@ class _Wiring:
                       and not (raw and w.dst == "pattern.media" and w.src == media_name(raw))]
         # plan 33 R: an effect of the run has its nodes already (one per
         # pipeline): a wire on from it reads the scene pipeline's
+        # plan 33 S: and a switch is made like a composite, once what its
+        # wired inputs read is in the graph
         self.makers = {name for w in self.wires for name in (w.src, w.node)
-                       if wire_node_kind(name) in ("effect", "composite")} - set(g.run)
+                       if wire_node_kind(name) in MAKERS} - set(g.run)
         self.made: dict[str, Node | None] = {}
         self.done: set[Wire] = set()
         self.explicit = {(w.node, w.port) for w in self.wires}
@@ -3818,6 +3963,8 @@ class _Wiring:
         kind = wire_node_kind(name)
         if kind == "media":
             return self.media.get(name)
+        if kind == "switch":            # (made, above, or not yet)
+            return None
         if kind in ("effect", "composite"):
             if name in self.makers:
                 return None
@@ -3854,6 +4001,15 @@ class _Wiring:
             for name in sorted(self.makers - set(self.made)):
                 ins = [w for w in self.wires if w.node == name and w not in self.done]
                 srcs = {w.port: self.node(w.src) for w in ins}
+                if (final and wire_node_kind(name) == "switch"
+                        and any(v is None for v in srcs.values())):
+                    # plan 33 S: a switch is made with the inputs it has —
+                    # one whose source this graph lacks is dormant alone
+                    for w in [w for w in ins if srcs[w.port] is None]:
+                        self._dormant(w, self._lacks(w.src) if w.src not in self.makers
+                                      else f"{w.src} has no picture this frame")
+                    ins = [w for w in ins if srcs[w.port] is not None]
+                    srcs = {w.port: srcs[w.port] for w in ins}
                 if any(v is None for v in srcs.values()):
                     if final:
                         for w in ins:
@@ -3864,7 +4020,7 @@ class _Wiring:
                 self._make(name, ins, srcs)
                 grew = changed = True
         for w in self.wires:
-            if w in self.done or wire_node_kind(w.node) in ("effect", "composite"):
+            if w in self.done or wire_node_kind(w.node) in MAKERS:
                 continue
             src = self.made.get(w.src) if w.src in self.makers else self.node(w.src)
             if src is None:
@@ -3910,7 +4066,9 @@ class _Wiring:
     def _make(self, name: str, ins: list[Wire], srcs: dict[str, Node | None]) -> None:
         g = self.g
         node_name = name if name not in g.nodes else f"fx.{name}"
-        if wire_node_kind(name) == "composite":
+        if wire_node_kind(name) == "switch":       # plan 33 S (a reserved name: no clash)
+            node = SwitchNode(name, **srcs)
+        elif wire_node_kind(name) == "composite":
             blend = self.blends.get(name, "over")
             node = Composite(node_name, blend=blend, under=srcs.get("under"),
                              over=srcs.get("over"),

@@ -1300,7 +1300,7 @@ AREA: dict[str, str] = {
     "group:hands": GEOMETRY, "group:cloud": GEOMETRY,
     "group:fx": SHADERS, "group:dream": SHADERS, "group:output": SHADERS,
     "group:overlay": SHADERS,
-    "group:media": MEDIA, "group:backdrop": MEDIA,
+    "group:media": MEDIA, "group:backdrop": MEDIA, "group:switch": MEDIA,
     # a render node, by its class: the geometry and what draws it
     f"render:{EYE}": GEOMETRY,
     "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
@@ -1308,6 +1308,8 @@ AREA: dict[str, str] = {
     # the media channels (plan 32 T10), and (plan 33 R) the backdrop they
     # lie under the scene as and the pattern the faces draw
     "MediaNode": MEDIA, "BackdropNode": MEDIA, "PatternNode": GEOMETRY,
+    # (plan 33 S: the switch sits in the MEDIA area beside the channels)
+    "SwitchNode": MEDIA,
     # …and the pictures it goes through
     "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
     "Composite": SHADERS, "Output": SHADERS,

@@ -91,6 +91,10 @@ class ViewState:
     backdrop: int = 0            # 0 off, 1–8 = a–h
     backdrop_alpha: float = 1.0
     backdrop_history: bool = False   # the look-back captures the backdrop too
+    # plan 33 S: each switch node's pick (`switch[.n].select`, declared from
+    # the preset's graph: params.declare_switches) — switch name → 0 off,
+    # 1–8 its input; read once a frame by the renderer
+    switch: dict[str, int] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

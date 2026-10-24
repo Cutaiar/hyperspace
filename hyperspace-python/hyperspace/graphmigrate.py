@@ -243,6 +243,8 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
     `view.media` and `backdrop.channel` still draw the faces' media and the
     backdrop until T4 renders `pattern.media` / `backdrop.image`, and the
     effects' `order` / `target` are declared until T7 — T4 drops `keep`).
+    A driven channel choice becomes its switch with `keep` as without it
+    (T5, R19: the switch's `select` is declared now).
     `desk`: a desk template's rows the document's `desk` stands over,
     counted in what drives what and retargeted in place."""
     out = copy.deepcopy(doc)
@@ -306,10 +308,10 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
         k = k if 0 <= k <= len(CHANNELS) else 0
         if has:
             continue
-        if old in driven and not keep:
-            # (R14: while `keep` is set — T3, T4 — a driven channel choice
-            # keeps its value and its rows as the file has them: no switch
-            # until T5 declares `switch.select`; the plain wire below says it)
+        if old in driven:
+            # (row 350; R14 → R19: from T5, which declares `switch.select`,
+            # the load builds the switch too, `keep` or not — so a preset
+            # that drives a channel choice saves as /5, which /4 cannot say)
             n = _next_switch(nodes)
             sw = G.SwitchAt(n).name
             nodes.append({"kind": "switch", **({"instance": n} if n != 1 else {})})
