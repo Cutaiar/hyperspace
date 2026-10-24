@@ -27,6 +27,7 @@ from test_ui_shell import _click, _learn_over, frame, rig  # noqa: F401 — the 
 
 from hyperspace import apc40, learn, ui_desk
 from hyperspace.app import CONTROL_SIZE
+from test_ui_shell import NARROW_CONTROL
 from hyperspace.learn import DESKED, MOVED, ON, ROUTED, cannot_show, ranked
 from hyperspace.routing import Binding
 
@@ -219,7 +220,7 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     `Learn.map_picked` (one undo step), and the pick is over. The page
     click road still works beside it."""
     panel, table = rig.panel, rig.router.table
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
     rig.lib.load("presets", "TRIP")
     pushes = _pushes(monkeypatch)
@@ -244,7 +245,7 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     assert "fx.kaleido.segments" in ids                  # an effect TRIP has on
     assert not [p for p in ids if p.startswith("dream.")]   # TRIP's look-back is off
     assert {g for g, _ in rest} >= {"view", "band"}
-    # at the default control size (the small desk, ~107 × 79 px of ground)
+    # in a narrow control window (the small desk, ~107 × 79 px of ground)
     # the chip lies inside the offer and at least three items show whole
     st = ui_desk._state(panel)
     box, chip = st["offer_box"], st["offer_chip"]

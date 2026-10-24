@@ -99,8 +99,11 @@ from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
-# wide enough for the cheat sheet on the left and the panel on the right
-CONTROL_SIZE = (960, 900)
+# two 4:3 panes side by side: the desk diagram on the left, the panel on
+# the right, the same size (ui.panel_w splits it). 900 tall is what every
+# page is laid out to fit; on a screen narrower than this the window opens
+# as wide as the screen and the desk gives up the width (placement.default_rect)
+CONTROL_SIZE = (2372, 900)
 
 # 4D perspective hold keys move depth4 in the taper's own log space —
 # octaves of (depth − 1) — so travel feels even across the whole throw.

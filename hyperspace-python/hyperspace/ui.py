@@ -91,7 +91,8 @@ PIN_HOLD = 0.5
 # the panel: a rail of pages on the left, the page beside it, a footer
 MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
 CANCEL_TIP = "click to cancel"  # the footer's armed-learn line: on it where it fits, and on hover
-PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
+PANEL_W = 540   # the panel never opens narrower (panel_w)
+DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wide per unit of height
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
@@ -156,6 +157,19 @@ def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
             m.merge_mode = True
             m.font_no = no
             io.fonts.add_font_from_file_ttf(path, size, m)
+
+
+def panel_w(display: tuple[float, float]) -> float:
+    """The panel's width as it opens in a control window of `display`
+    (w, h): the desk diagram left of it gets a `DESK_ASPECT` slice of the
+    window's height and the panel the rest, so neither is stretched — on
+    the default window (app.CONTROL_SIZE) the two come out the same size.
+    Never under `PANEL_W`: a narrow window keeps the panel whole and the
+    desk takes what is left (ui_desk.room). Once open, the panel is
+    wherever it is dragged; this is only where it starts."""
+    dw, dh = display
+    desk = DESK_ASPECT * (dh - 24)
+    return float(int(max(PANEL_W, dw - 36 - desk)))
 
 
 def load_fonts() -> None:
@@ -1493,10 +1507,11 @@ class Panel:
         if not self.open:
             return
         io = imgui.get_io()
+        pw = panel_w((io.display_size.x, io.display_size.y))
         imgui.set_next_window_pos(
-            imgui.ImVec2(io.display_size.x - PANEL_W - 12, 12), imgui.Cond_.once
+            imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
         )
-        imgui.set_next_window_size(imgui.ImVec2(PANEL_W, io.display_size.y - 24),
+        imgui.set_next_window_size(imgui.ImVec2(pw, io.display_size.y - 24),
                                    imgui.Cond_.once)
         opened, self.open = imgui.begin("CONTROLS", self.open)
         # where the panel is: the desk takes the room left of it (ui_desk.room;
