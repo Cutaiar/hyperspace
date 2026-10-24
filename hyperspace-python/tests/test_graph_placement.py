@@ -170,9 +170,10 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     assert [(e.name, e.where) for e in spec.wiring().placed] == [
         ("acid.2", ("after", "scene")), ("palette", ("after", "hands")),
         ("palette.2", ("into", "output.2"))]
-    # an unplaced instance 1 is still refused (it is the file itself)
-    with pytest.raises(G.GraphError, match="2 or more"):
-        G.read_graph({"nodes": [{"kind": "effect", "file": "palette"}]})
+    # plan 33 R21: an unplaced instance 1 is the file kept on no wire (it was
+    # refused while instance 1 was the stack's, always there)
+    kept = G.read_graph({"nodes": [{"kind": "effect", "file": "palette"}]})
+    assert kept.effects == (G.EffectAt("palette", 1),) and not kept.wiring().placed
     want = {"palette-hands": (G.EffectAt("palette", 1, after="hands"),),
             "palette-glass": (G.EffectAt("palette", 1, into="output.2"),),
             "acid-scene": (G.EffectAt("acid", 2, after="scene"),)}

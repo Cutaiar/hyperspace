@@ -383,10 +383,12 @@ def placement_error(effect: str, key: str, where: Any,
 class EffectAt:
     """An effect instance the preset's graph names (plan 26 A4, plan 30 D1).
 
-    Unplaced: an extra instance of a file, `fx.<file>.<n>.*` (n ≥ 2), its
-    own params and clock — instance 1 is the file itself, always there.
-    Plan 33 R: where it draws is its wires (a run from `frame`, a branch),
-    never its `order`; one on no wire has no node.
+    Unplaced: an instance of a file — an extra one, `fx.<file>.<n>.*`
+    (n ≥ 2), its own params and clock, or (plan 33 R21) instance 1, the
+    file's own `fx.<file>.*`, named with no `instance` when the section
+    keeps it on no wire (taken out of the run: kept, unreached, faint on
+    the canvas — row 349). Plan 33 R: where it draws is its wires (a run
+    from `frame`, a branch), never its `order`; one on no wire has no node.
 
     Placed (D1): `after` a node — on that node's output, every consumer
     of its picture reading the effect instead — or `into` one — on that
@@ -412,9 +414,8 @@ class EffectAt:
                              "once — one of the two")
         if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
             raise ValueError(f"effect {self.file} instance {self.n!r}: a whole number from 1")
-        if self.n < 2 and not self.placed:
-            raise ValueError(f"effect {self.file} instance {self.n!r}: 2 or more (instance 1 "
-                             "is the file itself)")
+        # (plan 33 R21: an unplaced instance 1 is the file kept on no wire —
+        # T1's "instance 1 is the file itself, always there" was the stack's)
         for key in PLACE_KEYS:
             where = getattr(self, key)
             why = placement_error(self.name, key, where) if where is not None else None
@@ -442,7 +443,8 @@ class EffectAt:
 
     def unplaced(self) -> EffectAt | None:
         """This instance at the default placement: in the chain at its
-        order (None for instance 1, the file itself, always there)."""
+        order (None for instance 1: a D1 placement refused leaves the file
+        where its wires put it — R21's unwired entry is written, never made here)."""
         return EffectAt(self.file, self.n) if self.n >= 2 else None
 
 
@@ -1092,7 +1094,7 @@ class GraphSpec:
                 nodes.append(d)
         for e in sorted(self.effects, key=lambda e: (e.file, e.n)):
             d = {"kind": "effect", "file": e.file}
-            if e.n != 1:                       # D1: instance 1 is named only when placed
+            if e.n != 1:                       # instance 1: no instance key (D1 placed, or R21 kept unwired)
                 d["instance"] = e.n
             if e.where is not None:
                 d[e.where[0]] = e.where[1]

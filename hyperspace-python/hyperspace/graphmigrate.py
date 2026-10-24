@@ -399,6 +399,10 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
         return None
     if spec.switches:
         return None
+    # R21: an instance 1 kept on no wire (taken out of the run) is unreached,
+    # a word `/4` lacks — a build from before plan 33 refuses the entry
+    if any(e.n == 1 and not e.placed for e in spec.effects):
+        return None
     wires = spec.all_wires()
     runs = {"frame": G.run_of(spec), "pattern": G.run_of(spec, "pattern", "shape.faces")}
     ends = {"frame": "fx.image", "pattern": "shape.faces"}
@@ -514,13 +518,26 @@ def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
     return out
 
 
+def _free_node(n: Any) -> bool:
+    """A node entry only the free graph has: a switch, or (R21) an effect's
+    instance 1 named with no placement — a build from before plan 33
+    refuses both."""
+    if not isinstance(n, dict):
+        return False
+    if n.get("kind") == "switch":
+        return True
+    return (n.get("kind") == "effect" and n.get("instance", 1) == 1
+            and not any(k in n for k in G.PLACE_KEYS))
+
+
 def legacy_section(section: Any) -> dict | None:
     """`section` as a build from before plan 33 reads it (R10): the wires
     of its runs (`_run_entries`: what `legacy_values` says as orders and
     targets), every wire touching a free-graph end (`frame`, `fx.image`,
     `pattern`, `shape.faces`, `backdrop.image`, a switch) and the switch
-    nodes taken out. A section with none of them is returned as it is, the
-    same object; one with nothing left (no node, no wire) is None, no
+    nodes and (R21) an unwired instance 1 taken out (`_free_node`). A
+    section with none of them is returned as it is, the same object; one
+    with nothing left (no node, no wire) is None, no
     section, as the GRAPH page lands an emptied graph. None stays None."""
     if not isinstance(section, dict):
         return section
@@ -532,14 +549,12 @@ def legacy_section(section: Any) -> dict | None:
         return _free_end(w) or (isinstance(w, dict) and (w.get("from"), w.get("to")) in runs)
 
     free_wires = isinstance(wires, list) and any(free(w) for w in wires)
-    free_nodes = isinstance(nodes, list) and any(
-        isinstance(n, dict) and n.get("kind") == "switch" for n in nodes)
+    free_nodes = isinstance(nodes, list) and any(_free_node(n) for n in nodes)
     if not (free_wires or free_nodes):
         return section
     out = copy.deepcopy(section)
     if isinstance(nodes, list):
-        out["nodes"] = [n for n in out["nodes"]
-                        if not (isinstance(n, dict) and n.get("kind") == "switch")]
+        out["nodes"] = [n for n in out["nodes"] if not _free_node(n)]
     if isinstance(wires, list):
         out["wires"] = [w for w in out["wires"] if not free(w)]
         if not out["wires"]:

@@ -1552,21 +1552,27 @@ def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable |
     """A modifier node let go at `centre` (canvas units): if it is still
     free — no cable in or out — and lands on a route or a modifier's input
     cable (`graphview.cable_near`, by the curve the widget draws), it is
-    inserted there. Plan 33 U: a free effect node (`kind` "effect": in the
-    section, no cable in or out) let go on a picture cable is inserted into
-    it the same way (`Edit.place_effect`, one undo step). Returns the cable
-    it went into, or None."""
+    inserted there. Plan 33 U: an effect node let go on a picture cable is
+    put onto it the same way (`Edit.place_effect`, one undo step) — a free
+    one (in the section, no cable in or out) inserted; (R22) one already
+    wired moved there, out of its place, the wires either side of it closed
+    over it: reordering the run is dragging a node to another cable. Its
+    own cables (any pipeline's node of it) are passed over, so a node let
+    go where it was, or on nothing, stays. Returns the cable it went into,
+    or None."""
     n = view.node(nid)
-    if n is None or view.cables_of(nid):
+    if n is None:
         return None
     pins = _state(panel)["pin_xy"]
     if n.kind == "render" and isinstance(n.ref, Effect):
-        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip=(nid,))
+        name = n.ref.effect
+        mine = {m.id for m in view.nodes if isinstance(m.ref, Effect) and m.ref.effect == name}
+        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip=mine)
         if c is None or c.type != graphview.IMAGE:
             return None
-        why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, n.ref.effect))
+        why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, name))
         return None if why is not None else c
-    if n.kind != "modifier":
+    if n.kind != "modifier" or view.cables_of(nid):
         return None
     c = graphview.cable_near(view, pins, centre, skip=(nid,))
     if c is None:

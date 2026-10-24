@@ -3395,7 +3395,8 @@ def _lift(doc: dict, name: str) -> None:
     wire into its `image` port and every wire out of it gone, and what fed
     it wired on into each port it fed — the run (or a branch) closed over
     it, so a run emptied is `frame → fx.image` again (R9). A wire into its
-    `aux` stays; a D1 placement of it goes. With nothing wired in, its
+    `aux` stays; a D1 placement of it goes; (R21) an instance 1 left on no
+    wire stays named, unreached. With nothing wired in, its
     wires out simply go."""
     wires = doc.get("wires", [])
     into = next((x for x in wires if x["to"] == f"{name}.image"), None)
@@ -3405,6 +3406,11 @@ def _lift(doc: dict, name: str) -> None:
         keep += [{"from": into["from"], "to": o["to"]} for o in outs]
     doc["wires"] = keep
     _unplace(doc, lambda n, key, where: n == name)
+    # R21: an instance 1 left on no wire is kept, named (unreached, faint)
+    file, n = rgraph.split_instance(name)
+    if n == 1 and not any(_touches(x, {name}) for x in keep) and not any(
+            _entry_name(e) == name for e in doc.get("nodes", [])):
+        doc.setdefault("nodes", []).append({"kind": "effect", "file": file})
 
 
 def _onto(doc: dict, s: str, d: str, name: str) -> None:
@@ -3416,6 +3422,10 @@ def _onto(doc: dict, s: str, d: str, name: str) -> None:
             return f"{n}.image" == d
         return f"{where}.image" == d
     _unplace(doc, into_d)
+    # (R21: an instance 1 kept unwired is named by its wires again)
+    doc["nodes"] = [e for e in doc.get("nodes", []) if not (
+        _entry_name(e) == name and e.get("instance", 1) == 1
+        and not any(k in e for k in rgraph.PLACE_KEYS))]
     doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d] + [
         {"from": s, "to": f"{name}.image"}, {"from": name, "to": d}]
 

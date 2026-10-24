@@ -836,6 +836,105 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     assert G.run_of(gs.spec) == ("wobble.2",)
 
 
+def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
+    """R21 (row 349): `acid` taken out of `frame → acid → fx.image` leaves
+    the empty run and is kept in the section — `{"kind": "effect", "file":
+    "acid"}`, on no wire — drawn faint, "reaches nothing"; saved, the preset
+    is `/5` (`/4` has no word for it); one undo puts it back in the run."""
+    import json
+
+    from test_graphview import views
+    from test_undo import settle
+
+    from hyperspace import graph as G
+    from hyperspace import graphmigrate
+    from hyperspace.outputs import Switches
+    rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "fx.image"),
+                              undo_rig=True)
+    assert e.unwire("frame", "acid.image") is None and len(pushed) == 1
+    spec = rig.presets.graph.spec
+    assert G.run_of(spec) == () and wires_of(rig) == {("frame", "fx.image")}
+    assert G.EffectAt("acid", 1) in spec.effects
+    assert {"kind": "effect", "file": "acid"} in rig.presets.graph.free_doc()["nodes"]
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    n = view.node("render:acid")
+    assert n is not None and n.faint and not n.idle
+    assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
+    # a /5 save: legacy_values has no /4 words for it, the old build's section drops it
+    assert graphmigrate.legacy_values(spec.to_json(), {}) is None
+    assert graphmigrate.legacy_section(spec.to_json()) is None
+    doc = json.loads(rig.presets.save_as("Out").read_text())
+    assert doc["schema"] == "hyperspace.preset/5"
+    assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
+    settle(rig)
+    assert rig.undo.undo()
+    assert G.run_of(rig.presets.graph.spec) == ("acid",)
+    # wired in again, it is named by its wires alone
+    rig2, e2, _ = free_rig(tmp_path / "again", ("frame", "acid.image"), ("acid", "fx.image"))
+    assert e2.unwire("acid", "fx.image") is None
+    assert e2.place_effect(("frame", "fx.image"), "acid") is None
+    assert rig2.presets.graph.spec.to_json()["nodes"] == []
+
+
+def test_an_unwired_instance_one_round_trips():
+    """R21: an unplaced instance 1 — no `instance` key, or `instance: 1` —
+    is read, written back as `{"kind": "effect", "file": …}` and read again
+    the same; D1's placed forms are as they were."""
+    from hyperspace import graph as G
+    for entry in ({"kind": "effect", "file": "acid"},
+                  {"kind": "effect", "file": "acid", "instance": 1}):
+        section = {"nodes": [entry], "wires": [{"from": "frame", "to": "fx.image"}]}
+        spec = G.read_graph(section, effects={"acid"})
+        assert spec.notes == () and spec.effects == (G.EffectAt("acid", 1),)
+        out = spec.to_json()
+        assert out["nodes"] == [{"kind": "effect", "file": "acid"}]
+        assert G.read_graph(out, effects={"acid"}) == spec
+        assert "acid" not in G.reaches(spec) and spec.effect_counts() == {}
+    placed = {"nodes": [{"kind": "effect", "file": "palette", "after": "hands"}]}
+    assert G.read_graph(placed).to_json() == placed
+
+
+def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
+    """R22: an effect already wired (`acid` in `frame → acid → wobble →
+    fx.image`) let go on another picture cable (`wobble → fx.image`) is
+    moved there in one undo step — the run is wobble, acid; let go on its
+    own cables, or on nothing, it stays where it is."""
+    from types import SimpleNamespace as NS
+
+    from test_graphview import views
+    from test_presets import put
+
+    from hyperspace import graph as G
+    from hyperspace import undo as undo_mod
+    from hyperspace.outputs import Switches
+    put(rig.lib.home, "Run", graph=_section(("frame", "acid.image"), ("acid", "wobble.image"),
+                                            ("wobble", "fx.image")))
+    rig.lib.load("presets", "Run")
+    gs = rig.lib.presets.graph
+    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.spec.wiring(),
+                                                   effects=("acid", "wobble")))
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    view = st["view"]
+    pushed = []
+    monkeypatch.setattr(undo_mod, "push",
+                        lambda label, load=False: pushed.append(label))
+    xy = {"render:frame": 0.0, "render:acid": 300.0, "render:wobble": 600.0,
+          "render:fx": 900.0}
+    for nid, x in xy.items():
+        st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
+        st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
+    # on its own cables (frame → acid, acid → wobble), and on nothing: no change
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
+    assert G.run_of(gs.spec) == ("acid", "wobble") and pushed == []
+    cable = next(c for c in view.cables if c.dst_port == "rin:fx/image")
+    assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
+    assert G.run_of(gs.spec) == ("wobble", "acid")
+    assert pushed == ["move acid onto wobble → fx.image"]
+
+
 def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
     """Plan 33 U: the strip (the FX page's open effect, GRAPH's side pane)
     draws no order slider and no ONTO chips — an effect's place is its

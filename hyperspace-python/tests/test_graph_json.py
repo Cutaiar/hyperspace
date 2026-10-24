@@ -92,7 +92,8 @@ def test_a_graph_section_reads_and_writes_itself_plainly():
      "two hands nodes of instance 1"),
     ({"nodes": [{"kind": "hands", "into": "scene", "laid": "add"},
                 {"kind": "hands", "instance": 2}]}, "but ghost.2 makes the layer"),
-    ({"nodes": [{"kind": "effect", "file": "acid"}]}, "2 or more"),
+    # (plan 33 R21: an unplaced instance 1 reads — the file kept on no wire)
+    ({"nodes": [{"kind": "effect", "file": "acid", "instance": 0}]}, "instance 0"),
     ({"nodes": [{"kind": "effect", "file": "Acid!", "instance": 2}]}, "lower_snake_case"),
     ({"nodes": [{"kind": "effect", "instance": 2}]}, "names no file"),
     ({"nodes": [{"kind": "history"}, {"kind": "history"}]}, "two history nodes"),
