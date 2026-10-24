@@ -359,9 +359,30 @@ Tests:
   `switch[.n].select` through the param (one undo step), its `select` row
   with Learn below (`ui_graph._switch_block`, `switch_feeds`). The
   canvas's summary says the pick ("picks in3", `graphview.switch_pick`).
+- **No hidden placement in a free section.** The owner added a glimmer
+  and wired only `zoomblur → glimmer.image`: glimmer drew on the output
+  and its params changed the picture, while GRAPH drew it faint and the
+  FX page listed it under "reaches nothing". `split_wires` had shortened
+  the wire to D1's `after zoomblur` (an effect fed by one wire and wired
+  into nothing), which the renderer honoured and `reaches` /
+  `graphview.unreached` / `ui_fx.groups` (the wires alone) did not. A
+  section with a `frame` run (every one on this build, R9) now shortens
+  no wire (`GraphSpec.wiring`): an effect with an input and no output is
+  an unreached branch — faint, "reaches nothing", not drawn — and D1's own
+  `after` / `into` entries place as before. A pre-33 section keeps the
+  shortening, and its migration writes each shortened wire as the D1
+  entry it stood for before adding the run (`graphmigrate._explicit_placements`:
+  `wired-outputs`' `palette → output.1.image` becomes `{"kind": "effect",
+  "file": "palette", "into": "output.1"}`), so it draws as before (no
+  golden moved) and an explicit `after` / `into` stays `/4` vocabulary.
+  Dragging an effect's `image` from a node, or its output into an
+  output's `image`, on GRAPH is now that wire, not a placement.
 
 Tests:
-`tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_every_nodes_side_panel_draws,test_home_page_maps_each_node_kind,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click,test_a_selection_never_resizes_the_canvas}`;
+`tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_every_nodes_side_panel_draws,test_home_page_maps_each_node_kind,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click,test_a_selection_never_resizes_the_canvas}`,
+`tests/test_graph_free.py::{test_the_owners_glimmer_with_no_output_is_unreached_and_not_drawn,test_wiring_its_output_then_draws_it,test_an_explicit_after_still_places_in_a_free_section}`
+(the owner's preset is `tests/fixtures/presets/glimmer-bug.json`),
+`tests/test_graph_migrate.py::test_a_legacy_shortened_placement_migrates_to_an_explicit_after`;
 hand check 329.
 
 ## What no person has verified

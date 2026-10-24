@@ -946,7 +946,9 @@ def split_wires(wires, placed=()) -> tuple[tuple[EffectAt, ...], tuple[Wire, ...
     history's `image` port and fed by none sits `into` it — and the wires
     left, each built as an edge: into an output's port, the history's
     image, a composite's, or an effect both fed and wired on). `placed`:
-    D1's own placements (an effect they place is not placed again)."""
+    D1's own placements (an effect they place is not placed again).
+    Pre-33 sections only (the owner, 2026-10-24): one with a `frame` run
+    is read with no shortening (`GraphSpec.wiring`)."""
     own = {e.name for e in placed}
     # plan 32 R: an aux wire is always an edge (`is_aux`), never a placement
     aux = tuple(w for w in wires if is_aux(w))
@@ -1022,7 +1024,10 @@ class GraphSpec:
     def wiring(self) -> Wiring:
         """The default graph's wiring this graph says. Plan 28 N4: the
         wires D1 would write short are placements (`split_wires`), after
-        D1's own; the rest are the wiring's `wires`."""
+        D1's own; the rest are the wiring's `wires`. Plan 33 (the owner,
+        2026-10-24): only in a section with no run — one with a run
+        (`graphmigrate.has_frame_run`) shortens nothing, so its placements
+        are D1's own entries and every other wire is an edge."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
         placed = tuple(e for e in self.effects if e.placed)
         run, wires = None, self.wires
@@ -1039,9 +1044,20 @@ class GraphSpec:
                      and wire_node_kind(w.src) == "media"), None)
         if back is not None:
             wires = tuple(w for w in wires if w != back)
-        synth, edges = split_wires(wires, placed)
-        if run is not None:
-            edges = _reached_edges(edges, run, placed + synth)
+        if run is None:
+            synth, edges = split_wires(wires, placed)
+        else:
+            # the owner, 2026-10-24: a section with a run shortens no wire
+            # to D1. A glimmer wired only `zoomblur → glimmer.image` drew
+            # on zoomblur's picture (`after zoomblur`) while GRAPH and the
+            # FX page, reading the wires, said it reaches nothing. Here a
+            # wire is a wire: an effect with nothing out of it is an
+            # unreached branch, never run; D1's own entries still place.
+            # A pre-33 section (no run) keeps the shortening, and its
+            # migration writes each as the D1 entry it stood for
+            # (`graphmigrate.migrate`), so an old preset draws as it did
+            synth, edges = (), wires
+            edges = _reached_edges(edges, run, placed)
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
                       draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                       placed=placed + synth, wires=edges, composites=self.composites(),

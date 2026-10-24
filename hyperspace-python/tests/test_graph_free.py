@@ -11,6 +11,7 @@ build writes it (Review Focus 1). The pictures are test_golden_frames.py's.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -590,3 +591,71 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
     run(ctx, r, vs, frames=1)
     assert [e.effect for e in r._graph.nodes["fx"].effects] == ["warp", "acid"]
     assert "acid" not in r._graph.dormant
+
+
+# ---------------------------------------------------------------- no shortcut in a free section
+# The owner, 2026-10-24: a glimmer wired only `zoomblur → glimmer.image`
+# drew on the output (split_wires shortened the wire to D1's `after
+# zoomblur`) while GRAPH drew it faint and the FX page said "reaches
+# nothing". In a section with a `frame` run a wire is a wire: nothing comes
+# out of glimmer, so it reaches nothing and is not drawn — all three agree.
+
+GLIMMER = SOURCES["presets"] / "glimmer-bug.json"
+
+
+def _glimmer_section(swap: bool = False) -> dict:
+    """The owner's saved section; `swap`: `glimmer → switch.in1` in place
+    of `zoomblur → switch.in1`."""
+    sec = copy.deepcopy(json.loads(GLIMMER.read_text())["graph"])
+    if swap:
+        sec["wires"] = [({"from": "glimmer", "to": "switch.in1"}
+                         if w == {"from": "zoomblur", "to": "switch.in1"} else w)
+                        for w in sec["wires"]]
+    return sec
+
+
+def _glimmer_graph(sec: dict):
+    from test_graphview import views
+
+    from hyperspace.outputs import Switches
+    spec = G.read_graph(sec)
+    return spec, G.default_graph(views(Switches()), spec.wiring(),
+                                 effects=("glimmer", "zoomblur", "displace"))
+
+
+def test_the_owners_glimmer_with_no_output_is_unreached_and_not_drawn():
+    from hyperspace import graphview, ui_fx
+
+    spec, g = _glimmer_graph(_glimmer_section())
+    assert not spec.notes
+    assert "glimmer" not in {e.name for e in spec.wiring().placed}
+    assert "glimmer" in graphview.unreached(spec)
+    assert "glimmer" in dict(ui_fx.groups(spec))[ui_fx.UNREACHED]
+    assert "glimmer" not in {n.effect for n in _effect_nodes(g)}
+    assert "zoomblur" in {n.effect for n in _effect_nodes(g)}
+
+
+def test_wiring_its_output_then_draws_it():
+    from hyperspace import graphview, ui_fx
+
+    spec, g = _glimmer_graph(_glimmer_section(swap=True))
+    assert not spec.notes
+    assert "glimmer" not in graphview.unreached(spec)
+    assert "glimmer" in dict(ui_fx.groups(spec))[ui_fx.BACKDROP]
+    assert ui_fx.UNREACHED not in dict(ui_fx.groups(spec))
+    assert "glimmer" in {n.effect for n in _effect_nodes(g)}
+
+
+def test_an_explicit_after_still_places_in_a_free_section():
+    spec = G.read_graph(section(("frame", "fx.image"),
+                                nodes=[{"kind": "effect", "file": "palette", "after": "hands"},
+                                       {"kind": "effect", "file": "acid", "instance": 2,
+                                        "after": "scene"}]))
+    assert not spec.notes
+    placed = {e.name: e.where for e in spec.wiring().placed}
+    assert placed == {"palette": ("after", "hands"), "acid.2": ("after", "scene")}
+    from test_graphview import views
+
+    from hyperspace.outputs import Switches
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("palette", "acid", "acid.2"))
+    assert {"palette", "acid.2"} <= {n.effect for n in _effect_nodes(g)}

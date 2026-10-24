@@ -326,3 +326,35 @@ def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v5():
     assert preset.schema_of({**doc, "graph": migrated}) != M.FREE_SCHEMA     # a /4 can say it
     off = base(**{"fx.acid.on": False})
     assert preset.schema_of({**off, "graph": cleared}) != M.FREE_SCHEMA
+
+
+def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
+    """The owner, 2026-10-24: a free section shortens no wire, so a pre-33
+    section's wire D1 would write short (`scene → acid.2.image`, nothing out
+    of acid.2) becomes the D1 entry it stood for, before the run is added —
+    the same placement, and the same picture. `into` likewise."""
+    doc = {**base(**{"fx.acid.2.on": True, "fx.palette.on": True}),
+           "graph": {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+                     "wires": [{"from": "scene", "to": "acid.2.image"},
+                               {"from": "palette", "to": "output.2.image"}]}}
+    before = G.read_graph(doc["graph"]).wiring().placed
+    assert {e.name: e.where for e in before} == {"acid.2": ("after", "scene"),
+                                                "palette": ("into", "output.2")}
+    section, notes = M.to_free(doc, SPECS)
+    assert notes == []
+    assert {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"} in section["nodes"]
+    assert {"kind": "effect", "file": "palette", "into": "output.2"} in section["nodes"]
+    assert ("scene", "acid.2.image") not in wires_of(section)
+    assert ("palette", "output.2.image") not in wires_of(section)
+    after = G.read_graph(section)
+    assert M.has_frame_run(after) and not after.notes
+    assert {e.name: e.where for e in after.wiring().placed} == {
+        e.name: e.where for e in before}
+    assert "palette" not in G.run_of(after)
+    # /4 can still say it: an explicit `after` / `into` is plan 30's word
+    assert M.legacy_values(section, _values_of(doc), SPECS) is not None
+    assert preset.schema_of({**doc, "graph": section}) != M.FREE_SCHEMA
+
+
+def _values_of(doc: dict) -> dict:
+    return doc.get("values") or {}

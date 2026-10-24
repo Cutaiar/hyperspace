@@ -277,9 +277,11 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
     assert rig.presets.graph.spec.wires == (G.Wire("frame", "fx.image"),   # (plan 33: the run)
                                             G.Wire("scene", "output.2.hands"))
-    # an effect wired after a node, then moved into an output's port
+    # an effect wired after a node: in a section with a run that is a
+    # branch reaching nothing, not D1's `after hands` (the owner, 2026-10-24)
     assert edit.wire("hands", "palette.image") is None
-    assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
+    assert stub.wiring.placed == ()
+    assert "palette" in graphview.unreached(rig.presets.graph.spec)
     assert edit.unwire("hands", "palette.image") is None
     assert edit.unwire("scene", "output.2.hands") is None
     assert rig.presets.graph.doc is None and _bare(stub.wiring) == G.Wiring()
@@ -360,7 +362,10 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
         # an effect of a pipeline's run names its instance
         monkeypatch.setattr(ui_graph.undo, "push", lambda label, load=False: pushed.append(label))
         drag("rout:acid", "rin:output.2/image")
-        assert stub.wiring.placed == (G.EffectAt("acid", 1, into="output.2"),)
+        # (a wire, not D1's `into output.2`, in a section with a run: the
+        # owner, 2026-10-24)
+        assert stub.wiring.placed == ()
+        assert G.Wire("acid", "output.2.image") in stub.wiring.wires
         # a render cable deleted on the canvas
         cable = graphview.VCable("wire:hands>output.2/hands", "rout:hands", "rin:output.2/hands",
                                  G.IMAGE, ref=(g.nodes["hands"], g.nodes["output.2"], "hands"),
@@ -370,7 +375,7 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
         monkeypatch.setattr(ed, "reject_deleted_item", lambda: cut.append("rejected"))
         ui_graph.DELETE["render"](rig.panel, st, None, cable)
         assert cut == ["accepted"] and st["note"] == ""
-        assert stub.wiring.wires == () and stub.wiring.placed
+        assert stub.wiring.wires == (G.Wire("acid", "output.2.image"),)
         # the default graph's own edge: kept, said on the head
         ui_graph.DELETE["render"](rig.panel, st, None, cable)
         assert cut == ["accepted", "rejected"] and "is the default graph's" in st["note"]
@@ -406,10 +411,12 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     # plan 33 T7 (R21): instance 1 is in the graph where it is wired, and
     # deleting it takes it out like any instance — not in it, it says so
     assert edit.drop_node("zoomblur") == "zoomblur is not in the preset's graph"
-    # … placed: deleting it takes it, and its placement, out of the graph
+    # … wired (a branch, not D1's `after hands`: the owner, 2026-10-24):
+    # deleting it takes it, and its wire, out of the graph
     assert edit.wire("hands", "palette.image") is None
-    assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
+    assert G.Wire("hands", "palette.image") in rig.presets.graph.spec.wires
     assert edit.drop_node("palette") is None and edit.said == "palette deleted"
+    assert G.Wire("hands", "palette.image") not in rig.presets.graph.spec.wires
     assert stub.wiring.placed == ()
     assert edit.add_node("hands") is None and edit.said == "ghost.2 added, drawn in the scene"
     assert "ghost.2.alpha" in rig.reg
@@ -715,7 +722,9 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
 def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
     """Plan 32 T7: dragging a channel onto a placed effect's `aux` port is
     a second picture, not a placement — the effect keeps its D1 place and
-    the wire rides beside it; its `image` port still moves it."""
+    the wire rides beside it; its `image` port still moves it — off its
+    place onto that wire, a branch reaching nothing until it is wired on
+    (a section with a run shortens no wire: the owner, 2026-10-24)."""
     rig, stub, edit, _ = _edit_rig(tmp_path)
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "blend",
                                               "after": "hands"}]})
@@ -727,4 +736,5 @@ def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
     assert stub.wiring.placed == (G.EffectAt("blend", 1, after="hands"),)
     assert stub.wiring.wires == (G.Wire("media.a", "blend.aux"),)
     assert edit.wire("scene", "blend.image") is None
-    assert stub.wiring.placed == (G.EffectAt("blend", 1, after="scene"),)
+    assert stub.wiring.placed == ()
+    assert "blend" in graphview.unreached(rig.presets.graph.spec)

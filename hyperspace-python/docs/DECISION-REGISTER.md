@@ -358,7 +358,7 @@ here; overturn → the change, then the same.
 | 346 | The migration keeps only effects that are on (mix > 0), and those something drives | 322 | owner — 2026-10-24 |
 | 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it | 322, 328 | (rec) — accepted 2026-10-24 |
 | 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
-| 349 | An unreached effect is kept, drawn faint, never run | 325, 326 | (rec) — accepted 2026-10-24 |
+| 349 | An unreached effect is kept, drawn faint, never run. Amended 2026-10-24 (the owner's glimmer): a section with a `frame` run shortens no wire to a D1 placement, so an effect with an input and no output is unreached and not drawn; explicit `after` / `into` entries still place; a pre-33 section's shortened wires migrate to explicit entries | 325, 326 | (rec) — accepted 2026-10-24 |
 | 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
 | 351 | The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
 | 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |

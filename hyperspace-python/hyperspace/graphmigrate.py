@@ -274,6 +274,39 @@ def _next_switch(nodes: list) -> int:
     return next(i for i in range(1, len(taken) + 2) if i not in taken)
 
 
+def _explicit_placements(spec: G.GraphSpec, nodes: list, wires: list) -> tuple[list, list]:
+    """A pre-33 section's (`nodes`, `wires`) with each wire D1 would write
+    short (`graph.split_wires`: an effect fed by one wire and wired into
+    nothing sits `after` its source; one wired into one output's or the
+    history's `image` and fed by none sits `into` it) written as the D1
+    entry it stood for — `{"kind": "effect", "file": f, ["instance": n,]
+    "after" | "into": where}` — and that wire dropped. The owner,
+    2026-10-24: a section with a run shortens no wire (`GraphSpec.wiring`),
+    so the run `migrate` adds would otherwise turn an old placement into an
+    unreached branch; written out, the old preset draws as it did."""
+    own = {e.name for e in spec.effects if e.placed}
+    synth = [e for e in spec.wiring().placed if e.name not in own]
+    if not synth:
+        return nodes, wires
+    nodes, wires = list(nodes), list(wires)
+    for e in synth:
+        key, where = e.where
+        entry = {"kind": "effect", "file": e.file, **({"instance": e.n} if e.n != 1 else {})}
+        at = next((i for i, n in enumerate(nodes)
+                   if isinstance(n, dict) and n.get("kind") == "effect"
+                   and n.get("file") == e.file and n.get("instance", 1) == e.n), None)
+        if at is None:
+            nodes.append({**entry, key: where})
+        else:
+            nodes[at] = {**nodes[at], key: where}
+        short = ({"from": where, "to": f"{e.name}.image"} if key == "after"
+                 else {"from": e.name, "to": f"{where}.image"})
+        wires = [w for w in wires
+                 if not (isinstance(w, dict) and (w.get("from"), w.get("to"))
+                         == (short["from"], short["to"]))]
+    return nodes, wires
+
+
 def migrate(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, list[str]]:
     """`doc` read as the free graph: (a copy with the graph section holding
     the runs and channel wires, the retired values dropped, any switch's
@@ -289,7 +322,10 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict,
     `frame → fx.image` when empty, so a migrated section is recognisable
     (`needs_free`). A
     section that already has a run from `frame` (or `pattern`), or a wire
-    into `pattern.media` / `backdrop.image`, is not given another.
+    into `pattern.media` / `backdrop.image`, is not given another. A
+    section given its frame run first has each wire D1 would write short
+    written as that D1 entry (`_explicit_placements`; the owner,
+    2026-10-24: a section with a run shortens none).
 
     The retired values (`retired`) are dropped from the copy: no build from
     plan 33 T7 on declares them, and the wires say all they said. A driven
@@ -336,6 +372,8 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict,
     for run in runs.values():
         run.sort(key=lambda n: (_order_of(values, specs, n), n))
     new_wires: list[dict] = []
+    if not has_frame:
+        nodes, wires = _explicit_placements(spec, nodes, wires)
     if not has_frame:           # an empty run is the bare `frame → fx.image`: always a head
         new_wires += _chain("frame", runs[0], "fx.image") if runs[0] else [
             {"from": "frame", "to": "fx.image"}]
