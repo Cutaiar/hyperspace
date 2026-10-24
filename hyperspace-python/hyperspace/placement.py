@@ -217,12 +217,17 @@ def _fit(rect: Rect, scr: list[Screen]) -> Rect | None:
 def default_rect(kind: str, size: tuple[int, int], s: Screen) -> Rect:
     """The default spot on a screen. Render (and anything else): top-left
     + MARGIN. Control: flush right − MARGIN, top + MARGIN. The size is the
-    one asked for, as it always was: on a screen smaller than the window
-    it overhangs, and a clipped size would be remembered at the quit and
-    follow the window to a bigger screen."""
+    one asked for: on a screen smaller than the window it overhangs, and a
+    clipped size would be remembered at the quit and follow the window to
+    a bigger screen. The control window's width is the one exception: it
+    is two panes side by side (app.CONTROL_SIZE), wider than a laptop, so
+    it is clipped to the screen less a MARGIN each side — the panel keeps
+    its width and the desk diagram left of it takes what is left
+    (ui.panel_w), so a narrower window is still whole."""
     w, h = int(size[0]), int(size[1])
     x = s.x + MARGIN
     if kind == "control":
+        w = max(MIN_SIZE[0], min(w, s.w - 2 * MARGIN))
         x = max(s.x + s.w - w - MARGIN, x)
     return x, s.y + MARGIN, w, h
 

@@ -571,7 +571,7 @@ def _room(panel) -> tuple[float, float, float, float]:
     if panel.open:
         panel_x = getattr(panel, "_panel_x", None)
         if panel_x is None:
-            panel_x = display[0] - ui.PANEL_W - EDGE
+            panel_x = display[0] - ui.panel_w(display) - EDGE
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))

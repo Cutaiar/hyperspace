@@ -73,6 +73,8 @@ GAP = 6.0                  # between two channel columns
 CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
+PIC_MAX_H = 25.0           # a channel's picture is 16:9 of its column, never taller than
+                           # this (the panel at ui.PANEL_W): the page fits on a wider one
 THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
                            # drawn goes first, one at a time
 DECODES = 4                # thumbnail decodes on the media pool at once, at most
@@ -499,7 +501,7 @@ def _channels(panel, st: dict, state) -> None:
     gone = set(state.missing())
     backdrop = _channel_of(panel, "backdrop.image")
     faces = _channel_of(panel, "pattern.media")
-    pic_h = cw * 9 / 16
+    pic_h = min(cw * 9 / 16, PIC_MAX_H)
     bottom = top.y
     dl = imgui.get_window_draw_list()
     for k, c in enumerate(CHANNELS):

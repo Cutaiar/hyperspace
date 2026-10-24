@@ -137,6 +137,10 @@ def test_a_remembered_size_is_clipped_to_its_screen():
     # small screen's size is never what gets remembered
     tiny = Screen("tiny", 0, 0, 800, 600)
     assert placement.default_rect("render", RENDER, tiny) == (16, 16, 1280, 820)
+    # …but the control window's width is: two panes side by side are
+    # wider than a laptop, and the desk gives up the width (ui.panel_w)
+    assert placement.default_rect("control", (2372, 900), LAPTOP) == (16, 54, 1696, 900)
+    assert placement.default_rect("control", (2372, 900), tiny) == (16, 16, 768, 900)
     # a huge rect that the clip would push off its screen is not used
     far = entry(PROJECTOR.x - 4000, 40, 5000, 900)
     r, note = place("render", RENDER, [PROJECTOR], -1, far)
