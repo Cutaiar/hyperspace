@@ -610,14 +610,18 @@ def test_a_preset_round_trips(rig):
     path = rig.presets.save_as("Round Trip")
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/2" and doc["name"] == "Round Trip"
+    # plan 33 T3: the fx module switched on effects the preset's run (its
+    # wires, none) does not hold — on outside every run, which /4 cannot
+    # say (R9) — so the save is /5, its graph the empty run
+    assert doc["schema"] == "hyperspace.preset/5" and doc["name"] == "Round Trip"
+    assert doc["graph"] == {"nodes": [], "wires": [{"from": "frame", "to": "fx.image"}]}
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"fx": "acid"}
-    # every performance base — but a /2 preset (no media used, plan 32 S)
-    # writes none of the media family's, all at their defaults
+    # every performance base, the media family's too (/5 is /4 and more),
+    # all at their defaults (no media used, plan 32 S)
     snap = rig.reg.snapshot(part="performance")
     assert all(v == preset.MEDIA_DEFAULTS[k] for k, v in snap.items() if preset.is_media_id(k))
-    assert doc["values"] == {k: v for k, v in snap.items() if not preset.is_media_id(k)}
+    assert doc["values"] == snap
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
     rig.presets.load("Round Trip")

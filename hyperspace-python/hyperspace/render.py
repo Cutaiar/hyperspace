@@ -1389,12 +1389,12 @@ class Renderer:
         # kept on the renderer so `_graph_for` keeps its one-argument shape)
         self._view_now = s
         graph = self._graph_for(views)
-        # plan 30 D1: "an effect is on" means one of the chain's runs: an
+        # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
-        # effects on a through output stands down as with none
-        placed = getattr(graph, "placed_names", frozenset())
-        fx_on = any(n not in placed for n in fx.state.chain(getattr(fx, "target", 0)))
+        # effects on a through output stands down as with none. Plan 33 R:
+        # the runs are the graph's (its wires), each effect asked `live`
+        fx_on = any(fx.state.live(n) for n in getattr(graph, "run", ()))
         stats["fx_on"] = fx_on
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
@@ -1414,10 +1414,15 @@ class Renderer:
         (`graph.default_graph`). getattr: a renderer from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
-        one adds its point-cloud node to the scene. Plan 30 D0: so is the
-        effect stack's list in order (`FxState.names()`): each pipeline's
-        run of effect nodes is built from it, and an effect switched on or
-        off changes nothing here (an off node reads through). A new graph
+        one adds its point-cloud node to the scene. Plan 33 R: so are the
+        effect files present (`FxState.specs`, as a set): each pipeline's
+        run is the wiring's (`Wiring.run`, its wires), so a file that goes
+        or comes builds again and an order, a target or a toggle does not
+        (an off node reads through). A wiring that says no run (no
+        preset's graph reached it) is handed the stack instead — the
+        frame-aimed effects in `FxState.names()` order, as plan 30 D0
+        built every run — and that list is part of the key, until the
+        stack retires (plan 33 T7). A new graph
         fits the effects' texture pool to what it needs (`Graph.pool`).
         Plan 28 N4: the preset's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
@@ -1431,12 +1436,19 @@ class Renderer:
         wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
         fx = getattr(self, "fx", None)
-        effects = tuple(fx.state.names()) if fx is not None else ()
+        st = fx.state if fx is not None else None
+        effects = frozenset(st.specs) if st is not None else frozenset()
+        stack = None
+        if getattr(wiring, "run", None) is None and st is not None:
+            stack = tuple(n for n in st.names()
+                          if st.values[n].get("target", 0) != FACES)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
-                or getattr(graph, "effects", ()) != effects):
-            graph = self._graph = default_graph(views, wiring, clouds, effects)
+                or frozenset(getattr(graph, "effects", ())) != effects
+                or getattr(graph, "stack", None) != stack):
+            graph = self._graph = default_graph(views, wiring, clouds, tuple(sorted(effects)),
+                                                stack)
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does

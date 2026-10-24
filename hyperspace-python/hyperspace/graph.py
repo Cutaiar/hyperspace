@@ -236,7 +236,14 @@ class Wiring:
     compares the wiring).
 
     Plan 32 R: `backdrop`, the channel laid under the scene (`GROUNDED`),
-    and `backdrop_history`, whether the capture takes it with the scene."""
+    and `backdrop_history`, whether the capture takes it with the scene.
+
+    Plan 33 R: `run`, the effects wired from `frame` into `fx.image`, in
+    wire order — each pipeline's run (`default_graph`); `()` is the empty
+    run (`frame → fx.image`). None: the wiring says no run (no preset's
+    graph reached it — a test rig, a tool, the app before its first load),
+    and the default graph takes the stack it is handed instead, as before
+    plan 33, until the stack retires (plan 33 T7)."""
 
     hands: str = "layer"
     blend: str = "over"
@@ -253,6 +260,7 @@ class Wiring:
     # graph is built again only when one changes
     backdrop: str = ""
     backdrop_history: bool = False
+    run: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -355,16 +363,17 @@ def placement_error(effect: str, key: str, where: Any,
 class EffectAt:
     """An effect instance the preset's graph names (plan 26 A4, plan 30 D1).
 
-    Unplaced: an extra instance of a file in the chain, `fx.<file>.<n>.*`
-    (n ≥ 2), its own params and clock, ordered by its own `order` like any
-    effect — instance 1 is the file itself, always there.
+    Unplaced: an extra instance of a file, `fx.<file>.<n>.*` (n ≥ 2), its
+    own params and clock — instance 1 is the file itself, always there.
+    Plan 33 R: where it draws is its wires (a run from `frame`, a branch),
+    never its `order`; one on no wire has no node.
 
     Placed (D1): `after` a node — on that node's output, every consumer
     of its picture reading the effect instead — or `into` one — on that
     node's `image` input alone (`output.<n>`: that output's picture) —
     one of the two, never both; then any instance, 1 included, may be
-    named. A placed instance is not in the chain's run: it sits where it
-    is put (`default_graph`), and its `order` means nothing there."""
+    named. A placed instance is in no pipeline's run: it sits where it is
+    put (`default_graph`)."""
 
     file: str
     n: int
@@ -992,10 +1001,22 @@ class GraphSpec:
         D1's own; the rest are the wiring's `wires`."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
         placed = tuple(e for e in self.effects if e.placed)
-        synth, edges = split_wires(self.wires, placed)
+        run, wires = None, self.wires
+        if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
+            # plan 33 R: the section says the run (every preset loaded on
+            # this build does, `graphmigrate`): its wires are the run, not
+            # edges, and the wires the faces and the backdrop take are
+            # plan 33 T4's — until then `view.media`, `backdrop.channel`
+            # and the faces chain draw them
+            run = run_of(self)
+            wires = tuple(w for w in wires if w not in _run_wires(run) and not _later(w))
+        synth, edges = split_wires(wires, placed)
+        if run is not None:
+            edges = _reached_edges(edges, run, placed + synth)
         return Wiring(hands=first.into, blend=self.laid, history=self.history.holds,
                       draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
-                      placed=placed + synth, wires=edges, composites=self.composites())
+                      placed=placed + synth, wires=edges, composites=self.composites(),
+                      run=run)
 
     def composites(self) -> tuple[CompositeAt, ...]:
         """The composite nodes the section adds (plan 28 N4), by instance."""
@@ -1213,8 +1234,10 @@ def run_of(spec: GraphSpec, head: str = "frame", end: str = "fx.image") -> tuple
     in order (plan 33 G): `("acid", "wobble")` for `frame → acid → wobble →
     fx.image`. `()` with no such path — a run is effects only, so a switch
     or a composite on the way ends it. The faces' run is
-    `run_of(spec, "pattern", "shape.faces")`."""
-    wires = spec.all_wires()
+    `run_of(spec, "pattern", "shape.faces")`. Read off the wire list alone:
+    a run is never D1's (`frame` is no place), and D1's `into` an effect of
+    the run is a second wire into its `image` that is not the run's."""
+    wires = [w for w in spec.wires if not is_aux(w)]
     run: list[str] = []
     src = next((w.src for w in wires if w.dst == end), None)
     while src is not None and src != head:
@@ -1223,6 +1246,49 @@ def run_of(spec: GraphSpec, head: str = "frame", end: str = "fx.image") -> tuple
         run.insert(0, src)
         src = next((w.src for w in wires if w.dst == f"{src}.image"), None)
     return tuple(run) if src == head else ()
+
+
+def _run_wires(run: tuple[str, ...]) -> set[Wire]:
+    """The wires of the run `frame → run… → fx.image` (`frame → fx.image`
+    for the empty one)."""
+    names = ["frame", *run]
+    out = {Wire(a, f"{b}.image") for a, b in zip(names, run)}
+    out.add(Wire(names[-1], "fx.image"))
+    return out
+
+
+def _later(w: Wire) -> bool:
+    """A wire plan 33 T4 renders: into the faces, the pattern's media or
+    the backdrop, from the pattern, or into or out of a switch."""
+    return (w.dst in ("shape.faces", "pattern.media", "backdrop.image")
+            or wire_node_kind(w.src) in ("pattern", "switch")
+            or wire_node_kind(w.node) == "switch")
+
+
+def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
+                   placed: tuple[EffectAt, ...]) -> tuple[Wire, ...]:
+    """`edges` without the wires into an effect or composite that reaches
+    nothing this graph draws (plan 33 R: an unreached node has no node and
+    never runs). What is drawn: an output's or the history's port, an
+    effect of the run, and a placed effect where it sits (D1's own and the
+    wires D1 would write short) — and whatever feeds one of those through
+    a picture port."""
+    wires = [*d1_wires(placed), *edges]
+    into: dict[str, list[str]] = {}
+    for w in wires:
+        if w.port in _PICTURE_PORTS:
+            into.setdefault(w.node, []).append(w.src)
+    todo = [*run, *(e.name for e in placed),
+            *(w.src for w in wires if wire_node_kind(w.node) in ("output", "history"))]
+    got: set[str] = set()
+    while todo:
+        name = todo.pop()
+        if name in got:
+            continue
+        got.add(name)
+        todo.extend(into.get(name, ()))
+    return tuple(w for w in edges
+                 if wire_node_kind(w.node) not in ("effect", "composite") or w.node in got)
 
 
 # ---------------------------------------------------------------- in words
@@ -2261,7 +2327,7 @@ class Capture(Node):
             r.lookback.capture(src, r.scene.fbo)
         # (plan 30 D1: any effect on, a placed one too — its clock moves
         # once a frame whether or not its edge had a picture to fold)
-        if (frame.fx_on or _chain_now(frame)) and not frame.stats["chain_runs"]:
+        if (frame.fx_on or _live_now(frame)) and not frame.stats["chain_runs"]:
             r.fx.state.advance_to(frame.t)
 
 
@@ -2338,15 +2404,17 @@ def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
 
 # ---------------------------------------------------------------- fx
 
-def _chain_now(frame: Frame) -> frozenset[str]:
-    """The effects on this frame (`FxState.chain` for the frame's target:
-    none while the stack is bypassed or at mix 0), asked once a frame —
-    the runs' and (plan 30 D1) the placed ones', which `frame.fx_on`
-    leaves out."""
-    got = frame.data.get("fx#chain")
+def _live_now(frame: Frame) -> frozenset[str]:
+    """The effects of this frame's graph that are live (`FxState.live`: on
+    with mix above 0, the stack on and above mix 0 — no target, no order:
+    plan 33 R), asked once a frame — the runs' and (plan 30 D1) the
+    placed and wired ones', which `frame.fx_on` leaves out."""
+    got = frame.data.get("fx#live")
     if got is None:
-        fx = frame.r.fx
-        got = frame.data["fx#chain"] = frozenset(fx.state.chain(getattr(fx, "target", 0)))
+        st = frame.r.fx.state
+        nodes = frame.graph.nodes.values() if frame.graph is not None else ()
+        got = frame.data["fx#live"] = frozenset(
+            n.effect for n in nodes if isinstance(n, Effect) and st.live(n.effect))
     return got
 
 
@@ -2381,9 +2449,9 @@ class Effect(Node):
     `fx.<effect>.*`; the node's own `name` is the effect's in the scene's
     pipeline and `acid(scene+hands)` … in the others (`effect_node_name`).
 
-    **Off** this frame — not in the frame chain's `FxState.chain` (switched
-    off, mix 0, the stack bypassed, aimed at the faces) or its file never
-    compiled — it is a read-through: its consumers get its input's
+    **Off** this frame — not `FxState.live` (switched off, mix 0, the
+    stack bypassed; plan 33 R: no target and no order, its place is its
+    wires) or its file never compiled — it is a read-through: its consumers get its input's
     picture (`paint` paints the input straight into the consumer's
     framebuffer, `image` is the input's), no pass runs and no texture is
     taken. **On**, it paints its input into a texture of the effects' pool
@@ -2399,7 +2467,7 @@ class Effect(Node):
     "materialised and painted images").
 
     Plan 30 D1 — **placed** effects (`placed`: "after" / "into", or None in
-    the chain's run). One placed after a node that makes a texture (the
+    a pipeline's run). One placed after a node that makes a texture (the
     scene, a hands' layer: `MAKES`; or after such an effect) folds that
     texture once, in its own `run`, into a pool texture held for the
     frame (`makes`): every consumer then reads that one picture — the
@@ -2532,7 +2600,7 @@ class Effect(Node):
         key = self.name + "#on"
         got = frame.data.get(key)
         if got is None:
-            got = frame.data[key] = (self.effect in _chain_now(frame)
+            got = frame.data[key] = (self.effect in _live_now(frame)
                                      and frame.r.fx.ready(self.effect))
         return got
 
@@ -2593,8 +2661,8 @@ class Effect(Node):
 class Fx(Node):
     """The pipeline's end (plan 30 D0: the class keeps its name and its
     `fx` lines; before D0 it ran every effect as one block). Its input is
-    the pipeline's run of `Effect` nodes — every effect instance, in the
-    stack's order, an off one reading through — whose last node paints
+    the pipeline's run of `Effect` nodes — the effects wired from `frame`
+    into `fx.image` (plan 33 R), an off one reading through — whose last node paints
     into the end's destination; with no effect on this frame the run
     reads straight through to the pipeline's source (the history, or the
     composite laying the hands on) and nothing of the chain is touched.
@@ -2631,9 +2699,9 @@ class Fx(Node):
 
     @property
     def effects(self) -> list[Effect]:
-        """The pipeline's run of effect nodes, first to last — the chain's
-        (plan 30 D1: an effect the preset placed after or into one of them
-        sits in the line but is not of the run)."""
+        """The pipeline's run of effect nodes, first to last — its wires'
+        from `frame` (plan 33 R; plan 30 D1: an effect the preset placed
+        after or into one of them sits in the line but is not of the run)."""
         run: list[Effect] = []
         src = self.inputs["image"]
         while isinstance(src, Effect):
@@ -2883,8 +2951,8 @@ class Graph:
     Plan 30 D0: `readers` counts each node's consumers (an effect read by
     two is made once into a held texture), `pool` is how many textures
     the effects' pool needs for this graph, and `effects` the effect
-    instances the default graph built its runs from (in the stack's
-    order: the renderer builds again when it changes).
+    instances the build had (plan 33 R: the renderer builds again when a
+    file comes or goes), `run` the effects of the pipelines' runs.
 
     Plan 30 D1: `insert` puts a placed effect on an edge after the graph
     is built (`default_graph`), `dormant` says why a placed effect has no
@@ -2908,6 +2976,12 @@ class Graph:
         # D1: the effects placed out of the runs (dormant ones included):
         # the renderer's `fx_on` ("an effect bends a pipeline") leaves them out
         self.placed_names: frozenset[str] = frozenset()
+        # plan 33 R: the effects of every pipeline's run, first to last —
+        # the renderer's `fx_on` is any of them live
+        self.run: tuple[str, ...] = ()
+        # (the stack it was handed for a wiring that says no run — the
+        # renderer's key, `Renderer._graph_for`; None for one that does)
+        self.stack: tuple[str, ...] | None = None
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
 
@@ -3084,7 +3158,8 @@ HISTORY_COMPOSITE = "composite(history)"
 
 
 def default_graph(views: list[View], wiring: Wiring | None = None,
-                  clouds: tuple[str, ...] = (), effects: tuple[str, ...] = ()) -> Graph:
+                  clouds: tuple[str, ...] = (), effects: tuple[str, ...] = (),
+                  stack: tuple[str, ...] | None = None) -> Graph:
     """The frame as a graph, from the views' switches and the wiring
     (`Wiring`; the default is today's frame). Each output's three
     switches are its wiring:
@@ -3121,14 +3196,23 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     (`cloud_roles`), each a point-cloud geometry in the scene, solid,
     before the hands; none listed, the graph is the one above.
 
-    Plan 30 D0: `effects`, every effect instance in the stack's order
-    (`FxState.names()`: on or off, whatever its target), is each
-    pipeline's run — one `Effect` node per instance between the
-    pipeline's source and its end (`Fx`), named by `effect_node_name`.
-    An off effect reads through, so switching one on or off changes no
-    node; only a change to the list (an order, an instance, a file)
-    builds the graph again. None given, the ends read their sources
-    directly: the frame with no effect.
+    Plan 33 R: `effects`, the effect instances this build has (what a run,
+    a placement or a wire may name). Each pipeline's run is the wiring's
+    (`Wiring.run`: the wires `frame → … → fx.image`, in wire order) — one
+    `Effect` node per instance between the pipeline's source (`frame`) and
+    its end (`Fx`), named by `effect_node_name`. An effect of the run this
+    build lacks (its file gone mid-show) has no node: the run reads
+    through it, and `Graph.dormant` says so (`no acid effect in this
+    build`) — the wires stay, so the node is back when the file is. An
+    effect on no wire has no node at all. An off effect of the run reads
+    through, so switching one on or off changes no node.
+
+    A wiring that says no run (`Wiring.run` None: no preset's graph
+    reached it) takes `stack` (else `effects`) in the order given, every
+    effect not placed or wired, as before plan 33 (plan 30 D0) — the
+    renderer hands it the frame-aimed effects in the stack's order until
+    the stack retires (plan 33 T7). None given, the ends read their
+    sources directly: the frame with no effect.
 
     Plan 30 D1: `Wiring.placed`, the effects the preset places, are not
     in the runs; each is put on its edge once the frame is built
@@ -3184,8 +3268,19 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         wiring.history == "scene+hands" and not in_scene) or wired_layer
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
-    g.effects = tuple(effects)                     # plan 30 D0: what its runs hold
-    g.placed_names = frozenset(out_of_run)         # plan 30 D1: … but these
+    g.effects = tuple(effects)                     # plan 33 R: the instances it may hold
+    g.placed_names = frozenset(out_of_run)         # plan 30 D1: placed or wired
+    g.stack = tuple(stack) if stack is not None else None
+    said = getattr(wiring, "run", None)            # (a Wiring from before a hot reload)
+    if said is not None:                           # plan 33 R: the run is its wires
+        names = list(said)
+    else:                                          # (no run said: the stack, as plan 30 D0)
+        names = [e for e in (stack if stack is not None else effects) if e not in out_of_run]
+    have = set(g.effects)
+    for e in names:
+        if e not in have:
+            g.dormant[e] = f"{e} in the run — no {e} effect in this build"
+    g.run = tuple(e for e in names if e in have)   # the effects of every pipeline's run
     points = cloud_nodes(g, g.clouds)
     shape = g.add(Shape("shape"))
     geo: dict[int, Hands] = {}
@@ -3229,12 +3324,10 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     gate = (layer,) if layer is not None else ()
 
     def run(key: int, src: Node) -> Node:
-        # the pipeline's run of effect nodes, in the stack's order; a name
-        # some other node has (or will have) is kept apart by the params'
-        # prefix, `fx.<name>`. D1: a placed effect is not of the run
-        for e in g.effects:
-            if e in out_of_run:
-                continue
+        # the pipeline's run of effect nodes from its `frame` (`src`), in
+        # wire order (plan 33 R); a name some other node has (or will have)
+        # is kept apart by the params' prefix, `fx.<name>`
+        for e in g.run:
             name = effect_node_name(e, key)
             if (name in g.nodes or name in ("capture", *FX_NAMES.values())
                     or name.startswith("output.")):
@@ -3316,8 +3409,10 @@ class _Wiring:
         # of the effects they feed is in the graph
         self.aux_wires = [w for w in wiring.wires if is_aux(w)]
         self.wires = [w for w in wiring.wires if not is_aux(w)]
+        # plan 33 R: an effect of the run has its nodes already (one per
+        # pipeline): a wire on from it reads the scene pipeline's
         self.makers = {name for w in self.wires for name in (w.src, w.node)
-                       if wire_node_kind(name) in ("effect", "composite")}
+                       if wire_node_kind(name) in ("effect", "composite")} - set(g.run)
         self.made: dict[str, Node | None] = {}
         self.done: set[Wire] = set()
         self.explicit = {(w.node, w.port) for w in self.wires}

@@ -42,6 +42,22 @@ DEFAULT_ORDER, DEFAULT_MIX = 50, 1.0
 Specs = dict[str, tuple[int, float]]   # effect name -> its file's (@order, @mix)
 
 _RETIRED_FX = re.compile(r"fx\..+\.(order|target)")
+# the load note for an effect left out of a run while the preset drives it
+LEFT_OUT = "{name} was off, so it is not in the run: wire it in on GRAPH to use it"
+
+
+def left_out_note(name: str) -> str:
+    """The load note for effect `name` left out of a run (row 346) while
+    something in the preset drives one of its params."""
+    return LEFT_OUT.format(name=name)
+
+
+def left_out_of(note: str) -> str | None:
+    """The effect a `left_out_note` names, or None for any other note."""
+    head, _, tail = LEFT_OUT.partition("{name}")
+    if note.startswith(head) and note.endswith(tail) and len(note) > len(head) + len(tail):
+        return note[len(head):len(note) - len(tail)]
+    return None
 
 
 def retired(pid: str) -> bool:
@@ -76,12 +92,14 @@ def _subs(doc: dict):
                 yield sub
 
 
-def targets(doc: dict) -> frozenset[str]:
+def targets(doc: dict, desk: list | None = None) -> frozenset[str]:
     """Every param id a route, desk row or macro subscriber in `doc` drives.
     A modifier's output and a sequencer step drive through a route (their
-    lane is the route's source), so the routes carry them."""
+    lane is the route's source), so the routes carry them. `desk`: rows the
+    document's own `desk` stands over — a desk template's, which the load
+    expands (`preset.Presets.load_doc`) — counted as its desk rows."""
     out: set[str] = set()
-    for row in (*_rows(doc, "routes"), *_rows(doc, "desk")):
+    for row in (*_rows(doc, "routes"), *_rows(doc, "desk"), *_dicts(desk)):
         if isinstance(row.get("target"), str):
             out.add(row["target"])
     for sub in _subs(doc):
@@ -93,9 +111,14 @@ def targets(doc: dict) -> frozenset[str]:
     return frozenset(out)
 
 
-def _retarget(doc: dict, old: str, new: str) -> None:
-    """Every row of `doc` that drives `old` drives `new` (in place)."""
-    for row in (*_rows(doc, "routes"), *_rows(doc, "desk")):
+def _dicts(rows: list | None) -> list[dict]:
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def _retarget(doc: dict, old: str, new: str, desk: list | None = None) -> None:
+    """Every row of `doc` (and of `desk`, a template's) that drives `old`
+    drives `new` (in place)."""
+    for row in (*_rows(doc, "routes"), *_rows(doc, "desk"), *_dicts(desk)):
         if row.get("target") == old:
             row["target"] = new
     for sub in _subs(doc):
@@ -109,8 +132,12 @@ def _retarget(doc: dict, old: str, new: str) -> None:
 # ---------------------------------------------------------------- the section as wires
 
 def _values(doc: dict) -> dict:
+    """`doc`'s values, the dict itself (made when it has none, so what is
+    written into it stays in the document)."""
     v = doc.get("values")
-    return v if isinstance(v, dict) else {}
+    if not isinstance(v, dict):
+        v = doc["values"] = {}
+    return v
 
 
 def _spec_of(specs: Specs | None, name: str) -> tuple[int, float]:
@@ -160,6 +187,12 @@ def _candidates(values: dict, specs: Specs | None) -> list[str]:
     return sorted(names)
 
 
+def _files(specs: Specs | None) -> set[str] | None:
+    """The effect files `specs` names (None: any well-formed name), what a
+    section is read against as the loader reads it (`read_graph`)."""
+    return {n.partition(".")[0] for n in specs} if specs else None
+
+
 def _wired_effects(spec: G.GraphSpec) -> set[str]:
     """The effects the section places or wires (a wire's end, D1's too) —
     but for an `aux` wire, which places neither end (plan 32 R): the effect
@@ -188,7 +221,8 @@ def _next_switch(nodes: list) -> int:
     return next(i for i in range(1, len(taken) + 2) if i not in taken)
 
 
-def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
+def migrate(doc: dict, specs: Specs, *, keep: bool = False,
+            desk: list | None = None) -> tuple[dict, list[str]]:
     """`doc` read as the free graph: (a copy with the graph section holding
     the runs and channel wires, the retired values dropped, any switch's
     `select` set and the rows that drove a channel choice retargeted; the
@@ -203,18 +237,28 @@ def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     `frame → fx.image` when empty, so a migrated section is recognisable
     (`needs_free`). A
     section that already has a run from `frame` (or `pattern`), or a wire
-    into `pattern.media` / `backdrop.image`, is not given another."""
+    into `pattern.media` / `backdrop.image`, is not given another.
+
+    `keep`: the retired values stay in the values (plan 33 T3, the load:
+    `view.media` and `backdrop.channel` still draw the faces' media and the
+    backdrop until T4 renders `pattern.media` / `backdrop.image`, and the
+    effects' `order` / `target` are declared until T7 — T4 drops `keep`).
+    `desk`: a desk template's rows the document's `desk` stands over,
+    counted in what drives what and retargeted in place."""
     out = copy.deepcopy(doc)
     notes: list[str] = []
     values = _values(out)
     section = out.get("graph")
     section = section if isinstance(section, dict) else {}
+    # (read against the files this build has, as the loader reads it: a
+    # placement on an effect not on disk is refused there, and its effect
+    # takes the run like any other)
     try:
-        spec = G.read_graph(section)
+        spec = G.read_graph(section, effects=_files(specs))
     except G.GraphError:
         spec = None                     # the loader says so and takes the default graph
     if spec is None:
-        for pid in [p for p in values if retired(p)]:
+        for pid in [p for p in values if retired(p) and not keep]:
             del values[pid]
         return out, notes
     nodes = list(section.get("nodes", []))
@@ -228,7 +272,7 @@ def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     has_back = any(w.dst == "backdrop.image" for w in on_wires)
     runs: dict[int, list[str]] = {0: [], 1: []}
     left_out: list[str] = []
-    driven = targets(out)
+    driven = targets(out, desk)
     driven_fx = _driven_fx(driven)
     for name in _candidates(values, specs):
         if name in wired or name in placed:
@@ -254,7 +298,7 @@ def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
             nodes.append({"kind": "effect", "file": file, "instance": n})
             declared.add((file, n))
     for name in sorted(left_out):
-        notes.append(f"{name} was off, so it is not in the run: wire it in on GRAPH to use it")
+        notes.append(left_out_note(name))
     for old, end, has in (("view.media", "pattern.media", has_media),
                           ("backdrop.channel", "backdrop.image", has_back)):
         k = values.get(old, 0)
@@ -271,10 +315,10 @@ def migrate(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
             new_wires.append({"from": sw, "to": end})
             select = f"{sw}.select"
             values[select] = k
-            _retarget(out, old, select)
+            _retarget(out, old, select, desk)
         elif k > 0:
             new_wires.append({"from": f"media.{CHANNELS[k - 1]}", "to": end})
-    for pid in [p for p in values if retired(p)]:
+    for pid in [p for p in values if retired(p) and not keep]:
         del values[pid]
     if new_wires or nodes != list(section.get("nodes", [])):
         sec = {k: v for k, v in section.items() if k not in ("nodes", "wires")}
@@ -345,7 +389,7 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
     `driven` is `targets(doc)`, so an effect on at mix 0 and driven is a
     member as `migrate` has it (R5)."""
     try:
-        spec = G.read_graph(section if isinstance(section, dict) else {})
+        spec = G.read_graph(section if isinstance(section, dict) else {}, effects=_files(specs))
     except G.GraphError:
         return None
     if spec.switches:
@@ -406,15 +450,91 @@ def has_frame_run(spec: G.GraphSpec) -> bool:
     return any(w.src == "frame" or w.dst == "fx.image" for w in spec.all_wires())
 
 
-def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset()) -> bool:
-    """Whether a preset's graph section must be written as `/5` (row 347):
-    it has a `frame` run or uses the free graph's words, and `/4` cannot
-    say it. A section with neither (plan 26-32's) never is."""
+def says_free(section: Any) -> bool:
+    """Whether a graph section says anything in the free graph's terms: a
+    run's head (`has_frame_run`) or a word `/4` lacks (`uses_free_words`).
+    A section this build cannot read says nothing."""
     if not isinstance(section, dict) or not section:
         return False
     try:
         spec = G.read_graph(section)
     except G.GraphError:
         return False
-    return ((has_frame_run(spec) or uses_free_words(spec))
-            and legacy_values(section, values, None, driven) is None)
+    return has_frame_run(spec) or uses_free_words(spec)
+
+
+def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset(),
+               specs: Specs | None = None) -> bool:
+    """Whether a preset's graph section must be written as `/5` (row 347):
+    it has a `frame` run or uses the free graph's words, and `/4` cannot
+    say it. A section with neither (plan 26-32's) never is. `specs` gives
+    an absent order or mix its file's default (`legacy_values`)."""
+    return says_free(section) and legacy_values(section, values, specs, driven) is None
+
+
+# the wire ends only the free graph has: a wire touching one is plan 33's
+_FREE_SRCS = ("frame", "pattern", "switch")
+_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch")
+
+
+def _free_end(w: Any) -> bool:
+    """Whether wire entry `w` touches an end only the free graph has."""
+    if not isinstance(w, dict):
+        return False
+    src, dst = w.get("from"), w.get("to")
+    node = dst.rpartition(".")[0] if isinstance(dst, str) else None
+    return (G.wire_node_kind(src) in _FREE_SRCS or G.wire_node_kind(node) in _FREE_DSTS)
+
+
+def _run_entries(section: dict) -> set[tuple[str, str]]:
+    """The (from, to) of every wire of the section's runs — `frame → … →
+    fx.image` and `pattern → … → shape.faces`, the wires between their
+    effects too — that `legacy_values` says as orders and targets."""
+    try:
+        spec = G.read_graph(section)
+    except G.GraphError:
+        return set()
+    out: set[tuple[str, str]] = set()
+    for head, end in (("frame", "fx.image"), ("pattern", "shape.faces")):
+        run = G.run_of(spec, head, end)
+        if not run:
+            continue
+        names = [head, *run]
+        out.update((a, f"{b}.image") for a, b in zip(names, run))
+        out.add((run[-1], end))
+    return out
+
+
+def legacy_section(section: Any) -> dict | None:
+    """`section` as a build from before plan 33 reads it (R10): the wires
+    of its runs (`_run_entries`: what `legacy_values` says as orders and
+    targets), every wire touching a free-graph end (`frame`, `fx.image`,
+    `pattern`, `shape.faces`, `backdrop.image`, a switch) and the switch
+    nodes taken out. A section with none of them is returned as it is, the
+    same object; one with nothing left (no node, no wire) is None, no
+    section, as the GRAPH page lands an emptied graph. None stays None."""
+    if not isinstance(section, dict):
+        return section
+    wires = section.get("wires")
+    nodes = section.get("nodes")
+    runs = _run_entries(section) if isinstance(wires, list) else set()
+
+    def free(w: Any) -> bool:
+        return _free_end(w) or (isinstance(w, dict) and (w.get("from"), w.get("to")) in runs)
+
+    free_wires = isinstance(wires, list) and any(free(w) for w in wires)
+    free_nodes = isinstance(nodes, list) and any(
+        isinstance(n, dict) and n.get("kind") == "switch" for n in nodes)
+    if not (free_wires or free_nodes):
+        return section
+    out = copy.deepcopy(section)
+    if isinstance(nodes, list):
+        out["nodes"] = [n for n in out["nodes"]
+                        if not (isinstance(n, dict) and n.get("kind") == "switch")]
+    if isinstance(wires, list):
+        out["wires"] = [w for w in out["wires"] if not free(w)]
+        if not out["wires"]:
+            del out["wires"]
+    if not out.get("nodes") and "wires" not in out and set(out) <= {"nodes", "wires"}:
+        return None
+    return out

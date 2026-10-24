@@ -257,7 +257,11 @@ def test_a_branch_saves_as_v5_and_reloads(tmp_path):
     app = make_app(tmp_path)
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
-    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == BRANCH
+    # (plan 33 T3: the load gave it its run's head, the empty run — R9)
+    head = {**BRANCH, "wires": [*BRANCH["wires"], {"from": "frame", "to": "fx.image"}]}
+    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == head
+    assert app.presets.load_doc(copy.deepcopy(saved)) == []
+    assert app.presets.document("t")["graph"] == head          # and reloads as it saved
 
 
 def test_a_preset_with_no_free_words_keeps_its_schema():

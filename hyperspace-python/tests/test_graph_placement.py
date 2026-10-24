@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_graph_json import Stub
+from test_graph_json import Stub, _bare
 from test_presets import boot, put
 
 from hyperspace import graph as G
@@ -139,7 +139,7 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
     rig.lib.load(PRESETS, "Odd")
     assert rig.presets.notes == [f"graph: {teapot}; the default placement"]
-    assert stub.wiring == G.Wiring(hands="scene") and rig.reg["view.bright"].value == 3.0
+    assert _bare(stub.wiring) == G.Wiring(hands="scene") and rig.reg["view.bright"].value == 3.0
     assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(PRESETS)
 

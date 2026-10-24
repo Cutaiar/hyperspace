@@ -34,6 +34,14 @@ S = Switches
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-lines.json"
 DEFAULT = G.Wiring()
 
+
+def _bare(w: G.Wiring) -> G.Wiring:
+    """`w` without its run (plan 33 T3: every loaded preset carries its
+    run as wires, `Wiring.run`; these tests are about the rest)."""
+    from dataclasses import replace
+
+    return replace(w, run=None)
+
 # ---------------------------------------------------------------- the JSON
 
 
@@ -383,9 +391,12 @@ def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
         rig.lib.load(PRESETS, slug)
         name = rig.lib.current(PRESETS)
         assert not [n for n in rig.presets.notes if n.startswith("graph")], slug
-        assert rig.presets.graph.spec is None and stub.wiring == DEFAULT
+        # plan 33 T3: the run as wires, the file's section (none) kept
+        assert rig.presets.graph.doc is None and _bare(stub.wiring) == DEFAULT
+        assert stub.wiring.run is not None
         assert preset.GRAPH_KEY not in rig.presets.document(name)
-        assert rig.presets.signature()[4] is None
+        # (plan 33 T3: the dirty dot reads the section as wires — the run)
+        assert json.loads(rig.presets.signature()[4])["wires"][-1]["to"] == "fx.image"
         assert not rig.lib.is_dirty(PRESETS), slug
 
 
@@ -401,7 +412,8 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     rig.presets.graph.attach(stub)
     missing = rig.lib.load(PRESETS, "hands-lines")
     assert missing == [] and rig.presets.notes == []
-    assert stub.wiring == G.Wiring(hands="scene", history="scene+hands", draw="lines")
+    assert _bare(stub.wiring) == G.Wiring(hands="scene", history="scene+hands", draw="lines")
+    assert stub.wiring.run == ("acid",)            # plan 33 T3: its run, as wires
     assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
@@ -411,7 +423,7 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
         in text
     # another preset with no graph: back to the default, the section gone
     rig.lib.load(PRESETS, "party-tumble")
-    assert stub.wiring == DEFAULT and rig.presets.graph.doc is None
+    assert _bare(stub.wiring) == DEFAULT and rig.presets.graph.doc is None
 
 
 def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
@@ -524,7 +536,8 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
         assert reg["fx.acid.2.twist"].value == 1.9
         missing = rig.lib.load(PRESETS, other)
         assert missing == ["fx.acid.2.twist"] and rig.lib.current(PRESETS) == other
-        assert "fx.acid.2.twist" not in reg and rig.presets.graph.spec is None
+        gs = rig.presets.graph            # (plan 33 T3: Plain's spec is its bare run)
+        assert "fx.acid.2.twist" not in reg and (gs.spec is None or not gs.spec.effect_counts())
         assert any("unknown id(s): fx.acid.2.twist" in n for n in rig.presets.notes)
     # a raise after the graph landed (not a value error): the graph that
     # was there comes back, with its instances' values, and the load stops
@@ -607,7 +620,7 @@ def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
     settle(rig)
     assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
     assert rig.undo.undo()
-    assert "fx.acid.2.twist" not in rig.reg and stub.wiring == DEFAULT
+    assert "fx.acid.2.twist" not in rig.reg and _bare(stub.wiring) == DEFAULT
     assert rig.undo.redo()
     assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
 

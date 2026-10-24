@@ -405,12 +405,23 @@ class FxState:
 
     def chain(self, target: int | None = None) -> list[str]:
         """The effects that run this frame, in order: all of them, or with
-        `target` (FRAME, FACES) only those aimed at it."""
+        `target` (FRAME, FACES) only those aimed at it. Plan 33 R: the
+        render graph asks `live` (its runs are wires); only the faces chain
+        and the FX page ask this, until the stack retires (plan 33 T7)."""
         if not self.on or self.mix <= 0.0:
             return []
         return [n for n in self.names()
                 if self.values[n]["on"] and self.values[n]["mix"] > 0.0
                 and (target is None or _target(self.values[n]) == target)]
+
+    def live(self, name: str) -> bool:
+        """Whether effect `name` draws this frame where it is wired (plan 33
+        R): the stack on (`fx.on`) and above mix 0 (`fx.mix`), the effect on
+        and above mix 0. No target and no order — its place is its wires —
+        and not whether it compiled (the chain's `ready` says that)."""
+        v = self.values.get(name)
+        return (bool(self.on) and self.mix > 0.0 and v is not None
+                and bool(v.get("on")) and float(v.get("mix", 0.0)) > 0.0)
 
     def select(self, name: str | None) -> None:
         """Open `name`'s strip. A name with no spec is ignored; None means

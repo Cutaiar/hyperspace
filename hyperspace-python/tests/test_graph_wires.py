@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
-from test_graph_json import Stub
+from test_graph_json import Stub, _bare
 from test_presets import boot, put
 
 from hyperspace import graph as G
@@ -211,7 +211,8 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
     assert rig.presets.notes == [
         ("graph: wire ghost → output.1.image — ghost makes geometry, output.1.image takes a "
          "picture; the default wiring")]
-    assert stub.wiring == G.Wiring(hands="scene", wires=(G.Wire("hands", "output.2.hands"),))
+    assert _bare(stub.wiring) == G.Wiring(hands="scene",
+                                          wires=(G.Wire("hands", "output.2.hands"),))
     assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(PRESETS)
 
@@ -274,13 +275,14 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
         "nodes": [], "wires": _wires(("hands", "output.2.hands"))}
     assert edit.wire("history", "output.2.hands").endswith("or an effect after it over")
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
-    assert rig.presets.graph.spec.wires == (G.Wire("scene", "output.2.hands"),)
+    assert rig.presets.graph.spec.wires == (G.Wire("frame", "fx.image"),   # (plan 33: the run)
+                                            G.Wire("scene", "output.2.hands"))
     # an effect wired after a node, then moved into an output's port
     assert edit.wire("hands", "palette.image") is None
     assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
     assert edit.unwire("hands", "palette.image") is None
     assert edit.unwire("scene", "output.2.hands") is None
-    assert rig.presets.graph.doc is None and stub.wiring == G.Wiring()
+    assert rig.presets.graph.doc is None and _bare(stub.wiring) == G.Wiring()
     assert not rig.lib.is_dirty(PRESETS)
     # the default graph's own edge is refused in words
     assert edit.unwire("history", "output.1.image").startswith(
@@ -440,7 +442,7 @@ def test_an_edit_is_one_undo_step(tmp_path):
     settle(r)
     assert stub.wiring.wires == (G.Wire("hands", "output.2.hands"),)
     assert r.undo.undo() and r.undo.status.endswith("wire hands → output.2.hands")
-    assert r.presets.graph.spec is None and stub.wiring == G.Wiring()
+    assert r.presets.graph.doc is None and _bare(stub.wiring) == G.Wiring()
 
 
 def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_path):
@@ -461,10 +463,10 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     # with the hands in the scene the history holds them whatever it says;
     # the fixture says so too, and a set_node on the history is the JSON's
     want = G.read_graph(_fixture("hands-lines")["graph"])
-    assert stub.wiring == G.Wiring(hands="scene", draw="lines")
+    assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
     assert want.wiring() == G.Wiring(hands="scene", draw="lines", history="scene+hands")
     vs = _views(S(), S(through=True), S(scene=False))
-    assert repr(G.default_graph(vs, stub.wiring, effects=("acid",))) == repr(
+    assert repr(G.default_graph(vs, _bare(stub.wiring), effects=("acid",))) == repr(
         G.default_graph(vs, want.wiring(), effects=("acid",)))
 
     def picture(wiring):
@@ -472,7 +474,7 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
         r.wiring = wiring
         return run(ctx, r, views(ctx, S(), S(through=True)), frames=3)
 
-    got, fixture = picture(stub.wiring), picture(want.wiring())
+    got, fixture = picture(_bare(stub.wiring)), picture(want.wiring())
     assert all(np.array_equal(a, b) for a, b in zip(got, fixture))
     plain = picture(G.Wiring())
     assert not np.array_equal(got[0], plain[0])               # the lines, in the scene

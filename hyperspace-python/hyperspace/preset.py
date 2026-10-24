@@ -296,7 +296,8 @@ def _names_v3(x) -> bool:
     return False
 
 
-def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default) -> str:
+def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default, *,
+              specs: graphmigrate.Specs | None = None, desk: list | None = None) -> str:
     """The schema a preset document is written as — the one ladder (D1,
     2026-10-23), the lowest that loses nothing:
 
@@ -326,10 +327,23 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default)
     re-save there (tests/test_plan31_review.py). The APC page's
     ``seq.page`` / ``seq.select`` rows are the session's and never saved.
     (The media rule does read the desk: a pre-32 build drops a desk row on
-    a media param it lacks — `uses_media`.)"""
-    if graphmigrate.needs_free(doc.get(GRAPH_KEY), dict(doc.get("values") or {}),
-                              graphmigrate.targets(doc)):
+    a media param it lacks — `uses_media`.)
+
+    Plan 33 M: `specs` (effect → its file's `(@order, @mix)`) gives an
+    absent order or mix its default, and `desk` is the rows a desk
+    template adds under the document's own (`graphmigrate.targets`). Below
+    `/5` the rest of the ladder reads the graph as a build from before
+    plan 33 would get it (`graphmigrate.legacy_section`): the run's wires
+    and the channels' are values there, not wires naming media."""
+    section = doc.get(GRAPH_KEY)
+    if graphmigrate.needs_free(section, dict(doc.get("values") or {}),
+                              graphmigrate.targets(doc, desk), specs):
         return FREE_SCHEMA
+    legacy = graphmigrate.legacy_section(section)
+    if legacy is not section:
+        doc = {k: v for k, v in doc.items() if k != GRAPH_KEY}
+        if legacy is not None:
+            doc[GRAPH_KEY] = legacy
     if uses_media(doc, at_default):
         return MEDIA_SCHEMA
     if any(k in doc for k in V3_KEYS):
@@ -422,6 +436,11 @@ class GraphSection:
         self.renderer = None
         self.spec: GraphSpec | None = None      # None: the default graph
         self.doc: dict | None = None            # the section a save writes (None: none)
+        # plan 33 M: the section in the free graph's words, when it is not
+        # `doc` — a load's: `doc` is then the file's, as a build from before
+        # plan 33 keeps it, and this the wires the load read it as (None:
+        # `doc` is the section in every schema)
+        self.free: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
         if renderer is not None:
@@ -459,6 +478,14 @@ class GraphSection:
                                                "placement") for n in spec.notes]
         return spec, spec.to_json(), []
 
+    def specs(self) -> dict[str, tuple[int, float]]:
+        """Each effect instance's file defaults, `(@order, @mix)` — what the
+        migration to the free graph reads an absent value as (plan 33 M,
+        `graphmigrate.Specs`); none with no FxState to ask."""
+        fx = getattr(self, "fx", None)
+        got = getattr(fx, "specs", None) or {}
+        return {n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}
+
     def files(self) -> set[str] | None:
         """The effect files on disk (None: no FxState to ask) — what a
         placement or a wire may name (plan 30 D1, plan 28 N4)."""
@@ -466,10 +493,16 @@ class GraphSection:
         return ({fx.file_of(n) for n in fx.specs}
                 if fx is not None and getattr(fx, "specs", None) else None)
 
-    def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:
+    def land(self, spec: GraphSpec | None, doc: dict | None = None,
+             free: dict | None = None) -> None:
         """Make `spec` the graph (None: the default): declare and drop the
         instances' params, and hand the renderer its wiring. `doc` is the
-        section a save writes back.
+        section a save writes back; `free` (plan 33 M) the same graph in the
+        free graph's words when `doc` is the file's from before them (a
+        load: `free_doc`). A `doc` in the free graph's words with no `free`
+        (an edit on the GRAPH page) is both: `doc` becomes it as a build
+        from before plan 33 reads it (`graphmigrate.legacy_section`), so an
+        edit undone leaves the preset clean.
 
         An extra hands node declared for the first time this run starts
         from what the open show holds for it (`ghost.2.*` in its session —
@@ -491,8 +524,18 @@ class GraphSection:
             changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
             if changed:
                 declare_fx(reg, self.fx, changed)
+        if free is None and graphmigrate.says_free(doc):
+            free, doc = doc, graphmigrate.legacy_section(doc)
         self.spec, self.doc = spec, copy.deepcopy(doc)
+        self.free = copy.deepcopy(free)
         self._push()
+
+    def free_doc(self) -> dict | None:
+        """The section in the free graph's words (plan 33 M): what a `/5`
+        save writes and what `schema_of` judges — `free` when the load
+        kept the file's section beside it, else `doc`."""
+        free = getattr(self, "free", None)      # (a section from before a hot reload)
+        return free if free is not None else self.doc
 
     def _seed(self, name: str) -> None:
         """A newly declared hands node's params from the open show's
@@ -520,13 +563,14 @@ class GraphSection:
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`)."""
-        return (self.spec, copy.deepcopy(self.doc))
+        return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)))
 
     def put(self, mark: tuple) -> None:
-        """Land what `mark` held again (an undo of a load), first."""
-        spec, doc = mark
-        if (spec, doc) != (self.spec, self.doc):
-            self.land(spec, doc)
+        """Land what `mark` held again (an undo of a load), first. (A mark
+        from before plan 33 holds no free section.)"""
+        spec, doc, free = (*mark, None)[:3]
+        if (spec, doc, free) != (self.spec, self.doc, getattr(self, "free", None)):
+            self.land(spec, doc, free)
 
     def _push(self) -> None:
         r = self.renderer
@@ -841,8 +885,21 @@ class Presets:
         notes += palette_notes
         # 0. and its render graph (plan 26 A4): read, not yet landed — no
         #    section is the default graph; one this build cannot read is a
-        #    note and the default graph
+        #    note and the default graph. Plan 33 M: read as the free graph
+        #    (`graphmigrate.migrate`: each pipeline's run, the faces' and the
+        #    channels' as wires; a route on a channel choice onto a switch),
+        #    a desk template's rows counted as the desk they expand to. The
+        #    retired values are kept (`keep`, plan 33 T3): `view.media` and
+        #    `backdrop.channel` still draw the faces' media and the backdrop
+        #    until T4, and order / target are declared until T7. The file's
+        #    own section is kept beside, as a pre-33 build keeps it: what a
+        #    save below `/5` writes (R10)
         gs = self._graph_section()
+        template_rows = self._template_rows(doc)
+        kept = doc.get(GRAPH_KEY)
+        doc, migrate_notes = graphmigrate.migrate(doc, gs.specs(), keep=True,
+                                                  desk=template_rows)
+        _, kept, _ = gs.read(kept)
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -922,7 +979,9 @@ class Presets:
             name = str(doc[TEMPLATE_KEY])
             try:
                 tdoc = lib.desk_template(name)
-                template = tdoc["desk"]
+                # (plan 33 M: as the migration read it, a row on a channel
+                # choice on its switch)
+                template = template_rows if template_rows is not None else tdoc["desk"]
             except LibraryError as e:
                 notes.append(f"desk template {name!r} not loaded ({e}): this preset's own "
                              "desk rows only")
@@ -992,7 +1051,7 @@ class Presets:
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
         try:
-            gs.land(spec, section)
+            gs.land(spec, kept, free=section)
             # the modifiers and their params (plan 28 N1), landed with the
             # values: their entries are their params' values
             notes += table.set_modifiers(mods, reg)
@@ -1063,6 +1122,16 @@ class Presets:
         #    subscriber on a session param is dropped with a note (D9)
         notes += table.set_macros(macros, reg)
         self.router.follow_macros(force=True)
+        # 5½. plan 33 M: an effect the migration left out of the run, said
+        #     only while a row that landed drives it (a desk row on an
+        #     invariant control, dropped above, drives nothing)
+        driven = graphmigrate.targets({"routes": [b.to_json() for b in table.routes()],
+                                       "desk": desk_json(table.desk()),
+                                       "macros": table.macros_doc()})
+        for note in migrate_notes:
+            name = graphmigrate.left_out_of(note)
+            if name is None or any(graphmigrate.effect_of(t) == name for t in driven):
+                notes.append(note)
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
         for group in PERFORMANCE_GROUPS:
@@ -1091,8 +1160,11 @@ class Presets:
             doc["note"] = self.note
         table = self.router.table
         # plan 26 A4: the graph the loaded preset carried, as read (a
-        # preset with none writes none: the default graph)
-        section = self._graph_section().doc
+        # preset with none writes none: the default graph). Plan 33 M: in
+        # the free graph's words while the schema is judged; below /5 it is
+        # put back as a pre-33 build reads it (below)
+        gs = self._graph_section()
+        section = gs.free_doc()
         if section is not None:
             doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
@@ -1120,7 +1192,32 @@ class Presets:
         # it is left out — /4 keeps every value and the bins, /3 every
         # value but the media family's, /2 neither family, so it is the
         # file it always was
-        doc["schema"] = schema_of(doc, at_default=self._at_default())
+        # plan 33 M (R10): a graph /4 can say is written as /4 says it — the
+        # run's order, the effects' targets and the channel choices as
+        # values (`legacy_values`), the section without a word of the free
+        # graph (`legacy_section`): a build from before plan 33 never meets
+        # one. An untouched load writes the values it landed and the file's
+        # own section, so it saves byte for byte as that build would
+        specs = gs.specs()
+        desk_rows = desk_json(table.desk())
+        if graphmigrate.says_free(section):
+            lv = graphmigrate.legacy_values(section, values, specs,
+                                            graphmigrate.targets(doc, desk_rows))
+            if lv is not None:
+                # (plan 33 T3: `view.media` and `backdrop.channel` are still
+                # what draws the faces' media and the backdrop — the MEDIA
+                # page sets them — so their values stand until T4 draws the
+                # wires instead)
+                values.update({k: v for k, v in lv.items()
+                               if k not in ("view.media", "backdrop.channel")})
+        doc["schema"] = schema_of(doc, at_default=self._at_default(), specs=specs,
+                                  desk=desk_rows)
+        if doc["schema"] != FREE_SCHEMA and GRAPH_KEY in doc:
+            legacy = graphmigrate.legacy_section(gs.doc)
+            if legacy is None:
+                del doc[GRAPH_KEY]
+            else:
+                doc[GRAPH_KEY] = copy.deepcopy(legacy)
         if doc["schema"] not in (MEDIA_SCHEMA, FREE_SCHEMA):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
@@ -1198,6 +1295,18 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
+    def _template_rows(self, doc: dict) -> list | None:
+        """A copy of the rows of the desk template `doc` names (plan 24 C3),
+        or None: none named, or one the library lacks (the load says so when
+        it expands the desk)."""
+        name = doc.get(TEMPLATE_KEY)
+        if not name:
+            return None
+        try:
+            return copy.deepcopy(list(self.lib.desk_template(str(name))["desk"]))
+        except (LibraryError, KeyError, TypeError):
+            return None
+
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `Presets` from
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
@@ -1268,7 +1377,9 @@ class Presets:
         would be written — and the graph section (plan 26 A4; None for a
         preset with none, so a file from before it is never dirty)."""
         table = self.router.table
-        section = self._graph_section().doc
+        # (plan 33 M: in the free graph's words, so a change to the run alone
+        # — which a pre-33 section says in values — dirties the preset too)
+        section = self._graph_section().free_doc()
         return (self._values(),
                 json.dumps([b.to_json() for b in table.routes()]),
                 json.dumps(desk_json(table.desk()), sort_keys=True),
