@@ -1,5 +1,393 @@
 # Plan 33 — the free graph: effects where they are wired, faces and backdrop as inputs, the FX stack retired
 
+**Status: built (2026-10-24)** on `plan-33-free-graph` (PR #235, into
+`plan-31-32-integration` @ 3547a7a; 3516 tests passed, 2 skipped). Designed
+with the owner on 2026-10-24 and built the same day, task by task, each
+reviewed. **Effects exist only where they are wired.** There is no
+`fx.<n>.order`, no `fx.<n>.target`, no `fx.select`, no faces chain and no
+order-built stack: each pipeline draws the run `frame → … → fx.image` that
+the preset's wires say. The faces (`shape.faces`), the pattern's media
+layer (`pattern.media`) and the backdrop (`backdrop.image`) are graph
+inputs, so a channel can run through its own shader branch to any of them,
+to an output or into another effect's `aux`. A `switch` node picks one of
+eight pictures by a modulatable `switch.select`, and only the picked one is
+made. GRAPH adds, wires, inserts and reorders effects; the FX page is a
+browser of the graph's effect nodes. Every preset made before this plan
+loads as the graph it drew: **none of the 661 goldens before it moved**
+(693 now: +24 in T4, +8 in T5). A preset the old schema can still say is
+saved as before, byte for byte (38 sources in the test); anything else is
+`hyperspace.preset/5`, which **an older build refuses**, so both Macs must
+run this build before anyone saves a free graph. The build plan was
+[`33-free-graph-build.md`](33-free-graph-build.md).
+
+Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group AC, checks
+318–328. Decisions: rows 341–352 of
+[`DECISION-REGISTER.md`](../DECISION-REGISTER.md) and the "Render graph
+without a stack" section of [`DECISIONS.md`](../DECISIONS.md). The
+build's rulings (R1–R24) are folded in below where they changed what you
+see.
+
+Commits on `plan-33-free-graph`, by task: spec and answers (0ed5929,
+e25d600, c7727bd); T1 = the vocabulary (5594905); T2 = the migration and
+`/5` (bb8eadd, cb686b3); T3 = the run from wires (622d74f, 5773773,
+83c7013); T4 = the faces, the pattern and the backdrop (d7e1ad1); T5 =
+the switch (e082929); T6 = GRAPH edits the free graph (424310c, fd17155);
+T7 = the FX page and the retirement (adc10d9); T8 = this documentation.
+
+## What was built
+
+### T1 — the vocabulary (`graph.py`, data only)
+
+- New wire ends: `frame` (makes `IMAGE`), `fx.image` (the pipeline end's
+  input), `pattern` (makes `IMAGE`, takes `media`), `shape.faces`,
+  `backdrop.image`, and `switch[.n].in1` … `in8`. `graph.RESERVED` holds
+  the names no effect file may take: `frame`, `fx`, `pattern`, `shape`,
+  `backdrop`, `switch`. `graph.SINKS` names the nodes a picture can end
+  at (`output`, `fx`, `shape`, `pattern`, `backdrop`, `history`).
+- A channel wired into an effect is a **branch**, not a refusal:
+  `split_wires` shortens a wire to D1's `after` only when
+  `placement_error` allows that place. `media.a → acid.2.image` is now a
+  legal section that reaches nothing until something reads it.
+- `wire_error` refuses a wire into `fx.image` that does not come from
+  `frame` or an effect chain leading back to it, in the words the design
+  gave. `SwitchAt` and `NODE_KINDS["switch"]` read a `{"kind": "switch"}`
+  node; a switch must be declared before a wire may name it, as a
+  composite must.
+- `graph.reaches(spec)` is the set of nodes with a path to a sink (it
+  also follows an output's `hands` and `readout` ports, the T1 ruling);
+  `graph.run_of(spec, head="frame", end="fx.image")` reads a run from the
+  explicit wire list.
+
+*At the machine:* nothing yet; this is the words. Tests:
+`tests/test_graph_free.py` (the first nine),
+`tests/test_graph_json.py::test_the_new_ends_round_trip`.
+
+### T2 — the migration and `/5` (`hyperspace/graphmigrate.py`, `preset.py`)
+
+- `graphmigrate.migrate(doc, specs, desk=)` takes a whole old document and
+  returns it with the run and the faces run written as wires, `view.media`
+  and `backdrop.channel` as channel wires (or a switch), the switch
+  `select` values set, rows retargeted and a list of load notes.
+  `to_free` is its section half. `graphmigrate.targets(doc, desk=)` is
+  the set of ids any route, desk row, macro, modifier or sequencer step
+  drives.
+- **Run membership (R5):** an effect is in the run when it is `on` and
+  either its `mix` is above 0 or something drives one of its ids. The
+  owner's row 346 was about effects toggled off; `presets/dial.json` has
+  `acid`, `huecycle` and `kaleido` on at mix 0 and pushed up by axis
+  routes, so they stay. An effect that is off stays out, and says so in
+  a load note when something drives it.
+- **A migrated section always has its head (R9):** `to_free` writes
+  `frame → fx.image` even for an empty run, so a migrated section is
+  recognisable and an emptied run does not re-grow on reload.
+- `specs` is `{name: (@order, @mix)}` read from the effect files (R8), so
+  nothing duplicates shader data in Python.
+- `graphmigrate.legacy_values(section, values, specs, driven=)` inverts
+  it: the `order`, `target`, `view.media` and `backdrop.channel` values a
+  `/4` file would carry, or `None` when `/4` cannot say the graph.
+  `graphmigrate.needs_free` asks the same of a section;
+  `preset.schema_of` writes `/5` first when it is true. `VERSIONS` is
+  `(2, 3, 4, 5)`, `FREE_SCHEMA` is `hyperspace.preset/5`.
+- `graphmigrate.reordered` (moved here from `fx.py` in T7) keeps orders
+  where they already sort right and moves the fewest.
+
+*At the machine:* every factory preset and fixture loads with no note and
+draws as before. Tests: `tests/test_graph_migrate.py` (164 tests, among
+them `test_every_library_preset_migrates_without_a_note`,
+`::test_no_library_preset_routes_an_effect_it_leaves_out`,
+`::test_a_driven_effect_on_at_mix_zero_stays_in_the_run`,
+`::test_an_empty_run_is_written_as_frame_to_fx`).
+
+### T3 — the run from wires (`graph.py`, `render.py`, `fx.py`, `preset.py`)
+
+- `Wiring.run` holds the run `GraphSpec.wiring()` read with `run_of`;
+  `default_graph` builds each pipeline's run from it (a run member whose
+  file is gone reads through and says so in `Graph.dormant`). An effect in
+  no run and on no reached branch has no node (`_reached_edges`).
+  `Effect.on` asks `FxState.live(name)`: `fx.on`, `fx.mix`, the effect's
+  own `on` and `mix`, and that it compiled. `Renderer._graph_for` keys on
+  the effect files present, not their order, so reordering rebuilds
+  nothing it need not.
+- **Load** (`Presets.load_doc`) runs `graphmigrate.migrate` on every
+  document. **Save** (`Presets.document`): when the section needs `/5`,
+  the free section is written; otherwise `legacy_values` is laid over the
+  values and `legacy_section` strips every plan-33 word, so a build from
+  before this plan never meets `frame` or `fx.image` (R10). An untouched
+  `/4`, `/3` or `/2` preset saves **byte-identical**: the test covers 38
+  sources (`tests/fixtures/plan33-v4-saves/`, recorded once from the base
+  at 3547a7a, force-added because `tests/fixtures/` is ignored).
+- **An fx module load replaces the run (R12).** Loading
+  `library/fx/<name>.json` migrates the module and replaces the loaded
+  graph's main run (and its faces run, if the module has one) with the
+  module's, keeping every other wire and branch
+  (`graphmigrate.module_runs`, `Presets._fx_module`, `Library.on_apply`).
+  The owner's model is "a module is this look's run".
+- **Switching an effect on that is in no run adds nothing to the picture
+  (R13)** and a later save is `/5`. No factory binding does this.
+
+*At the machine:* a preset looks as it did; toggling a wired effect
+changes the picture and nothing else. Tests:
+`tests/test_graph_free.py::{test_the_run_order_is_the_wire_order,test_only_wired_effects_have_nodes,test_an_unreached_effect_is_never_run,test_an_untouched_v4_preset_saves_byte_identical,test_loading_an_fx_module_replaces_the_run}`.
+
+### T4 — the faces, the pattern, the backdrop; branches at their size (`graph.py`, `render.py`)
+
+- `PatternNode` (`pattern`: `media` in, a picture out), `BackdropNode`
+  (`image` in, the sink) and `Shape.INPUTS = {"faces": IMAGE}`.
+  `shape.faces` unwired, wired straight from `pattern`, or fed a source
+  that reads nothing draws the faces as before, per face, with no 1024²
+  pass. Wired from `pattern` through effects it is the old face-chain
+  path: the pattern painted into the first half-float texture
+  (`PAINTS`), the effects in turn, the last into `face_pic`
+  (`FACE_PIC`² = 1024², now defined in `graph.py`). Wired from anything
+  else, that picture at 1024² is `u_pic`.
+- A channel wired straight into `pattern.media` is read raw, as
+  `view.media` was; a branch is made at its head's size (the channel's
+  texture size, else 1024²). A channel straight into `backdrop.image`
+  becomes `Wiring.backdrop` and is plan 32's `MediaNode` under the scene
+  byte for byte; a branch is laid under the scene in `grounded` by a
+  `Composite(under_alpha_of="backdrop_alpha")`.
+- **Branches are made once a frame at the size their consumer asks.**
+  `Frame.at(size)` is the frame at another size, with its own pool
+  (`Renderer.pool_at`) and data keyed `(name, size)`;
+  `Node.size_for(port, frame)` (R15) says what a port asks.
+  `Graph.at_frame` stops an effect only the faces read being folded at
+  the frame's size too. `Renderer._prune_sized` releases a pool or
+  texture the last frame did not use.
+- A wired effect's clock keeps running in frames its picture is not made
+  (R17), the rule placed effects already had.
+- `render._face_media` no longer reads `view.media`; the faces' effect
+  chain draws nothing (the object itself went in T7).
+
+*At the machine:* the headline graph (`media.a → acid.2 → tripcolour.2 →
+shape.faces`; `media.b → kaleido.2 → backdrop.image`) draws. Tests:
+`tests/test_graph_faces.py` (nine), `tests/test_media_faces_aux.py`; 24 new
+goldens (`media-chain-faces`, `media-chain-backdrop`, `branch-two-sizes`).
+
+### T5 — the switch (`graph.py`, `params.py`, `render.py`)
+
+- `SwitchNode`: eight `IMAGE` inputs `in1` … `in8`, one out, no pass and
+  no texture of its own. `index(frame)` is 0–8 from `Frame.selects`
+  (out-of-range counts as off); `selected(frame)` is the picked input's
+  node, or `None` when off or unwired. Its `image`, `paint`, `alpha`,
+  `depth` and `reads` pass the pick through: a **cut**.
+- `params.declare_switches(r, names)` declares `switch[.n].select` per
+  switch the graph names (enum: off, 1–8; modulatable; group `switch`),
+  undeclares those no longer named, and returns the ids that changed. The
+  picks live in `ViewState.switch`, read once a frame.
+- **Only the selected input runs.** `Graph.pulled(frame)` walks from every
+  node with no readers, following each switch's pick only, cached per
+  tuple of picks (bounded at 256); `Graph.evaluate` skips a `MAKES` node
+  or `Effect` that is not pulled. A channel no picked path reads is not
+  uploaded. Changing `select` rebuilds nothing.
+- A switch that picks a channel feeding `pattern.media` reads that channel
+  raw, exactly as a channel wired straight in; a switch under the scene
+  that is off or on an unwired input paints nothing, so the backdrop shows
+  nothing.
+- **A route onto the old channel choice becomes a switch (R14, R19).** An
+  old preset whose `view.media` or `backdrop.channel` is driven loads
+  with a switch (`media.a … media.h` into `in1 … in8`, the switch into
+  `pattern.media`), the pick at the old value and the rows retargeted to
+  `switch.select`. Saving it writes `/5`, since `/4` cannot say a switch.
+  Two fixtures (`tests/fixtures/plan33-driven/`) hold this; the other 38
+  stay byte-identical.
+
+*At the machine:* a knob on `switch.select` changes which channel the
+faces show, as a knob on `view.media` did. Tests:
+`tests/test_graph_switch.py` (twelve, among them
+`::test_only_the_selected_input_is_made`,
+`::test_select_changes_do_not_rebuild_the_graph`,
+`::test_a_route_drives_select`); 8 new goldens (`switch-faces`).
+
+### T6 — GRAPH edits the free graph (`graphview.py`, `ui_graph.py`)
+
+- The canvas draws `frame` (a stand-in, whenever the run comes from the
+  section's wires), `pattern` and `backdrop` (always, like the channels),
+  the switches, and the `shape.faces` port. Each pipeline's picture enters
+  `frame` on a display-only `feeds` cable. Areas: `pattern` in GEOMETRY;
+  `backdrop` and `switch` in MEDIA; `frame` and `fx` in SHADERS. An
+  effect or switch made of the media alone (`media_made`) is placed in
+  MEDIA, so `media.a → acid.2 → huecycle.2 → shape.faces` runs MEDIA →
+  GEOMETRY and the layout rule "no cable runs back" holds (a shader back
+  into the faces included).
+- The right-click picker adds an effect or a switch **unwired**, where the
+  menu opened: faint, "reaches nothing" (`REACHES_NOTHING`). An effect
+  dropped on a render cable is **inserted** (`Edit.insert_effect(cable,
+  file)`); right-click on a render cable offers "insert effect ▸ <file>".
+  **Reordering is dragging an effect onto another cable** (R22):
+  `Edit.place_effect(cable, name)` lifts it out of where it is (the run
+  closes over the gap) and puts it on the new cable, in one undo step. A
+  node dropped back where it was, or on empty canvas, does nothing.
+- Deleting a run cable lifts the effect it led into; the run closes up.
+  **Deleting `frame → fx.image` is refused (R20)** in words: "the run
+  starts at frame and ends at fx.image — insert effects into it".
+- **An unwired instance 1 stays in the section (R21)**:
+  `{"kind": "effect", "file": f}` with no instance key. Taking `acid` out
+  of the run leaves it faint and "reaches nothing", not gone, and the
+  section saves as `/5`; one undo puts it back.
+- A compile error colours the effect node's title and is its hover.
+  `ui_graph.select_effect(panel, name)` and `Panel.fx_selected` are the
+  one selection shared with the FX page.
+
+*At the machine:* all of the above, by mouse. Tests:
+`tests/test_graph_edit.py::{test_insert_effect_on_a_render_cable,test_reordering_the_run_is_rewiring,test_an_instance_one_effect_taken_out_of_the_run_stays_faint,test_dragging_a_run_member_onto_another_cable_moves_it}`,
+`tests/test_graph_areas.py` (the four `/5` fixtures back in),
+`tests/test_graphview.py`.
+
+### T7 — the FX page browses the graph; the stack retired (`ui_fx.py`, `fx.py`, `graph.py`)
+
+- `ui_fx.groups(spec)` lists every effect instance in the loaded graph,
+  grouped by where its path ends: **Run** (wire order), **→ faces**,
+  **→ pattern media**, **→ backdrop**, **→ output N**, **→ <effect>
+  aux**, any other end (history, a D1 `after`), and **reaches nothing**
+  last. An effect that ends in two places is listed in each. Each row is
+  a name, an `on` check, a small `mix` and one state word (`running`,
+  `off`, the `why_idle` reason, or `error: …`). Clicking a name opens its
+  strip; **Show on GRAPH** selects and centres it. The `→ faces` header
+  carries `fx.face_map`. The page edits no structure. With nothing in the
+  graph it says "no effects in the graph — add one on GRAPH (right-click
+  the canvas)".
+- **Removed from `fx.py`:** the `order` and `target` params,
+  `fx.select`, `TARGETS`, `FRAME`, `FACES`, `chain()`, `FxChain.run`,
+  `begin`, `active`, the faces chain's program borrowing. `@order` is
+  still parsed (`EffectSpec.order`), read only by the migration; the
+  module docstring and `_lib.glsl` say so. `RESERVED` keeps `order` and
+  `target` so an old preset's `fx.<n>.order` is not read as a uniform.
+  Removed from the FX page: the chip grid and its drag, the placed grid,
+  the order slider, the ONTO chips, the faces line.
+- **R23:** with the order-built stack gone, `Wiring.run is None` means
+  the empty run (`frame → fx.image`). Rigs and tools that relied on the
+  fallback get their run through `graphmigrate.wiring_for` (the same path
+  a load takes), and the golden tool's states keep the run the load
+  migrated. Three demo tools of the retired UI were deleted:
+  `tools/fx_page_demo.py`, `tools/face_target_shots.py`,
+  `tools/fx_faces_scene_shots.py`.
+- `view.media` and `backdrop.channel` are no longer params. Their readers
+  follow the wires (`graph.source_into`, `graph.channel_into`, through a
+  switch's pick): the FACES page tiles, the MEDIA page (its pickers row is
+  words such as "channel C (switch)", with "wired on GRAPH" in its note)
+  and Learn (`learn.cannot_show`). An old preset's two values still
+  migrate, and a `/4` save writes them back where the base build put them
+  (`graphmigrate.landed_retired`, `with_retired`).
+- `render_drop("acid")` no longer says "always in the chain": instance 1 is
+  dropped like any instance. GRAPH's picker on a section with no run gives
+  it the bare `frame → fx.image` (`graphview._with_run`).
+- 30 stack-only tests were deleted (named in adc10d9's message) and 17
+  added; the pure-wire behaviour that survived was rewritten, not dropped.
+
+*At the machine:* the FX page is a list to pick from and play. Tests:
+`tests/test_fx.py::{test_groups_follow_the_wires,test_the_fx_page_lists_the_graphs_effects,test_show_on_graph_selects_the_node,test_the_retired_ids_are_gone,test_an_old_preset_loads_its_retired_ids_without_a_note,test_an_old_preset_saves_its_retired_ids_back_where_they_were}`.
+
+## What no person has verified
+
+Every headless test passes (3516 passed, 2 skipped on the build machine,
+an M3 Max, with the 693 goldens); no person has run any of it. In
+particular:
+
+- **Every gesture on GRAPH** (318, 320, 325, 326): a drag onto a cable, a
+  near miss beside one, a right-click's subject, the faint node's look.
+  The tests drive `Edit` and `ui_graph.dropped` and draw the widget
+  headless; none moves a mouse.
+- **The headline graph by eye** (318): the goldens were checked on one
+  still each; the look of a clip through two effects on the faces, and a
+  camera through `kaleido` behind the scene, is for the owner.
+- **A knob on `switch.select` on a real APC40** (319): the test drives a
+  route from a synthetic LFO. The feel of a cut on a knob, and whether
+  eight positions on a continuous knob are easy to hit, is not tested.
+- **The FX page at distance with a big graph** (327), and its grouping
+  read against the GRAPH canvas.
+- **An old party preset by eye and on the second Mac** (322, 328): the
+  goldens pin 661 pictures on the gate Mac's GL and the byte test pins
+  the save; nobody has opened a `/5` file on an older build (the ladder
+  refusal is tested with the loader, not the old app).
+- **A channel lost mid-show** (323): the tests make a source read nothing;
+  a real NDI feed or camera going away, and the faces falling back to the
+  pattern for that frame, have not been seen.
+- **The frame cost** (324): two branches, the faces branch (a 1024² pass
+  per effect) and an eight-way switch were counted in makes, never timed
+  on a tile GPU.
+- **Hot reload of a registry from before T5** (R24): switches read off
+  until a restart; a developer matter only.
+
+## Known rough edges
+
+Behaviour the owner will meet:
+
+- **A pad or key that switches on an effect in no run does nothing (R13)**
+  and a later save is `/5`. No factory binding does it. The FX page lists
+  only the graph's effects, so there is nowhere to find such an effect.
+- **A person's own preset that drives a channel choice saves `/5` after
+  its first re-save (R19)** and is unreadable on an older build then. None
+  is in the library.
+- **An fx module load replaces the run (R12)**; it does not append. A
+  look-module applied over a hand-built run loses that run (branches and
+  placements survive). Undo restores it.
+- **Deleting `frame → fx.image` is refused (R20).** To empty the run, take
+  the effects out one at a time.
+- **A wired effect's clock runs while its picture is not made (R17)**,
+  so a long-idle effect jumps phase when it comes back. An unpulled
+  effect behind an unselected switch input is different: its clock stands
+  still. The two rules differ (T5 minor, undecided).
+- **A near-miss drag (R22)** can surface refusal notes such as "x is no
+  picture cable" in the footer. Check 325 asks whether that is noise.
+- **`render_add` numbers `max(existing) + 1`**, so re-adding a dropped
+  instance 1 makes `acid.2`.
+- **A backdrop branch has one extra reader**, so one extra pool texture a
+  frame (T4 minor). A branch is never over 1080p (R18: plan 32's caps
+  decode files at 1920×1080 and live at 1280×720).
+- **A `/4` save after a reorder writes the moved effect's `order` as an
+  int among floats.** Reads back the same.
+- **A pattern layer's first upload** is no longer in the scene's timing
+  line on SYSTEM.
+
+Code the next person will meet (deferred minors from the reviews):
+
+- `wire_error`'s port-list truncation is keyed on `len(takes) < 4`
+  rather than on the switch (T1). `run_of` returns `()` both for no run
+  and for an empty `frame → fx.image` run (T1).
+- `test_no_existing_preset_changes_schema` has a weakening `or` clause
+  (T2). `_watch_fx_modules()` is called from `load_doc` on every load, and
+  its hot-reload test simulates rather than exercising `test_hotreload`
+  (T3).
+- `Renderer._frame_target` / `pool_at` use `__dict__.setdefault` where the
+  file otherwise uses `getattr`; a solid geometry's draw raising between
+  `prepare` and `draw` leaves a stale `r._face_layer` (T4).
+- `Graph.pulled` treats an `after`-only reader as a root (conservative; to
+  be commented); no test that a route or desk row on a removed
+  `switch.<n>.select` goes dormant without raising; `MAKERS` sits
+  mid-file (T5).
+- `graphview.cable_near` reuses `d` for an id and then a distance and
+  shadows `a`, `b`; `returns()` has a long `and`/`or` condition (T6).
+- `ui_fx` imports the private `graph._PICTURE_PORTS` and `preset` the
+  private `library._module_values` (public aliases wanted);
+  `ui_fx.groups()` is computed twice a frame (the page and the strip's
+  `_where`) and again in GRAPH's side pane; `learn.cannot_show`'s
+  media-`None` fallback reads `off("view.media")`, dead in practice (T7).
+- `tests/test_presets.py::test_active_follows_the_loaded_preset_from_one_place`
+  failed once in the middle of T7 while `ruff --fix` ran over the tests;
+  it passes alone and in the final run. Watch for a flake.
+
+## The design, as agreed (2026-10-24), corrected where the build differs
+
+Where the build differs from the text below:
+
+- **Reserved names** are `frame`, `fx`, `pattern`, `shape`, `backdrop` and
+  `switch` (the design named the first three).
+- **Instance 1 can be unwired** (R21): the design's "instance 1 is the
+  file itself, always there" belonged to the retired stack.
+- **Run membership** is `on` and (`mix > 0` or driven), not `on` and
+  `mix > 0` (R5).
+- **A module load replaces the run** (R12); the design did not say.
+- **The retired values are not only dropped:** a save below `/5` writes
+  them back where the base build put them (`with_retired`), which is what
+  keeps the 38 sources byte-identical.
+- **`backdrop.alpha`'s owner** on GRAPH is the `backdrop` node, not the
+  composite.
+- The risk "about 31 of `test_fx.py`'s tests are rewritten, not deleted":
+  30 were deleted as tests of removed UI or of the stack alone (named in
+  adc10d9), the rest rewritten.
+- The design's wire `frame → fx.image` for an empty run is always present
+  (R9, R20), so a section with no effect still has one wire.
+
 The render graph stops being "today's frame, patched". An effect exists
 where it is **wired** and nowhere else: no `order`, no `target`, no
 implicit stack every effect file sits in. The **faces** on the geometry
@@ -315,8 +703,8 @@ their shape (Not in this plan).
 
 ## Decisions
 
-Rows 341–352 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), written
-there when the build lands. "(owner)" is answered in the owner's words;
+Rows 341–352 of [`DECISION-REGISTER.md`](../DECISION-REGISTER.md), with what
+was built against each. "(owner)" is answered in the owner's words;
 "(rec)" is a recommendation **accepted by the owner on 2026-10-24**
 ("accept the rest of the recs, start building").
 

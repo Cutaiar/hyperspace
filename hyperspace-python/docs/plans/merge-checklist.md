@@ -4,7 +4,7 @@ Everything that stands between Dan's open PRs and `main`, in order. The hand
 checks below are the titles from [`11-hand-checks.md`](11-hand-checks.md);
 open that file for each check's steps and its *Pass:* line. No person has
 run any of them yet. Every PR's automated suite and golden frames are green
-(#233: 3308 passed, 661 goldens).
+(#233: 3308 passed, 661 goldens; #235: 3516 passed, 693 goldens, the 661 unmoved).
 
 ## Which branch to run them on
 
@@ -21,6 +21,7 @@ stack existed. Exceptions:
 
 | PR | Into | What it needs before merging |
 |---|---|---|
+| **#235** plan 33, the free graph | `plan-31-32-integration` | hand checks AC (318–328) on `plan-33-free-graph`; **merge it into #233's branch before #233 merges**, so the stack grows by one PR |
 | **#233** plans 31 + 32 together | `plan-28-30-integration` | hand checks Z (280–285; 286–295 are #231's), AA (296–316), AB (317) on this build |
 | **#224** plans 28 + 30 | `plan-24-26-27-integration` | hand checks X (220–231, 267–271), Y (232–276), Z's 277–279 (the instanced field from `main`) |
 | **#195** plans 24, 26, 27 | `main` | hand checks U (148–167), W (168–190, 219), V (191–218) |
@@ -29,17 +30,18 @@ stack existed. Exceptions:
 | #205 leapc-cffi any version | `merge-main-20261016` | nothing: **close** — its head is already in `plan-28-30-integration` |
 | #204 plans 28/30 prompt | `plan-24-26-27-integration` | nothing: **close** — its head is already in `plan-28-30-integration` |
 
-**Merge order (no retargeting):** #233 into `plan-28-30-integration` → #224
+**Merge order (no retargeting):** #235 (plan 33) into `plan-31-32-integration`, then #233 into `plan-28-30-integration` → #224
 into `plan-24-26-27-integration` → #195 into `main`. Each merge just grows
 the next PR. `main` takes one merge. Then close #230, #232, #204, #205.
 
 ## Things that are not hand checks
 
 - [ ] **Both Macs on the merged build** before anyone saves a preset from it: `/3` (sequencer) and `/4` (media) presets are refused by older builds, and a plan-32-only build would drop a sequencer pattern from a `/4` file.
+- [ ] **Plan 33 (#235): both Macs on the build with the free graph** before anyone saves a branch, a switch or an unwired node: that saves `hyperspace.preset/5`, which an older build refuses. Presets that need nothing new save as before, byte for byte. The 661 goldens before the plan are unmoved (693 now); the gate Mac re-runs them.
 - [ ] `uv sync` on each Mac (new deps: `av`, `pillow-heif`, `syphon-python[opengl]`, `cyndilib`, `pyobjc-framework-avfoundation`).
 - [ ] **Dillon: #223 venues vs `[[devices]]`** — decide whether a venue may set devices (proposal: no; the overlay drops them with a note). Resolution notes for #223 and #214 against this stack: [`assets/32-media/merge-dillon-214-223.md`](assets/32-media/merge-dillon-214-223.md). #223 also needs its register rows 110/111, check 144 and guide L69 renumbered (taken on the stack).
 - [ ] Dillon's #214 and #223 are into `main`; after #195 lands they rebase onto it (one superficial hunk for #214; superficial hunks + the devices question for #223).
-- [ ] Optional: the compositing-order reconciliation session (plan 33) — the backdrop's place in the look-back is a stopgap until then.
+- [ ] Optional: the compositing-order reconciliation session — the backdrop's place in the look-back is a stopgap until then (plan 33 made changing it a graph edit, and kept plan 32's order, row 351).
 
 ## Without the hand camera
 
@@ -240,3 +242,16 @@ when the camera is back). No real recorded tape is committed yet.
 
 ### AB. Plans 31 and 32 together
 - [ ] **317** A preset with a pattern and a bin, saved and reloaded on the merged build — _laptop, the copy, a picture; a second Mac for the last step_
+
+### AC. Plan 33: the free graph
+- [ ] **318** The headline graph: a clip through two effects onto the faces, the camera through `kaleido` behind the scene — _laptop, the copy, a clip, a camera_
+- [ ] **319** A switch over three channels on an APC40 knob, into the faces — _APC40, the copy_
+- [ ] **320** Reordering the run by dragging — _laptop, the copy_
+- [ ] **321** The FX page finds and plays an effect on a branch — _laptop, the copy_
+- [ ] **322** An old party preset loads and looks the same; saved untouched it opens on the second Mac — _laptop, the copy, a second Mac_
+- [ ] **323** A channel on the faces is lost mid-show — _laptop, any live source_
+- [ ] **324** The frame cost of two branches, the faces branch and an eight-way switch — _laptop_
+- [ ] **325** The near-miss drag — _laptop, the copy_
+- [ ] **326** A shader back into the faces on the GRAPH layout — _laptop, the copy_
+- [ ] **327** The FX page with a big graph, at arm's length — _laptop_
+- [ ] **328** A free graph is refused by an older build — _two Macs, the copy_

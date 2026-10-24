@@ -40,7 +40,10 @@ explained in the [glossary](#glossary) at the end.
    `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
    The media entries (L145–L151) are plan 32's, and L152 is the two
    plans together: use branch `plan-31-32-integration`, where they land
-   together, until it is merged.
+   together, until it is merged. The free-graph entries (L153–L157, A47)
+   are plan 33's: use branch `plan-33-free-graph` (PR #235) until it is
+   merged. A free graph saves as `hyperspace.preset/5`, which an older
+   build refuses, so both Macs must run that build before L157.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -129,6 +132,8 @@ changes brightness or volume instead).
 15. Plan 32's media entries: L145–L148 on the laptop (L147 with the cloud
     and a second Mac), L149–L150 with Resolume or TouchDesigner, L151 with
     a phone on the copy; then L152, the two plans together, with two Macs.
+16. Plan 33's free-graph entries: L153–L156 on the laptop (L156 with a
+    live source), L157 with two Macs on the copy, then A47 with the APC40.
 
 ## Summary
 
@@ -286,6 +291,11 @@ changes brightness or volume instead).
 | L150 | Syphon and NDI out; a publish-only output | 1 | laptop, Resolume or TouchDesigner, a second screen | 308–310 |
 | L151 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314, 316 |
 | L152 | A preset with a pattern and a bin, saved and reloaded (plans 31 + 32) | 1 | laptop, a picture, the copy; a second Mac | 317 |
+| L153 | The headline graph; reordering the run by dragging; the FX page on a branch (plan 33) | 1 | laptop, a clip, a camera, the copy | 318, 320, 321 |
+| L154 | A drop beside a cable; a shader back into the faces on the layout | 1 | laptop, the copy | 325, 326 |
+| L155 | The FX page with a big graph, from across the room | 1 | laptop | 327 |
+| L156 | A channel lost on the faces mid-show; the frame cost of branches and a switch | 1 | laptop, a live source | 323, 324 |
+| L157 | An old party preset looks the same; a free graph on an older build | 1 | two Macs, the copy | 322, 328 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -332,6 +342,7 @@ changes brightness or volume instead).
 | A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 293 |
 | A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
+| A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -3788,6 +3799,108 @@ picture is gone after the reload; the second Mac opens it.
 
 *(check 317)*
 
+## Plan 33: the free graph (L153–L157)
+
+#### L153. The headline graph; reordering by dragging; the FX page on a branch
+
+**Needs:** laptop; a clip and a camera; the copy; branch
+`plan-33-free-graph`.
+
+**Do:** put the clip on channel A and the camera on B. On GRAPH,
+right-click the canvas and add `acid`, `tripcolour` and `kaleido`; they
+appear faint, "reaches nothing". Wire `media.a` → `acid.2` →
+`tripcolour.2` → `shape.faces`, and `media.b` → `kaleido.2` →
+`backdrop.image`; set the backdrop alpha to 1. Save under a new name.
+Then load `party-trip`, drag its first effect onto another cable, undo,
+and right-click a cable to insert an effect. Open the FX page: click
+`acid.2`, move a slider, press **Show on GRAPH**.
+
+**Right if:** each node stops being faint as it is wired; the clip plays
+on the faces through the two effects and the camera is a kaleidoscope
+behind the shape; the saved file says `hyperspace.preset/5`; a drag moves
+the effect and the run closes over the gap, one undo puts it back, a
+drop on empty canvas does nothing, the insert adds an instance; the FX
+page lists `acid.2` under **→ faces** and `kaleido.2` under **→
+backdrop**, the slider changes the picture, and **Show on GRAPH** centres
+the node.
+
+**Wrong if:** a wire is refused that should land, the faces go black, a
+node duplicates, or the two pages disagree about which effect is open.
+
+*(checks 318, 320, 321)*
+
+#### L154. A drop beside a cable; a shader back into the faces on the layout
+
+**Needs:** laptop; the copy; L153's graph.
+
+**Do:** drag an effect node and let go a few pixels beside a cable, then
+beside a modulation cable. Press tidy on L153's graph and look at the
+cables.
+
+**Right if:** a drop within reach of a cable lands on it, a drop away
+from one does nothing, and a refusal note ("x is no picture cable") is
+rare and makes sense; the cables run left to right (MEDIA, then GEOMETRY),
+none doubling back, and the two effects on the faces sit in MEDIA.
+
+**Wrong if:** a node moves for a drop nowhere near a cable, or a cable
+runs back across the canvas.
+
+*(checks 325, 326)*
+
+#### L155. The FX page with a big graph, from across the room
+
+**Needs:** laptop.
+
+**Do:** build a graph with about twelve effects, two branches, the faces,
+the backdrop and three unreached nodes. Open the FX page and stand a
+metre and a half back.
+
+**Right if:** the group headers and state words are legible, a name is
+easy to hit, nothing is clipped, and **reaches nothing** stands out.
+
+**Wrong if:** a row is hidden or a strip is pushed off the page.
+
+*(check 327)*
+
+#### L156. A channel lost on the faces; the frame cost of branches and a switch
+
+**Needs:** laptop; a camera or an NDI sender.
+
+**Do:** with a live source on the faces through two effects, unplug it for
+five seconds and plug it back. Then note SYSTEM's frame time on
+`party-trip`, build two branches, the faces branch and an eight-way
+switch driven by an LFO, and read the frame time each time.
+
+**Right if:** the faces show the pattern, not black or frozen, while the
+source is gone, and the picture comes back by itself; each branch costs
+about 2 ms or less (say your numbers) and the switch costs no more than
+one branch, only its picked path showing on SYSTEM.
+
+**Wrong if:** black faces, a freeze, a switch whose cost grows with its
+inputs, or a frame time over 16 ms.
+
+*(checks 323, 324)*
+
+#### L157. An old party preset looks the same; a free graph on an older build
+
+**Needs:** two Macs sharing a library, one on this build and one on the
+build from before plan 33; the copy.
+
+**Do:** on the new build, load each `party-*` preset and `dial`; save one
+untouched under its own name and diff it against the original. Open the
+library on the old Mac. Then save L153's graph, try it on the old Mac,
+strip its branches on the new build and save again.
+
+**Right if:** no load note, the pictures look as before, the untouched
+save is byte-identical and the old Mac opens it; the free graph's file
+says `/5` and the old Mac refuses it, leaving it as it was; the run-only
+file is a lower schema and the old Mac opens it.
+
+**Wrong if:** a load note, a changed picture, a diff, or the old Mac
+opening a `/5` file.
+
+*(checks 322, 328)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -4776,6 +4889,26 @@ is lost — press again.
 latched on the desk by itself.
 
 *(check 295)*
+
+#### A47. A switch over three channels on a knob, into the faces
+
+**Needs:** the APC40; the copy; three channels with pictures; branch
+`plan-33-free-graph`.
+
+**Do:** on GRAPH add a switch, wire `media.a`, `media.b` and `media.c`
+into its `in1`–`in3` and the switch into `pattern.media`. Learn
+`switch.select` onto an APC40 knob and sweep it; put the param on `off`
+and on `4`.
+
+**Right if:** the faces show A, B and C as the knob passes each third, as
+a cut; `off` and the unwired `4` show the faces' own pattern; only the
+picked channel uploads on SYSTEM. Say whether three positions on a
+continuous knob are easy to land on.
+
+**Wrong if:** a blended picture, a stall when the pick changes, or an
+unpicked channel still uploading.
+
+*(check 319)*
 
 ## (b) The hand camera
 
