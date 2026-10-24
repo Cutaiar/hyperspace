@@ -43,8 +43,8 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     vs = [View(S(through=True), (10, 10)), View(S(scene=False, through=True), (10, 10))]
     g = G.default_graph(vs, spec.wiring(), effects=tuple(sorted(RUN)))
     assert g.run == RUN
-    # (a wiring that says no run takes the effects handed it, in that order)
-    assert repr(G.default_graph(vs, effects=RUN)) == repr(g)
+    # (R23, plan 33 T7: a wiring that says no run has the empty one)
+    assert G.default_graph(vs, effects=RUN).run == ()
     for end, src, names in (
             ("fx", "history", list(RUN)),
             ("fx(scene+hands)", "composite(scene+hands)", [f"{e}(scene+hands)" for e in RUN]),
@@ -76,12 +76,14 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
 def test_an_effect_named_like_another_node_is_kept_apart():
     """An effect file called `scene` or `capture` (nothing stops one being
     dropped in the folder) gets the params' prefix as its node's name."""
-    g = G.default_graph([View(S(), (10, 10))], effects=("scene", "capture", "warp"))
+    names = ("scene", "capture", "warp")
+    g = G.default_graph([View(S(), (10, 10))], G.Wiring(run=names), effects=names)
     assert [e.name for e in g.nodes["fx"].effects] == ["fx.scene", "fx.capture", "warp"]
     assert isinstance(g.nodes["scene"], G.Scene) and isinstance(g.nodes["capture"], G.Capture)
     # one called `fx`: its nodes would be the ends' names in every pipeline
     g = G.default_graph([View(S(through=True), (10, 10)),
-                         View(S(scene=False, through=True), (10, 10))], effects=("fx",))
+                         View(S(scene=False, through=True), (10, 10))],
+                        G.Wiring(run=("fx",)), effects=("fx",))
     assert [e.name for e in g.nodes["fx"].effects] == ["fx.fx"]
     assert [e.name for e in g.nodes["fx(scene+hands)"].effects] == ["fx.fx(scene+hands)"]
     assert [e.name for e in g.nodes["fx(hands)"].effects] == ["fx.fx(hands)"]
@@ -128,11 +130,10 @@ def _count(r):
 def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuild(ctx):
     """Plan 33 R (rewritten from plan 30 D0's stack-order test): a wiring
     that says a run builds each pipeline's run from its wires, in wire
-    order whatever the orders say; the graph keys on the effect files
-    present, so switching one on, or a new order, keeps the graph object,
-    and a rewire builds another. A wiring that says no run (no preset's
-    graph: a rig) takes the frame-aimed stack in `FxState.names()` order,
-    as plan 30 D0 did — there a new order builds another."""
+    order; the graph keys on the effect files present, so switching one
+    on keeps the graph object, and a rewire builds another. A wiring that
+    says no run (no preset's graph) has the empty one (R23, plan 33 T7: the
+    stack is gone), whatever is switched on."""
     from test_outputs import rig, run, views
 
     r = rig(ctx)
@@ -145,25 +146,21 @@ def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuil
     assert set(g.effects) == set(r.fx.state.specs) and len(g.effects) >= 12
     assert _run_of(g, "fx") == ["acid", "warp"] == list(g.run)
     r.fx.state.values["acid"]["on"] = True
-    r.fx.state.values["acid"]["order"] = 99                # last in the stack: no matter
     run(ctx, r, vs, frames=1)
     assert r._graph is g
     r.wiring = G.read_graph({"wires": [{"from": "frame", "to": "warp.image"},
                                        {"from": "warp", "to": "fx.image"}]}).wiring()
     run(ctx, r, vs, frames=1)
     assert r._graph is not g and _run_of(r._graph, "fx") == ["warp"]
-    # no run said: the stack, frame-aimed, in order
+    # no run said: the empty run, whatever is on
     r = rig(ctx)
+    r.wiring = G.Wiring()
     run(ctx, r, vs, frames=1)
     g = r._graph
-    assert _run_of(g, "fx") == [n for n in r.fx.state.names()
-                                if r.fx.state.values[n]["target"] == 0]
+    assert _run_of(g, "fx") == [] and g.run == ()
     r.fx.state.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
-    assert r._graph is g
-    r.fx.state.values["acid"]["order"] = 0                # first in the stack now
-    run(ctx, r, vs, frames=1)
-    assert r._graph is not g and _run_of(r._graph, "fx")[0] == "acid"
+    assert r._graph is g and _run_of(g, "fx") == [] and not r.stats["fx_on"]
 
 
 def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
@@ -171,9 +168,19 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     the one with no effect nodes at all. One on among the off ones: that
     one pass a frame, no other."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import rig, run, views, wired
 
-    r = rig(ctx, effects=())
+    def every_one_wired(r):
+        """Every effect in the run (by its file's @order), switched off."""
+        st = r.fx.state
+        names = sorted(st.specs, key=lambda n: (st.specs[n].order, n))
+        chain = ["frame", *names]
+        r.wiring = wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
+                                       for a, b in zip(chain, names)]
+                             + [{"from": names[-1], "to": "fx.image"}]})
+        return r
+
+    r = every_one_wired(rig(ctx, effects=()))
     calls = _count(r)
     got = run(ctx, r, views(ctx, S()), frames=3)[0]
     assert calls == [] and r.stats["effects"] == [] and r.stats["chain_runs"] == 0
@@ -185,7 +192,7 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     assert not bare._graph_for(views(ctx, S())).nodes["fx"].effects
     assert np.array_equal(got, want)
     # one on: one pass a frame, the off ones around it none
-    r = rig(ctx, effects=("warp",))
+    r = every_one_wired(rig(ctx, effects=("warp",)))
     calls = _count(r)
     run(ctx, r, views(ctx, S()), frames=3)
     assert [n for n, _ in calls] == ["warp"] * 3 and r.stats["effects"] == ["warp"]
@@ -197,10 +204,13 @@ def test_two_instances_of_one_effect_are_two_nodes_on_one_program(ctx):
     values, one compiled program between them."""
     from test_outputs import rig, run, views
 
+    from hyperspace.graphmigrate import wiring_of
+
     r = rig(ctx, effects=())
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid"]["on"] = st.values["acid.2"]["on"] = True
+    r.wiring = wiring_of(st)                     # plan 33 R23: both in the run
     calls = _count(r)
     run(ctx, r, views(ctx, S()), frames=2)
     g = r._graph
@@ -363,11 +373,12 @@ def _block_paint(self, frame, dst):
     if not frame.fx_on:
         src.paint(frame, dst)
         return
-    fx = frame.r.fx
-    buf = fx.begin(frame.size)
+    from test_outputs import _stack_begin, _stack_run
+
+    buf = _stack_begin(frame.r, frame.size)
     src.paint(frame, buf)
     with frame.timed(self.name):
-        fx.run(dst, frame.t)
+        _stack_run(frame.r, dst, frame.t)
     frame.stats["chain_runs"] += 1
 
 
@@ -392,8 +403,9 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
         # the pre-D0 graph: the ends read their sources, no effect node —
         # its runs' effects named (plan 33 R: what `fx_on` asks), not built
         def bare(vs, o=old):
-            g = G.default_graph(vs, getattr(o, "wiring", None) or G.Wiring())
-            g.run = tuple(o.fx.state.chain(0))
+            from test_outputs import _stack_names
+            g = G.default_graph(vs, G.Wiring())
+            g.run = tuple(_stack_names(o))
             return g
 
         old._graph_for = bare

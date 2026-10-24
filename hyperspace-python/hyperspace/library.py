@@ -123,6 +123,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
+from .graphmigrate import retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -2028,7 +2029,9 @@ class Library:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
             values = _module_values(group, doc)
-            missing = [k for k in values if k not in self.reg]
+            # (an fx module's order and target, retired in plan 33 T7, are no
+            # unknown ids: its run is read from them, `Presets._fx_module`)
+            missing = [k for k in values if k not in self.reg and not retired(k)]
             resolved = self.resolved(group, values)
             self.restore(resolved)
             # (getattr: a Library from before a hot reload has no apply hooks)

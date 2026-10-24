@@ -328,9 +328,7 @@ def test_backdrop_under_scene(ctx):
     # off again (unwired): the graph without it, the frame black
     (none,) = _draw(ctx, _back(r, ""), _empty())
     assert "grounded" not in r._graph.nodes and (none[..., :3] == 0).all()
-    # plan 33 R: `backdrop.channel` (`ViewState.backdrop`) draws nothing now
-    (still_none,) = _draw(ctx, r, _empty(backdrop=1))
-    assert "grounded" not in r._graph.nodes and (still_none[..., :3] == 0).all()
+    # (plan 33 T7: no `backdrop.channel` — the wire into `backdrop.image` is it)
 
 
 def test_backdrop_needs_the_channels(ctx):

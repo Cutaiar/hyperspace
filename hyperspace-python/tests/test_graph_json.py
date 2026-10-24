@@ -346,10 +346,11 @@ def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     fx.phase["acid"] = fx.phase["acid.2"] = 0.0
     fx.advance(0.5)
     assert fx.phase["acid.2"] == 2 * fx.phase["acid"] > 0
-    assert fx.chain() == ["acid", "acid.2"]
-    reg["fx.acid.order"].set(60)
-    reg["fx.acid.2.order"].set(10)
-    assert fx.chain() == ["acid.2", "acid"]
+    # (plan 33 T7: no order of its own — where it runs is its wires; both on,
+    # a load lands them in the run by their file's @order, then by name)
+    from hyperspace.graphmigrate import wiring_of
+    assert wiring_of(fx).run == ("acid", "acid.2")
+    assert "fx.acid.2.order" not in reg
     # a hot edit re-declares the acid file: the second keeps its ids
     declare(reg, fx, {"acid"})
     assert "fx.acid.2.twist" in reg and reg["fx.acid.2.twist"].value == 1.7
@@ -458,17 +459,17 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
         "fx.on": True, "fx.acid.on": True, "fx.acid.twist": 0.3,
         "fx.acid.2.on": True, "fx.acid.2.twist": 1.9, "fx.acid.2.order": 70})
     missing = rig.lib.load(PRESETS, "Twice")
-    reg, fx = rig.reg, rig.reg.fx_state
+    reg = rig.reg
     assert missing == [] and rig.presets.notes == []
     assert reg["fx.acid.twist"].value == 0.3 and reg["fx.acid.2.twist"].value == 1.9
-    assert fx.chain() == ["acid", "acid.2"]
+    assert G.run_of(rig.presets.graph.spec) == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
     assert doc["graph"] == graph and doc["values"]["fx.acid.2.twist"] == 1.9
     # an id of an instance the graph does not hold is unknown, as ever
     put(rig.home, "Stray", values={"fx.acid.3.twist": 1.0})
     assert rig.lib.load(PRESETS, "Stray") == ["fx.acid.3.twist"]
-    assert "fx.acid.2.twist" not in reg and fx.chain() == []
+    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec) == ()
     rig.lib.load(PRESETS, "Twice")
     assert reg["fx.acid.2.twist"].value == 1.9
 
@@ -648,15 +649,18 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
     import numpy as np
     from test_outputs import rig, run, views
 
+    from hyperspace.graphmigrate import wiring_of
+
     one = rig(ctx, effects=("acid",), hands=False)
     a = run(ctx, one, views(ctx, S()))[0]
     two = rig(ctx, effects=("acid",), hands=False)
     fx = two.fx.state
     fx.set_instances({"acid": 2})
     fx.values["acid.2"].update(on=True, twist=1.5)
+    two.wiring = wiring_of(fx)                   # plan 33 R23: both in the run
     b = run(ctx, two, views(ctx, S()))[0]
     assert two.stats["chain_runs"] == 1 and not np.array_equal(a, b)
-    assert list(two.fx._progs) == ["acid"] and fx.chain() == ["acid", "acid.2"]
+    assert list(two.fx._progs) == ["acid"] and two.wiring.run == ("acid", "acid.2")
     # the second acid's own params act: the same rig twice, only
     # acid.2's twist changed (acid's values untouched) — another frame
     first = dict(fx.values["acid"])
@@ -667,6 +671,7 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
         st.set_instances({"acid": 2})
         st.values["acid"].update(first)
         st.values["acid.2"].update(on=True, twist=twist)
+        r.wiring = wiring_of(st)
         return run(ctx, r, views(ctx, S()))[0], st
 
     c, st_c = frame(0.2)

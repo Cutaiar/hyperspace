@@ -75,7 +75,7 @@ import re
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -469,7 +469,10 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
     ctx = context()
     rig = Rig(slug, hands, ctx)
     if wiring is not None:
-        rig.renderer.wiring = Wiring(**wiring)
+        # plan 33 R23: the other wiring keeps the preset's run — the run the
+        # load migrated (`graphmigrate`), which the order-built stack these
+        # goldens were recorded on drew; a wiring that says none runs none
+        rig.renderer.wiring = replace(Wiring(**wiring), run=rig.renderer.wiring.run)
     if config is not None:
         rig.list_devices(config)
     try:
@@ -481,7 +484,9 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         for v in views:
             if v.error:
                 raise RuntimeError(f"{slug} {hands}: an output failed: {v.error}")
-        fx_on = rig.renderer.fx.active()
+        # the recorded `effects_on`: an effect is live, wherever it is wired
+        # (plan 33 T7: what the stack's `chain()` said, with no target left)
+        fx_on = any(rig.fx.live(n) for n in rig.fx.specs)
         visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):

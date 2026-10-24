@@ -30,7 +30,7 @@ import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
-from test_graphview import views
+from test_graphview import stacked, views
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -48,7 +48,9 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
                if "graph" in json.loads(p.read_text()))
 FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
-REAL = tuple(FxState().names())          # every effect file: the app's chain
+# every effect file, by its @order: the chain an old preset with every one
+# on lands as (plan 33 T7: `names()` is by name — there is no stack)
+REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.GEOMETRY, graphview.SHADERS)
 
 
@@ -76,8 +78,9 @@ def real_graph(fixture=None):
                         ) if fixture else None
     wiring = spec.wiring() if spec is not None else G.Wiring()
     extra = tuple(e.name for e in spec.effects) if spec is not None else ()
-    return G.default_graph(views(Switches(), Switches(through=True)), wiring,
-                           effects=REAL + tuple(e for e in extra if e not in REAL))
+    effects = REAL + tuple(e for e in extra if e not in REAL)
+    return G.default_graph(views(Switches(), Switches(through=True)),
+                           stacked(effects, wiring), effects=effects)
 
 
 def load_fixture(rig, fixture):
@@ -401,7 +404,10 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
     succ: dict = {}
     for c in (*view.cables, *lay.throughs):
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
+        # (the frame's feeds too: since R23 an idle effect's through wire
+        # starts at `frame`, which the history feeds)
+        if (c.kind in ("render", graphview.THROUGH, graphview.FEEDS)
+                and a not in hidden and b not in hidden):
             succ.setdefault(a, set()).add(b)
     seen, todo = set(), ["render:history"]
     while todo:

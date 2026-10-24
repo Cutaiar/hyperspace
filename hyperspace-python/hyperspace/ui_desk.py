@@ -341,7 +341,10 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     routed = {b.target for b in table.routes() if b.enabled}
     routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
     on_desk = {b.target for b in table.desk() if b.enabled}
-    out = learn.ranked(params, values, defaults, routed, on_desk)
+    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    spec = panel.graph_now()[1] if hasattr(panel, "graph_now") else None
+    media = learn.faces_media(spec, getattr(getattr(panel, "view", None), "switch", None))
+    out = learn.ranked(params, values, defaults, routed, on_desk, media=media)
     st["offer"] = (key, out)
     return out
 

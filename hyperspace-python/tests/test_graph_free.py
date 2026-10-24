@@ -258,7 +258,9 @@ def test_loading_an_fx_module_replaces_the_run(tmp_path):
     app.lib.load("fx", "mandala")
     assert G.run_of(gs.spec) == want
     assert gs.spec.wiring().run == want
-    assert app.reg["fx.kaleido.order"].value == 8 and app.lib.current("fx") == "mandala"
+    # (its order is no param since T7: held for a /4 save, the module's)
+    assert gs.held_values()["fx.kaleido.order"] == 8.0 and app.lib.current("fx") == "mandala"
+    assert "fx.kaleido.order" not in app.reg
     # the save says it in /4 terms: no free word, the run as orders
     doc = app.presets.document("after")
     assert doc["schema"] != "hyperspace.preset/5"
@@ -471,24 +473,6 @@ def test_an_unreached_effect_is_never_run(ctx, tmp_path):
     assert "acid.2" not in {n.effect for n in _effect_nodes(g)}
     assert "acid.2" not in r.stats["effects"] and "acid" in r.stats["effects"]
     assert not [n for n in g.nodes if n.startswith("media.")]
-
-
-def test_order_changes_do_not_rebuild_the_graph(ctx, tmp_path):
-    """`fx.acid.order` (declared until T7) moves nothing — nor does its
-    target: the run is its wires, and the graph keys on the effect files
-    present."""
-    from test_outputs import run, views
-
-    from hyperspace.outputs import Switches
-
-    app, r = _loaded(ctx, tmp_path, "party-acid")
-    vs = views(ctx, Switches())
-    run(ctx, r, vs, frames=1)
-    g = r._graph
-    app.reg["fx.acid.order"].set(0 if app.reg["fx.acid.order"].value else 7)
-    app.reg["fx.acid.target"].set(1 - app.reg["fx.acid.target"].value)
-    run(ctx, r, vs, frames=1)
-    assert r._graph is g
 
 
 def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path):

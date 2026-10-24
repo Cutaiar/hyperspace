@@ -41,7 +41,7 @@ And the three that wrap what exists (A1's call, registered):
 
 - **FX** (`Effect`, `Fx`; plan 30 D0): each effect instance is an image
   node (`Effect`: one pass of its file's program, `FxChain.run_one`),
-  and each pipeline's chain is a run of them in the stack's order ending
+  and each pipeline's chain is a run of them in wire order (plan 33) ending
   in the pipeline's end (`Fx`). An effect that is off reads its input
   through: no pass, no texture.
 - **History** (`History`, `Capture`): the look-back (`lookback.Lookback`)
@@ -259,10 +259,10 @@ class Wiring:
 
     Plan 33 R: `run`, the effects wired from `frame` into `fx.image`, in
     wire order — each pipeline's run (`default_graph`); `()` is the empty
-    run (`frame → fx.image`). None: the wiring says no run (no preset's
-    graph reached it — a test rig, a tool, the app before its first load),
-    and the default graph takes the stack it is handed instead, as before
-    plan 33, until the stack retires (plan 33 T7)."""
+    run (`frame → fx.image`), and so is None (R23, plan 33 T7: the
+    order-built stack is gone — a wiring no preset's graph reached, a test
+    rig's, a tool's, the app's before its first load, runs no effect; one
+    that wants effects gets its run as a load does, `graphmigrate.wiring_for`)."""
 
     hands: str = "layer"
     blend: str = "over"
@@ -1276,6 +1276,34 @@ def run_of(spec: GraphSpec, head: str = "frame", end: str = "fx.image") -> tuple
     return tuple(run) if src == head else ()
 
 
+def source_into(wires, port: str, selects: dict[str, int] | None = None) -> str | None:
+    """The node whose picture `wires` put into `port` (`pattern.media`,
+    `backdrop.image`) — straight, or through a switch, followed to the
+    input its pick selects (`selects`: switch name → 0 off, k `in<k>`;
+    plan 33 S) — or None: nothing wired, or a switch off or on an unwired
+    input."""
+    by_dst = {w.dst: w.src for w in wires}
+    src, seen = by_dst.get(port), set()
+    while src is not None and wire_node_kind(src) == "switch" and src not in seen:
+        seen.add(src)
+        try:
+            k = int((selects or {}).get(src, 0))
+        except (TypeError, ValueError):
+            k = 0
+        src = by_dst.get(f"{src}.in{k}") if 1 <= k <= len(SWITCH_PORTS) else None
+    return src
+
+
+def channel_into(wires, port: str, selects: dict[str, int] | None = None) -> str | None:
+    """The media channel (`"a"` … `"h"`) `source_into` finds feeding
+    `port`, or None (nothing, or a picture that is not a channel's own: a
+    branch through an effect). What `view.media` and `backdrop.channel`
+    said before plan 33 T7 retired them, read off the section (the MEDIA
+    page's tags, the FACES page's tiles)."""
+    src = source_into(wires, port, selects)
+    return src.partition(".")[2] if wire_node_kind(src) == "media" else None
+
+
 def _run_wires(run: tuple[str, ...]) -> set[Wire]:
     """The wires of the run `frame → run… → fx.image` (`frame → fx.image`
     for the empty one)."""
@@ -1433,36 +1461,6 @@ def placement_words(e: EffectAt) -> str:
     if where == "history":
         return f"{w} into the history only"
     return f"{w} before {_node_said(where)}"
-
-
-def placed_chips(spec: GraphSpec | None) -> dict[str, str]:
-    """Each placed effect instance → where it sits, in a chip's few words
-    (plan 30 D2: the FX page): `after hands`, `into output 2`, `after
-    scene`, `into history`, `after acid 2`. The FX page edits the default
-    chain, so a name here is drawn apart from the run's chips, says this
-    in place of a place in the order, and is not dragged. The one source
-    of these words: N4's wires extend it (an effect on a wire says where
-    the wire takes it). None (no preset graph) → {}."""
-    if spec is None:
-        return {}
-    out: dict[str, str] = {}
-    w = spec.wiring()
-    # D1's placements, then (plan 28 N4) the wires D1 would write short
-    for e in w.placed:
-        key, where = e.where
-        out[e.name] = f"{key} {where.replace('.', ' ')}"
-    # plan 28 N4: an effect a wire feeds and wires on (`after history into
-    # output 2`), or wires into a port D1 has no word for
-    ins = {x.node: x.src for x in w.wires if wire_node_kind(x.node) == "effect"}
-    outs: dict[str, list[str]] = {}
-    for x in w.wires:
-        if wire_node_kind(x.src) == "effect":
-            outs.setdefault(x.src, []).append(x.node if x.port == "image" else x.dst)
-    for name in sorted(set(ins) | set(outs)):
-        said = ([f"after {ins[name]}"] if name in ins else []) + (
-            ["into " + ", ".join(outs[name])] if name in outs else [])
-        out[name] = " ".join(said).replace(".", " ")
-    return out
 
 
 def graph_words(spec: GraphSpec | None, dormant: dict[str, str] | None = None) -> str:
@@ -3406,9 +3404,6 @@ class Graph:
         # plan 33 R: the effects of every pipeline's run, first to last —
         # the renderer's `fx_on` is any of them live
         self.run: tuple[str, ...] = ()
-        # (the stack it was handed for a wiring that says no run — the
-        # renderer's key, `Renderer._graph_for`; None for one that does)
-        self.stack: tuple[str, ...] | None = None
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
         self._framed: frozenset[str] | None = None     # plan 33 R: `at_frame`, settled
@@ -3658,8 +3653,7 @@ HISTORY_COMPOSITE = "composite(history)"
 
 
 def default_graph(views: list[View], wiring: Wiring | None = None,
-                  clouds: tuple[str, ...] = (), effects: tuple[str, ...] = (),
-                  stack: tuple[str, ...] | None = None) -> Graph:
+                  clouds: tuple[str, ...] = (), effects: tuple[str, ...] = ()) -> Graph:
     """The frame as a graph, from the views' switches and the wiring
     (`Wiring`; the default is today's frame). Each output's three
     switches are its wiring:
@@ -3707,12 +3701,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     effect on no wire has no node at all. An off effect of the run reads
     through, so switching one on or off changes no node.
 
-    A wiring that says no run (`Wiring.run` None: no preset's graph
-    reached it) takes `stack` (else `effects`) in the order given, every
-    effect not placed or wired, as before plan 33 (plan 30 D0) — the
-    renderer hands it the frame-aimed effects in the stack's order until
-    the stack retires (plan 33 T7). None given, the ends read their
-    sources directly: the frame with no effect.
+    A wiring that says no run (`Wiring.run` None) has the empty one (R23,
+    plan 33 T7: the order-built stack is gone): the ends read their
+    sources directly, the frame with no effect.
 
     Plan 30 D1: `Wiring.placed`, the effects the preset places, are not
     in the runs; each is put on its edge once the frame is built
@@ -3788,12 +3779,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     g.clouds = tuple(clouds)                       # plan 26 A4b: what it was built for
     g.effects = tuple(effects)                     # plan 33 R: the instances it may hold
     g.placed_names = frozenset(out_of_run)         # plan 30 D1: placed or wired
-    g.stack = tuple(stack) if stack is not None else None
-    said = getattr(wiring, "run", None)            # (a Wiring from before a hot reload)
-    if said is not None:                           # plan 33 R: the run is its wires
-        names = list(said)
-    else:                                          # (no run said: the stack, as plan 30 D0)
-        names = [e for e in (stack if stack is not None else effects) if e not in out_of_run]
+    # plan 33 R: the run is its wires; none said is the empty run (R23 —
+    # getattr: a Wiring from before a hot reload has no `run`)
+    names = list(getattr(wiring, "run", None) or ())
     have = set(g.effects)
     for e in names:
         if e not in have:

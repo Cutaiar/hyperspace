@@ -93,8 +93,6 @@ PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
 MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
-# a media channel picker (view.media, backdrop.channel): off, then the channels
-MEDIA_CHANNELS = ["off", *media_channels.CHANNELS]
 BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
@@ -1144,10 +1142,9 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
     # plan 32 (row 331): the faces draw a media channel where the one
-    # bitmap file was; alpha, size and path as the bitmap's were
-    r.enum("view.media", "Face media", *_attr(view, "media"), MEDIA_CHANNELS, group=g,
-           tip="The media channel drawn over the face pattern (the MEDIA page fills "
-               "the channels); off for none.")
+    # bitmap file was; alpha, size and path as the bitmap's were. Which
+    # channel is the graph's wire into `pattern.media` (plan 33 T7: no
+    # `view.media` — an old preset's is read as that wire, `graphmigrate`)
     r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
     # the factory desk's knob 7 (apc40.DEFAULT_MAP, every factory preset's
@@ -1208,11 +1205,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
                             "last frame (once).")
 
-    # ---- the backdrop (plan 32 R, row 330): a channel under the scene ----
+    # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
+    # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
+    # `backdrop.channel`, an old preset's read as that wire)
     g = "backdrop"
-    r.enum("backdrop.channel", "Backdrop", *_attr(view, "backdrop"), MEDIA_CHANNELS, group=g,
-           tip="The media channel laid under the scene, before the look-back and the "
-               "effects; off for none.")
     r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
     r.toggle("backdrop.history", "Backdrop in the look-back", *_attr(view, "backdrop_history"),

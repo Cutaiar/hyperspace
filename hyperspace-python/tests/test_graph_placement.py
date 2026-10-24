@@ -396,13 +396,13 @@ def test_after_hands_folds_the_hands_layer_and_not_the_shape(ctx):
     hands' layer covers it — and there it does; the palette ran once a
     frame, on the layer, timed under its own name after `hands`."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=())
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
         calls = []
         real = r.fx.run_one
 
@@ -438,13 +438,13 @@ def test_into_output_2_folds_one_output_only(ctx):
     output 2 folds that output's picture; output 1 is byte for byte the
     frame with no palette; the chain ran once."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=("warp",), hands=False)
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),)))
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 
     _, (a1, a2) = frame(False)
@@ -461,13 +461,13 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     history reads the same one, and the effect ran once a frame for both;
     the frame differs from the one without it."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     r = rig(ctx, effects=(), hands=False, echoes=True)
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
-    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),)))
     seen = []
     real = r.lookback.capture
 
@@ -497,13 +497,13 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     output 2, output 2's hand-off frame is the folded one and output 1 is
     byte for byte the frame without it."""
     import numpy as np
-    from test_outputs import H, W, rig, run, views
+    from test_outputs import H, W, keep_run, rig, run, views
 
     from hyperspace.ghost import GhostState
 
     r = rig(ctx, effects=(), alpha=0.7)
     _palette(r)
-    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
     pv = View(S(), (W, H), presenter=object())
     run(ctx, r, [views(ctx, S())[0], pv], frames=2)
     assert r._graph.nodes["output.2"].inputs["hands"] is r._graph.nodes["palette"]
@@ -515,8 +515,8 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     r = rig(ctx, effects=())
     _palette(r)
     r.ghost_states = {"ghost.2": GhostState(on=True, alpha=0.25)}
-    r.wiring = G.Wiring(hands="scene", extra=(G.HandsAt(2),),
-                        placed=(G.EffectAt("palette", 1, after="hands.2"),))
+    r.wiring = keep_run(r, G.Wiring(hands="scene", extra=(G.HandsAt(2),),
+                                    placed=(G.EffectAt("palette", 1, after="hands.2"),)))
     calls = []
     real = r.fx.run_one
 
@@ -539,7 +539,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
         r = rig(ctx, effects=("warp",), hands=False)
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),)))
         pv = View(S(), (W, H), presenter=object())
         return r, run(ctx, r, [views(ctx, S())[0], pv], frames=2)[0], pv
 
@@ -555,13 +555,13 @@ def test_a_placed_effect_alone_bends_no_pipeline(ctx):
     """With only a placed effect on, `fx_on` is off: a through output
     stands down for the scene's pipeline (no SCENE+HANDS run, no second
     frame texture), no chain runs — and the placed effect still runs."""
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     r = rig(ctx, effects=())
     _palette(r)
-    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
     run(ctx, r, views(ctx, S(), S(through=True)), frames=2)
-    assert r.fx.active() and r.stats["fx_on"] is False
+    assert r.fx.state.live("palette") and r.stats["fx_on"] is False
     assert r.stats["chain_runs"] == 0 and r.stats["effects"] == ["palette"]
     assert r.stats["routes"] == [(SCENE, True), (SCENE, True)]
     assert SCENE_HANDS not in r.stats["pipelines"]
@@ -588,7 +588,9 @@ def test_into_a_through_output_standing_down_to_its_ground_is_dormant_for_the_fr
         r = rig(ctx, effects=())
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            # (warp in the run, off: the frame with no effect until it is on)
+            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),),
+                                run=("warp",))
         return r, run(ctx, r, views(ctx, S(), glass), frames=2)
 
     _, (a1, a2) = frame(False)

@@ -38,6 +38,7 @@ from fake_hands import hand  # tests/fake_hands.py
 from hyperspace import outputs as O
 from hyperspace.fx import FxState
 from hyperspace.ghost import _font
+from hyperspace.graphmigrate import wiring_of
 from hyperspace.hands import skeleton
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -72,6 +73,7 @@ def renderer(ctx, effects=("warp",), guide=0, **values) -> Renderer:
         fx.values[n]["on"] = True
         fx.values[n].update(values.get(n, {}))
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     r.ghost.state.on, r.ghost.state.alpha, r.ghost.state.guide = True, 1.0, guide
     r.ghost.source = hands(guide=bool(guide))
     return r

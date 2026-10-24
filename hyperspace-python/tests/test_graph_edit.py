@@ -944,8 +944,8 @@ def test_the_strip_has_no_order_or_onto(tmp_path, monkeypatch):
     from hyperspace import ui_fx
     page = PageRig(tmp_path, monkeypatch)
     try:
+        name = page.panel.fx_selected = "warp"
         page.frame()
-        name = page.st.selected()
         ids = set(page.rects)
         assert f"fx.{name}.mix" in ids and f"fx.{name}.blend" in ids
         assert not [k for k in ids if k.endswith(".order") or k.startswith("onto.")], ids

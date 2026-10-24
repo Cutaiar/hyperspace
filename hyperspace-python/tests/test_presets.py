@@ -25,7 +25,7 @@ from conftest import (
 )
 from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
-from hyperspace import apc40, envelope, lfo, preset, routing, sequencer, tempo
+from hyperspace import apc40, envelope, graphmigrate, lfo, preset, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -617,7 +617,13 @@ def test_a_preset_round_trips(rig):
     # writes none of the media family's, all at their defaults
     snap = rig.reg.snapshot(part="performance")
     assert all(v == preset.MEDIA_DEFAULTS[k] for k, v in snap.items() if preset.is_media_id(k))
-    assert doc["values"] == {k: v for k, v in snap.items() if not preset.is_media_id(k)}
+    # (plan 33 T7: and each effect's order and target, retired but written
+    # back below /5 where a build from before plan 33 reads them)
+    from hyperspace.graphmigrate import retired
+    assert {k: v for k, v in doc["values"].items() if not retired(k)} == {
+        k: v for k, v in snap.items() if not preset.is_media_id(k)}
+    assert {k for k in doc["values"] if retired(k)} == {
+        f"fx.{n}.{key}" for n in rig.reg.fx_state.specs for key in ("order", "target")}
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
     rig.presets.load("Round Trip")
@@ -766,6 +772,8 @@ def test_the_factory_presets_are_preset_2_performance_files():
         macros = {} if spec is None else {k: m.to_json() for k, m in spec.macros().items()}
         assert doc["macros"] == macros, path.name
         for pid in doc["values"]:
+            if graphmigrate.retired(pid):           # (plan 33 T7: read as the graph's wires)
+                continue
             assert part_of(reg_ids[pid]) == "performance", (path.name, pid)
         for row in doc["routes"]:
             b = Binding.from_json(row)

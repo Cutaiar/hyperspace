@@ -43,6 +43,22 @@ def views(*sw):
     return [View(s, (640, 360)) for s in sw]
 
 
+def stacked(effects, wiring=None) -> G.Wiring:
+    """`wiring` (None: the default) with `effects` its run — those no wire
+    or placement of it takes, in the order given: what the order-built
+    stack ran for a wiring that said no run, and what a load lands for an
+    old preset with them on (plan 33 R23: a graph fixture says its run)."""
+    from dataclasses import replace
+
+    wiring = wiring if wiring is not None else G.Wiring()
+    if wiring.run is not None:
+        return wiring
+    taken = {e.name for e in wiring.placed}
+    taken |= {n for w in wiring.wires if not G.is_aux(w) for n in (w.src, w.node)
+              if G.wire_node_kind(n) == "effect"}
+    return replace(wiring, run=tuple(e for e in effects if e not in taken))
+
+
 def owner_of(view, pid):
     hit = view.owner(f"mod:{pid}")
     return None if hit is None else hit[0].id
@@ -118,7 +134,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
     rig.router.table.bindings.append(Binding("key:F9", out1, "toggle"))   # a setter onto it
     g = G.default_graph(views(Switches(), Switches(scene=False, hands=True, through=True)),
-                        effects=("acid", "palette"))
+                        stacked(("acid", "palette")), effects=("acid", "palette"))
     view = build(rig, g)
     names = {n.id for n in view.nodes}
     assert {"render:shape", "render:acid", "render:acid(hands)", "render:fx",
@@ -286,7 +302,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     last); a placed node keeps its own and takes no room."""
     rig.lib.load("presets", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
-    g = G.default_graph(views(Switches()), effects=("acid",))
+    g = G.default_graph(views(Switches()), stacked(("acid",)), effects=("acid",))
     view = build(rig, g)
     placed = {"render:shape": (999.0, 999.0)}
     pos = graphview.auto_layout(view, placed)
@@ -297,9 +313,10 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"], x["render:eye"],
            x["render:scene"], x["render:history"], x["render:fx"], x["render:output.1"]]
     # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
-    # the shaders' idle line, and a through wire from the history to the fx
+    # the shaders' idle line, and a through wire from where the run starts
+    # (plan 33: `frame`, the history's picture) to the fx
     assert view.node("render:acid").idle
-    assert any(c.src_port == "rout:history" and c.dst_port.startswith("rin:fx/")
+    assert any(c.src_port == "rout:frame" and c.dst_port.startswith("rin:fx/")
                for c in graphview.layout(view).throughs)
     assert col == sorted(col) and len(set(col)) == len(col)
     assert x["group:tempo"] == x[graphview.ANALYZER]
@@ -357,6 +374,7 @@ def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
     rig.reg["fx.acid.on"].set(1)        # N9: an off effect with no cable is not drawn
     rig.panel.renderer = type("R", (), {})()
     rig.panel.renderer._graph = G.default_graph(views(Switches(), Switches(through=True)),
+                                                stacked(("acid", "palette")),
                                                 effects=("acid", "palette"))
     for _ in range(3):
         frame(rig.panel, "graph")
@@ -621,7 +639,7 @@ def test_graph_has_media_area(rig):
     # a wire from media.a into an effect's aux, with the backdrop on a as well
     spec = G.read_graph({"nodes": [], "wires": [{"from": "media.a", "to": "acid.aux"}]})
     wiring = replace(spec.wiring(), backdrop="a")
-    g = G.default_graph(views(Switches()), wiring, effects=("acid",))
+    g = G.default_graph(views(Switches()), stacked(("acid",), wiring), effects=("acid",))
     assert {"media.a", "media.a(wire)"} <= set(g.nodes)
     view = build(rig, g)
     assert view.node("render:media.a(wire)") is None       # one node per channel

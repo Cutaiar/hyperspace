@@ -398,13 +398,14 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.add_node("effect", "acid") is None and "fx.acid.3.on" in rig.reg
     assert edit.add_node("effect", "teapot") == "no teapot effect in this build"
     assert edit.drop_node("acid.3") is None and "fx.acid.3.on" not in rig.reg
-    assert edit.drop_node("acid") == ("acid is a file: it is always in the chain (switch "
-                                      "it off on FX; unwire it to put it back in the chain)")
-    # … placed or not: deleting instance 1 is refused, its placement kept
+    # plan 33 T7 (R21): instance 1 is in the graph where it is wired, and
+    # deleting it takes it out like any instance — not in it, it says so
+    assert edit.drop_node("zoomblur") == "zoomblur is not in the preset's graph"
+    # … placed: deleting it takes it, and its placement, out of the graph
     assert edit.wire("hands", "palette.image") is None
-    assert edit.drop_node("palette").startswith("palette is a file")
     assert stub.wiring.placed == (G.EffectAt("palette", 1, after="hands"),)
-    assert edit.unwire("hands", "palette.image") is None
+    assert edit.drop_node("palette") is None and edit.said == "palette deleted"
+    assert stub.wiring.placed == ()
     assert edit.add_node("hands") is None and edit.said == "ghost.2 added, drawn in the scene"
     assert "ghost.2.alpha" in rig.reg
     assert edit.add_node("composite") is None
@@ -553,12 +554,13 @@ def test_the_words_say_the_wires():
     assert G.graph_words(spec) == ("graph: acid ×2 · palette on output 1 only · acid 2 reads "
                                    "the history · output 2 shows acid 2")
     assert output_shows(S(through=True), True, True, 1.0, w, n=2)[0] == "acid 2 by a wire"
-    # the FX page's chips (plan 30 D2's `placed_chips`) say where a wire puts each
-    assert G.placed_chips(spec) == {"palette": "into output 1",
-                                    "acid.2": "after history into output 2"}
-    assert G.placed_chips(G.read_graph({"wires": _wires(("hands", "palette.image"),
-                                                        ("palette", "output.2.hands"))})
-                          ) == {"palette": "after hands into output 2 hands"}
+    # the FX page's groups (plan 33 T7, `ui_fx.groups`; plan 30 D2's
+    # `placed_chips` went with the placed grid) say where a wire puts each
+    from hyperspace.ui_fx import groups
+    assert groups(spec) == [("→ output 1", ["palette"]), ("→ output 2", ["acid.2"])]
+    assert groups(G.read_graph({"wires": _wires(("hands", "palette.image"),
+                                                ("palette", "output.2.hands"))})
+                  ) == [("→ output 2", ["palette"])]
     assert output_shows(S(), True, True, 1.0, w, n=1)[0].endswith(
         "palette on this output only")
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])
@@ -590,17 +592,17 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     and output 2's route is its own end."""
     import numpy as np
     from test_outputs import rig as gl_rig
-    from test_outputs import run, views
+    from test_outputs import run, views, wired
 
-    def frame(effects, wiring):
+    def frame(effects, section):
         r = gl_rig(ctx, effects=effects, hands=False)
-        r.wiring = wiring
+        if section is not None:          # (plan 33 R23: the rig's run kept)
+            r.wiring = wired(r, section)
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 
-    w = G.read_graph({"wires": _wires(("history", "output.2.image"))}).wiring()
-    r, (a1, a2) = frame(("warp",), w)
-    _, (b1, _) = frame(("warp",), G.Wiring())
-    _, (c1, _) = frame((), G.Wiring())
+    r, (a1, a2) = frame(("warp",), {"wires": _wires(("history", "output.2.image"))})
+    _, (b1, _) = frame(("warp",), None)
+    _, (c1, _) = frame((), None)
     assert np.array_equal(a1, b1) and np.array_equal(a2, c1) and not np.array_equal(a1, a2)
     assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("wire(output.2)", False)
     assert r.stats["routes"][0] == (SCENE, False)
@@ -688,17 +690,16 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
     the hands are never drawn twice and the wire is never dropped."""
     import numpy as np
     from test_outputs import rig as gl_rig
-    from test_outputs import run, views
+    from test_outputs import run, views, wired
 
-    w = G.read_graph({"wires": _wires(("hands", "output.2.hands"),
-                                      ("hands", "output.3.hands"))}).wiring()
+    section = {"wires": _wires(("hands", "output.2.hands"), ("hands", "output.3.hands"))}
+    r = gl_rig(ctx, effects=("warp",))
+    w = r.wiring = wired(r, section)                 # (plan 33 R23: warp's run with it)
     vs = _views(S(), S(through=True), S(scene=False, through=True))
     g = G.default_graph(vs, w, effects=("warp",))
     o2, o3 = g.nodes["output.2"], g.nodes["output.3"]
     assert o2.inputs["image"] is g.nodes["fx"] and o2.inputs["hands"] is g.nodes["hands"]
     assert o3.inputs["image"] is None and o3.inputs["hands"] is g.nodes["hands"]
-    r = gl_rig(ctx, effects=("warp",))
-    r.wiring = w
     a, b, _ = run(ctx, r, views(ctx, S(), S(through=True), S(scene=False, through=True)),
                   frames=2)
     assert np.array_equal(a, b)                    # the scene, the hands over: once

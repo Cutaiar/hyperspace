@@ -331,7 +331,7 @@ def _hands_owner(pid: str, ctx: _Ctx) -> str | None:
 def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
     # `fx.<effect>.<key>`: the effect's node in the scene's pipeline (named
     # by the effect), else the first node of that effect; `fx.on`,
-    # `fx.mix`, `fx.select` the scene pipeline's end; (plan 33 U)
+    # `fx.mix` the scene pipeline's end; (plan 33 U)
     # `fx.face_map` the shape's, whose faces it maps the picture onto
     if pid == "fx.face_map":
         return "shape"
@@ -757,18 +757,18 @@ class FrameNode(rgraph.Node):
 
 def says_run(spec) -> bool:
     """Does the section say the free graph's run (a `frame` wire)? Every
-    preset loaded on this build does (plan 33 M); a section before that
-    is D1's, whose effects run in the stack."""
+    preset loaded on this build does (plan 33 M); one that does not (an
+    edit with no preset loaded) has the empty run (R23, plan 33 T7)."""
     return spec is not None and any(w.src == "frame" or w.dst == "fx.image"
                                     for w in getattr(spec, "wires", ()))
 
 
 def unreached(spec) -> frozenset[str]:
     """The effects, composites and switches of section `spec` that reach
-    no sink (`graph.reaches`): drawn faint, never run. Empty while the
-    section says no run (`says_run`); a D1-placed effect sits where it is
-    placed, so it reaches."""
-    if not says_run(spec):
+    no sink (`graph.reaches`): drawn faint, never run — with a run or
+    without (R23, plan 33 T7: no stack runs what no wire reaches); a
+    D1-placed effect sits where it is placed, so it reaches."""
+    if spec is None:
         return frozenset()
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
@@ -1066,9 +1066,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         stand["pattern"] = rgraph.PatternNode("pattern")
     if "backdrop" not in ctx.names:
         stand["backdrop"] = rgraph.BackdropNode("backdrop")
-    # (`frame` while the render graph's runs are the section's wires: a
-    # graph built with no run said runs the stack from the pipeline's
-    # picture, drawn as it always was, until plan 33 T7 retires the stack)
+    # (`frame` while the render graph's wiring says its run, as every
+    # loaded preset's does: one that says none — no preset loaded, a graph
+    # put together by hand — has the empty run, R23, plan 33 T7, and its
+    # pipelines are drawn from their pictures straight to their ends)
     ends = [r for r in rnodes if isinstance(r, rgraph.Fx)]
     wired_run = getattr(getattr(render_graph, "wiring", None), "run", None) is not None
     if ends and wired_run:
@@ -3191,8 +3192,8 @@ def _entry_name(e: dict) -> str | None:
 
 def _unplace(doc: dict, which: Callable[[str, str, str], bool]) -> None:
     """D1's placement off each effect entry `which(name, key, where)`
-    picks: an extra instance back in the chain, instance 1's entry gone
-    (the file itself, always there)."""
+    picks: an extra instance's entry kept with no place (on no wire: it
+    reaches nothing, plan 33), instance 1's entry gone."""
     keep = []
     for e in doc.get("nodes", []):
         name = _entry_name(e)
@@ -3332,6 +3333,15 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     return _land(edit, doc, f"unwire {d}", f"unwired {d}")
 
 
+def _with_run(doc: dict, spec) -> None:
+    """`doc` given the bare run `frame → fx.image` (R9) when its section
+    says none (`says_run`): a node added unwired then reads as the free
+    graph's, unreached, and a save writes it as `/5` — no older build's
+    stack ever runs it."""
+    if not says_run(spec):
+        doc.setdefault("wires", []).append({"from": "frame", "to": "fx.image"})
+
+
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
     spec = getattr(edit.graph, "spec", None)
     doc = _doc(edit)
@@ -3344,13 +3354,16 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         doc["nodes"].append({"kind": "effect", "file": file, "instance": n})
         name = edit.added = rgraph.instance_name(file, n)
         # plan 33 U: on no wire — it reaches nothing until it is wired in
-        # (a section with no run yet runs it in the stack, as before)
+        # (R23, plan 33 T7: with or without a run; a section with none gets
+        # the bare `frame → fx.image`, R9, so it saves as the free graph)
+        _with_run(doc, spec)
         return _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
     if kind == "switch":
         n = max([s.n for s in (spec.switches if spec is not None else ())], default=0) + 1
         sw = rgraph.SwitchAt(n)
         doc["nodes"].append(sw.to_json())
         edit.added = sw.name
+        _with_run(doc, spec)
         return _land(edit, doc, f"add {sw.name}",
                      f"{sw.name} added: wire pictures into in1 … in8, pick one with "
                      f"{sw.name}.select")
@@ -3502,11 +3515,11 @@ def render_drop(edit: Edit, node: str) -> str | None:
     doc = _doc(edit)
     before = copy.deepcopy(doc)
     if kind == "effect":
-        if rgraph.split_instance(name)[1] == 1:
-            return (f"{name} is a file: it is always in the chain (switch it off on FX; "
-                    "unwire it to put it back in the chain)")
-        doc["nodes"] = [e for e in doc["nodes"] if _entry_name(e) != name]
+        # (R21, plan 33 T7: instance 1 too — it is in the graph where it is
+        # wired, and dropping it takes it out like any instance: lifted
+        # first, so the unwired entry `_lift` keeps for it goes as well)
         _lift(doc, name)               # plan 33 U (R9): the run closes over it
+        doc["nodes"] = [e for e in doc["nodes"] if _entry_name(e) != name]
         names = {name}
     elif kind in ("ghost", "layer"):
         _, n = rgraph.split_instance(name)

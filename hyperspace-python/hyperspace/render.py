@@ -110,7 +110,7 @@ from .field import (  # noqa: F401 — re-exported: the layouts were render.py's
     inst_positions,
 )
 from .field import is_3d as is_3d_layout
-from .fx import FACES, SCREEN, FxChain, FxState
+from .fx import SCREEN, FxChain, FxState
 from .geometry import (
     EYE_DISTANCE,
     EYE_FAR,
@@ -132,6 +132,7 @@ from .graph import (
     Frame,
     Graph,
     Wiring,
+    channel_into,
     cloud_roles,
     default_graph,
     graph_key,
@@ -892,7 +893,7 @@ class Renderer:
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
         self.lookback = Lookback(ctx, dream)
-        self.fx = FxChain(ctx, fx)      # the effect stack after the post pass
+        self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
         # the graph at FACE_PIC², `graph.Shape.prepare`). Nothing is
@@ -900,9 +901,7 @@ class Renderer:
         # (the frame is then drawn as with the faces unwired); _pic is the
         # picture the graph hands the one scene pass it wraps, _face_layer
         # what the pattern's media layer reads that pass (False: no frame
-        # running — the wiring's channel, `_face_media`). `face_fx` is the
-        # retired faces chain, no longer drawn with (plan 33 T7 deletes it)
-        self.face_fx = FxChain(ctx, self.fx.state, target=FACES, programs=self.fx)
+        # running — the wiring's channel, `_face_media`)
         self.face_pic = FaceTarget(ctx)
         self.pattern_pic = FaceTarget(ctx)
         self.face_error = ""
@@ -1042,13 +1041,13 @@ class Renderer:
         for res in olds:
             res.release()
         self._build_face_program()
-        # the faces' chain and its picture are made again from the modules
-        # as they are now (app.py's reloader does not re-class them); they
-        # hold a copy program and three textures, rebuilt on next use. A
-        # renderer from before the face target existed gets them here
+        # the faces' pictures are made again from the module as it is now
+        # (app.py's reloader does not re-class them), rebuilt on next use. A
+        # renderer from before the face target existed gets them here; one
+        # from before plan 33 T7 lets its faces chain (`face_fx`) go
         old_fx, old_pic = getattr(self, "face_fx", None), getattr(self, "face_pic", None)
         old_pat = getattr(self, "pattern_pic", None)
-        self.face_fx = FxChain(self.ctx, self.fx.state, target=FACES, programs=self.fx)
+        self.__dict__.pop("face_fx", None)
         self.face_pic = FaceTarget(self.ctx)
         self.pattern_pic = FaceTarget(self.ctx)
         self.face_error = ""
@@ -1122,17 +1121,19 @@ class Renderer:
         — not `view.media`. In a frame, what the graph's pattern node read
         for this scene pass (`graph.PatternNode.layer`, handed over as
         `_face_layer`: a channel's raw texture, or a branch's picture at its
-        head's size). Outside one (the FACES page's swatches, a tool) the
-        channel the wiring puts straight in (`_channel_layer`). None — the
-        layer off — with nothing wired, no media state, or nothing on the
+        head's size). Outside one (the FACES page's tiles, a tool) the
+        channel the wiring puts in (`_channel_layer`) — straight, or through
+        a switch at its pick (`graph.channel_into`, plan 33 T7; getattr: a
+        view state from before the switch has no picks). None — the layer
+        off — with nothing wired, no media state, or nothing on the
         channel."""
         got = getattr(self, "_face_layer", False)
         if got is not False:
             return got
         wiring = getattr(self, "wiring", None)
-        src = next((w.src for w in getattr(wiring, "wires", ()) if w.dst == "pattern.media"),
-                   "")
-        return self._channel_layer(src.partition(".")[2]) if src.startswith("media.") else None
+        c = channel_into(getattr(wiring, "wires", ()), "pattern.media",
+                         getattr(s, "switch", None))
+        return self._channel_layer(c) if c else None
 
     def _channel_layer(self, c: str) -> tuple[moderngl.Texture, bool] | None:
         """Channel `c`'s raw texture (`media_texture`: at its own size and
@@ -1456,12 +1457,9 @@ class Renderer:
         one adds its point-cloud node to the scene. Plan 33 R: so are the
         effect files present (`FxState.specs`, as a set): each pipeline's
         run is the wiring's (`Wiring.run`, its wires), so a file that goes
-        or comes builds again and an order, a target or a toggle does not
-        (an off node reads through). A wiring that says no run (no
-        preset's graph reached it) is handed the stack instead — the
-        frame-aimed effects in `FxState.names()` order, as plan 30 D0
-        built every run — and that list is part of the key, until the
-        stack retires (plan 33 T7). A new graph
+        or comes builds again and a toggle does not (an off node reads
+        through). A wiring that says no run (no preset's graph reached it)
+        has the empty one (R23, plan 33 T7). A new graph
         fits the effects' texture pool to what it needs (`Graph.pool`).
         Plan 28 N4: the preset's wires are part of the key — they ride in
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
@@ -1478,17 +1476,11 @@ class Renderer:
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
-        stack = None
-        if getattr(wiring, "run", None) is None and st is not None:
-            stack = tuple(n for n in st.names()
-                          if st.values[n].get("target", 0) != FACES)
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
-                or frozenset(getattr(graph, "effects", ())) != effects
-                or getattr(graph, "stack", None) != stack):
-            graph = self._graph = default_graph(views, wiring, clouds, tuple(sorted(effects)),
-                                                stack)
+                or frozenset(getattr(graph, "effects", ())) != effects):
+            graph = self._graph = default_graph(views, wiring, clouds, tuple(sorted(effects)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -2002,8 +1994,7 @@ class Renderer:
         faces' chain as it always ran: the seed (what face 0 shows: pattern
         and bitmap, premultiplied by its intensity) into the first texture,
         the effects one after another, the last into the picture — then
-        the picture's mipmaps. The retired faces chain (`face_fx`, every
-        effect aimed at the faces) no longer draws.
+        the picture's mipmaps.
 
         None, with nothing run and nothing allocated, unless something is
         to be painted, the faces are on, there is a copy to draw and the

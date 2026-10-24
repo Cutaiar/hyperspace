@@ -692,13 +692,16 @@ def test_every_factory_preset_renders_opaque_in_window_mode(ctx, tmp_path, name)
             values[f"fx.{fx_name}.on"] = True
             values[f"fx.{fx_name}.mix"] = 1.0
         assert b.reg.restore(values) == []
+        # plan 33 R23: every effect in the run, as a load of these values lands it
+        from hyperspace.graphmigrate import wiring_of
+        b.r.wiring = wiring_of(b.r.fx.state)
         if name == "multiply":
             for fx_name in b.r.fx.state.specs:
                 b.reg[f"fx.{fx_name}.blend"].set(3)
     a = _final_alpha(ctx, b, Output(None, None).bg_alpha)
     assert (a == 255).all(), f"{name}: {(a < 255).mean():.1%} below 255, lowest {a.min()}"
     if name in STRESS:
-        assert b.r.fx.active() and b.view.cut_through and b.view.faces
+        assert b.r.stats["fx_on"] and b.view.cut_through and b.view.faces
 
 
 # ---------------------------------------------------------------- the dream slot

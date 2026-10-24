@@ -32,7 +32,6 @@ import re
 from typing import Any
 
 from . import graph as G
-from .fx import reordered
 
 FREE_SCHEMA = "hyperspace.preset/5"
 RETIRED = ("fx.select", "view.media", "backdrop.channel")
@@ -74,6 +73,60 @@ def effect_of(pid: str) -> str | None:
     if parts[0] != "fx" or len(parts) < 3:
         return None
     return ".".join(parts[1:-1])
+
+
+# ---------------------------------------------------------------- an old stack's orders
+
+# `fx.<n>.order`'s range on a build from before plan 33 (it clamped there)
+MAX_ORDER = 99
+
+
+def reordered(seq: list[str], orders: dict[str, int], moved: str) -> dict[str, int]:
+    """Orders (0…MAX_ORDER) under which sorting by (order, name) gives
+    `seq`, changing as few effects as possible: `moved` alone when it can
+    be done, else the smallest run of neighbours that can. Returns only
+    the effects whose order changes.
+
+    Plan 33 T7: here, not in fx.py, because a stack's order is now only a
+    `/4` file's word — `legacy_values` writes a run back as the orders a
+    build from before plan 33 sorts into it (it was the FX page's drop,
+    plan 20 WP3, until the stack retired). Pure: it reads nothing but its
+    arguments.
+
+    One run of `seq` is renumbered: the shortest whose two sides already
+    sort as `seq` has them and which has room — as many integers strictly
+    between the orders either side of it as it has effects. It gets those
+    integers evenly spaced (one effect alone: the middle of its gap). So
+    no tie is ever made or relied on, and the name tie-break cannot reorder
+    the result; a tie that is already there and not in the way is left
+    alone. Of two runs of one length, one holding `moved` is taken, then the
+    one further right: the same input always gives the same orders. With no
+    room for a short run the run grows, to the whole list at worst (0…99:
+    up to a hundred effects; past that orders repeat)."""
+    def key(k: int) -> tuple[int, str]:
+        return orders[seq[k]], seq[k]
+    n = len(seq)
+    bad = [k for k in range(1, n) if not key(k - 1) < key(k)]    # seq[k] is out of place
+    if not bad:
+        return {}                                    # it already sorts that way
+    first, last = bad[0], bad[-1]                    # seq[:first] and seq[last:] sort as they are
+    i = seq.index(moved)
+    for size in range(max(1, last - first), n + 1):
+        los = range(min(first, n - size), max(0, last - size) - 1, -1)
+        for lo in sorted(los, key=lambda lo: not lo <= i < lo + size):   # stable: right first
+            hi = lo + size                           # the run is seq[lo:hi]
+            a = orders[seq[lo - 1]] if lo > 0 else -1
+            b = orders[seq[hi]] if hi < n else MAX_ORDER + 1
+            free = b - a - 1                         # the integers strictly between
+            if free < size and size != n:            # no room; the whole list is the last resort
+                continue
+            if size == 1:
+                new = [(a + b) // 2]                 # the middle of the gap
+            else:                                    # evenly through the gap, in seq's order
+                new = [a + 1 + ((2 * j + 1) * free) // (2 * size) for j in range(size)]
+            return {name: o for name, o in zip(seq[lo:hi], new, strict=True)
+                    if o != orders[name]}
+    return {}                                        # not reached: the whole list always returns
 
 
 # ---------------------------------------------------------------- what drives what
@@ -221,8 +274,7 @@ def _next_switch(nodes: list) -> int:
     return next(i for i in range(1, len(taken) + 2) if i not in taken)
 
 
-def migrate(doc: dict, specs: Specs, *, keep: bool = False,
-            desk: list | None = None) -> tuple[dict, list[str]]:
+def migrate(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, list[str]]:
     """`doc` read as the free graph: (a copy with the graph section holding
     the runs and channel wires, the retired values dropped, any switch's
     `select` set and the rows that drove a channel choice retargeted; the
@@ -239,12 +291,9 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
     section that already has a run from `frame` (or `pattern`), or a wire
     into `pattern.media` / `backdrop.image`, is not given another.
 
-    `keep`: the retired values stay in the values (plan 33 T3, the load:
-    `view.media` and `backdrop.channel` still draw the faces' media and the
-    backdrop until T4 renders `pattern.media` / `backdrop.image`, and the
-    effects' `order` / `target` are declared until T7 — T4 drops `keep`).
-    A driven channel choice becomes its switch with `keep` as without it
-    (T5, R19: the switch's `select` is declared now).
+    The retired values (`retired`) are dropped from the copy: no build from
+    plan 33 T7 on declares them, and the wires say all they said. A driven
+    channel choice becomes its switch (T5, R19).
     `desk`: a desk template's rows the document's `desk` stands over,
     counted in what drives what and retargeted in place."""
     out = copy.deepcopy(doc)
@@ -260,7 +309,7 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
     except G.GraphError:
         spec = None                     # the loader says so and takes the default graph
     if spec is None:
-        for pid in [p for p in values if retired(p) and not keep]:
+        for pid in [p for p in values if retired(p)]:
             del values[pid]
         return out, notes
     nodes = list(section.get("nodes", []))
@@ -309,9 +358,8 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
         if has:
             continue
         if old in driven:
-            # (row 350; R14 → R19: from T5, which declares `switch.select`,
-            # the load builds the switch too, `keep` or not — so a preset
-            # that drives a channel choice saves as /5, which /4 cannot say)
+            # (row 350, R19: a preset that drives a channel choice loads
+            # as a switch and saves as /5, which /4 cannot say)
             n = _next_switch(nodes)
             sw = G.SwitchAt(n).name
             nodes.append({"kind": "switch", **({"instance": n} if n != 1 else {})})
@@ -323,7 +371,7 @@ def migrate(doc: dict, specs: Specs, *, keep: bool = False,
             _retarget(out, old, select, desk)
         elif k > 0:
             new_wires.append({"from": f"media.{CHANNELS[k - 1]}", "to": end})
-    for pid in [p for p in values if retired(p) and not keep]:
+    for pid in [p for p in values if retired(p)]:
         del values[pid]
     if new_wires or nodes != list(section.get("nodes", [])):
         sec = {k: v for k, v in section.items() if k not in ("nodes", "wires")}
@@ -564,6 +612,121 @@ def legacy_section(section: Any) -> dict | None:
     return out
 
 
+# ---------------------------------------------------------------- the retired ids, written back
+
+def held_retired(values: dict) -> dict:
+    """The retired values a file holds (`retired`; `fx.select` was never
+    saved): what a load keeps beside the wires (`preset.GraphSection.held`)
+    so a save below `/5` writes them back where the file had them."""
+    return {k: v for k, v in (values or {}).items() if retired(k) and k != "fx.select"}
+
+
+def landed_retired(values: dict, defaults: dict, specs: Specs | None, *, effects: bool = True,
+                   channels: bool = True) -> dict:
+    """The retired values a build from before plan 33 T7 held after a load
+    of `values` (a file's) over `defaults` (its groups' defaults,
+    `Library.defaults`), typed as its registry held them — what its save
+    wrote, so ours can (`with_retired`). With `effects`: every effect
+    file's order (a float: a continuous param the load set) and target (an
+    int: an enum), each the file's, else the default's, else the file's
+    `@order` and the frame — every instance the load's graph holds too
+    (one added since keeps the int its declaration gave it). With
+    `channels`: `view.media` and `backdrop.channel` (ints)."""
+    src = {**held_retired(defaults), **held_retired(values)}
+    out: dict[str, Any] = {}
+    for name in sorted(specs or ()) if effects else ():
+        out[f"fx.{name}.order"] = _as(float, src.get(f"fx.{name}.order"),
+                                      _file_order(specs, name))
+        out[f"fx.{name}.target"] = _as(int, src.get(f"fx.{name}.target"), 0)
+    if channels:
+        for pid in ("view.media", "backdrop.channel"):
+            out[pid] = _as(int, src.get(pid), 0)
+    return out
+
+
+def with_retired(values: dict, held: dict, specs: Specs | None = None) -> dict:
+    """`values` (a registry's snapshot, which declares no retired id since
+    plan 33 T7) with the retired ids a build from before plan 33 declared,
+    each where its registry put it — `fx.<n>.order` and `fx.<n>.target`
+    right after `fx.<n>.blend`, `view.media` before `view.media_alpha`,
+    `backdrop.channel` before `backdrop.alpha` — so an untouched `/4`
+    preset saves byte for byte as that build wrote it (Review Focus 1).
+
+    Each takes `held`'s value (what the load landed, `landed_retired`,
+    typed), else what that build's declaration gave it — no load since: the
+    file's `@order` as an int (`specs`), target 0 (the frame), channel 0
+    (off). `legacy_values` then says the graph over these (a run's orders,
+    the channels as wired). A new dict; `values` is not changed."""
+    out: dict[str, Any] = {}
+    for k, v in values.items():
+        if k == "view.media_alpha" and "view.media" not in values:
+            out["view.media"] = _as(int, held.get("view.media"), 0)
+        if k == "backdrop.alpha" and "backdrop.channel" not in values:
+            out["backdrop.channel"] = _as(int, held.get("backdrop.channel"), 0)
+        out[k] = v
+        name = effect_of(k)
+        if name is not None and k == f"fx.{name}.blend":
+            order = held.get(f"fx.{name}.order")
+            out.setdefault(f"fx.{name}.order", order if _is_number(order)
+                           else int(_file_order(specs, name)))
+            out.setdefault(f"fx.{name}.target", _as(int, held.get(f"fx.{name}.target"), 0))
+    return out
+
+
+def _is_number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _as(kind, v: Any, default):
+    """`v` as `kind` (float, int), else `default` as `kind` — a held value a
+    hand-edited file made a string or a bool is that build's default too."""
+    return kind(v) if _is_number(v) else kind(default)
+
+
+# ---------------------------------------------------------------- a rig's run, as a load lands it
+
+def specs_of(fx: Any) -> Specs:
+    """An `FxState`'s effect instances as `Specs` — each one's file
+    defaults, `(@order, @mix)`; none for no state."""
+    got = getattr(fx, "specs", None) or {}
+    return {n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}
+
+
+def state_values(fx: Any) -> dict:
+    """An `FxState`'s settings as preset values (`fx.on`, `fx.mix`, every
+    `fx.<n>.<key>`): what a rig that set them by hand hands `wiring_for`."""
+    out: dict[str, Any] = {"fx.on": bool(getattr(fx, "on", True)),
+                           "fx.mix": float(getattr(fx, "mix", 1.0))}
+    for name, v in sorted((getattr(fx, "values", None) or {}).items()):
+        out.update({f"fx.{name}.{k}": x for k, x in v.items()})
+    return out
+
+
+def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = None
+               ) -> G.Wiring:
+    """The wiring a preset's `values` (and its `section`, None for none)
+    land as — `migrate`, the path a preset load takes, read back
+    (`read_graph`). Plan 33 R23: with the order-built stack gone a rig, a
+    tool or a test that switches effects on by hand gets its run here, as
+    an old preset with those values would: the effects on, by `order` (the
+    file's `@order` where the values name none), a faces-aimed one
+    (`target` 1) onto the faces."""
+    doc = {"values": dict(values)}
+    if section is not None:
+        doc["graph"] = section
+    out, _ = migrate(doc, specs or {})
+    section = out.get("graph")
+    spec = G.read_graph(section, effects=_files(specs)) if isinstance(section, dict) else None
+    return spec.wiring() if spec is not None else G.Wiring(run=())
+
+
+def wiring_of(fx: Any) -> G.Wiring:
+    """`wiring_for` an `FxState` as it stands (`state_values`, `specs_of`):
+    the run its switched-on effects make, by their files' `@order` — the
+    one line a rig that sets effects by hand needs (R23)."""
+    return wiring_for(state_values(fx), specs_of(fx))
+
+
 # ---------------------------------------------------------------- an fx module's run
 
 def _entry(w: Any) -> tuple[Any, Any] | None:
@@ -587,7 +750,7 @@ def module_runs(section: Any, values: dict, specs: Specs,
     faces = _run_entries(base, RUN_ENDS[1:])
     stripped = {**base, "wires": [w for w in wires if _entry(w) not in main | faces]}
     doc = {**(rows or {}), "values": dict(values), "graph": stripped}
-    out, notes = migrate(doc, specs, keep=True)
+    out, notes = migrate(doc, specs)
     sec = out.get("graph") if isinstance(out.get("graph"), dict) else stripped
     got = list(sec.get("wires") or [])
     if faces and not any(isinstance(w, dict) and w.get("from") == "pattern" for w in got):

@@ -80,15 +80,17 @@ class ViewState:
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
     # plan 32 (row 331): a media channel over the face pattern, where the
-    # one bitmap file (view.bmp_*) was; the same alpha, size and path
-    media: int = 0               # the channel on the faces: 0 off, 1–8 = a–h
+    # one bitmap file (view.bmp_*) was; the same alpha, size and path. Which
+    # channel is the preset graph's wire into `pattern.media` (plan 33 T7:
+    # `view.media` is retired)
     media_alpha: float = 1.0     # its opacity fader
     media_scale: float = 0.9     # its width, face-UV units (face spans 1.0)
     media_mode: int = 0          # its path: 0 still, 1 orbit, 2 fig-8, 3 sway
     media_amp: float = 0.15      # path amplitude about the face centre, UV units
     media_rate: float = 1.0      # path angular rate, rad/s
-    # the backdrop (row 330): a channel under the scene
-    backdrop: int = 0            # 0 off, 1–8 = a–h
+    # the backdrop (row 330): a picture under the scene — which one is the
+    # preset graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
+    # is retired)
     backdrop_alpha: float = 1.0
     backdrop_history: bool = False   # the look-back captures the backdrop too
     # plan 33 S: each switch node's pick (`switch[.n].select`, declared from

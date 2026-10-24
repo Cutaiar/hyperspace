@@ -227,18 +227,22 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
     """Each preset (library/presets/party-*.json, named by the
     party.hyp.json bank) names only real params, and its performer card
     exists beside the plan."""
+    from hyperspace.graphmigrate import retired
+
     r = rig(tmp_path=tmp_path, full=True)
+    # (plan 33 T7: and the retired ids — an effect's order, a channel
+    # choice — which a load reads as the graph's wires)
     ids = set(r.reg.ids())
     doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
     for name in PARTY:
-        vals = theme(name)
-        assert set(vals) <= ids, (name, set(vals) - ids)
+        vals = {v for v in theme(name) if not retired(v)}
+        assert vals <= ids, (name, vals - ids)
         assert (FACTORY.parents[1] / "docs" / "plans" / "assets" / "12-presets"
                 / f"{name}.md").is_file(), name
     for group, file in (("fx", "trip.json"), ("dream", "wake.json"), ("fx", "acid.json"),
                         ("fx", "mandala.json"), ("fx", "noita-heavily-tripping.json")):
         vals = json.loads((FACTORY / group / file).read_text())["values"]
-        assert set(vals) <= ids, file
+        assert {v for v in vals if not retired(v)} <= ids, file
     # plan 14 WP5 (decision 24): the effect families on F6–F8
     assert doc["bank"][5:8] == ["ACID", "MANDALA", "NOITA"]
     assert [f"party-{n.lower()}" for n in doc["bank"][:8]] == list(PARTY_BANK)
