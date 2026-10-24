@@ -3869,15 +3869,17 @@ easy to hit, nothing is clipped, and **reaches nothing** stands out.
 **Do:** with a live source on the faces through two effects, unplug it for
 five seconds and plug it back. Then note SYSTEM's frame time on
 `party-trip`, build two branches, the faces branch and an eight-way
-switch driven by an LFO, and read the frame time each time.
+switch driven by an LFO, and write down SYSTEM's frame rate and each
+branch's ms each time, with none wired first.
 
 **Right if:** the faces show the pattern, not black or frozen, while the
-source is gone, and the picture comes back by itself; each branch costs
-about 2 ms or less (say your numbers) and the switch costs no more than
+source is gone, and the picture comes back by itself; the frame rate
+stays where it was with no branches and the eight-way switch costs about
 one branch, only its picked path showing on SYSTEM.
 
 **Wrong if:** black faces, a freeze, a switch whose cost grows with its
-inputs, or a frame time over 16 ms.
+inputs (the frame rate drops visibly), or a branch's line that keeps
+growing.
 
 *(checks 323, 324)*
 

@@ -249,16 +249,17 @@ own node (plan 30) moved none of the 556 recorded before that, nor did
 the modulation graph and the wire list (plan 28) move any of the 580
 recorded before them (`tests/test_golden_frames.py`).
 
-**Effects as nodes; placement** (plan 30). Every effect instance is an
+**Effects as nodes; placement** (plan 30, plan 33). Plan 30 made effects
+nodes; plan 33 removed the stack they sat in. Every effect instance is an
 `Effect` node (one `image` in, an image out, its params `fx.<name>.*`,
-its pass `FxChain.run_one`). Each pipeline's chain is a run of them
-between its source and its end, `Fx` — the old node's name, now only the
-end: where the picture lands, the stand-down, the error path. (Since plan 33 a run is the instances the preset *wires*, below; the
-text in this paragraph about every instance being in every run, and about
-the order keying the rebuild, is the plan 30 design it replaced.) Every
-instance in a run is a node, on or off, so a toggle changes no node; an
-instance or a file changed rebuilds the graph
-(`Renderer._graph_for`'s key holds the effect files present). A preset's graph
+its pass `FxChain.run_one`), and it exists only where the preset's graph
+wires it: there is no order and no target. Each pipeline's **run** is the
+effects wired from `frame` to `fx.image`, between its source and its end,
+`Fx` — the old node's name, now only the end: where the picture lands, the
+stand-down, the error path. Every instance in a run is a node, on or off,
+so a toggle changes no node; an instance or a file changed rebuilds the
+graph (`Renderer._graph_for`'s key holds the effect files present, not an
+order). A preset's graph
 may **place** an effect on any image edge by name: `after` a node — the
 scene, a hands layer, the history, an output, an effect: every consumer
 of that node's picture reads the effect — or `into` one (the history,
@@ -267,9 +268,9 @@ in the run; on a node the graph lacks this frame it is dormant (no node,
 the words in `Graph.dormant`); one this build cannot honour is a note
 and that effect's default placement. The textures the effects paint
 into are one pool (`FxChain.pool`, sized by `Graph.pool`), and a held
-picture is never handed to the consumer that paints into it. (The
-faces' chain, `render.face_fx`, that plan 30 left inside the shape's face
-drawing is gone: plan 33 makes the faces' effects graph nodes.) The ports are typed
+picture is never handed to the consumer that paints into it. The faces
+have no chain of their own: their effects are nodes on a branch into
+`shape.faces`. The ports are typed
 `image`, `mask`, `geometry` and `value`; `graph.VALUE` is declared for
 the palette's lights-out and camera-in ports and no node uses it.
 

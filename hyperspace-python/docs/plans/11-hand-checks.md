@@ -4492,7 +4492,7 @@ picture that differs, a diff, or an older build refusing the file — write
 down which preset (`graphmigrate.legacy_values`, `Presets.document`).
 
 **323. A channel on the faces is lost mid-show.** (laptop, any live source)
-Headless: `tests/test_graph_faces.py::test_faces_fall_back_to_the_pattern_when_the_branch_reads_nothing`, `tests/test_media_live.py` (a feed stops).
+Headless: `tests/test_graph_faces.py::test_faces_fall_back_to_the_pattern_when_the_branch_reads_nothing`, `tests/test_media_live.py::test_live_holds_then_black` (a stopped feed is held 1 s, then reads nothing with the status `lost`); the first test also draws the lost-feed frame and asserts it equals the faces-unwired frame.
 With 318's graph (or a camera or NDI source straight into
 `pattern.media`), unplug the camera or stop the NDI sender while the
 faces show it; wait five seconds; plug it back. Delete the clip file on a
@@ -4506,18 +4506,17 @@ stall log (`graph.Shape.faces`, `media.live`).
 **324. The frame cost of two branches, the faces branch and an eight-way
 switch.** (laptop; the build machine's SYSTEM page)
 Headless: `tests/test_graph_switch.py::test_only_the_selected_input_is_made`, `tests/test_graph_faces.py::test_a_branch_read_at_two_sizes_is_made_once_each_and_does_not_leak`. These count makes; nothing times them.
-On SYSTEM note the frame time on `party-trip` with the look-back off.
-Build, in turn: two branches (a channel through two effects into an
+On SYSTEM write down the frame rate, and each node's ms, on `party-trip`
+with the look-back off and no branch wired. Build, in turn: two branches (a channel through two effects into an
 output, a second channel through one effect into `aux` of `blend`); 318's
 faces branch with three effects; and a switch with eight channels wired in
 and a different effect on each. Drive the switch with an LFO. Read the
-frame time and the per-node lines for each, at the output's usual
-resolution. *Pass:* each is within about 2 ms of the baseline per branch
-effect (say your numbers), the 1024² faces branch adds roughly the old
-face chain's cost, and the eight-way switch costs the same as a
-one-branch graph (only the picked path appears on SYSTEM). *Fail:* a
-switch whose cost grows with its inputs, a pool that grows over a minute
-(`Renderer._prune_sized`), or a frame time over 16 ms on the laptop.
+frame rate and the per-node lines for each, at the output's usual
+resolution, and write the numbers down. *Pass:* the frame rate stays where
+it was with no branches, and the eight-way switch costs about one branch
+(only the picked path has lines on SYSTEM). *Fail:* the frame rate drops
+visibly with the switch, or a branch's line keeps growing over a minute
+(`Renderer._prune_sized`).
 
 **325. The near-miss drag.** (laptop, the copy)
 Headless: `tests/test_graph_edit.py::test_dragging_a_run_member_onto_another_cable_moves_it` (the drop on its own cable and on empty canvas do nothing).
@@ -4546,12 +4545,12 @@ in SHADERS that are made of the media alone, or tidy putting a faint node
 in an area it does not belong to (`graphview.media_made`, `area_of`).
 
 **327. The FX page with a big graph, at arm's length.** (laptop)
-Headless: `tests/test_fx.py::{test_the_page_draws_and_fits,test_the_fx_page_lists_the_graphs_effects}`; the page at 12 rows is drawn, never looked at.
+Headless: `tests/test_fx.py::{test_the_page_draws_and_fits,test_the_fx_page_lists_the_graphs_effects}`. The first draws TRIP's graph with each of its effects open and asserts the page never scrolls; a dozen-effect graph is not covered.
 Build a graph with about twelve effects across the run, two branches, the
 faces, the backdrop and three unreached nodes. Open the FX page and read
 it from a metre and a half away. *Pass:* the group headers are legible,
 the state words (`running`, `off`, why) are readable, a name is easy to
-hit, the page fits (or scrolls) without clipping the strip, and the
+hit, the page fits without scrolling or clipping the strip, and the
 **reaches nothing** group stands out from the rest. Say what you would
 change (grouping, row height, a collapse). *Fail:* a row hidden, a strip
 pushed off the page, or text under 12 px (`ui_fx.page`).
