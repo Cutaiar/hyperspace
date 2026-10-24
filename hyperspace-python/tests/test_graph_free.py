@@ -328,6 +328,69 @@ def test_the_module_hook_survives_a_hot_reload(tmp_path):
     assert G.run_of(app.presets.graph.spec) == _module_run(app, "mandala")
 
 
+def test_a_module_load_keeps_a_faces_run_that_shares_an_effect(tmp_path):
+    """Final review (1): a faces run `pattern → acid → shape.faces`, then
+    the `acid` module (acid on, no faces run of its own). The faces run
+    keeps acid; the main run is the module's minus acid, closed over the
+    gap; no wire is refused and no note is lost."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    doc = {"schema": "hyperspace.preset/5", "name": "t",
+           "graph": section(("frame", "fx.image"), ("pattern", "acid.image"),
+                            ("acid", "shape.faces")),
+           "values": {"fx.acid.on": True}}
+    assert app.presets.load_doc(doc) == []
+    gs = app.presets.graph
+    assert G.run_of(gs.spec, "pattern", "shape.faces") == ("acid",)
+    want = tuple(n for n in _module_run(app, "acid") if n != "acid")
+    assert want and "acid" in _module_run(app, "acid")
+    app.lib.load("fx", "acid")
+    assert G.run_of(gs.spec, "pattern", "shape.faces") == ("acid",)
+    assert G.run_of(gs.spec) == want
+    assert gs.spec.notes == ()
+    assert app.presets.notes == []
+
+
+MISSING_RUN = (("frame", "foo.image"), ("foo", "acid.image"), ("acid", "fx.image"))
+
+
+def test_a_run_reads_through_an_effect_file_this_machine_lacks():
+    """R27: `frame → foo → acid → fx.image` with no `foo` on this machine
+    is no refused run: the section's run keeps foo (no note), and the
+    renderer draws `frame → acid → fx.image`, foo dormant and named."""
+    from test_graphview import views
+
+    from hyperspace.outputs import Switches
+    spec = G.read_graph(section(*MISSING_RUN), effects={"acid", "wobble"})
+    assert spec.notes == ()
+    assert G.run_of(spec) == ("foo", "acid")
+    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "wobble"))
+    assert g.run == ("acid",)
+    assert [e.effect for e in g.nodes["fx"].effects] == ["acid"]
+    assert "no foo effect in this build" in g.dormant["foo"]
+    # a wire on a missing effect that is no run's stays refused
+    branch = G.read_graph(section(("frame", "fx.image"), ("media.a", "foo.image"),
+                                  ("foo", "output.2.image")), effects={"acid"})
+    assert len(branch.notes) == 2 and all("no foo effect" in n for n in branch.notes)
+
+
+def test_the_missing_effects_wires_survive_a_save(tmp_path):
+    """R27: a preset whose run names `foo`, loaded on a machine without
+    it, loads with no note and saves its wires unchanged, so the Mac that
+    has foo still has its run."""
+    from test_plan31_wiring import make_app
+
+    app = make_app(tmp_path)
+    doc = {"schema": "hyperspace.preset/5", "name": "t", "graph": section(*MISSING_RUN),
+           "values": {"fx.acid.on": True}}
+    assert app.presets.load_doc(doc) == [] and app.presets.notes == []
+    assert G.run_of(app.presets.graph.spec) == ("foo", "acid")
+    out = app.presets.document("t")
+    assert out["schema"] == "hyperspace.preset/5"
+    assert out["graph"]["wires"] == section(*MISSING_RUN)["wires"]
+
+
 def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
     """R19 (R14 → T5, row 350): a route on `view.media` or `backdrop.channel`
     loads as a switch over the eight channels into `pattern.media` /

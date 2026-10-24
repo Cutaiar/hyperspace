@@ -113,8 +113,8 @@ from typing import Any, ClassVar
 
 from . import envelope as envmod
 from . import graph as rgraph
+from . import graphmigrate, modbank
 from . import learn as learnmod
-from . import modbank
 from . import modifiers as modmod
 from . import patch as patchmod
 from . import sequencer as seqmod
@@ -753,14 +753,6 @@ class FrameNode(rgraph.Node):
     KIND = "frame"
     INPUTS: ClassVar[dict[str, str]] = {}
     OUTPUT = IMAGE
-
-
-def says_run(spec) -> bool:
-    """Does the section say the free graph's run (a `frame` wire)? Every
-    preset loaded on this build does (plan 33 M); one that does not (an
-    edit with no preset loaded) has the empty run (R23, plan 33 T7)."""
-    return spec is not None and any(w.src == "frame" or w.dst == "fx.image"
-                                    for w in getattr(spec, "wires", ()))
 
 
 def unreached(spec) -> frozenset[str]:
@@ -2429,19 +2421,29 @@ class Edit:
         return render_unwire(self, cable, dst)
 
     def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
-        """The picker: an effect instance (`EffectAt(file, n + 1)`), a hands
-        node (`HandsAt(n + 1)`), a composite or (plan 33 U) a switch — an
-        effect, a composite and a switch on no wire (unreached, faint, until
-        one is wired). The new node's name is `added`."""
+        """The picker: an effect (R25: the file itself when nothing in the
+        section holds it, else the lowest free instance, switched on), a
+        hands node (`HandsAt(n + 1)`), a composite or (plan 33 U) a switch
+        — an effect, a composite and a switch on no wire (unreached, faint,
+        until one is wired). The new node's name is `added`."""
         return render_add(self, kind, file, **settings)
 
     def insert_effect(self, cable, file: str) -> Refusal | None:
-        """Plan 33 U: the next instance of effect `file` onto picture cable
-        `cable` (a `VCable`, or its two ends: pins or the section's names):
-        `src → new.image`, `new → dst`, in one landing (one undo step).
+        """Plan 33 U: effect `file` onto picture cable `cable` (a `VCable`,
+        or its two ends: pins or the section's names): `src → new.image`,
+        `new → dst`, in one landing (one undo step) — R25: the file itself
+        when nothing in the section holds it, else the lowest free instance,
+        switched on in the same step.
         Into the run's `frame → fx.image` it is the run's one effect (R9)."""
         why = render_insert(self, cable, file)
         return Refusal(why) if why is not None else None
+
+    def switch_channels(self, port: str) -> str | None:
+        """R28: the picker's "switch over the channels ▸ faces media /
+        backdrop" — a new switch over `media.a … h` into `port`
+        (`pattern.media`, `backdrop.image`) at the channel that fed it, one
+        undo step (`render_channel_switch`). The switch's name is `added`."""
+        return render_channel_switch(self, port)
 
     def place_effect(self, cable, name: str) -> Refusal | None:
         """Plan 33 U: effect instance `name` (an existing one: a free node
@@ -3144,8 +3146,15 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     gs = edit.graph
     files = gs.files() if gs is not None and hasattr(gs, "files") else None
     out: list[tuple[str, str | None, str]] = [("effect", f, f) for f in sorted(files or ())]
-    return out + [("switch", None, "switch"), ("hands", None, "hands"),
-                  ("composite", None, "composite")]
+    # R28: "switch over the channels ▸ faces media / backdrop" (`switch_channels`)
+    return out + [("switch", None, "switch"),
+                  *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
+                  ("hands", None, "hands"), ("composite", None, "composite")]
+
+
+# R28: the ports "switch over the channels" feeds, and their picker words
+CHANNEL_SWITCH_PORTS = (("pattern.media", "faces media"), ("backdrop.image", "backdrop"))
+CHANNEL_SWITCH_REFUSAL = "a switch over the channels goes into pattern.media or backdrop.image"
 
 
 def _doc(edit: Edit) -> dict:
@@ -3300,7 +3309,7 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     # the effect it leaves) out of the run, the run closed over it; the
     # empty run's own cable stays
     spec = getattr(edit.graph, "spec", None)
-    if says_run(spec):
+    if graphmigrate.has_frame_run(spec):
         run = rgraph.run_of(spec)
         here = [w for w in _run_cables(run) if w.dst == d and (s is None or w.src == s)]
         if here and set(_run_cables(run)) <= set(spec.wires):
@@ -3335,11 +3344,46 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
 
 def _with_run(doc: dict, spec) -> None:
     """`doc` given the bare run `frame → fx.image` (R9) when its section
-    says none (`says_run`): a node added unwired then reads as the free
+    says none (`graphmigrate.has_frame_run`): a node added unwired then reads as the free
     graph's, unreached, and a save writes it as `/5` — no older build's
     stack ever runs it."""
-    if not says_run(spec):
+    if not graphmigrate.has_frame_run(spec):
         doc.setdefault("wires", []).append({"from": "frame", "to": "fx.image"})
+
+
+def _new_instance(spec, file: str) -> int:
+    """The instance of effect `file` an add or an insert makes (R25): 1,
+    the file itself, when no wire, node entry or placement in section
+    `spec` holds it, else the lowest instance none holds."""
+    held: set[int] = set()
+    for e in (spec.effects if spec is not None else ()):
+        if e.file == file:
+            held.add(e.n)
+    for w in (spec.all_wires() if spec is not None else ()):
+        for end in (w.src, w.node):
+            if rgraph.wire_node_kind(end) == "effect":
+                f, n = rgraph.split_instance(end)
+                if f == file:
+                    held.add(n)
+    return next(n for n in range(1, len(held) + 2) if n not in held)
+
+
+def _switch_on(edit: Edit, name: str) -> None:
+    """R25: effect `name`, just added or inserted, switched on
+    (`fx.<name>.on`) — after the landing that declared its params and in
+    the same undo step (the step `_land` pushed is still open this frame,
+    so an undo puts the value back with the graph). Nothing to do with no
+    registry to hand (a stand-in section) or no such param."""
+    reg = getattr(edit.graph, "reg", None) or edit.reg
+    pid = f"fx.{name}.on"
+    if reg is not None and pid in reg:
+        reg[pid].set(True)
+
+
+def _effect_entry(file: str, n: int) -> dict:
+    """A section's entry for an unwired effect `file`'s instance `n`
+    (instance 1: no instance key, R21's form)."""
+    return {"kind": "effect", "file": file, **({"instance": n} if n != 1 else {})}
 
 
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
@@ -3349,15 +3393,18 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
         if not file or (files is not None and file not in files):
             return f"no {file} effect in this build"
-        n = max([e.n for e in (spec.effects if spec is not None else ()) if e.file == file],
-                default=1) + 1
-        doc["nodes"].append({"kind": "effect", "file": file, "instance": n})
+        n = _new_instance(spec, file)
+        doc["nodes"].append(_effect_entry(file, n))
         name = edit.added = rgraph.instance_name(file, n)
         # plan 33 U: on no wire — it reaches nothing until it is wired in
         # (R23, plan 33 T7: with or without a run; a section with none gets
-        # the bare `frame → fx.image`, R9, so it saves as the free graph)
+        # the bare `frame → fx.image`, R9, so it saves as the free graph);
+        # R25: switched on, so wiring it in shows it
         _with_run(doc, spec)
-        return _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
+        why = _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
+        if why is None:
+            _switch_on(edit, name)
+        return why
     if kind == "switch":
         n = max([s.n for s in (spec.switches if spec is not None else ())], default=0) + 1
         sw = rgraph.SwitchAt(n)
@@ -3387,6 +3434,43 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         doc["nodes"].append(c.to_json())
         return _land(edit, doc, f"add {c.name}", f"{c.name} added: wire its under and over")
     return f"no node kind {kind!r}: the picker adds an effect, a switch, hands or a composite"
+
+
+def render_channel_switch(edit: Edit, port: str) -> str | None:
+    """R28: a new switch over the eight channels into `port`
+    (`pattern.media` or `backdrop.image`) in one landing — `media.a … h →
+    in1 … in8`, the switch into the port in place of whatever fed it — and
+    its `select` the channel that fed the port (through a switch already
+    there, at that switch's pick), else 1, in the same undo step: headline
+    use 3 (a knob picks the faces' channel) in one gesture, the same wires
+    a driven `view.media` migrates to (row 350)."""
+    if port not in dict(CHANNEL_SWITCH_PORTS):
+        return CHANNEL_SWITCH_REFUSAL
+    spec = getattr(edit.graph, "spec", None)
+    reg = getattr(edit.graph, "reg", None) or edit.reg
+    selects: dict[str, int] = {}
+    for sw in (spec.switches if spec is not None else ()):
+        pid = f"{sw.name}.select"
+        if reg is not None and pid in reg:
+            selects[sw.name] = reg[pid].value
+    ch = rgraph.channel_into(spec.wires if spec is not None else (), port, selects)
+    k = rgraph.MEDIA_CHANNELS.index(ch) + 1 if ch and ch in rgraph.MEDIA_CHANNELS else 1
+    n = max([sw.n for sw in (spec.switches if spec is not None else ())], default=0) + 1
+    sw = rgraph.SwitchAt(n)
+    doc = _doc(edit)
+    doc["nodes"].append(sw.to_json())
+    doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != port] + [
+        {"from": f"media.{c}", "to": f"{sw.name}.in{i}"}
+        for i, c in enumerate(rgraph.MEDIA_CHANNELS, 1)] + [{"from": sw.name, "to": port}]
+    _with_run(doc, spec)
+    why = _land(edit, doc, f"switch over the channels into {port}",
+                f"{sw.name} over media a … h into {port}, at {rgraph.MEDIA_CHANNELS[k - 1]}")
+    if why is None:
+        edit.added = sw.name
+        pid = f"{sw.name}.select"
+        if reg is not None and pid in reg:
+            reg[pid].set(k)
+    return why
 
 
 def _touches(x: dict, names: set[str]) -> bool:
@@ -3478,15 +3562,16 @@ def render_insert(edit: Edit, cable, file: str) -> str | None:
     if not file or (files is not None and file not in files):
         return f"no {file} effect in this build"
     spec = getattr(edit.graph, "spec", None)
-    n = max([e.n for e in (spec.effects if spec is not None else ()) if e.file == file],
-            default=1) + 1
+    n = _new_instance(spec, file)                   # R25: the file itself when none holds it
     name = rgraph.instance_name(file, n)
     doc = _doc(edit)
-    doc["nodes"].append({"kind": "effect", "file": file, "instance": n})
+    if n != 1:                                      # (instance 1 is named by its wires)
+        doc["nodes"].append(_effect_entry(file, n))
     _onto(doc, s, d, name)
     why = _land(edit, doc, f"insert {name} into {s} → {d}", f"{name} inserted: {s} → {name} → {d}")
     if why is None:
         edit.added = name
+        _switch_on(edit, name)                      # R25: shown on the first gesture
     return why
 
 

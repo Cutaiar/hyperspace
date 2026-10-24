@@ -1357,14 +1357,24 @@ class Presets:
         # (its order and target are no params since plan 33 T7: read from
         # the module's file over the group's defaults, as its values land)
         own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))
-        new, _ = graphmigrate.module_runs(before, {**self.reg.snapshot(FX_GROUP), **own},
-                                          gs.specs(), rows)
-        spec, section, _ = gs.read(new)
+        new, notes = graphmigrate.module_runs(before, {**self.reg.snapshot(FX_GROUP), **own},
+                                              gs.specs(), rows)
+        spec, section, read_notes = gs.read(new)
         if spec is None:
-            note = (f"fx module {name}: its run is not applied — the preset's graph is "
-                    "not one this build reads")
-            self.notes = [*getattr(self, "notes", []), note]
-            self.lib.say(warning=note)
+            notes = [*notes, ("its run is not applied — the preset's graph is not one "
+                              "this build reads")]
+        else:
+            notes = [*notes, *read_notes]
+        # (final review, finding 1: every note the module's run makes is
+        # said — a run refused here would otherwise vanish without a word;
+        # one the preset's load already said is not said twice)
+        said = list(getattr(self, "notes", []))
+        for note in (f"fx module {name}: {n}" for n in notes):
+            if note not in said and not any(n == note.partition(": ")[2] for n in said):
+                said.append(note)
+                self.lib.say(warning=note)
+        self.notes = said
+        if spec is None:
             return
         # what a /4 save says of the effects is now the module's, as a build
         # from before plan 33 set every fx value (its group default where
@@ -1678,7 +1688,7 @@ def party_tracer_values() -> dict[str, Any]:
 
 
 def party_trip_routes() -> list[Binding]:
-    """The effect stack. Right height fires the zoom burst, reaching in
+    """The effects. Right height fires the zoom burst, reaching in
     zooms the kaleidoscope, right roll positions its swirl (level = none),
     fingers out spread the hue cycle, fingers up flood the plasma. Left
     height positions LFO 1's depth — a quarter-note sine that pumps the

@@ -4428,17 +4428,19 @@ backdrop that does not follow `kaleido`.
 
 **319. A switch over three channels on an APC40 knob, into the faces.**
 (APC40, the copy, three channels with pictures)
-Headless: `tests/test_graph_switch.py::{test_the_switch_shows_its_selected_input,test_a_route_drives_select,test_only_the_selected_input_is_made,test_select_changes_do_not_rebuild_the_graph,test_the_switch_onto_the_faces_is_a_cut}`, `tests/test_golden_frames.py` (`switch-faces`).
-Put three different pictures on channels A, B and C. On GRAPH add a
-switch, wire `media.a`, `media.b`, `media.c` into its `in1`, `in2`, `in3`
-and the switch into `pattern.media`. Arm Learn on `switch.select` (the
+Headless: `tests/test_graph_switch.py::{test_the_switch_shows_its_selected_input,test_a_route_drives_select,test_only_the_selected_input_is_made,test_select_changes_do_not_rebuild_the_graph,test_the_switch_onto_the_faces_is_a_cut}`, `tests/test_graph_edit.py::test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel`, `tests/test_golden_frames.py` (`switch-faces`).
+Put three different pictures on channels A, B and C. On GRAPH right-click
+the canvas and choose **switch over the channels ▸ faces media**: a switch
+over `media.a` … `media.h` into `pattern.media`, its `select` at the
+channel that fed the faces (R28). Arm Learn on `switch.select` (the
 switch's node, or the param search) and turn an APC40 knob. Sweep the
-knob; set `switch.select` to `off` and to `4` (unwired). On SYSTEM watch
-the media uploads while on each. *Pass:* the faces show A, B, C as the
-knob passes each third, as a cut with no crossfade; `off` and the
-unwired `4` show the faces' own pattern; only the picked channel's line
-is live on SYSTEM. Say whether three positions on a continuous knob are
-easy to land on and whether the cut feels abrupt. *Fail:* a half-blended
+knob; set `switch.select` to `off` and to `4` (channel D, empty). On
+SYSTEM watch the media uploads while on each. *Pass:* the faces show A,
+B, C at `select` 1, 2, 3 (the knob's first three eighths), as a cut with
+no crossfade; `off` and the empty `4` show the faces' own pattern; only
+the picked channel's line is live on SYSTEM. Say whether eight positions
+on a continuous knob are easy to land on and whether the cut feels
+abrupt. *Fail:* a half-blended
 picture, a stall when the pick changes, or an unselected channel still
 uploading (`graph.Graph.pulled`).
 

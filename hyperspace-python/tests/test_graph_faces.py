@@ -381,3 +381,38 @@ def test_a_branch_read_at_two_sizes_is_made_once_each_and_does_not_leak(ctx):
     assert set(counts) == {2}
     assert (len(r.fx._tex), {k: len(v) for k, v in r._pools.items()}, len(r._frames)) == at10
     assert (G.FACE_PIC, G.FACE_PIC) in r._pools
+
+
+def test_a_solid_draw_that_raises_leaves_no_face_layer_behind():
+    """Final review (11): the shape's `prepare` sets the faces' layer and
+    picture for the one scene pass; a solid geometry drawn between prepare
+    and the shape's draw that raises must not leave them for the next
+    pass — `Scene.run` puts both back whatever happens."""
+    from contextlib import nullcontext
+    from types import SimpleNamespace as NS
+
+    class Solid(G.Node):
+        KIND, OUTPUT, SOLID = "solidtest", G.GEOMETRY, True
+
+        def draw(self, frame, clear=True):
+            raise RuntimeError("solid draw failed")
+
+    class Faces(G.Node):
+        KIND, OUTPUT = "facestest", G.GEOMETRY
+
+        def prepare(self, frame):
+            frame.r._face_layer, frame.r._pic = "layer", "pic"
+
+        def draw(self, frame, clear=True):
+            frame.r._face_layer, frame.r._pic = False, None
+
+    fbo = NS(use=lambda: None)
+    r = NS(scene=NS(ensure=lambda *a: None, draw_fbo=fbo, resolve=lambda: None),
+           _blank=NS(use=lambda location: None), clear_scene=lambda: None,
+           _face_layer=False, _pic=None)
+    frame = NS(r=r, ctx=NS(viewport=None), size=(8, 8), samples=0,
+               timed=lambda name: nullcontext())
+    scene = G.Scene("scene", geometries=[Solid("solid"), Faces("faces")])
+    with pytest.raises(RuntimeError):
+        scene.run(frame)
+    assert r._face_layer is False and r._pic is None

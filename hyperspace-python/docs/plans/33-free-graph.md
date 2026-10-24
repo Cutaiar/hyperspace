@@ -1,7 +1,7 @@
 # Plan 33 — the free graph: effects where they are wired, faces and backdrop as inputs, the FX stack retired
 
 **Status: built (2026-10-24)** on `plan-33-free-graph` (PR #235, into
-`plan-31-32-integration` @ 3547a7a; 3516 tests passed, 2 skipped). Designed
+`plan-31-32-integration` @ 3547a7a; 3528 tests passed, 2 skipped). Designed
 with the owner on 2026-10-24 and built the same day, task by task, each
 reviewed. **Effects exist only where they are wired.** There is no
 `fx.<n>.order`, no `fx.<n>.target`, no `fx.select`, no faces chain and no
@@ -24,7 +24,7 @@ Hand checks: [`11-hand-checks.md`](11-hand-checks.md) group AC, checks
 318–328. Decisions: rows 341–352 of
 [`DECISION-REGISTER.md`](../DECISION-REGISTER.md) and the "Render graph
 without a stack" section of [`DECISIONS.md`](../DECISIONS.md). The
-build's rulings (R1–R24) are folded in below where they changed what you
+build's rulings (R1–R29) are folded in below where they changed what you
 see.
 
 Commits on `plan-33-free-graph`, by task: spec and answers (0ed5929,
@@ -213,6 +213,9 @@ faces show, as a knob on `view.media` did. Tests:
   menu opened: faint, "reaches nothing" (`REACHES_NOTHING`). An effect
   dropped on a render cable is **inserted** (`Edit.insert_effect(cable,
   file)`); right-click on a render cable offers "insert effect ▸ <file>".
+  An added or inserted effect is the file itself (instance 1) when nothing
+  in the section holds it, else the lowest free instance, and it is
+  **switched on** in the same undo step (R25, final review).
   **Reordering is dragging an effect onto another cable** (R22):
   `Edit.place_effect(cable, name)` lifts it out of where it is (the run
   closes over the gap) and puts it on the new cable, in one undo step. A
@@ -223,7 +226,8 @@ faces show, as a knob on `view.media` did. Tests:
 - **An unwired instance 1 stays in the section (R21)**:
   `{"kind": "effect", "file": f}` with no instance key. Taking `acid` out
   of the run leaves it faint and "reaches nothing", not gone, and the
-  section saves as `/5`; one undo puts it back.
+  section saves as `/5` while it is on; switched off as well, it saves
+  below `/5` again (R26, final review); one undo puts it back.
 - A compile error colours the effect node's title and is its hover.
   `ui_graph.select_effect(panel, name)` and `Panel.fx_selected` are the
   one selection shared with the FX page.
@@ -277,9 +281,55 @@ faces show, as a knob on `view.media` did. Tests:
 *At the machine:* the FX page is a list to pick from and play. Tests:
 `tests/test_fx.py::{test_groups_follow_the_wires,test_the_fx_page_lists_the_graphs_effects,test_show_on_graph_selects_the_node,test_the_retired_ids_are_gone,test_an_old_preset_loads_its_retired_ids_without_a_note,test_an_old_preset_saves_its_retired_ids_back_where_they_were}`.
 
+### Final review fixes (rulings R25–R29)
+
+The whole-branch review found three important gaps; they and its cheap
+minors were fixed in one wave (12 tests added, none of the 693 goldens
+moved, the byte test unchanged).
+
+- **An fx module load no longer wipes a faces run that shares an effect.**
+  `graphmigrate.module_runs` reads the module's main run with the kept
+  faces run's wires in place, so an effect the faces run holds stays
+  there and the main run closes over it (before, the effect had two
+  `image` inputs, both were refused and both runs went). `Presets._fx_module`
+  now says every note the module's run makes, in the panel and the footer.
+- **R25:** an effect added or inserted on GRAPH is instance 1 when no
+  wire, node or placement holds it, and is switched on in the same undo
+  step (`graphview._new_instance`, `_switch_on`). The first gesture shows
+  something.
+- **R26:** an unwired instance-1 entry whose effect is not live is no
+  reason for `/5` (`legacy_values`); taking an effect out and switching
+  it off saves below `/5` again.
+- **R27:** a run naming an effect file this machine lacks reads through
+  it. `read_graph` keeps the run's wires on the missing file
+  (`graph._through_missing`), the section saves them unchanged for the
+  Mac that has it, and the renderer draws the run without it, the file
+  named in `Graph.dormant`.
+- **R28:** the picker's **switch over the channels ▸ faces media /
+  backdrop** adds a switch, wires `media.a … h → in1 … in8`, puts it into
+  `pattern.media` or `backdrop.image` in place of what fed it, and sets
+  `select` to the channel that fed the port (else 1), in one undo step
+  (`Edit.switch_channels`).
+- **R29:** a texture made at another size is released only after
+  `render.SIZED_KEEP_FRAMES` (30) frames unused, so a switch flicked
+  every frame between branches of other sizes allocates nothing per
+  flick.
+- Minors: `Scene.run` resets `r._face_layer` and `r._pic` in a `finally`;
+  `learn.cannot_show` lost its dead `view.media` fallback;
+  `graphview.says_run` is now `graphmigrate.has_frame_run`; `to_free`
+  says it is kept for the migration tests; the stack's wording in
+  `render.py`, `graph.py`, `params.py`, `preset.py` and `graphmigrate.py`
+  now describes the wires.
+
+Tests:
+`tests/test_graph_free.py::{test_a_module_load_keeps_a_faces_run_that_shares_an_effect,test_a_run_reads_through_an_effect_file_this_machine_lacks,test_the_missing_effects_wires_survive_a_save}`,
+`tests/test_graph_edit.py::{test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on,test_a_second_insert_of_the_same_file_takes_instance_two,test_undo_of_an_insert_restores_the_on_value_too,test_an_unwired_instance_one_switched_off_saves_as_four,test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel,test_undo_of_switch_over_the_channels_puts_the_channel_back}`,
+`tests/test_graph_switch.py::{test_a_route_on_a_removed_switch_select_goes_dormant_without_raising,test_a_switch_flicked_every_frame_reallocates_nothing}`,
+`tests/test_graph_faces.py::test_a_solid_draw_that_raises_leaves_no_face_layer_behind`.
+
 ## What no person has verified
 
-Every headless test passes (3516 passed, 2 skipped on the build machine,
+Every headless test passes (3528 passed, 2 skipped on the build machine,
 an M3 Max, with the 693 goldens); no person has run any of it. In
 particular:
 
@@ -329,8 +379,11 @@ Behaviour the owner will meet:
   still. The two rules differ (T5 minor, undecided).
 - **A near-miss drag (R22)** can surface refusal notes such as "x is no
   picture cable" in the footer. Check 325 asks whether that is noise.
-- **`render_add` numbers `max(existing) + 1`**, so re-adding a dropped
-  instance 1 makes `acid.2`.
+- **An added or inserted effect starts on (R25).** It shows at once;
+  switch it off on its node or the FX page if that was not wanted.
+- **A run through an effect file this Mac lacks (R27)** draws without it
+  and says so only on GRAPH (`Graph.dormant`), not as a load note. A
+  GRAPH edit keeps the missing file's wires.
 - **A backdrop branch has one extra reader**, so one extra pool texture a
   frame (T4 minor). A branch is never over 1080p (R18: plan 32's caps
   decode files at 1920×1080 and live at 1280×720).
@@ -349,19 +402,16 @@ Code the next person will meet (deferred minors from the reviews):
   its hot-reload test simulates rather than exercising `test_hotreload`
   (T3).
 - `Renderer._frame_target` / `pool_at` use `__dict__.setdefault` where the
-  file otherwise uses `getattr`; a solid geometry's draw raising between
-  `prepare` and `draw` leaves a stale `r._face_layer` (T4).
+  file otherwise uses `getattr` (T4).
 - `Graph.pulled` treats an `after`-only reader as a root (conservative; to
-  be commented); no test that a route or desk row on a removed
-  `switch.<n>.select` goes dormant without raising; `MAKERS` sits
-  mid-file (T5).
+  be commented); a desk row (not a route) on a removed
+  `switch.<n>.select` is untested; `MAKERS` sits mid-file (T5).
 - `graphview.cable_near` reuses `d` for an id and then a distance and
   shadows `a`, `b`; `returns()` has a long `and`/`or` condition (T6).
 - `ui_fx` imports the private `graph._PICTURE_PORTS` and `preset` the
   private `library._module_values` (public aliases wanted);
   `ui_fx.groups()` is computed twice a frame (the page and the strip's
-  `_where`) and again in GRAPH's side pane; `learn.cannot_show`'s
-  media-`None` fallback reads `off("view.media")`, dead in practice (T7).
+  `_where`) and again in GRAPH's side pane (T7).
 - `tests/test_presets.py::test_active_follows_the_loaded_preset_from_one_place`
   failed once in the middle of T7 while `ruff --fix` ran over the tests;
   it passes alone and in the final run. Watch for a flake.

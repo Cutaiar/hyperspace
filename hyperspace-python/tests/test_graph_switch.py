@@ -421,3 +421,77 @@ def test_the_switch_onto_the_faces_is_a_cut(ctx):
     unwired, _ = _rig_frame(ctx, "switch-faces",
                             wiring=G.read_graph(section(("frame", "fx.image"))).wiring())
     assert not np.array_equal(got, unwired)
+
+
+def test_a_route_on_a_removed_switch_select_goes_dormant_without_raising(ctx):
+    """Final review (10): a preset with `switch.2` and an LFO route on
+    `switch.2.select`; a GRAPH edit deletes `switch.2` and frames are
+    drawn — nothing raises, the param is gone and the route stays in the
+    table, dormant (on no param), as a route on a removed modifier does."""
+    from hyperspace import graphview
+    from hyperspace.routing import Binding
+    from hyperspace.view import ViewState
+
+    m = _media(a=Still(_rgba(16, 9, RED)))
+    view = ViewState(lines=False, points=False, faces=False)
+    app = _app(m, view)
+    doc = {"schema": "hyperspace.preset/5", "name": "two", "values": {"switch.2.select": 1},
+           "graph": section(("frame", "fx.image"), ("media.a", "switch.2.in1"),
+                            ("switch.2", "output.1.image"),
+                            nodes=[{"kind": "switch", "instance": 2}])}
+    assert app.presets.load_doc(doc) == []
+    route = Binding("lfo:0", "switch.2.select", "push", 0.25)
+    app.router.table.bindings.append(route)
+    m.assign("a", 0, "file:/fake/a.png")
+    m.poll(0.0, 0.0)
+    r = _on_renderer(ctx, app, m)
+    vs = _views(ctx)
+    _frame(ctx, r, view, vs, 0)
+    e = graphview.Edit(graph=app.presets.graph)
+    assert e.drop_node("switch.2") is None
+    assert "switch.2.select" not in app.reg
+    for k in range(1, 5):
+        t = k * 0.25
+        app.clock.tick(t)
+        app.router.modulate(None, 0.25, now=t)
+        app.reg.apply()
+        _frame(ctx, r, view, vs, k)
+    assert route in app.router.table.routes() and "switch.2.select" not in app.reg
+
+
+def test_a_switch_flicked_every_frame_reallocates_nothing(ctx):
+    """R29: a switch flicked every frame between two branches made at
+    different sizes (two channels of other sizes through their own acid
+    into the pattern's media) for 100 frames: a sized texture
+    (`Renderer._prune_sized`) is kept `SIZED_KEEP_FRAMES` frames after its
+    last use, so their count is stable and they are the same objects
+    throughout — no allocation per flick."""
+    from hyperspace.render import SIZED_KEEP_FRAMES
+
+    assert SIZED_KEEP_FRAMES == 30
+    m = _media(a=Still(_rgba(16, 9, RED)), b=Still(_rgba(40, 30, BLUE)))
+    r = _renderer(ctx, m, [("media.a", "acid.2.image"), ("acid.2", "switch.in1"),
+                           ("media.b", "acid.3.image"), ("acid.3", "switch.in2"),
+                           ("switch", "pattern.media")],
+                  [SWITCH, {"kind": "effect", "file": "acid", "instance": 2},
+                   {"kind": "effect", "file": "acid", "instance": 3}], {"acid": 3},
+                  {n: {"on": True, "mix": 1.0} for n in ("acid.2", "acid.3")})
+    vs = _views(ctx, (160, 120))
+    s = _faces_view()
+    s.switch = {}
+
+    def sized() -> set[int]:
+        frames = [t for k, (t, _) in r._frames.items() if isinstance(k, tuple)]
+        pools = [t for pool in getattr(r, "_pools", {}).values() for t, _ in pool]
+        return {id(t) for t in (*frames, *pools)}
+
+    counts, seen = [], set()
+    for k in range(100):
+        s.switch["switch"] = 1 + k % 2
+        _frame(ctx, r, s, vs, k)
+        now = sized()
+        counts.append(len(now))
+        if k >= 2:
+            seen |= now
+    assert counts[2] > 0 and len(set(counts[2:])) == 1, counts
+    assert len(seen) == counts[2], (len(seen), counts[2])

@@ -1211,10 +1211,11 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
 
 
 def render_picker(panel, at=None) -> None:
-    """The picker's render items: an effect instance per file, a switch, a
-    hands node, a composite (`graphview.picker`). Plan 33 U: an effect or a
-    switch lands unwired (faint, "reaches nothing") where the menu opened
-    (`at`, canvas units)."""
+    """The picker's render items: an effect instance per file, a switch,
+    (R28) a switch over the channels into the faces' media or the backdrop,
+    a hands node, a composite (`graphview.picker`). Plan 33 U: an effect or
+    a switch lands unwired (faint, "reaches nothing") where the menu opened
+    (`at`, canvas units); the channels' switch lands wired."""
     e = render_edit(panel)
     items = graphview.picker(e)
     effects = [(f, label) for kind, f, label in items if kind == "effect"]
@@ -1224,8 +1225,31 @@ def render_picker(panel, at=None) -> None:
                 add_render(panel, e, "effect", f, at)
         imgui.end_menu()
     for kind, _, label in items:
-        if kind != "effect" and imgui.menu_item_simple(label):
+        if kind not in ("effect", "channels") and imgui.menu_item_simple(label):
             add_render(panel, e, kind, None, at)
+        if kind == "switch":
+            _channels_menu(panel, e, items, at)
+
+
+def _channels_menu(panel, e: graphview.Edit, items, at=None) -> None:
+    """R28: "switch over the channels ▸ faces media / backdrop", under the
+    picker's switch: one undo step (`Edit.switch_channels`), the new switch
+    put where the menu opened."""
+    ports = [(port, label) for kind, port, label in items if kind == "channels"]
+    if ports and imgui.begin_menu("switch over the channels"):
+        for port, label in ports:
+            if imgui.menu_item_simple(label):
+                switch_channels(panel, e, port, at)
+        imgui.end_menu()
+
+
+def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
+    """R28: a switch over the eight channels into `port`, one undo step,
+    put where the menu opened. Returns the refusal, or None."""
+    why = _render_said(panel, e, lambda e: e.switch_channels(port))
+    if why is None and e.added:
+        _place_new(panel, f"render:{e.added}", at)
+    return why
 
 
 def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):

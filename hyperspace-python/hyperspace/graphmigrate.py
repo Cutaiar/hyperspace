@@ -385,7 +385,11 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     """The section half of `migrate`: `doc`'s `graph` section with its runs and channel wires added
     (unchanged when it already has them; `{}` for a preset with no section
     and nothing to add), and the load notes. `migrate` is the rest of the
-    document: the values and rows this changes."""
+    document: the values and rows this changes.
+
+    No production caller (a load takes the whole document, `migrate`):
+    kept for tests/test_graph_migrate.py, which reads the migration's
+    section on its own, one rule at a time."""
     out, notes = migrate(doc, specs)
     section = out.get("graph")
     return (section if isinstance(section, dict) else {}), notes
@@ -436,7 +440,7 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
 
     The result is what to lay over `values`: an effect's `order` (kept as it
     is where the run already sorts by `(order, name)`, else
-    `fx.reordered`'s fewest changes), its `target`, and the two channel
+    `reordered`'s fewest changes), its `target`, and the two channel
     choices. A key the document does not hold and that needs no change is
     left out. `specs` gives an absent order or mix its file's default;
     `driven` is `targets(doc)`, so an effect on at mix 0 and driven is a
@@ -447,15 +451,18 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
         return None
     if spec.switches:
         return None
-    # R21: an instance 1 kept on no wire (taken out of the run) is unreached,
-    # a word `/4` lacks — a build from before plan 33 refuses the entry
-    if any(e.n == 1 and not e.placed for e in spec.effects):
+    driven_fx = _driven_fx(driven)
+    # R21: an instance 1 kept on no wire (taken out of the run) and live is
+    # unreached, a word `/4` lacks (its stack would run it). R26: one that
+    # is not live is nothing to `/4` — `legacy_section` strips the entry a
+    # build from before plan 33 refuses, and its stack left the effect out
+    if any(e.n == 1 and not e.placed and _live(values, specs, driven_fx, e.name)
+           for e in spec.effects):
         return None
     wires = spec.all_wires()
     runs = {"frame": G.run_of(spec), "pattern": G.run_of(spec, "pattern", "shape.faces")}
     ends = {"frame": "fx.image", "pattern": "shape.faces"}
     members = {n for r in runs.values() for n in r}
-    driven_fx = _driven_fx(driven)
     for head, end in ends.items():
         touching = {w for w in wires if w.src == head or w.dst == end}
         want = _expected(head, runs[head], end)
@@ -501,10 +508,14 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
     return out
 
 
-def has_frame_run(spec: G.GraphSpec) -> bool:
+def has_frame_run(spec: G.GraphSpec | None) -> bool:
     """Whether the section has a run's head: a wire from `frame` or into
-    `fx.image` (what `to_free` always writes)."""
-    return any(w.src == "frame" or w.dst == "fx.image" for w in spec.all_wires())
+    `fx.image` (what `migrate` always writes). Every preset loaded on this
+    build has one; a section with none (None: no preset loaded, an edit on
+    the GRAPH page with nothing loaded) has the empty run (R23). The GRAPH
+    page's edits ask this too (`graphview`)."""
+    return spec is not None and any(w.src == "frame" or w.dst == "fx.image"
+                                    for w in spec.all_wires())
 
 
 def says_free(section: Any) -> bool:
@@ -743,17 +754,29 @@ def module_runs(section: Any, values: dict, specs: Specs,
     the module has one. Every other wire, branch, composite, switch and
     placement stays, and an effect one of them wires is in no run (one
     `image` input). `rows`: the routes, desk and macros that drive what
-    (R5's membership). Returns the section and `migrate`'s notes."""
+    (R5's membership). Returns the section and `migrate`'s notes.
+
+    The faces run kept (the module has none) keeps its effects too: the
+    module's main run is read with the faces wires in place, so an effect
+    the faces run holds is wired there and left out of the main run, which
+    closes over the gap (final review, finding 1) — read without them, the
+    effect would sit in both runs, two `image` inputs, and `read_graph`
+    would refuse both."""
     base = copy.deepcopy(section) if isinstance(section, dict) else {"nodes": []}
     wires = list(base.get("wires") or [])
     main = _run_entries(base, RUN_ENDS[:1]) | {("frame", "fx.image")}
     faces = _run_entries(base, RUN_ENDS[1:])
-    stripped = {**base, "wires": [w for w in wires if _entry(w) not in main | faces]}
-    doc = {**(rows or {}), "values": dict(values), "graph": stripped}
-    out, notes = migrate(doc, specs)
-    sec = out.get("graph") if isinstance(out.get("graph"), dict) else stripped
-    got = list(sec.get("wires") or [])
-    if faces and not any(isinstance(w, dict) and w.get("from") == "pattern" for w in got):
-        got += [w for w in wires if _entry(w) in faces]      # the module has none: kept
-    return {**sec, "wires": got}, notes
+
+    def landed(drop: set) -> tuple[dict, list[str]]:
+        stripped = {**base, "wires": [w for w in wires if _entry(w) not in drop]}
+        doc = {**(rows or {}), "values": dict(values), "graph": stripped}
+        out, notes = migrate(doc, specs)
+        sec = out.get("graph") if isinstance(out.get("graph"), dict) else stripped
+        return sec, notes
+
+    sec, notes = landed(main | faces)
+    if faces and not any(isinstance(w, dict) and w.get("from") == "pattern"
+                         for w in sec.get("wires") or []):
+        sec, notes = landed(main)                    # the module has none: kept, and its effects
+    return sec, notes
 

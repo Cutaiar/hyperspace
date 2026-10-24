@@ -130,10 +130,13 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("view.pattern_mix", v) == "faces off"
     assert cannot_show("pattern.mod.3", v) == "faces off"
     assert cannot_show("view.media_alpha", v) == "faces off"
-    assert cannot_show("view.media_alpha", {**v, "view.faces": True}) == "no media channel"
-    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True}) == "no media channel"
-    assert cannot_show("view.media_scale", {**v, "view.faces": True,
-                                            "view.media": 2}) is None
+    # (plan 33: the graph says whether a channel feeds the faces, `media`;
+    # the retired `view.media` in the values says nothing)
+    faces = {**v, "view.faces": True}
+    assert cannot_show("view.media_alpha", faces, media=False) == "no media channel"
+    assert cannot_show("view.bmp_alpha", faces, media=False) == "no media channel"
+    assert cannot_show("view.media_scale", faces, media=True) is None
+    assert cannot_show("view.media_alpha", faces) is None        # no graph to ask: shown
     assert cannot_show("view.points_alpha", v) is None
     assert cannot_show("view.lines_alpha", v) == "lines off"
     # the stroke space (plan 26 A2b): dead only with the points and the lines off

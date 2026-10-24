@@ -189,8 +189,9 @@ def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
     that is asked) cannot show `pid`, in a few words ("faces off",
     "kaleido off"), or None when it can — the rule above. A switch the
     values do not name counts as on. `media`: whether its graph wires a
-    picture into the faces' layer (`faces_media`); None, as an old
-    preset's `view.media` says (absent: on)."""
+    picture into the faces' layer (`faces_media`); None (no graph to ask)
+    counts as wired — `view.media`, which said it before plan 33 T7, is no
+    param any more."""
     def off(sw: str) -> bool:
         v = values.get(sw)
         return v is not None and not bool(v)
@@ -199,8 +200,7 @@ def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
     if pid in _MEDIA:
         if off("view.faces"):
             return "faces off"
-        gone = (media is False) if media is not None else off("view.media")
-        return "no media channel" if gone else None
+        return "no media channel" if media is False else None
     if pid == "view.points_alpha":
         return "points off" if off("view.points") else None
     if pid == "view.lines_alpha":

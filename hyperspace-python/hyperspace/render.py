@@ -54,15 +54,16 @@ effect chain's texture instead and the last effect writes the window.
 `draw_scene` is the scene pass alone, for anything that wants the raw
 frame.
 
-Effects aimed at the faces (fx.py, plan 20) run before the scene pass, as
-a second chain over a fixed-size picture of what a face shows
-(`Renderer._face_picture`: a seed pass, the chain, mipmaps); the face
-shader then draws that picture on every face, per face or in screen
-space, in place of computing the pattern and the bitmap per fragment. So
-the faces' effects are *in* the scene texture: the echoes and the dream
-carry them, and the frame's effects run over them. With nothing aimed at
-the faces none of it runs, nothing is allocated and the frame is
-bit-identical. The ghost hands (ghost.py) are a geometry in the same
+A picture wired into the faces (`shape.faces`, plan 33 R: the faces'
+run `pattern → … → shape.faces`, or any branch) is made before the scene
+pass at a fixed size (FACE_PIC², `Renderer._face_picture`: the seed pass,
+then the effects on its wires, mipmaps); the face shader then draws that
+picture on every face, per face or in screen space, in place of
+computing the pattern and the bitmap per fragment. So the faces'
+effects are *in* the scene texture: the echoes and the dream carry them,
+and the frame's run goes over them. With nothing wired into the faces
+none of it runs, nothing is allocated and the frame is bit-identical.
+The ghost hands (ghost.py) are a geometry in the same
 camera (plan 26 A3): by default their own layer, laid over the finished
 frame (or onto it before the effects); wired into the scene, solid,
 before the shape; off, the frame is untouched. Last of all the master
@@ -148,6 +149,13 @@ from .view import N_MOD, RED, ViewState  # re-exported for callers that had them
 # in the frame reads — each at most this often, at most this many a frame
 PREVIEW_HZ = 10.0
 PREVIEWS_PER_FRAME = 2
+
+# plan 33 R29: how many frames a texture made at another size (`pool_at`, a
+# `(name, size)` frame target) is kept after its last use before
+# `_prune_sized` releases it — so a switch the sequencer flicks between two
+# branches of other sizes reallocates nothing per flick (half a second at
+# 60 fps: a few idle textures held, at most)
+SIZED_KEEP_FRAMES = 30
 
 PATTERNS_GLSL = Path(__file__).parent / "shaders" / "patterns.glsl"
 
@@ -1387,7 +1395,7 @@ class Renderer:
         did.
 
         What the nodes run is the frame as it was: the face picture (only
-        while an effect is aimed at the faces), the scene, the cover, the
+        while something is wired into `shape.faces`), the scene, the cover, the
         hands' layer, each pipeline once (the look-back composite, the
         hands onto it, the effects), the capture, then each view's
         picture, the ghost hands over it and its dim."""
@@ -1918,19 +1926,36 @@ class Renderer:
 
     def _prune_sized(self) -> None:
         """Once a frame, first: release the pools (`pool_at`) and the frame
-        textures keyed `(name, size)` that the last frame did not ask for —
-        a channel whose clip changed size, a branch unwired — so pictures
-        made at other sizes never pile up."""
+        textures keyed `(name, size)` that no frame has asked for in the
+        last `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a
+        branch unwired — so pictures made at other sizes never pile up,
+        and (R29) a switch flicked every frame between branches of other
+        sizes reallocates nothing: the branch not picked keeps its
+        textures for the next flick."""
+        # (__dict__: a renderer from before a hot reload has no idle counts;
+        # a key's count is the frames since it was last asked for)
+        idle = self.__dict__.setdefault("_sized_idle", {})
+
+        def stale(key, used: set) -> bool:
+            if key[1] in used:
+                idle.pop(key, None)
+                return False
+            idle[key] = idle.get(key, 0) + 1
+            if idle[key] < SIZED_KEEP_FRAMES:
+                return False
+            del idle[key]
+            return True
+
         pools = getattr(self, "_pools", None) or {}
         used = getattr(self, "_pools_used", None) or set()
-        for size in [k for k in pools if k not in used]:
+        for size in [k for k in pools if stale(("pool", k), used)]:
             for tex, fbo in pools.pop(size):
                 fbo.release()
                 tex.release()
         self._pools_used = set()
         frames = getattr(self, "_frames", None) or {}
         used = getattr(self, "_sized_used", None) or set()
-        for key in [k for k in frames if isinstance(k, tuple) and k not in used]:
+        for key in [k for k in frames if isinstance(k, tuple) and stale(("frame", k), used)]:
             tex, fbo = frames.pop(key)
             fbo.release()
             tex.release()

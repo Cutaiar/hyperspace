@@ -1025,7 +1025,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     resolves with or without a panel. `dream` is the renderer's lookback
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
+    renderer's effects' values) likewise, and `ghost` (ghost.GhostState, the
     renderer's ghost hands), and `media` (media.channels.MediaState, the
     eight channels the ``media.*`` params write; kept as ``r.media``, the
     one the preset's bins and the renderer read). `bank` is the open project
@@ -1451,7 +1451,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
-    # the stack the fx.* params write, for whoever declares more of them:
+    # the effects' state the fx.* params write, for whoever declares more:
     # a preset's graph holding an effect twice (plan 26 A4,
     # preset.GraphSection — `fx.acid.2.*`)
     r.fx_state = fx

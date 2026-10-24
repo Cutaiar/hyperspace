@@ -751,19 +751,102 @@ def test_insert_effect_on_a_render_cable(tmp_path):
                               undo_rig=True)
     cable = graphview.VCable("c", "rout:media.a", "rin:shape/faces", graphview.IMAGE,
                              kind="render")
-    assert e.insert_effect(cable, "kaleido") is None and e.added == "kaleido.2"
+    # (R25: no wire, node or placement holds kaleido, so it is instance 1)
+    assert e.insert_effect(cable, "kaleido") is None and e.added == "kaleido"
     got = wires_of(rig)
-    assert ("media.a", "kaleido.2.image") in got and ("kaleido.2", "shape.faces") in got
+    assert ("media.a", "kaleido.image") in got and ("kaleido", "shape.faces") in got
     assert ("media.a", "shape.faces") not in got and len(pushed) == 1
     settle(rig)
     assert rig.undo.undo()
     assert ("media.a", "shape.faces") in wires_of(rig)
-    assert "kaleido.2" not in {x.name for x in rig.presets.graph.spec.effects}
-    # into the empty run: frame → acid.2 → fx.image
+    assert "kaleido" not in {x.name for x in rig.presets.graph.spec.effects}
+    # into the empty run: frame → acid → fx.image
     assert e.insert_effect(("frame", "fx.image"), "acid") is None
-    assert G.run_of(rig.presets.graph.spec) == ("acid.2",)
+    assert G.run_of(rig.presets.graph.spec) == ("acid",)
     assert ("frame", "fx.image") not in wires_of(rig)
     assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
+
+
+def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(tmp_path):
+    """R25: an effect inserted on a cable, or added from the picker, that no
+    wire, node or placement in the section holds is the file itself
+    (instance 1), and it is switched on (`fx.<name>.on`) in the same
+    landing — the first gesture shows something."""
+    from hyperspace import graph as G
+    rig, e, pushed = free_rig(tmp_path, ("frame", "fx.image"))
+    reg = rig.reg
+    assert not reg["fx.kaleido.on"].value and not reg["fx.wobble.on"].value
+    assert e.insert_effect(("frame", "fx.image"), "kaleido") is None and e.added == "kaleido"
+    assert G.run_of(rig.presets.graph.spec) == ("kaleido",)
+    assert reg["fx.kaleido.on"].value is True and pushed == ["insert kaleido into frame → fx.image"]
+    assert e.add_node("effect", "wobble") is None and e.added == "wobble"
+    assert reg["fx.wobble.on"].value is True
+    assert "wobble" in {x.name for x in rig.presets.graph.spec.effects}
+
+
+def test_a_second_insert_of_the_same_file_takes_instance_two(tmp_path):
+    """R25: the run holds kaleido, so the next kaleido inserted is
+    `kaleido.2`, and it is switched on too."""
+    from hyperspace import graph as G
+    rig, e, _ = free_rig(tmp_path, ("frame", "fx.image"))
+    assert e.insert_effect(("frame", "fx.image"), "kaleido") is None and e.added == "kaleido"
+    assert e.insert_effect(("kaleido", "fx.image"), "kaleido") is None
+    assert e.added == "kaleido.2"
+    assert G.run_of(rig.presets.graph.spec) == ("kaleido", "kaleido.2")
+    assert rig.reg["fx.kaleido.2.on"].value is True and rig.reg["fx.kaleido.on"].value is True
+
+
+def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
+    """R25: the insert and its `on` are one undo step — one undo takes the
+    effect off the cable and puts `fx.kaleido.on` back off."""
+    from test_undo import settle
+
+    from hyperspace import graph as G
+    rig, e, _ = free_rig(tmp_path, ("frame", "fx.image"), undo_rig=True)
+    assert rig.reg["fx.kaleido.on"].value is False
+    assert e.insert_effect(("frame", "fx.image"), "kaleido") is None
+    assert rig.reg["fx.kaleido.on"].value is True
+    settle(rig)
+    assert len(rig.undo.stack) == 1 and rig.undo.undo()
+    assert rig.reg["fx.kaleido.on"].value is False
+    assert G.run_of(rig.presets.graph.spec) == () and wires_of(rig) == {("frame", "fx.image")}
+
+
+def test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel(tmp_path):
+    """R28: the picker's "switch over the channels ▸ faces media" is one
+    landing: a new switch, `media.a … h → in1 … in8`, the switch into
+    `pattern.media` in place of what fed it, and `select` the channel that
+    fed it (c: 3). "▸ backdrop" on a backdrop fed by nothing is a second
+    switch at select 1."""
+    rig, e, pushed = free_rig(tmp_path, ("frame", "fx.image"), ("media.c", "pattern.media"))
+    items = graphview.picker(e)
+    assert ("channels", "pattern.media", "faces media") in items
+    assert ("channels", "backdrop.image", "backdrop") in items
+    assert e.switch_channels("pattern.media") is None and e.added == "switch"
+    got = wires_of(rig)
+    for i, c in enumerate("abcdefgh", 1):
+        assert (f"media.{c}", f"switch.in{i}") in got
+    assert ("switch", "pattern.media") in got and ("media.c", "pattern.media") not in got
+    assert rig.reg["switch.select"].value == 3 and len(pushed) == 1
+    assert e.switch_channels("backdrop.image") is None and e.added == "switch.2"
+    assert ("switch.2", "backdrop.image") in wires_of(rig)
+    assert rig.reg["switch.2.select"].value == 1 and len(pushed) == 2
+    assert e.switch_channels("output.1.image") == (
+        "a switch over the channels goes into pattern.media or backdrop.image")
+
+
+def test_undo_of_switch_over_the_channels_puts_the_channel_back(tmp_path):
+    """R28: the switch, its nine wires and its `select` are one undo step:
+    one undo leaves `media.c → pattern.media` and no switch."""
+    from test_undo import settle
+    rig, e, _ = free_rig(tmp_path, ("frame", "fx.image"), ("media.c", "pattern.media"),
+                         undo_rig=True)
+    assert e.switch_channels("pattern.media") is None
+    assert rig.reg["switch.select"].value == 3
+    settle(rig)
+    assert len(rig.undo.stack) == 1 and rig.undo.undo()
+    assert wires_of(rig) == {("frame", "fx.image"), ("media.c", "pattern.media")}
+    assert rig.presets.graph.spec.switches == () and "switch.select" not in rig.reg
 
 
 def test_the_run_keeps_its_frame_head(tmp_path):
@@ -851,6 +934,9 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     from hyperspace.outputs import Switches
     rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "fx.image"),
                               undo_rig=True)
+    rig.reg["fx.acid.on"].set(True)              # (R26: live, so /4 cannot say it)
+    settle(rig)
+    rig.undo.clear()
     assert e.unwire("frame", "acid.image") is None and len(pushed) == 1
     spec = rig.presets.graph.spec
     assert G.run_of(spec) == () and wires_of(rig) == {("frame", "fx.image")}
@@ -862,7 +948,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     # a /5 save: legacy_values has no /4 words for it, the old build's section drops it
-    assert graphmigrate.legacy_values(spec.to_json(), {}) is None
+    assert graphmigrate.legacy_values(spec.to_json(), {"fx.acid.on": True}) is None
     assert graphmigrate.legacy_section(spec.to_json()) is None
     doc = json.loads(rig.presets.save_as("Out").read_text())
     assert doc["schema"] == "hyperspace.preset/5"
@@ -875,6 +961,27 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert e2.unwire("acid", "fx.image") is None
     assert e2.place_effect(("frame", "fx.image"), "acid") is None
     assert rig2.presets.graph.spec.to_json()["nodes"] == []
+
+
+def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
+    """R26 (refines R21): `acid` taken out of the run and switched off is
+    nothing `/4` lacks a word for — `legacy_values` takes the unwired
+    instance-1 entry (`legacy_section` strips it), so the preset saves as
+    `/4` again; while acid is still on it is `/5` (row 349)."""
+    import json
+
+    from hyperspace import graphmigrate
+    rig, e, _ = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "fx.image"))
+    rig.reg["fx.acid.on"].set(True)
+    assert e.unwire("frame", "acid.image") is None
+    section = rig.presets.graph.spec.to_json()
+    assert {"kind": "effect", "file": "acid"} in section["nodes"]
+    assert graphmigrate.legacy_values(section, {"fx.acid.on": True}) is None
+    assert json.loads(rig.presets.save_as("On").read_text())["schema"] == "hyperspace.preset/5"
+    rig.reg["fx.acid.on"].set(False)
+    assert graphmigrate.legacy_values(section, {"fx.acid.on": False}) is not None
+    doc = json.loads(rig.presets.save_as("Off").read_text())
+    assert doc["schema"] != "hyperspace.preset/5" and "graph" not in doc   # (/4 or lower)
 
 
 def test_an_unwired_instance_one_round_trips():

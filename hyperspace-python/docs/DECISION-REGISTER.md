@@ -6558,7 +6558,7 @@ designed plan 33, before the build: "(owner)" is his own answer, quoted,
 "(rec)" a recommendation he accepted ("accept the rest of the recs, start
 building"). Each row says what the build did; "Rough edge" and "Judge it"
 are for the hand checks of group AC (checks 318–328). The ledger's
-rulings R1–R24 are folded into "Built" where they changed what you see.
+rulings R1–R29 are folded into "Built" where they changed what you see.
 The plan lands on `plan-31-32-integration` (PR #235).
 
 ### 341. Retire the FX stack: no `order`, no `target`, effects are edited on GRAPH
@@ -6719,12 +6719,16 @@ The plan lands on `plan-31-32-integration` (PR #235).
 - **Built.** `graph.reaches(spec)`; an effect, composite or switch with no
   path to a sink has no render node and is drawn faint on GRAPH with
   "reaches nothing" (`REACHES_NOTHING`). The right-click picker adds
-  effects and switches this way. An instance 1 taken out of the run is
-  kept as `{"kind": "effect", "file": f}` (R21) and the section is `/5`.
+  effects and switches this way; an added or inserted effect is instance
+  1 when nothing holds it, else the lowest free instance, and starts on
+  (R25). An instance 1 taken out of the run is kept as `{"kind":
+  "effect", "file": f}` (R21) and the section is `/5` while the effect is
+  on; switched off, it saves below `/5` again (R26).
 - **Other options.** Drop it on save.
-- **To reverse.** `graph.reaches`, `graphview.unreached`, R21's node form.
-- **Rough edge.** `render_add` numbers `max(existing) + 1`, so re-adding a
-  dropped instance 1 gives `acid.2`.
+- **To reverse.** `graph.reaches`, `graphview.unreached`, R21's node form,
+  `graphview._new_instance` / `_switch_on` (R25).
+- **Rough edge.** An effect added or inserted shows at once (R25): switch
+  it off if it was meant to wait.
 - **Judge it.** Checks 325, 326.
 
 ### 350. A switch node in this plan: eight inputs, `switch.select` modulatable; a route on `view.media` or `backdrop.channel` migrates to one
@@ -6737,10 +6741,13 @@ The plan lands on `plan-31-32-integration` (PR #235).
   `ViewState.switch`. A driven `view.media` or `backdrop.channel` loads as
   `media.a … media.h` into a switch, the switch into `pattern.media` (or
   `backdrop.image`), the pick at the old value, the rows retargeted to
-  `switch.select` (R14, R19). The switch sits in the MEDIA area.
+  `switch.select` (R14, R19). The switch sits in the MEDIA area. On
+  GRAPH the picker's "switch over the channels ▸ faces media / backdrop"
+  builds the same wires in one undo step, `select` at the channel that fed
+  the port, else 1 (R28, `Edit.switch_channels`).
 - **Other options.** No switch; such routes dropped.
 - **To reverse.** `SwitchNode`, `declare_switches`, the migration's switch
-  half.
+  half, `graphview.render_channel_switch`.
 - **Rough edge.** A registry from before a hot reload into this build has
   no `switch_state`, so switches read off until a restart (R24; dev only).
 - **Judge it.** Check 319.
@@ -6766,10 +6773,14 @@ The plan lands on `plan-31-32-integration` (PR #235).
   a channel no picked path reads is not uploaded. Changing `select`
   rebuilds nothing (a cache of 256 pick-tuples). A pick of off, or on an
   unwired input, reads nothing: the faces show the pattern, the backdrop
-  shows nothing. 8 goldens (`switch-faces`).
+  shows nothing. 8 goldens (`switch-faces`). A texture made at another
+  size is kept `render.SIZED_KEEP_FRAMES` (30) frames after its last use,
+  so a switch flicked every frame between branches of other sizes
+  allocates nothing per flick (R29).
 - **Other options.** A crossfade time; a variable input count.
 - **To reverse.** `SwitchNode`, `Graph.pulled`.
 - **Rough edge.** An unpulled effect's clock stands still, where a wired
   effect whose picture is not made keeps running (R17); `pulled` treats an
-  `after`-only reader as a root.
+  `after`-only reader as a root; up to a few idle sized textures are held
+  half a second (R29).
 - **Judge it.** Checks 319, 324.

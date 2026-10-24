@@ -380,9 +380,10 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
 
 def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     """The right-click picker lists every effect file, a hands node and a
-    composite; an effect picked is the next instance (`EffectAt(file,
-    n + 1)`) with its own `fx.<file>.<n+1>.*` params, at their defaults,
-    in the chain; deleting the node drops it and its params; a hands node
+    composite; an effect picked is the file itself while nothing holds it
+    (R25: switched on), then the next instance (`EffectAt(file, n + 1)`)
+    with its own `fx.<file>.<n+1>.*` params, at their defaults but `on`,
+    on no wire; deleting the node drops it and its params; a hands node
     is the next instance, drawn in the scene while another makes the
     layer; a composite is the first; the frame's own nodes stay."""
     rig, stub, edit, pushed = _edit_rig(tmp_path)
@@ -391,10 +392,14 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
         ("hands", None, "hands"), ("composite", None, "composite")]
     assert "fx.acid.2.on" not in rig.reg
     assert edit.add_node("effect", "acid") is None
+    assert edit.said == "acid added: its params are fx.acid.*"
+    assert rig.reg["fx.acid.on"].value is True                    # R25: on, to show
+    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 1),)
+    assert edit.add_node("effect", "acid") is None
     assert edit.said == "acid.2 added: its params are fx.acid.2.*"
-    assert rig.reg["fx.acid.2.on"].value is False                 # off, as a new effect is
+    assert rig.reg["fx.acid.2.on"].value is True
     assert {"fx.acid.2.mix", "fx.acid.2.twist"} <= {p.id for p in rig.reg}
-    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 2),)
+    assert rig.presets.graph.spec.effects == (G.EffectAt("acid", 1), G.EffectAt("acid", 2))
     assert edit.add_node("effect", "acid") is None and "fx.acid.3.on" in rig.reg
     assert edit.add_node("effect", "teapot") == "no teapot effect in this build"
     assert edit.drop_node("acid.3") is None and "fx.acid.3.on" not in rig.reg
@@ -422,7 +427,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.drop_node("output.1") == "output.1 is the frame's own: it stays"
     assert edit.drop_node("ghost") == ("hands 1 is the frame's own hands: it stays "
                                        "(switch it off on HANDS)")
-    assert len(pushed) == 10
+    assert len(pushed) == 11
 
 
 def test_an_edit_is_one_undo_step(tmp_path):

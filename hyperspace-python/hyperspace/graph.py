@@ -434,7 +434,8 @@ class EffectAt:
 
     @property
     def where(self) -> tuple[str, str] | None:
-        """("after" | "into", the node's name), or None: in the chain."""
+        """("after" | "into", the node's name), or None: where its wires
+        put it (plan 33: no stack holds it)."""
         if self.after is not None:
             return "after", self.after
         if self.into is not None:
@@ -442,8 +443,8 @@ class EffectAt:
         return None
 
     def unplaced(self) -> EffectAt | None:
-        """This instance at the default placement: in the chain at its
-        order (None for instance 1: a D1 placement refused leaves the file
+        """This instance at the default placement: where its wires put
+        it (None for instance 1: a D1 placement refused leaves the file
         where its wires put it — R21's unwired entry is written, never made here)."""
         return EffectAt(self.file, self.n) if self.n >= 2 else None
 
@@ -507,7 +508,7 @@ def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
     """(the instance, None), or — for a placement this build cannot honour
     (plan 30 D1: both keys at once, a name that is not a string or not in
     the placeable vocabulary) — (the instance at the default placement,
-    or None for instance 1, which is always in the chain; the reason).
+    or None for instance 1, which its wires name; the reason).
     `read_graph` notes the reason; the rest of the graph stands."""
     _entry_keys(e, "effect", ("instance", "file", *PLACE_KEYS))
     if "file" not in e:
@@ -554,7 +555,8 @@ NODE_KINDS: dict[str, Any] = {
 # "output.1.image"}]}`. A wire names a node's output (`from`: the node's
 # name) and an input port (`to`: `<node>.<port>`). An input no wire names
 # is the default graph's: an output's ports follow the session's switches
-# (the rig's, not the look's), an effect sits in the chain at its order.
+# (the rig's, not the look's); an effect is where its wires put it, and one
+# on no wire is in no run (plan 33: no stack holds it).
 # D1's `after` / `into` are the same wires written short, and read as such
 # (`d1_wires`): `{"file": "palette", "after": "hands"}` is the wire
 # `hands → palette.image`, `{"file": "palette", "into": "output.2"}` the
@@ -1122,8 +1124,9 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     not in the placeable vocabulary (`placement_error`; `effects`: the
     effect files on disk, so `after: "teapot"` is refused — None takes
     any well-formed effect name), or a loop of placed effects
-    (`placement_loops`) — the effect takes the default placement (the
-    chain, at its order) and the reason rides in `GraphSpec.notes`."""
+    (`placement_loops`) — the effect takes the default placement (plan
+    33: where its wires put it, none for an instance on no wire) and the
+    reason rides in `GraphSpec.notes`."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
     extra = sorted(set(section) - {"nodes", "wires"})
@@ -1221,12 +1224,40 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                    switches=frozenset(s.name for s in spec.switches),
                    placed={e.name: e.where for e in effects_at if e.placed})
     wires, wire_notes = _read_wires(section["wires"], ctx, d1_wires(effects_at))
+    if ctx.effects is not None and wire_notes:
+        wires, wire_notes = _through_missing(section["wires"], ctx, d1_wires(effects_at),
+                                             wires, wire_notes, spec, set(effects))
     spec = replace(spec, wires=wires, notes=spec.notes + tuple(wire_notes))
     try:
         spec.wiring()
     except ValueError as err:
         raise GraphError(str(err)) from err
     return spec
+
+
+def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire, ...],
+                     notes: list[str], spec: GraphSpec, files: set[str]
+                     ) -> tuple[tuple[Wire, ...], list[str]]:
+    """`_read_wires`' result with a run's wires through an effect file this
+    machine lacks kept (plan 33 R27): `frame → foo → acid → fx.image` with
+    no `foo` on disk is read as if `foo` were there — the run, and the
+    faces' run, keep every wire — so the section a save writes still holds
+    them for the Mac that has the file, and the renderer reads the run
+    through it (`default_graph`: `foo` dormant, said, the run closed over
+    it). Only the run's wires on an effect whose *file* is missing are
+    kept; a wire on any other missing effect stays refused, as before."""
+    every, _ = _read_wires(raw, replace(ctx, effects=None), d1)
+    probe = replace(spec, wires=every)
+    missing = {e for head, end in (("frame", "fx.image"), ("pattern", "shape.faces"))
+               for e in run_of(probe, head, end) if split_instance(e)[0] not in files}
+    if not missing:
+        return wires, notes
+    back = {w for w in every if w not in wires and (w.src in missing or w.node in missing)}
+    if not back:
+        return wires, notes
+    stood = set(wires)
+    keep = tuple(w for w in (Wire(e["from"], e["to"]) for e in raw) if w in stood or w in back)
+    return keep, [n for n in notes if not any(n.startswith(f"wire {w} — ") for w in back)]
 
 
 # the ports a picture goes into (a geometry port or the history's cover is no
@@ -2173,15 +2204,19 @@ class Scene(Node):
         return [g for g in self.inputs.values() if g is not None]
 
     def run(self, frame: Frame) -> None:
-        if self.ground is None:
-            self._run(frame)
-            return
         r = frame.r
-        r.scene_ground = self.ground
+        if self.ground is not None:
+            r.scene_ground = self.ground
         try:
             self._run(frame)
         finally:
-            r.scene_ground = None
+            if self.ground is not None:
+                r.scene_ground = None
+            # (final review: the faces' layer and picture the shape's
+            # `prepare` set are this pass's alone — a solid's draw that
+            # raises before the shape's own draw must not leave them stale)
+            r._pic = None
+            r._face_layer = False
 
     def _run(self, frame: Frame) -> None:
         r, ctx = frame.r, frame.ctx
@@ -2812,7 +2847,7 @@ def lay(frame: Frame, blend: str, over: Node, depth_of: Node | None,
 
 def _live_now(frame: Frame) -> frozenset[str]:
     """The effects of this frame's graph that are live (`FxState.live`: on
-    with mix above 0, the stack on and above mix 0 — no target, no order:
+    with mix above 0, `fx.on` and `fx.mix` above 0 — no target, no order:
     plan 33 R), asked once a frame — the runs' and (plan 30 D1) the
     placed and wired ones', which `frame.fx_on` leaves out."""
     got = frame.data.get("fx#live")
@@ -3713,8 +3748,9 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     on its `image` input alone. A placement on a node this graph lacks
     (no hands layer, an output not open, an effect not on disk) leaves
     the effect dormant — no node, no pass, the words in `Graph.dormant`;
-    one that makes a loop is refused (`Graph.notes`) and the effect is in
-    the run at its order. The hands' layer an effect is placed on splits
+    one that makes a loop is refused (`Graph.notes`) and the effect is
+    where its wires put it, if anywhere (plan 33: in the run only when the
+    run's wires hold it). The hands' layer an effect is placed on splits
     its readout always: the guide and the labels are never folded.
 
     Plan 32 R: with `Wiring.backdrop` the scene is cleared see-through and
