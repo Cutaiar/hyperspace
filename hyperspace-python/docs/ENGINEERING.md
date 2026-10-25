@@ -969,22 +969,16 @@ an fx module (`library/fx/*.json`) migrates the module and **replaces**
 the loaded graph's run with it, keeping every other wire
 (`graphmigrate.module_runs`, `Presets._fx_module`, `Library.on_apply`).
 Switching on an effect that is in no run adds nothing to the picture.
-**Save:** `preset.schema_of` writes the lowest schema that loses nothing.
-`graphmigrate.needs_free` is true for a graph `/4` cannot say (a branch, a
-switch, an unwired node, an effect on outside every run); then the file
-is `hyperspace.preset/5` (`FREE_SCHEMA`; `VERSIONS = (2, 3, 4, 5)`) and
-**an older build refuses it**, so both Macs run this build before anyone
-saves one. Otherwise `graphmigrate.legacy_section` strips the plan-33
-words from the section, `legacy_values` lays the `order`, `target`,
-`view.media` and `backdrop.channel` values back (orders kept where they
-already sort right: `graphmigrate.reordered`) and `with_retired` splices
-the retired ids back in where the base build wrote them: an untouched
-`/4`, `/3` or `/2` preset saves **byte-identical**
-(`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
-38 sources in `tests/fixtures/plan33-v4-saves/`, recorded once from the
-base at 3547a7a; `tests/fixtures` is ignored, so they are force-added). A
-person's own preset that drives a channel choice loads with a switch and
-saves `/5`. No file under `hyperspace/library/` was edited.
+**Save:** always `hyperspace.preset/6` since row 394 (below, "Presets and
+the wired frame"). Until then plan 33 wrote the lowest schema that lost
+nothing — `/5` only for a graph `/4` could not say, else the section
+stripped of the free graph's words and the retired values laid back so an
+untouched `/2`–`/4` preset saved byte-identical; that save side
+(`schema_of`, `needs_free`, `legacy_section`, `legacy_values`,
+`with_retired`, `reordered`) is gone. The bytes those older builds wrote
+(`tests/fixtures/plan33-v4-saves/`, `plan35-v5-saves/`) are kept as old
+files to load. A person's own preset that drives a channel choice loads
+with a switch. No file under `hyperspace/library/` was edited.
 
 **Presets and the wired frame** (plan 35, rows 372–393;
 `graphmigrate.py`, `preset.py`, `graph.py`). **The marker.** A graph
@@ -1005,25 +999,35 @@ not in the file. `backdrop.history` is retired into the capture wire
 `graph.param_prefix` maps a node to its prefix), so no route, desk row or
 binding moves. Old ids are read for good; an old id in a wired frame is
 refused in words, and saved canvas positions follow the rename
-(`graphmigrate.renamed_layout`). **Save:** `preset.schema_of` writes the
-lowest schema that loses nothing. `graphmigrate.unwired` is the round
-trip: it takes a wired frame back to the old words (the run as
-`frame → … → fx.image`, `holds`, `into`, every id mapped back) and
-reports whether writing it forward again reads to the same section. If it
-does, the file is `/4`, `/3` or `/2` as before (untouched, byte for byte:
-`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
-38 sources in `tests/fixtures/plan33-v4-saves/`) or `/5` (ruling R10:
-`tests/test_graph_free.py::test_an_untouched_v5_preset_saves_byte_identical`,
-5 sources in `tests/fixtures/plan35-v5-saves/`); only a frame that
-needs the new vocabulary (a `ground` wire, a through, a hands node moved
-off the default, an edit that leaves the canonical shape) is
-`hyperspace.preset/6` (`preset.WIRED_SCHEMA`; `VERSIONS = (2, 3, 4, 5,
-6)`). A GRAPH edit lands the frame in its canonical wire order
-(`graphview._frame_order`) so an edit back to a migrated shape saves in
-the lowest schema again. **An older build refuses a `/6` file by the
-ladder's words, so both Macs run this build before anyone saves one**; an
-untouched `/4` preset, and a re-saved `/5` one, still open there. The
-owner's 58 Drive presets re-save byte-identically. **A new preset**
+(`graphmigrate.renamed_layout`; a dissolved node's position — `render:frame`,
+`render:fx`, `render:capture` … — is dropped, so a re-read is the
+identity). **Save (row 394, the owner, 2026-10-25: "anytime we update a
+schema, both machines will comply with that"):** every performance preset
+save is `hyperspace.preset/6` (`preset.WIRED_SCHEMA`; `Presets.document`)
+in today's words — the wired frame the load or the GRAPH page landed (with
+nothing loaded, the factory frame `graphmigrate.wired_of(Wiring())`),
+today's node and canvas ids, every value the registry holds (the media
+family, the envelopes and the sequencer included), the `media` section,
+no retired id. An untouched `/2`–`/5` file therefore saves as `/6`, and
+the `/6` is a fixed point: loaded and saved untouched again it is the same
+bytes (`tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`,
+every factory preset and fixture, `/2` to `/6`, the older builds'
+recorded saves among them), drawing exactly its goldens
+(`tests/test_golden_frames.py::test_every_preset_resaved_as_six_draws_its_goldens`).
+Every reader stays: `VERSIONS = (2, 3, 4, 5, 6)`, each migrated on load.
+What wrote older words — D1's lowest-schema rule (`schema_of`), R10's
+round trip (`unwired`, `legacy_section`, `legacy_values`, `with_retired`,
+`with_history`), R15's old canvas ids (`old_layout`) — is removed. **An
+older build refuses a `/6` file by the ladder's words**, so both Macs run
+the newest build (row 394 assumes it). The factory files keep the schema
+they were made in (`preset.factory_schema`, the generator's): the build's
+own stock, migrated on every load. **Migrating a library:**
+`tools/migrate_library.py` (dry run by default; `--apply` backs the
+library up to `~/Hyperspace/library-backup-<stamp>/` first, then rewrites
+each preset in place, atomically, through `headless.resave` — the app's
+own load and save — only where it loads, its `/6` is a fixed point and it
+draws the same picture on the golden rig (`golden_frames.picture`);
+`--force NAME` writes one anyway). **A new preset**
 (`Presets.new`) is the library's fresh values, routes cleared, the desk
 written as the factory preset layer (`fresh_desk()`), and
 `{"frame": "wired"}`; it is named `untitled` and dirty until saved. No
@@ -1068,12 +1072,9 @@ stepped, and a route on it remakes the delay pair and the effect pools
 after the resize at each step, bounded by `SIZED_KEEP_FRAMES`. A loop
 drag on GRAPH is refused red in `LOOP_FACES`, `LOOP_BACKDROP` or (any
 other loop in a wired frame) `LOOP_PLAIN`. **Both Macs:** a graph with
-a delay, resize, echo or dream writes `hyperspace.preset/5` where the
-frame round-trips (`graphmigrate.uses_free_words`), which a plan 33 build
-reads with a note ("unknown node kind 'delay'") and draws its own default
-graph; a frame that needs plan 35's vocabulary writes `/6`, which a plan
-33/34 build refuses. No factory preset has a delay, resize, echo or
-dream. The nodes' internals (`delay(write)`) are not on the canvas.
+a delay, resize, echo or dream saves `/6` like every preset (row 394),
+which a plan 33/34 build refuses; both run the newest build. No factory
+preset has a delay, resize, echo or dream. The nodes' internals (`delay(write)`) are not on the canvas.
 
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
@@ -1307,13 +1308,13 @@ prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
   known corruption risk).
 - **iCloud / Dropbox.** Mark the folder "Keep Downloaded" / "Available
   offline": an evicted file is invisible to the app.
-- **Both Macs on one library must be on this build** (plan 31). A preset
-  that uses the step sequencer, the envelopes or more or fewer than four
-  LFOs is saved as `hyperspace.preset/3`; every other preset is still
-  `hyperspace.preset/2`, byte for byte as before. An older build refuses
-  a /3 file with "schema … is not a hyperspace.preset" rather than load
-  it and strip the pattern on its next save, so update both machines
-  before either saves one. This build reads both.
+- **Both Macs on one library run the newest build** (row 394, the
+  owner's 2026-10-25 decision). Every save is `hyperspace.preset/6`; an
+  older build refuses it with "schema … is not a hyperspace.preset" rather
+  than load it and strip what it does not know on its next save. This build
+  reads every older schema (`/2`–`/5`) and migrates it on load. To move a
+  whole library at once: `uv run python tools/migrate_library.py` (a dry
+  run), then `--apply`.
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -1460,31 +1461,11 @@ as built.
   only), `cyndilib` (its macOS wheel carries `libndi`; check the NDI SDK's
   licence before shipping a build). A live kind whose library is missing
   says so in its status (`cyndilib not installed`) instead of raising.
-- **Both Macs on the free-graph build too** (plan 33): a preset whose graph
-  `/4` cannot say (a branch, a switch, an unwired node) saves
-  `hyperspace.preset/5`, which an older build refuses; every other preset
-  saves as before, byte for byte (see "Presets and the free graph" in §2).
-- **Both Macs on the wired-frame build too** (plan 35): a preset whose
-  frame needs the new vocabulary saves `hyperspace.preset/6`, which a
-  plan 33/34 build refuses by the ladder's words; every other preset saves
-  as before (`/4` byte for byte, `/5` where it round-trips). The node
-  ids were renamed (params were not), so a `/6` file read by an older
-  build would not make sense even if it were read. See "Presets and the
-  wired frame" in §2.
-- **Both Macs on the feedback build too** (plan 34, on the same branch as
-  plan 35): a preset with a `delay`, `resize`, `echo` or `dream` saves
-  `hyperspace.preset/5` where its frame round-trips. A plan 33 build reads
-  that file with a load note (it does not know the node kind), draws its
-  own default graph and loses the run and every branch for that load; a
-  `/6` file is refused there by the ladder's words. So both Macs run this
-  build before anyone saves one. See "Feedback" in §2 (checks 341 and 352).
-- **Both Macs on this build.** A preset that uses media is saved as
-  `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
-  or `view.media_*` value off its default; `view.media` itself is read as
-  a wire since plan 33); a build from before plan 32
-  **refuses** it, so two Macs sharing a library must both run this build
-  before either saves one. A preset that does not use media is the file it
-  was, bar two new effects' default lines. A pre-plan-32 preset's
+- **Both Macs on the newest build** (row 394): every preset saves
+  `hyperspace.preset/6` — the free graph (plan 33), feedback (plan 34),
+  the wired frame and its renamed node ids (plan 35) and the media section
+  (plan 32) all in it — and an older build refuses it by the ladder's
+  words. See "Presets and the wired frame" in §2. A pre-plan-32 preset's
   `view.bmp_*` values are dropped on load with a note
   (`bitmap file <path> is no longer read: put it on a media channel`); put
   the picture on a channel instead. The APC40's knob 7 still moves the faces'

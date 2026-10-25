@@ -611,20 +611,16 @@ def test_a_preset_round_trips(rig):
     path = rig.presets.save_as("Round Trip")
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/2" and doc["name"] == "Round Trip"
+    # (row 394: every save is the newest schema)
+    assert doc["schema"] == "hyperspace.preset/6" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"fx": "acid"}
-    # every performance base — but a /2 preset (no media used, plan 32 S)
-    # writes none of the media family's, all at their defaults
+    # every performance base, the media family's too — and no retired id
+    # (plan 33 T7: the wires say them; row 394: nothing writes them back)
     snap = rig.reg.snapshot(part="performance")
-    assert all(v == preset.MEDIA_DEFAULTS[k] for k, v in snap.items() if preset.is_media_id(k))
-    # (plan 33 T7: and each effect's order and target, retired but written
-    # back below /5 where a build from before plan 33 reads them)
+    assert doc["values"] == snap
     from hyperspace.graphmigrate import retired
-    assert {k: v for k, v in doc["values"].items() if not retired(k)} == {
-        k: v for k, v in snap.items() if not preset.is_media_id(k)}
-    assert {k for k in doc["values"] if retired(k)} == {
-        f"fx.{n}.{key}" for n in rig.reg.fx_state.specs for key in ("order", "target")}
+    assert not [k for k in doc["values"] if retired(k)]
     rig.reg["camera.zoom"].set(1.0)
     rig.lib.project.load_slot(0)                            # something else in between
     rig.presets.load("Round Trip")
@@ -763,12 +759,14 @@ def expected_desk(slug: str) -> list[dict] | None:
 def test_the_factory_presets_are_preset_2_performance_files():
     """Every factory preset is a performance file; its macros are the
     generator's (plan 13 WP5: lfo-breathe's Breathe, none elsewhere). Each
-    is a /2 but seq-demo, whose pattern makes it the one /3 (plan 31 P)."""
+    is a /2 but seq-demo, whose pattern makes it the one /3 (plan 31 P):
+    the generator's rule (`factory_schema`), the factory being the build's
+    own stock, never a save (row 394: a save is `/6`)."""
     reg_ids = {p.id: p for p in boot_registry()}
     for path in sorted((FACTORY / "presets").glob("*.json")):
         doc = json.loads(path.read_text())
         want = preset.SCHEMA_V3 if path.stem == "seq-demo" else preset.SCHEMA
-        assert doc["schema"] == want == preset.schema_of(doc), path.name
+        assert doc["schema"] == want == preset.factory_schema(doc), path.name
         spec = preset.FACTORY_PRESETS.get(path.stem)
         macros = {} if spec is None else {k: m.to_json() for k, m in spec.macros().items()}
         assert doc["macros"] == macros, path.name
@@ -1731,9 +1729,9 @@ FIXTURE_DIR = FACTORY.parents[1] / "tests" / "fixtures" / "presets"
 
 
 def test_a_wired_preset_saves_as_v6(rig):
-    """Row 385: a wired frame `/4` cannot say is written `hyperspace.preset/6`
-    (`schema_of`, where `/5` was); the ladder reads `/2` … `/6`, and a `/7`
-    file is refused in its words — as a plan 33/34 build refuses a `/6`."""
+    """Row 385, row 394: every save is `hyperspace.preset/6`, the frame
+    edited or not; the ladder reads `/2` … `/6`, and a `/7` file is refused
+    in its words."""
     assert preset.VERSIONS == (2, 3, 4, 5, 6)
     assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/6"
     rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
@@ -1741,8 +1739,10 @@ def test_a_wired_preset_saves_as_v6(rig):
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert preset.schema_of({"values": {}, "graph": edited}) == "hyperspace.preset/6"
-    assert preset.schema_of({"values": {}, "graph": section}) == preset.SCHEMA
+    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/6"
+    rig.presets.graph.land(G.read_graph(edited), edited)
+    doc = rig.presets.document("edited")
+    assert doc["schema"] == "hyperspace.preset/6" and doc["graph"] == edited
     put(rig.home, "SEVEN", schema="hyperspace.preset/7")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
@@ -1926,7 +1926,7 @@ def _resize_section(section=RESIZE_OLD):
 def test_resize_values_save_and_load_with_the_preset(tmp_path):
     """A preset whose graph holds `resize.2` carries its values: saved and
     loaded into a fresh rig, `resize.2.crop_x` lands with no unknown-id
-    note, and (R10) the file is `/5` — plan 34's words, the factory frame.
+    note, and the file is `/6` (row 394).
     A preset without the entry undeclares `resize.2.*`; one with the entry
     and no wire still declares it (the reach does not decide)."""
     a, b = tmp_path / "a", tmp_path / "b"
@@ -1936,7 +1936,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.presets.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.presets.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/5"
+    assert json.loads(saved)["schema"] == "hyperspace.preset/6"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)

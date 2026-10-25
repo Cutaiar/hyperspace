@@ -346,9 +346,13 @@ class Rig:
     (`context()`), with a renderer of its own: the registry, the router,
     the hands chain, the renderer."""
 
-    def __init__(self, slug: str, hands: str, ctx: moderngl.Context):
+    def __init__(self, slug: str, hands: str, ctx: moderngl.Context, *,
+                 source: Path | None = None, library: Path | None = None):
         """A factory preset by its slug, or a fixture (`FIXTURE_PRESETS`):
-        copied into the scratch library first and loaded from there."""
+        copied into the scratch library first and loaded from there. Row
+        394: or any preset file `source`, copied in as `slug` — with
+        `library`'s desk templates and module presets beside it
+        (`headless.SHARED_FOLDERS`) — for `picture`."""
         self.t = T0
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
@@ -369,10 +373,21 @@ class Rig:
         envelope.register(reg, self.envs, self.clock)
         sequencer.register(reg, self.seq, self.clock)
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
-        if slug in FIXTURE_PRESETS:          # a user's preset in the scratch library
+        if source is None and slug in FIXTURE_PRESETS:
+            source = FIXTURES / f"{slug}.json"
+        if source is not None:               # a user's preset in the scratch library
             own = Path(self._home.name) / "presets"
             own.mkdir(parents=True, exist_ok=True)
-            (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
+            (own / f"{slug}.json").write_bytes(Path(source).read_bytes())
+        if library is not None:
+            import shutil
+
+            from hyperspace.headless import SHARED_FOLDERS
+            for folder in SHARED_FOLDERS:
+                if (Path(library) / folder).is_dir():
+                    shutil.copytree(Path(library) / folder, Path(self._home.name) / folder,
+                                    dirs_exist_ok=True,
+                                    ignore=shutil.ignore_patterns(".*", "Icon*"))
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
@@ -623,6 +638,36 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
     finally:
         rig.close()
         _PARK.use()        # never free a bound framebuffer (see test_outputs.today)
+
+
+def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
+            states=STATES, hands: str = "present") -> tuple[list[str], list[str]]:
+    """Row 394 (tools/migrate_library.py): preset file `source` drawn on the
+    golden rig — copied into a scratch library as `slug`, loaded like a
+    user's preset, hands `hands`, `states` as its outputs' wiring
+    (`rig_section`, as a factory preset's goldens) for `FRAMES` frames on
+    the pinned clock — and (each output's SHA-256, the load's notes). Two
+    files that draw the same have the same hashes; the frame is never
+    asserted on, so a preset this build reads with a note still draws."""
+    ctx = context()
+    rig = Rig(slug, hands, ctx, source=source, library=library)
+    try:
+        section = rig_section(rig, slug, states, None)
+        rig.renderer.wiring = read_graph(
+            section, effects={n.partition(".")[0] for n in rig.fx.specs}).wiring()
+        targets = [_target(ctx, (W, H), SAMPLES if k == 0 else 0) for k in range(len(states))]
+        views = state_views(slug, states, (W, H), targets)
+        for _ in range(FRAMES):
+            rig.frame(views, (W, H), DPR)
+        errors = [v.error for v in views if v.error]
+        if errors:
+            raise RuntimeError(f"{source.name}: an output failed: {errors[0]}")
+        hashes = [hashlib.sha256(_read(ctx, f, (W, H)).tobytes()).hexdigest() for f in targets]
+        return hashes, list(rig.notes)
+    finally:
+        rig.close()
+        _PARK.use()
+        gc.collect()
 
 
 def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[Shot], dict]:

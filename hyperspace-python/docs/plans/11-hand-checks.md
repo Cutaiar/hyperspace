@@ -4794,8 +4794,9 @@ a node that is wired but unread, or a rate that drops with the look-back
 off and an echo wired (`DelayWrite.held`, `Lookback.keep`).
 
 **341. A `/5` file with a delay on a plan 33 build.** (two Macs, the copy)
-Headless: `tests/test_graph_feedback.py::test_the_new_words_are_v5_only`, `tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`.
-This is the `/5` half of 352. On this build load the factory frame, add a
+Headless: `tests/test_graph_feedback.py::test_the_new_words_load_and_save_as_six`, `tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`.
+*Superseded by row 394 (2026-10-25): every save is `/6` now, so this file
+says `/6` and a plan 33 build refuses it — see 353.* This is the `/5` half of 352. On this build load the factory frame, add a
 delay in a loop (332) and save it under a new name; read its `schema`. Open
 the library on a Mac on a plan 33 build.
 *Pass:* the file says `hyperspace.preset/5`; the plan 33 build opens it
@@ -4822,7 +4823,8 @@ Run on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`,
 with a clip (`.mp4`) in `~/Hyperspace-try/media/`. **A preset that needs
 the new vocabulary saves as `hyperspace.preset/6`, which an older build
 refuses:** both Macs must run this build before anyone saves one, and
-before 352. An untouched `/4` preset still saves byte for byte. Group AE
+before 352. (Row 394, 2026-10-25, after this group was written: every
+save is `/6`, an untouched `/4` included — see 353.) Group AE
 assumes the control window at its usual 960 × 900. None of these has been
 run by a person; the goldens were recorded on the build machine.
 
@@ -4988,7 +4990,10 @@ lines name the ends (`ends: shown(…)`), where the older build named
 
 **352. A `/6` preset on a plan 33/34 build; both Macs.** (two Macs, the
 copy)
-Headless: `tests/test_graph_migrate.py::test_v6_is_refused_by_the_ladder_below`, `tests/test_graph_wired.py::test_the_wired_words_are_v6_only`, `tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`.
+Headless: `tests/test_graph_migrate.py::test_v6_is_refused_by_the_ladder_below`, `tests/test_graph_wired.py::test_a_full_wired_frame_saves_as_it_stands`, `tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`.
+*Row 394 (2026-10-25) changes the pass: every re-save is `/6`, so the
+untouched `/4` and the re-saved `/5` are `/6` too and the old Mac refuses
+them as well; both Macs run this build (353).*
 On this build make a preset that needs the new vocabulary (342, then wire
 a clip into `output.2.image`, or pick "nothing" for output 2) and save it;
 read its `schema`. Open the library on a Mac still on a plan 33/34 build.
@@ -4998,8 +5003,37 @@ this build. Then put both Macs on this build.
 the ladder's words, leaving the file as it was; the untouched `/4` and the
 re-saved `/5` open there; with both Macs on this build every preset
 opens on both.
-*Fail:* the old Mac opens or half-reads the `/6` file, or a preset that
-needed no new words saved `/6` (`preset.schema_of`, `graphmigrate.unwired`).
+*Fail:* the old Mac opens or half-reads the `/6` file
+(`Library.read`'s versions).
+
+## AF. Row 394: every preset on the newest schema
+
+The owner's decision of 2026-10-25 (register row 394): no long-term
+support for old schemas — both Macs always run the newest build, so every
+save is `hyperspace.preset/6` and the library is migrated once with
+`tools/migrate_library.py`. On `preset-schema-6`. Every older schema still
+loads.
+
+**353. The library migrated to `/6`; both Macs on this build.** (two Macs,
+the shared library)
+Headless: `tests/test_migrate_library.py`, `tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`, `tests/test_golden_frames.py::test_every_preset_resaved_as_six_draws_its_goldens`.
+Put both Macs on this build. On one, run the dry run —
+`uv run python tools/migrate_library.py` (it reads `[library] path`) — and
+read its report; then the same with `--apply`. Note the backup folder it
+prints (`~/Hyperspace/library-backup-<stamp>/`). Let the Drive sync, then
+open a handful of presets on both Macs (a `/5` one — `glimmer-bug`,
+`moo`, `displace-moo` — `reeeeeeeel`, a macro preset and three ordinary
+ones), and save one untouched.
+*Pass:* the dry run lists every preset `→ 6` with `picture: same` and
+`fixed point: yes`, and writes nothing; `--apply` says where the backup is
+and rewrites them, every file in `presets/` then says
+`hyperspace.preset/6`, names and `hidden.json` unchanged; each preset looks
+as it did on both Macs; the untouched save changes nothing (the file's
+bytes are the same); a second dry run says `leave 58 untouched`.
+*Fail:* a preset skipped (the report's last list says why), a look that
+moved, a file renamed or lost, a write inside the backup's folder, or a
+`/6` that changes when saved untouched (`headless.resave`,
+`Presets.document`).
 
 ## What no test covers
 
@@ -5114,4 +5148,7 @@ Only a person can settle these:
   hands layer (347) — hands through the effects on a projector (348), the
   frame cost on a tile GPU (351) and a `/6` file on an older build (352):
   the tests draw the pages headless and count passes, and the goldens pin
-  741 pictures on the gate Mac.
+  741 pictures on the gate Mac;
+- the owner's library on both Macs after `tools/migrate_library.py --apply`
+  (353): the tool's tests run on a scratch library and its picture check
+  on the golden rig, never the Drive sync or the other Mac.

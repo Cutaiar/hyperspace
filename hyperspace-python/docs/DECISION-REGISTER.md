@@ -30,7 +30,10 @@ all the faces") carry his words; the rest are "(rec) — accepted
 plan 35). Three are written as built under plan 35: 359, 370 and 371.
 Rows 372–393 (plan 35, the free frame) are the same kind: the owner
 answered 373, 374 and 387 on 2026-10-24 and accepted the rest as
-recommended, before the build (on `plan-34-feedback`, PR #236).
+recommended, before the build (on `plan-34-feedback`, PR #236). Row 394
+is the owner's own, 2026-10-25: every save on the newest schema, which
+supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
+(on `preset-schema-6`).
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -338,7 +341,7 @@ here; overturn → the change, then the same.
 | 316 | One global span (½–4 bars) and a global length 1–8 | 281, 289 | (rec) — accepted 2026-10-22 |
 | 317 | The APC40 page on SEND A, latched (on `plan-31-a1`) | 286–295 | (rec) — accepted 2026-10-22 |
 | 318 | The pattern in the preset; `run` not | 282 | (rec) — accepted 2026-10-22 |
-| 319 | Conditional `hyperspace.preset/3` | 285 | (rec) — accepted 2026-10-22 |
+| 319 | Conditional `hyperspace.preset/3` (save side superseded by 394) | 285 | (rec) — accepted 2026-10-22 |
 | 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 286–295 | (rec) — accepted 2026-10-22 |
 | 321 | Eight fixed channels `a`–`h` | 303 | (rec) — accepted 2026-10-22 |
 | 322 | A bin of ≤ 16 sources plus a `slot` param | 296, 298 | (rec) — accepted 2026-10-22 |
@@ -359,14 +362,14 @@ here; overturn → the change, then the same.
 | 337 | Conditional preset `/4` = `/3` + media (a media value, bin, or route / desk row / modifier / macro / wire naming a media id); both Macs on the merged build | 301, 317 | (rec) — accepted 2026-10-22 |
 | 338 | Base `plan-28-30-integration` | — | (rec) — accepted 2026-10-22 |
 | 339 | No desk or APC40 default bindings; Learn for all | 299 | (rec) — accepted 2026-10-22 |
-| 340 | Plans 31 and 32 together: one schema ladder `/4` = `/3` + media; land together; "at its default" is the library's | 317 | owner — 2026-10-23 |
+| 340 | Plans 31 and 32 together: one schema ladder `/4` = `/3` + media; land together; "at its default" is the library's (D1's lowest-schema save superseded by 394) | 317 | owner — 2026-10-23 |
 | 341 | Retire the FX stack: no `order`, no `target`; effects edited on GRAPH | 318, 320 | owner — 2026-10-24 |
 | 342 | One picture input for all faces (`shape.faces`); per instance is next | 318 | owner — 2026-10-24 |
 | 343 | The run is wires `frame → … → fx.image`, drawn by every pipeline | 320, 322 | (rec) — accepted 2026-10-24 |
 | 344 | A `pattern` node with a `media` input replaces `view.media` | 318, 323 | (rec) — accepted 2026-10-24 |
 | 345 | A `backdrop` node with an `image` input replaces `backdrop.channel` | 318 | (rec) — accepted 2026-10-24 |
 | 346 | The migration keeps only effects that are on (mix > 0), and those something drives | 322 | owner — 2026-10-24 |
-| 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it | 322, 328 | (rec) — accepted 2026-10-24 |
+| 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it (superseded by 394) | 322, 328 | (rec) — accepted 2026-10-24 |
 | 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
 | 349 | An unreached effect is kept, drawn faint, never run. Amended 2026-10-24 (the owner's glimmer): a section with a `frame` run shortens no wire to a D1 placement, so an effect with an input and no output is unreached and not drawn; explicit `after` / `into` entries still place; a pre-33 section's shortened wires migrate to explicit entries | 325, 326 | (rec) — accepted 2026-10-24 |
 | 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
@@ -404,7 +407,7 @@ here; overturn → the change, then the same.
 | 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through | 345 | (rec) — accepted 2026-10-24 |
 | 383 | Migration writes today's default frame once into All outputs; D1 placements stay entries | 345 | (rec) — accepted 2026-10-24 |
 | 384 | Below `/6` by round trip: a wired frame saves in the old words when it is exactly what `frame_wires` writes | 352 | (rec) — accepted 2026-10-24 |
-| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10), and below `/6` the GRAPH layout in the canvas's old ids (final review R15) | 352 | (rec) — accepted 2026-10-24 |
+| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10), and below `/6` the GRAPH layout in the canvas's old ids (final review R15) — the save side superseded by 394 | 352 | (rec) — accepted 2026-10-24 |
 | 386 | The new preset: fresh values, routes cleared, the desk written as the factory layer, `untitled` and unsaved | 342 | (rec) — accepted 2026-10-24 |
 | 387 | What a new preset's "empty" is: only the outputs, nothing wired, plus a "scene starter" item | 342 | owner — 2026-10-24: as proposed |
 | 388 | GRAPH deletes everything: the refusals left are type errors, loops and the rig's own nodes | 343 | (rec) — accepted 2026-10-24 |
@@ -413,6 +416,7 @@ here; overturn → the change, then the same.
 | 391 | Point clouds stay the rig's, drawn in every scene | — | (rec) — accepted 2026-10-24 |
 | 392 | The golden states as wiring: the tool writes each state's wires with the mutes all on | — | (rec) — accepted 2026-10-24 |
 | 393 | Plan 34's frame words retired: `FRAME_SOURCE_REFUSAL`, `LOOP_FRAME`; `FRAME_EDGES` becomes `HIDDEN_EDGES` | — | (rec) — accepted 2026-10-24 |
+| 394 | Every save is the newest schema (`hyperspace.preset/6`); old schemas load but are never written; the library is migrated once (`tools/migrate_library.py`) | 353 | owner — 2026-10-25: "We don't plan on having long-term support for old schemas … You can assume that anytime we update a schema, both machines will comply with that." |
 
 "—": no hand check shows it; tests only.
 
@@ -6579,6 +6583,8 @@ These rows follow plan 31's rows 311–320; the two plans land together on
 
 ### 340. One schema ladder: `/4` = `/3` + media; the two land together
 
+- **Superseded (save side) by row 394**, 2026-10-25: a save writes `/6`,
+  never the lowest schema; the ladder is read, not written.
 - **Answer.** owner — 2026-10-23 (D1–D3 of
   [`plans/assets/32-media/merge-31-32.md`](plans/assets/32-media/merge-31-32.md)).
 - **Built.** One rule, `preset.schema_of`, picks what a save writes, the
@@ -6725,6 +6731,8 @@ The plan lands on `plan-31-32-integration` (PR #235).
 
 ### 347. Save writes the lowest schema that loses nothing; `/5` only for a graph `/4` cannot say
 
+- **Superseded by row 394**, 2026-10-25: every save is `/6`; `schema_of`,
+  `needs_free`, `legacy_section` and `legacy_values` are gone.
 - **Answer.** (rec) — accepted 2026-10-24.
 - **Built.** `preset.schema_of` writes `/5` (`FREE_SCHEMA`, `VERSIONS =
   (2, 3, 4, 5)`) when `graphmigrate.needs_free` says the graph uses a word
@@ -7442,6 +7450,10 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
 
 ### 385. The schema is `hyperspace.preset/6`
 
+- **Superseded (save side) by row 394**, 2026-10-25: R10's lowest-schema
+  save and R15's old canvas ids below `/6` are gone — every save is `/6`
+  in today's ids; `/6` itself, `VERSIONS` and the refusal by an older
+  build stand.
 - **Answer.** (rec) — accepted 2026-10-24. R10 amends it.
 - **Built.** `preset.WIRED_SCHEMA` is `/6`; `VERSIONS` is
   `(2, 3, 4, 5, 6)`; a plan 33/34 build refuses a `/6` file by its
@@ -7593,3 +7605,58 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
   section is not a wired frame). Plan 34's T4 did not remove it, as this
   row first said it would.
 - **Judge it.** —
+
+### 394. Every save is the newest schema
+
+- **Answer.** owner — 2026-10-25, in his words: "We don't plan on having
+  long-term support for old schemas. We're more doing this because it
+  makes it easier for us to quickly iterate. You can assume that anytime
+  we update a schema, both machines will comply with that." He wants every
+  preset in his library on the newest schema, so old-schema files stop
+  circulating. **Supersedes** D1's save rule (row 340: the lowest schema
+  that loses nothing), row 319's conditional `/3`, row 347, ruling R10
+  and row 385's save side, and R15 (the GRAPH layout in the canvas's old
+  ids below `/6`).
+- **Built.** `Presets.document` always writes `hyperspace.preset/6`
+  (`WIRED_SCHEMA`) in today's words: the wired frame the load or GRAPH
+  landed (with nothing loaded, `graphmigrate.wired_of(Wiring())`, the
+  factory frame), today's node and canvas ids, every value the registry
+  holds (media, envelopes and sequencer included) and the `media` section,
+  no retired id. Every reader stays: `VERSIONS = (2, 3, 4, 5, 6)`, each
+  migrated on load. Removed as save-only: `preset.schema_of`,
+  `uses_media`, `build_default`, `MEDIA_DEFAULTS`, `Presets._five_section`
+  and `_at_default`, `GraphSection.held`/`five`/`held_values`, the load's
+  `/5` re-read and kept file layout; `graphmigrate.legacy_values`,
+  `legacy_section`, `unwired`, `needs_free`, `says_free`,
+  `uses_free_words`, `has_frame_run`, `with_retired`, `with_history`,
+  `reordered`, `old_layout`, `old_canvas_id`. `renamed_layout` now drops
+  a dissolved node's position (`render:frame`, `render:fx`,
+  `render:capture` …), so a layout read back from a `/6` is the identity.
+  The factory files keep the schema they were made in
+  (`preset.factory_schema`, the generator's: the build's own stock).
+  `hyperspace/headless.py` holds the app's preset half (`make_app`,
+  moved from the tests) and `resave`, the one road a file takes;
+  `tools/migrate_library.py` rewrites a library through it — a dry run by
+  default; `--apply` backs the folder up to
+  `~/Hyperspace/library-backup-<stamp>/` first and writes only a preset
+  that loads, whose `/6` is a fixed point and that draws the same picture
+  on the golden rig (`golden_frames.picture`), unless `--force NAME`.
+  Tests: `tests/test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point`
+  (every factory preset and fixture, `/2`–`/6`, the older builds' recorded
+  saves in `plan33-v4-saves/` and `plan35-v5-saves/` among them),
+  `tests/test_golden_frames.py::test_every_preset_resaved_as_six_draws_its_goldens`
+  (each factory preset and fixture's `/6` draws exactly its goldens),
+  `tests/test_migrate_library.py`; the byte-identical-to-an-older-build
+  tests they replace are gone.
+- **Other options.** Keep the ladder (R10) and migrate nothing; or write
+  `/6` only on an edit and leave untouched files as they are.
+- **To reverse.** `Presets.document` (the schema and the graph it
+  writes); the removed functions are in git history before this row.
+- **Rough edge.** A Mac on an older build refuses every file this build
+  saves, even an untouched one. A migrated file differs from the old one
+  wherever this build's load already differed: desk rows on the invariant
+  controls (the shape pads, the render toggles) left out, the retired
+  values and `view.bmp_*` ids left out, a macro's base subscriber's value
+  written where it landed over `values`, `camera.pan` in world units —
+  none changes the picture. The factory files stay `/2` (seq-demo `/3`).
+- **Judge it.** Check 353.

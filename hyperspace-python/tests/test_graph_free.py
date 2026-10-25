@@ -5,8 +5,10 @@ New wire ends (`frame`, `fx.image`, `pattern`, `shape.faces`,
 branch instead of a refusal, and `reaches` / `run_of` read off the wires
 (data only). Then T3: the renderer builds each pipeline's run from the
 preset graph's wires `frame → … → fx.image`, an effect on no wire has no
-node, and an untouched pre-33 preset saves byte for byte as the base
-build writes it (Review Focus 1). The pictures are test_golden_frames.py's.
+node. Row 394 (the owner, 2026-10-25): every preset, whatever its schema,
+saves as `/6` and that save is a fixed point — what replaced the
+byte-identical-to-an-older-build saves (Review Focus 1, R10). The pictures
+are test_golden_frames.py's.
 """
 
 from __future__ import annotations
@@ -122,8 +124,8 @@ SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
            # R15 (final review): a /4 whose GRAPH layout is in the canvas's
            # old ids (render:media.a, render:hands …), as the owner's are
            "old-layout": ROOT / "tests" / "fixtures" / "old-canvas-layout"}
-# R14 → R19: a route on each channel choice (a /4 and a /2). Since T5 they
-# load with a switch and save as /5 (row 347), so they are not byte sources
+# R14 → R19: a route on each channel choice (a /4 and a /2): they load
+# with a switch (T5) and save as /6 with it (row 394)
 DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
 
 
@@ -150,43 +152,71 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
     assert G.Wiring().run is None
 
 
-def v4_sources() -> list[tuple[str, Path]]:
-    """Every factory preset file (dial's too) and every fixture under
-    tests/fixtures/presets/ and tests/fixtures/merge-31-32/, as (kind, path)
-    — but a `/5` fixture (plan 33 T4's proofs), which no build before plan
-    33 reads and `test_a_free_fixture_saves_as_six` holds instead, and a
-    `/6` one (plan 35 T3's wired frames), which none before plan 35 reads."""
+def old_sources() -> list[tuple[str, Path]]:
+    """Every preset file this tree holds in an older schema or the newest,
+    as (kind, path): the factory's (dial's too), every fixture under
+    tests/fixtures/presets/, merge-31-32/, old-canvas-layout/ and
+    plan33-driven/, and the bytes older builds saved, kept from the
+    byte-identical tests row 394 retired (plan33-v4-saves/: the base build's
+    `/2`–`/4` saves; plan35-v5-saves/: plan 33/34's `/5`) — `/2` to `/6`."""
     out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
-    for kind, folder in SOURCES.items():
-        out += [(kind, p) for p in sorted(folder.glob("*.json"))
-                if json.loads(p.read_text()).get("schema") not in ("hyperspace.preset/5",
-                                                                    "hyperspace.preset/6")]
+    for kind, folder in {**SOURCES, "driven": DRIVEN, "v4-saves": SAVES,
+                         "v5-saves": V5_SAVES}.items():
+        out += [(kind, p) for p in sorted(folder.glob("*.json"))]
     return out
 
 
-# ruling R10 (plan 35 T3 review): the lowest schema that loses nothing — a
-# `/5` file re-saved untouched is the bytes a plan 33/34 build writes, so the
-# other Mac keeps reading it. Those bytes were recorded once by the base
-# build (0cbbc15, `git archive`d) loading and saving each source untouched
+# the bytes plan 33/34 saved for six `/5` sources (recorded by 0cbbc15) —
+# old files now, read like any other (row 394)
 V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
-V5_SOURCES = ("media-chain-faces", "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-              "delay-trails", "glimmer-bug")
 
 
-def test_an_untouched_v5_preset_saves_byte_identical(tmp_path):
-    """Plan 33 T4's proof presets (a channel through effects onto the
-    faces, under the scene, at two sizes), T5's switch and plan 34's
-    trails: loaded and saved untouched, each is `/5` again, byte for byte
-    what the plan 33/34 build writes (R10, superseding row 385's "nothing
-    writes /5"). The owner's glimmer-bug carries a GRAPH layout in the
-    canvas's old ids (`render:media.a`, `render:frame` …): R15, it is
-    written in them again (recorded by 052d889, the plan 33 head)."""
-    assert sorted(p.stem for p in V5_SAVES.glob("*.json")) == sorted(V5_SOURCES)
-    for k, name in enumerate(V5_SOURCES):
-        path = SOURCES["presets"] / f"{name}.json"
-        got = saved_bytes(tmp_path / str(k), "presets", path)
-        assert json.loads(got)["schema"] == "hyperspace.preset/5", name
-        assert got == (V5_SAVES / f"{name}.json").read_bytes(), name
+def test_every_schema_is_among_the_sources():
+    """The sources cover the whole ladder a load still reads: `/2` to `/6`."""
+    schemas = {json.loads(p.read_text())["schema"] for _, p in old_sources()}
+    assert schemas == {f"hyperspace.preset/{n}" for n in (2, 3, 4, 5, 6)}
+    assert len(old_sources()) >= 95
+
+
+def _six(raw: bytes, name: str) -> dict:
+    """A save's document, checked for the newest schema in today's words."""
+    doc = json.loads(raw)
+    assert doc["schema"] == "hyperspace.preset/6", name
+    graph = doc.get("graph")
+    assert isinstance(graph, dict) and graph.get(G.FRAME_KEY) == G.WIRED_FRAME, name
+    from hyperspace import graphmigrate as M
+
+    assert not [k for k in doc["values"] if M.retired(k)], name
+    lay = doc.get("layout") or {}
+    assert lay == M.renamed_layout(lay), name            # today's canvas ids
+    return doc
+
+
+def test_every_old_preset_saves_as_six_and_is_a_fixed_point(tmp_path):
+    """Row 394 (the owner, 2026-10-25: both Macs always on the newest
+    schema): every preset — the factory's and every fixture, `/2` to `/6`
+    — loaded into a scratch library and saved untouched is
+    `hyperspace.preset/6`, its graph the wired frame, no retired id in its
+    values and its GRAPH layout in today's canvas ids; and that `/6`,
+    loaded and saved untouched again, is the same bytes."""
+    for k, (kind, path) in enumerate(old_sources()):
+        name = f"{kind}/{path.name}"
+        first = saved_bytes(tmp_path / f"{k}a", kind, path)
+        _six(first, name)
+        again = tmp_path / f"{k}-six" / path.name
+        again.parent.mkdir(parents=True)
+        again.write_bytes(first)
+        assert saved_bytes(tmp_path / f"{k}b", "presets", again) == first, name
+
+
+def test_the_driven_channel_sources_keep_their_switches_through_six(tmp_path):
+    """R19 (row 350): a route on `view.media` / `backdrop.channel` loads as a
+    switch; saved, the `/6` carries the switch node, its routes on the
+    select and the select at the old pick (`DRIVEN`'s two)."""
+    for k, path in enumerate(sorted(DRIVEN.glob("*.json"))):
+        doc = _six(saved_bytes(tmp_path / str(k), "driven", path), path.name)
+        assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"], path.name
+        assert all(r["target"].endswith(".select") for r in doc["routes"]), path.name
 
 
 def _five_rig(tmp_path, name):
@@ -199,207 +229,74 @@ def _five_rig(tmp_path, name):
     return app
 
 
-def test_a_moved_node_in_an_old_layout_saves_below_six_in_the_old_ids(tmp_path):
-    """R15: the owner's glimmer-bug lands its layout in the wired frame's
-    ids (R14); a node moved on GRAPH — one the file placed, one it had no
-    place for — saves `/5` with every key in the canvas's old ids, so the
-    other Mac's build finds them; a `/6` save writes the new ids."""
+def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
+    """R14, row 394: the owner's glimmer-bug lands its layout in the wired
+    frame's ids; a node moved on GRAPH — one the file placed, one it had no
+    place for — saves `/6` with every key in today's ids (R15's old ids
+    below `/6` are gone with the ladder), and reads back where it was."""
     app = _five_rig(tmp_path, "glimmer-bug")
     pr = app.presets
     assert "render:channel.a" in pr.layout and "render:media.a" not in pr.layout
     pr.layout["render:channel.a"] = [10, 20]
     pr.layout["render:hands.2"] = [30, 40]
     doc = pr.document("glimmer-bug")
-    assert doc["schema"] == "hyperspace.preset/5"
+    assert doc["schema"] == "hyperspace.preset/6"
     lay = doc["layout"]
-    assert lay["render:media.a"] == [10, 20] and lay["render:ghost.2"] == [30, 40]
-    assert not [k for k in lay if k.startswith(("render:channel.", "render:hands"))]
+    assert lay["render:channel.a"] == [10, 20] and lay["render:hands.2"] == [30, 40]
+    assert not [k for k in lay if k.startswith(("render:media.", "render:ghost"))]
     assert list(lay) == sorted(lay)
     from hyperspace import graphmigrate as M
 
     assert M.renamed_layout(lay) == pr.layout        # and it reads back where it was
 
 
-def test_an_edited_v5_preset_sayable_in_v5_saves_v5(tmp_path):
-    """R10: an edit plan 33's words can say (branch-two-sizes' second
-    picture taken off output 2) saves `/5`, its graph the frame's round trip
-    in the old ids — no marker, no new id — which reads back as the edited
-    frame."""
-    from hyperspace import graphmigrate as M
-
-    app = _five_rig(tmp_path, "branch-two-sizes")
-    gs = app.presets.graph
-    wired = copy.deepcopy(gs.free_doc())
-    cut = [w for w in wired["wires"] if w["to"] != "output.2.image"]
-    assert len(cut) == len(wired["wires"]) - 1
-    edited = {**wired, "wires": cut}
-    gs.land(G.read_graph(edited), copy.deepcopy(edited))
-    doc = app.presets.document("branch-two-sizes")
-    assert doc["schema"] == "hyperspace.preset/5"
-    graph = doc["graph"]
-    assert G.FRAME_KEY not in graph
-    assert not any(w["to"].startswith("output.2.") for w in graph["wires"])
-    assert {"from": "frame", "to": "fx.image"} in graph["wires"] or any(
-        w["from"] == "frame" for w in graph["wires"])
-    assert "backdrop.history" in doc["values"]
-    again, _ = M.migrate({"values": doc["values"], "graph": graph}, gs.specs())
-    assert G.read_graph(again["graph"]).to_json() == G.read_graph(edited).to_json()
-
-
-def test_a_frame_edit_needing_new_words_saves_v6(tmp_path):
-    """R10: `/6` only for what the wired frame alone can say — a copy, a
-    `ground`, a picture into All outputs that is not the look-back's run, a
-    capture deleted."""
+def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
+    """Row 394: any GRAPH edit — one plan 33's words could say (a picture
+    taken off output 2), a copy, `ground`, a channel into All outputs, the
+    capture deleted — saves `/6` with the edited frame as it stands, and
+    no `backdrop.history` (the capture wire says it)."""
     app = _five_rig(tmp_path, "branch-two-sizes")
     gs = app.presets.graph
     wired = copy.deepcopy(gs.free_doc())
     head = next(w for w in wired["wires"] if w["to"] == "output.all.image")
     for name, wires in {
+            "output 2's picture off": [w for w in wired["wires"]
+                                       if w["to"] != "output.2.image"],
             "channel into All outputs": [w if w is not head else
                                          {"from": "channel.a", "to": "output.all.image"}
                                          for w in wired["wires"]],
             "no capture": [w for w in wired["wires"] if w["to"] != "lookback.capture"],
             "ground": [*wired["wires"], {"from": "ground", "to": "output.3.image"}]}.items():
+        assert wires != wired["wires"], name
         edited = {**wired, "wires": wires}
         gs.land(G.read_graph(edited), copy.deepcopy(edited))
         doc = app.presets.document("branch-two-sizes")
         assert doc["schema"] == "hyperspace.preset/6", name
         assert doc["graph"] == G.read_graph(edited).to_json(), name
+        assert "backdrop.history" not in doc["values"], name
 
 
-def test_the_round_trip_is_canonical(tmp_path):
-    """Plan 35 M (row 384, Review Focus 4): for every fixture and every one
-    of the 38 sources, the wired frame the load landed, put back below `/6`
-    (`legacy_section`, its values by `legacy_values`) and loaded again,
-    is the same wired frame — and one `/4` cannot say is given back as it
-    is, `legacy_values` reading it as needing `/6`."""
+def test_an_untouched_factory_preset_saves_as_its_load(tmp_path):
+    """Row 394: party-trip untouched saves `/6`, its graph exactly the wired
+    frame the load landed (`free_doc`) — the frame is the save."""
     from test_plan31_wiring import make_app
-
-    from hyperspace import graphmigrate as M
-
-    sources = [*v4_sources(), *((kind, p) for kind, folder in SOURCES.items()
-                                for p in sorted(folder.glob("*.json"))
-                                if (kind, p) not in v4_sources())]
-    said = 0
-    for k, (kind, path) in enumerate(sources):
-        home = tmp_path / str(k)
-        if kind != "factory":
-            (home / "presets").mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(path, home / "presets" / path.name)
-        app = make_app(home)
-        app.lib.load("presets", path.stem)
-        gs = app.presets.graph
-        wired = gs.free_doc()
-        assert wired[G.FRAME_KEY] == G.WIRED_FRAME, path.name
-        doc = app.presets.document(path.stem)
-        specs, driven = gs.specs(), M.targets(doc)
-        back = M.legacy_section(wired)
-        if doc["schema"] == M.WIRED_SCHEMA:
-            assert M.needs_free(wired, doc["values"], driven, specs), path.name
-            assert M.unwired(wired, specs) is None, path.name
-            continue
-        said += 1
-        again = {k: v for k, v in doc.items() if k != "graph"}
-        if doc["schema"] == M.FREE_SCHEMA:
-            # (R10: a `/5` save is the frame's round trip in plan 33's words)
-            assert M.unwired(wired, specs) is not None, path.name
-            back = doc["graph"]
-        if back is not None:
-            again["graph"] = back
-        out, _ = M.migrate(again, specs)
-        assert (G.read_graph(out["graph"]).to_json()
-                == G.read_graph(wired).to_json()), path.name
-    assert said >= 38
-
-
-def test_an_edited_frame_saves_as_v6(tmp_path):
-    """Plan 35 M (Review Focus 4): any edit to the frame fails the round
-    trip — the capture's wire deleted, or a channel in place of the run's
-    last wire into All outputs — so the section `needs_free` and the save
-    is `/6`; untouched, the same preset saves below it."""
-    from test_plan31_wiring import make_app
-
-    from hyperspace import graphmigrate as M
 
     app = make_app(tmp_path)
     app.lib.load("presets", "party-trip")
-    gs = app.presets.graph
-    wired = copy.deepcopy(gs.free_doc())
-    assert app.presets.document("party-trip")["schema"] != M.WIRED_SCHEMA
-    last = next(w for w in wired["wires"] if w["to"] == "output.all.image")
-    edits = {"capture": [w for w in wired["wires"]
-                         if (w["from"], w["to"]) != ("scene", "lookback.capture")],
-             "channel": [w if w is not last else {"from": "channel.a", "to": "output.all.image"}
-                         for w in wired["wires"]]}
-    for name, wires in edits.items():
-        edited = {**wired, "wires": wires}
-        assert len(wires) == len(wired["wires"]) - (name == "capture"), name
-        doc = app.presets.document("party-trip")
-        assert M.needs_free(edited, doc["values"], M.targets(doc), gs.specs()), name
-        gs.land(G.read_graph(edited), copy.deepcopy(edited))
-        saved = app.presets.document("party-trip")
-        assert saved["schema"] == "hyperspace.preset/6", name
-        assert saved["graph"] == G.read_graph(edited).to_json(), name
+    doc = app.presets.document("party-trip")
+    assert doc["schema"] == "hyperspace.preset/6"
+    assert doc["graph"] == app.presets.graph.free_doc()
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
     """`path` loaded into a scratch library at `home` (a fixture copied in
-    as a user's preset) and saved untouched under its own name: the bytes
-    on disk. The app's registry, library, router and presets
-    (`test_plan31_wiring.make_app`). Uses nothing plan 33 added, so the
-    same function run against the base build records its bytes."""
-    from test_plan31_wiring import make_app
+    as a user's preset; a factory one by name) and saved untouched under
+    the name it loaded as: the bytes on disk (`headless.resave`, the road
+    tools/migrate_library.py takes)."""
+    from hyperspace import headless
 
-    home.mkdir(parents=True, exist_ok=True)
-    os.environ["HYPERSPACE_HOME"] = str(home)       # (the autouse fixture puts it back)
-    if kind != "factory":
-        (home / "presets").mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(path, home / "presets" / path.name)
-    app = make_app(home)
-    app.lib.load("presets", path.stem)
-    return app.presets.save_as(path.stem).read_bytes()
-
-
-def record_saves(out: Path, scratch: Path) -> None:
-    """Write each source's saved bytes under `out` as `<kind>--<file>`."""
-    out.mkdir(parents=True, exist_ok=True)
-    for k, (kind, path) in enumerate(v4_sources()):
-        (out / f"{kind}--{path.name}").write_bytes(saved_bytes(scratch / str(k), kind, path))
-
-
-def test_an_untouched_v4_preset_saves_byte_identical(tmp_path):
-    """Review Focus 1 (R4, R10): every factory preset and every fixture,
-    loaded into a scratch library and saved untouched on this build, is the
-    file the base build (plan-31-32-integration @ 3547a7a) writes for the
-    same input, byte for byte — so the second Mac, on the older build,
-    keeps reading it — and no saved file carries a plan-33 word.
-
-    The base's bytes are checked in under tests/fixtures/plan33-v4-saves/,
-    recorded once by running this module's `record_saves` against a
-    checkout of 3547a7a (`git worktree add --detach <scratch>/base 3547a7a`,
-    then from this hyperspace-python, with the base's package and tests
-    first on the path: ``PYTHONPATH=<scratch>/base/hyperspace-python:
-    <scratch>/base/hyperspace-python/tests python`` importing this file by
-    its path and calling ``record_saves(SAVES, <scratch>/homes)``; the
-    worktree removed after). The sources are this tree's: no library file
-    or fixture changed since 3547a7a."""
-    sources = v4_sources()
-    assert len(sources) >= 25 + 11 + 2
-    assert sorted(p.name for p in SAVES.glob("*.json")) == sorted(
-        f"{kind}--{path.name}" for kind, path in sources)
-    for k, (kind, path) in enumerate(sources):
-        got = saved_bytes(tmp_path / str(k), kind, path)
-        want = (SAVES / f"{kind}--{path.name}").read_bytes()
-        assert got == want, f"{kind}/{path.name}"
-        doc = json.loads(got)
-        assert doc["schema"] != "hyperspace.preset/5", path.name
-        graph = doc.get("graph") or {}
-        assert not [n for n in graph.get("nodes", []) if n.get("kind") == "switch"], path.name
-        for w in graph.get("wires", []):
-            assert G.wire_node_kind(w["from"]) not in ("frame", "pattern", "switch"), path.name
-            into = G.wire_node_kind(w["to"].rpartition(".")[0])
-            assert into not in ("fx", "shape", "pattern", "backdrop", "switch"), path.name
-        assert "switch" not in json.dumps(doc.get("routes", [])), path.name
+    raw, _, _ = headless.resave(path, home, factory=kind == "factory")
+    return raw
 
 
 def _module_run(app, module: str) -> tuple[str, ...]:
@@ -434,14 +331,13 @@ def test_loading_an_fx_module_replaces_the_run(tmp_path):
     assert want and want != acid_run and {"plasma", "kaleido"} <= set(want)
     app.lib.load("fx", "mandala")
     assert main_run(gs.spec) == want
-    # (its order is no param since T7: held for a /4 save, the module's)
-    assert gs.held_values()["fx.kaleido.order"] == 8.0 and app.lib.current("fx") == "mandala"
-    assert "fx.kaleido.order" not in app.reg
-    # the save says it in /4 terms: no free word, the run as orders (plan
-    # 35: the module's run where the old one stood — the round trip holds)
+    # (its order is no param since T7, and no save writes one: row 394)
+    assert app.lib.current("fx") == "mandala" and "fx.kaleido.order" not in app.reg
+    # the save is `/6`, the module's run in its frame
     doc = app.presets.document("after")
-    assert doc["schema"] not in ("hyperspace.preset/5", "hyperspace.preset/6")
-    assert "graph" not in doc
+    assert doc["schema"] == "hyperspace.preset/6"
+    assert main_run(G.read_graph(doc["graph"])) == want
+    assert "fx.kaleido.order" not in doc["values"]
 
 
 def test_loading_an_fx_module_keeps_branches(tmp_path):
@@ -557,7 +453,7 @@ def test_a_run_reads_through_an_effect_file_this_machine_lacks():
 def test_the_missing_effects_wires_survive_a_save(tmp_path):
     """R27: a preset whose run names `foo`, loaded on a machine without
     it, loads with no note and saves its wires unchanged, so the Mac that
-    has foo still has its run (R10: `/5`, the file's own section)."""
+    has foo still has its run (row 394: in the `/6` frame)."""
     from test_plan31_wiring import make_app
 
     app = make_app(tmp_path)
@@ -566,19 +462,17 @@ def test_the_missing_effects_wires_survive_a_save(tmp_path):
     assert app.presets.load_doc(doc) == [] and app.presets.notes == []
     assert main_run(app.presets.graph.spec) == ("foo", "acid")
     out = app.presets.document("t")
-    # (R10: untouched, the file's own section, `/5`, as the base wrote it)
-    assert out["schema"] == "hyperspace.preset/5"
-    assert out["graph"]["wires"] == section(*MISSING_RUN)["wires"]
+    assert out["schema"] == "hyperspace.preset/6"
+    assert main_run(G.read_graph(out["graph"])) == ("foo", "acid")
 
 
-def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
+def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_six(tmp_path):
     """R19 (R14 → T5, row 350): a route on `view.media` or `backdrop.channel`
     loads as a switch over the eight channels into `pattern.media` /
     `backdrop.image`, the route retargeted onto its `select`, the select at
-    the old choice — and, saved untouched, the preset is /5 (row 347: /4
-    cannot say a switch), its graph the switches and their wires and its
-    routes on the selects. These two sources left the byte-identical set
-    for this; the pictures are tests/test_graph_switch.py's."""
+    the old choice — and, saved untouched, the preset is /6 (row 394), its
+    graph the switches and their wires and its routes on the selects. The
+    pictures are tests/test_graph_switch.py's."""
     from test_plan31_wiring import make_app
 
     want = {"driven-channels": (("switch", "pattern.media", "view.media", 2),
@@ -598,7 +492,7 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
                 assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
         doc = app.presets.document(name)
-        assert doc["schema"] == "hyperspace.preset/5", name          # (R10)
+        assert doc["schema"] == "hyperspace.preset/6", name          # (row 394)
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
             for sw, *_ in switches]
@@ -609,9 +503,9 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
     assert not [p for p in SAVES.glob("plan33--*.json")]
 
 
-def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path):
+def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_six(tmp_path):
     """R13 (row 341): an effect switched on that no wire puts in a run draws
-    nothing and is said nowhere in /4 — a later save is /5, the run as it
+    nothing — a later save is /6 (as every save is, row 394), the run as it
     was."""
     from test_plan31_wiring import make_app
 
@@ -624,7 +518,7 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path
     app.reg[f"fx.{off}.on"].set(True)
     assert main_run(gs.spec) == run
     doc = app.presets.document("after")
-    assert doc["schema"] == "hyperspace.preset/5" and G.run_of(G.read_graph(doc["graph"])) == run
+    assert doc["schema"] == "hyperspace.preset/6" and main_run(G.read_graph(doc["graph"])) == run
 
 
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):

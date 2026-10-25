@@ -1828,7 +1828,7 @@ class GraphSpec:
         wires D1 would write short are placements (`split_wires`), after
         D1's own; the rest are the wiring's `wires`. Plan 33 (the owner,
         2026-10-24): only in a section with no run — one with a run
-        (`graphmigrate.has_frame_run`) shortens nothing, so its placements
+        (a wire from `frame` or into `fx.image`) shortens nothing, so its placements
         are D1's own entries and every other wire is an edge."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
         placed = tuple(e for e in self.effects if e.placed)

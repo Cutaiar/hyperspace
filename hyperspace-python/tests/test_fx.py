@@ -1272,160 +1272,6 @@ def test_the_map_is_one_undo_step(tmp_path, monkeypatch):
         rig.close()
 
 
-# ---------------------------------------------------------------- an old stack's orders (plan 20 WP3 → 33 T7)
-#
-# `reordered` was the FX page's drop; since plan 33 T7 it is the `/4` save's
-# (`graphmigrate.legacy_values`: a run written back as orders a build from
-# before plan 33 sorts into it), so it lives in graphmigrate
-
-FACTORY_ORDERS = {"plasma": 5, "acid": 10, "kaleido": 15, "zoomblur": 17, "warp": 20,
-                  "displace": 22, "wobble": 25, "doublevision": 30, "deconverge": 40,
-                  "fractals": 60, "glimmer": 70, "tripcolour": 80, "huecycle": 85,
-                  "blend": 90, "palette": 95}
-
-
-def _moved_to(names: list[str], moved: str, place: int) -> list[str]:
-    """`names` with `moved` taken out and put back at `place`."""
-    seq = [n for n in names if n != moved]
-    seq.insert(place, moved)
-    return seq
-
-
-def _sorted_by(orders: dict[str, int]) -> list[str]:
-    return sorted(orders, key=lambda n: (orders[n], n))      # FxState.names()'s rule
-
-
-def _fewest(seq: list[str], orders: dict[str, int]) -> int:
-    """The fewest orders any rewrite must change for `seq` to sort that
-    way, by trying every set of effects to leave alone (small lists only)."""
-    from itertools import combinations
-
-    from hyperspace.graphmigrate import MAX_ORDER
-    for k in range(len(seq) + 1):
-        for changed in combinations(seq, k):
-            prev, prev_name, ok = -1, None, True     # prev_name: None after a rewritten one
-            for n in seq:
-                if n in changed:
-                    prev, prev_name = prev + 1, None  # the smallest integer still free
-                else:
-                    o = orders[n]
-                    if not (o > prev or (o == prev and prev_name is not None and prev_name < n)):
-                        ok = False
-                        break
-                    prev, prev_name = o, n
-                if prev > MAX_ORDER:
-                    ok = False
-                    break
-            if ok:
-                return k
-    raise AssertionError("no rewrite at all")
-
-
-def test_reordered_moves_one_effect_when_there_is_room():
-    from hyperspace.graphmigrate import reordered
-    st = FxState()
-    orders = {n: st.specs[n].order for n in st.names()}      # the files' @order lines
-    assert orders == FACTORY_ORDERS
-    names = _sorted_by(orders)
-    for moved in names:
-        for place in range(len(names)):
-            seq = _moved_to(names, moved, place)
-            new = reordered(seq, orders, moved)
-            if seq == names:
-                assert new == {}, (moved, place)             # dropped where it was
-                continue
-            # every single move changes exactly one order: the moved effect's
-            assert list(new) == [moved], (moved, place, new)
-            a = orders[seq[place - 1]] if place else -1
-            b = orders[seq[place + 1]] if place + 1 < len(seq) else 100
-            assert new[moved] == (a + b) // 2 and a < new[moved] < b
-            assert _sorted_by({**orders, **new}) == seq
-    # the one gap of one integer: between 15 and 17, twice running
-    seq = _moved_to(names, "huecycle", names.index("zoomblur"))
-    once = {**orders, **reordered(seq, orders, "huecycle")}
-    assert once["huecycle"] == 16
-    again = _moved_to(_sorted_by(once), "plasma", 3)         # between 15 and 16: no room
-    new = reordered(again, once, "plasma")
-    assert len(new) == 2 and "plasma" in new and _sorted_by({**once, **new}) == again
-    # the inputs are read, never written
-    assert orders == FACTORY_ORDERS
-
-
-def test_reordered_renumbers_the_smallest_window():
-    from itertools import permutations
-
-    from hyperspace.graphmigrate import reordered
-    orders = {"a": 10, "b": 11, "c": 12, "d": 40, "e": 41}
-    names = _sorted_by(orders)
-    # d between a and b: no integer between 10 and 11. One neighbour moves
-    # with it (a: 10 → lower), not the whole packed run
-    seq = ["a", "d", "b", "c", "e"]
-    new = reordered(seq, orders, "d")
-    assert set(new) == {"a", "d"} and _sorted_by({**orders, **new}) == seq
-    assert new["a"] < new["d"] < 11 and orders["b"] == 11
-    # a to the end: 41 < a < 100, alone
-    assert reordered(["b", "c", "d", "e", "a"], orders, "a") == {"a": 70}
-    # e to the front: alone again
-    assert reordered(["e", "a", "b", "c", "d"], orders, "e") == {"e": 4}
-    # stable: the same drop gives the same orders, whatever the dict's order
-    for perm in permutations(orders.items()):
-        assert reordered(seq, dict(perm), "d") == new
-    # every move over lists packed tight in different places: the result
-    # sorts to what was asked, and no rewrite of fewer orders would
-    for packed in ({"a": 10, "b": 11, "c": 12, "d": 13, "e": 14},
-                   {"a": 0, "b": 1, "c": 2, "d": 3, "e": 50},
-                   {"a": 50, "b": 96, "c": 97, "d": 98, "e": 99},
-                   {"a": 0, "b": 1, "c": 2, "d": 98, "e": 99},
-                   orders):
-        names = _sorted_by(packed)
-        for moved in names:
-            for place in range(len(names)):
-                seq = _moved_to(names, moved, place)
-                new = reordered(seq, packed, moved)
-                after = {**packed, **new}
-                assert _sorted_by(after) == seq, (packed, moved, place, new)
-                assert len(set(after.values())) == len(after)            # no tie made
-                assert all(o != packed[n] for n, o in new.items())       # only real changes
-                assert len(new) == _fewest(seq, packed), (packed, moved, place, new)
-    # ties that are already there (two effects at one order, told apart by
-    # name) are left alone unless the move lands between them
-    tied = {"a": 10, "b": 10, "c": 10, "d": 30}
-    assert reordered(["a", "b", "c", "d"], tied, "b") == {}
-    new = reordered(["d", "a", "b", "c"], tied, "d")
-    assert list(new) == ["d"] and new["d"] < 10
-    seq = ["a", "d", "b", "c"]                                           # between two of the tie
-    new = reordered(seq, tied, "d")
-    assert _sorted_by({**tied, **new}) == seq and "c" not in new
-    seq = ["b", "a", "c", "d"]                                           # the tie itself reordered
-    new = reordered(seq, tied, "b")
-    assert _sorted_by({**tied, **new}) == seq and "d" not in new
-
-
-def test_reordered_always_sorts_to_the_sequence_asked_for():
-    from hyperspace.graphmigrate import MAX_ORDER, reordered
-    hundred = {f"e{k:03d}": k for k in range(MAX_ORDER + 1)}     # every order taken
-    for orders in (FACTORY_ORDERS, hundred):
-        names = _sorted_by(orders)
-        for moved in names:
-            for place in range(len(names)):
-                seq = _moved_to(names, moved, place)
-                new = reordered(seq, orders, moved)
-                after = {**orders, **new}
-                assert _sorted_by(after) == seq, (moved, place)
-                assert all(isinstance(o, int) and 0 <= o <= MAX_ORDER for o in new.values())
-                assert len(set(after.values())) == len(after)    # never a tie to break by name
-    # and a run of drops, each from the state the last one left
-    import random
-    rnd = random.Random(20)
-    orders = dict(FACTORY_ORDERS)
-    for _ in range(400):
-        names = _sorted_by(orders)
-        moved = rnd.choice(names)
-        seq = _moved_to(names, moved, rnd.randrange(len(names)))
-        orders.update(reordered(seq, orders, moved))
-        assert _sorted_by(orders) == seq and all(0 <= o <= MAX_ORDER for o in orders.values())
-
-
 def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, monkeypatch):
     """`ui_fx.strip` — the FX page's open strip and the GRAPH page's side
     column for a selected effect node — reads the graph itself, so its title
@@ -1734,14 +1580,14 @@ def test_the_media_page_reads_a_wired_frames_channels():
     assert ui_media._channel_of(panel, "pattern.media") == "c"
 
 
-def test_an_old_preset_saves_its_retired_ids_back_where_they_were(tmp_path):
-    """A `/4` save writes the retired ids out of the held load and the wires
-    (`graphmigrate.with_retired`, `legacy_values`), never the registry:
-    every effect's order (a float, as the load set it) and target right
-    after its blend, the channel choices where the old registry put them —
-    and a run reordered on GRAPH as orders that sort into it."""
+def test_an_old_preset_saves_no_retired_id(tmp_path):
+    """Row 394: a `/4` preset's retired ids (an effect's order and target,
+    `view.media`) are read as wires on load and never written back — the
+    save is `/6`, the run and the channel the wired frame's; a run
+    reordered on GRAPH saves as the wires it now is."""
     from test_plan31_wiring import make_app
 
+    from hyperspace import graph as G
     from hyperspace import graphmigrate as M
     app = make_app(tmp_path)
     values = {"fx.warp.on": True, "fx.acid.on": True, "fx.acid.order": 30,
@@ -1750,29 +1596,23 @@ def test_an_old_preset_saves_its_retired_ids_back_where_they_were(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/4"
-    keys = list(out["values"])
-    for n in app.presets.graph.fx.specs:
-        i = keys.index(f"fx.{n}.blend")
-        assert keys[i + 1:i + 3] == [f"fx.{n}.order", f"fx.{n}.target"], n
-        assert isinstance(out["values"][f"fx.{n}.order"], float), n
-    assert out["values"]["fx.acid.order"] == 30.0 and out["values"]["view.media"] == 2
-    assert keys.index("view.media") + 1 == keys.index("view.media_alpha")
-    assert keys.index("backdrop.channel") + 1 == keys.index("backdrop.alpha")
-    # warp (@order 20) before acid (30): reorder on GRAPH to acid first
-    # (plan 35 T3: the wired frame's run, rewired where it stands)
+    assert out["schema"] == "hyperspace.preset/6"
+    assert not [k for k in out["values"] if M.retired(k)]
+    run = G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image")
+    assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
+    assert G.Wire("channel.b", "pattern.media") in G.read_graph(out["graph"]).all_wires()
+    # reorder on GRAPH to acid first (the wired frame's run, rewired where it stands)
     sec = app.presets.graph.free_doc()
-    run = [{"from": "lookback", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
-           {"from": "warp", "to": "output.all.image"}]
+    rerun = [{"from": "lookback", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
+             {"from": "warp", "to": "output.all.image"}]
     old = [w for w in sec["wires"] if w["from"] in ("lookback", "acid", "warp")
            and w["to"] != "pattern.media"]
     at = sec["wires"].index(old[0])
     keep = [w for w in sec["wires"] if w not in old]
-    sec = {**sec, "wires": [*keep[:at], *run, *keep[at:]]}
-    from hyperspace import graph as G
+    sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
-    v = out["values"]
-    assert out["schema"] == "hyperspace.preset/4" and "graph" not in out
-    assert v["fx.acid.order"] < v["fx.warp.order"]               # a pre-33 build: acid first
-    assert M.needs_free(sec, v, specs=app.presets.graph.specs()) is False
+    assert out["schema"] == "hyperspace.preset/6"
+    assert G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image") == (
+        "acid", "warp")
+    assert not [k for k in out["values"] if M.retired(k)]

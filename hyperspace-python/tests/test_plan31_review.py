@@ -229,24 +229,23 @@ def test_a_two_second_stall_at_length_1_still_fires_one_step():
     assert [c[0] for c in calls] == pytest.approx([0.0, 2.0])
 
 
-# ---- 7: desk rows and layout keys need no /3 — an older build keeps them ----
+# ---- 7: desk rows and layout keys on plan 31's ids — an older build keeps them ----
 
 def test_desk_rows_and_layout_keys_on_plan_31_ids_survive_a_build_without_it(tmp_path):
     """A pre-plan-31 build (`make_app(plan31=False)`: no env/seq params)
     loads a desk row on ``env.2.fire`` and GRAPH positions for env/seq
     nodes and writes them back verbatim — `set_desk` checks no target
-    against the registry and `read_layout` keeps any name — so neither
-    makes a file /3 (`preset.schema_of`)."""
+    against the registry and `read_layout` keeps any name. (Row 394: the
+    save is `/6` whatever it holds.)"""
     old = make_app(tmp_path, plan31=False)
     doc = old.presets.document("x")
     row = {**doc["desk"][0], "target": "env.2.fire", "op": "momentary"}
     layout = {"env.6": [10, 20], "seq": [1, 2], "lfo.7": [3, 4]}
     doc = {**doc, "desk": [row, *doc["desk"][1:]], "layout": layout}
-    assert preset.schema_of(doc) == preset.SCHEMA
     old.presets.load_doc(doc)
     out = old.presets.document("x")
     assert out["desk"][0] == row and out["layout"] == layout
-    assert out["schema"] == preset.SCHEMA
+    assert out["schema"] == preset.WIRED_SCHEMA
 
 
 # ---- 8: a refused add says why: the count, or the ids used up ----

@@ -149,6 +149,8 @@ changes brightness or volume instead).
     on the laptop (L165 with a clip, L164 with the dream worker), L166
     with L161 (the frame cost, the laptop and then the rig), L167 with two
     Macs on the copy (with L162).
+19. Row 394, last: L168 — the shared library migrated to `/6` with both
+    Macs on this build (after L162 and L167, which need an older Mac).
 
 ## Summary
 
@@ -321,6 +323,7 @@ changes brightness or volume instead).
 | L165 | A resize into a delay with an LFO on the crop; a resize before an effect; a window resize mid-feedback | 1 | laptop, a clip, the copy | 337, 338, 339 |
 | L166 | The frame cost of a delay, a resize and echoes | 1 | laptop, then the rig | 340 |
 | L167 | A delay saved on this build, opened on a plan 33 build | 1 | two Macs, the copy | 341 |
+| L168 | The library migrated to `/6`; both Macs on this build (row 394) | 1 | two Macs, the shared library | 353 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -4025,9 +4028,10 @@ plan 33/34 build; the copy.
 preset that needs the new vocabulary (a window set to "nothing") and try
 it on the older Mac; then put both Macs on this build.
 
-**Right if:** the pictures look as before and the untouched save is
-byte-identical; the three `/5` presets re-save as `/5`; the new file says
+**Right if:** the pictures look as before; the new file says
 `hyperspace.preset/6` and the older Mac refuses it, leaving it as it was.
+(Row 394, 2026-10-25: every re-save is `/6` now — the untouched one and the
+three `/5` presets too — so the older Mac refuses those as well; L168.)
 
 **Wrong if:** a look that moved, a changed file, or the older Mac opening
 the `/6` file.
@@ -4137,14 +4141,42 @@ hitch from a wired but unread node.
 and save it under a new name; read its `schema`; open the library on the
 plan 33 Mac; then put both Macs on this build.
 
-**Right if:** the file says `hyperspace.preset/5`; the plan 33 build opens
-it with a load note and draws its own default graph; with both Macs on
-this build it opens on both. (A `/6` file on that Mac is refused: L162.)
+**Right if:** the file says `hyperspace.preset/6` (row 394: every save
+is) and the plan 33 build refuses it, leaving it as it was; with both Macs
+on this build it opens on both.
 
 **Wrong if:** the file says `/6` for a frame that needs nothing of plan
 35's, or the plan 33 build crashes or refuses it.
 
 *(check 341)*
+
+## Row 394: the library on the newest schema (L168)
+
+The owner, 2026-10-25: old schemas get no long-term support — both Macs
+always run the newest build — so every save is `hyperspace.preset/6`, and
+the library is moved there once with `tools/migrate_library.py`. On
+`preset-schema-6`.
+
+#### L168. The library migrated to `/6`; both Macs on this build
+
+**Needs:** both Macs on this build, sharing the library (`[library] path`).
+
+**Do:** on one Mac, `uv run python tools/migrate_library.py` (a dry run:
+it writes nothing) and read the report; then add `--apply` and note the
+backup folder it prints. Let the cloud sync. Open `glimmer-bug`, `moo`,
+`reeeeeeeel`, a macro preset and a few others on both Macs; save one
+untouched; run the dry run again.
+
+**Right if:** every preset is listed `→ 6`, `picture: same`, `fixed point:
+yes`; after `--apply` every preset file says `hyperspace.preset/6` under
+its own name, each looks as before on both Macs, the untouched save leaves
+the file's bytes as they were, and the second dry run leaves every preset
+untouched.
+
+**Wrong if:** a preset in the "not written" list, a look that moved, a
+renamed or missing file, or a `/6` that changes on an untouched save.
+
+*(check 353)*
 
 # Part 2 — tests that need hardware
 

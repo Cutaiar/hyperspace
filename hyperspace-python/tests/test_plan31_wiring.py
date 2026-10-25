@@ -398,41 +398,12 @@ def app(tmp_path):
 
 def make_app(tmp_path, plan31: bool = True):
     """The app's registry, library, router and presets; `plan31` False is
-    a build from before plan 31 — no envelopes, no sequencer."""
-    from hyperspace import preset, tempo
-    from hyperspace.analysis import Analyser
-    from hyperspace.analyzer import Analyzer
-    from hyperspace.control import Control
-    from hyperspace.fx import FxState
-    from hyperspace.library import Library
-    from hyperspace.lookback import DreamState
-    from hyperspace.params import build_registry
-    from hyperspace.view import ViewState
+    a build from before plan 31 — no envelopes, no sequencer. (Row 394:
+    `hyperspace.headless.make_app`, so tools/migrate_library.py saves
+    through the same app without importing a test.)"""
+    from hyperspace import headless
 
-    chain = Analyzer(Analyser())
-    control = Control(chain)
-    lib = Library(tmp_path, period=0.0)
-    reg = build_registry(ViewState(), control, SimpleNamespace(chain=chain), lib.project,
-                         dream=DreamState(), fx=FxState())
-    control.library = lib
-    clock = tempo.Clock(now=lambda: 0.0)
-    lfos, envs, seq = LFOs(), Envelopes(), Sequencer()
-    tempo.register(reg, clock)
-    lfo.register(reg, lfos, clock)
-    if plan31:
-        envelope.register(reg, envs, clock)
-        sequencer.register(reg, seq, clock)
-    table = routing.Bindings.load(routing.bindings_path(tmp_path), legacy_midi=None)
-    routing.register_desk(reg, table)
-    lib.attach(reg)
-    router = routing.Router(reg, table)
-    router.use_lfos(lfos, clock)
-    if plan31:
-        router.use_bank(envs, clock)
-        router.use_sequencer(seq, envs)
-    presets = preset.Presets(lib, reg, router)
-    return SimpleNamespace(lib=lib, reg=reg, router=router, presets=presets, lfos=lfos,
-                           envs=envs, seq=seq, clock=clock)
+    return headless.make_app(tmp_path, plan31)
 
 
 def test_a_preset_carries_the_pattern_and_the_envelopes(app):
@@ -498,45 +469,40 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
     assert r.box.x == 0.0 and not math.isnan(r.reg["t.x"].value)
 
 
-# ---- plan 31 P: the conditional schema, hyperspace.preset/3 ----
+# ---- plan 31 P: the envelopes and the sequencer in the preset (row 394: /6) ----
 
-V2, V3 = "hyperspace.preset/2", "hyperspace.preset/3"
+V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/6"
 
 
 def _new_ids(doc) -> list[str]:
     return [k for k in doc["values"] if k.startswith(("env.", "seq."))]
 
 
-def test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step(app, tmp_path):
-    """Nothing of plan 31's touched: a /2 file naming no env.* / seq.*
-    value — the file a build from before plan 31 wrote — and a load and a
-    re-save of it are byte for byte the same file."""
+def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
+    """Nothing of plan 31's touched: still `/6` (row 394: plan 31's
+    conditional `/3` is gone with the ladder), naming every env.* / seq.*
+    value at its default beside every other performance value — the
+    transport never — and a load and a re-save of it are byte for byte the
+    same file."""
     from hyperspace import preset
 
     app.reg["seq.run"].set(True)                  # the transport is never the preset's
     doc = app.presets.document("plain")
-    assert doc["schema"] == V2 and preset.schema_of(doc) == V2
-    assert _new_ids(doc) == [] and "lfos" not in doc and "envs" not in doc
+    assert doc["schema"] == V6
+    assert "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="performance")
-    # (plan 32: nor a media-family value — /4's, and this preset uses none;
-    # plan 33 T7: the effects' retired order and target written back too)
-    from hyperspace.graphmigrate import retired
-    assert {k for k in doc["values"] if not retired(k)} == {k for k in every
-                                  if not k.startswith(("env.", "seq.", "mod."))
-                                  and not preset.is_media_id(k)}
+    assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")}
+    assert "seq.run" not in doc["values"] and _new_ids(doc)
     path = app.presets.save_as("plain")
     first = path.read_bytes()
     assert first == preset.dumps(doc).encode()
-    # byte for byte what a build without the envelopes and the sequencer writes
-    old = make_app(tmp_path / "old", plan31=False)
-    assert preset.dumps(old.presets.document("plain")).encode() == first
     # and stable through a load (once a load has read the file's integers
     # back as floats, as every preset since plan 13 does)
     assert app.presets.load("plain") == []
     again = app.presets.save_as("plain").read_bytes()
     assert app.presets.load("plain") == []
     assert app.presets.save_as("plain").read_bytes() == again
-    assert app.presets.document("plain")["schema"] == V2
+    assert app.presets.document("plain")["schema"] == V6
 
 
 @pytest.mark.parametrize("touch", [
@@ -550,12 +516,11 @@ def test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step(app, tmp_p
     lambda a: a.router.table.set_routes([Binding("lfo:0", "seq.swing", "push", 0.5)]),
 ], ids=["step", "swing", "gate", "env-knob", "extra-env", "lfos", "env-route",
         "seq-target"])
-def test_anything_an_older_build_would_lose_saves_as_3(app, touch):
+def test_anything_of_plan_31_saves_in_six(app, touch):
     touch(app)
     doc = app.presets.document("new")
-    assert doc["schema"] == V3 and next(iter(doc)) == "schema"
-    # a /3 file carries every envelope and sequencer value, as /2 carries
-    # every other group's
+    assert doc["schema"] == V6 and next(iter(doc)) == "schema"
+    # every envelope and sequencer value, as every other group's
     snap = app.reg.snapshot(part="performance")
     assert set(_new_ids(doc)) == {k for k in snap if k.startswith(("env.", "seq."))}
 
@@ -579,42 +544,37 @@ def test_a_3_round_trips_and_a_2_after_it_puts_the_defaults_back(app):
     assert app.presets.document("plain") == plain
 
 
-def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
-    """The library takes /2, /3 and /4 (`preset.VERSIONS`); a build from before
-    plan 31, whose kind takes /2 alone, refuses a /3 file whole instead of
-    loading it and stripping the pattern on its next save."""
+def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
+    """The library takes /2 … /6 (`preset.VERSIONS`): a /2 and a /3 document
+    load to the same state (/2 → /3 is the identity); a build from before
+    plan 31, whose kind takes /2 alone, refuses this build's save whole
+    instead of loading it and stripping the pattern on its next save."""
     from dataclasses import replace
 
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
     assert preset.VERSIONS == (2, 3, 4, 5, 6)      # (plan 35, row 385: /6 the wired frame)
-    app.presets.save_as("plain")
-    app.reg["seq.3.3"].set(True)
-    app.presets.save_as("pattern")
-    lib = app.lib
-    assert lib.read("presets", "plain")["schema"] == V2
-    assert lib.read("presets", "pattern")["schema"] == V3
-    kinds = lib._kinds
-    kinds["presets"] = replace(kinds["presets"], versions=(2,))     # the older build
-    try:
-        assert lib.read("presets", "plain")["schema"] == V2
-        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-            lib.read("presets", "pattern")
-    finally:
-        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
-
-
-def test_2_to_3_is_the_identity(app):
-    """A /2 document relabelled /3 loads to the same state as the /2."""
     app.reg["view.bright"].set(1.5)
-    doc = app.presets.document("p")
-    assert doc["schema"] == V2
-    app.presets.load_doc(doc)
+    doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
+    doc["values"] = {k: v for k, v in doc["values"].items()
+                     if not k.startswith(("env.", "seq."))}
+    assert app.presets.load_doc({**doc, "schema": V2}) == []
     want = app.reg.snapshot(part="performance")
     app.reg["view.bright"].set(0.2)
     assert app.presets.load_doc({**doc, "schema": V3}) == []
     assert app.reg.snapshot(part="performance") == want
+    app.reg["seq.3.3"].set(True)
+    app.presets.save_as("pattern")
+    lib = app.lib
+    assert lib.read("presets", "pattern")["schema"] == V6
+    kinds = lib._kinds
+    kinds["presets"] = replace(kinds["presets"], versions=(2,))     # the older build
+    try:
+        with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+            lib.read("presets", "pattern")
+    finally:
+        kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
 
 
 # ---- plan 31 P: the factory seq-demo ----

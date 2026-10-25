@@ -327,7 +327,7 @@ def test_a_saved_preset_says_its_pan_is_in_world_units_and_loads_as_saved(tmp_pa
     rig.reg["camera.pan.y"].set(-0.75)
     path = rig.presets.save_as("WORLD PAN")
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/2"     # no schema bump: a key marks it
+    assert doc["schema"] == "hyperspace.preset/6"     # (row 394); a key marks the units
     assert doc[preset.UNITS_KEY] == {"camera.pan": "world"}
     assert doc["values"]["camera.pan.x"] == 2.5
     rig.reg["camera.pan.x"].set(0.0)

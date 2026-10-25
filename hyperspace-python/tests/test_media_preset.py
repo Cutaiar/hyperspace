@@ -1,6 +1,8 @@
 """Plan 32 T5 — the media channels in the preset: the `media` section (the
-bins), the channel params, `hyperspace.preset/4` only when a preset uses
-them, and the old `view.bmp_*` dropped with a note.
+bins), the channel params, and the old `view.bmp_*` dropped with a note.
+Row 394: every save is `hyperspace.preset/6` with the section and every
+media value (plan 32's "/4 only when a preset uses them" is gone with the
+ladder).
 
 Rigs are test_presets.boot / test_undo.boot (app.main's order on a tmp
 home); the registry's own `MediaState` (`reg.media`) is handed a fake
@@ -79,103 +81,71 @@ LATER_EFFECTS = ('  "fx.displace.', '  "fx.blend.')
 
 
 @pytest.mark.parametrize("name", ["party-faces", "lfo-breathe"])
-def test_preset_without_media_is_unchanged(tmp_path, name):
-    """A preset that uses no media is written byte for byte as the base
-    wrote it (fixtures/media-preset-base/, saved by the writer before T5)
-    but for the six `view.bmp_*` values this build no longer has — and the
-    values of the effect files added since (plan 32 T7's displace and blend:
-    a preset holds every effect's params, as it did each file before them)."""
+def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
+    """A preset that uses no media saves `/6` (row 394) holding every value
+    the base wrote (fixtures/media-preset-base/, saved by the writer before
+    T5) as it wrote it — but the six `view.bmp_*` this build no longer has
+    and the retired ids (an effect's order and target, `backdrop.history`:
+    the wires say them) — beside the media family at its defaults and an
+    empty `media` section."""
+    from hyperspace import graphmigrate as M
+
     r = boot(tmp_path)
     assert r.presets.load(name) == []
-    want = "".join(line for line in (BASE / f"{name}.json").read_text().splitlines(True)
-                   if not line.startswith('  "view.bmp_'))
-    got = save_text(r, name).splitlines(True)
-    assert any(line.startswith(LATER_EFFECTS) for line in got)
-    assert "".join(line for line in got if not line.startswith(LATER_EFFECTS)) == want
-    assert preset.uses_media(r.presets.document(name)) is False
+    base = json.loads((BASE / f"{name}.json").read_text())
+    doc = json.loads(save_text(r, name))
+    assert doc["schema"] == preset.WIRED_SCHEMA
+    kept = {k: v for k, v in base["values"].items()
+            if not k.startswith("view.bmp_") and not M.retired(k)}
+    assert {k: doc["values"][k] for k in kept} == kept
+    assert any(k.startswith(LATER_EFFECTS[0].strip(' "')) for k in doc["values"])
+    assert doc[preset.MEDIA_KEY] == {"channels": {}}
+    assert "media.a.slot" in doc["values"] and "view.media_alpha" in doc["values"]
 
 
-def test_media_preset_is_v4(rig):
+def test_a_media_preset_and_one_without_are_both_six(rig):
+    """Row 394: with media or without, the save is `/6`, with the bins (an
+    empty section when none is assigned) and every media-family value."""
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.SCHEMA and preset.MEDIA_KEY not in doc
+    assert doc["schema"] == preset.WIRED_SCHEMA == "hyperspace.preset/6"
+    assert doc[preset.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.MEDIA_SCHEMA == "hyperspace.preset/4"
+    assert doc["schema"] == preset.WIRED_SCHEMA
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": ["shared:loops/tunnel.mp4"]}}
-    assert doc["values"]["media.a.slot"] == 0          # a /4 file holds every value
-    rig.reg.media.assign("a", 0, None)
-    assert rig.presets.document("x")["schema"] == preset.SCHEMA
-    # a value away from its default is enough, of each family
+    assert doc["values"]["media.a.slot"] == 0
     for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
                    ("backdrop.alpha", 0.5)):
-        was = rig.reg[pid].value
         rig.reg[pid].set(v)
-        assert rig.presets.document("x")["schema"] == preset.MEDIA_SCHEMA, pid
-        rig.reg[pid].set(was)
-    assert rig.presets.document("x")["schema"] == preset.SCHEMA
+        assert rig.presets.document("x")["values"][pid] == v, pid
 
 
-def test_uses_media_rule():
-    assert not preset.uses_media({"values": {"view.bright": 2.0}})
-    assert not preset.uses_media({"values": {"media.a.slot": 0, "view.media_scale": 0.9},
-                                  "media": {"channels": {"a": [None, None]}}})
-    assert preset.uses_media({"media": {"channels": {"a": [None, "local:x.png"]}}})
-    assert preset.uses_media({"values": {"view.media": 2}})
-    assert preset.uses_media({"values": {"media.h.loop": 1}})
-
-
-def test_uses_media_counts_names_in_rows():
-    """A preset whose only media is a row naming a media-family id or a
-    channel node — a route, a modifier's input, a macro's subscriber, a
-    graph wire — is /4: an older build would drop that row silently."""
-    assert preset.uses_media({"routes": [{"source": "lfo:0", "target": "media.a.pos",
-                                          "op": "push", "value": 0.2}]})
-    assert preset.uses_media({"routes": [{"source": "param:backdrop.alpha",
-                                          "target": "bridge:3", "op": "send"}]})
-    assert preset.uses_media({"desk": [{"source": "cc:0:48", "target": "media.c.jog"}]})
-    assert not preset.uses_media({"desk": [{"source": "cc:*:21", "dark": True}]})
-    assert preset.uses_media({"macros": {"macro.1": {"subs": [{"base": "backdrop.alpha",
-                                                               "from": 0, "to": 1}]}}})
-    assert preset.uses_media({"macros": {"macro.2": {"subs": [
-        {"depth": {"source": "hand:right.y", "target": "view.media_alpha"},
-         "from": 0, "to": 1}]}}})
-    assert preset.uses_media({"modifiers": [{"id": "mod.1", "kind": "smooth",
-                                             "in": ["param:media.b.rate"]}]})
-    assert preset.uses_media({"graph": {"nodes": [], "wires": [{"from": "media.a",
-                                                                "to": "acid.aux"}]}})
-    # rows that name no media id leave the preset /2
-    assert not preset.uses_media({
-        "routes": [{"source": "lfo:0", "target": "camera.zoom", "op": "push"}],
-        "modifiers": [{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}],
-        "macros": {"macro.1": {"subs": [{"base": "dream.decay", "from": 0, "to": 1}]}},
-        "graph": {"nodes": [], "wires": [{"from": "hands.2", "to": "output.2.hands"}]}})
-    # a malformed section is not media, and never raises
-    assert not preset.uses_media({"routes": "x", "macros": [], "graph": {"wires": 3},
-                                  "modifiers": [7, {"in": "media.a.pos"}]})
-
-
-def test_preset_whose_only_media_is_a_route_or_macro_is_v4(rig):
+def test_a_row_on_a_media_param_survives_the_save(rig):
+    """A route, a macro subscriber or a desk row on a media-family param is
+    saved with the preset (`/6`, as every save)."""
     from test_presets import put
     put(rig.home, "LFOPOS", routes=[{"source": "lfo:0", "target": "media.a.pos",
                                      "op": "push", "value": 0.2}])
     assert rig.presets.load("LFOPOS") == []
     doc = rig.presets.document("LFOPOS")
-    assert doc["schema"] == preset.MEDIA_SCHEMA
+    assert doc["schema"] == preset.WIRED_SCHEMA
     assert any(r["target"] == "media.a.pos" for r in doc["routes"])
     put(rig.home, "MACROALPHA", macros={"macro.1": {"subs": [
         {"base": "backdrop.alpha", "from": 0, "to": 1}]}})
     assert rig.presets.load("MACROALPHA") == []
-    assert rig.presets.document("MACROALPHA")["schema"] == preset.MEDIA_SCHEMA
+    doc = rig.presets.document("MACROALPHA")
+    assert doc["schema"] == preset.WIRED_SCHEMA
+    assert doc["macros"]["macro.1"]["subs"][0]["base"] == "backdrop.alpha"
     put(rig.home, "DESKALPHA", desk=[{"source": "cc:0:48", "target": "backdrop.alpha",
                                       "op": "set"}])
     assert rig.presets.load("DESKALPHA") == []
     doc = rig.presets.document("DESKALPHA")
-    assert doc["schema"] == preset.MEDIA_SCHEMA
+    assert doc["schema"] == preset.WIRED_SCHEMA
     assert any(r.get("target") == "backdrop.alpha" for r in doc["desk"])
     put(rig.home, "PLAIN", routes=[{"source": "lfo:0", "target": "camera.zoom",
                                     "op": "push", "value": 0.1}])
     assert rig.presets.load("PLAIN") == []
-    assert rig.presets.document("PLAIN")["schema"] == preset.SCHEMA
+    assert rig.presets.document("PLAIN")["schema"] == preset.WIRED_SCHEMA
 
 
 def test_bins_round_trip(rig, tmp_path):
@@ -186,7 +156,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/4"' in text
+    assert '"schema": "hyperspace.preset/6"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})
@@ -240,7 +210,7 @@ def test_bmp_alpha_is_an_alias_of_media_alpha(rig):
     assert reg.snapshot()["view.media_alpha"] == 0.3
     doc = rig.presets.document("x")
     assert "view.bmp_alpha" not in doc["values"]
-    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.MEDIA_SCHEMA
+    assert doc["values"]["view.media_alpha"] == 0.3 and doc["schema"] == preset.WIRED_SCHEMA
     put(rig.home, "OLDALPHA", values={"view.bmp_alpha": 0.25})
     assert rig.presets.load("OLDALPHA") == [] and rig.presets.notes == []
     assert real.value == 0.25

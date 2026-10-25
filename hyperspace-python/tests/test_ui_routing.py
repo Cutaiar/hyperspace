@@ -533,7 +533,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/2" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/6" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     frame(panel)
     # another preset back: the user route goes, the inputs stay
