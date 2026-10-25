@@ -1187,7 +1187,7 @@ def _wired_module_runs(section: dict, values: dict, specs: Specs,
 
 # ---------------------------------------------------------------- the frame as wires (plan 35 M)
 #
-# Plan 35 (rows 372, 375, 383): the frame `default_graph` builds from the
+# Plan 35 (rows 372, 375, 383): the frame the retired `default_graph` built from the
 # outputs' switches is written as ordinary wires. `frame_wires` is the frame
 # for the default switches, written once into All outputs (`output.all`);
 # `output_wires` is what one output's state (`Shows`: the switches as the
@@ -1199,7 +1199,7 @@ def _wired_module_runs(section: dict, values: dict, specs: Specs,
 class Shows:
     """One output's switch state as the migration reads it (plan 35 M):
     the scene, the hands, the hands through the effects. A word of the
-    migration, not of `outputs` (T4 retires `Switches.through`)."""
+    migration, not of `outputs` (T4 retired `Switches.through`)."""
 
     scene: bool = True
     hands: bool = True
@@ -1255,7 +1255,7 @@ def _next_copies(spec: G.GraphSpec, count: int) -> list[int]:
 
 def frame_wires(spec: G.GraphSpec, *, backdrop_history: bool = False
                 ) -> tuple[list[dict], list[dict]]:
-    """The frame `default_graph` builds for `spec` under the default
+    """The frame the retired `default_graph` built for `spec` under the default
     switches (`Shows()`: the scene, the hands over, not through), as
     (entries, wires) in the new ids, written to All outputs (plan 35 M,
     rows 375 and 383). `spec` is a section as read before the wired frame
@@ -1410,6 +1410,59 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
     return out
 
 
+def section_of(wiring: G.Wiring) -> dict:
+    """An unwired `Wiring` (no preset's graph reached it: the app before its
+    first load, a test rig's, a tool's — `wiring_for`'s run) said as the
+    section before the wired frame that reads as it, in the old ids (plan
+    35 T4): its hands entries, `laid`, `holds`, its placed effects and the
+    run's instances, its composites, then the run `frame → … → fx.image`
+    (the empty one with none), the backdrop's channel and its own wires."""
+    effects = list(wiring.placed)
+    held = {e.name for e in effects}
+    names = [*(wiring.run or ()), *(x for w in wiring.wires for x in (w.src, w.node))]
+    for name in names:
+        if G.wire_node_kind(name) != "effect" or name in held:
+            continue
+        file, n = G.split_instance(name)
+        if n > 1:
+            effects.append(G.EffectAt(file, n))
+            held.add(name)
+    # the nodes the wires name that a `Wiring` holds no entry of (the old
+    # graph made each from its name): plan 33's switches, plan 34's delays,
+    # resizes, look-back frames and the dream
+    others: list[tuple[str, Any]] = [("composite", c) for c in wiring.composites]
+    made = {"switch": G.SwitchAt, "delay": G.DelayAt, "resize": G.ResizeAt,
+            "echo": G.EchoAt, "dream": lambda n: G.DreamAt()}
+    seen: set[str] = set()
+    for w in wiring.wires:
+        for name in (w.src, w.node):
+            kind = G.wire_node_kind(name)
+            if kind in made and name not in seen:
+                seen.add(name)
+                n = name.partition(".")[2]
+                others.append((kind, made[kind](int(n) if n.isdigit() else 1)))
+    spec = G.GraphSpec(hands=tuple(wiring.nodes()), laid=wiring.blend,
+                       history=G.HistoryAt(wiring.history), effects=tuple(effects),
+                       others=tuple(others))
+    out = {"nodes": spec.to_json()["nodes"],
+           "wires": _chain("frame", list(wiring.run or ()), "fx.image")}
+    if wiring.backdrop:
+        out["wires"].append(_w(f"media.{wiring.backdrop}", "backdrop.image"))
+    out["wires"] += [w.to_json() for w in wiring.wires]
+    return out
+
+
+def wired_of(wiring: G.Wiring) -> dict:
+    """An unwired `Wiring` as the wired frame a load lands for it (plan 35
+    T4, `graph.wired`): `section_of` it, renamed and written as a wired
+    frame (`wired_section`), its look-back recording the backdrop where
+    `backdrop_history` says. `Wiring()` is the factory look,
+    `frame_wires(read_graph({}))`."""
+    section = section_of(wiring)
+    return wired_section(renamed(section), G.read_graph(section),
+                         backdrop_history=wiring.backdrop_history)
+
+
 def _src_into(wires, dst: str) -> str | None:
     return next((w.src for w in wires if w.dst == dst), None)
 
@@ -1420,7 +1473,7 @@ def _kind(name: str | None) -> str | None:
 
 def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
     """Output `n`'s overrides of All outputs under `shows` (plan 35 M):
-    exactly the picture, hands and guide `default_graph` gives output `n`
+    exactly the picture, hands and guide the retired `default_graph` gave output `n`
     for that switch state, with `_Wiring._put`'s output rules applied to
     the section's own wires into `output.<n>` (a picture by a wire drops
     the guide where no hands are laid over; a hands wire on a through

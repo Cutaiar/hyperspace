@@ -30,13 +30,14 @@ import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
-from test_graphview import stacked, views
+from test_graphview import stacked, thru, views
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
 from hyperspace import graph as G
 from hyperspace import graphview, ui, ui_graph
 from hyperspace.fx import FxState
+from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
@@ -79,8 +80,8 @@ def real_graph(fixture=None):
     wiring = spec.wiring() if spec is not None else G.Wiring()
     extra = tuple(e.name for e in spec.effects) if spec is not None else ()
     effects = REAL + tuple(e for e in extra if e not in REAL)
-    return G.default_graph(views(Switches(), Switches(through=True)),
-                           stacked(effects, wiring), effects=effects)
+    src = spec if spec is not None and spec.wired else stacked(effects, wiring)
+    return thru(src, effects, Shows(), Shows(through=True))
 
 
 def load_fixture(rig, fixture):
@@ -189,7 +190,9 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in ("render:shape", "render:eye", "render:ghost", "render:scene",
                               "render:hands", "render:cover", "group:hands",
                               "group:cloud")} == {graphview.GEOMETRY}
-    assert {area[k] for k in ("render:history", "render:acid", "render:palette", "render:fx",
+    end = "render:" + graphview.canvas_name(view.node("render:output.1").ref.inputs["image"])
+    assert end.startswith("render:shown(")             # (plan 35 T4: where `fx` was)
+    assert {area[k] for k in ("render:history", "render:acid", "render:palette", end,
                               "render:capture", "render:output.1", "render:output.2",
                               "group:output")} == {graphview.SHADERS}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
@@ -211,7 +214,7 @@ def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
                                    {"from": "acid.2", "to": "switch.in1"},
                                    {"from": "switch", "to": "output.2.image"}]})
     declare_switches(rig.reg, ["switch"])
-    g = G.default_graph(views(Switches(), Switches()), spec.wiring(),
+    g = G.build_graph(views(Switches(), Switches()), spec.wiring(),
                         effects=REAL + ("acid.2",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     assert view.node("render:acid.2").area == graphview.SHADERS
@@ -415,7 +418,8 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
         if k not in seen:
             seen.add(k)
             todo += list(succ.get(k, ()))
-    assert "render:fx" in seen and "render:output.1" in seen
+    end = "render:" + graphview.canvas_name(view.node("render:output.1").ref.inputs["image"])
+    assert end in seen and "render:output.1" in seen
     assert not {c.id for c in lay.throughs} & {c.id for c in view.cables}
     # Delete on a through wire: refused in words
     said = []

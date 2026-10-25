@@ -729,7 +729,7 @@ def test_the_picker_adds_an_effect_unwired(tmp_path):
     assert [s.name for s in spec.switches] == ["switch"] and "switch.select" in rig.reg
     assert wires_of(rig) == before and pushed == ["add acid.2", "add switch"]
     # on the canvas: faint, drawn, saying so
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     for nid in ("render:acid.2", "render:switch"):
         n = view.node(nid)
@@ -903,16 +903,18 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
         ("frame", "fx.image"), nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("presets", "Free")
     gs = rig.lib.presets.graph
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.said().wiring(),
+    rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.said().wiring(),
                                                    effects=("wobble", "wobble.2")))
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
     view = st["view"]
     assert view.node("render:wobble.2").faint and view.node("render:frame") is not None
+    # (plan 35 T4: the run's end, `shown(lookback)` — on the canvas, in the
+    # old words until T5, `shown(history)` — where `fx` was)
     cable = next(c for c in view.cables
-                 if (c.src_port, c.dst_port) == ("rout:frame", "rin:fx/image"))
+                 if (c.src_port, c.dst_port) == ("rout:frame", "rin:shown(history)/image"))
     st["pin_xy"].update({graphview.stub_out("render:frame"): (0.0, 0.0),
-                         graphview.stub_in("render:fx"): (400.0, 0.0)})
+                         graphview.stub_in("render:shown(history)"): (400.0, 0.0)})
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
     assert G.run_of(gs.said()) == ()
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (200.0, 0.0)) is cable
@@ -942,7 +944,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert G.run_of(spec) == () and wires_of(rig) == {("frame", "fx.image")}
     assert G.EffectAt("acid", 1) in spec.effects
     assert {"kind": "effect", "file": "acid"} in rig.presets.graph.free_doc()["nodes"]
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     n = view.node("render:acid")
     assert n is not None and n.faint and not n.idle
@@ -1038,7 +1040,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
                                             ("wobble", "fx.image")))
     rig.lib.load("presets", "Run")
     gs = rig.lib.presets.graph
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.said().wiring(),
+    rig.panel.renderer = NS(_graph=G.build_graph(views(Switches()), gs.said().wiring(),
                                                    effects=("acid", "wobble")))
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
@@ -1047,7 +1049,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     monkeypatch.setattr(undo_mod, "push",
                         lambda label, load=False: pushed.append(label))
     xy = {"render:frame": 0.0, "render:acid": 300.0, "render:wobble": 600.0,
-          "render:fx": 900.0}
+          "render:shown(wobble)": 900.0}               # (plan 35 T4: where `fx` was)
     for nid, x in xy.items():
         st["pin_xy"][graphview.stub_out(nid)] = (x + 100.0, 0.0)
         st["pin_xy"][graphview.stub_in(nid)] = (x, 0.0)
@@ -1055,7 +1057,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
     assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
     assert G.run_of(gs.said()) == ("acid", "wobble") and pushed == []
-    cable = next(c for c in view.cables if c.dst_port == "rin:fx/image")
+    cable = next(c for c in view.cables if c.dst_port == "rin:shown(wobble)/image")
     assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
     assert G.run_of(gs.said()) == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → fx.image"]

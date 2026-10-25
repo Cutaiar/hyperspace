@@ -35,9 +35,11 @@ for p in (ROOT, ROOT / "tests"):
 
 from fake_hands import hand  # tests/fake_hands.py
 
+from hyperspace import graphmigrate as M
 from hyperspace import outputs as O
 from hyperspace.fx import FxState
 from hyperspace.ghost import _font
+from hyperspace.graph import read_graph
 from hyperspace.graphmigrate import wiring_of
 from hyperspace.hands import skeleton
 from hyperspace.render import Renderer
@@ -79,6 +81,18 @@ def renderer(ctx, effects=("warp",), guide=0, **values) -> Renderer:
     return r
 
 
+def wire(r, *shows: M.Shows) -> None:
+    """Plan 35 T4: `r`'s run with each output's state (`graphmigrate.Shows`,
+    the retired switches: "hands through the effects" is wiring now) written
+    into its wiring, as a load and the golden tool write them; every
+    window's mutes stay on."""
+    sec = M.wired_of(r.wiring)
+    for k, sh in enumerate(shows):
+        if sh != M.Shows():
+            sec = M.with_output_wires(sec, k + 1, sh)
+    r.wiring = read_graph(sec).wiring()
+
+
 def view_state() -> ViewState:
     return ViewState(shape=10, ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25,
                      faces=True, pattern=2)
@@ -104,8 +118,8 @@ def frames(ctx, r, views, n=12, t0=2.0):
 
 def stats_line(r) -> str:
     st = r.stats
-    names = ", ".join(O.NAMES[k] for k in st["pipelines"]) or "none"
-    return (f"Renderer.stats: pipelines [{names}] · chain runs {st['chain_runs']} · "
+    names = ", ".join(st["ends"]) or "none"
+    return (f"Renderer.stats: ends [{names}] · chain runs {st['chain_runs']} · "
             f"direct {st['direct']} · captures {st['captures']} · hands' layer {st['layer']}")
 
 
@@ -150,11 +164,11 @@ def compose(ctx) -> Path:
     return path
 
 
-EIGHT = [O.Switches(scene=a, hands=b, through=c)
+EIGHT = [M.Shows(scene=a, hands=b, through=c)
          for a in (True, False) for b in (True, False) for c in (False, True)]
 
 
-def _state_label(k: int, sw: O.Switches) -> str:
+def _state_label(k: int, sw: M.Shows) -> str:
     return (f"{k}  scene {'on' if sw.scene else 'off'} · hands {'on' if sw.hands else 'off'}"
             f" · {'through' if sw.through else 'over'} effects")
 
@@ -166,7 +180,8 @@ def eight(ctx) -> Path:
     pad, head = 10, 24
     small, title = _font(14), _font(17)
     r = renderer(ctx, effects=("warp", "kaleido"))
-    views = [O.View(sw, (FW, FH), target=target(ctx, (FW, FH))) for sw in EIGHT]
+    wire(r, *EIGHT)
+    views = [O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH))) for _ in EIGHT]
     frames(ctx, r, views)
     sheet = Image.new("RGB", (pad + 4 * (tw + pad), 34 + 2 * (head + th + pad) + 28), BG)
     d = ImageDraw.Draw(sheet)
@@ -174,7 +189,7 @@ def eight(ctx) -> Path:
            "draw_outputs (offscreen, synthetic hands, warp + kaleido)", fill=INK, font=title)
     for k, v in enumerate(views):
         x, y = pad + (k % 4) * (tw + pad), 34 + (k // 4) * (head + th + pad)
-        d.text((x, y), _state_label(k + 1, v.switches), fill=(240, 200, 120), font=small)
+        d.text((x, y), _state_label(k + 1, EIGHT[k]), fill=(240, 200, 120), font=small)
         sheet.paste(pixels(v.target).resize((tw, th), Image.LANCZOS), (x, y + head))
     d.text((pad, sheet.height - 24), stats_line(r) + " · 3 = 4 and 7 = 8 byte for byte",
            fill=DIM_INK, font=small)
@@ -190,7 +205,8 @@ def through(ctx) -> Path:
     small, title = _font(14), _font(17)
     r = renderer(ctx, effects=("warp", "kaleido"), guide=1)
     glass = O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH)))
-    proj = O.View(O.Switches(through=True), (FW, FH), target=target(ctx, (FW, FH)))
+    proj = O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH)))
+    wire(r, M.Shows(), M.Shows(through=True))
     frames(ctx, r, [glass, proj])
     sheet = Image.new("RGB", (pad + 2 * (FW + pad), 34 + head + FH + 40), BG)
     d = ImageDraw.Draw(sheet)
@@ -233,7 +249,8 @@ def style(ctx, name: str = "CAGE") -> Path:
     r.ghost.state.tethers = True
     r.ghost.state.style = G.STYLES.index(name)
     glass = O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH)))
-    proj = O.View(O.Switches(through=True), (FW, FH), target=target(ctx, (FW, FH)))
+    proj = O.View(O.Switches(), (FW, FH), target=target(ctx, (FW, FH)))
+    wire(r, M.Shows(), M.Shows(through=True))
     frames(ctx, r, [glass, proj])
     sheet = Image.new("RGB", (pad + 2 * (FW + pad), 34 + head + FH + 40), BG)
     d = ImageDraw.Draw(sheet)
@@ -267,10 +284,10 @@ def timing(ctx, n: int = 120) -> Path:
         return ctx.framebuffer(color_attachments=[ctx.renderbuffer(size, 4, samples=samples)])
 
     cases = [
-        ("one view, default (Renderer.draw's path)", [O.Switches()]),
-        ("two views agreeing (scene + hands over)", [O.Switches(), O.Switches()]),
+        ("one view, default (Renderer.draw's path)", [M.Shows()]),
+        ("two views agreeing (scene + hands over)", [M.Shows(), M.Shows()]),
         ("two views disagreeing (hands over | hands through)",
-         [O.Switches(), O.Switches(through=True)]),
+         [M.Shows(), M.Shows(through=True)]),
     ]
     try:
         chip = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
@@ -284,7 +301,9 @@ def timing(ctx, n: int = 120) -> Path:
               f"glFinish; {n} frames after 20 warm-up"), ""]
     for label, sws in cases:
         r = renderer(ctx, effects=("warp", "kaleido"))
-        views = [O.View(sw, size, target=fb(4 if k == 0 else 0)) for k, sw in enumerate(sws)]
+        wire(r, *sws)
+        views = [O.View(O.Switches(), size, target=fb(4 if k == 0 else 0))
+                 for k in range(len(sws))]
         s = view_state()
         times = []
         for k in range(n + 20):
@@ -297,7 +316,7 @@ def timing(ctx, n: int = 120) -> Path:
         times.sort()
         lines.append(f"{label:52s} median {statistics.median(times):6.2f} ms · "
                      f"p90 {times[int(0.9 * len(times))]:6.2f} ms · chain runs "
-                     f"{r.stats['chain_runs']} · pipelines {[O.NAMES[p] for p in r.stats['pipelines']]}")
+                     f"{r.stats['chain_runs']} · ends {r.stats['ends']}")
     path = OUT / "compose-timing.txt"
     path.write_text("\n".join(lines) + "\n")
     return path

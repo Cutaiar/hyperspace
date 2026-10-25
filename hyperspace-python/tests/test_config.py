@@ -189,6 +189,21 @@ def test_no_screens_list_is_one_output_as_today(tmp_path, capsys):
     assert capsys.readouterr().err == ""
 
 
+def test_a_through_key_is_said_once(tmp_path, capsys):
+    """Plan 35 M: `through` in `[[output.screens]]` is the preset's wiring
+    now — read, ignored, and said once (`THROUGH_IS_WIRING`); the entry
+    carries no `through`."""
+    p = tmp_path / "config.toml"
+    p.write_text('[[output.screens]]\nname = "glass"\n'
+                 '[[output.screens]]\nname = "projector"\nthrough = true\n')
+    cfg = config.load(p)
+    want = config.THROUGH_IS_WIRING.format(n=2)
+    assert cfg["notes"].count(want) == 1
+    assert all("through" not in e for e in config.screens(cfg))
+    assert "through" not in config.SCREEN
+    assert want in capsys.readouterr().err
+
+
 def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     p = tmp_path / "config.toml"
     p.write_text('[output]\nmonitor = 0\nfullscreen = false\nbg = 0.4\n'
@@ -200,12 +215,14 @@ def test_a_screens_list_wins_over_the_scalar_keys_with_a_note(tmp_path, capsys):
     glass, proj = config.screens(cfg)
     assert glass == {**config.SCREEN, "name": "glass", "monitor": 1, "fullscreen": True}
     assert proj == {**config.SCREEN, "name": "projector", "monitor": 2, "hands": False,
-                    "through": True, "dim": 0.6}
+                    "dim": 0.6}
     # output 1's entry is what the first window's readers see
     assert (oc["monitor"], oc["fullscreen"], oc["bg"]) == (1, True, 0.4)
-    assert cfg["notes"] == [("config: [[output.screens]] is listed, so [output] monitor and "
-                            "fullscreen are ignored — output 1's entry says")]
-    assert capsys.readouterr().err.strip() == cfg["notes"][0]
+    # (plan 35 T4: the `through` key said once — the preset's wiring now)
+    assert cfg["notes"] == [config.THROUGH_IS_WIRING.format(n=2),
+                            ("config: [[output.screens]] is listed, so [output] monitor and "
+                             "fullscreen are ignored — output 1's entry says")]
+    assert capsys.readouterr().err.strip().splitlines() == cfg["notes"]
     # no scalar keys in the file: nothing to say
     p.write_text('[[output.screens]]\nmonitor = 1\n[[output.screens]]\nmonitor = -1\n')
     cfg = config.load(p)

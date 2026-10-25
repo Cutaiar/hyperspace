@@ -50,27 +50,27 @@ def registry(home: Path, file: str = "clouds/knot.npz", copy: bool = True,
 
 
 def test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_nothing():
-    """`default_graph(…, clouds)`: one `cloud` node per listed role, named
+    """`build_graph(…, clouds)`: one `cloud` node per listed role, named
     by the naming rule (`cloud`, `cloud.2`), solid, the scene's first
     geometries (before the hands and the shape), each its own timed line;
     with none the graph is today's, node for node."""
     vs = [O.View(S(), (W, H))]
-    plain = G.default_graph(vs)
-    assert [n.name for n in G.default_graph(vs, None, ()).order] == \
+    plain = G.build_graph(vs)
+    assert [n.name for n in G.build_graph(vs, None, ()).order] == \
         [n.name for n in plain.order]
     assert plain.clouds == () and not any(n.KIND == G.CLOUD_KIND for n in plain.order)
-    g = G.default_graph(vs, G.Wiring(hands="scene"), ("scan", "lidar"))
+    g = G.build_graph(vs, G.Wiring(hands="scene"), ("scan", "lidar"))
     assert g.clouds == ("scan", "lidar")
     scene = g.nodes["scene"]
     geoms = scene.geometries()
-    assert [n.name for n in geoms] == ["cloud", "cloud.2", "ghost", "shape"]
+    assert [n.name for n in geoms] == ["cloud", "cloud.2", "hands", "shape"]
     assert [n.role for n in geoms[:2]] == ["scan", "lidar"]
     assert [n.source for n in geoms[:2]] == ["cloud:scan", "cloud:lidar"]
     assert all(n.SOLID and n.TIMED and n.OUTPUT == G.GEOMETRY for n in geoms[:2])
-    assert g.timed[:3] == ["cloud", "cloud.2", "ghost"]
+    assert g.timed[:3] == ["cloud", "cloud.2", "hands"]
     # the rest of the graph is the one without clouds
     assert [n.name for n in g.order if n.KIND != G.CLOUD_KIND] == \
-        [n.name for n in G.default_graph(vs, G.Wiring(hands="scene")).order]
+        [n.name for n in G.build_graph(vs, G.Wiring(hands="scene")).order]
 
 
 def test_the_listed_roles_are_the_cloud_devices_of_the_registry(tmp_path):

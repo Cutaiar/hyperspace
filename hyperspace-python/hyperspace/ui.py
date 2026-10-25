@@ -58,17 +58,21 @@ from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom, menu
 from .graph import (
+    GROUND,
     Wiring,
     graph_words,
     hands_words,
+    in_scene_hands,
     layer_words,
     output_placement_words,
-    output_wires,
+    output_ports,
+    through_layer,
+    through_of,
     wire_words,
+    wired,
 )
 from .hands import panel as ui_hands
 from .media import publish
-from .outputs import HANDS, SCENE, SCENE_HANDS, route
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
 from .view import ViewState
@@ -286,54 +290,60 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
                  wiring: Wiring | None = None, n: int | None = None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
     it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
-    words, no picture). It is `outputs.route`'s answer for the output's
-    switches, whether an effect is on and whether a hand shows (`visible`:
-    the ghost hands are on and the layer drew, fork F7), with master × its
-    own dim. The reasons: "nothing" (scene and hands off), "no hand" (the
-    scene off and no hand showing), "dim" (its own dim at 0), "master" (the
-    crossfader at black — the footer already says "dim black").
+    words, no picture): its window's mutes (`sw`: the picture, the hands),
+    whether an effect is on, whether a hand shows (`visible`: the ghost
+    hands are on and the layer drew, fork F7), with master × its own dim.
+    The reasons: "nothing" (both muted), "no hand" (the picture muted and no
+    hand showing), "dim" (its own dim at 0), "master" (the crossfader at
+    black — the footer already says "dim black").
 
-    Plan 26 A4: under the loaded preset's graph (`wiring`; None or the
-    default, the words above, unchanged) the words say the wiring too
-    (`graph.hands_words`): an output whose scene holds the hands shows
-    "scene + hands in the scene" (no layer over it), and a layer laid on
-    names its hands node when there are two, "as lines", and a blend that
-    is not plainly over.
-
-    Plan 30 D1: with `n`, the output's number, the effects the graph
-    places on what this output shows (`graph.output_placement_words`):
-    `palette on the hands` while it shows them, `acid 2 before the
-    history` while it shows the scene, `palette 2 on this output only`."""
-    key, after = route(sw, fx_on, visible)
-    wired = wiring is not None and wiring != Wiring()
-    inside = wired and bool(wiring.in_scene()) and sw.scene
-    if inside:                      # the scene holds the hands, whatever its hands switch
-        key, after = SCENE, False
+    Plan 35 T4: the words read the wires (`graph.wired`: None, or a wiring
+    no preset's graph reached, is the factory look) — "hands through the
+    effects" where output `n`'s picture is a chain over the layer laid on
+    (`graph.through_layer`; it bends only with an effect on and a hand
+    drawn, else the hands go over), "scene + hands in the scene" where the
+    scene holds them (`graph.hands_words`), a layer's node when there are
+    two, "as lines", a blend that is not plainly over; a picture or hands
+    by a wire of the output's own (plan 28 N4); the effects placed on what
+    it shows (plan 30 D1, `graph.output_placement_words`)."""
+    w = wired(wiring)
+    k = n if n is not None else 1
+    shown = bool(sw.hands) and bool(visible)
+    thru = through_of(w, k)
+    through = thru is not None
+    bent = through and shown and fx_on
+    # (a through over nothing is the hands alone: no scene in its picture)
+    picture = (bool(sw.scene) and output_ports(w, k)["image"] is not None
+               and not (through and thru[1] is None))
+    inside = bool(in_scene_hands(w)) and picture
+    after = shown and not bent and not inside and output_ports(w, k)["hands"] is not None
     own = float(sw.dim)
-    # plan 28 N4: the preset's wires into this output's ports stand over
-    # its switches — a picture by a wire, the hands laid over by one
-    ports = output_wires(wiring, n) if wired and n is not None else {}
+    # plan 28 N4: the preset's wires into this output's own ports (a
+    # through's chain and a port wired to show nothing are not "a wire")
+    ports = ({x.port: x for x in w.wires if x.node == f"output.{k}" and x.src != GROUND}
+             if n is not None else {})
+    if through:
+        ports.pop("image", None)
     if ports:
         if own <= 0.0:
             return "black — dim 0", "dim"
         if master <= 0.0:
             return "black — master dim", "master"
-        if "image" in ports:
+        if "image" in ports and sw.scene:
             words = wire_words(ports["image"]).partition(" shows ")[2] + " by a wire"
-        elif key is None and not after:
+        elif not picture and not after:
             words = "ground"
         else:
-            words = output_shows(sw, fx_on, visible, 1.0, wiring)[0]
-        words += "".join(" · " + wire_words(w) for p, w in sorted(ports.items())
+            words = output_shows(sw, fx_on, visible, 1.0, w)[0]
+        words += "".join(" · " + wire_words(x) for p, x in sorted(ports.items())
                          if p != "image")
-        if "image" not in ports and wiring.placed:
-            words += output_placement_words(wiring, n, key in (SCENE, SCENE_HANDS),
-                                            after or key in (SCENE_HANDS, HANDS))
+        if "image" not in ports and w.placed:
+            words += output_placement_words(w, k, picture, after or bent)
         factor = min(1.0, master * own)
         if factor < 1.0:
             words += f" · {min(99, max(1, round(factor * 100)))}%"
         return words, ""
-    if key is None and not after:
+    if not picture and not after and not bent:
         if not sw.scene and not sw.hands:
             return "black — nothing switched on", "nothing"
         return "black — the scene is off and no hand shows", "no hand"
@@ -341,22 +351,19 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
         return "black — dim 0", "dim"
     if master <= 0.0:
         return "black — master dim", "master"
-    if key == SCENE:
+    if bent:
+        words = "scene + hands through the effects" if picture else "hands through the effects"
+    elif picture:
         words = "scene + hands over the effects" if after else "scene"
-    elif key == SCENE_HANDS:
-        words = "scene + hands through the effects"
-    elif key == HANDS:
-        words = "hands through the effects"
     else:
         words = "hands"
     if inside:
-        words = "scene + " + hands_words(wiring, sw)
-    elif wired and (after or key in (SCENE_HANDS, HANDS)):
+        words = "scene + " + hands_words(w, sw, k)
+    elif after or bent:
         # a layer laid on: its node, "as lines", its blend
-        words += layer_words(wiring)
-    if wired and n is not None and wiring.placed:
-        shows_hands = after or key in (SCENE_HANDS, HANDS)     # the layer, not the scene's
-        words += output_placement_words(wiring, n, key in (SCENE, SCENE_HANDS), shows_hands)
+        words += layer_words(w, through_layer(w, k) if bent else output_ports(w, k)["hands"])
+    if n is not None and w.placed:
+        words += output_placement_words(w, k, picture, after or bent)
     factor = min(1.0, master * own)
     if factor < 1.0:
         words += f" · {min(99, max(1, round(factor * 100)))}%"
@@ -1828,8 +1835,8 @@ class Panel:
         wiring, spec = self.graph_now()
         # the switches line up after the widest "N  name", which is cut so
         # the three ticks always fit the page's width
-        ticks = sum(imgui.calc_text_size(s).x for s in ("scene", "hands", "through effects"))
-        ticks += 3 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
+        ticks = sum(imgui.calc_text_size(s).x for s in ("picture", "hands"))
+        ticks += 2 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
         ticks += 2 * imgui.get_style().item_spacing.x
         room = max(imgui.get_content_region_avail().x - ticks - 8, 40)
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
@@ -1846,11 +1853,11 @@ class Panel:
             imgui.align_text_to_frame_padding()
             imgui.text(labels[sl.n])
             imgui.same_line(col)
-            self._check(f"{pre}.scene", "scene")
+            # plan 35 O (row 374): the window's two mutes; "hands through the
+            # effects" is the preset's wiring (T6 writes it from here)
+            self._check(f"{pre}.scene", "picture")
             imgui.same_line()
             self._check(f"{pre}.hands", "hands")
-            imgui.same_line()
-            self._check(f"{pre}.through", "through effects")
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
@@ -1870,7 +1877,7 @@ class Panel:
                 why.append("hands: ghost hands are off (HANDS page)")
             elif sw.hands and getattr(self, "hands", None) is None:
                 why.append("hands: no tracker")
-            if sw.through and not fx_on:
+            if through_layer(wiring, sl.n) is not None and not fx_on:
                 why.append("through: no effect on")
             # one line for what is wrong: its present's error first (warning
             # colour, the whole on hover), then why a switch can do nothing
@@ -1893,7 +1900,7 @@ class Panel:
             if not flips:
                 imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(f"{hands_words(wiring, sw)}\n{said}")
+                    imgui.set_tooltip(f"{hands_words(wiring, sw, sl.n)}\n{said}")
                 continue
             # no dim row: the ticks at the right of the "shows:" line, the
             # words cut to the room left of them
@@ -1902,7 +1909,7 @@ class Panel:
             imgui.text_colored(WARN if black else FAINT,
                                fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw)}\n{said}")
+                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw, sl.n)}\n{said}")
             for k, (pid, t) in enumerate(flips):
                 imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
                 self._check(pid, t)
@@ -2212,19 +2219,21 @@ class Panel:
         heading, then one line per node of the render graph (graph.py) of
         the last frames, its rolling median in ms
         (`Renderer.stats["gpu_ms"]`, render.PassTimer) — plan 30 D0: a line
-        per effect that ran a pass (`acid`, `acid(scene+hands)`, the
-        graph's `Effect` nodes, `Graph.timed_in`) before its pipeline end's
-        own (`fx`, the work beyond its effects); with no timer
-        queries on the context, the one line saying so. Nothing before a
+        per effect that ran a pass (`acid`, a copy, the graph's `Effect`
+        nodes, `Graph.timed_in`) before its end's own (`shown(acid)`, the
+        work beyond its effects); with no timer queries on the context, the
+        one line saying so. Plan 35 T4: then the ends that ran the last
+        frame (`stats["ends"]`, where the pipelines were). Nothing before a
         frame has been timed, or with no renderer."""
         stats = getattr(self.renderer, "stats", None) or {}
         ms = stats.get("gpu_ms") or {}
         note = stats.get("gpu_note") or ""
+        ends = [f"ends: {' · '.join(stats['ends'])}"] if stats.get("ends") else []
         if not ms:
             return [f"gpu: {note}"] if note else []
         width = max(len(name) for name in ms)
         return (["gpu per node, ms (median of the last frames):"]
-                + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()])
+                + [f"  {name:<{width}}  {v:6.2f}" for name, v in ms.items()] + ends)
 
     def _gpu_timing(self) -> None:
         for text in self.gpu_lines():

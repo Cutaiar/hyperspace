@@ -1549,7 +1549,7 @@ def home_page(n: graphview.VNode):
         return ("media", _media_sel(r.channel))
     if isinstance(r, Effect):
         return ("fx", _fx_sel(r.effect))
-    if isinstance(r, rgraph.Fx):
+    if isinstance(r, rgraph.Shown):           # (plan 35 T4: an end, where `fx` was)
         return ("fx", None)
     if isinstance(r, rgraph.PatternNode):
         return ("faces", None)

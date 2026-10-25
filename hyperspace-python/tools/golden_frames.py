@@ -46,9 +46,10 @@ decoded before the first frame is drawn.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
-picture). The pipeline each state reached (`outputs.route`: SCENE,
-SCENE_HANDS, HANDS or none, and the hands laid over after) is recorded
-beside it, so the manifest lists what each preset actually reaches.
+picture). The pipeline each state reached (the retired `outputs.route`'s
+table, kept here as data, `ROUTES`: SCENE, SCENE+HANDS, HANDS or none,
+and the hands laid over after) is recorded beside it, so the manifest
+lists what each preset actually reaches.
 `tests/test_golden_frames.py` compares every hash exactly, on the
 renderer the goldens were recorded on (`GL_RENDERER`), and skips with a
 note elsewhere.
@@ -56,7 +57,7 @@ note elsewhere.
     uv run python tools/golden_frames.py              # diff against the goldens
     uv run python tools/golden_frames.py --record     # (re)record them
     uv run python tools/golden_frames.py --only party-trip,legacy6 [--record]
-    uv run python tools/golden_frames.py --signatures # plan 35: today's frame, node for node
+    uv run python tools/golden_frames.py --signatures # plan 35: a new case's signature only
     uv run python tools/golden_frames.py --names      # plan 35: the fixtures' node names only
 
 A diff writes a contact sheet of every frame that moved (golden | now |
@@ -232,7 +233,7 @@ from hyperspace.bands import default_params
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
-from hyperspace.graph import Wiring, build_graph, default_graph, read_graph, signature
+from hyperspace.graph import Wiring, build_graph, read_graph, signature
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
@@ -481,10 +482,10 @@ def context() -> moderngl.Context:
     return _CTX
 
 
-# `outputs.route`'s table, as data (plan 35 T3: the goldens' states are
-# wiring now, and an output's end is named for its picture, not a
-# pipeline): (scene, hands shown, through with an effect on) → (the
-# pipeline it reached, the hands laid over after)
+# the retired `outputs.route`'s table, as data (plan 35 T3: the goldens'
+# states are wiring now, and an output's end is named for its picture, not
+# a pipeline; T4 deleted the table): (scene, hands shown, through with an
+# effect on) → (the pipeline it reached, the hands laid over after)
 ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE", True),
           (True, True, True): ("SCENE+HANDS", False), (False, False, False): ("none", False),
           (False, True, False): ("none", True), (False, True, True): ("HANDS", False)}
@@ -812,13 +813,14 @@ def summary(doc: dict) -> str:
 #
 # Plan 35 B (Review Focus 1): every case the goldens draw — each preset and
 # fixture in the eight states as one rig's eight outputs, and the WIRED
-# variants over their presets and states — built twice: by `default_graph`
-# from the switches (today's frame), and by `build_graph` from the preset's
-# section written as a wired frame (`graphmigrate.wired_section`) with each
-# output's state as its own wires (`output_wires`) and every mute on.
-# `graph.signature` must be equal node for node. `--signatures` writes
-# today's half to SIGNATURES, so T4 — which deletes the switch half of
-# `default_graph` — keeps the reference.
+# variants over their presets and states — built by `build_graph` from the
+# preset's section written as a wired frame (`graphmigrate.wired_section`)
+# with each output's state as its own wires (`output_wires`) and every mute
+# on. `graph.signature` must equal, node for node, the frame the retired
+# `default_graph` built from the switches: T2 recorded it to SIGNATURES and
+# T3 re-recorded it, both from `default_graph`; T4 deleted the oracle, so
+# the file is the reference now (`tests/test_graph_frame.py`). A recorded
+# case is never written again: `--signatures` adds a new case alone.
 
 SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
 
@@ -855,8 +857,8 @@ class Loader:
         self.presets = Presets(lib, reg, router)
 
     def load(self, slug: str):
-        """(the spec and section as plan 33 read the file — the oracle's,
-        `default_graph`'s; the effect instances held; the wired frame the
+        """(the spec and section as plan 33 read the file — the one the
+        retired `default_graph` read; the effect instances held; the wired frame the
         load landed — `build_graph`'s). Plan 35 T3: every load lands a wired
         frame, so the plan 33 half is the same file through `migrate` with
         its `wire` off, after the load declared its instances."""
@@ -887,7 +889,7 @@ def signature_keys() -> list[str]:
     `solo-scene+hands+through` for a preset with an effect on (`SOLO`,
     `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
     # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
-    # section before it, so no `default_graph` to prove it against)
+    # section before it, so no `default_graph` recorded to prove it against)
     keys = [f"{slug}/states" for slug in (*FACTORY_PRESETS, *FIXTURE_PRESETS)
             if slug not in WIRED_FIXTURES]
     for slug in FACTORY_PRESETS:
@@ -949,13 +951,11 @@ def signature_case(loader: Loader, key: str):
 
 
 def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
-    """(today's graph from the switches, the wired frame's, the wired
-    section) for one case (see above). `wired`: the frame as the load
-    wired it — checked here to be `wired_section` of the old section, so
-    the proof's two halves are the load's — None, that alone."""
+    """(the wired frame's graph, the wired section) for one case (see
+    above). `wired`: the frame as the load wired it — checked here to be
+    `wired_section` of the old section, so the proof is the load's — None,
+    that alone."""
     files = {e.partition(".")[0] for e in effects}
-    views = [View(Switches(**sw), (W, H)) for _, sw in states]
-    old = default_graph(views, spec.wiring(), tuple(clouds), effects)
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
     if wired is None:
         wired = made
@@ -966,7 +966,7 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
     assert not got.notes, got.notes
     mutes_on = [View(Switches(), (W, H)) for _ in states]
     new = build_graph(mutes_on, got.wiring(), tuple(clouds), effects)
-    return old, new, wired
+    return new, wired
 
 
 def as_json(sig):
@@ -977,13 +977,18 @@ def as_json(sig):
 
 
 def record_signatures() -> dict:
-    """Today's signature of every case (`default_graph`), into SIGNATURES."""
+    """A case SIGNATURES lacks (a fixture added since), its signature from
+    `build_graph`, into SIGNATURES; every recorded case is kept as it is
+    (plan 35 T4: the file is the reference the retired `default_graph`
+    wrote — rewriting it from the builder would prove the builder by
+    itself)."""
+    out = json.loads(SIGNATURES.read_text()) if SIGNATURES.exists() else {}
     loader = Loader()
     try:
-        out = {}
         for key in signature_keys():
-            old, _, _ = frame_graphs(*signature_case(loader, key))     # (today's half alone)
-            out[key] = as_json(signature(old))
+            if key not in out:
+                new, _ = frame_graphs(*signature_case(loader, key))
+                out[key] = as_json(signature(new))
     finally:
         loader.close()
     SIGNATURES.parent.mkdir(parents=True, exist_ok=True)
@@ -992,10 +997,11 @@ def record_signatures() -> dict:
 
 
 def record_names() -> int:
-    """Plan 35 T3: every fixture's recorded render nodes (`fixtures.<slug>.
-    <hands>.nodes`, `Graph.timed`) rewritten as this build names them — the
-    wired frame's builder names its ends for their pictures, not the
-    pipelines — and nothing else: no `goldens` entry, hash or PNG is
+    """Plan 35 T3, T4: every fixture's recorded render nodes (`fixtures.
+    <slug>.<hands>.nodes`, `Graph.timed`) rewritten as this build names
+    them — the ends for their pictures, not the pipelines (T3), every node
+    in the new ids (T4: `lookback`, `lookback(capture)`, `hands.layer`,
+    `channel.a` …) — and nothing else: no `goldens` entry, hash or PNG is
     touched (asserted). Returns how many lists changed."""
     doc = load_manifest()
     before = json.dumps(doc["goldens"])
@@ -1019,13 +1025,13 @@ def main() -> None:
     ap.add_argument("--record", action="store_true", help="write the goldens")
     ap.add_argument("--only", default="", help="comma-separated preset slugs")
     ap.add_argument("--signatures", action="store_true",
-                    help="write today's frame signatures (plan 35 T2) and stop")
+                    help="add a new case's frame signature (plan 35; recorded ones kept)")
     ap.add_argument("--names", action="store_true",
                     help="rewrite the fixtures' recorded render node names only (plan 35)")
     a = ap.parse_args()
     if a.signatures:
         got = record_signatures()
-        print(f"wrote {len(got)} frame signatures to {SIGNATURES.relative_to(ROOT)}")
+        print(f"{len(got)} frame signatures in {SIGNATURES.relative_to(ROOT)}")
         return
     if a.names:
         print(f"rewrote {record_names()} fixtures' node names; no golden touched")

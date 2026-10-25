@@ -26,7 +26,7 @@ from __future__ import annotations
 from imgui_bundle import imgui
 
 from . import ui
-from .graph import Wiring, history_words
+from .graph import Wiring, lookback_words
 from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
@@ -103,8 +103,9 @@ def page(panel, dt: float) -> None:
 def history_line(renderer) -> str:
     """The LOOKBACK page's wiring line (plan 26 A4): `history: the scene`,
     or `history: the scene · with the hands` — from the renderer's wiring
-    (`graph.history_words`); the default with no renderer."""
-    return history_words(getattr(renderer, "wiring", None) or Wiring())
+    (`graph.lookback_words`, plan 35 T4: read off the wire into
+    `lookback.capture`); the default with no renderer."""
+    return lookback_words(getattr(renderer, "wiring", None) or Wiring())
 
 
 def _say(text: str) -> None:

@@ -2144,25 +2144,32 @@ def test_the_output_page_fits_with_four_outputs_and_overlays_rows(rig, monkeypat
     over = _page_scroll(rig, monkeypatch)
     assert over["output"] <= 0
     drawn, edges = _output_page(rig, monkeypatch)
-    assert drawn.count("scene") == 4 and drawn.count("through effects") == 4
+    # (plan 35 T4: the two mutes; "through" is the preset's wiring)
+    assert drawn.count("picture") == 4 and drawn.count("through effects") == 0
     for s, right, edge in edges:
         assert right <= edge + 1, f"{s!r} runs past the page ({right} > {edge})"
 
 
 def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     """Plan 21 WP4 / fork F8: words, not a picture. Each output's "shows:"
-    line is `outputs.route`'s answer with master × own dim; a switch that
-    can do nothing says why; an output that did not open is one line."""
+    line is what is wired into it through its mutes (plan 35 T4: the
+    retired route table's words, "hands through the effects" the output's
+    wiring) with master × own dim; a mute that can do nothing says why; an
+    output that did not open is one line."""
+    from wiredframe import Shows, wiring
+
+    from hyperspace.graph import Wiring
     from hyperspace.outputs import Switches as S
     from hyperspace.ui import output_shows
 
-    # the words, as a pure function of the switches and the frame
+    # the words, as a pure function of the mutes, the wiring and the frame
     assert output_shows(S(), False, True, 1.0) == ("scene + hands over the effects", "")
     assert output_shows(S(), False, False, 1.0) == ("scene", "")
-    assert output_shows(S(through=True), True, True, 1.0) == (
+    assert output_shows(S(), True, True, 1.0, wiring(Wiring(), Shows(through=True))) == (
         "scene + hands through the effects", "")
     assert output_shows(S(scene=False), True, True, 1.0) == ("hands", "")
-    assert output_shows(S(scene=False, through=True), True, True, 1.0) == (
+    assert output_shows(S(), True, True, 1.0,
+                        wiring(Wiring(), Shows(scene=False, through=True))) == (
         "hands through the effects", "")
     assert output_shows(S(hands=False, dim=0.8), True, True, 0.8) == ("scene · 64%", "")
     assert output_shows(S(scene=False, hands=False), True, True, 1.0) == (
@@ -2176,7 +2183,6 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["output.2.dim"].set(0.6)
     reg["output.3.scene"].set(False)
     reg["output.3.hands"].set(False)
-    reg["output.4.through"].set(True)
     slots[1].error = "present: RuntimeError: lost the context"
     drawn, _ = _output_page(rig, monkeypatch)
     assert "1  glass" in drawn and "2  projector" in drawn
@@ -2188,8 +2194,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     reg["ghost.on"].set(False)
     drawn, _ = _output_page(rig, monkeypatch)
     why = [s for s in drawn if s.startswith(("hands:", "through:"))]
-    assert why[0] == "hands: ghost hands are off (HANDS page)"
-    assert why[-1] == "hands: ghost hands are off (HANDS page) · through: no effect on"
+    assert why[0] == why[-1] == "hands: ghost hands are off (HANDS page)"
     assert "paced by output 1 · frame 1920×1080 · below: output 1's window" in drawn
     # an output the config lists but that did not open: one line, why
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"
@@ -2199,8 +2204,9 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
 
 
 def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeypatch):
-    """No list in the config: one block, "1", scene and hands ticked,
-    through effects not, and no dim row of its own (hand check Q1)."""
+    """No list in the config: one block, "1", its two mutes — picture and
+    hands — ticked (plan 35 T4: no through), and no dim row of its own
+    (hand check Q1)."""
     from hyperspace.overlay import register_switches as reg_sw
 
     with build_rig(tmp_path) as r:
@@ -2211,11 +2217,10 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
         reg_sw(r.reg, one)
         r.panel.outputs = one
         drawn, _ = _output_page(r, monkeypatch)
-        assert drawn[drawn.index("1"):drawn.index("1") + 4] == [
-            "1", "scene", "hands", "through effects"]
+        assert drawn[drawn.index("1"):drawn.index("1") + 3] == ["1", "picture", "hands"]
         assert "output.1.dim" not in r.reg and not any(s.startswith("paced") for s in drawn)
         assert [s for s in drawn if s.startswith("shows: ")] == ["shows: scene"]
-        assert r.reg["output.1.scene"].label == "Scene"
+        assert r.reg["output.1.scene"].label == "Picture"
 
 
 def test_the_footer_names_a_black_output(rig, monkeypatch):

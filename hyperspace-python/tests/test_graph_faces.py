@@ -102,7 +102,7 @@ def test_the_faces_nodes_are_built_from_the_wires():
     pattern node exists only when a wire touches it, `shape.faces` reads
     what is wired, and a branch under the scene is `grounded`'s `under`."""
     vs = [View(Switches(), (64, 48))]
-    plain = G.default_graph(vs, G.Wiring(run=()), effects=("acid",))
+    plain = G.build_graph(vs, G.Wiring(run=()), effects=("acid",))
     assert "pattern" not in plain.nodes and plain.nodes["shape"].inputs["faces"] is None
     assert G.Shape.INPUTS == {"faces": G.IMAGE}
     assert G.PatternNode.KIND == "pattern" and G.PatternNode.INPUTS == {"media": G.IMAGE}
@@ -111,7 +111,7 @@ def test_the_faces_nodes_are_built_from_the_wires():
     assert G.BackdropNode.OUTPUT is None
     spec = G.read_graph(section(("frame", "fx.image"), ("pattern", "acid.image"),
                                 ("acid", "shape.faces")))
-    g = G.default_graph(vs, spec.wiring(), effects=("acid",))
+    g = G.build_graph(vs, spec.wiring(), effects=("acid",))
     pat, acid = g.nodes["pattern"], g.nodes["acid"]
     assert isinstance(pat, G.PatternNode) and acid.inputs["image"] is pat
     assert g.nodes["shape"].inputs["faces"] is acid and "acid" not in g.run
@@ -119,20 +119,20 @@ def test_the_faces_nodes_are_built_from_the_wires():
     assert order.index("pattern") < order.index("acid") < order.index("shape")
     # a channel straight into the pattern's layer: no fitted node of its own
     spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "pattern.media")))
-    g = G.default_graph(vs, spec.wiring())
+    g = G.build_graph(vs, spec.wiring())
     assert g.nodes["pattern"].channel == "a" and not [n for n in g.nodes if n.startswith("media")]
-    assert g.timed == G.default_graph(vs, G.Wiring(run=())).timed
+    assert g.timed == G.build_graph(vs, G.Wiring(run=())).timed
     # a branch under the scene
     spec = G.read_graph(section(("frame", "fx.image"), ("media.b", "kaleido.2.image"),
                                 ("kaleido.2", "backdrop.image"),
                                 nodes=[_instance("kaleido", 2)]))
-    g = G.default_graph(vs, spec.wiring(), effects=("kaleido", "kaleido.2"))
-    under = g.nodes[G.GROUNDED].inputs["under"]
+    g = G.build_graph(vs, spec.wiring(), effects=("kaleido", "kaleido.2"))
+    under = g.nodes["backdrop"].inputs["under"]
     assert isinstance(under, G.Effect) and under.effect == "kaleido.2"
-    assert g.nodes[G.GROUNDED].under_alpha_of == "backdrop_alpha"
-    assert g.nodes["scene"].ground == 0.0 and g.nodes["history"].inputs["image"].name == "grounded"
-    assert isinstance(g.nodes["backdrop"], G.BackdropNode)
-    assert g.nodes["backdrop"].inputs["image"] is under
+    assert g.nodes["backdrop"].under_alpha_of == "backdrop_alpha"
+    assert g.nodes["scene"].ground == 0.0 and g.nodes["lookback"].inputs["image"].name == "backdrop"
+    # (plan 35 T4: the backdrop is the composite itself — no sink beside it)
+    assert isinstance(g.nodes["backdrop"], G.Composite)
 
 
 def test_the_sizes_a_port_asks():
@@ -345,7 +345,7 @@ def test_a_branch_under_the_scene(ctx):
     r = _renderer(ctx, m, pairs, [_instance("kaleido", 2)], {"kaleido": 2},
                   {"kaleido.2": {"on": True, "mix": 1.0}})
     (got,) = _draw(ctx, r, _empty(backdrop_alpha=0.5), size=size)
-    assert "kaleido.2" in r.stats["effects"] and "grounded" in r._graph.nodes
+    assert "kaleido.2" in r.stats["effects"] and "backdrop" in r._graph.nodes
     # the reference: the same pass over the fitted still, by hand
     src = r._media_fit("b", size)
     out = ctx.texture(size, 4)

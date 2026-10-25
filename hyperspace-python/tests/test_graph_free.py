@@ -517,9 +517,10 @@ def test_a_run_reads_through_an_effect_file_this_machine_lacks():
     spec = G.read_graph(section(*MISSING_RUN), effects={"acid", "wobble"})
     assert spec.notes == ()
     assert G.run_of(spec) == ("foo", "acid")
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "wobble"))
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid", "wobble"))
     assert g.run == ("acid",)
-    assert [e.effect for e in g.nodes["fx"].effects] == ["acid"]
+    assert [e.effect for e in G._effects_of(g.outputs[0].inputs["image"].inputs["image"])
+            ] == ["acid"]
     assert "no foo effect in this build" in g.dormant["foo"]
     # a wire on a missing effect that is no run's stays refused
     branch = G.read_graph(section(("frame", "fx.image"), ("media.a", "foo.image"),
@@ -720,14 +721,16 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
     r.wiring = spec.wiring()
     vs = views(ctx, Switches())
     with_acid = run(ctx, r, vs, frames=2)[0]
-    assert [e.effect for e in r._graph.nodes["fx"].effects] == ["warp", "acid"]
+    end = r._graph.outputs[0].inputs["image"]          # (plan 35 T4: where `fx` was)
+    assert [e.effect for e in G._effects_of(end.inputs["image"])] == ["warp", "acid"]
     gone = folder / "acid.glsl"
     kept = gone.read_bytes()
     gone.unlink()
     assert "acid" in st.poll() and "acid" not in st.specs
     got = run(ctx, r, vs, frames=2)[0]
     g = r._graph
-    assert [e.effect for e in g.nodes["fx"].effects] == ["warp"]
+    assert [e.effect for e in G._effects_of(g.outputs[0].inputs["image"].inputs["image"])
+            ] == ["warp"]
     assert g.dormant["acid"].endswith("no acid effect in this build")
     assert r.wiring.run == ("warp", "acid") and G.Wire("acid", "fx.image") in spec.wires
     assert not np.array_equal(got, with_acid)
@@ -746,7 +749,8 @@ def test_a_wired_effect_whose_file_goes_reads_through_and_returns(ctx, tmp_path)
     assert "acid" in st.poll() and "acid" in st.specs
     st.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
-    assert [e.effect for e in r._graph.nodes["fx"].effects] == ["warp", "acid"]
+    end = r._graph.outputs[0].inputs["image"]          # (plan 35 T4: where `fx` was)
+    assert [e.effect for e in G._effects_of(end.inputs["image"])] == ["warp", "acid"]
     assert "acid" not in r._graph.dormant
 
 
@@ -776,7 +780,7 @@ def _glimmer_graph(sec: dict):
 
     from hyperspace.outputs import Switches
     spec = G.read_graph(sec)
-    return spec, G.default_graph(views(Switches()), spec.wiring(),
+    return spec, G.build_graph(views(Switches()), spec.wiring(),
                                  effects=("glimmer", "zoomblur", "displace"))
 
 
@@ -814,5 +818,5 @@ def test_an_explicit_after_still_places_in_a_free_section():
     from test_graphview import views
 
     from hyperspace.outputs import Switches
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("palette", "acid", "acid.2"))
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("palette", "acid", "acid.2"))
     assert {"palette", "acid.2"} <= {n.effect for n in _effect_nodes(g)}

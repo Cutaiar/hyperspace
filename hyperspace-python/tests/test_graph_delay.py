@@ -61,15 +61,15 @@ def test_the_delay_write_runs_before_the_capture():
     spec = G.read_graph(section(("frame", "fx.image"), ("scene", "delay.image"),
                                 ("delay", "shape.faces"), nodes=DELAY))
     assert not spec.notes, spec.notes
-    g = G.default_graph(vs, spec.wiring())
+    g = G.build_graph(vs, spec.wiring())
     order = [n.name for n in g.order]
     write = g.nodes["delay(write)"]
     assert isinstance(write, G.DelayWrite) and write.delay == "delay"
     assert write.inputs["image"] is g.nodes["scene"]
     assert isinstance(g.nodes["delay"], G.Delay)
     assert g.nodes["shape"].inputs["faces"] is g.nodes["delay"]
-    assert order.index("delay(write)") < order.index("capture")
-    assert write in g.nodes["capture"].after
+    assert order.index("delay(write)") < order.index("lookback(capture)")
+    assert write in g.nodes["lookback(capture)"].after
     assert "delay(write)" in g.timed and not g.dormant
 
 
@@ -370,7 +370,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     from hyperspace.render import Renderer
 
     vs = [View(Switches(), (240, 150))]
-    graphs = [("default", G.default_graph(vs, G.Wiring(run=())), Renderer(ctx))]
+    graphs = [("default", G.build_graph(vs, G.Wiring(run=())), Renderer(ctx))]
     tool = _tool()
     for slug in tool.FIXTURE_PRESETS:
         if slug in PLAN_34:

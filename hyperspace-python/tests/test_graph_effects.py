@@ -1,8 +1,9 @@
 """Plan 30 D0: the effect node, and the frame chain as a run of them.
 
-The pure half first — the default graph holds one `graph.Effect` node
-per effect instance in the stack's order, per pipeline, ending in the
-pipeline's end (`graph.Fx`), and the pool it asks for — then the
+The pure half first — the frame holds one `graph.Effect` node per
+effect instance in the run's wire order, and (plan 35 T4) one `graph.Copy`
+per effect for each output wired with the hands through, each chain ending
+in its end (`graph.Shown`), and the pool it asks for — then the
 renderer's half on offscreen targets: an off effect reads through and
 runs no pass, two instances are two nodes on one program, an effect read
 by two consumers runs once, SYSTEM times each effect that ran, the end
@@ -16,9 +17,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from wiredframe import Shows, Thru, graph
 
 from hyperspace import graph as G
-from hyperspace.outputs import HANDS, SCENE, SCENE_HANDS, Switches, View
+from hyperspace.outputs import Switches, View
 
 S = Switches
 RUN = ("warp", "acid", "acid.2", "palette")
@@ -26,68 +28,74 @@ RUN = ("warp", "acid", "acid.2", "palette")
 # ---------------------------------------------------------------- no GL
 
 
+def _effects(g: G.Graph, end: str) -> list[G.Effect]:
+    """The effects (copies too) end `end` reads, first first."""
+    return G._effects_of(g.nodes[end].inputs["image"])
+
+
 def _run_of(g: G.Graph, end: str) -> list[str]:
-    return [e.effect for e in g.nodes[end].effects]
+    return [e.effect for e in _effects(g, end)]
+
+
+def _end(g: G.Graph) -> str:
+    """Output 1's end, by name."""
+    return g.nodes["output.1"].inputs["image"].name
 
 
 def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
-    """Each pipeline's end reads the last of a run of effect nodes, one per
-    instance in the run's wire order (plan 33 R: `frame → … → fx.image`),
-    the first reading the pipeline's source (its `frame`); the scene's run
-    is named by the effects, the others by the pipeline's suffix; none
-    given, the end reads its source as before D0."""
+    """All outputs' end reads the last of a run of effect nodes, one per
+    instance in the run's wire order (plan 33 R; plan 35: `lookback → … →
+    output.all.image`), the first reading the look-back; each output wired
+    with the hands through has a copy of each (`Copy`, named `copy`,
+    `copy.2` …) over its composite (plan 35 T4, row 377); none given, the
+    end reads the look-back as before D0."""
     wires = [{"from": a, "to": f"{b}.image"} for a, b in zip(("frame", *RUN), RUN)]
-    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
-                         "wires": [*wires, {"from": RUN[-1], "to": "fx.image"}]})
-    assert spec.wiring().run == RUN
-    vs = [View(S(through=True), (10, 10)), View(S(scene=False, through=True), (10, 10))]
-    g = G.default_graph(vs, spec.wiring(), effects=tuple(sorted(RUN)))
+    section = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+               "wires": [*wires, {"from": RUN[-1], "to": "fx.image"}]}
+    assert G.read_graph(section).wiring().run == RUN
+    shows = [Shows(through=True), Shows(scene=False, through=True)]
+    g = graph(shows, section, effects=tuple(sorted(RUN)))
     assert g.run == RUN
     # (R23, plan 33 T7: a wiring that says no run has the empty one)
-    assert G.default_graph(vs, effects=RUN).run == ()
+    assert graph(shows, effects=RUN).run == ()
     for end, src, names in (
-            ("fx", "history", list(RUN)),
-            ("fx(scene+hands)", "composite(scene+hands)", [f"{e}(scene+hands)" for e in RUN]),
-            ("fx(hands)", "composite(hands)", [f"{e}(hands)" for e in RUN])):
-        fx = g.nodes[end]
+            ("shown(palette)", "lookback", list(RUN)),
+            ("shown(copy.4)", "composite", ["copy", "copy.2", "copy.3", "copy.4"]),
+            ("shown(copy.8)", "composite.2", ["copy.5", "copy.6", "copy.7", "copy.8"])):
+        run = _effects(g, end)
         assert _run_of(g, end) == list(RUN)
-        assert [e.name for e in fx.effects] == names
-        assert all(isinstance(e, G.Effect) and e.KIND == "effect" for e in fx.effects)
-        assert fx.effects[0].inputs == {"image": g.nodes[src], "aux": None}
-        assert fx.inputs["image"] is fx.effects[-1] and fx.source is g.nodes[src]
+        assert [e.name for e in run] == names
+        assert all(isinstance(e, G.Effect) and e.KIND == "effect" for e in run)
+        assert run[0].inputs == {"image": g.nodes[src], "aux": None}
+        assert g.nodes[end].inputs["image"] is run[-1] and g.nodes[end].source is g.nodes[src]
         order = [n.name for n in g.order]
         assert [order.index(n) for n in names] == sorted(order.index(n) for n in names)
         assert order.index(names[-1]) < order.index(end)
-    # the layer and its stand-down still find the composite behind the run
-    assert g.nodes["fx(scene+hands)"].layer is g.nodes["hands"]
-    assert g.nodes["fx(hands)"].fallback is None
-    assert g.nodes["fx(scene+hands)"].fallback is g.nodes["fx"]
+    assert all(isinstance(g.nodes[f"copy.{k}"], G.Copy) for k in range(2, 9))
+    # the layer and its stand-down still find the composite behind the copies
+    assert g.nodes["shown(copy.4)"].layer is g.nodes["hands.layer"]
+    assert g.nodes["shown(copy.8)"].fallback is None
+    assert g.nodes["shown(copy.4)"].fallback is g.nodes["shown(palette)"]
     # the timed lines are the graph's own: an effect has one only when it runs
     assert not set(g.timed) & {n.name for n in g.order if isinstance(n, G.Effect)}
     assert g.pool == 2
     # none given: no effect node, and no pool
-    bare = G.default_graph([View(S(), (10, 10))])
-    assert bare.nodes["fx"].inputs["image"] is bare.nodes["history"] and bare.pool == 0
-    assert G.effect_node_name("acid.2", SCENE) == "acid.2"
-    assert G.effect_node_name("acid.2", SCENE_HANDS) == "acid.2(scene+hands)"
-    assert G.effect_node_name("acid.2", HANDS) == "acid.2(hands)"
+    bare = G.build_graph([View(S(), (10, 10))])
+    assert bare.nodes["shown(lookback)"].inputs["image"] is bare.nodes["lookback"]
+    assert bare.pool == 0
 
 
 def test_an_effect_named_like_another_node_is_kept_apart():
-    """An effect file called `scene` or `capture` (nothing stops one being
-    dropped in the folder) gets the params' prefix as its node's name."""
-    names = ("scene", "capture", "warp")
-    g = G.default_graph([View(S(), (10, 10))], G.Wiring(run=names), effects=names)
-    assert [e.name for e in g.nodes["fx"].effects] == ["fx.scene", "fx.capture", "warp"]
-    assert isinstance(g.nodes["scene"], G.Scene) and isinstance(g.nodes["capture"], G.Capture)
-    # one called `fx`: its nodes would be the ends' names in every pipeline
-    g = G.default_graph([View(S(through=True), (10, 10)),
-                         View(S(scene=False, through=True), (10, 10))],
-                        G.Wiring(run=("fx",)), effects=("fx",))
-    assert [e.name for e in g.nodes["fx"].effects] == ["fx.fx"]
-    assert [e.name for e in g.nodes["fx(scene+hands)"].effects] == ["fx.fx(scene+hands)"]
-    assert [e.name for e in g.nodes["fx(hands)"].effects] == ["fx.fx(hands)"]
-    assert all(isinstance(g.nodes[n], G.Fx) for n in G.FX_NAMES.values())
+    """An effect file called `capture` (nothing stops one being dropped in
+    the folder) is its own node: the frame's look-back, capture and cover
+    are named apart from any effect (plan 35 T4: `lookback`,
+    `lookback(capture)`, `lookback(cover)`)."""
+    names = ("capture", "warp")
+    g = G.build_graph([View(S(), (10, 10))], G.Wiring(run=names), effects=names)
+    assert [e.name for e in _effects(g, _end(g))] == ["capture", "warp"]
+    assert isinstance(g.nodes["lookback(capture)"], G.Capture)
+    assert isinstance(g.nodes["lookback(cover)"], G.Cover)
+    assert isinstance(g.nodes["lookback"], G.History)
 
 
 def test_an_effect_node_takes_an_image_and_makes_one():
@@ -129,11 +137,11 @@ def _count(r):
 
 def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuild(ctx):
     """Plan 33 R (rewritten from plan 30 D0's stack-order test): a wiring
-    that says a run builds each pipeline's run from its wires, in wire
-    order; the graph keys on the effect files present, so switching one
-    on keeps the graph object, and a rewire builds another. A wiring that
-    says no run (no preset's graph) has the empty one (R23, plan 33 T7: the
-    stack is gone), whatever is switched on."""
+    that says a run builds it from its wires, in wire order; the graph
+    keys on the effect files present, so switching one on keeps the graph
+    object, and a rewire builds another. A wiring that says no run (no
+    preset's graph) has the empty one (R23, plan 33 T7: the stack is gone),
+    whatever is switched on."""
     from test_outputs import rig, run, views
 
     r = rig(ctx)
@@ -144,23 +152,23 @@ def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuil
     run(ctx, r, vs, frames=1)
     g = r._graph
     assert set(g.effects) == set(r.fx.state.specs) and len(g.effects) >= 12
-    assert _run_of(g, "fx") == ["acid", "warp"] == list(g.run)
+    assert _run_of(g, _end(g)) == ["acid", "warp"] == list(g.run)
     r.fx.state.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
     assert r._graph is g
     r.wiring = G.read_graph({"wires": [{"from": "frame", "to": "warp.image"},
                                        {"from": "warp", "to": "fx.image"}]}).wiring()
     run(ctx, r, vs, frames=1)
-    assert r._graph is not g and _run_of(r._graph, "fx") == ["warp"]
+    assert r._graph is not g and _run_of(r._graph, _end(r._graph)) == ["warp"]
     # no run said: the empty run, whatever is on
     r = rig(ctx)
     r.wiring = G.Wiring()
     run(ctx, r, vs, frames=1)
     g = r._graph
-    assert _run_of(g, "fx") == [] and g.run == ()
+    assert _run_of(g, _end(g)) == [] and g.run == ()
     r.fx.state.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
-    assert r._graph is g and _run_of(g, "fx") == [] and not r.stats["fx_on"]
+    assert r._graph is g and _run_of(g, _end(g)) == [] and not r.stats["fx_on"]
 
 
 def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
@@ -185,11 +193,11 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     got = run(ctx, r, views(ctx, S()), frames=3)[0]
     assert calls == [] and r.stats["effects"] == [] and r.stats["chain_runs"] == 0
     assert r.fx._tex == []                                # no texture taken
-    assert len(r._graph.nodes["fx"].effects) >= 12
+    assert len(_effects(r._graph, _end(r._graph))) >= 12
     bare = rig(ctx, effects=())
-    bare._graph_for = lambda vs: G.default_graph(vs, G.Wiring())   # no effect nodes
+    bare._graph_for = lambda vs: G.build_graph(vs, G.Wiring())   # no effect nodes
     want = run(ctx, bare, views(ctx, S()), frames=3)[0]
-    assert not bare._graph_for(views(ctx, S())).nodes["fx"].effects
+    assert not _effects(bare._graph_for(views(ctx, S())), "shown(lookback)")
     assert np.array_equal(got, want)
     # one on: one pass a frame, the off ones around it none
     r = every_one_wired(rig(ctx, effects=("warp",)))
@@ -238,8 +246,8 @@ def test_an_effect_read_by_two_runs_once_into_a_held_texture(ctx):
     g = G.Graph()
     scene = g.add(Picture("picture"))
     warp = g.add(G.Effect("warp", image=scene))
-    g.add(G.Fx("fx", SCENE, image=warp))
-    g.add(G.Fx("fx(hands)", HANDS, image=warp))
+    g.add(G.Shown("fx", image=warp))
+    g.add(G.Shown("fx(hands)", image=warp))
     assert g.readers(warp) == 2 and g.pool == 3
     frame = G.Frame(r, ctx, None, W, H, 1.0, 2.0, [], (W, H), 0, r.scene.fbo, (0, 0, W, H),
                     fx_on=True, stats={"chain_runs": 0})
@@ -282,9 +290,9 @@ def test_a_held_effect_read_through_the_pool_is_never_its_consumers_target(ctx):
         pic = g.add(Picture("picture"))
         warp = g.add(G.Effect("warp", image=pic))
         kal = g.add(G.Effect("kaleido", image=warp))
-        g.add(G.Fx("fx", SCENE, image=kal))
+        g.add(G.Shown("fx", image=kal))
         if held:                                           # a second reader of warp
-            g.add(G.Fx("fx(hands)", HANDS, image=warp))
+            g.add(G.Shown("fx(hands)", image=warp))
         assert g.readers(warp) == (2 if held else 1) and g.pool == (3 if held else 2)
         frame = G.Frame(r, ctx, None, W, H, 1.0, 2.0, [], (W, H), 0, r.scene.fbo,
                         (0, 0, W, H), fx_on=True, stats={"chain_runs": 0})
@@ -321,8 +329,8 @@ def test_a_held_effect_read_through_the_pool_is_never_its_consumers_target(ctx):
 
 def test_the_system_page_times_each_effect_that_ran(ctx):
     """Two effects on among the off ones: a line each, in the graph's
-    order before the pipeline's end, the end's own line kept, and no line
-    for an effect that is off."""
+    order before their end, the end's own line kept, and no line for an
+    effect that is off."""
     from test_outputs import rig, run, views
 
     from hyperspace.render import PassTimer
@@ -335,18 +343,21 @@ def test_the_system_page_times_each_effect_that_ran(ctx):
     ms = r.stats["gpu_ms"]
     on = [n for n in r.fx.state.names() if n in ("warp", "kaleido")]
     static = r._graph.timed
-    at = static.index("fx")
+    end = _end(r._graph)
+    at = static.index(end)
     assert list(ms) == [*static[:at], *on, *static[at:]]
     assert "acid" not in ms and all(v >= 0.0 for v in ms.values())
     lines = Panel.gpu_lines(SimpleNamespace(renderer=r))
-    named = [ln.split()[0] for ln in lines[1:]]
-    assert named == list(ms) and {"warp", "kaleido", "fx"} <= set(named)
+    # (plan 35 T4: the last line names the ends that ran)
+    assert lines[-1] == f"ends: {end}"
+    named = [ln.split()[0] for ln in lines[1:-1]]
+    assert named == list(ms) and {"warp", "kaleido", end} <= set(named)
 
 
 def test_the_pipeline_end_still_paints_straight_into_a_frame_sized_output(ctx):
     """One output at the frame's size, unflipped: the last effect's pass
     writes the output's own framebuffer (no frame texture); a flipped one
-    takes the pipeline's frame texture, as before."""
+    takes its end's frame texture, as before."""
     from test_outputs import rig, run, views
 
     r = rig(ctx, effects=("warp", "kaleido"))
@@ -354,21 +365,24 @@ def test_the_pipeline_end_still_paints_straight_into_a_frame_sized_output(ctx):
     run(ctx, r, vs, frames=1)
     calls = _count(r)
     run(ctx, r, vs, frames=1)
-    assert r.stats["direct"] is True and r.stats["pipelines"] == [SCENE]
+    end = _end(r._graph)
+    assert r.stats["direct"] is True and r.stats["ends"] == [end]
     assert len(calls) == 2 and calls[-1][1] is vs[0].target
     assert any(calls[0][1] is f for _, f in r.fx.pool(r.fx.size, 2))   # the first: the pool's
-    assert SCENE not in (getattr(r, "_frames", None) or {})            # no frame texture
+    assert end not in (getattr(r, "_frames", None) or {})              # no frame texture
     r = rig(ctx, effects=("warp",))
     calls = _count(r)
     vs = views(ctx, S(flip_x=True))
     run(ctx, r, vs, frames=1)
     assert r.stats["direct"] is False
-    assert calls[-1][1] is r._frame_target(SCENE, (vs[0].rect[2], vs[0].rect[3]))[1]
+    assert calls[-1][1] is r._frame_target(_end(r._graph),
+                                           (vs[0].rect[2], vs[0].rect[3]))[1]
 
 
 def _block_paint(self, frame, dst):
-    """`graph.Fx.paint` as it was before D0, verbatim: the whole stack as
-    one block through `FxChain.begin` / `run`."""
+    """The pipelines' end's `paint` as it was before D0, verbatim (plan 35
+    T4: on `graph.Shown`, the ends' one class now): the whole stack as one
+    block through `FxChain.begin` / `run`."""
     src = self.inputs["image"]
     if not frame.fx_on:
         src.paint(frame, dst)
@@ -386,30 +400,40 @@ def _block_paint(self, frame, dst):
 def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
     """Byte for byte, with the off effects between the on ones read
     through: the run of nodes against the pre-D0 end (no effect nodes, the
-    block chain), through the scene and the hands-through pipelines."""
+    block chain), through the scene and the hands-through outputs (plan
+    35 T4: their copies)."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import rig, run, views, wviews
+    from wiredframe import wiring
 
-    sw = (S(), S(through=True), S(scene=False, through=True))
+    sw = (S(), Thru(), Thru(scene=False))
     r = rig(ctx, effects=effects)
     if "palette" in effects:
         r.fx.state.values["palette"].update(mix=1.0, hue_from=170.0, hue_to=230.0)
-    got = run(ctx, r, views(ctx, *sw), frames=3)
+    got = run(ctx, r, wviews(ctx, r, *sw), frames=3)
     with monkeypatch.context() as m:
-        m.setattr(G.Fx, "paint", _block_paint)
+        m.setattr(G.Shown, "paint", _block_paint)
         old = rig(ctx, effects=effects)
         if "palette" in effects:
             old.fx.state.values["palette"].update(mix=1.0, hue_from=170.0, hue_to=230.0)
         # the pre-D0 graph: the ends read their sources, no effect node —
-        # its runs' effects named (plan 33 R: what `fx_on` asks), not built
+        # its runs' effects named (plan 33 R: what `fx_on` asks), not built;
+        # a through's end is always itself (hands drawn and an effect on:
+        # what bent the pipeline)
+        thru = wiring(G.Wiring(), *(s.shows if isinstance(s, Thru) else Shows() for s in sw))
+        assert not thru.copies
+
         def bare(vs, o=old):
             from test_outputs import _stack_names
-            g = G.default_graph(vs, G.Wiring())
-            g.run = tuple(_stack_names(o))
+            g = G.build_graph(vs, thru, (), tuple(sorted(o.fx.state.specs)))
+            g.run = tuple(_stack_names(o))           # (the stack's: `o.wiring`'s run)
+            for n in g.order:
+                if isinstance(n, G.Shown):
+                    n.stands = False
             return g
 
         old._graph_for = bare
-        want = run(ctx, old, views(ctx, *sw), frames=3)
+        want = run(ctx, old, views(ctx, S(), S(), S()), frames=3)
     assert r.stats["chain_runs"] == old.stats["chain_runs"] >= 1
     for a, b in zip(got, want, strict=True):
         assert np.array_equal(a, b)
@@ -438,8 +462,8 @@ def test_the_value_port_type_exists_and_no_node_uses_it():
     for c in classes:
         assert c.OUTPUT != G.VALUE and G.VALUE not in c.INPUTS.values(), c
         assert c.OUTPUT in (None, *G.PORT_TYPES), c
-    g = G.default_graph([View(S(through=True), (10, 10)),
-                         View(S(scene=False, through=True), (10, 10))], effects=RUN)
+    g = graph([Shows(through=True), Shows(scene=False, through=True)],
+              G.Wiring(run=RUN), effects=RUN)
     for node in g.order:
         assert node.OUTPUT != G.VALUE and G.VALUE not in node.INPUTS.values(), node.name
     assert patch.RENDER_VALUE == G.VALUE

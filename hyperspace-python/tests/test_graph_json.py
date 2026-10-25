@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 from test_presets import boot, put
+from wiredframe import Shows, graph, wire_switches, wiring
 
 from hyperspace import graph as G
 from hyperspace import preset
@@ -175,32 +176,32 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     glass's its layer's. The layer's geometry is in no scene, so only the
     scene's hands get a line of their own."""
     w = G.Wiring(hands="scene", extra=(G.HandsAt(2, "layer", "lines"),))
-    g = G.default_graph([View(S(), (10, 10)), View(S(scene=False), (10, 10)),
-                         View(S(scene=False, through=True), (10, 10))], w)
-    assert _names(g) == ["shape", "ghost", "ghost.2", "scene", "cover", "hands.2", "readout",
-                         "history", "fx", "composite(hands)", "fx(hands)", "capture",
+    g = graph([Shows(), Shows(scene=False), Shows(scene=False, through=True)], w)
+    assert _names(g) == ["shape", "hands", "hands.2", "scene", "lookback(cover)",
+                         "hands.2.layer", "hands.guide", "lookback", "shown(lookback)",
+                         "composite", "shown(composite)", "lookback(capture)",
                          "output.1", "output.2", "output.3"]
-    ghost, ghost2 = g.nodes["ghost"], g.nodes["ghost.2"]
-    assert g.nodes["scene"].inputs == {"geometry": ghost, "geometry.2": g.nodes["shape"]}
-    assert ghost.draw_as == "solid" and ghost2.draw_as == "lines"
-    layer = g.nodes["hands.2"]
-    assert layer.inputs == {"geometry": ghost2} and layer.readout == "through"
-    assert g.nodes["readout"].inputs == {"geometry": ghost}
+    hands, hands2 = g.nodes["hands"], g.nodes["hands.2"]
+    assert g.nodes["scene"].inputs == {"geometry": hands, "geometry.2": g.nodes["shape"]}
+    assert hands.draw_as == "solid" and hands2.draw_as == "lines"
+    layer = g.nodes["hands.2.layer"]
+    assert layer.inputs == {"geometry": hands2} and layer.readout == "downstream"
+    assert g.nodes["hands.guide"].inputs == {"geometry": hands}
     o1, o2, o3 = (g.nodes[f"output.{k}"] for k in (1, 2, 3))
-    assert o1.inputs["image"] is g.nodes["fx"] and o1.inputs["hands"] is None
-    assert o1.inputs["readout"] is g.nodes["readout"]
+    assert o1.inputs["image"] is g.nodes["shown(lookback)"] and o1.inputs["hands"] is None
+    assert o1.inputs["readout"] is g.nodes["hands.guide"]
     assert o2.inputs["hands"] is layer and o2.inputs["readout"] is layer
-    assert o3.inputs["image"] is g.nodes["fx(hands)"] and o3.inputs["readout"] is layer
-    assert g.nodes["composite(hands)"].inputs["over"] is layer
+    assert o3.inputs["image"] is g.nodes["shown(composite)"] and o3.inputs["readout"] is layer
+    assert g.nodes["composite"].inputs["over"] is layer
     # a time per node: the scene's hands (its consumer edge), the second
-    # instance's layer and readout lines
-    assert g.in_scene() == {"ghost"}
-    assert g.timed == ["ghost", "scene", "cover", "hands.2", "readout", "history", "fx",
-                       "composite(hands)", "fx(hands)", "capture", "output.1", "output.2",
-                       "output.3"]
+    # instance's layer and guide lines
+    assert g.in_scene() == {"hands"}
+    assert g.timed == ["hands", "scene", "lookback(cover)", "hands.2.layer", "hands.guide",
+                       "lookback", "shown(lookback)", "composite", "shown(composite)",
+                       "lookback(capture)", "output.1", "output.2", "output.3"]
     # the projector alone: no layer at all, the second node not built
-    g = G.default_graph([View(S(), (10, 10))], w)
-    assert "ghost.2" not in g.nodes and "hands.2" not in g.nodes
+    g = graph([Shows()], w)
+    assert "hands.2" not in g.nodes and "hands.2.layer" not in g.nodes
 
 
 def test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene():
@@ -210,10 +211,10 @@ def test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene():
     only in a layer has none (the layer's line is its time); the same
     node object in two graphs is never changed by either."""
     w = G.Wiring(hands="scene")
-    both = G.default_graph([View(S(), (1, 1)), View(S(scene=False), (1, 1))], w)
-    assert {"ghost", "hands"} <= set(both.timed) and both.in_scene() == {"ghost"}
-    only = G.default_graph([View(S(), (1, 1))])
-    assert "ghost" not in only.timed and "hands" in only.timed
+    both = graph([Shows(), Shows(scene=False)], w)
+    assert {"hands", "hands.layer"} <= set(both.timed) and both.in_scene() == {"hands"}
+    only = G.build_graph([View(S(), (1, 1))])
+    assert "hands" not in only.timed and "hands.layer" in only.timed
     shared = G.Hands("ghost")
     a, b = G.Graph(), G.Graph()
     a.add(shared)
@@ -229,24 +230,27 @@ def test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene():
 
 def test_the_wiring_in_words():
     """The OUTPUT page's words (`hands_words`, `layer_words`) and the
-    LOOKBACK page's (`history_words`), and the graph's one line."""
+    LOOKBACK page's (`lookback_words`), and the graph's one line — read
+    off the wires (plan 35 T4: an output's state is its wiring, `Shows`;
+    its window's `Switches` the mutes)."""
     w = DEFAULT
     assert G.hands_words(w, S()) == "hands: over"
-    assert G.hands_words(w, S(through=True)) == "hands: through FX"
+    assert G.hands_words(wiring(w, Shows(through=True)), S()) == "hands: through FX"
     assert G.hands_words(w, S(hands=False)) == "hands: off"
     assert G.hands_words(G.Wiring(blend="depth"), S()) == "hands: over · depth-aware"
     assert G.hands_words(G.Wiring(blend="add"), S()) == "hands: over · added"
     lines = G.Wiring(hands="scene", draw="lines")
     assert G.hands_words(lines, S()) == "hands: in the scene as lines"
-    assert G.hands_words(lines, S(scene=False, through=True)) == "hands: through FX as lines"
+    assert G.hands_words(wiring(lines, Shows(scene=False, through=True)), S(scene=False)) == \
+        "hands: through FX as lines"
     two = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
     assert G.hands_words(two, S()) == "hands: in the scene (1)"
-    assert G.hands_words(two, S(scene=False)) == "hands: over (2)"
+    assert G.hands_words(wiring(two, Shows(scene=False)), S(scene=False)) == "hands: over (2)"
     assert G.layer_words(DEFAULT) == ""
-    assert G.history_words(DEFAULT) == "history: the scene"
-    assert G.history_words(G.Wiring(history="scene+hands")) == \
+    assert G.lookback_words(DEFAULT) == "history: the scene"
+    assert G.lookback_words(G.Wiring(history="scene+hands")) == \
         "history: the scene · with the hands"
-    assert G.history_words(G.Wiring(hands="scene")) == "history: the scene · with the hands"
+    assert G.lookback_words(G.Wiring(hands="scene")) == "history: the scene · with the hands"
     spec = G.read_graph(json.loads(FIXTURE.read_text())["graph"])
     assert G.graph_words(spec) == \
         "graph: hands 1 in the scene as lines · history with the hands"
@@ -268,13 +272,18 @@ def test_the_output_pages_shows_line_says_the_wiring():
     lines = G.Wiring(hands="scene", draw="lines")
     assert output_shows(S(), True, True, 1.0, lines) == (
         "scene + hands: in the scene as lines", "")
-    assert output_shows(S(scene=False), True, True, 1.0, lines) == ("hands as lines", "")
-    assert output_shows(S(through=True), True, False, 1.0, G.Wiring(blend="depth")) == (
-        "scene", "")
+    # (plan 35 T4: the scene off, the hands over, is the output's wiring; a
+    # picture mute on an in-scene preset shows the guide alone, check 347)
+    glass = wiring(lines, Shows(scene=False))
+    assert output_shows(S(), True, True, 1.0, glass) == ("hands as lines", "")
+    assert output_shows(S(scene=False), True, True, 1.0, lines)[1] == "no hand"
+    thru = wiring(G.Wiring(blend="depth"), Shows(through=True))
+    assert output_shows(S(), True, False, 1.0, thru) == ("scene", "")
     assert output_shows(S(), True, True, 1.0, G.Wiring(blend="depth")) == (
         "scene + hands over the effects · depth-aware", "")
-    two = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
-    assert output_shows(S(scene=False, through=True), True, True, 0.5, two) == (
+    two = wiring(G.Wiring(hands="scene", extra=(G.HandsAt(2),)),
+                 Shows(scene=False, through=True))
+    assert output_shows(S(), True, True, 0.5, two) == (
         "hands through the effects (2) · 50%", "")
     # the scene holds the hands whatever the output's hands switch says
     # (the golden hands-lines|present|scene is the scene+hands picture):
@@ -725,7 +734,7 @@ def test_a_second_hands_node_is_its_own_ghost_on_the_glass(ctx):
     st2 = GhostState(on=True, alpha=0.25)
     r.ghost_states = {"ghost.2": st2}
     r.wiring = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
-    vs = views(ctx, S(), S(scene=False))
+    vs = views(ctx, *wire_switches(r, S(), S(scene=False)))    # (plan 35 T4: the glass's wiring)
     pics = run(ctx, r, vs, frames=PassTimer.LAG + 3)
     g2 = r.ghost_of("ghost.2")
     assert g2 is not r.ghost and g2.state is st2 and g2.source is r.ghost.source
@@ -735,8 +744,8 @@ def test_a_second_hands_node_is_its_own_ghost_on_the_glass(ctx):
     want = run(ctx, ref, views(ctx, S(scene=False)))[0]
     assert np.array_equal(pics[1], want)
     if r.timer.on:
-        assert {"ghost", "scene", "hands.2"} <= set(r.stats["gpu_ms"])
-    assert "ghost.2" not in r._graph.timed            # its time is its layer's line
+        assert {"hands", "scene", "hands.2.layer"} <= set(r.stats["gpu_ms"])
+    assert "hands.2" not in r._graph.timed            # its time is its layer's line
     # back to one hands node: the second Ghost is released with its graph
     r.wiring = G.Wiring()
     run(ctx, r, vs, frames=1)
@@ -751,10 +760,10 @@ def test_hands_as_lines_draw_their_edges(ctx):
     import numpy as np
     from test_outputs import rig, run, views
 
-    def pic(wiring, sw):
+    def pic(w, sw):
         r = rig(ctx, effects=())
-        r.wiring = wiring
-        return run(ctx, r, views(ctx, sw))[0], r
+        r.wiring = w
+        return run(ctx, r, views(ctx, *wire_switches(r, sw)))[0], r     # (plan 35 T4)
 
     for sw, flag in ((S(scene=False), "layer"), (S(), "in_scene")):
         solid, _ = pic(G.Wiring(hands="scene"), sw)

@@ -72,20 +72,21 @@ multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
 
 Plan 21: `Renderer.draw_outputs` shows that one frame on several outputs
-(`outputs.View`), each through its own switches — the scene, the hands,
-its own dim. The scene, the capture and the hands' layer run once a
-frame; the look-back composite and the effect chain once per distinct
-pipeline (`outputs.route`); the picture, the hands over it and the dim
-once per output. `draw` is `draw_outputs` with one default view on the
-bound framebuffer, and is the frame it always was, byte for byte.
+(`outputs.View`), each through its own mutes — the picture, the hands —
+and its own dim. The scene, the capture and the hands' layer run once a
+frame; each distinct picture an output shows once (its end, `Shown`);
+the picture, the hands over it and the dim once per output. `draw` is
+`draw_outputs` with one default view on the bound framebuffer, and is
+the frame it always was, byte for byte.
 
 Plan 26 A1: those passes are the nodes of a render graph (graph.py).
-`_draw_frame` builds the default graph for the views' switches — or
-reuses the last one while they do not change — and evaluates it: the
-nodes run once each, in an order settled when the graph was built, and
-each node is timed on the GPU (`PassTimer`, one line per node on the
-SYSTEM page). The default graph is today's three pipelines; every golden
-frame of A0 is drawn byte for byte. The passes themselves (`draw_scene`,
+`_draw_frame` builds the graph — or reuses the last one while the views'
+count and the wiring do not change — and evaluates it: the nodes run
+once each, in an order settled when the graph was built, and each node
+is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
+Plan 35 T4: every graph is a wired frame's (`graph.build_graph`, an
+unwired wiring wired first: `graph.wired`); the pipelines are gone, and
+every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
 
@@ -141,12 +142,14 @@ from .graph import (
     Delay,
     Frame,
     Graph,
+    Hands,
     Wiring,
     build_graph,
     channel_into,
     cloud_roles,
-    default_graph,
     graph_key,
+    param_prefix,
+    wired,
 )
 from .lookback import DreamState, Lookback
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
@@ -852,10 +855,10 @@ class PassTimer:
     ms (`medians`), in the graph's order.
 
     `end_frame(names)` takes the frame's node names (`Graph.timed`): a
-    node that ran more than once (the history painted for two pipelines)
+    node that ran more than once (the look-back painted for two ends)
     is summed into its frame's total; one that did not run counts 0 that
-    frame; a name no longer in the graph (an output closed, a pipeline
-    gone with its switch) drops out of the medians. Time queries never
+    frame; a name no longer in the graph (an output closed, a node
+    unwired) drops out of the medians. Time queries never
     nest (GL allows one active per target), so the nodes are timed side
     by side, never one inside another.
 
@@ -1018,11 +1021,11 @@ class Renderer:
         self._pic: moderngl.Texture | None = None
         self._face_layer = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
-        # plan 21: the outputs. A pipeline with more than one consumer (or
-        # one not drawn here) ends in a frame texture, one per pipeline key,
-        # made on first use; the program that shows one on an output, too.
-        # `stats` is what the last frame ran
-        self._frames: dict[int, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
+        # plan 21: the outputs. A picture with more than one consumer (or
+        # one not drawn here) ends in a frame texture, one per end (plan 35:
+        # keyed by the end's name), made on first use; the program that
+        # shows one on an output, too. `stats` is what the last frame ran
+        self._frames: dict[str, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
         # plan 26 A3: the program a Composite node lays a layer with, on
@@ -1045,11 +1048,11 @@ class Renderer:
         # plan 26 A4b: the cloud nodes' GL (`graph._CloudGL`), made on first
         # draw; the getattr guards stay for a hot-reloaded renderer
         self._cloud_gl = None
-        self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
+        self.stats: dict = {"ends": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
         # plan 26 A1: the render graph for the last frame's views, reused
-        # while their switches do not change (graph.graph_key)
+        # while their count and the wiring do not change (graph.graph_key)
         self._graph: Graph | None = None
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass (one copy)
@@ -1362,10 +1365,10 @@ class Renderer:
         Once a frame: the face picture, the scene pass, the cover, the
         look-back's tick and pull, the hands' layer (only while some view
         shows hands), the look-back's capture (from the scene texture,
-        exactly once, whatever the switches). Once per distinct pipeline
-        (`outputs.route`): the look-back composite and the effect chain,
-        ending straight on the view when it is the pipeline's only
-        consumer at the frame size, else in a frame texture. Once per
+        exactly once, whatever the mutes). Once per distinct picture an
+        output shows (its end, plan 35 `Shown`): the look-back composite and
+        the effects wired to it, ending straight on the view when it is the
+        end's only consumer at the frame size, else in a frame texture. Once per
         view: the picture (nothing, a 1:1 copy, or scaled into
         `outputs.fit`'s rect with the rest cleared to the view's ground),
         the hands over it, the dim (master × the view's). A view with a
@@ -1521,7 +1524,7 @@ class Renderer:
         fx = self.fx
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
+        stats = {"ends": [], "chain_runs": 0, "direct": True, "captures": 0,
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
@@ -1566,10 +1569,11 @@ class Renderer:
             stats["gpu_note"] = timer.note
 
     def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
-        """The render graph for these views: the last one while their
-        switches and the wiring have not changed (`graph.graph_key`,
-        `Renderer.wiring`), else the default graph built from them
-        (`graph.default_graph`). getattr: a renderer from before the graph
+        """The render graph for these views: the last one while their count
+        and the wiring have not changed (`graph.graph_key`,
+        `Renderer.wiring`), else one built from them (`graph.build_graph`,
+        an unwired wiring wired first: `graph.wired`). getattr: a renderer
+        from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
         one adds its point-cloud node to the scene. Plan 33 R: so are the
@@ -1587,15 +1591,12 @@ class Renderer:
         history holds it (`backdrop_wiring`), laid onto the preset's wiring
         for the graph alone — `Renderer.wiring` stays the preset's (plan
         33 R: whose `backdrop` is the section's wire into `backdrop.image`).
-        Plan 35 B: a wired frame (`Wiring.wired`) is `graph.build_graph`'s,
-        keyed by the views' count alone — its switches are mutes, read by
-        each output every frame, never a rebuild."""
+        Plan 35 B, T4: every frame is a wired frame, keyed by the views'
+        count alone — a window's switches are mutes, read by each output
+        every frame, never a rebuild."""
         s = s if s is not None else getattr(self, "_view_now", None)
-        wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
-        # plan 35 B: a wired frame is built from its wires alone — the key
-        # is the views' count, so a mute (the window's) never rebuilds
-        wired = bool(getattr(wiring, "wired", False))
-        key = (len(views),) if wired else graph_key(views)
+        wiring = wired(self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s))
+        key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
@@ -1604,13 +1605,13 @@ class Renderer:
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or frozenset(getattr(graph, "effects", ())) != effects):
-            build = build_graph if wired else default_graph
-            graph = self._graph = build(views, wiring, clouds, tuple(sorted(effects)))
+            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
             # not hold goes with the old graph
-            self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
+            self.drop_ghosts({param_prefix(n.name) for n in graph.nodes.values()
+                              if isinstance(n, Hands)})
         return graph
 
     def backdrop_wiring(self, wiring: Wiring, s: ViewState | None) -> Wiring:
@@ -1870,15 +1871,15 @@ class Renderer:
             got = cache[key] = self.ctx.sampler(repeat_x=False, repeat_y=False, filter=f)
         return got
 
-    def _compose(self, v: View, key: int | None, after: bool,
-                 frames: dict[int, moderngl.Texture | None], failed: set[int],
+    def _compose(self, v: View, key: str | None, after: bool,
+                 frames: dict[str, moderngl.Texture | None], failed: set[str],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
                  lay=None, blend: str = "over", ghost: Ghost | None = None,
                  readout_ghost: Ghost | None = None,
                  hands_tex: moderngl.Texture | None = None) -> None:
-        """One view's picture: the pipeline's frame (`key`, the pipeline its
-        end node closes, `outputs.SCENE` …; already there when it was drawn
-        direct), the hands over it in the same rect, the readout layer over
+        """One view's picture: its end's frame (`key`, the end's name, plan
+        35 `Shown`: `shown(lookback)` …; already there when it was drawn
+        direct; None, its ground), the hands over it in the same rect, the readout layer over
         that when there is one, its dim. `lay(target, rect, opaque, flip)`
         lays the hands when the output's wiring is not plain over (plan 26
         A3: add, depth-aware); a presenter's hand-off carries `blend` and
@@ -2050,7 +2051,7 @@ class Renderer:
 
     def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1"
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
-        """The frame texture for a pipeline: RGBA8 at the frame's size,
+        """The frame texture for an end (plan 35: by its name): RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
         again when the frame's size changes. Plan 33 R: a key that is
         `(name, size)` (a picture made at another size, `graph.Frame.key`)

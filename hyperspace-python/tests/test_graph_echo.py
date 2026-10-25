@@ -105,12 +105,12 @@ def test_the_echo_nodes_say_what_they_are():
                                    {"from": "echo.3", "to": "shape.faces"},
                                    {"from": "dream", "to": "output.2.image"}]})
     assert not spec.notes, spec.notes
-    g = G.default_graph(vs, spec.wiring())
+    g = G.build_graph(vs, spec.wiring())
     assert isinstance(g.nodes["echo.3"], G.EchoNode) and g.nodes["echo.3"].k == 3
     assert isinstance(g.nodes["dream"], G.DreamNode)
     assert g.nodes["shape"].inputs["faces"] is g.nodes["echo.3"]
     assert g.reads_ring and not g.dormant
-    assert not G.default_graph(vs, G.Wiring(run=())).reads_ring
+    assert not G.build_graph(vs, G.Wiring(run=())).reads_ring
 
 
 def test_echo_k_is_the_kth_newest_capture(ctx):
@@ -239,7 +239,7 @@ def test_an_echo_into_an_outputs_hands_reads_last_frames_capture(ctx):
     r = _off(_renderer(ctx, None, [("echo.1", "output.2.hands")], [_echo(1)]))
     _frame(ctx, r, _empty(), _views(ctx, size), size, 0)
     g = r._graph
-    assert g.nodes["echo.1"] in g.nodes["capture"].after
+    assert g.nodes["echo.1"] in g.nodes["lookback(capture)"].after
     assert g.nodes["echo.1"].said == f"not held yet: the ring holds 0 of {MAX_ECHOES}"
     # (an echo never reaches a `readout`: that port takes a hands layer's
     # guide, refused at read — what is wired there runs before the capture too)

@@ -338,7 +338,7 @@ def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
     for e in ctx.effects:
         if pid.startswith(f"fx.{e}."):
             return ctx.effect_node.get(e)
-    return rgraph.FX_NAMES[rgraph.SCENE]
+    return None
 
 
 def _output_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -745,6 +745,51 @@ RUN_KEPT = "the run starts at frame and ends at fx.image — insert effects into
 MAKER_KINDS = ("effect", "composite", "switch")
 
 
+def canvas_name(node: rgraph.Node) -> str:
+    """The canvas's name for render node `node` (plan 35 T4, a bridge until
+    T5 draws GRAPH in the new ids): the render graph names its nodes in the
+    new ids (`lookback`, `hands.layer`, `channel.a` …) while the canvas and
+    the section it is read with (`GraphSection.said`) still say the old
+    ones (`history`, `hands`, `media.a` …) — so `render:history` stays the
+    look-back's pin. By the node's class, so a name of either vocabulary
+    is never taken for the other's."""
+    name = node.name
+    if isinstance(node, rgraph.Shown) and name.startswith("shown(") and name.endswith(")"):
+        inner = name[len("shown("):-1]
+        src = node.inputs.get("image")
+        while isinstance(src, rgraph.Effect):
+            src = src.inputs.get("image")
+        return f"shown({canvas_name(src) if src is not None and src.name == inner else inner})"
+    old = {rgraph.LOOKBACK: "history", rgraph.CAPTURE: "capture", rgraph.COVER: "cover"}
+    if isinstance(node, (rgraph.History, rgraph.Capture, rgraph.Cover)):
+        return old.get(name, name)
+    if isinstance(node, rgraph.Composite) and name == rgraph.BACKDROP:
+        return "grounded"
+    if isinstance(node, rgraph.Hands) or (
+            isinstance(node, rgraph.HandsLayer) and name.endswith(".layer")) or (
+            isinstance(node, rgraph.Readout) and name.endswith(".guide")):
+        return rgraph.old_id(name)
+    if isinstance(node, rgraph.MediaNode) and name.startswith("channel."):
+        base, paren, rest = name.partition("(")
+        return rgraph.old_id(base) + paren + rest
+    return name
+
+
+def run_end(node: rgraph.Node) -> bool:
+    """Whether render node `node` is All outputs' run's end (plan 35 T4,
+    the bridge until T5): an end (`Shown`) whose picture is the look-back
+    through the run's effects alone — what `fx` was, `fx.image` in the old
+    words."""
+    if not isinstance(node, rgraph.Shown):
+        return False
+    src = node.inputs.get("image")
+    while isinstance(src, rgraph.Effect):
+        if src.placed is not None:
+            return False
+        src = src.inputs.get("image")
+    return isinstance(src, rgraph.History)
+
+
 class FrameNode(rgraph.Node):
     """`frame` on the canvas (plan 33 U): the pipelines' picture before
     their effects, a source. A stand-in the view draws, never in a render
@@ -1022,7 +1067,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     # ---- the render graph's nodes ----
     ctx = _Ctx()
     rnodes = list(render_graph.order) if render_graph is not None else []
-    ctx.names = {r.name for r in rnodes}
+    # (plan 35 T4: each render node by its canvas name, `canvas_name`)
+    cname = {id(r): canvas_name(r) for r in rnodes}
+
+    def nm(r: rgraph.Node) -> str:
+        return cname.get(id(r), r.name)
+
+    ctx.names = {nm(r) for r in rnodes}
     effects: dict[str, str] = {}
     for r in rnodes:
         if isinstance(r, rgraph.Effect):
@@ -1030,7 +1081,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             if r.name == r.effect or r.effect not in effects:
                 effects[r.effect] = r.name
         elif isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
-            ctx.first_cloud = r.name
+            ctx.first_cloud = nm(r)
     ctx.effect_node = effects
     ctx.effects = sorted(effects, key=len, reverse=True)   # `acid.2` before `acid`
     # plan 32 T10: the eight channels are source nodes whatever the render
@@ -1040,7 +1091,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     chans: dict[str, rgraph.MediaNode] = {}
     for r in rnodes:
         if isinstance(r, rgraph.MediaNode) and (r.channel not in chans
-                                                or r.name == rgraph.media_name(r.channel)):
+                                                or nm(r) == rgraph.media_name(r.channel)):
             chans[r.channel] = r
     for c in rgraph.MEDIA_CHANNELS:
         name = rgraph.media_name(c)
@@ -1062,8 +1113,13 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     # loaded preset's does: one that says none — no preset loaded, a graph
     # put together by hand — has the empty run, R23, plan 33 T7, and its
     # pipelines are drawn from their pictures straight to their ends)
-    ends = [r for r in rnodes if isinstance(r, rgraph.Fx)]
-    wired_run = getattr(getattr(render_graph, "wiring", None), "run", None) is not None
+    # (plan 35 T4, the bridge until T5: the pipelines' ends are gone, but a
+    # section said in the old words — a run `frame → … → fx.image`,
+    # `GraphSection.said` — is drawn as it was: `frame` beside All outputs'
+    # end, `run_end`, whose run's first cable leaves it)
+    ends = [r for r in rnodes if run_end(r)]
+    wired_run = (spec is not None and not getattr(spec, "wired", False)
+                 and spec.wiring().run is not None)
     if ends and wired_run:
         stand["frame"] = FrameNode("frame")
     built_fx = {r.effect for r in rnodes if isinstance(r, rgraph.Effect)}
@@ -1083,10 +1139,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 by_name[r.effect] = r
         elif isinstance(r, rgraph.MediaNode):
             by_name.setdefault(rgraph.media_name(r.channel), r)
-        elif isinstance(r, rgraph.Fx):
-            by_name.setdefault("fx", r)
         else:
-            by_name.setdefault(r.name, r)
+            by_name.setdefault(nm(r), r)
     for c in rgraph.MEDIA_CHANNELS:
         by_name.setdefault(rgraph.media_name(c), nodes[f"render:{rgraph.media_name(c)}"].ref)
     # a stand-in's inputs are the section's wires into it (its cables in,
@@ -1111,11 +1165,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if isinstance(r, rgraph.MediaNode):
             continue
         kind = "output" if isinstance(r, rgraph.Output) else "render"
-        n = add_node(VNode(f"render:{r.name}", kind, r.name, ref=r))
+        name = nm(r)
+        n = add_node(VNode(f"render:{name}", kind, name, ref=r))
         for port, typ in r.INPUTS.items():
-            add_port(n, VPort(f"rin:{r.name}/{port}", port, IN, typ))
+            add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
         if r.OUTPUT is not None:
-            add_port(n, VPort(f"rout:{r.name}", r.OUTPUT, OUT, r.OUTPUT))
+            add_port(n, VPort(f"rout:{name}", r.OUTPUT, OUT, r.OUTPUT))
 
     # ---- the params: every one a cable can reach ----
     rows = list(table.bindings)
@@ -1274,16 +1329,16 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 # plan 33 U: the run's first cable is the section's
                 # `frame → <first>.image`; the picture feeds `frame`
                 f = stand["frame"]
-                view.cables.append(VCable(f"wire:frame>{r.name}/{port}", "rout:frame",
-                                          f"rin:{r.name}/{port}", IMAGE, ref=(f, r, port),
+                view.cables.append(VCable(f"wire:frame>{nm(r)}/{port}", "rout:frame",
+                                          f"rin:{nm(r)}/{port}", IMAGE, ref=(f, r, port),
                                           kind="render"))
-                if src.name not in fed:
-                    fed.append(src.name)
+                if nm(src) not in fed:
+                    fed.append(nm(src))
                 continue
             out = (rgraph.media_name(src.channel) if isinstance(src, rgraph.MediaNode)
-                   else src.name)          # a channel's every node is its one node's out
-            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{out}",
-                                      f"rin:{r.name}/{port}", r.INPUTS[port],
+                   else nm(src))          # a channel's every node is its one node's out
+            view.cables.append(VCable(f"wire:{nm(src)}>{nm(r)}/{port}", f"rout:{out}",
+                                      f"rin:{nm(r)}/{port}", r.INPUTS[port],
                                       ref=(src, r, port), kind="render"))
     for name in fed:
         view.cables.append(VCable(f"{FEEDS}:{name}>frame", f"rout:{name}",
@@ -1320,7 +1375,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         # it was just added, or it waits to be wired in
         ref = n.ref
         n.faint = n.kind == "render" and isinstance(ref, MEDIA_MADE) and (
-            (ref.effect if isinstance(ref, rgraph.Effect) else ref.name) in gone)
+            (ref.effect if isinstance(ref, rgraph.Effect) else canvas_name(ref)) in gone)
         n.idle = not n.faint and (is_idle(n, macros, named) or (
             n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled) or (
             channel_empty(n, reg)))
@@ -1522,7 +1577,7 @@ AREA: dict[str, str] = {
     "MediaNode": MEDIA, "BackdropNode": MEDIA, "PatternNode": MEDIA, "SwitchNode": MEDIA,
     # …and the pictures it goes through: (plan 33 U) the run from `frame`
     # to the pipeline's end (`fx`)
-    "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
+    "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Shown": SHADERS,
     "Composite": SHADERS, "Output": SHADERS, "FrameNode": SHADERS,
 }
 TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
@@ -3121,27 +3176,20 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     # plan 33 G: the pipeline's end and the faces are wire ends — each
     # pipeline's end is `fx.image`, the shape's picture input `shape.faces`
     # (the nodes themselves stay the frame's own, `PLUMBING`)
-    if head == "rin" and port == "image" and built in rgraph.FX_NAMES.values():
-        return "fx.image", None
     if head == "rin" and built == "shape" and port == "faces":
         return "shape.faces", None
-    nodes = getattr(render_graph, "nodes", None) or {}
+    # (plan 35 T4: the render graph's nodes by their canvas names, `canvas_name`)
+    nodes = {canvas_name(n): n for n in (getattr(render_graph, "nodes", None) or {}).values()}
     node = nodes.get(built)
+    if head == "rin" and port == "image" and run_end(node):
+        return "fx.image", None                  # (the bridge: the old words' run end)
     if node is None and _is_plumbing(built):     # (no graph to ask: by its name)
         return None, _plumbing(built)
-    if isinstance(node, rgraph.Wired):
-        out = built[len("wire("):-1]
-        if head == "rin":
-            return f"{out}.image", None
-        src = node.inputs["image"]
-        if src is None:
-            return None, f"{out}'s wired picture has no source"
-        return spec_name(f"rout:{src.name}", render_graph)
     if isinstance(node, rgraph.Effect):
         name = node.effect
     elif isinstance(node, rgraph.MediaNode):
         name = rgraph.media_name(node.channel)      # `media.a(wire)` is channel a's
-    elif isinstance(node, (rgraph.Fx, rgraph.Capture, rgraph.Shape, rgraph.Readout,
+    elif isinstance(node, (rgraph.Shown, rgraph.Capture, rgraph.Shape, rgraph.Readout,
                            rgraph.PointCloud)):
         return None, _plumbing(built)
     else:
@@ -3341,7 +3389,8 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     if isinstance(cable, VCable):
         if cable.ref is not None:
             src_node, node, port = cable.ref
-            src, dst = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
+            # (plan 35 T4: by their canvas names, `canvas_name`)
+            src, dst = f"rout:{canvas_name(src_node)}", f"rin:{canvas_name(node)}/{port}"
         else:                                # (its pins name it as well)
             src, dst = cable.src_port, cable.dst_port
     else:
@@ -3591,7 +3640,8 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
     if isinstance(cable, VCable):
         if cable.ref is not None:
             src_node, node, port = cable.ref
-            a, b = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
+            # (plan 35 T4: by their canvas names, `canvas_name`)
+            a, b = f"rout:{canvas_name(src_node)}", f"rin:{canvas_name(node)}/{port}"
         else:
             a, b = cable.src_port, cable.dst_port
     else:

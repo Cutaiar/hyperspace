@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_graphview import _in_editor, stacked, views
+from test_graphview import _in_editor, stacked, thru
 from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -30,7 +30,7 @@ from hyperspace import graph as G
 from hyperspace import graphview, modifiers, ui, ui_graph, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
-from hyperspace.outputs import Switches
+from hyperspace.graphmigrate import Shows
 from hyperspace.routing import Binding
 
 DT = 1 / 60
@@ -45,9 +45,8 @@ def party(rig):
     """party-trip on the page: its rows, a render graph with effects, the
     APC40 listed. Returns the page's state after two frames."""
     rig.lib.load("presets", "party-trip")
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches(), Switches(through=True)),
-                                                   stacked(("acid", "palette")),
-                                                   effects=("acid", "palette")))
+    rig.panel.renderer = NS(_graph=thru(stacked(("acid", "palette")), ("acid", "palette"),
+                                        Shows(), Shows(through=True)))
     rig.panel.devices = rig_devices(rig)
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")

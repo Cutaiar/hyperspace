@@ -63,7 +63,6 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
     `cloud` device, hands present, named `cloud/<state>`, and nothing
     else."""
-    from hyperspace.outputs import NAMES
     from hyperspace.preset import FACTORY_PRESETS
 
     doc = _manifest()
@@ -132,7 +131,8 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     assert len(capped) == 1
     (p, h, s), = capped
     assert (p, h) == (cap["preset"], cap["hands"]) and s.startswith(cap["state"] + "@")
-    routes = set(NAMES.values()) | {"none"}
+    # (plan 35 T4: the retired route table's names, kept as the tool's data)
+    routes = {name for name, _ in tool.ROUTES.values()}
     for e in doc["goldens"]:
         assert e["route"] in routes, e
         assert len(e["sha256"]) == 64
@@ -191,6 +191,30 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
     assert sorted(on) == sorted(_tool().LOOKBACK_ON)
 
 
+# the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
+# `--names` rewrites recorded node names only, never an entry
+GOLDENS_DIGEST = "71dcd9c76e2c85807a8ac9273f42ea210468881af21b025dd4a7cca5ad99ad02"
+# the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
+# render nodes are named in the new ids)
+OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
+                    "shown(history)")
+
+
+def test_renaming_moved_no_golden():
+    """Plan 35 T4: `tools/golden_frames.py --names` rewrote the fixtures'
+    recorded render node names in the new ids (`lookback`, `hands.layer`,
+    `lookback(capture)` …) and touched no `goldens` entry — the list is
+    byte for byte the one T3 recorded."""
+    import hashlib
+
+    doc = _manifest()
+    assert hashlib.sha256(json.dumps(doc["goldens"]).encode()).hexdigest() == GOLDENS_DIGEST
+    for slug, said in doc["fixtures"].items():
+        names = said["present"].get("nodes") or []
+        assert not set(names) & set(OLD_RENDER_NAMES), (slug, names)
+        assert not any(n.startswith(("media.", "hands(")) for n in names), (slug, names)
+
+
 def test_the_gpu_lines_on_the_system_page():
     """One line per node, its median in ms, under a heading; the note
     alone with no timer queries; nothing before a frame was timed."""
@@ -205,6 +229,9 @@ def test_the_gpu_lines_on_the_system_page():
     assert lines({"gpu_ms": {}, "gpu_note": "no GPU timer queries on this context (Error)"}) \
         == ["gpu: no GPU timer queries on this context (Error)"]
     assert lines({}) == [] and Panel.gpu_lines(SimpleNamespace(renderer=None)) == []
+    # plan 35 T4: the ends that ran, where the pipelines were
+    got = lines({"gpu_ms": {"scene": 1.0}, "gpu_note": "", "ends": ["shown(acid)", "shown(copy)"]})
+    assert got[-1] == "ends: shown(acid) · shown(copy)"
 
 
 # ---------------------------------------------------------------- GL
@@ -290,10 +317,11 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    assert r._graph.timed == ["scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    assert r._graph.timed == ["scene", "lookback(cover)", "hands.layer", "lookback",
+                              "shown(warp)", "lookback(capture)", "output.1"]
     # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
-    assert list(ms) == ["scene", "cover", "hands", "history", "warp", "fx",
-                        "capture", "output.1"]
+    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "warp",
+                        "shown(warp)", "lookback(capture)", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

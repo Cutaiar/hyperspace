@@ -291,8 +291,7 @@ def _slots(cfg: dict | None) -> list[Slot]:
 
     out = []
     for k, e in enumerate(config.screens(cfg or {})):
-        sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]),
-                      through=bool(e["through"]), dim=float(e["dim"]),
+        sw = Switches(scene=bool(e["scene"]), hands=bool(e["hands"]), dim=float(e["dim"]),
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
                         monitor=placement.index(e["monitor"]),

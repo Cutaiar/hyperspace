@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 from test_ghost import both, tracker
 from test_outputs import H, W, fbo, keep_run, px, rig, scene_view, views
+from wiredframe import Thru, wire_switches
 
 from hyperspace import ghost as G
 from hyperspace import outputs as O
@@ -207,9 +208,12 @@ def test_the_scene_holds_the_hands_so_the_effects_bend_them_and_the_history_keep
 def test_a_glass_without_the_scene_still_gets_the_hands_layer(ctx):
     """The same hands in the scene on one output and a clean layer on
     another (decision 3): the glass (scene off) shows the hands' layer
-    exactly as the default graph's glass does."""
-    a = _draw(ctx, _rig(ctx, Wiring(hands="scene")), views(ctx, S(), S(scene=False)))
-    b = _draw(ctx, _rig(ctx), views(ctx, S(), S(scene=False)))
+    exactly as the default graph's glass does (plan 35 T4: the glass's
+    state is its output's wiring — a mute on an in-scene preset shows its
+    ground and the guide, check 347)."""
+    ra, rb = _rig(ctx, Wiring(hands="scene")), _rig(ctx)
+    a = _draw(ctx, ra, views(ctx, *wire_switches(ra, S(), S(scene=False))))
+    b = _draw(ctx, rb, views(ctx, *wire_switches(rb, S(), S(scene=False))))
     assert np.array_equal(a[1], b[1]) and a[1][..., :3].max() > 100
     assert not np.array_equal(a[0], b[0])
 
@@ -225,7 +229,7 @@ def test_the_guide_never_rides_the_scene(ctx):
         pics.append(_draw(ctx, r, views(ctx, S()))[0])
         scenes.append(np.frombuffer(r.scene.tex.read(), dtype=np.uint8).copy())
         assert r.stats["readout"] is bool(guide)
-        assert "readout" in r._graph.nodes
+        assert "hands.guide" in r._graph.nodes
     assert np.array_equal(scenes[0], scenes[1])
     assert not np.array_equal(pics[0], pics[1])
 
@@ -258,9 +262,10 @@ def test_a_depth_aware_layer_goes_behind_the_shape(ctx):
         assert hidden.sum() > 50
         assert np.array_equal(depth[hidden], bare[hidden])
     # through an effect too: the composite before the chain hides it
-    a = _draw(ctx, _rig(ctx, None, BEHIND, effects=("warp",)), views(ctx, S(through=True)))[0]
-    b = _draw(ctx, _rig(ctx, Wiring(blend="depth"), BEHIND, effects=("warp",)),
-              views(ctx, S(through=True)))[0]
+    ra = _rig(ctx, None, BEHIND, effects=("warp",))
+    a = _draw(ctx, ra, views(ctx, *wire_switches(ra, Thru())))[0]
+    rb = _rig(ctx, Wiring(blend="depth"), BEHIND, effects=("warp",))
+    b = _draw(ctx, rb, views(ctx, *wire_switches(rb, Thru())))[0]
     assert not np.array_equal(a, b)
 
 
@@ -288,16 +293,17 @@ def test_the_presenter_carries_the_hands_the_readout_and_the_dim_in_every_wiring
     for wiring in (Wiring(hands="scene"), Wiring(history="scene+hands"), Wiring(blend="add")):
         r = _rig(ctx, wiring, alpha=0.7, dim=0.8, guide=1)
         pairs = [(S(dim=0.5), (W, H)), (S(scene=False), (W, H)),
-                 (S(scene=False, through=True), (640, 300))]
+                 (Thru(scene=False), (640, 300))]
         got = _presented(ctx, r, pairs)
         for (sw, size), (want, shown) in zip(pairs, got, strict=True):
             assert np.array_equal(want, shown), (wiring, sw, size)
         assert any(p[0][..., :3].max() > 100 for p in got)
     # the hand-off itself: hands over on the glass, the readout everywhere
     r = _rig(ctx, Wiring(hands="scene"), guide=1, dim=0.5)
-    pv1 = O.View(S(), (W, H), presenter=object())
-    pv2 = O.View(S(scene=False), (W, H), presenter=object())
-    _draw(ctx, r, [views(ctx, S())[0], pv1, pv2], frames=2)
+    sws = wire_switches(r, S(), S(), S(scene=False))     # (plan 35 T4: the glass's wiring)
+    pv1 = O.View(sws[1], (W, H), presenter=object())
+    pv2 = O.View(sws[2], (W, H), presenter=object())
+    _draw(ctx, r, [views(ctx, sws[0])[0], pv1, pv2], frames=2)
     assert pv1.handoff.hands is None and pv1.handoff.readout is r.ghost.readout
     assert pv2.handoff.hands is r.ghost.tex and pv2.handoff.readout is r.ghost.readout
     assert pv1.handoff.factor == pytest.approx(0.5) and pv1.handoff.frame is not None
@@ -321,7 +327,7 @@ def test_a_second_hands_node_on_a_presenter_glass_matches_the_target(ctx):
     r.ghost_states = {"ghost.2": G.GhostState(on=True, alpha=0.25, guide=1)}
     r.wiring = Wiring(hands="scene", extra=(HandsAt(2),))
     pairs = [(S(dim=0.5), (640, 400)), (S(scene=False), (640, 400)),
-             (S(scene=False, through=True), (640, 300))]
+             (Thru(scene=False), (640, 300))]
     got = _presented(ctx, r, pairs)
     assert r.ghost_of("ghost.2") is not r.ghost
     for (sw, size), (want, shown) in zip(pairs, got, strict=True):
@@ -357,18 +363,18 @@ def test_the_mirror_and_an_output_flip_each_flip_the_hands_once(ctx):
 
 def test_the_hands_have_their_own_line_when_the_scene_draws_them(ctx):
     """Per-node GPU timing: inside the scene the hands' draw is its own
-    line (`ghost`), beside the scene's; as a layer it is the layer's
-    (`hands`), as before."""
+    line (`hands`, plan 35 T4's name), beside the scene's; as a layer it
+    is the layer's (`hands.layer`), as before."""
     from hyperspace.render import PassTimer
 
     r = _rig(ctx, Wiring(hands="scene"))
     if not r.timer.on:
         pytest.skip(f"this context has no timer queries: {r.timer.note}")
-    vs = views(ctx, S(), S(scene=False))
+    vs = views(ctx, *wire_switches(r, S(), S(scene=False)))
     _draw(ctx, r, vs, frames=PassTimer.LAG + 3)
     ms = r.stats["gpu_ms"]
     assert list(ms) == r._graph.timed
-    assert list(ms)[:2] == ["ghost", "scene"] and "hands" in ms
+    assert list(ms)[:2] == ["hands", "scene"] and "hands.layer" in ms
     r.wiring = Wiring()
     _draw(ctx, r, vs, frames=PassTimer.LAG + 2)
-    assert "ghost" not in r.stats["gpu_ms"] and "hands" in r.stats["gpu_ms"]
+    assert "hands" not in r.stats["gpu_ms"] and "hands.layer" in r.stats["gpu_ms"]

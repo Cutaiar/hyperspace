@@ -1,13 +1,18 @@
 """The render outputs, as the renderer sees them (plan 21 WP1).
 
 One frame is drawn per loop; each output — a window on its own screen,
-or an offscreen target standing in for one — shows that frame through
-its own switches: the scene on or off, the hands on or off, and its own
-dim. This module is the pure half of that: what an output asks for
-(`Switches`), which pipeline gives it (`route`), where the frame sits in
-an output of another shape (`fit`), and the one-frame record the
-renderer fills in for an output (`View`, with `Handoff` for an output in
-another window's context). `Renderer.draw_outputs` (render.py) does the
+or an offscreen target standing in for one — shows what the preset's
+graph wires into it (plan 35: its own wires, else All outputs') through
+its window's two mutes, the picture and the hands, with its mirror and
+its own dim. A mute is the window's, never the preset's structure: off,
+the window ignores the picture (or the hands and the guide) wired into
+it and shows its ground, the hands over — it builds nothing, so it never
+rebuilds the graph (row 374). "Hands through the effects" is wiring in
+the preset, not a switch (plan 35 O). This module is the pure half of
+that: what a window's mutes are (`Switches`), where the frame sits in an
+output of another shape (`fit`), and the one-frame record the renderer
+fills in for an output (`View`, with `Handoff` for an output in another
+window's context). `Renderer.draw_outputs` (render.py) does the
 drawing. WP3 adds the rig's side: `Slot`, one listed output for the run
 (app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
 a `Handoff` in another window's context. Plan 32 T9 adds `Offscreen`, a
@@ -31,21 +36,18 @@ from .glsl import QUAD_VS
 
 MAX_OUTPUTS = 4
 
-# pipeline keys, in run order: the scene through the look-back and the
-# effects; the scene with the hands laid on before the effects (WP2); the
-# hands alone through the effects (WP2)
-SCENE, SCENE_HANDS, HANDS = 0, 1, 2
-PIPELINES = (SCENE, SCENE_HANDS, HANDS)
-NAMES = {SCENE: "SCENE", SCENE_HANDS: "SCENE+HANDS", HANDS: "HANDS"}
-
 
 @dataclass
 class Switches:
-    """What one output shows — what the output.N.* params write (WP4)."""
+    """One window's mutes and its own look — what the output.N.* params
+    write (WP4). Plan 35 O (row 374): `scene` is the picture mute (off: the
+    window ignores the picture wired into it), `hands` the hands mute (off:
+    it ignores the hands and the guide); read by its `Output` each frame,
+    never a rebuild. The through switch is gone: "hands through the
+    effects" is the preset's wiring."""
 
-    scene: bool = True
+    scene: bool = True         # the picture (its label "picture"; the id is kept)
     hands: bool = True
-    through: bool = False      # hands through effects (WP2)
     dim: float = 1.0           # this output's own dim, times the master's
     # plan 23 WP1: this output's picture mirrored as its last step, inside
     # the fit rect — the frame, the hands laid after and the readout alike,
@@ -53,31 +55,6 @@ class Switches:
     # whole rect and needs none). Off, the output is bit-identical
     flip_x: bool = False       # left-right
     flip_y: bool = False       # top-bottom
-
-
-def route(sw: Switches, fx_active: bool, hands_visible: bool) -> tuple[int | None, bool]:
-    """(pipeline key, or None for the ground; hands composited after).
-
-    `hands_visible` is "the ghost hands are on and a hand shows this
-    frame" (`Ghost.layer` drew); the hands are *shown* on this output when
-    its own hands switch is on too (fork F7).
-
-    | scene | hands shown | through and an effect on | pipeline    | hands after |
-    |  on   |    no       |          —               | SCENE       | no          |
-    |  on   |    yes      |          no              | SCENE       | yes         |
-    |  on   |    yes      |          yes             | SCENE_HANDS | no          |
-    |  off  |    no       |          —               | None        | no          |
-    |  off  |    yes      |          no              | None        | yes         |
-    |  off  |    yes      |          yes             | HANDS       | no          |
-
-    So with no effect on, or no hand shown, the through switch changes
-    nothing: every output is SCENE or the ground (WP2; fork F2 makes
-    "scene off, hands through" the hands alone through the chain)."""
-    shown = bool(sw.hands) and bool(hands_visible)
-    through = shown and bool(sw.through) and bool(fx_active)
-    if sw.scene:
-        return (SCENE_HANDS, False) if through else (SCENE, shown)
-    return (HANDS, False) if through else (None, shown)
 
 
 def capped(size: tuple[int, int], cap: tuple[int, int] | None) -> tuple[int, int]:

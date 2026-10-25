@@ -1194,7 +1194,7 @@ def test_the_output_switches_are_left_alone_by_undo_presets_and_shows(rig):
     settle(r)
     depth = len(r.undo.stack)
     reg["output.2.scene"].set(False)
-    reg["output.1.through"].set(True)
+    reg["output.1.flip_x"].set(True)
     reg["output.2.dim"].set(0.3)
     settle(r)
     assert len(r.undo.stack) == depth                 # no step for a rig setting
@@ -1207,7 +1207,7 @@ def test_the_output_switches_are_left_alone_by_undo_presets_and_shows(rig):
     assert r.undo.undo() and speed.base == pytest.approx(was)
     assert r.undo.redo() and speed.base == pytest.approx(was + 0.5)
     sw1, sw2 = slots[0].switches, slots[1].switches
-    assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)
+    assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
     # a preset save names none of them, and neither does a show save
     path = r.presets.save_as("RIG")
     text = path.read_text()
@@ -1219,6 +1219,6 @@ def test_the_output_switches_are_left_alone_by_undo_presets_and_shows(rig):
                  lambda: r.lib.project.load("party")):
         load()
         settle(r)
-        assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)
+        assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
     assert r.undo.undo()                             # undoing a load does not move them either
-    assert (sw2.scene, sw2.hands, sw2.dim, sw1.through) == (False, False, 0.3, True)
+    assert (sw2.scene, sw2.hands, sw2.dim, sw1.flip_x) == (False, False, 0.3, True)
