@@ -169,8 +169,11 @@ MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
-# from a cleared state over the rig's FRAMES frames, seven feedback steps
-FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails")
+# from a cleared state over the rig's FRAMES frames, seven feedback steps.
+# Plan 34 T3's one: the look-back's third-newest echo on the faces, the
+# look-back off and a capture every frame (`echo.3 → shape.faces`): the
+# pattern for the first three frames, then the scene of three frames back
+FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES)

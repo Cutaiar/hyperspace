@@ -1536,6 +1536,11 @@ class Renderer:
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph)
+        # plan 34 E (row 362): a graph reading the ring keeps it capturing
+        # with the look-back off (getattr: a renderer from before has none)
+        lookback = getattr(self, "lookback", None)
+        if lookback is not None:
+            lookback.keep = bool(getattr(graph, "reads_ring", False))
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed

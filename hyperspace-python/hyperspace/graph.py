@@ -2996,6 +2996,139 @@ class DelayWrite(Node):
                 rebind(frame.target, frame.vp)
 
 
+# ---------------------------------------------------------------- the look-back's frames
+
+class _RingNode(Node):
+    """A picture of the look-back's (plan 34 E, rows 360–363): no inputs,
+    read before this frame's capture writes (every consumer runs before
+    `Capture`: a wired output's end, a delay's write, the faces in the
+    scene), so no loop runs through one. Its own size is the ring's echo
+    size (`Lookback.echo`) while it reads; a consumer of another size gets
+    it fitted by cover (`OWN_FIT`, `Renderer._refit`) — painted, or for one
+    that binds a texture refitted once a frame into a half-float target of
+    its own (`<name>#fit`), as a delay's is. While it reads nothing the
+    faces show the pattern, an output its ground, an effect transparent
+    black."""
+
+    INPUTS: ClassVar[dict[str, str]] = {}
+    OUTPUT = IMAGE
+    TIMED = False                 # its one pass is its consumer's
+
+    def _src(self, frame: Frame) -> tuple | None:
+        """(texture, crop, clamp) this frame, or None while it reads nothing."""
+        return None
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        return tuple(frame.r.lookback.echo) if self._src(frame) is not None else None
+
+    def reads(self, frame: Frame) -> bool:
+        return self._src(frame) is not None
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        got = self._src(frame)
+        if got is not None:
+            tex, crop, clamp = got
+            frame.r._refit(tex, dst, crop=crop, fit=OWN_FIT, clamp=clamp)
+            return
+        rect = tuple(dst.viewport)
+        dst.use()
+        frame.ctx.viewport = rect
+        frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        key = self.name + "#fit"
+        if key not in frame.data:
+            out, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f2")
+            fbo.viewport = (0, 0, *frame.size)
+            got = self._src(frame)
+            if got is not None:
+                tex, crop, clamp = got
+                frame.r._refit(tex, fbo, crop=crop, fit=OWN_FIT, clamp=clamp)
+            else:
+                fbo.use()
+                frame.ctx.viewport = (0, 0, *frame.size)
+                frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
+            frame.data[key] = out
+        return frame.data[key]
+
+
+def _ring_holds(frame: Frame) -> str:
+    """What the capture takes this frame, in words (plan 34 E, row 363):
+    the scene, with the hands' layer (`history.holds`), or over the
+    backdrop (`backdrop.history`)."""
+    g = frame.graph
+    wiring = g.wiring if g is not None else None
+    if getattr(wiring, "history", "scene") == "scene+hands":
+        return "the scene + hands"
+    if getattr(wiring, "backdrop_history", False) and g is not None and GROUNDED in g.nodes:
+        return "the scene + backdrop"
+    return "the scene"
+
+
+class EchoNode(_RingNode):
+    """`echo.<k>` (plan 34 E, rows 360–363): the look-back ring's k-th
+    newest commit (`Lookback.echo_slot`), its slot's rect of the atlas
+    cropped, the samples clamped half a texel inside it so no neighbour
+    bleeds. It reads nothing before k commits since the ring was made,
+    the frame a `dream.res` change makes it again, or with no ring
+    (`Lookback.ring_error`). The ring keeps capturing for it with the
+    look-back off (`Graph.reads_ring`, `Lookback.keep`): what it holds is
+    what the capture takes, 8-bit, at `dream.res` on its short side, every
+    `dream.gap` seconds."""
+
+    KIND = "echo"
+
+    def __init__(self, name: str, k: int, after: tuple[Node, ...] = ()):
+        super().__init__(name, after)
+        self.k = k                    # 1 the newest commit, MAX_ECHOES the oldest
+
+    def _src(self, frame: Frame) -> tuple | None:
+        lb = frame.r.lookback
+        slot = lb.echo_slot(self.k)
+        if slot is None:
+            return None
+        eh = max(int(lb.echo[1]), 1)
+        crop = (0.0, slot / MAX_ECHOES, 1.0, 1.0 / MAX_ECHOES)
+        clamp = (0.0, (slot + 0.5 / eh) / MAX_ECHOES, 1.0, (slot + 1 - 0.5 / eh) / MAX_ECHOES)
+        return lb.atlas, crop, clamp
+
+    def run(self, frame: Frame) -> None:
+        lb = frame.r.lookback
+        if lb.echo_slot(self.k) is None:
+            self.said = f"not held yet: the ring holds {lb.held()} of {MAX_ECHOES}"
+            return
+        w, h = lb.echo
+        gap = max(float(lb.state.gap), 0.0)
+        every = "every frame" if gap <= 0.0 else f"every {gap:.2f} s"
+        self.said = f"{w}×{h} · {every} · {_ring_holds(frame)}"
+
+
+class DreamNode(_RingNode):
+    """`dream` (plan 34 E, rows 360–361): the look-back's dream buffer —
+    the dream worker's result at the echo size, a frame or two after the
+    capture it answers. It reads nothing with no worker attached, or
+    before the worker's first result has landed (`Lookback.dream_frame`)."""
+
+    KIND = "dream"
+    _WHOLE = (0.0, 0.0, 1.0, 1.0)
+
+    def _src(self, frame: Frame) -> tuple | None:
+        lb = frame.r.lookback
+        if lb.dream is None or lb.dream_frame < 0:
+            return None
+        return lb.dream, self._WHOLE, None
+
+    def run(self, frame: Frame) -> None:
+        lb = frame.r.lookback
+        if self._src(frame) is not None:
+            w, h = lb.echo
+            self.said = f"{w}×{h} · the dream worker's, a frame or two late"
+        elif lb.source is None:
+            self.said = "no dream worker: reads nothing"
+        else:
+            self.said = "waiting for the dream worker"
+
+
 # ---------------------------------------------------------------- layers
 
 class Cover(Node):
@@ -3956,6 +4089,9 @@ class Graph:
         self._framed: frozenset[str] | None = None     # plan 33 R: `at_frame`, settled
         # plan 33 S: `pulled`, by the switches' picks (None: not yet asked)
         self._pulled: dict[tuple[int, ...], frozenset[str]] | None = None
+        # plan 34 E (row 362): an `echo.<k>` or the `dream` is in the graph —
+        # the renderer keeps the ring capturing (`Lookback.keep`)
+        self.reads_ring = False
 
     def insert(self, node: Effect, edges: list[tuple[Node, str]]) -> Effect:
         """Add placed effect `node` (its input already wired) and make each
@@ -4449,6 +4585,16 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
     for w in wiring.wires:
         if wire_node_kind(w.src) == "delay" and w.src not in g.nodes:
             g.add(Delay(w.src))
+    # plan 34 E: an echo or the dream a wire leaves is a source too — the
+    # ring as last frame's capture left it; with one the ring keeps
+    # capturing whatever `dream.on` says (`reads_ring`, `Lookback.keep`)
+    for w in wiring.wires:
+        kind = wire_node_kind(w.src)
+        if kind == "echo" and w.src not in g.nodes:
+            g.add(EchoNode(w.src, int(w.src.partition(".")[2])))
+        elif kind == "dream" and w.src not in g.nodes:
+            g.add(DreamNode(w.src))
+    g.reads_ring = any(isinstance(n, _RingNode) for n in g.nodes.values())
     wiring_left = _Wiring(g, wiring, layer, depth, media)
     wiring_left.run(final=False)
     _place(g, placed)
@@ -4512,6 +4658,9 @@ class _Wiring:
         if kind == "delay":             # plan 34 D: its read side, made with the media
             got = g.nodes.get(name)
             return got if isinstance(got, Delay) else None
+        if kind in ("echo", "dream"):   # plan 34 E: the ring's, made with the media
+            got = g.nodes.get(name)
+            return got if isinstance(got, _RingNode) else None
         if kind in ("effect", "composite"):
             if name in self.makers:
                 return None

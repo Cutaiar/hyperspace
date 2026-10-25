@@ -1,0 +1,273 @@
+# ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
+"""Plan 34 T3 — the look-back's frames as sources (E, rows 360–363):
+`echo.<k>`, the ring's k-th newest commit, and `dream`, the dream buffer,
+wireable into any picture port.
+
+What it must keep honest: echo.1 is the newest commit and echo.k the k-th
+newest; one the ring does not hold yet (fewer than k commits, the ring
+just remade for a `dream.res` change) reads nothing, so the faces show the
+pattern and an output its ground; the ring keeps capturing while the graph
+reads it with the look-back off, and the wake still shows only with
+`dream.on`; an echo read this frame is last frame's capture; the words say
+the echo's size, cadence and what it holds.
+
+The GL tests use test_graph_faces' harness; they skip without a standalone
+context."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+from test_graph_faces import (
+    Still,
+    _draw,
+    _empty,
+    _faces,
+    _fbo,
+    _media,
+    _px,
+    _renderer,
+    _rgba,
+    _rig_frame,
+    ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
+)
+
+from hyperspace import graph as G
+from hyperspace.lookback import MAX_ECHOES
+from hyperspace.media.frame import MediaFrame
+from hyperspace.outputs import Switches, View
+
+RED, GREEN, BLUE = (255, 0, 0), (0, 255, 0), (0, 0, 255)
+moderngl = pytest.importorskip("moderngl")
+
+
+def _echo(k):
+    return {"kind": "echo", "index": k}
+
+
+def _views(ctx, size, n=2):
+    return [View(Switches(), size, target=_fbo(ctx, *size)) for _ in range(n)]
+
+
+def _frame(ctx, r, s, vs, size, k):
+    r.draw_outputs(s, *size, 1.0, vs, t_now=2.0 + k / 60)
+    assert ctx.error == "GL_NO_ERROR"
+    return [_px(v.target) for v in vs]
+
+
+def _mid(px):
+    h, w = px.shape[:2]
+    return tuple(int(c) for c in px[h // 2, w // 2, :3])
+
+
+def _near(a, b, d=2):
+    return all(abs(x - y) <= d for x, y in zip(a, b, strict=True))
+
+
+def _off(r, gap=0.0):
+    """The look-back off, a capture every frame."""
+    st = r.lookback.state
+    st.on, st.gap = False, gap
+    return r
+
+
+def _three(r, size):
+    """The ring made at `size` and three captures written by hand: red,
+    green, blue at t = 1, 2, 3 (echo.1 the blue)."""
+    lb = r.lookback
+    assert lb._ensure(*size)
+    ew, eh = lb.echo
+    for slot, colour in enumerate((RED, GREEN, BLUE)):
+        lb.write_slot(slot, _rgba(ew, eh, colour), at=float(slot + 1))
+    assert lb.held() == 3
+
+
+def test_the_echo_nodes_say_what_they_are():
+    """The two sources' shapes (the brief's Interfaces), and the graph
+    built from wires out of them: one node each, `reads_ring` set."""
+    for cls, kind in ((G.EchoNode, "echo"), (G.DreamNode, "dream")):
+        assert cls.KIND == kind and cls.INPUTS == {} and cls.OUTPUT == G.IMAGE
+        assert not cls.TIMED
+    assert G.EchoNode("echo.3", 3).k == 3
+    vs = [View(Switches(), (64, 48)), View(Switches(), (64, 48))]
+    spec = G.read_graph({"nodes": [_echo(3), {"kind": "dream"}],
+                         "wires": [{"from": "frame", "to": "fx.image"},
+                                   {"from": "echo.3", "to": "shape.faces"},
+                                   {"from": "dream", "to": "output.2.image"}]})
+    assert not spec.notes, spec.notes
+    g = G.default_graph(vs, spec.wiring())
+    assert isinstance(g.nodes["echo.3"], G.EchoNode) and g.nodes["echo.3"].k == 3
+    assert isinstance(g.nodes["dream"], G.DreamNode)
+    assert g.nodes["shape"].inputs["faces"] is g.nodes["echo.3"]
+    assert g.reads_ring and not g.dormant
+    assert not G.default_graph(vs, G.Wiring(run=())).reads_ring
+
+
+def test_echo_k_is_the_kth_newest_capture(ctx):
+    """Three slots written red, green, blue at t = 1, 2, 3: `echo.1 →
+    output.2.image` shows blue, echo.2 green and echo.3 red, each at the
+    output's centre (row 360)."""
+    size = (160, 120)
+    for k, want in ((1, BLUE), (2, GREEN), (3, RED)):
+        r = _off(_renderer(ctx, None, [(f"echo.{k}", "output.2.image")], [_echo(k)]))
+        _three(r, size)
+        out = _frame(ctx, r, _faces(), _views(ctx, size), size, 0)[1]
+        assert _near(_mid(out), want), (k, _mid(out))
+
+
+def test_an_echo_past_the_ring_reads_nothing(ctx):
+    """With three captures, `echo.4 → shape.faces` draws the faces-unwired
+    frame (the pattern, row 361) and `echo.4 → output.2.image` the
+    ground; the node says how many the ring holds."""
+    size = (160, 120)
+    s = _faces(pattern=2)
+    plain = _draw(ctx, _off(_renderer(ctx)), s)[0]
+    r = _off(_renderer(ctx, None, [("echo.4", "shape.faces")], [_echo(4)]))
+    _three(r, size)
+    (got,) = _frame(ctx, r, s, _views(ctx, size, 1), size, 0)
+    assert np.array_equal(got, plain) and r.face_error == ""
+    assert r._graph.nodes["echo.4"].said == f"not held yet: the ring holds 3 of {MAX_ECHOES}"
+    r = _off(_renderer(ctx, None, [("echo.4", "output.2.image")], [_echo(4)]))
+    _three(r, size)
+    out = _frame(ctx, r, s, _views(ctx, size), size, 0)[1]
+    assert _mid(out) == (0, 0, 0)
+
+
+def test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off(ctx):
+    """`dream.on` off, gap 0, `echo.1 → output.2.image`: after three frames
+    the ring holds three (row 362), and output 1 — no wake — is the same
+    section's frame without the echo wire. The wire removed, the ring goes
+    idle in one frame."""
+    size, s = (160, 120), _faces()
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.image")], [_echo(1)]))
+    plain_r = _off(_renderer(ctx))
+    vs, plain_vs = _views(ctx, size), _views(ctx, size)
+    for k in range(3):
+        got = _frame(ctx, r, s, vs, size, k)[0]
+        want = _frame(ctx, plain_r, s, plain_vs, size, k)[0]
+        assert np.array_equal(got, want), k
+    assert r.lookback.held() == 3 and r.lookback.keep
+    assert plain_r.lookback.held() == 0 and not plain_r.lookback.keep
+    r.wiring = G.read_graph({"nodes": [], "wires": [{"from": "frame",
+                                                      "to": "fx.image"}]}).wiring()
+    _frame(ctx, r, s, vs, size, 3)
+    assert r.lookback.held() == 0 and not r.lookback.keep
+
+
+def test_an_echo_read_this_frame_is_last_frames_capture(ctx):
+    """Gap 0, a still changing colour each frame on the backdrop (the
+    history holding it), `echo.1 → output.2.image`: output 2 at frame n is
+    the backdrop's colour at frame n−1 (row 363) — the echo is read before
+    this frame's capture writes."""
+    size = (160, 120)
+    still = Still(_rgba(16, 9, RED))
+    m = _media(a=still)
+    m.channels["a"].fit = 2                                   # stretch: fills
+    r = _off(_renderer(ctx, m, [("media.a", "backdrop.image"),
+                                ("echo.1", "output.2.image")], [_echo(1)]))
+    vs = _views(ctx, size)
+    s = _empty(backdrop_history=True)
+    colours = (RED, GREEN, BLUE, RED, GREEN)
+    got = []
+    for k, colour in enumerate(colours):
+        still.f = MediaFrame(_rgba(16, 9, colour), 1.0, k)
+        got.append(_mid(_frame(ctx, r, s, vs, size, k)[1]))
+    assert got[0] == (0, 0, 0), got
+    for k in range(1, len(colours)):
+        assert _near(got[k], colours[k - 1]), (k, got)
+
+
+def test_a_res_change_empties_the_echoes(ctx):
+    """After four frames `dream.res` goes 2 → 3: echo.1 reads nothing the
+    next frame (the ring is remade), reads again the frame after, and
+    echo.2 only once two commits have landed (row 361)."""
+    size, s = (160, 120), _faces()
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.image"),
+                                   ("echo.2", "output.3.image")], [_echo(1), _echo(2)]))
+    vs = _views(ctx, size, 3)
+    for k in range(4):
+        _frame(ctx, r, s, vs, size, k)
+    g = r._graph
+    assert g.nodes["echo.1"].said.startswith("344×256 · ")
+    r.lookback.state.res = 3
+    reads = []
+    for k in range(4, 7):
+        _frame(ctx, r, s, vs, size, k)
+        g = r._graph
+        reads.append((not g.nodes["echo.1"].said.startswith("not held"),
+                      not g.nodes["echo.2"].said.startswith("not held")))
+    assert reads == [(False, False), (True, False), (True, True)], reads
+    assert r.lookback.echo == (512, 384)
+
+
+def test_the_dream_reads_nothing_until_written(ctx):
+    """`dream → output.2.image`: the ground, and the words say there is no
+    worker. Pixels written into the dream buffer (a fake worker attached):
+    output 2 shows them, and the words name the echo size (row 361)."""
+    size, s = (160, 120), _faces()
+    r = _off(_renderer(ctx, None, [("dream", "output.2.image")], [{"kind": "dream"}]))
+    vs = _views(ctx, size)
+    out = _frame(ctx, r, s, vs, size, 0)[1]
+    assert _mid(out) == (0, 0, 0)
+    assert r._graph.nodes["dream"].said == "no dream worker: reads nothing"
+    lb = r.lookback
+    lb.source = SimpleNamespace(latest=lambda: None, submit=lambda *a: None)
+    ew, eh = lb.echo
+    lb.write_from(_rgba(ew, eh, GREEN), 1)
+    out = _frame(ctx, r, s, vs, size, 1)[1]
+    assert _near(_mid(out), GREEN), _mid(out)
+    assert r._graph.nodes["dream"].said.startswith(f"{ew}×{eh} · ")
+
+
+def _holds(ctx, size, gap, nodes=(), frames=2):
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.image")], [_echo(1), *nodes]), gap)
+    vs = _views(ctx, size)
+    for k in range(frames):
+        _frame(ctx, r, _faces(), vs, size, k)
+    return r._graph.nodes["echo.1"].said
+
+
+def test_echo_words_say_size_and_cadence(ctx):
+    """At 960×600, `dream.res` 2 (256), after two frames (eight at a gap of
+    0.1 s, its first commit six frames in): the echo's size, its cadence
+    and what the capture holds (row 363)."""
+    size = (960, 600)
+    assert _holds(ctx, size, 0.0) == "408×256 · every frame · the scene"
+    assert _holds(ctx, size, 0.1, frames=8) == "408×256 · every 0.10 s · the scene"
+    said = _holds(ctx, size, 0.0, [{"kind": "history", "holds": "scene+hands"}])
+    assert said == "408×256 · every frame · the scene + hands"
+
+
+def test_an_echo_on_the_faces_is_fitted(ctx):
+    """`echo.1 → shape.faces`: the shape's prepare paints the slot into the
+    faces' picture (1024²), cover-fitted — its centre the slot's colour,
+    no face error (row 368)."""
+    size = (160, 120)
+    r = _off(_renderer(ctx, None, [("echo.1", "shape.faces")], [_echo(1)]))
+    lb = r.lookback
+    assert lb._ensure(*size)
+    ew, eh = lb.echo
+    lb.write_slot(4, _rgba(ew, eh, GREEN), at=1.0)
+    lb.write_slot(5, _rgba(ew, eh, BLUE), at=0.5)       # an older one beside it
+    _frame(ctx, r, _faces(), _views(ctx, size, 1), size, 0)
+    assert r.face_error == ""
+    tex = r.face_pic.tex
+    w, h = tex.size
+    px = np.frombuffer(tex.read(), np.uint8).reshape(h, w, 4)
+    assert _near(tuple(int(c) for c in px[h // 2, w // 2, :3]), GREEN)
+
+
+def test_the_echo_faces_fixture_shows_the_ring(ctx):
+    """The `echo-faces` golden (`echo.3 → shape.faces`, look-back off, gap
+    0) after the golden's 8 frames: the ring held for the graph, echo.3
+    read, and the faces not the pattern's — the frame is not party-faces'."""
+    got, r = _rig_frame(ctx, "echo-faces", frames=8)
+    plain, _ = _rig_frame(ctx, "party-faces", frames=8)
+    lb = r.lookback
+    assert not lb.state.on and lb.keep and lb.held() >= 3
+    node = r._graph.nodes["echo.3"]
+    assert isinstance(node, G.EchoNode) and not node.said.startswith("not held"), node.said
+    assert r.face_error == "" and not r._graph.dormant
+    assert np.abs(got[..., :3] - plain[..., :3]).max() > 40

@@ -553,6 +553,12 @@ class Lookback:
         self._off = np.zeros(MAX_ECHOES, dtype="f4")
         self.error = ""                # _common.glsl did not compile: on the fallback
         self.ring_error = ""           # the history textures could not be made (_ensure)
+        # plan 34 E (row 362): the render graph reads the ring this frame (an
+        # `echo.<k>` or `dream` node, `Graph.reads_ring`, set by the
+        # renderer): the capture goes on with the look-back off, the wake
+        # still shown only with `dream.on`
+        self.keep = False
+        self._made_res = -1            # the `dream.res` the ring was made at (`echo_slot`)
         self._build_programs()
 
     def _build_programs(self) -> None:
@@ -617,6 +623,7 @@ class Lookback:
             return False
         self.ring_error = ""
         self.echo = size
+        self._made_res = self.state.res
         self._fbo.use()
         self.ctx.clear(0.0, 0.0, 0.0, 0.0)
         self._captures.clear()
@@ -764,7 +771,9 @@ class Lookback:
 
     def _capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
         s = self.state
-        if not s.on:
+        # (plan 34 E, row 362: a graph reading the ring keeps it — getattr: a
+        # look-back from before the reload has no `keep`)
+        if not s.on and not getattr(self, "keep", False):
             self.idle()
             return
         _, _, w, h = target.viewport
@@ -856,6 +865,22 @@ class Lookback:
         if self._captures:
             return self._captures[-1][0]
         return None
+
+    def held(self) -> int:
+        """How many commits the ring holds (plan 34 E: an echo's words)."""
+        return len(self._captures)
+
+    def echo_slot(self, k: int) -> int | None:
+        """The atlas slot of the k-th newest commit (`echo.<k>`, plan 34 E,
+        row 361; 1 the newest), or None while the ring does not hold it:
+        fewer than k commits since it was made, no ring (`ring_error`), or
+        a `dream.res` the ring is about to be made again for — its echoes
+        are gone this frame, and come back one commit at a time."""
+        if self.atlas is None or not 1 <= k <= len(self._captures):
+            return None
+        if self.state.res != getattr(self, "_made_res", self.state.res):
+            return None
+        return self._captures[-k][0]
 
     def read_into(self, array: np.ndarray, slot: int | None = None) -> None:
         """glReadPixels of one echo into `array` ((h, w, 4) uint8, any
