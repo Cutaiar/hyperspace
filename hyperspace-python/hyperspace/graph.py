@@ -3082,9 +3082,24 @@ class EchoNode(_RingNode):
         super().__init__(name, after)
         self.k = k                    # 1 the newest commit, MAX_ECHOES the oldest
 
+    def _slot(self, frame: Frame) -> int | None:
+        """The slot this frame reads: the one `run` took before the capture
+        (fix round 1: a consumer that paints after the capture — an
+        output's `hands` — still reads last frame's commit, not one newer),
+        or None when this frame's capture has written over it since (the
+        oldest slot, re-used). Without a `run` this frame, the slot now."""
+        lb = frame.r.lookback
+        took = frame.root.data.get(self.name + "#slot")
+        if took is None:
+            return lb.echo_slot(self.k)
+        slot, at = took
+        if slot is not None and getattr(lb, "wrote", None) == (at + 1, slot):
+            return None
+        return slot
+
     def _src(self, frame: Frame) -> tuple | None:
         lb = frame.r.lookback
-        slot = lb.echo_slot(self.k)
+        slot = self._slot(frame)
         if slot is None:
             return None
         eh = max(int(lb.echo[1]), 1)
@@ -3094,8 +3109,16 @@ class EchoNode(_RingNode):
 
     def run(self, frame: Frame) -> None:
         lb = frame.r.lookback
-        if lb.echo_slot(self.k) is None:
-            self.said = f"not held yet: the ring holds {lb.held()} of {MAX_ECHOES}"
+        slot = lb.echo_slot(self.k)
+        # (before the capture: every consumer of an echo is in `Capture.after`)
+        frame.root.data[self.name + "#slot"] = (slot, lb.frame)
+        if slot is None:
+            if lb.atlas is None and lb.ring_error:
+                self.said = lb.ring_error
+            elif lb.remaking():
+                self.said = "the look-back is remaking its frames (resolution changed)"
+            else:
+                self.said = f"not held yet: the ring holds {lb.held()} of {MAX_ECHOES}"
             return
         w, h = lb.echo
         gap = max(float(lb.state.gap), 0.0)
@@ -4853,6 +4876,7 @@ class _Wiring:
             if cap is not None:
                 cap.after = (*cap.after, end)
         elif w.port == "hands":
+            self._before_capture(src)
             # a through output's switch hands are inside its picture (the
             # layer laid on before the chain): the wire replaces them, so
             # the picture becomes the end it was laid onto — the scene's,
@@ -4870,8 +4894,17 @@ class _Wiring:
             if out.inputs["readout"] is None and isinstance(layer, HandsLayer):
                 out.inputs["readout"] = layer       # the guide where it shows the hands
         else:
+            self._before_capture(src)
             out.inputs["readout"] = src
         return None
+
+    def _before_capture(self, src: Node) -> None:
+        """`src`, read at an output's `hands` or `readout`, runs before the
+        capture as an `image` end does (plan 34 E, fix round 1): an echo on
+        its way takes its slot before this frame's commit lands."""
+        cap = self.g.nodes.get("capture")
+        if cap is not None and src not in cap.after:
+            cap.after = (*cap.after, src)
 
 
 def _place(g: Graph, placed: list[EffectAt]) -> None:

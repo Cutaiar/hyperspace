@@ -43,6 +43,14 @@ RED, GREEN, BLUE = (255, 0, 0), (0, 255, 0), (0, 0, 255)
 moderngl = pytest.importorskip("moderngl")
 
 
+REMAKING = "the look-back is remaking its frames (resolution changed)"
+
+
+def _reading(node):
+    """Whether an echo's words say it read (its size first)."""
+    return node.said[:1].isdigit()
+
+
 def _echo(k):
     return {"kind": "echo", "index": k}
 
@@ -196,10 +204,53 @@ def test_a_res_change_empties_the_echoes(ctx):
     for k in range(4, 7):
         _frame(ctx, r, s, vs, size, k)
         g = r._graph
-        reads.append((not g.nodes["echo.1"].said.startswith("not held"),
-                      not g.nodes["echo.2"].said.startswith("not held")))
+        reads.append((_reading(g.nodes["echo.1"]), _reading(g.nodes["echo.2"])))
+        if k == 4:
+            assert g.nodes["echo.1"].said == REMAKING
     assert reads == [(False, False), (True, False), (True, True)], reads
     assert r.lookback.echo == (512, 384)
+
+
+def test_a_res_change_to_the_same_size_keeps_the_echoes(ctx):
+    """Fix round 1 (minor 1): a `dream.res` whose echo size comes out the
+    same (here the atlas capped by `fit_atlas` to the driver's largest
+    texture) makes no new ring, so the echoes go on reading."""
+    size, s = (160, 120), _faces()
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.image")], [_echo(1)]))
+    r.lookback.max_texture = lambda: 2048
+    vs = _views(ctx, size)
+    for k in range(3):
+        _frame(ctx, r, s, vs, size, k)
+    assert r.lookback.echo == (80, 64)
+    r.lookback.state.res = 3
+    for k in range(3, 5):
+        _frame(ctx, r, s, vs, size, k)
+        assert _reading(r._graph.nodes["echo.1"]), (k, r._graph.nodes["echo.1"].said)
+    assert r.lookback.echo == (80, 64) and r.lookback.held() == 5
+
+
+def test_an_echo_into_an_outputs_hands_reads_last_frames_capture(ctx):
+    """Fix round 1 (Important 1): an echo at an output's `hands` is read
+    before this frame's capture, as at its `image`: at
+    frame 0 the ring holds nothing yet, and over three hand-written
+    captures echo.k laid over output 2 is the k-th newest — not the
+    (black) commit this frame's capture lands."""
+    size = (160, 120)
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.hands")], [_echo(1)]))
+    _frame(ctx, r, _empty(), _views(ctx, size), size, 0)
+    g = r._graph
+    assert g.nodes["echo.1"] in g.nodes["capture"].after
+    assert g.nodes["echo.1"].said == f"not held yet: the ring holds 0 of {MAX_ECHOES}"
+    # (an echo never reaches a `readout`: that port takes a hands layer's
+    # guide, refused at read — what is wired there runs before the capture too)
+    spec = G.read_graph({"nodes": [_echo(1)],
+                         "wires": [{"from": "echo.1", "to": "output.2.readout"}]})
+    assert spec.notes and "takes a hands layer's guide" in spec.notes[0]
+    for k, want in ((1, BLUE), (3, RED)):
+        r = _off(_renderer(ctx, None, [(f"echo.{k}", "output.2.hands")], [_echo(k)]))
+        _three(r, size)
+        out = _frame(ctx, r, _empty(), _views(ctx, size), size, 0)[1]
+        assert _near(_mid(out), want), (k, _mid(out))
 
 
 def test_the_dream_reads_nothing_until_written(ctx):
