@@ -123,7 +123,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .graphmigrate import retired
+from .graphmigrate import renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -210,7 +210,9 @@ LAYOUT = "layout"
 def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
     """A file's ``layout`` value as {node id: [x, y]} (whole canvas units),
     and how many entries were not a name and two finite numbers (dropped).
-    None is an empty map; a value that is no map, an empty map and one drop."""
+    None is an empty map; a value that is no map, an empty map and one drop.
+    R14 (plan 35 T5): a layout saved in the canvas's old ids is read in the
+    wired frame's (`graphmigrate.renamed_layout`), so its positions stay."""
     if value is None:
         return {}, 0
     if not isinstance(value, dict):
@@ -227,7 +229,7 @@ def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
             bad += 1
             continue
         out[k] = [round(x), round(y)]
-    return out, bad
+    return renamed_layout(out), bad
 
 # the preset a group resets to; any other group uses one named "default"
 # if it has one, else the values its objects were built with

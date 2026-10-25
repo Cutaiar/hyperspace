@@ -755,7 +755,7 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
-    "output": "Output", rgraph.ALL_OUTPUTS: "All outputs",
+    "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (V's hover column; an effect says its file's
 # own `@tip` when it has one)
@@ -784,6 +784,9 @@ HOVERS: dict[str, str] = {
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
     rgraph.ALL_OUTPUTS: "What every output shows unless its own port is wired.",
+    # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
+    rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
+                    "see-through in overlay: wired into an output's port, that port shows it."),
 }
 # the words a delete or an add says (plan 35 G)
 OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows its ground"
@@ -798,8 +801,9 @@ NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 def kind_of(name: str) -> str | None:
     """A canvas name's kind (plan 35 G): a wired frame's (`graph.
     wire_node_kind(…, wired=True)`), All outputs' own key, the rig's camera
-    and clouds; None for a name no wired frame has a node for (an old id,
-    `frame`, `fx`, `ground`)."""
+    and clouds, and (R13) `ground` — no render node, but drawn so its wires
+    are seen; None for a name no wired frame has a node for (an old id,
+    `frame`, `fx`)."""
     if not isinstance(name, str):
         return None
     if name == rgraph.ALL_OUTPUTS:
@@ -809,7 +813,7 @@ def kind_of(name: str) -> str | None:
     if name == rgraph.CLOUD_KIND or name.startswith(f"{rgraph.CLOUD_KIND}."):
         return "cloud"
     kind = rgraph.wire_node_kind(name, wired=True)
-    return None if kind in ("frame", "fx", rgraph.GROUND) else kind
+    return None if kind in ("frame", "fx") else kind
 
 
 def _takes(kind: str | None) -> dict[str, str]:
@@ -911,7 +915,7 @@ def _tip(reg, name: str) -> str:
 def frame_names(spec) -> list[str]:
     """Every node wired frame `spec` names, once, in section order: its
     entries' (the hands, the effects, then the rest as read), then each
-    wire's ends — `ground` none, it is no node — with the hands node each
+    wire's ends (`ground` too, R13: drawn so its wires are seen) — with the hands node each
     layer or guide draws by name just before it (no wire goes into a layer:
     it draws its hands, and the hands' params are on that node)."""
     if spec is None:
@@ -951,12 +955,22 @@ def unreached(spec) -> frozenset[str]:
     if getattr(spec, "wired", False):
         got |= {rgraph.hands_of(n) for n in got if kind_of(n) in ("layer", "guide")}
         return frozenset(n for n in frame_names(spec) if n not in got
-                         and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS))
+                         and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
     names |= {c.name for c in spec.composites()}
     names |= {n for w in spec.wires for n in (w.src, w.node)
               if rgraph.wire_node_kind(n) in MAKER_KINDS}
     return frozenset(n for n in names if n not in got)
+
+
+class GroundNode(rgraph.Node):
+    """`ground` on the canvas (R13): the source a wire into an output's port
+    names to show the window's background there. No render node is ever
+    built for it (the output clears to its ground); this stands in so the
+    wire is drawn, and can be deleted, like any other."""
+
+    KIND = "ground"
+    OUTPUT = IMAGE
 
 
 class ResizeNode(rgraph.Node):
@@ -980,6 +994,7 @@ FRAME_CLASS: dict[str, type] = {
     "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": ResizeNode, "echo": rgraph.EchoNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
+    rgraph.GROUND: GroundNode,
 }
 
 
@@ -1502,7 +1517,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                       label=f"lane {li + 1} fires env {env}{why}",
                                       addr=seq_node.port(src).addr))
     # plan 35 G: each wire of the section, as it stands, a render cable —
-    # `ground` none (it is no node: the port shows nothing), a wire into a
+    # `ground`'s from the Ground node (R13), a wire into a
     # window this rig has not open dormant (plan 35 T4: it builds nothing)
     windows = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
     # (plan 30 D1's `after X`, kept in an old preset's frame: what reads X
@@ -1764,7 +1779,7 @@ AREA: dict[str, str] = {
     # an `Effect`: found by its base class)
     "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
     # the windows and All outputs
-    "Output": OUTPUTS_AREA,
+    "Output": OUTPUTS_AREA, "GroundNode": OUTPUTS_AREA,
     # the media channels (plan 32 T10), and (plan 33 U) the pictures made
     # beside them: the pattern the faces draw, a switch picking one of them,
     # a delay's last frame — and any effect or composite made of the media

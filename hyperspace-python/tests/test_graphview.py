@@ -265,6 +265,38 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     assert all(p.patched for p in ports.values())
 
 
+def test_old_layout_positions_follow_the_renamed_ids(rig):
+    """R14: positions saved on the canvas before plan 35 (`render:eye`,
+    `render:history`, `render:media.a`, `render:ghost`, `render:hands` the
+    layer …) are read under the wired frame's ids (`graphmigrate.
+    renamed_layout`), in the preset's layout and in the show's, so the
+    owner's arrangement stays; a layout already in the new ids is as it is."""
+    import json
+
+    from hyperspace import graphmigrate as M
+    from hyperspace.preset import LAYOUT_KEY
+    old = {"render:eye": [1, 2], "render:history": [3, 4], "render:media.a": [5, 6],
+           "render:ghost": [7, 8], "render:hands": [9, 10], "render:readout.2": [11, 12],
+           "render:acid.2": [13, 14], "lfo.1": [15, 16]}
+    new = {"render:camera": [1, 2], "render:lookback": [3, 4], "render:channel.a": [5, 6],
+           "render:hands": [7, 8], "render:hands.layer": [9, 10],
+           "render:hands.2.guide": [11, 12], "render:acid.2": [13, 14], "lfo.1": [15, 16]}
+    assert M.renamed_layout(old) == new
+    assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
+    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
+    lib.load("presets", "party-trip")
+    doc = presets.document("party-trip")
+    doc[LAYOUT_KEY] = old
+    presets.load_doc(doc)
+    assert presets.layout == new
+    project.save("old-show")
+    raw = json.loads(project.path.read_text())
+    raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
+    project.path.write_text(json.dumps(raw))
+    project.load("old-show")
+    assert project.layout == {"render:camera": [40, 50], "render:output.1": [60, 70]}
+
+
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
     """The look's nodes' positions are the preset's ``layout``, the rig's
     the show's: written on save, read on load. A preset without the key

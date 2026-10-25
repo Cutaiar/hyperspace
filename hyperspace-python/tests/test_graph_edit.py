@@ -1519,6 +1519,51 @@ def test_the_starter_wires_the_scene_to_all_outputs(tmp_path):
     assert pushed == ["scene starter"]
 
 
+GROUNDED = {"frame": "wired", "wires": [{"from": "scene", "to": "output.all.image"},
+                                        {"from": "shape", "to": "scene.geometry"},
+                                        {"from": "ground", "to": "output.2.image"}]}
+
+
+def test_a_ground_wire_is_drawn(tmp_path):
+    """R13: `ground → output.2.image` is plumbing the owner can see — a
+    small Ground source in OUTPUTS, hovered with what it is (the window's
+    background), its cable into the window's port, laid out running right."""
+    from test_graphview import views
+
+    from hyperspace.outputs import Switches
+    rig, _, _ = wired_rig(tmp_path, GROUNDED)
+    spec = rig.presets.graph.spec
+    g = G.build_graph(views(Switches(), Switches()), spec.wiring())
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    n = view.node("render:ground")
+    assert n is not None and n.label == "Ground" and n.area == graphview.OUTPUTS_AREA
+    assert not n.faint and not n.idle
+    assert "background" in n.status and n.status.endswith("· id ground")
+    c = next(c for c in view.cables if c.dst_port == "rin:output.2/image")
+    assert c.src_port == "rout:ground" and c.ref == G.Wire("ground", "output.2.image")
+    pos = graphview.auto_layout(view)
+    assert pos["render:ground"][0] < pos["render:output.2"][0]
+    # no ground wire: no Ground node
+    plain = graphview.build(rig.router.table, rig.reg, rig.router, None, None,
+                            G.read_graph({"frame": "wired"}))
+    assert plain.node("render:ground") is None
+
+
+def test_a_ground_wire_deletes(tmp_path):
+    """R13: the ground cable deletes as any wire — one undo step through
+    `_land` — and so does the Ground node (every ground wire with it)."""
+    from test_undo import settle
+    rig, e, pushed = wired_rig(tmp_path, GROUNDED, undo_rig=True)
+    cable = graphview.VCable("c", "rout:ground", "rin:output.2/image", graphview.IMAGE,
+                             ref=G.Wire("ground", "output.2.image"), kind="render")
+    assert e.unwire(cable) is None and pushed == ["unwire output.2.image"]
+    assert ("ground", "output.2.image") not in wired_wires(rig)
+    settle(rig)
+    assert rig.undo.undo() and ("ground", "output.2.image") in wired_wires(rig)
+    assert e.drop_node("render:ground") is None and e.said == "Ground deleted"
+    assert not [w for w in rig.presets.graph.spec.wires if w.src == "ground"]
+
+
 def test_a_frame_node_is_added_once(tmp_path):
     """A frame kind from the picker is its entry, there once: a second add
     is refused in words; a copy of an instance is `CopyAt(next, of)`."""

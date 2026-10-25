@@ -1321,6 +1321,47 @@ def _new_dst(dst: Any) -> Any:
     return f"{G.new_id(node)}{dot}{port}" if dot else dst
 
 
+# R14 (plan 35 T5): the GRAPH canvas's node ids before the wired frame —
+# `render:<old id>`, the shared camera `render:eye` — that only an old
+# layout holds (a new one says none of them), so a layout naming one is
+# read in the old ids throughout: `render:hands` the layer there, the
+# hands geometry in a new one
+CANVAS_IDS = {"render:eye": "render:camera"}
+_OLD_CANVAS = re.compile(r"render:(?:ghost(?:\.\d+)?|readout(?:\.\d+)?|history|eye|cover|"
+                         r"capture|frame|fx|grounded|media\.[a-h](?:\(wire\))?|shown\(.*\)|"
+                         r".*\((?:scene\+hands|hands)\))")
+
+
+def renamed_canvas_id(nid: str) -> str:
+    """An old canvas node id → the wired frame's (`render:ghost.2` →
+    `render:hands.2`, `render:hands` → `render:hands.layer`, `render:media.a`
+    → `render:channel.a`, `render:eye` → `render:camera`); any other id
+    (a dissolved node's, a modifier's, a device's) as it is."""
+    if nid in CANVAS_IDS:
+        return CANVAS_IDS[nid]
+    head, sep, name = nid.partition(":")
+    if head != "render" or not sep:
+        return nid
+    if name.startswith("media.") and name.endswith("(wire)"):
+        name = name[:-len("(wire)")]
+    return f"render:{G.new_id(name)}"
+
+
+def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
+    """A GRAPH layout ({node id: [x, y]}, a preset's or a show's) in the
+    wired frame's ids (R14): one that names an id only the old canvas had
+    (`_OLD_CANVAS`) is renamed throughout (`renamed_canvas_id`), the
+    first position kept where two old ids land on one; any other is as it
+    is — so the owner's arrangement follows the rename, and a layout saved
+    since stays put."""
+    if not any(isinstance(k, str) and _OLD_CANVAS.fullmatch(k) for k in layout):
+        return layout
+    out: dict[str, Any] = {}
+    for k, xy in layout.items():
+        out.setdefault(renamed_canvas_id(k) if isinstance(k, str) else k, xy)
+    return out
+
+
 def renamed(section: Any) -> Any:
     """A `/2`–`/5` section in the new ids (plan 35 V2, row 373): every wire
     end and D1's `after` / `into` through `graph.new_id`, the port
