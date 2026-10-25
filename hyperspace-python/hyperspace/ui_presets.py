@@ -373,16 +373,21 @@ def strip(panel, group: str) -> None:
             imgui.set_tooltip("A new preset: factory values, nothing wired — "
                               "black until something is wired to an output")
         imgui.same_line()
+    # R17: a preset `new` made and nothing saved names itself — a user
+    # preset that happens to be called `untitled` is never written over
+    # (the flag counts while `untitled` is current: an undo of New hands
+    # back the preset before, which saves as it always did)
+    unsaved = presets is not None and cur == preset.UNTITLED_PRESET and (
+        bool(getattr(presets, "unsaved", False)) or lib.path_of(group, cur) is None)
     if save_chip(panel, group, word, is_dirty):
-        if presets is not None and cur == preset.UNTITLED_PRESET \
-                and lib.path_of(group, cur) is None:
+        if unsaved:
             _begin_naming(panel, group, "")      # unnamed: save acts as as…
         else:
             _guard(panel, lib.overwrite, group)
             invalidate(panel, group)
     imgui.same_line()
     if ui.chip("as…"):
-        _begin_naming(panel, group, cur or "")
+        _begin_naming(panel, group, "" if unsaved else (cur or ""))
     _rect(panel, f"strip.{group}.as")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the group's settings as a new user preset")

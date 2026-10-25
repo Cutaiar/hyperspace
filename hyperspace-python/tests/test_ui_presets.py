@@ -910,3 +910,34 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
     frame(panel)
     _click(panel, _rects(panel)["strip.presets.save"])
     assert ui_presets._state(panel)["naming"] == "presets"
+
+
+def test_new_then_save_never_writes_over_a_preset_named_untitled(rig):  # noqa: F811
+    """R17 (final review): a user preset named `untitled` exists; New, then
+    save, opens naming (the new preset is unsaved, whatever its name) and
+    the file is the bytes it was; `as…` on it prefills nothing. A save
+    clears the flag: save on the saved preset writes over it."""
+    from hyperspace import preset
+
+    panel, lib = rig.panel, rig.lib
+    path = lib.presets.save_as(preset.UNTITLED_PRESET)
+    was = path.read_bytes()
+    assert not lib.presets.unsaved
+    lib.presets.new()
+    assert lib.presets.unsaved and lib.path_of("presets", preset.UNTITLED_PRESET) == path
+    frame(panel, "presets")
+    frame(panel)
+    _click(panel, _rects(panel)["strip.presets.save"])
+    st = ui_presets._state(panel)
+    assert st["naming"] == "presets" and st["buf"] == ""
+    assert path.read_bytes() == was
+    st["naming"] = None
+    frame(panel)
+    _click(panel, _rects(panel)["strip.presets.as"])
+    assert st["naming"] == "presets" and st["buf"] == ""
+    st["naming"] = None
+    lib.presets.save_as("blank")
+    assert not lib.presets.unsaved
+    lib.presets.new()
+    lib.presets.load("blank")
+    assert not lib.presets.unsaved

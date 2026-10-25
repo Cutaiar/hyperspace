@@ -879,6 +879,10 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
+        # R17 (final review): the live preset came from `new` and has never
+        # been saved — save names it (whatever a file of its name holds);
+        # a load or a save clears it (`_landed`)
+        self.unsaved = False
         # plan 26 A4: the loaded preset's graph section (its instances'
         # params, the renderer's wiring once one is attached)
         self.graph = GraphSection(reg, lib=lib)
@@ -928,7 +932,7 @@ class Presets:
         gets that layer and `"desk": []` an empty one — the blank preset
         says which), and a frame of the outputs alone: nothing wired, so
         black. The session's params stay. One undo step, named `untitled`,
-        dirty and with no file until it is saved."""
+        dirty and `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
         undo.push("new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
@@ -940,9 +944,8 @@ class Presets:
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({"frame": "wired"}).to_json()}
-        lib._apply_doc(GROUP, UNTITLED_PRESET, doc)
-        # never saved: nothing to be clean against (the Project's own rule)
-        lib._landed(GROUP, UNTITLED_PRESET, ())
+        lib.land_unsaved(GROUP, UNTITLED_PRESET, doc)
+        self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
         return [NEW_SAID]
 
@@ -1629,7 +1632,9 @@ class Presets:
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
         what just loaded, whichever road it came in by (the strip, an F-key,
-        a file edited on disk); a preset the bank does not name lights none."""
+        a file edited on disk); a preset the bank does not name lights none.
+        A save lands here too: either way the preset is no longer `unsaved`."""
+        self.unsaved = False
         self.lib.project.follow()
         for fn in getattr(self, "listeners", ()):
             try:

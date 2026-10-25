@@ -1844,6 +1844,27 @@ def test_a_new_preset_undoes_in_one_step(rig):
     assert rig.reg.snapshot(part="performance") == before
     assert rig.lib.current("presets") == loaded
     assert len(rig.router.table.routes()) >= 1
+    assert rig.lib.is_dirty("presets")        # (the spoiled preset's dot, back)
+
+
+def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
+    """T7's deferred check (final review): after a preset with a channel's
+    bin, a macro and a modifier, New leaves no bin filled, no macro
+    subscriber and no modifier — and its save writes none of them."""
+    doc = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())
+    doc.update(name="full", media={"channels": {"a": ["local:x.png"]}},
+               modifiers=[{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}])
+    rig.presets.load_doc(doc)
+    table, media = rig.router.table, rig.presets.media
+    assert media.to_json()["channels"] and table.modifiers_doc(rig.reg)
+    assert [m for m in table.macros_doc().values() if m.get("subs")]
+    rig.presets.new()
+    assert not media.to_json().get("channels")
+    assert not table.modifiers_doc(rig.reg)
+    assert not [m for m in table.macros_doc().values() if m.get("subs")]
+    saved = rig.presets.document("blank")
+    assert not saved.get("modifiers") and not (saved.get("media") or {}).get("channels")
+    assert not [m for m in saved["macros"].values() if m.get("subs")]
 
 
 def test_a_new_preset_saves_and_loads_back_empty(rig):

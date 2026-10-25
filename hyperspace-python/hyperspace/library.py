@@ -2056,6 +2056,16 @@ class Library:
             hook(self._current[group])
         return missing
 
+    def land_unsaved(self, group: str, name: str, doc: dict) -> list[str]:
+        """Apply `doc` as the group's current preset `name` that no file
+        holds (plan 35 T7's `Presets.new`): the one road in (`_apply_doc`,
+        no path), then nothing to be clean against — dirty until it is saved,
+        the Project's own rule for a show never saved. Returns the unknown
+        ids."""
+        missing = self._apply_doc(group, name, doc)
+        self._landed(group, name, ())
+        return missing
+
     def adopt(self, group: str, name: str, reapply) -> None:
         """A preset applied by someone else — the scene combo landing a
         scene's values on the analyzer itself: make it the group's current
