@@ -1080,6 +1080,106 @@ def _build_loxodrome() -> dict:
     return {"V": _w0(pts), "E": [[i, (i + 1) % m] for i in range(m)], "F": [], "curve": True}
 
 
+# --------------------------------------------------------- vector marks
+#
+# A subject read from a vector source instead of a formula (after
+# Dillon's PR #214): an SVG of pill-shaped bars under hyperspace/marks/,
+# read by vector.read_stadia into its stadia, drawn two ways — as drawn,
+# flat in the z = 0 plane, and each bar lifted into a capsule round its
+# own axis. The Flow mark (wisprflow.ai's own SVG, five bars) is the first.
+# prototypes/subjects/ in the repository root is a browser prototype of
+# where the looks could go next.
+
+
+def _stadia(name: str) -> list[tuple]:
+    """A mark's bars as (a, b, r, d, right): the ends' centres a and b in
+    the plane (y up, centred on the SVG's artboard), the end radius, the
+    unit axis d from a to b and the unit `right` across it (d turned
+    clockwise), so a, b, right and d are a CCW frame."""
+    from . import vector
+
+    bars, (bx, by, bw, bh) = vector.mark(name)
+    cx, cy = bx + bw / 2, by + bh / 2
+    out = []
+    for s in bars:
+        a = np.array([s.a[0] - cx, cy - s.a[1]])
+        b = np.array([s.b[0] - cx, cy - s.b[1]])
+        if (b[1], b[0]) < (a[1], a[0]):    # a the lower (or left) end: v runs up a bar
+            a, b = b, a
+        L = float(np.linalg.norm(b - a))
+        d = (b - a) / L if L > 0 else np.array([0.0, 1.0])
+        out.append((a, b, s.r, d, np.array([d[1], -d[0]])))
+    return out
+
+
+def _build_stadia_flat(name: str, n_cap: int = 12) -> dict:
+    """The mark as drawn: each bar a stadium outline in the z = 0 plane,
+    one face each. A flat vector, so its face UVs ("FUV") are the mark's
+    own plane, square and centred — a face pattern or a bitmap shows
+    through every bar as one picture — and it draws no points: an
+    outline's samples are not corners ("curve"). "flat": the renderer's
+    depth cue for a plane figure (Renderer.draw_scene)."""
+    V: list = []
+    E: list = []
+    F: list = []
+    for a, b, r, d, right in _stadia(name):
+        arc = [(math.cos(math.pi * k / n_cap), math.sin(math.pi * k / n_cap))
+               for k in range(n_cap + 1)]
+        # over b's end from the right round to the left, then under a's: CCW
+        ring = ([b + r * (c * right + s * d) for c, s in arc]
+                + [a - r * (c * right + s * d) for c, s in arc])
+        off = len(V)
+        V.extend([float(p[0]), float(p[1]), 0.0, 0.0] for p in ring)
+        E.extend([off + k, off + (k + 1) % len(ring)] for k in range(len(ring)))
+        F.append(list(range(off, off + len(ring))))
+    P = np.asarray(V)[:, :2]
+    lo, ext = P.min(axis=0), np.ptp(P, axis=0)
+    span = ext.max()
+    uv = (P - lo) / span + (1.0 - ext / span) / 2       # centred, square
+    return {"V": V, "E": E, "F": F, "FUV": [uv[c].tolist() for c in F], "curve": True,
+            "flat": True}
+
+
+def _build_stadia_capsules(name: str, m: int = 16, n_cap: int = 6) -> dict:
+    """The mark lifted into 3D: each bar a capsule round its own axis — a
+    hemisphere, the cylinder between the ends' centres, a hemisphere — m
+    segments round and n_cap rings over each end. Seen face-on it has the
+    flat mark's outline. Its face UVs wrap each capsule, u round the bar
+    and v along it, so a pattern turns with the bar instead of tiling
+    every quad. No points: they would bunch into a blot at each pole."""
+    parts, fuv = [], []
+    for a, b, r, d, right in _stadia(name):
+        L = float(np.linalg.norm(b - a))
+        # the profile: (radius, distance along the axis from a)
+        prof = [(r * math.sin(p), -r * math.cos(p))
+                for p in (math.pi / 2 * k / n_cap for k in range(n_cap + 1))]
+        prof += [(r * math.sin(p), L - r * math.cos(p))
+                 for p in (math.pi / 2 * (1 + k / n_cap) for k in range(n_cap + 1))]
+        grid = []
+        for al in (2 * math.pi * j / m for j in range(m)):
+            row = []
+            for rho, s in prof:
+                q = a + s * d + rho * math.cos(al) * right
+                row.append((float(q[0]), float(q[1]), rho * math.sin(al)))
+            grid.append(row)
+        g = _mesh3(grid, wrap_u=True, wrap_v=False)[0]
+        Vb = np.asarray(g["V"])
+        for cyc in g["F"]:
+            P = Vb[cyc]
+            rel = P[:, :2] - a
+            across, along = rel @ right, rel @ d
+            rho = np.hypot(across, P[:, 2])
+            u = (np.arctan2(P[:, 2], across) / (2 * math.pi)) % 1.0
+            side = rho > 1e-9
+            if side.any() and np.ptp(u[side]) > 0.5:   # the seam: 0 is 1 there
+                u = np.where(u < 0.5, u + 1.0, u)
+            u = np.where(side, u, u[side].mean())      # a pole takes its quad's angle
+            v = np.clip((along + r) / (L + 2 * r), 0.0, 1.0)   # 0 at a's pole, 1 at b's
+            fuv.append(np.stack([u, v], axis=1).tolist())
+        parts.append(g)
+    return {**_merge(parts), "FUV": fuv, "curve": True}
+
+
 # ----------------------------------------------------------- scenes
 #
 # A scene is several shapes in one frame, sharing its centre: a sphere
@@ -1400,6 +1500,12 @@ SHAPES = [
     Shape("Truncated icosahedral prism", "hyperprism", 34, "t{3,5}×{ }",
           lambda: prism([v[:3] for v in _build_trunc_icosa()["V"]]),
           family="Prisms and pyramids"),
+    # -------- vector marks: a subject read from an SVG (hyperspace/marks/,
+    # after PR #214); appended, since the index is a shape's identity
+    Shape("Flow mark", "vector · the Wispr Flow mark, five stadia", 0, "5 ⊂⊃ · SVG",
+          lambda: _build_stadia_flat("flow-mark"), dims=3, family="Vector marks"),
+    Shape("Flow capsules", "vector · the Flow mark's bars as capsules", 0, "5 ⊂⊃ × S¹",
+          lambda: _build_stadia_capsules("flow-mark"), dims=3, family="Vector marks"),
 ]
 
 # The Shape menu (ui.Panel._shape_combo): sections, each a run of
@@ -1410,7 +1516,7 @@ MENU = (
             "600-cell family", "Catalan duals", "Star polychora", "Prisms and pyramids",
             "Surfaces and fibrations")),
     ("3D", ("Surfaces", "Platonic solids", "Archimedean solids", "Catalan solids",
-            "Star polyhedra", "Compounds", "Mathematical toys")),
+            "Star polyhedra", "Compounds", "Mathematical toys", "Vector marks")),
     ("Scenes", ("Scenes",)),
 )
 
@@ -1442,6 +1548,10 @@ def geom(i: int) -> dict:
         _cache[i]["F"] = g["F"]
     if g.get("curve"):  # a curve's samples are not corners: no points drawn
         _cache[i]["curve"] = True
+    if g.get("flat"):  # a plane figure: its depth cue spans the unit sphere (render)
+        _cache[i]["flat"] = True
+    if "FUV" in g:  # its faces' UVs given by its builder (a vector mark's)
+        _cache[i]["FUV"] = g["FUV"]
     if "layers" in g:  # a scene: whose rows are whose, and how each draws
         _cache[i].update(_scene_style(g["layers"], len(g["V"]), len(g["E"]), len(g["F"])))
     return _cache[i]
@@ -1756,14 +1866,19 @@ def face_uvs(i: int) -> np.ndarray:
     the circumradius spans 0.5 about a (0.5, 0.5) centre with CCW winding.
     Congruent faces therefore carry identical UV polygons (up to the cycle's
     n-fold starting rotation), which is what makes one pattern land with the
-    same scale and framing on every face.
+    same scale and framing on every face. A builder that gives its own
+    ("FUV": the vector marks) has them used as given — one picture across a
+    flat mark, a wrap round each capsule — each corner's UV in its face
+    cycle's order.
     """
     if i in _uv_cache:
         return _uv_cache[i]
     g = geom(i)
     V = g["V"]
     per_face: list[np.ndarray] = []
-    for cyc in faces(i):
+    if "FUV" in g:
+        per_face = [np.asarray(f, dtype=np.float64) for f in g["FUV"]]
+    for cyc in faces(i)[len(per_face):]:
         xy = _face_xy(V[np.asarray(cyc)])   # the face in its own CCW 2-plane basis
         r = np.linalg.norm(xy, axis=1).max()
         per_face.append(xy / (2 * r) + 0.5)

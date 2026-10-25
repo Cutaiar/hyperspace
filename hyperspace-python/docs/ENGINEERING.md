@@ -160,8 +160,9 @@ with F 0) draws no points: its samples are not corners.
 polytopes; the 5-cell, tesseract, 24-cell and 600-cell families;
 Catalan duals; star polychora; prisms and pyramids; surfaces and
 fibrations), **3D** (surfaces, Platonic, Archimedean and
-Catalan solids, star polyhedra, compounds, mathematical toys) and
-**Scenes**. `geometry.menu()` lists them; within a family, index order.
+Catalan solids, star polyhedra, compounds, mathematical toys, vector
+marks) and **Scenes**. `geometry.menu()` lists them; within a family,
+index order.
 The index stays the identity, so the menu's order never reaches a preset
 (`tests/test_catalog.py::test_the_menu_holds_every_shape_once_by_kind`).
 
@@ -240,6 +241,32 @@ The index stays the identity, so the menu's order never reaches a preset
 | 97 | Octagonal antiprism prism | Prisms and pyramids | 68 | 32 | 80 |
 | 98 | Icosidodecahedral prism | Prisms and pyramids | 124 | 60 | 150 |
 | 99 | Truncated icosahedral prism | Prisms and pyramids | 154 | 120 | 240 |
+| 100 | Flow mark | Vector marks | 5 | 130 | 130 |
+| 101 | Flow capsules | Vector marks | 1040 | 970 | 2000 |
+
+**Vector marks** (3D, after the prisms; after Dillon's PR #214). A
+subject read from a vector source instead of a formula: an SVG of
+pill-shaped bars under `hyperspace/marks/`, which `vector.read_stadia`
+reads into its stadia (each `<path>` walked, its points bounding it, the
+pill that box holds; a path that is not a pill is refused by name). The
+first is the Wispr Flow mark, wisprflow.ai's own SVG, five bars.
+**Flow mark** is the mark as drawn (`_build_stadia_flat`): five stadium
+outlines in the z = 0 plane, one face each. **Flow capsules**
+(`_build_stadia_capsules`) lifts each bar into a capsule round its own
+axis. Neither draws points. Each builder gives its own face UVs
+(`"FUV"`, which `face_uvs` uses as given): the mark's are its own plane,
+so a face pattern, a bitmap or a media channel on the faces shows through
+the five bars as one picture; the capsules' wrap each bar, u round it
+and v along it. A plane figure has no depth of its own, so its depth cue
+(`"flat"`) spans the unit sphere's diameter back from its nearest point:
+face-on it draws at full weight, and a tilt dims its far side. Another
+pill mark is an SVG and two catalog lines
+(`tests/test_catalog.py::test_the_flow_mark_is_five_stadia_as_the_svg_draws_them`
+and the three after it, `tests/test_vector.py`,
+`tests/test_render.py::test_a_flat_vector_draws_at_full_weight_face_on`).
+A browser prototype of where the looks could go (flat ↔ capsules,
+materials, textures, bars moving to audio) is in
+[`prototypes/subjects/`](../../prototypes/subjects/).
 
 **Scenes** (`Shape.layers`, `geometry.Layer`). A scene is several shapes
 in one frame sharing a centre — a glome round a tesseract round a star.

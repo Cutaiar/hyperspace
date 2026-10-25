@@ -151,12 +151,33 @@ def v4_sources() -> list[tuple[str, Path]]:
     """Every factory preset file (dial's too) and every fixture under
     tests/fixtures/presets/ and tests/fixtures/merge-31-32/, as (kind, path)
     — but a `/5` fixture (plan 33 T4's proofs), which no build before plan
-    33 reads and `test_a_free_fixture_saves_as_five` holds instead."""
+    33 reads and `test_a_free_fixture_saves_as_five` holds instead — and
+    the vector marks' two (`VECTOR_FIXTURES`, after PR #214), whose shapes
+    no build before them has, so the base has no save of theirs to match;
+    `test_a_vector_mark_fixture_saves_its_shape` holds them instead."""
     out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in SOURCES.items():
         out += [(kind, p) for p in sorted(folder.glob("*.json"))
-                if json.loads(p.read_text()).get("schema") != "hyperspace.preset/5"]
+                if json.loads(p.read_text()).get("schema") != "hyperspace.preset/5"
+                and p.stem not in VECTOR_FIXTURES]
     return out
+
+
+VECTOR_FIXTURES = ("flow-mark", "flow-capsules")
+
+
+def test_a_vector_mark_fixture_saves_its_shape(tmp_path):
+    """The vector marks' proof presets, loaded and saved untouched, keep
+    their shape (the Flow mark, the Flow capsules) and stay below `/5`."""
+    from hyperspace.geometry import SHAPES
+
+    for k, name in enumerate(VECTOR_FIXTURES):
+        path = SOURCES["presets"] / f"{name}.json"
+        doc = json.loads(saved_bytes(tmp_path / str(k), "presets", path))
+        want = json.loads(path.read_text())["values"]["view.shape"]
+        assert doc["values"]["view.shape"] == want, name
+        assert SHAPES[want].family == "Vector marks", name
+        assert doc["schema"] != "hyperspace.preset/5", name
 
 
 def test_a_free_fixture_saves_as_five(tmp_path):

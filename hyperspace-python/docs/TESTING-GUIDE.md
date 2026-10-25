@@ -44,6 +44,8 @@ explained in the [glossary](#glossary) at the end.
    are plan 33's: use branch `plan-33-free-graph` (PR #235) until it is
    merged. A free graph saves as `hyperspace.preset/5`, which an older
    build refuses, so both Macs must run that build before L157.
+   The vector-mark entry (L158, the Flow mark as a subject, after PR #214)
+   is on branch `flow-mark-subject` until it is merged.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -134,6 +136,7 @@ changes brightness or volume instead).
     a phone on the copy; then L152, the two plans together, with two Macs.
 16. Plan 33's free-graph entries: L153–L156 on the laptop (L156 with a
     live source), L157 with two Macs on the copy, then A47 with the APC40.
+17. The vector marks: L158 on the laptop, on the copy.
 
 ## Summary
 
@@ -296,6 +299,7 @@ changes brightness or volume instead).
 | L155 | The FX page with a big graph, from across the room | 1 | laptop | 327 |
 | L156 | A channel lost on the faces mid-show; the frame cost of branches and a switch | 1 | laptop, a live source | 323, 324 |
 | L157 | An old party preset looks the same; a free graph on an older build | 1 | two Macs, the copy | 322, 328 |
+| L158 | The Flow mark as a subject, flat and as capsules (after PR #214) | 1 | laptop, the copy; a clip | 332, 333 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -3902,6 +3906,34 @@ file is a lower schema and the old Mac opens it.
 opening a `/5` file.
 
 *(checks 322, 328)*
+
+## Vector marks: the Flow mark as a subject (L158)
+
+#### L158. The Flow mark, flat and as capsules
+
+**Needs:** laptop; the copy; a clip; branch `flow-mark-subject`.
+
+**Do:** open the Shape menu and find **Vector marks**, the last group
+under 3D. Pick **Flow mark**, turn rotate off and reset the camera. Turn
+the faces on with PLAID or BLOOM at full mix, then turn the camera's yaw
+slowly to one side and back. Put the clip on channel A and on the faces.
+Then pick **Flow capsules**, rotate in XZ and YZ only, faces on with
+BLOOM, brightness about 2; set nine instances on a grid with RIPPLE. Save
+the preset under a new name, load another, and load it back.
+
+**Right if:** the flat mark is the Wispr Flow logo (five rounded bars,
+tall, short, middle, short, tall), bright face-on, no red dots; the
+pattern and then the clip run through all five bars as one picture;
+tilted, the far side dims. The capsules are round, turn smoothly, the
+pattern wraps round each bar with no seam, nine marks ripple, and the
+preset comes back on the capsules. Say whether the capsules' faces are
+bright enough to read.
+
+**Wrong if:** a bar out of place or the wrong height, a dim mark face-on,
+the pattern starting over in each bar, a seam or a blot at a pole, or the
+preset coming back on another shape.
+
+*(checks 332, 333)*
 
 # Part 2 — tests that need hardware
 

@@ -166,9 +166,13 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces")
+# the vector marks' two (after PR #214): the Flow mark still and face-on,
+# and the Flow capsules turning, the faces on — their proof is the shape
+# (`view.shape`), no graph of their own
+SUBJECT_FIXTURES: tuple[str, ...] = ("flow-mark", "flow-capsules")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
-                                    *MEDIA_FIXTURES)
+                                    *MEDIA_FIXTURES, *SUBJECT_FIXTURES)
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 

@@ -2419,6 +2419,14 @@ class Renderer:
 
         near, far = pd.min(), pd.max()
         span = max(far - near, 1e-6)
+        if g.get("flat"):
+            # a plane figure (a vector mark, geometry._build_stadia_flat) has
+            # no depth of its own, so its own span would put it at the cue's
+            # dimmest face-on: the cue spans the unit sphere's diameter back
+            # from its nearest point (pd's largest), so face-on it draws at
+            # full weight and a tilt dims its far side. Only shapes marked
+            # "flat" come here
+            near, span = far - 2.0, 2.0
         E = g["E"]
         edepth = (pd[E[:, 0]] + pd[E[:, 1]]) * 0.5
         order = np.argsort(edepth, kind="stable")  # painter: far first

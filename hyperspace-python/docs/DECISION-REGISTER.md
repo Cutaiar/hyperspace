@@ -6784,3 +6784,68 @@ The plan lands on `plan-31-32-integration` (PR #235).
   `after`-only reader as a root; up to a few idle sized textures are held
   half a second (R29).
 - **Judge it.** Checks 319, 324.
+
+## Vector marks: the Flow mark as a subject (rows 353–355)
+
+Dillon's PR #214 (`subjects-flow-logo`, 2026-10-17) drew the Wispr Flow
+mark as the subject, flat and as capsules; it was built before the render
+graph and could not land. These rows are the port's own choices on
+`flow-mark-subject`, built on its recommendation; #214 stays open as the
+record.
+
+### 353. A vector logo is a catalog shape, not a graph node
+
+- **Built.** The Flow mark is two shapes in `geometry.SHAPES`, appended
+  after the prisms (index 99 **Flow mark**, 100 **Flow capsules**; the
+  index is a shape's identity), both 3D, in a family of their own,
+  **Vector marks**, last in the Shape menu's 3D section. So it is picked
+  the way every shape is (the Shape menu, `view.shape` on a knob, a
+  route), drawn by the graph's one `shape` node with its faces input,
+  instanced into a field, layered into a scene, and saved in a preset as
+  `view.shape` with nothing new in the file. A face pattern, a media
+  channel or a wired picture on `shape.faces` lands on it as on any
+  shape.
+- **Other options.** A `subject` node of its own in the graph beside the
+  shape (a second geometry, its own SVG param); a separate "subject"
+  param that overrides the shape.
+- **To reverse.** The two `Shape` lines and the `"Vector marks"` entry in
+  `geometry.MENU`; `hyperspace/vector.py`, `hyperspace/marks/`.
+- **Rough edge.** A preset saved with shape 99 or 100 opens on an older
+  build as a shape index past its menu. The Shape menu is now 101 long.
+- **Judge it.** Checks 332, 333.
+
+### 354. The mark is read from its SVG at build time, pills only
+
+- **Built.** #214 typed the five bars' numbers in by hand. Here
+  `hyperspace/marks/flow-mark.svg` (the prototype's source, byte for byte)
+  is read when the shape is first built: `vector.read_stadia` walks each
+  `<path>` (M L H V C S Q T Z, absolute and relative), bounds it, and takes
+  the pill that box holds; a path that is not a pill, or uses an arc, is
+  refused by name. Each bar keeps its own radius, so the first bar is the
+  0.25 % narrower the SVG draws it. Another pill-shaped mark is an SVG in
+  `hyperspace/marks/` and two catalog lines.
+- **Other options.** #214's constants; a general SVG reader (any outline,
+  extruded with a bevel, as the prototype does).
+- **To reverse.** `geometry._stadia` back to a constant table.
+- **Rough edge.** Only pills: the Flow wordmark (letters) is refused. A
+  mark is read from the package, not from the user's library, so a new
+  one needs a build.
+- **Judge it.** Check 332.
+
+### 355. A plane figure's depth cue starts at full weight; the marks bring their own face UVs
+
+- **Built.** As #214: a shape marked `"flat"` (the Flow mark alone) has its
+  depth cue span the unit sphere's diameter back from its nearest point,
+  so face-on it draws at full weight and a tilt dims its far side; every
+  other shape's cue is unchanged. A builder may give its faces' UVs
+  (`"FUV"`, used by `face_uvs` as given): the flat mark's are its own
+  plane, square, so one picture shows through the five bars; the
+  capsules' wrap each bar, u round it and v up it. Neither draws points.
+- **Other options.** The cue over the shape's own (zero) depth, which
+  draws a face-on mark at its dimmest; the per-face UVs every other shape
+  gets, which tile the picture once per bar (and per quad on a capsule).
+- **To reverse.** The `if g.get("flat")` in `Renderer.draw_scene`;
+  `"FUV"` in `geom` and `face_uvs`.
+- **Rough edge.** The capsules have 1040 faces, so the faces' density
+  thins them and the pattern reads faintly at the default brightness.
+- **Judge it.** Checks 332, 333.

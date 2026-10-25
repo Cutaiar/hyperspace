@@ -349,6 +349,34 @@
     "none",
     "through"
    ]
+  },
+  "flow-mark": {
+   "file": "tests/fixtures/presets/flow-mark.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "flow-capsules": {
+   "file": "tests/fixtures/presets/flow-capsules.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
   }
  },
  "presets": {
@@ -1334,6 +1362,64 @@
     "nodes": [
      "media.b",
      "media.a",
+     "scene",
+     "cover",
+     "hands",
+     "history",
+     "fx",
+     "composite(scene+hands)",
+     "fx(scene+hands)",
+     "composite(hands)",
+     "fx(hands)",
+     "capture",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "flow-mark": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": true,
+    "graph": null,
+    "nodes": [
+     "scene",
+     "cover",
+     "hands",
+     "history",
+     "fx",
+     "composite(scene+hands)",
+     "fx(scene+hands)",
+     "composite(hands)",
+     "fx(hands)",
+     "capture",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "flow-capsules": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": true,
+    "graph": null,
+    "nodes": [
      "scene",
      "cover",
      "hands",
@@ -10358,6 +10444,214 @@
   },
   {
    "preset": "switch-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f9dfc439ae4b7d11cef6641e8ee4af8a178ef5dda5b60ea6a66efab2ed17d976",
+   "png": "png/f9dfc439ae4b7d11.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f9dfc439ae4b7d11cef6641e8ee4af8a178ef5dda5b60ea6a66efab2ed17d976",
+   "png": "png/f9dfc439ae4b7d11.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "8d7ce82b7ced5150b8016e2149428bb17187f01d2bfeac0817a1b7c2d97bf174",
+   "png": "png/8d7ce82b7ced5150.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "8d7ce82b7ced5150b8016e2149428bb17187f01d2bfeac0817a1b7c2d97bf174",
+   "png": "png/8d7ce82b7ced5150.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "flow-mark",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "302d4e04845a7dc7cafc17422c321103ea70b5bd52be6cb1c60a27d1783000b8",
+   "png": "png/302d4e04845a7dc7.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "302d4e04845a7dc7cafc17422c321103ea70b5bd52be6cb1c60a27d1783000b8",
+   "png": "png/302d4e04845a7dc7.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0f690af2a309b2540b9e7d03a66370a25167941db84331a2bc76959ea297a9b0",
+   "png": "png/0f690af2a309b254.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0f690af2a309b2540b9e7d03a66370a25167941db84331a2bc76959ea297a9b0",
+   "png": "png/0f690af2a309b254.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "flow-capsules",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "flow-capsules",
    "hands": "present",
    "state": "through",
    "route": "none",

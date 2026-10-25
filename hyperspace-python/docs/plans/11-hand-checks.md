@@ -4628,6 +4628,50 @@ the same row. *Fail:* mix drops to 0 between fires, a fire reaches less
 than the top, or the GRAPH cable makes another row (`learn.row_for`,
 `graphview.Edit.route_for`).
 
+## AD. Vector marks: the Flow mark as a subject (after PR #214)
+
+The Flow mark, read from its SVG (`hyperspace/marks/flow-mark.svg`), as
+two shapes at the end of the Shape menu's 3D section, **Vector marks**:
+**Flow mark** (flat, as drawn) and **Flow capsules** (each bar lifted).
+On `flow-mark-subject`; register rows 353–355. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`). None of these has been run by
+a person; the goldens (`flow-mark`, `flow-capsules`) were checked by eye
+on the build machine.
+
+**332. The Flow mark from the Shape menu, flat and face-on, a picture
+through its bars.** (laptop, the copy; a clip for the last step)
+Headless: `tests/test_catalog.py::{test_the_flow_mark_is_five_stadia_as_the_svg_draws_them,test_the_flow_mark_shows_one_picture_through_its_bars,test_the_vector_marks_sit_last_in_the_3d_section_and_only_they_are_flat}`, `tests/test_vector.py`, `tests/test_render.py::test_a_flat_vector_draws_at_full_weight_face_on`, `tests/test_golden_frames.py` (`flow-mark`).
+Open the Shape menu: **Vector marks** is the last group under 3D. Pick
+**Flow mark**, turn **rotate** off and press camera reset. Then turn the
+faces on with a pattern (PLAID or BLOOM) at full mix; turn the camera's
+yaw slowly to about 60° and back. Last, put the clip on channel A and set
+the faces' media to it. *Pass:* five rounded bars, tall–short–middle–
+short–tall, the mark as wisprflow.ai draws it, bright face-on (not dim);
+no red dots on the outline; the pattern reads as one picture running
+through all five bars (not repeated per bar); tilted, the far side dims
+and the near side stays bright; the clip shows through the bars as one
+picture. *Fail:* a bar the wrong height or out of line, a dim mark
+face-on, dots on the outline, the pattern restarting in each bar, or a
+squashed picture (`vector.read_stadia`, `_build_stadia_flat`, the
+`"flat"` cue in `Renderer.draw_scene`).
+
+**333. The Flow capsules turning, a pattern round the bars, a field of
+them, and a preset that keeps it.** (laptop, the copy)
+Headless: `tests/test_catalog.py::test_the_flow_capsules_are_the_marks_bars_lifted`, `tests/test_shapes4d.py` (the digests), `tests/test_golden_frames.py` (`flow-capsules`).
+Pick **Flow capsules**, rotation on in XZ and YZ only, faces on with
+BLOOM at full mix, brightness up to about 2. Then set the instances to 9
+on a grid with RIPPLE. Save the preset under a new name, load another,
+and load it back; then wire an effect (`acid`) onto `shape.faces` on
+GRAPH. *Pass:* five round capsules in the mark's outline, turning
+smoothly; the pattern wraps round each bar and turns with it, with no
+seam flicker; the W planes move nothing (it is 3D); nine marks ripple;
+the saved preset comes back on the capsules; the acid shows on the bars'
+faces. Say whether the faces are bright enough to read at the default
+brightness (register row 355's rough edge). *Fail:* a dent or a spike at
+a pole, a visible seam running down a bar, red blots at the poles, or the
+preset coming back on another shape (`_build_stadia_capsules`,
+`face_uvs`).
+
 ## What no test covers
 
 Only a person can settle these:

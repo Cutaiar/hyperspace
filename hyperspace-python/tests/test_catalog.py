@@ -278,3 +278,88 @@ def test_a_shape_that_is_not_a_scene_is_drawn_as_before():
             want[2] = G.view_depth(V, a, yaw, pitch)
         for got, w in zip(G.shape_view(i, ang, yaw, pitch), want):
             assert np.array_equal(got, w)
+
+
+# ------------------------------------------------------- vector marks
+# the Flow mark, read from its SVG (hyperspace/marks/flow-mark.svg, after
+# PR #214): flat as drawn, and its bars lifted into capsules
+
+FLOW_MARK, FLOW_CAPS = BY_NAME["Flow mark"], BY_NAME["Flow capsules"]
+
+
+def _bars(V: np.ndarray, faces: list) -> list:
+    """Each bar's (x centre, width, height), left to right."""
+    out = []
+    for c in faces:
+        P = V[np.asarray(c)]
+        out.append((P[:, 0].mean(), np.ptp(P[:, 0]), np.ptp(P[:, 1])))
+    return sorted(out)
+
+
+def test_the_flow_mark_is_five_stadia_as_the_svg_draws_them():
+    # five bars of one width on one pitch, their heights the SVG's: the two
+    # outer bars tallest, then the middle one, the two short ones equal
+    from hyperspace import vector
+
+    g = G.geom(FLOW_MARK)
+    V, F = g["V"], G.faces(FLOW_MARK)
+    assert all(G.SHAPES[i].dims == 3 and G.SHAPES[i].family == "Vector marks"
+               for i in (FLOW_MARK, FLOW_CAPS))
+    assert len(F) == 5 and (V[:, 2] == 0).all() and (V[:, 3] == 0).all()
+    assert g.get("flat") and g.get("curve")
+    bars = _bars(V, F)
+    widths = [b[1] for b in bars]
+    assert np.ptp(widths) < 0.01 * widths[0]               # one width (the SVG's, to 0.5%)
+    assert np.ptp(np.diff([b[0] for b in bars])) < 0.01 * widths[0]   # one pitch
+    h = [b[2] / b[1] for b in bars]                        # height in widths
+    stadia, _ = vector.mark("flow-mark")
+    svg = [(s.b[1] - s.a[1] + 2 * s.r) / (2 * s.r) for s in stadia]
+    assert h == pytest.approx(svg, abs=1e-3)
+    # the outer bars agree to the SVG's own rounding (its first bar is 0.25% narrower)
+    assert h[0] == pytest.approx(h[4], abs=0.03) and h[1] == pytest.approx(h[3], abs=1e-3)
+    assert h[0] > h[2] > h[1]
+    assert abs(bars[2][0]) < 1e-3                          # centred: the middle bar on the axis
+
+
+def test_the_flow_mark_shows_one_picture_through_its_bars():
+    # its face UVs are the mark's own plane: a corner's UV is an affine
+    # function of where it is, the same for every bar, square
+    g = G.geom(FLOW_MARK)
+    V, F = g["V"], G.faces(FLOW_MARK)
+    P = np.concatenate([V[np.asarray(c), :2] for c in F])
+    uv = np.concatenate([np.asarray(f) for f in g["FUV"]])
+    A = np.hstack([P, np.ones((len(P), 1))])
+    fit = np.linalg.lstsq(A, uv, rcond=None)[0]
+    assert np.allclose(A @ fit, uv)
+    assert fit[0, 0] > 0 and fit[0, 0] == pytest.approx(fit[1, 1])  # square, not stretched
+    # face_uvs hands them to the triangles as given, inside [0, 1]
+    tri = G.face_uvs(FLOW_MARK)
+    assert len(tri) == 3 * len(G.face_triangles(FLOW_MARK))
+    assert tri.min() >= 0 and tri.max() <= 1
+
+
+def test_the_flow_capsules_are_the_marks_bars_lifted():
+    # each bar, seen face-on, has the flat mark's outline; in depth it is
+    # round, one bar's width deep; its UVs wrap it, v running up the bar
+    caps, mark = G.geom(FLOW_CAPS), G.geom(FLOW_MARK)
+    V = caps["V"]
+    assert np.allclose(V[:, :2].min(0), mark["V"][:, :2].min(0))
+    assert np.allclose(V[:, :2].max(0), mark["V"][:, :2].max(0))
+    width = _bars(mark["V"], G.faces(FLOW_MARK))[2][1]     # the middle bar's
+    assert np.ptp(V[:, 2]) == pytest.approx(width, rel=0.01)
+    assert len(caps["FUV"]) == len(G.faces(FLOW_CAPS))
+    for cyc, f in zip(G.faces(FLOW_CAPS), caps["FUV"]):
+        u, v = np.asarray(f).T
+        assert np.ptp(u) <= 1 / 16 + 1e-9                  # no quad spans the seam
+        dy, dv = np.subtract.outer(V[cyc, 1], V[cyc, 1]), np.subtract.outer(v, v)
+        assert (dy * dv >= -1e-12).all()                 # v rises with y
+
+
+def test_the_vector_marks_sit_last_in_the_3d_section_and_only_they_are_flat():
+    three = [fam for sec, fam, _ in G.menu() if sec == "3D"]
+    assert three[-1] == "Vector marks"
+    assert {fam: ix for _, fam, ix in G.menu()}["Vector marks"] == [FLOW_MARK, FLOW_CAPS]
+    assert G.geom(FLOW_CAPS).get("curve") and not G.geom(FLOW_CAPS).get("flat")
+    # no other shape is flat or gives its own UVs: theirs draw as before
+    assert [i for i in range(len(G.SHAPES)) if G.geom(i).get("flat")] == [FLOW_MARK]
+    assert [i for i in range(len(G.SHAPES)) if "FUV" in G.geom(i)] == [FLOW_MARK, FLOW_CAPS]
