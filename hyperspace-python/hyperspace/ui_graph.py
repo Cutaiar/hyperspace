@@ -85,25 +85,36 @@ their handlers (`_create_render`, `_delete_render_cable`,
 `_delete_render_node`) land through `render_edit`, whose undo step is
 pushed only once the edit is read back and accepted.
 
-**The free graph** (plan 33 U): `frame`, `fx`, the pattern, the backdrop,
-the switches and the shape's `faces` port are drawn like the other render
-nodes (`graphview.build`). The picker adds an effect or a switch on no
-wire, where the menu opened (`add_render`): faint, "reaches nothing",
-until it is wired in. A render cable's menu offers "insert effect ▸
-<file>" (`insert_effect`); a free effect node let go on a picture cable is
-inserted into it (`dropped`, `Edit.place_effect`); a cable of the run
-deleted takes its effect out, the run closed over it, and `frame →
-fx.image` itself is kept (`graphview.RUN_KEPT`). A compile error colours
-an effect node's title and is its hover (`effect_errors`). The selected
-effect is the panel's one selection, shared with the FX page
-(`Panel.fx_selected`, `share`, `select_effect`).
+**The free graph** (plan 33 U): the pattern, the backdrop, the switches
+and the shape's `faces` port are drawn like the other render nodes
+(`graphview.build`). The picker adds a node on no wire, where the menu
+opened (`add_render`): faint, "reaches nothing", until it is wired in. A
+render cable's menu offers "insert effect ▸ <file>" (`insert_effect`); a
+free effect node let go on a picture cable is inserted into it
+(`dropped`, `Edit.place_effect`). A compile error colours an effect
+node's title and is its hover (`effect_errors`). The selected effect is
+the panel's one selection, shared with the FX page (`Panel.fx_selected`,
+`share`, `select_effect`).
+
+**The wired frame** (plan 35 G): the canvas is the preset's wired frame,
+in the owner's ids and words — every node of it titled for what it is
+(`graphview.label_of`: "Look-back", "Hands layer", "Channel A", a window
+by its config name), its hover what it does with its id and its params'
+prefix (`graphview.hover_of`), the side panel's header the same
+(`graphview.side_head`). Every node and wire of it deletes; only a type
+error and a loop refuse, and a window keeps itself (its wires go). The
+picker is grouped by primitive — the scene starter (`shape → scene → All
+outputs` in one gesture), scene ▸, look-back ▸, pictures ▸, effects ▸,
+copy of ▸ — a frame node the section has drawn disabled
+(`render_picker`).
 
 A node can be moved: where it is dropped is saved, in the
 preset's ``layout`` for the look's nodes and the show's for the rig's
 (`graphview.home`), and the preset (or the show) is dirty. An unplaced
 node takes its place in its **area** (plan 28 N9, `graphview.layout`):
-controllers → audio (the small *other* under it) → modulation → geometry
-→ shaders, left to right, each titled faintly on the canvas behind its
+controllers → audio (the small *other* under it) → modulation → media →
+scene → look-back → effects → outputs (plan 35 G: by primitive), left to
+right, each titled faintly on the canvas behind its
 nodes (`_titles`). A node with nothing in and nothing out — an unused
 macro, an unpatched LFO, a group no cable reaches, a lost device — is
 not drawn (`drawn_node`): its area shows one line in its place ("8 idle
@@ -292,10 +303,8 @@ def view_of(panel) -> graphview.View | None:
     devices = getattr(panel, "devices", None)
     rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
     gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
-    # (plan 35 T3: a migrated wired frame drawn in the words the canvas
-    # was written in, `GraphSection.said`, until T5 draws the frame itself)
-    said = getattr(gs, "said", None)
-    spec = said() if callable(said) else getattr(gs, "spec", None)
+    # (plan 35 G: the wired frame itself, in the new ids)
+    spec = getattr(gs, "spec", None)
     lanes = _lanes(panel)
     k = graphview.key(table, reg, router, devices, rgraph, spec)
     if st["view"] is None or st["key"] != k:
@@ -303,7 +312,8 @@ def view_of(panel) -> graphview.View | None:
         bands = (getattr(router, "labels", {}).get("lane")
                  or (getattr(chain, "band_names", None) if chain is not None else None))
         st["view"] = graphview.build(table, reg, router, devices, rgraph, spec,
-                                     lanes=lanes, bands=bands, template=template_of(panel))
+                                     lanes=lanes, bands=bands, template=template_of(panel),
+                                     slots=getattr(panel, "outputs", None) or ())
         st["key"] = k
     else:
         graphview.refresh(st["view"], reg, router, lanes, lambda nid: collapsed(st, nid))
@@ -562,7 +572,9 @@ def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
     """The node effect instance `name` is drawn as: its scene pipeline's
     (named by the instance), else its first."""
     hits = [n for n in view.nodes if isinstance(n.ref, Effect) and n.ref.effect == name]
-    return next((n for n in hits if n.ref.name == name), hits[0] if hits else None)
+    # (plan 35 G: the instance's own node, before a copy of it)
+    return next((n for n in hits if n.id == f"render:{name}"),
+                next((n for n in hits if n.ref.name == name), hits[0] if hits else None))
 
 
 def _select(st: dict, view: graphview.View) -> None:
@@ -647,7 +659,8 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
 
 def _area_chips(st: dict) -> None:
     """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
-    MODULATION · MEDIA · GEOMETRY · SHADERS, wrapped to the page; a click frames
+    MODULATION · MEDIA · SCENE · LOOK-BACK · EFFECTS · OUTPUTS (plan 35 G),
+    wrapped to the page; a click frames
     the canvas on that area (`frame_area`, next frame)."""
     for i, a in enumerate(graphview.AREAS):
         label = f"{graphview.TITLES[a]}##area"
@@ -985,9 +998,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.begin_node(ed.NodeId(_id(st, "n:" + n.id)))
     imgui.push_id(n.id)
     shut = collapsed(st, n.id)
-    # (plan 33 U: `frame` takes no wire, but each pipeline's picture feeds it)
-    has_in = (any(p.direction == graphview.IN for p in n.ports)
-              or isinstance(n.ref, graphview.FrameNode))
+    has_in = any(p.direction == graphview.IN for p in n.ports)
     has_out = any(p.direction == graphview.OUT for p in n.ports)
     # the title line: [in stub] label [+ / -] [out stub]
     if has_in:
@@ -1143,7 +1154,7 @@ def _hover(st: dict, view: graphview.View) -> None:
         if err:                             # plan 33 U: a compile error is its hover
             tip = f"{n.label}\n{err}"
         elif n is not None and n.faint:
-            tip = f"{n.label}\n{FAINT_TIP}"
+            tip = f"{n.label}\n{FAINT_TIP}" + (f"\n{n.status}" if n.status else "")
         elif n is not None and n.status:
             tip = f"{n.label}\n{n.status}"
     if tip:
@@ -1170,7 +1181,9 @@ def render_edit(panel) -> graphview.Edit:
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "presets", None), "graph", None)
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
-    return graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
+    e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
+    e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
+    return e
 
 
 def _render_said(panel, e: graphview.Edit, fn, st: dict | None = None) -> str | None:
@@ -1223,9 +1236,11 @@ def _create_render(panel, st: dict, view: graphview.View, a: str, b: str) -> Non
 
 
 def _delete_render_cable(panel, st: dict, view: graphview.View, c) -> None:
-    """Delete pressed on a render cable: unwired, or kept with the words
-    (the default graph's own edge). A cable of a render node this delete
-    just took out goes with it, saying nothing over the node's words."""
+    """Delete pressed on a render cable: its wire out of the section (plan
+    35 G: any wire — the run's, the look-back's, the scene's geometry; only
+    one the section does not have is refused, in words). A cable of a
+    render node this delete just took out goes with it, saying nothing over
+    the node's words."""
     gone = st.get("dropped") or set()
     if view is not None and gone and any(
             view.pins.get(p, ("",))[0] in gone for p in (c.src_port, c.dst_port)):
@@ -1238,8 +1253,10 @@ def _delete_render_cable(panel, st: dict, view: graphview.View, c) -> None:
 
 
 def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
-    """Delete pressed on a render node: an extra effect instance, hands
-    node or composite out of the graph; the frame's own nodes stay, said."""
+    """Delete pressed on a render node: any node of the section out of the
+    graph with its wires (plan 35 G); a window keeps itself, its wires
+    gone (said, accepted as an edit: the node stays drawn); the camera and
+    a cloud are the rig's, refused in words."""
     if _render_said(panel, render_edit(panel), lambda e: e.drop_node(n.id), st) is None:
         st.setdefault("dropped", set()).add(n.id)
         ed.accept_deleted_item(False)
@@ -1247,25 +1264,54 @@ def _delete_render_node(panel, st: dict, view: graphview.View, n) -> None:
         ed.reject_deleted_item()
 
 
+LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back ▸
+
+
 def render_picker(panel, at=None) -> None:
-    """The picker's render items: an effect instance per file, a switch,
-    (R28) a switch over the channels into the faces' media or the backdrop,
-    a hands node, a composite (`graphview.picker`). Plan 33 U: an effect or
-    a switch lands unwired (faint, "reaches nothing") where the menu opened
-    (`at`, canvas units); the channels' switch lands wired."""
+    """The picker's render items (`graphview.picker`), grouped by primitive
+    (plan 35 G, `graphview.PICKER_GROUP`): the scene starter at the top,
+    then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
+    pictures ▸ (R28's switch over the channels under the switch), effects ▸
+    and copy of ▸. A frame node the section has already — the scene, the
+    shape, the look-back, the backdrop, the pattern, an echo, the dream —
+    is drawn disabled (`graphview.picked`): there is one of each. A node
+    lands unwired (faint, "reaches nothing") where the menu opened (`at`,
+    canvas units); the starter and the channels' switch land wired."""
     e = render_edit(panel)
     items = graphview.picker(e)
-    effects = [(f, label) for kind, f, label in items if kind == "effect"]
-    if effects and imgui.begin_menu("effect"):
-        for f, label in effects:
-            if imgui.menu_item_simple(label):
-                add_render(panel, e, "effect", f, at)
+    have = graphview.picked(e)
+    for group in graphview.PICKER_GROUPS:
+        mine = [it for it in items if graphview.PICKER_GROUP.get(it[0]) == group]
+        if not mine:
+            continue
+        if not group:
+            for kind, f, label in mine:
+                if imgui.menu_item_simple(label):
+                    add_render(panel, e, kind, f, at)
+            continue
+        if not imgui.begin_menu(f"{group}##graph.pick"):
+            continue
+        for kind, f, label in mine:
+            if kind in ("echo", "channels"):        # (their own submenus)
+                continue
+            if imgui.menu_item_simple(label, enabled=graphview.picked_name(kind, f) not in have):
+                add_render(panel, e, kind, f, at)
+            if kind == "lookback":
+                _echo_menu(panel, e, [it for it in mine if it[0] == "echo"], have, at)
+            if kind == "switch":
+                _channels_menu(panel, e, items, at)
         imgui.end_menu()
-    for kind, _, label in items:
-        if kind not in ("effect", "channels") and imgui.menu_item_simple(label):
-            add_render(panel, e, kind, None, at)
-        if kind == "switch":
-            _channels_menu(panel, e, items, at)
+
+
+def _echo_menu(panel, e: graphview.Edit, echoes, have: set[str], at=None) -> None:
+    """Plan 34's look-back frames, echo.1 (newest) … echo.32 (oldest), in
+    their own submenu under look-back ▸; one already in the section drawn
+    disabled."""
+    if imgui.begin_menu(LOOKBACK_MENU):
+        for kind, f, label in echoes:
+            if imgui.menu_item_simple(label, enabled=f"echo.{f}" not in have):
+                add_render(panel, e, kind, f, at)
+        imgui.end_menu()
 
 
 def _channels_menu(panel, e: graphview.Edit, items, at=None) -> None:
@@ -1309,8 +1355,8 @@ def render_node_menu(panel, n) -> None:
     composite's blend, delete."""
     e = render_edit(panel)
     name, _ = graphview.spec_name(n.id, e.render)
-    kind = rgraph.wire_node_kind(name) if name else None
-    if kind in ("ghost", "layer"):
+    kind = graphview.kind_of(name) if name else None
+    if kind in ("hands", "layer", "guide"):              # (plan 35 V2: the new ids)
         for how in rgraph.DRAWS:
             if imgui.menu_item_simple(f"draw {how}"):
                 _render_said(panel, e, lambda e, how=how: e.set_node(name, draw=how))
@@ -1399,9 +1445,11 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
             ui_routing.remove_modifier(panel, m.id)
         return
     ui._micro(n.kind)
-    imgui.text(n.label)
+    # plan 35 G (V2): a frame node's header says its id and its params' prefix
+    imgui.text(graphview.side_head(n) if n.kind in graphview.FRAME_VKINDS else n.label)
     if n.status:
-        imgui.text_disabled(n.status)
+        imgui.text_disabled(n.status.partition(" · id ")[0]
+                            if n.kind in graphview.FRAME_VKINDS else n.status)
     if isinstance(n.ref, rgraph.SwitchNode):
         _switch_block(panel, view, n)
     if _param_rows(panel, st, n):
@@ -1543,23 +1591,26 @@ def home_page(n: graphview.VNode):
     if n.kind == "group":
         key = _page_of_group(n.label)
         return (key, None) if key is not None else None
-    if n.id == f"render:{graphview.EYE}":
+    # plan 35 G: by the wired frame's ids — `render:camera` (was `render:eye`),
+    # a channel `render:channel.<c>`, All outputs the OUTPUT page with no
+    # window picked, a copy FX with its original selected (`Copy.effect`)
+    if n.id == f"render:{graphview.CAMERA}":
         return ("camera", None)
+    if n.id == f"render:{rgraph.ALL_OUTPUTS}":
+        return ("output", None)
     if isinstance(r, rgraph.MediaNode):
         return ("media", _media_sel(r.channel))
     if isinstance(r, Effect):
         return ("fx", _fx_sel(r.effect))
-    if isinstance(r, rgraph.Shown):           # (plan 35 T4: an end, where `fx` was)
-        return ("fx", None)
     if isinstance(r, rgraph.PatternNode):
         return ("faces", None)
     if isinstance(r, rgraph.BackdropNode):
         return ("media", None)
     if isinstance(r, rgraph.Shape):
         return ("view", None)
-    if isinstance(r, rgraph.History):
+    if isinstance(r, (rgraph.History, rgraph.EchoNode, rgraph.DreamNode)):
         return ("lookback", None)
-    if isinstance(r, (rgraph.Hands, rgraph.HandsLayer)):
+    if isinstance(r, (rgraph.Hands, rgraph.HandsLayer, rgraph.Readout)):
         return ("hands", None)
     if isinstance(r, rgraph.Output) or n.kind == "output":
         return ("output", None)
@@ -2001,9 +2052,9 @@ def dropped(panel, view: graphview.View, nid: str, centre) -> graphview.VCable |
         return None
     pins = _state(panel)["pin_xy"]
     if n.kind == "render" and isinstance(n.ref, Effect):
-        name = n.ref.effect
-        mine = {m.id for m in view.nodes if isinstance(m.ref, Effect) and m.ref.effect == name}
-        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip=mine)
+        # (plan 35 G: the node's own name — an instance, or a copy of one)
+        name = n.id.partition(":")[2]
+        c = graphview.cable_near(view, pins, centre, kinds=("render",), skip={nid})
         if c is None or c.type != graphview.IMAGE:
             return None
         why = _render_said(panel, render_edit(panel), lambda e: e.place_effect(c, name))
@@ -2230,20 +2281,12 @@ def _lane_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> Non
 DELETE["lane"] = _lane_cut
 
 
-def _feeds_cut(panel, st: dict, view: graphview.View, c: graphview.VCable) -> None:
-    """Delete pressed on a pipeline's picture into `frame` (plan 33 U): kept —
-    it is what frame is, no wire — and the head says so."""
-    ed.reject_deleted_item()
-    _note(st, graphview.FEEDS_NO_DELETE)
-
-
-DELETE[graphview.FEEDS] = _feeds_cut
-
 # a node delete's handler by the node's kind (the seam: N4 maps "render"
-# and "output"); a kind not listed is the rig's
+# and "output", plan 35 G a channel too); a kind not listed is the rig's
 DELETE_NODE = {"modifier": _value_node_cut, "macro": _value_node_cut,
                "lfo": _voice_node_cut, "env": _voice_node_cut,
-               "render": _delete_render_node, "output": _delete_render_node}
+               "render": _delete_render_node, "output": _delete_render_node,
+               "channel": _delete_render_node}
 
 
 def delete_bundle(st: dict, b: graphview.VBundle) -> str:
@@ -2385,9 +2428,6 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
             if imgui.menu_item_simple(kind):
                 insert_modifier(panel, c, kind)
         imgui.end_menu()
-    if c.kind == graphview.FEEDS:               # plan 33 U: what frame is, no wire
-        imgui.text_disabled(graphview.FEEDS_NO_DELETE)
-        return
     if c.kind == "render" and c.type == graphview.IMAGE:
         files = [f for kind, f, _ in graphview.picker(render_edit(panel)) if kind == "effect"]
         if files and imgui.begin_menu("insert effect"):     # plan 33 U
@@ -2450,7 +2490,7 @@ def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
             remove_node(panel, n.id)
         if why is not None and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
             imgui.set_tooltip(why)
-    if n.kind in ("render", "output"):
+    if n.kind in graphview.FRAME_VKINDS:
         render_node_menu(panel, n)
 
 

@@ -563,29 +563,6 @@ class GraphSection:
         self.free = copy.deepcopy(free)
         self._push()
 
-    def said(self) -> GraphSpec | None:
-        """The landed graph in the words the pages were written in (plan 35
-        T3): a wired frame that is exactly a migrated one, read back by its
-        round trip (`graphmigrate.unwired`) — the run `frame → … →
-        fx.image`, `into`, `holds`, the old ids, as the GRAPH canvas's
-        render names still are until T4 — else the spec as it is (none, a
-        section of before, an edited frame). Kept for the spec it read."""
-        spec = self.spec
-        if spec is None or not spec.wired:
-            return spec
-        held = self.__dict__.get("_said")
-        if held is not None and held[0] is spec:
-            return held[1]
-        got = graphmigrate.unwired(spec.to_json(), self.specs())
-        out = spec
-        if got is not None:
-            try:
-                out = read_graph(got[0], effects=self.files())
-            except GraphError:
-                out = spec
-        self.__dict__["_said"] = (spec, out)
-        return out
-
     def held_values(self) -> dict[str, Any]:
         """The retired values the load read (getattr: a section from before
         plan 33 T7 holds none)."""

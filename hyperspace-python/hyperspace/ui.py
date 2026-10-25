@@ -1784,20 +1784,12 @@ class Panel:
     def graph_now(self):
         """(the renderer's wiring, the loaded preset's graph spec or None):
         what the OUTPUT page says in words (plan 26 A4). Any piece missing
-        (no renderer, no presets) reads as the default graph."""
+        (no renderer, no presets) reads as the default graph. Plan 35 T5:
+        the wired frame itself, in the new ids, on every page."""
         wiring = getattr(self.renderer, "wiring", None) or Wiring()
         presets = getattr(getattr(self, "library", None), "presets", None)
         gs = getattr(presets, "graph", None)
-        spec = getattr(gs, "spec", None)
-        said = getattr(gs, "said", None)
-        if spec is not None and getattr(spec, "wired", False) and callable(said):
-            # plan 35 T3: a migrated wired frame said in the words the pages
-            # were written in (`GraphSection.said`) until T6 makes them
-            # views of the wires; an edited frame is said as it stands
-            spec = said()
-            if not spec.wired:
-                wiring = spec.wiring()
-        return wiring, spec
+        return wiring, getattr(gs, "spec", None)
 
     def black_outputs(self) -> list[int]:
         """The opened outputs showing nothing for a reason other than the

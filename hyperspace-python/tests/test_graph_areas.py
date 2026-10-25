@@ -52,7 +52,8 @@ FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch
 # every effect file, by its @order: the chain an old preset with every one
 # on lands as (plan 33 T7: `names()` is by name — there is no stack)
 REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
-CONCERNS = (graphview.AUDIO, graphview.GEOMETRY, graphview.SHADERS)
+CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, graphview.EFFECTS_AREA,
+            graphview.OUTPUTS_AREA)
 
 
 @pytest.fixture()
@@ -67,6 +68,12 @@ def load(rig, name, graph=None):
     if graph is not None:
         rig.panel.renderer = NS(_graph=graph)
     rig.lib.load("presets", name)
+    # (plan 35 T5: the canvas is the preset's wired frame — party-trip's is
+    # the render graph's own frame, landed again after the load)
+    section = getattr(rig.panel.renderer._graph, "section", None)
+    if name == "party-trip" and section is not None:
+        spec = G.read_graph(section)
+        rig.lib.presets.graph.land(spec, spec.to_json())
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
@@ -74,14 +81,18 @@ def load(rig, name, graph=None):
 
 def real_graph(fixture=None):
     """The app's chain (every effect, and the instances the fixture adds),
-    wired as graph fixture `fixture` says."""
+    wired as graph fixture `fixture` says — its wired frame kept on it
+    (`section`, the frame `load` lands for party-trip)."""
+    from wiredframe import shown
     spec = G.read_graph(json.loads((FIXTURES / f"{fixture}.json").read_text())["graph"]
                         ) if fixture else None
     wiring = spec.wiring() if spec is not None else G.Wiring()
     extra = tuple(e.name for e in spec.effects) if spec is not None else ()
     effects = REAL + tuple(e for e in extra if e not in REAL)
     src = spec if spec is not None and spec.wired else stacked(effects, wiring)
-    return thru(src, effects, Shows(), Shows(through=True))
+    g = thru(src, effects, Shows(), Shows(through=True))
+    g.section = shown(src, Shows(), Shows(through=True))
+    return g
 
 
 def load_fixture(rig, fixture):
@@ -136,9 +147,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     on the app's whole chain wired by each graph fixture: every node is in
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
-    column — so no audio node stands in a geometry or shader column, nor
-    any of those in another's; and no drawn wire runs back or within a
-    column but the shaders' row returns.
+    column — so no audio node stands in a scene, look-back, effects or
+    outputs column (plan 35 G's areas), nor any of those in another's; and
+    no drawn wire runs back or within a column but the returns
+    (`graphview.returns`: the effects' wrapped rows, the capture's).
 
     Plan 33 T6: the free graph's `/5` fixtures, each loaded as the preset
     on its own graph, hold too. The rule that keeps them right-running: a
@@ -187,37 +199,43 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in (graphview.ANALYZER, "group:band", "group:tempo", "group:master",
                               "group:audio", "group:scene")} == {graphview.AUDIO}
     assert {area[k] for k in ("lfo.1", "macro.1", "group:lfo")} == {graphview.MODULATION}
-    assert {area[k] for k in ("render:shape", "render:eye", "render:ghost", "render:scene",
-                              "render:hands", "render:cover", "group:hands",
-                              "group:cloud")} == {graphview.GEOMETRY}
-    end = "render:" + graphview.canvas_name(view.node("render:output.1").ref.inputs["image"])
-    assert end.startswith("render:shown(")             # (plan 35 T4: where `fx` was)
-    assert {area[k] for k in ("render:history", "render:acid", "render:palette", end,
-                              "render:capture", "render:output.1", "render:output.2",
-                              "group:output")} == {graphview.SHADERS}
+    # (plan 35 G: by primitive, in the new ids)
+    assert {area[k] for k in ("render:shape", "render:camera", "render:hands", "render:scene",
+                              "render:hands.layer", "group:hands",
+                              "group:cloud")} == {graphview.SCENE_AREA}
+    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    assert {area[k] for k in ("render:acid", "render:palette", "render:copy",
+                              "render:composite")} == {graphview.EFFECTS_AREA}
+    assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
+                              "group:output")} == {graphview.OUTPUTS_AREA}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
                               "group:missing")} == {graphview.OTHER}
 
 
 def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
-    """Plan 33 T6: an effect on the history wired into a switch (`history →
-    acid.2 → switch.in1`, the switch into output 2) is the scene's picture —
-    it stays with the shaders — so its cable into the switch, which sits
-    with the media, runs back: one of `returns` (as a wrapped row's is). No
-    other wire runs back. (Into the faces, the pattern or the backdrop a
-    scene picture is a loop — the scene draws them — and is never built.)"""
+    """Plan 33 T6: an effect on the look-back wired into a switch (`lookback
+    → acid.2 → switch.in1`, the switch into output 2) is the scene's
+    picture — it stays with the effects — so its cable into the switch,
+    which sits with the media, runs back: one of `returns` (as a wrapped
+    row's is). No other wire runs back. (Into the faces, the pattern or the
+    backdrop a scene picture is a loop — the scene draws them — and is
+    never built.)"""
     from hyperspace.params import declare_switches
-    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "acid", "instance": 2},
+    spec = G.read_graph({"frame": "wired",
+                         "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
                                    {"kind": "switch"}],
-                         "wires": [{"from": "frame", "to": "fx.image"},
-                                   {"from": "history", "to": "acid.2.image"},
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "scene", "to": "lookback.image"},
+                                   {"from": "lookback", "to": "output.all.image"},
+                                   {"from": "lookback", "to": "acid.2.image"},
                                    {"from": "acid.2", "to": "switch.in1"},
                                    {"from": "switch", "to": "output.2.image"}]})
+    assert not spec.notes
     declare_switches(rig.reg, ["switch"])
     g = G.build_graph(views(Switches(), Switches()), spec.wiring(),
                         effects=REAL + ("acid.2",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
-    assert view.node("render:acid.2").area == graphview.SHADERS
+    assert view.node("render:acid.2").area == graphview.EFFECTS_AREA
     assert view.node("render:switch").area == graphview.MEDIA
     lay = graphview.layout(view, collapsed=lambda nid: True)
     back = graphview.returns(view, lay)
@@ -238,6 +256,8 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
     drawn = [n for n in view.nodes if not n.idle]
     for a, (tx, ty) in lay.titles.items():
         mine = [n for n in drawn if n.area == a]
+        if not mine:                    # (plan 35 G: MEDIA's channels all idle: its line)
+            continue
         first = min(n.column for n in mine)
         assert tx == first * graphview.COL_W
         assert all(lay.nodes[n.id][1] >= ty + graphview.TITLE_H for n in mine
@@ -266,16 +286,18 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     view = st["view"]
     ui_graph.toggle_idle(st, graphview.MODULATION)
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:eye"] = [900, 40]
+    rig.lib.presets.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
     # twice — and the eight media channels, their bins empty (plan 32 T10:
-    # the channels' params on their own nodes, the backdrop's always drawn)
-    assert sum(n.idle for n in view.nodes) == 24
-    assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in 7 areas, every one "
-                          "collapsed · 24 idle off the canvas")
+    # the channels' params on their own nodes); plan 35 G: the backdrop's
+    # group node too (no backdrop in the section: it idles like any group)
+    assert sum(n.idle for n in view.nodes) == 25
+    k = len({n.area for n in view.nodes if not n.idle})
+    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
+                          "collapsed · 25 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -328,7 +350,7 @@ def test_the_idle_macros_line_expands_to_show_them_and_the_picker_still_offers_t
     lay = ui_graph.areas_of(st, view)
     ids = lay.idle[graphview.MODULATION]
     assert ui_graph.idle_line(view, ids) == "8 idle macros · 3 idle LFOs"
-    assert ui_graph.idle_line(view, lay.idle[graphview.GEOMETRY]) == "1 idle param group"
+    assert ui_graph.idle_line(view, lay.idle[graphview.SCENE_AREA]) == "2 idle param groups"
     line = lay.lines[graphview.MODULATION]
     assert all(lay.nodes[i] == line for i in ids)            # shut: they sit at the line
     ui_graph.toggle_idle(st, graphview.MODULATION)
@@ -397,7 +419,7 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
         assert n.idle == (n.ref.effect in off and not cabled), n.id
     hidden = {n.id for n in effects if n.idle}
     lay = ui_graph.areas_of(st, view)
-    assert ui_graph.idle_line(view, lay.idle[graphview.SHADERS]).startswith(
+    assert ui_graph.idle_line(view, lay.idle[graphview.EFFECTS_AREA]).startswith(
         f"{len(hidden)} off effects")
     assert lay.throughs and all(c.kind == graphview.THROUGH for c in lay.throughs)
     for c in lay.throughs:
@@ -407,19 +429,17 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
     succ: dict = {}
     for c in (*view.cables, *lay.throughs):
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        # (the frame's feeds too: since R23 an idle effect's through wire
-        # starts at `frame`, which the history feeds)
-        if (c.kind in ("render", graphview.THROUGH, graphview.FEEDS)
-                and a not in hidden and b not in hidden):
+        # (plan 35 G: the look-back's picture straight into the run, the
+        # run's last into All outputs — no `frame`, no end)
+        if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
             succ.setdefault(a, set()).add(b)
-    seen, todo = set(), ["render:history"]
+    seen, todo = set(), ["render:lookback"]
     while todo:
         k = todo.pop()
         if k not in seen:
             seen.add(k)
             todo += list(succ.get(k, ()))
-    end = "render:" + graphview.canvas_name(view.node("render:output.1").ref.inputs["image"])
-    assert end in seen and "render:output.1" in seen
+    assert "render:output.all" in seen
     assert not {c.id for c in lay.throughs} & {c.id for c in view.cables}
     # Delete on a through wire: refused in words
     said = []
@@ -436,7 +456,7 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
         if isinstance(n.ref, G.Effect) and n.ref.effect in (one, two):
             assert not n.idle, n.id
     # the line opened: the whole chain, no through wire
-    ui_graph.toggle_idle(st, graphview.SHADERS)
+    ui_graph.toggle_idle(st, graphview.EFFECTS_AREA)
     frame(rig.panel, "graph")
     lay = ui_graph.areas_of(st, st["view"])
     assert lay.throughs == [] and all(n.id in lay.cols for n in st["view"].nodes
@@ -444,21 +464,21 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
 
 
 def test_the_shader_chain_wraps_in_rows_of_four(rig):
-    """The app's whole chain, laid out in full (the shaders' line open): the
-    shaders take four columns, their depths in Z rows — every row left to
+    """The app's whole chain, laid out in full (the effects' line open): the
+    effects take four columns, their depths in Z rows — every row left to
     right, a render cable inside a row running right, one from a row's end
     to the next row's start the only kind that runs back (`returns`); the
-    whole canvas about eleven columns (plan 32 T10's media area one of
-    them), not twenty-three."""
+    whole canvas about a dozen columns (plan 32 T10's media area one of
+    them, plan 35 G's look-back and outputs two more), not twenty-three."""
     st = load(rig, "party-trip", real_graph())
     view = st["view"]
-    for opened in ((), (graphview.SHADERS,)):
+    for opened in ((), (graphview.EFFECTS_AREA,)):
         lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=opened)
-        assert lay.spans[graphview.SHADERS] <= graphview.SHADER_ROW
+        assert lay.spans[graphview.EFFECTS_AREA] <= graphview.SHADER_ROW
         cols = 1 + max(lay.cols.values())
-        assert cols <= 11, (opened, cols)
-    lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.SHADERS,))
-    assert lay.spans[graphview.SHADERS] == graphview.SHADER_ROW
+        assert cols <= 13, (opened, cols)
+    lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.EFFECTS_AREA,))
+    assert lay.spans[graphview.EFFECTS_AREA] == graphview.SHADER_ROW
     assert max(lay.rows.values()) >= 2
     back = graphview.returns(view, lay)
     assert back
@@ -466,13 +486,13 @@ def test_the_shader_chain_wraps_in_rows_of_four(rig):
         if c.kind != "render":
             continue
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        if view.node(a).area == view.node(b).area == graphview.SHADERS:
+        if view.node(a).area == view.node(b).area == graphview.EFFECTS_AREA:
             if lay.rows[a] == lay.rows[b]:
                 assert lay.cols[a] < lay.cols[b], c.id
             else:
                 assert c.id in back and lay.rows[b] > lay.rows[a]
     # each row starts under the tallest column of the one before
-    sh = [n for n in view.nodes if n.id in lay.cols and n.area == graphview.SHADERS]
+    sh = [n for n in view.nodes if n.id in lay.cols and n.area == graphview.EFFECTS_AREA]
     for r in range(1, max(lay.rows.values()) + 1):
         above = max(lay.nodes[n.id][1] for n in sh if lay.rows[n.id] == r - 1)
         assert all(lay.nodes[n.id][1] > above for n in sh if lay.rows[n.id] == r)
@@ -532,12 +552,12 @@ def test_the_area_chips_and_a_title_click_frame_an_area(rig, monkeypatch):
     assert graphview.idle_id(graphview.MODULATION) in ids and "lfo.1" in ids
     assert "frame_area" not in st
     # a click on GEOMETRY's title
-    x0, y0, x1, y1 = st["title_rects"][graphview.GEOMETRY]
+    x0, y0, x1, y1 = st["title_rects"][graphview.SCENE_AREA]
     monkeypatch.setattr(ed, "is_background_clicked", lambda: True)
     monkeypatch.setattr(imgui, "get_mouse_pos", lambda: imgui.ImVec2((x0 + x1) / 2,
                                                                      (y0 + y1) / 2))
     frame(rig.panel, "graph")
-    assert st["frame_area"] == graphview.GEOMETRY
+    assert st["frame_area"] == graphview.SCENE_AREA
 
 
 # ---------------------------------------------------------------- the titles
@@ -586,13 +606,94 @@ def test_area_titles_draw(rig, monkeypatch):
     # screen, held to the room; never under TITLE_FLOOR px: the short word
     fit = ui_graph.title_fit
     assert fit("AUDIO", "AUD", 244.0, 1.0, 13.0, 40.0, 25.0) == ("AUDIO", ui_graph.TITLE_SIZE)
-    text, size = fit("SHADERS", "SHD", 4000.0, 10.0, 13.0, 60.0, 30.0)
-    assert text == "SHADERS" and size == pytest.approx(ui_graph.TITLE_SCREEN * 10.0)
+    text, size = fit("EFFECTS", "FX", 4000.0, 10.0, 13.0, 60.0, 30.0)
+    assert text == "EFFECTS" and size == pytest.approx(ui_graph.TITLE_SCREEN * 10.0)
     text, size = fit("CONTROLLERS", "CTRL", 244.0, 6.0, 13.0, 100.0, 35.0)
     assert text == "CTRL" and size >= ui_graph.TITLE_FLOOR * 6.0
     assert size * 35.0 / 13.0 <= 244.0 + 1e-6
     assert fit("CONTROLLERS", "CTRL", 10.0, 6.0, 13.0, 100.0, 35.0) == (
         "CTRL", ui_graph.TITLE_FLOOR * 6.0)
+
+
+def test_the_areas_run_by_primitive(rig):
+    """Plan 35 G: the areas by primitive, left to right — MEDIA, SCENE,
+    LOOK-BACK, EFFECTS, OUTPUTS after the controllers, the audio and the
+    modulation. The default frame's nodes sit where the owner's words put
+    them (the camera the scene's), and no wire of it runs back."""
+    assert graphview.AREAS == (graphview.CONTROLLERS, graphview.AUDIO, graphview.MODULATION,
+                               graphview.MEDIA, graphview.SCENE_AREA, graphview.LOOKBACK_AREA,
+                               graphview.EFFECTS_AREA, graphview.OUTPUTS_AREA)
+    assert not hasattr(graphview, "SHADERS") and "geometry" not in graphview.TITLES
+    view = load(rig, "party-trip")["view"]
+    area = {n.id: n.area for n in view.nodes}
+    assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
+                              "render:hands.layer", "render:camera")} == {graphview.SCENE_AREA}
+    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
+    assert {area[k] for k in ("render:output.all", "render:output.1",
+                              "render:output.2")} == {graphview.OUTPUTS_AREA}
+    assert area["render:channel.a"] == graphview.MEDIA
+    assert back_wires(view) == []
+    for name in ("history", "eye", "ghost", "capture", "cover", "frame", "grounded"):
+        assert view.node(f"render:{name}") is None, name
+    # by class: what a section may declare, each in its primitive's area
+    V = graphview.VNode
+    for ref, want in ((G.Readout("hands.guide"), graphview.SCENE_AREA),
+                      (G.BackdropNode("backdrop"), graphview.SCENE_AREA),
+                      (G.EchoNode("echo.2", 2), graphview.LOOKBACK_AREA),
+                      (G.DreamNode("dream"), graphview.LOOKBACK_AREA),
+                      (G.Copy("copy", "acid"), graphview.EFFECTS_AREA),
+                      (G.Composite("composite"), graphview.EFFECTS_AREA),
+                      (G.SwitchNode("switch"), graphview.MEDIA),
+                      (G.Delay("delay"), graphview.MEDIA),
+                      (G.PatternNode("pattern"), graphview.MEDIA)):
+        assert graphview.area_of(V(f"render:{ref.name}", "render", ref.name, ref=ref)) == want
+
+
+def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
+    """`{"frame": "wired"}` with every bin empty: the canvas's render nodes
+    are All outputs and the windows — the eight channels idle on MEDIA's
+    line ("8 empty channels"), no pattern and no backdrop drawn. A source in
+    channel a's bin draws it; a wire from channel b draws that one too."""
+    from test_presets import put
+    party(rig)
+    reg = rig.reg
+
+    chans = reg.media.channels
+
+    def landed(section, filled=()):
+        put(rig.lib.home, "Blank", schema="hyperspace.preset/6", graph=section)
+        rig.lib.load("presets", "Blank")
+        for c, ch in chans.items():          # (every bin empty but `filled`'s)
+            ch.bin = [None] * len(ch.bin)
+            if c in filled:
+                ch.bin[0] = "local:still.png"
+        spec = rig.lib.presets.graph.spec
+        rig.panel.renderer = NS(_graph=G.build_graph(views(Switches(), Switches()),
+                                                     spec.wiring()))
+        frame(rig.panel, "graph")
+        frame(rig.panel, "graph")
+        return ui_graph._state(rig.panel)
+
+    st = landed({"frame": "wired"})
+    view = st["view"]
+    drawn = {n.id for n in view.nodes if n.kind in ("render", "output", "channel")
+             and not n.idle and n.id != "render:camera"}
+    assert drawn == {"render:output.all", "render:output.1", "render:output.2"}
+    chans_ = [n for n in view.nodes if n.kind == "channel"]
+    assert len(chans_) == 8 and all(n.idle and n.area == graphview.MEDIA for n in chans_)
+    lay = ui_graph.areas_of(st, view)
+    assert ui_graph.idle_line(view, lay.idle[graphview.MEDIA]).startswith("8 empty channels")
+    assert view.node("render:pattern") is None and view.node("render:backdrop") is None
+    chans["a"].bin[0] = "local:still.png"
+    frame(rig.panel, "graph")
+    assert not st["view"].node("render:channel.a").idle
+    st = landed({"frame": "wired", "wires": [{"from": "channel.b", "to": "output.2.image"}]},
+                filled="a")
+    view = st["view"]
+    assert not view.node("render:channel.a").idle and not view.node("render:channel.b").idle
+    lay = ui_graph.areas_of(st, view)
+    assert ui_graph.idle_line(view, lay.idle[graphview.MEDIA]).startswith("6 empty channels")
 
 
 def test_the_page_draws_with_the_areas_in_every_state(rig):
@@ -612,7 +713,7 @@ def test_the_page_draws_with_the_areas_in_every_state(rig):
     ui_graph.expand_all(st, view, True)
     st["patched_only"] = False
     frame(rig.panel, "graph")
-    st["frame_area"] = graphview.SHADERS
+    st["frame_area"] = graphview.EFFECTS_AREA
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
