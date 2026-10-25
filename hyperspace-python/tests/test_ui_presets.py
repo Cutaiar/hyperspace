@@ -884,3 +884,29 @@ def test_the_open_list_does_not_reread_the_library_every_frame(rig, monkeypatch)
         frame(panel)
     assert st["list"]["group"] == "presets"                 # still open
     assert len(calls) <= 3, f"{len(calls)} library index passes in 10 frames"
+
+
+def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
+    """Plan 35 T7 (row 387): `new` sits before `save` on the presets' strip
+    and starts the blank preset; `save` on the untitled preset begins
+    naming, since it has no file to write over."""
+    from hyperspace import preset
+
+    panel, lib = rig.panel, rig.lib
+    called = []
+    monkeypatch.setattr(lib.presets, "new", lambda: called.append(1) or [preset.NEW_SAID])
+    frame(panel, "presets")
+    frame(panel)
+    rects = _rects(panel)
+    assert "strip.presets.new" in rects and "strip.presets.save" in rects
+    assert rects["strip.presets.new"][2] <= rects["strip.presets.save"][0]
+    assert [k for k in rects if k.endswith(".new") and k.startswith("strip.")] == [
+        "strip.presets.new"]
+    _click(panel, rects["strip.presets.new"])
+    assert called == [1]
+    monkeypatch.undo()
+    lib.presets.new()
+    assert lib.current("presets") == preset.UNTITLED_PRESET
+    frame(panel)
+    _click(panel, _rects(panel)["strip.presets.save"])
+    assert ui_presets._state(panel)["naming"] == "presets"

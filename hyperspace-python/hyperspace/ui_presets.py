@@ -74,7 +74,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
+from . import preset, ui
 from .library import F_KEYS, HOME_UNSET, PRESETS, LibraryError, slot_key
 from .params import PERFORMANCE_GROUPS
 
@@ -356,11 +356,28 @@ def strip(panel, group: str) -> None:
 
     # save · as… (· reset on a module strip), flush right
     word = save_label(lib, group) if kind else "save"
+    # plan 35 T7 (row 387): `new` starts a blank preset, on the presets' strip
+    presets = getattr(lib, "presets", None) if group == PRESETS else None
     chips = (word, "as…") if kind else (word, "as…", "reset")
+    if presets is not None:
+        chips = ("new", *chips)
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    if presets is not None:
+        if ui.chip("new##new"):
+            _guard(panel, presets.new)
+            invalidate(panel, group)
+        _rect(panel, f"strip.{group}.new")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("A new preset: factory values, nothing wired — "
+                              "black until something is wired to an output")
+        imgui.same_line()
     if save_chip(panel, group, word, is_dirty):
-        _guard(panel, lib.overwrite, group)
-        invalidate(panel, group)
+        if presets is not None and cur == preset.UNTITLED_PRESET \
+                and lib.path_of(group, cur) is None:
+            _begin_naming(panel, group, "")      # unnamed: save acts as as…
+        else:
+            _guard(panel, lib.overwrite, group)
+            invalidate(panel, group)
     imgui.same_line()
     if ui.chip("as…"):
         _begin_naming(panel, group, cur or "")

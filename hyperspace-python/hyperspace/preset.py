@@ -188,6 +188,10 @@ V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
 V3_KEYS = ("lfos", "envs")
 GROUP = PRESETS                   # the library folder, and the strip's group
+# plan 35 T7 (row 387): the new preset — what the strip's `new` chip starts,
+# named until it is saved, and what it says
+UNTITLED_PRESET = "untitled"
+NEW_SAID = "new preset: factory values, nothing wired — black until something is wired to an output"
 
 # plan 32 S (row 337): the media section, and the schema a preset that
 # uses media is written with (plan 31's conditional /3 is the precedent)
@@ -906,6 +910,31 @@ class Presets:
         """The live state as a user preset (a factory one of that name is
         shadowed, never overwritten)."""
         return self.lib.save_as(GROUP, name)
+
+    def new(self) -> list[str]:
+        """A new preset (plan 35 T7, row 387): the library's fresh values
+        for every performance group (the reset `Project.new` uses, so
+        nothing of the preset loaded before survives), no routes, the desk
+        written out as the factory preset layer (a file with no `desk` key
+        gets that layer and `"desk": []` an empty one — the blank preset
+        says which), and a frame of the outputs alone: nothing wired, so
+        black. The session's params stay. One undo step, named `untitled`,
+        dirty and with no file until it is saved."""
+        lib, reg = self.lib, self.reg
+        undo.push("new preset", load=True)    # the load below joins this step
+        values = {k: v for k, v in lib._fresh_all().items()
+                  if k in reg and reg[k].group in PERFORMANCE_GROUPS
+                  and reg[k].group != modifiers.GROUP and reg[k].persist
+                  and not is_instance_id(k) and not is_switch_id(k)}
+        doc = {"schema": SCHEMA, "name": UNTITLED_PRESET, "values": values,
+               "routes": [], "macros": {}, "modules": {},
+               "desk": desk_json(fresh_desk(self.router.table.profile)),
+               GRAPH_KEY: read_graph({"frame": "wired"}).to_json()}
+        lib._apply_doc(GROUP, UNTITLED_PRESET, doc)
+        # never saved: nothing to be clean against (the Project's own rule)
+        lib._landed(GROUP, UNTITLED_PRESET, ())
+        lib.say(NEW_SAID)
+        return [NEW_SAID]
 
     def load_doc(self, doc: dict, path: Path | None = None) -> list[str]:
         """Apply a preset document — the kind's loader (plan 13 §5).

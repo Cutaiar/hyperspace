@@ -26,6 +26,7 @@ from conftest import (
 from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
 from hyperspace import apc40, envelope, graphmigrate, lfo, preset, routing, sequencer, tempo
+from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -1768,3 +1769,123 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
         spec = got
         saved = r.presets.save_as(name).read_text()
         assert json.loads(saved)["schema"] == "hyperspace.preset/6"
+
+
+# ---------------------------------------------------------------- a new preset (plan 35 T7)
+
+def _fresh_performance(lib):
+    return {k: v for k, v in lib._fresh_all().items()
+            if k in lib.reg and lib.reg[k].group in PERFORMANCE_GROUPS
+            and not preset.is_instance_id(k) and not preset.is_switch_id(k)
+            and lib.reg[k].group != "modifiers"}
+
+
+def _spoil(rig, name):
+    """A loaded factory preset with a route and a desk row of its own."""
+    rig.presets.load(name)
+    table = rig.router.table
+    table.add(Binding("hand:7", "view.bright", "position"))
+    table.set_desk([*table.desk(), Binding("cc:0:14", "view.speed", "abs", layer="preset")])
+
+
+@pytest.mark.parametrize("name", ["big-blue-wave", "hex-engine"])
+def test_a_new_preset_is_factory_values_and_nothing_wired(rig, name):
+    """Plan 35 T7 (row 387): the library's fresh values for every
+    performance group whatever was loaded, no preset routes, the desk the
+    factory preset layer (written explicitly), the session as it was, and a
+    frame that is only the outputs — black."""
+    lib, reg, table = rig.lib, rig.reg, rig.router.table
+    _spoil(rig, name)
+    kept = reg.snapshot(part="session")
+    assert rig.presets.new() == [preset.NEW_SAID]
+    for k, v in _fresh_performance(lib).items():
+        assert reg[k].value == v, k
+    assert table.routes() == []
+    assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
+    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    assert doc["desk"] == preset.desk_json(preset.fresh_desk())
+    assert doc["routes"] == []
+    assert reg.snapshot(part="session") == kept
+    spec = rig.presets.graph.spec
+    assert spec.to_json() == {"frame": "wired", "nodes": []}
+    assert G.reaches(spec) == frozenset()
+    assert lib.current("presets") == preset.UNTITLED_PRESET
+    assert lib.is_dirty("presets")
+    assert lib.path_of("presets", preset.UNTITLED_PRESET) is None
+
+
+def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
+    after = []
+    for name in ("big-blue-wave", "hex-engine"):
+        _spoil(rig, name)
+        rig.presets.new()
+        after.append((rig.reg.snapshot(part="performance"),
+                      rig.presets.document(preset.UNTITLED_PRESET)))
+    assert after[0] == after[1]
+
+
+def test_a_new_preset_undoes_in_one_step(rig):
+    from hyperspace import undo
+    from hyperspace.library import Marks
+
+    u = undo.Undo(rig.reg, rig.router.table, marks=Marks(rig.lib))
+    undo.install(u)
+    try:
+        _spoil(rig, "big-blue-wave")
+        u.tick(1.0)
+        u.tick(2.0)
+        before = rig.reg.snapshot(part="performance")
+        loaded = rig.lib.current("presets")
+        rig.presets.new()
+        assert u.stack[-1].label == "new preset"
+        assert u.undo()
+    finally:
+        undo.install(None)
+    assert rig.reg.snapshot(part="performance") == before
+    assert rig.lib.current("presets") == loaded
+    assert len(rig.router.table.routes()) >= 1
+
+
+def test_a_new_preset_saves_and_loads_back_empty(rig):
+    _spoil(rig, "big-blue-wave")
+    rig.presets.new()
+    rig.presets.save_as("blank")
+    _spoil(rig, "hex-engine")
+    rig.presets.load("blank")
+    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": []}
+    assert rig.router.table.routes() == []
+    assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
+
+
+@pytest.fixture(scope="module")
+def gl_ctx():
+    try:
+        import moderngl
+
+        c = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    yield c
+
+
+def test_a_new_preset_draws_black(rig, gl_ctx):
+    """Plan 35 T7: the blank preset's frame, drawn on two views, is the
+    ground — an opaque black — at each window's centre."""
+    from test_graph_frame import SIZE, _fbo, _px, _tool
+
+    from hyperspace.outputs import Switches, View
+
+    rig.presets.new()
+    spec = rig.presets.graph.spec
+    gl = _tool().Rig("legacy6", "present", gl_ctx)
+    try:
+        gl.renderer.wiring = spec.wiring()
+        vs = [View(Switches(), SIZE, target=_fbo(gl_ctx)) for _ in range(2)]
+        for _ in range(3):
+            gl.frame(vs, SIZE, 1.0)
+        assert gl_ctx.error == "GL_NO_ERROR"
+        for v in vs:
+            assert not v.error, v.error
+            assert tuple(_px(v.target)[SIZE[1] // 2, SIZE[0] // 2]) == (0, 0, 0, 255)
+    finally:
+        gl.close()
