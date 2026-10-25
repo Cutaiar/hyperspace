@@ -440,7 +440,10 @@ def uses_free_words(spec: G.GraphSpec) -> bool:
     (`frame`, `fx.image`, `pattern`, `shape.faces`, `backdrop.image`), a
     switch, a channel into an effect (a branch), or an effect wired and
     reaching nothing. Plan 34 L: or feedback's words — a delay, a resize,
-    a look-back frame or the dream, declared or on a wire (`/5` only)."""
+    a look-back frame or the dream, declared or on a wire (`/5` only).
+    Plan 35 F: or a wired frame, or a copy (`/6` only)."""
+    if spec.wired or spec.copies:
+        return True
     if spec.switches or _feedback(spec):
         return True
     for w in spec.all_wires():
@@ -588,18 +591,28 @@ def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset(),
     return says_free(section) and legacy_values(section, values, specs, driven) is None
 
 
-# the wire ends only the free graph has: a wire touching one is plan 33's
-_FREE_SRCS = ("frame", "pattern", "switch", "delay", "resize", "echo", "dream")
-_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch", "delay", "resize")
+# the wire ends only the free graph has: a wire touching one is plan 33's.
+# Plan 35 F: and the wired frame's — a copy, `ground`, the shape as a
+# source, the scene's geometry — and the ports only a wired frame has
+_FREE_SRCS = ("frame", "pattern", "switch", "delay", "resize", "echo", "dream",
+              "copy", "ground", "shape")
+_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch", "delay", "resize",
+              "copy", "scene")
+_FREE_PORTS = ("lookback.capture", "lookback.occluder", "backdrop.scene", "output.all.image",
+               "output.all.hands", "output.all.guide")
 
 
 def _free_end(w: Any) -> bool:
-    """Whether wire entry `w` touches an end only the free graph has."""
+    """Whether wire entry `w` touches an end only the free graph has (its
+    names read in either frame's kinds: plan 35's copy and ground are a
+    wired frame's)."""
     if not isinstance(w, dict):
         return False
     src, dst = w.get("from"), w.get("to")
     node = dst.rpartition(".")[0] if isinstance(dst, str) else None
-    return (G.wire_node_kind(src) in _FREE_SRCS or G.wire_node_kind(node) in _FREE_DSTS)
+    return (dst in _FREE_PORTS
+            or any(G.wire_node_kind(src, wired=x) in _FREE_SRCS
+                   or G.wire_node_kind(node, wired=x) in _FREE_DSTS for x in (False, True)))
 
 
 RUN_ENDS = (("frame", "fx.image"), ("pattern", "shape.faces"))
@@ -628,10 +641,11 @@ def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
 def _free_node(n: Any) -> bool:
     """A node entry only the free graph has: a switch, or (R21) an effect's
     instance 1 named with no placement — a build from before plan 33
-    refuses both; (plan 34 L) a delay, a resize, an echo or the dream."""
+    refuses both; (plan 34 L) a delay, a resize, an echo or the dream;
+    (plan 35 F) a copy or a frame kind's entry (`G.FRAME_KINDS`)."""
     if not isinstance(n, dict):
         return False
-    if n.get("kind") in ("switch", *FEEDBACK):
+    if n.get("kind") in ("switch", *FEEDBACK, "copy", *G.FRAME_KINDS):
         return True
     return (n.get("kind") == "effect" and n.get("instance", 1) == 1
             and not any(k in n for k in G.PLACE_KEYS))

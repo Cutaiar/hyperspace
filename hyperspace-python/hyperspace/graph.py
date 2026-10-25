@@ -287,6 +287,10 @@ class Wiring:
     backdrop: str = ""
     backdrop_history: bool = False
     run: tuple[str, ...] | None = None
+    # plan 35 F: a wired frame's (`GraphSpec.wired`): `wires` holds every
+    # wire, and any hands node may have a layer (row 380). T2's builder reads
+    # it; T1 sets it so a wired section reads
+    wired: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -314,7 +318,7 @@ class Wiring:
             raise ValueError(f"wiring extra {self.extra!r}: hands nodes numbered 2 or more, "
                              "each once")
         layers = [h for h in self.nodes() if h.into == "layer"]
-        if len(layers) > 1:
+        if len(layers) > 1 and not self.wired:
             raise ValueError("wiring: one hands node makes the layer, not "
                              + " and ".join(hands_name(h.n) for h in layers))
 
@@ -350,9 +354,10 @@ _PLACE_NODE = re.compile(rf"scene|history|hands(?:\.{_INSTANCE})?|output\.[1-9][
 # plan 33 G: the wire ends that are no effect — `frame`, the pipeline end
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
 # file may take them, and no effect's place is one of them. Plan 34 L: and
-# feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`
+# feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`. Plan 35 F:
+# and the wired frame's `copy` (`copy.<n>`) and the source word `ground`
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "dream")
+            "dream", "copy", "ground")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -504,7 +509,10 @@ def _instance(e: dict) -> int:
     return n
 
 
-def _hands_entry(e: dict) -> tuple[HandsAt, str | None]:
+def _hands_entry(e: dict, wired: bool = False) -> tuple[HandsAt, str | None]:
+    if wired and "into" in e:
+        # plan 35 F: in a wired frame the hands go into the scene by a wire
+        raise GraphError(INTO_IS_A_WIRE.format(hands=wired_hands_name(_instance(e))))
     _entry_keys(e, "hands", ("instance", "into", "draw", "laid"))
     laid = e.get("laid")
     if laid is not None and laid not in BLENDS:
@@ -538,7 +546,18 @@ def _effect_entry(e: dict) -> tuple[EffectAt | None, str | None]:
     return (EffectAt(file, n) if n >= 2 else None), why
 
 
-def _history_entry(e: dict) -> HistoryAt:
+def _history_entry(e: dict, wired: bool = False) -> HistoryAt | LookbackAt:
+    """A `history` entry (plan 26 A4), or (plan 35 F) the look-back's
+    `{"kind": "lookback"}` of a wired frame, whose `holds` is a wire now
+    (`lookback.capture`). In a wired frame `history` is the old id
+    (`OLD_ID_IN_A_WIRED_FRAME`; T3's `graphmigrate.renamed` renames it)."""
+    if e.get("kind") == "lookback":
+        if "holds" in e:
+            raise GraphError(HOLDS_IS_A_WIRE)
+        _entry_keys(e, "lookback", ())
+        return LookbackAt()
+    if wired:
+        raise GraphError(OLD_ID_IN_A_WIRED_FRAME.format(old="history", new=new_id("history")))
     _entry_keys(e, "history", ("holds",))
     return HistoryAt(e.get("holds", "scene"))
 
@@ -573,7 +592,9 @@ NODE_KINDS: dict[str, Any] = {
 WIRE_KEYS = ("from", "to")
 _LAYER = re.compile(rf"hands(?:\.{_INSTANCE})?")
 _GHOST = re.compile(rf"ghost(?:\.{_INSTANCE})?")
-_OUTPUT = re.compile(r"output\.[1-9][0-9]*")
+# plan 35 F: and All outputs, `output.all` (a wired frame's: outside one
+# `wire_node_kind` keeps plan 34's table, which has no such output)
+_OUTPUT = re.compile(r"output\.(?:[1-9][0-9]*|all)")
 _COMPOSITE = re.compile(rf"composite(?:\.{_INSTANCE})?")
 _MEDIA = re.compile(rf"media\.[{MEDIA_CHANNELS}]")     # plan 32 R: a channel, a wire's end
 _SWITCH = re.compile(rf"switch(?:\.{_INSTANCE})?")       # plan 33 S: `switch`, `switch.2` …
@@ -629,9 +650,16 @@ NO_SOURCE = ("output", "fx", "shape", "backdrop")
 AUX = "aux"     # plan 32 R: an effect's second picture port (`Effect.INPUTS`)
 
 
-def wire_node_kind(name: Any) -> str | None:
-    """What kind of node a wire's name is (`WIRE_MAKES`'s keys), or None."""
+def wire_node_kind(name: Any, wired: bool = False) -> str | None:
+    """What kind of node a wire's name is (`WIRE_MAKES`'s keys), or None.
+    Plan 35 F: `wired`, a name of a wired frame (`WIRED_MAKES`' keys), in
+    the new ids — `hands` is the hands geometry there, `hands.layer` its
+    layer — where an old id (`ghost`, `history`, `media.a` …) is no node."""
     if not isinstance(name, str):
+        return None
+    if wired:
+        return _wired_kind(name)
+    if name == ALL_OUTPUTS:
         return None
     if name in ("scene", "history", "cover"):
         return name
@@ -658,6 +686,11 @@ def split_instance(name: str) -> tuple[str, int]:
     """`acid.2` → ("acid", 2); `palette` → ("palette", 1)."""
     head, _, n = name.partition(".")
     return head, int(n) if n else 1
+
+
+def _wire_node(dst: Any) -> str | None:
+    """A raw wire entry's `to` → the node it goes into, or None."""
+    return dst.rpartition(".")[0] if isinstance(dst, str) else None
 
 
 @dataclass(frozen=True)
@@ -885,9 +918,325 @@ def _dream_entry(e: dict) -> DreamAt:
 
 NODE_KINDS["dream"] = _dream_entry
 
+
+# ---------------------------------------------------------------- the wired frame (plan 35 F, V2)
+#
+# A section that says `"frame": "wired"` holds the whole frame in its wires
+# and entries — the shape to the outputs — in the owner's names (V2, row
+# 373: `hands` the tracked hands as geometry, `hands.layer` their layer,
+# `hands.guide` their guide, `lookback` the look-back, `channel.a` a media
+# channel). Nothing is built that no wire or entry says (T2's builder).
+# Outside one, plan 34's words hold unchanged: an old section is read in
+# the old ids, and T3's migration renames it (`graphmigrate.renamed`).
+
+FRAME_KEY = "frame"           # the section's third key …
+WIRED_FRAME = "wired"         # … and its one value
+ALL_OUTPUTS = "output.all"    # what every output shows unless its own port is wired
+GROUND = "ground"             # a source with no node: wired into an output's port, nothing
+# the frame's entry kinds (`layer` and `guide` take `instance`): a frame
+# node exists when a wire names it or an entry declares it (GRAPH keeps
+# an unwired one so, faint)
+FRAME_KINDS = ("scene", "shape", "backdrop", "pattern", "lookback", "layer", "guide")
+# the one port several wires go into, drawn in their section order
+MANY_PORTS = frozenset({"scene.geometry"})
+# what a picture is for in a wired frame (`reaches`): every port of an
+# `output.<n>` or `output.all`, and what the look-back records
+SINK_PORTS = ("output", "lookback.capture")
+# (reader, read) edges no wire says: the shape reads the faces pattern while
+# `shape.faces` is unwired (`reaches`) …
+IMPLICIT_EDGES = (("shape", "pattern"),)
+# … and the edges `sink_loops` walks in a wired frame (row 393: plan 34's
+# `FRAME_EDGES` less what the wires now say): that one, and the cover the
+# look-back makes from the scene's face buffer
+HIDDEN_EDGES = (("shape", "pattern"), ("lookback", "scene"))
+
+GONE_IN_A_WIRED_FRAME = ("{name} is gone in a wired frame (plan 35): wire the picture "
+                         "straight into an effect, a composite or an output")
+HOLDS_IS_A_WIRE = ("lookback holds: in a wired frame what the look-back records is a wire "
+                   "— wire a picture into lookback.capture")
+INTO_IS_A_WIRE = ("{hands} into: in a wired frame the hands go into the scene by a wire — "
+                  "wire {hands} into scene.geometry")
+FRAME_VALUE = "frame {value!r}: the one value is \"wired\""
+GEOMETRY_INTO_SCENE = "{src} makes geometry: it goes into scene.geometry"
+COPY_NO_OF = "copy {name}: names no of (the effect instance it draws again)"
+COPY_BAD_OF = "copy {name}: of {of!r} is no effect instance of this graph"
+GROUND_ONLY_INTO_OUTPUTS = "ground goes only into an output's port: it shows nothing there"
+OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name (plan 35): in a wired frame it is {new}"
+# (a frame kind's entry outside a wired frame: plan 34's table has no such node)
+FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section says "
+                      "\"frame\": \"wired\")")
+
+# V2 (row 373, "approve, but rename ids too"): old wire name → new, for
+# whole names and D1's `after` / `into` values; `<n>` an instance from 2
+# (an output's from 1), `<c>` a channel letter. The entry kind `history` is
+# `lookback` by the same row. Every other id is unchanged: `shape`,
+# `scene`, `pattern`, `backdrop`, `output.<n>`, effects, `composite`,
+# `switch`, and plan 34's `delay`, `resize`, `echo.<k>`, `dream`
+NEW_IDS = {
+    "ghost": "hands", "ghost.<n>": "hands.<n>",
+    "hands": "hands.layer", "hands.<n>": "hands.<n>.layer",
+    "readout": "hands.guide", "readout.<n>": "hands.<n>.guide",
+    "history": "lookback",
+    "media.<c>": "channel.<c>",
+    "output.<n>.readout": "output.<n>.guide",
+}
+OLD_IDS = {new: old for old, new in NEW_IDS.items()}
+# params keep their ids (V2): a node's params' prefix by its kind — the
+# rest of the node's id after the kind's head (`hands.2` → `ghost.2`); an
+# effect's is `fx.<id>`, any other node's its own id (`param_prefix`)
+PARAM_PREFIX = {"hands": "ghost", "lookback": "dream", "channel": "media", "camera": "eye"}
+
+
+def _id_pattern(template: str) -> re.Pattern:
+    """`NEW_IDS`' template as a pattern: `<n>` an instance (an output's from
+    1, a hands node's from 2), `<c>` a channel."""
+    n = r"[1-9][0-9]*" if template.startswith("output.") else _INSTANCE
+    out = re.escape(template).replace(re.escape("<n>"), f"(?P<n>{n})")
+    return re.compile(out.replace(re.escape("<c>"), f"(?P<c>[{MEDIA_CHANNELS}])"))
+
+
+_NEW_MAP = [(_id_pattern(src), dst) for src, dst in NEW_IDS.items()]
+_OLD_MAP = [(_id_pattern(src), dst) for src, dst in OLD_IDS.items()]
+
+
+def _mapped(name: Any, table: list[tuple[re.Pattern, str]]) -> Any:
+    if not isinstance(name, str):
+        return name
+    for pat, dst in table:
+        got = pat.fullmatch(name)
+        if got is not None:
+            return dst.replace("<n>", got.groupdict().get("n") or "").replace(
+                "<c>", got.groupdict().get("c") or "")
+    return name
+
+
+def new_id(name: Any) -> Any:
+    """Old wire name → its new id (`ghost.2` → `hands.2`, `hands` →
+    `hands.layer`, `media.c` → `channel.c`, `output.2.readout` →
+    `output.2.guide`); a name not in `NEW_IDS` is itself."""
+    return _mapped(name, _NEW_MAP)
+
+
+def old_id(name: Any) -> Any:
+    """New id → the old wire name it was (`OLD_IDS`, `new_id`'s inverse);
+    a name not in the table is itself."""
+    return _mapped(name, _OLD_MAP)
+
+
+def wired_hands_name(n: int) -> str:
+    """The n-th hands geometry node of a wired frame: `hands`, `hands.2` …
+    (its params `ghost[.n].*`, `param_prefix`)."""
+    return "hands" if n == 1 else f"hands.{n}"
+
+
+def hands_of(name: str) -> str:
+    """The hands node a layer or a guide of a wired frame draws, by name:
+    `hands.2.layer` → `hands.2`, `hands.guide` → `hands`."""
+    return name.rpartition(".")[0]
+
+
+def param_prefix(name: str) -> str:
+    """A wired frame's node id → its params' prefix (V2: params keep their
+    ids): `hands.2` → `ghost.2` (its layer and guide too), `lookback` →
+    `dream`, `channel.a` → `media.a`, `camera` → `eye`, an effect `acid.2`
+    → `fx.acid.2`; any other node's prefix is its own id."""
+    kind = "camera" if name == "camera" else wire_node_kind(name, wired=True)
+    if kind in ("layer", "guide"):
+        name, kind = hands_of(name), "hands"
+    if kind == "effect":
+        return f"fx.{name}"
+    head = PARAM_PREFIX.get(kind)
+    if head is None:
+        return name
+    rest = name.partition(".")[2]
+    return f"{head}.{rest}" if rest else head
+
+
+_HANDS_W = re.compile(rf"hands(?:\.{_INSTANCE})?")
+_LAYER_W = re.compile(rf"hands(?:\.{_INSTANCE})?\.layer")
+_GUIDE_W = re.compile(rf"hands(?:\.{_INSTANCE})?\.guide")
+_CHANNEL = re.compile(rf"channel\.[{MEDIA_CHANNELS}]")
+_COPY = re.compile(rf"copy(?:\.{_INSTANCE})?")
+
+
+def _wired_kind(name: str) -> str | None:
+    """`wire_node_kind(name, wired=True)`: a wired frame's kinds. `frame`
+    and `fx` are named so `wire_error` can say they are gone; an old id
+    (`new_id(name) != name`) and the cover are no node."""
+    if name in ("scene", "shape", "backdrop", "pattern", "lookback", "dream", "frame", "fx",
+                GROUND):
+        return name
+    for kind, pat in (("hands", _HANDS_W), ("layer", _LAYER_W), ("guide", _GUIDE_W),
+                      ("output", _OUTPUT), ("composite", _COMPOSITE), ("channel", _CHANNEL),
+                      ("switch", _SWITCH), ("delay", _DELAY), ("resize", _RESIZE),
+                      ("echo", _ECHO), ("copy", _COPY)):
+        if pat.fullmatch(name):
+            return kind
+    if new_id(name) != name or name == "cover":
+        return None
+    if _PLACE_EFFECT.fullmatch(name):
+        return "effect"
+    return None
+
+
+@dataclass(frozen=True)
+class _FrameAt:
+    """One of the frame's own nodes declared by an entry (plan 35 F): one
+    only (`n` is 1), named by its kind, `{"kind": <kind>}`."""
+
+    KIND: ClassVar[str] = ""
+
+    @property
+    def n(self) -> int:
+        return 1
+
+    @property
+    def name(self) -> str:
+        return self.KIND
+
+    def to_json(self) -> dict:
+        return {"kind": self.KIND}
+
+
+@dataclass(frozen=True)
+class SceneAt(_FrameAt):
+    """The scene: draws the geometry wired into `scene.geometry`."""
+
+    KIND: ClassVar[str] = "scene"
+
+
+@dataclass(frozen=True)
+class ShapeAt(_FrameAt):
+    """The polytope, its faces the pattern or what is wired into `faces`."""
+
+    KIND: ClassVar[str] = "shape"
+
+
+@dataclass(frozen=True)
+class BackdropAt(_FrameAt):
+    """The backdrop: `backdrop.scene` laid over `backdrop.image`."""
+
+    KIND: ClassVar[str] = "backdrop"
+
+
+@dataclass(frozen=True)
+class PatternAt(_FrameAt):
+    """The faces pattern (and its media layer, `pattern.media`)."""
+
+    KIND: ClassVar[str] = "pattern"
+
+
+@dataclass(frozen=True)
+class LookbackAt(_FrameAt):
+    """The look-back (was `history`, row 381): echoes and the dream over
+    `lookback.image`, recording `lookback.capture`. It replaces `HistoryAt`
+    in a wired frame; what it holds is the capture wire."""
+
+    KIND: ClassVar[str] = "lookback"
+
+
+@dataclass(frozen=True)
+class _HandsPictureAt:
+    """A picture of the n-th hands node (plan 35 F, row 380): drawn from
+    `hands[.n]` by name, no geometry wire."""
+
+    n: int = 1
+    KIND: ClassVar[str] = ""
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"{self.KIND} instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return f"{wired_hands_name(self.n)}.{self.KIND}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": self.KIND}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+@dataclass(frozen=True)
+class LayerAt(_HandsPictureAt):
+    """The hands drawn alone (`hands.layer`, `hands.<n>.layer`), to lay
+    over a picture or put through effects."""
+
+    KIND: ClassVar[str] = "layer"
+
+
+@dataclass(frozen=True)
+class GuideAt(_HandsPictureAt):
+    """The hands' labels and tethers (`hands.guide`, `hands.<n>.guide`),
+    laid over last and never bent."""
+
+    KIND: ClassVar[str] = "guide"
+
+
+@dataclass(frozen=True)
+class CopyAt:
+    """A copy (plan 35 F, row 377): effect instance `of` drawn again on
+    another picture, with its knobs and its clock — its own `image` and
+    `aux` — `copy`, `copy.<n>`. What the per-pipeline run was, said as a
+    node, only where one is wanted."""
+
+    n: int
+    of: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"copy instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "copy" if self.n == 1 else f"copy.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "copy", "of": self.of}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _frame_entry(cls):
+    def read(e: dict) -> _FrameAt:
+        _entry_keys(e, cls.KIND, ())
+        return cls()
+    return read
+
+
+def _picture_entry(cls):
+    def read(e: dict) -> _HandsPictureAt:
+        _entry_keys(e, cls.KIND, ("instance",))
+        return cls(_instance(e))
+    return read
+
+
+def _copy_entry(e: dict) -> CopyAt:
+    _entry_keys(e, "copy", ("of", "instance"))
+    n = _instance(e)
+    name = CopyAt(n, "").name
+    if "of" not in e:
+        raise GraphError(COPY_NO_OF.format(name=name))
+    if not isinstance(e["of"], str):
+        raise GraphError(COPY_BAD_OF.format(name=name, of=e["of"]))
+    return CopyAt(n, e["of"])
+
+
+for _cls in (SceneAt, ShapeAt, BackdropAt, PatternAt):
+    NODE_KINDS[_cls.KIND] = _frame_entry(_cls)
+for _cls in (LayerAt, GuideAt):
+    NODE_KINDS[_cls.KIND] = _picture_entry(_cls)
+NODE_KINDS["lookback"] = _history_entry
+NODE_KINDS["copy"] = _copy_entry
+del _cls
+
 # plan 34 L: the node kinds a section declares by an entry, one per
-# instance, before a wire may name one (as a composite and a switch)
-DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream")
+# instance, before a wire may name one (as a composite and a switch).
+# Plan 35 F: and a copy, which always needs its entry, and the frame's
+# kinds — but a wire of a wired frame naming one of those declares it
+DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "copy", *FRAME_KINDS)
 
 
 def d1_wires(effects) -> list[Wire]:
@@ -928,12 +1277,19 @@ class _WireCtx:
     resizes: frozenset[str] = frozenset()
     echoes: frozenset[str] = frozenset()
     dream: bool = False
+    # plan 35 F: whether the section is a wired frame (its wires in the new
+    # ids, `WIRED_TAKES`; `ghosts` then holds the hands nodes' new names,
+    # `hands`, `hands.2` …), and the copies declared (their names)
+    wired: bool = False
+    copies: frozenset[str] = frozenset()
 
     def declared(self, kind: str) -> frozenset[str]:
-        """The names of kind `kind` (one of `DECLARED`) the section declares."""
+        """The names of kind `kind` (one of `DECLARED`) the section declares
+        (a frame kind's: none here — a wire of a wired frame declares it)."""
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
-                "resize": self.resizes, "echo": self.echoes,
-                "dream": frozenset({"dream"}) if self.dream else frozenset()}[kind]
+                "resize": self.resizes, "echo": self.echoes, "copy": self.copies,
+                "dream": frozenset({"dream"}) if self.dream else frozenset()
+                }.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -980,8 +1336,11 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     a name that is no node, a port that does not exist, a port of another
     type, a geometry or mask wire (a hands node's place is its `into`),
     a layer or a hands node this graph lacks, an effect D1 already
-    places. The canvas's drag says the same words."""
+    places. The canvas's drag says the same words. Plan 35 F: a wired
+    frame's wire (`ctx.wired`) is checked by its own table (`_wired_error`)."""
     ctx = ctx if ctx is not None else _WireCtx()
+    if ctx.wired:
+        return _wired_error(w, ctx)
     src_kind = wire_node_kind(w.src)
     if src_kind is None:
         return f"no node {w.src!r}: a wire leaves {WIRE_FROM_WORDS}"
@@ -1008,7 +1367,7 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     for name, k in ((w.src, src_kind), (node, kind)):
         if k == "effect" and ctx.effects is not None and name not in ctx.effects:
             return f"no {name} effect in this build"
-        if k in DECLARED and name not in ctx.declared(k):
+        if k in DECLARED and k not in FRAME_KINDS and name not in ctx.declared(k):
             entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
                      else f'{{"kind": "{k}"}}')
             return f"no {name} node in this graph (add one: {entry})"
@@ -1027,11 +1386,9 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     if kind == "output" and port == "readout" and src_kind != "layer":
         return f"{w.dst} takes a hands layer's guide ({ctx.layer})"
     if kind == "composite" and port == "over" and src_kind == "history":
-        return ("the history paints into what reads it, so it is not laid over: "
-                "wire it under, or an effect after it over")
+        return _LAID_OVER.format(name="history")
     if kind == "output" and port == "hands" and src_kind == "history":
-        return ("the history paints into what reads it, so it is not laid over: "
-                "wire it into the output's image, or an effect after it over")
+        return _LAID_OVER_OUTPUT.format(name="history")
     # (an aux wire places nothing: a placed effect takes one where it sits)
     for name, k, into in ((node, kind, port != AUX), (w.src, src_kind, False)):
         if k == "effect" and name in ctx.placed and (into or kind != "effect"):
@@ -1040,19 +1397,129 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     return None
 
 
-def wire_loops(wires: list[Wire]) -> dict[Wire, str]:
+# plan 35 F: a wired frame's ports (the table of the global constraints):
+# what each kind makes and takes. The shape and the hands make geometry,
+# which goes into the scene alone (several wires, `MANY_PORTS`); the
+# backdrop lays `scene` over `image`; the look-back records `capture`; a
+# copy is an effect's; an output and All outputs take a picture, the hands
+# over it and the guide over all; `ground` makes nothing, as a picture
+WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IMAGE,
+               "guide": IMAGE, "lookback": IMAGE, "channel": IMAGE, "backdrop": IMAGE,
+               "copy": IMAGE, "output": None, GROUND: IMAGE, "effect": IMAGE,
+               "composite": IMAGE, "pattern": IMAGE, "switch": IMAGE, "delay": IMAGE,
+               "resize": IMAGE, "echo": IMAGE, "dream": IMAGE}
+WIRED_TAKES: dict[str, dict[str, str]] = {
+    "scene": {"geometry": GEOMETRY}, "shape": {"faces": IMAGE},
+    "hands": {}, "layer": {}, "guide": {}, "channel": {}, GROUND: {},
+    "lookback": {"image": IMAGE, "capture": IMAGE, "occluder": IMAGE},
+    "backdrop": {"image": IMAGE, "scene": IMAGE},
+    "copy": {"image": IMAGE, "aux": IMAGE},
+    "output": {"image": IMAGE, "hands": IMAGE, "guide": IMAGE},
+    **{k: WIRE_TAKES[k] for k in ("effect", "composite", "pattern", "switch", "delay",
+                                  "resize", "echo", "dream")},
+}
+WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide), scene.geometry, "
+                  "shape.faces, backdrop.image / scene, lookback.image / capture / occluder, "
+                  "pattern.media, an effect's or a copy's image or aux, a composite's under / "
+                  "over, a switch's in1 … in8, or a delay's or a resize's image")
+WIRED_FROM_WORDS = ("scene, shape, hands …, hands.layer …, hands.guide …, lookback, "
+                    "backdrop, pattern, an effect, a copy, a composite, a switch, a delay, "
+                    "a resize, echo.1 …, dream, a channel (channel.a …) or ground")
+# the look-back paints into what reads it (plan 28): the words for a wire
+# laying it over, either frame's
+_LAID_OVER = ("the {name} paints into what reads it, so it is not laid over: "
+              "wire it under, or an effect after it over")
+_LAID_OVER_OUTPUT = ("the {name} paints into what reads it, so it is not laid over: "
+                     "wire it into the output's image, or an effect after it over")
+
+
+def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
+    """`wire_error` in a wired frame (plan 35 F): `frame` and `fx` are gone,
+    an old id is said by its new one, geometry goes into the scene alone,
+    `ground` into an output's port alone, an output's guide takes a hands
+    layer or guide; the rest — the types, the declared nodes, a loop into
+    itself, the look-back laid over, D1's one place — as plan 34 says."""
+    ends = (w.src, w.node)
+    for name in ends:
+        if name in ("frame", "fx"):
+            return GONE_IN_A_WIRED_FRAME.format(name=name)
+    for name in ends:
+        if wire_node_kind(name, wired=True) is None and new_id(name) != name:
+            return OLD_ID_IN_A_WIRED_FRAME.format(old=name, new=new_id(name))
+    src_kind = wire_node_kind(w.src, wired=True)
+    if src_kind is None:
+        return f"no node {w.src!r}: a wire leaves {WIRED_FROM_WORDS}"
+    if src_kind == "output":
+        return f"{w.src} is an output: it makes nothing to wire on"
+    node, port = w.node, w.port
+    kind = wire_node_kind(node, wired=True)
+    if kind is None:
+        return f"no input {w.dst!r}: a wire goes into {WIRED_TO_WORDS}"
+    if kind == "output" and new_id(w.dst) != w.dst:
+        return OLD_ID_IN_A_WIRED_FRAME.format(old=w.dst, new=new_id(w.dst))
+    takes = WIRED_TAKES[kind]
+    if port not in takes:
+        names = list(takes) if len(takes) < 4 else [next(iter(takes)), "…", [*takes][-1]]
+        said = f"it takes {', '.join(names)}" if takes else "nothing is wired into it"
+        return f"{node} has no port {port!r} ({said})"
+    if src_kind == GROUND and kind != "output":
+        return GROUND_ONLY_INTO_OUTPUTS
+    makes, want = WIRED_MAKES[src_kind], takes[port]
+    if makes == GEOMETRY and want != GEOMETRY and kind != "output":
+        return GEOMETRY_INTO_SCENE.format(src=w.src)
+    if makes != want:
+        return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
+    for name, k in ((w.src, src_kind), (node, kind)):
+        if k == "effect" and ctx.effects is not None and name not in ctx.effects:
+            return f"no {name} effect in this build"
+        if k in ("hands", "layer", "guide"):
+            hands = name if k == "hands" else hands_of(name)
+            if hands != "hands" and hands not in ctx.ghosts:   # (hands 1 is always there)
+                n = split_instance(hands)[1]
+                return (f"no {hands} node in this graph (add one: "
+                        f'{{"kind": "hands", "instance": {n}}})')
+        if k in DECLARED and k not in FRAME_KINDS and name not in ctx.declared(k):
+            entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
+                     else f'{{"kind": "{k}"}}')
+            return f"no {name} node in this graph (add one: {entry})"
+    if w.src == node:
+        return f"{node} into itself makes a loop"
+    if kind == "output" and port == "guide" and src_kind not in ("layer", "guide", GROUND):
+        return f"{w.dst} takes a hands layer or a hands guide (hands.layer, hands.guide …)"
+    if kind == "composite" and port == "over" and src_kind == "lookback":
+        return _LAID_OVER.format(name="lookback")
+    if kind == "output" and port == "hands" and src_kind == "lookback":
+        return _LAID_OVER_OUTPUT.format(name="lookback")
+    for name, k, into in ((node, kind, port != AUX), (w.src, src_kind, False)):
+        if k == "effect" and name in ctx.placed and (into or kind != "effect"):
+            key, where = ctx.placed[name]
+            return f"{name} sits {key} {where!r} already (its node says so): one place"
+    return None
+
+
+def _later(w: Wire, wired: bool) -> bool:
+    """Whether wire `w` is read only after this frame (no dependency, never
+    on a loop): one into a delay (plan 34 L: its picture is last frame's)
+    or (plan 35 F) into `lookback.capture`, which the ring records for the
+    frames after, once every end has run."""
+    return (wire_node_kind(w.node, wired=wired) == "delay"
+            or (wired and w.dst == "lookback.capture"))
+
+
+def wire_loops(wires: list[Wire], wired: bool = False) -> dict[Wire, str]:
     """The wires on a loop — a node reading, through wires, its own
     picture — each with the loop in words (`acid.2 → palette → acid.2`).
     A wire makes its node depend on its source — but (plan 34 L) a wire
     into a delay: a delay's picture is last frame's, so it depends on
-    nothing this frame, and such a wire is never on a loop."""
+    nothing this frame, and such a wire is never on a loop. Plan 35 F:
+    `wired`, a wired frame's wires (`_later`: the capture's too)."""
     deps: dict[str, set[str]] = {}
     for w in wires:
-        if wire_node_kind(w.node) != "delay":
+        if not _later(w, wired):
             deps.setdefault(w.node, set()).add(w.src)
     out: dict[Wire, str] = {}
     for w in wires:
-        if wire_node_kind(w.node) == "delay":
+        if _later(w, wired):
             continue
         path = _loop_path(deps, w)
         if path is not None:
@@ -1082,7 +1549,7 @@ def _loop_path(deps: dict[str, set[str]], w: Wire) -> list[str] | None:
     return [*path, w.node]
 
 
-def sink_loops(wires: list[Wire]) -> dict[Wire, str]:
+def sink_loops(wires: list[Wire], wired: bool = False) -> dict[Wire, str]:
     """The wires that close a loop through the default graph's hidden edges
     (plan 34 L: `FRAME_EDGES` — the faces drawn in the scene, the history
     over the scene and the backdrop, `frame` the history's picture), each
@@ -1091,33 +1558,48 @@ def sink_loops(wires: list[Wire]) -> dict[Wire, str]:
     so the one refused is the wire that closes the loop (a drag's own,
     appended last). A wire into a delay is no dependency (z⁻¹: the loop
     through one is the point). `wire_loops` has refused the explicit loops
-    first; what it would refuse is left to it."""
+    first; what it would refuse is left to it.
+
+    Plan 35 F (row 393): in a wired frame (`wired`) the wires say most of
+    those edges themselves (`shape → scene.geometry`, `scene →
+    backdrop.scene`, `backdrop → lookback.image`), and the walk counts the
+    two left hidden, `HIDDEN_EDGES`, in place of `FRAME_EDGES`."""
     deps: dict[str, set[str]] = {}
-    for node, reads in FRAME_EDGES:
+    for node, reads in (HIDDEN_EDGES if wired else FRAME_EDGES):
         deps.setdefault(node, set()).add(reads)
     out: dict[Wire, str] = {}
     for w in wires:
-        if wire_node_kind(w.node) == "delay":
+        if _later(w, wired):
             continue
         path = _loop_path(deps, w)
         if path is None:
             deps.setdefault(w.node, set()).add(w.src)
             continue
-        hops = {(path[i + 1], path[i]) for i in range(len(path) - 1)}
-        out[w] = loop_words(" → ".join(path), hops)
+        out[w] = loop_words(" → ".join(path), _hops(path), wired=wired)
     return out
 
 
-def loop_words(path: str, hops: set[tuple[str, str]]) -> str:
+def _hops(path: list[str]) -> set[tuple[str, str]]:
+    """A loop's (reader, read) edges, its names each read by the next."""
+    return {(path[i + 1], path[i]) for i in range(len(path) - 1)}
+
+
+def loop_words(path: str, hops: set[tuple[str, str]], wired: bool = False) -> str:
     """The refusal for a loop `path` (`shape → scene → shape`) whose
     (reader, read) edges are `hops`: through the faces when it runs
     through the scene drawing the faces, else through the backdrop when
-    it runs through the history over the backdrop, else through the frame."""
-    if ("scene", "shape") in hops:
+    it runs through the history over the backdrop, else through the frame.
+
+    Plan 35 F: in a wired frame (`wired`) through the faces is any wire into
+    `scene.geometry` (the scene's one port), through the backdrop a wire
+    into `backdrop.scene` or the look-back over the backdrop, and any other
+    loop has `wire_loops`' words — there is no frame."""
+    if ("scene", "shape") in hops or (wired and any(r == "scene" for r, _ in hops)):
         return LOOP_FACES.format(path=path)
-    if ("history", "backdrop") in hops:
+    if ("history", "backdrop") in hops or (
+            wired and (("lookback", "backdrop") in hops or ("backdrop", "scene") in hops)):
         return LOOP_BACKDROP.format(path=path)
-    return LOOP_FRAME.format(path=path)
+    return f"that makes a loop ({path})" if wired else LOOP_FRAME.format(path=path)
 
 
 def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ...], list[str]]:
@@ -1148,12 +1630,13 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
         else:
             ok.append(w)
     # two wires into one port (D1's placements count): each refused, the
-    # port keeps its default (or D1's placement)
+    # port keeps its default (or D1's placement). Plan 35 F: but in a wired
+    # frame the scene's geometry takes several, drawn in section order
     into: dict[str, list[Wire]] = {}
     for w in (*d1, *ok):
         into.setdefault(w.dst, []).append(w)
     for dst, ws in into.items():
-        if len(ws) > 1:
+        if len(ws) > 1 and not (ctx.wired and dst in MANY_PORTS):
             srcs = " and ".join(x.src for x in ws)
             for w in ws:
                 if w in ok:
@@ -1161,11 +1644,14 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
                     notes.append(f"wire {w} — {dst} takes one wire, and {len(ws)} go into "
                                  f"it ({srcs}): it keeps its default")
     # an effect no wire feeds sits into one port (D1's `into`); to feed
-    # more, wire its input
-    fed = {w.node for w in (*d1, *ok) if wire_node_kind(w.node) == "effect" and not is_aux(w)}
+    # more, wire its input (plan 35 F: a wired frame's names in its kinds)
+    def kind(name: str) -> str | None:
+        return wire_node_kind(name, wired=ctx.wired)
+
+    fed = {w.node for w in (*d1, *ok) if kind(w.node) == "effect" and w.port != AUX}
     outs: dict[str, list[Wire]] = {}
     for w in ok:
-        if wire_node_kind(w.src) == "effect" and wire_node_kind(w.node) != "effect":
+        if kind(w.src) == "effect" and kind(w.node) != "effect":
             outs.setdefault(w.src, []).append(w)
     for e, ws in outs.items():
         if e not in fed and len(ws) > 1:
@@ -1173,15 +1659,19 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
                 ok.remove(w)
                 notes.append(f"wire {w} — {e} has no wire in, so it sits into one port "
                              f"({ws[0].dst}): wire its input to feed more")
-    loops = wire_loops([*d1, *ok])
+    loops = wire_loops([*d1, *ok], wired=ctx.wired)
     for w in list(ok):
         if w in loops:
             ok.remove(w)
-            notes.append(f"wire {w} — that makes a loop ({loops[w]})")
+            # plan 35 F: a wired frame's wires say the faces and the backdrop
+            # themselves, so their loops keep plan 34's words (`loop_words`)
+            why = (loop_words(loops[w], _hops(loops[w].split(" → ")), wired=True)
+                   if ctx.wired else f"that makes a loop ({loops[w]})")
+            notes.append(f"wire {w} — {why}")
     # plan 34 L: then a loop through the default graph's hidden edges — the
     # faces, the backdrop, the frame — refused here, in words, not left to
     # land dormant at build (`_Wiring._sink` stays the backstop)
-    sinks = sink_loops([*d1, *ok])
+    sinks = sink_loops([*d1, *ok], wired=ctx.wired)
     for w in list(ok):
         if w in sinks:
             ok.remove(w)
@@ -1270,6 +1760,20 @@ class GraphSpec:
     others: tuple[tuple[str, Any], ...] = ()      # (kind, what its reader returned)
     notes: tuple[str, ...] = field(default=(), compare=False)
     wires: tuple[Wire, ...] = ()                  # plan 28 N4: the wire list, as read
+    # plan 35 F: whether the section says `"frame": "wired"` — every node of
+    # the frame in its wires or entries, in the new ids (V2)
+    wired: bool = False
+
+    @property
+    def frame_nodes(self) -> tuple:
+        """The frame kinds' entries (plan 35 F: `SceneAt`, `LookbackAt`,
+        `LayerAt` …, `FRAME_KINDS`), as read, in section order."""
+        return tuple(got for k, got in self.others if k in FRAME_KINDS)
+
+    @property
+    def copies(self) -> tuple[CopyAt, ...]:
+        """The copies the section adds (plan 35 F), by instance."""
+        return self._of("copy")
 
     def wiring(self) -> Wiring:
         """The default graph's wiring this graph says. Plan 28 N4: the
@@ -1280,6 +1784,12 @@ class GraphSpec:
         are D1's own entries and every other wire is an edge."""
         first = next((h for h in self.hands if h.n == 1), HandsAt())
         placed = tuple(e for e in self.effects if e.placed)
+        if self.wired:
+            # plan 35 F: a wired frame's wires are every wire, as they stand
+            # (no run, no shortening, no backdrop channel); T2 builds them
+            return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
+                          blend=self.laid, placed=placed, wires=self.wires,
+                          composites=self.composites(), wired=True)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every preset loaded on
@@ -1395,9 +1905,11 @@ class GraphSpec:
         for kind, got in self.others:
             to = getattr(got, "to_json", None)
             nodes.append(to() if to is not None else {"kind": kind, **dict(got)})
+        # plan 35 F: a wired frame says so first
+        head = {FRAME_KEY: WIRED_FRAME} if self.wired else {}
         if not self.wires:                     # N4: a graph with no wires is D1's, short
-            return {"nodes": nodes}
-        return {"nodes": nodes, "wires": [w.to_json() for w in self.wires]}
+            return {**head, "nodes": nodes}
+        return {**head, "nodes": nodes, "wires": [w.to_json() for w in self.wires]}
 
 
 def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -> GraphSpec:
@@ -1418,9 +1930,14 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     reason rides in `GraphSpec.notes`."""
     if not isinstance(section, dict):
         raise GraphError(f"not an object but {type(section).__name__}")
-    extra = sorted(set(section) - {"nodes", "wires"})
+    extra = sorted(set(section) - {"nodes", "wires", FRAME_KEY})
     if extra:
-        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes and wires)")
+        raise GraphError(f"no key {', '.join(map(repr, extra))} (it takes nodes, wires and "
+                         "frame)")
+    # plan 35 F: the marker — a wired frame, its one value
+    if FRAME_KEY in section and section[FRAME_KEY] != WIRED_FRAME:
+        raise GraphError(FRAME_VALUE.format(value=section[FRAME_KEY]))
+    wired = FRAME_KEY in section
     entries = section.get("nodes", [])
     if not isinstance(entries, list):
         raise GraphError("nodes is not a list")
@@ -1438,8 +1955,12 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
         if reader is None:
             raise GraphError(f"unknown node kind {kind!r} (this build knows "
                              f"{', '.join(sorted(NODE_KINDS))})")
+        if not wired and (kind in FRAME_KINDS or kind == "copy"):
+            raise GraphError(FRAME_KIND_UNWIRED.format(kind=kind))
         try:
-            got = reader(e)
+            # plan 35 F: a wired frame's hands take no `into`, and `history`
+            # is its old id
+            got = reader(e, wired=wired) if kind in ("hands", "history") else reader(e)
         except GraphError:
             raise
         except (ValueError, TypeError) as err:
@@ -1488,9 +2009,25 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                          f"({loops[at.name]})")
             found[key] = at.unplaced()
     effects_at = tuple(found[k] for k in sorted(found) if found[k] is not None)
+    raw_wires = section.get("wires")
+    # plan 35 F: a copy draws an effect instance the section holds — by an
+    # entry, a wire or D1 — again; one whose `of` names none is said and
+    # dropped with its wires (the rest of the graph stands)
+    if any(k == "copy" for k, _ in others):
+        held = {e.name for e in effects_at} | {
+            name for w in (raw_wires if isinstance(raw_wires, list) else ())
+            if isinstance(w, dict) for name in (w.get("from"), _wire_node(w.get("to")))
+            if wire_node_kind(name, wired=True) == "effect"}
+        for k, got in list(others):
+            if k == "copy" and got.of not in held:
+                notes.append(COPY_BAD_OF.format(name=got.name, of=got.of))
+                others.remove((k, got))
+                if isinstance(raw_wires, list):
+                    raw_wires = [w for w in raw_wires if not isinstance(w, dict)
+                                 or got.name not in (w.get("from"), _wire_node(w.get("to")))]
     spec = GraphSpec(hands=tuple(hands[n] for n in sorted(hands)),
                      history=history if history is not None else HistoryAt(),
-                     effects=effects_at, others=tuple(others), notes=tuple(notes))
+                     effects=effects_at, others=tuple(others), notes=tuple(notes), wired=wired)
     try:
         wiring = spec.wiring()
     except ValueError as err:
@@ -1498,7 +2035,8 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     layer = wiring.layer_node().n
     for n, how in laid.items():
         if n != layer:
-            raise GraphError(f"hands {n}: laid {how!r}, but {hands_name(layer)} makes the layer")
+            said = wired_hands_name(layer) if wired else hands_name(layer)
+            raise GraphError(f"hands {n}: laid {how!r}, but {said} makes the layer")
     spec = replace(spec, laid=laid.get(layer, "over"))
     if "wires" not in section:
         return spec
@@ -1506,8 +2044,9 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     # such node or port, a port of another type, two into one port, a
     # loop) is a note and that port's default; the rest stand
     names = {e.name for e in effects_at}
+    named = wired_hands_name if wired else hands_name
     ctx = _WireCtx(layer=layer_name(layer),
-                   ghosts=frozenset(hands_name(h.n) for h in wiring.nodes()),
+                   ghosts=frozenset(named(h.n) for h in wiring.nodes()),
                    effects=None if known is None else known | names,
                    composites=frozenset(c.name for c in spec.composites()),
                    switches=frozenset(s.name for s in spec.switches),
@@ -1515,10 +2054,11 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                    resizes=frozenset(r.name for r in spec.resizes),
                    echoes=frozenset(e.name for e in spec.echoes),
                    dream=spec.dream is not None,
-                   placed={e.name: e.where for e in effects_at if e.placed})
-    wires, wire_notes = _read_wires(section["wires"], ctx, d1_wires(effects_at))
+                   placed={e.name: e.where for e in effects_at if e.placed},
+                   wired=wired, copies=frozenset(c.name for c in spec.copies))
+    wires, wire_notes = _read_wires(raw_wires, ctx, d1_wires(effects_at))
     if ctx.effects is not None and wire_notes:
-        wires, wire_notes = _through_missing(section["wires"], ctx, d1_wires(effects_at),
+        wires, wire_notes = _through_missing(raw_wires, ctx, d1_wires(effects_at),
                                              wires, wire_notes, spec, set(effects))
     spec = replace(spec, wires=wires, notes=spec.notes + tuple(wire_notes))
     try:
@@ -1571,13 +2111,51 @@ def reaches(spec: GraphSpec) -> frozenset[str]:
     a sink), and then what feeds it is reached too. The walk is that
     fixpoint: a delay is a node like any other, followed back from only
     when reached, so a delay that feeds nothing is unreached and holds no
-    buffer, and a loop through one is followed round once."""
+    buffer, and a loop through one is followed round once.
+
+    Plan 35 F: in a wired frame (`spec.wired`) the walk is seeded by every
+    wire into a sink port (`SINK_PORTS`: an output's, All outputs', the
+    look-back's capture), and a node is reached when its picture or its
+    geometry goes into a port of a reached node; the shape reads the faces
+    pattern (`IMPLICIT_EDGES`) while `shape.faces` is unwired and the
+    section has a pattern. `ground` is no node: it reaches nothing."""
+    if spec.wired:
+        return _wired_reaches(spec)
     wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS]
     into: dict[str, list[str]] = {}
     for w in wires:
         into.setdefault(w.node, []).append(w.src)
     todo = [src for node, srcs in into.items() if wire_node_kind(node) in SINKS
             for src in srcs]
+    got: set[str] = set()
+    while todo:
+        name = todo.pop()
+        if name in got:
+            continue
+        got.add(name)
+        todo.extend(into.get(name, ()))
+    return frozenset(got)
+
+
+def _is_sink(w: Wire) -> bool:
+    """Whether wire `w` goes into a sink port of a wired frame (`SINK_PORTS`:
+    a whole kind's ports, or one port by its full name)."""
+    return any(w.dst == p if "." in p else wire_node_kind(w.node, wired=True) == p
+               for p in SINK_PORTS)
+
+
+def _wired_reaches(spec: GraphSpec) -> frozenset[str]:
+    """`reaches` in a wired frame (plan 35 F): the fixpoint from the sinks."""
+    wires = [w for w in spec.all_wires() if w.src != GROUND]
+    into: dict[str, list[str]] = {}
+    for w in wires:
+        into.setdefault(w.node, []).append(w.src)
+    has_pattern = any("pattern" in (w.src, w.node) for w in wires) or any(
+        isinstance(n, PatternAt) for n in spec.frame_nodes)
+    if has_pattern and not any(w.dst == "shape.faces" for w in wires):
+        for node, reads in IMPLICIT_EDGES:
+            into.setdefault(node, []).append(reads)
+    todo = [w.src for w in wires if _is_sink(w)]
     got: set[str] = set()
     while todo:
         name = todo.pop()
