@@ -154,6 +154,8 @@ def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
     rig.presets.load(name)
     reg, table = rig.reg, rig.table
     values = reg.snapshot()
+    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    media = learn.faces_media(rig.presets.graph.spec, getattr(reg, "switch_state", None))
     on: dict[str, Binding] = {}
     for b in table.desk():
         if b.enabled:
@@ -166,7 +168,7 @@ def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
             cells.append(Cell(c.glyph, DARK))
             continue
         why = "no such param" if reg.get(b.target) is None else learn.cannot_show(
-            b.target, values)
+            b.target, values, media)
         cells.append(Cell(c.glyph, DEAD if why else MAPPED, b.target, why or ""))
     glyphs = {c.glyph for c in controls}
     extra = sorted({f"{g} → {b.target}" for g, b in on.items() if g not in glyphs},

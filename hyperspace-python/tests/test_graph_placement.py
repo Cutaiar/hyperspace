@@ -18,10 +18,11 @@ captures the folded scene. The fixtures' pictures are
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from test_graph_json import Stub
+from test_graph_json import Stub, _bare
 from test_presets import boot, put
 
 from hyperspace import graph as G
@@ -36,8 +37,16 @@ RUN = ("warp", "acid", "acid.2", "palette", "palette.2")
 FILES = {"warp", "acid", "palette", "kaleido"}
 
 
+def _run(placed=(), effects=RUN) -> tuple[str, ...]:
+    """The run a preset's wires give these effects (plan 33 R: the
+    migration's, every effect not placed, in the order given)."""
+    names = {e.name for e in placed}
+    return tuple(e for e in effects if e not in names)
+
+
 def _graph(views, *placed, effects=RUN):
-    return G.default_graph(views, G.Wiring(placed=tuple(placed)), effects=effects)
+    return G.default_graph(views, G.Wiring(placed=tuple(placed), run=_run(placed, effects)),
+                           effects=effects)
 
 
 def _fixture(slug: str) -> dict:
@@ -120,9 +129,10 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
         "acid.2 into 'palette' — that makes a loop (acid.2 into palette after acid.2)")
     assert spec.wiring().placed == (G.EffectAt("warp", 1, after="hands"),)
     assert G.EffectAt("acid", 2) in spec.effects
-    # refused at build too, same shape: the effect back in the run at its order
+    # refused at build too, same shape: the run is its wires (plan 33 R),
+    # the two placements in a loop take no other place
     w = G.Wiring(placed=(G.EffectAt("palette", 1, after="acid.2"),
-                         G.EffectAt("acid", 2, into="palette")))
+                         G.EffectAt("acid", 2, into="palette")), run=RUN)
     g = G.default_graph([View(S(), (10, 10))], w, effects=RUN)
     assert g.notes == [
         ("palette after 'acid.2' — that makes a loop (palette after acid.2 into palette); "
@@ -139,7 +149,7 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
     rig.lib.load(PRESETS, "Odd")
     assert rig.presets.notes == [f"graph: {teapot}; the default placement"]
-    assert stub.wiring == G.Wiring(hands="scene") and rig.reg["view.bright"].value == 3.0
+    assert _bare(stub.wiring) == G.Wiring(hands="scene") and rig.reg["view.bright"].value == 3.0
     assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(PRESETS)
 
@@ -160,9 +170,10 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
     assert [(e.name, e.where) for e in spec.wiring().placed] == [
         ("acid.2", ("after", "scene")), ("palette", ("after", "hands")),
         ("palette.2", ("into", "output.2"))]
-    # an unplaced instance 1 is still refused (it is the file itself)
-    with pytest.raises(G.GraphError, match="2 or more"):
-        G.read_graph({"nodes": [{"kind": "effect", "file": "palette"}]})
+    # plan 33 R21: an unplaced instance 1 is the file kept on no wire (it was
+    # refused while instance 1 was the stack's, always there)
+    kept = G.read_graph({"nodes": [{"kind": "effect", "file": "palette"}]})
+    assert kept.effects == (G.EffectAt("palette", 1),) and not kept.wiring().placed
     want = {"palette-hands": (G.EffectAt("palette", 1, after="hands"),),
             "palette-glass": (G.EffectAt("palette", 1, into="output.2"),),
             "acid-scene": (G.EffectAt("acid", 2, after="scene"),)}
@@ -195,7 +206,7 @@ def test_no_factory_preset_changes_and_the_default_graph_is_identical():
         assert "graph" not in json.loads(path.read_text()), path.name
     vs = [View(S(through=True), (10, 10)), View(S(scene=False, through=True), (10, 10)),
           View(S(), (10, 10))]
-    plain = G.default_graph(vs, G.Wiring(), effects=RUN)
+    plain = G.default_graph(vs, G.Wiring(run=RUN), effects=RUN)     # (plan 33: by wires)
     assert G.Wiring().placed == () and plain.dormant == {} and plain.notes == []
     assert not [n for n in plain.order if isinstance(n, G.Effect) and n.placed]
     assert plain.nodes["hands"].readout == "through" and plain.pool == 2
@@ -205,7 +216,7 @@ def test_no_factory_preset_changes_and_the_default_graph_is_identical():
     assert plain.nodes["output.3"].inputs["hands"] is plain.nodes["hands"]
     refused = G.read_graph({"nodes": [{"kind": "effect", "file": "palette",
                                        "after": "teapot"}]}, effects=FILES)
-    again = G.default_graph(vs, refused.wiring(), effects=RUN)
+    again = G.default_graph(vs, replace(refused.wiring(), run=RUN), effects=RUN)
     assert repr(again) == repr(plain) and refused.wiring() == G.Wiring()
 
 
@@ -268,9 +279,9 @@ def test_after_scene_and_into_the_history_in_the_graph():
     assert g.nodes["capture"].inputs["image"] is a2
     assert g.nodes["cover"].inputs["scene"] is scene
     assert g.readers(a2) == 2
-    g = G.default_graph(vs, G.Wiring(blend="depth", history="scene+hands",
-                                     placed=(G.EffectAt("acid", 2, after="scene"),)),
-                        effects=RUN)
+    at = (G.EffectAt("acid", 2, after="scene"),)
+    g = G.default_graph(vs, G.Wiring(blend="depth", history="scene+hands", placed=at,
+                                     run=_run(at)), effects=RUN)
     a2 = g.nodes["acid.2"]
     assert g.nodes["composite(history)"].inputs["under"] is a2
     assert g.nodes["composite(history)"].inputs["depth"] is g.nodes["scene"]
@@ -385,13 +396,13 @@ def test_after_hands_folds_the_hands_layer_and_not_the_shape(ctx):
     hands' layer covers it — and there it does; the palette ran once a
     frame, on the layer, timed under its own name after `hands`."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=())
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
         calls = []
         real = r.fx.run_one
 
@@ -427,13 +438,13 @@ def test_into_output_2_folds_one_output_only(ctx):
     output 2 folds that output's picture; output 1 is byte for byte the
     frame with no palette; the chain ran once."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     def frame(placed: bool):
         r = rig(ctx, effects=("warp",), hands=False)
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),)))
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 
     _, (a1, a2) = frame(False)
@@ -450,13 +461,13 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     history reads the same one, and the effect ran once a frame for both;
     the frame differs from the one without it."""
     import numpy as np
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     r = rig(ctx, effects=(), hands=False, echoes=True)
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
-    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),)))
     seen = []
     real = r.lookback.capture
 
@@ -486,13 +497,13 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     output 2, output 2's hand-off frame is the folded one and output 1 is
     byte for byte the frame without it."""
     import numpy as np
-    from test_outputs import H, W, rig, run, views
+    from test_outputs import H, W, keep_run, rig, run, views
 
     from hyperspace.ghost import GhostState
 
     r = rig(ctx, effects=(), alpha=0.7)
     _palette(r)
-    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
     pv = View(S(), (W, H), presenter=object())
     run(ctx, r, [views(ctx, S())[0], pv], frames=2)
     assert r._graph.nodes["output.2"].inputs["hands"] is r._graph.nodes["palette"]
@@ -504,8 +515,8 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
     r = rig(ctx, effects=())
     _palette(r)
     r.ghost_states = {"ghost.2": GhostState(on=True, alpha=0.25)}
-    r.wiring = G.Wiring(hands="scene", extra=(G.HandsAt(2),),
-                        placed=(G.EffectAt("palette", 1, after="hands.2"),))
+    r.wiring = keep_run(r, G.Wiring(hands="scene", extra=(G.HandsAt(2),),
+                                    placed=(G.EffectAt("palette", 1, after="hands.2"),)))
     calls = []
     real = r.fx.run_one
 
@@ -528,7 +539,7 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
         r = rig(ctx, effects=("warp",), hands=False)
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),)))
         pv = View(S(), (W, H), presenter=object())
         return r, run(ctx, r, [views(ctx, S())[0], pv], frames=2)[0], pv
 
@@ -544,13 +555,13 @@ def test_a_placed_effect_alone_bends_no_pipeline(ctx):
     """With only a placed effect on, `fx_on` is off: a through output
     stands down for the scene's pipeline (no SCENE+HANDS run, no second
     frame texture), no chain runs — and the placed effect still runs."""
-    from test_outputs import rig, run, views
+    from test_outputs import keep_run, rig, run, views
 
     r = rig(ctx, effects=())
     _palette(r)
-    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),))
+    r.wiring = keep_run(r, G.Wiring(placed=(G.EffectAt("palette", 1, after="hands"),)))
     run(ctx, r, views(ctx, S(), S(through=True)), frames=2)
-    assert r.fx.active() and r.stats["fx_on"] is False
+    assert r.fx.state.live("palette") and r.stats["fx_on"] is False
     assert r.stats["chain_runs"] == 0 and r.stats["effects"] == ["palette"]
     assert r.stats["routes"] == [(SCENE, True), (SCENE, True)]
     assert SCENE_HANDS not in r.stats["pipelines"]
@@ -577,7 +588,9 @@ def test_into_a_through_output_standing_down_to_its_ground_is_dormant_for_the_fr
         r = rig(ctx, effects=())
         if placed:
             _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),))
+            # (warp in the run, off: the frame with no effect until it is on)
+            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),),
+                                run=("warp",))
         return r, run(ctx, r, views(ctx, S(), glass), frames=2)
 
     _, (a1, a2) = frame(False)

@@ -38,6 +38,12 @@ explained in the [glossary](#glossary) at the end.
    The step-sequencer entries (L139–L144) are plan 31's: use branch
    `plan-31-integration` until it is merged. Its APC40 entries (A37–A46) need branch
    `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
+   The media entries (L145–L151) are plan 32's, and L152 is the two
+   plans together: use branch `plan-31-32-integration`, where they land
+   together, until it is merged. The free-graph entries (L153–L157, A47)
+   are plan 33's: use branch `plan-33-free-graph` (PR #235) until it is
+   merged. A free graph saves as `hyperspace.preset/5`, which an older
+   build refuses, so both Macs must run that build before L157.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -123,6 +129,11 @@ changes brightness or volume instead).
 14. Plan 31's step-sequencer entries: L139–L143 on the laptop (L141
     with music), L144 with two Macs on the copy; then, on branch
     `plan-31-a1` and with Dylan, A37 first and A38–A46 with the APC40.
+15. Plan 32's media entries: L145–L148 on the laptop (L147 with the cloud
+    and a second Mac), L149–L150 with Resolume or TouchDesigner, L151 with
+    a phone on the copy; then L152, the two plans together, with two Macs.
+16. Plan 33's free-graph entries: L153–L156 on the laptop (L156 with a
+    live source), L157 with two Macs on the copy, then A47 with the APC40.
 
 ## Summary
 
@@ -272,6 +283,19 @@ changes brightness or volume instead).
 | L142 | The trigger lines the pattern up | 1 | laptop | 283 |
 | L143 | The lanes on the GRAPH page | 1 | laptop | 284 |
 | L144 | A pattern preset on an older build | 1 | two Macs, the copy | 285 |
+| L145 | A still as the backdrop; the faces and `aux` (plan 32) | 1 | laptop, a picture | 296, 297 |
+| L146 | A video: speed, scrub, loop; the cue knob as a jog wheel | 1 | laptop; APC40 for the jog | 298, 299 |
+| L147 | A file dropped in the media folder appears; a missing-local banner | 1 | laptop; the cloud and a second Mac | 300, 301 |
+| L148 | Junk files, a renamed clip, rapid switching; the MEDIA page at distance | 1 | laptop | 302, 303 |
+| L149 | Syphon and NDI in from Resolume and TouchDesigner; `extra_ips` | 1 | laptop, Resolume or TouchDesigner, a second Mac | 304–307, 313, 315 |
+| L150 | Syphon and NDI out; a publish-only output | 1 | laptop, Resolume or TouchDesigner, a second screen | 308–310 |
+| L151 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314, 316 |
+| L152 | A preset with a pattern and a bin, saved and reloaded (plans 31 + 32) | 1 | laptop, a picture, the copy; a second Mac | 317 |
+| L153 | The headline graph; reordering the run by dragging; the FX page on a branch (plan 33) | 1 | laptop, a clip, a camera, the copy | 318, 320, 321 |
+| L154 | A drop beside a cable; a shader back into the faces on the layout | 1 | laptop, the copy | 325, 326 |
+| L155 | The FX page with a big graph, from across the room | 1 | laptop | 327 |
+| L156 | A channel lost on the faces mid-show; the frame cost of branches and a switch | 1 | laptop, a live source | 323, 324 |
+| L157 | An old party preset looks the same; a free graph on an older build | 1 | two Macs, the copy | 322, 328 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -318,6 +342,7 @@ changes brightness or volume instead).
 | A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 293 |
 | A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
+| A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -3619,6 +3644,265 @@ loses its pattern.
 
 *(check 285)*
 
+## Media (plan 32: L145–L151)
+
+Plan 32 gives the app eight media channels (pictures, video, a webcam,
+Syphon, NDI) and the MEDIA page. Run on the copy, after `uv sync`
+(four new libraries). Put a still, a `.heic`, a 30 s `.mp4` and a `.gif`
+in `~/Hyperspace-try/media/`. A preset that uses media is saved in a new
+file format (`/4`, which is `/3` plus media): a build from before plan 32
+will not open it, so both Macs need this build first.
+
+#### L145. A still as the backdrop; the faces and `aux`
+
+**Needs:** laptop; a picture.
+
+**Do:** MEDIA page: pick the picture (This Mac), click cell 1 of channel
+A; set Backdrop to A, alpha 1; turn the look-back on and flip its
+"history" switch; then set Faces to A and try the four paths. On the
+GRAPH page wire `media.a` to the `aux` port of Displace, then Blend.
+
+**Right if:** the picture sits under the shape, bent by effects with
+history on; on the faces it keeps its shape and follows the pattern;
+Displace bends the frame by the picture's brightness and Blend keys its
+bright parts; unwired, each effect does nothing.
+
+**Wrong if:** the picture is upside down, stretched, or vanishes when an
+effect is placed after the scene.
+
+*(checks 296, 297)*
+
+#### L146. A video: speed, scrub, loop; the cue knob as a jog wheel
+
+**Needs:** laptop; an APC40 for the jog.
+
+**Do:** put the `.mp4` on channel A (backdrop A). Set rate 2, −1, 0;
+loops; drag Position while it plays and let go. Learn the cue knob onto
+Jog and spin it.
+
+**Right if:** the clip plays at the rate, scrubs where you drag and plays
+on when you let go; a jog spin speeds it and coasts back like a platter;
+nothing stalls.
+
+**Judge:** whether the jog's gain and coast feel right.
+
+**Wrong if:** the picture hitches while scrubbing or the jog never
+settles.
+
+*(checks 298, 299)*
+
+#### L147. A dropped file; a missing-local banner
+
+**Needs:** laptop; for the second half the shared cloud folder and a
+second Mac.
+
+**Do:** with the MEDIA page open, drop a picture into the media folder in
+Finder; delete one that is on a channel. On Mac 1 save a preset whose
+bins hold a `local:` file; load it on Mac 2.
+
+**Right if:** the new file is listed within about two seconds; the deleted
+one's channel goes black and reads `missing`; Mac 2 shows a banner naming
+the source it lacks and the channel is black.
+
+**Wrong if:** the app stalls, or no banner.
+
+*(checks 300, 301)*
+
+#### L148. Junk files, a renamed clip, rapid switching; the page at distance
+
+**Needs:** laptop.
+
+**Do:** put a `.txt`, a truncated `.mp4`, a 0-byte `.png` in the media
+folder; rename a playing clip; sweep a channel's slot with an LFO over
+eight clips for a minute; quit. Stand two metres back from the MEDIA page
+with 30 files in the library.
+
+**Right if:** the junk is listed with an error and nothing else stops; the
+sweep never hitches; the app quits in about two seconds; the page reads
+from there.
+
+**Wrong if:** a hitch at a switch, a slow quit, or a page too small to
+read.
+
+*(checks 302, 303)*
+
+#### L149. Syphon and NDI in
+
+**Needs:** laptop; Resolume or TouchDesigner; a second Mac for the
+network case. `kind = "syphon"` and `kind = "ndi"` in `[[devices]]`.
+
+**Do:** on the Live tab put a Syphon server, then a Resolume NDI sender,
+then a TouchDesigner sender from the second Mac, on the backdrop. Quit and
+restart each sender. Where mDNS is blocked, add `extra_ips`.
+
+**Right if:** each appears in a few seconds, upright; a quit sender holds
+its last frame a second, goes black and returns by itself.
+
+**Wrong if:** nothing is found, the picture is flipped, or it needs a
+relaunch to return.
+
+*(checks 304–307, 313, 315)*
+
+#### L150. Syphon and NDI out; a publish-only output
+
+**Needs:** laptop; Resolume or TouchDesigner; a second screen.
+
+**Do:** set `syphon = "hs"` and `ndi = "hs"` on `[output]`; receive in
+Resolume and TouchDesigner. Give output 2 `window = false`. Resize and
+move output 1's window.
+
+**Right if:** the picture arrives upright at the render size (not 4K);
+SYSTEM shows both publishers at about 60 fps, NDI's readback near 4 ms;
+output 2 opens no window and still sends.
+
+**Wrong if:** it is flipped, black, or the sent size follows the window.
+
+*(checks 308–310)*
+
+#### L151. A webcam; a phone through an NDI app; an old bitmap preset
+
+**Needs:** laptop; a phone with an NDI camera app; the copy.
+
+**Do:** `kind = "camera"`; put the camera on a channel and accept the
+macOS prompt. Start the phone app's NDI sender; put it on a channel. Load
+a preset saved before plan 32 with a picture on the faces.
+
+**Right if:** the camera runs at about 30 fps; the phone appears as an NDI
+source; the old preset loads with a note that the bitmap is no longer read.
+The APC40's knob 7 still moves the faces' media opacity.
+
+**Wrong if:** a stalled camera, or a crash on the old preset.
+
+*(checks 311, 312, 314, 316)*
+
+## Plans 31 and 32 together (L152)
+
+#### L152. A preset with a pattern and a bin, saved and reloaded
+
+**Needs:** the laptop on branch `plan-31-32-integration` (or later), a
+picture in `~/Hyperspace-try/media/`, the copy; a second Mac on a build
+from before plan 31 or on `plan-32-media` alone, sharing the library.
+
+**Do:** load TRIP. In the SEQ grid turn two steps on; on the MEDIA page
+put the picture in channel a's bin and pick it as the backdrop. Save under
+a new name. Open the file in a text editor. Load another preset, then
+load the new one again. On the second Mac, try to load it.
+
+**Right if:** the file says `hyperspace.preset/4`, has `seq.` lines, the
+`media` section with the picture's id, and the backdrop values; reloaded,
+both steps are on and the picture is behind the scene again; the second
+Mac refuses the file with a message about the schema and leaves it as it
+was.
+
+**Wrong if:** the file says `/3` or `/2`; either the pattern or the
+picture is gone after the reload; the second Mac opens it.
+
+*(check 317)*
+
+## Plan 33: the free graph (L153–L157)
+
+#### L153. The headline graph; reordering by dragging; the FX page on a branch
+
+**Needs:** laptop; a clip and a camera; the copy; branch
+`plan-33-free-graph`.
+
+**Do:** put the clip on channel A and the camera on B. On GRAPH,
+right-click the canvas and add `acid`, `tripcolour` and `kaleido`; they
+appear faint, "reaches nothing". Wire `media.a` → `acid.2` →
+`tripcolour.2` → `shape.faces`, and `media.b` → `kaleido.2` →
+`backdrop.image`; set the backdrop alpha to 1. Save under a new name.
+Then load `party-trip`, drag its first effect onto another cable, undo,
+and right-click a cable to insert an effect. Open the FX page: click
+`acid.2`, move a slider, press **Show on GRAPH**.
+
+**Right if:** each node stops being faint as it is wired; the clip plays
+on the faces through the two effects and the camera is a kaleidoscope
+behind the shape; the saved file says `hyperspace.preset/5`; a drag moves
+the effect and the run closes over the gap, one undo puts it back, a
+drop on empty canvas does nothing, the insert adds an instance; the FX
+page lists `acid.2` under **→ faces** and `kaleido.2` under **→
+backdrop**, the slider changes the picture, and **Show on GRAPH** centres
+the node.
+
+**Wrong if:** a wire is refused that should land, the faces go black, a
+node duplicates, or the two pages disagree about which effect is open.
+
+*(checks 318, 320, 321)*
+
+#### L154. A drop beside a cable; a shader back into the faces on the layout
+
+**Needs:** laptop; the copy; L153's graph.
+
+**Do:** drag an effect node and let go a few pixels beside a cable, then
+beside a modulation cable. Press tidy on L153's graph and look at the
+cables.
+
+**Right if:** a drop within reach of a cable lands on it, a drop away
+from one does nothing, and a refusal note ("x is no picture cable") is
+rare and makes sense; the cables run left to right (MEDIA, then GEOMETRY),
+none doubling back, and the two effects on the faces sit in MEDIA.
+
+**Wrong if:** a node moves for a drop nowhere near a cable, or a cable
+runs back across the canvas.
+
+*(checks 325, 326)*
+
+#### L155. The FX page with a big graph, from across the room
+
+**Needs:** laptop.
+
+**Do:** build a graph with about twelve effects, two branches, the faces,
+the backdrop and three unreached nodes. Open the FX page and stand a
+metre and a half back.
+
+**Right if:** the group headers and state words are legible, a name is
+easy to hit, nothing is clipped, and **reaches nothing** stands out.
+
+**Wrong if:** a row is hidden or a strip is pushed off the page.
+
+*(check 327)*
+
+#### L156. A channel lost on the faces; the frame cost of branches and a switch
+
+**Needs:** laptop; a camera or an NDI sender.
+
+**Do:** with a live source on the faces through two effects, unplug it for
+five seconds and plug it back. Then note SYSTEM's frame time on
+`party-trip`, build two branches, the faces branch and an eight-way
+switch driven by an LFO, and write down SYSTEM's frame rate and each
+branch's ms each time, with none wired first.
+
+**Right if:** the faces show the pattern, not black or frozen, while the
+source is gone, and the picture comes back by itself; the frame rate
+stays where it was with no branches and the eight-way switch costs about
+one branch, only its picked path showing on SYSTEM.
+
+**Wrong if:** black faces, a freeze, a switch whose cost grows with its
+inputs (the frame rate drops visibly), or a branch's line that keeps
+growing.
+
+*(checks 323, 324)*
+
+#### L157. An old party preset looks the same; a free graph on an older build
+
+**Needs:** two Macs sharing a library, one on this build and one on the
+build from before plan 33; the copy.
+
+**Do:** on the new build, load each `party-*` preset and `dial`; save one
+untouched under its own name and diff it against the original. Open the
+library on the old Mac. Then save L153's graph, try it on the old Mac,
+strip its branches on the new build and save again.
+
+**Right if:** no load note, the pictures look as before, the untouched
+save is byte-identical and the old Mac opens it; the free graph's file
+says `/5` and the old Mac refuses it, leaving it as it was; the run-only
+file is a lower schema and the old Mac opens it.
+
+**Wrong if:** a load note, a changed picture, a diff, or the old Mac
+opening a `/5` file.
+
+*(checks 322, 328)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -4607,6 +4891,26 @@ is lost — press again.
 latched on the desk by itself.
 
 *(check 295)*
+
+#### A47. A switch over three channels on a knob, into the faces
+
+**Needs:** the APC40; the copy; three channels with pictures; branch
+`plan-33-free-graph`.
+
+**Do:** on GRAPH add a switch, wire `media.a`, `media.b` and `media.c`
+into its `in1`–`in3` and the switch into `pattern.media`. Learn
+`switch.select` onto an APC40 knob and sweep it; put the param on `off`
+and on `4`.
+
+**Right if:** the faces show A, B and C as the knob passes each third, as
+a cut; `off` and the unwired `4` show the faces' own pattern; only the
+picked channel uploads on SYSTEM. Say whether three positions on a
+continuous knob are easy to land on.
+
+**Wrong if:** a blended picture, a stall when the pick changes, or an
+unpicked channel still uploading.
+
+*(check 319)*
 
 ## (b) The hand camera
 

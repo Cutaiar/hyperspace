@@ -1,0 +1,8 @@
+{"schema": "hyperspace.preset/4", "name": "driven-channels",
+ "note": "plan 33 R14: a route on each channel choice (the faces' media, the backdrop) — saved untouched it is the file the base build writes",
+ "values": {"view.media": 2, "backdrop.channel": 3, "fx.acid.on": true},
+ "routes": [{"source": "lane:0", "target": "view.media", "op": "push", "value": 0.5},
+            {"source": "lane:1", "target": "backdrop.channel", "op": "push", "value": 0.25}],
+ "desk": [],
+ "macros": {},
+ "modules": {}}

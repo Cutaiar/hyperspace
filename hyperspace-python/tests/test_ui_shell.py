@@ -17,6 +17,10 @@ from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
+
+# the narrowest control window that opens the panel at ui.PANEL_W (the
+# default before the 4:3 split): the small desk, glyphs only, beside it
+NARROW_CONTROL = (960, 900)
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.outputs import Slot
@@ -854,8 +858,7 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
     frame(rig.panel, "view")
     assert "·  dim black" in drawn
     # a dim the driver refused is said on the OUTPUT page (review of PR #81)
-    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="",
-                                         bitmap_error="")
+    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="")
     drawn.clear()
     frame(rig.panel, "output")
     assert "dim: Error: refused — the picture is not dimmed" in drawn
@@ -1333,6 +1336,19 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
 
 # ------------------------------------------------- plan 17: the right-click menu
 
+def _a_file_path(rig, monkeypatch) -> str:
+    """A file-path param (Kind.TEXT) drawn on the media page by the
+    panel's own widget (`Panel._path`), as `view.bmp_file` was until plan
+    32 took the one bitmap file away — no page draws a TEXT param of its
+    own now, and the widget's contract still holds. Returns its id."""
+    view, pid = rig.view, "view.test_file"
+    view.test_file = ""
+    rig.reg.text(pid, "Test file", lambda: view.test_file,
+                 lambda v: setattr(view, "test_file", v), group="view")
+    monkeypatch.setattr(type(rig.panel), "_page_media", lambda self, dt: self._path(pid))
+    return pid
+
+
 def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
          ) -> tuple[list[str], list[str]]:
     """One frame of `page` with the context menu of `pid` open: (the lines
@@ -1491,10 +1507,11 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
                                    "Learn hand/right"]
     assert "Learn" not in items
     # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    # (and, the owner 2026-10-24, Route from ▸ after the Learn items)
     rig.router.table.unbind("view.speed")
     _, items = menu(panel, monkeypatch, "view.speed", "view")
     assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
-                                                  "Route a lane here…"]
+                                                  "Route from ▸", "Route a lane here…"]
     # each arms with its want
     menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
     assert (lrn.learning, lrn.want) == ("view.speed", "desk")
@@ -1522,13 +1539,15 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
     assert _learn_items(items) == ["Learn desk"]
     # a file path: nothing to learn (a knob cannot set a path)
-    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
-    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    assert rig.reg[path].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, path, "media")
     assert items == [] and "not modulatable" in lines
     # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
     panel.hands = None
     _, items = menu(panel, monkeypatch, "view.speed", "view")
-    assert items == ["Learn desk", "Route a lane here…"]
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Route from ▸",
+                                                  "Route a lane here…"]
     # a rig whose axes are one hand's: that side only
     panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
     assert panel._hand_sides() == ["right"]
@@ -1894,12 +1913,13 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
         _click(panel, rects[pid])
         assert lrn.control is None and reg[pid].base == before, pid
         assert any(b.source == "cc:*:19" and b.target == pid for b in table.desk()), pid
-    frame(panel, "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    frame(panel, "media")
     frame(panel)
     lrn.pick(_control("D5").source)
     frame(panel)
     n = len(pushes)
-    _click(panel, rects["view.bmp_file"])
+    _click(panel, rects[path])
     assert lrn.control == "cc:*:20" and len(pushes) == n
     ui_desk.let_go(panel)
     # the big desk: the click that picks brings the panel back under the

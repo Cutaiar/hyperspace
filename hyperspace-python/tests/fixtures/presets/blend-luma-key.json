@@ -1,0 +1,380 @@
+{
+ "schema": "hyperspace.preset/4",
+ "name": "blend-luma-key",
+ "note": "plan 32 T7's proof preset (a test fixture, never a factory preset): party-faces with the still on channel a wired into blend's aux - the luma key lays the still's bright parts over the frame",
+ "graph": {
+  "nodes": [],
+  "wires": [
+   {
+    "from": "media.a",
+    "to": "blend.aux"
+   }
+  ]
+ },
+ "values": {
+  "view.shape": 3,
+  "view.speed": 0.2,
+  "view.depth4": 2.4,
+  "view.bright": 2.5,
+  "view.points": false,
+  "view.lines": true,
+  "view.faces": true,
+  "view.rotate": true,
+  "view.plane.XY": false,
+  "view.plane.XZ": false,
+  "view.plane.YZ": false,
+  "view.plane.XW": true,
+  "view.plane.YW": true,
+  "view.plane.ZW": false,
+  "view.pattern": 6,
+  "view.pattern_mix": 0.5,
+  "view.instances": 1,
+  "view.inst_motion": 0,
+  "camera.zoom": 1.1,
+  "camera.yaw": 0.0,
+  "camera.pitch": 0.0,
+  "rot.rate.XY": 1.0,
+  "dream.on": false,
+  "fx.on": true,
+  "lfo.1.depth": 0.0,
+  "rot.rate.XZ": 1.0,
+  "rot.rate.YZ": 1.0,
+  "rot.rate.XW": 1.0,
+  "rot.rate.YW": 1.0,
+  "rot.rate.ZW": 1.0,
+  "pattern.mod.0": 1.0,
+  "pattern.mod.1": 1.0,
+  "pattern.mod.2": 1.0,
+  "pattern.mod.3": 1.0,
+  "pattern.mod.4": 1.0,
+  "pattern.mod.5": 1.0,
+  "fx.blend.on": true,
+  "fx.blend.mode": 4,
+  "fx.blend.key": 0.45,
+  "fx.blend.soft": 0.1,
+  "fx.blend.mix": 1.0,
+  "media.a.fit": 2
+ },
+ "routes": [
+  {
+   "source": "lane:0",
+   "target": "rot.rate.ZW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:1",
+   "target": "rot.rate.XW",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:2",
+   "target": "rot.rate.YW",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:3",
+   "target": "rot.rate.XY",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:4",
+   "target": "rot.rate.XZ",
+   "op": "push",
+   "value": 0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:5",
+   "target": "rot.rate.YZ",
+   "op": "push",
+   "value": -0.0625,
+   "scale": "master.gain"
+  },
+  {
+   "source": "lane:0",
+   "target": "pattern.mod.0",
+   "op": "push",
+   "value": 0.35
+  },
+  {
+   "source": "lane:1",
+   "target": "pattern.mod.1",
+   "op": "push",
+   "value": 0.35
+  },
+  {
+   "source": "lane:3",
+   "target": "pattern.mod.3",
+   "op": "push",
+   "value": 0.35
+  },
+  {
+   "source": "lane:4",
+   "target": "pattern.mod.4",
+   "op": "push",
+   "value": 0.35
+  },
+  {
+   "source": "lane:5",
+   "target": "pattern.mod.5",
+   "op": "push",
+   "value": 0.35
+  },
+  {
+   "source": "hand:left.roll",
+   "target": "rot.phase.XY",
+   "op": "push",
+   "value": 0.25
+  },
+  {
+   "source": "hand:left.pitch",
+   "target": "rot.phase.YZ",
+   "op": "push",
+   "value": 0.25
+  },
+  {
+   "source": "hand:left.yaw",
+   "target": "rot.phase.XZ",
+   "op": "push",
+   "value": 0.25
+  },
+  {
+   "source": "hand:left.y",
+   "target": "view.bright",
+   "op": "push",
+   "value": 0.14
+  },
+  {
+   "source": "hand:right.y",
+   "target": "view.pattern_mix",
+   "op": "push",
+   "value": 0.6
+  },
+  {
+   "source": "hand:right.z",
+   "target": "camera.zoom",
+   "op": "push",
+   "value": -0.1892
+  },
+  {
+   "source": "hand:right.roll",
+   "target": "pattern.mod.2",
+   "op": "push",
+   "value": 0.7
+  },
+  {
+   "source": "hand:right.pitch",
+   "target": "camera.pitch",
+   "op": "push",
+   "value": 0.25
+  }
+ ],
+ "desk": [
+  {
+   "source": "cc:*:16",
+   "target": "view.depth4",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:*:17",
+   "target": "camera.yaw",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:*:18",
+   "target": "camera.pitch",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:*:19",
+   "target": "view.pattern",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:48",
+   "target": "view.bright",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:49",
+   "target": "view.speed",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:50",
+   "target": "view.instances",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:51",
+   "target": "view.pattern_mix",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:52",
+   "target": "view.inst_amp",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:53",
+   "target": "view.inst_rate",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:54",
+   "target": "view.bmp_alpha",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:55",
+   "target": "camera.zoom",
+   "op": "abs",
+   "feedback": "ring"
+  },
+  {
+   "source": "cc:0:47",
+   "target": "view.shape",
+   "op": "rel",
+   "ring": 0
+  },
+  {
+   "source": "note:0:50",
+   "target": "view.plane.ZW",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:1:50",
+   "target": "view.plane.XW",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:2:50",
+   "target": "view.plane.YW",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:3:50",
+   "target": "view.plane.XY",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:4:50",
+   "target": "view.plane.XZ",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:5:50",
+   "target": "view.plane.YZ",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:4:55",
+   "target": "view.inst_motion",
+   "op": "set",
+   "value": 0,
+   "feedback": "led",
+   "on": 3
+  },
+  {
+   "source": "note:5:55",
+   "target": "view.inst_motion",
+   "op": "set",
+   "feedback": "led",
+   "on": 3
+  },
+  {
+   "source": "note:6:55",
+   "target": "view.inst_motion",
+   "op": "set",
+   "value": 2,
+   "feedback": "led",
+   "on": 3
+  },
+  {
+   "source": "note:7:55",
+   "target": "view.inst_motion",
+   "op": "set",
+   "value": 3,
+   "feedback": "led",
+   "on": 3
+  },
+  {
+   "source": "note:0:82",
+   "target": "view.points",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:83",
+   "target": "view.lines",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:84",
+   "target": "view.faces",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:85",
+   "target": "view.rotate",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:86",
+   "target": "camera.reset",
+   "op": "toggle",
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:94",
+   "target": "view.bright",
+   "op": "step",
+   "value": 3,
+   "feedback": "led"
+  },
+  {
+   "source": "note:0:95",
+   "target": "view.bright",
+   "op": "step",
+   "value": -3,
+   "feedback": "led"
+  }
+ ],
+ "macros": {},
+ "modules": {},
+ "media": {
+  "channels": {
+   "a": [
+    "local:backdrop-still.png"
+   ]
+  }
+ }
+}

@@ -10,13 +10,18 @@ editor) on 2026-10-17, rows 278–290 in plan 28's N7 (a legible graph)
 and rows 291–298 in plan 30's N8 (the palette as compression)
 and rows 299–310 in plan 28's N9 (the graph by concern)
 on 2026-10-20: the build took its own
-recommendation and built it. Rows 311–320 are different: they are plan
-31's ten design decisions (the step sequencer), which the owner
-**accepted as recommended on 2026-10-22, before the build**; each is
-answered "(rec) — accepted 2026-10-22" and says what was built against
-it, kept here so the build's own choices inside each can still be
-overturned (they are on `plan-31-integration`; row 317's page on
-`plan-31-a1`). Every other one is in the app now (rows 110–213
+recommendation and built it. Rows 311–320 (plan 31, the step sequencer)
+and 321–339 (plan 32, media) are different: the owner **accepted them as
+recommended on 2026-10-22, before their builds**; each is answered
+"(rec) — accepted 2026-10-22" (or "owner") and says what was built
+against it, kept here so the build's own choices inside each can still
+be overturned (the two plans land together on `plan-31-32-integration`;
+row 317's page on `plan-31-a1`). Row 340 is the owner's 2026-10-23
+answer on how the two combine. Rows 341–352 (plan 33, the free graph) are
+the same kind as 311–339: the owner answered 341, 342, 346, 348 and 350 in
+his own words on 2026-10-24 and accepted the rest as recommended, before
+the build (on `plan-33-free-graph`, PR #235, into `plan-31-32-integration`).
+Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
 for the
@@ -325,6 +330,38 @@ here; overturn → the change, then the same.
 | 318 | The pattern in the preset; `run` not | 282 | (rec) — accepted 2026-10-22 |
 | 319 | Conditional `hyperspace.preset/3` | 285 | (rec) — accepted 2026-10-22 |
 | 320 | A1 only after Dylan agrees (built on `plan-31-a1`, waiting) | 286–295 | (rec) — accepted 2026-10-22 |
+| 321 | Eight fixed channels `a`–`h` | 303 | (rec) — accepted 2026-10-22 |
+| 322 | A bin of ≤ 16 sources plus a `slot` param | 296, 298 | (rec) — accepted 2026-10-22 |
+| 323 | Bins live in the preset | 301 | (rec) — accepted 2026-10-22 |
+| 324 | Source ids and places; a missing source is black plus the banner | 300–302 | (rec) — accepted 2026-10-22 |
+| 325 | Live kinds are device-registry kinds that discover feeds | 304, 305, 311, 313 | (rec) — accepted 2026-10-22 |
+| 326 | The transport: pos latch, rate −4…+4, jog with coast, three loop modes | 298, 299 | (rec) — accepted 2026-10-22 |
+| 327 | Scrub proxies for clips ≤ 10 minutes (own worker) | 298 | (rec) — accepted 2026-10-22 |
+| 328 | Threads: a pool, a thread per blocking source, the render thread only uploads | 302, 303 | (rec) — accepted 2026-10-22 |
+| 329 | Caps 1080p files / 720p live; upload only consumed, new frames | 303 | (rec) — accepted 2026-10-22 |
+| 330 | Backdrop under the scene, before history and effects; history off | 296 | (rec) — accepted 2026-10-22 |
+| 331 | Faces read a channel; `view.bmp_*` dropped with a note; K7 kept by an alias | 297, 314 | (rec) — accepted 2026-10-22 |
+| 332 | Every effect gets an `aux` input; `displace` and `blend` | 297 | (rec) — accepted 2026-10-22 |
+| 333 | The phone's own page is V2; an NDI camera app in V1 | 312 | owner — 2026-10-22 |
+| 334 | Phone join (V2): a token in the QR, ≤ 4, approved on the host | — | (rec), not built — 2026-10-22 |
+| 335 | Resolume / TouchDesigner both ways in V1; publishers are SYSTEM lines | 304–310 | owner — 2026-10-22 |
+| 336 | Dependencies: `av`, `pillow-heif`, `syphon-python`, `cyndilib` (+ avfoundation) | 311 | (rec) — accepted 2026-10-22 |
+| 337 | Conditional preset `/4` = `/3` + media (a media value, bin, or route / desk row / modifier / macro / wire naming a media id); both Macs on the merged build | 301, 317 | (rec) — accepted 2026-10-22 |
+| 338 | Base `plan-28-30-integration` | — | (rec) — accepted 2026-10-22 |
+| 339 | No desk or APC40 default bindings; Learn for all | 299 | (rec) — accepted 2026-10-22 |
+| 340 | Plans 31 and 32 together: one schema ladder `/4` = `/3` + media; land together; "at its default" is the library's | 317 | owner — 2026-10-23 |
+| 341 | Retire the FX stack: no `order`, no `target`; effects edited on GRAPH | 318, 320 | owner — 2026-10-24 |
+| 342 | One picture input for all faces (`shape.faces`); per instance is next | 318 | owner — 2026-10-24 |
+| 343 | The run is wires `frame → … → fx.image`, drawn by every pipeline | 320, 322 | (rec) — accepted 2026-10-24 |
+| 344 | A `pattern` node with a `media` input replaces `view.media` | 318, 323 | (rec) — accepted 2026-10-24 |
+| 345 | A `backdrop` node with an `image` input replaces `backdrop.channel` | 318 | (rec) — accepted 2026-10-24 |
+| 346 | The migration keeps only effects that are on (mix > 0), and those something drives | 322 | owner — 2026-10-24 |
+| 347 | Save writes the lowest schema that loses nothing; `/5` only when `/4` cannot say it | 322, 328 | (rec) — accepted 2026-10-24 |
+| 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
+| 349 | An unreached effect is kept, drawn faint, never run. Amended 2026-10-24 (the owner's glimmer): a section with a `frame` run shortens no wire to a D1 placement, so an effect with an input and no output is unreached and not drawn; explicit `after` / `into` entries still place; a pre-33 section's shortened wires migrate to explicit entries | 325, 326 | (rec) — accepted 2026-10-24 |
+| 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
+| 351 | The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
+| 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
 
 "—": no hand check shows it; tests only.
 
@@ -6129,3 +6166,621 @@ are `seq-demo`'s (621).
   it lands; it touches `routing.dispatch` / `active`, `midi.py`,
   `apc40.DEFAULT_MAP` and `ui_desk`.
 - **Judge it.** Checks 286–295, with Dylan.
+
+## Plan 32 — media (rows 321–339)
+
+Rows 321–339 were answered by the owner on 2026-10-22, in the session that
+designed plan 32, before the build: "(rec)" is the recommendation accepted,
+"(owner)" the owner's own. Each row says what the build did; "Rough edge"
+and "Judge it" are for the hand checks of group AA (checks 296–316).
+These rows follow plan 31's rows 311–320; the two plans land together on
+`plan-31-32-integration` (row 340).
+
+### 321. Eight fixed channels, `a`–`h`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.channels.CHANNELS = "abcdefgh"`; each channel has six
+  params in the `media` group (`media.<c>.slot / fit / rate / pos / jog /
+  loop`, 48 in all), all routable, all Learn targets, none with a desk
+  default. The group is a performance group, so the presets page's module
+  overview leaves it out (a channel's values mean nothing without its bin).
+- **Other options.** Channels added and removed like LFOs (plan 31's
+  bank); sixteen channels.
+- **To reverse.** `channels.CHANNELS`, `params.build_registry`, the MEDIA
+  page's eight columns, `graph.MEDIA_CHANNELS` (a test holds the two
+  constants equal).
+- **Rough edge.** Unused empty channels sit on GRAPH's idle line ("8 empty
+  channels"); eight 45 px columns are tight on the panel.
+- **Judge it.** Check 303.
+
+### 322. A channel's choice is a bin of ≤ 16 sources plus a `slot` param
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.<c>.slot` is a discrete 0–15 param; the bin is
+  `BIN = 16` ids, an empty entry or a missing source reads black. Switching
+  is a param, so Learn, the pad, the APC40, the sequencer, a macro, an LFO
+  and undo all switch it. The MEDIA page assigns (library pick, then a
+  cell), cues (a cell with no pick writes the slot) and empties (right
+  click); a bin edit is one undo step.
+- **Other options.** A channel holding one source with no bin; a longer
+  bin.
+- **To reverse.** `channels.BIN`, the slot param's range, the page's bin
+  cells.
+- **Rough edge.** A bin edit made any way but the MEDIA page (a script) is
+  not an undo step.
+- **Judge it.** Checks 296, 298.
+
+### 323. Bins live in the preset
+
+- **Answer.** (rec) — accepted 2026-10-22. "Source lists in the preset are
+  fine."
+- **Built.** A `media` section, `{"channels": {"a": [id | null, …≤16],
+  …}}`, one channel to a line. The bins are part of the dirty dot's
+  signature and of `Presets.same`, and `library.Marks` carries them, so an
+  undo of a load puts them back. A bad id in a file is a note and the entry
+  is dropped; the bins land after the values.
+- **Other options.** Bins in the show or the session (the rig), not the
+  preset.
+- **To reverse.** `preset.document`, `MediaState.to_json / from_json`,
+  `library.Marks`.
+- **Rough edge.** A preset names a place (`local:`, `camera:`) another Mac
+  may lack: the banner says so, the channel shows black.
+- **Judge it.** Check 301.
+
+### 324. Source ids and places
+
+- **Answer.** (rec) — accepted 2026-10-22: `shared:`, `local:`, `file:`,
+  the live kinds; a missing source is black plus the banner.
+- **Built.** `shared:<rel>` (`<library>/media/`), `local:<rel>`
+  (`<home>/media/`), `file:<abs>`, `camera:<name>`, `syphon:<app>/<server>`,
+  `ndi:<stream>` (`ndi:HOST (stream)` when two hosts send one name);
+  `phone:` is parsed and never opened. The MEDIA page's banner lists the
+  ids the loaded preset names that this Mac lacks, three lines and "and n
+  more". A file that is deleted, renamed or replaced mid-show turns its
+  channel black and `missing` (a new mtime reloads it); a placeholder is
+  `fetching` — black, never opened (a read would block until the download
+  lands), out of the banner, opened within a second of the scan that says
+  `ready` (final review A-I1); a junk file is `error: …`; none of it
+  reaches the frame thread. **Copy to shared** turns a `local:` or `file:` pick into a
+  `shared:` one.
+- **Other options.** Content hashes instead of paths; a manifest.
+- **To reverse.** `media.ids`, `MediaFolder`, the banner in `ui_media`.
+- **Rough edge.** A renamed file is a new id (the old bin entry goes
+  missing); `file:` ids are absolute and so never portable.
+- **Judge it.** Checks 300, 301, 302.
+
+### 325. Live kinds are device-registry kinds that discover feeds
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `ndi`, `syphon` and `camera` are `devices.kinds()` entries on
+  `media.live.LiveKind`; an entry in `[[devices]]` turns one on (the
+  factory template lists all three, commented, `enabled = true`). A kind's
+  `media_sources()` is the dict its last scan published, and
+  `DeviceRegistry.media_feeds()` merges the open devices'. Status
+  `connected — n feeds`, `lost`, or `error: …`; the registry's retry and
+  config watch come free. The kind's name for its feed map is
+  `media_sources`, not the design's `feeds`, which `devices.Base` already
+  uses for the Router schemes a device feeds (ruling during the build).
+  A feed that vanishes is held `lost` and found again with no relaunch; a
+  channel follows a device remade by a `config.toml` edit.
+- **Other options.** A separate "media sources" registry beside devices.
+- **To reverse.** `media.live`, `devices.kinds`, `DeviceRegistry.media_feeds`.
+- **Rough edge.** A GRAPH device node is grey unless its status starts with
+  `connected` (changed from "connected"); the camera kind lists Continuity
+  Camera.
+- **Judge it.** Checks 304, 305, 311, 313, 316.
+
+### 326. The transport: `pos` latch scrub, `rate` −4…+4, `jog` a push with coast, `loop` three modes, rate 0 freezes a live feed
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.transport.Transport`: speed = `rate + coast`, where only
+  `coast` (target 8 × `jog`) springs (`motion.spring`, 2 Hz); a `rate`
+  change acts at once (ruling: "× native speed" and "jog coasts back to
+  rate" together). While `pos` moves, the playhead is put there; at rest it
+  runs on. `loop` / `pingpong` / `once` (the last holds its last frame).
+  On a live feed `rate` 0 freezes the frame. The playhead is a readout on
+  the MEDIA page and GRAPH, never a param. A channel with no consumer still
+  plays but is not uploaded.
+- **Other options.** `pos` as an absolute param only; jog as a speed
+  multiplier; a rate that springs too.
+- **To reverse.** `Transport.step`, `JOG_GAIN`, `JOG_HZ` in `transport.py`.
+- **Rough edge.** Rate 0 freezes an NDI or camera feed exactly, and a Syphon
+  channel holds too — its copy of the held frame is made only when the
+  frame moves — except across a renderer hot reload, which copies the held
+  texture name again (check 315). A frozen live channel says `frozen`. `once` never re-arms by itself (a new scrub moves it);
+  a proxy retimes VFR clips; scrubbing a clip without a proxy is coarse
+  (keyframes).
+- **Judge it.** Checks 298, 299, 315.
+
+### 327. Scrub proxies for clips ≤ 10 minutes
+
+- **Answer.** (rec) — accepted 2026-10-22. "I can't imagine we'd have
+  longer clips than that."
+- **Built.** A clip of ≤ 600 s gets an MJPEG proxy (≤ 1280×720) in
+  `<home>/media-cache/proxies/`, never the shared folder, made the first
+  time the clip is opened. The build gave it a single cancellable worker of
+  its own (`media-proxy`) instead of the pool: a transcode cannot be
+  cancelled on the pool and would hold a worker through an app exit. Until
+  it exists the original plays forward only; the proxy is picked up at the
+  next open.
+- **Other options.** Transcode at add time; HAP/ProRes proxies; no proxy.
+- **To reverse.** `media.proxy`, `video.VideoSource` (`read_path`).
+- **Rough edge.** A failed proxy is retried at every open; clips over 10
+  minutes scrub by keyframe, always.
+- **Judge it.** Check 298.
+
+### 328. Threads: a pool for jobs that end, a thread per blocking source, the render thread only uploads
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `media.pool` (3 workers) for still decode, folder scans, live
+  discovery and joins, and `media-thumb` (1 worker, at most 16 jobs
+  waiting, the oldest dropped) for thumbnails; all daemon threads
+  (`pool.DaemonExecutor`: `concurrent.futures` joins its own at
+  interpreter exit, so one stuck read held Quit — final review A-I1); a
+  thread of its own per video
+  (`media-video-<name>`), live feed (`media-live-<id>`), NDI out
+  (`media-ndi-out-<name>`), plus `media-proxy`, `media-closer` (a dropped
+  source is closed there, so a close stuck in a cloud download cannot
+  freeze the frame), `media-discover-syphon` and the folder's probe
+  threads. `MediaState.poll` steps transports and opens/queues closes;
+  `MediaTextures` uploads. Tests: a fake adapter sleeping 200 ms leaves the
+  frame untouched; 500 rapid switches balance opens and closes and leave one
+  thread; app exit joins everything within 2 s — one deadline shared by
+  every close (`pool.begin_exit` / `left`), proved in a subprocess with
+  every pool worker stuck in a read, a transcode running and a video stuck
+  opening; a huge image reads None until ready.
+- **Other options.** One pool for all (a blocking read starves it);
+  asyncio.
+- **To reverse.** The adapters' thread starts, `Closer`.
+- **Rough edge.** Syphon's client release runs on the frame thread. A
+  video's close waits 1 s at most and abandons a thread stuck opening; a
+  close of another kind hung for good still blocks later closes (leak, not
+  stall).
+- **Judge it.** Checks 302, 303.
+
+### 329. Caps: 1080p files, 720p live; upload only consumed channels with a new frame
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `CAP_FILE` 1920×1080, `CAP_LIVE` 1280×720, aspect kept, on the
+  decoding thread. `MediaTextures.texture` writes only for a channel a
+  consumer reads this frame whose `(frame, t)` moved. Syphon textures
+  arrive at the server's size and are sampled scaled (a cap would need a
+  GPU pass). The MEDIA page's preview of a channel nothing reads is a copy
+  at most 320 px wide, each at most 10 a second and two a frame, round
+  robin (final review B-I2); a channel the frame reads shows its own
+  texture.
+- **Other options.** Resize on the GPU; a lower file cap.
+- **To reverse.** `frame.CAP_FILE`, `CAP_LIVE`.
+- **Rough edge.** Eight consumed 1080p channels at 30 fps is ~2 GB/s of
+  texture writes; never measured in a show.
+- **Judge it.** Check 303.
+
+### 330. Backdrop under the scene, before the history and the effects; `backdrop.history` off by default; plan 33 settles the order
+
+- **Answer.** (rec) — accepted 2026-10-22. "Stopgap is fine."
+- **Built.** `backdrop.channel` (off / a–h), `backdrop.alpha`,
+  `backdrop.history`. The scene clears to alpha 0 and is laid over the
+  channel (`grounded`); echoes and the dream are drawn over the backdrop.
+  With `history` off they are held back by the scene alone (the history's
+  `occluder` port — not by the backdrop's brightness, which hid them;
+  final review B-I1). With `history` on the capture takes the composite,
+  so the echoes hold the backdrop too and the history occludes from its own
+  picture as before: occluded by the scene alone, a still backdrop added
+  onto itself and washed to white (re-review). So with `history` on, the
+  shape's echoes show over the backdrop's dark areas only. An effect placed
+  `after scene` is retargeted to the backdrop's composite. The hands-only
+  pipeline has none. With no backdrop the graph is unchanged node for node.
+- **Other options.** The backdrop inside the history by default; a
+  backdrop per output.
+- **To reverse.** `graph.default_graph`'s `grounded`, `Renderer.scene_ground`.
+- **Rough edge.** With `history` off, echoes are not bent by an effect
+  placed after the scene; with `cut_through` on and a backdrop, faint fills
+  let the backdrop show through (never eyeballed).
+- **Judge it.** Check 296.
+
+### 331. Faces read a channel (`view.media`); `view.bmp_*` dropped on load with a note
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `view.media` (off / a–h) and `view.media_alpha / scale / mode /
+  amp / rate` with the old meaning; the faces read the channel's raw
+  texture, aspect kept. An old preset's non-empty `view.bmp_file` is
+  dropped with `bitmap file <path> is no longer read: put it on a media
+  channel`. Ruling: the APC40's factory knob 7 (`cc:0:54 → view.bmp_alpha`)
+  keeps working because `view.bmp_alpha` is a hidden alias of
+  `view.media_alpha`: an old preset's value lands on `media_alpha`
+  (the file's own `view.media_alpha` wins); row 339 forbids new defaults,
+  not the keeping of existing ones.
+- **Other options.** Retire the knob (free K7); keep a bitmap page beside.
+- **To reverse.** `params` (the alias rule), `preset` (the load note).
+- **Rough edge.** The alias shows as its own port on GRAPH's shape node,
+  like the `band.sel.*` aliases.
+- **Judge it.** Checks 297, 314.
+
+### 332. Every effect gets an optional `aux` input; `displace` and `blend`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** `Effect.INPUTS = {"image", "aux"}`; `_lib.glsl` has `u_aux`,
+  `u_aux_on`, `u_aux_size`, `aux(uv)`, `aux_luma(uv)`; unwired is
+  transparent black. Any `IMAGE` node may feed it (a channel, the scene,
+  the history, another effect), by a wire `{"from": "media.a", "to":
+  "acid.2.aux"}`; a loop or a missing end is dormant with words. `displace`
+  (luma or red/green moves the picture; amount, mode, angle) and `blend`
+  (over, multiply, screen, difference, luma key; key, soft; mix = amount).
+  No factory preset uses them. Goldens `displace-luma`, `blend-luma-key`.
+- **Other options.** Effects named per input; N aux ports.
+- **To reverse.** `graph.Effect.INPUTS`, `fx.py` uniforms, the two shader
+  files.
+- **Rough edge.** Adding two effect files adds `fx.displace.*` / `fx.blend.*`
+  lines to every saved preset (see row 337); an aux from an in-run effect
+  reads the scene pipeline's node.
+- **Judge it.** Check 297.
+
+### 333. The phone's own HTTPS page is V2; V1 leaves the door open for an NDI camera app
+
+- **Answer.** (owner) — 2026-10-22. Its check with a real phone comes after
+  the sprint.
+- **Built.** Nothing for phones but the `phone:` id, parsed and never
+  opened, and never listed missing. A phone running an NDI camera app is an
+  `ndi:` source.
+- **Other options.** The HTTPS/WebRTC page (the design in the plan file, §P).
+- **To reverse.** n/a (V2 adds the adapter and a kind).
+- **Rough edge.** The NDI-camera-app road has never been tried with a real
+  phone.
+- **Judge it.** Check 312.
+
+### 334. Phone join (V2): a per-rig token in the QR, at most 4, each approved on the host
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** Not built (V2).
+- **Other options.** Open join; a PIN per session.
+- **To reverse.** n/a.
+- **Rough edge.** n/a.
+- **Judge it.** No check; V2.
+
+### 335. Resolume / TouchDesigner both ways in V1: NDI in, Syphon in, Syphon out, NDI out; publish-only outputs
+
+- **Answer.** (owner) — 2026-10-22.
+- **Built.** In: `ndi` (with `extra_ips`) and `syphon` kinds (row 325). Out:
+  `[output]` / `[[output.screens]]` take `syphon = "<name>"`, `ndi =
+  "<name>"` and `window = false`. Syphon out hands the texture over on the
+  frame thread (0 ms); NDI out reads back through two pixel-pack buffers
+  and sends on its own thread (~4 ms of frame time at 1080p), dropping a
+  frame when the sender is busy. A window publishes at the render cap, so
+  a retina window is not a 4K stream. Rulings: publishers are SYSTEM lines
+  (`<kind> out <name> — <fps> fps, readback <ms> ms`), not registry sinks;
+  output 1 cannot be publish-only (it holds the GL context and paces the
+  loop): `window = false` there is a note. `extra_ips` goes through an
+  app-owned `<home>/ndi/ndi-config.v1.json` (`NDI_CONFIG_DIR` set before
+  `cyndilib` loads), because `cyndilib` hard-codes the finder's extra IPs.
+  Syphon in is a `GL_TEXTURE_RECTANGLE`, copied on the GPU into a 2D
+  texture.
+- **Other options.** A registry sink per publisher; NDI|HX; a Syphon
+  Metal server; clocking the NDI sender.
+- **To reverse.** `media.publish`, `config` (the three keys),
+  `render._publish`.
+- **Rough edge.** `extra_ips` is unverified (the status says so); a change
+  after `cyndilib` loaded needs a restart; the NDI copy is 4 ms of a 16 ms
+  frame; a hand-edited `window = false` on output 1 is refused.
+- **Judge it.** Checks 304–310.
+
+### 336. Dependencies: `av`, `pillow-heif`, `syphon-python`, `cyndilib` in the default install, each imported only when used
+
+- **Answer.** (rec) — accepted 2026-10-22; the phone's (`aiohttp`,
+  `aiortc`, `segno`) come with V2.
+- **Built.** `pyproject.toml`: `av>=19`, `pillow-heif>=1.8`,
+  `syphon-python[opengl]>=0.2` (macOS only; the extra is PyOpenGL, already a
+  dependency, which Syphon's GL server needs), `cyndilib>=0.1.3` (its macOS
+  wheel carries `libndi`; check the NDI SDK's licence before shipping a
+  build), and, beyond the row, `pyobjc-framework-avfoundation` (macOS only,
+  for the camera list). `import hyperspace.app` imports none of `av`,
+  `pillow_heif`, `syphon`, `cyndilib`, `AVFoundation` (a boundary test).
+- **Other options.** Optional extras; a separate install step.
+- **To reverse.** `pyproject.toml`, `uv lock`.
+- **Rough edge.** `uv sync` pulls four more wheels (a heavier first launch).
+- **Judge it.** Check 311 (a fresh `uv sync` on the other Mac).
+
+### 337. Conditional preset `hyperspace.preset/4`, after plan 31's `/3`
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** A preset is saved `/4` only when its document has a `media`
+  section with an id, any `media.*`, `backdrop.*` or `view.media*` value
+  away from its default, or a route, desk row, modifier, macro or graph
+  wire naming a media id. `/4` is `/3` plus media (row 340): a `/4` file
+  carries every value, plan 31's envelopes and pattern too; every other
+  preset is `/3` or `/2` by plan 31's rule (row 319), without the media
+  values. Load accepts 2, 3 and 4. **Both Macs sharing a library must run
+  the merged build** to load a `/4` file; an older build refuses it.
+- **Other options.** Always write `/4`.
+- **To reverse.** `preset.uses_media`, `MEDIA_SCHEMA`.
+- **Rough edge.** "Every other preset is byte for byte the file it was"
+  holds except for the added `fx.displace.*` / `fx.blend.*` value lines
+  (two new effect files; plan 30's palette did the same): the test ignores
+  them. A `/4` file read by an older build is the cross-build question
+  hand check 301 asks.
+- **Judge it.** Check 301.
+
+### 338. Base `plan-28-30-integration`, taking it in as it moves
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** Built on `plan-28-30-integration` @ 1a5cc2e. Nothing taken in
+  during the build.
+- **Other options.** Wait for #224 to merge.
+- **To reverse.** n/a.
+- **Rough edge.** It lands with plan 31 (`plan-31-32-integration`, row
+  340). No schema, register row or hand check renumbered; only the
+  TESTING-GUIDE ids moved (plan 32's L139–L145 became L145–L151).
+- **Judge it.** n/a.
+
+### 339. No desk or APC40 default bindings; Learn for all
+
+- **Answer.** (rec) — accepted 2026-10-22.
+- **Built.** No factory row, desk template or APC40 mapping was added;
+  `apc40.py` and `midi.py` are untouched. Every channel param is a Learn
+  target; the MEDIA page suggests Learning the cue knob to
+  `media.<c>.jog`. K7's existing row survives through an alias (row 331).
+- **Other options.** Defaults on the clip grid; the cue knob bound to the
+  selected channel's jog.
+- **To reverse.** n/a (add rows to a profile).
+- **Rough edge.** Nothing moves a channel until a performer Learns it.
+- **Judge it.** Check 299.
+
+## Plans 31 and 32 together (row 340)
+
+### 340. One schema ladder: `/4` = `/3` + media; the two land together
+
+- **Answer.** owner — 2026-10-23 (D1–D3 of
+  [`plans/assets/32-media/merge-31-32.md`](plans/assets/32-media/merge-31-32.md)).
+- **Built.** One rule, `preset.schema_of`, picks what a save writes, the
+  lowest schema that loses nothing: `/4` when the preset uses media
+  (`uses_media`: a bin, a media-family value off its default, or a row or
+  wire naming a media id), else `/3` by row 319's rule, else `/2`.
+  `VERSIONS = (2, 3, 4)`. A `/2` file carries neither family's values, a
+  `/3` the envelopes' and the sequencer's but no media value and no
+  `media` key, a `/4` everything plus the bins. The factory presets
+  (`preset.generated`) go through the same rule. "At its default" is
+  plan 31's test for both families: what a load lands for the value
+  missing (`Library.defaults`, the group's default module over the build
+  values), to a float's hair. Plans 31 and 32 land together, on
+  `plan-31-32-integration`, so no build reads `/4` without `/3`.
+- **Other options.** One schema per combination (`/3` sequencer, `/4`
+  media, `/5` both), or a list of required features in the file.
+- **To reverse.** `preset.schema_of`, `Presets.document`'s strip.
+- **Rough edge.** A Mac still on `plan-32-media` alone reads `/4` but
+  not `/3`: it would load a merged-build `/4` that carries a pattern and
+  drop the pattern on a re-save. Never run that branch against the shared
+  library once the merged build has saved.
+- **Judge it.** Check 317.
+
+## Plan 33 — the free graph (rows 341–352)
+
+Rows 341–352 were answered by the owner on 2026-10-24, in the session that
+designed plan 33, before the build: "(owner)" is his own answer, quoted,
+"(rec)" a recommendation he accepted ("accept the rest of the recs, start
+building"). Each row says what the build did; "Rough edge" and "Judge it"
+are for the hand checks of group AC (checks 318–328). The ledger's
+rulings R1–R29 are folded into "Built" where they changed what you see.
+The plan lands on `plan-31-32-integration` (PR #235).
+
+### 341. Retire the FX stack: no `order`, no `target`, effects are edited on GRAPH
+
+- **Answer.** (owner) — 2026-10-24: "Retire the main chain fx stack, we can
+  edit it directly in the graph."
+- **Built.** `fx.<n>.order`, `fx.<n>.target` and `fx.select` are not
+  params (`fx.RESERVED` keeps `order` and `target` as names, so an old
+  preset's ids are not read as uniforms). `TARGETS`, `FRAME`, `FACES`,
+  `chain()`, `FxChain.run`, the faces chain (`face_fx`) and the order-built
+  fallback run are gone; `Wiring.run is None` is the empty run (R23).
+  `@order` in an effect file is parsed and read only by the migration.
+  An old preset's orders and targets are read as wires on load
+  (`graphmigrate.migrate`) and, on a save below `/5`, written back where
+  the base build put them (`with_retired`). Three demo tools of the
+  retired UI and 30 stack-only tests were deleted.
+- **Other options.** Keep the stack as the default run and let the graph
+  add branches beside it.
+- **To reverse.** Large: the T3 run-from-wires and T7 removals. The
+  migration's inverse (`legacy_values`) is the way back to `order`.
+- **Rough edge.** A pad or key that switches on an effect in no run does
+  nothing (R13) and a later save is `/5`. An fx module load replaces the
+  run rather than appending (R12).
+- **Judge it.** Checks 318, 320.
+
+### 342. One picture input for all faces: `shape.faces`
+
+- **Answer.** (owner) — 2026-10-24: "I'm fine with one input for all faces
+  right now, per instance is the next place I would go with this though."
+- **Built.** `Shape.INPUTS = {"faces": IMAGE}`. Unwired, or fed straight
+  from `pattern`, the faces draw per face with no 1024² pass (every
+  golden without a face effect). Through effects from `pattern`: the old
+  ping-pong into `face_pic` (1024²). From anything else: that picture at
+  1024² as `u_pic`, mapped per face or in screen space by `fx.face_map`.
+  A source that reads nothing (a lost channel) makes the faces show the
+  pattern for that frame. 24 goldens added (`media-chain-faces` and the
+  two beside it).
+- **Other options.** A picture per shape instance now.
+- **To reverse.** n/a (a later plan adds `shape.faces.<k>`; the port name
+  leaves room).
+- **Rough edge.** Every face shows face 0's pattern phase when a picture
+  is wired in, as it did with an effect aimed at the faces.
+- **Judge it.** Check 318.
+
+### 343. The run is wires from `frame` to `fx.image`, drawn by every pipeline
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Wiring.run`, from `graph.run_of`; every pipeline (scene,
+  scene+hands, hands) draws the same run on its own picture, as each drew
+  the chain. An effect in no run and on no reached branch has no node.
+  A run member whose file is gone reads through and says so
+  (`Graph.dormant`). The graph's rebuild key takes the effect files
+  present, not their order. Into `fx.image` only from `frame` or an effect
+  chain leading back to it; anything else is refused in words.
+- **Other options.** A run per pipeline in the preset.
+- **To reverse.** `Wiring.run`, `default_graph`'s run, `wire_error`.
+- **Rough edge.** An emptied run keeps its bare `frame → fx.image` wire
+  (R9), and deleting that wire is refused (R20), so "no run" is never
+  expressible; an empty run is the same picture.
+- **Judge it.** Checks 320, 322.
+
+### 344. A `pattern` node with a `media` input replaces `view.media`; `shape.faces` unwired draws as today
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.PatternNode`. A channel straight into `pattern.media`
+  is read raw (`Renderer._channel_layer`), as `view.media` was, so
+  `faces-media`'s graph and goldens are unchanged; a branch is made at
+  its head's size and keeps the channel's aspect. `view.media_alpha /
+  scale / mode / amp / rate` stay params. `view.media` is not a param;
+  its readers (`render._face_media`, the FACES and MEDIA pages, Learn)
+  follow the wires, through a switch's pick.
+- **Other options.** The media layer dropped for a composite over the
+  pattern (loses the layer's scale and orbit).
+- **To reverse.** `PatternNode`, `render._face_media`.
+- **Rough edge.** The MEDIA page's faces picker is read-only words
+  ("channel C (switch)", "wired on GRAPH"); the choice is made on GRAPH or
+  by a knob on a switch.
+- **Judge it.** Checks 318, 323.
+
+### 345. A `backdrop` node with an `image` input replaces `backdrop.channel`; `backdrop.alpha` and `backdrop.history` stay params
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.BackdropNode`, the sink. A channel straight in becomes
+  `Wiring.backdrop` and is plan 32's `MediaNode` under the scene, byte for
+  byte; a branch is laid under the scene in `grounded` by
+  `Composite(under_alpha_of="backdrop_alpha")` at the frame size.
+  `backdrop.*` params belong to the `backdrop` node on GRAPH.
+- **Other options.** Keep `backdrop.channel` as a param beside the wire.
+- **To reverse.** `BackdropNode`, `Composite.under_alpha_of`.
+- **Rough edge.** A backdrop branch has one extra reader, so one extra
+  pool texture a frame.
+- **Judge it.** Check 318.
+
+### 346. The migration keeps only the effects that are on (mix > 0), and the ones something drives
+
+- **Answer.** (owner) — 2026-10-24: "effects that are toggled off right now
+  really are not used in any presets." The driven-at-mix-0 clause is the
+  build's ruling R5, taken for `dial`.
+- **Built.** An effect joins the run when it is `on` and (`mix > 0` or an
+  id of its own is driven by a route, desk row, macro, modifier or step).
+  `presets/dial.json` has `acid`, `huecycle` and `kaleido` on at mix 0,
+  pushed up by axis routes; they stay. An effect that is off stays out and
+  a load note says so when something drives it. A test fails the build if
+  a library preset routes an effect the migration leaves out
+  (`test_no_library_preset_routes_an_effect_it_leaves_out`). All 661
+  goldens before the plan are unmoved.
+- **Other options.** Keep every effect, off ones read through (an idle node
+  each); keep only the on, mix > 0 ones and lose `dial`'s three.
+- **To reverse.** `graphmigrate.migrate`'s membership rule.
+- **Rough edge.** A person's own preset that drives an effect which was
+  off loses it, with a note.
+- **Judge it.** Check 322.
+
+### 347. Save writes the lowest schema that loses nothing; `/5` only for a graph `/4` cannot say
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `preset.schema_of` writes `/5` (`FREE_SCHEMA`, `VERSIONS =
+  (2, 3, 4, 5)`) when `graphmigrate.needs_free` says the graph uses a word
+  `/4` cannot: a branch, a switch, an unwired node, an effect on outside
+  every run, a faces run `/4` cannot order. Otherwise the section is
+  stripped of plan-33 words (`legacy_section`) and `legacy_values` lays
+  the orders, targets and channel choices back, so a build from before the
+  plan never meets `frame` or `fx.image` (R10). An untouched `/4`, `/3` or
+  `/2` saves byte-identical (38 sources in
+  `tests/fixtures/plan33-v4-saves/`). **Both Macs must run this build**
+  before a `/5` file is saved; an older build refuses it.
+- **Other options.** Always `/5` (both Macs update at once).
+- **To reverse.** `preset.schema_of`, `graphmigrate.legacy_values`.
+- **Rough edge.** A person's own preset that drives a channel choice
+  becomes a switch and saves `/5` on its first re-save (R19); none is in
+  the library. A `/4` save after a reorder writes the moved effect's
+  `order` as an int among floats.
+- **Judge it.** Checks 322, 328.
+
+### 348. The FX page stays as a browser of the effect nodes in the graph
+
+- **Answer.** (owner) — 2026-10-24: "a kind of dynamic representation of
+  the things that are in the graph. It's kind of like a file explorer way
+  of exploring what is in the graph."
+- **Built.** `ui_fx.groups(spec)`: **Run**, **→ faces**, **→ pattern
+  media**, **→ backdrop**, **→ output N**, **→ <effect> aux**, any other
+  end, **reaches nothing** last; an effect that ends in two places is
+  listed in each. A row is a name, an `on` check, a small `mix` and a
+  state word; a click opens the strip, **Show on GRAPH**
+  (`ui_graph.select_effect`) selects and centres the node. The selection
+  (`Panel.fx_selected`) is shared with GRAPH's side pane. The head keeps
+  `fx.on` and `fx.mix`; the `→ faces` header carries `fx.face_map`. The
+  page adds, removes, wires and reorders nothing.
+- **Other options.** Remove the page; the strip in GRAPH's side pane only.
+- **To reverse.** `ui_fx.page`, `ui_fx.groups`.
+- **Rough edge.** `groups()` is computed twice a frame on the page and
+  again in GRAPH's side pane; with a big graph the list is long.
+- **Judge it.** Checks 321, 327.
+
+### 349. An unreached effect is kept in the preset, drawn faint, never run
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.reaches(spec)`; an effect, composite or switch with no
+  path to a sink has no render node and is drawn faint on GRAPH with
+  "reaches nothing" (`REACHES_NOTHING`). The right-click picker adds
+  effects and switches this way; an added or inserted effect is instance
+  1 when nothing holds it, else the lowest free instance, and starts on
+  (R25). An instance 1 taken out of the run is kept as `{"kind":
+  "effect", "file": f}` (R21) and the section is `/5` while the effect is
+  on; switched off, it saves below `/5` again (R26).
+- **Other options.** Drop it on save.
+- **To reverse.** `graph.reaches`, `graphview.unreached`, R21's node form,
+  `graphview._new_instance` / `_switch_on` (R25).
+- **Rough edge.** An effect added or inserted shows at once (R25): switch
+  it off if it was meant to wait.
+- **Judge it.** Checks 325, 326.
+
+### 350. A switch node in this plan: eight inputs, `switch.select` modulatable; a route on `view.media` or `backdrop.channel` migrates to one
+
+- **Answer.** (owner) — 2026-10-24: "If a switch node would be the right
+  solution for long-term use, it can be added to this plan."
+- **Built.** `graph.SwitchNode` (`switch`, `switch.2`, …), `in1` … `in8`;
+  `params.declare_switches` declares `switch[.n].select` (off, 1–8,
+  modulatable, group `switch`) from the graph's switches; the picks live in
+  `ViewState.switch`. A driven `view.media` or `backdrop.channel` loads as
+  `media.a … media.h` into a switch, the switch into `pattern.media` (or
+  `backdrop.image`), the pick at the old value, the rows retargeted to
+  `switch.select` (R14, R19). The switch sits in the MEDIA area. On
+  GRAPH the picker's "switch over the channels ▸ faces media / backdrop"
+  builds the same wires in one undo step, `select` at the channel that fed
+  the port, else 1 (R28, `Edit.switch_channels`).
+- **Other options.** No switch; such routes dropped.
+- **To reverse.** `SwitchNode`, `declare_switches`, the migration's switch
+  half, `graphview.render_channel_switch`.
+- **Rough edge.** A registry from before a hot reload into this build has
+  no `switch_state`, so switches read off until a restart (R24; dev only).
+- **Judge it.** Check 319.
+
+### 351. The default graph keeps plan 32's compositing order
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Nothing moved: the backdrop is under the scene, before the
+  history and the effects, and every golden before the plan is unmoved.
+  Changing the order is now a graph edit.
+- **Other options.** Settle the order in this plan.
+- **To reverse.** n/a.
+- **Rough edge.** The backdrop's place in the look-back is still plan 32's
+  stopgap (row 330) until the compositing session.
+- **Judge it.** Check 322 (an old party preset looks the same).
+
+### 352. The switch is a cut, eight inputs, only the selected one runs
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** No pass and no texture of its own; `Graph.pulled(frame)` walks
+  back from every node with no readers following only each switch's pick;
+  `Graph.evaluate` skips a `MAKES` node or `Effect` that is not pulled, and
+  a channel no picked path reads is not uploaded. Changing `select`
+  rebuilds nothing (a cache of 256 pick-tuples). A pick of off, or on an
+  unwired input, reads nothing: the faces show the pattern, the backdrop
+  shows nothing. 8 goldens (`switch-faces`). A texture made at another
+  size is kept `render.SIZED_KEEP_FRAMES` (30) frames after its last use,
+  so a switch flicked every frame between branches of other sizes
+  allocates nothing per flick (R29).
+- **Other options.** A crossfade time; a variable input count.
+- **To reverse.** `SwitchNode`, `Graph.pulled`.
+- **Rough edge.** An unpulled effect's clock stands still, where a wired
+  effect whose picture is not made keeps running (R17); `pulled` treats an
+  `after`-only reader as a root; up to a few idle sized textures are held
+  half a second (R29).
+- **Judge it.** Checks 319, 324.

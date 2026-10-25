@@ -507,9 +507,10 @@ built, never per frame; `Graph.evaluate` runs every node once.
 (`graph.default_graph`) only when its key changes: each output's scene /
 hands / through switches (`graph_key`), the renderer's `Wiring` (below;
 its placements included), the roles of the listed `cloud` devices and
-the effect stack's list in order (`FxState.names()`: an order, an
-instance or a file changed). What is per frame: whether an effect of a
-chain run is on (`frame.fx_on`: a placed effect does not count), whether
+the effect files present (`frozenset(fx.state.specs)`: an instance or a
+file changed; an order change no longer exists, plan 33). What is per
+frame: whether an effect of a run is on (`frame.fx_on`: a placed effect
+does not count), which inputs each switch picks (`Frame.selects`), whether
 each effect runs, and whether a hand drew decide which pipeline end each
 output takes (`Output.settle`); a pipeline no output takes is skipped and
 its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
@@ -517,9 +518,9 @@ its nodes read 0 ms. Evaluating the frame this way moved no pixel of A0's
 dependency order too, in `Router.modulate`: ARCHITECTURE §2.) For one default
 output the order is `shape → ghost → scene → cover → hands → history →
 plasma → acid → kaleido → … → huecycle → palette → fx → capture →
-output.1`: one effect node per instance in the stack's order (`order`,
-then name: thirteen with the factory files at their `@order`), on or
-off.
+output.1`: one effect node per instance in the run the preset wires from
+`frame` to `fx.image` (plan 33; in wire order, on or off), and none for an
+effect the graph does not wire.
 
 **The default graph** is today's frame, wired from each output's
 switches: **scene** on, its `image` is the SCENE chain (`history → the
@@ -623,11 +624,11 @@ solid.
 is an image node: one `image` port in, an image out, its params
 `fx.<name>.*`, its pass `FxChain.run_one` on the file's one compiled
 program (hot reload as before). Each pipeline's chain is a **run** of
-them, one per instance in `FxState.names()` — every instance, on or off,
-whatever its target — between the pipeline's source and its end, so
-switching a chip on or off changes no node and rebuilds nothing.
-Whether an effect runs is asked once a frame (`Effect.on`: in
-`FxState.chain(FRAME)` and compiled). **Off**, it is read through: it
+them, one per instance in `Wiring.run` — every instance of the run, on or
+off — between the pipeline's source and its end, so switching an effect
+on or off changes no node and rebuilds nothing. Whether an effect runs is
+asked once a frame (`Effect.on`: `FxState.live(name)` — `fx.on`, `fx.mix`,
+its own `on` and `mix`, and that it compiled; no target, no order). **Off**, it is read through: it
 paints its input straight into its consumer's framebuffer and its
 `image` is its input's — no pass, no texture. **On**, it paints its
 input into a texture of the effects' pool and runs its pass from there
@@ -641,9 +642,9 @@ texture is never handed to a consumer that paints into it
 releases it when a new graph needs fewer. The pipeline's **end**, `Fx`,
 keeps the old node's name and jobs: it moves the clocks once a frame,
 paints its input, counts `chain_runs`, and decides where the picture
-lands (above). The faces' chain (`render.face_fx`) still runs the old
-way, `FxChain.run` over `begin`'s textures, inside the shape's face
-drawing: the one shader run the graph does not show.
+lands (above). The faces' effect chain that plan 30 left inside the shape's
+face drawing (`render.face_fx`, `FxChain.run`) is gone (plan 33): the
+faces' effects are nodes on a branch into `shape.faces`.
 
 **Placement** (plan 30 D1). An effect entry may say where it sits:
 `after` a node — on that node's picture, every consumer of it reading
@@ -699,8 +700,8 @@ factory presets):
   before the history`, or the dormant words), and the LOOKBACK line those
   on the history's way (`history: the scene · acid 2 before the
   history`) — `graph.placement_words`, `output_placement_words`,
-  `history_words`, `graph_words(spec, dormant)`. The FX page's chips say
-  it the JSON's way (`after hands`, `graph.placed_chips`).
+  `history_words`, `graph_words(spec, dormant)`. The FX page's group
+  headers say where an effect ends (`ui_fx.groups`: `→ faces`, `→ output 2`).
 
 **The wire list; outputs as nodes** (plan 28 N4). A section may carry
 `wires` beside `nodes`, one `{"from": "<node>", "to": "<node>.<port>"}`
@@ -813,16 +814,20 @@ If the worker cannot start, the reason is on the SYSTEM page, the
 LOOKBACK page and the red banner, and the look-back runs echoes only; a
 preset that asks for the dream with no worker is a warning, once.
 
-**Effects** (`fx.py`, FX page). One GLSL file per effect in
+**Effects** (`fx.py`, FX page, GRAPH). One GLSL file per effect in
 `shaders/fx/` — thirteen ship: acid, deconverge, doublevision, fractals,
 glimmer, huecycle, kaleido, palette, plasma, tripcolour, warp, wobble,
 zoomblur (`_lib.glsl` is shared). **A new effect is a new `.glsl` file, not
 Python**: every `// @param` uniform becomes `fx.<file>.<key>`, plus
-`on mix speed blend order target` per effect; `// @mix <value>` sets the
-effect's default wet/dry (1 when absent); `fx.on` bypasses the stack
-and `fx.mix` scales it.
+`on mix speed blend` per effect (plan 33 removed `order` and `target`);
+`// @mix <value>` sets the effect's default wet/dry (1 when absent);
+`fx.on` bypasses every effect and `fx.mix` scales them. `// @order <n>`
+is still parsed (`EffectSpec.order`) and read only by `graphmigrate`, to
+give an old preset's effect without a saved order its place in that
+preset's run; where an effect sits now is its wires. A new effect file
+needs no `@order`.
 
-**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95`,
+**The palette** (plan 24, `shaders/fx/palette.glsl`, `@order 95` (read only by the migration, which puts it last in an old preset's run),
 so, unplaced, last in the chain, after the look-back and before the dim — and
 before the hands unless an output sends them through the effects; plan
 30: a preset's graph may place it on the hands' layer only, one output
@@ -853,49 +858,126 @@ saved palette is an `fx` module preset; no palette ships in
 error keeps the last version, a compile error skips the pass. Factory
 effect presets are `library/fx/*.json`.
 
-- **The page.** Bypass and mix, the chain in words (`frame  Plasma → Hue
-  cycle`, and a `faces` row while anything is aimed at the faces), then
-  one chip per effect, three to a row, in stack order. A chip's **LED**
-  switches the effect; its **name** opens its strip. An open effect
-  that is not running says why first ("off", "faces off", "the whole
-  stack is bypassed", "FX mix is at 0", "its mix is at 0") with a chip
-  to fix it; its controls stay live under a veil. **Drag a chip by its
-  name** onto another to put it before that one (or onto the right half
-  of the last to move it to the end): one undo step. The open strip
-  packs params that share a stem and end `_lo`/`_hi` or
-  `_hue`/`_sat`/`_val` onto one row (`ui_fx.strip_rows`), and the
-  palette shows only its open mode's rows (`ui_fx.HIDDEN_BY_MODE`; the
-  hidden ones stay routable), so the page fits without scrolling.
-- **Placed effects** (plan 30 D2). The page edits the default chain. An
-  effect the loaded preset's graph places (`Panel.graph_now`'s spec)
-  leaves the chain's grid for a second grid under it, three to a row:
-  `Palette · after hands`, `Palette · into output 2` (`graph.placed_chips`,
-  cut to the chip by `placed_label`). It is no drag source and no drop
-  target, and a drop never rewrites its order; its LED switches it, its
-  name opens its strip (any effect's), whose title hover gives the
-  place in place of the order; the name's hover adds "placed by the
-  preset's graph, not in the chain …" and `dormant: …` while the built
-  graph has it dormant. The status line keeps the chain's labels and
-  adds the placed effects that run: `Acid → Palette · 1 placed`,
-  `nothing in the chain · 1 placed` (on, aimed at the frame, not
-  dormant). One placed and aimed at the faces reads `· on the faces`, is
-  on the faces row and is not counted. The page still never scrolls
-  (`tests/test_fx.py::test_the_page_fits_with_three_placed_effects`).
-- **Aimed at the faces.** Each effect's `fx.<name>.target` is `frame`
-  (the default) or `faces`: the **ONTO frame · faces** chips at the
-  right end of the open strip's title line, the lit one where it runs
-  (not modulatable). The faces are translucent, so an effect on them
-  reads faint — the strip says so while it runs there; Brightness lifts
-  them. Effects aimed at the faces run first over a 1024²
-  picture of what a face shows, and the faces show that picture — per
-  face (at each face's own UV, turning with the shape) or screen (one
-  still picture seen through the faces), `fx.face_map`. A chip aimed at
-  the faces has a diamond LED. With an effect on the faces, every face
+- **The page** (plan 33, rows 341 and 348): a browser of the effect nodes
+  in the loaded graph, not a place structure lives. Bypass (`fx.on`) and
+  mix (`fx.mix`) at the head. `ui_fx.groups(spec)` lists every effect
+  instance, grouped by where its path ends: **Run** (in wire order),
+  **→ faces**, **→ pattern media**, **→ backdrop**, **→ output N**,
+  **→ <effect> aux**, any other end (the history, a D1 `after`), and
+  **reaches nothing** last; an effect that ends in two places is listed
+  under each. A row is the name (click to open its strip), an `on`
+  check, a small `mix` and one state word: `running`, `off`, the
+  `why_idle` reason ("the whole stack is bypassed", "FX mix is at 0",
+  "its mix is at 0", "it ends on the faces, and Faces is off", "reaches
+  nothing") or `error: …`. The `→ faces` header carries `fx.face_map`.
+  Below the list, **Show on GRAPH** (`ui_graph.select_effect`) selects and
+  centres the node, and the open **strip** is every param of that node
+  (`ui_fx.strip`). The selection, `Panel.fx_selected`, is one name shared
+  with GRAPH's side pane and saved nowhere. The strip packs params that
+  share a stem and end `_lo`/`_hi` or `_hue`/`_sat`/`_val` onto one row
+  (`ui_fx.strip_rows`), and the palette shows only its open mode's rows
+  (`ui_fx.HIDDEN_BY_MODE`; the hidden ones stay routable). With nothing in
+  the graph: "no effects in the graph — add one on GRAPH (right-click the
+  canvas)". The page adds, removes, wires and reorders nothing; the chip
+  grid and its drag, the placed grid, the order slider, the ONTO chips and
+  the faces row are gone.
+- **Adding, wiring and ordering are on GRAPH.** The right-click picker
+  adds an effect (`acid.2`, …) or a switch **unwired**, faint and "reaches
+  nothing", where the menu opened. An effect dropped on a render cable is
+  **inserted** into it (`graphview.Edit.insert_effect(cable, file)`; the
+  cable's right-click menu offers "insert effect ▸ <file>"). Dragging an
+  effect already in the graph onto another cable moves it
+  (`Edit.place_effect(cable, name)`: lifted out, the run closes over the
+  gap, put on the cable; one undo step; a drop on its own cable or on
+  empty canvas does nothing). Deleting a run cable lifts the effect it
+  led into; deleting the last `frame → fx.image` is refused. An instance 1
+  taken out of the run is kept unwired (`{"kind": "effect", "file": f}`),
+  faint, and the section saves `/5`.
+- **Where the faces get their picture.** `shape.faces` unwired, or wired
+  straight from `pattern`, draws the pattern per face as before. Wired
+  from `pattern` through effects, the pattern is painted into the first
+  half-float texture, the effects run in turn and the last writes the
+  1024² `face_pic` (`graph.FACE_PIC`); wired from anything else that
+  picture is `u_pic`. `fx.face_map` (per face, or screen) says how the
+  faces show it. The faces are translucent, so an effect reads faint
+  there; Brightness lifts them. With a picture wired in, every face
   shows face 0's pattern phase; the echoes and the dream carry the
-  faces' effects, never the frame's. The faces' chain is not on the
-  render graph (it runs inside the shape's face drawing; SYSTEM times it
-  inside `scene`), and a placement does not move it: an effect both
-  placed and aimed at the faces runs there.
+  faces' picture, never the frame's effects. The faces' effects are graph
+  nodes: SYSTEM times each one on its own line, and a source that reads
+  nothing (a lost channel) makes the faces show the pattern for that
+  frame.
+- **Where the pattern's media layer and the backdrop get theirs.**
+  `pattern.media` wired straight from a channel is the raw channel
+  texture (`Renderer._channel_layer`), as `view.media` was; from a branch
+  it is the branch's picture at its head's size. `backdrop.image` wired
+  straight from a channel is plan 32's `MediaNode` under the scene; from
+  a branch it is laid under the scene in `grounded` at the frame size with
+  `backdrop.alpha` applied (`Composite(under_alpha_of="backdrop_alpha")`).
+  `view.media` and `backdrop.channel` are not params; `graph.source_into`
+  and `graph.channel_into` read which channel a port is fed, through a
+  switch's pick, for the FACES and MEDIA pages and Learn.
+
+**The switch** (plan 33, rows 350 and 352; `graph.SwitchNode`,
+`params.declare_switches`). Kind `switch`, instances `switch`, `switch.2`
+(the naming rule below). Eight `IMAGE` inputs `in1` … `in8` and one out;
+its picture is the selected input's, passed through at the size its
+consumer asks: no pass, no texture of its own, a cut. `switch[.n].select`
+is an enum (off, 1–8, modulatable, group `switch`) declared per switch
+the graph names and saved with the preset's values; the picks live in
+`ViewState.switch` and reach the frame as `Frame.selects`. **Only the
+selected input runs:** `Graph.pulled(frame)` walks from every node with
+no readers and follows each switch's pick only (cached per tuple of picks,
+at most 256); `Graph.evaluate` skips `run` for a `MAKES` node or an
+`Effect` that is not pulled, and a channel no pulled path reads is not
+uploaded. Changing `select` rebuilds nothing. A pick of off, or of an
+unwired input, reads nothing: the faces show the pattern, the backdrop
+nothing. A switch that picks a channel feeding `pattern.media` reads it
+raw, as a wire straight in would. The switch sits in GRAPH's MEDIA area.
+
+**Branches and sizes** (plan 33). A picture is made once a frame per
+**size** its consumers ask: the frame-size consumers (an output, a
+composite, the backdrop, the history, `fx`, an `aux`) the frame's,
+`shape.faces` 1024², `pattern.media` its head's own. `Frame.at(size)` is
+the frame at another size, with its own pool (`Renderer.pool_at`) and
+data keyed `(name, size)`; `Node.size_for(port, frame)` says what a port
+asks. `Graph.at_frame` stops an effect only the faces read from being
+folded at the frame's size too. Once a frame `Renderer._prune_sized`
+releases any pool or sized texture the last frame did not use. A wired
+effect's clock advances in frames its picture is not made (as a placed
+effect's always did), so it can jump phase when it comes back; an
+effect behind an unselected switch input stands still.
+
+**Presets and the free graph** (plan 33, rows 343 and 346–347;
+`hyperspace/graphmigrate.py`, `preset.py`). **Load:** `Presets.load_doc`
+runs `graphmigrate.migrate(doc, specs, desk=)` on every document. A
+section with no `frame`/`fx.image` run is given one: the effects that are
+`on` and either at `mix > 0` or driven by a route, desk row, macro,
+modifier or step (`graphmigrate.targets`), in `(@order or saved order,
+name)` order; the effects aimed at the faces as `pattern → … →
+shape.faces`; `view.media = k` and `backdrop.channel = k` as channel
+wires; a route onto either as a switch with the old pick and the rows
+retargeted to `switch.select`. An effect left out was off, so the
+picture is the same; one something drives says so in a load note. Loading
+an fx module (`library/fx/*.json`) migrates the module and **replaces**
+the loaded graph's run with it, keeping every other wire
+(`graphmigrate.module_runs`, `Presets._fx_module`, `Library.on_apply`).
+Switching on an effect that is in no run adds nothing to the picture.
+**Save:** `preset.schema_of` writes the lowest schema that loses nothing.
+`graphmigrate.needs_free` is true for a graph `/4` cannot say (a branch, a
+switch, an unwired node, an effect on outside every run); then the file
+is `hyperspace.preset/5` (`FREE_SCHEMA`; `VERSIONS = (2, 3, 4, 5)`) and
+**an older build refuses it**, so both Macs run this build before anyone
+saves one. Otherwise `graphmigrate.legacy_section` strips the plan-33
+words from the section, `legacy_values` lays the `order`, `target`,
+`view.media` and `backdrop.channel` values back (orders kept where they
+already sort right: `graphmigrate.reordered`) and `with_retired` splices
+the retired ids back in where the base build wrote them: an untouched
+`/4`, `/3` or `/2` preset saves **byte-identical**
+(`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
+38 sources in `tests/fixtures/plan33-v4-saves/`, recorded once from the
+base at 3547a7a; `tests/fixtures` is ignored, so they are force-added). A
+person's own preset that drives a channel choice loads with a switch and
+saves `/5`. No file under `hyperspace/library/` was edited.
 
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
@@ -1063,6 +1145,9 @@ root and `Library.machine` the home.
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
+| `media/` | This Mac's media files, ids `local:<relative path>` (plan 32; the shared ones are `<library>/media/`). Subfolders are groups. | any picture or video |
+| `media-cache/thumbs/`, `media-cache/proxies/` | 160 px thumbnails and the MJPEG scrub proxies of clips ≤ 600 s, keyed by id + size + mtime. Never in the shared folder; safe to delete (made again). | PNG, MJPEG |
+| `ndi/ndi-config.v1.json` | Written only when an `ndi` device lists `extra_ips`; NDI reads it through `NDI_CONFIG_DIR`. | NDI's JSON |
 
 A `midi_map.json` or `config.toml` left in the working directory from an
 old build is copied in on the first run; a `midi_map.json` in the home is
@@ -1238,6 +1323,63 @@ Rules worth knowing:
   `git` key in `[library]` is ignored with a note asking you to remove it.
 - `[hands] calibration` and `tape` are relative to the config's folder.
 
+### Media
+
+Plan 32. Pictures, videos and live feeds go onto eight channels (`a`–`h`);
+the MEDIA page is where they are picked, and
+[`plans/32-media-channels.md`](plans/32-media-channels.md) is the design
+as built.
+
+- **Folders.** `<library>/media/` is the shared folder (the plan 25 cloud
+  folder, so both Macs see a file dropped into it; with no `[library]
+  path` there is none) and `<home>/media/` is this Mac's. Both are scanned
+  every 2 s: a dropped file appears without a relaunch, a removed one is
+  `missing`, a cloud placeholder is `fetching`. A file added from anywhere
+  (**Add file…**) is `file:<absolute path>`; **Copy to shared** turns it
+  into `shared:`. A preset that names a `local:`, `file:` or live source
+  this Mac lacks loads, shows black for it, and the MEDIA page's banner
+  lists it.
+- **Formats.** Stills: png, jpg, webp, bmp, tiff, heic. Video: mp4, mov,
+  m4v, webm, mkv, avi, gif (see `media.adapters.VIDEO_EXT`).
+  Files are decoded to at most 1920×1080, live feeds to 1280×720.
+  There is no sound.
+- **Live feeds** are `[[devices]]` entries; the factory template lists all
+  three, commented: `kind = "ndi"` (optional `extra_ips = ["10.0.0.5"]` for
+  a sender on another subnet; it is written to `<home>/ndi/ndi-config.v1.json`
+  before `cyndilib` loads, which has not been verified against a real second
+  subnet, and a change after NDI was first loaded needs a restart),
+  `kind = "syphon"` and `kind = "camera"` (macOS asks for the camera on the
+  first open; a refusal is `error: camera permission (System Settings ▸
+  Privacy & Security ▸ Camera)`). NDI over a venue's Wi-Fi is hungry (full
+  NDI ~100 Mb/s at 1080p): bring your own router.
+- **Publishing.** `syphon = "<server name>"` and `ndi = "<sender name>"`
+  on `[output]` or an `[[output.screens]]` entry publish that output's
+  picture (a window at the render cap, `[output] render`); `window = false`
+  on a later output makes it publish-only (no window). Output 1 always
+  has a window. One SYSTEM line per publisher: `ndi out <name> — 60 fps,
+  readback 4.0 ms`, in the warning colour with the error on a failure.
+- **Dependencies** (all in the default install, imported only when a
+  source opens): `av` (PyAV, bundles FFmpeg), `pillow-heif`,
+  `syphon-python[opengl]` and `pyobjc-framework-avfoundation` (macOS
+  only), `cyndilib` (its macOS wheel carries `libndi`; check the NDI SDK's
+  licence before shipping a build). A live kind whose library is missing
+  says so in its status (`cyndilib not installed`) instead of raising.
+- **Both Macs on the free-graph build too** (plan 33): a preset whose graph
+  `/4` cannot say (a branch, a switch, an unwired node) saves
+  `hyperspace.preset/5`, which an older build refuses; every other preset
+  saves as before, byte for byte (see "Presets and the free graph" in §2).
+- **Both Macs on this build.** A preset that uses media is saved as
+  `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
+  or `view.media_*` value off its default; `view.media` itself is read as
+  a wire since plan 33); a build from before plan 32
+  **refuses** it, so two Macs sharing a library must both run this build
+  before either saves one. A preset that does not use media is the file it
+  was, bar two new effects' default lines. A pre-plan-32 preset's
+  `view.bmp_*` values are dropped on load with a note
+  (`bitmap file <path> is no longer read: put it on a media channel`); put
+  the picture on a channel instead. The APC40's knob 7 still moves the faces'
+  media opacity.
+
 ### The device list
 
 Every input and output is a `[[devices]]` entry (plan 27). Without a
@@ -1357,8 +1499,13 @@ writes the test fixture `tests/fixtures/clouds/knot.npz`.
 The panel is built to be read from a few feet back in a dark room. A
 rail of sixteen pages (`ui.PAGES`); the rail shows a red dirty dot
 beside a page whose group has moved off its loaded preset. No page
-scrolls at the control size (960 × 900, `app.CONTROL_SIZE`;
+scrolls at the control size (2372 × 900, `app.CONTROL_SIZE`;
 `tests/test_ui_shell.py::test_every_page_fits_the_control_window`).
+The window is two 4:3 panes: the panel opens at `ui.panel_w`, leaving
+the desk diagram left of it a 4:3 slice of the height and the panel
+the rest (never under `ui.PANEL_W`, 540). On a screen narrower than
+that the window opens as wide as the screen (`placement.default_rect`),
+the panel at 540 and the desk takes what is left.
 
 | Page | What is on it |
 |---|---|
@@ -2162,7 +2309,7 @@ macros.
 
 **Not a step:** a performer (a hand, a band, an LFO writes an offset,
 never the base); the rotation phases; the tempo (a tap is never undone);
-triggers; selections and panel state (`band.select`, `fx.select`,
+triggers; selections and panel state (`band.select`, `Panel.fx_selected`,
 `preset.select`, `desk.shift`, `ui.*`); the transport; the rig's output
 settings (screen, fullscreen, overlay, the master dim, every
 `output.N.*` switch); `bindings.json`'s session rows; a band added,
@@ -2639,6 +2786,11 @@ What only a person at the machine can check is
 - **A build from before plans 28 and 30 loses this build's `modifiers` and
   `layout` on a save** and opens a wired or placed `graph` as the
   default graph: both Macs sharing a library must run the same build.
+- **Media (plan 32)**: two Macs sharing a library must both run the build
+  that writes `hyperspace.preset/4`; Resolume and TouchDesigner have never
+  sent us or received a frame, `extra_ips` is unverified, the phone's own
+  page is V2, and output 1 cannot be publish-only (see "Media" in §4 and
+  the plan's "Known rough edges").
 - **The golden frames prove pixels only on "Apple M3 Max"**; on any
   other Mac the test skips.
 - **On a 3D shape, the W planes' readouts keep counting**: `rot.phase.*`

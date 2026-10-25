@@ -5,12 +5,14 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–295; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–329; group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
 merged in, and 280–295 plan 31's (286–295 the APC40 page, on
-`plan-31-a1`).
+`plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
+together; group AC (318–331) is plan 33's, the free graph, on
+`plan-33-free-graph`.
 
 ## Before you start
 
@@ -22,7 +24,9 @@ X (plan 30) and Y (plan 28) need `plan-28-30-integration` until it is
 merged. Group Z's 277–279 (the instanced field) are on `main`; its
 plan 31 checks, 280–295, need `plan-31-integration`, and the APC40
 checks 286–295 `plan-31-a1` (the page waits for Dylan's sign-off).
-Before
+Group AA (plan 32) and check 317 need `plan-31-32-integration`, where
+plans 31 and 32 land together, and `uv sync` for plan 32's four new
+dependencies. Before
 any launch of this build:
 
 ```
@@ -4109,6 +4113,521 @@ lost (press again). *Fail:* the page and SEND A's light out of step, or
 SEND A latching on the device itself (in Generic mode SEND A is a
 toggle the device keeps; `apc40.fell_back`).
 
+## AA. Plan 32: media (channels, the media folder, live feeds, publishing out)
+
+Plan 32 as built is [`32-media-channels.md`](32-media-channels.md): eight
+channels `a`–`h`, each a bin of 16 sources and a `slot`; stills, video,
+cameras, Syphon and NDI in; the backdrop, the faces, an effect's `aux` and
+an output reading a channel; Syphon and NDI out; the MEDIA page. On
+`plan-31-32-integration`, where plans 31 and 32 land together (base
+`plan-28-30-integration`). Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync` (four new
+dependencies). Pictures and clips to try go in `~/Hyperspace-try/media/`
+(a still, an iPhone `.heic`, an `.mp4` of about 30 s with motion, a
+`.gif`). A shared folder needs `[library] path` set to the cloud folder.
+Group AA assumes the control window at its usual 960 × 900. None of these
+has been run by a person; the loopback tests (our sender into our
+receiver) are the only evidence for 304–309.
+
+**296. A still as a backdrop.** (laptop)
+Headless: `tests/test_media_render.py::{test_backdrop_under_scene,test_backdrop_history_toggle,test_an_effect_after_the_scene_sits_after_the_backdrop_too,test_the_echoes_show_over_a_bright_backdrop,test_a_static_backdrop_in_the_history_keeps_its_brightness}`, `tests/test_golden_frames.py` (`backdrop-still`).
+MEDIA page: pick the still in the library (This Mac), click bin cell 1 of
+channel A, then set **Backdrop** channel to A and its alpha to 1. Turn the
+look-back on (the echoes), then **history** on and off; turn the faces'
+cut-through on; place an `acid` effect after the scene on the FX page.
+*Pass:* the still sits under the shape and is bent by the effects with
+**history** on, and keeps its own brightness (it never brightens toward
+white as the echoes build); with it off the echoes of the shape lie over
+the still unbent, visible over its bright areas too; alpha 0.5 mixes; with a backdrop and cut-through on, faint fills
+let the backdrop show (say whether that reads right). Setting Backdrop off
+returns the picture exactly as before. *Fail:* the backdrop vanishes when an
+effect is placed after the scene (`graph._place_one`), a seam or flipped
+picture (`media_tex.flipped`).
+
+**297. The faces and `aux`.** (laptop)
+Headless: `tests/test_media_faces_aux.py::{test_faces_show_channel,test_aux_wired_from_channel,test_displace_moves_pixels,test_blend_modes_with_an_aux,test_unwired_aux_reads_black}`, `tests/test_golden_frames.py` (`faces-media`, `displace-luma`, `blend-luma-key`).
+Set **Faces** to channel A (the still), alpha 0.8, then each path (STILL,
+ORBIT, FIG-8, SWAY). Back on GRAPH, wire `media.a` to the `aux` port of
+`displace`, then of `blend`; turn each on; try `blend`'s five modes and the
+luma-key threshold, `displace`'s luma and red/green modes. *Pass:* the
+picture sits on the faces in aspect, upright, and follows the pattern
+per-face or in screen space as the bitmap did; `displace` bends the frame by
+the still's brightness and mid-grey moves nothing; `blend` keys the bright
+parts; unwiring `aux` leaves the effect as if it were off. *Fail:* a flipped
+or stretched picture; an unwired aux that is not transparent
+(`fx.py`'s aux uniforms, `_lib.glsl`).
+
+**298. A video: rate, scrub, loop, the proxy.** (laptop)
+Headless: `tests/test_media_transport.py`, `tests/test_media_video.py`, `tests/test_media_channels.py::test_transport_drives_want`.
+Put the `.mp4` on channel A and the faces or backdrop on A. Watch the
+SYSTEM page for a `media.a` line and the page's playhead bar. Set rate 2,
+−1, 0, 0.5; loop, ping-pong, once; drag **position** while it plays and
+let go; wait a minute and open it again. *Pass:* it plays at native speed
+at 1; double speed at 2; backwards at −1; holds at 0; the position drag
+scrubs and, let go, it plays on from there; ping-pong reverses at each end,
+once holds the last frame; after the first open, `<home>/media-cache/proxies/`
+holds a proxy file and scrubbing is smoother on the next open.
+The frame rate holds with the clip playing (three playing clips on
+three channels: say the frame time). *Fail:* the picture stalls while
+scrubbing or the whole app hitches on a clip switch (`media.video`,
+`channels._switch`).
+
+**299. Jog with the cue knob.** (APC40)
+Headless: `tests/test_media_transport.py::{test_jog_spins_and_coasts,test_pos_latch_scrubs_then_plays_on}`.
+Select channel A on the MEDIA page. Arm Learn on **jog**, turn the APC40's
+CUE knob (relative) so the route is made; then spin the knob either way and
+let go, with the clip at rate 1 and at rate 0. *Pass:* a spin speeds the
+playhead (or runs it backwards) and, let go, it coasts back to `rate`
+within about a second, like a platter; at rate 0 it scrubs and stops. Say
+whether the gain and the coast feel right. Nothing was bound by default
+(row 339). *Fail:* it never settles (`transport.JOG_HZ`) or jumps
+(`JOG_GAIN`).
+
+**300. A dropped file appears.** (laptop; the cloud for the second half)
+Headless: `tests/test_media_folder.py::{test_dropped_file_appears_within_a_scan,test_removed_file_is_missing,test_slow_read_is_fetching,test_dataless_flag_is_fetching}`.
+With the MEDIA page open on This Mac, drop a new picture into
+`~/Hyperspace-try/media/` from Finder; then delete a file that is on a
+channel; then, with `[library] path` set to the Drive folder, drop a file
+into `<drive>/media/` from the other Mac, and one that Drive has not yet
+downloaded. *Pass:* the new file is in the list within about two seconds
+with a thumbnail, no relaunch; the deleted one's channel goes black and
+its status reads `missing` (the app does not hitch); the file from the
+other Mac appears as `shared:…`, `fetching` while Drive streams it, then
+ready. *Fail:* a stall while a placeholder downloads (`folder._probe`),
+a stuck `fetching`.
+
+**301. The missing-local banner; both Macs on `/4`.** (two Macs)
+Headless: `tests/test_media_preset.py::{test_media_preset_is_v4,test_preset_without_media_is_unchanged,test_bins_round_trip,test_v2_and_v4_both_load}`, `tests/test_ui_media.py::test_banner_lists_missing`.
+On Mac 1 save a preset with a `local:` clip, a `camera:` and a `shared:`
+file in its bins; on Mac 2 (running this build) load it from the shared
+library. Then save a preset with no media on Mac 1 and open the file.
+*Pass:* on Mac 2 the MEDIA page shows the banner "`local:…` — not on this
+Mac: shows black" for the local one and the camera if it has none, and the
+channel is black while the shared file plays; a preset with no media is
+`hyperspace.preset/2` and looks as it did. Then open that `/4` preset in a build from before plan 32 (check out
+`plan-28-30-integration`, or use a Mac that has not updated) and read what it
+says: it should refuse the file or note the unknown schema, and load
+nothing of the media. Update both Macs before saving one. *Fail:* the
+banner is missing or lists a source that is present (`channels.missing`).
+
+**302. Junk, mid-show deletes and rapid switching.** (laptop)
+Headless: `tests/test_media_folder.py::{test_junk_does_not_stop_the_scan,test_blocked_read_does_not_stall_the_scan}`, `tests/test_media_channels.py::{test_rapid_switching_with_slow_closes_stays_fast_and_balances,test_close_with_a_hung_source_returns_within_two_seconds}`, `tests/test_app_boundary.py` (the exit test).
+Put a `.txt`, a truncated `.mp4`, a 0-byte `.png` and a renamed
+`.jpg` that is not a picture in the media folder. Put a good clip on
+channel A and, while it plays, rename it in Finder. Map `media.a.slot` to an
+LFO or the sequencer at 16ths over a bin of eight clips and run it for a
+minute; then quit. *Pass:* the junk is listed with `error: …` and nothing
+else stops; the renamed clip's channel goes black and `missing`, the app
+carries on; the slot sweep never hitches the frame rate, memory and the
+thread count settle, and the app quits in about two seconds. *Fail:* a
+frame-time spike at a switch (`MediaState.poll`), a hang on quit
+(`MediaState.close`).
+
+**303. The MEDIA page at distance, and a big library.** (laptop)
+Headless: `tests/test_ui_media.py::{test_the_media_page_fits,test_a_big_library_costs_what_is_in_view,test_a_thumbnail_is_decoded_once_off_the_ui_thread}`.
+Two metres from the screen, with 30 or more files in the library and every
+channel filled. Scroll the library, click a channel's letter, assign and
+empty cells, use **Add file…** and **Copy to shared**. *Pass:* the
+page fits the panel with no scroll beyond the library list; the letters,
+status words and selected channel's transport read from there; the
+selected channel's rate, jog, position, loop, slot and fit are the
+panel's own widgets (right-click for Learn); scrolling a big library does
+not drop the frame rate. Say whether a transport only for the selected
+channel, rather than in each of the eight columns, is acceptable.
+**Add file…** opens the macOS file dialog and the file appears under This
+Mac; **Copy to shared** says where it landed. *Fail:* a stutter while
+scrolling (`ui_media` clipper, `UiTextures`).
+
+**304. Syphon in.** (laptop, a Syphon app)
+Headless: `tests/test_media_live.py::test_syphon_loopback`, `tests/test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass`.
+Run any Syphon server (Syphon Simple Server, Resolume's, a TouchDesigner
+Syphon Spout Out TOP) with a recognisable
+picture; with `kind = "syphon"` in `[[devices]]`, open the MEDIA page's
+Live tab, put `syphon:<app>/<server>` on a channel, then on the backdrop.
+*Pass:* the server appears in under 3 s; the picture is upright, the right
+way round and not scaled wrongly; quitting the server shows `lost` and,
+after a second, black; restarting it brings it back with no relaunch; the
+frame rate stays near 60. *Fail:* upside-down (`u_bmp_flip`,
+`media_tex`), a black picture (the rectangle blit, `MediaTextures.error`).
+
+**305. NDI in from Resolume.** (laptop, Resolume, same router)
+Headless: `tests/test_media_live.py::test_ndi_loopback`.
+In Resolume, turn on NDI output (Output ▸ NDI). With `kind = "ndi"` in
+`[[devices]]`, find `ndi:<Resolume sender>` on the Live tab and put it on a
+backdrop. *Pass:* it appears within a few seconds, runs at the source's
+rate with latency you cannot see in a beat, and survives Resolume quitting
+(held 1 s, then black and `lost`) and coming back. *Fail:* nothing found
+(the router blocking mDNS; try `extra_ips`, check 307), tearing or lag
+(`media.ndi`).
+
+**306. NDI in from TouchDesigner on a second Mac.** (two Macs)
+Headless: as 305.
+On Mac 2 run TouchDesigner with an NDI Out TOP; on Mac 1 use the build
+with `ndi` on. *Pass:* as 305 over the wire; say the bandwidth and the
+latency you see on your network. Note the sender's name as listed
+(`ndi:HOST (stream)` appears only when two hosts send one name). *Fail:*
+as 305.
+
+**307. `extra_ips`.** (two networks)
+Headless: `tests/test_media_live.py::test_extra_ips_go_in_the_apps_ndi_config_before_cyndilib`.
+Where mDNS is blocked (a different subnet, or turn it off on the router),
+add `extra_ips = ["<the sender's address>"]` to the `ndi` entry, relaunch
+and look at the SYSTEM line. *Pass:* the sender is found by address; the
+status reads `extra_ips via NDI config (unverified)`. This is the one that
+rests on the SDK's documentation alone: write down whether it worked. If
+not, `<home>/ndi/ndi-config.v1.json` and `NDI_CONFIG_DIR` are what to
+check. *Fail:* nothing found with the entry set (`media.ndi`).
+
+**308. Syphon out into Resolume.** (laptop, Resolume)
+Headless: `tests/test_media_publish.py::{test_syphon_out_loopback,test_each_published_output_hands_its_picture_to_its_publishers}`.
+Add `syphon = "hs"` to `[output]`; relaunch; in Resolume add a Syphon
+source and pick "hs". *Pass:* our picture arrives upright at the render
+cap's size (not 4K on a retina window), SYSTEM shows `syphon out hs — 60
+fps, readback 0.0 ms`, and the frame rate holds. *Fail:* upside-down or a
+black frame (`SyphonOut`), a dropped frame rate.
+
+**309. NDI out into Resolume and TouchDesigner.** (laptop, both)
+Headless: `tests/test_media_publish.py::{test_ndi_out_loopback,test_ndi_out_never_blocks}`.
+Add `ndi = "hs"` to `[output]` and relaunch; receive it in Resolume (NDI
+source) and in TouchDesigner (NDI In TOP) on a second Mac. *Pass:* the
+picture arrives the right way up, colours within NDI's compression, and the
+SYSTEM line reads about 60 fps and readback around 4 ms; the frame time
+rises by that ~4 ms only. Quitting the receiver does not hitch the
+app; a quit takes about two seconds. *Fail:* a stall when the receiver
+connects or disconnects (`media.publish.NdiOut`), a picture flipped.
+
+**310. A publish-only output; a window resized.** (projector or a second screen)
+Headless: `tests/test_media_publish.py::{test_publish_only_output_has_no_window,test_draw_render_draws_a_publish_only_output_offscreen_at_the_render_cap}`.
+Make output 2 `window = false` with `syphon` and `ndi` set (the rig can send
+a picture it does not show); then give output 1 an `ndi` name and drag
+the render window to another screen and resize it; try `window = false`
+on output 1. *Pass:* output 2 opens no window and sends at `[output]
+render`; output 1 keeps publishing at the capped size through the resize
+and a retina/non-retina move (this is the one T9 could not see); `window =
+false` on output 1 is a note and a window. *Fail:* the sent size follows
+the window up to 4K, or a black send after a resize (`render._published`).
+
+**311. A webcam; the dependencies.** (laptop)
+Headless: `tests/test_media_live.py::{test_a_refused_camera_says_where_to_allow_it,test_cameras_are_listed_by_name,test_missing_library_is_an_error_status}`.
+On a Mac that has not had the camera allowed to this terminal, `uv sync`,
+add `kind = "camera"`, open the Live tab, put `camera:<FaceTime HD
+Camera>` on a channel. Then refuse the prompt and look at the status. *Pass:*
+macOS asks once; the picture runs at about 30 fps at 1280×720 (the
+author's one run, from a script, read 30.5); a refusal reads `error: camera
+permission (System Settings ▸ Privacy & Security ▸ Camera)`; `uv sync` pulls
+the four new libraries and `uv run hyperspace` starts with no import
+error. *Fail:* a stalled picture (`camera.CameraReader`).
+
+**312. The phone, through an NDI camera app.** (a phone, same Wi-Fi)
+Headless: none (the V1 phone is an `ndi:` source).
+Install an NDI camera app on the phone (NDI HX Camera, say), start its
+sender, find `ndi:<phone name>` on the Live tab and put it on a backdrop.
+*Pass:* it appears and runs; say the delay and the quality, and whether
+it survives the phone sleeping. This is the V1 phone (row 333); the QR
+page is V2. *Fail:* not found (the router, same network).
+
+**313. A feed vanishes and comes back.** (laptop, any live source)
+Headless: `tests/test_media_live.py::{test_live_holds_then_black,test_sender_returns,test_a_held_feed_that_vanishes_is_kept_and_found_again,test_a_channel_follows_its_device_remade_by_a_config_edit}`.
+With a Syphon or NDI feed on the backdrop, quit the sender, wait, restart
+it; then edit `config.toml` (change the `ndi` entry's `extra_ips`) while
+it runs. *Pass:* the last frame holds about a second, then black, status
+`lost`; the feed returns by itself; the config edit does not drop the
+channel for longer than the device's remake. *Fail:* it needs a slot
+switch to come back (`channels._stale`).
+
+**314. An old bitmap preset; knob 7.** (laptop, the copy; APC40 for the knob)
+Headless: `tests/test_media_preset.py::{test_bmp_file_dropped_with_note,test_bmp_alpha_is_an_alias_of_media_alpha}`.
+Copy in a preset saved by the previous build with a bitmap on the faces
+(a `view.bmp_file` value) and load it; turn the APC40's knob 7 on the
+default desk with the faces on a media channel. *Pass:* the load note says
+`bitmap file <path> is no longer read: put it on a media channel` and
+the faces are plain; put the picture on a channel and set **Faces**, and
+knob 7 moves its opacity as it did the bitmap's (the preset's old alpha
+landed on `view.media_alpha`). *Fail:* a crash on load, or knob 7 dead
+(`params`' alias rule).
+
+**315. A frozen Syphon channel.** (laptop, a Syphon app with moving
+picture)
+Headless: `tests/test_media_channels.py::test_live_freeze_at_rate_zero`,
+`::test_a_frozen_live_channel_says_frozen` and
+`tests/test_media_render.py::test_a_frozen_rectangle_frame_is_never_copied_again`
+(no real Syphon surface).
+Put a moving Syphon server on a channel (backdrop), set `rate` to 0, then
+watch for five seconds. *Pass:* the picture stops and the MEDIA page says
+`frozen`. The held frame names Syphon's own texture, but the channel's
+copy of it is made only when the frame moves, so it should hold. The one
+expected exception: save a renderer file (a hot reload) while frozen — the
+copy is made again from the held name, so the picture may jump to the
+live one or to garbage; write down which. An NDI feed at rate 0 should
+freeze exactly (`channels._freeze`, `syphon.SyphonSource.gl_poll`).
+
+**316. A camera without a 1280×720 mode.** (a capture card or Continuity
+Camera)
+Headless: `tests/test_media_live.py::test_a_camera_without_720p_opens_in_a_mode_it_has`
+and `::test_a_camera_with_no_mode_says_what_was_tried` (a fake `av`).
+Put such a device on a channel. *Pass:* it opens (in 1920×1080, 640×480
+or the device's default; `camera.MODES`). *Fail:* `error: …` — write down
+the wording; a device that takes no mode says `error: no supported mode
+(tried …)`.
+
+## AB. Plans 31 and 32 together
+
+**317. A preset with a pattern and a bin, saved and reloaded on the merged
+build.** (laptop, the copy, a picture; a second Mac for the last step)
+Headless: `tests/test_plan31_32_merge.py::{test_a_pattern_and_a_bin_save_as_4_and_round_trip,test_an_older_build_refuses_the_combined_4,test_a_3_only_and_a_media_free_preset_are_what_each_branch_wrote,test_media_at_the_librarys_default_is_untouched}`.
+On `plan-31-32-integration`, load TRIP, turn two steps on in the SEQ grid,
+put a picture in channel a's bin on the MEDIA page and make it the
+backdrop; save under a new name and open the file in a text editor. Load
+another preset, then the new one. Then load it on a Mac on a build from
+before plan 31, or on `plan-32-media` alone. *Pass:* the file says
+`"schema": "hyperspace.preset/4"` and holds the `seq.` values, the
+`media` section and the backdrop values; reloaded, both steps are on and
+the picture is under the scene; the other Mac refuses it ("schema … is
+not a hyperspace.preset"), the file untouched. *Fail:* `/3` or `/2`
+written (`preset.schema_of`), the pattern or the bin gone after the
+reload, or the other Mac opening the file — `plan-32-media` alone reads
+`/4` but not `/3` and would drop the pattern on a re-save (register row
+340).
+
+## AC. Plan 33: the free graph
+
+Plan 33 as built is [`33-free-graph.md`](33-free-graph.md): effects exist
+only where they are wired (no `order`, no `target`, no stack); the faces
+(`shape.faces`), the pattern's media layer and the backdrop are graph
+inputs; a `switch` picks one of eight pictures by a param; GRAPH adds,
+inserts and reorders effects; the FX page browses the graph's effect
+nodes; old presets migrate on load and save back unchanged. On
+`plan-33-free-graph` (PR #235, into `plan-31-32-integration`). Run on the
+copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`, with a
+clip (`.mp4`) and a still in `~/Hyperspace-try/media/` and a camera for
+318. **A free graph saves as `hyperspace.preset/5`, which an older build
+refuses:** both Macs must run this build before 322's last step and 328.
+Group AC assumes the control window at its usual 960 × 900. None of these
+has been run by a person; the goldens were recorded on the build machine.
+
+**318. The headline graph: a clip through two effects onto the faces, the
+camera through `kaleido` behind the scene.** (laptop, the copy, a clip, a
+camera)
+Headless: `tests/test_graph_faces.py::{test_a_channel_through_effects_lands_on_the_faces,test_a_branch_under_the_scene,test_faces_unwired_draw_as_today}`, `tests/test_golden_frames.py` (`media-chain-faces`, `media-chain-backdrop`, `branch-two-sizes`).
+Put the clip on channel A and the camera on channel B (MEDIA page). On
+GRAPH right-click the canvas and add `acid` and `tripcolour`, then
+`kaleido`: each appears faint, "reaches nothing". Drag `media.a` to
+`acid.2.image`, `acid.2` to `tripcolour.2.image`, `tripcolour.2` to
+`shape.faces`; then `media.b` to `kaleido.2.image` and `kaleido.2` to
+`backdrop.image`. Turn the faces on, the look-back off, and set the
+backdrop alpha to 1. *Pass:* each node loses its faint look as it is
+wired; the clip plays on the faces through acid and tripcolour (on the
+faces' own pattern if the clip is unwired again), the camera is bent
+into a kaleidoscope behind the shape, and the SYSTEM page lists a line
+for each of the three effects. Save under a new name: the file says
+`"schema": "hyperspace.preset/5"`. Say whether the faces' picture reads
+as a face texture or as a washed-out picture, and whether the 1024² face
+picture is soft at distance. *Fail:* a wire refused that should land
+(read the note), a node that stays faint when wired, black faces, or a
+backdrop that does not follow `kaleido`.
+
+**319. A switch over three channels on an APC40 knob, into the faces.**
+(APC40, the copy, three channels with pictures)
+Headless: `tests/test_graph_switch.py::{test_the_switch_shows_its_selected_input,test_a_route_drives_select,test_only_the_selected_input_is_made,test_select_changes_do_not_rebuild_the_graph,test_the_switch_onto_the_faces_is_a_cut}`, `tests/test_graph_edit.py::test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel`, `tests/test_golden_frames.py` (`switch-faces`).
+Put three different pictures on channels A, B and C. On GRAPH right-click
+the canvas and choose **switch over the channels ▸ faces media**: a switch
+over `media.a` … `media.h` into `pattern.media`, its `select` at the
+channel that fed the faces (R28). Arm Learn on `switch.select` (the
+switch's node, or the param search) and turn an APC40 knob. Sweep the
+knob; set `switch.select` to `off` and to `4` (channel D, empty). On
+SYSTEM watch the media uploads while on each. *Pass:* the faces show A,
+B, C at `select` 1, 2, 3 (the knob's first three eighths), as a cut with
+no crossfade; `off` and the empty `4` show the faces' own pattern; only
+the picked channel's line is live on SYSTEM. Say whether eight positions
+on a continuous knob are easy to land on and whether the cut feels
+abrupt. *Fail:* a half-blended
+picture, a stall when the pick changes, or an unselected channel still
+uploading (`graph.Graph.pulled`).
+
+**320. Reordering the run by dragging.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_reordering_the_run_is_rewiring,test_dragging_a_run_member_onto_another_cable_moves_it,test_insert_effect_on_a_render_cable}`.
+Load `party-trip` (or any preset with two or three effects on). On GRAPH
+open the shaders area, so the run `frame → … → fx.image` is cables. Drag
+the first effect node onto the cable between the last effect and `fx`;
+undo; drag a node onto empty canvas; right-click a cable and choose
+"insert effect ▸ wobble". Then try to delete the cable `frame → fx.image`
+when the run is empty. *Pass:* the dragged effect leaves its place, the
+run closes over the gap and it sits at the new cable, and the picture
+changes order at once; one undo puts it back; dropped on empty canvas it
+stays where it was; the insert adds `wobble.2` into the cable; deleting
+the last `frame → fx.image` cable is refused in words ("the run starts at
+frame and ends at fx.image — insert effects into it"). *Fail:* a node
+that duplicates, a run that breaks into two pieces, a second undo
+needed, or a cable that cannot be hit (`ui_graph.dropped`,
+`graphview.Edit.place_effect`).
+
+**321. The FX page finds and plays an effect on a branch.** (laptop, the
+copy)
+Headless: `tests/test_fx.py::{test_groups_follow_the_wires,test_the_fx_page_lists_the_graphs_effects,test_show_on_graph_selects_the_node}`.
+With 318's graph loaded, open the FX page. Find `acid.2` and `kaleido.2`,
+click each, move a slider of the open one, toggle its `on`, click **Show on
+GRAPH**. Open GRAPH, select another effect there, return to FX. *Pass:*
+the list is grouped (**Run**, **→ faces**, **→ backdrop**, and
+**reaches nothing** last), `acid.2` under **→ faces** and `kaleido.2` under
+**→ backdrop**; each row's state reads `running` or the reason it is
+idle; the slider changes the picture live; **Show on GRAPH** selects and
+centres the node; the selection made on GRAPH is the one open on FX. The
+page offers no add, remove or reorder. *Fail:* an effect missing from the
+list, listed under the wrong end, or a selection that diverges between
+the two pages (`Panel.fx_selected`).
+
+**322. An old party preset loads and looks the same; saved untouched it
+opens on the second Mac.** (laptop, the copy, a second Mac on `main` or
+the previous integration build)
+Headless: `tests/test_graph_free.py::{test_an_untouched_v4_preset_saves_byte_identical,test_a_free_fixture_saves_as_five}`, `tests/test_graph_migrate.py::{test_every_library_preset_migrates_without_a_note,test_no_library_preset_routes_an_effect_it_leaves_out}`, `tests/test_golden_frames.py` (the 661 before the plan).
+On a Mac with a preset library from before this plan (a copy of the
+shared folder), load each `party-*` preset and `dial`,
+watching the footer. Note two or three by eye against how
+they looked last week. Save one of them under its own name without
+touching anything, and open both files in a diff. Then open the library on
+the second Mac (on the previous build). *Pass:* no load note; the pictures
+look as they did, including `dial`'s three effects that come in only when
+an axis is pushed (R5); the saved file is
+byte-identical to the original (a diff shows nothing); the second Mac
+opens it without a note. *Fail:* a load note naming an effect left out, a
+picture that differs, a diff, or an older build refusing the file — write
+down which preset (`graphmigrate.legacy_values`, `Presets.document`).
+
+**323. A channel on the faces is lost mid-show.** (laptop, any live source)
+Headless: `tests/test_graph_faces.py::test_faces_fall_back_to_the_pattern_when_the_branch_reads_nothing`, `tests/test_media_live.py::test_live_holds_then_black` (a stopped feed is held 1 s, then reads nothing with the status `lost`); the first test also draws the lost-feed frame and asserts it equals the faces-unwired frame.
+With 318's graph (or a camera or NDI source straight into
+`pattern.media`), unplug the camera or stop the NDI sender while the
+faces show it; wait five seconds; plug it back. Delete the clip file on a
+second run. *Pass:* the faces show the pattern (not black, not frozen) for
+the frames the branch reads nothing, the SYSTEM line for the channel says
+`lost`, the show continues without a hitch, and the picture returns by
+itself when the feed does; the backdrop shows nothing while its branch
+reads nothing. *Fail:* black faces, a freeze, or an exception in the
+stall log (`graph.Shape.faces`, `media.live`).
+
+**324. The frame cost of two branches, the faces branch and an eight-way
+switch.** (laptop; the build machine's SYSTEM page)
+Headless: `tests/test_graph_switch.py::test_only_the_selected_input_is_made`, `tests/test_graph_faces.py::test_a_branch_read_at_two_sizes_is_made_once_each_and_does_not_leak`. These count makes; nothing times them.
+On SYSTEM write down the frame rate, and each node's ms, on `party-trip`
+with the look-back off and no branch wired. Build, in turn: two branches (a channel through two effects into an
+output, a second channel through one effect into `aux` of `blend`); 318's
+faces branch with three effects; and a switch with eight channels wired in
+and a different effect on each. Drive the switch with an LFO. Read the
+frame rate and the per-node lines for each, at the output's usual
+resolution, and write the numbers down. *Pass:* the frame rate stays where
+it was with no branches, and the eight-way switch costs about one branch
+(only the picked path has lines on SYSTEM). *Fail:* the frame rate drops
+visibly with the switch, or a branch's line keeps growing over a minute
+(`Renderer._prune_sized`).
+
+**325. The near-miss drag.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::test_dragging_a_run_member_onto_another_cable_moves_it` (the drop on its own cable and on empty canvas do nothing).
+On a graph with a run of two effects and a few branch cables, drag an
+effect node and let go a few pixels *beside* a cable, then beside a value
+cable, then onto a cable that is not a picture (a modulation cable).
+Read the footer each time. *Pass:* a drop beside a cable either lands on
+it (when within the hit distance) or does nothing; a drop on a
+non-picture cable may say "x is no picture cable". Say whether those
+refusal notes are noise or help, and whether the hit distance is too
+tight or too loose. *Fail:* a node moved by a drop that was nowhere near a
+cable, a run split in two, or a note on every plain drag (R22; the
+ledger's T6 minor).
+
+**326. A shader back into the faces on the GRAPH layout.** (laptop, the
+copy)
+Headless: `tests/test_graph_areas.py` (the four `/5` fixtures, each with no back wire), `tests/test_graphview.py`.
+Load 318's graph (`media.a → acid.2 → tripcolour.2 → shape.faces`) and
+press tidy, then expand the shaders area. *Pass:* the cables run left to
+right: MEDIA (channel, `acid.2`, `tripcolour.2`) then GEOMETRY (the
+shape), with no cable doubling back across the canvas; the two effect
+nodes sit in the MEDIA area, not SHADERS; an unwired effect is faint with
+"reaches nothing" and sits where it was added. Say whether the layout
+reads at arm's length. *Fail:* a cable running back across areas, effects
+in SHADERS that are made of the media alone, or tidy putting a faint node
+in an area it does not belong to (`graphview.media_made`, `area_of`).
+
+**327. The FX page with a big graph, at arm's length.** (laptop)
+Headless: `tests/test_fx.py::{test_the_page_draws_and_fits,test_the_fx_page_lists_the_graphs_effects}`. The first draws TRIP's graph with each of its effects open and asserts the page never scrolls; a dozen-effect graph is not covered.
+Build a graph with about twelve effects across the run, two branches, the
+faces, the backdrop and three unreached nodes. Open the FX page and read
+it from a metre and a half away. *Pass:* the group headers are legible,
+the state words (`running`, `off`, why) are readable, a name is easy to
+hit, the page fits without scrolling or clipping the strip, and the
+**reaches nothing** group stands out from the rest. Say what you would
+change (grouping, row height, a collapse). *Fail:* a row hidden, a strip
+pushed off the page, or text under 12 px (`ui_fx.page`).
+
+**328. A free graph is refused by an older build.** (two Macs, the copy)
+Headless: `tests/test_graph_migrate.py::test_v5_is_refused_by_the_ladder_below`, `tests/test_graph_free.py::test_a_free_fixture_saves_as_five`.
+Save 318's graph on the new build; open the file and read the `schema`.
+Open the same library on the second Mac, on the build from before the
+plan. Then, on the new build, open the saved preset and delete every
+branch and switch so only the run is left, and save under another name.
+*Pass:* the first file says `hyperspace.preset/5` and the old Mac refuses
+it ("schema … is not a hyperspace.preset"), leaving the file as it was;
+the second, with only a run, says `/4` (or the lowest schema that fits)
+with `order` and `target` values and opens on the old Mac. *Fail:* the
+old Mac opens the `/5` file or drops part of it, or the run-only file is
+`/5` (`preset.schema_of`, `graphmigrate.legacy_values`).
+
+**329. A node's controls in the side panel, and a switch by mouse.**
+(laptop, the copy, a clip)
+Headless: `tests/test_graph_legible.py::{test_a_media_nodes_params_are_rows_in_the_side_panel,test_a_side_panel_row_edits_through_the_param,test_a_big_node_folds_its_groups,test_open_on_page_switches_page_and_selects,test_the_switch_block_picks_an_input_with_one_click}`.
+Put the clip on channel A (MEDIA page) and wire `media.a → shape.faces`.
+On GRAPH click the `media.a` node: drag its **position** slider in the
+side panel, then its **jog**, and right-click a label for Learn. Press
+**open on MEDIA**. Back on GRAPH, add a **switch over the channels ▸ faces
+media** (right-click the canvas), click the switch and press its chips
+`3 · media.c`, `1 · media.a`, `off` with the mouse; click the shape.
+*Pass:* the clip seeks with position and scrubs with jog as it does on
+the MEDIA page, one ⌘Z undoes one drag; the chip opens MEDIA with
+channel A selected; each switch chip changes the faces at once, the pick
+lit, an unwired input faint, and the switch's canvas line says "picks
+in3"; the shape's groups are folded, the patched ones open, and the panel
+scrolls; the graph never pans. Say whether 320 px reads at arm's length.
+*Fail:* a row that does not move its param, an undo that takes two
+steps, the wrong page or channel, a chip that does nothing, or the
+canvas moving when a node is clicked (`ui_graph._param_rows`, `home_page`,
+`_switch_block`).
+
+**330. Route from ▸ an LFO, a new LFO, and a taken param.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param,test_route_from_an_lfo_makes_the_route_a_graph_cable_makes,test_route_from_on_a_taken_param_asks_replace_or_keep,test_route_from_new_lfo_adds_one_and_routes_it,test_an_lfo_already_driving_is_checked}`.
+The owner, 2026-10-24: "There is no Learn option for routing one of the
+LFOs there or any of the envelopes there." On the FX page open Glimmer
+and right-click its **mix**: **Route from ▸ LFO 1**. Right-click mix
+again; then right-click its **speed** and pick **Route from ▸ new LFO**.
+Then right-click a param a hand or a band already performs and pick
+**Route from ▸ LFO 2**; press **Keep**, then do it again and press
+**Replace**. Open the same menu on GRAPH's side panel and on the VIEW page.
+*Pass:* mix breathes with LFO 1 and GRAPH shows the cable `LFO 1 → mix`;
+the second menu shows **LFO 1** checked, and clicking it does nothing;
+new LFO adds one LFO (the LFO page and GRAPH show it) that drives speed,
+and one ⌘Z takes both the LFO and its route back; the taken param puts up
+the Replace / Keep prompt, Keep leaves the old performer and Replace puts
+LFO 2 there; the submenu is the same on every page, sits after the Learn
+items and before Learn sink, and is absent on a toggle or a trigger.
+*Fail:* a route that differs from the one a GRAPH drag makes (op, depth),
+an undo that takes two steps for new LFO, a pick on a taken param that
+replaces with no prompt, or a page whose menu lacks it
+(`ui_graph.route_from_menu`, `Panel._ctx_learn`).
+
+**331. An envelope pushes up from the base and comes back to it.** (laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_an_envelope_route_is_a_push_about_the_base,test_an_envelope_on_a_toggle_stays_position,test_an_lfo_route_is_unchanged}`.
+The owner, 2026-10-24: "the envelopes have no way for me to set a
+baseline … they all reduce the base to 0 in between fires no matter what
+I set the base to be." Wire a glimmer into the run and set its **mix** to
+0.4 on the FX page. Right-click mix: **Route from ▸ env 1**. On SEQ set
+envelope 1 to one-shot with a short attack and decay, and fire it (its
+fire chip, or a sequencer step) a few times; watch the mix slider's
+modulated mark and the picture. Then open ROUTING and read the new row.
+*Pass:* between fires mix sits at 0.4 and the glints show at that level;
+each fire lifts mix to the top (1.0) and it falls back to 0.4; the row
+reads `push` at depth 0.60, and its op chip flips it to `pos` and back.
+The same cable dragged on GRAPH from env 1's out into mix's `mod` makes
+the same row. *Fail:* mix drops to 0 between fires, a fire reaches less
+than the top, or the GRAPH cable makes another row (`learn.row_for`,
+`graphview.Edit.route_for`).
+
 ## What no test covers
 
 Only a person can settle these:
@@ -4175,7 +4694,7 @@ Only a person can settle these:
   not the feel;
 - two Macs on one shared library with this run's keys (259): no test
   runs an older build against a file this one saved (the review pass did,
-  once, by hand: register row 277), nor a `/3` preset (285);
+  once, by hand: register row 277), nor a `/3` or `/4` preset (285, 301, 317);
 - the frame rate of thousands of copies on the Mac's GPU (277): the tests
   draw on Mesa's software rasteriser;
 - whether the sequencer *feels* tight against music (282): the tests prove
@@ -4185,5 +4704,32 @@ Only a person can settle these:
   at the caps (280, 281): nothing has measured 16 LFOs and 16 envelopes;
 - the APC40 sequencer page on a real mk1 (286–295, on `plan-31-a1`): the
   fake-port rig proves the messages, never the yellow, the red, the scene
-  blink or the flicker, and models no Generic-mode fall-back.
-
+  blink or the flicker, and models no Generic-mode fall-back;
+- NDI and Syphon with a real Resolume or TouchDesigner, in and out, and NDI
+  over a network from a second Mac (304–309): the tests run our sender into
+  our receiver in one process; `extra_ips` through the app's own NDI config
+  file is unverified (307);
+- an NDI camera app on a real phone (312), a webcam through the macOS
+  permission prompt on a second Mac (311), and a published window after a
+  resize or a DPI change (310);
+- the look of a backdrop under the scene with the look-back and cut-through
+  (296), and `displace` and `blend` at distance (297): the goldens were
+  checked by eye on one still;
+- scrub and the cue knob's jog as a performer feels them (298, 299), and
+  a Drive placeholder going `fetching` then `ready` (300);
+- the MEDIA page at arm's length with a big library (303), and the frame
+  cost of three playing clips, eight channels and NDI out's ~4 ms (298,
+  303, 309): the smoke runs were on the dev machine only;
+- every gesture on GRAPH that edits the free graph (318, 320, 325, 326): an
+  effect dragged onto a cable, a drop beside one, the faint "reaches
+  nothing" node, a right-click on a render cable; the tests drive
+  `Edit` and `ui_graph.dropped` and draw the widget headless;
+- a knob on `switch.select` on a real APC40 (319), and the look of a clip
+  through two effects on the faces and a camera through `kaleido` behind
+  the scene (318): the goldens were checked by eye on one still each;
+- a lost channel on the faces (323) and the frame cost of branches, the
+  faces branch and an eight-way switch (324): the tests count makes on
+  Mesa and never time a tile GPU;
+- the FX page with a dozen effects at arm's length (327), and a `/5` file on
+  an older build (328): the ladder refusal is tested against the loader,
+  not the old app.

@@ -30,7 +30,7 @@ import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
-from test_graphview import views
+from test_graphview import stacked, views
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -43,9 +43,14 @@ from hyperspace.routing import Binding
 FACTORY = sorted(p.stem for p in (Path(graphview.__file__).parent / "library" / "presets")
                  .glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
+# (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
+# shaders into the faces, the backdrop, a switch — are laid out with the rest)
 WIRED = sorted(p.stem for p in FIXTURES.glob("*.json")
                if "graph" in json.loads(p.read_text()))
-REAL = tuple(FxState().names())          # every effect file: the app's chain
+FREE = ("branch-two-sizes", "media-chain-backdrop", "media-chain-faces", "switch-faces")
+# every effect file, by its @order: the chain an old preset with every one
+# on lands as (plan 33 T7: `names()` is by name — there is no stack)
+REAL = tuple(sorted(FxState().specs, key=lambda n: (FxState().specs[n].order, n)))
 CONCERNS = (graphview.AUDIO, graphview.GEOMETRY, graphview.SHADERS)
 
 
@@ -67,10 +72,29 @@ def load(rig, name, graph=None):
 
 
 def real_graph(fixture=None):
-    """The app's chain (every effect), wired as graph fixture `fixture` says."""
-    wiring = G.read_graph(json.loads((FIXTURES / f"{fixture}.json").read_text())["graph"]
-                          ).wiring() if fixture else G.Wiring()
-    return G.default_graph(views(Switches(), Switches(through=True)), wiring, effects=REAL)
+    """The app's chain (every effect, and the instances the fixture adds),
+    wired as graph fixture `fixture` says."""
+    spec = G.read_graph(json.loads((FIXTURES / f"{fixture}.json").read_text())["graph"]
+                        ) if fixture else None
+    wiring = spec.wiring() if spec is not None else G.Wiring()
+    extra = tuple(e.name for e in spec.effects) if spec is not None else ()
+    effects = REAL + tuple(e for e in extra if e not in REAL)
+    return G.default_graph(views(Switches(), Switches(through=True)),
+                           stacked(effects, wiring), effects=effects)
+
+
+def load_fixture(rig, fixture):
+    """Graph fixture `fixture` loaded as the preset (its spec the view's),
+    on its own render graph (`real_graph`): the page's state after two frames."""
+    party(rig)
+    dst = rig.lib.home / "presets" / f"{fixture}.json"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text((FIXTURES / f"{fixture}.json").read_text())
+    rig.panel.renderer = NS(_graph=real_graph(fixture))
+    rig.lib.load("presets", fixture)
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    return ui_graph._state(rig.panel)
 
 
 def drawn_ids(rig, monkeypatch):
@@ -113,12 +137,31 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     right and never share a column — but *other*, under the audio in its
     column — so no audio node stands in a geometry or shader column, nor
     any of those in another's; and no drawn wire runs back or within a
-    column but the shaders' row returns."""
+    column but the shaders' row returns.
+
+    Plan 33 T6: the free graph's `/5` fixtures, each loaded as the preset
+    on its own graph, hold too. The rule that keeps them right-running: a
+    picture made of the media alone (every path back from it starts at a
+    channel or the pattern — `media.a → acid.2 → huecycle.2`) is a branch
+    of the media and sits in the media area, so it runs on into the faces
+    (geometry), the backdrop and a switch (media, deeper) or an output
+    (shaders); a picture the scene made, taken back into a switch with the
+    media, runs back by design (`graphview.returns`)."""
+    assert set(FREE) <= set(WIRED)
     cases = [(name, None) for name in FACTORY]
-    cases += [("party-trip", f) for f in (None, *WIRED)]
+    cases += [("party-trip", f) for f in (None, *WIRED) if f not in FREE]
+    cases += [(f, f) for f in FREE]
     for name, fixture in cases:
-        graph = real_graph(fixture) if fixture is not None or name == "party-trip" else None
-        view = load(rig, name, graph)["view"]
+        if name in FREE:
+            st = load_fixture(rig, name)
+            view = st["view"]
+            assert view.spec is not None and G.run_of(view.spec) == (), name
+            for n in view.nodes:        # the branch is drawn with the media
+                if isinstance(n.ref, G.Effect) and n.ref.effect.endswith(".2"):
+                    assert n.area == graphview.MEDIA, (name, n.id)
+        else:
+            graph = real_graph(fixture) if fixture is not None or name == "party-trip" else None
+            view = load(rig, name, graph)["view"]
         for n in view.nodes:
             assert n.area in graphview.ORDER, (name, n.id)
             assert n.area == graphview.area_of(n)
@@ -151,6 +194,33 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
                               "group:output")} == {graphview.SHADERS}
     assert {area[k] for k in ("group:preset", "group:ui", "group:desk",
                               "group:missing")} == {graphview.OTHER}
+
+
+def test_a_scene_picture_into_a_switch_runs_back_by_design(rig):
+    """Plan 33 T6: an effect on the history wired into a switch (`history →
+    acid.2 → switch.in1`, the switch into output 2) is the scene's picture —
+    it stays with the shaders — so its cable into the switch, which sits
+    with the media, runs back: one of `returns` (as a wrapped row's is). No
+    other wire runs back. (Into the faces, the pattern or the backdrop a
+    scene picture is a loop — the scene draws them — and is never built.)"""
+    from hyperspace.params import declare_switches
+    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "acid", "instance": 2},
+                                   {"kind": "switch"}],
+                         "wires": [{"from": "frame", "to": "fx.image"},
+                                   {"from": "history", "to": "acid.2.image"},
+                                   {"from": "acid.2", "to": "switch.in1"},
+                                   {"from": "switch", "to": "output.2.image"}]})
+    declare_switches(rig.reg, ["switch"])
+    g = G.default_graph(views(Switches(), Switches()), spec.wiring(),
+                        effects=REAL + ("acid.2",))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    assert view.node("render:acid.2").area == graphview.SHADERS
+    assert view.node("render:switch").area == graphview.MEDIA
+    lay = graphview.layout(view, collapsed=lambda nid: True)
+    back = graphview.returns(view, lay)
+    into = next(c for c in view.cables if c.dst_port == "rin:switch/in1")
+    assert into.id in back
+    assert back_wires(view) == []
 
 
 def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
@@ -197,10 +267,12 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     frame(rig.panel, "graph")
     st["tidy"] = True
     frame(rig.panel, "graph")
-    # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off) twice
-    assert sum(n.idle for n in view.nodes) == 16
-    assert st["said"] == (f"laid out {len(view.nodes) - 16} nodes in 6 areas, every one "
-                          "collapsed · 16 idle off the canvas")
+    # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
+    # twice — and the eight media channels, their bins empty (plan 32 T10:
+    # the channels' params on their own nodes, the backdrop's always drawn)
+    assert sum(n.idle for n in view.nodes) == 24
+    assert st["said"] == (f"laid out {len(view.nodes) - 24} nodes in 7 areas, every one "
+                          "collapsed · 24 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -332,7 +404,10 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
     succ: dict = {}
     for c in (*view.cables, *lay.throughs):
         a, b = graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port)
-        if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
+        # (the frame's feeds too: since R23 an idle effect's through wire
+        # starts at `frame`, which the history feeds)
+        if (c.kind in ("render", graphview.THROUGH, graphview.FEEDS)
+                and a not in hidden and b not in hidden):
             succ.setdefault(a, set()).add(b)
     seen, todo = set(), ["render:history"]
     while todo:
@@ -369,14 +444,15 @@ def test_the_shader_chain_wraps_in_rows_of_four(rig):
     shaders take four columns, their depths in Z rows — every row left to
     right, a render cable inside a row running right, one from a row's end
     to the next row's start the only kind that runs back (`returns`); the
-    whole canvas about ten columns, not twenty-three."""
+    whole canvas about eleven columns (plan 32 T10's media area one of
+    them), not twenty-three."""
     st = load(rig, "party-trip", real_graph())
     view = st["view"]
     for opened in ((), (graphview.SHADERS,)):
         lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=opened)
         assert lay.spans[graphview.SHADERS] <= graphview.SHADER_ROW
         cols = 1 + max(lay.cols.values())
-        assert cols <= 10, (opened, cols)
+        assert cols <= 11, (opened, cols)
     lay = graphview.layout(view, collapsed=lambda nid: True, idle_open=(graphview.SHADERS,))
     assert lay.spans[graphview.SHADERS] == graphview.SHADER_ROW
     assert max(lay.rows.values()) >= 2
@@ -464,7 +540,7 @@ def test_the_area_chips_and_a_title_click_frame_an_area(rig, monkeypatch):
 
 def test_area_titles_draw(rig, monkeypatch):
     """Each area's title is drawn on the canvas, large and faint, over its
-    first column — six on party-trip (OTHER under AUDIO) — behind the nodes
+    first column — seven on party-trip (OTHER under AUDIO) — behind the nodes
     (before the first node is begun); sized to stay readable zoomed out,
     never under the floor on screen, a short word when the long one will
     not fit its room (to the next title on its row)."""
@@ -493,7 +569,8 @@ def test_area_titles_draw(rig, monkeypatch):
                                                                 begin(nid)))
     frame(rig.panel, "graph")
     assert [t[0] for t in texts] == [graphview.TITLES[a] for a in graphview.ORDER]
-    assert order[:6] == ["title"] * 6 and order[6] == "node"
+    n = len(graphview.ORDER)
+    assert order[:n] == ["title"] * n and order[n] == "node"
     lay = st["auto"][1]
     audio = next(t for t in texts if t[0] == "AUDIO")
     assert audio[1] == lay.titles[graphview.AUDIO][0]

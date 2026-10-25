@@ -6,7 +6,8 @@ sequencer page, is built on its own branch, `plan-31-a1`, and waits for
 Dylan's sign-off** (he owns the desk, decision 10); nothing on
 `plan-31-integration` depends on it. A2 (D5–D8 as the selected lane's
 AHDSR) is not built. The owner accepted all ten recommended decisions
-on 2026-10-22.
+on 2026-10-22. Plans 31 and 32 landed together via
+`plan-31-32-integration` (2026-10-23; register row 340).
 
 The LFOs are now a **modulator bank** of any size up to 16, each voice
 added or removed by a stable id. **Envelopes** are a second bank: AHDSR

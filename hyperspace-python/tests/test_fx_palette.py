@@ -43,10 +43,12 @@ def state(tmp_path, *, palette: bool = True) -> FxState:
 
 
 def frame(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
+    from hyperspace.graphmigrate import wiring_of
     from hyperspace.render import Renderer
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
