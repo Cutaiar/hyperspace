@@ -2938,7 +2938,8 @@ class DelayWrite(Node):
     capture (`Capture.after`, as a `Wired` end) — at the size it holds
     (`held`: its input's own size, else the frame's, row 357), cleared to
     transparent black first. An input that reads nothing this frame leaves
-    it transparent black. A size change makes the write side again and
+    the pair unwritten (R7): next frame the delay reads nothing, as a
+    channel with nothing on it does. A size change makes the write side again and
     leaves the read side, so the next frame still reads the one before,
     fitted. Timed: the SYSTEM line `delay(write)` (row 354)."""
 
@@ -2979,10 +2980,13 @@ class DelayWrite(Node):
             frame.ctx.viewport = (0, 0, *held)
             frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
             at = frame if held == tuple(frame.size) else frame.at(held)
+            # (R7, the controller 2026-10-24: an input that read nothing
+            # leaves the pair unwritten — next frame the delay reads nothing
+            # and the faces fall back to the pattern, plan 33's rule)
             if src.reads(at):
                 with frame.timed(self.name):
                     src.paint(at, fbo)
-            pair.wrote = True
+                pair.wrote = True
             self.said = ""
         except Exception as e:  # noqa: BLE001 — a delay must not take the frame down
             # (nothing written: next frame the delay reads nothing)

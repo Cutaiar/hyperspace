@@ -16,6 +16,7 @@ context."""
 
 from __future__ import annotations
 
+from itertools import pairwise
 from types import SimpleNamespace
 
 import numpy as np
@@ -23,12 +24,14 @@ import pytest
 from test_graph_faces import (
     Still,
     _draw,
+    _empty,
     _faces,
     _fbo,
     _media,
     _px,
     _renderer,
     _rgba,
+    _rig_frame,
     _tool,
     ctx,  # noqa: F401 — the GL context fixture, taken as each GL test's argument
     section,
@@ -157,9 +160,9 @@ def _trails(ctx):
 
 def test_a_loop_of_effects_never_reads_what_it_writes(ctx):
     """Review Focus 1: the `delay-trails` loop (`delay → zoomblur.2 →
-    composite.under`, `composite → delay.image`) over 8 frames: no GL error,
-    and no effect pass samples the texture it writes, nor the delay's write
-    side (row 354)."""
+    palette.2 → composite.2.over`, `composite.2 → delay.image`) over 8
+    frames: no GL error, and no effect pass samples the texture it writes,
+    nor the delay's write side (row 354)."""
     rig = _trails(ctx)
     try:
         r = rig.renderer
@@ -184,6 +187,74 @@ def test_a_loop_of_effects_never_reads_what_it_writes(ctx):
             assert src != dst and src != write, (src, dst, write)
     finally:
         rig.close()
+
+
+TRAILS = [("delay", "zoomblur.2.image"), ("zoomblur.2", "palette.2.image"),
+          ("scene", "composite.2.under"), ("palette.2", "composite.2.over"),
+          ("composite.2", "output.1.image"), ("composite.2", "delay.image")]
+
+
+def test_the_trails_show_and_fade(ctx):
+    """R6: the `delay-trails` fixture after the golden's 8 frames is not
+    party-faces' frame (the trail shows), and the trails fade: the same
+    graph (last frame darkened by palette.2's val slice to 0.6, added over
+    the scene) with the shape drawn for six frames and then an empty scene,
+    each frame's picture is strictly darker than the one before and gone
+    within fifteen — it decays, never sticks or saturates."""
+    trails, _ = _rig_frame(ctx, "delay-trails", frames=8)
+    plain, _ = _rig_frame(ctx, "party-faces", frames=8)
+    assert np.abs(trails[..., :3] - plain[..., :3]).max() > 40
+    assert (trails[..., :3].sum(axis=2) > plain[..., :3].sum(axis=2) + 30).mean() > 0.01
+    size = (160, 120)
+    r = _renderer(ctx, None, TRAILS,
+                  [{"kind": "effect", "file": "zoomblur", "instance": 2},
+                   {"kind": "effect", "file": "palette", "instance": 2},
+                   {"kind": "composite", "instance": 2, "blend": "add"}, *DELAY],
+                  {"zoomblur": 2, "palette": 2},
+                  {"zoomblur.2": {"on": True, "mix": 1.0, "amount": 0.15, "glow": 0.0},
+                   "palette.2": {"on": True, "mix": 1.0, "val_to": 0.6}})
+    vs = [View(Switches(), size, target=_fbo(ctx, *size))]
+    for k in range(6):
+        _frame(ctx, r, _faces(), vs, size, k)
+    sums = []
+    for k in range(6, 21):
+        (px,) = _frame(ctx, r, _empty(), vs, size, k)
+        sums.append(int(px[..., :3].sum()))
+        if k == 20:
+            assert px[..., :3].max() <= 2, px[..., :3].max()
+    assert sums[0] > 0 and "palette.2" in r.stats["effects"]
+    assert all(b < a for a, b in pairwise(sums) if a > 0), sums
+
+
+def test_a_delay_whose_input_read_nothing_reads_nothing(ctx):
+    """R7: `media.a → delay.image`, `delay → shape.faces`. While the
+    channel shows a still, the faces show last frame's still; the frame its
+    feed is lost the delay writes nothing, so the frame after the faces
+    fall back to the pattern (plan 33's rule) — the faces-unwired frame,
+    pixel for pixel — never black. An empty channel reads nothing from the
+    first frame on."""
+    size, s = (160, 120), _faces(pattern=2)
+    plain_r = _renderer(ctx, _media())
+    plain_vs = [View(Switches(), size, target=_fbo(ctx, *size))]
+    plain = [_frame(ctx, plain_r, s, plain_vs, size, k)[0] for k in range(4)]
+    pairs = [("media.a", "delay.image"), ("delay", "shape.faces")]
+    still = Still(_rgba(16, 9))
+    r = _renderer(ctx, _media(a=still), pairs, DELAY)
+    vs = [View(Switches(), size, target=_fbo(ctx, *size))]
+    got = []
+    for k in range(4):
+        if k == 2:
+            still.gone = True                                 # the feed lost
+        got.append(_frame(ctx, r, s, vs, size, k)[0])
+    assert np.array_equal(got[0], plain[0])                    # nothing came in before
+    assert not np.array_equal(got[1], plain[1])                # last frame's still
+    assert not np.array_equal(got[2], plain[2])                # (still frame 1's)
+    assert np.array_equal(got[3], plain[3]) and r.face_error == ""
+    assert not r.delay_pair("delay").holds
+    empty = _renderer(ctx, _media(), pairs, DELAY)
+    for k in range(3):
+        (px,) = _frame(ctx, empty, s, vs, size, k)
+        assert np.array_equal(px, plain[k]), k
 
 
 def test_a_size_change_loses_no_frame(ctx):

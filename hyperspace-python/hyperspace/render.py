@@ -88,6 +88,14 @@ SYSTEM page). The default graph is today's three pipelines; every golden
 frame of A0 is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
+
+Plan 34 D: each delay's two half-float pictures are the renderer's
+(`DelayPair`, `delay_pair`), kept by name across graph rebuilds and
+swapped once a frame before the graph runs (`_turn_delays`); a picture
+of its own size is laid into a consumer of another shape by the refit
+pass (`REFIT_FS`, `_refit`). GL allows one time query active at once, so
+a node's query opened inside another's is a no-op (`PassTimer.time`,
+ruling R5): `delay(write)` times its paint, effects inside it included.
 """
 
 from __future__ import annotations

@@ -182,7 +182,7 @@ Sequential. T2 builds the refit and the own-size rule that T3 and T4 use. T5 nee
 - [ ] **Step 3:** implement.
 - [ ] **Step 4:** create the two fixtures. Each has a `frame → fx.image` run and `"schema": "hyperspace.preset/5"`, with the values plan 33's fixtures carry.
   - `delay-faces`: nodes `delay`; wires `scene → delay.image`, `delay → shape.faces`.
-  - `delay-trails`: nodes `delay`, `zoomblur` instance 2, `composite`; wires `delay → zoomblur.2.image`, `zoomblur.2 → composite.under`, `scene → composite.over`, `composite → delay.image`, `composite → output.1.image`; `fx.zoomblur.2.on` true and `.mix` 1.
+  - `delay-trails` (as rebuilt under ruling R6: the first graph's opaque scene `over` hid the trail): nodes `delay`, `zoomblur` instance 2, `palette` instance 2, `composite` instance 2 blend `add`; wires `delay → zoomblur.2.image`, `zoomblur.2 → palette.2.image`, `scene → composite.2.under`, `palette.2 → composite.2.over`, `composite.2 → delay.image`, `composite.2 → output.1.image`; `fx.zoomblur.2.on` true, `.mix` 1, `.amount` 0.15, `.glow` 0; `fx.palette.2.on` true, `.mix` 1, `.val_to` 0.6.
 
   Record `--only delay-faces,delay-trails`. Run the whole golden suite: the 693 are unchanged.
 - [ ] **Step 5:** `uv run pytest -q -x` passes. Commit `"Plan 34 T2: the delay — last frame's picture, half-float ping-pong, a loop through it drawn"`.

@@ -1,7 +1,7 @@
 {
  "schema": "hyperspace.preset/5",
  "name": "delay-trails",
- "note": "plan 34 T2's proof preset (a test fixture, never a factory preset): party-faces with a loop of effects through a delay (delay, zoomblur.2, composite.under; the scene over; the composite back into delay.image and out to output 1): trails that grow and stream, half-float throughout",
+ "note": "plan 34 T2's proof preset (a test fixture, never a factory preset): party-faces with trails through a delay: last frame's picture smeared toward the centre (zoomblur.2) and darkened (palette.2, val to 0.6), added over the scene (composite.2, add); the sum is output 1's picture and goes back into delay.image, so each trail fades by 0.6 a frame as it streams, half-float throughout",
  "values": {
   "view.shape": 3,
   "view.speed": 0.2,
@@ -40,7 +40,12 @@
   "pattern.mod.5": 1.0,
   "fx.on": true,
   "fx.zoomblur.2.on": true,
-  "fx.zoomblur.2.mix": 1.0
+  "fx.zoomblur.2.mix": 1.0,
+  "fx.zoomblur.2.amount": 0.15,
+  "fx.zoomblur.2.glow": 0.0,
+  "fx.palette.2.on": true,
+  "fx.palette.2.mix": 1.0,
+  "fx.palette.2.val_to": 0.6
  },
  "routes": [
   {
@@ -361,6 +366,11 @@
   "nodes": [
    {
     "kind": "effect",
+    "file": "palette",
+    "instance": 2
+   },
+   {
+    "kind": "effect",
     "file": "zoomblur",
     "instance": 2
    },
@@ -368,7 +378,9 @@
     "kind": "delay"
    },
    {
-    "kind": "composite"
+    "kind": "composite",
+    "instance": 2,
+    "blend": "add"
    }
   ],
   "wires": [
@@ -382,19 +394,23 @@
    },
    {
     "from": "zoomblur.2",
-    "to": "composite.under"
+    "to": "palette.2.image"
    },
    {
     "from": "scene",
-    "to": "composite.over"
+    "to": "composite.2.under"
    },
    {
-    "from": "composite",
-    "to": "delay.image"
+    "from": "palette.2",
+    "to": "composite.2.over"
    },
    {
-    "from": "composite",
+    "from": "composite.2",
     "to": "output.1.image"
+   },
+   {
+    "from": "composite.2",
+    "to": "delay.image"
    }
   ]
  }

@@ -197,7 +197,9 @@ face instead of 1024².
   change (the window, a cap, a resize's `size`) remakes the write side only,
   so the next frame still reads the frame before at its old size, fitted. No
   frame goes blank but the very first. An input that reads nothing this
-  frame (`reads`) leaves the write side transparent black.
+  frame (`reads`) leaves the pair unwritten (ruling R7, T2): next frame the
+  delay reads nothing, and the faces fall back to the pattern, as for a
+  channel with nothing on it.
 - **What a consumer gets.** `Delay.paint(frame, dst)` lays the read side
   into `dst` by the refit pass (`Renderer._refit`, cover). `Delay.image(frame)`
   is the read side when it is the frame's size. Otherwise it refits it once
@@ -534,8 +536,10 @@ one (row 371, the schema) was the constraint given.
   laptop. The faces show the shape within the shape, a frame deeper each
   frame. Judge the look, black faces included.
 - **333.** Trails: the `delay-trails` fixture's graph (`delay →
-  zoomblur.2 → composite.under`, `scene → composite.over`, `composite →
-  delay.image` and `output.1.image`). Trails grow and stream.
+  zoomblur.2 → palette.2` with palette.2's val slice to 0.6, `scene →
+  composite.2.under`, `palette.2 → composite.2.over` added, `composite.2 →
+  delay.image` and `output.1.image`; ruling R6, T2). Trails stream toward
+  the centre and fade within a few frames; nothing sticks or burns to white.
 - **334.** The drag: `scene → shape.faces` on GRAPH goes red with the
   faces words, and does not land. Through a delay it lands, and the faces
   show the scene.

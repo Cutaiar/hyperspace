@@ -1443,6 +1443,11 @@
      "nodes": [
       {
        "kind": "effect",
+       "file": "palette",
+       "instance": 2
+      },
+      {
+       "kind": "effect",
        "file": "zoomblur",
        "instance": 2
       },
@@ -1450,7 +1455,9 @@
        "kind": "delay"
       },
       {
-       "kind": "composite"
+       "kind": "composite",
+       "instance": 2,
+       "blend": "add"
       }
      ],
      "wires": [
@@ -1464,19 +1471,23 @@
       },
       {
        "from": "zoomblur.2",
-       "to": "composite.under"
+       "to": "palette.2.image"
       },
       {
        "from": "scene",
-       "to": "composite.over"
+       "to": "composite.2.under"
       },
       {
-       "from": "composite",
-       "to": "delay.image"
+       "from": "palette.2",
+       "to": "composite.2.over"
       },
       {
-       "from": "composite",
+       "from": "composite.2",
        "to": "output.1.image"
+      },
+      {
+       "from": "composite.2",
+       "to": "delay.image"
       }
      ]
     },
@@ -1490,9 +1501,9 @@
      "fx(scene+hands)",
      "composite(hands)",
      "fx(hands)",
-     "composite",
-     "delay(write)",
+     "composite.2",
      "wire(output.1)",
+     "delay(write)",
      "capture",
      "output.1",
      "output.2",
@@ -10633,9 +10644,9 @@
     960,
     600
    ],
-   "sha256": "b41e9b2dcc5c4a69af5d99b873b7e22a71bcc7bfc50c647ee44e808114a0dbe2",
-   "png": "png/b41e9b2dcc5c4a69.png",
-   "wired": "composite"
+   "sha256": "649cddb34ec6540ba268a5a3c05ca812b44586d28ffd395540b98b42285490af",
+   "png": "png/649cddb34ec6540b.png",
+   "wired": "composite.2"
   },
   {
    "preset": "delay-trails",
