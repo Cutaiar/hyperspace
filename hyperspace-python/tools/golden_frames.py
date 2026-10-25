@@ -166,9 +166,14 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces")
+# plan 34 T2's two: the scene through a delay onto the faces (the infinite
+# mirror), and a loop of effects through a delay (trails: `delay →
+# zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
+# from a cleared state over the rig's FRAMES frames, seven feedback steps
+FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
-                                    *MEDIA_FIXTURES)
+                                    *MEDIA_FIXTURES, *FEEDBACK_FIXTURES)
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 

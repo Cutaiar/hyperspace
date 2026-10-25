@@ -130,6 +130,7 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     FACE_PIC,
     MEDIA_CHANNELS,
+    Delay,
     Frame,
     Graph,
     Wiring,
@@ -139,7 +140,7 @@ from .graph import (
     graph_key,
 )
 from .lookback import DreamState, Lookback
-from .media_tex import FIT_FS, MediaTextures, UiTextures, fit_scale
+from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
@@ -291,6 +292,31 @@ void main() {
     }
     if (u_opaque != 0) c.a = 1.0;
     f_color = c;
+}
+"""
+
+# plan 34 D (row 358): a picture of its own size laid into a target of
+# another shape (`Renderer._refit`: the delay, the echoes, the dream, the
+# resize) — the crop `u_crop` of the source (x0, y0, w, h in its GL uv)
+# fitted about the centre by `u_scale` (`media_tex.fit_scale` of the crop's
+# pixels into the target's), sampled inside `u_clamp` (min uv, max uv) so
+# no neighbour bleeds in. Outside the fit, transparent black; inside, the
+# texel as it is (premultiplied in, premultiplied out)
+REFIT_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform vec4 u_crop;
+uniform vec2 u_scale;
+uniform vec4 u_clamp;
+out vec4 f_color;
+void main() {
+    vec2 q = 0.5 + (v_uv - 0.5) * u_scale;
+    if (any(lessThan(q, vec2(0.0))) || any(greaterThan(q, vec2(1.0)))) {
+        f_color = vec4(0.0);
+        return;
+    }
+    f_color = texture(u_src, clamp(u_crop.xy + q * u_crop.zw, u_clamp.xy, u_clamp.zw));
 }
 """
 
@@ -712,6 +738,68 @@ class CoverTarget:
         self.size = (0, 0)
 
 
+class DelayPair:
+    """One delay's two pictures (plan 34 D, row 354): `read`, last frame's
+    (what `graph.Delay` shows), and `write`, this frame's (what
+    `graph.DelayWrite` paints into) — each (texture, framebuffer), RGBA
+    half-float (an 8-bit feedback with a decay below 1 sticks and never
+    fades), LINEAR, clamped, cleared to transparent black when made. Two
+    distinct textures always: no pass reads what it writes.
+
+    `turn()`, once a frame before the graph runs (`Renderer._turn_delays`):
+    a pair written last frame swaps its sides and holds a frame; one not
+    written holds nothing (strict z⁻¹). `idle` counts the frames no graph
+    has held its delay: released at `SIZED_KEEP_FRAMES`."""
+
+    def __init__(self) -> None:
+        self.read: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
+        self.write: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
+        self.holds = False
+        self.wrote = False
+        self.idle = 0
+
+    def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The write side at `size`: made again only when missing or of
+        another size (row 357: the read side is left alone, so the next
+        frame still reads the frame before, at its old size)."""
+        size = (int(size[0]), int(size[1]))
+        if self.write is not None and tuple(self.write[0].size) == size:
+            return self.write[1]
+        self._free(self.write)
+        self.write = None
+        tex = ctx.texture(size, 4, dtype="f2")
+        try:
+            tex.repeat_x = tex.repeat_y = False
+            tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+            fbo = ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        fbo.clear(0.0, 0.0, 0.0, 0.0)
+        self.write = (tex, fbo)
+        return fbo
+
+    def turn(self) -> None:
+        if self.wrote:
+            self.read, self.write = self.write, self.read
+            self.holds = True
+        else:
+            self.holds = False
+        self.wrote = False
+
+    @staticmethod
+    def _free(side) -> None:
+        if side is not None:
+            for res in (side[1], side[0]):
+                res.release()
+
+    def release(self) -> None:
+        self._free(self.read)
+        self._free(self.write)
+        self.read = self.write = None
+        self.holds = self.wrote = False
+
+
 class FaceTarget:
     """The picture the faces show while something other than the pattern
     is wired into them (plan 20; plan 33 R: `shape.faces`), or the
@@ -807,8 +895,11 @@ class PassTimer:
         self._free = []
 
     def time(self, name: str) -> _Timed:
-        """``with timer.time("scene"):`` — the node's GPU time, this frame."""
-        if not self.on:
+        """``with timer.time("scene"):`` — the node's GPU time, this frame.
+        Plan 34 D: inside another node's query (a delay's write painting an
+        effect, which times its own pass) it is a no-op — GL allows one
+        active per target, so the outer line holds the inner's time."""
+        if not self.on or getattr(self, "_active", False):
             return _Timed(None)
         try:
             q = self._free.pop() if self._free else self.ctx.query(time=True)
@@ -865,12 +956,14 @@ class _Timed:
             try:
                 self.q.__enter__()
                 self.began = True
+                self.timer._active = True        # (plan 34 D: no query inside it)
             except Exception as e:  # noqa: BLE001 — timing never costs a frame
                 self.timer._off(e)
         return self
 
     def __exit__(self, *exc) -> bool:
         if self.began:
+            self.timer._active = False
             try:
                 self.q.__exit__(None, None, None)
             except Exception as e:  # noqa: BLE001 — timing never costs a frame
@@ -1432,6 +1525,9 @@ class Renderer:
         self._frame_size = size
         self._prune_sized()
         graph = self._graph_for(views)
+        # plan 34 D: each delay's pair turns — last frame's write is now
+        # what its delay reads
+        self._turn_delays(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -1678,6 +1774,79 @@ class Renderer:
         self._fit_prog, self._fit_vao = prog, vao
         return prog, vao
 
+    def _refit(self, tex: moderngl.Texture, dst: moderngl.Framebuffer,
+               crop: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
+               fit: int = COVER, filter: str = "linear",
+               clamp: tuple[float, float, float, float] | None = None,
+               mip: bool = False) -> None:
+        """`tex`'s `crop` (x0, y0, w, h in its GL uv) fitted by `fit`
+        (`media_tex.FITS`) into `dst`'s viewport, blending off, the texels
+        as they are (premultiplied in and out), transparent black outside
+        the fit (plan 34 D, row 358; `REFIT_FS`). `clamp` (min u, min v,
+        max u, max v) bounds the samples (the crop itself when None). The
+        filter is a sampler object's (`_sampler`: linear, or nearest; `mip`
+        trilinear from mipmaps built here), so the texture's own filter —
+        a shared one's, the scene's — is never changed. Blending is on
+        again on every exit."""
+        prog, vao = self._refit_program()
+        ctx = self.ctx
+        rect = tuple(dst.viewport)
+        x0, y0, cw, ch = (float(v) for v in crop)
+        lo_hi = clamp if clamp is not None else (x0, y0, x0 + cw, y0 + ch)
+        sampler = self._sampler(filter, mip)
+        dst.use()
+        ctx.viewport = rect
+        ctx.disable(moderngl.BLEND)
+        try:
+            if mip:
+                was = tex.filter
+                tex.build_mipmaps()
+                tex.filter = was
+            tex.use(location=0)
+            sampler.use(location=0)
+            prog["u_src"].value = 0
+            prog["u_crop"].value = (x0, y0, cw, ch)
+            prog["u_scale"].value = fit_scale(
+                fit, (max(cw * tex.size[0], 1.0), max(ch * tex.size[1], 1.0)),
+                (int(rect[2]), int(rect[3])))
+            prog["u_clamp"].value = tuple(float(v) for v in lo_hi)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            sampler.clear(location=0)
+            ctx.enable(moderngl.BLEND)
+
+    def _refit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
+        """`_refit`'s program (`REFIT_FS`), built on first use (getattr: a
+        renderer from before plan 34 has none)."""
+        prog, vao = getattr(self, "_refit_prog", None), getattr(self, "_refit_vao", None)
+        if prog is not None and vao is not None:
+            return prog, vao
+        prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=REFIT_FS)
+        try:
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception:
+            prog.release()
+            raise
+        self._refit_prog, self._refit_vao = prog, vao
+        return prog, vao
+
+    def _sampler(self, filter: str = "linear", mip: bool = False
+                 ) -> moderngl.Sampler:
+        """A sampler object for `_refit`, made once per (filter, mip) and
+        kept: clamped, linear (trilinear with `mip`) or nearest."""
+        cache = self.__dict__.setdefault("_samplers", {})
+        key = (filter, bool(mip))
+        got = cache.get(key)
+        if got is None:
+            if filter == "nearest":
+                f = (moderngl.NEAREST_MIPMAP_NEAREST if mip else moderngl.NEAREST,
+                     moderngl.NEAREST)
+            else:
+                f = (moderngl.LINEAR_MIPMAP_LINEAR if mip else moderngl.LINEAR,
+                     moderngl.LINEAR)
+            got = cache[key] = self.ctx.sampler(repeat_x=False, repeat_y=False, filter=f)
+        return got
+
     def _compose(self, v: View, key: int | None, after: bool,
                  frames: dict[int, moderngl.Texture | None], failed: set[int],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
@@ -1856,26 +2025,31 @@ class Renderer:
         self._lay_prog, self._lay_vao = prog, vao
         return prog, vao
 
-    def _frame_target(self, key, size: tuple[int, int]
+    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1"
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
         """The frame texture for a pipeline: RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
         again when the frame's size changes. Plan 33 R: a key that is
         `(name, size)` (a picture made at another size, `graph.Frame.key`)
-        lives while some frame asks for it (`_prune_sized`)."""
+        lives while some frame asks for it (`_prune_sized`). Plan 34 D:
+        `dtype` "f2" a half-float one (a delay's picture refitted, which
+        must not quantise); a stored texture of another dtype is made
+        again."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
         if isinstance(key, tuple):
             self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
-        if have is not None and have[0].size == size:
+        if (have is not None and have[0].size == size
+                and getattr(have[0], "dtype", "f1") == dtype):
             return have
         if have is not None:
             for res in (have[1], have[0]):
                 res.release()
             del frames[key]
-        tex = self.ctx.texture(size, 4)
+        tex = self.ctx.texture(size, 4) if dtype == "f1" else self.ctx.texture(size, 4,
+                                                                                dtype=dtype)
         try:
             tex.repeat_x = tex.repeat_y = False
             tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
@@ -1923,6 +2097,46 @@ class Renderer:
                 tex.release()
         self._pools = {}
         self._pools_used = set()
+
+    def delay_pair(self, name: str) -> DelayPair:
+        """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
+        kept by name across graph rebuilds — an edit elsewhere on GRAPH
+        does not cut the feedback (__dict__: a renderer from before plan 34
+        has none)."""
+        pairs = self.__dict__.setdefault("_delays", {})
+        got = pairs.get(name)
+        if got is None:
+            got = pairs[name] = DelayPair()
+        return got
+
+    def _turn_delays(self, graph: Graph) -> None:
+        """Once a frame, before the graph runs: every pair turns (a pair
+        written last frame now reads it; one not written holds nothing). A
+        pair whose delay is in no node of `graph` counts a frame idle and
+        is released at `SIZED_KEEP_FRAMES`, with its refitted picture
+        (`<name>#fit`); one in the graph is idle 0. Never raises."""
+        pairs = getattr(self, "_delays", None)
+        if not pairs:
+            return
+        held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
+        for name in list(pairs):
+            pair = pairs[name]
+            pair.turn()
+            if name in held:
+                pair.idle = 0
+                continue
+            pair.idle += 1
+            if pair.idle < SIZED_KEEP_FRAMES:
+                continue
+            del pairs[name]
+            try:
+                pair.release()
+                fit = (getattr(self, "_frames", None) or {}).pop(name + "#fit", None)
+                if fit is not None:
+                    fit[1].release()
+                    fit[0].release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
 
     def _prune_sized(self) -> None:
         """Once a frame, first: release the pools (`pool_at`) and the frame

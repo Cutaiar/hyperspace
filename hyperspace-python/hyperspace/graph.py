@@ -185,6 +185,11 @@ GROUNDED = "grounded"
 # constant and not a param — 512 cannot be told from it on a face and 2048
 # costs several times as much. render.py takes it from here
 FACE_PIC = 1024
+# plan 34 D (row 358): how a picture of its own size (`Node.own_size`: a
+# delay's, a resize's, an echo's) is laid into a consumer of another shape
+# — `media_tex.COVER` (`media_tex.FITS[0]`), written out because this
+# module imports no media module; a test holds the two equal
+OWN_FIT = 0
 
 
 def media_name(c: str) -> str:
@@ -2013,6 +2018,10 @@ class Node:
     # pattern's seed): an effect after it paints it, as the faces' chain
     # always seeded its first texture, rather than folding its texture
     PAINTS = False
+    # plan 34 (the brief's `Node.said`): what the node says it holds, in
+    # words, set in `run` by a node that has any (a delay's "last frame's ·
+    # 960×600 half-float") — GRAPH's summary reads it
+    said: str = ""
 
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         unknown = set(inputs) - set(self.INPUTS)
@@ -2052,6 +2061,13 @@ class Node:
         frame it is painted for); the faces and the pattern's layer say
         their own (`SIZED`)."""
         return tuple(frame.size)
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        """The size this node makes its picture at whatever its consumer
+        asks (plan 34 D, row 368): a delay's held size, a resize's, an
+        echo's — or None, its consumer decides (every node before plan 34).
+        A consumer of another size gets the picture fitted by `OWN_FIT`."""
+        return None
 
     def reads(self, frame: Frame) -> bool:
         """Whether this node's picture comes from something this frame
@@ -2630,17 +2646,21 @@ class MediaNode(Node):
         return get is not None and get(self.channel) is not None
 
 
-def picture(frame: Frame, node: Node) -> moderngl.Texture | None:
+def picture(frame: Frame, node: Node, dtype: str = "f1") -> moderngl.Texture | None:
     """`node`'s picture at `frame`'s size as a texture (plan 33 R): the
     one it made, else painted once a frame into a texture of the
     renderer's under its name (`Frame.key`) — what a consumer that binds a
-    picture reads (the pattern's layer, a branch under the scene)."""
+    picture reads (the pattern's layer, a branch under the scene). Plan
+    34 D: `dtype` the texture's ("f2", half-float, for a picture that must
+    not quantise), kept under its own key beside the RGBA8 one."""
     tex = node.image(frame)
     if tex is not None:
         return tex
-    key = node.name + "#picture"
+    key = node.name + "#picture" + ("" if dtype == "f1" else "." + dtype)
     if key not in frame.data:
-        tex, fbo = frame.r._frame_target(frame.key(key), frame.size)
+        # (the RGBA8 call as it always was: a stand-in renderer's too)
+        tex, fbo = (frame.r._frame_target(frame.key(key), frame.size) if dtype == "f1"
+                    else frame.r._frame_target(frame.key(key), frame.size, dtype=dtype))
         fbo.viewport = (0, 0, *frame.size)
         node.paint(frame, fbo)
         frame.data[key] = tex
@@ -2700,6 +2720,11 @@ class PatternNode(Node):
         if port != "media":
             return super().size_for(port, frame)
         head = _head(self.inputs["media"], frame)
+        # plan 34 D: a head with a size of its own (a delay's, a resize's)
+        # is made there, as a channel's texture is
+        own = head.own_size(frame) if head is not None else None
+        if own is not None:
+            return tuple(own)
         get = getattr(frame.r, "media_texture", None)
         tex = get(head.channel) if isinstance(head, MediaNode) and get is not None else None
         return tuple(tex.size) if tex is not None else (FACE_PIC, FACE_PIC)
@@ -2813,6 +2838,11 @@ class SwitchNode(Node):
         src = self.selected(frame)
         return src.alpha(frame) if src is not None else 1.0
 
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        """Its pick's (plan 34 D): a cut passes the picture as it is made."""
+        src = self.selected(frame)
+        return src.own_size(frame) if src is not None else None
+
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         """The picked input painted into `dst` — or the ground with none,
         so a consumer never shows what `dst` held (as an empty channel)."""
@@ -2824,6 +2854,142 @@ class SwitchNode(Node):
         dst.use()
         frame.ctx.viewport = rect
         frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+
+# ---------------------------------------------------------------- delay
+
+class Delay(Node):
+    """A delay's picture (plan 34 D, rows 353–358): `delay`, `delay.2` …,
+    what came into its `image` last frame — z⁻¹. No inputs: its picture is
+    the read side of a half-float pair the renderer holds under its name
+    (`Renderer.delay_pair`, `render.DelayPair`), written last frame by its
+    other half, `DelayWrite`, and swapped at the start of this one
+    (`Renderer._turn_delays`). So a loop through it is no dependency, and
+    no pass ever reads the texture it writes.
+
+    It reads nothing (`reads` False: the faces show the pattern, an output
+    its ground) on the first frame and in any frame after one nothing was
+    written: strict z⁻¹, never a stale picture. Its own size is the read
+    side's (`own_size`, row 357): a consumer of another size gets it
+    fitted by cover (`OWN_FIT`, `Renderer._refit`) — painted (`paint`) or,
+    for one that binds a texture (`image`), refitted once a frame into a
+    half-float target of its own (`<name>#fit`), so the `IMAGE` contract
+    (a picture at the frame's size) holds for every consumer."""
+
+    KIND = "delay"
+    INPUTS: ClassVar[dict[str, str]] = {}
+    OUTPUT = IMAGE
+    TIMED = False                 # no pass of its own: its write's is `delay(write)`
+
+    def _read(self, frame: Frame) -> moderngl.Texture | None:
+        """The read side's texture while the pair holds a frame, else None
+        (getattr: a renderer from before plan 34 has no delays)."""
+        get = getattr(frame.r, "delay_pair", None)
+        pair = get(self.name) if get is not None else None
+        if pair is None or not pair.holds or pair.read is None:
+            return None
+        return pair.read[0]
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        tex = self._read(frame)
+        return tuple(tex.size) if tex is not None else None
+
+    def reads(self, frame: Frame) -> bool:
+        return self._read(frame) is not None
+
+    def run(self, frame: Frame) -> None:
+        tex = self._read(frame)
+        self.said = (f"last frame's · {tex.size[0]}×{tex.size[1]} half-float"
+                     if tex is not None else "nothing yet")
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """Last frame's picture laid into `dst` by cover — or the ground
+        while it holds none, so a consumer never shows what `dst` held."""
+        tex = self._read(frame)
+        if tex is not None:
+            frame.r._refit(tex, dst, fit=OWN_FIT)
+            return
+        rect = tuple(dst.viewport)
+        dst.use()
+        frame.ctx.viewport = rect
+        frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        tex = self._read(frame)
+        if tex is not None and tuple(tex.size) == tuple(frame.size):
+            return tex
+        key = self.name + "#fit"
+        if key not in frame.data:
+            out, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f2")
+            fbo.viewport = (0, 0, *frame.size)
+            if tex is not None:
+                frame.r._refit(tex, fbo, fit=OWN_FIT)
+            else:
+                fbo.use()
+                frame.ctx.viewport = (0, 0, *frame.size)
+                frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
+            frame.data[key] = out
+        return frame.data[key]
+
+
+class DelayWrite(Node):
+    """A delay's other half (plan 34 D): `<delay>(write)`, its `image`
+    input painted into the pair's write side once a frame — before the
+    capture (`Capture.after`, as a `Wired` end) — at the size it holds
+    (`held`: its input's own size, else the frame's, row 357), cleared to
+    transparent black first. An input that reads nothing this frame leaves
+    it transparent black. A size change makes the write side again and
+    leaves the read side, so the next frame still reads the one before,
+    fitted. Timed: the SYSTEM line `delay(write)` (row 354)."""
+
+    KIND = "delay"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = None
+    TIMED = True
+    SIZED: ClassVar[frozenset[str]] = frozenset({"image"})
+
+    def __init__(self, name: str, delay: str, image: Node | None = None,
+                 after: tuple[Node, ...] = ()):
+        super().__init__(name, after, image=image)
+        self.delay = delay            # the `Delay` whose pair this writes
+
+    def held(self, frame: Frame) -> tuple[int, int]:
+        """The size it holds this frame: its input's own, else the frame's."""
+        src = self.inputs["image"]
+        own = src.own_size(frame) if src is not None else None
+        return tuple(own) if own is not None else tuple(frame.root.size)
+
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        if port == "image":
+            return self.held(frame)
+        return super().size_for(port, frame)
+
+    def run(self, frame: Frame) -> None:
+        r = frame.r
+        get = getattr(r, "delay_pair", None)
+        src = self.inputs["image"]
+        if get is None or src is None:
+            return
+        try:
+            held = self.held(frame)
+            pair = get(self.delay)
+            fbo = pair.target(frame.ctx, held)
+            fbo.viewport = (0, 0, *held)
+            fbo.use()
+            frame.ctx.viewport = (0, 0, *held)
+            frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
+            at = frame if held == tuple(frame.size) else frame.at(held)
+            if src.reads(at):
+                with frame.timed(self.name):
+                    src.paint(at, fbo)
+            pair.wrote = True
+            self.said = ""
+        except Exception as e:  # noqa: BLE001 — a delay must not take the frame down
+            # (nothing written: next frame the delay reads nothing)
+            self.said = f"{self.name}: {type(e).__name__}: {e}"[:160]
+            rebind = getattr(r, "_rebind", None)
+            if rebind is not None:
+                rebind(frame.target, frame.vp)
 
 
 # ---------------------------------------------------------------- layers
@@ -3362,9 +3528,35 @@ class Effect(Node):
                                      and frame.r.fx.ready(self.effect))
         return got
 
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        """Its `image` input's (plan 34 D, row 368): an effect after a
+        delay, a resize or an echo runs at that size, in that size's pool,
+        and is fitted into a consumer of another (`_own`). None for every
+        node of plan 33, so its paths below are the ones they always were."""
+        src = self.inputs["image"]
+        return src.own_size(frame) if src is not None else None
+
+    def _own(self, frame: Frame, own: tuple[int, int]) -> moderngl.Texture | None:
+        """This effect's picture made at its own size `own` (the root frame
+        at that size: `Frame.at`'s pool and data)."""
+        root = frame.root
+        return self.image(root if tuple(own) == tuple(root.size) else root.at(own))
+
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         src = self.inputs["image"]
         if src is None:
+            return
+        own = self.own_size(frame)
+        if own is not None and tuple(own) != tuple(frame.size):
+            # plan 34 D: made at its own size, laid in by cover
+            tex = self._own(frame, own)
+            if tex is not None:
+                frame.r._refit(tex, dst, fit=OWN_FIT)
+                return
+            rect = tuple(dst.viewport)
+            dst.use()
+            frame.ctx.viewport = rect
+            frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
             return
         if not self.on(frame):
             src.paint(frame, dst)                 # read through: no pass, no texture
@@ -3384,6 +3576,23 @@ class Effect(Node):
 
     def image(self, frame: Frame) -> moderngl.Texture | None:
         src = self.inputs["image"]
+        own = self.own_size(frame)
+        if own is not None and tuple(own) != tuple(frame.size):
+            # plan 34 D: made at its own size, refitted once a frame into a
+            # half-float target at the frame's (the `IMAGE` contract)
+            key = self.name + "#fit"
+            if key not in frame.data:
+                tex = self._own(frame, own)
+                out, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f2")
+                fbo.viewport = (0, 0, *frame.size)
+                if tex is not None:
+                    frame.r._refit(tex, fbo, fit=OWN_FIT)
+                else:
+                    fbo.use()
+                    frame.ctx.viewport = (0, 0, *frame.size)
+                    frame.ctx.clear(0.0, 0.0, 0.0, 0.0)
+                frame.data[key] = out
+            return frame.data[key]
         if not self.on(frame):
             return src.image(frame) if src is not None else None
         if self.makes:
@@ -4230,6 +4439,12 @@ def default_graph(views: list[View], wiring: Wiring | None = None,
         if wire_node_kind(w.src) == "media" and w.src not in media and w != straight:
             name = w.src if w.src not in g.nodes else f"{w.src}(wire)"
             media[w.src] = g.add(MediaNode(name, w.src.partition(".")[2]))
+    # plan 34 D: a delay a wire leaves is a source like a channel — last
+    # frame's picture, no inputs; what feeds it is its `DelayWrite`, put on
+    # with the wires (`_Wiring._put`)
+    for w in wiring.wires:
+        if wire_node_kind(w.src) == "delay" and w.src not in g.nodes:
+            g.add(Delay(w.src))
     wiring_left = _Wiring(g, wiring, layer, depth, media)
     wiring_left.run(final=False)
     _place(g, placed)
@@ -4290,6 +4505,9 @@ class _Wiring:
             return self.media.get(name)
         if kind == "switch":            # (made, above, or not yet)
             return None
+        if kind == "delay":             # plan 34 D: its read side, made with the media
+            got = g.nodes.get(name)
+            return got if isinstance(got, Delay) else None
         if kind in ("effect", "composite"):
             if name in self.makers:
                 return None
@@ -4457,6 +4675,16 @@ class _Wiring:
             return None
         if w.node in ("shape", "pattern", "backdrop"):
             return self._sink(w, src)
+        if wire_node_kind(w.node) == "delay":
+            # plan 34 D: what a delay keeps for next frame — its write, run
+            # before the capture (as a wired output's end is)
+            if not isinstance(g.nodes.get(w.node), Delay):
+                return f"{w.node} feeds nothing here: wire it out"
+            write = g.add(DelayWrite(f"{w.node}(write)", w.node, image=src))
+            cap = g.nodes.get("capture")
+            if cap is not None:
+                cap.after = (*cap.after, write)
+            return None
         out = g.nodes.get(w.node)
         if not isinstance(out, Output):
             return self._lacks(w.node)
