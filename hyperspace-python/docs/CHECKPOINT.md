@@ -19,15 +19,15 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–209 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–310 (bar
     109), built on a recommendation and waiting for the owner's keep or
     overturn; row 109 records the owner's plan 25 answers.
   - [`AUDIT-2026-09.md`](AUDIT-2026-09.md): the open defects.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–218, with the automated test behind each.
-  - [`plans/`](plans/README.md) `15-…` to `27-…`: what each plan built
+    numbered 1–276, with the automated test behind each.
+  - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`
     is the owner's wishlist the last run came from.
@@ -36,34 +36,55 @@ and a projector. It is one Python process in `hyperspace-python/`.
 
 ## Where the code stands
 
-`main` is at `56c7d44`: everything through plan 25 (the shared library
-folder), plan 22's shapes and face patterns among it. Plans 24, 26 and 27
-were run together on 2026-10-14 and are built on
-`plan-24-26-27-integration`, waiting for the owner's merge into `main`:
-the party fixes ([`plans/24-party-fixes.md`](plans/24-party-fixes.md)),
-the render graph ([`plans/26-render-graph.md`](plans/26-render-graph.md))
-and the device registry
-([`plans/27-device-registry.md`](plans/27-device-registry.md)). On that
-branch: 2190 tests pass (2 skipped), and 556 golden frames match on the
-gate Mac. No preset was edited or added. Check `git log` and the PRs for
-the current state (PR #189, the exit crash, is open beside it).
+`main` holds everything through plan 25 (the shared library folder),
+plan 22's shapes and face patterns among it, and the fixes merged since
+(the pad's share button #197, the hands' own `leapc_cffi` #201, uv's
+own Python 3.14 #206, among others). Plans 24, 26 and 27 were run
+together on 2026-10-14 and are built on `plan-24-26-27-integration`,
+waiting for the owner's merge into `main` (PR #195): the party fixes
+([`plans/24-party-fixes.md`](plans/24-party-fixes.md)), the render graph
+([`plans/26-render-graph.md`](plans/26-render-graph.md)) and the device
+registry ([`plans/27-device-registry.md`](plans/27-device-registry.md)).
+No preset was edited or added. Check `git log` and the PRs for the
+current state.
+
+**Plans 28 and 30 are built** on `plan-28-30-integration` (cut from the
+plan 24–26–27 branch with `main` merged in), waiting for the run's final
+PR into `plan-24-26-27-integration` and then the owner's merge. Plan 30, shader nodes
+([`plans/30-shader-nodes.md`](plans/30-shader-nodes.md)): every effect an
+image node, placeable by a preset on any image edge. Plan 28, the node
+editor ([`plans/28-node-editor.md`](plans/28-node-editor.md)): the
+modulation evaluated in dependency order (no one-frame lag), modifiers
+in the preset, the GRAPH page drawing and editing both graphs, a wire
+list with the outputs as nodes, the APC40 as two nodes — and, after the
+owner's first look (N7, 2026-10-20), a legible GRAPH: every node
+collapsed by default, one wire a node pair, the routes and the modifiers
+edited on GRAPH (ROUTING points there; its desk, macros, session and
+sinks stay); then the palette as a colour compression (N8, 2026-10-20).
+About 2410 tests pass (2411, 2 skipped, with N8), ruff is
+clean, and 596 golden frames match on the gate Mac, every one recorded
+before unchanged. No preset was edited or added; `apc40.py` and
+`midi.py` (Dylan's desk work) untouched.
 
 ## What is left
 
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
-  plans 24, 26 and 27 add checks 144–218.
-- **The owner's keep or overturn** on register rows 34–209 (the answer
-  sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)).
+  plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
+  220–276 (N8's palette as compression 267–271, N9's graph by concern
+  272–276). Above all: a cable dragged on the GRAPH page (247), which no
+  test can do.
+- **The owner's keep or overturn** on register rows 34–310 (the answer
+  sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
+  plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
+  299–310).
+- **Both Macs on this build before sharing presets**: an older build
+  drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory
   preset uses yet: fader sets for S1–S8, hand mappings (the dance sources,
-  the grab), dance presets, palettes, desk templates, and the factory
-  presets' graph wiring (hands in the scene, as lines, in the history);
-  touch shows.
-- **Plan 28**, the node editor: modifier nodes, a read-only then an
-  editable view of the modulation and render graphs, the outputs as
-  nodes, and evaluating the modulation in dependency order (the
-  one-frame lag stays until then).
+  the grab), dance presets, palettes and where they sit, modifier
+  patches, desk templates, and the factory presets' graph wiring (hands
+  in the scene, as lines, in the history, on one output); touch shows.
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.
@@ -71,7 +92,8 @@ the current state (PR #189, the exit crash, is open beside it).
 - **Things nobody has observed:** frame pacing with two screens; a screen
   unplugged mid-run; anything on the APC40, the hand camera, the
   projector or the glass — the registry's devices, the hands through the
-  shared camera and the golden presets by eye among them. No real hand
+  shared camera and the golden presets by eye among them; any mouse drag
+  on the GRAPH page; a placed or wired picture on a real second window. No real hand
   has been tracked: every hands picture comes from a synthetic pose or
   tape. No person has watched the lifted shapes or the Klein bottle
   turn, or seen the FACES page or the seventeen patterns on the Mac: its

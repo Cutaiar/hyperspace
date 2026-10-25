@@ -394,12 +394,18 @@ def test_the_timer_lists_the_graphs_nodes_and_drops_a_node_that_left(ctx):
         pytest.skip(f"this context has no timer queries: {r.timer.note}")
     vs = views(ctx, S(through=True))
     run(ctx, r, vs, frames=PassTimer.LAG + 2)
-    assert list(r.stats["gpu_ms"]) == r._graph.timed
+    # plan 30 D0 (decision 5): the effect that ran has its own line, in
+    # its place before its pipeline's end; the graph's static lines are
+    # the rest
+    timed = r._graph.timed
+    at = timed.index("fx(scene+hands)")
+    assert list(r.stats["gpu_ms"]) == [*timed[:at], "warp(scene+hands)", *timed[at:]]
     assert "fx(scene+hands)" in r.stats["gpu_ms"] and "composite(scene+hands)" in r.stats["gpu_ms"]
     vs[0].switches.through = False
     run(ctx, r, vs, frames=PassTimer.LAG + 1)
-    assert list(r.stats["gpu_ms"]) == r._graph.timed == [
-        "scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    assert r._graph.timed == ["scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    assert list(r.stats["gpu_ms"]) == [
+        "scene", "cover", "hands", "history", "warp", "fx", "capture", "output.1"]
 
 
 def test_a_made_image_paints_itself_one_to_one(ctx):

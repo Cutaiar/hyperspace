@@ -34,6 +34,14 @@ S = Switches
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-lines.json"
 DEFAULT = G.Wiring()
 
+
+def _bare(w: G.Wiring) -> G.Wiring:
+    """`w` without its run (plan 33 T3: every loaded preset carries its
+    run as wires, `Wiring.run`; these tests are about the rest)."""
+    from dataclasses import replace
+
+    return replace(w, run=None)
+
 # ---------------------------------------------------------------- the JSON
 
 
@@ -84,7 +92,8 @@ def test_a_graph_section_reads_and_writes_itself_plainly():
      "two hands nodes of instance 1"),
     ({"nodes": [{"kind": "hands", "into": "scene", "laid": "add"},
                 {"kind": "hands", "instance": 2}]}, "but ghost.2 makes the layer"),
-    ({"nodes": [{"kind": "effect", "file": "acid"}]}, "2 or more"),
+    # (plan 33 R21: an unplaced instance 1 reads — the file kept on no wire)
+    ({"nodes": [{"kind": "effect", "file": "acid", "instance": 0}]}, "instance 0"),
     ({"nodes": [{"kind": "effect", "file": "Acid!", "instance": 2}]}, "lower_snake_case"),
     ({"nodes": [{"kind": "effect", "instance": 2}]}, "names no file"),
     ({"nodes": [{"kind": "history"}, {"kind": "history"}]}, "two history nodes"),
@@ -337,10 +346,11 @@ def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     fx.phase["acid"] = fx.phase["acid.2"] = 0.0
     fx.advance(0.5)
     assert fx.phase["acid.2"] == 2 * fx.phase["acid"] > 0
-    assert fx.chain() == ["acid", "acid.2"]
-    reg["fx.acid.order"].set(60)
-    reg["fx.acid.2.order"].set(10)
-    assert fx.chain() == ["acid.2", "acid"]
+    # (plan 33 T7: no order of its own — where it runs is its wires; both on,
+    # a load lands them in the run by their file's @order, then by name)
+    from hyperspace.graphmigrate import wiring_of
+    assert wiring_of(fx).run == ("acid", "acid.2")
+    assert "fx.acid.2.order" not in reg
     # a hot edit re-declares the acid file: the second keeps its ids
     declare(reg, fx, {"acid"})
     assert "fx.acid.2.twist" in reg and reg["fx.acid.2.twist"].value == 1.7
@@ -383,9 +393,12 @@ def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
         rig.lib.load(PRESETS, slug)
         name = rig.lib.current(PRESETS)
         assert not [n for n in rig.presets.notes if n.startswith("graph")], slug
-        assert rig.presets.graph.spec is None and stub.wiring == DEFAULT
+        # plan 33 T3: the run as wires, the file's section (none) kept
+        assert rig.presets.graph.doc is None and _bare(stub.wiring) == DEFAULT
+        assert stub.wiring.run is not None
         assert preset.GRAPH_KEY not in rig.presets.document(name)
-        assert rig.presets.signature()[4] is None
+        # (plan 33 T3: the dirty dot reads the section as wires — the run)
+        assert json.loads(rig.presets.signature()[4])["wires"][-1]["to"] == "fx.image"
         assert not rig.lib.is_dirty(PRESETS), slug
 
 
@@ -401,7 +414,8 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     rig.presets.graph.attach(stub)
     missing = rig.lib.load(PRESETS, "hands-lines")
     assert missing == [] and rig.presets.notes == []
-    assert stub.wiring == G.Wiring(hands="scene", history="scene+hands", draw="lines")
+    assert _bare(stub.wiring) == G.Wiring(hands="scene", history="scene+hands", draw="lines")
+    assert stub.wiring.run == ("acid",)            # plan 33 T3: its run, as wires
     assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
@@ -411,7 +425,7 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
         in text
     # another preset with no graph: back to the default, the section gone
     rig.lib.load(PRESETS, "party-tumble")
-    assert stub.wiring == DEFAULT and rig.presets.graph.doc is None
+    assert _bare(stub.wiring) == DEFAULT and rig.presets.graph.doc is None
 
 
 def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
@@ -445,17 +459,17 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
         "fx.on": True, "fx.acid.on": True, "fx.acid.twist": 0.3,
         "fx.acid.2.on": True, "fx.acid.2.twist": 1.9, "fx.acid.2.order": 70})
     missing = rig.lib.load(PRESETS, "Twice")
-    reg, fx = rig.reg, rig.reg.fx_state
+    reg = rig.reg
     assert missing == [] and rig.presets.notes == []
     assert reg["fx.acid.twist"].value == 0.3 and reg["fx.acid.2.twist"].value == 1.9
-    assert fx.chain() == ["acid", "acid.2"]
+    assert G.run_of(rig.presets.graph.spec) == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
     assert doc["graph"] == graph and doc["values"]["fx.acid.2.twist"] == 1.9
     # an id of an instance the graph does not hold is unknown, as ever
     put(rig.home, "Stray", values={"fx.acid.3.twist": 1.0})
     assert rig.lib.load(PRESETS, "Stray") == ["fx.acid.3.twist"]
-    assert "fx.acid.2.twist" not in reg and fx.chain() == []
+    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec) == ()
     rig.lib.load(PRESETS, "Twice")
     assert reg["fx.acid.2.twist"].value == 1.9
 
@@ -524,7 +538,8 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
         assert reg["fx.acid.2.twist"].value == 1.9
         missing = rig.lib.load(PRESETS, other)
         assert missing == ["fx.acid.2.twist"] and rig.lib.current(PRESETS) == other
-        assert "fx.acid.2.twist" not in reg and rig.presets.graph.spec is None
+        gs = rig.presets.graph            # (plan 33 T3: Plain's spec is its bare run)
+        assert "fx.acid.2.twist" not in reg and (gs.spec is None or not gs.spec.effect_counts())
         assert any("unknown id(s): fx.acid.2.twist" in n for n in rig.presets.notes)
     # a raise after the graph landed (not a value error): the graph that
     # was there comes back, with its instances' values, and the load stops
@@ -607,7 +622,7 @@ def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
     settle(rig)
     assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
     assert rig.undo.undo()
-    assert "fx.acid.2.twist" not in rig.reg and stub.wiring == DEFAULT
+    assert "fx.acid.2.twist" not in rig.reg and _bare(stub.wiring) == DEFAULT
     assert rig.undo.redo()
     assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
 
@@ -634,15 +649,18 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
     import numpy as np
     from test_outputs import rig, run, views
 
+    from hyperspace.graphmigrate import wiring_of
+
     one = rig(ctx, effects=("acid",), hands=False)
     a = run(ctx, one, views(ctx, S()))[0]
     two = rig(ctx, effects=("acid",), hands=False)
     fx = two.fx.state
     fx.set_instances({"acid": 2})
     fx.values["acid.2"].update(on=True, twist=1.5)
+    two.wiring = wiring_of(fx)                   # plan 33 R23: both in the run
     b = run(ctx, two, views(ctx, S()))[0]
     assert two.stats["chain_runs"] == 1 and not np.array_equal(a, b)
-    assert list(two.fx._progs) == ["acid"] and fx.chain() == ["acid", "acid.2"]
+    assert list(two.fx._progs) == ["acid"] and two.wiring.run == ("acid", "acid.2")
     # the second acid's own params act: the same rig twice, only
     # acid.2's twist changed (acid's values untouched) — another frame
     first = dict(fx.values["acid"])
@@ -653,6 +671,7 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
         st.set_instances({"acid": 2})
         st.values["acid"].update(first)
         st.values["acid.2"].update(on=True, twist=twist)
+        r.wiring = wiring_of(st)
         return run(ctx, r, views(ctx, S()))[0], st
 
     c, st_c = frame(0.2)
@@ -719,3 +738,20 @@ def test_hands_as_lines_draw_their_edges(ctx):
         # the edges: inside a solid hand some pixels are the ground now
         assert (drawn(solid) & ~drawn(lines)).sum() > 0
     assert ctx.wireframe is False
+
+
+def test_the_new_ends_round_trip():
+    """Plan 33 G: frame, fx.image, pattern, shape.faces, backdrop.image and
+    switch.2 read and write back equal."""
+    section = {"nodes": [{"kind": "switch"}, {"kind": "switch", "instance": 2}],
+               "wires": [{"from": "frame", "to": "acid.image"},
+                         {"from": "acid", "to": "fx.image"},
+                         {"from": "media.a", "to": "switch.in1"},
+                         {"from": "switch", "to": "pattern.media"},
+                         {"from": "pattern", "to": "shape.faces"},
+                         {"from": "media.b", "to": "switch.2.in1"},
+                         {"from": "switch.2", "to": "backdrop.image"}]}
+    spec = G.read_graph(section)
+    assert not spec.notes
+    assert spec.to_json() == section
+    assert G.read_graph(spec.to_json()) == spec

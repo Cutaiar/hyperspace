@@ -483,7 +483,7 @@
             amber: the three planes involving W, the fourth axis · teal: the three ordinary 3D planes
           </text>
           <text class="fnt" x="6" y="288" font-size="10" letter-spacing=".8">
-            on a masked 3D shape (the Heart) the amber planes fold at draw time: ZW → XY · XW → XZ · YW → YZ
+            on a 3D shape (the Heart, the solids) the amber planes do nothing: it has no W to turn through
           </text>
           <text class="fnt" x="6" y="306" font-size="10" letter-spacing=".8">
             faces input: the same lane also pushes pattern input i, at depth 0.35 (routing.PATTERN_DEPTH) on a base of 1
@@ -497,11 +497,10 @@
         three-dimensional analogue and reads as the shape turning through itself.
         The <code>dir</code> column flips a band's sense so adjacent bands do not
         visually cancel. The map is six routes onto <code>rot.rate.*</code>
-        (<code>routing.legacy6_routes</code>), so a preset can re-aim it. A shape
-        kept in 3D cannot turn through <code>W</code>, so for it alone the W
-        planes' angles are added onto 3D planes where it is drawn
-        (<code>geometry.view_angles</code>): SUB rolls it, BASS spins it about the
-        vertical, MIDB tumbles it. No parameter changes. Each lane also pushes
+        (<code>routing.legacy6_routes</code>), so a preset can re-aim it. A 3D
+        shape has no <code>W</code>, so the W planes do nothing to it
+        (<code>geometry.view_angles</code>): only the three upper bands turn it.
+        No parameter changes. Each lane also pushes
         the face-pattern input at its own index — SUB swells the pattern's
         scale, BASS flashes its glow, and so on (<code>patterns.py</code>); inputs
         6 and 7, HUE and SPREAD, are left for an LFO, a macro or a knob.
@@ -569,7 +568,7 @@
           <g font-size="11" class="soft">
             <text x="16" y="186">audio band lanes</text>
             <text x="16" y="203">hands (Ultraleap)</text>
-            <text x="16" y="220">LFOs · clock</text>
+            <text x="16" y="220">LFOs · envelopes · seq</text>
             <text x="16" y="237">DAW in · OSC faders</text>
           </g>
 
@@ -703,8 +702,8 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Routing table</div><div class="mods">routing</div></div>
-        <div class="what">The binding rows, the referee, the desk's two layers, the macros, and the one per-frame modulation pass. <span>Imports nothing above it.</span></div>
+        <div><div class="name">Routing table</div><div class="mods">routing · patch · modifiers</div></div>
+        <div class="what">The binding rows, the referee, the desk's two layers, the macros, the preset's modifiers, and the one per-frame modulation pass — the table run as a graph, each node after what it reads. <span>Imports nothing above it.</span></div>
         <div class="chip c-offset">Offset</div>
       </div>
       <div class="rrow">
@@ -723,23 +722,23 @@
         <div class="chip c-offset">Lanes</div>
       </div>
       <div class="rrow">
-        <div><div class="name">LFOs &amp; clock</div><div class="mods">lfo · tempo</div></div>
-        <div class="what">Four oscillators and one tap-tempo clock. Leaves — the registry, router and clock all arrive as arguments.</div>
+        <div><div class="name">LFOs, envelopes, sequencer &amp; clock</div><div class="mods">modbank · lfo · envelope · sequencer · tempo</div></div>
+        <div class="what">Two modulator banks of voices by stable id, up to sixteen each — the oscillators (four by default) and the AHDSR envelopes (1–5 always there) — a step sequencer of five lanes × eight steps read straight off the clock, firing each lane's envelope at each step's exact time, and one tap-tempo clock. Leaves, or leaves but for the bank — the registry, router and clock all arrive as arguments.</div>
         <div class="chip c-offset">Feed</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Render stack</div><div class="mods">geometry · view · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
-        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
+        <div><div class="name">Render stack</div><div class="mods">geometry · view · field · graph · render · glsl · fx · lookback · dream · ghost · outputs · overlay</div></div>
+        <div class="what">GL resources, the shared camera the shape and the hands are seen through, the instance field, the frame history, the dream worker, the faces' picture. <span>Imports no registry at all.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
         <div><div class="name">Graph</div><div class="mods">graph</div></div>
-        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, the effect chain, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
+        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. An effect can sit on any image edge. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Panel</div><div class="mods">ui · ui_* · hands/panel · control</div></div>
-        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal.</div>
+        <div><div class="name">Panel</div><div class="mods">ui · ui_* · ui_graph · graphview · hands/panel · control</div></div>
+        <div class="what">The imgui control window — pages, the routing editor, the band and FX editors, the Replace-or-Keep modal, the GRAPH page: both graphs on one node-editor canvas, edited by dragging cables through the table's own calls, and the SEQ page's step grid in the APC40's LED colours.</div>
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
@@ -788,23 +787,29 @@
       <div class="step"><div class="n">6</div><div class="d">Mouse — orbit, pan, zoom</div><div class="chip c-base">base</div></div>
       <div class="step"><div class="n">7</div><div class="d">Audio step and publish — the band lanes</div><div class="chip c-offset">feed</div></div>
       <div class="step"><div class="n">8</div><div class="d">Devices feed — <b>devices.feed()</b>: the hands, the DAW bridge's external lanes, OSC faders</div><div class="chip c-offset">feed</div></div>
-      <div class="step"><div class="n">9</div><div class="d">LFOs step and publish</div><div class="chip c-offset">feed</div></div>
-      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — every live performer row, in table order</div><div class="chip c-offset">offset</div></div>
+      <div class="step"><div class="n">9</div><div class="d">Inside step 10: every bank begins (a held trigger lands), then the sequencer steps — each crossed step fires its envelope at the step's exact time — then each LFO and envelope steps at its own node</div><div class="chip c-offset">feed</div></div>
+      <div class="step mark"><div class="n">10</div><div class="d"><b>router.modulate()</b> — the patch in dependency order: LFOs and envelopes, modifiers, then every live performer row at its param's node; a param something later reads lands there and then</div><div class="chip c-offset">offset</div></div>
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a masked shape's W planes fold here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 
-    <h3>One frame of lag, deliberately</h3>
+    <h3>Dependency order, no lag</h3>
     <p>
-      Anything that <em>reads</em> a parameter while sources are being gathered —
-      an LFO reading its own depth, a route scaled by a macro — sees what
-      <code>apply()</code> wrote last frame. That is what makes the pass
-      non-recursive: nothing in it reads a value it is about to write. The
-      sinks run after <code>apply()</code>, so what goes out to the DAW is this
-      frame's value. Each block, and each device, is also individually guarded,
+      The modulation pass runs the routing table as a graph, each node after
+      everything it reads. An LFO is a source with inputs: its knobs land,
+      then it steps. A scale or a macro behind a route lands before the route
+      that reads it. So an LFO owning another LFO's depth, a macro scaling a
+      push, a hand on a modifier's release all act <em>this</em> frame —
+      every factory preset lands the same values as before, a frame earlier
+      where it was late. Nothing reads a stale value but through a delay
+      node: a loop with no delay in it keeps its last cable off, with a note
+      on the routing page; a delay closing a loop makes it exactly one frame
+      late. A parameter landed in the pass is never applied twice. The
+      sinks still run after <code>apply()</code>, so what goes out to the DAW
+      is this frame's value. Each block, and each device, is also individually guarded,
       so hot-reloaded code that raises records the error and the loop carries on
       drawing.
     </p>
@@ -857,10 +862,13 @@
       <div class="sub">
         <h4>Effects</h4>
         <p>Each shader file in the effects folder <em>is</em> an effect: its
-        uniforms become parameters automatically. An effect aims either at the
-        whole frame or at the polytope's faces, which can show the picture per
-        face or in screen space.</p>
-        <span class="path">fx · glsl · shaders/fx/*.glsl · ui_fx</span>
+        uniforms become parameters automatically. On the frame each effect is
+        a node of the render graph — bitmap in, bitmap out, off ones read
+        straight through — and a preset can place one anywhere there is a
+        picture: on the hands only, on one output only, before the trail. An
+        effect can instead aim at the polytope's faces, which can show the
+        picture per face or in screen space.</p>
+        <span class="path">fx · graph · glsl · shaders/fx/*.glsl · ui_fx</span>
       </div>
       <div class="sub">
         <h4>Look-back &amp; dream</h4>
@@ -901,22 +909,49 @@
         <span class="path">ghost · graph</span>
       </div>
       <div class="sub">
+        <h4>Modulation as a graph</h4>
+        <p>Every route, macro subscriber, scale, LFO and envelope knob is an edge
+        between sources, LFOs, envelopes, modifiers, macros and parameters, sorted once
+        when the table changes and run each frame in that order. Modifiers —
+        curve, scale, smooth, combine, threshold, delay — sit between a
+        source and a route, live in the preset, and publish a lane a route
+        reads like any other. A loop runs only through a delay.</p>
+        <span class="path">patch · modifiers · routing · ui_routing</span>
+      </div>
+      <div class="sub">
+        <h4>The node editor</h4>
+        <p>One canvas for both graphs: the controllers (the APC40 as two
+        nodes, a layer each; a desk template as one collapsible node; a
+        missing device as a grey placeholder by role), the LFOs, the
+        envelopes, the sequencer (its lanes' envelopes as cables), the
+        modifiers, the macros, the parameters under the render node that
+        owns them, the render graph's image cables and the outputs. A cable
+        dragged is the row a Learn would make, or a wire in the preset's
+        graph; Learn starts from a port. Positions live in the preset and
+        the show.</p>
+        <span class="path">graphview · ui_graph · imgui_node_editor</span>
+      </div>
+      <div class="sub">
         <h4>Render graph</h4>
         <p>The frame as wired nodes: the shape, the hands and a point cloud
         share one fixed camera with a depth buffer, so a hand can pass between
         the shape's edges. Zoom and pan move only the shape, in the world. A
         preset can say its wiring in its file — the hands in the scene or as a
-        layer, an effect twice — and 556 golden frames pin every factory
-        preset's picture to the byte.</p>
+        layer, an effect twice, an effect placed on one edge, a wire that gives
+        one output its own picture or its own hands — and 596 golden frames pin
+        every factory preset's picture, and the fixture presets', to the
+        byte.</p>
         <span class="path">graph · render · geometry · tools/golden_frames</span>
       </div>
       <div class="sub">
         <h4>Shapes in four dimensions</h4>
-        <p>Twenty-six shapes. A cell count of zero marks a surface, not a 3D
-        shape: the Clifford torus is a surface native to 4D. Each shape says how
-        it fills <code>W</code> — native, lifted into it by a function of its own
-        parameters, or masked: kept 3D, its W planes folded onto 3D ones as it is
-        drawn. Only the Heart is masked.</p>
+        <p>Ninety-nine shapes, in families the Shape menu groups under 4D, 3D and
+        Scenes. Each says honestly whether it is 4D or 3D
+        (<code>Shape.dims</code>): a 4D shape turns through <code>W</code>; a 3D
+        shape sits at w = 0 and the W planes leave it alone. A cell count of
+        zero marks a surface, not a 3D shape: the Clifford torus is a surface
+        native to 4D. A scene is several shapes in one frame; the 3D switch
+        holds a 4D shape's pose and turns it rigidly in 3D.</p>
         <span class="path">geometry · render · tools/turntable</span>
       </div>
       <div class="sub">
@@ -934,7 +969,7 @@
   <!-- ══ 07 ═════════════════════════════════════════════════════════ -->
   <section>
     <div class="shead"><span class="num">07</span><h2>The boundaries are tested, not intended</h2></div>
-    <p class="dek">What keeps a 41,800-line single process from turning into a knot.</p>
+    <p class="dek">What keeps a 48,900-line single process from turning into a knot.</p>
 
     <div class="col">
       <p>
@@ -952,10 +987,11 @@
         anything may import them — are named explicitly:
         <code>analysis</code>, <code>tapers</code>, <code>undo</code>,
         <code>placement</code>, <code>geometry</code>,
-        <code>tempo</code>, <code>lfo</code>, <code>glsl</code>,
+        <code>tempo</code>, <code>modbank</code>, <code>sequencer</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
-        <code>watchdog</code>, and the hands package's signal and tape
-        modules.
+        <code>watchdog</code>, <code>patch</code> (the modulation graph's
+        sorter), and the hands package's signal and tape modules; <code>lfo</code>
+        and <code>envelope</code> import only <code>modbank</code>.
       </p>
 
       <h3>The hands package is built to be removed</h3>
@@ -979,10 +1015,10 @@
     </div>
 
     <div class="stats">
-      <div class="stat"><div class="v">56</div><div class="k">Python modules</div></div>
-      <div class="stat"><div class="v">41,792</div><div class="k">lines of app</div></div>
-      <div class="stat"><div class="v">46,985</div><div class="k">lines of tests</div></div>
-      <div class="stat"><div class="v">80</div><div class="k">test files</div></div>
+      <div class="stat"><div class="v">65</div><div class="k">Python modules</div></div>
+      <div class="stat"><div class="v">53,048</div><div class="k">lines of app</div></div>
+      <div class="stat"><div class="v">57,014</div><div class="k">lines of tests</div></div>
+      <div class="stat"><div class="v">100</div><div class="k">test files</div></div>
       <div class="stat"><div class="v">26</div><div class="k">shapes</div></div>
       <div class="stat"><div class="v">13</div><div class="k">effects</div></div>
     </div>
@@ -999,7 +1035,9 @@
     both in the same PR.<br>
     Drawn from the component map and the frame order; counts measured from the
     tree (modules and lines: every .py under hyperspace/ and under tests/;
-    test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib).
+    test files: tests/test_*.py; effects: shaders/fx/*.glsl but _lib;
+    shapes: geometry.SHAPES; patterns: patterns.MODES, seventeen),
+    re-measured after plan 31 on plan-31-integration, at c81a9d9.
     Band-to-plane map from hyperspace/bands.py and routing.legacy6_routes;
     shapes from geometry.SHAPES; patterns and their inputs from patterns.py; the liftable-package rule
     from hyperspace/hands/__init__.py and tests/test_hands_boundary.py.

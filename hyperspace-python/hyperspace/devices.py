@@ -108,7 +108,9 @@ RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
 WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
-BUILTIN_SCHEMES = ("lane", "lfo")           # fed by the analyzer and the LFOs, not a device
+# fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
+# not a device
+BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
 
 
 def retry_after(misses: int) -> float:
@@ -568,6 +570,7 @@ class PadDevice(Base):
         super().__init__(role, entry, ctx, io=io)
         self._taken = False      # this frame's press completed a learn
         self._dt = 0.0
+        self._dialed: set[str] = set()   # the sticks a route reads as a dial (last `act`)
 
     @property
     def joystick(self) -> int | None:
@@ -577,8 +580,13 @@ class PadDevice(Base):
         return j if isinstance(j, int) and not isinstance(j, bool) and j >= 0 else None
 
     def open(self) -> None:
-        from .gamepad import Claims, Pad
+        from .gamepad import DIAL_MODES, Claims, Pad
         self.io = Pad(usb=bool(self.entry.get("usb", True)))
+        # where each stick's dial reading starts (`dial_left` / `dial_right`)
+        for stick, key in (("L", "dial_left"), ("R", "dial_right")):
+            mode = self.entry.get(key)
+            if mode in DIAL_MODES:
+                self.io.dial_modes[stick] = mode
         claims = getattr(self.ctx, "pads", None)
         if claims is None:
             claims = self.ctx.pads = Claims()
@@ -645,8 +653,11 @@ class PadDevice(Base):
             return False
         from . import gamepad
         q = self.qualifier
-        self._taken = bool(gamepad.learn_from(self.io, learn, role=q) if q else
-                           gamepad.learn_from(self.io, learn))
+        # a stick a route already reads as a dial learns its sectors (the
+        # routes as the last frame's `act` saw them: Learn runs before it)
+        dialed = self.__dict__.get("_dialed", set())
+        self._taken = bool(gamepad.learn_from(self.io, learn, role=q, dials=lambda: dialed)
+                           if q else gamepad.learn_from(self.io, learn, dials=lambda: dialed))
         return self._taken
 
     def act(self, router) -> None:
@@ -658,15 +669,22 @@ class PadDevice(Base):
         if io is None:
             return
         q = self.qualifier
+        from . import gamepad
+        # the sticks a route reads as a dial, for the next frame's Learn
+        # (gamepad.dialed); asked only while the pad is there, once a frame
+        claimed = getattr(router, "claimed", None)     # duck-typed: a shim may have none
         if q:
             router.pad(io, buttons=not self._taken, role=q)
+            if io.on and claimed is not None:
+                self._dialed = gamepad.dialed(claimed(f"axis@{q}") or ())
             return
         router.pad(io, buttons=not self._taken)
         if io.on:
-            from . import gamepad
+            routed = (claimed("axis") or ()) if claimed is not None else ()
+            self._dialed = gamepad.dialed(routed)
             reg = self.ctx.reg if self.ctx.reg is not None else getattr(router, "reg", None)
             if reg is not None:
-                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0))
+                gamepad.steer(io, router, reg, self.__dict__.get("_dt", 0.0), routed=routed)
 
     def targets(self) -> list[tuple]:
         return [(self.io, "gamepad", "Pad")] if self.io is not None else []
@@ -1139,12 +1157,16 @@ class CloudDevice(Base):
 
 def kinds() -> dict[str, type[Base]]:
     """The kinds the registry knows: `[[devices]] kind` → the device class.
-    B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else
+    B3 adds "midi-out", B4 adds "osc" and "cloud", plan 32 T8 the live
+    media kinds "ndi", "syphon" and "camera" — here and nowhere else
     (a new kind is one line here and its own class: no edit to `app.py`).
     The hands' device lives in its own package (`hands/device.py`, plan 27
     B2), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
+    from .media.camera import CameraKind  # (each imports its library only in a scan or open)
+    from .media.ndi import NdiKind
+    from .media.syphon import SyphonKind
     from .osc import OscDevice  # (osc.py imports pythonosc only when a server opens)
     return {
         "midi": MidiDevice,
@@ -1154,6 +1176,9 @@ def kinds() -> dict[str, type[Base]]:
         "midi-out": MidiOutDevice,          # plan 27 B3: a sink alone
         "osc": OscDevice,
         "cloud": CloudDevice,
+        "ndi": NdiKind,                     # plan 32 T8: live media feeds, `media_feeds`
+        "syphon": SyphonKind,
+        "camera": CameraKind,
     }
 
 
@@ -1318,7 +1343,7 @@ class DeviceRegistry:
 
     def continuous_schemes(self) -> tuple[str, ...]:
         """The schemes a route can read as a lane, in offer order: the
-        built-in `lane` (the analyzer) and `lfo` first, then each listed
+        built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
         device's `feeds` in list order (an `off` device's too, so a preset
         row naming it stays a dormant route, not an unknown one). What the
         Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
@@ -1463,6 +1488,23 @@ class DeviceRegistry:
             c = getattr(d, "cloud", None)
             if c is not None and d.role in self._opened:
                 out[f"{CLOUD_SCHEME}:{d.role}"] = c
+        return out
+
+    def media_feeds(self) -> dict:
+        """The live media feeds the open devices have found (plan 32 T8),
+        as source id → `media.live.LiveSource`, in list order (the first
+        device to find an id keeps it) — what the app's media resolver
+        answers `live(sid)` from. Each device's dict is made by its own
+        scan, off the frame thread, so this is lookups only: the MEDIA page
+        asks it every frame. Not through the Router: a picture is not a
+        scalar lane."""
+        out: dict = {}
+        for d in self.devices:
+            fn = getattr(d, "media_sources", None)
+            if fn is None or d.role not in self._opened:
+                continue
+            for sid, src in fn().items():
+                out.setdefault(sid, src)
         return out
 
     def lines(self) -> list[tuple[str, str, str, int, str]]:

@@ -47,7 +47,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from hyperspace import apc40, learn, lfo, routing, tempo
+from hyperspace import apc40, envelope, learn, lfo, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -139,6 +139,8 @@ def boot(home: Path) -> SimpleNamespace:
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    envelope.register(reg, envelope.Envelopes(), clock)      # plan 31: seq-demo's ids
+    sequencer.register(reg, sequencer.Sequencer(), clock)
     table = Bindings.load(None, legacy_midi=None)
     routing.register_desk(reg, table)
     lib.attach(reg)
@@ -152,6 +154,8 @@ def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
     rig.presets.load(name)
     reg, table = rig.reg, rig.table
     values = reg.snapshot()
+    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    media = learn.faces_media(rig.presets.graph.spec, getattr(reg, "switch_state", None))
     on: dict[str, Binding] = {}
     for b in table.desk():
         if b.enabled:
@@ -164,7 +168,7 @@ def coverage_of(rig, name: str, controls: list[apc40.Control]) -> Row:
             cells.append(Cell(c.glyph, DARK))
             continue
         why = "no such param" if reg.get(b.target) is None else learn.cannot_show(
-            b.target, values)
+            b.target, values, media)
         cells.append(Cell(c.glyph, DEAD if why else MAPPED, b.target, why or ""))
     glyphs = {c.glyph for c in controls}
     extra = sorted({f"{g} → {b.target}" for g, b in on.items() if g not in glyphs},

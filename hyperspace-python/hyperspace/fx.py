@@ -1,4 +1,4 @@
-"""Effects — a stack of fullscreen shader passes over the finished frame.
+"""Effects — fullscreen shader passes, each where the graph wires it.
 
 An effect is one GLSL file in ``hyperspace/shaders/fx/``: a function
 ``vec4 effect(vec2 uv)`` plus the uniforms it reads, each annotated so the
@@ -13,7 +13,7 @@ The file format (see any file in the folder; ``_lib.glsl`` holds the
 helpers every effect can call)::
 
     // @label  Trip warp            the name on the page
-    // @order  20                   where it sits in the stack (low runs first)
+    // @order  20                   read only by the migration (below)
     // @blend  mix                  mix | add | screen | multiply — how its
                                     output lands on its input
     // @speed  1                    the default time rate
@@ -25,29 +25,28 @@ helpers every effect can call)::
     vec4 effect(vec2 uv) { return src(uv + …); }
 
 ``@param lo hi default [log] [wrap] "Label" tip`` — the uniform name
-without its ``u_`` is the id suffix. Every effect also gets six params
+without its ``u_`` is the id suffix. A discrete choice (plan 30 N8) is
+``uniform int u_mode; // @param choice [compress|gradient] 0 "Mode" tip``:
+the names in brackets, ``|`` between them, then the default's index — an
+enum param the strips draw as a picker (a combo), never a slider; the
+uniform gets the index. Every effect also gets four params
 of its own: ``on``, ``mix`` (wet/dry against its input), ``speed`` (the
 rate its clock ``u_phase`` runs at — integrated here, so a lane riding
-the speed never jumps the phase), ``blend``, ``order`` and ``target``.
-Three more are the stack's: ``fx.on`` (bypass everything), ``fx.mix``
-(scales every effect's mix — one fader that fades the whole trip in) and
-``fx.face_map`` (below).
+the speed never jumps the phase) and ``blend``. Three more are every
+effect's: ``fx.on`` (bypass everything), ``fx.mix`` (scales every
+effect's mix — one fader that fades the whole trip in) and
+``fx.face_map`` (how the faces show a picture wired into them).
 
-An effect is aimed at one of two targets (plan 20): the **frame**, as
-below, or the **faces** — the effects aimed there run as a second chain
-over a fixed-size picture of what a face shows, and the face shader draws
-that picture on every face (render.py, ``Renderer._face_picture``),
-mapped per face or in screen space (``fx.face_map``). The two chains are
-two ``FxChain`` s over one ``FxState``: the second borrows the first's
-programs (one compile and one error line per effect), and the clocks
-advance once a frame whichever runs (``FxState.advance_to``).
-
-The frame (render.py): the scene is drawn, the look-back composites it
-into the first of two ping-pong textures instead of the window, each
-active effect reads one and writes the other, and the last writes the
-window. With no effect on the chain is not in the path at all and the
-output is bit-identical to before. The look-back captures the scene, not
-the effected frame, so echoes are never warped twice.
+Plan 33 (rows 341–349): an effect exists where the preset's graph wires
+it — the run ``frame → … → fx.image`` each pipeline draws, a branch onto
+the faces (``shape.faces``), the pattern's layer, the backdrop, an output
+or another effect's ``aux`` — and nowhere else. There is no stack: no
+``order`` and no ``target`` param (an old preset's are read as wires by
+``graphmigrate``, which is all a file's ``@order`` is still for), and the
+render graph runs each effect as a node (``graph.Effect``: one pass,
+``FxChain.run_one``). With no effect wired the frame is bit-identical to
+before. The look-back captures the scene, not the effected frame, so
+echoes are never warped twice.
 
 Colour stays premultiplied (overlay.py clears to see-through): after its
 blend a pass lifts alpha to cover its own colour, so a generator painting
@@ -72,18 +71,21 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 FX_DIR = Path(__file__).parent / "shaders" / "fx"
 LIB_FILE = "_lib.glsl"          # helpers prepended to every effect; not an effect
 BLENDS = ["mix", "add", "screen", "multiply"]
-TARGETS = ["frame", "faces"]    # fx.<name>.target's choices: what an effect runs on
-FRAME, FACES = 0, 1
 FACE_MAPS = ["per face", "screen"]   # fx.face_map's choices: how the faces show their picture
 PER_FACE, SCREEN = 0, 1
-RESERVED = {"on", "mix", "speed", "blend", "order", "target"}   # the per-effect params' names
-MAX_ORDER = 99
+# the per-effect params' names — and `order` / `target`, retired (plan 33)
+# but still in old presets as `fx.<n>.order`: a uniform of either name
+# would read as the retired id, so neither is ever a key
+RESERVED = {"on", "mix", "speed", "blend", "order", "target"}
 SPEED_MAX = 8.0
 RELOAD_EVERY = 30               # frames between mtime checks of the folder
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 _DIRECTIVE = re.compile(r"^\s*//\s*@(label|order|blend|speed|mix|tip)\s+(.*?)\s*$")
 _UNIFORM = re.compile(r"^\s*uniform\s+(float|int)\s+(u_\w+)\s*;\s*//\s*@param\s+(.*?)\s*$")
+_CHOICE = re.compile(
+    r"^choice\s+\[(?P<names>[^\]]*)\]\s+(?P<default>\d+)\s+\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
+)
 _PARAM = re.compile(
     r"^(?P<nums>(?:[-+]?[\d.]+(?:[eE][-+]?\d+)?\s+){3})"
     r"(?P<flags>(?:(?:log|wrap)\s+)*)\"(?P<label>[^\"]+)\"\s*(?P<tip>.*)$"
@@ -116,6 +118,7 @@ class ParamSpec:
     log: bool = False
     wrap: bool = False
     tip: str = ""
+    choices: tuple[str, ...] = ()   # a discrete choice's names (`@param choice`): an enum
 
 
 @dataclass
@@ -126,6 +129,8 @@ class EffectSpec:
     label: str
     source: str
     params: list[ParamSpec] = field(default_factory=list)
+    # `@order`: no part in anything drawn (plan 33) — the stack position an
+    # old preset naming none had, which `graphmigrate` reads it as
     order: int = 50
     blend: int = 0
     speed: float = 1.0
@@ -135,8 +140,20 @@ class EffectSpec:
     def signature(self) -> tuple:
         """What the registry declares from this spec — a change means re-declare."""
         return (self.label, self.tip, self.order, self.blend, self.speed, self.mix,
-                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip)
+                tuple((p.key, p.label, p.lo, p.hi, p.default, p.integer, p.log, p.wrap, p.tip,
+                       p.choices)
                       for p in self.params))
+
+
+def _check_key(name: str, n: int, key: str, seen: set[str]) -> None:
+    if key in RESERVED or key in seen:
+        raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
+    if key.isdecimal():
+        # the naming rule (plan 26 A0/A4): a purely decimal segment
+        # right after `fx.<file>` is an instance marker — `fx.acid.2`
+        # is the second acid — so no key may be one
+        raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
+                        "instance number (fx.<file>.2 is the second instance)")
 
 
 def parse(name: str, source: str) -> EffectSpec:
@@ -155,7 +172,7 @@ def parse(name: str, source: str) -> EffectSpec:
                 elif key == "tip":
                     spec.tip = f"{spec.tip} {val}".strip()
                 elif key == "order":
-                    spec.order = max(0, min(int(val), MAX_ORDER))
+                    spec.order = max(0, min(int(val), 99))     # an old stack's 0…99
                 elif key == "speed":
                     spec.speed = float(val)
                 elif key == "mix":
@@ -171,20 +188,30 @@ def parse(name: str, source: str) -> EffectSpec:
                 raise SpecError(f"{name}:{n}: @param needs 'uniform float|int u_name;' before it")
             continue
         typ, uniform, body = m.groups()
+        key = uniform[2:]
+        cm = _CHOICE.match(body)
+        if cm or body.startswith("choice"):
+            if not cm:
+                raise SpecError(f'{name}:{n}: @param choice wants [a|b|…] default "Label" tip')
+            if typ != "int":
+                raise SpecError(f"{name}:{n}: u_{key} is a choice, so its uniform is an int")
+            names = tuple(c.strip() for c in cm["names"].split("|"))
+            if len(names) < 2 or not all(names) or len(set(names)) < len(names):
+                raise SpecError(f"{name}:{n}: u_{key} needs two or more distinct choices")
+            _check_key(name, n, key, seen)
+            seen.add(key)
+            spec.params.append(ParamSpec(
+                key=key, uniform=uniform, label=cm["label"], lo=0.0, hi=float(len(names) - 1),
+                default=float(min(int(cm["default"]), len(names) - 1)), integer=True,
+                tip=cm["tip"].strip(), choices=names,
+            ))
+            continue
         pm = _PARAM.match(body + " ")
         if not pm:
             raise SpecError(f'{name}:{n}: @param wants lo hi default [log] [wrap] "Label" tip')
         lo, hi, default = (float(x) for x in pm["nums"].split())
         flags = pm["flags"].split()
-        key = uniform[2:]
-        if key in RESERVED or key in seen:
-            raise SpecError(f"{name}:{n}: u_{key} — {key!r} is taken")
-        if key.isdecimal():
-            # the naming rule (plan 26 A0/A4): a purely decimal segment
-            # right after `fx.<file>` is an instance marker — `fx.acid.2`
-            # is the second acid — so no key may be one
-            raise SpecError(f"{name}:{n}: u_{key} — a key of digits alone would read as an "
-                            "instance number (fx.<file>.2 is the second instance)")
+        _check_key(name, n, key, seen)
         if not lo < hi:
             raise SpecError(f"{name}:{n}: u_{key} needs lo < hi")
         if "log" in flags and lo <= 0:
@@ -203,8 +230,8 @@ def parse(name: str, source: str) -> EffectSpec:
 class FxState:
     """The fx.* params' object: the specs on disk, their values, their clocks.
 
-    `values[name]` holds one effect's settings by key — its six own
-    (on, mix, speed, blend, order, target) and one per annotated uniform. The dicts
+    `values[name]` holds one effect's settings by key — its four own
+    (on, mix, speed, blend) and one per annotated uniform. The dicts
     are kept across a reload of the file, so a value survives an edit that
     does not remove its uniform.
 
@@ -212,20 +239,18 @@ class FxState:
     than once (`set_instances`). Instance n ≥ 2 of file `acid` is the
     effect named `acid.2` — in `specs` (the file's spec, labelled "Acid
     2"), `values`, `phase` and `names()` like any effect, so its params are
-    `fx.acid.2.*` by the naming rule (`declare`), it has its own clock and
-    order, and the chain runs it on the file's one program. Instance 1 is
-    the file itself, today's `acid`, always there.
+    `fx.acid.2.*` by the naming rule (`declare`), it has its own clock,
+    and it runs on the file's one program. Instance 1 is the file itself,
+    `acid`, whose params are always declared; where any instance runs is
+    the graph's wires (plan 33).
     """
 
     def __init__(self, directory: Path | str = FX_DIR):
         self.dir = Path(directory)
         self.on = True           # fx.on — the chain's bypass
         self.mix = 1.0           # fx.mix — scales every effect's mix
-        self.face_map = PER_FACE # fx.face_map — how the faces show their effects' picture
+        self.face_map = PER_FACE # fx.face_map — how the faces show a picture wired into them
         self._t_last: float | None = None      # the frame time of the last advance_to
-        # the open strip's effect, by name (None: whatever is first). A name,
-        # not an index into names(): a reorder or a preset load never moves it
-        self.sel_name: str | None = None
         self.specs: dict[str, EffectSpec] = {}
         self.values: dict[str, dict[str, Any]] = {}
         self.phase: dict[str, float] = {}
@@ -349,9 +374,7 @@ class FxState:
         old = self.values.get(name, {})
         v = {"on": bool(old.get("on", False)), "mix": float(old.get("mix", spec.mix)),
              "speed": float(old.get("speed", spec.speed)),
-             "blend": int(old.get("blend", spec.blend)),
-             "order": int(old.get("order", spec.order)),
-             "target": int(old.get("target", FRAME))}
+             "blend": int(old.get("blend", spec.blend))}
         for p in spec.params:
             x = old.get(p.key, p.default)
             v[p.key] = round(x) if p.integer else float(x)
@@ -367,38 +390,21 @@ class FxState:
             self.on_specs(changed)
         return changed
 
-    # ---- the chain ----
+    # ---- the effects ----
 
     def names(self) -> list[str]:
-        """Every effect, in stack order."""
-        return sorted(self.specs, key=lambda n: (self.values[n]["order"], n))
+        """Every effect, by name (plan 33: no stack order — an effect's
+        place is its wires)."""
+        return sorted(self.specs)
 
-    def chain(self, target: int | None = None) -> list[str]:
-        """The effects that run this frame, in order: all of them, or with
-        `target` (FRAME, FACES) only those aimed at it."""
-        if not self.on or self.mix <= 0.0:
-            return []
-        return [n for n in self.names()
-                if self.values[n]["on"] and self.values[n]["mix"] > 0.0
-                and (target is None or _target(self.values[n]) == target)]
-
-    def select(self, name: str | None) -> None:
-        """Open `name`'s strip. A name with no spec is ignored; None means
-        'whatever is first'. Writes nothing but sel_name."""
-        if name is None or name in self.specs:
-            self.sel_name = name
-
-    def selected(self) -> str | None:
-        """sel_name while it has a spec; else the first of names(); None
-        with no effects. Never writes — a file that goes away and comes
-        back is open again."""
-        # getattr: a hot reload re-classes the live FxState without running
-        # __init__ (hotreload.py), so an instance from before has no sel_name
-        name = getattr(self, "sel_name", None)
-        if name in self.specs:
-            return name
-        names = self.names()
-        return names[0] if names else None
+    def live(self, name: str) -> bool:
+        """Whether effect `name` draws this frame where it is wired (plan 33
+        R): the effects on (`fx.on`) and above mix 0 (`fx.mix`), the effect
+        on and above mix 0. Its place is its wires, and whether it compiled
+        is the chain's to say (`FxChain.ready`)."""
+        v = self.values.get(name)
+        return (bool(self.on) and self.mix > 0.0 and v is not None
+                and bool(v.get("on")) and float(v.get("mix", 0.0)) > 0.0)
 
     def advance(self, dt: float) -> None:
         """Every effect's clock by dt at its speed — on or not, so an effect
@@ -409,68 +415,15 @@ class FxState:
     def advance_to(self, t: float) -> float:
         """Every effect's clock up to the frame time `t`: advance(dt) with
         dt the time since the last call, clamped to 0…0.25 s, 0 on the
-        first. A second call with the same `t` advances nothing — two
-        chains run over one state in a frame (the frame's and the faces'),
-        and whichever runs first moves the clocks. Returns the dt applied."""
+        first. A second call with the same `t` advances nothing — every
+        effect node of a frame calls it, and the first moves the clocks.
+        Returns the dt applied."""
         # getattr: an FxState from before a hot reload has no _t_last
         last = getattr(self, "_t_last", None)
         dt = 0.0 if last is None else max(0.0, min(t - last, 0.25))
         self._t_last = t
         self.advance(dt)
         return dt
-
-
-def _target(v: dict) -> int:
-    """An effect's target from its values: FRAME for anything but FACES (a
-    dict from before a hot reload has no key, and a stray value must not
-    lose the effect from both chains)."""
-    return FACES if v.get("target", FRAME) == FACES else FRAME
-
-
-def reordered(seq: list[str], orders: dict[str, int], moved: str) -> dict[str, int]:
-    """Orders (0…MAX_ORDER) under which sorting by (order, name) gives
-    `seq`, changing as few effects as possible: `moved` alone when it can
-    be done, else the smallest run of neighbours that can. Returns only
-    the effects whose order changes.
-
-    `seq` is `names()` with `moved` taken out and put back somewhere (a
-    chip dragged on the FX page, plan 20 WP3); `orders` is every effect's
-    order now. Pure: it reads nothing but its arguments.
-
-    One run of `seq` is renumbered: the shortest whose two sides already
-    sort as `seq` has them and which has room — as many integers strictly
-    between the orders either side of it as it has effects. It gets those
-    integers evenly spaced (one effect alone: the middle of its gap). So
-    no tie is ever made or relied on, and the name tie-break in `names()`
-    cannot reorder the result; a tie that is already there and not in the
-    way is left alone. Of two runs of one length, one holding `moved` is
-    taken, then the one further right: the same drop always gives the
-    same orders. With no room for a short run the run grows, to the whole
-    list at worst (0…99: up to a hundred effects; past that orders repeat)."""
-    def key(k: int) -> tuple[int, str]:
-        return orders[seq[k]], seq[k]
-    n = len(seq)
-    bad = [k for k in range(1, n) if not key(k - 1) < key(k)]    # seq[k] is out of place
-    if not bad:
-        return {}                                    # it already sorts that way
-    first, last = bad[0], bad[-1]                    # seq[:first] and seq[last:] sort as they are
-    i = seq.index(moved)
-    for size in range(max(1, last - first), n + 1):
-        los = range(min(first, n - size), max(0, last - size) - 1, -1)
-        for lo in sorted(los, key=lambda lo: not lo <= i < lo + size):   # stable: right first
-            hi = lo + size                           # the run is seq[lo:hi]
-            a = orders[seq[lo - 1]] if lo > 0 else -1
-            b = orders[seq[hi]] if hi < n else MAX_ORDER + 1
-            free = b - a - 1                         # the integers strictly between
-            if free < size and size != n:            # no room; the whole list is the last resort
-                continue
-            if size == 1:
-                new = [(a + b) // 2]                 # the middle of the gap
-            else:                                    # evenly through the gap, in seq's order
-                new = [a + 1 + ((2 * j + 1) * free) // (2 * size) for j in range(size)]
-            return {name: o for name, o in zip(seq[lo:hi], new, strict=True)
-                    if o != orders[name]}
-    return {}                                        # not reached: the whole list always returns
 
 
 def declare(r, fx: FxState, names: set[str] | None = None) -> None:
@@ -481,24 +434,17 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
     if names is None:
         r.remove_prefix("fx.")
         r.toggle("fx.on", "Effects", *_attr(fx, "on"), group=g,
-                 tip="The effect stack's bypass: off, the frame goes straight to the "
-                     "screen whatever is switched on below.")
+                 tip="Every effect's bypass: off, each reads its picture straight "
+                     "through, wherever it is wired.")
         r.continuous("fx.mix", "FX mix", *_attr(fx, "mix"), lo=0.0, hi=1.0,
                      fmt=lambda v: f"mix {v:.2f}", group=g,
-                     tip="Scales every effect's mix — one fader to fade the whole stack in.")
+                     tip="Scales every effect's mix — one fader to fade them all in.")
         r.enum("fx.face_map", "Faces show", lambda: getattr(fx, "face_map", PER_FACE),
                lambda x: setattr(fx, "face_map", x), FACE_MAPS, group=g,
-               tip="How the faces' effects sit on the shape: per face, every face carries "
-                   "the whole picture and it turns with the shape; screen, the faces are "
-                   "windows onto one picture that stays still while the shape moves "
-                   "across it.")
-        # a view onto FxState.sel_name: it reads the open effect's place in
-        # the stack, and a write opens the effect at that place. The name is
-        # what is kept, so the index follows the effect when the order moves
-        r.enum("fx.select", "Edit", lambda: _sel_index(fx), lambda i: _sel_set(fx, i),
-               lambda: [fx.specs[n].label for n in fx.names()], group=g,
-               persist=False, modulatable=False,
-               tip="Which effect's faders are open on the page.")
+               tip="How a picture wired into the faces sits on the shape: per face, every "
+                   "face carries the whole picture and it turns with the shape; screen, "
+                   "the faces are windows onto one picture that stays still while the "
+                   "shape moves across it.")
         names = set(fx.specs)
     for name in sorted(names):
         # this effect's own ids, `fx.<name>.<key>` (a key has no dot) —
@@ -523,34 +469,14 @@ def declare(r, fx: FxState, names: set[str] | None = None) -> None:
         r.enum(f"{pre}.blend", f"{lb} blend", *_key(v, "blend"), BLENDS, group=g,
                tip="How the effect's output lands on its input: mix replaces, add and "
                    "screen light up, multiply darkens.")
-        r.continuous(f"{pre}.order", f"{lb} order", *_key(v, "order"), lo=0, hi=MAX_ORDER,
-                     integer=True, fmt=lambda x: f"#{int(x)}", group=g, modulatable=False,
-                     tip="Where it sits in the stack: low runs first, so a warp before a "
-                         "colour pass bends the colour too.")
-        # where it runs: the stack's structure, like order — set, never ridden
-        r.enum(f"{pre}.target", f"{lb} target", lambda v=v: v.get("target", FRAME),
-               lambda x, v=v: v.__setitem__("target", x), TARGETS, group=g,
-               modulatable=False,
-               tip="What the effect runs on: the whole frame, or the picture in the "
-                   "faces (Faces must be on).")
         for p in spec.params:
+            if p.choices:       # a discrete choice (plan 30 N8): a picker, never a slider
+                r.enum(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
+                       list(p.choices), group=g, tip=p.tip)
+                continue
             r.continuous(f"{pre}.{p.key}", f"{lb} {p.label.lower()}", *_key(v, p.key),
                          lo=p.lo, hi=p.hi, log=p.log, wrap=p.wrap, integer=p.integer,
                          fmt=_fmt(p), group=g, tip=p.tip)
-
-
-def _sel_index(fx: FxState) -> int:
-    """fx.select's value: where the open effect sits in names(); 0 with none."""
-    names = fx.names()               # sorted once: this is read by every surface that shows it
-    name = getattr(fx, "sel_name", None)
-    return names.index(name) if name in fx.specs else 0
-
-
-def _sel_set(fx: FxState, i) -> None:
-    """A write to fx.select: open the effect at `i` in names(), clamped."""
-    names = fx.names()
-    if names:
-        fx.select(names[max(0, min(int(i), len(names) - 1))])
 
 
 def _attr(obj, name):
@@ -583,6 +509,9 @@ uniform float u_mix;       // its mix × fx.mix
 uniform int u_blend;       // index into BLENDS
 uniform int u_opaque;      // 1 on an opaque ground (window, fullscreen): alpha stays 1
                            // (always 0 on the faces' chain: there alpha is a face's intensity)
+uniform sampler2D u_aux;   // plan 32 R: the second picture (unit 1), wired by `<effect>.aux`
+uniform int u_aux_on;      // 1 while one is wired; 0 and `aux(uv)` is transparent black
+uniform vec2 u_aux_size;   // its size, px (0, 0 with none)
 in vec2 v_uv;
 out vec4 f_color;
 """
@@ -620,21 +549,18 @@ def fragment_source(lib: str, effect: str, shared: str | None = None) -> str:
 
 
 class FxChain:
-    """The ping-pong textures and one program per effect, on one GL context.
+    """The effects' textures and one program per effect, on one GL context.
 
-    A chain runs the effects aimed at its `target`: the frame's (the
-    default — with every effect aimed at the frame it is the whole stack)
-    or the faces'. A chain made with `programs=` another chain borrows that
-    chain's programs and speaks its errors: one compile per effect and one
-    error line however many chains run it. Every uniform is set before
-    each pass, so one program serves two chains in a frame."""
+    Plan 30 D0: every effect is a render graph node (`graph.Effect`), one
+    pass each (`run_one`) between textures of this chain's `pool`. Plan 33
+    T7: that is the only way an effect runs — the faces' chain (`run`, a
+    second chain borrowing this one's programs) went with the stack; a
+    branch onto the faces is effect nodes too. Every uniform is set before
+    each pass, so one program serves every instance of a file in a frame."""
 
-    def __init__(self, ctx: moderngl.Context, state: FxState | None = None, *,
-                 target: int = FRAME, programs: FxChain | None = None):
+    def __init__(self, ctx: moderngl.Context, state: FxState | None = None):
         self.ctx = ctx
         self.state = state if state is not None else FxState()
-        self.target = target
-        self.programs = programs        # the chain whose programs this one runs; None: its own
         self.size = (0, 0)
         self._tex: list[moderngl.Texture] = []
         self._fbo: list[moderngl.Framebuffer] = []
@@ -642,8 +568,7 @@ class FxChain:
         # keeps the last good entry and records why in `errors`
         self._progs: dict[str, tuple[str, moderngl.Program, moderngl.VertexArray]] = {}
         self._tried: dict[str, str] = {}        # name → source of the last attempt
-        # a borrower's errors are the owner's dict: one line for both targets
-        self.errors: dict[str, str] = {} if programs is None else programs.errors
+        self.errors: dict[str, str] = {}
         self._frame = 0
         self.opaque = False     # the ground is opaque: every pass writes alpha 1 (Renderer.draw)
         self._build_copy()
@@ -654,8 +579,7 @@ class FxChain:
         self._copy["u_src"].value = 0
 
     def on_reload(self) -> None:
-        """Hot-swap hook: every program is rebuilt from source on next use.
-        A borrower holds none: only the owner releases programs."""
+        """Hot-swap hook: every program is rebuilt from source on next use."""
         self._release_programs()
         self._copy_vao.release()
         self._copy.release()
@@ -669,21 +593,30 @@ class FxChain:
         if self._frame % RELOAD_EVERY == 0:
             self.state.poll()
 
-    def active(self) -> bool:
-        # getattr: a chain from before a hot reload has no target
-        return bool(self.state.chain(getattr(self, "target", FRAME)))
-
-    def begin(self, size: tuple[int, int]) -> moderngl.Framebuffer:
-        """The framebuffer the frame should be composited into this frame."""
-        if size != self.size or not self._tex:
+    def pool(self, size: tuple[int, int], n: int = 2
+             ) -> list[tuple[moderngl.Texture, moderngl.Framebuffer]]:
+        """The chain's half-float textures at `size`, at least `n` of them
+        (plan 30 D0): the textures the frame's `graph.Effect` nodes paint
+        into — two for a straight run of effects, one more for each effect held for the frame
+        (`graph.Graph.pool`). Made again, all of them, when the size
+        changes; grown by appending (a texture handed out this frame stays
+        what it is); shrunk only by `fit_pool` and `release_targets`."""
+        if size != self.size:
             self.release_targets()
             self.size = size
-            for _ in range(2):
-                tex = self.ctx.texture(size, 4, dtype="f2")
-                tex.repeat_x = tex.repeat_y = False
-                self._tex.append(tex)
-                self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
-        return self._fbo[0]
+        while len(self._tex) < n:
+            tex = self.ctx.texture(size, 4, dtype="f2")
+            tex.repeat_x = tex.repeat_y = False
+            self._tex.append(tex)
+            self._fbo.append(self.ctx.framebuffer(color_attachments=[tex]))
+        return list(zip(self._tex, self._fbo, strict=True))
+
+    def fit_pool(self, n: int) -> None:
+        """Release the pool when it holds more than `n` textures — a graph
+        that needs fewer was built (`Renderer._graph_for`); the next use
+        makes what that graph asks for."""
+        if len(self._tex) > n:
+            self.release_targets()
 
     def release_targets(self) -> None:
         for res in (*self._fbo, *self._tex):
@@ -693,62 +626,87 @@ class FxChain:
 
     def release(self) -> None:
         """Everything this chain made on the GL context: its textures, its
-        copy program and — unless it borrows them — its effect programs."""
+        copy program and its effect programs."""
         self.release_targets()
         self._release_programs()
         self._copy_vao.release()
         self._copy.release()
 
     def _release_programs(self) -> None:
-        """This chain's own effect programs (a borrower has none)."""
+        """This chain's effect programs."""
         for _, prog, vao in self._progs.values():
             vao.release()
             prog.release()
         self._progs.clear()
         self._tried.clear()
 
-    def run(self, target: moderngl.Framebuffer, t: float) -> list[str]:
-        """Every active effect over the frame `begin()` handed out, the last
-        one into `target`'s viewport. Returns the effects that ran.
+    def _opaque(self) -> int:
+        """u_opaque for a pass that says none: 1 over an opaque ground (a
+        node on a see-through one — the hands' layer, the faces' picture —
+        passes its own, `run_one`'s `opaque`)."""
+        return int(getattr(self, "opaque", False))
 
-        `t` is the frame's time in seconds — the renderer's one clock
-        (Renderer.draw), pinned by callers that render offscreen. Effects
-        advance by the time since the state's clocks last moved: once a
-        frame, whichever chain runs first (FxState.advance_to)."""
+    def _uniforms(self, prog: moderngl.Program, name: str, size: tuple[int, int],
+                  t: float, opaque: int) -> None:
+        """Every uniform of effect `name`'s pass over a source of `size`:
+        one program serves every instance of a file, so all of them are set
+        before each pass."""
         st = self.state
-        st.advance_to(t)
-        aim = getattr(self, "target", FRAME)
-        # in the faces' picture alpha is a face's intensity, never the window's
-        opaque = int(aim == FRAME and getattr(self, "opaque", False))
-        passes = [(n, self._program(n)) for n in st.chain(aim)]
-        passes = [(n, pv) for n, pv in passes if pv is not None]
+        w, h = size
+        v = st.values[name]
+        self._set(prog, "u_src", 0)
+        self._set(prog, "u_res", (float(w), float(h)))
+        self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
+        self._set(prog, "u_time", float(t))
+        self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
+        self._set(prog, "u_blend", int(v["blend"]))
+        self._set(prog, "u_opaque", opaque)
+        self._set(prog, "u_aux", 1)
+        self._set(prog, "u_aux_on", 0)
+        self._set(prog, "u_aux_size", (0.0, 0.0))
+        for p in st.specs[name].params:
+            x = v[p.key]
+            self._set(prog, p.uniform, round(x) if p.integer else float(x))
+
+    def ready(self, name: str) -> bool:
+        """Whether effect `name` has a program to run (built now if it has
+        not been tried): False for a file that never compiled."""
+        return self._program(name) is not None
+
+    def run_one(self, name: str, src: moderngl.Texture, dst: moderngl.Framebuffer,
+                t: float, opaque: int | None = None,
+                aux: moderngl.Texture | None = None) -> None:
+        """One effect's pass (plan 30 D0: a `graph.Effect` node's): its
+        program over `src` into `dst`'s viewport, every uniform set, the
+        clocks moved first (once per frame time,
+        `FxState.advance_to`). An effect with no program copies `src`
+        across, so `dst` always holds the picture (the node reads such an
+        effect through and never asks). `opaque` (plan 30 D1): `u_opaque`
+        for this pass when not the chain's — 0 for an effect placed on a
+        hands' layer, whose ground is see-through whatever the window's.
+        `aux` (plan 32 R): the picture wired into the effect's `aux` port,
+        bound on unit 1 (`u_aux_on` 1); None leaves it off, and `aux(uv)`
+        reads transparent black."""
+        self.state.advance_to(t)
+        pv = self._program(name)
         ctx = self.ctx
         ctx.disable(moderngl.BLEND)
-        w, h = self.size
-        src = 0
-        if not passes:                 # everything on failed to build: a copy
-            target.use()
-            self._tex[0].use(location=0)
-            self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
-        for k, (name, (prog, vao)) in enumerate(passes):
-            last = k == len(passes) - 1
-            (target if last else self._fbo[1 - src]).use()
-            self._tex[src].use(location=0)
-            v = st.values[name]
-            self._set(prog, "u_src", 0)
-            self._set(prog, "u_res", (float(w), float(h)))
-            self._set(prog, "u_phase", float(st.phase.get(name, 0.0)))
-            self._set(prog, "u_time", float(t))
-            self._set(prog, "u_mix", float(v["mix"]) * float(st.mix))
-            self._set(prog, "u_blend", int(v["blend"]))
-            self._set(prog, "u_opaque", opaque)
-            for p in st.specs[name].params:
-                x = v[p.key]
-                self._set(prog, p.uniform, round(x) if p.integer else float(x))
+        try:
+            dst.use()
+            src.use(location=0)
+            if pv is None:
+                self._copy_vao.render(moderngl.TRIANGLES, vertices=3)
+                return
+            prog, vao = pv
+            self._uniforms(prog, name, src.size, t,
+                           self._opaque() if opaque is None else int(opaque))
+            if aux is not None:
+                aux.use(location=1)
+                self._set(prog, "u_aux_on", 1)
+                self._set(prog, "u_aux_size", tuple(float(x) for x in aux.size))
             vao.render(moderngl.TRIANGLES, vertices=3)
-            src = 1 - src
-        ctx.enable(moderngl.BLEND)
-        return [n for n, _ in passes]
+        finally:
+            ctx.enable(moderngl.BLEND)
 
     @staticmethod
     def _set(prog: moderngl.Program, name: str, value) -> None:
@@ -758,11 +716,7 @@ class FxChain:
 
     def _program(self, name: str):
         """The effect's (program, vao), built on first use and on every
-        change to its file or the lib; None if it never compiled. A
-        borrower asks the chain it borrows from."""
-        owner = getattr(self, "programs", None)
-        if owner is not None:
-            return owner._program(name)
+        change to its file or the lib; None if it never compiled."""
         st = self.state
         spec = st.specs.get(name)
         if spec is None:
@@ -786,9 +740,6 @@ class FxChain:
 
     def compile_all(self) -> dict[str, str]:
         """Build every effect now (tests, tools); returns name → error."""
-        owner = getattr(self, "programs", None)
-        if owner is not None:
-            return owner.compile_all()
         for n in self.state.specs:
             self._program(n)
         return dict(self.errors)

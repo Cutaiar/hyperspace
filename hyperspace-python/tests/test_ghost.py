@@ -481,6 +481,9 @@ def frame(ctx, *, src=None, on=True, alpha=1.0, fx: FxState | None = None, frame
     """(RGBA frame, renderer) after `frames` frames at 30 fps."""
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     r = renderer or Renderer(ctx, fx=fx)
+    if renderer is None and fx is not None:      # plan 33 R23: its run, as a load lands it
+        from hyperspace.graphmigrate import wiring_of
+        r.wiring = wiring_of(fx)
     r.ghost.state.on, r.ghost.state.alpha = on, alpha
     r.ghost.source = src
     s = ViewState(ang=list(VIEW["ang"]), yaw=VIEW["yaw"], pitch=VIEW["pitch"])
@@ -738,7 +741,7 @@ def test_the_effects_never_touch_the_hands(ctx):
     fx = FxState()
     fx.values["warp"]["on"] = True
     effected, r1 = frame(ctx, src=src, fx=fx)
-    assert r1.fx.active()
+    assert r1.stats["fx_on"]
     outside = ~mask
     assert np.abs(effected[outside].astype(int) - plain[outside]).sum() > 1000   # FX ran
     assert np.array_equal(effected[inner], plain[inner])                          # not on the hands

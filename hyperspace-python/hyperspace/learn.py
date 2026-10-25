@@ -84,7 +84,9 @@ table are all it needs.
 
 from __future__ import annotations
 
-from . import undo
+from . import modifiers, undo
+from .envelope import GROUP as ENV_SCHEME
+from .graph import source_into
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -154,7 +156,8 @@ def blocked(table: Bindings, source: str) -> str | None:
 # preset's own bases (the values a load lands, not this frame's modulation):
 #
 #   pattern.*, view.pattern, view.pattern_mix   the faces are off (view.faces)
-#   view.bmp_*                                   the faces are off, or no bitmap file
+#   view.media_*, view.bmp_alpha                 the faces are off, or nothing wired into
+#                                                their layer (`pattern.media`, plan 33 T7)
 #   view.points_alpha / view.lines_alpha         points / lines off
 #   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
@@ -166,26 +169,39 @@ def blocked(table: Bindings, source: str) -> str | None:
 # click-to-map (`ranked`) never offers a dead param among a preset's own.
 
 _PATTERN = ("view.pattern", "view.pattern_mix")
-_BITMAP = ("view.bmp_alpha", "view.bmp_scale", "view.bmp_mode", "view.bmp_amp",
-           "view.bmp_rate")
+_MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media_amp",
+          "view.media_rate",      # plan 32: the faces' media channel (was view.bmp_*)
+          "view.bmp_alpha")       # …and the factory knob 7's alias of view.media_alpha
 _ROTATE = ("rot.rate.", "view.plane.")
 
 
-def cannot_show(pid: str, values) -> str | None:
+def faces_media(spec, selects=None) -> bool | None:
+    """Whether the graph `spec` (a `graph.GraphSpec`) wires a picture into
+    the faces' media layer, `pattern.media` — straight, or through a switch
+    at its pick (`selects`, `ViewState.switch`) — what `view.media` said
+    before plan 33 T7 retired it. None with no graph to ask."""
+    if spec is None:
+        return None
+    return source_into(spec.all_wires(), "pattern.media", selects) is not None
+
+
+def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
     """Why the preset whose bases are `values` ({id: base}; `.get` is all
     that is asked) cannot show `pid`, in a few words ("faces off",
     "kaleido off"), or None when it can — the rule above. A switch the
-    values do not name counts as on."""
+    values do not name counts as on. `media`: whether its graph wires a
+    picture into the faces' layer (`faces_media`); None (no graph to ask)
+    counts as wired — `view.media`, which said it before plan 33 T7, is no
+    param any more."""
     def off(sw: str) -> bool:
         v = values.get(sw)
         return v is not None and not bool(v)
     if pid.startswith("pattern.") or pid in _PATTERN:
         return "faces off" if off("view.faces") else None
-    if pid in _BITMAP:
+    if pid in _MEDIA:
         if off("view.faces"):
             return "faces off"
-        f = values.get("view.bmp_file")
-        return "no bitmap file" if f is not None and not str(f) else None
+        return "no media channel" if media is False else None
     if pid == "view.points_alpha":
         return "points off" if off("view.points") else None
     if pid == "view.lines_alpha":
@@ -226,7 +242,8 @@ ROUTED, MOVED, ON, DESKED = "routed", "moved", "on", "on the desk"
 
 
 def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
-           shows=None) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
+           shows=None, media: bool | None = None
+           ) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
     """Click-to-map's offer (plan 24 C3): the params this preset uses,
     ranked, then the rest by group. A pure function.
 
@@ -236,7 +253,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     what a load fills an id the file does not name with). `routed`: the
     ids a route or a macro subscriber drives. `on_desk`: the ids a
     preset-layer row already holds. `shows(pid)`: why it cannot show, or
-    None (`cannot_show` over `values` when not given).
+    None (`cannot_show` over `values` and `media` when not given).
 
     Returns (used, rest). `used` is [(id, why)], in tiers — ``routed`` (a
     route or a macro moves it), ``moved`` (its base is off the group
@@ -246,7 +263,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     meant) — each tier in registry order. A param the preset cannot show is
     never used. `rest` is every other param as [(group, [id, …])], the
     performance groups first, then the session's, each in registry order."""
-    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values))
+    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values, media))
     tiers: dict[str, list[str]] = {ROUTED: [], MOVED: [], ON: [], DESKED: []}
     rest: dict[str, list[str]] = {}
     for pid, group in params:
@@ -273,7 +290,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
 def _switched_on(pid: str, values) -> bool:
     """Is `pid` part of a module `cannot_show` knows that is on — its
     switch named in `values` and set? (A param of no such module: False.)"""
-    if pid.startswith("pattern.") or pid in _PATTERN or pid in _BITMAP:
+    if pid.startswith("pattern.") or pid in _PATTERN or pid in _MEDIA:
         return bool(values.get("view.faces"))
     if pid == "view.points_alpha":
         return bool(values.get("view.points"))
@@ -287,6 +304,42 @@ def _switched_on(pid: str, values) -> bool:
     if pid.startswith("dream.") and pid != "dream.on":
         return bool(values.get("dream.on"))
     return False
+
+
+def row_for(source: str, p: Param, when: str | None = None, *,
+            centred: bool = False, depth: float | None = None) -> Binding:
+    """The row a hand learn makes (plan 18 WP3): its op and depth.
+
+        the target                       a centred axis   a one-sided axis   an envelope
+        continuous, centred on zero      push, depth D    push, depth D      push, depth H
+        any other continuous param       push, depth D    position, depth 1  push, depth H
+        an enum, a toggle, a trigger,
+        a whole-number param             position, 1      position, 1        position, 1
+
+    D is `depth`, or `PUSH_DEPTH` when the caller named none. An envelope
+    (the ``env`` scheme, `envelope.GROUP`) rests at 0 and only rises, so as
+    the fader it pinned the param to its minimum between fires (the owner,
+    2026-10-24: "they all reduce the base to 0 in between fires no matter
+    what I set the base to be"): it is a push about the base instead, H
+    the headroom above the base when the row is made, `1 - p.norm`, and
+    at least `PUSH_DEPTH` — a full fire reaches the top of the range, and
+    between fires the base shows. A push
+    carries no `rest` of its own, so it is centred where the axis
+    rests, resolved every frame (`Router.rest_of`): a level hand, or
+    a height at the bottom, adds nothing and the preset's value shows
+    until the hand moves. A discrete target keeps the fader because a
+    push of D about a toggle's base never crosses `params.MOD_ON`, and
+    about a whole-number param with a short throw (`dream.steps`, 1–3)
+    never reaches the next step: the learn would land and do nothing.
+    Nothing reads the target's id or group and nothing is refused: a
+    rate-type param lands by the same table as any other."""
+    stepped = p.kind is not Kind.CONTINUOUS or p.integer
+    if not stepped and base_scheme(source.partition(":")[0]) == ENV_SCHEME:
+        return Binding(source, p.id, "push", max(1.0 - p.norm, PUSH_DEPTH), when=when)
+    if not stepped and (centred or centred_target(p)):
+        d = PUSH_DEPTH if depth is None else float(depth)
+        return Binding(source, p.id, "push", d, when=when)
+    return Binding(source, p.id, "position", 1.0, when=when)
 
 
 class Learn:
@@ -379,12 +432,17 @@ class Learn:
         plan 27 B2). "hand:left": a source that starts "hand:left." (an
         axis or a switch of that hand, by name). "pad": a gamepad button,
         the D-pad or an axis (PAD_SCHEMES). A device's role (a want with no
-        ``:``): a source under that scheme."""
+        ``:``): a source under that scheme. A modifier's output lane
+        (``mod:<n>``, plan 28 N1) is a continuous source like a hand's
+        axis: it completes a learn armed for anything, or for "mod", and
+        never a desk, pad or hand one."""
         if getattr(self, "learning", None) is None:
             return False
         want = getattr(self, "want", None)       # a Learn from before a hot reload: None
         if want is None:
             return True
+        if source.partition(":")[0] == modifiers.SCHEME:
+            return want == modifiers.SCHEME
         if want == DESK:
             return Binding(source, "").is_midi
         if want == "pad":                    # any pad's: ``pad@p2:A`` too (plan 27 B6)
@@ -663,29 +721,9 @@ class Learn:
 
     def _row(self, source: str, p: Param, when: str | None, *,
              centred: bool = False, depth: float | None = None) -> Binding:
-        """The row a hand learn makes (plan 18 WP3): its op and depth.
-
-            the target                       a centred axis   a one-sided axis
-            continuous, centred on zero      push, depth D    push, depth D
-            any other continuous param       push, depth D    position, depth 1
-            an enum, a toggle, a trigger,
-            a whole-number param             position, 1      position, 1
-
-        D is `depth`, or `PUSH_DEPTH` when the caller named none. A push
-        carries no `rest` of its own, so it is centred where the axis
-        rests, resolved every frame (`Router.rest_of`): a level hand, or
-        a height at the bottom, adds nothing and the preset's value shows
-        until the hand moves. A discrete target keeps the fader because a
-        push of D about a toggle's base never crosses `params.MOD_ON`, and
-        about a whole-number param with a short throw (`dream.steps`, 1–3)
-        never reaches the next step: the learn would land and do nothing.
-        Nothing reads the target's id or group and nothing is refused: a
-        rate-type param lands by the same table as any other."""
-        stepped = p.kind is not Kind.CONTINUOUS or p.integer
-        if not stepped and (centred or centred_target(p)):
-            d = PUSH_DEPTH if depth is None else float(depth)
-            return Binding(source, p.id, "push", d, when=when)
-        return Binding(source, p.id, "position", 1.0, when=when)
+        """The row a hand learn makes (`row_for`, the one table — the GRAPH
+        page's cable into a `mod` port makes the same row, plan 28 N3)."""
+        return row_for(source, p, when, centred=centred, depth=depth)
 
     def resolve_pending(self, replace: bool) -> Binding | None:
         """The prompt's answer to a held learn: *Replace* swaps the target's

@@ -10,7 +10,10 @@ renderer fills in for an output (`View`, with `Handoff` for an output in
 another window's context). `Renderer.draw_outputs` (render.py) does the
 drawing. WP3 adds the rig's side: `Slot`, one listed output for the run
 (app.py fills it from `[[output.screens]]`), and `Presenter`, which shows
-a `Handoff` in another window's context.
+a `Handoff` in another window's context. Plan 32 T9 adds `Offscreen`, a
+texture-backed target on the renderer's context: a publish-only output
+(`window = false`) is drawn into one, and a published output with a
+window has one as its `tap`, the copy its publishers are handed.
 
 Render stack (ARCHITECTURE §3): it only reads. This module imports
 moderngl and glsl at most — never app, ui or params — and the
@@ -115,7 +118,7 @@ class Handoff:
     this order:
 
     1. clears its framebuffer to (0, 0, 0, `bg_alpha`);
-    2. draws `frame` (RGBA8, `frame_size`, premultiplied, LINEAR) into
+    2. draws `frame` (RGBA8 or half float, below; `frame_size`, premultiplied, LINEAR) into
        `rect` (in its framebuffer, the view's `viewport` included) — 1:1 when `rect`'s size is `frame_size`, else scaled; with
        `bg_alpha` 1 it writes alpha 1. `frame` None: the ground only;
     3. lays `hands` (the hands' layer, premultiplied, frame-sized) over the
@@ -133,7 +136,14 @@ class Handoff:
 
     The textures are valid until the next `draw_outputs`; the renderer's
     context must be flushed (`glFlush`) before the presenter's samples
-    them (plan §1: otherwise it sees last frame's)."""
+    them (plan §1: otherwise it sees last frame's).
+
+    Plan 30 D1: `frame` or `hands` may be a half-float texture of the
+    effects' pool rather than RGBA8 — an output's frame through an effect
+    placed into it, the hands' layer through one placed after the hands.
+    The presenter wraps every name as "f1" (`Presenter._ext`); that
+    declares the wrapper's dtype only, and a shader samples the texture
+    by its name whatever its real format, so the picture is right."""
 
     frame: moderngl.Texture | None
     frame_size: tuple[int, int]
@@ -177,6 +187,13 @@ class View:
     viewport: tuple[int, int, int, int] | None = None
     handoff: Handoff | None = None              # set by draw_outputs for a presenter
     exc: BaseException | None = field(default=None, repr=False)   # what set `error`
+    # plan 32 T9: this output's publishers (media/publish.py), each handed
+    # its picture once the frame is drawn — `target`'s own texture when it
+    # is an `Offscreen`'s, else a copy in `tap` (an `Offscreen`): a
+    # window's framebuffer resolved into it, a presenter's hand-off
+    # presented into it on the renderer's context
+    publish: list = field(default_factory=list)
+    tap: Any = None
 
     @property
     def rect(self) -> tuple[int, int, int, int]:
@@ -199,7 +216,12 @@ class Slot:
     `Presenter` (outputs after the first), `error` the last present that
     raised ("" once one succeeds), `size` its framebuffer at the last frame.
     The app fills it; the renderer never sees it, only the `View` built
-    from it each frame."""
+    from it each frame.
+
+    Plan 32 T9: `syphon` / `ndi` are the names it is published under ("" =
+    not), `publishers` the publishers made for them, `window` false for a
+    publish-only output — no window ever, drawn into `offscreen`; a
+    published output with a window copies its picture into `tap`."""
 
     n: int
     name: str = ""
@@ -212,6 +234,12 @@ class Slot:
     presenter: Any = None
     error: str = ""
     size: tuple[int, int] = (0, 0)
+    window: bool = True
+    syphon: str = ""
+    ndi: str = ""
+    publishers: list = field(default_factory=list)
+    offscreen: Any = None
+    tap: Any = None
 
     @property
     def label(self) -> str:
@@ -220,7 +248,65 @@ class Slot:
 
     @property
     def opened(self) -> bool:
+        """It has a window (a publish-only output never has)."""
         return self.win is not None
+
+    @property
+    def publish_only(self) -> bool:
+        return not self.window
+
+    @property
+    def drawn(self) -> bool:
+        """It gets a picture each frame: a window, or publish-only with
+        something to publish (`missing` says why one is not)."""
+        return self.opened or (self.publish_only and not self.missing)
+
+
+class Offscreen:
+    """An RGBA8 texture and its framebuffer on the renderer's context,
+    made at the size `fit` asks for and made again when that changes
+    (plan 32 T9): a publish-only output's target, a published window's
+    tap. `tex` is what a publisher is handed."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self.tex: moderngl.Texture | None = None
+        self.fbo: moderngl.Framebuffer | None = None
+
+    @property
+    def size(self) -> tuple[int, int] | None:
+        return None if self.tex is None else tuple(self.tex.size)
+
+    def fit(self, size: tuple[int, int]) -> moderngl.Framebuffer:
+        size = (max(int(size[0]), 1), max(int(size[1]), 1))
+        if self.fbo is None or self.size != size:
+            self.release()
+            tex = self.ctx.texture(size, 4)
+            try:
+                self.fbo = self.ctx.framebuffer(color_attachments=[tex])
+            except Exception:
+                tex.release()
+                raise
+            self.tex = tex
+        return self.fbo
+
+    def release(self) -> None:
+        """Free both; a bound framebuffer is never released (moderngl
+        rebinds it after the next one is made: GL_INVALID_OPERATION), so
+        the default framebuffer is bound first when it is this one."""
+        fbo, tex, self.fbo, self.tex = self.fbo, self.tex, None, None
+        if fbo is not None:
+            try:
+                if self.ctx.fbo is fbo:
+                    self.ctx.screen.use()
+                fbo.release()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
+        if tex is not None:
+            try:
+                tex.release()
+            except Exception:  # noqa: BLE001, S110 — teardown is best-effort
+                pass
 
 
 # a frame texture or a layer into a rect of a presenter's framebuffer:

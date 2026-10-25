@@ -17,6 +17,10 @@ from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
+
+# the narrowest control window that opens the panel at ui.PANEL_W (the
+# default before the 4:3 split): the small desk, glyphs only, beside it
+NARROW_CONTROL = (960, 900)
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.outputs import Slot
@@ -100,6 +104,7 @@ def build_rig(tmp_path, renderer=None):
     try:
         yield r
     finally:
+        panel.close()                   # the GRAPH page's node editor context, if drawn
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
 
@@ -719,12 +724,13 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
                     imgui.get_content_region_avail().y + imgui.get_style().item_spacing.y))
     monkeypatch.setattr(Panel, "_page_view", measured)
     room = {}
-    for n in (1, 7, 9, 100):
-        for layout in (0, 1, 2):
+    for n in (1, 7, 9, 4096):
+        for layout in (0, 1, 2, 5):         # a 3D lattice adds the field's depth
             for motion in (0, 1):
                 rig.reg["view.instances"].set(n)
                 rig.reg["view.inst_layout"].set(layout)
                 rig.reg["view.inst_motion"].set(motion)
+                rig.reg["view.inst_fit"].set(n == 9)
                 for _ in range(3):          # the window settles its size, then its content
                     frame(rig.panel, "view")
                 room[(n, layout, motion)] = got[-1]
@@ -733,12 +739,12 @@ def view_page_room(rig, monkeypatch) -> dict[tuple[int, int, int], tuple[float, 
 
 def test_the_view_page_fits_with_a_field_in_motion(rig, monkeypatch):
     """Plan 20 WP6: the VIEW page does not scroll with more than one copy.
-    The page test above draws it at one copy, where the field row is
-    hidden; above one the row shows (and the page as it was scrolled by
-    19 px there). Measured with 7, 9 and 100 copies in every layout, still
-    and in motion, and at one copy."""
+    The page test above draws it at one copy, where the field rows are
+    hidden; above one they show (and the page as it was scrolled by 19 px
+    there). Measured with 7, 9 (fitted) and 4096 copies in the flat layouts
+    and a lattice, still and in motion, and at one copy."""
     room = view_page_room(rig, monkeypatch)
-    assert len(room) == 24
+    assert len(room) == 32
     assert {k: v for k, v in room.items() if v[0] > 0 or v[1] < 0} == {}
 
 
@@ -779,6 +785,17 @@ def test_the_field_row_and_the_rate_cells_keep_their_menus(rig, monkeypatch):
     row = [rects[pid] for pid in FIELD_ROW]
     assert len({round(r[1]) for r in row}) == 1                    # one line
     assert all(row[k][2] < row[k + 1][0] for k in range(3))        # none overlaps the next
+    # the count and Fit share a line; spacing and a lattice's depth the next
+    rig.reg["view.inst_layout"].set(5)
+    for _ in range(3):
+        frame(rig.panel, "view")
+    count, depth = rects["view.instances"], (rects["view.inst_spacing"],
+                                             rects["view.inst_persp"])
+    assert count[2] <= CONTROL_SIZE[0] and depth[0][2] < depth[1][0]
+    assert round(depth[0][1]) == round(depth[1][1]) > round(rects["view.inst_layout"][1])
+    rig.reg["view.inst_layout"].set(1)
+    for _ in range(3):
+        frame(rig.panel, "view")
     cells = [rects[pid] for pid in ROT_RATES]
     assert len({round(r[1]) for r in cells}) == 3                  # three rows of two
     assert all(cells[k][2] < cells[k + 1][0] for k in (0, 2, 4))
@@ -841,8 +858,7 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
     frame(rig.panel, "view")
     assert "·  dim black" in drawn
     # a dim the driver refused is said on the OUTPUT page (review of PR #81)
-    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="",
-                                         bitmap_error="")
+    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="")
     drawn.clear()
     frame(rig.panel, "output")
     assert "dim: Error: refused — the picture is not dimmed" in drawn
@@ -851,9 +867,12 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the preset
-    strip and the header stay put (by design; audit U1)."""
+    strip and the header stay put (by design; audit U1). Plan 28 N7: the
+    routes are GRAPH's now — forty of them draw no line here — and the
+    child holds the desk, the macros, the session and the sinks, which
+    overflow it on their own."""
     reg, table = rig.reg, rig.router.table
-    for p in reg:                       # enough rows to overflow: one per free target
+    for p in reg:                       # forty routes: none of them a line here now
         if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
@@ -862,17 +881,18 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
         if len(table.routes()) >= 40:
             break
     assert len(table.routes()) >= 40
-    inner = []
-    row = ui_routing._row
+    inner, rows = [], []
+    sinks, row = ui_routing.sinks, ui_routing._row
 
-    def measured(panel, router, b, k):
-        out = row(panel, router, b, k)
-        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child
-        return out
-    monkeypatch.setattr(ui_routing, "_row", measured)
+    def measured(panel, router):
+        sinks(panel, router)
+        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child, at its end
+    monkeypatch.setattr(ui_routing, "sinks", measured)
+    monkeypatch.setattr(ui_routing, "_row", lambda *a: rows.append(a) or row(*a))
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page itself scrolled"
-    assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+    assert inner and inner[-1] > 0, "the child did not scroll with the factory desk"
+    assert rows == []
 
 
 def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
@@ -1316,6 +1336,19 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
 
 # ------------------------------------------------- plan 17: the right-click menu
 
+def _a_file_path(rig, monkeypatch) -> str:
+    """A file-path param (Kind.TEXT) drawn on the media page by the
+    panel's own widget (`Panel._path`), as `view.bmp_file` was until plan
+    32 took the one bitmap file away — no page draws a TEXT param of its
+    own now, and the widget's contract still holds. Returns its id."""
+    view, pid = rig.view, "view.test_file"
+    view.test_file = ""
+    rig.reg.text(pid, "Test file", lambda: view.test_file,
+                 lambda v: setattr(view, "test_file", v), group="view")
+    monkeypatch.setattr(type(rig.panel), "_page_media", lambda self, dt: self._path(pid))
+    return pid
+
+
 def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
          ) -> tuple[list[str], list[str]]:
     """One frame of `page` with the context menu of `pid` open: (the lines
@@ -1474,10 +1507,11 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
                                    "Learn hand/right"]
     assert "Learn" not in items
     # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    # (and, the owner 2026-10-24, Route from ▸ after the Learn items)
     rig.router.table.unbind("view.speed")
     _, items = menu(panel, monkeypatch, "view.speed", "view")
     assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
-                                                  "Route a lane here…"]
+                                                  "Route from ▸", "Route a lane here…"]
     # each arms with its want
     menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
     assert (lrn.learning, lrn.want) == ("view.speed", "desk")
@@ -1505,13 +1539,15 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
     assert _learn_items(items) == ["Learn desk"]
     # a file path: nothing to learn (a knob cannot set a path)
-    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
-    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    assert rig.reg[path].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, path, "media")
     assert items == [] and "not modulatable" in lines
     # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
     panel.hands = None
     _, items = menu(panel, monkeypatch, "view.speed", "view")
-    assert items == ["Learn desk", "Route a lane here…"]
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Route from ▸",
+                                                  "Route a lane here…"]
     # a rig whose axes are one hand's: that side only
     panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
     assert panel._hand_sides() == ["right"]
@@ -1877,12 +1913,13 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
         _click(panel, rects[pid])
         assert lrn.control is None and reg[pid].base == before, pid
         assert any(b.source == "cc:*:19" and b.target == pid for b in table.desk()), pid
-    frame(panel, "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    frame(panel, "media")
     frame(panel)
     lrn.pick(_control("D5").source)
     frame(panel)
     n = len(pushes)
-    _click(panel, rects["view.bmp_file"])
+    _click(panel, rects[path])
     assert lrn.control == "cc:*:20" and len(pushes) == n
     ui_desk.let_go(panel)
     # the big desk: the click that picks brings the panel back under the

@@ -76,8 +76,10 @@ def test_the_kinds_table_maps_each_kind_and_make_sorts_an_entry():
     """`[[devices]] kind` → the device class, here and nowhere else; an
     entry that is not enabled is `off`, a kind the table lacks an error
     line — never a crash, never an import."""
-    # plan 27 B3 adds the midi-out sink; B4 the recorded cloud and the OSC device: one line each
-    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out", "osc", "cloud"}
+    # plan 27 B3 adds the midi-out sink; B4 the recorded cloud and the OSC device: one line each;
+    # plan 32 T8 the live media feeds
+    assert set(devices.KINDS) == {"midi", "gamepad", "hands", "bridge", "midi-out", "osc", "cloud",
+                                  "ndi", "syphon", "camera"}
     assert devices.MidiDevice.schemes == ("cc", "note", "pitch")
     assert devices.PadDevice.schemes == ("axis", "pad", "hat")
     assert devices.HandsDevice.schemes == ("hand", "hands")      # B2: C4's pair scheme too
@@ -177,7 +179,7 @@ def test_two_pads_open_each_under_its_role(monkeypatch):
     assert "pad@p2:A" in [p.address for p in two.sources]
     assert "hat@p2:UP" in [p.address for p in two.sources]
     assert reg.schemes() == ("axis", "pad", "hat", "axis@p2", "pad@p2", "hat@p2")
-    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "axis@p2")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "axis@p2")
     assert reg.row_schemes() == ("pad", "hat", "pad@p2", "hat@p2")
     # Learn pad (whichever pad moves) and "Learn p2" (that pad only)
     assert reg.wants() == ("pad", "p2")
@@ -424,10 +426,10 @@ def test_continuous_schemes_are_the_builtins_then_each_devices_feeds_in_list_ord
     reg = devices.DeviceRegistry(devices=[
         devices.MidiDevice("apc40", io=io), devices.PadDevice("pad", io=io),
         devices.OffDevice("leap", "hands"), devices.BridgeDevice("bridge", io=io)])
-    assert devices.BUILTIN_SCHEMES == ("lane", "lfo")
-    assert reg.continuous_schemes() == ("lane", "lfo", "axis", "hand", "hands", "ext")
+    assert devices.BUILTIN_SCHEMES == ("lane", "lfo", "env", "seq")
+    assert reg.continuous_schemes() == ("lane", "lfo", "env", "seq", "axis", "hand", "hands", "ext")
     assert reg.schemes() == ("cc", "note", "pitch", "axis", "pad", "hat", "hand", "hands", "ext")
-    assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo")
+    assert devices.DeviceRegistry([]).continuous_schemes() == ("lane", "lfo", "env", "seq")
 
 
 def test_a_bridge_on_or_off_arms_no_learn():
@@ -551,7 +553,7 @@ def test_the_pad_shim_polls_learns_and_delivers_rows_as_the_frame_did(monkeypatc
     calls: list = []
     pad = SimpleNamespace(poll=lambda: calls.append("poll"), on=True, source="glfw", usb_pad=None)
     router = SimpleNamespace(pad=lambda p, buttons: calls.append(("rows", p is pad, buttons)))
-    monkeypatch.setattr(gamepad, "learn_from", lambda p, learn: calls.append(("learn", learn)) or
+    monkeypatch.setattr(gamepad, "learn_from", lambda p, learn, **kw: calls.append(("learn", learn)) or
                         learn == "taken")
     d = devices.PadDevice("pad", io=pad)
     d.poll(1 / 60, 0.0)

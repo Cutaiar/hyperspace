@@ -406,8 +406,8 @@ def test_the_pad_runs_on_the_registry_rows_axes_and_its_camera_job(build):
     y0 = yaw.base
     pad.frame(axes=[1.0, 0.0, 0.0, 0.0, -1.0, -1.0])
     frame(r)
-    assert r.router.labels["axis"] == list(gp.AXIS_LABELS)
-    assert r.router.rests["axis"] == list(gp.AXIS_RESTS)
+    assert r.router.labels["axis"] == list(gp.LANE_LABELS)   # the six, then the dials
+    assert r.router.rests["axis"] == list(gp.LANE_RESTS)
     assert float(r.router.feeds["axis"][0]) == pytest.approx(1.0)
     assert yaw.base > y0                                     # the left stick orbits
     r.table.add(Binding("axis:LX", "view.inst_amp", "position", 1.0))
@@ -456,8 +456,8 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
     ents = entries() + [{"role": "pad", "kind": "gamepad", "enabled": True, "usb": False},
                         {"role": "leap", "kind": "hands", "enabled": False}]
     r = build(ents, plug=())
-    assert r.router.schemes() == ("lane", "lfo", "axis", "hand", "hands")
-    assert ui_routing.source_schemes(r.router) == ["lfo", "axis", "hand", "hands"]
+    assert r.router.schemes() == ("lane", "lfo", "env", "seq", "axis", "hand", "hands")
+    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "hand", "hands"]
     assert r.learn.wants() == ("desk", "pad", "hand:left", "hand:right")
     r.learn.arm("view.bright", "hand:left")             # off, but listed: armable
     with pytest.raises(ValueError, match="no such want"):
@@ -538,7 +538,7 @@ def test_a_pre_run_bindings_json_means_the_first_pad_with_two_pads_listed(build)
     assert r.reg["view.faces"].value != faces            # the primary's A: the file's row
     # ROUTING's combo offers the second pad's axes under its role, after
     # the primary's (no page change: the registry's feeds, the pad's labels)
-    assert ui_routing.source_schemes(r.router) == ["lfo", "axis", "axis@p2"]
+    assert ui_routing.source_schemes(r.router) == ["lfo", "env", "seq", "axis", "axis@p2"]
     panel = NS(audio=NS(chain=NS(band_names=["LOW"])))
     offered = dict(ui_routing._sources(panel, r.router))
     assert offered["axis@p2:LX"] == "axis@p2 left stick X"

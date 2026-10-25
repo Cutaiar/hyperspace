@@ -3,21 +3,44 @@
 // shares: PI, TAU, LUMA, luma, peak, rot, hsv2rgb, hsv, rgb2hsv, hue_rotate, pal.
 // EDIT WHILE THE APP RUNS: every effect recompiles on save.
 //
+// Where an effect sits is its wires on the GRAPH page (plan 33): there is
+// no stack. `// @order N` at the top of a file is parsed and ignored by
+// the renderer; only the migration of a preset saved before plan 33 reads
+// it, to give an effect without a saved order its place in that preset's
+// run. A new effect file does not need one.
+//
 // What an effect has to work with:
-//   u_src      sampler2D — the frame so far (premultiplied RGBA)
+//   u_src      sampler2D — the picture wired into the effect's image port
+//                          (premultiplied RGBA)
 //   u_res      vec2      — its size in pixels
 //   u_phase    float     — the effect's clock: seconds × its speed fader
 //   u_time     float     — seconds, wall clock (for flicker that must not
 //                          stop when the speed is 0)
 //   v_uv       vec2      — this pixel, 0..1 across the frame, y up
+//   u_aux      sampler2D — the second picture, wired into the effect's aux
+//                          port (plan 32 R: a channel, the scene, the history);
+//                          read it with aux(uv) / aux_luma(uv) below
+//   u_aux_on   int       — 1 while one is wired; 0: aux(uv) is transparent black
+//   u_aux_size vec2      — its size in pixels (0, 0 with none)
 // and must define  vec4 effect(vec2 uv)  — premultiplied colour that the
-// chain then blends onto the frame by the effect's blend and mix.
+// pass then blends onto its input by the effect's blend and mix.
 
 // the frame at uv, mirrored past the edges so a warp never smears a border
 vec4 src(vec2 uv) {
     uv = 1.0 - abs(1.0 - mod(uv, 2.0));
     return texture(u_src, uv);
 }
+
+// the aux picture at uv, mirrored past the edges like src; transparent
+// black while nothing is wired into the effect's aux port
+vec4 aux(vec2 uv) {
+    if (u_aux_on == 0) return vec4(0.0);
+    uv = 1.0 - abs(1.0 - mod(uv, 2.0));
+    return texture(u_aux, uv);
+}
+
+// its brightness (premultiplied: a see-through pixel is dark)
+float aux_luma(vec2 uv) { return luma(aux(uv).rgb); }
 
 // centred coordinates: the frame's height is 1, x runs with the aspect
 vec2 centred(vec2 uv) { return (uv - 0.5) * vec2(u_res.x / u_res.y, 1.0); }

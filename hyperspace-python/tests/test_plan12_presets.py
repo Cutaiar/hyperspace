@@ -227,18 +227,22 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
     """Each preset (library/presets/party-*.json, named by the
     party.hyp.json bank) names only real params, and its performer card
     exists beside the plan."""
+    from hyperspace.graphmigrate import retired
+
     r = rig(tmp_path=tmp_path, full=True)
+    # (plan 33 T7: and the retired ids — an effect's order, a channel
+    # choice — which a load reads as the graph's wires)
     ids = set(r.reg.ids())
     doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
     for name in PARTY:
-        vals = theme(name)
-        assert set(vals) <= ids, (name, set(vals) - ids)
+        vals = {v for v in theme(name) if not retired(v)}
+        assert vals <= ids, (name, vals - ids)
         assert (FACTORY.parents[1] / "docs" / "plans" / "assets" / "12-presets"
                 / f"{name}.md").is_file(), name
     for group, file in (("fx", "trip.json"), ("dream", "wake.json"), ("fx", "acid.json"),
                         ("fx", "mandala.json"), ("fx", "noita-heavily-tripping.json")):
         vals = json.loads((FACTORY / group / file).read_text())["values"]
-        assert set(vals) <= ids, file
+        assert {v for v in vals if not retired(v)} <= ids, file
     # plan 14 WP5 (decision 24): the effect families on F6–F8
     assert doc["bank"][5:8] == ["ACID", "MANDALA", "NOITA"]
     assert [f"party-{n.lower()}" for n in doc["bank"][:8]] == list(PARTY_BANK)
@@ -302,7 +306,13 @@ def test_each_hand_axis_moves_its_target_as_the_table_says(name, tmp_path):
         ordered = [sign * x for x in readings]
         assert all(y >= x - 1e-9 for x, y in itertools.pairwise(ordered)), (name, b.target, readings)
         span = ordered[-1] - ordered[0]
-        assert span > 0.1, (name, b.target, readings)       # it reads on screen
+        # it reads on screen: a tenth of the throw, or — on a log range, whose
+        # norm is octaves and whose span the ends can widen (camera.zoom's did,
+        # 2026-10-21) — half an octave, a move of 1.4× or more
+        if p.log:
+            assert span * math.log2(p.hi / p.lo) > 0.5, (name, b.target, readings)
+        else:
+            assert span > 0.1, (name, b.target, readings)
         if b.op == "position":
             assert abs(readings[-1]) == pytest.approx(1.0 - base, abs=2e-3)
         # the hand at u = 1 leaves the box: the base returns over the spring
@@ -387,13 +397,15 @@ def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
             lfos.publish(router)
             router.modulate()
             r.reg.apply()
-            seen.append(zoom.eff_norm - z0)
+            # in octaves, so the pump is measured as the zoom it is and not
+            # as a fraction of a range whose ends may move (2026-10-21)
+            seen.append((zoom.eff_norm - z0) * math.log2(zoom.hi / zoom.lo))
         return seen
 
     still = frames({}, 60)
     assert max(abs(x) for x in still) < 1e-9                      # depth 0: no pump
     pumped = frames({"left": feats("left", y=1.0)}, 60)
-    assert max(pumped) > 0.03 and min(pumped) < -0.03             # ±0.04 at depth 1
+    assert max(pumped) > 0.3 and min(pumped) < -0.3               # ±0.39 octaves (×1.31) at depth 1
     assert r.reg["lfo.1.depth"].value == pytest.approx(1.0, abs=1e-3)
     gone = frames({}, 90)
     assert abs(gone[-1]) < 1e-6 and r.reg["lfo.1.depth"].value == 0.0
@@ -408,6 +420,10 @@ EFFECTS_IN_NO_PRESET: dict[str, str] = {
     # palettes are made at the venue (fx module presets) and the factory
     # presets keep the picture they have
     "palette": "starts at mix 0 and ships no palette; saved palettes are the owner's",
+    # plan 32 T7: these bend the frame by a picture wired into their aux
+    # input; a factory preset ships no media, so there is nothing to wire
+    "displace": "reads its aux input; factory presets wire no media channel",
+    "blend": "reads its aux input; factory presets wire no media channel",
 }
 
 

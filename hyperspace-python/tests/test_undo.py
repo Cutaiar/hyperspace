@@ -299,7 +299,7 @@ def test_integrated_state_and_the_clock_are_not_watched(rig):
     reg = rig.reg
     for pid in ("rot.phase.XY", "tempo.bpm", "tempo.nudge", "ui.page", "ui.panel",
                 "output.fullscreen", "output.monitor", "band.select", "band.sel.thr",
-                "preset.select", "fx.select", "desk.shift", "audio.mic", "edit.undo"):
+                "preset.select", "desk.shift", "audio.mic", "edit.undo"):
         assert pid in reg and not undo.watched(reg[pid]), pid
     for pid in ("view.bright", "scene.select", "master.gain", "hands.smooth", "ghost.on",
                 "output.bg", "camera.yaw", "band.0.thr", "macro.1", "lfo.1.rate"):

@@ -366,10 +366,12 @@ def test_the_trigger_param_moves_the_clock_and_the_synced_lfos():
     assert lfos[1].x == 0.0
 
 
-def test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame():
+def test_an_lfo_owning_another_lfos_depth_changes_its_output_the_same_frame():
     """The chain: LFO 1 pushes lfo.2.depth, centred on the LFO rest of 0.5
-    the router reads from `rests` (the row names none). One frame of lag,
-    no recursion: the depth lands in apply(), the next step reads it."""
+    the router reads from `rests` (the row names none). In dependency
+    order (plan 28 N0, decision 7): the LFOs step inside the pass, LFO 1
+    first, then the depth lands, then LFO 2 steps on it — the same frame,
+    no lag and no recursion."""
     reg, c, lfos = rig()
     one, two = lfos[0], lfos[1]
     one.shape, one.rate = SHAPES.index("sine"), 1.0    # a quarter cycle per frame below
@@ -377,33 +379,36 @@ def test_an_lfo_owning_another_lfos_depth_changes_its_output_next_frame():
     two.shape, two.rate = SHAPES.index("square"), 1.0
     table = Bindings([Binding("lfo:0", "lfo.2.depth", "push", 1.0)])
     router = Router(reg, table)
+    router.use_lfos(lfos, c)
     depth = reg["lfo.2.depth"]
     dt = 0.25
 
     def frame(t):
-        lfos.step(dt, t, c)
-        lfos.publish(router)
-        router.modulate(None)
+        c.tick(t)
+        router.modulate(None, dt, now=t)
         reg.apply()
 
     assert table.owner("lfo.2.depth") is table.bindings[0]
     frame(0.25)
     assert lfos.outputs[0] == pytest.approx(1.0)          # sine at its crest
-    assert lfos.outputs[1] == pytest.approx(REST)          # LFO 2 stepped at depth 0
     assert depth.modulated and depth.base == 0.0
     assert two.depth == pytest.approx(0.5)                 # 1.0 · (1.0 − rest 0.5)
+    assert lfos.outputs[1] == pytest.approx(REST + 0.25)   # square high at depth 0.5, now
     assert router.rests["lfo"] == [REST] * 4 and router.labels["lfo"][1] == "LFO 2"
-    frame(0.5)                                             # the next frame: it swings
-    assert lfos.outputs[1] == pytest.approx(REST - 0.25)   # square low at depth 0.5
+    assert list(router.feeds["lfo"]) == pytest.approx(lfos.outputs)   # each lane as it stepped
+    frame(0.5)
     assert lfos.outputs[0] == pytest.approx(REST, abs=1e-9)   # LFO 1 at its rest…
     assert two.depth == pytest.approx(0.0, abs=1e-9)       # …pushes nothing: a no-op
+    assert lfos.outputs[1] == pytest.approx(REST)          # depth 0 read the same frame
     frame(0.75)
-    assert lfos.outputs[1] == pytest.approx(REST)          # depth 0 read a frame late
     assert two.depth == 0.0                                # the trough clamps at 0
+    assert lfos.outputs[1] == pytest.approx(REST)
     # the source lets go: the base comes back, and the output with it
     table.bindings.clear()
     frame(1.0)
     assert not depth.modulated and two.depth == 0.0
+    # an LFO with no cable still steps and publishes
+    assert lfos[3].at == 1.0 and len(router.feeds["lfo"]) == 4
 
 
 def test_lfo_source_is_fed_as_floats_in_range():

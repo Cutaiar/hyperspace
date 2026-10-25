@@ -56,7 +56,8 @@ def test_base_subscribers_of_opposite_polarity_move_opposite_ways():
 
 def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
     """Row 12b: a hand owning macro.1 deepens the route its depth
-    subscriber names — a frame later, from the macro's effective value —
+    subscriber names — the same frame, from the macro's effective value
+    (plan 28 N0, decision 7: the macro's node runs before the route) —
     and leaves its base subscribers alone; the knob moves those."""
     r = rig()
     reg = r.reg
@@ -74,10 +75,10 @@ def test_a_performer_on_a_macro_moves_only_its_depth_subscribers():
     router.feed("hand", [0.9])
     frame(router, reg)                           # the set_macros lands the bases
     assert speed.norm == pytest.approx(0.2)
-    # this frame the route read the macro before the hand moved it: 0.2
-    assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.2 * 0.5, abs=1e-6)
+    # this frame the route read the macro after the hand moved it: 0.9
+    assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.9 * 0.5, abs=1e-6)
     assert m.modulated and m.value == pytest.approx(0.9)
-    frame(router, reg)                           # next frame: 0.9, the hand's
+    frame(router, reg)                           # and the next: still 0.9, the hand's
     assert bright.eff_norm - bright.norm == pytest.approx(0.5 * 0.9 * 0.5, abs=1e-6)
     assert speed.norm == pytest.approx(0.2)      # the base subscriber never moved
     # the knob turns the macro's base under the hand: the base subscriber

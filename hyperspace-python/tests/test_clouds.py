@@ -194,9 +194,9 @@ def test_a_cloud_is_on_the_registry_not_the_router(tmp_path):
     rig.poll(0.0, 0.0, router=router)
     rig.feed(router)
     assert "cloud" not in router.feeds and "scan" not in router.feeds
-    assert rig.continuous_schemes() == ("lane", "lfo")
+    assert rig.continuous_schemes() == ("lane", "lfo", "env", "seq")
     assert rig.row_schemes() == () and rig.wants() == ()
-    assert router.schemes() == ("lane", "lfo")
+    assert router.schemes() == ("lane", "lfo", "env", "seq")
     assert set(rig.clouds) == {"cloud:scan"}
 
 

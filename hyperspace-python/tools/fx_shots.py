@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hyperspace.fx import FxState
+from hyperspace.graphmigrate import wiring_of
 from hyperspace.library import FACTORY
 from hyperspace.render import Renderer
 from hyperspace.view import ViewState
@@ -50,6 +51,7 @@ def shot(ctx, fbo, values: dict, frames: int, scene: bool = True) -> np.ndarray:
         else:
             fx.values[name].update(v)
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)  # plan 33 R23: its run as a load lands it
     s = view()
     if not scene:
         s.lines = s.points = s.faces = False
@@ -131,6 +133,7 @@ def main() -> None:
                 fx.values[name].update(v)
         for label, st in (("off", FxState()), ("tripping balls", fx)):
             r = Renderer(ctx, fx=st)
+            r.wiring = wiring_of(st)  # plan 33 R23: its run as a load lands it
             s = view()
             ts = []
             for k in range(40):

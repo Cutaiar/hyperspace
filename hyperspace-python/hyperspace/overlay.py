@@ -451,12 +451,13 @@ def register_switches(reg: Registry, slots) -> list[str]:
     — and not modulatable; a launch (and ⌘R) takes them from the config's
     ``[[output.screens]]`` entry, so a switch flipped at the party lasts
     until the restart. They can be learned onto a desk button like any
-    toggle. An output that did not open gets none. Returns the ids."""
+    toggle. An output that did not open gets none; a publish-only one
+    (plan 32 T9: drawn, with no window) gets them all. Returns the ids."""
     rig = {"persist": False, "modulatable": False}
     several = len(slots) > 1
     ids: list[str] = []
     for sl in slots:
-        if not sl.opened:
+        if not getattr(sl, "drawn", sl.opened):
             continue
         sw, pre = sl.switches, f"output.{sl.n}"
         who = _cap(sl.name or f"output {sl.n}")

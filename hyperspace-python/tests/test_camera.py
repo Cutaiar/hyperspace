@@ -210,26 +210,52 @@ def test_each_point_is_drawn_where_project_h_puts_it(ctx):
         assert img[int(y), int(x)][0] > 40, (x, y)
 
 
+def _rows(ctx, monkeypatch, s, **draw_kw):
+    """One draw of `s`, and what it uploaded: the edges' and the points'
+    vertex rows (edges: column 8 the width at scale 1, 9 the alpha; points:
+    5 the radius at scale 1), the copies' rows (centre, scale, alpha), and
+    the stroke-scale uniform the line and point programs were drawn with
+    (1 world space: × the copy's scale in the shader; 0 screen space)."""
+    from hyperspace.render import Renderer
+
+    seen = {}
+    real = Renderer.draw_scene
+
+    def spy(self, *a, **k):
+        real(self, *a, **k)
+        seen["lines"] = np.frombuffer(self._lbuf.read(), dtype="f4").reshape(-1, 13).copy()
+        seen["points"] = np.frombuffer(self._pbuf.read(), dtype="f4").reshape(-1, 10).copy()
+        seen["copies"] = np.frombuffer(self._ibuf.read(), dtype="f4").reshape(-1, 4).copy()
+        seen["wscale"] = (self._lines["u_wscale"].value, self._points["u_wscale"].value)
+        seen["model"] = np.frombuffer(self._scene_mats[1], dtype="f4").reshape(4, 4).T.copy()
+
+    monkeypatch.setattr(Renderer, "draw_scene", spy)
+    try:
+        _draw(ctx, s, **draw_kw)
+    finally:
+        monkeypatch.setattr(Renderer, "draw_scene", real)
+    return seen
+
+
 def test_strokes_keep_their_weight_whatever_the_zoom(ctx, monkeypatch):
     """In screen space (`view.screen_strokes` on, plan 26 A2b) the line width
     and the point radius do not scale with camera.zoom (plan 26 A2): the
-    shape grows in the world, its strokes stay as heavy. World space, the
-    default, is tests/test_stroke_space.py."""
-    from hyperspace.render import Renderer
-
-    widths = {}
-    real = Renderer._tile
-
-    def spy(verts, offs, **kw):
-        widths.setdefault(verts.shape[1], []).append(verts.copy())
-        return real(verts, offs, **kw)
-
-    monkeypatch.setattr(Renderer, "_tile", staticmethod(spy))
-    for zoom in (1.0, 2.5):
-        _draw(ctx, _view(lines=True, zoom=zoom, screen_strokes=True))
-    (l1, l2), (p1, p2) = widths[10], widths[7]
-    assert np.array_equal(l1[:, 8], l2[:, 8])        # the edges' widths
-    assert np.array_equal(p1[:, 5], p2[:, 5])        # the points' radii
+    shape grows in the world, its strokes stay as heavy. On a one-copy
+    view the zoom is the world transform and the copy is at scale 1; on
+    the instanced field's own path (Fit) the zoom is in the copy's scale
+    and the shaders are told not to apply it. World space, the default,
+    is tests/test_stroke_space.py."""
+    for fit in (False, True):
+        a = _rows(ctx, monkeypatch, _view(lines=True, zoom=1.0, screen_strokes=True,
+                                          inst_fit=fit))
+        b = _rows(ctx, monkeypatch, _view(lines=True, zoom=2.5, screen_strokes=True,
+                                          inst_fit=fit))
+        assert np.array_equal(a["lines"][:, 8], b["lines"][:, 8])     # the edges' widths
+        assert np.array_equal(a["points"][:, 5], b["points"][:, 5])   # the points' radii
+        assert a["wscale"] == b["wscale"] == (0.0, 0.0)
+        if not fit:
+            assert a["copies"][0, 2] == b["copies"][0, 2] == 1.0
+            assert a["model"][0, 0] == 1.0 and b["model"][0, 0] == np.float32(2.5)
 
 
 def test_the_shapes_depth_is_its_nearest_visible_surface(ctx):

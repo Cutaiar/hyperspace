@@ -34,7 +34,15 @@ fixtures under `tests/fixtures/presets/` (`FIXTURE_PRESETS`, never a
 factory preset): each copied into the scratch library and loaded like a
 user's preset, its `graph` section landing through the real `Presets`
 onto the rig's renderer, hands present, in the eight states — the
-manifest's `fixture_states` and `fixtures`.
+manifest's `fixture_states` and `fixtures`. And (plan 31 P) the
+envelopes and the step sequencer are stepped through the router as the
+app steps them — at rest and stopped, so they move nothing — but for the
+presets in `RUNNING` (``seq-demo``), drawn with play pressed as the rig
+starts, so their frame is the pattern mid-envelope at the pinned clock.
+Plan 32's five fixtures are media
+presets (`MEDIA_FIXTURES`): their bins name `local:` ids the rig's media
+channels find under `tests/golden/media/` (`GoldenMedia`), every still
+decoded before the first frame is drawn.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
@@ -63,9 +71,11 @@ import gc
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -136,10 +146,42 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # landing through the real `Presets` (`GraphSection`) onto the rig's
 # renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
-FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines",)
+# plan 30 D1: the three placements' proof presets — the palette after the
+# hands' layer, the palette into output 2's picture, a second acid after
+# the scene (`graph.EffectAt.after` / `into`)
+# plan 28 N4: the wire list's proof presets — hands 2 wired to output 2's
+# hands alone, the palette wired into output 1's picture and a second acid
+# from the history into output 2's (`graph.Wire`)
+# plan 32 T6: the media channels' proof presets — a still on channel a as
+# the backdrop under the scene, and channel c wired into output 2's picture
+# (`graph.MediaNode`); their stills are under tests/golden/media/. Plan 32
+# T7's three: the still on the faces (`view.media`), and the still wired into
+# an effect's aux — blend's luma key, displace by its brightness. Plan 33
+# T4's three (`hyperspace.preset/5`): the still through its own shaders onto
+# the faces (`media.a → acid.2 → huecycle.2 → shape.faces`), under the scene
+# (`media.a → kaleido.2 → backdrop.image`), and one branch read at two sizes
+# (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
+# one: a switch onto the faces at select 2, the still (in1 an empty channel,
+# in3 the still through acid.2: never made)
+MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
+                                   "blend-luma-key", "displace-luma", "media-chain-faces",
+                                   "media-chain-backdrop", "branch-two-sizes", "switch-faces")
+FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
+                                    "acid-scene", "hands-glass-only", "wired-outputs",
+                                    *MEDIA_FIXTURES)
+MEDIA = ROOT / "tests" / "golden" / "media"
+MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 
 # the one frame at the 1080p cap: a 2× HiDPI 1080p screen (3840×2160
 # pixels, 1920×1080 logical) whose frame the cap keeps at 1920×1080
+# plan 31 P: the presets drawn with the sequencer running (`seq.run` is
+# never in a preset): play pressed as the rig starts, so step 1 fires on
+# the first frame at T0 + DT and the hashed frame, FRAMES − 1 frames
+# later (about 117 ms at 120 BPM), is mid-envelope on its kick (the hat
+# that fired with it is over, the snare still to come: tests/
+# test_plan31_wiring.py's seq-demo test steps the same frames)
+RUNNING: tuple[str, ...] = ("seq-demo",)
+
 CAP = {"preset": "party-trip", "hands": "present", "state": "scene+hands",
        "size": (3840, 2160), "logical": (1920, 1080), "dpr": 2.0}
 
@@ -162,7 +204,7 @@ import numpy as np
 
 from hyperspace import config as config_mod
 from hyperspace import devices as devices_mod
-from hyperspace import lfo, tempo
+from hyperspace import envelope, lfo, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import default_params
@@ -174,6 +216,9 @@ from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
 from hyperspace.lookback import DreamState
+from hyperspace.media import ids as media_ids
+from hyperspace.media.channels import MediaState
+from hyperspace.media.source import FETCHING
 from hyperspace.outputs import NAMES, Switches, View, route
 from hyperspace.params import build_registry
 from hyperspace.preset import FACTORY_PRESETS, Presets
@@ -217,6 +262,23 @@ class FakeHands:
         pass
 
 
+class GoldenMedia:
+    """The rig's media resolver (plan 32 T6): a `local:` id is a file under
+    `tests/golden/media/`; nothing else is on this Mac."""
+
+    proxy_cache = None
+
+    def path(self, sid: str):
+        got = media_ids.parse(sid)
+        if got.kind != "local":
+            return None
+        p = MEDIA / got.ref
+        return p if p.is_file() else None
+
+    def live(self, sid: str):
+        return None
+
+
 class NullOut:
     name = "none"
 
@@ -236,15 +298,19 @@ class Shot:
     sha256: str
     size: tuple[int, int]
     pixels: np.ndarray   # (h, w, 4) uint8, top row first: for the PNG and a diff
+    wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
 
     @property
     def key(self) -> str:
         return f"{self.preset}|{self.hands}|{self.state}"
 
     def entry(self) -> dict:
-        return {"preset": self.preset, "hands": self.hands, "state": self.state,
-                "route": self.route, "hands_over": self.over, "size": list(self.size),
-                "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        out = {"preset": self.preset, "hands": self.hands, "state": self.state,
+               "route": self.route, "hands_over": self.over, "size": list(self.size),
+               "sha256": self.sha256, "png": f"png/{self.sha256[:16]}.png"}
+        if self.wired is not None:          # (only a wired output's entry has it)
+            out["wired"] = self.wired
+        return out
 
 
 class Rig:
@@ -259,11 +325,21 @@ class Rig:
         self.view, self.fx, self.dream, self.ghost = (ViewState(), FxState(), DreamState(),
                                                       GhostState())
         chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
+        # plan 32: the channels the `media.*` params write and the preset's
+        # bins fill, as app.main makes them (here over the golden stills)
+        self.media = MediaState(GoldenMedia())
         self.reg = reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain),
-                                        None, self.dream, self.fx, ghost=self.ghost)
+                                        None, self.dream, self.fx, ghost=self.ghost,
+                                        media=self.media)
         self.clock = tempo.Clock(now=lambda: self.t)
         tempo.register(reg, self.clock)
         lfo.register(reg, lfo.LFOs(), self.clock)      # declared, never stepped: at rest
+        # plan 31 P: the envelopes and the sequencer, stepped as the app
+        # steps them — at rest and stopped unless the preset is in
+        # `RUNNING`, so no other golden sees them
+        self.envs, self.seq = envelope.Envelopes(), sequencer.Sequencer()
+        envelope.register(reg, self.envs, self.clock)
+        sequencer.register(reg, self.seq, self.clock)
         self._home = tempfile.TemporaryDirectory(prefix="hyperspace-golden-lib-")
         if slug in FIXTURE_PRESETS:          # a user's preset in the scratch library
             own = Path(self._home.name) / "presets"
@@ -272,14 +348,26 @@ class Rig:
         lib = Library(Path(self._home.name))
         lib.attach(reg)
         self.router = Router(reg, Bindings())
+        self.router.use_bank(self.envs, self.clock)
+        self.router.use_sequencer(self.seq, self.envs, self.clock)
         presets = self.presets = Presets(lib, reg, self.router)
         self.missing = presets.load(slug)
         self.notes = list(presets.notes)
         reg["ghost.on"].set(True)
+        # plan 28 N4: a second hands node the graph declares shows too (its
+        # own `ghost.<n>.on`, the session's like `ghost.on`); only a fixture
+        # declares one, so no other golden sees this
+        for pid in [p.id for p in reg if re.fullmatch(r"ghost\.[0-9]+\.on", p.id)]:
+            reg[pid].set(True)
         self.io = HandsIO(HandSettings.from_config({}), {"enabled": True},
                           source=FakeHands(lambda: self.t, hands == "present"),
                           out=NullOut(), clock=lambda: self.t)
         self.clock.trigger(self.t)
+        if slug in RUNNING:
+            # the transport is the session's (decision 8): pressed play,
+            # the pattern restarting at step 1 on the first frame (T0 + DT)
+            self.seq.run = True
+            self.seq.restart()
         self.ctx = ctx
         r = self.renderer = Renderer(ctx, dream=self.dream, fx=self.fx, ghost=self.ghost)
         # plan 26 A4: the preset's graph (none for a factory preset: the
@@ -291,6 +379,17 @@ class Rig:
             raise RuntimeError(f"fx shaders failed to build: {errs}")
         r.ghost.source, r.ghost.router = self.io, self.router
         self.devices = None          # plan 26 A4b: a device registry, polled each frame
+        # plan 32: the channels on the renderer, as app.main hands them; the
+        # stills the preset's slots name opened and decoded before the first
+        # frame (the pool's job: a golden must not catch one half-way)
+        r.media = self.media
+        self.media.poll(0.0, self.t)
+        until = time.monotonic() + MEDIA_WAIT_S
+        while any(ch.source is not None and ch.source.status == FETCHING
+                  for ch in self.media.channels.values()):
+            if time.monotonic() > until:
+                raise RuntimeError(f"{slug}: a media still did not decode in {MEDIA_WAIT_S} s")
+            time.sleep(0.01)
 
     def list_devices(self, toml: str) -> None:
         """A scratch `config.toml` in the rig's home listing `toml`'s
@@ -309,6 +408,7 @@ class Rig:
         self.renderer.cloud_source = self.devices
 
     def close(self) -> None:
+        self.media.close()
         self._home.cleanup()
 
     def frame(self, views: list[View], logical: tuple[int, int], dpr: float) -> None:
@@ -317,6 +417,7 @@ class Rig:
         self.t += DT
         if self.devices is not None:
             self.devices.poll(DT, self.t)
+        self.media.poll(DT, self.t)
         self.io.poll(DT, None, self.router)
         self.clock.tick(self.t)
         self.router.modulate()
@@ -368,7 +469,10 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
     ctx = context()
     rig = Rig(slug, hands, ctx)
     if wiring is not None:
-        rig.renderer.wiring = Wiring(**wiring)
+        # plan 33 R23: the other wiring keeps the preset's run — the run the
+        # load migrated (`graphmigrate`), which the order-built stack these
+        # goldens were recorded on drew; a wiring that says none runs none
+        rig.renderer.wiring = replace(Wiring(**wiring), run=rig.renderer.wiring.run)
     if config is not None:
         rig.list_devices(config)
     try:
@@ -380,7 +484,9 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         for v in views:
             if v.error:
                 raise RuntimeError(f"{slug} {hands}: an output failed: {v.error}")
-        fx_on = rig.renderer.fx.active()
+        # the recorded `effects_on`: an effect is live, wherever it is wired
+        # (plan 33 T7: what the stack's `chain()` said, with no target left)
+        fx_on = any(rig.fx.live(n) for n in rig.fx.specs)
         visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):
@@ -390,9 +496,21 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             if wiring is None and rig.renderer.wiring == Wiring():    # (a fixture's graph: its own)
                 assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
             raw = _read(ctx, f, size)
-            shots.append(Shot(slug, hands, name, NAMES[key] if key is not None else "none",
+            # plan 28 N4: an output whose picture is a wire's shows no
+            # pipeline of `outputs.route`'s table (its end is its own,
+            # `graph.Wired`, keyed `wire(output.<n>)`): its route reads
+            # "none" and its entry says what feeds the wire (`wired`); any
+            # other key not in the table is a bug, and raises here
+            wired = None
+            if isinstance(key, str) and key.startswith("wire("):
+                port = f"{key[len('wire('):-1]}.image"
+                wired = next(w.src for w in rig.renderer.wiring.wires if w.dst == port)
+                route_name = "none"
+            else:
+                route_name = NAMES[key] if key is not None else "none"
+            shots.append(Shot(slug, hands, name, route_name,
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
-                              tuple(size), raw[::-1].copy()))
+                              tuple(size), raw[::-1].copy(), wired))
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
@@ -523,6 +641,7 @@ def record(shots: list[Shot], said: dict, renderer: str, only: set[str] | None,
                                 "states": list(names), "presets": list(which)}
                          for name, toml, names, which in CLOUDED},
         "cap": {**CAP, "size": list(CAP["size"]), "logical": list(CAP["logical"])},
+        "sequencer_running": list(RUNNING),
         "fixture_states": {slug: {"file": f"tests/fixtures/presets/{slug}.json",
                                   "hands": "present", "states": [n for n, _ in STATES]}
                            for slug in FIXTURE_PRESETS},
