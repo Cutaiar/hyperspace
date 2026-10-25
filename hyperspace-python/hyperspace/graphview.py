@@ -3495,6 +3495,40 @@ def _with_frame(doc: dict) -> dict:
     return doc
 
 
+def _frame_order(wires: list[dict]) -> list[dict]:
+    """`wires` in the order a load writes a wired frame (the global
+    constraints' canonical frame order, `graphmigrate.frame_wires`): the
+    section's own wires first, as they stand, then the frame's — the
+    scene's geometry, `backdrop.scene`, the look-back's picture and
+    occluder, the run, All outputs' picture, hands and guide, the capture's
+    composite and the capture. A stable sort: only `scene.geometry` takes
+    several wires, and theirs keep their order (it is the draw order). So
+    an edit that brings a frame back to a migrated one round-trips
+    (`graphmigrate.unwired`) and saves in the lowest schema again (R10)."""
+    into = {x["to"]: x["from"] for x in wires}
+    run: list[str] = []
+    head = into.get(f"{rgraph.ALL_OUTPUTS}.image")
+    while kind_of(head) == "effect" and head not in run:
+        run.insert(0, head)
+        head = into.get(f"{head}.image")
+    chain = (set(zip(["lookback", *run], [f"{e}.image" for e in run]))
+             if head == "lookback" else set())
+    held = into.get("lookback.capture")
+    comp = held if kind_of(held) == "composite" else None
+    groups = {"scene.geometry": 1, "backdrop.scene": 2, "lookback.image": 3,
+              "lookback.occluder": 4, f"{rgraph.ALL_OUTPUTS}.image": 6,
+              f"{rgraph.ALL_OUTPUTS}.hands": 7, f"{rgraph.ALL_OUTPUTS}.guide": 8,
+              "lookback.capture": 10}
+
+    def group(x: dict) -> int:
+        if (x["from"], x["to"]) in chain:
+            return 5
+        if comp is not None and x["to"].rpartition(".")[0] == comp:
+            return 9
+        return groups.get(x["to"], 0)
+    return sorted(wires, key=group)
+
+
 def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> str | None:
     """Read `doc` back as a preset would (a note is the refusal, nothing
     changed); else, unless `dry`, the undo step and the landing."""
@@ -3509,6 +3543,7 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> st
     doc["nodes"] = [e for e in doc["nodes"] if not (
         e.get("kind") in rgraph.FRAME_KINDS and set(e) <= {"kind", "instance"}
         and _node_name(e) in wired)]
+    doc["wires"] = _frame_order(doc.get("wires", []))
     if not doc.get("wires"):
         doc.pop("wires", None)
     try:
