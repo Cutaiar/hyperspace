@@ -2107,6 +2107,7 @@ def test_the_ghost_style_is_on_the_hands_page_while_the_ghost_is_on(rig, monkeyp
 
 def _output_page(rig, monkeypatch, page="output") -> tuple[list[str], list[tuple]]:
     """Every text and checkbox label the page (and the footer) draws, and
+    each closed combo's words (plan 35 T6: "shows:" is a picture combo), and
     each item's right edge against its window's, at the control size."""
     import hyperspace.ui as ui_mod
 
@@ -2119,8 +2120,12 @@ def _output_page(rig, monkeypatch, page="output") -> tuple[list[str], list[tuple
         edges.append((s, imgui.get_item_rect_max().x,
                       imgui.get_window_pos().x + imgui.get_window_width()))
 
-    real = {n: getattr(imgui, n) for n in ("text", "text_colored", "text_disabled", "checkbox")}
+    real = {n: getattr(imgui, n) for n in ("text", "text_colored", "text_disabled", "checkbox",
+                                           "begin_combo")}
     with monkeypatch.context() as m:
+        m.setattr(ui_mod.imgui, "begin_combo",
+                  lambda label, preview, *a: (real["begin_combo"](label, preview, *a),
+                                              rec(preview))[0])
         m.setattr(ui_mod.imgui, "text", lambda s: (real["text"](s), rec(s))[0])
         m.setattr(ui_mod.imgui, "text_colored",
                   lambda c, s: (real["text_colored"](c, s), rec(s))[0])
@@ -2186,9 +2191,15 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     slots[1].error = "present: RuntimeError: lost the context"
     drawn, _ = _output_page(rig, monkeypatch)
     assert "1  glass" in drawn and "2  projector" in drawn
+    # plan 35 T6: each window's picture combo says its port's wire (the
+    # factory frame: none of its own), then why it is black, or its dim;
+    # All outputs' combo first, its picture's source
     shows = [s for s in drawn if s.startswith("shows: ")]
-    assert shows == ["shows: scene", "shows: scene · 60%", "shows: black — nothing switched on",
-                     "shows: scene"]          # no hand shows in this rig: the hands add nothing
+    assert shows == ["shows: Look-back", "shows: as All outputs",
+                     "shows: as All outputs · 60%",
+                     "shows: as All outputs · black — nothing switched on",
+                     "shows: as All outputs"]
+    assert drawn.count("hands through the effects") == 4 and drawn.count("All outputs") == 1
     assert "present: RuntimeError: lost the context" in drawn
     # ghost hands off: said beside the outputs whose hands are on; no effect: said on 4
     reg["ghost.on"].set(False)
@@ -2200,7 +2211,7 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     slots[1].win, slots[1].missing = None, "screen 2 is not connected"
     drawn, _ = _output_page(rig, monkeypatch)
     assert "2  projector — screen 2 is not connected" in drawn
-    assert len([s for s in drawn if s.startswith("shows: ")]) == 3
+    assert len([s for s in drawn if s.startswith("shows: as All")]) == 3
 
 
 def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeypatch):
@@ -2219,7 +2230,8 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
         drawn, _ = _output_page(r, monkeypatch)
         assert drawn[drawn.index("1"):drawn.index("1") + 3] == ["1", "picture", "hands"]
         assert "output.1.dim" not in r.reg and not any(s.startswith("paced") for s in drawn)
-        assert [s for s in drawn if s.startswith("shows: ")] == ["shows: scene"]
+        assert [s for s in drawn if s.startswith("shows: ")] == [
+            "shows: Look-back", "shows: as All outputs"]
         assert r.reg["output.1.scene"].label == "Picture"
 
 

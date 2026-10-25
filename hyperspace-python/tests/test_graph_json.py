@@ -295,13 +295,16 @@ def test_the_output_pages_shows_line_says_the_wiring():
 
 
 def test_the_lookback_page_says_what_the_history_holds():
-    from types import SimpleNamespace as NS
+    """Plan 35 T6: "records:" names the source of the wire into
+    `lookback.capture` (the hands held: the composite laying them on);
+    `lookback_words` keeps the longer words for the combo's hover."""
+    from hyperspace import graphmigrate as M
+    from hyperspace.ui_lookback import capture_line
 
-    from hyperspace.ui_lookback import history_line
-
-    assert history_line(None) == "history: the scene"
-    assert history_line(NS(wiring=G.Wiring(history="scene+hands"))) == \
-        "history: the scene · with the hands"
+    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands")))
+    assert capture_line(None) == "records: Scene"
+    assert capture_line(held) == "records: Composite"
+    assert G.lookback_words(held.wiring()) == "history: the scene · with the hands"
 
 
 # ---------------------------------------------------------------- effect instances

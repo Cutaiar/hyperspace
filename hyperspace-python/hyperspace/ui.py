@@ -38,6 +38,7 @@ from . import (
     apc40,
     field,
     gamepad,
+    graphview,
     learn,
     ui_bands,
     ui_desk,
@@ -58,6 +59,7 @@ from .bands import CEIL, KNEE
 from .control import Control
 from .geometry import SHAPES, geom, menu
 from .graph import (
+    ALL_OUTPUTS,
     GROUND,
     Wiring,
     graph_words,
@@ -286,11 +288,41 @@ def fit_text(text: str, width: float) -> str:
     return text[:lo].rstrip() + "…"
 
 
+GROUND_WORDS = "nothing — its ground"
+THROUGH_WORDS = "hands through the effects"     # OUTPUT's checkbox (plan 35 O)
+OPEN_ON_GRAPH = "open on GRAPH"                 # a window's block: its node selected there
+
+
+def shows_line(spec, n: int | None, slots=()) -> str:
+    """The OUTPUT page's "shows:" (plan 35 U), read off the wired frame
+    (`graphview.page_spec`: None is the factory frame): window `n`'s
+    picture port — its own wire's source by its title (`graphview.
+    label_of`: "Channel A"), "as All outputs" with no wire of its own, or
+    "nothing — its ground" for a `ground` wire or nothing anywhere; a
+    window putting the hands through the effects says so after. `n` None:
+    All outputs' own picture. The mutes are not read: they are the
+    window's ticks beside the words."""
+    spec = graphview.page_spec(spec)
+    alls = graphview.picture_now(spec, f"{graphview.rgraph.ALL_OUTPUTS}.image")
+    if n is None:
+        now = alls
+    else:
+        now = graphview.picture_now(spec, f"output.{n}.image")
+        if now == graphview.AS_ALL and alls == graphview.NOTHING:
+            now = graphview.NOTHING
+    words = GROUND_WORDS if now == graphview.NOTHING else graphview.picture_label(
+        spec, now, slots)
+    if n is not None and graphview.is_through(spec, n):
+        words += f" · the {THROUGH_WORDS}"
+    return f"shows: {words}"
+
+
 def output_shows(sw, fx_on: bool, visible: bool, master: float,
                  wiring: Wiring | None = None, n: int | None = None) -> tuple[str, str]:
     """What one render output shows, in words, and why it is black ("" when
-    it is not) — the OUTPUT page's "shows:" line (plan 21 WP4, fork F8:
-    words, no picture): its window's mutes (`sw`: the picture, the hands),
+    it is not) — plan 21 WP4, fork F8: words, no picture; plan 35 T6: the
+    picture combo's hover, its black words after `shows_line`'s, and the
+    footer's black outputs: its window's mutes (`sw`: the picture, the hands),
     whether an effect is on, whether a hand shows (`visible`: the ghost
     hands are on and the layer drew, fork F7), with master × its own dim.
     The reasons: "nothing" (both muted), "no hand" (the picture muted and no
@@ -1810,12 +1842,18 @@ class Panel:
         return f"·  {which} black"
 
     def _output_blocks(self) -> None:
-        """One block per render output the config lists (plan 21 WP4): its
-        number and name and its three switches, its own dim (with two or
-        more outputs), why a switch can do nothing, and "shows:" — what it
-        shows in words (fork F8), in the warning colour when it is black.
-        An output that did not open is one disabled line saying why; under
-        the blocks, which output paces the loop and the frame's size."""
+        """One block per render output the config lists (plan 21 WP4), a
+        view of the wires (plan 35 U): its number and name, its two mutes
+        ("picture", "hands": the window's, never the preset) and "hands
+        through the effects" (the preset's wiring, `graphview.set_through`),
+        its own dim and flips (with two or more outputs), why a tick can do
+        nothing, and "shows:" — its picture port's source in words
+        (`shows_line`) as a combo of the graph's pictures that sets it
+        (`graphview.set_picture`), in the warning colour when it is black —
+        with "open on GRAPH" beside it. Above them, All outputs' block: the
+        same combo, nothing else. An output that did not open is one
+        disabled line saying why; under the blocks, the last edit's words
+        and which output paces the loop and the frame's size."""
         slots = getattr(self, "outputs", None) or []
         if not slots:
             return
@@ -1823,13 +1861,26 @@ class Panel:
         fx_on, visible, master = self._outputs_now()
         ghost = self.reg.get("ghost.on")
         # plan 26 A4: the render graph the outputs are wired by — the
-        # loaded preset's `graph` section, or the default
+        # loaded preset's `graph` section, or the default; plan 35 U: the
+        # wired frame the pages read and edit (`graphview.page_spec`)
         wiring, spec = self.graph_now()
+        frame = graphview.page_spec(spec)
+        said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
+                                         "dormant", None))
+        # (the blocks' rows closer together: four windows of four rows each,
+        # and All outputs', fit the page unscrolled — popped after the loop)
+        imgui.push_style_var(imgui.StyleVar_.item_spacing,
+                             imgui.ImVec2(imgui.get_style().item_spacing.x, 4))
+        imgui.align_text_to_frame_padding()
+        imgui.text(graphview.label_of(ALL_OUTPUTS))
+        imgui.same_line()
+        self._picture_combo(frame, f"{ALL_OUTPUTS}.image", shows_line(frame, None, slots), -1,
+                            False, f"{graphview.hover_of(ALL_OUTPUTS)}\n{said}", slots)
         # the switches line up after the widest "N  name", which is cut so
         # the three ticks always fit the page's width
-        ticks = sum(imgui.calc_text_size(s).x for s in ("picture", "hands"))
-        ticks += 2 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
-        ticks += 2 * imgui.get_style().item_spacing.x
+        ticks = sum(imgui.calc_text_size(s).x for s in ("picture", "hands", THROUGH_WORDS))
+        ticks += 3 * (imgui.get_frame_height() + 2 * imgui.get_style().item_inner_spacing.x)
+        ticks += 3 * imgui.get_style().item_spacing.x
         room = max(imgui.get_content_region_avail().x - ticks - 8, 40)
         labels = {sl.n: fit_text(f"{sl.n}  {sl.name}" if sl.name else f"{sl.n}", room)
                   for sl in slots}
@@ -1845,11 +1896,14 @@ class Panel:
             imgui.align_text_to_frame_padding()
             imgui.text(labels[sl.n])
             imgui.same_line(col)
-            # plan 35 O (row 374): the window's two mutes; "hands through the
-            # effects" is the preset's wiring (T6 writes it from here)
+            # plan 35 O (row 374): the window's two mutes (the rig's, never
+            # the preset); "hands through the effects" is the preset's
+            # wiring, written from here (T6, `graphview.set_through`)
             self._check(f"{pre}.scene", "picture")
             imgui.same_line()
             self._check(f"{pre}.hands", "hands")
+            imgui.same_line()
+            self._through_check(frame, sl.n, slots)
             # the mirror (plan 23 WP1): two ticks at the right of the dim row,
             # or of the "shows:" line when the output has no dim of its own
             flips = [(pid, t) for pid, t in ((f"{pre}.flip_x", "flip X"),
@@ -1886,36 +1940,112 @@ class Panel:
             # the whole graph in words on the line's hover
             # plan 30 D1: the effects placed on what it shows, and on hover
             # why a placed one runs nowhere this frame (`Graph.dormant`)
+            # plan 35 U: "shows:" is the window's picture port as the wires
+            # say it, and the combo that sets it (`graphview.set_picture`);
+            # the retired route table's words (`output_shows`) on its hover,
+            # and after the words when it is black or dimmed
             words, black = output_shows(sw, fx_on, visible, master, wiring, n=sl.n)
-            said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
-                                             "dormant", None))
-            if not flips:
-                imgui.text_colored(WARN if black else FAINT, f"shows: {words}")
-                if imgui.is_item_hovered():
-                    imgui.set_tooltip(f"{hands_words(wiring, sw, sl.n)}\n{said}")
-                continue
-            # no dim row: the ticks at the right of the "shows:" line, the
-            # words cut to the room left of them
-            avail = imgui.get_content_region_avail().x
-            imgui.align_text_to_frame_padding()
-            imgui.text_colored(WARN if black else FAINT,
-                               fit_text(f"shows: {words}", max(avail - fw - 8, 40)))
+            line = shows_line(frame, sl.n, slots)
+            factor = min(1.0, master * float(sw.dim))
+            if black:
+                line += f" · {words}"
+            elif 0.0 < factor < 1.0:
+                line += f" · {min(99, max(1, round(factor * 100)))}%"
+            tip = f"{words}\n{hands_words(wiring, sw, sl.n)}\n{said}"
+            gw = chip_w(OPEN_ON_GRAPH) + st.item_spacing.x
+            self._picture_combo(frame, f"{pre}.image", line, -(gw + (fw + 8 if flips else 0)),
+                                bool(black), tip, slots)
+            imgui.same_line()
+            if chip(f"{OPEN_ON_GRAPH}##graph.{pre}"):
+                ui_graph.select_node(self, pre)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"shows: {words}\n{hands_words(wiring, sw, sl.n)}\n{said}")
-            for k, (pid, t) in enumerate(flips):
-                imgui.same_line(imgui.get_cursor_start_pos().x + avail - fw if k == 0 else 0.0)
+                imgui.set_tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
+                                  "page and bring it on screen")
+            for pid, t in flips:            # no dim row: the ticks at the right of this one
+                imgui.same_line()
                 self._check(pid, t)
+        imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why
         for line in dormant_lines(getattr(self.renderer, "_graph", None)):
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
                 imgui.set_tooltip(line)
+        self._edit_said("output_said")
         if several:
             w, h = slots[0].size
             size = f" · frame {w}×{h}" if w and h else ""
             imgui.text_colored(FAINT, fit_text(f"paced by output 1{size} · below: output 1's "
                                                "window", imgui.get_content_region_avail().x))
         imgui.dummy(imgui.ImVec2(0, 2))
+
+    # ---- plan 35 U: the pages' graph edits (OUTPUT, LOOKBACK) ----
+
+    def _graph_edit(self, fn, key: str) -> None:
+        """Page edit `fn(edit)` on the loaded preset's graph — GRAPH's own
+        `render_edit`: one undo step, its refusals — its words (a refusal,
+        or what it did) kept under `key` for the page's line."""
+        e = ui_graph.render_edit(self)
+        try:
+            why = fn(e)
+        except Exception as err:  # noqa: BLE001 — a page's edit must not kill the app
+            why = f"edit failed: {err}"
+        setattr(self, key, why or e.said)
+
+    def _edit_said(self, key: str) -> None:
+        """The page's last graph edit's words, faint, one line (the whole on hover)."""
+        line = getattr(self, key, "")
+        if line:
+            imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(line)
+
+    def _picture_combo(self, frame, port: str, line: str, width: float, warn: bool,
+                       tip: str, slots=(), key: str = "output_said") -> None:
+        """A picture port as a combo (plan 35 U): closed, `line` (its
+        "shows:" or "records:" words, in the warning colour when `warn`);
+        open, `graphview.picture_choices` by their titles, the pick a
+        `graphview.set_picture` edit. `tip` on the closed combo's hover."""
+        imgui.set_next_item_width(width)
+        if warn:
+            imgui.push_style_color(imgui.Col_.text, WARN)
+        # (a chip's padding: the row is a line of words with its chip
+        # beside it, and four windows' blocks fit the page unscrolled)
+        imgui.push_style_var(imgui.StyleVar_.frame_padding, CHIP_PAD)
+        opened = imgui.begin_combo(f"##picture.{port}", line)
+        imgui.pop_style_var()
+        if warn:
+            imgui.pop_style_color()
+        pick = None
+        if opened:
+            now = graphview.picture_now(frame, port)
+            for item in graphview.picture_choices(frame, port):
+                chosen = item == now
+                text = graphview.picture_label(frame, item, slots)
+                if imgui.selectable(f"{text}##{port}.{item}", chosen)[0] and not chosen:
+                    pick = item
+                if chosen:
+                    imgui.set_item_default_focus()
+            imgui.end_combo()
+        elif tip and imgui.is_item_hovered():
+            imgui.set_tooltip(tip)
+        if pick is not None:
+            self._graph_edit(lambda e: graphview.set_picture(e, port, pick), key)
+
+    def _through_check(self, frame, n: int, slots=()) -> None:
+        """Window `n`'s "hands through the effects" (plan 35 O): ticked while
+        its picture is a chain over the hands layer laid on; a tick is
+        `graphview.set_through`. Drawn disabled, with why on its hover,
+        where it can do nothing (`graphview.through_refusal`)."""
+        on = graphview.is_through(frame, n)
+        why = None if on else graphview.through_refusal(frame, n, slots)
+        imgui.begin_disabled(why is not None)
+        changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
+        imgui.end_disabled()
+        if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
+            imgui.set_tooltip(why or "the hands bent by the effects on this output (written "
+                              "into the preset's graph: a composite before the effects)")
+        if changed:
+            self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
 
     def _page_view(self, dt: float) -> None:
         v = self.view

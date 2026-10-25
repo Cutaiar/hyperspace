@@ -25,8 +25,8 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
-from .graph import Wiring, lookback_words
+from . import graphview, ui
+from .graph import lookback_words
 from .lookback import LAYER_INFO, LAYERS, RES, tint_colour
 from .params import Kind
 
@@ -80,10 +80,10 @@ def page(panel, dt: float) -> None:
     imgui.text_disabled(status)
     if getattr(lb, "error", ""):
         imgui.text_colored(ui.WARN, f"GLSL: {lb.error} — on the shipped helpers")
-    # plan 26 A4: what the history is wired to capture, in words (the
-    # loaded preset's graph sets it; no editor until plan 28) — in the
-    # spacing the switch's row had under it, so the page is no taller
-    imgui.text_disabled(history_line(panel.renderer))
+    # plan 35 U: what the look-back records — a combo of the graph's
+    # pictures setting the wire into `lookback.capture`, one GRAPH edit
+    # (`graphview.set_picture`) — and what it draws over, in words, beside it
+    _records_row(panel)
 
     panel._section("echoes", note=_trail_note(r))
     _cells(panel, lb, "##echoes", SECTIONS["echoes"])
@@ -100,12 +100,52 @@ def page(panel, dt: float) -> None:
     _cells(panel, lb, "##both", SECTIONS["both"])
 
 
-def history_line(renderer) -> str:
-    """The LOOKBACK page's wiring line (plan 26 A4): `history: the scene`,
-    or `history: the scene · with the hands` — from the renderer's wiring
-    (`graph.lookback_words`, plan 35 T4: read off the wire into
-    `lookback.capture`); the default with no renderer."""
-    return lookback_words(getattr(renderer, "wiring", None) or Wiring())
+CAPTURE = "lookback.capture"
+RECORDS_NOTHING = "nothing — the echoes fade"
+RECORDS_TIP = ("what the look-back records: the picture wired into lookback.capture — "
+               "the echoes and the dream are made of it (a GRAPH edit, one undo step)")
+
+
+def capture_line(spec) -> str:
+    """The LOOKBACK page's "records:" (plan 35 U): the source wired into
+    `lookback.capture` by its title (`graphview.picture_label`: "Scene"),
+    or "nothing — the echoes fade" with no wire there. `spec` is the
+    loaded preset's graph (`graphview.page_spec`: None is the factory
+    frame)."""
+    spec = graphview.page_spec(spec)
+    now = graphview.picture_now(spec, CAPTURE)
+    return "records: " + (RECORDS_NOTHING if now == graphview.NOTHING
+                          else graphview.picture_label(spec, now))
+
+
+def draws_over_line(spec) -> str:
+    """"draws over: <lookback.image's source>" — words alone (plan 35 U):
+    what the echoes are laid on is a wire, set on GRAPH."""
+    spec = graphview.page_spec(spec)
+    now = graphview.picture_now(spec, "lookback.image")
+    return "draws over: " + (graphview.NOTHING if now == graphview.NOTHING
+                             else graphview.picture_label(spec, now))
+
+
+def _records_row(panel) -> None:
+    """The records combo, half the row, and "draws over:" beside it; the
+    last edit's words under them while there are any."""
+    now = getattr(panel, "graph_now", None)
+    try:
+        spec = now()[1] if now is not None else None
+    except (AttributeError, TypeError):     # a stand-in renderer or library: no graph
+        spec = None
+    frame = graphview.page_spec(spec)
+    width = imgui.get_content_region_avail().x * 0.55
+    # (the hover: the longer words — "with the hands", a placed effect)
+    tip = RECORDS_TIP if frame is None else f"{lookback_words(frame.wiring())}\n\n{RECORDS_TIP}"
+    panel._picture_combo(frame, CAPTURE, capture_line(frame), width, False, tip,
+                         key="lookback_said")
+    imgui.same_line()
+    imgui.align_text_to_frame_padding()
+    over = draws_over_line(frame)
+    imgui.text_disabled(ui.fit_text(over, imgui.get_content_region_avail().x))
+    panel._edit_said("lookback_said")
 
 
 def _say(text: str) -> None:

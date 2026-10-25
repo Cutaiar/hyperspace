@@ -3662,7 +3662,12 @@ def _hands_entry(doc: dict, n: int) -> dict | None:
                  and e.get("instance", 1) == n), None)
 
 
-def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None:
+def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
+                doc: dict | None = None) -> str | None:
+    """A wire `src → dst` into the section (the one into `dst` replaced,
+    but a `scene.geometry`'s, which takes several). `doc` (plan 35 T6): the
+    section to wire on — the OUTPUT page's pick, its through taken off
+    first — else the landed one."""
     s, why = spec_name(src, edit.render)
     if s is None:
         return why
@@ -3672,7 +3677,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None
     if kind_of(d) is not None:
         return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
-    doc = _doc(edit)
+    doc = _doc(edit) if doc is None else doc
     wires = doc.get("wires", [])
     if d in rgraph.MANY_PORTS:
         # several wires go in, drawn in section order — a hands node's
@@ -4155,3 +4160,213 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
                 return _land(edit, doc, f"{name} {blend}", f"{name} laid {blend}")
         return f"no {name} node in this graph"
     return f"{name} has no setting here"
+
+
+# ---- plan 35 T6 (U): the OUTPUT and LOOKBACK pages as views of the wires.
+# A page sets a picture port (a window's, All outputs', the look-back's
+# capture) and a window's "hands through the effects" — each a GRAPH edit
+# through `_land`: one undo step, GRAPH's refusals, and the frame in its
+# canonical wire order, so an edit put back saves in the lowest schema
+# again (R10). The mutes are the window's (row 374), never written here.
+
+AS_ALL = "as All outputs"      # a window's picture port with no wire of its own
+NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the capture: no wire
+# the areas a page lists the graph's pictures in (the canvas's, left to right)
+PICTURE_AREA: dict[str, str] = {
+    "channel": MEDIA, "pattern": MEDIA, "switch": MEDIA, "delay": MEDIA,
+    "scene": SCENE_AREA, "layer": SCENE_AREA, "guide": SCENE_AREA, "backdrop": SCENE_AREA,
+    "lookback": LOOKBACK_AREA, "echo": LOOKBACK_AREA, "dream": LOOKBACK_AREA,
+    "effect": EFFECTS_AREA, "copy": EFFECTS_AREA, "composite": EFFECTS_AREA,
+    "resize": EFFECTS_AREA,
+}
+PICTURE_AREAS = (MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA)
+THROUGH_NO_LAYER = ("hands through the effects: All outputs lays no hands layer over its "
+                    "picture — wire a hands layer into output.all.hands on GRAPH")
+THROUGH_OWN_PICTURE = ("{label} shows {src} by its own wire: the hands go through All "
+                       "outputs' effects — set its picture to \"as All outputs\" first")
+
+
+def page_spec(spec):
+    """The wired frame a page reads (plan 35 U): `spec` itself when it is
+    one; else (no preset landed, a section from before the wired frame) the
+    frame a GRAPH edit starts from (`_frame_doc`) read — None if it will
+    not read."""
+    if spec is not None and getattr(spec, "wired", False):
+        return spec
+    try:
+        return rgraph.read_graph(_with_frame(copy.deepcopy(_frame_doc(spec))))
+    except rgraph.GraphError:
+        return None
+
+
+def picture_sources(spec) -> list[str]:
+    """Every picture-making node section `spec` reaches or declares
+    (`frame_names`: its entries and its wires' ends), in area order —
+    MEDIA, SCENE, LOOK-BACK, EFFECTS — and section order within one: what
+    a page's picture combo may offer (plan 35 U). No geometry, no window,
+    no `ground` (the combo's "nothing" says that)."""
+    names = [n for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
+             and _makes(kind_of(n)) == IMAGE]
+    return sorted(names, key=lambda n: PICTURE_AREAS.index(PICTURE_AREA[kind_of(n)]))
+
+
+def _window(port: str) -> int | None:
+    """The window `port` is the picture port of (`output.2.image` → 2), or
+    None (All outputs', the capture)."""
+    head, _, rest = port.partition(".")
+    n, _, p = rest.partition(".")
+    return int(n) if head == "output" and n.isdigit() and p == "image" else None
+
+
+def picture_choices(spec, port: str) -> list[str]:
+    """A picture combo's items for `port`: a window's "as All outputs",
+    "nothing" and `picture_sources`; All outputs' and the capture's
+    "nothing" and the sources."""
+    head = [AS_ALL, NOTHING] if _window(port) is not None else [NOTHING]
+    return [*head, *picture_sources(spec)]
+
+
+def _into(spec, dst: str) -> str | None:
+    return next((w.src for w in (spec.wires if spec is not None else ()) if w.dst == dst), None)
+
+
+def picture_now(spec, port: str) -> str:
+    """The combo's pick for `port` as section `spec` wires it: the source's
+    name; `ground`, or no wire (All outputs', the capture), "nothing"; a
+    window with no wire of its own, or putting the hands through All
+    outputs' picture (`is_through`), "as All outputs" (a through over
+    nothing — the scene off — "nothing")."""
+    n = _window(port)
+    if n is not None and is_through(spec, n):
+        under = rgraph.through_of(spec.wiring(), n)[1]
+        return AS_ALL if under is not None else NOTHING
+    src = _into(spec, port)
+    if src is None:
+        return AS_ALL if n is not None else NOTHING
+    return NOTHING if src == rgraph.GROUND else src
+
+
+def picture_label(spec, name: str, slots=()) -> str:
+    """A combo item's words: "as All outputs" and "nothing" as they are,
+    a node by its title (`label_of`; a copy with what it copies)."""
+    if name in (AS_ALL, NOTHING):
+        return name
+    of = next((c.of for c in (getattr(spec, "copies", None) or ()) if c.name == name), "")
+    return label_of(name, slots, of=of)
+
+
+def is_through(spec, n: int) -> bool:
+    """Whether window `n` puts the hands through the effects: its picture
+    a chain over a composite laying a hands layer (`graph.through_of`)."""
+    return spec is not None and rgraph.through_of(spec.wiring(), n) is not None
+
+
+def _drop_through(doc: dict, n: int) -> bool:
+    """Window `n`'s "hands through the effects" taken out of section `doc`
+    (the inverse of `graphmigrate.output_wires` under `Shows(through=
+    True)`): the wire into its picture, the chain of copies back to the
+    composite and the composite — each that nothing else reads, with its
+    entry and its wires — and the `ground` the through put on its hands
+    port, so the layer is laid over again. A through over nothing (the
+    scene off) leaves `ground` on the picture port. False: not through."""
+    wires = doc.get("wires", [])
+    into = {x["to"]: x["from"] for x in wires}
+    port = f"output.{n}."
+    chain: list[str] = []
+    src = into.get(port + "image")
+    while kind_of(src) == "copy" and src not in chain:
+        chain.append(src)
+        src = into.get(f"{src}.image")
+    if kind_of(src) != "composite" or kind_of(into.get(f"{src}.over")) != "layer":
+        return False
+    chain.append(src)
+    under = into.get(f"{src}.under")
+    left = [x for x in wires if x["to"] != port + "image"
+            and not (x["to"] == port + "hands" and x["from"] == rgraph.GROUND)]
+    gone: set[str] = set()
+    for name in chain:                     # the window's end first, back to the composite
+        if any(x["from"] == name for x in left):
+            break                          # (read by something else: kept, and what feeds it)
+        gone.add(name)
+        left = [x for x in left if x["to"].rpartition(".")[0] != name]
+    dropped = [x for x in wires if x not in left]
+    doc["wires"] = left
+    doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in gone]
+    if under is None:
+        doc["wires"].append({"from": rgraph.GROUND, "to": port + "image"})
+    _keep_declared(doc, [x["from"] for x in dropped if x["from"] not in gone])
+    return True
+
+
+def set_picture(edit: Edit, port: str, choice: str) -> str | None:
+    """A page's picture combo (plan 35 U): `choice` into `port` — a
+    window's (`output.N.image`), All outputs' or the look-back's capture.
+    A source is `render_wire(…, port)`; "nothing" is `ground` into a
+    window's port, no wire into the others'; "as All outputs" takes the
+    window's own wire away. A window putting the hands through the effects
+    drops that first (`_drop_through`), in the same landing. One undo step;
+    a pick that is so already lands nothing ("already so")."""
+    spec = _spec(edit)
+    if picture_now(spec, port) == choice:
+        edit.said = "already so"
+        return None
+    n = _window(port)
+    doc = _doc(edit)
+    thru = n is not None and _drop_through(doc, n)
+    if choice == NOTHING and n is not None:
+        choice = rgraph.GROUND
+    if choice not in (AS_ALL, NOTHING):
+        if thru:
+            doc["wires"] = [x for x in doc["wires"] if x["to"] != port]
+        return render_wire(edit, choice, port, doc=doc)
+    wires = doc.get("wires", [])
+    left = [x for x in wires if x["to"] != port]
+    gone = [x for x in wires if x not in left]
+    doc["wires"] = left
+    _keep_declared(doc, [x["from"] for x in gone])
+    said = f"{port}: {AS_ALL}" if choice == AS_ALL else f"unwired {port}"
+    return _land(edit, doc, f"unwire {port}", said)
+
+
+def through_refusal(spec, n: int, slots=()) -> str | None:
+    """Why window `n` cannot put the hands through the effects (the
+    checkbox drawn disabled, its hover these words), or None: All outputs
+    lays no hands layer over its picture (R11: no hands to put through),
+    or the window shows a picture of its own by a wire."""
+    if kind_of(_into(spec, f"{rgraph.ALL_OUTPUTS}.hands")) != "layer":
+        return THROUGH_NO_LAYER
+    own = _into(spec, f"output.{n}.image")
+    if own is not None and own != rgraph.GROUND and not is_through(spec, n):
+        return THROUGH_OWN_PICTURE.format(label=label_of(f"output.{n}", slots),
+                                          src=picture_label(spec, own))
+    return None
+
+
+def set_through(edit: Edit, n: int, on: bool) -> str | None:
+    """OUTPUT's "hands through the effects" on window `n` (plan 35 O, T4's
+    carried toggle), as wiring: on, the section plus `graphmigrate.
+    output_wires(spec, n, Shows(through=True))` — a composite laying All
+    outputs' hands layer on its picture's head and a copy of each effect of
+    its run, into `output.n.image` (with the window's picture `ground`, the
+    hands alone through); off, those wires and the composite and copies
+    only they use (`_drop_through`). One undo step each. Refused in words:
+    All outputs laying no hands layer (R11), a window with a picture of
+    its own."""
+    spec = _spec(edit)
+    if spec is None:
+        return "no preset is loaded"
+    label = label_of(f"output.{n}", getattr(edit, "slots", ()))
+    if is_through(spec, n) == on:
+        edit.said = "already so"
+        return None
+    doc = _doc(edit)
+    if not on:
+        _drop_through(doc, n)
+        return _land(edit, doc, f"hands over on output {n}",
+                     f"{label}: the hands over the effects")
+    why = through_refusal(spec, n, getattr(edit, "slots", ()))
+    if why is not None:
+        return why
+    shows = graphmigrate.Shows(scene=_into(spec, f"output.{n}.image") is None, through=True)
+    return _land(edit, graphmigrate.with_output_wires(doc, n, shows),
+                 f"hands through on output {n}", f"{label}: the hands through the effects")

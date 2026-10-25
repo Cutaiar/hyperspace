@@ -568,6 +568,17 @@ def select_effect(panel, name: str) -> None:
     st["select"] = name
 
 
+def select_node(panel, name: str) -> None:
+    """Select frame node `name` (plan 35 U, OUTPUT's "open on GRAPH":
+    `output.2`, `output.all`) and centre it on the canvas next frame, the
+    GRAPH page opened."""
+    st = _state(panel)
+    st["select_node"] = f"render:{name}"
+    pid = "ui.page"
+    if pid in panel.reg:
+        panel.reg[pid].set(ui.PAGE_KEYS.index("graph"))
+
+
 def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
     """The node effect instance `name` is drawn as: its scene pipeline's
     (named by the instance), else its first."""
@@ -579,7 +590,15 @@ def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
 
 def _select(st: dict, view: graphview.View) -> None:
     """Inside the editor, the nodes drawn: the selection `select_effect` (or
-    the FX page) asked for, selected and brought on screen."""
+    the FX page) asked for, selected and brought on screen; a frame node
+    `select_node` asked for (OUTPUT's "open on GRAPH") the same."""
+    nid = st.pop("select_node", None)
+    got = view.node(nid) if nid else None
+    if got is not None and drawn_node(st, got):
+        ed.clear_selection()
+        ed.select_node(ed.NodeId(_id(st, "n:" + got.id)))
+        ed.navigate_to_selection(False)
+        return
     name = st.get("select")
     if not name:
         return

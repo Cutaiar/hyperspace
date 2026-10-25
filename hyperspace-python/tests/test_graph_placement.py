@@ -355,11 +355,9 @@ def test_a_placement_the_graph_lacks_is_dormant_and_said_in_words():
 
 def test_the_words_say_the_placements():
     """`graph_words`, the OUTPUT page's "shows:" line (`output_shows` with
-    the output's number) and the LOOKBACK page's history line."""
-    from types import SimpleNamespace as NS
-
+    the output's number, now its combo's hover) and the look-back's words
+    (`lookback_words`, the LOOKBACK records combo's hover — plan 35 T6)."""
     from hyperspace.ui import output_shows
-    from hyperspace.ui_lookback import history_line
 
     spec = G.read_graph({"nodes": [
         {"kind": "effect", "file": "acid", "instance": 2, "after": "scene"},
@@ -381,7 +379,7 @@ def test_the_words_say_the_placements():
         "scene · acid 2 before the history"
     # without the number (or with no placement) the words are A4's
     assert output_shows(S(), True, True, 1.0, w) == ("scene + hands over the effects", "")
-    assert history_line(NS(wiring=w)) == "history: the scene · acid 2 before the history"
+    assert G.lookback_words(w) == "history: the scene · acid 2 before the history"
     for e, words in ((G.EffectAt("acid", 2, into="history"), "acid 2 into the history only"),
                      (G.EffectAt("palette", 1, after="history"),
                       "palette after the history"),
