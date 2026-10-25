@@ -4076,7 +4076,9 @@ def render_drop(edit: Edit, node: str) -> str | None:
     """Plan 35 G: any node of the section goes — its entry and every wire
     touching it, one undo step (an effect or a copy lifted first, so the
     chain closes over it; a hands node with its layer and its guide, its
-    params kept in the registry; R16, an effect with its copies). A window
+    params kept in the registry; R16, an effect with its copies; R18, the
+    backdrop like an effect — what its `scene` port took goes on to what it
+    fed, and the note says so). A window
     is the rig's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
     said, no refusal; with none, `NOTHING_TO_DELETE`); All outputs the
     same. The camera and a cloud are the rig's (`spec_name`)."""
@@ -4112,9 +4114,21 @@ def render_drop(edit: Edit, node: str) -> str | None:
     for x in ([name, *mine] if kind in ("effect", "copy") else ()):
         _lift(doc, x)
     names |= set(mine)
+    # R18 (final review): the backdrop lifted as an effect is — the picture
+    # into its `scene` port wired on into every port it fed, so deleting
+    # it shows the scene, not black
+    joined: list[dict] = []
+    if kind == "backdrop":
+        wires = doc.get("wires", [])
+        under = next((x["from"] for x in wires if x["to"] == f"{name}.scene"), None)
+        if under is not None:
+            joined = [{"from": under, "to": x["to"]} for x in wires
+                      if x["from"] == name and not _touches({"from": under, "to": x["to"]},
+                                                            names)]
     doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in names]
     gone = [x for x in doc.get("wires", []) if _touches(x, names)]
     doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
+    doc["wires"] += [x for x in joined if x not in doc["wires"]]
     _unplace(doc, lambda e, key, where: where in names)
     if doc == before:
         return f"{label} is not in the preset's graph"
@@ -4122,6 +4136,11 @@ def render_drop(edit: Edit, node: str) -> str | None:
                          if n not in names])
     also = ("" if not mine else ", and its copy" if len(mine) == 1
             else f", and its {len(mine)} copies")
+    if joined:
+        what = "the scene" if joined[0]["from"] == "scene" else label_of(joined[0]["from"], slots)
+        to = ", ".join(dict.fromkeys(label_of(x["to"].rpartition(".")[0], slots)
+                                     for x in joined))
+        also += f"; {what} goes on to {to}"
     return _land(edit, doc, f"delete {name}", f"{label} deleted{also}")
 
 

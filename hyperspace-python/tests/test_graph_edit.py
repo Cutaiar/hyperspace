@@ -1551,6 +1551,43 @@ def test_the_owners_sequence(tmp_path):
     assert ("kaleido", "output.all.image") not in wired_wires(rig)
 
 
+def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
+    """R18 (final review): on the owner's glimmer-bug (displace-moo's shape:
+    a switch of two channel branches under the scene), deleting the
+    backdrop joins what its `scene` port took to what it fed — the scene
+    goes on to the look-back — and says so; drawn, the frame is not black."""
+    from test_graph_frame import SIZE, _fbo, _px, _tool
+
+    from hyperspace.outputs import Switches, View
+
+    rig, e, pushed = wired_rig(tmp_path, slug="glimmer-bug")
+    spec = rig.presets.graph.spec
+    into = next(w.src for w in spec.wires if w.dst == "backdrop.scene")
+    fed = sorted(w.dst for w in spec.wires if w.src == "backdrop")
+    assert into == "scene" and fed == ["lookback.image"]
+    assert e.drop_node("render:backdrop") is None
+    assert e.said == "Backdrop deleted; the scene goes on to Look-back", e.said
+    wires = wired_wires(rig)
+    assert ("scene", "lookback.image") in wires
+    assert not [w for w in wires if "backdrop" in w[0] or w[1].startswith("backdrop.")]
+    try:
+        import moderngl
+
+        gl_ctx = moderngl.create_context(standalone=True)
+    except Exception as ex:  # noqa: BLE001 — any GL failure means skip the drawing
+        pytest.skip(f"no standalone GL context available: {ex}")
+    gl = _tool().Rig("legacy6", "present", gl_ctx)
+    try:
+        gl.renderer.wiring = rig.presets.graph.spec.wiring()
+        vs = [View(Switches(), SIZE, target=_fbo(gl_ctx))]
+        for _ in range(3):
+            gl.frame(vs, SIZE, 1.0)
+        assert gl_ctx.error == "GL_NO_ERROR" and not vs[0].error, vs[0].error
+        assert _px(vs[0].target)[..., :3].max() > 0
+    finally:
+        gl.close()
+
+
 def test_deleting_a_window_unwires_it(tmp_path):
     """An output is the rig's window: delete takes the wires into it and
     says so (`OUTPUT_UNWIRED`), not a refusal; it shows its ground."""
