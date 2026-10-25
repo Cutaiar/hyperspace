@@ -1365,9 +1365,14 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         settle(rig)
     else:
         rig = boot(tmp_path)
+    fixture = Path(__file__).parent / "fixtures" / "presets" / f"{slug}.json"
     if slug is None:
         put(rig.home, "Wired", schema="hyperspace.preset/6", graph=graph)
         rig.lib.load(PRESETS, "Wired")
+    elif fixture.exists():          # (a graph fixture, loaded and migrated as a file is)
+        (rig.home / "presets").mkdir(parents=True, exist_ok=True)
+        (rig.home / "presets" / fixture.name).write_text(fixture.read_text())
+        rig.lib.load(PRESETS, slug)
     else:
         rig.lib.load(PRESETS, slug)
     stub = Stub()
@@ -1411,12 +1416,18 @@ def _names(spec) -> list[str]:
     return list(dict.fromkeys(x for x in out if x != G.GROUND))
 
 
-def test_every_frame_node_and_wire_deletes(tmp_path):
-    """Review Focus 5: on party-wake migrated, each wire in turn, and then
-    each node in turn, goes with its words said and no refusal — the
-    owner's refusals deleting `grounded`, `frame → fx` and the run's
-    cables are gone. What is left is the marker alone."""
-    rig, e, pushed = wired_rig(tmp_path, slug="party-wake")
+DELETES = ("party-wake", "through-one-output", "branch-two-sizes")
+
+
+@pytest.mark.parametrize("slug", DELETES)
+def test_every_frame_node_and_wire_deletes(tmp_path, slug):
+    """Review Focus 5: on party-wake migrated — and (R16, R15) the copy
+    fixture `through-one-output` and the two-out fixture `branch-two-sizes`
+    — each wire in turn, and then each node in turn, goes with its words
+    said and no refusal — the owner's refusals deleting `grounded`, `frame →
+    fx` and the run's cables are gone. What is left is the marker alone.
+    And nodes first, their wires in place: every node goes the same way."""
+    rig, e, pushed = wired_rig(tmp_path, slug=slug)
     gs = rig.presets.graph
     assert gs.spec.wired and gs.spec.wires
     for w in list(gs.spec.wires):
@@ -1432,6 +1443,60 @@ def test_every_frame_node_and_wire_deletes(tmp_path):
         assert e.said, name
     assert {k: v for k, v in gs.spec.to_json().items() if v} == {"frame": "wired"}
     assert pushed and all(p.startswith(("unwire", "delete")) for p in pushed)
+    rig, e, _ = wired_rig(tmp_path / "nodes-first", slug=slug)
+    gs = rig.presets.graph
+    for name in _names(gs.spec):
+        if name not in _names(gs.spec):          # (gone with another: a copy with its effect)
+            continue
+        e.said = ""
+        assert e.drop_node(f"render:{name}") is None, name
+        assert e.said, name
+    assert not gs.spec.wires and not gs.spec.copies
+
+
+def test_deleting_an_effect_takes_its_copies(tmp_path):
+    """R16: an effect a copy draws again, deleted, takes its copies (their
+    entries and wires) in the same landing — a copy of nothing is no node —
+    and says so."""
+    rig, e, pushed = wired_rig(tmp_path, slug="through-one-output")
+    spec = rig.presets.graph.spec
+    name = min({c.of for c in spec.copies})
+    mine = [c.name for c in spec.copies if c.of == name]
+    n = len(pushed)
+    assert e.drop_node(f"render:{name}") is None
+    words = "its copy" if len(mine) == 1 else f"its {len(mine)} copies"
+    assert e.said == f"{name} deleted, and {words}" and len(pushed) == n + 1
+    spec = rig.presets.graph.spec
+    assert not [c for c in spec.copies if c.of == name]
+    assert not [w for w in spec.wires if {w.src, w.node} & set(mine)]
+
+
+def test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs(tmp_path):
+    """R15: in a wired frame an effect with no input reads nothing — drawn
+    faint, its outs kept, no refusal (`branch-two-sizes`: `acid.2` fed by a
+    channel into two ports)."""
+    rig, e, _ = wired_rig(tmp_path, slug="branch-two-sizes")
+    spec = rig.presets.graph.spec
+    feed = next(w for w in spec.wires if w.dst == "acid.2.image")
+    outs = {w for w in spec.wires if w.src == "acid.2"}
+    assert len(outs) > 1
+    assert e.unwire(f"rout:{feed.src}", "rin:acid.2/image") is None
+    spec = rig.presets.graph.spec
+    assert {w for w in spec.wires if w.src == "acid.2"} == outs and not spec.notes
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, None, spec)
+    assert view.node("render:acid.2").faint
+    # deleting the channel that fed it: the same
+    rig, e, _ = wired_rig(tmp_path / "again", slug="branch-two-sizes")
+    assert e.drop_node(f"render:{feed.src}") is None
+    assert {w for w in rig.presets.graph.spec.wires if w.src == "acid.2"} == outs
+
+
+def test_deleting_an_unwired_window_says_nothing_to_delete(tmp_path):
+    """A window with no wires of its own, deleted: nothing happens, and the
+    words say so (not that its wires went)."""
+    _, e, pushed = wired_rig(tmp_path, slug="party-wake")
+    assert e.drop_node("render:output.2") is None and pushed == []
+    assert e.said == "nothing to delete: output 2 has no wires"
 
 
 # backdrop-still's frame (a channel under the scene on the backdrop) with

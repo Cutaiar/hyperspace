@@ -1714,6 +1714,26 @@ def test_the_channel_choices_are_read_off_the_wires():
     assert ui_media.feed_words(none, "backdrop.image") == "nothing wired"
 
 
+def test_the_media_page_reads_a_wired_frames_channels():
+    """Plan 35 T5 review: on a wired frame (every load's) the MEDIA page
+    reads `channel.<c>` — the strip's "the backdrop" / "on the faces" marks
+    (`_channel_of`) and the pickers' words (`feed_words`) — straight and
+    through a switch."""
+    from hyperspace import graph as G
+    from hyperspace import ui_media
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "switch"}], "wires": [
+        {"from": "channel.a", "to": "backdrop.image"}, {"from": "scene", "to": "backdrop.scene"},
+        {"from": "shape", "to": "scene.geometry"}, {"from": "backdrop", "to": "output.all.image"},
+        {"from": "channel.c", "to": "switch.in2"}, {"from": "switch", "to": "pattern.media"}]})
+    assert not spec.notes
+    panel = SimpleNamespace(graph_now=lambda: (spec.wiring(), spec),
+                            view=SimpleNamespace(switch={"switch": 2}))
+    assert ui_media.feed_words(panel, "backdrop.image") == "channel A"
+    assert ui_media._channel_of(panel, "backdrop.image") == "a"
+    assert ui_media.feed_words(panel, "pattern.media") == "channel C (switch)"
+    assert ui_media._channel_of(panel, "pattern.media") == "c"
+
+
 def test_an_old_preset_saves_its_retired_ids_back_where_they_were(tmp_path):
     """A `/4` save writes the retired ids out of the held load and the wires
     (`graphmigrate.with_retired`, `legacy_values`), never the registry:

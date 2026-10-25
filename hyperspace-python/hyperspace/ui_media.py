@@ -632,14 +632,18 @@ def _feed(panel, port: str) -> tuple[str | None, bool]:
     wires = spec.all_wires()
     direct = next((w.src for w in wires if w.dst == port), None)
     picks = getattr(getattr(panel, "view", None), "switch", None)
-    return source_into(wires, port, picks), wire_node_kind(direct) == "switch"
+    wired = bool(getattr(spec, "wired", False))     # (plan 35: a wired frame's ids)
+    return source_into(wires, port, picks), wire_node_kind(direct, wired=wired) == "switch"
 
 
 def _channel_of(panel, port: str) -> str | None:
     """The channel the loaded graph feeds `port` with (`_feed`), or None:
-    nothing wired, a switch off, or a picture that is no channel's own."""
+    nothing wired, a switch off, or a picture that is no channel's own.
+    Plan 35 T5: a wired frame's `channel.<c>` (every load's), or a section
+    of before it's `media.<c>`, as `graph.channel_into` reads them."""
     src, _ = _feed(panel, port)
-    c = src.partition(".")[2] if wire_node_kind(src) == "media" else None
+    old, new = wire_node_kind(src), wire_node_kind(src, wired=True)
+    c = src.partition(".")[2] if old == "media" or new == "channel" else None
     return c if c and c in CHANNELS else None
 
 

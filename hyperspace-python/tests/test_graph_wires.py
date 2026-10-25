@@ -444,7 +444,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.drop_node("composite") is None
     assert not [w for w in stub.wiring.wires if "composite" in (w.src, w.node)]
     assert edit.drop_node("output.1") is None
-    assert edit.said == graphview.OUTPUT_UNWIRED.format(label="Output 1")
+    assert edit.said == "nothing to delete: output 1 has no wires"   # (its wires went with the composite)
     assert edit.drop_node("hands") is None and edit.said == "Hands deleted"
     assert not [w for w in stub.wiring.wires if w.src in ("hands", "hands.layer")]
     assert len(pushed) == 12

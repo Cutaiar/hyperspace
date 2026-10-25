@@ -1703,8 +1703,11 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
     for w in ok:
         if kind(w.src) == "effect" and kind(w.node) != "effect":
             outs.setdefault(w.src, []).append(w)
+    # (R15, plan 35 T5: not in a wired frame — there no wire is short for
+    # D1's `into`, and an effect with no input reads nothing: unreached,
+    # drawn faint, its outs kept)
     for e, ws in outs.items():
-        if e not in fed and len(ws) > 1:
+        if e not in fed and len(ws) > 1 and not ctx.wired:
             for w in ws[1:]:
                 ok.remove(w)
                 notes.append(f"wire {w} — {e} has no wire in, so it sits into one port "

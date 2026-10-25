@@ -794,6 +794,7 @@ ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, s
                "windows show their own wires, else their ground")
 STARTER_SAID = "scene starter: shape → scene → All outputs"
 IN_ALREADY = "{label} is in the graph already"
+NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
 NO_SUCH_WIRE = "{wire}: no such wire"
 NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 
@@ -954,6 +955,11 @@ def unreached(spec) -> frozenset[str]:
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
     if getattr(spec, "wired", False):
         got |= {rgraph.hands_of(n) for n in got if kind_of(n) in ("layer", "guide")}
+        # (R15: an effect or a copy no wire feeds reads nothing — never built,
+        # faint, its outs kept)
+        fed = {w.node for w in spec.all_wires() if w.port == "image"}
+        got -= {n for n in got if kind_of(n) in ("effect", "copy") and n not in fed
+                and n not in {e.name for e in spec.effects if e.placed}}
         return frozenset(n for n in frame_names(spec) if n not in got
                          and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
@@ -4064,9 +4070,10 @@ def render_drop(edit: Edit, node: str) -> str | None:
     """Plan 35 G: any node of the section goes — its entry and every wire
     touching it, one undo step (an effect or a copy lifted first, so the
     chain closes over it; a hands node with its layer and its guide, its
-    params kept in the registry). A window is the rig's: its wires go, and
-    it shows its ground (`OUTPUT_UNWIRED`, said, no refusal); All outputs
-    the same. The camera and a cloud are the rig's (`spec_name`)."""
+    params kept in the registry; R16, an effect with its copies). A window
+    is the rig's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
+    said, no refusal; with none, `NOTHING_TO_DELETE`); All outputs the
+    same. The camera and a cloud are the rig's (`spec_name`)."""
     name, why = spec_name(node, edit.render)
     if name is None:
         return why
@@ -4078,8 +4085,10 @@ def render_drop(edit: Edit, node: str) -> str | None:
                 else OUTPUT_UNWIRED.format(label=label_of(name, slots)))
         wires = doc.get("wires", [])
         left = [x for x in wires if x["to"].rpartition(".")[0] != name]
-        if len(left) == len(wires):
-            edit.said = said
+        if len(left) == len(wires):         # (T5 review: say nothing was done)
+            edit.said = NOTHING_TO_DELETE.format(
+                what="All outputs" if kind == rgraph.ALL_OUTPUTS
+                else f"output {name.partition('.')[2]}")
             return None
         doc["wires"] = left
         _keep_declared(doc, [x["from"] for x in wires if x not in left])
@@ -4090,8 +4099,13 @@ def render_drop(edit: Edit, node: str) -> str | None:
     names = {name}
     if kind == "hands":
         names |= {f"{name}.layer", f"{name}.guide"}
-    if kind in ("effect", "copy"):
-        _lift(doc, name)
+    # R16: an effect's copies go with it (a copy of nothing is no node), in
+    # the same landing — each lifted, so its chain closes over it too
+    mine = ([_node_name(e) for e in doc.get("nodes", [])
+             if e.get("kind") == "copy" and e.get("of") == name] if kind == "effect" else [])
+    for x in ([name, *mine] if kind in ("effect", "copy") else ()):
+        _lift(doc, x)
+    names |= set(mine)
     doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in names]
     gone = [x for x in doc.get("wires", []) if _touches(x, names)]
     doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
@@ -4100,7 +4114,9 @@ def render_drop(edit: Edit, node: str) -> str | None:
         return f"{label} is not in the preset's graph"
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
                          if n not in names])
-    return _land(edit, doc, f"delete {name}", f"{label} deleted")
+    also = ("" if not mine else ", and its copy" if len(mine) == 1
+            else f", and its {len(mine)} copies")
+    return _land(edit, doc, f"delete {name}", f"{label} deleted{also}")
 
 
 def render_set(edit: Edit, node: str, **settings) -> str | None:
