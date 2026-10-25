@@ -341,7 +341,10 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     routed = {b.target for b in table.routes() if b.enabled}
     routed |= {s.base for m in table.macros.values() for s in m.subs if s.base}
     on_desk = {b.target for b in table.desk() if b.enabled}
-    out = learn.ranked(params, values, defaults, routed, on_desk)
+    # (plan 33 T7: whether the faces show a picture is the graph's wire)
+    spec = panel.graph_now()[1] if hasattr(panel, "graph_now") else None
+    media = learn.faces_media(spec, getattr(getattr(panel, "view", None), "switch", None))
+    out = learn.ranked(params, values, defaults, routed, on_desk, media=media)
     st["offer"] = (key, out)
     return out
 
@@ -568,7 +571,7 @@ def _room(panel) -> tuple[float, float, float, float]:
     if panel.open:
         panel_x = getattr(panel, "_panel_x", None)
         if panel_x is None:
-            panel_x = display[0] - ui.PANEL_W - EDGE
+            panel_x = display[0] - ui.panel_w(display) - EDGE
     sheet = None
     if panel.cheatsheet:
         sheet = (getattr(panel, "_sheet_w", 0.0), getattr(panel, "_sheet_h", 0.0))

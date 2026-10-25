@@ -92,7 +92,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     assert len(keys) == len(doc["goldens"])
     fx_on = {p for p, said in doc["presets"].items() if said["absent"]["effects_on"]}
     assert fx_on == {"party-trip", "party-acid", "party-mandala", "party-noita",
-                     "lfo-breathe", "hands-fx"}
+                     "lfo-breathe", "hands-fx", "seq-demo"}
+    # plan 31 P: seq-demo drawn with play pressed (`seq.run` is no preset's)
+    assert doc["sequencer_running"] == ["seq-demo"] == list(_tool().RUNNING)
     want = {(p, h, s) for p in FACTORY_PRESETS for h in ("absent", "present")
             for s in [*doc["states"], "solo"]
             + (["solo-scene+hands+through"] if p in fx_on else [])}
@@ -110,9 +112,13 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     assert (keys - capped - wired - clouded - fixture == want and wired <= keys
             and clouded <= keys and fixture <= keys)
     # (plan 30 D1: + 3 × 8, the three placement fixtures' eight states;
-    # plan 28 N4: + 2 × 8, the two wire fixtures')
-    assert len(doc["goldens"]) == (23 * 2 * 9 + 6 * 2 + 1 + 23 * 5 + 2 + 2 * 2 + 8 + 3 * 8
-                                   + 2 * 8)
+    # plan 28 N4: + 2 × 8, the two wire fixtures'; plan 31 P: seq-demo, a
+    # 24th factory preset and a 7th with an effect on; plan 32 T6: + 2 × 8,
+    # the two media fixtures'; plan 32 T7: + 3 × 8, the faces' and the aux's;
+    # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
+    # plan 33 T5: + 8, the switch onto the faces)
+    assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
+                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -145,9 +151,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         said = doc["fixtures"][slug]["present"]
         assert said["missing"] == [] and said["notes"] == [] and said["hands_shown"]
         # the graph landed as the file says it (the section, not a repr of
-        # the Wiring: a field added later moves no golden)
-        assert said["graph"] == json.loads((ROOT / f["file"]).read_text())["graph"]
-        assert said["graph"]["nodes"]
+        # the Wiring: a field added later moves no golden). Plan 32 T6: a
+        # media fixture's proof is its channels — a wire with no node, or
+        # no graph at all (the backdrop is a value)
+        assert said["graph"] == json.loads((ROOT / f["file"]).read_text()).get("graph")
+        assert (said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 

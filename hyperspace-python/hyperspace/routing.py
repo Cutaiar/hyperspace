@@ -261,7 +261,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, modifiers, motion
+from . import apc40, envelope, lfo, modifiers, motion
 from . import patch as patchmod
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
@@ -288,6 +288,22 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 # the factory session table as a file (`write_factory`): what a fresh
 # bindings.json holds — outside library/, since it is no group's preset
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
+
+# the modulator banks (modbank.py, plan 31 B) the modulation patch knows,
+# by scheme: voice n is the node ``<scheme>:<n-1>`` (its kind the scheme),
+# and its knob params ``<scheme>.<n>.<knob>`` (the class's KNOBS) and the
+# bank-wide ones (SHARED) feed it. Known here by class, so a bare router
+# (no bank handed in) still draws an LFO route's source as an LFO. A new
+# kind is one entry here, its scheme in patch.KINDS, and its instance
+# handed to `Router.use_bank`
+BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
+                          envelope.Envelopes.SCHEME: envelope.Envelopes}
+
+# the schemes no device feeds — the analyzer, the LFOs, the envelopes and
+# the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
+# BUILTIN_SCHEMES, restated (routing never imports devices), the two held
+# equal by tests/test_plan31_wiring.py
+BUILTIN_LANES = ("lane", "lfo", "env", "seq")
 
 MIDI_SCHEMES = ("cc", "note", "pitch")
 # the row kinds the table dispatches itself (plan 27 B2): the keys
@@ -2542,10 +2558,11 @@ class Router:
         offers them: the registry's (`continuous_schemes`: the analyzer's
         `lane` and the LFOs' `lfo` first, then each listed device's feeds
         in list order), then any other scheme that has been fed or
-        labelled this run. With no registry, `lane` and `lfo` and then
-        whatever has been fed or labelled."""
+        labelled this run. With no registry, `BUILTIN_LANES` (the
+        analyzer, the LFOs, the envelopes, the sequencer) and then whatever
+        has been fed or labelled."""
         devs = self.__dict__.get("devices")
-        out = list(devs.continuous_schemes()) if devs is not None else ["lane", "lfo"]
+        out = list(devs.continuous_schemes()) if devs is not None else [*BUILTIN_LANES]
         for s in (*self.labels, *self.feeds):
             if s not in out and is_continuous(s):
                 out.append(s)
@@ -2875,18 +2892,77 @@ class Router:
 
     # ---- the modulation patch (plan 28 N0): the table as a graph, in order ----
 
+    def use_bank(self, bank, clock) -> None:
+        """A modulator bank (modbank.Bank: the LFOs, plan 31 B) and the
+        clock it steps on: from now on its voices step inside `modulate`,
+        each at its node of the patch, after the knob params it reads have
+        landed (decision 7), and it feeds its scheme. Its scheme must be in
+        `BANKS`. A bare router (the tests') steps no bank, and whatever
+        feeds the scheme feeds it."""
+        banks = self.__dict__.setdefault("banks", {})
+        banks[bank.SCHEME] = bank
+        self.clock = clock
+
     def use_lfos(self, lfos, clock) -> None:
-        """The LFO bank (lfo.LFOs) and the clock it steps on: from now on the
-        LFOs step inside `modulate`, each at its node of the patch, after
-        the knob params it reads have landed (decision 7). app.main calls
-        it once; a bare router (the tests') steps no LFO, and whatever feeds
-        ``lfo`` feeds it."""
-        self.lfos, self.clock = lfos, clock
+        """The LFO bank (lfo.LFOs) and its clock: `use_bank`, and `lfos`
+        named for the callers that read the bank off the router."""
+        self.lfos = lfos
+        self.use_bank(lfos, clock)
+
+    def use_sequencer(self, seq, envs, clock=None) -> None:
+        """The step sequencer (sequencer.Sequencer, plan 31 S) and the
+        envelope bank its lanes fire (envelope.Envelopes): from now on it
+        steps inside `modulate`, after every bank's `begin` — so a global
+        ``lfo.trigger`` held for this frame has moved the clock's epoch and
+        the grid re-aligns on the same frame — and before the plan, so the
+        envelope nodes later in it see this frame's fires, stamped at each
+        step's exact time. It feeds ``seq:<i>``, trigger lanes resting at 0
+        (decision 10), which a route can take to any trigger param. `clock`
+        None: the one `use_bank` gave."""
+        self.sequencer, self.seq_envs = seq, envs
+        if clock is not None:
+            self.clock = clock
+
+    def _step_sequencer(self, t: float, clock) -> None:
+        """The sequencer's frame (`use_sequencer`): its fires and stop
+        releases go to the envelope bank by id — one the bank lacks (a lane
+        pointed at a removed extra) is a no-op — and its pulses are fed."""
+        seq = self.__dict__.get("sequencer")
+        if seq is None or clock is None:
+            return
+        envs = self.__dict__.get("seq_envs")
+
+        # each note holds a gate-mode envelope for `seq.gate` of a step at
+        # this frame's bpm and span (a one-shot ignores it), so a pattern
+        # of gate envelopes plays notes rather than one held sustain
+        gate = seq.gate_seconds(clock) if hasattr(seq, "gate_seconds") else None
+
+        def fire(lane, env, at, velocity):
+            if envs is not None:
+                envs.fire(env, at=at, velocity=velocity, gate=gate, owner="seq")
+
+        def release(lane, env, at):
+            # only a note the pattern opened: a held pad's, a hand's or a
+            # fire's note on the same envelope sounds on, its gate still live
+            if envs is not None:
+                envs.release(env, at=at, owner="seq")
+
+        seq.step(t, clock, fire, release)
+        seq.publish(self)                        # its lanes as trigger kinds too
+
+    def bank(self, scheme: str):
+        """The bank handed in for `scheme`, or None."""
+        return self._banks().get(scheme)
+
+    def _banks(self) -> dict:
+        """The banks handed in, by scheme, in the order they came."""
+        return self.__dict__.get("banks") or {}
 
     def _patch_key(self) -> tuple:
         """What the patch is made of — the performer rows (each by identity
         and the fields that make edges), the macros' subscribers, the
-        modifiers (N1, when the table has them), the LFO count and the
+        modifiers (N1, when the table has them), each bank's ids (plan 31
+        B) and the
         registry's add / remove serial — compared each frame, so the patch
         is rebuilt only when one of them changes, never per frame."""
         t = self.table
@@ -2896,34 +2972,35 @@ class Router:
         mods = (getattr(t, "modifiers_serial", 0),
                 *((getattr(m, "id", ""), getattr(m, "kind", ""),
                    tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
-        lfos = self.__dict__.get("lfos")
-        return (id(t), rows, t.macros_serial, subs, mods,
-                len(lfos) if lfos is not None else 0, getattr(self.reg, "serial", 0))
+        banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        return (id(t), rows, t.macros_serial, subs, mods, banks,
+                getattr(self.reg, "serial", 0))
 
     def build_patch(self) -> patchmod.Patch:
         """The modulation graph of this table (patch.py's nodes and edges):
-        every LFO (when the router steps them) and modifier first, in their
+        every bank voice (when the router steps the bank: each LFO, by id)
+        and modifier first, in their
         order; then per route, in table order, its source, its gate, its
         `scale`, its macros' depth subscribers and its target, with a `mod`
         edge for the row — one cable per route, ``(source, target)`` — and
         a `when` / `depth` edge for each of the rest; the macros' base
-        subscribers as `base` edges; each LFO's knob params (and
-        ``lfo.trigger``) and each modifier's own params, where the patch
+        subscribers as `base` edges; each voice's knob params (and the
+        bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
         disabled. No loop is cut here (`patch` does that)."""
         g = patchmod.Patch()
         t = self.table
-        lfos = self.__dict__.get("lfos")
-        for i in range(len(lfos) if lfos is not None else 0):
-            g.add(f"lfo:{i}", "lfo")
+        for scheme, bank in self._banks().items():
+            for n in bank.ids():
+                g.add(f"{scheme}:{n - 1}", scheme)
         mods = _modifiers_of(t)
         for m in mods:
             g.add(_modifier_node(m), "modifier", delay=getattr(m, "kind", "") == "delay")
 
         def source(addr: str) -> str:
             scheme, i = self.lane(addr)
-            if scheme == "lfo" and i >= 0:
-                return g.add(f"lfo:{i}", "lfo").id
+            if scheme in BANKS and i >= 0:
+                return g.add(f"{scheme}:{i}", scheme).id
             return g.add(addr, "source").id
 
         def param(pid: str) -> str:
@@ -2951,14 +3028,16 @@ class Router:
             for s in t.macros[mid].subs:
                 if s.base is not None:
                     g.link(param(mid), param(s.base), "base")
-        lfo_nodes = [n.id for n in g.nodes.values() if n.kind == "lfo"]
-        for nid in lfo_nodes:
+        voices = [(n.id, n.kind) for n in g.nodes.values() if n.kind in BANKS]
+        for nid, scheme in voices:
+            cls = BANKS[scheme]
             n = int(nid.split(":")[1]) + 1
-            for k in patchmod.LFO_KNOBS:
-                if f"lfo.{n}.{k}" in g.nodes:
-                    g.link(f"lfo.{n}.{k}", nid, k)
-            if "lfo.trigger" in g.nodes:
-                g.link("lfo.trigger", nid, "trigger")
+            for k in cls.KNOBS:
+                if f"{scheme}.{n}.{k}" in g.nodes:
+                    g.link(f"{scheme}.{n}.{k}", nid, k)
+            for pid, port in cls.SHARED.items():
+                if pid in g.nodes:
+                    g.link(pid, nid, port)
         for m in mods:
             prefix = f"{getattr(m, 'id', '')}."
             for nid, node in list(g.nodes.items()):
@@ -2973,7 +3052,7 @@ class Router:
         last cable in table order — that cable's edges disabled and a note
         in `patch_notes` (ROUTING's head shows it), the row itself left in
         the table and the file as it is. Cached: rebuilt when `_patch_key`
-        moves (the table, the LFO list, the registry's params), with the
+        moves (the table, the banks' ids, the registry's params), with the
         evaluation plan `modulate` walks."""
         d = self.__dict__
         key = self._patch_key()
@@ -3034,8 +3113,7 @@ class Router:
             notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
                          f"is off until it has one")
         # the evaluation plan: per node in order, what `modulate` does there
-        lfos = self.__dict__.get("lfos")
-        n_lfo = len(lfos) if lfos is not None else 0
+        banks = self._banks()
         reads = {e.src for e in patchmod.ordering(g)}
         by_target: dict[str, list] = {}
         for b in t.mods():
@@ -3049,10 +3127,10 @@ class Router:
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
         for node in patchmod.order(g):
-            if node.kind == "lfo":
+            if node.kind in banks:
                 i = int(node.id.split(":")[1])
-                if i < n_lfo:
-                    plan.append(("lfo", i))
+                if i + 1 in banks[node.kind]:          # a gap, or past the last: no voice
+                    plan.append(("bank", node.kind, i))
             elif node.kind == "modifier" and node.id in mod_ids:
                 plan.append(("modifier", mod_ids[node.id], node.id in early,
                              node.id in dormant))
@@ -3182,7 +3260,9 @@ class Router:
                  now: float | None = None) -> None:
         """The frame's modulation pass — the one path a continuous source
         has to a param — over the patch **in dependency order** (plan 28
-        N0, decision 7). At an LFO's node that LFO steps (`use_lfos`; `now`
+        N0, decision 7). Every bank begins first (`use_bank`: a held global
+        trigger lands), then the sequencer steps (`use_sequencer`: its
+        fires queued on the envelopes, its pulses fed); at a voice's node — an LFO's — it steps (`now`
         the frame's time, the clock's when None) and its lane is fed; at a
         modifier's, `_step_modifier`; at a param's, every enabled performer
         row on it whose source is live calls modulate on it — depth =
@@ -3203,14 +3283,17 @@ class Router:
         plan = self.__dict__["_plan"]
         begin = getattr(self.reg, "begin_frame", None)
         mark = begin() if begin is not None else None
-        lfos = self.__dict__.get("lfos")
-        lfo_lane = None
-        if lfos is not None:
-            clock = self.__dict__.get("clock")
-            t = now if now is not None else getattr(clock, "t", 0.0)
-            lfos.begin(t, clock)
-            lfos.publish(self)                       # names, rests; each lane as its LFO steps
-            lfo_lane = self.feeds["lfo"]
+        banks = self._banks()
+        fed: dict[str, np.ndarray] = {}
+        clock = self.__dict__.get("clock")
+        t = now if now is not None else getattr(clock, "t", 0.0)
+        for scheme, bank in banks.items():
+            bank.begin(t, clock)
+            bank.publish(self)                   # names, rests; each lane as its voice steps
+            fed[scheme] = self.feeds[scheme]
+        # plan 31 W1: after every `begin` (a held global trigger has moved
+        # the epoch), before the plan (the envelopes step at their nodes)
+        self._step_sequencer(t, clock)
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL
@@ -3220,10 +3303,11 @@ class Router:
         cache = self.__dict__.get("_lanes", _NO_LANES)
         for step in plan:
             kind = step[0]
-            if kind == "lfo":
-                if lfo_lane is not None:
-                    i = step[1]
-                    lfo_lane[i] = lfos.step_one(i, dt, t, clock)
+            if kind == "bank":
+                lane = fed.get(step[1])
+                if lane is not None:
+                    i = step[2]
+                    lane[i] = banks[step[1]].step_one(i, dt, t, clock)
                 continue
             if kind == "modifier":
                 self._step_modifier(step[1], dt, lanes, early=step[2], cut=step[3])

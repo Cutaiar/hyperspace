@@ -27,6 +27,7 @@ from test_ui_shell import _click, _learn_over, frame, rig  # noqa: F401 — the 
 
 from hyperspace import apc40, learn, ui_desk
 from hyperspace.app import CONTROL_SIZE
+from test_ui_shell import NARROW_CONTROL
 from hyperspace.learn import DESKED, MOVED, ON, ROUTED, cannot_show, ranked
 from hyperspace.routing import Binding
 
@@ -83,7 +84,7 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
     rows in this run); none meets the bar yet."""
     controls, rows = tool.coverage(tmp_path)
     names = [r.name for r in rows]
-    assert len(rows) == 24 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212)
+    assert len(rows) == 25 and "TRIP" in names and "hands-orbit" in names   # + DIAL (#212), seq-demo (plan 31)
     n = len(controls)
     for r in rows:
         assert r.count(tool.MAPPED) + r.count(tool.DARK) + r.count(tool.DEAD) == n
@@ -92,7 +93,8 @@ def test_every_factory_presets_numbers_are_in_the_report(tool, tmp_path):
         assert r.count(tool.DARK) + r.count(tool.DEAD) > tool.BAR, r.name
     trip = rows[names.index("TRIP")]
     k7 = next(c for c in trip.cells if c.glyph == "K7")
-    assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no bitmap file")
+    # the factory knob 7: an alias of view.media_alpha since plan 32
+    assert (k7.status, k7.target, k7.why) == (tool.DEAD, "view.bmp_alpha", "no media channel")
 
 
 def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_path):
@@ -124,14 +126,18 @@ def test_a_library_template_preset_is_reported_with_its_expanded_desk(tool, tmp_
 def test_cannot_show_is_the_rule_by_group():
     v = {"view.faces": False, "view.points": True, "view.lines": False, "fx.on": True,
          "fx.kaleido.on": False, "fx.plasma.on": True, "dream.on": False,
-         "view.rotate": False, "view.bmp_file": ""}
+         "view.rotate": False, "view.media": 0}
     assert cannot_show("view.pattern", v) == "faces off"
     assert cannot_show("view.pattern_mix", v) == "faces off"
     assert cannot_show("pattern.mod.3", v) == "faces off"
-    assert cannot_show("view.bmp_alpha", v) == "faces off"
-    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True}) == "no bitmap file"
-    assert cannot_show("view.bmp_alpha", {**v, "view.faces": True,
-                                          "view.bmp_file": "a.png"}) is None
+    assert cannot_show("view.media_alpha", v) == "faces off"
+    # (plan 33: the graph says whether a channel feeds the faces, `media`;
+    # the retired `view.media` in the values says nothing)
+    faces = {**v, "view.faces": True}
+    assert cannot_show("view.media_alpha", faces, media=False) == "no media channel"
+    assert cannot_show("view.bmp_alpha", faces, media=False) == "no media channel"
+    assert cannot_show("view.media_scale", faces, media=True) is None
+    assert cannot_show("view.media_alpha", faces) is None        # no graph to ask: shown
     assert cannot_show("view.points_alpha", v) is None
     assert cannot_show("view.lines_alpha", v) == "lines off"
     # the stroke space (plan 26 A2b): dead only with the points and the lines off
@@ -217,7 +223,7 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     `Learn.map_picked` (one undo step), and the pick is over. The page
     click road still works beside it."""
     panel, table = rig.panel, rig.router.table
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
     rig.lib.load("presets", "TRIP")
     pushes = _pushes(monkeypatch)
@@ -242,7 +248,7 @@ def test_a_picked_control_is_offered_this_presets_params_and_a_click_maps_it(rig
     assert "fx.kaleido.segments" in ids                  # an effect TRIP has on
     assert not [p for p in ids if p.startswith("dream.")]   # TRIP's look-back is off
     assert {g for g, _ in rest} >= {"view", "band"}
-    # at the default control size (the small desk, ~107 × 79 px of ground)
+    # in a narrow control window (the small desk, ~107 × 79 px of ground)
     # the chip lies inside the offer and at least three items show whole
     st = ui_desk._state(panel)
     box, chip = st["offer_box"], st["offer_chip"]

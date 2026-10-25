@@ -25,7 +25,7 @@ from conftest import OWNER_PAD, OWNER_ROW, boot_home, far_pads, old_shape_pads, 
 from legacy_chain import LegacyChain  # tests/legacy_chain.py — the frozen reference
 from test_analyzer import fixture_wavs, frames  # noqa: F401 — the fixture, re-exported
 
-from hyperspace import apc40, hands, lfo, preset, routing, tempo
+from hyperspace import apc40, envelope, hands, lfo, preset, routing, sequencer, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import BANDS, CEIL, default_params
@@ -82,6 +82,9 @@ def rig(sr: float = 48_000.0, tmp_path: Path | None = None, full: bool = False):
         tempo.register(reg, clock)
         lfos = lfo.LFOs(seed=1)
         lfo.register(reg, lfos, clock)
+        # plan 31: the envelopes and the sequencer (seq-demo's ids)
+        envelope.register(reg, envelope.Envelopes(), clock)
+        sequencer.register(reg, sequencer.Sequencer(), clock)
         hands.register(reg, hands.HandSettings.from_config({}))  # the global track knobs
     return SimpleNamespace(reg=reg, view=view, control=control, audio=audio, chain=chain,
                            lib=lib, lfos=lfos if full else None, clock=clock if full else None)
@@ -1967,11 +1970,12 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
         if spec.values is not None:
-            assert set(preset.generated(name)["values"]) <= ids, name
+            from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+            assert {v for v in preset.generated(name)["values"] if not retired(v)} <= ids, name
     assert set(preset.FACTORY_PRESETS) == {*preset.HOUSE,
         "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
-        "party-acid", "party-mandala", "party-noita", "party-tracer"}
+        "party-acid", "party-mandala", "party-noita", "party-tracer", "seq-demo"}
     assert (preset.FACTORY_DIR / "lfo-breathe.json").exists()
 
 
@@ -1986,6 +1990,9 @@ def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
     assert made
     for key in made:
         for pid in json.loads((preset.FACTORY_DIR / f"{key}.json").read_text())["values"]:
+            from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+            if retired(pid):
+                continue
             assert pid in ids, (key, pid)
             p = r.reg[pid]
             assert p.persist and not p.alias and part_of(p) == "performance", (key, pid)

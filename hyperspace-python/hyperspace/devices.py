@@ -108,7 +108,9 @@ RETRY_FAST = 5
 RETRY_SLOW_S = 10.0
 WATCH_FRAMES = 30        # config.toml's mtime is looked at this often (as the shaders are)
 STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
-BUILTIN_SCHEMES = ("lane", "lfo")           # fed by the analyzer and the LFOs, not a device
+# fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
+# not a device
+BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
 
 
 def retry_after(misses: int) -> float:
@@ -1155,12 +1157,16 @@ class CloudDevice(Base):
 
 def kinds() -> dict[str, type[Base]]:
     """The kinds the registry knows: `[[devices]] kind` → the device class.
-    B3 adds "midi-out", B4 adds "osc" and "cloud" — here and nowhere else
+    B3 adds "midi-out", B4 adds "osc" and "cloud", plan 32 T8 the live
+    media kinds "ndi", "syphon" and "camera" — here and nowhere else
     (a new kind is one line here and its own class: no edit to `app.py`).
     The hands' device lives in its own package (`hands/device.py`, plan 27
     B2), which imports this module, so it is looked up when asked for —
     `devices.KINDS` and `devices.HandsDevice` read through here too."""
     from .hands.device import HandsDevice
+    from .media.camera import CameraKind  # (each imports its library only in a scan or open)
+    from .media.ndi import NdiKind
+    from .media.syphon import SyphonKind
     from .osc import OscDevice  # (osc.py imports pythonosc only when a server opens)
     return {
         "midi": MidiDevice,
@@ -1170,6 +1176,9 @@ def kinds() -> dict[str, type[Base]]:
         "midi-out": MidiOutDevice,          # plan 27 B3: a sink alone
         "osc": OscDevice,
         "cloud": CloudDevice,
+        "ndi": NdiKind,                     # plan 32 T8: live media feeds, `media_feeds`
+        "syphon": SyphonKind,
+        "camera": CameraKind,
     }
 
 
@@ -1334,7 +1343,7 @@ class DeviceRegistry:
 
     def continuous_schemes(self) -> tuple[str, ...]:
         """The schemes a route can read as a lane, in offer order: the
-        built-in `lane` (the analyzer) and `lfo` first, then each listed
+        built-in `lane` (the analyzer), `lfo`, `env` and `seq` first, then each listed
         device's `feeds` in list order (an `off` device's too, so a preset
         row naming it stays a dormant route, not an unknown one). What the
         Router offers (`Router.schemes`, plan 27 B2: no fixed tuple)."""
@@ -1479,6 +1488,23 @@ class DeviceRegistry:
             c = getattr(d, "cloud", None)
             if c is not None and d.role in self._opened:
                 out[f"{CLOUD_SCHEME}:{d.role}"] = c
+        return out
+
+    def media_feeds(self) -> dict:
+        """The live media feeds the open devices have found (plan 32 T8),
+        as source id → `media.live.LiveSource`, in list order (the first
+        device to find an id keeps it) — what the app's media resolver
+        answers `live(sid)` from. Each device's dict is made by its own
+        scan, off the frame thread, so this is lookups only: the MEDIA page
+        asks it every frame. Not through the Router: a picture is not a
+        scalar lane."""
+        out: dict = {}
+        for d in self.devices:
+            fn = getattr(d, "media_sources", None)
+            if fn is None or d.role not in self._opened:
+                continue
+            for sid, src in fn().items():
+                out.setdefault(sid, src)
         return out
 
     def lines(self) -> list[tuple[str, str, str, int, str]]:

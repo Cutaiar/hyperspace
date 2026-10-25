@@ -29,6 +29,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | MANDALA | 29 | 8 | 1 | 9 | 5 over |
 | NOITA | 29 | 8 | 1 | 9 | 5 over |
 | PLASMA HEART | 25 | 12 | 1 | 13 | 9 over |
+| seq-demo | 23 | 12 | 3 | 15 | 11 over |
 | SPIRAL SILK | 25 | 12 | 1 | 13 | 9 over |
 | STROBE CAGE | 25 | 12 | 1 | 13 | 9 over |
 | TRACER | 28 | 8 | 2 | 10 | 6 over |
@@ -37,7 +38,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | WAKE | 29 | 8 | 1 | 9 | 5 over |
 | WOVEN LATTICE | 23 | 12 | 3 | 15 | 11 over |
 
-0 of 24 presets meet the bar.
+0 of 25 presets meet the bar.
 
 ## Preset × control
 
@@ -62,6 +63,7 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | MANDALA | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | NOITA | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | PLASMA HEART | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| seq-demo | ● | ● | ● | ✕ | · | · | · | · | ● | ● | ● | ✕ | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | SPIRAL SILK | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | STROBE CAGE | ● | ● | ● | ● | · | · | · | · | ● | ● | ● | ● | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
 | TRACER | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ✕ | ● | ● | ✕ | ● | · | · | · | · | · | · | · | · | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
@@ -74,12 +76,12 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 
 | preset | control | param | why |
 | --- | --- | --- | --- |
-| ACID | K7 | `view.bmp_alpha` | no bitmap file |
-| BIG BLUE WAVE | K7 | `view.bmp_alpha` | no bitmap file |
-| DIAL | K7 | `view.bmp_alpha` | no bitmap file |
-| EMBER ORBIT | K7 | `view.bmp_alpha` | no bitmap file |
-| FACES | K7 | `view.bmp_alpha` | no bitmap file |
-| FIELD | K7 | `view.bmp_alpha` | no bitmap file |
+| ACID | K7 | `view.bmp_alpha` | no media channel |
+| BIG BLUE WAVE | K7 | `view.bmp_alpha` | no media channel |
+| DIAL | K7 | `view.bmp_alpha` | no media channel |
+| EMBER ORBIT | K7 | `view.bmp_alpha` | no media channel |
+| FACES | K7 | `view.bmp_alpha` | no media channel |
+| FIELD | K7 | `view.bmp_alpha` | no media channel |
 | hands-fx | K4 | `view.pattern_mix` | faces off |
 | hands-fx | K7 | `view.bmp_alpha` | faces off |
 | hands-orbit | D4 | `view.pattern` | faces off |
@@ -91,23 +93,26 @@ The owner's bar for the authoring pass: **at most 4 dark or dead** on the preset
 | hands-play | D4 | `view.pattern` | faces off |
 | hands-play | K4 | `view.pattern_mix` | faces off |
 | hands-play | K7 | `view.bmp_alpha` | faces off |
-| HEX ENGINE | K7 | `view.bmp_alpha` | no bitmap file |
-| INVERSE HALO | K7 | `view.bmp_alpha` | no bitmap file |
+| HEX ENGINE | K7 | `view.bmp_alpha` | no media channel |
+| INVERSE HALO | K7 | `view.bmp_alpha` | no media channel |
 | legacy6 | D4 | `view.pattern` | faces off |
 | legacy6 | K4 | `view.pattern_mix` | faces off |
 | legacy6 | K7 | `view.bmp_alpha` | faces off |
 | lfo-breathe | K4 | `view.pattern_mix` | faces off |
 | lfo-breathe | K7 | `view.bmp_alpha` | faces off |
-| MANDALA | K7 | `view.bmp_alpha` | no bitmap file |
-| NOITA | K7 | `view.bmp_alpha` | no bitmap file |
-| PLASMA HEART | K7 | `view.bmp_alpha` | no bitmap file |
-| SPIRAL SILK | K7 | `view.bmp_alpha` | no bitmap file |
-| STROBE CAGE | K7 | `view.bmp_alpha` | no bitmap file |
+| MANDALA | K7 | `view.bmp_alpha` | no media channel |
+| NOITA | K7 | `view.bmp_alpha` | no media channel |
+| PLASMA HEART | K7 | `view.bmp_alpha` | no media channel |
+| seq-demo | D4 | `view.pattern` | faces off |
+| seq-demo | K4 | `view.pattern_mix` | faces off |
+| seq-demo | K7 | `view.bmp_alpha` | faces off |
+| SPIRAL SILK | K7 | `view.bmp_alpha` | no media channel |
+| STROBE CAGE | K7 | `view.bmp_alpha` | no media channel |
 | TRACER | K4 | `view.pattern_mix` | faces off |
 | TRACER | K7 | `view.bmp_alpha` | faces off |
-| TRIP | K7 | `view.bmp_alpha` | no bitmap file |
-| TUMBLE | K7 | `view.bmp_alpha` | no bitmap file |
-| WAKE | K7 | `view.bmp_alpha` | no bitmap file |
+| TRIP | K7 | `view.bmp_alpha` | no media channel |
+| TUMBLE | K7 | `view.bmp_alpha` | no media channel |
+| WAKE | K7 | `view.bmp_alpha` | no media channel |
 | WOVEN LATTICE | D4 | `view.pattern` | faces off |
 | WOVEN LATTICE | K4 | `view.pattern_mix` | faces off |
 | WOVEN LATTICE | K7 | `view.bmp_alpha` | faces off |

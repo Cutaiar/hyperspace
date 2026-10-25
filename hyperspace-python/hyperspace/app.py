@@ -73,7 +73,7 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, devices, gamepad, lfo, placement, tempo, undo
+from . import config, devices, envelope, gamepad, lfo, placement, sequencer, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -82,7 +82,12 @@ from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
 from .library import home as library_home
-from .outputs import Presenter, Slot, Switches, View
+from .media import pool as media_pool
+from .media import proxy as media_proxy
+from .media import publish
+from .media.channels import MediaState
+from .media.folder import MediaFolder
+from .outputs import Offscreen, Presenter, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
@@ -94,8 +99,11 @@ from .watchdog import LOG_NAME, RenderWatch, Watchdog
 
 TITLE = "Hyperspace"
 RENDER_SIZE = (1280, 820)
-# wide enough for the cheat sheet on the left and the panel on the right
-CONTROL_SIZE = (960, 900)
+# two 4:3 panes side by side: the desk diagram on the left, the panel on
+# the right, the same size (ui.panel_w splits it). 900 tall is what every
+# page is laid out to fit; on a screen narrower than this the window opens
+# as wide as the screen and the desk gives up the width (placement.default_rect)
+CONTROL_SIZE = (2372, 900)
 
 # 4D perspective hold keys move depth4 in the taper's own log space —
 # octaves of (depth − 1) — so travel feels even across the whole throw.
@@ -121,16 +129,101 @@ def _quiet(fn) -> None:
         pass
 
 
+@dataclass
+class _Closer:
+    """Something `close_all` closes that is a function, not an object."""
+
+    fn: Callable[[], None]
+
+    def close(self) -> None:
+        self.fn()
+
+
 def close_all(audio, *adapters) -> None:
     """Every optional adapter's `close()` — the device registry (every
     device, the pad included; plan 27 B1), the dream worker — then the
     audio stream, best-effort, so a broken port never blocks a quit or a
     restart. The one list for both exits (audit P1); `None` for an
-    adapter that was never opened."""
-    for a in adapters:
-        if a is not None:
-            _quiet(a.close)
-    _quiet(audio.stop)
+    adapter that was never opened. Plan 32 (final review A-m1): the
+    closes share one deadline, `media.pool.EXIT_S` from here — each waits
+    what is left of it at most."""
+    _quiet(media_pool.begin_exit)
+    try:
+        for a in adapters:
+            if a is not None:
+                _quiet(a.close)
+        _quiet(audio.stop)
+    finally:
+        _quiet(media_pool.end_exit)     # the deadline is the exit's alone
+
+
+class MediaResolver:
+    """The app's `media.adapters.Resolver` (plan 32): the file kinds from
+    the media folder's last scan, live feeds from the device registry's
+    `media_feeds` (plan 32 T8: the ndi / syphon / camera entries' last
+    scans — `devices` is pointed at the registry once it exists). Both are
+    lookups in what a scan already made, never a scan: the MEDIA page asks
+    every frame. `stamp` is what tells a replaced file: the scan's size
+    and mtime for the id, and its status, so a file that finishes
+    downloading opens afresh (final review A-I1); `status` is the scan's
+    word on a file (`fetching` is never opened)."""
+
+    def __init__(self, folder: MediaFolder, devices=None):
+        self.folder = folder
+        self.devices = devices
+
+    @property
+    def proxy_cache(self) -> Path:
+        return self.folder.proxy_cache
+
+    def path(self, sid: str) -> Path | None:
+        return self.folder.path(sid)
+
+    def live(self, sid: str):
+        reg = getattr(self, "devices", None)
+        return None if reg is None else reg.media_feeds().get(sid)
+
+    def stamp(self, sid: str):
+        e = self.folder.entry(sid)
+        return None if e is None else (e.size, e.mtime, e.status)
+
+    def status(self, sid: str) -> str:
+        return self.folder.status(sid)
+
+
+class MediaIO:
+    """The media side of the app (plan 32): the folder (scanned on its own
+    timer), the eight channels, polled once a frame in the scene-setter
+    slot, and the close that both exits run — every source closed on the
+    channels' closer thread within a 1.5 s budget
+    (`channels.CLOSE_BUDGET_S`), the folder's timer stopped, the proxy
+    worker and the pool told to stop without waiting, all inside the
+    exit's one deadline (`media.pool.left`; review focus 3: the exit stays
+    under 2 s). The workers are daemon threads, so one stuck in a read
+    never holds the interpreter's exit."""
+
+    def __init__(self, folder: MediaFolder, state: MediaState):
+        self.folder, self.state = folder, state
+
+    def poll(self, dt: float, now: float) -> None:
+        self.state.poll(dt, now)
+
+    def close(self) -> None:
+        _quiet(self.state.close)
+        _quiet(self.folder.stop)
+        _quiet(media_proxy.cancel_all)
+        _quiet(lambda: media_pool.shutdown(wait=False))
+
+
+def _open_media(lib_path: str, home: Path) -> MediaIO:
+    """The media folder — `<library>/media/` shared when ``[library] path``
+    is set, `<home>/media/` this Mac's own, the proxies and thumbnails in
+    `<home>/media-cache/` — and the channels over it. The folder's scans
+    start now, on the pool."""
+    folder = MediaFolder(Path(lib_path) / "media" if lib_path else None,
+                         home / "media", home / "media-cache")
+    folder.start()
+    return MediaIO(folder, MediaState(MediaResolver(folder)))
 
 
 def _destroy_windows(windows) -> None:
@@ -203,8 +296,13 @@ def _slots(cfg: dict | None) -> list[Slot]:
                       flip_x=bool(e.get("flip_x", False)), flip_y=bool(e.get("flip_y", False)))
         out.append(Slot(k + 1, name=str(e["name"] or ""), switches=sw,
                         monitor=placement.index(e["monitor"]),
-                        fullscreen=bool(e["fullscreen"])))
+                        fullscreen=bool(e["fullscreen"]),
+                        window=bool(e.get("window", True)) or k == 0,
+                        syphon=str(e.get("syphon", "") or ""), ndi=str(e.get("ndi", "") or "")))
     return out
+
+
+NOTHING_TO_PUBLISH = "window = false and nothing to publish (no syphon or ndi)"
 
 
 CASCADE = 40     # px: a later output's default spot, down and right of the one before
@@ -264,6 +362,13 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     render_rect = ctrl_rect = None
     later_rects: list = [None] * len(slots)
     notes: list[str] = []
+    # plan 32 T9: a publish-only output never has a window, so no screen
+    # or spot is looked for; one with nothing to publish is not drawn either
+    idle = []
+    for slot in slots[1:]:
+        if slot.publish_only and not (slot.syphon or slot.ndi):
+            slot.missing = NOTHING_TO_PUBLISH
+            idle.append(f"output: {slot.label}: {slot.missing} — not drawn")
     if scr:
         try:
             seen = placement.load(home) if home is not None else {}
@@ -275,6 +380,8 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             notes += [n1, n2]
             taken = [tuple(render_rect[:2])]
             for k, slot in enumerate(slots[1:], start=1):
+                if slot.publish_only:
+                    continue
                 later_rects[k], n = _later_rect(slot, k, scr, renders, taken)
                 notes.append(n)
         except Exception as e:  # noqa: BLE001 — a file nobody foresaw must not stop a launch
@@ -282,15 +389,18 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
             ctrl_rect = placement.default_rect("control", CONTROL_SIZE, scr[0])
             notes = [_err("placement", e) + " — the windows open at their default spots"]
             for k, slot in enumerate(slots[1:], start=1):
+                if slot.publish_only:
+                    continue
                 if slot.monitor >= len(scr):        # fork F9 holds here too (review of #123)
                     slot.missing = f"screen {slot.monitor} is not connected"
                 if not slot.missing:
                     r = placement.default_rect("render", RENDER_SIZE, scr[0])
                     later_rects[k] = (r[0] + CASCADE * k, r[1] + CASCADE * k, r[2], r[3])
-        for note in filter(None, notes):
-            print(note, file=sys.stderr)
-            if cfg is not None:
-                cfg.setdefault("notes", []).append(note)
+    for note in filter(None, [*notes, *idle]):
+        print(note, file=sys.stderr)
+        if cfg is not None:
+            cfg.setdefault("notes", []).append(note)
+    if scr:
         # …and the config is left saying what was done: an index no screen
         # has (or no number at all) is −1 from here on, as the note above
         # said, so `Output.monitor` cannot carry it further (plan 16 WP7)
@@ -339,7 +449,7 @@ def _windows(overlay: bool = False, cfg: dict | None = None, home: Path | None =
     # another window takes focus — the hints above still hold
     # (TRANSPARENT_FRAMEBUFFER off, SAMPLES 0, AUTO_ICONIFY off)
     for k, slot in enumerate(slots[1:], start=1):
-        if slot.missing:
+        if slot.missing or slot.publish_only:
             continue
         rect = later_rects[k]
         size = rect[2:] if rect else RENDER_SIZE
@@ -434,6 +544,36 @@ def _open_presenters(slots: list[Slot], make_context=None, notes: list | None = 
     glfw.make_context_current(slots[0].win)
 
 
+def _open_publishers(slots: list[Slot], ctx, notes: list | None = None) -> None:
+    """Plan 32 T9: each drawn output's publishers (media/publish.py), made
+    with the render context current — a Syphon server takes the context
+    current as it is made; a publisher that cannot open says so on its
+    SYSTEM line, and every failure is said once in `notes` (the
+    config's). A publish-only output gets its offscreen target, a
+    published window its tap (`outputs.Offscreen`)."""
+    for slot in slots:
+        if not slot.drawn:
+            continue
+        slot.publishers = publish.open_for(slot, ctx, notes=notes)
+        if slot.publish_only:
+            slot.offscreen = Offscreen(ctx)
+        elif slot.publishers:
+            slot.tap = Offscreen(ctx)
+
+
+def _close_publishers(win, slots: list[Slot]) -> None:
+    """Both exits: every publisher closed (an NDI sender's thread joined)
+    and the offscreen targets freed, with the render context current —
+    their GL objects are its."""
+    _quiet(lambda: glfw.make_context_current(win))
+    publish.close_all(slots)
+    for slot in slots:
+        for off in (slot.offscreen, slot.tap):
+            if off is not None:
+                _quiet(off.release)
+        slot.publishers, slot.offscreen, slot.tap = [], None, None
+
+
 def _gl_flush() -> None:
     """glFlush in the current context: a presenter's context samples the
     renderer's frame textures, and without the flush it sees last frame's
@@ -462,7 +602,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     1. output 1 current; the stranded-target check; its window bound;
     2. a `View` per output — output 1 on its window's framebuffer (the
        `View` `Renderer.draw` builds, so one output is today's frame), each
-       later one with its presenter and its framebuffer's size;
+       later one with its presenter and its framebuffer's size, or (plan
+       32 T9) a publish-only one on its offscreen target at the render
+       cap's size ("full": output 1's framebuffer), in their list order;
+       each published one carries its publishers (and its tap);
     3. `renderer.draw_outputs`: output 1 drawn whole, a `Handoff` left for
        the others;
     4. glFlush in output 1's context;
@@ -491,16 +634,27 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     ctx.viewport = (0, 0, fbw, fbh)
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
+    offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
     try:
         views = [View(first.switches, (fbw, fbh), target=ctx.screen,
-                      bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh))]
-        for sl in later:
-            sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
-            views.append(View(sl.switches, sl.size, presenter=sl.presenter))
+                      bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
+                      publish=first.publishers, tap=first.tap)]
+        shown = []                      # (slot, view): the presented ones
+        pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
+        for sl in slots[1:]:
+            if sl in later:
+                sl.size = tuple(int(v) for v in glfw.get_framebuffer_size(sl.win))
+                views.append(View(sl.switches, sl.size, presenter=sl.presenter,
+                                  publish=sl.publishers, tap=sl.tap))
+                shown.append((sl, views[-1]))
+            elif sl in offscreen:
+                sl.size = (int(pub_size[0]), int(pub_size[1]))
+                views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
+                                  publish=sl.publishers))
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
         if later:
             (flush or _gl_flush)()
-        for sl, v in zip(later, views[1:], strict=True):
+        for sl, v in shown:
             try:
                 glfw.make_context_current(sl.win)
                 if v.handoff is not None and sl.size[0] > 0 and sl.size[1] > 0:
@@ -866,6 +1020,7 @@ class Host:
     devices: devices.DeviceRegistry | None = None
     dream_io: object | None = None    # the look-back's worker: not a device
     learn: object | None = None       # learn.Learn: what MIDI and the hands complete
+    media: MediaIO | None = None      # the media folder and channels (plan 32)
     render_watch: RenderWatch | None = None   # the render window's health (watchdog.py)
     undo: object | None = None        # undo.Undo: ticked once a frame (plan 15 WP1)
     # every opened render output's window settings, output 1's (`output`)
@@ -874,9 +1029,11 @@ class Host:
 
     @property
     def adapters(self) -> tuple:
-        """What `close_all` closes, in shutdown order: the registry (every
-        device, last listed first — the pad included) and the dream worker."""
-        return (self.devices, self.dream_io)
+        """What `close_all` closes, in shutdown order: the media channels
+        and folder (plan 32: their sources go before the devices that may
+        feed them), the registry (every device, last listed first — the pad
+        included) and the dream worker."""
+        return (getattr(self, "media", None), self.devices, self.dream_io)
 
     @property
     def pad(self):
@@ -936,6 +1093,16 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
         devs.poll(dt, now, router=router, learn=h.learn)
         if devs.error:
             ok, reloader.runtime_error = False, devs.error
+
+    # ---- the media channels (plan 32): each follows its slot — a source
+    # opened or closed, never decoded here — and a clip's transport steps
+    # on the bases the devices just wrote ----
+    media = getattr(h, "media", None)
+    if media is not None:
+        try:
+            media.poll(dt, now)
+        except Exception as e:  # noqa: BLE001
+            ok, reloader.runtime_error = False, _err("media", e)
 
     # ---- the macros' base subscribers: the last scene-setter — a macro
     # whose base moved (a knob just now, the panel last frame, a restore)
@@ -1074,6 +1241,8 @@ def main() -> None:
     # each later output: a presenter on its own context, never waiting
     _open_presenters(slots, notes=cfg.setdefault("notes", []))
     later = [sl for sl in slots[1:] if sl.opened]
+    # the outputs published out (plan 32 T9), output 1's context current
+    _open_publishers(slots, ctx, cfg.setdefault("notes", []))
 
     # the control side: imgui on the control window's context. Its swap
     # never waits for a vblank — two vsynced swaps a frame would halve the
@@ -1099,11 +1268,17 @@ def main() -> None:
     # (config, bindings, windows, logs, last_show) stay in the home either way
     lp = cfg.get("library", {}).get("path", "")
     library = Library(Path(lp), machine=home) if lp else Library()
+    # the media folder and the eight channels (plan 32): the channels'
+    # params are declared over this one `MediaState`, the preset's bins are
+    # its, and the renderer reads its frames
+    media = _open_media(lp, home)
+    renderer.media = media.state
     # dream.* drives the renderer's look-back (lookback.py); the post pass
     # runs inside renderer.draw
     panels: list = []                  # app.restart raises the panel's flag; frame() polls it
     reg = build_registry(s, control, audio, library.project, dream=renderer.lookback.state,
                          fx=renderer.fx.state, ghost=renderer.ghost.state,
+                         media=media.state,
                          restart=lambda: [setattr(p, "restart_requested", True) for p in panels])
     # an analyzer preset carries its band layout; the library hands it to
     # control before restoring values (07-overhaul contracts)
@@ -1114,12 +1289,20 @@ def main() -> None:
     library.on_load("band", control.scene_loaded)
     control.library = library
     hand_settings = _hand_settings(reg, cfg)   # before attach: "default" includes them
-    # the tap-tempo clock and the four LFOs (tempo.py, lfo.py): their knobs
-    # are params too, so a preset carries a tempo and an LFO arrangement
+    # the tap-tempo clock and the LFO bank (tempo.py, lfo.py; four by
+    # default, up to 16, plan 31 B): their knobs are params too, so a
+    # preset carries a tempo and an LFO arrangement
     clock = tempo.Clock()
     lfos = lfo.LFOs()
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
+    # plan 31: the envelope bank (the five lane envelopes, plus extras) and
+    # the step sequencer that fires them — registered beside the LFOs and
+    # before attach, so "default" holds their knobs and an empty pattern
+    envs = envelope.Envelopes()
+    seq = sequencer.Sequencer()
+    envelope.register(reg, envs, clock)
+    sequencer.register(reg, seq, clock)
     # the render window's placement registers before attach, so "default"
     # includes output.* and reset / the dirty dot see them (audit L6)
     output = _make_output(render_win, reg, cfg)
@@ -1142,10 +1325,13 @@ def main() -> None:
     panel = Panel(control, audio, s, renderer, library.project, registry=reg, library=library)
     panels.append(panel)
     panel.clock, panel.lfos = clock, lfos     # the LFO page's scopes and beat light
+    panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
+    router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
+    router.use_sequencer(seq, envs)        # after the banks begin, before the plan
     # the presets (preset.py): the library's `presets/` files, landed on the
     # registry and the table; the project's bank loads through it
     presets = Presets(library, reg, router)
@@ -1187,8 +1373,10 @@ def main() -> None:
     rig.listeners.append(point_at_devices)
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
+    panel.media = media                        # the MEDIA page: the folder and the channels
     renderer.ghost.router = router           # the guide lights what the table routes
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+    media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
     if dream_io is not None:            # fills the look-back's dream slot
@@ -1208,7 +1396,10 @@ def main() -> None:
     marks = Marks(library)
     undo_obj = undo.Undo(reg, router.table, marks=marks,
                          tag=lambda: tuple(s.name for s in audio.chain.spec),
-                         on_restore=router.sync_macros)
+                         on_restore=router.sync_macros,
+                         # the LFOs' membership (plan 31 B), read off the
+                         # router at each step, so a re-classed router counts
+                         banks=lambda: router._banks())
     undo.install(undo_obj)             # what undo.push and the edit.* triggers reach
     panel.undo = undo_obj              # the footer's message slot
     # panel state and chain must stay one object even after source changes
@@ -1225,6 +1416,9 @@ def main() -> None:
         (renderer.ghost, "ghost", "Ghost"),
         (renderer.ghost.state, "ghost", "GhostState"),
         (s, "view", "ViewState"),
+        (media.state, "media.channels", "MediaState"),        # plan 32
+        *[(ch, "media.channels", "Channel") for ch in media.state.channels.values()],
+        (media.folder, "media.folder", "MediaFolder"),
         (panel, "ui", "Panel"),
         (control, "control", "Control"),
         (audio, "audio", "AudioEngine"),
@@ -1250,7 +1444,14 @@ def main() -> None:
         (learn, "learn", "Learn"),
         (clock, "tempo", "Clock"),
         (lfos, "lfo", "LFOs"),
+        # the LFOs as they are at this swap: N of them, with gaps (plan 31 B)
         *[(lf, "lfo", "LFO") for lf in lfos.lfos],
+        # the envelopes the same way (plan 31: five lane ones and the
+        # extras), and the sequencer with its lanes
+        (envs, "envelope", "Envelopes"),
+        *[(e, "envelope", "Envelope") for e in envs.voices],
+        (seq, "sequencer", "Sequencer"),
+        *[(ln, "sequencer", "Lane") for ln in seq.lanes],
         *([(hand_settings, "hands.core", "HandSettings")] if hand_settings else []),
         *([(dream_io, "dream", "DreamWorker")] if dream_io else []),
         # the devices' adapters, the shims and the registry (devices.py):
@@ -1305,6 +1506,9 @@ def main() -> None:
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 
+    # both exits close the publishers, in output 1's context (plan 32 T9)
+    publishers = _Closer(lambda: _close_publishers(render_win, slots))
+
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
 
@@ -1315,12 +1519,13 @@ def main() -> None:
                 clock=clock, lfos=lfos, keys=keys, mouse=mouse, output=output,
                 renderer=renderer, panel=panel, reloader=reloader,
                 draw_render=draw_render, draw_panel=draw_panel,
-                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters), impl,
+                restart=lambda: _restart(audio, (watchdog, awake, panel, *host.adapters,
+                                                 publishers), impl,
                                          ctrl_win,
                                          save=save_windows, windows=all_windows()),
                 quit=lambda: glfw.set_window_should_close(render_win, True),
                 devices=rig, dream_io=dream_io, learn=learn, render_watch=render_watch,
-                undo=undo_obj,
+                undo=undo_obj, media=media,
                 outputs=[sl.output for sl in slots if sl.output is not None])
 
     # smoke-test escape hatch: HYPERSPACE_FRAMES=n closes after n frames
@@ -1366,7 +1571,7 @@ def main() -> None:
     _quiet(save_windows)      # where the windows are, for the next launch (placement.py)
     # the watchdog first: teardown is no stall; the panel before imgui goes
     # (its GRAPH page's node editor context, plan 28 N2)
-    close_all(audio, watchdog, awake, panel, *host.adapters)
+    close_all(audio, watchdog, awake, panel, *host.adapters, publishers)
     impl.shutdown()
     _destroy_windows(all_windows())   # every window before terminate: the exit crash
     glfw.terminate()

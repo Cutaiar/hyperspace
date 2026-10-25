@@ -26,7 +26,8 @@ IMPORT_SCRIPT = """
 import sys
 import hyperspace.app
 gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
-         "leap", "torch", "pythonosc")
+         "leap", "torch", "pythonosc",
+         "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
@@ -352,7 +353,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
         draw_render=lambda dt: log.append("render.draw"),
         draw_panel=lambda dt, fps: log.append("panel.draw"),
         restart=lambda: log.append("restart"), quit=lambda: log.append("quit"),
-        devices=rig, dream_io=None, undo=Stub("undo", log),
+        devices=rig, dream_io=None, undo=Stub("undo", log), media=Stub("media", log),
     )
     assert g.KEY_ESCAPE  # the fake never touches glfw; the keys are plain ints
     return h
@@ -376,6 +377,7 @@ ORDER = [
     "pad.lanes", "router.felt",                      #   …through the pad's feel (motion.py)
     "midi.poll",                                     #   …MIDI — cc and note rows
     "bridge.reconnect",                              #   …the bridge's ports, looked for again
+    "media.poll",                                    # the media channels follow their slots (plan 32)
     "router.follow_macros",                          # the macros' base subscribers
     "undo.tick",                                     # the bases, compared (plan 15 WP1)
     "output.apply",                                  # reads last frame's objects
@@ -414,6 +416,28 @@ def test_main_hands_the_router_its_lfos():
     calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
              and isinstance(n.func, ast.Attribute) and n.func.attr == "use_lfos"]
     assert calls == ["router.use_lfos(lfos, clock)"]
+
+
+def test_main_hands_the_router_its_envelopes_and_sequencer():
+    """Plan 31 W1: the envelopes are a second bank and the sequencer fires
+    them, both stepped inside `router.modulate` — a main that forgot either
+    call would leave every envelope at rest and the grid silent, with the
+    frame order unchanged. Each is registered before the router takes it,
+    and both are hot-reload targets."""
+    import ast
+    import inspect
+
+    src = inspect.getsource(app.main)
+    tree = ast.parse(src)
+    calls = [ast.unparse(n) for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Attribute)
+             and n.func.attr in ("use_bank", "use_sequencer")]
+    assert calls == ["router.use_bank(envs, clock)", "router.use_sequencer(seq, envs)"]
+    assert src.index("envelope.register(reg, envs, clock)") < src.index("library.attach(reg)")
+    assert src.index("sequencer.register(reg, seq, clock)") < src.index("library.attach(reg)")
+    assert src.index("router.use_lfos(lfos, clock)") < src.index("router.use_bank(envs, clock)")
+    assert '(envs, "envelope", "Envelopes")' in src
+    assert '(seq, "sequencer", "Sequencer")' in src
 
 
 def test_an_absent_pad_or_adapter_is_simply_skipped():
@@ -559,13 +583,15 @@ def test_the_loop_keys_outside_the_table():
 
 
 def test_the_host_close_list_is_every_adapter_in_shutdown_order():
-    """The one close list (audit P1) is the registry — every device, last
-    listed first, the pad included (plan 27 B1) — then the dream worker."""
+    """The one close list (audit P1) is the media channels and folder
+    (plan 32), the registry — every device, last listed first, the pad
+    included (plan 27 B1) — then the dream worker."""
     log: list[str] = []
     h = _host(log)
-    assert h.adapters == (h.devices, None)
+    assert h.adapters == (h.media, h.devices, None)
     app.close_all(SimpleNamespace(stop=lambda: log.append("audio")), *h.adapters)
-    assert log == ["bridge.close", "hands.close", "midi.close", "pad.close", "audio"]
+    assert log == ["media.close", "bridge.close", "hands.close", "midi.close", "pad.close",
+                   "audio"]
     assert all(d.io is None for d in h.devices) and h.pad is None
 
 
@@ -730,7 +756,8 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": dict(config.DEFAULTS["output"])}
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
     assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
-    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 - 960 - 16, 54))
+    # the control window, wider than the laptop, opens as wide as it (less the margins)
+    assert (g.size[ctrl], g.pos[ctrl]) == ((1728 - 32, app.CONTROL_SIZE[1]), (16, 54))
     assert "notes" not in cfg and not (tmp_path / placement.FILE).exists()   # a launch only reads
 
     # remembered: created at the remembered size, put at the remembered spot
@@ -745,7 +772,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": {"monitor": 0, "control_monitor": 1}}
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
     assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
-    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 + 1920 - 960 - 16, 16))
+    assert (g.size[ctrl], g.pos[ctrl]) == ((1920 - 32, app.CONTROL_SIZE[1]), (1728 + 16, 16))
     assert "notes" not in cfg
 
     # the projector unplugged, and a config index with no screen: default
@@ -769,7 +796,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": {}}
     monkeypatch.setattr(placement, "place", _boom)
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
-    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (16, 54))
     assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
     # …and a later output whose screen is not connected stays closed then
     # too (fork F9; review of #123), while one on a connected screen opens
@@ -786,7 +813,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(app, "glfw", g)
     slots, ctrl = app._windows(False)
     render = slots[0].win
-    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (16, 54))
 
 
 def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
@@ -808,7 +835,7 @@ def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
     # quit: main's helper writes both windows' rects
     app._save_windows(tmp_path, render, ctrl, out)
     doc = placement.load(tmp_path)
-    assert doc["control"] == {"x": 300, "y": 90, "w": 960, "h": 900, "screen": "Built-in"}
+    assert doc["control"] == {"x": 300, "y": 90, "w": 1728 - 32, "h": 900, "screen": "Built-in"}
     assert doc["render"] == [{"x": 1900, "y": 120, "w": 1000, "h": 700, "screen": "Projector"}]
 
     # fullscreen at the exit: the windowed rect, never the cover of the screen (F6)
@@ -1403,3 +1430,119 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     r = _Renderer(log)
     app._draw_render(r, _Ctx(log), object(), slots, flush=lambda: None)
     assert r.calls[0][1].switches is slots[1].switches and r.calls[0][1].switches.scene
+
+
+def test_the_media_exit_joins_everything_within_two_seconds(tmp_path):
+    """Plan 32 review focus 3: the app's media close — every channel's
+    source closed and its thread joined, the folder's timer stopped, the
+    proxy worker and the pool let go — ends well inside 2 s, and leaves no
+    media thread of the channels' or the folder's running."""
+    import threading
+    import time
+
+    from test_media_channels import FakeOpener
+
+    lib = tmp_path / "lib"
+    media = app._open_media(str(lib), tmp_path / "home")
+    assert media.folder.shared == lib / "media" and media.folder.local == tmp_path / "home" / "media"
+    assert media.state.resolver.proxy_cache == tmp_path / "home" / "media-cache" / "proxies"
+    op = FakeOpener(thread=True)
+    media.state.opener = op
+    media.state.resolver.path = lambda sid: Path("/x")
+    for c in "abcd":
+        media.state.assign(c, 0, f"local:{c}.png")
+    media.poll(1 / 60, 0.0)
+    assert op.opens == 4
+    t = time.monotonic()
+    media.close()
+    assert time.monotonic() - t < 2.0
+    assert op.closes == 4
+    left = [th.name for th in threading.enumerate()
+            if th.name.startswith(("media-fake-", "media-folder-watch"))]
+    assert left == []
+    other = app._open_media("", tmp_path / "home2")      # no [library] path: no shared folder
+    assert other.folder.shared is None
+    other.close()
+
+
+def test_the_resolver_stamp_moves_when_a_download_lands(tmp_path):
+    """Final review A-I1: the media resolver's stamp carries the scan's
+    status, so a file whose size and mtime stay put while it goes from
+    `fetching` to `ready` still reads as changed; `status` is the folder's."""
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(size=10, mtime=1.0, status="fetching")
+    folder = SimpleNamespace(entry=lambda sid: entry, status=lambda sid: entry.status)
+    r = app.MediaResolver(folder)
+    was = r.stamp("shared:a.png")
+    assert r.status("shared:a.png") == "fetching"
+    entry.status = "ready"
+    assert r.stamp("shared:a.png") != was and r.status("shared:a.png") == "ready"
+
+
+_STUCK_EXIT = r"""
+import sys, threading, time
+from pathlib import Path
+from types import SimpleNamespace
+
+import av
+from hyperspace import app
+from hyperspace.media import pool, proxy
+from hyperspace.media.video import VideoSource
+
+home = Path(sys.argv[1])
+never = threading.Event()
+media = app._open_media(str(home / "lib"), home / "home")
+# three stills mid-download: every pool worker stuck in a read
+for _ in range(pool.WORKERS + 2):
+    pool.submit(never.wait)
+pool.submit_thumb(never.wait)
+# a transcode running on the proxy worker
+started = threading.Event()
+def transcode(path, cache, cancel=None):
+    started.set()
+    never.wait()
+proxy.make_proxy = transcode
+clip = home / "clip.mp4"
+clip.write_bytes(b"x")
+proxy.submit(clip, home / "cache")
+started.wait(2)
+# a video on a channel stuck in av.open
+av.open = lambda *a, **k: never.wait()
+media.state.opener = lambda sid, r: VideoSource(sid, clip)
+media.state.resolver.path = lambda sid: clip
+media.state.assign("a", 0, "local:clip.mp4")
+media.poll(1 / 60, 0.0)
+time.sleep(0.1)
+print("closing", time.time(), flush=True)
+t = time.monotonic()
+app.close_all(SimpleNamespace(stop=lambda: None), media)
+print("closed", time.monotonic() - t, flush=True)
+"""
+
+
+def test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck(tmp_path):
+    """Final review A-I1 / A-m1 / A-m4: with every pool worker stuck in a
+    cloud file's read, a thumbnail job and a transcode running and a
+    video stuck opening, the app's close path (`close_all`, one shared
+    deadline) returns and the interpreter exits — no worker joined at
+    exit — inside 2 s of the close starting."""
+    import subprocess
+    import sys
+    import time
+
+    script = tmp_path / "stuck_exit.py"
+    script.write_text(_STUCK_EXIT)
+    p = subprocess.Popen([sys.executable, str(script), str(tmp_path)], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, cwd=Path(__file__).parent.parent)
+    try:
+        out, err = p.communicate(timeout=20)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        out, err = p.communicate()
+        pytest.fail(f"the process never exited: {out!r} {err[-2000:]!r}")
+    ended = time.time()
+    assert p.returncode == 0, err[-2000:]
+    lines = dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
+    assert float(lines["closed"]) < 2.0, out
+    assert ended - float(lines["closing"]) < 2.0, (ended, out)

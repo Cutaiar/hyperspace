@@ -16,6 +16,7 @@ from test_ui_shell import (
 
 from hyperspace import apc40, gamepad, ui_desk, ui_pad
 from hyperspace.app import CONTROL_SIZE
+from test_ui_shell import NARROW_CONTROL
 from hyperspace.routing import Binding, padmap
 
 # ---------------------------------------------------------------- the layout
@@ -113,7 +114,7 @@ def test_the_pad_takes_the_top_of_the_desks_column():
     """`room`: top-left, left of the panel, never over `MAX_H` of the
     display; the desk, which grows up from the foot of the same column,
     starts under it (`ui_desk.room`'s `pad_h`)."""
-    display = tuple(float(v) for v in CONTROL_SIZE)             # 960 × 900
+    display = tuple(float(v) for v in NARROW_CONTROL)             # 960 × 900
     panel_x = display[0] - 540 - 12
     E = ui_pad.EDGE
     x, y, w, h = ui_pad.room(display, panel_x)
@@ -218,7 +219,7 @@ def test_the_small_pad_draws_glyphs_only(rig, monkeypatch):
     """The panel open, the pad beside it: the units are too small for
     labels, so the picture is the glyphs."""
     panel, reg = rig.panel, rig.reg
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     reg["ui.pad_diagram"].set(True)
     got = _pad_frames(rig, monkeypatch)
     assert ui_pad._state(panel)["unit"][0] < ui_pad.LABEL_UNIT

@@ -46,9 +46,10 @@ Two kinds of file, both plain JSON you can open in a text editor:
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
-— the presets, ``hyperspace.preset/2`` under ``presets/``, which
-preset.py's ``Presets`` loads and writes (the one kind since plan 13
-WP5 made the routing presets presets). For such a group the
+— the presets, ``hyperspace.preset/2`` (``/3`` since plan 31, written
+only when needed: a build that takes /2 alone refuses one, `read`)
+under ``presets/``, which preset.py's ``Presets`` loads and writes (the
+one kind since plan 13 WP5 made the routing presets presets). For such a group the
 library does the file half — list, user-shadows-factory, load / save as
 / delete, the dirty dot, the watch — and the kind's hooks do the
 document half: ``load(doc, path)`` applies it, ``document(name)`` is
@@ -122,6 +123,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
+from .graphmigrate import retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -1340,8 +1342,9 @@ class Marks:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
         its load left for the panel, the loaded preset's graph — plan 26
-        A4, `preset.GraphSection.mark`, None with no presets), and the
-        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)."""
+        A4, `preset.GraphSection.mark`, None with no presets), the
+        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)
+        and the media channels' bins (plan 32, `Presets.media`)."""
         lib, pre = self.lib, self.lib.presets
         gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
@@ -1349,7 +1352,14 @@ class Marks:
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
                  list(getattr(pre, "desk_notes", ()))),
                 gs.mark() if gs is not None else None,
-                copy.deepcopy(getattr(pre, "layout", None) or {}))
+                copy.deepcopy(getattr(pre, "layout", None) or {}),
+                self._bins(pre))
+
+    @staticmethod
+    def _bins(pre):
+        """The media channels' bins (plan 32), None without them."""
+        media = getattr(pre, "media", None)
+        return media.to_json() if media is not None else None
 
     def lands(self) -> dict:
         """{group: landed} — every group's name, reference and re-apply
@@ -1417,6 +1427,9 @@ class Marks:
                 note[0], list(note[1]), list(note[2]))
             if len(mark) > 5:            # the GRAPH page's positions (plan 28 N2)
                 lib.presets.layout = copy.deepcopy(mark[5])
+            media = getattr(lib.presets, "media", None)
+            if len(mark) > 6 and mark[6] is not None and media is not None:
+                media.from_json(mark[6])     # the bins (plan 32)
         pr.follow()
 
 
@@ -1594,6 +1607,13 @@ class Library:
         if self.reg is not None and group not in self._fresh_extra:
             self._fresh_extra[group] = hook()
 
+    def on_apply(self, group: str, hook) -> None:
+        """Register who is handed a module preset of this group as it lands
+        — ``hook(name, doc)``, after its values, inside its undo step (plan
+        33 R12: an fx module's run replaces the loaded graph's). A load
+        through the strip, a step or a file watch: not a rename, not a show."""
+        self.__dict__.setdefault("_apply_hooks", {})[group] = hook
+
     def on_load(self, group: str, hook) -> None:
         """Register who is told the name a load of this group landed — the
         scene combo, so a strip load moves the selected scene."""
@@ -1735,6 +1755,13 @@ class Library:
     def is_factory(self, group: str, name: str) -> bool:
         p = self.path_of(group, name)
         return p is not None and not self._is_user(p)
+
+    def factory_names(self, group: str) -> tuple[frozenset[str], frozenset[str]]:
+        """(the factory names, every name) of the group's index, in one pass
+        — `is_factory` for a whole list without an index per name."""
+        idx = self._index(group)
+        return (frozenset(n for n, p in idx.items() if not self._is_user(p)),
+                frozenset(idx))
 
     def list(self, group: str, *, hidden: bool = False) -> list[str]:
         """Every preset of the group by name, the user's shadowing the
@@ -2002,9 +2029,15 @@ class Library:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
             values = _module_values(group, doc)
-            missing = [k for k in values if k not in self.reg]
+            # (an fx module's order and target, retired in plan 33 T7, are no
+            # unknown ids: its run is read from them, `Presets._fx_module`)
+            missing = [k for k in values if k not in self.reg and not retired(k)]
             resolved = self.resolved(group, values)
             self.restore(resolved)
+            # (getattr: a Library from before a hot reload has no apply hooks)
+            apply = getattr(self, "_apply_hooks", {}).get(group)
+            if apply is not None:
+                apply(name, doc)
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:

@@ -57,7 +57,8 @@ from __future__ import annotations
 
 import copy
 import math
-from collections.abc import Callable, Iterator
+import re
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -82,6 +83,8 @@ from .lookback import (
     TINT_FROM,
     DreamState,
 )
+from .media import channels as media_channels
+from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
 
@@ -89,7 +92,8 @@ PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
 INST_LAYOUT = ["GRID", "HEX", "RING", "CUBIC", "BCC", "FCC", "HCP", "HEX PRISM", "DIAMOND"]
 INST_MOTION = ["STILL", "ORBIT", "WAVE", "RIPPLE"]
-BMP_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]
+MEDIA_PATHS = ["STILL", "ORBIT", "FIG-8", "SWAY"]   # the faces' media path (view.media_mode)
+BMP_ALPHA = "view.bmp_alpha"   # the one bitmap id kept: an alias of view.media_alpha
 PLANES = PLANE_NAMES   # the rotation planes' names, in geometry.PLANES's order
 
 RAW_STEPS = 100  # detents across an untapered continuous range
@@ -109,7 +113,13 @@ F_KEYS = 8
 # (`preset`, the bank) has no persisted params, and `rot.phase.*` is `persist=False`.
 # `mod` (plan 28 N1): the modifier nodes' params, `mod.<n>.<p>` — the
 # preset's, declared while it holds the modifier (routing.declare_modifiers)
-PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "lfo", "macro", "mod")
+# `env` and `seq` (plan 31): the envelopes' knobs and the sequencer's
+# pattern are the look's, like the LFOs' (decision 8: the pattern is the
+# preset's, `seq.run` and the playhead are not persisted at all)
+# `switch` (plan 33 S): each switch node's `select`, the preset's, declared
+# while its graph holds the switch (declare_switches)
+PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
+                      "switch", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -915,6 +925,68 @@ def _item(get_list, i):
     return (lambda: get_list()[i]), (lambda v: get_list().__setitem__(i, v))
 
 
+# ---- plan 33 S: the switches' picks ----
+SWITCH_GROUP = "switch"
+# off, then the eight inputs (R11: choice k is the input `in<k>`)
+SWITCH_CHOICES = ["off", *(str(i) for i in range(1, 9))]
+_SWITCH_ID = re.compile(r"(switch(?:\.(?:[2-9]|[1-9][0-9]+))?)\.select")
+
+
+def switch_id(name: str) -> str:
+    """The `select` param of switch node `name` (`switch.2` → `switch.2.select`)."""
+    return f"{name}.select"
+
+
+def is_switch_id(pid: str) -> bool:
+    """Is `pid` a switch's `select` — one that exists only while a preset's
+    graph holds that switch (plan 33 S)? A preset load sorts such ids
+    against the graph it lands, as it does an effect instance's."""
+    return bool(_SWITCH_ID.fullmatch(pid))
+
+
+def _switch_state(r: Registry) -> dict[str, int]:
+    """The picks the `select` params write, switch name → 0–8: the view
+    state's (`ViewState.switch`, which the renderer reads once a frame),
+    kept by `build_registry` as `r.switch_state`; a dict of the registry's
+    own for one built without a view (a test, a registry from before a hot
+    reload brought the switch)."""
+    state = getattr(r, "switch_state", None)
+    if not isinstance(state, dict):
+        state = r.switch_state = {}
+    return state
+
+
+def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
+    """The switches' params (plan 33 S), as `FxState.set_instances` and
+    `fx.declare` do the effect instances': `switch[.<n>].select` for each
+    switch `names` holds — an enum off / 1–8 (`SWITCH_CHOICES`), off when
+    first declared, group `switch` (a performance group: the preset's),
+    modulatable, so a route, a desk row, a macro, an LFO or a sequencer
+    step drives it like any param — and those of every switch no longer
+    named dropped (a route on one goes dormant, as for a deleted band). A
+    switch still named keeps its pick. Returns the ids that appeared or
+    went."""
+    state = _switch_state(r)
+    want = {switch_id(n): n for n in names}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SWITCH_GROUP and p.id not in want]:
+        r.remove(p.id)
+        state.pop(p.id[:-len(".select")], None)
+        changed.append(p.id)
+    for pid, name in want.items():
+        if pid in r:
+            continue
+        state[name] = 0
+        r.enum(pid, f"{name} select", (lambda n=name: int(state.get(n, 0))),
+               (lambda v, n=name: state.__setitem__(n, int(v))), SWITCH_CHOICES,
+               group=SWITCH_GROUP,
+               tip=f"Which of {name}'s eight inputs it passes on (in1 … in8), or off: "
+                   "the faces then show the pattern, the backdrop nothing. Only the "
+                   "picked input's picture is made.")
+        changed.append(pid)
+    return changed
+
+
 def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
@@ -942,7 +1014,7 @@ def dream_speed_text(k: float) -> str:
 
 
 def build_registry(view, control, audio, bank=None, dream=None, fx=None,
-                   restart=None, ghost=None) -> Registry:
+                   restart=None, ghost=None, media=None) -> Registry:
     """Declare every parameter the surface owns.
 
     `audio` only needs a `.chain` attribute (tests pass a namespace); the
@@ -953,8 +1025,10 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     resolves with or without a panel. `dream` is the renderer's lookback
     state (lookback.DreamState); a fresh one stands in when there is no
     renderer, so the group is always declared; `fx` (fx.FxState, the
-    renderer's effect stack) likewise, and `ghost` (ghost.GhostState, the
-    renderer's ghost hands). `bank` is the open project
+    renderer's effects' values) likewise, and `ghost` (ghost.GhostState, the
+    renderer's ghost hands), and `media` (media.channels.MediaState, the
+    eight channels the ``media.*`` params write; kept as ``r.media``, the
+    one the preset's bins and the renderer read). `bank` is the open project
     (library.Project), whose preset slots the ``preset.*`` params
     load, save and cycle. `restart` is the host's request to
     restart the process (``app.restart``; app.py polls a flag) — a no-op
@@ -963,6 +1037,18 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     """
     r = Registry()
     dream = dream if dream is not None else DreamState()
+    media = media if media is not None else media_channels.MediaState()
+    r.media = media
+    # plan 33 S: the switches' picks live on the view state the renderer
+    # reads (`ViewState.switch`); their params come with the preset's graph
+    picks = getattr(view, "switch", None)
+    if not isinstance(picks, dict):
+        picks = {}
+        try:
+            view.switch = picks
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.switch_state = picks
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -1055,19 +1141,30 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                + ", ".join(i.name for i in patterns.INPUTS) + ".")
     r.continuous("view.pattern_mix", "Pattern mix", *_attr(view, "pattern_mix"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"mix {v:.2f}", group=g)
-    r.continuous("view.bmp_alpha", "Bitmap alpha", *_attr(view, "bmp_alpha"),
-                 lo=0.0, hi=1.0, fmt=lambda v: f"bitmap alpha {v:.2f}", group=g)
-    r.continuous("view.bmp_scale", "Bitmap size", *_attr(view, "bmp_scale"),
-                 lo=0.05, hi=2.0, fmt=lambda v: f"bitmap size {v:.2f}", group=g)
-    r.enum("view.bmp_mode", "Bitmap path", *_attr(view, "bmp_mode"), BMP_PATHS, group=g,
-           tip="The bitmap's own path about the face centre — independent of the "
+    # plan 32 (row 331): the faces draw a media channel where the one
+    # bitmap file was; alpha, size and path as the bitmap's were. Which
+    # channel is the graph's wire into `pattern.media` (plan 33 T7: no
+    # `view.media` — an old preset's is read as that wire, `graphmigrate`)
+    r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
+    # the factory desk's knob 7 (apc40.DEFAULT_MAP, every factory preset's
+    # desk) is `view.bmp_alpha`: kept as a view onto `view.media_alpha`, so
+    # the row means what it always meant — the opacity of the picture on
+    # the faces. An alias: never saved (a preset writes view.media_alpha),
+    # and an old preset's value lands on the real one (preset.load_doc)
+    r.continuous(BMP_ALPHA, "Media alpha (knob 7)", *_attr(view, "media_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g, alias=True,
+                 tip="The factory desk's knob 7 from before plan 32: Media alpha.")
+    r.aliases[BMP_ALPHA] = lambda p: r.get("view.media_alpha")
+    r.continuous("view.media_scale", "Media size", *_attr(view, "media_scale"),
+                 lo=0.05, hi=2.0, fmt=lambda v: f"media size {v:.2f}", group=g)
+    r.enum("view.media_mode", "Media path", *_attr(view, "media_mode"), MEDIA_PATHS, group=g,
+           tip="The media's own path about the face centre — independent of the "
                "instance-grid motion.")
-    r.continuous("view.bmp_amp", "Bitmap amp", *_attr(view, "bmp_amp"), lo=0.0, hi=0.5,
+    r.continuous("view.media_amp", "Media amp", *_attr(view, "media_amp"), lo=0.0, hi=0.5,
                  fmt=lambda v: f"amp {v:.2f}", group=g)
-    r.continuous("view.bmp_rate", "Bitmap rate", *_attr(view, "bmp_rate"), lo=0.0, hi=6.0,
+    r.continuous("view.media_rate", "Media rate", *_attr(view, "media_rate"), lo=0.0, hi=6.0,
                  fmt=lambda v: f"rate {v:.1f}", group=g)
-    r.text("view.bmp_file", "Bitmap file", *_attr(view, "bmp_file"), group=g,
-           tip="Image drawn over the face pattern; empty for none.")
     # the face pattern's eight inputs — what the shaders read as u_mod[8],
     # named by the convention in patterns.py (SCALE GLOW WARP SPEED COLOUR
     # SHARP HUE SPREAD). Base 1.0 is the un-driven look; a routed lane rides on it.
@@ -1075,6 +1172,48 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.continuous(f"pattern.mod.{k}", patterns.label(k),
                      *_item(lambda: view.pattern_mod, k), lo=0.0, hi=2.6,
                      fmt=lambda v: f"{v:.2f}", group="pattern", tip=patterns.tip(k))
+
+    # ---- the media channels (plan 32 C, media/channels.py): the bin entry
+    # on each, how it fits a frame, and its transport — all performance,
+    # all routable; the bins themselves are the preset's `media` section ----
+    g = "media"
+    fmt_rate = lambda v: "hold" if v == 0 else f"×{v:.2f}"
+    for c, ch in media.channels.items():
+        r.continuous(f"media.{c}.slot", f"{c.upper()} slot", *_attr(ch, "slot"),
+                     lo=0, hi=media_channels.BIN - 1, integer=True,
+                     fmt=lambda v: f"slot {int(v) + 1}", group=g,
+                     tip="Which of the channel's sixteen bin entries is on it; an empty "
+                         "entry, or a source not on this Mac, is black.")
+        r.enum(f"media.{c}.fit", f"{c.upper()} fit", *_attr(ch, "fit"),
+               list(media_channels.FITS), group=g,
+               tip="How the picture fills a frame of another shape: cover crops, "
+                   "contain letterboxes, stretch distorts.")
+        r.continuous(f"media.{c}.rate", f"{c.upper()} rate", *_attr(ch, "rate"),
+                     lo=-4.0, hi=4.0, fmt=fmt_rate, group=g,
+                     tip="× the clip's own speed; negative plays backwards, 0 holds. "
+                         "On a live feed, 0 freezes the frame.")
+        r.continuous(f"media.{c}.pos", f"{c.upper()} position", *_attr(ch, "pos"),
+                     lo=0.0, hi=1.0, fmt=lambda v: f"pos {v:.3f}", group=g,
+                     tip="The scrub: while it moves the playhead is put there; when it "
+                         "rests the clip plays on at the rate from where it was left.")
+        r.continuous(f"media.{c}.jog", f"{c.upper()} jog", *_attr(ch, "jog"),
+                     lo=-1.0, hi=1.0, fmt=lambda v: f"jog {v:+.2f}", group=g,
+                     tip="A push of playhead speed that coasts back to the rate, like a "
+                         "platter spun and let go — learn a relative encoder (the cue "
+                         "knob) to it.")
+        r.enum(f"media.{c}.loop", f"{c.upper()} loop", *_attr(ch, "loop"), list(MEDIA_LOOPS),
+               group=g, tip="At the clip's end: loop, play back (pingpong), or hold the "
+                            "last frame (once).")
+
+    # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
+    # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
+    # `backdrop.channel`, an old preset's read as that wire)
+    g = "backdrop"
+    r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
+                 lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
+    r.toggle("backdrop.history", "Backdrop in the look-back", *_attr(view, "backdrop_history"),
+             group=g, tip="On, the look-back captures the backdrop with the scene; off, the "
+                          "echoes and the dream are drawn over the backdrop.")
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane
@@ -1312,7 +1451,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     fx = fx if fx is not None else FxState()
     declare_fx(r, fx)
     fx.on_specs = lambda names: declare_fx(r, fx, names)
-    # the stack the fx.* params write, for whoever declares more of them:
+    # the effects' state the fx.* params write, for whoever declares more:
     # a preset's graph holding an effect twice (plan 26 A4,
     # preset.GraphSection — `fx.acid.2.*`)
     r.fx_state = fx

@@ -35,6 +35,15 @@ explained in the [glossary](#glossary) at the end.
    (L103–L128, L131–L135, A34–A36, B41–B45, C8, D24, D25) plan 28's: until they are
    merged, use branch `plan-28-30-integration`. The instanced-field entries
    (L136–L138: thousands of copies, the 3D lattices, Fit) are on `main`.
+   The step-sequencer entries (L139–L144) are plan 31's: use branch
+   `plan-31-integration` until it is merged. Its APC40 entries (A37–A46) need branch
+   `plan-31-a1`, which waits for Dylan's sign-off: run them with him.
+   The media entries (L145–L151) are plan 32's, and L152 is the two
+   plans together: use branch `plan-31-32-integration`, where they land
+   together, until it is merged. The free-graph entries (L153–L157, A47)
+   are plan 33's: use branch `plan-33-free-graph` (PR #235) until it is
+   merged. A free graph saves as `hyperspace.preset/5`, which an older
+   build refuses, so both Macs must run that build before L157.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -49,7 +58,7 @@ explained in the [glossary](#glossary) at the end.
    app re-reads while it runs; the entries that say so edit it live.
 5. **The control window's pages** are the column of names down its left
    edge — OUTPUT, VIEW, FACES, BITMAP, CAMERA, LOOKBACK, FX, AUDIO,
-   ANALYZER, ROUTING, GRAPH, LFO, HANDS, PRESETS, SYSTEM. Click a name to open
+   ANALYZER, ROUTING, GRAPH, LFO, SEQ, HANDS, PRESETS, SYSTEM. Click a name to open
    that page. Messages appear in the *footer*, the line along the bottom.
 
 Below, `<home>` means whichever home folder the app is using. ⌘ is the
@@ -117,6 +126,14 @@ changes brightness or volume instead).
     with the APC40; B41–B45 with the hand camera (B43 before B44); C8 on
     the projector; D24 and D25 with the glass and the projector, after
     D1.
+14. Plan 31's step-sequencer entries: L139–L143 on the laptop (L141
+    with music), L144 with two Macs on the copy; then, on branch
+    `plan-31-a1` and with Dylan, A37 first and A38–A46 with the APC40.
+15. Plan 32's media entries: L145–L148 on the laptop (L147 with the cloud
+    and a second Mac), L149–L150 with Resolume or TouchDesigner, L151 with
+    a phone on the copy; then L152, the two plans together, with two Macs.
+16. Plan 33's free-graph entries: L153–L156 on the laptop (L156 with a
+    live source), L157 with two Macs on the copy, then A47 with the APC40.
 
 ## Summary
 
@@ -260,6 +277,25 @@ changes brightness or volume instead).
 | L136 | Four thousand copies hold the frame rate | 1 | laptop | 277 |
 | L137 | Fit leaves no copy cut by the edge | 1 | laptop, a second screen helps | 278 |
 | L138 | The lattices read as 3D | 1 | laptop, a mouse helps | 279 |
+| L139 | Seven LFOs, then sixteen | 1 | laptop, the copy | 280 |
+| L140 | The SEQ page from across the room | 1 | laptop | 281 |
+| L141 | The drum pattern against music | 1 | laptop, music | 282 |
+| L142 | The trigger lines the pattern up | 1 | laptop | 283 |
+| L143 | The lanes on the GRAPH page | 1 | laptop | 284 |
+| L144 | A pattern preset on an older build | 1 | two Macs, the copy | 285 |
+| L145 | A still as the backdrop; the faces and `aux` (plan 32) | 1 | laptop, a picture | 296, 297 |
+| L146 | A video: speed, scrub, loop; the cue knob as a jog wheel | 1 | laptop; APC40 for the jog | 298, 299 |
+| L147 | A file dropped in the media folder appears; a missing-local banner | 1 | laptop; the cloud and a second Mac | 300, 301 |
+| L148 | Junk files, a renamed clip, rapid switching; the MEDIA page at distance | 1 | laptop | 302, 303 |
+| L149 | Syphon and NDI in from Resolume and TouchDesigner; `extra_ips` | 1 | laptop, Resolume or TouchDesigner, a second Mac | 304–307, 313, 315 |
+| L150 | Syphon and NDI out; a publish-only output | 1 | laptop, Resolume or TouchDesigner, a second screen | 308–310 |
+| L151 | A webcam; a phone through an NDI camera app; an old bitmap preset | 1 | laptop, a phone, the copy | 311, 312, 314, 316 |
+| L152 | A preset with a pattern and a bin, saved and reloaded (plans 31 + 32) | 1 | laptop, a picture, the copy; a second Mac | 317 |
+| L153 | The headline graph; reordering the run by dragging; the FX page on a branch (plan 33) | 1 | laptop, a clip, a camera, the copy | 318, 320, 321 |
+| L154 | A drop beside a cable; a shader back into the faces on the layout | 1 | laptop, the copy | 325, 326 |
+| L155 | The FX page with a big graph, from across the room | 1 | laptop | 327 |
+| L156 | A channel lost on the faces mid-show; the frame cost of branches and a switch | 1 | laptop, a live source | 323, 324 |
+| L157 | An old party preset looks the same; a free graph on an older build | 1 | two Macs, the copy | 322, 328 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -296,6 +332,17 @@ changes brightness or volume instead).
 | A34 | Learn from a pin, with the desk | 2a | APC40 | 248 |
 | A35 | The APC40 as two boxes, SHIFT latched and released | 2a | APC40, hand camera | 256 |
 | A36 | Whose cable is it; a missing device | 2a | APC40, the copy | 258 |
+| A37 | SEND A turns the pads into the pattern, and back | 2a | APC40, the copy, `plan-31-a1` | 286 |
+| A38 | Yellow over green | 2a | APC40, `plan-31-a1` | 287 |
+| A39 | No flicker at speed | 2a | APC40, `plan-31-a1` | 288 |
+| A40 | The bottom row is the playhead and the length | 2a | APC40, `plan-31-a1` | 289 |
+| A41 | Scene buttons pick and mute a lane | 2a | APC40, `plan-31-a1` | 290 |
+| A42 | A held bank pad across SEND A saves nothing | 2a | APC40, the copy, `plan-31-a1` | 291 |
+| A43 | SHIFT with the pattern up | 2a | APC40, `plan-31-a1` | 292 |
+| A44 | QUANT with the pattern up | 2a | APC40, `plan-31-a1` | 293 |
+| A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
+| A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
+| A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -3472,6 +3519,390 @@ fade are right.
 
 *(check 279)*
 
+## The step sequencer (L139–L144; plan 31)
+
+The LFOs can now number up to sixteen; there are **envelopes** (a shape
+that rises and falls once each time something fires it) and a **step
+sequencer**: a grid of five lanes by eight steps that fires the lanes'
+envelopes in time with the tapped tempo. The new **SEQ** page, after LFO,
+draws the grid. The factory preset **seq-demo** has a drum pattern: the
+kick brightens the picture, the snare punches the zoom, the hats split
+the colours. It loads stopped: press **run** on the SEQ page.
+
+#### L139. Seven LFOs, then sixteen (on the copy)
+
+**Needs:** laptop; the copy.
+
+**Do:** load LFO BREATHE; open LFO. Click **+ lfo** three times. Click a
+one-line strip's arrow. Click **×** on LFO 2, then ⌘Z. Click **+ lfo**
+until it greys out, hover it, and scroll the page.
+
+**Right if:** with four LFOs the page looks as it always did; from five,
+all but one strip are a single line with a small picture and a moving
+bar, and the arrow opens that strip and closes the other; after ×, LFO 3
+is still called LFO 3; ⌘Z brings LFO 2 back; at sixteen the button is
+grey and says why; the page scrolls and stays smooth.
+
+**Wrong if:** the LFOs renumber after a ×; two strips open at once; the
+app stutters with sixteen.
+
+*(check 280)*
+
+#### L140. The SEQ page from across the room
+
+**Needs:** laptop.
+
+**Do:** load **seq-demo**, open SEQ, press **run**. Step back two
+metres. Then click the number **6** above the grid; click lane 2's **M**;
+click lane 3's number; click any square; ⌘Z.
+
+**Right if:** the green squares (the kick, the snare and the hats) stand
+out from the dark ones; a red-framed column walks across in time, and a
+green square under it turns yellow — still easy to tell from green;
+after **6**, columns 7 and 8 go dim and ignore clicks; lane 2's squares
+turn red; clicking lane 3's number opens envelope 3's strip below; a
+click toggles a square and ⌘Z puts it back. Nothing scrolls.
+
+**Wrong if:** yellow and green hard to tell apart from a distance; a dim
+column that still toggles.
+
+*(check 281)*
+
+#### L141. The drum pattern against music
+
+**Needs:** laptop; music at about 120 BPM, then about 175.
+
+**Do:** tap the tempo in with the music; press ⇧B on a downbeat; load
+**seq-demo**, press **run**. Then the faster track: tap again, ⇧B. On
+envelope 1's strip set **mode** to gate.
+
+**Right if:** the picture flashes on the kick, the zoom punches on the
+snare and the colours split on every hat, all on the music; nothing
+drifts over a minute; at 175 the hats are still separate hits; in gate
+mode the kick still lets go quickly.
+
+**Wrong if:** hits early or late against a good tap; a hit doubled or
+missed when the app stutters; a gate-mode kick that stays lit.
+
+*(check 282)*
+
+#### L142. The trigger lines the pattern up
+
+**Needs:** laptop.
+
+**Do:** on seq-demo, running, set LFO 1's sync to **1 bar** and route it
+onto something you can see. Press ⇧B off the beat a few times; then the
+SEQ page's **restart**; then ⇧B again.
+
+**Right if:** each ⇧B puts the grid on step 1 and LFO 1 at the start of
+its cycle at the same moment, with a kick there; **restart** puts only
+the grid on step 1, LFO 1 carrying on; the next ⇧B lines both up again.
+
+**Wrong if:** the grid ignores ⇧B; a burst of hits on a press; restart
+moves the LFO.
+
+*(check 283)*
+
+#### L143. The lanes on the GRAPH page
+
+**Needs:** laptop.
+
+**Do:** on seq-demo, stopped, open GRAPH, click **MODULATION**; open the
+*sequencer* box and *env 1*–*env 3* (open the idle line's **+** to see
+*env 4*). Press run on SEQ and come back; mute lane 2 there. Drag lane
+1's dot onto *env 4*'s **fire** dot; ⌘Z. Click a lane cable and press
+Delete. Right-click *env 1*; right-click the canvas and add an
+**envelope**, then delete it.
+
+**Right if:** three cables, "lane 1 fires env 1" to "lane 3 fires env 3",
+faint and marked "(stopped)" until run is on, lane 2's faint "(muted)";
+lanes 4 and 5 (no steps) have none; the drag moves lane 1 onto env 4 (the
+SEQ page's picker says env 4) and ⌘Z moves it back; Delete only explains
+how to rebind; env 1 cannot be deleted and says why; the new envelope is
+env 6 and can be deleted.
+
+**Wrong if:** a lane cable deleted; the drag making a route instead.
+
+*(check 284)*
+
+#### L144. A pattern preset on an older build (two Macs, on the copy)
+
+**Needs:** two Macs sharing one library folder, one on this build and one
+on a build from before plan 31; the copy.
+
+**Do:** on this build save TRIP unchanged under a new name; then turn one
+step on in the SEQ grid and save under another name. Open both files in
+a text editor. Load each on the older build.
+
+**Right if:** the unchanged one says `hyperspace.preset/2` and has no
+`env.` or `seq.` lines; the other says `/3`; the older build loads the
+first and refuses the second with a message about the schema, leaving
+the file as it was.
+
+**Wrong if:** the older build opens the `/3` file and, saved there, it
+loses its pattern.
+
+*(check 285)*
+
+## Media (plan 32: L145–L151)
+
+Plan 32 gives the app eight media channels (pictures, video, a webcam,
+Syphon, NDI) and the MEDIA page. Run on the copy, after `uv sync`
+(four new libraries). Put a still, a `.heic`, a 30 s `.mp4` and a `.gif`
+in `~/Hyperspace-try/media/`. A preset that uses media is saved in a new
+file format (`/4`, which is `/3` plus media): a build from before plan 32
+will not open it, so both Macs need this build first.
+
+#### L145. A still as the backdrop; the faces and `aux`
+
+**Needs:** laptop; a picture.
+
+**Do:** MEDIA page: pick the picture (This Mac), click cell 1 of channel
+A; set Backdrop to A, alpha 1; turn the look-back on and flip its
+"history" switch; then set Faces to A and try the four paths. On the
+GRAPH page wire `media.a` to the `aux` port of Displace, then Blend.
+
+**Right if:** the picture sits under the shape, bent by effects with
+history on; on the faces it keeps its shape and follows the pattern;
+Displace bends the frame by the picture's brightness and Blend keys its
+bright parts; unwired, each effect does nothing.
+
+**Wrong if:** the picture is upside down, stretched, or vanishes when an
+effect is placed after the scene.
+
+*(checks 296, 297)*
+
+#### L146. A video: speed, scrub, loop; the cue knob as a jog wheel
+
+**Needs:** laptop; an APC40 for the jog.
+
+**Do:** put the `.mp4` on channel A (backdrop A). Set rate 2, −1, 0;
+loops; drag Position while it plays and let go. Learn the cue knob onto
+Jog and spin it.
+
+**Right if:** the clip plays at the rate, scrubs where you drag and plays
+on when you let go; a jog spin speeds it and coasts back like a platter;
+nothing stalls.
+
+**Judge:** whether the jog's gain and coast feel right.
+
+**Wrong if:** the picture hitches while scrubbing or the jog never
+settles.
+
+*(checks 298, 299)*
+
+#### L147. A dropped file; a missing-local banner
+
+**Needs:** laptop; for the second half the shared cloud folder and a
+second Mac.
+
+**Do:** with the MEDIA page open, drop a picture into the media folder in
+Finder; delete one that is on a channel. On Mac 1 save a preset whose
+bins hold a `local:` file; load it on Mac 2.
+
+**Right if:** the new file is listed within about two seconds; the deleted
+one's channel goes black and reads `missing`; Mac 2 shows a banner naming
+the source it lacks and the channel is black.
+
+**Wrong if:** the app stalls, or no banner.
+
+*(checks 300, 301)*
+
+#### L148. Junk files, a renamed clip, rapid switching; the page at distance
+
+**Needs:** laptop.
+
+**Do:** put a `.txt`, a truncated `.mp4`, a 0-byte `.png` in the media
+folder; rename a playing clip; sweep a channel's slot with an LFO over
+eight clips for a minute; quit. Stand two metres back from the MEDIA page
+with 30 files in the library.
+
+**Right if:** the junk is listed with an error and nothing else stops; the
+sweep never hitches; the app quits in about two seconds; the page reads
+from there.
+
+**Wrong if:** a hitch at a switch, a slow quit, or a page too small to
+read.
+
+*(checks 302, 303)*
+
+#### L149. Syphon and NDI in
+
+**Needs:** laptop; Resolume or TouchDesigner; a second Mac for the
+network case. `kind = "syphon"` and `kind = "ndi"` in `[[devices]]`.
+
+**Do:** on the Live tab put a Syphon server, then a Resolume NDI sender,
+then a TouchDesigner sender from the second Mac, on the backdrop. Quit and
+restart each sender. Where mDNS is blocked, add `extra_ips`.
+
+**Right if:** each appears in a few seconds, upright; a quit sender holds
+its last frame a second, goes black and returns by itself.
+
+**Wrong if:** nothing is found, the picture is flipped, or it needs a
+relaunch to return.
+
+*(checks 304–307, 313, 315)*
+
+#### L150. Syphon and NDI out; a publish-only output
+
+**Needs:** laptop; Resolume or TouchDesigner; a second screen.
+
+**Do:** set `syphon = "hs"` and `ndi = "hs"` on `[output]`; receive in
+Resolume and TouchDesigner. Give output 2 `window = false`. Resize and
+move output 1's window.
+
+**Right if:** the picture arrives upright at the render size (not 4K);
+SYSTEM shows both publishers at about 60 fps, NDI's readback near 4 ms;
+output 2 opens no window and still sends.
+
+**Wrong if:** it is flipped, black, or the sent size follows the window.
+
+*(checks 308–310)*
+
+#### L151. A webcam; a phone through an NDI app; an old bitmap preset
+
+**Needs:** laptop; a phone with an NDI camera app; the copy.
+
+**Do:** `kind = "camera"`; put the camera on a channel and accept the
+macOS prompt. Start the phone app's NDI sender; put it on a channel. Load
+a preset saved before plan 32 with a picture on the faces.
+
+**Right if:** the camera runs at about 30 fps; the phone appears as an NDI
+source; the old preset loads with a note that the bitmap is no longer read.
+The APC40's knob 7 still moves the faces' media opacity.
+
+**Wrong if:** a stalled camera, or a crash on the old preset.
+
+*(checks 311, 312, 314, 316)*
+
+## Plans 31 and 32 together (L152)
+
+#### L152. A preset with a pattern and a bin, saved and reloaded
+
+**Needs:** the laptop on branch `plan-31-32-integration` (or later), a
+picture in `~/Hyperspace-try/media/`, the copy; a second Mac on a build
+from before plan 31 or on `plan-32-media` alone, sharing the library.
+
+**Do:** load TRIP. In the SEQ grid turn two steps on; on the MEDIA page
+put the picture in channel a's bin and pick it as the backdrop. Save under
+a new name. Open the file in a text editor. Load another preset, then
+load the new one again. On the second Mac, try to load it.
+
+**Right if:** the file says `hyperspace.preset/4`, has `seq.` lines, the
+`media` section with the picture's id, and the backdrop values; reloaded,
+both steps are on and the picture is behind the scene again; the second
+Mac refuses the file with a message about the schema and leaves it as it
+was.
+
+**Wrong if:** the file says `/3` or `/2`; either the pattern or the
+picture is gone after the reload; the second Mac opens it.
+
+*(check 317)*
+
+## Plan 33: the free graph (L153–L157)
+
+#### L153. The headline graph; reordering by dragging; the FX page on a branch
+
+**Needs:** laptop; a clip and a camera; the copy; branch
+`plan-33-free-graph`.
+
+**Do:** put the clip on channel A and the camera on B. On GRAPH,
+right-click the canvas and add `acid`, `tripcolour` and `kaleido`; they
+appear faint, "reaches nothing". Wire `media.a` → `acid.2` →
+`tripcolour.2` → `shape.faces`, and `media.b` → `kaleido.2` →
+`backdrop.image`; set the backdrop alpha to 1. Save under a new name.
+Then load `party-trip`, drag its first effect onto another cable, undo,
+and right-click a cable to insert an effect. Open the FX page: click
+`acid.2`, move a slider, press **Show on GRAPH**.
+
+**Right if:** each node stops being faint as it is wired; the clip plays
+on the faces through the two effects and the camera is a kaleidoscope
+behind the shape; the saved file says `hyperspace.preset/5`; a drag moves
+the effect and the run closes over the gap, one undo puts it back, a
+drop on empty canvas does nothing, the insert adds an instance; the FX
+page lists `acid.2` under **→ faces** and `kaleido.2` under **→
+backdrop**, the slider changes the picture, and **Show on GRAPH** centres
+the node.
+
+**Wrong if:** a wire is refused that should land, the faces go black, a
+node duplicates, or the two pages disagree about which effect is open.
+
+*(checks 318, 320, 321)*
+
+#### L154. A drop beside a cable; a shader back into the faces on the layout
+
+**Needs:** laptop; the copy; L153's graph.
+
+**Do:** drag an effect node and let go a few pixels beside a cable, then
+beside a modulation cable. Press tidy on L153's graph and look at the
+cables.
+
+**Right if:** a drop within reach of a cable lands on it, a drop away
+from one does nothing, and a refusal note ("x is no picture cable") is
+rare and makes sense; the cables run left to right (MEDIA, then GEOMETRY),
+none doubling back, and the two effects on the faces sit in MEDIA.
+
+**Wrong if:** a node moves for a drop nowhere near a cable, or a cable
+runs back across the canvas.
+
+*(checks 325, 326)*
+
+#### L155. The FX page with a big graph, from across the room
+
+**Needs:** laptop.
+
+**Do:** build a graph with about twelve effects, two branches, the faces,
+the backdrop and three unreached nodes. Open the FX page and stand a
+metre and a half back.
+
+**Right if:** the group headers and state words are legible, a name is
+easy to hit, nothing is clipped, and **reaches nothing** stands out.
+
+**Wrong if:** a row is hidden or a strip is pushed off the page.
+
+*(check 327)*
+
+#### L156. A channel lost on the faces; the frame cost of branches and a switch
+
+**Needs:** laptop; a camera or an NDI sender.
+
+**Do:** with a live source on the faces through two effects, unplug it for
+five seconds and plug it back. Then note SYSTEM's frame time on
+`party-trip`, build two branches, the faces branch and an eight-way
+switch driven by an LFO, and write down SYSTEM's frame rate and each
+branch's ms each time, with none wired first.
+
+**Right if:** the faces show the pattern, not black or frozen, while the
+source is gone, and the picture comes back by itself; the frame rate
+stays where it was with no branches and the eight-way switch costs about
+one branch, only its picked path showing on SYSTEM.
+
+**Wrong if:** black faces, a freeze, a switch whose cost grows with its
+inputs (the frame rate drops visibly), or a branch's line that keeps
+growing.
+
+*(checks 323, 324)*
+
+#### L157. An old party preset looks the same; a free graph on an older build
+
+**Needs:** two Macs sharing a library, one on this build and one on the
+build from before plan 33; the copy.
+
+**Do:** on the new build, load each `party-*` preset and `dial`; save one
+untouched under its own name and diff it against the original. Open the
+library on the old Mac. Then save L153's graph, try it on the old Mac,
+strip its branches on the new build and save again.
+
+**Right if:** no load note, the pictures look as before, the untouched
+save is byte-identical and the old Mac opens it; the free graph's file
+says `/5` and the old Mac refuses it, leaving it as it was; the run-only
+file is a lower schema and the old Mac opens it.
+
+**Wrong if:** a load note, a changed picture, a diff, or the old Mac
+opening a `/5` file.
+
+*(checks 322, 328)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -4296,6 +4727,190 @@ lights it where it is.
 **Wrong if:** a grey box named `axis@p2`.
 
 *(check 258)*
+
+#### The step sequencer on the desk (A37–A46; branch `plan-31-a1`, with Dylan)
+
+These need branch **`plan-31-a1`**, which holds the APC40 page and waits
+for Dylan's sign-off. **SEND A** (in the track section's top-right
+group) turns the clip-launch pads into the step grid: rows 1–5 are the
+five lanes, the clip-stop row the playhead and the length, scene launch
+1–5 pick a lane. Press SEND A again to get the bank back. Load
+**seq-demo** and press **run** on the SEQ page first, unless the entry
+says otherwise. Run them on the copy.
+
+#### A37. SEND A turns the pads into the pattern, and back (on the copy)
+
+**Needs:** the APC40; the copy; `plan-31-a1`.
+
+**Do:** with the party show loaded, note the colours of the 24 bank pads,
+SAVE (track 8's clip stop) and scene 1–4. Press SEND A; press a few grid
+pads; press SEND A again.
+
+**Right if:** SEND A lights; the grid shows the drum pattern in green
+(lanes 4 and 5 dark), scene 1 lit; a pad turns its step on or off (the
+screen agrees) and loads no preset; SEND A again goes dark and every bank
+pad, SAVE and the scene buttons come back exactly as they were.
+
+**Wrong if:** a bank pad left dark or a step left lit; a pad loading a
+preset while the grid is up.
+
+*(check 286)*
+
+#### A38. Yellow over green
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A up, seq-demo running; look from a metre or two.
+
+**Right if:** the moving yellow on a lit pad is easy to tell from green,
+and red (mute lane 2 on screen) from both.
+
+**Wrong if:** yellow and green look the same on the desk.
+
+*(check 287)*
+
+#### A39. No flicker at speed
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** turn every step of all five lanes on (on screen); SEND A; tempo
+about 175 with span ½ bar; then span 4 bars.
+
+**Right if:** the yellow column steps cleanly across five lit pads; no
+pad flashes dark between steps.
+
+**Wrong if:** flicker or stutter on the grid.
+
+*(check 288)*
+
+#### A40. The bottom row is the playhead and the length
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A, running. Watch the clip-stop row; press clip stop 5, then
+clip stop 8; then stop the transport on screen.
+
+**Right if:** one clip stop is lit, walking along with the playhead;
+after clip stop 5 the pattern repeats after step 5 and columns 6–8 go
+dark and do nothing; clip stop 8 brings back all eight and **does not
+save a preset** (off the grid it is SAVE); stopped, the row is dark.
+
+**Wrong if:** clip stop 8 saves; a dark column still toggles.
+
+*(check 289)*
+
+#### A41. Scene buttons pick and mute a lane
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A. Press scene 2; scene 2 again; scene 3; scene 2 again.
+
+**Right if:** scene 2 lights (the on-screen desk's header says "SEQ ·
+lane 2 · L=8"); the second press mutes lane 2 — its scene button blinks,
+its pads turn red, the snare stops; scene 3 picks lane 3 while scene 2
+keeps blinking; pressing scene 2 then picks it again (it stays muted);
+points, lines, faces and rotate never change.
+
+**Wrong if:** no blink; a scene press switching points or lines.
+
+*(check 290)*
+
+#### A42. A held bank pad across SEND A saves nothing (on the copy)
+
+**Needs:** the APC40; the copy; `plan-31-a1`.
+
+**Do:** grid down. Hold an **empty** bank pad (row 4); while holding,
+press SEND A; keep holding for two seconds; let go.
+
+**Right if:** nothing is saved (the PRESETS page and the slot unchanged),
+no pad blinks, the grid is up.
+
+**Wrong if:** a new preset in that slot.
+
+*(check 291)*
+
+#### A43. SHIFT with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A; press SHIFT (it stays lit); press grid pads, scene
+buttons and clip stops; turn a track knob; press SHIFT again.
+
+**Right if:** the grid, the scene buttons and the clip stops still edit
+the pattern with SHIFT lit; the knobs and faders do their SHIFT jobs;
+with SHIFT off the knobs are the preset's again and the grid still up.
+
+**Wrong if:** a SHIFT-layer action fires from a grid pad or scene button.
+
+*(check 292)*
+
+#### A44. QUANT with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A on seq-demo; press QUANT (next preset) a few times; then
+load seq-demo again from the screen.
+
+**Right if:** the grid stays up through every load and shows each
+preset's pattern (most are empty: dark), the drums again on seq-demo.
+
+**Wrong if:** a load takes the grid down, or the old pattern stays lit.
+
+*(check 293)*
+
+#### A45. Switch the desk off and on with the pattern up
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** SEND A up and running; switch the APC40 off and on (or unplug
+it and plug it back in).
+
+**Right if:** within a second or two the desk shows the grid again as it
+was: SEND A lit, the pattern, the lane's scene button, the walking clip
+stop.
+
+**Wrong if:** the bank's lights come back while the screen says the grid
+is up, or the grid stays dark.
+
+*(check 294)*
+
+#### A46. SEND A after the desk fell back to Generic mode
+
+**Needs:** the APC40; `plan-31-a1`.
+
+**Do:** with the grid **down**, switch the desk off and on while the app
+runs (it may come back in Akai's Generic mode — see SETUP); press SEND A;
+press it again. Then the same with the grid **up** before switching off.
+
+**Right if:** within a press or two the desk is back in the app's mode
+(the desk log says so); from then on SEND A turns the grid on and off
+once per press, its light matching the screen; at worst the first press
+is lost — press again.
+
+**Wrong if:** SEND A's light and the screen disagree, or SEND A stays
+latched on the desk by itself.
+
+*(check 295)*
+
+#### A47. A switch over three channels on a knob, into the faces
+
+**Needs:** the APC40; the copy; three channels with pictures; branch
+`plan-33-free-graph`.
+
+**Do:** on GRAPH add a switch, wire `media.a`, `media.b` and `media.c`
+into its `in1`–`in3` and the switch into `pattern.media`. Learn
+`switch.select` onto an APC40 knob and sweep it; put the param on `off`
+and on `4`.
+
+**Right if:** the faces show A, B and C as the knob passes each third, as
+a cut; `off` and the unwired `4` show the faces' own pattern; only the
+picked channel uploads on SYSTEM. Say whether three positions on a
+continuous knob are easy to land on.
+
+**Wrong if:** a blended picture, a stall when the pick changes, or an
+unpicked channel still uploading.
+
+*(check 319)*
 
 ## (b) The hand camera
 
@@ -6325,6 +6940,10 @@ what you want changed.
   as the colour you meant from a distance (the ghost hands are pale), a
   palette per screen, and whether the FX page's placed chip reads
   clearly. (L98, L102, D20, D21, D23; checks 223, 224, 229, 231)
+- **The step sequencer's feel** — whether the drum pattern feels tight
+  against music at 120–175 BPM, and whether the SEQ grid and the yellow
+  playhead read from across the room, on screen and on the desk. (L140,
+  L141, A38, A39; checks 281, 282, 287, 288)
 
 Smaller calls along the way: the Ghost mirror setting for the glass (D8;
 108); `hands-orbit`'s directions and zoom (B18; 80); whether faces'
