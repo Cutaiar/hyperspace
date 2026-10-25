@@ -18,8 +18,10 @@ Top to bottom:
   channel A    the selected channel's transport and fit — rate · jog,
                position · loop, slot · fit — as the panel's own widgets,
                then what is on it, its status and its time.
-  backdrop · faces   the two channel pickers and their alphas; the hint
-               that the desk's cue knob is a jog.
+  backdrop · faces   which channel each is wired to (plan 33 T7: the
+               graph's wires into `backdrop.image` and `pattern.media`,
+               through a switch at its pick — wired on GRAPH, said here)
+               and their alphas; the hint that the desk's cue knob is a jog.
 
 Read across a room in the dark (the restyle of PR #24): the panel's own
 widgets and faces, a bin cell lit solid red, a missing source in the
@@ -54,6 +56,7 @@ from dataclasses import dataclass
 from imgui_bundle import imgui
 
 from . import ui, undo
+from .graph import source_into, wire_node_kind
 from .media import pool
 from .media.adapters import VIDEO_EXT
 from .media.channels import BIN, CHANNELS, EMPTY
@@ -70,6 +73,8 @@ GAP = 6.0                  # between two channel columns
 CELL_H = 16.0              # a bin cell
 CELL_GAP = 2.0
 BAR_H = 4.0                # the playhead bar under a channel's picture
+PIC_MAX_H = 25.0           # a channel's picture is 16:9 of its column, never taller than
+                           # this (the panel at ui.PANEL_W): the page fits on a wider one
 THUMBS_KEPT = 512          # decoded thumbnails held for the renderer: the least recently
                            # drawn goes first, one at a time
 DECODES = 4                # thumbnail decodes on the media pool at once, at most
@@ -494,9 +499,9 @@ def _channels(panel, st: dict, state) -> None:
     cw = (avail - GAP * (len(CHANNELS) - 1)) / len(CHANNELS)
     top = imgui.get_cursor_screen_pos()
     gone = set(state.missing())
-    backdrop = _channel_of(panel, "backdrop.channel")
-    faces = _channel_of(panel, "view.media")
-    pic_h = cw * 9 / 16
+    backdrop = _channel_of(panel, "backdrop.image")
+    faces = _channel_of(panel, "pattern.media")
+    pic_h = min(cw * 9 / 16, PIC_MAX_H)
     bottom = top.y
     dl = imgui.get_window_draw_list()
     for k, c in enumerate(CHANNELS):
@@ -611,13 +616,42 @@ def assign(panel, c: str, i: int, sid: str | None) -> None:
     _state(panel)["said"] = said
 
 
-def _channel_of(panel, pid: str) -> str | None:
-    """The channel an off / a–h picker names, or None for off."""
-    p = panel.reg.get(pid)
-    if p is None:
-        return None
-    k = int(panel._real(p).base or 0)
-    return CHANNELS[k - 1] if 1 <= k <= len(CHANNELS) else None
+def _feed(panel, port: str) -> tuple[str | None, bool]:
+    """(the node the loaded graph wires into `port` — `backdrop.image`,
+    `pattern.media` — or None, whether a switch is on the way): straight,
+    or through a switch at its pick (`graph.source_into`; the picks are the
+    view's, `ViewState.switch`). Plan 33 T7: what `backdrop.channel` and
+    `view.media` said before they were retired. Nothing with no graph."""
+    now = getattr(panel, "graph_now", None)
+    try:
+        spec = now()[1] if now is not None else None
+    except (AttributeError, TypeError):     # a stand-in panel: no graph
+        spec = None
+    if spec is None:
+        return None, False
+    wires = spec.all_wires()
+    direct = next((w.src for w in wires if w.dst == port), None)
+    picks = getattr(getattr(panel, "view", None), "switch", None)
+    return source_into(wires, port, picks), wire_node_kind(direct) == "switch"
+
+
+def _channel_of(panel, port: str) -> str | None:
+    """The channel the loaded graph feeds `port` with (`_feed`), or None:
+    nothing wired, a switch off, or a picture that is no channel's own."""
+    src, _ = _feed(panel, port)
+    c = src.partition(".")[2] if wire_node_kind(src) == "media" else None
+    return c if c and c in CHANNELS else None
+
+
+def feed_words(panel, port: str) -> str:
+    """What feeds `port`, in words: `channel A`, `channel A (switch)`, `acid.2`
+    (a picture through effects), `off (switch)`, or `nothing wired`."""
+    src, switched = _feed(panel, port)
+    via = " (switch)" if switched else ""
+    if src is None:
+        return f"off{via}" if switched else "nothing wired"
+    c = _channel_of(panel, port)
+    return f"channel {c.upper()}{via}" if c else f"{src}{via}"
 
 
 # ---- the selected channel ----
@@ -660,15 +694,18 @@ def _mmss(s: float) -> str:
 # ---- the backdrop and the faces ----
 
 def _pickers(panel, st: dict) -> None:
-    panel._section("backdrop · faces", note="which channel each draws")
+    panel._section("backdrop · faces", note="which picture each draws · wired on GRAPH")
     if imgui.begin_table("##media.pickers", 2, imgui.TableFlags_.sizing_stretch_same):
-        rows = (("backdrop.channel", "backdrop", "view.media", "faces"),
-                ("backdrop.alpha", "alpha", "view.media_alpha", "alpha"))
-        for lp, ll, rp, rl in rows:
+        # plan 33 T7: the channel is the graph's wire, said here (GRAPH wires it)
+        for port, label in (("backdrop.image", "backdrop"), ("pattern.media", "faces")):
             imgui.table_next_column()
-            if lp in panel.reg:
-                panel.half(lp, ll)
+            panel._label_cell(label, width=ui.HALF_LABEL_W)
+            imgui.align_text_to_frame_padding()
+            imgui.text_colored(ui.TEXT, feed_words(panel, port))
+            if imgui.is_item_hovered():
+                imgui.set_tooltip(f"what the graph wires into {port}: rewire it on GRAPH")
+        for pid in ("backdrop.alpha", "view.media_alpha"):
             imgui.table_next_column()
-            if rp in panel.reg:
-                panel.half(rp, rl)
+            if pid in panel.reg:
+                panel.half(pid, "alpha")
         imgui.end_table()

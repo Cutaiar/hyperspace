@@ -43,14 +43,15 @@ def test_channel_params_registered(rig):
         assert reg[f"media.{c}.loop"].choices == ["loop", "pingpong", "once"]
         assert all(reg[f"media.{c}.{k}"].modulatable
                    for k in ("slot", "fit", "rate", "pos", "jog", "loop"))
+    # (plan 33 T7: `backdrop.channel` and `view.media` retired — which
+    # channel each draws is the graph's wire into `backdrop.image` /
+    # `pattern.media`)
     assert sorted(p.id for p in reg if p.id.startswith("backdrop.")) == [
-        "backdrop.alpha", "backdrop.channel", "backdrop.history"]
+        "backdrop.alpha", "backdrop.history"]
     assert reg["backdrop.history"].kind is Kind.TOGGLE
     views = sorted(p.id for p in reg if p.id.startswith("view.media"))
-    assert views == ["view.media", "view.media_alpha", "view.media_amp", "view.media_mode",
+    assert views == ["view.media_alpha", "view.media_amp", "view.media_mode",
                      "view.media_rate", "view.media_scale"]
-    off = ["off", *CHANNELS]
-    assert reg["view.media"].choices == off and reg["backdrop.channel"].choices == off
     assert reg["view.media_alpha"].label == "Media alpha"
     # of the bitmap's ids only the factory knob 7's is left, an alias
     assert [p.id for p in reg if p.id.startswith("view.bmp")] == ["view.bmp_alpha"]
@@ -105,8 +106,8 @@ def test_media_preset_is_v4(rig):
     rig.reg.media.assign("a", 0, None)
     assert rig.presets.document("x")["schema"] == preset.SCHEMA
     # a value away from its default is enough, of each family
-    for pid, v in (("media.b.rate", 2.0), ("backdrop.channel", 3),
-                   ("view.media_alpha", 0.5), ("backdrop.history", True)):
+    for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
+                   ("backdrop.history", True)):
         was = rig.reg[pid].value
         rig.reg[pid].set(v)
         assert rig.presets.document("x")["schema"] == preset.MEDIA_SCHEMA, pid
@@ -183,7 +184,6 @@ def test_bins_round_trip(rig, tmp_path):
     m.assign("a", 1, "camera:FaceTime HD Camera")
     m.assign("d", 7, "file:/Users/x/pic.heic")
     rig.reg["media.a.slot"].set(1)
-    rig.reg["view.media"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
     assert '"schema": "hyperspace.preset/4"' in text
@@ -193,7 +193,6 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(0)
     assert rig.presets.load("MEDIA") == [] and rig.presets.notes == []
     assert m.to_json() == want and rig.reg["media.a.slot"].value == 1
-    assert rig.view.media == 1
     # a preset without the section empties every bin
     rig.presets.load("party-faces")
     assert m.to_json() == {"channels": {}}
@@ -207,7 +206,10 @@ def test_v2_and_v4_both_load(rig):
     assert rig.presets.load("OLD") == []
     assert rig.reg["view.bright"].value == 2.0
     assert rig.presets.load("NEW") == [] and rig.presets.notes == []
-    assert rig.reg["backdrop.channel"].value == 2
+    # (plan 33 T7: the retired choice is read as its wire, never an unknown id)
+    from hyperspace import graph as G
+    assert G.Wire("media.b", "backdrop.image") in rig.presets.graph.spec.wires
+    assert "backdrop.channel" not in rig.reg
     assert rig.reg.media.channels["b"].bin[0] == "shared:x.png"
 
 

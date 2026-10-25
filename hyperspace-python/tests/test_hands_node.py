@@ -20,7 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from test_ghost import both, tracker
-from test_outputs import H, W, fbo, px, rig, scene_view, views
+from test_outputs import H, W, fbo, keep_run, px, rig, scene_view, views
 
 from hyperspace import ghost as G
 from hyperspace import outputs as O
@@ -123,7 +123,7 @@ FRONT, BEHIND = -400.0, 400.0
 def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
-        r.wiring = wiring
+        r.wiring = keep_run(r, wiring)      # (plan 33 R23: the rig's run kept)
     if z0 is not None and r.ghost.source is not None:
         r.ghost.source.units = hc.Units(mm=200.0, origin=(0.0, 205.0, z0), tilt=0.0)
     r._no_shape = not shape

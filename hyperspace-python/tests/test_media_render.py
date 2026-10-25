@@ -234,6 +234,16 @@ def _renderer(ctx, media=None, wires=()):
     return r
 
 
+def _back(r, c: str = "a"):
+    """`r` with channel `c` wired under the scene (plan 33 R: the section's
+    `media.<c> → backdrop.image`, as `GraphSpec.wiring` lands it — not
+    `backdrop.channel`); "" unwires it."""
+    from dataclasses import replace
+
+    r.wiring = replace(r.wiring, backdrop=c)
+    return r
+
+
 def _empty(**kw):
     """A view with nothing of the shape drawn."""
     from hyperspace.view import ViewState
@@ -296,7 +306,7 @@ def test_unconsumed_channel_not_uploaded(ctx):
     r = _renderer(ctx, _media(a=a, b=b))
     _draw(ctx, r, _empty(), frames=3)
     assert r._media_textures().uploads == 0 and a.reads == b.reads == 0
-    _draw(ctx, r, _empty(backdrop=1), frames=3)
+    _draw(ctx, _back(r), _empty(), frames=3)
     assert b.reads == 0 and a.reads == 3                 # read once a frame
     assert r._media_textures().uploads == 1               # the frame never moved
 
@@ -305,39 +315,41 @@ def test_backdrop_under_scene(ctx):
     """A red still on channel a under the scene: with nothing of the shape
     drawn the frame is the still; with the shape, its faces are laid over
     it; at backdrop alpha 0.5, half red over the black ground."""
-    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
-    (pic,) = _draw(ctx, r, _empty(backdrop=1))
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9)))))
+    (pic,) = _draw(ctx, r, _empty())
     h, w = pic.shape[:2]
     assert tuple(pic[h // 2, w // 2, :3]) == RED and (pic[..., :3] == RED).all()
     assert r._graph.nodes["grounded"] and "media.a" in r._graph.timed
-    (shaped,) = _draw(ctx, r, _shape(backdrop=1))
+    (shaped,) = _draw(ctx, r, _shape())
     assert (shaped[..., :3] != RED).any(axis=-1).any()      # the faces over the red
     assert (shaped[..., :3] == RED).all(axis=-1).any()      # and the still between them
-    (half,) = _draw(ctx, r, _empty(backdrop=1, backdrop_alpha=0.5))
+    (half,) = _draw(ctx, r, _empty(backdrop_alpha=0.5))
     assert abs(half[h // 2, w // 2, 0] - 128) <= 1 and half[h // 2, w // 2, 1] == 0
-    # off again: the graph without it, the frame black
-    (none,) = _draw(ctx, r, _empty(backdrop=0))
+    # off again (unwired): the graph without it, the frame black
+    (none,) = _draw(ctx, _back(r, ""), _empty())
     assert "grounded" not in r._graph.nodes and (none[..., :3] == 0).all()
+    # (plan 33 T7: no `backdrop.channel` — the wire into `backdrop.image` is it)
 
 
 def test_backdrop_needs_the_channels(ctx):
     """A renderer with no media state draws no backdrop (and builds none)."""
-    r = _renderer(ctx, None)
-    (pic,) = _draw(ctx, r, _empty(backdrop=1))
+    r = _back(_renderer(ctx, None))
+    (pic,) = _draw(ctx, r, _empty())
     assert "grounded" not in r._graph.nodes and (pic[..., :3] == 0).all()
 
 
 def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
-    r = _renderer(ctx, _media(a=Still(_rgba(16, 9)), b=Still(_rgba(16, 9, BLUE))))
-    _draw(ctx, r, _empty(backdrop=1))
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9)), b=Still(_rgba(16, 9, BLUE)))))
+    _draw(ctx, r, _empty())
     g = r._graph
-    _draw(ctx, r, _empty(backdrop=1, backdrop_alpha=0.3))
+    _draw(ctx, r, _empty(backdrop_alpha=0.3))
     assert r._graph is g                                    # alpha is per frame
-    _draw(ctx, r, _empty(backdrop=1, backdrop_history=True))
+    _draw(ctx, r, _empty(backdrop_history=True))
     assert r._graph is not g and r._graph.wiring.backdrop_history
     assert r._graph.nodes["capture"].inputs["image"].name == "grounded"
-    _draw(ctx, r, _empty(backdrop=2))
-    assert r._graph.wiring.backdrop == "b" and not r.wiring.backdrop   # the base is the preset's
+    _draw(ctx, _back(r, "b"), _empty())
+    # (the history is the frame's, laid on for the graph alone: the base is the preset's)
+    assert r._graph.wiring.backdrop == "b" and not r.wiring.backdrop_history
 
 
 def test_media_wire_to_output(ctx):
@@ -512,8 +524,8 @@ def test_render_thread_never_waits(ctx):
     before it does, black under the scene, none waiting for it — then the
     still shows."""
     late = Late(_rgba(16, 9))
-    r = _renderer(ctx, _media(a=late))
-    s = _empty(backdrop=1)
+    r = _back(_renderer(ctx, _media(a=late)))
+    s = _empty()
     _draw(ctx, r, s)                                    # programs built, graph made
     t0 = time.perf_counter()
     late.start(0.3)
@@ -563,16 +575,16 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
     st.set_instances({"acid": 2})
     st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
     assert not r.fx.compile_all()
-    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))
+    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),), backdrop="a")
 
     def red(pic):
         return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
 
-    (pic,) = _draw(ctx, r, _empty(backdrop=1), frames=2)
+    (pic,) = _draw(ctx, r, _empty(), frames=2)
     assert "acid.2" in r.stats["effects"]
     assert r._graph.nodes["acid.2"].inputs["image"] is r._graph.nodes["grounded"]
     assert red(pic) > 0.5, red(pic)
-    (shaped,) = _draw(ctx, r, _shape(backdrop=1), frames=2)
+    (shaped,) = _draw(ctx, r, _shape(), frames=2)
     assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
 
 
@@ -601,12 +613,12 @@ def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
     blue = 120
     got = {}
     for history in (False, True):
-        r = _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue)))))
+        r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue))))))
         r.lookback.state.on = True                      # the default echoes
         size = (96, 64)
         v = View(Switches(), size, target=_fbo(ctx, *size))
         for k in range(60):
-            r.draw_outputs(_empty(backdrop=1, backdrop_history=history), *size, 1.0, [v],
+            r.draw_outputs(_empty(backdrop_history=history), *size, 1.0, [v],
                            t_now=2.0 + k / 60)
         assert ctx.error == "GL_NO_ERROR"
         pic = _px(v.target)
@@ -624,9 +636,9 @@ def test_the_echoes_show_over_a_bright_backdrop(ctx):
     alone — never by the backdrop's brightness, which (a blue still at
     200) would cover every trail."""
     history = False
-    r = _renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200)))))
-    pic = _trails(ctx, r, _shape(backdrop=1, backdrop_history=history),
-                  _empty(backdrop=1, backdrop_history=history))
+    r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, 200))))))
+    pic = _trails(ctx, r, _shape(backdrop_history=history),
+                  _empty(backdrop_history=history))
     assert (pic[..., 2] >= 199).all()                        # the backdrop everywhere
     trail = (pic[..., :2] > 8).any(axis=-1).sum()
     assert trail > 20, trail                                 # and the echoes over it
@@ -704,7 +716,7 @@ def test_the_media_page_previews_cost_two_small_uploads_a_frame(ctx):
     # channel a under the scene: read and uploaded in full as the frame
     # needs it, and that is what the page shows
     r.media_watch = set(channels.CHANNELS)
-    _draw(ctx, r, _empty(backdrop=1))
+    _draw(ctx, _back(r), _empty())
     tex, _ = r.media_shown("a")
     assert tex.size == (1280, 720) and mt.uploads == 1
     mt.release()

@@ -113,7 +113,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, modifiers, routing, tapers, undo
+from . import apc40, graphmigrate, modifiers, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -135,6 +135,7 @@ from .library import (
     PROJECTS,
     SLOTS,
     LibraryError,
+    _module_values,
     _write_text,
     bank_doc,
     read_layout,
@@ -156,9 +157,12 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     PERFORMANCE_GROUPS,
     PLANES,
     SESSION_GROUPS,
+    SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_switches,
     is_instance_id,
+    is_switch_id,
     pan_world,
     part_of,
 )
@@ -172,7 +176,10 @@ SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 # plan 32 S (row 337) on top (D1, 2026-10-23): /4 is /3 plus media — one
 # ladder, so a build that reads /4 reads every version below it
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
-VERSIONS = (2, 3, 4)
+# plan 33 M (row 347): /5 is /4 plus a graph /4 cannot say (a branch, a
+# switch, an unreached effect …) — written only then (`schema_of`)
+FREE_SCHEMA = graphmigrate.FREE_SCHEMA
+VERSIONS = (2, 3, 4, 5)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -191,10 +198,12 @@ def _media_defaults() -> dict[str, Any]:
     compares against (no registry is to hand where a document is judged)."""
     from .view import ViewState
     v, ch = ViewState(), media_channels.Channel("a")
-    out: dict[str, Any] = {"view.media": v.media, "view.media_alpha": v.media_alpha,
+    # (`view.media` and `backdrop.channel`, retired in plan 33 T7, at the
+    # off they defaulted to: an old file's 0 is still no media)
+    out: dict[str, Any] = {"view.media": 0, "view.media_alpha": v.media_alpha,
                            "view.media_scale": v.media_scale, "view.media_mode": v.media_mode,
                            "view.media_amp": v.media_amp, "view.media_rate": v.media_rate,
-                           "backdrop.channel": v.backdrop, "backdrop.alpha": v.backdrop_alpha,
+                           "backdrop.channel": 0, "backdrop.alpha": v.backdrop_alpha,
                            "backdrop.history": v.backdrop_history}
     for c in media_channels.CHANNELS:
         for k in ("slot", "fit", "rate", "pos", "jog", "loop"):
@@ -293,11 +302,15 @@ def _names_v3(x) -> bool:
     return False
 
 
-def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default) -> str:
+def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default, *,
+              specs: graphmigrate.Specs | None = None, desk: list | None = None) -> str:
     """The schema a preset document is written as — the one ladder (D1,
     2026-10-23), the lowest that loses nothing:
 
-    - ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
+    - ``hyperspace.preset/5`` (plan 33 M, row 347) when its ``graph`` uses
+      the free graph's words and ``/4`` cannot say it
+      (`graphmigrate.needs_free`);
+    - else ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
       (`uses_media`): a bin, a media-family value off its default, or a
       row or wire naming one;
     - else ``hyperspace.preset/3`` (plan 31 P, decision 9) when it carries
@@ -320,7 +333,23 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default)
     re-save there (tests/test_plan31_review.py). The APC page's
     ``seq.page`` / ``seq.select`` rows are the session's and never saved.
     (The media rule does read the desk: a pre-32 build drops a desk row on
-    a media param it lacks — `uses_media`.)"""
+    a media param it lacks — `uses_media`.)
+
+    Plan 33 M: `specs` (effect → its file's `(@order, @mix)`) gives an
+    absent order or mix its default, and `desk` is the rows a desk
+    template adds under the document's own (`graphmigrate.targets`). Below
+    `/5` the rest of the ladder reads the graph as a build from before
+    plan 33 would get it (`graphmigrate.legacy_section`): the run's wires
+    and the channels' are values there, not wires naming media."""
+    section = doc.get(GRAPH_KEY)
+    if graphmigrate.needs_free(section, dict(doc.get("values") or {}),
+                              graphmigrate.targets(doc, desk), specs):
+        return FREE_SCHEMA
+    legacy = graphmigrate.legacy_section(section)
+    if legacy is not section:
+        doc = {k: v for k, v in doc.items() if k != GRAPH_KEY}
+        if legacy is not None:
+            doc[GRAPH_KEY] = legacy
     if uses_media(doc, at_default):
         return MEDIA_SCHEMA
     if any(k in doc for k in V3_KEYS):
@@ -377,6 +406,7 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
 # ---- the render graph (plan 26 A4) ----
 
 GRAPH_KEY = "graph"
+FX_GROUP = "fx"          # the effects' module group (`library/fx/*.json`): plan 33 R12
 
 
 class GraphSection:
@@ -398,7 +428,9 @@ class GraphSection:
       and an extra hands node's, `ghost.2.*` (`ghost.register`: the
       session's, like `ghost.*`, on a `GhostState` of its own that is
       kept while the app runs, so a preset that drops the node and one
-      that brings it back find its settings as they were);
+      that brings it back find its settings as they were); and (plan 33
+      S) each switch's `switch[.n].select` (`params.declare_switches`: a
+      performance param, its pick in the preset's `values`);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
       the default graph is built from) and `Renderer.ghost_states` (the
       extra hands nodes' states, each drawn by its own `Ghost`).
@@ -413,6 +445,16 @@ class GraphSection:
         self.renderer = None
         self.spec: GraphSpec | None = None      # None: the default graph
         self.doc: dict | None = None            # the section a save writes (None: none)
+        # plan 33 M: the section in the free graph's words, when it is not
+        # `doc` — a load's: `doc` is then the file's, as a build from before
+        # plan 33 keeps it, and this the wires the load read it as (None:
+        # `doc` is the section in every schema)
+        self.free: dict | None = None
+        # plan 33 T7: the retired values the load landed (`graphmigrate.
+        # landed_retired`: orders, targets, the channel choices), kept beside
+        # the section for a save below /5 (`graphmigrate.with_retired`); a
+        # GRAPH edit keeps them, an fx module's run replaces the effects
+        self.held: dict[str, Any] = {}
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
         if renderer is not None:
@@ -450,6 +492,12 @@ class GraphSection:
                                                "placement") for n in spec.notes]
         return spec, spec.to_json(), []
 
+    def specs(self) -> dict[str, tuple[int, float]]:
+        """Each effect instance's file defaults, `(@order, @mix)` — what the
+        migration to the free graph reads an absent value as (plan 33 M,
+        `graphmigrate.Specs`); none with no FxState to ask."""
+        return graphmigrate.specs_of(getattr(self, "fx", None))
+
     def files(self) -> set[str] | None:
         """The effect files on disk (None: no FxState to ask) — what a
         placement or a wire may name (plan 30 D1, plan 28 N4)."""
@@ -457,10 +505,16 @@ class GraphSection:
         return ({fx.file_of(n) for n in fx.specs}
                 if fx is not None and getattr(fx, "specs", None) else None)
 
-    def land(self, spec: GraphSpec | None, doc: dict | None = None) -> None:
+    def land(self, spec: GraphSpec | None, doc: dict | None = None,
+             free: dict | None = None) -> None:
         """Make `spec` the graph (None: the default): declare and drop the
         instances' params, and hand the renderer its wiring. `doc` is the
-        section a save writes back.
+        section a save writes back; `free` (plan 33 M) the same graph in the
+        free graph's words when `doc` is the file's from before them (a
+        load: `free_doc`). A `doc` in the free graph's words with no `free`
+        (an edit on the GRAPH page) is both: `doc` becomes it as a build
+        from before plan 33 reads it (`graphmigrate.legacy_section`), so an
+        edit undone leaves the preset clean.
 
         An extra hands node declared for the first time this run starts
         from what the open show holds for it (`ghost.2.*` in its session —
@@ -482,8 +536,25 @@ class GraphSection:
             changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
             if changed:
                 declare_fx(reg, self.fx, changed)
+        # plan 33 S: each switch's `select`, as the effect instances' params
+        declare_switches(reg, [sw.name for sw in spec.switches] if spec is not None else [])
+        if free is None and graphmigrate.says_free(doc):
+            free, doc = doc, graphmigrate.legacy_section(doc)
         self.spec, self.doc = spec, copy.deepcopy(doc)
+        self.free = copy.deepcopy(free)
         self._push()
+
+    def held_values(self) -> dict[str, Any]:
+        """The retired values the load read (getattr: a section from before
+        plan 33 T7 holds none)."""
+        return dict(getattr(self, "held", None) or {})
+
+    def free_doc(self) -> dict | None:
+        """The section in the free graph's words (plan 33 M): what a `/5`
+        save writes and what `schema_of` judges — `free` when the load
+        kept the file's section beside it, else `doc`."""
+        free = getattr(self, "free", None)      # (a section from before a hot reload)
+        return free if free is not None else self.doc
 
     def _seed(self, name: str) -> None:
         """A newly declared hands node's params from the open show's
@@ -511,13 +582,17 @@ class GraphSection:
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`)."""
-        return (self.spec, copy.deepcopy(self.doc))
+        return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)),
+                self.held_values())
 
     def put(self, mark: tuple) -> None:
-        """Land what `mark` held again (an undo of a load), first."""
-        spec, doc = mark
-        if (spec, doc) != (self.spec, self.doc):
-            self.land(spec, doc)
+        """Land what `mark` held again (an undo of a load), first. (A mark
+        from before plan 33 holds no free section, one from before T7 no
+        retired values.)"""
+        spec, doc, free, held = (*mark, None, None)[:4]
+        if (spec, doc, free) != (self.spec, self.doc, getattr(self, "free", None)):
+            self.land(spec, doc, free)
+        self.held = dict(held or {})
 
     def _push(self) -> None:
         r = self.renderer
@@ -565,7 +640,8 @@ MODIFIERS_KEY = "modifiers"
 LAYOUT_KEY = "layout"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
-NO_MODULE = ("macro", modifiers.GROUP)
+# (plan 33 S: a switch's pick means nothing without the preset's graph)
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -779,6 +855,8 @@ class Presets:
                  versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
+        # plan 33 R12: an fx module loaded replaces the graph's runs
+        self._watch_fx_modules()
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -813,6 +891,9 @@ class Presets:
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
+        # plan 33 R12: (again on every load — a Presets from before a hot
+        # reload brought this method never ran the __init__ that registers it)
+        self._watch_fx_modules()
         # 0. the look-back's per-frame ids, read as 60 Hz frames (plan 14
         #    WP6) — a file the launch's migration has not rewritten
         doc, converted = echo_seconds(doc)
@@ -832,8 +913,21 @@ class Presets:
         notes += palette_notes
         # 0. and its render graph (plan 26 A4): read, not yet landed — no
         #    section is the default graph; one this build cannot read is a
-        #    note and the default graph
+        #    note and the default graph. Plan 33 M: read as the free graph
+        #    (`graphmigrate.migrate`: each pipeline's run, the faces' and the
+        #    channels' as wires; a route on a channel choice onto a switch),
+        #    a desk template's rows counted as the desk they expand to. The
+        #    retired values (an effect's order and target, `view.media`,
+        #    `backdrop.channel`: no param since plan 33 T7) are dropped from
+        #    the values, said by the wires — so never an unknown id — and
+        #    held beside them with the file's own section, as a pre-33
+        #    build keeps both: what a save below `/5` writes (R10)
         gs = self._graph_section()
+        template_rows = self._template_rows(doc)
+        kept = doc.get(GRAPH_KEY)
+        kept_retired = graphmigrate.held_retired(doc.get("values") or {})
+        doc, migrate_notes = graphmigrate.migrate(doc, gs.specs(), desk=template_rows)
+        _, kept, _ = gs.read(kept)
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -869,7 +963,8 @@ class Presets:
             elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
-            elif is_instance_id(pid):
+            elif is_instance_id(pid) or is_switch_id(pid):
+                # (plan 33 S: a switch's `select` too — its graph declares it)
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)
@@ -913,7 +1008,9 @@ class Presets:
             name = str(doc[TEMPLATE_KEY])
             try:
                 tdoc = lib.desk_template(name)
-                template = tdoc["desk"]
+                # (plan 33 M: as the migration read it, a row on a channel
+                # choice on its switch)
+                template = template_rows if template_rows is not None else tdoc["desk"]
             except LibraryError as e:
                 notes.append(f"desk template {name!r} not loaded ({e}): this preset's own "
                              "desk rows only")
@@ -983,7 +1080,9 @@ class Presets:
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
         try:
-            gs.land(spec, section)
+            gs.land(spec, kept, free=section)
+            # (after the landing: its instances are declared now)
+            gs.held = self._held_retired(kept_retired)
             # the modifiers and their params (plan 28 N1), landed with the
             # values: their entries are their params' values
             notes += table.set_modifiers(mods, reg)
@@ -1054,6 +1153,16 @@ class Presets:
         #    subscriber on a session param is dropped with a note (D9)
         notes += table.set_macros(macros, reg)
         self.router.follow_macros(force=True)
+        # 5½. plan 33 M: an effect the migration left out of the run, said
+        #     only while a row that landed drives it (a desk row on an
+        #     invariant control, dropped above, drives nothing)
+        driven = graphmigrate.targets({"routes": [b.to_json() for b in table.routes()],
+                                       "desk": desk_json(table.desk()),
+                                       "macros": table.macros_doc()})
+        for note in migrate_notes:
+            name = graphmigrate.left_out_of(note)
+            if name is None or any(graphmigrate.effect_of(t) == name for t in driven):
+                notes.append(note)
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
         for group in PERFORMANCE_GROUPS:
@@ -1082,8 +1191,11 @@ class Presets:
             doc["note"] = self.note
         table = self.router.table
         # plan 26 A4: the graph the loaded preset carried, as read (a
-        # preset with none writes none: the default graph)
-        section = self._graph_section().doc
+        # preset with none writes none: the default graph). Plan 33 M: in
+        # the free graph's words while the schema is judged; below /5 it is
+        # put back as a pre-33 build reads it (below)
+        gs = self._graph_section()
+        section = gs.free_doc()
         if section is not None:
             doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
@@ -1111,13 +1223,41 @@ class Presets:
         # it is left out — /4 keeps every value and the bins, /3 every
         # value but the media family's, /2 neither family, so it is the
         # file it always was
-        doc["schema"] = schema_of(doc, at_default=self._at_default())
-        if doc["schema"] != MEDIA_SCHEMA:
+        # plan 33 M (R10): a graph /4 can say is written as /4 says it — the
+        # run's order, the effects' targets and the channel choices as
+        # values (`legacy_values`), the section without a word of the free
+        # graph (`legacy_section`): a build from before plan 33 never meets
+        # one. An untouched load writes the values it landed and the file's
+        # own section, so it saves byte for byte as that build would
+        # Plan 33 T7: no param holds a retired id any more, so below /5 they
+        # are put back where that build's registry wrote them
+        # (`graphmigrate.with_retired`: what the load landed, else what that
+        # build's declaration gave) — after the schema is judged, which reads
+        # the graph, never them
+        specs = gs.specs()
+        desk_rows = desk_json(table.desk())
+        doc["schema"] = schema_of(doc, at_default=self._at_default(), specs=specs,
+                                  desk=desk_rows)
+        if doc["schema"] != FREE_SCHEMA:
+            values = graphmigrate.with_retired(values, gs.held_values(), specs)
+            if graphmigrate.says_free(section):
+                lv = graphmigrate.legacy_values(section, values, specs,
+                                                graphmigrate.targets(doc, desk_rows))
+                if lv is not None:
+                    values.update(lv)
+        if doc["schema"] != FREE_SCHEMA and GRAPH_KEY in doc:
+            legacy = graphmigrate.legacy_section(gs.doc)
+            if legacy is None:
+                del doc[GRAPH_KEY]
+            else:
+                doc[GRAPH_KEY] = copy.deepcopy(legacy)
+        if doc["schema"] not in (MEDIA_SCHEMA, FREE_SCHEMA):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
         if doc["schema"] == SCHEMA:
+            # (a retired id, written back above, is an effect's: no V3 group)
             values = {k: v for k, v in values.items()
-                      if self.reg[k].group not in V3_GROUPS}
+                      if k not in self.reg or self.reg[k].group not in V3_GROUPS}
         doc["values"] = values
         return doc
 
@@ -1189,6 +1329,89 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
+    def _watch_fx_modules(self) -> None:
+        """Hand the library's fx module loads to `_fx_module` (plan 33 R12,
+        `Library.on_apply`): idempotent, so `load_doc` calls it as well as
+        `__init__` and a hot reload that re-classes this object (never
+        re-inits it) is registered at its next preset load. The hook looks
+        the method up at call time, so a re-class reaches it."""
+        on_apply = getattr(self.lib, "on_apply", None)
+        if on_apply is not None:
+            on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
+
+    def _fx_module(self, name: str, doc: dict) -> None:
+        """An fx module just landed (plan 33 R12, `Library.on_apply`): its
+        run replaces the loaded graph's main run, and its faces run the
+        faces' when it has one (`graphmigrate.module_runs`); every branch,
+        composite, switch and placement stays. Its values are the fx group
+        as the module landed them. A wire the loaded graph had refused stays
+        refused, as the load said, and the rest lands with the module's run
+        (the load's own landing: the spec without it, the section with it).
+        A graph this build cannot read at all is left as it is, said in a
+        note; one that comes out the same is not landed again."""
+        gs = self._graph_section()
+        table = self.router.table
+        rows = {"routes": [b.to_json() for b in table.routes()],
+                "desk": desk_json(table.desk()), "macros": table.macros_doc()}
+        before = gs.free_doc()
+        # (its order and target are no params since plan 33 T7: read from
+        # the module's file over the group's defaults, as its values land)
+        own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))
+        new, notes = graphmigrate.module_runs(before, {**self.reg.snapshot(FX_GROUP), **own},
+                                              gs.specs(), rows)
+        spec, section, read_notes = gs.read(new)
+        if spec is None:
+            notes = [*notes, ("its run is not applied — the preset's graph is not one "
+                              "this build reads")]
+        else:
+            notes = [*notes, *read_notes]
+        # (final review, finding 1: every note the module's run makes is
+        # said — a run refused here would otherwise vanish without a word;
+        # one the preset's load already said is not said twice)
+        said = list(getattr(self, "notes", []))
+        for note in (f"fx module {name}: {n}" for n in notes):
+            if note not in said and not any(n == note.partition(": ")[2] for n in said):
+                said.append(note)
+                self.lib.say(warning=note)
+        self.notes = said
+        if spec is None:
+            return
+        # what a /4 save says of the effects is now the module's, as a build
+        # from before plan 33 set every fx value (its group default where
+        # the module names none); the channel choices stay the preset's
+        held = {k: v for k, v in gs.held_values().items() if not k.startswith("fx.")}
+        gs.held = {**held, **own}
+        if section != before:
+            gs.land(spec, section)
+
+    def _held_retired(self, values: dict, groups=PERFORMANCE_GROUPS) -> dict[str, Any]:
+        """The retired values (plan 33 T7) a load of `values` (a file's, or
+        an fx module's) lands, as a build from before T7 landed them —
+        `graphmigrate.landed_retired` over the groups' defaults
+        (`Library.defaults`) and the effects this build holds: what a save
+        below /5 writes back (`graphmigrate.with_retired`)."""
+        defaults: dict[str, Any] = {}
+        for g in groups:
+            try:
+                defaults.update(self.lib.defaults(g))
+            except (LibraryError, AttributeError, KeyError):   # a stand-in library
+                continue
+        return graphmigrate.landed_retired(
+            values, defaults, self._graph_section().specs(), effects=FX_GROUP in groups,
+            channels=bool({"view", "backdrop"} & set(groups)))
+
+    def _template_rows(self, doc: dict) -> list | None:
+        """A copy of the rows of the desk template `doc` names (plan 24 C3),
+        or None: none named, or one the library lacks (the load says so when
+        it expands the desk)."""
+        name = doc.get(TEMPLATE_KEY)
+        if not name:
+            return None
+        try:
+            return copy.deepcopy(list(self.lib.desk_template(str(name))["desk"]))
+        except (LibraryError, KeyError, TypeError):
+            return None
+
     def _graph_section(self) -> GraphSection:
         """The graph section's lander; made here for a `Presets` from
         before plan 26 A4 (a hot reload re-classes, never re-inits)."""
@@ -1259,7 +1482,9 @@ class Presets:
         would be written — and the graph section (plan 26 A4; None for a
         preset with none, so a file from before it is never dirty)."""
         table = self.router.table
-        section = self._graph_section().doc
+        # (plan 33 M: in the free graph's words, so a change to the run alone
+        # — which a pre-33 section says in values — dirties the preset too)
+        section = self._graph_section().free_doc()
         return (self._values(),
                 json.dumps([b.to_json() for b in table.routes()]),
                 json.dumps(desk_json(table.desk()), sort_keys=True),
@@ -1463,7 +1688,7 @@ def party_tracer_values() -> dict[str, Any]:
 
 
 def party_trip_routes() -> list[Binding]:
-    """The effect stack. Right height fires the zoom burst, reaching in
+    """The effects. Right height fires the zoom burst, reaching in
     zooms the kaleidoscope, right roll positions its swirl (level = none),
     fingers out spread the hue cycle, fingers up flood the plasma. Left
     height positions LFO 1's depth — a quarter-note sine that pumps the

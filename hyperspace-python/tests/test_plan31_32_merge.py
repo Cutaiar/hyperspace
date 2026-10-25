@@ -28,17 +28,39 @@ def app(tmp_path):
     return make_app(tmp_path)
 
 
+def _backdrop(app, c: str | None) -> None:
+    """Channel `c` under the scene (None: none) as the GRAPH page lands it
+    (plan 33 T7: the wire `media.<c> → backdrop.image`, where
+    `backdrop.channel` was)."""
+    from hyperspace import graph as G
+
+    gs = app.presets.graph
+    if c is None:
+        gs.land(None)
+        return
+    section = {"wires": [{"from": "frame", "to": "fx.image"},
+                         {"from": f"media.{c}", "to": "backdrop.image"}]}
+    gs.land(G.read_graph(section), section)
+
+
+def _backdrop_of(app) -> str | None:
+    from hyperspace import graph as G
+
+    spec = app.presets.graph.spec
+    return G.channel_into(spec.all_wires(), "backdrop.image") if spec is not None else None
+
+
 def _pattern_and_bin(app) -> None:
     reg = app.reg
     reg["seq.1.1"].set(True)
     reg["seq.3.5"].set(True)
     reg["env.1.attack"].set(0.4)
     reg.media.assign("a", 0, CLIP)
-    reg["backdrop.channel"].set(1)
+    _backdrop(app, "a")
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4)
+    assert preset.VERSIONS == (2, 3, 4, 5)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     # the document-only rule (factory presets, `generated`) knows /4 too
     assert preset.schema_of({"values": {"seq.1.1": True}}) == V3
@@ -57,8 +79,10 @@ def test_a_pattern_and_a_bin_save_as_4_and_round_trip(app):
     snap = reg.snapshot(part="performance")
     assert {k for k in doc["values"] if k.startswith(("env.", "seq."))} == {
         k for k in snap if k.startswith(("env.", "seq."))}
+    # (plan 33 T7: and the two retired channel choices, written back as a
+    # build from before plan 33 reads them)
     assert {k for k in doc["values"] if preset.is_media_id(k)} == {
-        k for k in snap if preset.is_media_id(k)}
+        k for k in snap if preset.is_media_id(k)} | {"view.media", "backdrop.channel"}
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
     app.presets.save_as("both")
     # undo it all, then load
@@ -66,11 +90,11 @@ def test_a_pattern_and_a_bin_save_as_4_and_round_trip(app):
     reg["seq.3.5"].set(False)
     reg["env.1.attack"].set(0.01)
     reg.media.assign("a", 0, None)
-    reg["backdrop.channel"].set(0)
+    _backdrop(app, None)
     assert app.presets.load("both") == []
     assert reg["seq.1.1"].value is True and reg["seq.3.5"].value is True
     assert reg["env.1.attack"].value == pytest.approx(0.4)
-    assert reg["backdrop.channel"].value == 1
+    assert _backdrop_of(app) == "a" and doc["values"]["backdrop.channel"] == 1
     assert reg.media.channels["a"].bin[0] == CLIP
     assert app.presets.document("both") == doc
     # and stable through a load (once a load has read the file's integers

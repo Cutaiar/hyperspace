@@ -518,8 +518,10 @@ def test_an_untouched_preset_saves_as_2_without_an_envelope_or_a_step(app, tmp_p
     assert doc["schema"] == V2 and preset.schema_of(doc) == V2
     assert _new_ids(doc) == [] and "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="performance")
-    # (plan 32: nor a media-family value — /4's, and this preset uses none)
-    assert set(doc["values"]) == {k for k in every
+    # (plan 32: nor a media-family value — /4's, and this preset uses none;
+    # plan 33 T7: the effects' retired order and target written back too)
+    from hyperspace.graphmigrate import retired
+    assert {k for k in doc["values"] if not retired(k)} == {k for k in every
                                   if not k.startswith(("env.", "seq.", "mod."))
                                   and not preset.is_media_id(k)}
     path = app.presets.save_as("plain")
@@ -586,7 +588,7 @@ def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4)
+    assert preset.VERSIONS == (2, 3, 4, 5)
     app.presets.save_as("plain")
     app.reg["seq.3.3"].set(True)
     app.presets.save_as("pattern")

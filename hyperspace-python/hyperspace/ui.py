@@ -91,7 +91,8 @@ PIN_HOLD = 0.5
 # the panel: a rail of pages on the left, the page beside it, a footer
 MESSAGE_S = 4.0  # how long the footer's message slot shows a line after it changes
 CANCEL_TIP = "click to cancel"  # the footer's armed-learn line: on it where it fits, and on hover
-PANEL_W = 540   # leaves the cheat sheet its column in the control window (app.CONTROL_SIZE)
+PANEL_W = 540   # the panel never opens narrower (panel_w)
+DESK_ASPECT = 4 / 3   # at launch the desk diagram left of the panel is this wide per unit of height
 RAIL_W = 112
 LABEL_W = 104    # the label column in a _row
 HALF_LABEL_W = 78    # the label column in a half-width table cell (Panel.half)
@@ -156,6 +157,19 @@ def _add_font(role: str, size: float, tracking: float = 0.0) -> None:
             m.merge_mode = True
             m.font_no = no
             io.fonts.add_font_from_file_ttf(path, size, m)
+
+
+def panel_w(display: tuple[float, float]) -> float:
+    """The panel's width as it opens in a control window of `display`
+    (w, h): the desk diagram left of it gets a `DESK_ASPECT` slice of the
+    window's height and the panel the rest, so neither is stretched — on
+    the default window (app.CONTROL_SIZE) the two come out the same size.
+    Never under `PANEL_W`: a narrow window keeps the panel whole and the
+    desk takes what is left (ui_desk.room). Once open, the panel is
+    wherever it is dragged; this is only where it starts."""
+    dw, dh = display
+    desk = DESK_ASPECT * (dh - 24)
+    return float(int(max(PANEL_W, dw - 36 - desk)))
 
 
 def load_fonts() -> None:
@@ -532,7 +546,7 @@ CHEATSHEET = [
 # holds the source and the master faders (the level into the analyser);
 # the analyzer page the scene and meters, then the band editor
 # (ui_bands.py); the routing page is the matrix (ui_routing.py); the fx
-# page the effect stack (ui_fx.py); the faces page the pattern browser
+# page a browser of the graph's effects (ui_fx.py); the faces page the pattern browser
 # and its eight inputs (ui_patterns.py); the hands page is the Ultraleap live
 # view and setup (hands/panel.py); the lfo page the clock and the four
 # LFOs (ui_lfo.py).
@@ -567,6 +581,9 @@ class Panel:
         # app.restart (the SYSTEM page's button, Cmd+R's param) sets it; app.frame
         # polls it after the panel draws and restarts the process
         self.restart_requested = False
+        # plan 33 U: the effect instance selected — on GRAPH (its node) or on
+        # the FX page (its row): one selection both pages show; saved nowhere
+        self.fx_selected: str | None = None
         self.library = library      # library.Library, or None: no strips, no project row
         # the F1–F8 preset bank is the open project's (library.Project)
         self.bank = bank if bank is not None else (
@@ -838,7 +855,13 @@ class Panel:
         modulatable), for the sides the rig's axes have. **Learn pad**:
         while a gamepad is connected, wherever Learn desk is offered — a
         button, the D-pad, a stick or a trigger completes it
-        (`gamepad.learn_from`)."""
+        (`gamepad.learn_from`). **Route from ▸** (the owner, 2026-10-24:
+        "there is no Learn option for routing one of the LFOs there"): on
+        a modulatable param that is no trigger, every LFO and envelope of
+        the banks — the one already driving it checked — then new LFO /
+        new envelope; a pick is the cable a drag on GRAPH makes
+        (`ui_graph.route_from_menu`). It sits after the Learn items, before
+        Learn sink, and is no Learn: an LFO has no gesture to wait for."""
         lrn = self.learn
         if self._desk_target(a) and imgui.menu_item_simple("Learn desk"):
             lrn.arm(a.id, "desk")
@@ -859,6 +882,10 @@ class Panel:
             for want in learn_wants(lrn):
                 if imgui.menu_item_simple(f"Learn {want}"):
                     lrn.arm(a.id, want)
+        # the owner, 2026-10-24: an LFO or an envelope onto the param — no
+        # gesture to wait for, so not a Learn; the cable a drag on GRAPH
+        # makes (`ui_graph.route_from_menu`)
+        ui_graph.route_from_menu(self, p)
         # plan 27 B3: the param *out* to a sink port — the rig's ports
         # (`Learn.sinks`), a pick lands at once as a session row
         # (`Learn.learn_sink`): no prompt, no undo step, no preset dirt
@@ -1493,10 +1520,11 @@ class Panel:
         if not self.open:
             return
         io = imgui.get_io()
+        pw = panel_w((io.display_size.x, io.display_size.y))
         imgui.set_next_window_pos(
-            imgui.ImVec2(io.display_size.x - PANEL_W - 12, 12), imgui.Cond_.once
+            imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
         )
-        imgui.set_next_window_size(imgui.ImVec2(PANEL_W, io.display_size.y - 24),
+        imgui.set_next_window_size(imgui.ImVec2(pw, io.display_size.y - 24),
                                    imgui.Cond_.once)
         opened, self.open = imgui.begin("CONTROLS", self.open)
         # where the panel is: the desk takes the room left of it (ui_desk.room;
@@ -1736,15 +1764,12 @@ class Panel:
         what `output_shows` reads, from the renderer as it last drew. Any
         piece missing (no renderer, a stand-in) reads as off / full."""
         r = self.renderer
-        try:
-            fx_on = bool(r.fx.active())
-        except Exception:  # noqa: BLE001 — no renderer, or a stand-in
-            fx_on = False
-        # plan 30 D1: as the renderer drew it — a placed effect bends no
-        # pipeline (`stats["fx_on"]` leaves it out)
+        # as the renderer drew it (`Frame.fx_on`, its `stats["fx_on"]`: an
+        # effect of a pipeline's run is live — plan 30 D1, a placed effect
+        # bends no pipeline; plan 33 T7, the run is the wires, so no
+        # effect's own state says it)
         drawn = (getattr(r, "stats", None) or {}).get("fx_on")
-        if isinstance(drawn, bool):
-            fx_on = fx_on and drawn
+        fx_on = drawn if isinstance(drawn, bool) else False
         visible = bool((getattr(r, "stats", None) or {}).get("layer", False))
         dim = self.reg.get("output.dim")
         return fx_on, visible, (dim.value if dim is not None else 1.0)
@@ -2036,7 +2061,7 @@ class Panel:
         ui_lookback.page(self, dt)     # the frame history and its composite
 
     def _page_fx(self, dt: float) -> None:
-        ui_fx.page(self, dt)           # the effect stack over the frame
+        ui_fx.page(self, dt)           # the graph's effects, by where each ends
 
     def _page_audio(self, dt: float) -> None:
         a = self.audio

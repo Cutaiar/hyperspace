@@ -1970,7 +1970,8 @@ def test_every_factory_preset_names_real_params_with_one_owner(tmp_path):
             assert b.is_performer, (name, b)
         assert routing.referee(routes)[1] == [], name
         if spec.values is not None:
-            assert set(preset.generated(name)["values"]) <= ids, name
+            from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+            assert {v for v in preset.generated(name)["values"] if not retired(v)} <= ids, name
     assert set(preset.FACTORY_PRESETS) == {*preset.HOUSE,
         "legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play", "hands-orbit",
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
@@ -1989,6 +1990,9 @@ def test_a_converted_presets_values_are_bases_a_preset_would_save(tmp_path):
     assert made
     for key in made:
         for pid in json.loads((preset.FACTORY_DIR / f"{key}.json").read_text())["values"]:
+            from hyperspace.graphmigrate import retired  # (plan 33 T7: read as wires)
+            if retired(pid):
+                continue
             assert pid in ids, (key, pid)
             p = r.reg[pid]
             assert p.persist and not p.alias and part_of(p) == "performance", (key, pid)

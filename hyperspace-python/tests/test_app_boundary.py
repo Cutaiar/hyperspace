@@ -756,7 +756,8 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": dict(config.DEFAULTS["output"])}
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
     assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
-    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 - 960 - 16, 54))
+    # the control window, wider than the laptop, opens as wide as it (less the margins)
+    assert (g.size[ctrl], g.pos[ctrl]) == ((1728 - 32, app.CONTROL_SIZE[1]), (16, 54))
     assert "notes" not in cfg and not (tmp_path / placement.FILE).exists()   # a launch only reads
 
     # remembered: created at the remembered size, put at the remembered spot
@@ -771,7 +772,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": {"monitor": 0, "control_monitor": 1}}
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
     assert (g.size[render], g.pos[render]) == (app.RENDER_SIZE, (16, 54))
-    assert (g.size[ctrl], g.pos[ctrl]) == (app.CONTROL_SIZE, (1728 + 1920 - 960 - 16, 16))
+    assert (g.size[ctrl], g.pos[ctrl]) == ((1920 - 32, app.CONTROL_SIZE[1]), (1728 + 16, 16))
     assert "notes" not in cfg
 
     # the projector unplugged, and a config index with no screen: default
@@ -795,7 +796,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     cfg = {"output": {}}
     monkeypatch.setattr(placement, "place", _boom)
     g, render, ctrl = _open(monkeypatch, cfg, tmp_path)
-    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (16, 54))
     assert len(cfg["notes"]) == 1 and cfg["notes"][0].startswith("placement: ")
     # …and a later output whose screen is not connected stays closed then
     # too (fork F9; review of #123), while one on a connected screen opens
@@ -812,7 +813,7 @@ def test_the_windows_open_where_placement_says(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(app, "glfw", g)
     slots, ctrl = app._windows(False)
     render = slots[0].win
-    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (1728 - 960 - 16, 54))
+    assert (g.pos[render], g.pos[ctrl]) == ((16, 54), (16, 54))
 
 
 def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
@@ -834,7 +835,7 @@ def test_the_exits_save_the_windowed_rects(monkeypatch, tmp_path):
     # quit: main's helper writes both windows' rects
     app._save_windows(tmp_path, render, ctrl, out)
     doc = placement.load(tmp_path)
-    assert doc["control"] == {"x": 300, "y": 90, "w": 960, "h": 900, "screen": "Built-in"}
+    assert doc["control"] == {"x": 300, "y": 90, "w": 1728 - 32, "h": 900, "screen": "Built-in"}
     assert doc["render"] == [{"x": 1900, "y": 120, "w": 1000, "h": 700, "screen": "Projector"}]
 
     # fullscreen at the exit: the windowed rect, never the cover of the screen (F6)
