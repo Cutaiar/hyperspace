@@ -136,6 +136,7 @@ import numpy as np
 from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .lookback import MAX_ECHOES
 from .outputs import View
+from .view import RESIZE_ASPECTS, RESIZE_FILTERS, RESIZE_FITS, RESIZE_SIDES, ResizeState
 
 # port types: a colour picture at the frame's size, a one-channel mask at
 # the frame's size, or draw calls (a geometry, drawn by its scene or layer)
@@ -2664,6 +2665,10 @@ class Frame:
     # 1–8 the input), read once by the renderer (`ViewState.switch`): what
     # `SwitchNode.selected` and `Graph.pulled` read — never a rebuild
     selects: dict[str, int] = field(default_factory=dict)
+    # plan 34 Z: each resize's values this frame (resize name → its
+    # `view.ResizeState`), read once by the renderer (`ViewState.resize`):
+    # what `ResizeNode` crops and sizes by — a value, never a rebuild
+    resizes: dict[str, Any] = field(default_factory=dict)
 
     @property
     def root(self) -> Frame:
@@ -3890,6 +3895,165 @@ class DreamNode(_RingNode):
             self.said = "no dream worker: reads nothing"
         else:
             self.said = "waiting for the dream worker"
+
+
+# ---------------------------------------------------------------- the resize
+
+def resize_size(side: int, aspect: str, src: tuple[int, int]) -> tuple[int, int]:
+    """A resize's own size (plan 34 Z, row 368): `side` square, or `src`'s
+    orientation with its long side `side` and its short side in proportion
+    (never under 1 pixel)."""
+    side = int(side)
+    if aspect == "square":
+        return side, side
+    w, h = int(src[0]), int(src[1])
+    long, short = max(w, h, 1), min(w, h)
+    other = max(1, round(side * short / long))
+    return (side, other) if w >= h else (other, side)
+
+
+def _pick(values: tuple, i: Any) -> Any:
+    """`values[i]`, held into range (a value off either end is that end's)."""
+    try:
+        k = int(i)
+    except (TypeError, ValueError):
+        k = 0
+    return values[min(max(k, 0), len(values) - 1)]
+
+
+# (the values of a resize with none this frame: read, never written)
+_RESIZE_DEFAULT = ResizeState()
+
+
+class ResizeNode(Node):
+    """A resize (plan 34 Z, row 368): `resize`, `resize.2` …, its `image`
+    input's crop (`crop_*`, a normalised rect from the top left) made at a
+    size of its own (`size` the long side, `aspect` the input's or square:
+    `resize_size`) by `fit` and `filter` (`ViewState.resize`, read as
+    `Frame.resizes`: values, never a rebuild). So what comes after it — a
+    delay's pair (`DelayWrite.held`), an effect's pool (`Effect.own_size`)
+    — runs at that size: the owner's "no 1080p buffer into the faces for
+    no reason". It breaks "the consumer decides the size" on purpose (row
+    368).
+
+    Made once a frame (`made`: a half-float target of the renderer's keyed
+    `(<name>#own, size)`, so a size step reallocates once each way and the
+    size left is kept for `SIZED_KEEP_FRAMES`); a consumer of another size
+    gets it fitted by cover (`OWN_FIT`) — painted, or for one that binds a
+    texture refitted once a frame into `<name>#fit`, as a delay's is. A
+    crop past the input's edge is transparent black (`REFIT_FS`); a linear
+    reduction of more than 2× samples mipmaps. It reads what its input
+    reads: with nothing, the faces show the pattern, an output its ground."""
+
+    KIND = "resize"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
+    TIMED = True
+
+    def __init__(self, name: str, image: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, image=image)
+
+    def state(self, frame: Frame) -> ResizeState:
+        """This frame's values (`Frame.resizes`), else the defaults."""
+        return (getattr(frame.root, "resizes", None) or {}).get(self.name) or _RESIZE_DEFAULT
+
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        """What `image` is made at: its input's own size, else the frame's."""
+        if port == "image":
+            src = self.inputs["image"]
+            own = src.own_size(frame) if src is not None else None
+            return tuple(own) if own is not None else tuple(frame.root.size)
+        return super().size_for(port, frame)
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        st = self.state(frame)
+        return resize_size(_pick(RESIZE_SIDES, st.size), _pick(RESIZE_ASPECTS, st.aspect),
+                           self.size_for("image", frame))
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return src is not None and src.reads(frame)
+
+    @staticmethod
+    def _crop(st: ResizeState) -> tuple[float, float, float, float]:
+        """The crop as a GL-uv rect (x0, y0, w, h): `crop_y` runs down."""
+        w, h = float(st.crop_w), float(st.crop_h)
+        return float(st.crop_x) - w / 2, 1.0 - float(st.crop_y) - h / 2, w, h
+
+    def made(self, frame: Frame) -> moderngl.Texture | None:
+        """The picture at its own size, made once a frame (the root's data)
+        — None while the input reads nothing."""
+        root = frame.root
+        key = self.name + "#own"
+        if key in root.data:
+            return root.data[key]
+        root.data[key] = None
+        src = self.inputs["image"]
+        if src is None or not src.reads(frame):
+            return None
+        r = frame.r
+        st = self.state(frame)
+        size = self.size_for("image", frame)
+        at_in = root if size == tuple(root.size) else root.at(size)
+        own = self.own_size(frame)
+        with frame.timed(self.name):
+            tex = src.image(at_in)
+            if tex is None:
+                tex = picture(at_in, src, dtype="f2")
+            if tex is None:
+                return None
+            crop = self._crop(st)
+            filt = _pick(RESIZE_FILTERS, st.filter)
+            mip = filt == "linear" and (crop[2] * tex.size[0] / own[0] > 2.0
+                                        or crop[3] * tex.size[1] / own[1] > 2.0)
+            out, fbo = r._frame_target((key, own), own, dtype="f2")
+            fbo.viewport = (0, 0, *own)
+            r._refit(tex, fbo, crop=crop, fit=RESIZE_FITS.index(_pick(RESIZE_FITS, st.fit)),
+                     filter=filt, mip=mip)
+        root.data[key] = out
+        return out
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """Its picture laid into `dst` by cover with its filter — or the
+        ground while it reads nothing, so a consumer never shows what `dst`
+        held."""
+        tex = self.made(frame)
+        if tex is not None:
+            frame.r._refit(tex, dst, fit=OWN_FIT,
+                           filter=_pick(RESIZE_FILTERS, self.state(frame).filter))
+            return
+        rect = tuple(dst.viewport)
+        dst.use()
+        frame.ctx.viewport = rect
+        frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Its picture at the frame's size (the `IMAGE` contract): the one it
+        made when that is its own, else refitted once a frame (`#fit`)."""
+        tex = self.made(frame)
+        if tex is None or tuple(tex.size) == tuple(frame.size):
+            return tex
+        key = self.name + "#fit"
+        if key not in frame.data:
+            out, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f2")
+            fbo.viewport = (0, 0, *frame.size)
+            frame.r._refit(tex, fbo, fit=OWN_FIT,
+                           filter=_pick(RESIZE_FILTERS, self.state(frame).filter))
+            frame.data[key] = out
+        return frame.data[key]
+
+    def run(self, frame: Frame) -> None:
+        """What it says (GRAPH's summary, Global Constraints' words)."""
+        if not self.reads(frame):
+            self.said = "its input reads nothing"
+            return
+        st = self.state(frame)
+        w, h = self.own_size(frame)
+        said = f"{w}×{h} · {_pick(RESIZE_FITS, st.fit)} · {_pick(RESIZE_FILTERS, st.filter)}"
+        cw, ch = float(st.crop_w), float(st.crop_h)
+        if cw < 1.0 or ch < 1.0:
+            said += f" · crop {cw:.0%}×{ch:.0%}"
+        self.said = said
 
 
 # ---------------------------------------------------------------- layers
@@ -5400,6 +5564,14 @@ class _Build:
                                                   if self._one(f"{name}.{p}") is not None}))
         if kind == "delay":
             return self._keep(Delay(name))
+        if kind == "resize":
+            # plan 34 Z: made where the wires reach it; fed by nothing, it
+            # builds nothing (as an unfed effect, plan 35 R15)
+            src = self._from(f"{name}.image")
+            if src is None:
+                self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+                return None
+            return self._keep(ResizeNode(name, image=src))
         if kind == "echo":
             return self._keep(EchoNode(name, int(name.partition(".")[2])))
         if kind == "dream":

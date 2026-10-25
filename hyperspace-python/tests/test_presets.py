@@ -1889,3 +1889,59 @@ def test_a_new_preset_draws_black(rig, gl_ctx):
             assert tuple(_px(v.target)[SIZE[1] // 2, SIZE[0] // 2]) == (0, 0, 0, 255)
     finally:
         gl.close()
+
+
+# ---- plan 34 T4: the resize's values (Review Focus 6) ----
+
+RESIZE_OLD = {"nodes": [{"kind": "resize", "instance": 2}],
+              "wires": [{"from": "frame", "to": "fx.image"},
+                        {"from": "media.a", "to": "resize.2.image"}]}
+
+
+def _resize_section(section=RESIZE_OLD):
+    return graphmigrate.wired_section(graphmigrate.renamed(section), G.read_graph(section))
+
+
+def test_resize_values_save_and_load_with_the_preset(tmp_path):
+    """A preset whose graph holds `resize.2` carries its values: saved and
+    loaded into a fresh rig, `resize.2.crop_x` lands with no unknown-id
+    note, and (R10) the file is `/5` — plan 34's words, the factory frame.
+    A preset without the entry undeclares `resize.2.*`; one with the entry
+    and no wire still declares it (the reach does not decide)."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    r = boot(a)
+    put(a, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
+    r.lib.poll()
+    assert r.presets.load("CROP") == []
+    assert r.reg["resize.2.crop_x"].value == 0.3
+    saved = r.presets.save_as("CROP").read_text()
+    assert json.loads(saved)["schema"] == "hyperspace.preset/5"
+    assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
+    (b / "presets").mkdir(parents=True)
+    (b / "presets" / "crop.json").write_text(saved)
+    r = boot(b)
+    assert r.presets.load("CROP") == []
+    assert r.reg["resize.2.crop_x"].value == 0.3
+    assert not [n for n in r.presets.notes if "unknown id" in n]
+    put(b, "PLAIN", values={})
+    r.lib.poll()
+    r.presets.load("PLAIN")
+    assert not [p for p in r.reg if p.id.startswith("resize.2.")]
+    unwired = {**_resize_section(), "wires": [
+        w for w in _resize_section()["wires"] if w["to"] != "resize.2.image"]}
+    put(b, "UNWIRED", graph=unwired, values={"resize.2.crop_x": 0.7})
+    r.lib.poll()
+    r.presets.load("UNWIRED")
+    assert "resize.2" not in G.reaches(r.presets.graph.spec)
+    assert r.reg["resize.2.crop_x"].value == 0.7
+
+
+def test_a_new_preset_carries_no_resize_values(rig):
+    put(rig.home, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
+    rig.lib.poll()
+    rig.presets.load("CROP")
+    assert "resize.2.crop_x" in rig.reg
+    rig.presets.new()
+    assert not [p for p in rig.reg if preset.is_resize_id(p.id)]
+    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    assert not [k for k in doc["values"] if k.startswith("resize")]

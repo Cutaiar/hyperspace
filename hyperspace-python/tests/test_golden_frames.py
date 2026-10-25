@@ -117,9 +117,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
     # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
-    # onto the faces; plan 35 T3: + 3 × 8, the three wired frames)
+    # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
+    # T4: + 2 × 8, the resize into a delay onto the faces and the crop)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
-                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8)
+                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
+                                   + 2 * 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -192,7 +194,10 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
-# `--names` rewrites recorded node names only, never an entry
+# `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
+# two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
+# 741 before them are the same list, byte for byte
+GOLDENS_SINCE = ("resize-faces", "resize-crop")
 GOLDENS_DIGEST = "71dcd9c76e2c85807a8ac9273f42ea210468881af21b025dd4a7cca5ad99ad02"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
@@ -208,7 +213,9 @@ def test_renaming_moved_no_golden():
     import hashlib
 
     doc = _manifest()
-    assert hashlib.sha256(json.dumps(doc["goldens"]).encode()).hexdigest() == GOLDENS_DIGEST
+    kept = [e for e in doc["goldens"] if e["preset"] not in GOLDENS_SINCE]
+    assert len(kept) == 741
+    assert hashlib.sha256(json.dumps(kept).encode()).hexdigest() == GOLDENS_DIGEST
     for slug, said in doc["fixtures"].items():
         names = said["present"].get("nodes") or []
         assert not set(names) & set(OLD_RENDER_NAMES), (slug, names)

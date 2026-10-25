@@ -156,12 +156,15 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     PAN_IDS,
     PERFORMANCE_GROUPS,
     PLANES,
+    RESIZE_GROUP,
     SESSION_GROUPS,
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_resizes,
     declare_switches,
     is_instance_id,
+    is_resize_id,
     is_switch_id,
     pan_world,
     part_of,
@@ -445,7 +448,9 @@ class GraphSection:
       kept while the app runs, so a preset that drops the node and one
       that brings it back find its settings as they were); and (plan 33
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
-      performance param, its pick in the preset's `values`);
+      performance param, its pick in the preset's `values`); and (plan
+      34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
+      entry, reached or not);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
       the default graph is built from) and `Renderer.ghost_states` (the
       extra hands nodes' states, each drawn by its own `Ghost`).
@@ -561,6 +566,9 @@ class GraphSection:
                 declare_fx(reg, self.fx, changed)
         # plan 33 S: each switch's `select`, as the effect instances' params
         declare_switches(reg, [sw.name for sw in spec.switches] if spec is not None else [])
+        # plan 34 Z: each resize's values, by its entry — reached or not, so
+        # an unwired resize keeps its knobs as an unwired switch its pick
+        declare_resizes(reg, [z.name for z in spec.resizes] if spec is not None else [])
         if free is None and graphmigrate.says_free(doc):
             free, doc = doc, graphmigrate.legacy_section(doc)
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -665,8 +673,9 @@ MODIFIERS_KEY = "modifiers"
 LAYOUT_KEY = "layout"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
-# (plan 33 S: a switch's pick means nothing without the preset's graph)
-NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP)
+# (plan 33 S: a switch's pick means nothing without the preset's graph;
+# plan 34 Z: nor a resize's values)
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -925,7 +934,8 @@ class Presets:
         values = {k: v for k, v in lib._fresh_all().items()
                   if k in reg and reg[k].group in PERFORMANCE_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
-                  and not is_instance_id(k) and not is_switch_id(k)}
+                  and not is_instance_id(k) and not is_switch_id(k)
+                  and not is_resize_id(k)}
         doc = {"schema": SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -1021,8 +1031,9 @@ class Presets:
             elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
-            elif is_instance_id(pid) or is_switch_id(pid):
-                # (plan 33 S: a switch's `select` too — its graph declares it)
+            elif is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid):
+                # (plan 33 S: a switch's `select` too — its graph declares it;
+                # plan 34 Z: and a resize's values)
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)

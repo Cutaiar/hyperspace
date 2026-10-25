@@ -19,6 +19,34 @@ from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
 
+# plan 34 Z (row 368): a resize node's choices — the long side it makes its
+# picture at (`resize[.n].size`, an index: 4 is 256), the shape (the input's
+# aspect, or square), how the crop is laid into that size (`media_tex.FITS`'
+# order: a test holds them equal; written out, as this module imports no
+# media module) and the filter it samples with
+RESIZE_SIDES = (16, 32, 64, 128, 256, 512, 1024, 2048)
+RESIZE_ASPECTS = ("input", "square")
+RESIZE_FITS = ("cover", "contain", "stretch")
+RESIZE_FILTERS = ("linear", "nearest")
+
+
+@dataclass
+class ResizeState:
+    """One resize node's values (plan 34 Z, `resize[.n].*`: params.declare_resizes),
+    read once a frame by the renderer (`ViewState.resize`, `graph.Frame.resizes`):
+    indexes into `RESIZE_SIDES`, `RESIZE_ASPECTS`, `RESIZE_FITS` and
+    `RESIZE_FILTERS`, and the crop — a normalised rect of the input, its centre
+    (`crop_x`, `crop_y`, from the top left) and its size. A value, never a rebuild."""
+
+    size: int = 4
+    aspect: int = 0
+    fit: int = 0
+    filter: int = 0
+    crop_x: float = 0.5
+    crop_y: float = 0.5
+    crop_w: float = 1.0
+    crop_h: float = 1.0
+
 
 @dataclass
 class ViewState:
@@ -97,6 +125,9 @@ class ViewState:
     # the preset's graph: params.declare_switches) — switch name → 0 off,
     # 1–8 its input; read once a frame by the renderer
     switch: dict[str, int] = field(default_factory=dict)
+    # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
+    # preset's graph: params.declare_resizes) — resize name → its state
+    resize: dict[str, ResizeState] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

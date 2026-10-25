@@ -313,7 +313,9 @@ void main() {
 # fitted about the centre by `u_scale` (`media_tex.fit_scale` of the crop's
 # pixels into the target's), sampled inside `u_clamp` (min uv, max uv) so
 # no neighbour bleeds in. Outside the fit, transparent black; inside, the
-# texel as it is (premultiplied in, premultiplied out)
+# texel as it is (premultiplied in, premultiplied out). Plan 34 T4: a crop
+# past the source's edge (a resize's) is transparent black there too — a
+# crop inside the source, every caller's before the resize, never is
 REFIT_FS = """
 #version 330
 in vec2 v_uv;
@@ -328,7 +330,12 @@ void main() {
         f_color = vec4(0.0);
         return;
     }
-    f_color = texture(u_src, clamp(u_crop.xy + q * u_crop.zw, u_clamp.xy, u_clamp.zw));
+    vec2 uv = u_crop.xy + q * u_crop.zw;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        f_color = vec4(0.0);
+        return;
+    }
+    f_color = texture(u_src, clamp(uv, u_clamp.xy, u_clamp.zw));
 }
 """
 
@@ -1557,9 +1564,11 @@ class Renderer:
         # view state from before the switch has none): what the switches
         # pass and what the graph pulls, never a rebuild
         selects = dict(getattr(s, "switch", None) or {})
+        # plan 34 Z: each resize's values likewise (`ViewState.resize`)
+        resizes = dict(getattr(s, "resize", None) or {})
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
-                      stats=stats, selects=selects)
+                      stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
         try:
             graph.evaluate(frame)

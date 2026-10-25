@@ -116,7 +116,7 @@ import itertools
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 from . import envelope as envmod
 from . import graph as rgraph
@@ -979,16 +979,6 @@ class GroundNode(rgraph.Node):
     OUTPUT = IMAGE
 
 
-class ResizeNode(rgraph.Node):
-    """A resize on the canvas (plan 34 L's `resize`): its picture in, its
-    picture out at a size of its own. A stand-in: plan 34 T5 brings the
-    render node that makes it."""
-
-    KIND = "resize"
-    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
-    OUTPUT = IMAGE
-
-
 # a frame kind → the render class its node is (a built one is taken only
 # when it is of this class: a guide split out of its layer is the layer's
 # node, the backdrop the composite that lays the scene on; each such stands in)
@@ -998,7 +988,7 @@ FRAME_CLASS: dict[str, type] = {
     "backdrop": rgraph.BackdropNode, "lookback": rgraph.History,
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
     "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
-    "delay": rgraph.Delay, "resize": ResizeNode, "echo": rgraph.EchoNode,
+    "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -1086,7 +1076,9 @@ def frame_of(spec, render_graph=None):
         return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
 
 
-MEDIA_MADE = (rgraph.Effect, rgraph.Composite, rgraph.SwitchNode)
+# (plan 34 T4: a resize of the media alone too — `channel.a → resize →
+# acid.2` runs on from the media, as a switch over the channels does)
+MEDIA_MADE = (rgraph.Effect, rgraph.Composite, rgraph.SwitchNode, rgraph.ResizeNode)
 
 
 def media_made(r) -> bool:

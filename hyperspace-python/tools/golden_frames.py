@@ -167,11 +167,12 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # one: a switch onto the faces at select 2, the still (in1 an empty channel,
 # in3 the still through acid.2: never made)
 # Plan 35 T3's `channel-out-only` (`hyperspace.preset/6`): channel a's still
-# wired straight into All outputs, nothing else — no scene pass
+# wired straight into All outputs, nothing else — no scene pass. Plan 34
+# T4's `resize-crop` (a wired frame, below)
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-                                   "channel-out-only")
+                                   "channel-out-only", "resize-crop")
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
@@ -184,12 +185,17 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # (black: nothing wired), channel a alone into All outputs (a media
 # fixture, above), and acid on All outputs with a copy of it over a
 # composite of the look-back and the hands layer on output 2 alone, whose
-# hands port is `ground`
-WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output")
+# hands port is `ground`. Plan 34 T4's two (`/6` wired frames, each state
+# under its window's mutes): `resize-faces`, the owner's headline — the
+# scene made at 64² square, nearest, into a delay onto the faces (`scene →
+# resize → delay → shape.faces`) — and `resize-crop`, channel a's still
+# cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
+WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
+                                   "resize-faces", "resize-crop")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
-                                    "through-one-output")
+                                    "through-one-output", "resize-faces")
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 
