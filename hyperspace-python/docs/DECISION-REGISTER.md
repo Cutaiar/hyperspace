@@ -21,6 +21,9 @@ answer on how the two combine. Rows 341–352 (plan 33, the free graph) are
 the same kind as 311–339: the owner answered 341, 342, 346, 348 and 350 in
 his own words on 2026-10-24 and accepted the rest as recommended, before
 the build (on `plan-33-free-graph`, PR #235, into `plan-31-32-integration`).
+Rows 372–393 (plan 35, the free frame) are the same kind: the owner
+answered 373, 374 and 387 on 2026-10-24 and accepted the rest as
+recommended, before the build (on `plan-34-feedback`, PR #236).
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -360,8 +363,30 @@ here; overturn → the change, then the same.
 | 348 | The FX page stays as a browser of the graph's effect nodes | 321, 327 | owner — 2026-10-24 |
 | 349 | An unreached effect is kept, drawn faint, never run. Amended 2026-10-24 (the owner's glimmer): a section with a `frame` run shortens no wire to a D1 placement, so an effect with an input and no output is unreached and not drawn; explicit `after` / `into` entries still place; a pre-33 section's shortened wires migrate to explicit entries | 325, 326 | (rec) — accepted 2026-10-24 |
 | 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
-| 351 | The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
+| 351 | *Superseded by 372.* The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
 | 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
+| 372 | The frame is wires: every node of the frame is ordinary, `"frame": "wired"`, nothing is built that no wire or entry says | 343, 344 | owner — 2026-10-24 |
+| 373 | The vocabulary: labels, hovers and **ids** in the owner's primitives (`ghost` → `hands`, `history` → `lookback`, …); params keep their ids | 345, 350 | owner — 2026-10-24: "approve, but rename ids too" |
+| 374 | The per-output switches: picture and hands are each window's mutes, "through" is wiring, a preset wires All outputs once | 346, 347, 348 | owner — 2026-10-24: as proposed |
+| 375 | All outputs (`output.all`): what every output shows unless its own port is wired | 344, 345 | (rec) — accepted 2026-10-24 |
+| 376 | An unwired output shows its ground: black, or see-through in overlay | 342, 344 | (rec) — accepted 2026-10-24 |
+| 377 | No pipelines: an effect on a second picture is a `copy` with the instance's knobs and clock | 348 | (rec) — accepted 2026-10-24 |
+| 378 | The stand-down is kept for a copy chain over a hands composite | 348, 351 | (rec) — accepted 2026-10-24 |
+| 379 | The direct paint is kept; users counted per frame through the mutes; mutes never rebuild | 351 | (rec) — accepted 2026-10-24 |
+| 380 | Hands: any hands node may have a layer and a guide; `hands.n → scene.geometry` puts it in the scene | 347, 348 | (rec) — accepted 2026-10-24 |
+| 381 | The look-back is one node (`lookback`) with `image`, `capture`, `occluder`; the capture is a sink; `holds` and `backdrop.history` retire | 349 | (rec) — accepted 2026-10-24 |
+| 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through | 345 | (rec) — accepted 2026-10-24 |
+| 383 | Migration writes today's default frame once into All outputs; D1 placements stay entries | 345 | (rec) — accepted 2026-10-24 |
+| 384 | Below `/6` by round trip: a wired frame saves in the old words when it is exactly what `frame_wires` writes | 352 | (rec) — accepted 2026-10-24 |
+| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10) | 352 | (rec) — accepted 2026-10-24 |
+| 386 | The new preset: fresh values, routes cleared, the desk written as the factory layer, `untitled` and unsaved | 342 | (rec) — accepted 2026-10-24 |
+| 387 | What a new preset's "empty" is: only the outputs, nothing wired, plus a "scene starter" item | 342 | owner — 2026-10-24: as proposed |
+| 388 | GRAPH deletes everything: the refusals left are type errors, loops and the rig's own nodes | 343 | (rec) — accepted 2026-10-24 |
+| 389 | Canvas areas by primitive: MEDIA, SCENE, LOOK-BACK, EFFECTS, OUTPUTS | 350 | (rec) — accepted 2026-10-24 |
+| 390 | OUTPUT and LOOKBACK are views that edit wires | 346, 349 | (rec) — accepted 2026-10-24 |
+| 391 | Point clouds stay the rig's, drawn in every scene | — | (rec) — accepted 2026-10-24 |
+| 392 | The golden states as wiring: the tool writes each state's wires with the mutes all on | — | (rec) — accepted 2026-10-24 |
+| 393 | Plan 34's frame words retired: `FRAME_SOURCE_REFUSAL`, `LOOP_FRAME`; `FRAME_EDGES` becomes `HIDDEN_EDGES` | — | (rec) — accepted 2026-10-24 |
 
 "—": no hand check shows it; tests only.
 
@@ -3795,7 +3820,7 @@ among them. No preset was edited or added: no factory preset carries a
   1 in the scene as lines · history with the hands`,
   `graph.graph_words`). The LOOKBACK page says `history: the scene` or
   `history: the scene · with the hands` under its switch
-  (`ui_lookback.history_line`). No editor (plan 28); the existing
+  (`ui_lookback.history_line`, since plan 35 `capture_line` and `draws_over_line`). No editor (plan 28); the existing
   switches still set the default graph's wiring.
 - **Other options.** A line per output of its own (four outputs overflow
   the control window); the whole graph as a line on the page (the same).
@@ -6754,6 +6779,8 @@ The plan lands on `plan-31-32-integration` (PR #235).
 
 ### 351. The default graph keeps plan 32's compositing order
 
+*Superseded by row 372 (plan 35): there is no default graph; the order is the wires `graphmigrate.frame_wires` writes for an old preset, and no golden moved.*
+
 - **Answer.** (rec) — accepted 2026-10-24.
 - **Built.** Nothing moved: the backdrop is under the scene, before the
   history and the effects, and every golden before the plan is unmoved.
@@ -6784,3 +6811,405 @@ The plan lands on `plan-31-32-integration` (PR #235).
   `after`-only reader as a root; up to a few idle sized textures are held
   half a second (R29).
 - **Judge it.** Checks 319, 324.
+
+## Plan 35 — the free frame (rows 372–393)
+
+Rows 372–393 were put to the owner on 2026-10-24, in the session that
+designed plan 35, before the build: three were answered in his own words
+(373 "approve, but rename ids too", 374 and 387 "as proposed") and the
+rest are recommendations the build took ("(rec)"). Each row says what the
+build did; "Rough edge" and "Judge it" are for the hand checks of group
+AE (checks 342–352). The ledger's rulings R1–R17 are folded into "Built"
+where they changed what you see. The plan is built on `plan-34-feedback`
+(PR #236); plan 34 is paused after its T3 and resumes on this model.
+Row 351 ("the default graph keeps plan 32's compositing order") is
+**superseded by 372**: there is no default graph to keep, and the order is
+the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
+`FRAME_EDGES`; row 393 supersedes it.
+
+### 372. The frame is wires: every node of the frame is ordinary
+
+- **Answer.** (owner) — 2026-10-24: "There's no point in having all of
+  these things be in some 'default graph.' If I can't make them go away,
+  it sounds like … we haven't actually made this thing a free graph yet."
+- **Built.** A section says `"frame": "wired"`; `graph.build_graph` builds
+  only what a wire or entry reaches (`graph.reaches`, from every output
+  port, `output.all`'s and `lookback.capture`). `frame`, `fx`, `grounded`,
+  `capture`, `cover` and the pipelines are not nodes; `default_graph`,
+  `Fx`, `Wired` and `PLUMBING` are deleted. Every section a load reads
+  becomes one (`graphmigrate.migrate`). A blank frame builds no scene pass
+  (`tests/test_graph_frame.py::test_nothing_unreached_is_built`).
+- **Other options.** Keep the default graph and free only some nodes.
+- **To reverse.** Not locally: the whole of T1–T5.
+- **Rough edge.** A preset the other Mac reads below `/6` must round-trip
+  (row 384).
+- **Judge it.** Checks 343, 344.
+
+### 373. The vocabulary: names a performer reads, and the ids too
+
+- **Answer.** (owner) — 2026-10-24: "approve, but rename ids too."
+- **Built.** Every node has a label and a one-line hover
+  (`graphview.LABELS`, `HOVERS`, `label_of`, `hover_of`;
+  `tests/test_graph_legible.py::test_every_node_has_a_label_and_a_hover`).
+  The ids: `ghost` → `hands`, the hands layer → `hands.layer`, `readout`
+  → `hands.guide`, `history` → `lookback` (with `capture` merged in),
+  `media.<c>` → `channel.<c>`, `output.N.readout` → `output.N.guide`,
+  `render:eye` → `render:camera`. Params keep their ids
+  (`graph.param_prefix`). Old ids are read for good and renamed on load
+  (`graphmigrate.renamed`); an old id in a wired frame is refused in
+  words. Saved canvas positions follow the rename (R14,
+  `graphmigrate.renamed_layout`,
+  `tests/test_graphview.py::test_old_layout_positions_follow_the_renamed_ids`).
+  `tests/test_graph_wired.py::{test_the_ids_map_both_ways,test_a_nodes_params_keep_their_prefix,test_an_old_id_in_a_wired_frame_is_refused}`.
+- **Other options.** Rename labels only; keep `ghost` and `history`.
+- **To reverse.** `NEW_IDS` / `OLD_IDS` and `renamed`, but a `/6` file
+  already saved keeps the new ids.
+- **Rough edge.** `hands` meant the layer before and means the geometry
+  now: a missed rename would swap the two silently. A hand-written
+  section in the old ids in a wired frame is refused, not read.
+- **Judge it.** Checks 350, 345.
+
+### 374. The per-output switches: picture and hands are mutes, "through" is wiring
+
+- **Answer.** (owner) — 2026-10-24: approved as proposed.
+- **Built.** `output.N.scene` (labelled **picture**) and `output.N.hands`
+  are the rig's own on/off per window, from the config, never in a
+  preset, learnable, and they never rebuild the graph
+  (`tests/test_graph_frame.py::{test_a_mute_ignores_its_port,test_a_mute_never_rebuilds}`,
+  `tests/test_overlay.py::test_output_switches_are_picture_and_hands`,
+  `tests/test_ui_output.py::test_the_mutes_are_not_the_preset`).
+  `output.N.through` is gone; a config's `through` is noted once
+  (`tests/test_config.py::test_a_through_key_is_said_once`). Through is a
+  composite before the effects, wired (row 377) and set from OUTPUT
+  (`graphview.set_through`). R9: **a hands mute wins over a stand-down**
+  (`tests/test_graph_frame.py::test_a_hands_mute_wins_over_a_stand_down`).
+- **Other options.** The switches as wires in the preset (a laptop preset
+  would leave the glass black on the rig); the switches kept building
+  structure.
+- **To reverse.** `overlay.register_switches` and `Output.settle`.
+- **Rough edge.** **Two owner notes.** A picture mute hides the through
+  picture, so a migrated preset with hands through the effects and the
+  picture muted shows nothing (the old HANDS route is not a mute). And a
+  picture mute on an in-scene preset shows the ground and the guide, not
+  the hands layer. No rig config mutes a picture today.
+- **Judge it.** Checks 346, 347, 348.
+
+### 375. All outputs (`output.all`)
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** A node with the output ports (`image`, `hands`, `guide`),
+  no params, always on the canvas. An output whose own port has no wire
+  shows `output.all`'s. An old preset's frame is written there once, so
+  it looks the same on the laptop (one window) and the rig (two)
+  (`tests/test_graph_wired.py::test_reach_runs_from_the_outputs_and_the_capture`).
+  Two outputs showing one picture share one end
+  (`test_graph_frame.py::test_one_end_for_two_outputs_of_one_picture_is_built_once`).
+- **Other options.** Every output wired one by one (`output.1` …
+  `output.4`).
+- **To reverse.** `ALL_OUTPUTS`, `output_wires`.
+- **Rough edge.** R12: a wire into `output.N` past the window count
+  builds nothing and says "no output 3 this frame"; it does nothing until
+  that window opens.
+- **Judge it.** Checks 344, 345.
+
+### 376. An unwired output shows its ground
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Black on an opaque window, see-through in overlay (today's
+  clear, `(0, 0, 0, View.bg_alpha)`). `ground` is also a source word
+  that goes only into output ports: `ground → output.2.image` makes that
+  window show nothing although All outputs has something. R13: it is
+  drawn on GRAPH as a small "Ground" node and deletes
+  (`tests/test_graph_edit.py::{test_a_ground_wire_is_drawn,test_a_ground_wire_deletes}`;
+  `tests/test_graph_wired.py::test_ground_goes_only_into_outputs`).
+- **Other options.** Always opaque black.
+- **To reverse.** `GROUND`, `graphview.GroundNode`.
+- **Rough edge.** The Ground node has no params; it is a canvas stand-in, never built.
+- **Judge it.** Checks 342, 344.
+
+### 377. No pipelines: an effect on a second picture is a `copy`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.Copy` (`copy`, `copy.2` …, entry
+  `{"kind": "copy", "of": "acid"}`) draws an instance on another picture
+  with its own `image` and `aux` and the instance's knobs and clock. It
+  replaces the per-pipeline run (`acid(scene+hands)`) and is what
+  "hands through the effects" writes
+  (`tests/test_graph_frame.py::{test_a_copy_reads_its_originals_knobs,test_two_throughs_take_their_own_instances}`).
+  R16: deleting an effect deletes its copies in the same landing and says
+  so (`tests/test_graph_edit.py::test_deleting_an_effect_takes_its_copies`).
+  R15: an effect with no input is drawn faint, keeps its outs and reads
+  nothing; only type errors and loops refuse
+  (`test_unwiring_an_effects_only_input_leaves_it_faint_with_its_outs`).
+- **Other options.** A second instance with routes linking its params
+  (two clocks).
+- **To reverse.** `Copy`, `CopyAt`.
+- **Rough edge.** A copy of an effect that is deleted by hand-editing a
+  file is a note and dropped (`COPY_BAD_OF`).
+- **Judge it.** Check 348.
+
+### 378. The stand-down is kept for a copy chain over a hands composite
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.Shown.fallback` and `Output.settle`: an output whose
+  picture is a chain of copies over a hands composite shows the originals
+  over the composite's `under`, with the layer laid at the output, while
+  the copies bend nothing (no copy live, or no hand drawn). It keeps the
+  fast path and every golden
+  (`tests/test_graph_frame.py::test_a_copy_chain_stands_down`,
+  `tests/test_graph.py::test_a_through_output_is_a_composite_its_end_and_a_stand_down`).
+- **Other options.** Always draw the composite (a pass more; the through
+  goldens at risk).
+- **To reverse.** `Shown.fallback`.
+- **Rough edge.** A composite of a hands layer with no copies stands down
+  too (T2); the look is the same.
+- **Judge it.** Checks 348, 351.
+
+### 379. The direct paint is kept; mutes never rebuild
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Shown.run` paints straight into a window when one output
+  uses it, counting users per frame through the mutes (`Frame.users`).
+  A mute is read each frame; no graph is rebuilt for it.
+- **Other options.** Rebuild on a mute (the old `Switches` key).
+- **To reverse.** `Frame.users`, `graph_key`.
+- **Rough edge.** The hands layer is built and drawn while All outputs
+  wires it, even when every window mutes the hands (T4).
+- **Judge it.** Check 351.
+
+### 380. Hands: any hands node may have a layer and a guide
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `hands.n.layer` draws `hands.n`; `hands.n.guide` is its
+  readout; `hands.n → scene.geometry` puts the hands in the scene. The
+  guide splits out when the hands are in the scene or an effect is on the
+  layer (`HandsLayer.split`, "always" or "downstream"). `laid` is read on
+  any one hands entry
+  (`tests/test_graph_frame.py::test_laid_on_a_second_hands_entry_reads_in_a_wired_frame`,
+  `::test_the_hands_guide_is_its_layers_own_while_the_layer_is_built`).
+- **Other options.** One hands node makes the layer.
+- **To reverse.** `HandsLayer.split`.
+- **Rough edge.** Two `laid` entries are refused.
+- **Judge it.** Checks 347, 348.
+
+### 381. The look-back is one node; the capture is a sink
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `lookback` ("Look-back") has `image`, `capture` and
+  `occluder`. What is wired into `lookback.capture` runs even when no
+  output shows the look-back (R6: it is written for the next frame, like
+  a delay, so it closes no loop). `holds` and `backdrop.history` retire
+  into the capture wire; a route or desk row driving `backdrop.history`
+  is dropped with a note
+  (`tests/test_graph_migrate.py::{test_backdrop_history_and_holds_become_the_capture_wire,test_a_driven_backdrop_history_is_dropped_with_a_note,test_no_library_preset_drives_backdrop_history}`).
+  LOOKBACK's "records" combo writes the wire
+  (`tests/test_ui_lookback.py::test_records_says_and_sets_the_capture`);
+  the internal `Capture` runs once after every end
+  (`tests/test_graph_frame.py::test_the_capture_runs_once_after_every_end`).
+- **Other options.** Keep `backdrop.history` as a look-back param.
+- **To reverse.** `graphmigrate.RETIRED`.
+- **Rough edge.** "records: Composite" for a capture through a
+  composite; the longer words are on hover.
+- **Judge it.** Check 349.
+
+### 382. The backdrop lays `backdrop.scene` over `backdrop.image`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `grounded` is merged into the backdrop: a composite of the
+  scene over its picture at `backdrop.alpha`. A scene a backdrop reads is
+  drawn see-through
+  (`tests/test_graph_frame.py::test_a_scene_on_a_backdrop_is_drawn_see_through`).
+  A channel wired straight in keeps plan 32's path byte for byte.
+- **Other options.** A plain composite with an alpha param.
+- **To reverse.** The backdrop case in `_Build`.
+- **Rough edge.** The backdrop's place in the look-back is still plan
+  32's stopgap order (row 330); it is now a wire edit.
+- **Judge it.** Check 345.
+
+### 383. Migration writes today's default frame for the default switches
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphmigrate.migrate` writes the frame `default_graph` built
+  for the default switches once into All outputs (`frame_wires`), keeps a
+  section's own output wires as overrides, and leaves D1 placements as
+  entries placed on the built graph. Proved node for node by
+  `graph.signature` over 125 cases
+  (`tests/test_graph_frame.py::test_the_wired_frame_builds_what_default_graph_builds`
+  against `tests/fixtures/frame-signatures.json`) and by every golden
+  (`tests/test_graph_migrate.py::test_every_section_loads_as_a_wired_frame`,
+  46 cases).
+- **Other options.** Migrate each output on its own.
+- **To reverse.** `graphmigrate.wired_section`.
+- **Rough edge.** The signature keeps only the nodes a frame can show
+  (R8); a difference in a node nothing reads is not seen by it.
+- **Judge it.** Check 345.
+
+### 384. Below `/6` by round trip
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphmigrate.unwired` takes a wired frame back to the old
+  words (the run as `frame → … → fx.image`, `holds`, `into`, every id
+  mapped back) and `legacy_section` / `legacy_values` use it. It is the
+  round trip only when writing it forward again reads to the same section.
+  An untouched `/4` preset saves byte for byte
+  (`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
+  38 sources); `test_the_round_trip_is_canonical`. A GRAPH edit lands the
+  wires in the canonical order so an edit back to a migrated frame
+  round-trips again.
+- **Other options.** Every wired preset saves `/6`.
+- **To reverse.** `unwired`.
+- **Rough edge.** The capture composite's slot in `_frame_order` is the
+  implementer's reading of the order.
+- **Judge it.** Check 352.
+
+### 385. The schema is `hyperspace.preset/6`
+
+- **Answer.** (rec) — accepted 2026-10-24. R10 amends it.
+- **Built.** `preset.WIRED_SCHEMA` is `/6`; `VERSIONS` is
+  `(2, 3, 4, 5, 6)`; a plan 33/34 build refuses a `/6` file by its
+  ladder's words (`tests/test_graph_migrate.py::test_v6_is_refused_by_the_ladder_below`).
+  **R10, superseding the first design's "nothing writes `/5` again":** a
+  save writes the lowest schema that loses nothing, so a section whose
+  wired frame `unwired` round-trips into `/5` words saves as `/5`, and
+  `/6` only when the new vocabulary is needed (a ground wire, a through, a
+  hands node moved out of the default). That keeps the other Mac working
+  on re-saves of `displace-moo`, `glimmer-bug` and `moo`
+  (`tests/test_graph_free.py::test_an_untouched_v5_preset_saves_byte_identical`,
+  5 sources in `tests/fixtures/plan35-v5-saves/`;
+  `tests/test_presets.py::test_a_wired_preset_saves_as_v6`;
+  `tests/test_ui_output.py::test_a_picture_put_back_saves_in_the_lowest_schema`).
+  The owner's 58 Drive presets re-save byte-identically. The `frame` key
+  stays as the section's marker.
+- **Other options.** Stay `/5` with the marker alone (a plan 34 build
+  would load the values over its default frame, and could read `hands`
+  the geometry as `hands` the layer).
+- **To reverse.** `WIRED_SCHEMA`, `schema_of`.
+- **Rough edge.** A `/5` file keeps the old ids on disk and still loads.
+  Both Macs must be on this build before anyone saves a `/6` file.
+- **Judge it.** Check 352.
+
+### 386. The new preset
+
+- **Answer.** (rec) — accepted 2026-10-24 (the owner chose the button;
+  the details are the build's).
+- **Built.** `Presets.new` (`preset.UNTITLED_PRESET`, `NEW_SAID`): the
+  library's fresh values (as `Project.new`), routes cleared, the desk
+  written as the factory preset layer, the session untouched, named
+  `untitled`, dirty with no path, one undo step
+  (`tests/test_presets.py::{test_a_new_preset_is_factory_values_and_nothing_wired,test_a_new_preset_does_not_depend_on_what_was_loaded,test_a_new_preset_undoes_in_one_step,test_a_new_preset_saves_and_loads_back_empty}`).
+  A **new** chip before **save** on the PRESET strip
+  (`tests/test_ui_presets.py::test_the_strip_has_a_new_chip`).
+- **Other options.** A menu entry; clearing the session too.
+- **To reverse.** `Presets.new`, the chip.
+- **Rough edge.** A user preset literally named `untitled` makes save
+  overwrite instead of asking for a name; `as…` prefills `untitled`;
+  `new` calls the library's private `_apply_doc` and `_landed`.
+- **Judge it.** Check 342.
+
+### 387. What a new preset's "empty" is
+
+- **Answer.** (owner) — 2026-10-24: approved as proposed.
+- **Built.** `{"frame": "wired"}`: the outputs and All outputs, nothing
+  wired, so it draws black
+  (`tests/test_presets.py::test_a_new_preset_draws_black`,
+  `tests/test_graph_areas.py::test_a_blank_preset_draws_only_the_outputs`).
+  The picker's top-level **scene starter** wires `shape → scene → All
+  outputs` in one step
+  (`tests/test_graph_edit.py::test_the_starter_wires_the_scene_to_all_outputs`).
+  Empty channels sit on MEDIA's idle line. The desk is written
+  explicitly (`fresh_desk()`), since a file with no `desk` key gets the
+  factory layer and `"desk": []` an empty one.
+- **Other options.** Start with the scene starter already wired; start
+  with the last preset's graph.
+- **To reverse.** `graphview.render_starter`.
+- **Rough edge.** None known.
+- **Judge it.** Check 342.
+
+### 388. GRAPH deletes everything
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The refusals left are type errors, loops, the camera and a
+  cloud (`NOT_REMOVABLE`). Deleting a window unwires it. `PLUMBING`,
+  `RUN_KEPT` (plan 33 R20), `FEEDS_NO_DELETE` and `FrameNode` are
+  deleted. Deleting an effect closes the chain over it; a node that loses
+  its last wire stays, faint, as an entry
+  (`tests/test_graph_edit.py::{test_every_frame_node_and_wire_deletes,test_the_owners_sequence,test_deleting_a_window_unwires_it}`;
+  `tests/test_graphview.py::test_no_plumbing_words_remain`).
+- **Other options.** Keep some plumbing (the capture, `fx`).
+- **To reverse.** `graphview.render_unwire` and `render_drop`.
+- **Rough edge.** A node that loses its last wire stays, faint, until it is deleted
+  too.
+- **Judge it.** Check 343.
+
+### 389. Canvas areas by primitive
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graphview.AREAS`: CONTROLLERS, AUDIO, MODULATION, MEDIA,
+  SCENE, LOOK-BACK, EFFECTS, OUTPUTS. The picker groups the same way
+  (`tests/test_graph_areas.py::test_the_areas_run_by_primitive`,
+  `tests/test_graph_edit.py::test_the_picker_groups_by_primitive`).
+- **Other options.** Keep GEOMETRY and SHADERS.
+- **To reverse.** `AREAS`, `PICKER_GROUPS`.
+- **Rough edge.** The effects area wraps into rows of four.
+- **Judge it.** Check 350.
+
+### 390. OUTPUT and LOOKBACK are views that edit wires
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Each window's `shows:` combo ("as All outputs", "nothing",
+  the graph's pictures in area order, and every channel with a source,
+  R17) wires or unwires; its mutes; "hands through the effects"
+  (`graphview.set_through`, refused with a reason when it cannot be
+  honoured); LOOKBACK's "records" combo. One undo step each
+  (`tests/test_ui_output.py::{test_the_combo_offers_the_graphs_pictures_in_area_order,test_output_offers_a_channel_with_a_source_and_picking_wires_it,test_picking_a_picture_wires_the_output,test_through_writes_the_wiring,test_through_needs_a_hands_layer_over_all_outputs}`).
+- **Other options.** Leave the pages as the rig's switches.
+- **To reverse.** `ui.Panel._output_blocks`, `ui_lookback._records_row`.
+- **Rough edge.** The OUTPUT block spacing is tighter (4, was 7) so four
+  outputs fit; through is refused with the window's own picture.
+- **Judge it.** Checks 346, 349.
+
+### 391. Point clouds stay the rig's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `build_graph(views, wiring, clouds, …)` draws the listed
+  cloud devices in every scene. They are not wired
+  (`tests/test_graph_frame.py::test_the_proof_covers_one_window_and_the_clouds`).
+- **Other options.** A cloud as a wired geometry (a preset naming a
+  device one Mac lacks).
+- **To reverse.** `_Build`'s scene case.
+- **Rough edge.** A cloud cannot be removed from a scene on GRAPH
+  (`NOT_REMOVABLE`).
+- **Judge it.** —
+
+### 392. The golden states as wiring
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `tools/golden_frames.py` writes each state's per-output
+  wires (`graphmigrate.output_wires`) with the window mutes all on
+  (`View(Switches(), …)`); the mutes have tests of their own (row 374).
+  Three `/6` fixtures (`blank-frame`, `channel-out-only`,
+  `through-one-output`), 24 new goldens (741), the 717 before unmoved
+  (`tests/test_golden_frames.py::test_renaming_moved_no_golden`,
+  `tests/test_graph_frame.py::test_output_wires_for_each_state`).
+- **Other options.** Keep the switches in the tool and re-record.
+- **To reverse.** `golden_frames.rig_section`.
+- **Rough edge.** R11: a through state applies the OUTPUT toggle only
+  where All outputs already lays the hands.
+- **Judge it.** —
+
+### 393. Plan 34's frame words retired
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `FRAME_SOURCE_REFUSAL` and `LOOP_FRAME` are not read in a
+  wired frame (there is no `frame`); `FRAME_EDGES` is replaced there by
+  `graph.HIDDEN_EDGES = (("shape", "pattern"), ("lookback", "scene"))`.
+  `LOOP_FACES` and `LOOP_BACKDROP` keep their words and now also name
+  explicit loops through `scene.geometry` and `backdrop.scene`
+  (`tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+  This supersedes the `FRAME_EDGES` of plan 34's row 359; plan 34's own
+  `delay`, `resize`, `echo.k` and `dream` ids do not clash with V2.
+- **Other options.** Keep `frame` as a hidden node for the loop check.
+- **To reverse.** `HIDDEN_EDGES`, `loop_words`.
+- **Rough edge.** `FRAME_EDGES` still stands for a section outside a
+  wired frame until plan 34 T4 removes the last of them.
+- **Judge it.** —

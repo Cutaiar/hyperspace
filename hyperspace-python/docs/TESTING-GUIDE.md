@@ -44,6 +44,10 @@ explained in the [glossary](#glossary) at the end.
    are plan 33's: use branch `plan-33-free-graph` (PR #235) until it is
    merged. A free graph saves as `hyperspace.preset/5`, which an older
    build refuses, so both Macs must run that build before L157.
+   The free-frame entries (L158–L162) are plan 35's: use branch
+   `plan-34-feedback` (PR #236) until it is merged. A frame that needs the
+   new vocabulary saves as `hyperspace.preset/6`, which an older build
+   refuses, so both Macs must run that build before L162.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -134,6 +138,8 @@ changes brightness or volume instead).
     a phone on the copy; then L152, the two plans together, with two Macs.
 16. Plan 33's free-graph entries: L153–L156 on the laptop (L156 with a
     live source), L157 with two Macs on the copy, then A47 with the APC40.
+17. Plan 35's free-frame entries: L158, L159 and L161 on the laptop (L159
+    with a clip), L160 at the rig, L162 with two Macs on the copy.
 
 ## Summary
 
@@ -296,6 +302,11 @@ changes brightness or volume instead).
 | L155 | The FX page with a big graph, from across the room | 1 | laptop | 327 |
 | L156 | A channel lost on the faces mid-show; the frame cost of branches and a switch | 1 | laptop, a live source | 323, 324 |
 | L157 | An old party preset looks the same; a free graph on an older build | 1 | two Macs, the copy | 322, 328 |
+| L158 | A new preset; the owner's delete sequence on GRAPH (plan 35) | 1 | laptop, the copy | 342, 343 |
+| L159 | A channel alone on All outputs; the OUTPUT page; LOOKBACK's records | 1 | laptop, a clip, the copy | 344, 346, 349 |
+| L160 | The glass's mutes; hands through the effects on output 2 | 1 | the rig, hands | 347, 348 |
+| L161 | The canvas at distance; SYSTEM before and after | 1 | laptop, the older build | 350, 351 |
+| L162 | A library preset looks the same; a `/6` file on an older build | 1 | two Macs, the copy | 345, 352 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2391,7 +2402,7 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 596 frames match their goldens (Apple M3 Max,
+**Right if:** it ends "all 741 frames match their goldens (Apple M3 Max,
 4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
@@ -3902,6 +3913,112 @@ file is a lower schema and the old Mac opens it.
 opening a `/5` file.
 
 *(checks 322, 328)*
+
+## Plan 35: the free frame (L158–L162)
+
+Plan 35's tests: the frame is wired, so **three `/6` fixtures**
+(`blank-frame`, `channel-out-only`, `through-one-output`) and **24 new
+goldens** (741; the 717 before it did not move) are in
+`tests/golden/frames/`; each golden output state (scene off, hands
+through, …) is written as that output's own wires, with the window mutes
+on; and a **signature test** (`graph.signature`, 125 cases in
+`tests/fixtures/frame-signatures.json`) proves the wired frame builds the
+node-for-node frame the deleted `default_graph` built. L82 now ends "all
+741 frames match their goldens".
+
+#### L158. A new preset, and the owner's delete sequence
+
+**Needs:** laptop; the copy; branch `plan-34-feedback` (PR #236).
+
+**Do:** load `party-trip`, change a knob and a route, then press **new**
+on the PRESET strip. Right-click GRAPH and pick the scene starter; undo
+twice. Load `party-trip` again and, on GRAPH, delete the cable from the
+scene to the backdrop, then the look-back's cable into the first effect,
+then each effect's cable, then the last effect's cable into All outputs.
+
+**Right if:** the new preset is black on both windows with the factory's
+values and desk; the starter shows the shape on both; every delete lands
+with no refusal and the picture changes as it goes, black at the last.
+
+**Wrong if:** a value left over, a refusal about "the default graph", or a
+cable that cannot be deleted.
+
+*(checks 342, 343)*
+
+#### L159. A channel alone; the OUTPUT page and LOOKBACK
+
+**Needs:** laptop; a clip; the copy; the TV for two windows.
+
+**Do:** on a new preset wire the clip's channel into All outputs. On
+OUTPUT pick a different picture for output 2, then "as All outputs",
+then undo. On LOOKBACK set **records** to the backdrop, the scene and
+nothing.
+
+**Right if:** the clip fills both windows with no scene pass on SYSTEM;
+a pick changes output 2 only and is one undo step; the echoes follow what
+is recorded.
+
+**Wrong if:** a scene pass on SYSTEM, a pick that moves output 1, or an
+undo that takes two steps.
+
+*(checks 344, 346, 349)*
+
+#### L160. The glass's mutes, and hands through the effects
+
+**Needs:** the rig (or the TV as a second window); hands in view.
+
+**Do:** turn the glass output's picture mute off, then on; on OUTPUT tick
+**hands through the effects** for output 2 and untick it; try the mute on
+a migrated preset with hands through and on a preset with the hands in
+the scene.
+
+**Right if:** the muted glass shows the hands only; output 2 shows the
+hands bent by the effects when ticked and looks like output 1 when not.
+The two owner notes are for you to judge: a picture mute hides the
+through picture, and on an in-scene preset it shows the ground and the
+guide, not the hands layer.
+
+**Wrong if:** a hitch when a mute flicks, a toggle that does nothing, or
+hands left on a muted window.
+
+*(checks 347, 348)*
+
+#### L161. The canvas at distance; SYSTEM before and after
+
+**Needs:** laptop; a build from before plan 35 for the comparison.
+
+**Do:** press tidy on `party-trip` and read the canvas from a metre and a
+half away; then note SYSTEM's frame time and rate on this build and the
+older one.
+
+**Right if:** the labels and hovers read without the ids, the areas run
+MEDIA, SCENE, LOOK-BACK, EFFECTS, OUTPUTS left to right with no cable
+running back but the capture's and a delay's, and the frame time is no
+worse.
+
+**Wrong if:** an id where a name should be, a cable doubling back, or a
+slower frame.
+
+*(checks 350, 351)*
+
+#### L162. A library preset looks the same; a `/6` file on an older build
+
+**Needs:** two Macs sharing a library, one on this build and one on a
+plan 33/34 build; the copy.
+
+**Do:** compare `party-trip`, `dial`, `displace-moo`, `glimmer-bug` and
+`moo` on both builds; save `party-trip` untouched and diff it; save a
+preset that needs the new vocabulary (a window set to "nothing") and try
+it on the older Mac; then put both Macs on this build.
+
+**Right if:** the pictures look as before and the untouched save is
+byte-identical; the three `/5` presets re-save as `/5`; the new file says
+`hyperspace.preset/6` and the older Mac refuses it, leaving it as it was.
+
+**Wrong if:** a look that moved, a changed file, or the older Mac opening
+the `/6` file.
+
+*(checks 345, 352)*
 
 # Part 2 — tests that need hardware
 

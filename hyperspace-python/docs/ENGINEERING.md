@@ -979,6 +979,54 @@ base at 3547a7a; `tests/fixtures` is ignored, so they are force-added). A
 person's own preset that drives a channel choice loads with a switch and
 saves `/5`. No file under `hyperspace/library/` was edited.
 
+**Presets and the wired frame** (plan 35, rows 372–393;
+`graphmigrate.py`, `preset.py`, `graph.py`). **The marker.** A graph
+section that says `"frame": "wired"` is a wired frame: its nodes and
+wires are everything the renderer builds (`graph.build_graph`), and the
+key is the section's own marker (`read_graph` knows no schema). Every
+readable section becomes one on load: `Presets.load_doc` runs
+`graphmigrate.migrate`, which runs plan 33's steps, then `renamed`, then
+`wired_section`, and writes the frame `frame_wires` gives (today's frame
+for the default switches) once into `output.all`. A window's mutes are
+not in the file. `backdrop.history` is retired into the capture wire
+(`lookback.capture`); a route or desk row on it is dropped with a note.
+**The ids** are renamed in one table (`graph.NEW_IDS` / `OLD_IDS`,
+`new_id` / `old_id`): `ghost` → `hands`, the hands layer → `hands.layer`,
+`readout` → `hands.guide`, `history` → `lookback`, `media.<c>` →
+`channel.<c>`, `output.N.readout` → `output.N.guide`, `eye` → `camera`.
+**Params keep their ids** (`ghost.*`, `dream.*`, `media.<c>.*`, `eye.*`;
+`graph.param_prefix` maps a node to its prefix), so no route, desk row or
+binding moves. Old ids are read for good; an old id in a wired frame is
+refused in words, and saved canvas positions follow the rename
+(`graphmigrate.renamed_layout`). **Save:** `preset.schema_of` writes the
+lowest schema that loses nothing. `graphmigrate.unwired` is the round
+trip: it takes a wired frame back to the old words (the run as
+`frame → … → fx.image`, `holds`, `into`, every id mapped back) and
+reports whether writing it forward again reads to the same section. If it
+does, the file is `/4`, `/3` or `/2` as before (untouched, byte for byte:
+`tests/test_graph_free.py::test_an_untouched_v4_preset_saves_byte_identical`,
+38 sources in `tests/fixtures/plan33-v4-saves/`) or `/5` (ruling R10:
+`tests/test_graph_free.py::test_an_untouched_v5_preset_saves_byte_identical`,
+5 sources in `tests/fixtures/plan35-v5-saves/`); only a frame that
+needs the new vocabulary (a `ground` wire, a through, a hands node moved
+off the default, an edit that leaves the canonical shape) is
+`hyperspace.preset/6` (`preset.WIRED_SCHEMA`; `VERSIONS = (2, 3, 4, 5,
+6)`). A GRAPH edit lands the frame in its canonical wire order
+(`graphview._frame_order`) so an edit back to a migrated shape saves in
+the lowest schema again. **An older build refuses a `/6` file by the
+ladder's words, so both Macs run this build before anyone saves one**; an
+untouched `/4` preset, and a re-saved `/5` one, still open there. The
+owner's 58 Drive presets re-save byte-identically. **A new preset**
+(`Presets.new`) is the library's fresh values, routes cleared, the desk
+written as the factory preset layer (`fresh_desk()`), and
+`{"frame": "wired"}`; it is named `untitled` and dirty until saved. No
+file under `hyperspace/library/` was edited. **Tools:**
+`tools/golden_frames.py` writes each golden state as the output's own
+wires with the mutes all on; `--signatures` adds a missing case to
+`tests/fixtures/frame-signatures.json` from `build_graph` alone (never
+re-records an existing one), and `--names` rewrites only the fixtures'
+recorded node names and asserts the `goldens` list is unchanged.
+
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
 params are `<node>.<key>`, where `<node>` is the node's prefix —
@@ -1368,6 +1416,13 @@ as built.
   `/4` cannot say (a branch, a switch, an unwired node) saves
   `hyperspace.preset/5`, which an older build refuses; every other preset
   saves as before, byte for byte (see "Presets and the free graph" in §2).
+- **Both Macs on the wired-frame build too** (plan 35): a preset whose
+  frame needs the new vocabulary saves `hyperspace.preset/6`, which a
+  plan 33/34 build refuses by the ladder's words; every other preset saves
+  as before (`/4` byte for byte, `/5` where it round-trips). The node
+  ids were renamed (params were not), so a `/6` file read by an older
+  build would not make sense even if it were read. See "Presets and the
+  wired frame" in §2.
 - **Both Macs on this build.** A preset that uses media is saved as
   `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
   or `view.media_*` value off its default; `view.media` itself is read as

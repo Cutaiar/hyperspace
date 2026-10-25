@@ -281,6 +281,21 @@ replaces a row, rewrite that row instead of adding a new one.
 | **The FX page is a browser of the graph's effect nodes**, grouped by where each ends; it edits no structure. GRAPH adds, inserts and reorders. | `ui_fx.groups`, `graphview.Edit` | row 348 (owner) |
 | **The default graph keeps plan 32's compositing order**; reconciling it is its own session. | `graph.default_graph` | row 351 |
 
+## The frame as wires (plan 35)
+
+| Decision | Where | Who |
+|---|---|---|
+| **The frame is wires.** The shape, the scene, the hands, their layer and guide, the backdrop, the look-back and the outputs are ordinary nodes; a section says `"frame": "wired"` and nothing is built that no wire or entry reaches. `frame`, `fx`, `grounded`, `capture`, `cover` and the pipelines are not nodes. Supersedes row 351. | `graph.build_graph`, `graph.reaches`, `graphmigrate.migrate` | row 372 (owner); 351 |
+| **Names a performer reads, ids too.** `ghost` → `hands`, the layer → `hands.layer`, `readout` → `hands.guide`, `history` → `lookback` (with `capture` merged in), `media.<c>` → `channel.<c>`, `eye` → `camera`. Params keep their ids. Old ids are read for good and renamed on load. | `graph.new_id`, `old_id`, `param_prefix`; `graphmigrate.renamed` | row 373 (owner) |
+| **Picture and hands are each window's mutes; "through" is wiring.** A mute is the rig's, never in a preset, never a rebuild. A hands mute wins over a stand-down. | `overlay.register_switches`, `graph.Output.settle` | row 374 (owner) |
+| **An output shows its own wires, else All outputs (`output.all`), else its ground** (black, or see-through in overlay). `ground` is a source word that goes only into output ports. | `graph.ALL_OUTPUTS`, `GROUND` | rows 375, 376 |
+| **No pipelines.** An effect on a second picture is a `copy` with the instance's knobs and clock; a copy chain over a hands composite stands down while it bends nothing; the direct paint is kept. | `graph.Copy`, `Shown.fallback` | rows 377–379 |
+| **The look-back is one node; its capture is a sink.** What is wired into `lookback.capture` runs even when nothing shows the look-back; the backdrop lays `backdrop.scene` over `backdrop.image`. | `graph.Capture`, `HIDDEN_EDGES` | rows 381, 382, 393 |
+| **Old presets load as today's frame, written once into All outputs**; a save writes the lowest schema that loses nothing (`/4` and `/5` by round trip, `/6` only for the new words). Both Macs must run this build before a `/6` save. | `graphmigrate.frame_wires`, `unwired`; `preset.WIRED_SCHEMA` | rows 383–385 (R10) |
+| **A new preset is the factory's values with nothing wired**, black until something is wired; the desk is the factory layer. | `preset.Presets.new` | rows 386, 387 (owner) |
+| **GRAPH deletes everything.** The refusals left are type errors, loops, the camera and a cloud. The canvas is the section, grouped by primitive. OUTPUT and LOOKBACK are views that edit wires. | `graphview.render_unwire`, `render_drop`, `AREAS` | rows 388–390 |
+| **Point clouds stay the rig's**, drawn in every scene. | `graph.build_graph` | row 391 |
+
 ## Face patterns
 
 | Decision | Where | Who |
