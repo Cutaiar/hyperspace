@@ -261,7 +261,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, envelope, lfo, modifiers, motion
+from . import apc40, envelope, lfo, modifiers, motion, seq_page
 from . import patch as patchmod
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
@@ -376,6 +376,11 @@ SHIFT_PARAM = "desk.shift"
 # the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
 # (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
 SAVE_PARAM = "desk.save"
+# the sequencer page's latch (plan 31 §A, decision 7): SEND A, invariant,
+# a session toggle (seq_page.register) — while it is on the page's rows
+# shadow the clip grid, the clip stops and scene launch 1–5
+SEQ_PAGE_PARAM = seq_page.PARAM
+SEQ_PAGE_SOURCE = f"note:0:{apc40.N_SEND_A}"
 # knob smoothing (plan 18 WP2): how long a value from one of the desk's
 # absolute knobs or faders takes to arrive (midi.py's glide). One session
 # param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
@@ -466,7 +471,8 @@ APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   **{source: "plan 19" for _k, source in _FAR_PADS},
                   **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
                   **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
-                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
+                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24",
+                  SEQ_PAGE_SOURCE: "plan 31"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
@@ -489,6 +495,8 @@ APC_NEW_ROWS = (
     # held them: they were the preset layer's), and SAVE on track 8's clip stop
     *[(source, pid, op, value, False) for source, pid, op, value in sorted(TOGGLE_DESK_ROWS)],
     (f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary", 1.0, False),
+    # plan 31 §A: SEND A enters and leaves the sequencer page, latched
+    (SEQ_PAGE_SOURCE, SEQ_PAGE_PARAM, "toggle", 1.0, False),
 )
 # plan 15 WP4's clip-stop SAVE AS bar, retired 2026-10-09: an empty bank
 # pad held saves into its own slot (`Param.held` on `preset.select`), and
@@ -1087,6 +1095,22 @@ def save_missing(rows: Iterable[Binding]) -> str | None:
             "save needs track 8's clip stop free")
 
 
+def seq_missing(rows: Iterable[Binding]) -> str | None:
+    """Plan 31 §A: `save_missing`'s line for the sequencer page — a table
+    with no row on `seq.page` because the owner's own row holds SEND A —
+    so the page's absence is never silent. None when the row is there or
+    SEND A is free."""
+    rows = list(rows)
+    if any(b.target == SEQ_PAGE_PARAM for b in rows):
+        return None
+    page = Binding(SEQ_PAGE_SOURCE, SEQ_PAGE_PARAM, "toggle")
+    mine = next((b for b in rows if b.is_midi and b.overlaps(page)), None)
+    if mine is None:
+        return None
+    return (f"the sequencer page not added: {page.source} is yours ({mine.target}) — "
+            "SEND A enters it")
+
+
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
     """First performer per target wins: (kept, [(dropped row, why)]).
 
@@ -1494,6 +1518,21 @@ def led_level(b: Binding, p: Param) -> int:
     return 0
 
 
+SHADES = ("off", "on", "hit", "muted", "held")
+
+
+def led_shade(b: Binding, p: Param) -> str:
+    """A note row's light by name (plan 31 §A), one of SHADES: a surface
+    page's row says its own (`shade`, seq_page.py: a step "on", "muted" in
+    a muted lane, "hit" under the playhead); any other row is `led_level`'s
+    — "on" lit, "held" a filled bank pad, "off". The profile turns a shade
+    into a velocity (apc40.SHADE); midi.py and ui_desk.py both read this."""
+    shade = getattr(b, "shade", None)
+    if shade is not None:
+        return shade(p)
+    return ("off", "held", "on")[led_level(b, p)]
+
+
 def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
@@ -1533,6 +1572,7 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                            "Off: it jumps a detent at a time, as before. One setting for "
                            "every knob and fader; buttons and the cue knob are not smoothed.")
     _register_pad_feel(reg, table)
+    seq_page.register(reg, table)       # `seq.page`, SEND A's latch (plan 31 §A)
 
 
 def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
@@ -1715,6 +1755,14 @@ class Bindings:
     # `to_json` writes rows only, and `is_session_row` is about rows
     modifiers: tuple[Modifier, ...] = ()
     modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
+    # the surface page up on the first MIDI role's desk (plan 31 §A): an
+    # object with `rows()` (seq_page.SeqPage), or None. Its rows shadow
+    # every row on their controls, invariant ones included, while it is up;
+    # they are in memory only — never in `bindings`, never saved, never
+    # Learnable. `page_serial` counts the flips (`set_page`): midi.py
+    # redraws the whole desk on one. On the class, for a hot reload
+    page: object | None = None
+    page_serial: int = 0
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -1817,10 +1865,10 @@ class Bindings:
                 else:
                     t.announce(path, kept=bak)
                     t.write()
-            missing = save_missing(t.bindings)
-            if missing is not None:          # said every launch, never written: the row is yours
-                print(f"bindings: {path}: {missing}", file=sys.stderr)
-                t.said = f"{t.said} · {missing}" if t.said else missing
+            for missing in (save_missing(t.bindings), seq_missing(t.bindings)):
+                if missing is not None:      # said every launch, never written: the row is yours
+                    print(f"bindings: {path}: {missing}", file=sys.stderr)
+                    t.said = f"{t.said} · {missing}" if t.said else missing
             return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
@@ -2047,6 +2095,13 @@ class Bindings:
             return False
         if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
             return True
+        # a page's control while it is up: the page's, so no Learn takes it.
+        # Only for the desk as it stands (`rows` None): given `rows`, the
+        # question is the table's own (D6: a preset's desk loaded under the
+        # page keeps its rows there)
+        if (rows is None and self.is_primary(b.device)
+                and any(Binding(b.bare, "").overlaps(x) for x in self.page_rows)):
+            return True
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
 
@@ -2083,7 +2138,13 @@ class Bindings:
         first MIDI role) goes to now: the invariant rows on its control,
         else the enabled rows of the layer that is up **on that device**
         (plan 27 B2: the latch is per role) — nothing else (D8: no
-        fall-through; a control the up layer does not map does nothing)."""
+        fall-through; a control the up layer does not map does nothing).
+        A surface page's rows come first (plan 31 §A): on a page control
+        they are all there is, and a disabled one does nothing."""
+        if self.is_primary(role):
+            page = [b for b in self.page_rows if b.matches(kind, channel, number)]
+            if page:
+                return [b for b in page if b.enabled]
         rows = [b for b in self.route(kind, channel, number)
                 if b.enabled and self.serves(role, b)]
         inv = [b for b in rows if b.layer is None]
@@ -2098,13 +2159,31 @@ class Bindings:
     def active(self, role: str | None = None) -> list[Binding]:
         """The MIDI rows of the device of `role` (None: the first MIDI
         role) that show on it now: every invariant row, and the up layer's
-        rows on controls that are not invariant."""
+        rows on controls that are not invariant — and, first, a surface
+        page's rows (plan 31 §A), which hide every row on their controls."""
         rows = [b for b in self.midi() if self.serves(role, b)]
         index = self._controls([b for b in rows if b.layer is None and b.enabled],
                                shift=self.is_primary(role))     # once a frame: an index,
         layer = self.layer_of(role)                             # not a pairwise scan
-        return [b for b in rows
-                if b.layer is None or (b.layer == layer and not self._on(b, index))]
+        page = self.page_rows if self.is_primary(role) else []
+        if page:
+            under = self._controls(page, shift=False)
+            rows = [b for b in rows if not self._on(b, under)]
+        return [*page, *(b for b in rows
+                         if b.layer is None or (b.layer == layer and not self._on(b, index)))]
+
+    @property
+    def page_rows(self) -> list[Binding]:
+        """The rows of the surface page that is up (`page`), else none."""
+        return self.page.rows() if self.page is not None else []
+
+    def set_page(self, page: object | None) -> None:
+        """Put a surface page up (None: take it down). A flip bumps
+        `page_serial`; nothing else about the table changes — the layer,
+        the desk and SHIFT stay where they are (plan 31 decision 7)."""
+        if page is not self.page:
+            self.page = page
+            self.page_serial = getattr(self, "page_serial", 0) + 1
 
     def layer_of(self, role: str | None = None) -> str:
         """The layer up on the device of `role`: the first role's is

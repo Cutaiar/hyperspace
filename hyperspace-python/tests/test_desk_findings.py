@@ -33,7 +33,7 @@ import mido
 import pytest
 from test_midi import FakeIn, FakeOut, note, push, rig  # noqa: F401 — the fixture
 
-from hyperspace import apc40, hands, lfo, tempo
+from hyperspace import apc40, hands, lfo, routing, tempo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -142,7 +142,10 @@ def test_the_owners_file_holds_the_factory_session_rows_and_nothing_else():
     mine = {key(r) for r in own if r["source"].split(":")[0] in ("cc", "note")}
     factory = {key(r) for r in apc40.DEFAULT_MAP}
     assert mine <= factory
-    assert {r[4] for r in factory - mine} == {"preset"}
+    # beyond it: the preset layer, and SEND A — the sequencer page (plan 31
+    # §A), newer than the file, added at its load (`APC_NEW_ROWS`)
+    send_a = (routing.SEQ_PAGE_SOURCE, routing.SEQ_PAGE_PARAM, "toggle", 1.0, None)
+    assert {r[4] for r in factory - mine - {send_a}} == {"preset"}
 
 
 def test_in_alternate_mode_the_activator_is_one_press_a_flip(tmp_path):
