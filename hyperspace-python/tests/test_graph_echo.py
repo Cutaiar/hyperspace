@@ -322,3 +322,39 @@ def test_the_echo_faces_fixture_shows_the_ring(ctx):
     assert isinstance(node, G.EchoNode) and not node.said.startswith("not held"), node.said
     assert r.face_error == "" and not r._graph.dormant
     assert np.abs(got[..., :3] - plain[..., :3]).max() > 40
+
+
+def test_an_echo_into_hands_reads_nothing_when_the_ring_failed_to_rebuild(ctx):
+    """Fix round 2: echo.1 at output 2's `hands` takes its slot before the
+    capture; the capture then fails to make the ring again (a resize: here
+    the ring released right after it, `atlas` None). The frame draws — no
+    raise, no GL error — with the hands the picture made before the capture
+    (`Output.settle` asks for it first: last frame's blue). Anything asking
+    the echo after that failed remake, with the slot it took, reads nothing
+    (R7): no own size, and `paint` clears to the ground rather than handing
+    `_refit` no texture."""
+    size = (160, 120)
+    r = _off(_renderer(ctx, None, [("echo.1", "output.2.hands")], [_echo(1)]))
+    _three(r, size)
+    lb = r.lookback
+    real = lb.capture
+
+    def failed(scene, target):
+        real(scene, target)
+        lb.release_ring()                  # the remake that could not be made
+
+    lb.capture = failed
+    out = _frame(ctx, r, _empty(), _views(ctx, size), size, 0)[1]
+    assert lb.atlas is None and _near(_mid(out), BLUE), _mid(out)
+    node = r._graph.nodes["echo.1"]
+    frame = SimpleNamespace(r=r, ctx=ctx, bg_alpha=1.0, size=size,
+                            data={"echo.1#slot": (2, lb.frame - 1)})
+    frame.root = frame
+    assert node._slot(frame) == 2                   # the slot it took …
+    assert not node.reads(frame) and node.own_size(frame) is None   # … reads nothing
+    fbo = _fbo(ctx, *size)
+    fbo.viewport = (0, 0, *size)
+    fbo.use()
+    fbo.clear(0.5, 0.5, 0.5, 1.0)
+    node.paint(frame, fbo)
+    assert ctx.error == "GL_NO_ERROR" and _mid(_px(fbo)) == (0, 0, 0)

@@ -3100,7 +3100,9 @@ class EchoNode(_RingNode):
     def _src(self, frame: Frame) -> tuple | None:
         lb = frame.r.lookback
         slot = self._slot(frame)
-        if slot is None:
+        # (fix round 2: a slot taken before a capture whose remake failed —
+        # the ring released, `atlas` None — reads nothing, R7)
+        if slot is None or lb.atlas is None:
             return None
         eh = max(int(lb.echo[1]), 1)
         crop = (0.0, slot / MAX_ECHOES, 1.0, 1.0 / MAX_ECHOES)
