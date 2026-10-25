@@ -79,13 +79,14 @@ def test_an_aux_wire_leaves_the_effect_in_its_run():
     assert G.Effect.INPUTS == {"image": G.IMAGE, "aux": G.IMAGE}
     assert "aux" in G.Effect.REFS
     from test_graphview import stacked
+    from wiredframe import Shows, graph
 
     effects = ("acid", "blend", "palette")
-    vs = [View(Switches(), (96, 64)), View(Switches(through=True), (96, 64))]
-    base = G.default_graph(vs, stacked(effects), effects=effects)
+    shows = [Shows(), Shows(through=True)]        # (plan 35 T4: a copy of blend through)
+    base = graph(shows, stacked(effects), effects=effects, size=(96, 64))
     spec = G.read_graph({"wires": [{"from": "media.a", "to": "blend.aux"}]})
     assert spec.notes == ()
-    g = G.default_graph(vs, stacked(effects, spec.wiring()), effects=effects)
+    g = graph(shows, stacked(effects, spec.wiring()), effects=effects, size=(96, 64))
     blends = [n for n in g.order if isinstance(n, G.Effect) and n.effect == "blend"]
     assert len(blends) == 2
     assert {n.name for n in blends} == {n.name for n in base.order
@@ -93,7 +94,7 @@ def test_an_aux_wire_leaves_the_effect_in_its_run():
     for n in blends:
         assert isinstance(n.inputs["aux"], G.MediaNode) and n.inputs["aux"].channel == "a"
         assert n.inputs["image"].name == base.nodes[n.name].inputs["image"].name
-    assert ([n.name for n in g.order if n.name != "media.a"]
+    assert ([n.name for n in g.order if n.name != "channel.a"]
             == [n.name for n in base.order])
 
 

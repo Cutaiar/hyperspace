@@ -201,37 +201,38 @@ its `Presenter`) and calls `Renderer.draw_outputs(s, w, h, dpr, views)`.
 framebuffer. `Renderer._draw_frame` settles the frame's size under the
 render cap and ticks the effect folder, then **evaluates the render
 graph** (`graph.py`): the graph for these views — built by
-`graph.default_graph` from each view's switches, the renderer's
-`Wiring` and the listed `cloud` devices, and reused until one of those
-changes (`Renderer._graph_for`) — runs its nodes once each, in
+`graph.build_graph` from the renderer's `Wiring` (the preset's wired
+frame) and the listed `cloud` devices, and reused until the window count,
+the wiring or the clouds change (`Renderer._graph_for`; a window's mutes
+never rebuild it) — runs its nodes once each, in
 dependency order settled when it was built (`Graph.order`,
 `Graph.evaluate`), each node timed on the GPU (`render.PassTimer`). For
 one default output:
 
 ```text
-GEOMETRY   [cloud …]  shape   ghost            draw calls in the shared camera (the eye)
+GEOMETRY   [cloud …]  shape   hands[.n]    draw calls in the shared camera (the eye); a hands
+                      node is in the scene only if a wire puts it in `scene.geometry`
 SCENE      scene      the solid geometries first (a cloud, in-scene hands: depth written),
                       then the see-through shape, painter-sorted, depth-tested against them;
                       the face picture first, only while a picture other than the plain
                       pattern is wired into `shape.faces` (plan 33)
-LAYER      cover      the faces' mask, only while the look-back occludes
-           hands      Ghost.layer: the hands alone, own colour + depth — only if a view lays them on
-HISTORY    history    the look-back composite over its input (the echoes' clock, the dream pulled)
-EFFECT     acid … palette     one node per effect instance in the run the preset wires from
-                      `frame` to `fx.image` (plan 33; no stack, no order), on or off:
-                      on, its pass over its input into a pool texture or its consumer;
-                      off, its input read through (no pass, no texture)
-END        fx         the pipeline's end → the view itself when it is the pipeline's only
-                      consumer at the frame size, else a frame texture
-                      [composite(scene+hands) → acid(scene+hands) … → fx(scene+hands),
-                       composite(hands) → acid(hands) … → fx(hands):
-                       per reachable through pipeline; a through pipeline with no effect of
-                       its run on, or no hand drawn, stands down for its fallback this frame]
-HISTORY    capture    the ring takes its input — the scene by default — exactly once, after
-                      every pipeline
-OUTPUT     output.N   the picture (direct | 1:1 | letterboxed by outputs.fit) — or an
-                      outputs.Handoff for a presenter; the hands over it, the readout,
-                      the flips; dim: Renderer.dim × the view's own (Renderer.dim_pass)
+LAYER      lookback(cover)   the faces' mask, only while the look-back occludes
+           hands.layer       Ghost.layer: the hands alone, own colour + depth — only if a wire reads it
+BACKDROP   backdrop   the scene over `backdrop.image` at `backdrop.alpha` (plan 35: `grounded` merged)
+HISTORY    lookback   the look-back composite over its `image` (the echoes' clock, the dream pulled)
+EFFECT     acid … palette, copy …   one node per wired effect instance, and a `copy` for an
+                      instance drawn on another picture; on, its pass over its input into a
+                      pool texture or its consumer; off, its input read through
+SHOWN      shown(src) one per distinct picture an output shows → the window itself when it is
+                      the picture's only consumer at the frame size, else a frame texture
+                      [a copy chain over a hands composite stands down to its originals
+                       while it bends nothing: Shown.fallback]
+HISTORY    lookback(capture)   the ring takes what is wired to `lookback.capture`, exactly
+                      once, after every Shown, every delay's write and every output's
+                      hands and guide source (a sink: it runs when nothing shows the look-back)
+OUTPUT     output.N   its own `image` wire, else `output.all`'s, else the ground; the hands
+                      over it, the guide over everything, through the window's mutes; the
+                      flips; dim: Renderer.dim × the view's own (Renderer.dim_pass)
 EXIT  views[0].target bound again with its rect and blending, a raise included
 THEN in app._draw_render: glFlush (only with a later output); each later output
   Presenter.present then swap; output 1 swapped last
@@ -330,17 +331,104 @@ of this; `graph.py` still imports the render stack only
 `tests/test_graph_switch.py`, `tests/test_graph_migrate.py`). Pictures
 unmoved: the 661 goldens before it.
 
+**The wired frame** (plan 35). The three paragraphs above (placement,
+wires, the free graph) describe the vocabulary as plan 33 left it; where
+they say `frame`, `fx.image`, `history`, `ghost`, `readout`, `media.a` or a
+pipeline, read the wired frame's names and wires below (`hands`,
+`hands.guide`, `lookback`, `channel.a`; the run is wires into
+`output.all.image`). Since plan 35 there is no default graph:
+every section the app reads is a **wired frame** (`"frame": "wired"`), and
+`graph.build_graph(views, wiring, clouds, effects)` builds only what its
+wires reach (`graph.reaches`: a path to an output's port, to `output.all`'s
+or to `lookback.capture`). The frame's own nodes are ordinary: `shape`,
+`scene` (its `geometry` port takes the shape, the hands and the clouds the
+rig lists, in wire order), `backdrop` (`scene` over `image`), `pattern`,
+`lookback` (`image`, `capture`, `occluder`), `hands[.n]` with its
+`.layer` and `.guide`, `channel.<c>`, effects and their `copy`, and the
+outputs. `frame`, `fx`, `grounded`, `capture` and `cover` are not nodes of
+the section, and there are no pipelines: the old per-pipeline run is wires
+and copies. **`Shown`** is the one internal end: one per distinct picture
+an output shows, carrying the direct paint into a window, the stand-down
+(`Shown.fallback`, `Output.settle`) and the count of users per frame
+through the mutes. **An output** shows its own `image`, `hands` and `guide`
+wires, else **All outputs'** (`output.all`: a node with the output ports, no
+params, always on the canvas), else its ground (`(0, 0, 0, View.bg_alpha)`:
+black, or see-through in overlay). **The mutes** are the window's own
+`output.N.scene` (picture) and `output.N.hands` switches, read every frame
+(`Frame.users` counts through them), never in a preset, never a rebuild;
+a hands mute wins over a stand-down. **The capture is a sink**: the
+internal `Capture` runs once, after every `Shown`, every `DelayWrite` and
+every output's hands and guide source, so what is wired into
+`lookback.capture` runs although nothing shows the look-back, and it closes
+no loop. A node no path reaches is unreached (kept, drawn faint, never
+built); a wire into `output.N` past the window count builds nothing and is
+reported dormant. **Old presets** are migrated to the wiring today's frame
+drew (`graphmigrate.migrate`: plan 33's run, then `renamed`, then
+`wired_section`, written once into All outputs by `frame_wires`), and each
+golden output state is that output's own wires (`output_wires`). It is
+proved, not hoped: `graph.signature(g)` fingerprints the chains behind each
+output's `image`, `hands`, `guide`, `depth` and stand-down plus the order
+of the nodes a frame can show, and `tests/fixtures/frame-signatures.json`
+records 125 cases first made by the deleted `default_graph`
+(`tests/test_graph_frame.py::test_the_wired_frame_builds_what_default_graph_builds`).
+The 717 goldens before the plan did not move; 24 are new, for three `/6`
+fixtures (741; 757 with plan 34 T4's resize fixtures). The ids are renamed in one table (`graph.new_id`,
+`old_id`, `param_prefix`; `graphmigrate.renamed`), and a save writes the
+lowest schema that loses nothing (`graphmigrate.unwired`).
+
+**Feedback, look-back sources and the resize** (plan 34, rows 353–371).
+Four node kinds on the wired frame: `delay`, `resize`, `echo.<k>` and
+`dream`. **The delay is z⁻¹ in `build_graph`.** `Delay` has no inputs and
+paints the read side of a half-float ping-pong pair the renderer holds
+under its name (`Renderer.delay_pair`, `render.DelayPair`, swapped by
+`Renderer._turn_delays` at the frame's start, kept across rebuilds — not
+loads: a preset load resets them, `Renderer.reset_delays` — and
+released `SIZED_KEEP_FRAMES` frames after the delay leaves the graph), so
+an edge into it is no dependency and a loop through one is legal.
+`_Build.build` adds, for each delay the wires reach, a `DelayWrite`
+(`<delay>(write)`, timed on SYSTEM) *before* the internal `Capture`, in the
+capture's `after`, the way `Shown` ends are; it paints the delay's `image`
+into the write side at the input's own size, else the frame's, and an
+input that read nothing leaves the pair unwritten (the delay then reads
+nothing next frame and the faces show the pattern). A read of an echo at an
+output's `hands` is ordered before the capture the same way. **`echo.k`
+and `dream` are picture sources** over the look-back's ring
+(`Lookback.echo_slot`); the ring keeps capturing for them with the
+look-back off (`Graph.reads_ring` → `Lookback.keep`). **Own size.**
+`Node.own_size(frame)` is None for every node of plan 33 and earlier; a
+delay, an echo, the dream and a resize have one, which breaks "the consumer
+decides" on purpose: `Node.size_for` asks an own-sized input for its own
+size, `Effect` after one runs at it (its pool keyed by that size), and a
+consumer of another shape gets the picture fitted by cover through
+`Renderer._refit` (`OWN_FIT`; a delay's `#fit` target for a node that binds
+a texture). **`ResizeNode`** is built by `_Build._make` only where the wires
+reach it, its params from its entry (`params.declare_resizes`, group
+`resize`, values in `ViewState.resize`, read as `Frame.resizes`); it makes
+its picture once a frame, when pulled, into a half-float `(name#own, size)`
+target by one `_refit` (crop as a centre and a size, cover/contain/stretch,
+mipmapped trilinear past a 2× shrink or nearest) and `_prune_sized` drops
+the targets it left; a resize with no input is dormant, and one no wire
+takes anywhere is not built (its params stay while its entry does). **The
+loop check** reads what the wires say plus `HIDDEN_EDGES` in a wired frame
+(`sink_loops`, `loop_words`: `LOOP_FACES`, `LOOP_BACKDROP`, `LOOP_PLAIN`),
+and `FRAME_EDGES` for an old section's read before it migrates; both leave
+an edge into a delay out. GRAPH draws none of the internals: `delay(write)`
+is not a node on the canvas, a delay's `image` port is the pin
+`rin:<delay>/image`. Pictures unmoved: the 741 goldens before the resize fixtures
+(`tests/test_graph_delay.py`, `tests/test_graph_echo.py`,
+`tests/test_graph_resize.py`, `tests/test_graph_feedback.py`).
+
 What the order guarantees, each held by tests in `tests/test_render.py`,
 `tests/test_outputs.py`, `tests/test_ghost.py`, `tests/test_graph.py` and
 `tests/test_golden_frames.py`:
 
-- **Every golden frame is drawn byte for byte**: 596 frames — every
+- **Every golden frame is drawn byte for byte**: 757 frames — every
   factory preset in every output state, hands absent and present, the
   other wirings, the fixture presets (plan 30's three placements and
-  plan 28's two wire fixtures among them) and a recorded cloud — on the gate
+  plan 28's two wire fixtures and plan 34's five among them) and a recorded cloud — on the gate
   Mac's renderer ("Apple M3 Max"); elsewhere the test skips
   (`tests/test_golden_frames.py::test_every_golden_frame_is_drawn_byte_for_byte`).
-- **The graph is built once per set of switches and reused**, its order
+- **The graph is built once per window count and wiring and reused** (a mute rebuilds nothing), its order
   puts dependencies first, and a pipeline no view takes this frame does
   not run (`tests/test_graph.py::test_the_graph_is_built_once_per_set_of_switches_and_reused`,
   `::test_order_puts_dependencies_first_and_ties_in_insertion_order`,
@@ -1014,7 +1102,7 @@ docstring has the rest.
 | `patterns.py` | the face patterns' eight inputs and seventeen modes as data: names, meanings, what each input does in each mode | `INPUTS`, `MODES`, `NAMES`, `SCALE` … `SPREAD`, `effect`, `ignores`, `label`, `tip` | imports nothing (by convention); `params`, `render` and `ui_patterns` read it; `shaders/patterns.glsl`'s accessors and header are held to it, and modes are appended, never inserted (`tests/test_patterns.py`) |
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
 | `field.py` | the instance field: where each copy goes — the flat layouts, the six 3D lattices, the fit to the screen and its snapped zoom and pan, the painter's order between copies, the cull | `field` (per frame: a row of centre, scale, alpha per drawn copy), `lattice`, `inst_positions`, `fit_dims`, `NAMES`, `LAYOUTS_3D` | pure numpy, imports only `geometry`; no GL, no state but caches (`tests/test_field.py`) |
-| `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the default graph from the switches and the `Wiring`, the effect nodes and their runs, placement on an image edge, the hands node, the point-cloud node, the preset's `graph` section, the wiring and the placements in words | `Node`, `Graph` (`order`, `evaluate`, `pulled`, `timed`, `timed_in`, `pool`, `insert`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Fx` (the pipeline end), `History`, `Capture`, `Output`, `Wired`, `Wiring`, `PatternNode`, `BackdropNode`, `SwitchNode`, `default_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `SwitchAt`, `Wire`, `wire_error`, `read_graph`, `run_of`, `reaches`, `SINKS`, `RESERVED`, `source_into`, `channel_into`, `placement_words`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and the default graph (`tests/test_graph_json.py`) |
+| `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the default graph from the switches and the `Wiring`, the effect nodes and their runs, placement on an image edge, the hands node, the point-cloud node, the preset's `graph` section, the wiring and the placements in words | `Node`, `Graph` (`order`, `evaluate`, `pulled`, `timed`, `timed_in`, `pool`, `insert`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Fx` (the pipeline end), `History`, `Capture`, `Output`, `Wired`, `Wiring`, `PatternNode`, `BackdropNode`, `SwitchNode`, `Delay`, `DelayWrite` (z⁻¹, plan 34), `EchoNode`, `DreamNode`, `ResizeNode` (own size, `Node.own_size`, built by `_Build._make`), `DelayAt`, `ResizeAt`, `EchoAt`, `DreamAt`, `sink_loops`, `loop_words`, `HIDDEN_EDGES` (in a wired frame; `FRAME_EDGES` for an old section's read), `default_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `SwitchAt`, `Wire`, `wire_error`, `read_graph`, `run_of`, `reaches`, `SINKS`, `RESERVED`, `source_into`, `channel_into`, `placement_words`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and the default graph (`tests/test_graph_json.py`) |
 | `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches; the scene's instanced draws (one 3D pass, one vec4 a copy) | `Renderer` (`draw`, `draw_outputs`, `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `pool_at`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions` (re-exported from `field`), `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
 | `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; one effect's pass for a graph node (every effect is a `graph.Effect` node where the graph wires it) | `FxState` (`names`, `live`, `advance_to`, `face_map`), `FxChain` (`run_one`, `pool`, `fit_pool`, `ready`), `FACE_MAPS`, `declare` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `@order` is parsed and read only by `graphmigrate`; `fx.face_map` is modulatable (`tests/test_fx.py`) |
 | `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |

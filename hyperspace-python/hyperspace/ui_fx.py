@@ -54,7 +54,7 @@ BACKDROP = "→ backdrop"
 UNREACHED = "reaches nothing"
 # a picture port's sink → the group it ends in (an output, an aux: by name)
 _ENDS = {"shape.faces": FACES, "pattern.media": PATTERN, "backdrop.image": BACKDROP,
-         "fx.image": RUN}
+         "fx.image": RUN, "output.all.image": RUN}     # (plan 35: a wired frame's run's end)
 EMPTY = "no effects in the graph — add one on GRAPH (right-click the canvas)"
 SHOW = "Show on GRAPH"
 NAME_W = 0.42       # of the page's width: a row's name chip
@@ -87,27 +87,35 @@ def groups(spec) -> list[tuple[str, list[str]]]:
     destination, whatever their pick: the page shows what is wired);
     an effect ending in two places is in each group; within a group the
     effects are in path order, the head first. Empty groups are left out.
-    Pure: it reads the spec alone (D1's placements as the wires they are)."""
+    Pure: it reads the spec alone (D1's placements as the wires they are).
+
+    Plan 35 T3: in a wired frame (every load's) the run is the effects from
+    the look-back into All outputs, and a name is a wired frame's (`hands`
+    the geometry, `lookback` no effect); a copy groups with its wires."""
     if spec is None:
         return []
+    wired = bool(getattr(spec, "wired", False))
+
+    def kind_of(name: str) -> str | None:
+        return wire_node_kind(name, wired=wired)
     # (the picture ports `graph.reaches` follows: a value port carries none)
     wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS]
     names = {e.name for e in spec.effects}
     for w in wires:
-        names.update(n for n in (w.src, w.node) if wire_node_kind(n) == "effect")
+        names.update(n for n in (w.src, w.node) if kind_of(n) == "effect")
     out_of: dict[str, list] = {}
     for w in wires:
         out_of.setdefault(w.src, []).append(w)
-    run = run_of(spec)
+    run = run_of(spec, "lookback", "output.all.image") if wired else run_of(spec)
     ends: dict[str, dict[str, int]] = {}      # effect → its ends → its distance from each
 
     def follow(node: str, seen: frozenset[str]) -> dict[str, int]:
         got: dict[str, int] = {}
         for w in out_of.get(node, ()):
-            kind, port = wire_node_kind(w.node), w.port
+            kind, port = kind_of(w.node), w.port
             if w.node in seen:
                 continue
-            if kind in ("effect", "switch", "composite") and port != "aux":
+            if kind in ("effect", "switch", "composite", "copy") and port != "aux":
                 for end, d in follow(w.node, seen | {w.node}).items():
                     got[end] = min(got.get(end, d + 1), d + 1)
                 continue

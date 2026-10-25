@@ -45,10 +45,10 @@ def test_channel_params_registered(rig):
                    for k in ("slot", "fit", "rate", "pos", "jog", "loop"))
     # (plan 33 T7: `backdrop.channel` and `view.media` retired — which
     # channel each draws is the graph's wire into `backdrop.image` /
-    # `pattern.media`)
-    assert sorted(p.id for p in reg if p.id.startswith("backdrop.")) == [
-        "backdrop.alpha", "backdrop.history"]
-    assert reg["backdrop.history"].kind is Kind.TOGGLE
+    # `pattern.media`; plan 35 T3: and `backdrop.history`, the wire into
+    # `lookback.capture`)
+    assert sorted(p.id for p in reg if p.id.startswith("backdrop.")) == ["backdrop.alpha"]
+    assert reg["backdrop.alpha"].kind is Kind.CONTINUOUS
     views = sorted(p.id for p in reg if p.id.startswith("view.media"))
     assert views == ["view.media_alpha", "view.media_amp", "view.media_mode",
                      "view.media_rate", "view.media_scale"]
@@ -107,7 +107,7 @@ def test_media_preset_is_v4(rig):
     assert rig.presets.document("x")["schema"] == preset.SCHEMA
     # a value away from its default is enough, of each family
     for pid, v in (("media.b.rate", 2.0), ("view.media_alpha", 0.5),
-                   ("backdrop.history", True)):
+                   ("backdrop.alpha", 0.5)):
         was = rig.reg[pid].value
         rig.reg[pid].set(v)
         assert rig.presets.document("x")["schema"] == preset.MEDIA_SCHEMA, pid
@@ -206,9 +206,10 @@ def test_v2_and_v4_both_load(rig):
     assert rig.presets.load("OLD") == []
     assert rig.reg["view.bright"].value == 2.0
     assert rig.presets.load("NEW") == [] and rig.presets.notes == []
-    # (plan 33 T7: the retired choice is read as its wire, never an unknown id)
+    # (plan 33 T7: the retired choice is read as its wire, never an unknown
+    # id — plan 35 V2: in the new ids)
     from hyperspace import graph as G
-    assert G.Wire("media.b", "backdrop.image") in rig.presets.graph.spec.wires
+    assert G.Wire("channel.b", "backdrop.image") in rig.presets.graph.spec.wires
     assert "backdrop.channel" not in rig.reg
     assert rig.reg.media.channels["b"].bin[0] == "shared:x.png"
 

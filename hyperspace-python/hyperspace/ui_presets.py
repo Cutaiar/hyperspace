@@ -74,7 +74,7 @@ from __future__ import annotations
 
 from imgui_bundle import imgui
 
-from . import ui
+from . import preset, ui
 from .library import F_KEYS, HOME_UNSET, PRESETS, LibraryError, slot_key
 from .params import PERFORMANCE_GROUPS
 
@@ -98,10 +98,12 @@ FACTORY_KEY = "\0factory"  # …a group's factory names, and every name it index
 # meaning is its subscribers, which live in the preset) and the media
 # channels and backdrop (plan 32: a channel's values mean nothing without
 # its bin, the preset's media section; the MEDIA page holds them) and (plan
-# 33 S) the switches' picks (nothing without the preset's graph), and the
+# 33 S) the switches' picks and (plan 34 Z) the resizes' values (nothing
+# without the preset's graph), and the
 # band strip's scene, the one session module a project names
 OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS
-                     if g not in ("macro", "mod", "media", "backdrop", "switch")], "band")
+                     if g not in ("macro", "mod", "media", "backdrop", "switch", "resize")],
+                  "band")
 
 
 # ---- state on the panel, created on first use ----
@@ -356,14 +358,36 @@ def strip(panel, group: str) -> None:
 
     # save · as… (· reset on a module strip), flush right
     word = save_label(lib, group) if kind else "save"
+    # plan 35 T7 (row 387): `new` starts a blank preset, on the presets' strip
+    presets = getattr(lib, "presets", None) if group == PRESETS else None
     chips = (word, "as…") if kind else (word, "as…", "reset")
+    if presets is not None:
+        chips = ("new", *chips)
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
+    if presets is not None:
+        if ui.chip("new##new"):
+            _guard(panel, presets.new)
+            invalidate(panel, group)
+        _rect(panel, f"strip.{group}.new")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("A new preset: factory values, nothing wired — "
+                              "black until something is wired to an output")
+        imgui.same_line()
+    # R17: a preset `new` made and nothing saved names itself — a user
+    # preset that happens to be called `untitled` is never written over
+    # (the flag counts while `untitled` is current: an undo of New hands
+    # back the preset before, which saves as it always did)
+    unsaved = presets is not None and cur == preset.UNTITLED_PRESET and (
+        bool(getattr(presets, "unsaved", False)) or lib.path_of(group, cur) is None)
     if save_chip(panel, group, word, is_dirty):
-        _guard(panel, lib.overwrite, group)
-        invalidate(panel, group)
+        if unsaved:
+            _begin_naming(panel, group, "")      # unnamed: save acts as as…
+        else:
+            _guard(panel, lib.overwrite, group)
+            invalidate(panel, group)
     imgui.same_line()
     if ui.chip("as…"):
-        _begin_naming(panel, group, cur or "")
+        _begin_naming(panel, group, "" if unsaved else (cur or ""))
     _rect(panel, f"strip.{group}.as")
     if imgui.is_item_hovered():
         imgui.set_tooltip("Save the group's settings as a new user preset")

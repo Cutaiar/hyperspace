@@ -46,9 +46,10 @@ decoded before the first frame is drawn.
 
 A golden is the SHA-256 of the full-resolution RGBA frame as GL returns
 it, plus a quarter-size PNG for a person (one file per distinct
-picture). The pipeline each state reached (`outputs.route`: SCENE,
-SCENE_HANDS, HANDS or none, and the hands laid over after) is recorded
-beside it, so the manifest lists what each preset actually reaches.
+picture). The pipeline each state reached (the retired `outputs.route`'s
+table, kept here as data, `ROUTES`: SCENE, SCENE+HANDS, HANDS or none,
+and the hands laid over after) is recorded beside it, so the manifest
+lists what each preset actually reaches.
 `tests/test_golden_frames.py` compares every hash exactly, on the
 renderer the goldens were recorded on (`GL_RENDERER`), and skips with a
 note elsewhere.
@@ -56,6 +57,8 @@ note elsewhere.
     uv run python tools/golden_frames.py              # diff against the goldens
     uv run python tools/golden_frames.py --record     # (re)record them
     uv run python tools/golden_frames.py --only party-trip,legacy6 [--record]
+    uv run python tools/golden_frames.py --signatures # plan 35: a new case's signature only
+    uv run python tools/golden_frames.py --names      # plan 35: the fixtures' node names only
 
 A diff writes a contact sheet of every frame that moved (golden | now |
 difference ×4) under docs/plans/assets/26-render-graph/. `--record` with
@@ -163,12 +166,36 @@ FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 # (acid.2 on the faces at 1024² and as output 2's picture). Plan 33 T5's
 # one: a switch onto the faces at select 2, the still (in1 an empty channel,
 # in3 the still through acid.2: never made)
+# Plan 35 T3's `channel-out-only` (`hyperspace.preset/6`): channel a's still
+# wired straight into All outputs, nothing else — no scene pass. Plan 34
+# T4's `resize-crop` (a wired frame, below)
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
-                                   "media-chain-backdrop", "branch-two-sizes", "switch-faces")
+                                   "media-chain-backdrop", "branch-two-sizes", "switch-faces",
+                                   "channel-out-only", "resize-crop")
+# plan 34 T2's two: the scene through a delay onto the faces (the infinite
+# mirror), and a loop of effects through a delay (trails: `delay →
+# zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
+# from a cleared state over the rig's FRAMES frames, seven feedback steps.
+# Plan 34 T3's one: the look-back's third-newest echo on the faces, the
+# look-back off and a capture every frame (`echo.3 → shape.faces`): the
+# pattern for the first three frames, then the scene of three frames back
+FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces")
+# plan 35 T3's three wired frames (`hyperspace.preset/6`): the marker alone
+# (black: nothing wired), channel a alone into All outputs (a media
+# fixture, above), and acid on All outputs with a copy of it over a
+# composite of the look-back and the hands layer on output 2 alone, whose
+# hands port is `ground`. Plan 34 T4's two (`/6` wired frames, each state
+# under its window's mutes): `resize-faces`, the owner's headline — the
+# scene made at 64² square, nearest, into a delay onto the faces (`scene →
+# resize → delay → shape.faces`) — and `resize-crop`, channel a's still
+# cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
+WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
+                                   "resize-faces", "resize-crop")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
-                                    *MEDIA_FIXTURES)
+                                    *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
+                                    "through-one-output", "resize-faces")
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 
@@ -204,14 +231,15 @@ import numpy as np
 
 from hyperspace import config as config_mod
 from hyperspace import devices as devices_mod
-from hyperspace import envelope, lfo, sequencer, tempo
+from hyperspace import envelope, graphmigrate, lfo, sequencer, tempo
+from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import default_params
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
-from hyperspace.graph import Wiring
+from hyperspace.graph import Wiring, build_graph, read_graph, signature
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
@@ -219,7 +247,7 @@ from hyperspace.lookback import DreamState
 from hyperspace.media import ids as media_ids
 from hyperspace.media.channels import MediaState
 from hyperspace.media.source import FETCHING
-from hyperspace.outputs import NAMES, Switches, View, route
+from hyperspace.outputs import Switches, View
 from hyperspace.params import build_registry
 from hyperspace.preset import FACTORY_PRESETS, Presets
 from hyperspace.render import Renderer
@@ -460,24 +488,98 @@ def context() -> moderngl.Context:
     return _CTX
 
 
+# the retired `outputs.route`'s table, as data (plan 35 T3: the goldens'
+# states are wiring now, and an output's end is named for its picture, not
+# a pipeline; T4 deleted the table): (scene, hands shown, through with an
+# effect on) → (the pipeline it reached, the hands laid over after)
+ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE", True),
+          (True, True, True): ("SCENE+HANDS", False), (False, False, False): ("none", False),
+          (False, True, False): ("none", True), (False, True, True): ("HANDS", False)}
+
+
+def expected_route(state: dict, fx_on: bool, visible: bool) -> tuple[str, bool]:
+    """What an output in `state` shows, by today's table (`ROUTES`)."""
+    shown = bool(state["hands"]) and bool(visible)
+    return ROUTES[(bool(state["scene"]), shown, shown and bool(state["through"]) and fx_on)]
+
+
+def plan33_section(presets, slug: str) -> tuple[dict, set[str]]:
+    """Preset `slug`'s section as plan 33 wrote it (`migrate` with `wire`
+    off, after the load declared its instances), and the effect files —
+    what a WIRED variant takes its run from."""
+    doc = presets.lib.read("presets", slug)
+    gs = presets.graph
+    old, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc), wire=False)
+    files = {n.partition(".")[0] for n in gs.specs()}
+    return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
+
+
+def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
+    """The rig's wired frame (plan 35 T3, row 392): the preset's section as
+    the load wired it — or a WIRED variant's (`variant_section` over the
+    preset's run, wired as a load wires it) — and each view's state as
+    that output's own wires (`output_wires`); the mutes are all on.
+
+    A wired fixture (`WIRED_FIXTURES`, `/6`) is a frame of its own, not
+    today's frame under switches: its section is left as it is, but for
+    a through state where All outputs lays the hands (`_lays_hands`), which
+    takes what OUTPUT's "hands through the effects" writes
+    (`Shows(through=True)`); its scene and hands are the window's
+    mutes (`state_views`). An output draws only what is wired."""
+    presets = rig.presets
+    if wiring is None:
+        wired = presets.graph.free_doc()
+    else:
+        old, files = plan33_section(presets, slug)
+        run = tuple(read_graph(old, effects=files).wiring().run or ())
+        vsection = variant_section(wiring, run)
+        wired = graphmigrate.wired_section(graphmigrate.renamed(vsection),
+                                           read_graph(vsection, effects=files))
+    for k, (_, sw) in enumerate(states):
+        if slug not in WIRED_FIXTURES:
+            wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+        elif sw["through"] and _lays_hands(wired):
+            wired = graphmigrate.with_output_wires(wired, k + 1,
+                                                   graphmigrate.Shows(through=True))
+    return wired
+
+
+def _lays_hands(section: dict) -> bool:
+    """Whether All outputs lays a hands layer over its picture: only then
+    has "hands through the effects" any hands to put through (a frame that
+    wires no hands shows none, through or not)."""
+    return any(w.get("to") == f"{G.ALL_OUTPUTS}.hands" and w.get("from") != G.GROUND
+               for w in section.get("wires", []))
+
+
+def state_views(slug: str, states, size, targets) -> list[View]:
+    """The rig's windows: every mute on (the states are wiring), but for a
+    wired fixture's, whose picture and hands mutes are its state's."""
+    if slug not in WIRED_FIXTURES:
+        return [View(Switches(), size, target=f) for f in targets]
+    return [View(Switches(scene=sw["scene"], hands=sw["hands"]), size, target=f)
+            for f, (_, sw) in zip(targets, states)]
+
+
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
            wiring: dict | None = None, config: str | None = None) -> tuple[list[Shot], dict]:
-    """Render one rig's states (under `wiring`, the default graph's when
+    """Render one rig's states (under `wiring`, the preset's own when
     None; with `config`'s devices listed, A4b); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
-    rig drew reaches the next."""
+    rig drew reaches the next. Plan 35 T3 (row 392): each state is its
+    output's wiring (`rig_section`), every window's mutes on."""
     ctx = context()
     rig = Rig(slug, hands, ctx)
-    if wiring is not None:
-        # plan 33 R23: the other wiring keeps the preset's run — the run the
-        # load migrated (`graphmigrate`), which the order-built stack these
-        # goldens were recorded on drew; a wiring that says none runs none
-        rig.renderer.wiring = replace(Wiring(**wiring), run=rig.renderer.wiring.run)
+    base = rig.presets.graph.free_doc() or {}
+    section = rig_section(rig, slug, states, wiring)
+    spec = read_graph(section, effects={n.partition(".")[0] for n in rig.fx.specs})
+    assert not spec.notes, (slug, spec.notes)
+    rig.renderer.wiring = spec.wiring()
     if config is not None:
         rig.list_devices(config)
     try:
         targets = [_target(ctx, size, SAMPLES if k == 0 else 0) for k in range(len(states))]
-        views = [View(Switches(**sw), size, target=f) for f, (_, sw) in zip(targets, states)]
+        views = state_views(slug, states, size, targets)
         for _ in range(FRAMES):
             rig.frame(views, logical, dpr)
         assert ctx.error == "GL_NO_ERROR", ctx.error
@@ -490,24 +592,25 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         visible = bool(rig.renderer.stats.get("layer") or rig.renderer.stats.get("in_scene"))
         shots = []
         for k, ((name, sw), f) in enumerate(zip(states, targets)):
-            # the pipeline the graph's output settled on (plan 26 A3: the
-            # wiring); with the default wiring it is `outputs.route`'s
+            # what the output settled on (its end, the hands laid over):
+            # for a factory preset in its own wiring, `outputs.route`'s
+            # table (`expected_route`) — a picture where it names one, the
+            # hands over where it lays them
             key, over = rig.renderer.stats["routes"][k]
-            if wiring is None and rig.renderer.wiring == Wiring():    # (a fixture's graph: its own)
-                assert (key, over) == route(Switches(**sw), fx_on, visible), (slug, name)
+            route_name, hands_over = expected_route(sw, fx_on, visible)
+            if wiring is None and slug not in FIXTURE_PRESETS:
+                assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
+                    slug, name, key, over)
             raw = _read(ctx, f, size)
-            # plan 28 N4: an output whose picture is a wire's shows no
-            # pipeline of `outputs.route`'s table (its end is its own,
-            # `graph.Wired`, keyed `wire(output.<n>)`): its route reads
-            # "none" and its entry says what feeds the wire (`wired`); any
-            # other key not in the table is a bug, and raises here
-            wired = None
-            if isinstance(key, str) and key.startswith("wire("):
-                port = f"{key[len('wire('):-1]}.image"
-                wired = next(w.src for w in rig.renderer.wiring.wires if w.dst == port)
+            # plan 28 N4: an output whose picture is the preset's own wire
+            # shows no pipeline of the table: its route reads "none" and its
+            # entry says what feeds the wire (`wired`, in the old ids, as
+            # the manifest has them)
+            port = f"output.{k + 1}.image"
+            wired = next((G.old_id(w["from"]) for w in base.get("wires", [])
+                          if w.get("to") == port), None)
+            if wired is not None or key is None:
                 route_name = "none"
-            else:
-                route_name = NAMES[key] if key is not None else "none"
             shots.append(Shot(slug, hands, name, route_name,
                               bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
                               tuple(size), raw[::-1].copy(), wired))
@@ -712,11 +815,233 @@ def summary(doc: dict) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- the frame's signatures (plan 35 T2)
+#
+# Plan 35 B (Review Focus 1): every case the goldens draw — each preset and
+# fixture in the eight states as one rig's eight outputs, and the WIRED
+# variants over their presets and states — built by `build_graph` from the
+# preset's section written as a wired frame (`graphmigrate.wired_section`)
+# with each output's state as its own wires (`output_wires`) and every mute
+# on. `graph.signature` must equal, node for node, the frame the retired
+# `default_graph` built from the switches: T2 recorded it to SIGNATURES and
+# T3 re-recorded it, both from `default_graph`; T4 deleted the oracle, so
+# the file is the reference now (`tests/test_graph_frame.py`). A recorded
+# case is never written again: `--signatures` adds a new case alone.
+
+SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
+
+
+class Loader:
+    """Each preset loaded as the rig loads it (the real `Presets` over a
+    scratch library, the fixtures copied in), headless: no renderer, no
+    media. `load(slug)` gives the landed spec, its section
+    (`GraphSection.free_doc`: the migrated one) and the effect instances
+    then held."""
+
+    def __init__(self):
+        self._home = tempfile.TemporaryDirectory(prefix="hyperspace-signatures-")
+        home = Path(self._home.name)
+        own = home / "presets"
+        own.mkdir(parents=True, exist_ok=True)
+        for slug in FIXTURE_PRESETS:
+            (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
+        self.view, self.fx = ViewState(), FxState()
+        chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
+        reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain), None,
+                             DreamState(), self.fx, ghost=GhostState())
+        clock = tempo.Clock(now=lambda: T0)
+        tempo.register(reg, clock)
+        lfo.register(reg, lfo.LFOs(), clock)
+        envs, seq = envelope.Envelopes(), sequencer.Sequencer()
+        envelope.register(reg, envs, clock)
+        sequencer.register(reg, seq, clock)
+        lib = Library(home)
+        lib.attach(reg)
+        router = Router(reg, Bindings())
+        router.use_bank(envs, clock)
+        router.use_sequencer(seq, envs, clock)
+        self.presets = Presets(lib, reg, router)
+
+    def load(self, slug: str):
+        """(the spec and section as plan 33 read the file — the one the
+        retired `default_graph` read; the effect instances held; the wired frame the
+        load landed — `build_graph`'s). Plan 35 T3: every load lands a wired
+        frame, so the plan 33 half is the same file through `migrate` with
+        its `wire` off, after the load declared its instances."""
+        self.presets.load(slug)
+        gs = self.presets.graph
+        doc = self.presets.lib.read("presets", slug)
+        old, _ = graphmigrate.migrate(doc, gs.specs(), desk=self.presets._template_rows(doc),
+                                      wire=False)
+        effects = tuple(sorted(self.fx.specs))
+        section = old.get("graph") if isinstance(old.get("graph"), dict) else {}
+        spec = read_graph(section, effects={e.partition(".")[0] for e in effects})
+        return spec, section, effects, gs.free_doc()
+
+    def close(self) -> None:
+        self._home.cleanup()
+
+
+def _effects_on(slug: str) -> bool:
+    """Whether a factory preset has an effect on, as its goldens recorded
+    it (the manifest's `effects_on`: what draws `SOLO_FX`)."""
+    said = load_manifest().get("presets", {}).get(slug, {})
+    return bool(said.get("absent", {}).get("effects_on"))
+
+
+def signature_keys() -> list[str]:
+    """Every case's key, `<slug>/<variant>`: `states` (the eight), a WIRED
+    variant's name, and (plan 35 T3) the window alone — `solo`, and
+    `solo-scene+hands+through` for a preset with an effect on (`SOLO`,
+    `SOLO_FX`) — and a CLOUDED rig's name, as the goldens draw them."""
+    # (a `/6` fixture — plan 35 T3's — is a wired frame of its own: no
+    # section before it, so no `default_graph` recorded to prove it against)
+    keys = [f"{slug}/states" for slug in (*FACTORY_PRESETS, *FIXTURE_PRESETS)
+            if slug not in WIRED_FIXTURES]
+    for slug in FACTORY_PRESETS:
+        keys += [f"{slug}/{name}" for name, _, _, which in WIRED
+                 if which is None or slug in which]
+        keys += [f"{slug}/{name}" for name, _ in SOLO]
+        if _effects_on(slug):
+            keys += [f"{slug}/{name}" for name, _ in SOLO_FX]
+        keys += [f"{slug}/{name}" for name, _, _, which in CLOUDED if slug in which]
+    return keys
+
+
+# a WIRED variant's wiring field → the old section's entry that says it
+_VARIANT_ENTRY = {"hands": lambda v: {"kind": "hands", "into": v},
+                  "blend": lambda v: {"kind": "hands", "laid": v},
+                  "history": lambda v: {"kind": "history", "holds": v}}
+
+
+def variant_section(fields: dict, run: tuple[str, ...]) -> dict:
+    """A WIRED variant as the section that reads as it (plan 35 T3): a
+    wiring of that one field (`Wiring(**fields)`) over the preset's run,
+    in the old ids, as a pre-35 preset would have said it."""
+    nodes = [_VARIANT_ENTRY[k](v) for k, v in fields.items()]
+    for e in run:
+        file, n = G.split_instance(e)
+        if n > 1:
+            nodes.append({"kind": "effect", "file": file, "instance": n})
+    wires = (graphmigrate._chain("frame", list(run), "fx.image") if run
+             else [{"from": "frame", "to": "fx.image"}])
+    return {"nodes": nodes, "wires": wires}
+
+
+def signature_case(loader: Loader, key: str):
+    """(the states, the old spec, the old section, the effect instances,
+    the wired section, the cloud roles) of case `key`. A WIRED variant is
+    the golden rig's: a wiring of that one field over the preset's run
+    (`_shoot`), said as the section that reads as it, and wired as a load
+    wires it. `solo` and `solo-…` are one window; a CLOUDED rig lists
+    its device's role."""
+    slug, _, variant = key.partition("/")
+    spec, section, effects, wired = loader.load(slug)
+    files = {e.partition(".")[0] for e in effects}
+    solo = dict(SOLO + SOLO_FX)
+    if variant == "states":
+        return STATES, spec, section, effects, wired, ()
+    if variant in solo:
+        return ((variant, solo[variant]),), spec, section, effects, wired, ()
+    cloud = next((c for c in CLOUDED if c[0] == variant), None)
+    if cloud is not None:
+        return (tuple((n, dict(STATES)[n]) for n in cloud[2]), spec, section, effects, wired,
+                ("scan",))
+    _, fields, names, _ = next(v for v in WIRED if v[0] == variant)
+    run = tuple(spec.wiring().run or ())
+    vsection = variant_section(fields, run)
+    vspec = read_graph(vsection, effects=files)
+    assert vspec.wiring() == replace(Wiring(**fields), run=run), (key, vspec.wiring())
+    vwired = graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec)
+    return tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, ()
+
+
+def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
+    """(the wired frame's graph, the wired section) for one case (see
+    above). `wired`: the frame as the load wired it — checked here to be
+    `wired_section` of the old section, so the proof is the load's — None,
+    that alone."""
+    files = {e.partition(".")[0] for e in effects}
+    made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
+    if wired is None:
+        wired = made
+    assert read_graph(made, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+    for k, (_, sw) in enumerate(states):
+        wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+    got = read_graph(wired, effects=files)
+    assert not got.notes, got.notes
+    mutes_on = [View(Switches(), (W, H)) for _ in states]
+    new = build_graph(mutes_on, got.wiring(), tuple(clouds), effects)
+    return new, wired
+
+
+def as_json(sig):
+    """A signature as JSON lists (tuples → lists)."""
+    if isinstance(sig, tuple):
+        return [as_json(x) for x in sig]
+    return sig
+
+
+def record_signatures() -> dict:
+    """A case SIGNATURES lacks (a fixture added since), its signature from
+    `build_graph`, into SIGNATURES; every recorded case is kept as it is
+    (plan 35 T4: the file is the reference the retired `default_graph`
+    wrote — rewriting it from the builder would prove the builder by
+    itself)."""
+    out = json.loads(SIGNATURES.read_text()) if SIGNATURES.exists() else {}
+    loader = Loader()
+    try:
+        for key in signature_keys():
+            if key not in out:
+                new, _ = frame_graphs(*signature_case(loader, key))
+                out[key] = as_json(signature(new))
+    finally:
+        loader.close()
+    SIGNATURES.parent.mkdir(parents=True, exist_ok=True)
+    SIGNATURES.write_text(json.dumps(out, indent=1) + "\n")
+    return out
+
+
+def record_names() -> int:
+    """Plan 35 T3, T4: every fixture's recorded render nodes (`fixtures.
+    <slug>.<hands>.nodes`, `Graph.timed`) rewritten as this build names
+    them — the ends for their pictures, not the pipelines (T3), every node
+    in the new ids (T4: `lookback`, `lookback(capture)`, `hands.layer`,
+    `channel.a` …) — and nothing else: no `goldens` entry, hash or PNG is
+    touched (asserted). Returns how many lists changed."""
+    doc = load_manifest()
+    before = json.dumps(doc["goldens"])
+    changed = 0
+    for slug in FIXTURE_PRESETS:
+        said = doc.get("fixtures", {}).get(slug)
+        if said is None:
+            continue
+        _, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR)
+        gc.collect()
+        if said["present"].get("nodes") != info["nodes"]:
+            said["present"]["nodes"] = info["nodes"]
+            changed += 1
+    assert json.dumps(doc["goldens"]) == before
+    MANIFEST.write_text(json.dumps(doc, indent=1) + "\n")
+    return changed
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--record", action="store_true", help="write the goldens")
     ap.add_argument("--only", default="", help="comma-separated preset slugs")
+    ap.add_argument("--signatures", action="store_true",
+                    help="add a new case's frame signature (plan 35; recorded ones kept)")
+    ap.add_argument("--names", action="store_true",
+                    help="rewrite the fixtures' recorded render node names only (plan 35)")
     a = ap.parse_args()
+    if a.signatures:
+        got = record_signatures()
+        print(f"{len(got)} frame signatures in {SIGNATURES.relative_to(ROOT)}")
+        return
+    if a.names:
+        print(f"rewrote {record_names()} fixtures' node names; no golden touched")
+        return
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
     if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")

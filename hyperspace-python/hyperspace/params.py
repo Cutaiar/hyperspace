@@ -87,6 +87,7 @@ from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
+from .view import RESIZE_ASPECTS, RESIZE_FILTERS, RESIZE_FITS, RESIZE_SIDES, ResizeState
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
@@ -118,8 +119,10 @@ F_KEYS = 8
 # preset's, `seq.run` and the playhead are not persisted at all)
 # `switch` (plan 33 S): each switch node's `select`, the preset's, declared
 # while its graph holds the switch (declare_switches)
+# `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
+# crop, the preset's, declared while its graph holds the entry (declare_resizes)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -987,6 +990,93 @@ def declare_switches(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 34 Z: the resizes' values ----
+RESIZE_GROUP = "resize"
+_RESIZE_KEYS = ("size", "aspect", "fit", "filter", "crop_x", "crop_y", "crop_w", "crop_h")
+_RESIZE_ID = re.compile(r"resize(?:\.(?:[2-9]|[1-9][0-9]+))?\.(size|aspect|fit|filter|crop_x"
+                        r"|crop_y|crop_w|crop_h)")
+
+
+def resize_ids(name: str) -> list[str]:
+    """Resize node `name`'s params (`resize.2` → `resize.2.size` …), in order."""
+    return [f"{name}.{k}" for k in _RESIZE_KEYS]
+
+
+def is_resize_id(pid: str) -> bool:
+    """Is `pid` one of a resize's values — one that exists only while a
+    preset's graph holds that resize (plan 34 Z)? A preset load sorts such
+    ids against the graph it lands, as it does a switch's `select`."""
+    return bool(_RESIZE_ID.fullmatch(pid))
+
+
+def _resize_state(r: Registry) -> dict[str, ResizeState]:
+    """The states the resize params write, resize name → `ResizeState`: the
+    view state's (`ViewState.resize`, which the renderer reads once a
+    frame), kept by `build_registry` as `r.resize_state`; a dict of the
+    registry's own for one built without a view (as `_switch_state`)."""
+    state = getattr(r, "resize_state", None)
+    if not isinstance(state, dict):
+        state = r.resize_state = {}
+    return state
+
+
+_RESIZE_TIPS = {
+    "size": "The long side {name} makes its picture at, in pixels: what comes after "
+            "it (a delay, an effect) runs at that size.",
+    "aspect": "{name}'s shape: its input's aspect, or square.",
+    "fit": "How {name}'s crop is laid into its size: cover crops, contain "
+           "letterboxes, stretch fills.",
+    "filter": "How {name} samples its input: linear (mipmapped for a big "
+              "reduction), or nearest — hard pixels.",
+    "crop_x": "The centre of {name}'s crop across its input, 0 left … 1 right.",
+    "crop_y": "The centre of {name}'s crop down its input, 0 top … 1 bottom.",
+    "crop_w": "The width of {name}'s crop, a share of its input's.",
+    "crop_h": "The height of {name}'s crop, a share of its input's.",
+}
+
+
+def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The resizes' params (plan 34 Z), as `declare_switches` does the
+    switches': for each resize `names` holds, `size` (an enum over
+    `RESIZE_SIDES`), `aspect`, `fit` and `filter` (enums), and the crop
+    (`crop_x`, `crop_y` 0–1; `crop_w`, `crop_h` 0.01–1) — group `resize`
+    (a performance group: the preset's), modulatable — over a
+    `ResizeState` made when first declared and kept while the name stays;
+    those of every resize no longer named dropped, with their states.
+    Returns the ids that appeared or went."""
+    state = _resize_state(r)
+    want = {n: resize_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == RESIZE_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    enums = {"size": [str(s) for s in RESIZE_SIDES], "aspect": list(RESIZE_ASPECTS),
+             "fit": list(RESIZE_FITS), "filter": list(RESIZE_FILTERS)}
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — never by class: after a hot reload of
+        # `view` a live state is the old class's, and its params, bound to
+        # it, are kept below; replacing it would leave them writing a dead one)
+        if st is None:
+            st = state[name] = ResizeState()
+        for pid, key in zip(ids, _RESIZE_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key.replace('_', ' ')}"
+            tip = _RESIZE_TIPS[key].format(name=name)
+            if key in enums:
+                r.enum(pid, label, *_attr(st, key), enums[key], group=RESIZE_GROUP, tip=tip)
+            else:
+                lo = 0.0 if key in ("crop_x", "crop_y") else 0.01
+                r.continuous(pid, label, *_attr(st, key), lo=lo, hi=1.0,
+                             group=RESIZE_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
@@ -1049,6 +1139,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.switch_state = picks
+    # plan 34 Z: the resizes' values likewise (`ViewState.resize`)
+    sizes = getattr(view, "resize", None)
+    if not isinstance(sizes, dict):
+        sizes = {}
+        try:
+            view.resize = sizes
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.resize_state = sizes
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -1207,13 +1306,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
-    # `backdrop.channel`, an old preset's read as that wire)
+    # `backdrop.channel`, an old preset's read as that wire; plan 35 T3
+    # retired `backdrop.history` likewise — what the look-back records is
+    # the wire into `lookback.capture`, `graphmigrate.RETIRED`)
     g = "backdrop"
     r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
-    r.toggle("backdrop.history", "Backdrop in the look-back", *_attr(view, "backdrop_history"),
-             group=g, tip="On, the look-back captures the backdrop with the scene; off, the "
-                          "echoes and the dream are drawn over the backdrop.")
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane

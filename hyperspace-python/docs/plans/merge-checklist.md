@@ -23,6 +23,7 @@ stack existed. Exceptions:
 |---|---|---|
 | **#235** plan 33, the free graph | `plan-31-32-integration` | hand checks AC (318–328) on `plan-33-free-graph`; **merge it into #233's branch before #233 merges**, so the stack grows by one PR |
 | **#233** plans 31 + 32 together | `plan-28-30-integration` | hand checks Z (280–285; 286–295 are #231's), AA (296–316), AB (317) on this build |
+| **#236** plan 34 (T1–T6, feedback) + plan 35, the free frame | `main` (retargeted 2026-10-25, after plan 33's stack merged) | hand checks AD (332–341) and AE (342–352) on `plan-34-feedback`, in one sitting (AD starts from AE's new preset; 340 with 351; 341 is the `/5` half of 352); **both Macs on the build before a `/5` save of a delay, resize, echo or dream, or a `/6` save** |
 | **#224** plans 28 + 30 | `plan-24-26-27-integration` | hand checks X (220–231, 267–271), Y (232–276), Z's 277–279 (the instanced field from `main`) |
 | **#195** plans 24, 26, 27 | `main` | hand checks U (148–167), W (168–190, 219), V (191–218) |
 | #231 plan 31 A1 (APC40 sequencer page) | `plan-31-integration` | **Dillon's sign-off** (the desk is his, decision 10); checks 286–295 with him. Not needed for #233 |
@@ -38,6 +39,8 @@ the next PR. `main` takes one merge. Then close #230, #232, #204, #205.
 
 - [ ] **Both Macs on the merged build** before anyone saves a preset from it: `/3` (sequencer) and `/4` (media) presets are refused by older builds, and a plan-32-only build would drop a sequencer pattern from a `/4` file.
 - [ ] **Plan 33 (#235): both Macs on the build with the free graph** before anyone saves a branch, a switch or an unwired node: that saves `hyperspace.preset/5`, which an older build refuses. Presets that need nothing new save as before, byte for byte. The 661 goldens before the plan are unmoved (693 now); the gate Mac re-runs them.
+- [ ] **Plan 35 (#236): both Macs on the build with the wired frame** before anyone saves a preset that needs the new vocabulary (a window set to "nothing", hands through the effects, an edit off the migrated shape): that saves `hyperspace.preset/6`, which a plan 33/34 build refuses. Untouched `/4` presets save byte for byte and `/5` ones where they round-trip. The 717 goldens before the plan are unmoved (757 now, with plan 34's T4); the gate Mac re-runs them.
+- [ ] **Plan 34 (#236): the same two Macs for the feedback words.** A preset with a delay, a resize, an echo or the dream saves `hyperspace.preset/5` where its frame round-trips: a plan 33 build reads it **with a note** and draws its own default graph (check 341); a `/6` file there is **refused** (check 352). Both Macs on this build before anyone saves either.
 - [ ] `uv sync` on each Mac (new deps: `av`, `pillow-heif`, `syphon-python[opengl]`, `cyndilib`, `pyobjc-framework-avfoundation`).
 - [ ] **Dillon: #223 venues vs `[[devices]]`** — decide whether a venue may set devices (proposal: no; the overlay drops them with a note). Resolution notes for #223 and #214 against this stack: [`assets/32-media/merge-dillon-214-223.md`](assets/32-media/merge-dillon-214-223.md). #223 also needs its register rows 110/111, check 144 and guide L69 renumbered (taken on the stack).
 - [ ] Dillon's #214 and #223 are into `main`; after #195 lands they rebase onto it (one superficial hunk for #214; superficial hunks + the devices question for #223).
@@ -255,3 +258,28 @@ when the camera is back). No real recorded tape is committed yet.
 - [ ] **326** A shader back into the faces on the GRAPH layout — _laptop, the copy_
 - [ ] **327** The FX page with a big graph, at arm's length — _laptop_
 - [ ] **328** A free graph is refused by an older build — _two Macs, the copy_
+
+### AD. Plan 34: feedback (run with AE, after 342)
+- [ ] **332** The infinite mirror; an empty delay shows the pattern — _laptop, the copy_
+- [ ] **333** Trails you can see — _laptop, the copy_
+- [ ] **334** The drag: a loop is refused in words; through a delay it lands — _laptop, the copy_
+- [ ] **335** An echo on the faces, and into an output's hands — _laptop, the copy; the TV_
+- [ ] **336** The dream on the faces — _laptop, the copy, the dream worker_
+- [ ] **337** A resize into a delay; an LFO on the crop — _laptop, the copy_
+- [ ] **338** A resize before an effect makes the effect cheaper — _laptop, the copy, a clip_
+- [ ] **339** A window resize, the render cap and a modulated resize size mid-feedback — _laptop, the copy_
+- [ ] **340** The frame cost of a delay, a resize and echoes (with 351) — _laptop, then the rig_
+- [ ] **341** A `/5` file with a delay on a plan 33 build (the other half of 352) — _two Macs, the copy_
+
+### AE. Plan 35: the free frame
+- [ ] **342** A new preset: black, the factory's values and desk, a scene starter — _laptop, the copy_
+- [ ] **343** The owner's delete sequence on a party preset — _laptop, the copy_
+- [ ] **344** A channel alone on All outputs — _laptop, the copy, a clip_
+- [ ] **345** A library preset by eye on both Macs, before and after — _laptop, the copy, the other Mac_
+- [ ] **346** The OUTPUT page: pick a picture, as All outputs, undo; four outputs at distance — _laptop, the copy; the TV_
+- [ ] **347** The glass's picture mute, and the two owner notes (a picture mute hides the through picture; on an in-scene preset it shows the ground and the guide) — _the rig_
+- [ ] **348** Hands through the effects on output 2 — _the rig, or the TV_
+- [ ] **349** LOOKBACK's records: the backdrop, the scene, nothing — _laptop, the copy_
+- [ ] **350** The canvas at distance — _laptop, the copy_
+- [ ] **351** SYSTEM before and after on the party preset — _laptop, then the rig_
+- [ ] **352** A `/6` preset on a plan 33/34 build; both Macs on this build — _two Macs, the copy_

@@ -72,22 +72,31 @@ multiplies what is there — it draws nothing of its own, and at 1 it does
 not run.
 
 Plan 21: `Renderer.draw_outputs` shows that one frame on several outputs
-(`outputs.View`), each through its own switches — the scene, the hands,
-its own dim. The scene, the capture and the hands' layer run once a
-frame; the look-back composite and the effect chain once per distinct
-pipeline (`outputs.route`); the picture, the hands over it and the dim
-once per output. `draw` is `draw_outputs` with one default view on the
-bound framebuffer, and is the frame it always was, byte for byte.
+(`outputs.View`), each through its own mutes — the picture, the hands —
+and its own dim. The scene, the capture and the hands' layer run once a
+frame; each distinct picture an output shows once (its end, `Shown`);
+the picture, the hands over it and the dim once per output. `draw` is
+`draw_outputs` with one default view on the bound framebuffer, and is
+the frame it always was, byte for byte.
 
 Plan 26 A1: those passes are the nodes of a render graph (graph.py).
-`_draw_frame` builds the default graph for the views' switches — or
-reuses the last one while they do not change — and evaluates it: the
-nodes run once each, in an order settled when the graph was built, and
-each node is timed on the GPU (`PassTimer`, one line per node on the
-SYSTEM page). The default graph is today's three pipelines; every golden
-frame of A0 is drawn byte for byte. The passes themselves (`draw_scene`,
+`_draw_frame` builds the graph — or reuses the last one while the views'
+count and the wiring do not change — and evaluates it: the nodes run
+once each, in an order settled when the graph was built, and each node
+is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
+Plan 35 T4: every graph is a wired frame's (`graph.build_graph`, an
+unwired wiring wired first: `graph.wired`); the pipelines are gone, and
+every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
+
+Plan 34 D: each delay's two half-float pictures are the renderer's
+(`DelayPair`, `delay_pair`), kept by name across graph rebuilds and
+swapped once a frame before the graph runs (`_turn_delays`); a picture
+of its own size is laid into a consumer of another shape by the refit
+pass (`REFIT_FS`, `_refit`). GL allows one time query active at once, so
+a node's query opened inside another's is a no-op (`PassTimer.time`,
+ruling R5): `delay(write)` times its paint, effects inside it included.
 """
 
 from __future__ import annotations
@@ -130,16 +139,20 @@ from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
     FACE_PIC,
     MEDIA_CHANNELS,
+    Delay,
     Frame,
     Graph,
+    Hands,
     Wiring,
+    build_graph,
     channel_into,
     cloud_roles,
-    default_graph,
     graph_key,
+    param_prefix,
+    wired,
 )
 from .lookback import DreamState, Lookback
-from .media_tex import FIT_FS, MediaTextures, UiTextures, fit_scale
+from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
 from .tapers import clamp
@@ -291,6 +304,38 @@ void main() {
     }
     if (u_opaque != 0) c.a = 1.0;
     f_color = c;
+}
+"""
+
+# plan 34 D (row 358): a picture of its own size laid into a target of
+# another shape (`Renderer._refit`: the delay, the echoes, the dream, the
+# resize) — the crop `u_crop` of the source (x0, y0, w, h in its GL uv)
+# fitted about the centre by `u_scale` (`media_tex.fit_scale` of the crop's
+# pixels into the target's), sampled inside `u_clamp` (min uv, max uv) so
+# no neighbour bleeds in. Outside the fit, transparent black; inside, the
+# texel as it is (premultiplied in, premultiplied out). Plan 34 T4: a crop
+# past the source's edge (a resize's) is transparent black there too — a
+# crop inside the source, every caller's before the resize, never is
+REFIT_FS = """
+#version 330
+in vec2 v_uv;
+uniform sampler2D u_src;
+uniform vec4 u_crop;
+uniform vec2 u_scale;
+uniform vec4 u_clamp;
+out vec4 f_color;
+void main() {
+    vec2 q = 0.5 + (v_uv - 0.5) * u_scale;
+    if (any(lessThan(q, vec2(0.0))) || any(greaterThan(q, vec2(1.0)))) {
+        f_color = vec4(0.0);
+        return;
+    }
+    vec2 uv = u_crop.xy + q * u_crop.zw;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        f_color = vec4(0.0);
+        return;
+    }
+    f_color = texture(u_src, clamp(uv, u_clamp.xy, u_clamp.zw));
 }
 """
 
@@ -712,6 +757,68 @@ class CoverTarget:
         self.size = (0, 0)
 
 
+class DelayPair:
+    """One delay's two pictures (plan 34 D, row 354): `read`, last frame's
+    (what `graph.Delay` shows), and `write`, this frame's (what
+    `graph.DelayWrite` paints into) — each (texture, framebuffer), RGBA
+    half-float (an 8-bit feedback with a decay below 1 sticks and never
+    fades), LINEAR, clamped, cleared to transparent black when made. Two
+    distinct textures always: no pass reads what it writes.
+
+    `turn()`, once a frame before the graph runs (`Renderer._turn_delays`):
+    a pair written last frame swaps its sides and holds a frame; one not
+    written holds nothing (strict z⁻¹). `idle` counts the frames no graph
+    has held its delay: released at `SIZED_KEEP_FRAMES`."""
+
+    def __init__(self) -> None:
+        self.read: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
+        self.write: tuple[moderngl.Texture, moderngl.Framebuffer] | None = None
+        self.holds = False
+        self.wrote = False
+        self.idle = 0
+
+    def target(self, ctx: moderngl.Context, size: tuple[int, int]) -> moderngl.Framebuffer:
+        """The write side at `size`: made again only when missing or of
+        another size (row 357: the read side is left alone, so the next
+        frame still reads the frame before, at its old size)."""
+        size = (int(size[0]), int(size[1]))
+        if self.write is not None and tuple(self.write[0].size) == size:
+            return self.write[1]
+        self._free(self.write)
+        self.write = None
+        tex = ctx.texture(size, 4, dtype="f2")
+        try:
+            tex.repeat_x = tex.repeat_y = False
+            tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
+            fbo = ctx.framebuffer(color_attachments=[tex])
+        except Exception:
+            tex.release()
+            raise
+        fbo.clear(0.0, 0.0, 0.0, 0.0)
+        self.write = (tex, fbo)
+        return fbo
+
+    def turn(self) -> None:
+        if self.wrote:
+            self.read, self.write = self.write, self.read
+            self.holds = True
+        else:
+            self.holds = False
+        self.wrote = False
+
+    @staticmethod
+    def _free(side) -> None:
+        if side is not None:
+            for res in (side[1], side[0]):
+                res.release()
+
+    def release(self) -> None:
+        self._free(self.read)
+        self._free(self.write)
+        self.read = self.write = None
+        self.holds = self.wrote = False
+
+
 class FaceTarget:
     """The picture the faces show while something other than the pattern
     is wired into them (plan 20; plan 33 R: `shape.faces`), or the
@@ -755,10 +862,10 @@ class PassTimer:
     ms (`medians`), in the graph's order.
 
     `end_frame(names)` takes the frame's node names (`Graph.timed`): a
-    node that ran more than once (the history painted for two pipelines)
+    node that ran more than once (the look-back painted for two ends)
     is summed into its frame's total; one that did not run counts 0 that
-    frame; a name no longer in the graph (an output closed, a pipeline
-    gone with its switch) drops out of the medians. Time queries never
+    frame; a name no longer in the graph (an output closed, a node
+    unwired) drops out of the medians. Time queries never
     nest (GL allows one active per target), so the nodes are timed side
     by side, never one inside another.
 
@@ -807,8 +914,11 @@ class PassTimer:
         self._free = []
 
     def time(self, name: str) -> _Timed:
-        """``with timer.time("scene"):`` — the node's GPU time, this frame."""
-        if not self.on:
+        """``with timer.time("scene"):`` — the node's GPU time, this frame.
+        Plan 34 D: inside another node's query (a delay's write painting an
+        effect, which times its own pass) it is a no-op — GL allows one
+        active per target, so the outer line holds the inner's time."""
+        if not self.on or getattr(self, "_active", False):
             return _Timed(None)
         try:
             q = self._free.pop() if self._free else self.ctx.query(time=True)
@@ -865,12 +975,14 @@ class _Timed:
             try:
                 self.q.__enter__()
                 self.began = True
+                self.timer._active = True        # (plan 34 D: no query inside it)
             except Exception as e:  # noqa: BLE001 — timing never costs a frame
                 self.timer._off(e)
         return self
 
     def __exit__(self, *exc) -> bool:
         if self.began:
+            self.timer._active = False
             try:
                 self.q.__exit__(None, None, None)
             except Exception as e:  # noqa: BLE001 — timing never costs a frame
@@ -916,11 +1028,11 @@ class Renderer:
         self._pic: moderngl.Texture | None = None
         self._face_layer = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
-        # plan 21: the outputs. A pipeline with more than one consumer (or
-        # one not drawn here) ends in a frame texture, one per pipeline key,
-        # made on first use; the program that shows one on an output, too.
-        # `stats` is what the last frame ran
-        self._frames: dict[int, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
+        # plan 21: the outputs. A picture with more than one consumer (or
+        # one not drawn here) ends in a frame texture, one per end (plan 35:
+        # keyed by the end's name), made on first use; the program that
+        # shows one on an output, too. `stats` is what the last frame ran
+        self._frames: dict[str, tuple[moderngl.Texture, moderngl.Framebuffer]] = {}
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
         # plan 26 A3: the program a Composite node lays a layer with, on
@@ -943,11 +1055,11 @@ class Renderer:
         # plan 26 A4b: the cloud nodes' GL (`graph._CloudGL`), made on first
         # draw; the getattr guards stay for a hot-reloaded renderer
         self._cloud_gl = None
-        self.stats: dict = {"pipelines": [], "chain_runs": 0, "direct": True}
+        self.stats: dict = {"ends": [], "chain_runs": 0, "direct": True}
         # plan 26 A0: GPU time per node, `stats["gpu_ms"]` (the SYSTEM page)
         self.timer = PassTimer(ctx)
         # plan 26 A1: the render graph for the last frame's views, reused
-        # while their switches do not change (graph.graph_key)
+        # while their count and the wiring do not change (graph.graph_key)
         self._graph: Graph | None = None
         self.cover = CoverTarget(ctx)
         self._face_verts = 0           # face vertices in _fbuf from the last scene pass (one copy)
@@ -1260,10 +1372,10 @@ class Renderer:
         Once a frame: the face picture, the scene pass, the cover, the
         look-back's tick and pull, the hands' layer (only while some view
         shows hands), the look-back's capture (from the scene texture,
-        exactly once, whatever the switches). Once per distinct pipeline
-        (`outputs.route`): the look-back composite and the effect chain,
-        ending straight on the view when it is the pipeline's only
-        consumer at the frame size, else in a frame texture. Once per
+        exactly once, whatever the mutes). Once per distinct picture an
+        output shows (its end, plan 35 `Shown`): the look-back composite and
+        the effects wired to it, ending straight on the view when it is the
+        end's only consumer at the frame size, else in a frame texture. Once per
         view: the picture (nothing, a 1:1 copy, or scaled into
         `outputs.fit`'s rect with the rest cleared to the view's ground),
         the hands over it, the dim (master × the view's). A view with a
@@ -1419,7 +1531,7 @@ class Renderer:
         fx = self.fx
         fx.tick()
         fx.opaque = getattr(self, "bg_alpha", 1.0) >= 1.0
-        stats = {"pipelines": [], "chain_runs": 0, "direct": True, "captures": 0,
+        stats = {"ends": [], "chain_runs": 0, "direct": True, "captures": 0,
                  "effects": [], "layer": False, "readout": False,
                  "routes": [(None, False)] * len(views)}
         self.stats = stats
@@ -1432,6 +1544,14 @@ class Renderer:
         self._frame_size = size
         self._prune_sized()
         graph = self._graph_for(views)
+        # plan 34 D: each delay's pair turns — last frame's write is now
+        # what its delay reads
+        self._turn_delays(graph)
+        # plan 34 E (row 362): a graph reading the ring keeps it capturing
+        # with the look-back off (getattr: a renderer from before has none)
+        lookback = getattr(self, "lookback", None)
+        if lookback is not None:
+            lookback.keep = bool(getattr(graph, "reads_ring", False))
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -1444,9 +1564,11 @@ class Renderer:
         # view state from before the switch has none): what the switches
         # pass and what the graph pulls, never a rebuild
         selects = dict(getattr(s, "switch", None) or {})
+        # plan 34 Z: each resize's values likewise (`ViewState.resize`)
+        resizes = dict(getattr(s, "resize", None) or {})
         frame = Frame(self, ctx, s, w, h, dpr, t, views, size, _samples_of(ctx, target),
                       target, vp, bg_alpha=getattr(self, "bg_alpha", 1.0), fx_on=fx_on,
-                      stats=stats, selects=selects)
+                      stats=stats, selects=selects, resizes=resizes)
         timer = self._pass_timer()
         try:
             graph.evaluate(frame)
@@ -1456,10 +1578,11 @@ class Renderer:
             stats["gpu_note"] = timer.note
 
     def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
-        """The render graph for these views: the last one while their
-        switches and the wiring have not changed (`graph.graph_key`,
-        `Renderer.wiring`), else the default graph built from them
-        (`graph.default_graph`). getattr: a renderer from before the graph
+        """The render graph for these views: the last one while their count
+        and the wiring have not changed (`graph.graph_key`,
+        `Renderer.wiring`), else one built from them (`graph.build_graph`,
+        an unwired wiring wired first: `graph.wired`). getattr: a renderer
+        from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
         one adds its point-cloud node to the scene. Plan 33 R: so are the
@@ -1476,10 +1599,13 @@ class Renderer:
         Plan 32 R: so are the frame's backdrop channel and whether the
         history holds it (`backdrop_wiring`), laid onto the preset's wiring
         for the graph alone — `Renderer.wiring` stays the preset's (plan
-        33 R: whose `backdrop` is the section's wire into `backdrop.image`)."""
-        key = graph_key(views)
+        33 R: whose `backdrop` is the section's wire into `backdrop.image`).
+        Plan 35 B, T4: every frame is a wired frame, keyed by the views'
+        count alone — a window's switches are mutes, read by each output
+        every frame, never a rebuild."""
         s = s if s is not None else getattr(self, "_view_now", None)
-        wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
+        wiring = wired(self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s))
+        key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
@@ -1488,12 +1614,13 @@ class Renderer:
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or frozenset(getattr(graph, "effects", ())) != effects):
-            graph = self._graph = default_graph(views, wiring, clouds, tuple(sorted(effects)))
+            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
             # not hold goes with the old graph
-            self.drop_ghosts({n for n in graph.nodes if n.startswith("ghost.")})
+            self.drop_ghosts({param_prefix(n.name) for n in graph.nodes.values()
+                              if isinstance(n, Hands)})
         return graph
 
     def backdrop_wiring(self, wiring: Wiring, s: ViewState | None) -> Wiring:
@@ -1504,6 +1631,8 @@ class Renderer:
         channels to read (`media` None) or no view state (a caller from
         before). A branch into `backdrop.image` takes `backdrop.history`
         as the channel does."""
+        if getattr(wiring, "wired", False):
+            return wiring             # (plan 35: a wired frame says its backdrop in wires)
         letter, hist = "", False
         if s is not None and getattr(self, "media", None) is not None:
             letter = getattr(wiring, "backdrop", "")
@@ -1678,15 +1807,88 @@ class Renderer:
         self._fit_prog, self._fit_vao = prog, vao
         return prog, vao
 
-    def _compose(self, v: View, key: int | None, after: bool,
-                 frames: dict[int, moderngl.Texture | None], failed: set[int],
+    def _refit(self, tex: moderngl.Texture, dst: moderngl.Framebuffer,
+               crop: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0),
+               fit: int = COVER, filter: str = "linear",
+               clamp: tuple[float, float, float, float] | None = None,
+               mip: bool = False) -> None:
+        """`tex`'s `crop` (x0, y0, w, h in its GL uv) fitted by `fit`
+        (`media_tex.FITS`) into `dst`'s viewport, blending off, the texels
+        as they are (premultiplied in and out), transparent black outside
+        the fit (plan 34 D, row 358; `REFIT_FS`). `clamp` (min u, min v,
+        max u, max v) bounds the samples (the crop itself when None). The
+        filter is a sampler object's (`_sampler`: linear, or nearest; `mip`
+        trilinear from mipmaps built here), so the texture's own filter —
+        a shared one's, the scene's — is never changed. Blending is on
+        again on every exit."""
+        prog, vao = self._refit_program()
+        ctx = self.ctx
+        rect = tuple(dst.viewport)
+        x0, y0, cw, ch = (float(v) for v in crop)
+        lo_hi = clamp if clamp is not None else (x0, y0, x0 + cw, y0 + ch)
+        sampler = self._sampler(filter, mip)
+        dst.use()
+        ctx.viewport = rect
+        ctx.disable(moderngl.BLEND)
+        try:
+            if mip:
+                was = tex.filter
+                tex.build_mipmaps()
+                tex.filter = was
+            tex.use(location=0)
+            sampler.use(location=0)
+            prog["u_src"].value = 0
+            prog["u_crop"].value = (x0, y0, cw, ch)
+            prog["u_scale"].value = fit_scale(
+                fit, (max(cw * tex.size[0], 1.0), max(ch * tex.size[1], 1.0)),
+                (int(rect[2]), int(rect[3])))
+            prog["u_clamp"].value = tuple(float(v) for v in lo_hi)
+            vao.render(moderngl.TRIANGLES, vertices=3)
+        finally:
+            sampler.clear(location=0)
+            ctx.enable(moderngl.BLEND)
+
+    def _refit_program(self) -> tuple[moderngl.Program, moderngl.VertexArray]:
+        """`_refit`'s program (`REFIT_FS`), built on first use (getattr: a
+        renderer from before plan 34 has none)."""
+        prog, vao = getattr(self, "_refit_prog", None), getattr(self, "_refit_vao", None)
+        if prog is not None and vao is not None:
+            return prog, vao
+        prog = self.ctx.program(vertex_shader=QUAD_VS, fragment_shader=REFIT_FS)
+        try:
+            vao = self.ctx.vertex_array(prog, [])
+        except Exception:
+            prog.release()
+            raise
+        self._refit_prog, self._refit_vao = prog, vao
+        return prog, vao
+
+    def _sampler(self, filter: str = "linear", mip: bool = False
+                 ) -> moderngl.Sampler:
+        """A sampler object for `_refit`, made once per (filter, mip) and
+        kept: clamped, linear (trilinear with `mip`) or nearest."""
+        cache = self.__dict__.setdefault("_samplers", {})
+        key = (filter, bool(mip))
+        got = cache.get(key)
+        if got is None:
+            if filter == "nearest":
+                f = (moderngl.NEAREST_MIPMAP_NEAREST if mip else moderngl.NEAREST,
+                     moderngl.NEAREST)
+            else:
+                f = (moderngl.LINEAR_MIPMAP_LINEAR if mip else moderngl.LINEAR,
+                     moderngl.LINEAR)
+            got = cache[key] = self.ctx.sampler(repeat_x=False, repeat_y=False, filter=f)
+        return got
+
+    def _compose(self, v: View, key: str | None, after: bool,
+                 frames: dict[str, moderngl.Texture | None], failed: set[str],
                  size: tuple[int, int], readout: moderngl.Texture | None = None,
                  lay=None, blend: str = "over", ghost: Ghost | None = None,
                  readout_ghost: Ghost | None = None,
                  hands_tex: moderngl.Texture | None = None) -> None:
-        """One view's picture: the pipeline's frame (`key`, the pipeline its
-        end node closes, `outputs.SCENE` …; already there when it was drawn
-        direct), the hands over it in the same rect, the readout layer over
+        """One view's picture: its end's frame (`key`, the end's name, plan
+        35 `Shown`: `shown(lookback)` …; already there when it was drawn
+        direct; None, its ground), the hands over it in the same rect, the readout layer over
         that when there is one, its dim. `lay(target, rect, opaque, flip)`
         lays the hands when the output's wiring is not plain over (plan 26
         A3: add, depth-aware); a presenter's hand-off carries `blend` and
@@ -1856,26 +2058,34 @@ class Renderer:
         self._lay_prog, self._lay_vao = prog, vao
         return prog, vao
 
-    def _frame_target(self, key, size: tuple[int, int]
+    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1"
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
-        """The frame texture for a pipeline: RGBA8 at the frame's size,
+        """The frame texture for an end (plan 35: by its name): RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
         again when the frame's size changes. Plan 33 R: a key that is
         `(name, size)` (a picture made at another size, `graph.Frame.key`)
-        lives while some frame asks for it (`_prune_sized`)."""
+        lives while some frame asks for it (`_prune_sized`) — R16: as does
+        any other key, after `SIZED_KEEP_FRAMES` idle. Plan 34 D:
+        `dtype` "f2" a half-float one (a delay's picture refitted, which
+        must not quantise); a stored texture of another dtype is made
+        again."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
-        if isinstance(key, tuple):
-            self.__dict__.setdefault("_sized_used", set()).add(key)
+        # R16 (final review): every key asked for is marked — a string
+        # key (an end's `shown(...)`, a `#fit`) is pruned when idle as a
+        # `(name, size)` one is, so a load leaves nothing of the last preset
+        self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
-        if have is not None and have[0].size == size:
+        if (have is not None and have[0].size == size
+                and getattr(have[0], "dtype", "f1") == dtype):
             return have
         if have is not None:
             for res in (have[1], have[0]):
                 res.release()
             del frames[key]
-        tex = self.ctx.texture(size, 4)
+        tex = self.ctx.texture(size, 4) if dtype == "f1" else self.ctx.texture(size, 4,
+                                                                                dtype=dtype)
         try:
             tex.repeat_x = tex.repeat_y = False
             tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
@@ -1924,11 +2134,67 @@ class Renderer:
         self._pools = {}
         self._pools_used = set()
 
+    def delay_pair(self, name: str) -> DelayPair:
+        """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
+        kept by name across graph rebuilds — an edit elsewhere on GRAPH
+        does not cut the feedback; a preset load does (`reset_delays`, R19)
+        (__dict__: a renderer from before plan 34 has none)."""
+        pairs = self.__dict__.setdefault("_delays", {})
+        got = pairs.get(name)
+        if got is None:
+            got = pairs[name] = DelayPair()
+        return got
+
+    def reset_delays(self) -> None:
+        """R19 (final review, row 354): a preset load landed a new section —
+        at the next turn every pair holds nothing (as on its first frame),
+        so no trail of the last preset shows in the new one. A GRAPH edit
+        or rebuild does not ask: the feedback runs on across those. The
+        textures are kept; only what they hold is forgotten."""
+        self.__dict__["_delays_reset"] = True
+
+    def _turn_delays(self, graph: Graph) -> None:
+        """Once a frame, before the graph runs: every pair turns (a pair
+        written last frame now reads it; one not written holds nothing). A
+        pair whose delay is in no node of `graph` counts a frame idle and
+        is released at `SIZED_KEEP_FRAMES`, with its refitted picture
+        (`<name>#fit`); one in the graph is idle 0. After `reset_delays`
+        (a load, R19) every pair holds nothing this frame. Never raises."""
+        pairs = getattr(self, "_delays", None)
+        reset = getattr(self, "_delays_reset", False)
+        if reset:
+            self._delays_reset = False
+        if not pairs:
+            return
+        if reset:
+            for pair in pairs.values():
+                pair.wrote = False      # (so `turn` holds nothing this frame)
+        held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
+        for name in list(pairs):
+            pair = pairs[name]
+            pair.turn()
+            if name in held:
+                pair.idle = 0
+                continue
+            pair.idle += 1
+            if pair.idle < SIZED_KEEP_FRAMES:
+                continue
+            del pairs[name]
+            try:
+                pair.release()
+                fit = (getattr(self, "_frames", None) or {}).pop(name + "#fit", None)
+                if fit is not None:
+                    fit[1].release()
+                    fit[0].release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+
     def _prune_sized(self) -> None:
         """Once a frame, first: release the pools (`pool_at`) and the frame
-        textures keyed `(name, size)` that no frame has asked for in the
-        last `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a
-        branch unwired — so pictures made at other sizes never pile up,
+        textures (R16: every key — `(name, size)`, an end's `shown(...)`, a
+        `#fit`, a channel's fit) that no frame has asked for in the last
+        `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a branch
+        unwired, the preset before a load — so pictures never pile up,
         and (R29) a switch flicked every frame between branches of other
         sizes reallocates nothing: the branch not picked keeps its
         textures for the next flick."""
@@ -1954,12 +2220,17 @@ class Renderer:
                 tex.release()
         self._pools_used = set()
         frames = getattr(self, "_frames", None) or {}
-        used = getattr(self, "_sized_used", None) or set()
-        for key in [k for k in frames if isinstance(k, tuple) and stale(("frame", k), used)]:
+        used = getattr(self, "_sized_used", None)
+        if used is None:
+            used = self._sized_used = set()
+        for key in [k for k in frames if stale(("frame", k), used)]:
             tex, fbo = frames.pop(key)
-            fbo.release()
-            tex.release()
-        self._sized_used = set()
+            try:
+                fbo.release()
+                tex.release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+        used.clear()
 
     def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple,
                       ghost: Ghost | None = None) -> None:

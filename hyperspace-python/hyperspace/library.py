@@ -123,7 +123,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .graphmigrate import retired
+from .graphmigrate import renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
     F_KEYS,
@@ -210,7 +210,16 @@ LAYOUT = "layout"
 def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
     """A file's ``layout`` value as {node id: [x, y]} (whole canvas units),
     and how many entries were not a name and two finite numbers (dropped).
-    None is an empty map; a value that is no map, an empty map and one drop."""
+    None is an empty map; a value that is no map, an empty map and one drop.
+    R14 (plan 35 T5): a layout saved in the canvas's old ids is read in the
+    wired frame's (`graphmigrate.renamed_layout`), so its positions stay."""
+    out, bad = read_positions(value)
+    return renamed_layout(out), bad
+
+
+def read_positions(value: Any) -> tuple[dict[str, list[float]], int]:
+    """`read_layout` in the file's own ids, nothing renamed: what a build
+    from before plan 35 read (R15 — a save below `/6` writes these back)."""
     if value is None:
         return {}, 0
     if not isinstance(value, dict):
@@ -2045,6 +2054,16 @@ class Library:
         hook = self._load_hooks.get(group)
         if hook is not None:
             hook(self._current[group])
+        return missing
+
+    def land_unsaved(self, group: str, name: str, doc: dict) -> list[str]:
+        """Apply `doc` as the group's current preset `name` that no file
+        holds (plan 35 T7's `Presets.new`): the one road in (`_apply_doc`,
+        no path), then nothing to be clean against — dirty until it is saved,
+        the Project's own rule for a show never saved. Returns the unknown
+        ids."""
+        missing = self._apply_doc(group, name, doc)
+        self._landed(group, name, ())
         return missing
 
     def adopt(self, group: str, name: str, reapply) -> None:

@@ -31,18 +31,22 @@ this one read the same rows, so an edit on either is on both next frame.
   that envelope's ``fire``; ``modifier`` (``mod.<n>``, plan 28
   N1) — its inputs, its params, its lane; ``macro`` (``macro.<n>``) — a
   bus: its knob in, one output, its subscribers as cables;
-- ``render`` / ``output`` — the render graph's nodes (``render:<name>``),
-  with their image / geometry / mask ports and, as input ports, the
-  params of the render node that owns them (`OWNERS`, the one table);
-  ``render:eye`` — the shared camera (`camera.*`, `eye.*`), which draws
-  through every geometry and so has no image port; ``render:media.<c>``
-  — the eight media channels (plan 32 T10), always, each with its image
-  out and its `media.<c>.*` params, one node per channel however many
-  nodes the render graph made of it (the backdrop's, a wire's);
-  ``render:frame``, ``render:pattern``, ``render:backdrop`` (plan 33 U)
-  — the run's head, the face pattern, the backdrop, the pattern and the
-  backdrop always; an unreached effect, composite or switch of the
-  section drawn from it (`unreached`), ``faint`` ("reaches nothing");
+- ``render`` / ``output`` — the wired frame's nodes (plan 35 G): one per
+  name the preset's section says, by an entry or a wire's end, in the
+  owner's ids (``render:<id>``: ``render:scene``, ``render:hands.layer``,
+  ``render:lookback``, ``render:acid.2``, ``render:copy`` …), titled in the
+  owner's words (`label_of`, `LABELS`) and hovered by what each is
+  (`hover_of`, `HOVERS`), their ports a wired frame's (`graph.WIRED_TAKES`,
+  ``rin:lookback/capture``) and, as input ports, the params of the node
+  that owns them (`OWNERS`, the one table); ``render:output.all`` and each
+  window ``render:output.<n>`` always; ``render:camera`` — the shared
+  camera (`camera.*`, `eye.*`), the rig's, which draws through every scene
+  and so has no picture port; a cloud, the rig's; a node the section
+  declares or wires that reaches nothing (`unreached`) ``faint``
+  ("reaches nothing");
+- ``channel`` — the eight media channels (``render:channel.<c>``, plan 32
+  T10), always, each with its picture out and its `media.<c>.*` params;
+  one with an empty bin and no cable sits on MEDIA's idle line;
 - ``group`` — a node per group of params no render node owns
   (``group:tempo``, ``group:master`` …).
 
@@ -66,7 +70,7 @@ pair; `land_choices` is the picker a drag onto a stub opens.
 `Binding`, into ``mod``), ``setter`` (a desk / pad / key row, into
 ``base``), ``sub`` (a macro subscriber, into ``base`` or ``depth``,
 `ref` (macro id, `Sub`)), ``input`` (a modifier's input), ``render`` (a
-render-graph edge, `ref` (source node, node, port)), ``lane`` (plan 31: a
+wire of the section, `ref` its `graph.Wire`), ``lane`` (plan 31: a
 sequencer lane's envelope binding, `ref` (lane, envelope id) — no row:
 dragging a lane's pin onto an envelope's ``base:env.<n>.fire`` rebinds it,
 and it cannot be deleted). A route's `scale`
@@ -83,13 +87,16 @@ organised by concern), left to right: *controllers* (the devices, the
 keys, a placeholder, a desk template) → *audio* (the analyzer, the band,
 tempo, master, audio and scene params; the small *other* area — the
 preset, ui and desk params — stacked under it) → *modulation* (the LFOs,
-the modifiers, the macros) → *media* (the eight channels and the
-backdrop, plan 32 T10; plan 33 the pattern, the switches, and any
-effect or composite made of the media alone, `media_made`) → *geometry*
-(the shape, the camera, the hands, a cloud, the scene that draws them) →
-*shaders* (the history, `frame`, the effects, the composites, `fx`, the
-outputs). Every wire runs right but the shaders' wrapped rows and a
-scene picture taken back into a switch (`returns`). `AREA` is the one table (`area_of`);
+the modifiers, the macros) → (plan 35 G: by primitive) *media* (the
+eight channels, plan 32 T10; plan 33 the pattern, the switches, and any
+effect or composite made of the media alone, `media_made`; plan 34's
+delays) → *scene* (the shape, the hands, their layers and guides, a
+cloud, the camera, the scene that draws them, the backdrop) →
+*look-back* (the look-back, its echoes, the dream) → *effects* (the
+effects, the copies, the composites, a resize) → *outputs* (All outputs,
+then each window). Every wire runs right but the effects' wrapped rows,
+a scene picture taken back into a switch, and what is kept for the next
+frame — into `lookback.capture`, into a delay (`returns`). `AREA` is the one table (`area_of`);
 each area's title is drawn on the canvas over its first column
 (`layout`). A node with nothing in and nothing out (`VNode.idle`: an
 unused macro, an unpatched LFO, a group node no cable reaches, a lost
@@ -109,7 +116,7 @@ import itertools
 import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 from . import envelope as envmod
 from . import graph as rgraph
@@ -142,7 +149,9 @@ IMAGE, GEOMETRY, MASK = rgraph.IMAGE, rgraph.GEOMETRY, rgraph.MASK
 TYPES = (VALUE, TRIGGER, IMAGE, GEOMETRY, MASK)
 
 KINDS = ("device", "source", "analyzer", "lfo", "env", "seq", "modifier", "macro", "group",
-         "render", "output", "template")
+         "render", "output", "template", "channel")
+# plan 35 G: the kinds a wired frame's node is drawn as (its render-side ones)
+FRAME_VKINDS = ("render", "output", "channel")
 # plan 31 G1: ``lane`` is a sequencer lane's envelope binding (``seq.<l>.env``,
 # a fixed link the sequencer fires directly — no row), drawn as a cable
 CABLE_KINDS = ("route", "setter", "sub", "input", "render", "lane")
@@ -152,7 +161,7 @@ BASE, MOD, DEPTH = "base", "mod", "depth"
 PRESET, SESSION = "preset", "session"
 
 ANALYZER = "analyzer"
-EYE = "eye"                  # the shared camera's node: `render:eye`
+CAMERA = "camera"            # the shared camera's node: `render:camera` (plan 35 V2: was `eye`)
 MISSING = "missing"          # a group node for the cables' targets no registry holds
 # plan 31 G1: the modulator banks the canvas draws a node per voice of
 # (``lfo.<n>``, ``env.<n>``: the scheme is the node's kind and the params'
@@ -324,8 +333,9 @@ def _first_segment_number(pid: str, head: str) -> int:
 
 
 def _hands_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 35 V2: `ghost[.n].*` is hands node `hands[.n]`'s (params keep their ids)
     n = _first_segment_number(pid, "ghost")
-    return rgraph.hands_name(n)
+    return rgraph.wired_hands_name(n)
 
 
 def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -338,7 +348,7 @@ def _effect_owner(pid: str, ctx: _Ctx) -> str | None:
     for e in ctx.effects:
         if pid.startswith(f"fx.{e}."):
             return ctx.effect_node.get(e)
-    return rgraph.FX_NAMES[rgraph.SCENE]
+    return None
 
 
 def _output_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -354,9 +364,9 @@ def _cloud_owner(pid: str, ctx: _Ctx) -> str | None:
 
 def _media_owner(pid: str, ctx: _Ctx) -> str | None:
     # plan 32 T10: `media.<c>.<key>` on channel c's node, there whatever the
-    # render graph holds (`build` adds the eight)
+    # render graph holds (`build` adds the eight); plan 35 V2: `channel.<c>`
     seg = pid.split(".")
-    return rgraph.media_name(seg[1]) if len(seg) >= 3 else None
+    return rgraph.channel_name(seg[1]) if len(seg) >= 3 else None
 
 
 def _view_owner(pid: str, ctx: _Ctx) -> str | None:
@@ -371,26 +381,33 @@ def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
     return pid.rpartition(".")[0] or None
 
 
-# a param's group → the render node that owns it: a node name, or a rule
-# over the id (an instance's number, an effect's name). A name the render
-# graph does not hold this frame (no output shows the hands, no scene
-# pipeline) leaves the param to its group's node. `EYE` is the shared
-# camera's node, which the render graph has no node for. A group not
-# listed here has no render node: a node per group (`group:<group>`)
+def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 34 T5: `resize[.<n>].<key>` on its resize's node
+    return pid.rpartition(".")[0] or None
+
+
+# a param's group → the canvas node that owns it: a node id, or a rule
+# over the param id (an instance's number, an effect's name). Plan 35 V2:
+# the ids are the wired frame's, the params keep theirs (`graph.
+# param_prefix`: `dream.*` the look-back's, `ghost.2.*` hands 2's). A node
+# the section does not name (no look-back, no backdrop) leaves the param
+# to its group's node. `CAMERA` is the shared camera's node, the rig's,
+# which no section names. A group not listed here has no render node: a
+# node per group (`group:<group>`)
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
     "rot": "shape",
     "pattern": "shape",
-    # plan 33 U: the backdrop's params on its node (always drawn), a
-    # switch's pick on its switch
+    # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
     "backdrop": "backdrop",
     "switch": _switch_owner,
+    "resize": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
-    "dream": "history",
+    "dream": rgraph.LOOKBACK,
     "fx": _effect_owner,
-    "camera": EYE,
-    "eye": EYE,
+    "camera": CAMERA,
+    "eye": CAMERA,
     "output": _output_owner,
     "media": _media_owner,
 }
@@ -405,14 +422,14 @@ class _Ctx:
 
 
 def render_owner(p: Param, ctx: _Ctx) -> str | None:
-    """The render node (`render:<name>`, or `render:eye`) that owns param
+    """The render node (`render:<name>`, or `render:camera`) that owns param
     `p`, or None: no render node does (or not in this graph)."""
     rule = OWNERS.get(p.group)
     if rule is None:
         return None
     name = rule(p.id, ctx) if callable(rule) else rule
-    if name == EYE:
-        return f"render:{EYE}"
+    if name == CAMERA:
+        return f"render:{CAMERA}"
     if name is None or name not in ctx.names:
         return None
     return f"render:{name}"
@@ -717,52 +734,240 @@ def _port_type(kind: str) -> str:
     return TRIGGER if kind == TRIGGER else VALUE
 
 
-# ---------------------------------------------------------------- the free graph (plan 33 U)
+# ---------------------------------------------------------------- the wired frame (plan 35 G)
 #
-# The preset's graph is wires (plan 33): the run `frame → … → fx.image`,
-# branches from the channels and the pattern, the faces' and the
-# backdrop's inputs, the switches. The canvas draws it as the render graph
-# built it, and three things the render graph has no node for:
-#
-# - **`frame`** — each pipeline's picture before its effects (the history;
-#   the history with the hands laid on; the hands' layer). The render graph
-#   reads the run from that picture directly; the canvas draws one `frame`
-#   node, the run's first cable leaving it (so a cable names the wire the
-#   section says, `frame → acid.image`), and a `feeds` cable from each
-#   pipeline's picture into it — what `frame` is, never a wire;
-# - **the pattern and the backdrop**, always, as the channels are: a wire
-#   end is somewhere to drag to before anything is wired there;
-# - **the unreached** (`unreached`): an effect, composite or switch of the
-#   section that no path leads from to a sink has no render node (it never
-#   runs); the canvas draws it from the section — a stand-in node, faint,
-#   "reaches nothing", its wires in — so it can be wired in.
+# The preset's graph is a wired frame (plan 35): every node of the picture,
+# the shape to the outputs, is a name of the section's entries or wires, in
+# the owner's ids (V2, row 373). The canvas draws the section itself: a
+# node per name (`frame_names`), a cable per wire, All outputs and each
+# window always, the eight channels (idle while empty and unwired, plan 28
+# N9's idle line), the rig's camera and clouds. Each node's `ref` is the
+# render node the renderer built for that name, else a stand-in of its
+# kind (`_stand_in`: never built into a graph, never run), so its area, its
+# side panel and its page are its kind's whatever was built. A node the
+# section declares or wires that reaches no sink (`unreached`) is drawn
+# faint, "reaches nothing", its wires in, so it can be wired on. Nothing
+# of the old frame's plumbing (`frame`, `fx`, `grounded`, `capture`, the
+# pipelines' composites and ends) is drawn: none of it is a node any more.
 
 REACHES_NOTHING = "reaches nothing"     # the spec's canvas word for an unreached node
-FEEDS = "feeds"                         # a cable from a pipeline's picture into `frame`
-FEEDS_NO_DELETE = ("frame is each pipeline's picture before its effects (the history, "
-                   "the hands laid on): nothing to delete — insert effects after it")
-RUN_KEPT = "the run starts at frame and ends at fx.image — insert effects into it"
-MAKER_KINDS = ("effect", "composite", "switch")
+MAKER_KINDS = ("effect", "composite", "switch")    # (`unreached` before the wired frame)
+D1_AFTER = "sits after"     # a cable drawn from a D1 `after` effect (`build`, `returns`)
+
+# V (the owner, 2026-10-24, row 373): a node's title by its kind …
+LABELS: dict[str, str] = {
+    "scene": "Scene", "shape": "Shape", "hands": "Hands", "layer": "Hands layer",
+    "guide": "Hands guide", "cloud": "Point cloud", "camera": "Camera",
+    "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
+    "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
+    "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
+    "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
+}
+# … and its hover, one line (V's hover column; an effect says its file's
+# own `@tip` when it has one)
+HOVERS: dict[str, str] = {
+    "shape": "The polytope. Its faces show the faces pattern, or the picture wired into faces.",
+    "scene": "Draws the shape and any hands wired into it, through the camera.",
+    "hands": ("The tracked hands as geometry: wire them into a scene, or draw them alone as "
+              "a hands layer."),
+    "layer": "The hands drawn alone, to lay over a picture or put through effects.",
+    "guide": "The hands' labels and tethers, laid over last and never bent.",
+    "cloud": "A listed cloud device, drawn in every scene.",
+    "camera": "The shared eye every scene draws through.",
+    "backdrop": "Lays the scene over a picture, at backdrop alpha.",
+    "lookback": ("Echoes and the dream of past frames, over its picture; records what is "
+                 "wired into capture."),
+    "pattern": ("What the faces show unless a picture is wired into them, and its media "
+                "layer."),
+    "channel": "A clip, still or live feed.",
+    "effect": "An effect: its knobs, on the picture wired into its image.",
+    "copy": "The same effect, with its knobs, on another picture.",
+    "composite": "Lays one picture over another.",
+    "switch": "Picks one of eight.",
+    "delay": "Last frame's picture.",
+    "resize": "A crop at its own size.",
+    "echo": "The k-th newest look-back frame.",
+    "dream": "The dream buffer.",
+    "output": "A window: shows its picture, the hands over it, the guide over all.",
+    rgraph.ALL_OUTPUTS: "What every output shows unless its own port is wired.",
+    # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
+    rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
+                    "see-through in overlay: wired into an output's port, that port shows it."),
+}
+# the words a delete or an add says (plan 35 G)
+OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows its ground"
+ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
+               "windows show their own wires, else their ground")
+STARTER_SAID = "scene starter: shape → scene → All outputs"
+IN_ALREADY = "{label} is in the graph already"
+NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
+NO_SUCH_WIRE = "{wire}: no such wire"
+NO_SUCH_COPY = "copy of {of}: no such effect instance in the graph"
 
 
-class FrameNode(rgraph.Node):
-    """`frame` on the canvas (plan 33 U): the pipelines' picture before
-    their effects, a source. A stand-in the view draws, never in a render
-    graph: the render graph's run reads its pipeline's own picture."""
+def kind_of(name: str) -> str | None:
+    """A canvas name's kind (plan 35 G): a wired frame's (`graph.
+    wire_node_kind(…, wired=True)`), All outputs' own key, the rig's camera
+    and clouds, and (R13) `ground` — no render node, but drawn so its wires
+    are seen; None for a name no wired frame has a node for (an old id,
+    `frame`, `fx`)."""
+    if not isinstance(name, str):
+        return None
+    if name == rgraph.ALL_OUTPUTS:
+        return rgraph.ALL_OUTPUTS
+    if name == CAMERA:
+        return CAMERA
+    if name == rgraph.CLOUD_KIND or name.startswith(f"{rgraph.CLOUD_KIND}."):
+        return "cloud"
+    kind = rgraph.wire_node_kind(name, wired=True)
+    return None if kind in ("frame", "fx") else kind
 
-    KIND = "frame"
-    INPUTS: ClassVar[dict[str, str]] = {}
-    OUTPUT = IMAGE
+
+def _takes(kind: str | None) -> dict[str, str]:
+    """A canvas kind's input ports (`graph.WIRED_TAKES`; All outputs' are an output's)."""
+    if kind == rgraph.ALL_OUTPUTS:
+        kind = "output"
+    return rgraph.WIRED_TAKES.get(kind or "", {})
+
+
+def _makes(kind: str | None) -> str | None:
+    """What a canvas kind puts out (`graph.WIRED_MAKES`; a cloud geometry)."""
+    if kind == "cloud":
+        return GEOMETRY
+    return rgraph.WIRED_MAKES.get(kind or "")
+
+
+def _slot_name(slots, n: int) -> str:
+    if isinstance(slots, Mapping):
+        return str(slots.get(n) or "")
+    for sl in slots or ():
+        if getattr(sl, "n", None) == n:
+            return str(getattr(sl, "name", "") or "")
+    return ""
+
+
+def label_of(name: str, slots=(), *, of: str = "") -> str:
+    """Node `name`'s title on the canvas (V, `LABELS`): `hands.2` "Hands 2",
+    `channel.a` "Channel A", `hands.2.layer` "Hands layer 2", `echo.3` "Echo
+    3", `copy.2` of `acid` "copy of acid (2)", an effect its instance name
+    with the dot a space ("acid 2"), a window its config name (`slots`: the
+    outputs, each with `n` and `name`, or {n: name}), else "Output N"."""
+    kind = kind_of(name)
+    if kind == rgraph.ALL_OUTPUTS:
+        return LABELS[kind]
+    if kind == "output":
+        n = int(name.partition(".")[2])
+        return _slot_name(slots, n) or f"{LABELS['output']} {n}"
+    if kind == "effect":
+        return name.replace(".", " ")
+    if kind == "copy":
+        n = rgraph.split_instance(name)[1]
+        what = f"{LABELS['copy']} {of}" if of else "copy"
+        return what if n == 1 else f"{what} ({n})"
+    if kind == "channel":
+        return f"{LABELS['channel']} {name.partition('.')[2].upper()}"
+    if kind in ("layer", "guide"):
+        n = rgraph.split_instance(rgraph.hands_of(name))[1]
+        return LABELS[kind] if n == 1 else f"{LABELS[kind]} {n}"
+    if kind in LABELS:
+        rest = name.partition(".")[2]
+        return f"{LABELS[kind]} {rest}" if rest else LABELS[kind]
+    return name
+
+
+def params_of(name: str, of: str = "") -> str:
+    """The prefix node `name`'s params are found by (V2: `graph.
+    param_prefix` — params keep their ids); a copy's knobs are its
+    original's (`fx.<of>`)."""
+    kind = kind_of(name)
+    if kind == "copy" and of:
+        return f"fx.{of}"
+    if kind in (rgraph.ALL_OUTPUTS, "cloud", None):
+        return name
+    return rgraph.param_prefix(name)
+
+
+def hover_of(name: str, slots=(), *, of: str = "", tip: str = "") -> str:
+    """Node `name`'s hover (V, `HOVERS`): what it is in one line (an
+    effect's own `@tip`, when its file has one), then its id and, where it
+    differs, its params' prefix — "… · id lookback · params dream.*", so
+    `dream.fade` under a node called Look-back reads why."""
+    kind = kind_of(name)
+    text = tip if kind == "effect" and tip else HOVERS.get(kind or "", "")
+    out = f"{text} · id {name}" if text else f"id {name}"
+    pre = params_of(name, of)
+    return out if pre == name else f"{out} · params {pre}.*"
+
+
+def side_head(n: VNode) -> str:
+    """A frame node's side-panel header (V2): its title, its id and, where it
+    differs, its params' prefix — "Look-back · lookback · params dream.*"."""
+    name = n.id.partition(":")[2]
+    of = getattr(n.ref, "effect", "") if kind_of(name) == "copy" else ""
+    pre = params_of(name, of)
+    head = f"{n.label} · {name}"
+    return head if pre == name else f"{head} · params {pre}.*"
+
+
+def _tip(reg, name: str) -> str:
+    """Effect instance `name`'s file's `@tip`, its first sentence (a hover is
+    one line); "" with no FxState to ask."""
+    specs = getattr(getattr(reg, "fx_state", None), "specs", None) or {}
+    spec = specs.get(name) or specs.get(rgraph.split_instance(name)[0])
+    tip = str(getattr(spec, "tip", "") or "")
+    head, dot, _ = tip.partition(". ")
+    return (head + "." if dot else tip).strip()
+
+
+def frame_names(spec) -> list[str]:
+    """Every node wired frame `spec` names, once, in section order: its
+    entries' (the hands, the effects, then the rest as read), then each
+    wire's ends (`ground` too, R13: drawn so its wires are seen) — with the hands node each
+    layer or guide draws by name just before it (no wire goes into a layer:
+    it draws its hands, and the hands' params are on that node)."""
+    if spec is None:
+        return []
+    raw: list[str] = [rgraph.wired_hands_name(h.n) for h in spec.hands]
+    raw += [e.name for e in spec.effects]
+    for _, got in spec.others:
+        name = getattr(got, "name", None)
+        if isinstance(name, str):
+            raw.append(name)
+    for w in spec.all_wires():
+        raw += [w.src, w.node]
+    out: list[str] = []
+    for name in dict.fromkeys(raw):
+        kind = kind_of(name)
+        if kind is None:
+            continue
+        if kind in ("layer", "guide") and rgraph.hands_of(name) not in out:
+            out.append(rgraph.hands_of(name))
+        if name not in out:
+            out.append(name)
+    return out
 
 
 def unreached(spec) -> frozenset[str]:
-    """The effects, composites and switches of section `spec` that reach
-    no sink (`graph.reaches`): drawn faint, never run — with a run or
-    without (R23, plan 33 T7: no stack runs what no wire reaches); a
+    """The nodes of section `spec` that reach no sink (`graph.reaches`):
+    drawn faint, never run. Plan 35 G: in a wired frame every kind — a
+    node declared or wired with no path to an output's port, All outputs'
+    or the look-back's capture (a hands node reaches with its layer or its
+    guide, which draw it by name; the windows and All outputs are the sinks,
+    never faint). Before the wired frame (a section a test reads as it
+    stands): the effects, composites and switches, as plan 33 drew them. A
     D1-placed effect sits where it is placed, so it reaches."""
     if spec is None:
         return frozenset()
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
+    if getattr(spec, "wired", False):
+        got |= {rgraph.hands_of(n) for n in got if kind_of(n) in ("layer", "guide")}
+        # (R15: an effect or a copy no wire feeds reads nothing — never built,
+        # faint, its outs kept)
+        fed = {w.node for w in spec.all_wires() if w.port == "image"}
+        got -= {n for n in got if kind_of(n) in ("effect", "copy") and n not in fed
+                and n not in {e.name for e in spec.effects if e.placed}}
+        return frozenset(n for n in frame_names(spec) if n not in got
+                         and kind_of(n) not in ("output", rgraph.ALL_OUTPUTS, rgraph.GROUND))
     names = {e.name for e in spec.effects} | {s.name for s in spec.switches}
     names |= {c.name for c in spec.composites()}
     names |= {n for w in spec.wires for n in (w.src, w.node)
@@ -770,21 +975,116 @@ def unreached(spec) -> frozenset[str]:
     return frozenset(n for n in names if n not in got)
 
 
-def _stand_in(name: str, spec) -> rgraph.Node | None:
-    """A render node of the section's unreached `name` for the canvas to
-    draw (never built into a graph, never run)."""
-    kind = rgraph.wire_node_kind(name)
+class GroundNode(rgraph.Node):
+    """`ground` on the canvas (R13): the source a wire into an output's port
+    names to show the window's background there. No render node is ever
+    built for it (the output clears to its ground); this stands in so the
+    wire is drawn, and can be deleted, like any other."""
+
+    KIND = "ground"
+    OUTPUT = IMAGE
+
+
+# a frame kind → the render class its node is (a built one is taken only
+# when it is of this class: a guide split out of its layer is the layer's
+# node, the backdrop the composite that lays the scene on; each such stands in)
+FRAME_CLASS: dict[str, type] = {
+    "scene": rgraph.Scene, "shape": rgraph.Shape, "hands": rgraph.Hands,
+    "layer": rgraph.HandsLayer, "guide": rgraph.Readout, "cloud": rgraph.PointCloud,
+    "backdrop": rgraph.BackdropNode, "lookback": rgraph.History,
+    "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
+    "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
+    "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
+    "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
+    rgraph.GROUND: GroundNode,
+}
+
+
+def _stand_in(name: str, spec=None) -> rgraph.Node | None:
+    """A render node of kind `name`'s for the canvas to draw where the
+    renderer built none (unreached, or not reached this frame): never built
+    into a graph, never run. Every kind of a wired frame has one; a copy's
+    `of` and a composite's blend are the section's (`spec`)."""
+    kind = kind_of(name)
+    if kind is None:
+        return None
+    rest = name.partition(".")[2]
     if kind == "effect":
         return rgraph.Effect(name, node=name)
-    if kind == "switch":
-        return rgraph.SwitchNode(name)
+    if kind == "copy":
+        of = next((c.of for c in (getattr(spec, "copies", ()) or ()) if c.name == name), "")
+        return rgraph.Copy(name, of)
     if kind == "composite":
-        c = next((c for c in spec.composites() if c.name == name), None)
+        c = next((c for c in (spec.composites() if spec is not None else ()) if c.name == name),
+                 None)
         return rgraph.Composite(name, blend=c.blend if c is not None else "over")
-    return None
+    if kind == "channel":
+        return rgraph.MediaNode(name, rest)
+    if kind == "cloud":
+        return rgraph.PointCloud(name, "")
+    if kind == "echo":
+        return rgraph.EchoNode(name, int(rest))
+    if kind in ("output", rgraph.ALL_OUTPUTS):
+        return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
+    if kind == CAMERA:
+        return None
+    return FRAME_CLASS[kind](name)
 
 
-MEDIA_MADE = (rgraph.Effect, rgraph.Composite, rgraph.SwitchNode)
+def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
+    """The render nodes the renderer built, by the canvas name each stands
+    for: an effect by its instance, a channel by `channel.<c>` (its first
+    node: the backdrop's own and a wire's are one channel), the rest by
+    name — each only when it is of its kind's class (`FRAME_CLASS`)."""
+    out: dict[str, rgraph.Node] = {}
+    for r in rnodes:
+        if isinstance(r, rgraph.Copy):
+            name = r.name
+        elif isinstance(r, rgraph.Effect):
+            name = r.effect
+        elif isinstance(r, rgraph.MediaNode):
+            name = rgraph.channel_name(r.channel)
+        else:
+            name = r.name
+        cls = FRAME_CLASS.get(kind_of(name) or "")
+        if cls is None or not isinstance(r, cls) or name in out:
+            continue
+        if cls is rgraph.Effect and isinstance(r, rgraph.Copy):
+            continue
+        out[name] = r
+    return out
+
+
+def frame_of(spec, render_graph=None):
+    """The wired frame the canvas draws (plan 35 G): the preset's section
+    when it is one (every load's); a section from before it (a test's) as
+    the load would wire it; with none, the frame the renderer drew (its
+    wiring), else `{"frame": "wired"}`'s nothing."""
+    if spec is not None and getattr(spec, "wired", False):
+        return spec
+    try:
+        if spec is not None:
+            doc = graphmigrate.wired_section(graphmigrate.renamed(spec.to_json()), spec)
+        else:
+            wiring = getattr(render_graph, "wiring", None)
+            if wiring is None:
+                return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
+            if getattr(wiring, "wired", False):
+                return rgraph.GraphSpec(
+                    hands=tuple(h for h in wiring.nodes() if h.n != 1 or h.draw != "solid"),
+                    laid=wiring.blend, effects=tuple(wiring.placed),
+                    others=(*(("composite", c) for c in wiring.composites),
+                            *(("copy", c) for c in wiring.copies)),
+                    wires=tuple(wiring.wires), wired=True)
+            doc = graphmigrate.wired_of(wiring)
+        return rgraph.read_graph(doc)
+    except (rgraph.GraphError, ValueError):
+        return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
+
+
+# (plan 34 T4: a resize of the media alone too — `channel.a → resize →
+# acid.2` runs on from the media, as a switch over the channels does)
+MEDIA_MADE = (rgraph.Effect, rgraph.Composite, rgraph.SwitchNode, rgraph.ResizeNode)
 
 
 def media_made(r) -> bool:
@@ -792,7 +1092,7 @@ def media_made(r) -> bool:
     made of the media alone (plan 33 T6's layout rule): every path back
     from it through its picture inputs starts at a channel or the pattern,
     and there is one. Such a node is a branch of the media and sits in the
-    media area, so `media.a → acid.2 → shape.faces` runs left to right."""
+    media area, so `channel.a → acid.2 → shape.faces` runs left to right."""
     if not isinstance(r, MEDIA_MADE):
         return False
     seen: set[int] = set()
@@ -809,7 +1109,7 @@ def media_made(r) -> bool:
         ins = [x for x in getattr(n, "inputs", {}).values() if x is not None]
         if not ins:
             if n is not r:
-                return False            # a scene picture (the frame, the history …)
+                return False            # a scene picture (the look-back, the scene …)
             continue
         todo.extend(ins)
     return heads > 0
@@ -817,14 +1117,15 @@ def media_made(r) -> bool:
 
 def build(table: Bindings, reg: Registry, router: Router | None = None, devices=None,
           render_graph: rgraph.Graph | None = None, spec=None, *, lanes=None,
-          bands: Iterable[str] | None = None, template=None) -> View:
+          bands: Iterable[str] | None = None, template=None, slots=()) -> View:
     """The view of `table`, `reg`, `router`, the device registry `devices`
     and the render graph `render_graph` (the renderer's last), with the
     preset's graph `spec` kept on the view. `lanes` are the analyzer's
     lanes this frame, normalised (None: not live); `bands` their names
     (else the Router's published ``lane`` labels); `template` the loaded
     preset's desk template as ``(name, rows)`` (plan 28 N5), None when it
-    names none."""
+    names none; `slots` the rig's outputs (each with `n` and `name`: a
+    window's title is its config name, plan 35 G)."""
     view = View(spec=spec)
     nodes: dict[str, VNode] = {}
     src_pins: dict[tuple | str, str] = {}       # lane key → pin
@@ -1019,103 +1320,57 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                  "" if b.layer is None or shadowed else b.layer)
         return pin, inside
 
-    # ---- the render graph's nodes ----
+    # ---- the wired frame's nodes (plan 35 G): the section's, in the owner's ids ----
     ctx = _Ctx()
     rnodes = list(render_graph.order) if render_graph is not None else []
-    ctx.names = {r.name for r in rnodes}
-    effects: dict[str, str] = {}
-    for r in rnodes:
-        if isinstance(r, rgraph.Effect):
-            # the scene pipeline's node is named by the effect; else the first
-            if r.name == r.effect or r.effect not in effects:
-                effects[r.effect] = r.name
-        elif isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
-            ctx.first_cloud = r.name
-    ctx.effect_node = effects
-    ctx.effects = sorted(effects, key=len, reverse=True)   # `acid.2` before `acid`
-    # plan 32 T10: the eight channels are source nodes whatever the render
-    # graph holds — a channel nothing reads this frame has no node there,
-    # and one that is both the backdrop and a wire's start has two
-    # (`media.a`, `media.a(wire)`): each is drawn as its channel's one node
-    chans: dict[str, rgraph.MediaNode] = {}
-    for r in rnodes:
-        if isinstance(r, rgraph.MediaNode) and (r.channel not in chans
-                                                or r.name == rgraph.media_name(r.channel)):
-            chans[r.channel] = r
-    for c in rgraph.MEDIA_CHANNELS:
-        name = rgraph.media_name(c)
-        ctx.names.add(name)
-        r = chans.get(c) or rgraph.MediaNode(name, c)       # a stand-in: never drawn into
-        n = add_node(VNode(f"render:{name}", "render", name, ref=r))
-        add_port(n, VPort(f"rout:{name}", r.OUTPUT, OUT, r.OUTPUT))
-    # plan 33 U: the pattern and the backdrop always (wire ends before
-    # anything is wired there), `frame` beside the pipelines' ends, and a
-    # stand-in for each unreached node of the section (`unreached`) — none
-    # of them ever drawn into
-    gone = unreached(spec)
-    stand: dict[str, rgraph.Node] = {}
-    if "pattern" not in ctx.names:
-        stand["pattern"] = rgraph.PatternNode("pattern")
-    if "backdrop" not in ctx.names:
-        stand["backdrop"] = rgraph.BackdropNode("backdrop")
-    # (`frame` while the render graph's wiring says its run, as every
-    # loaded preset's does: one that says none — no preset loaded, a graph
-    # put together by hand — has the empty run, R23, plan 33 T7, and its
-    # pipelines are drawn from their pictures straight to their ends)
-    ends = [r for r in rnodes if isinstance(r, rgraph.Fx)]
-    wired_run = getattr(getattr(render_graph, "wiring", None), "run", None) is not None
-    if ends and wired_run:
-        stand["frame"] = FrameNode("frame")
-    built_fx = {r.effect for r in rnodes if isinstance(r, rgraph.Effect)}
-    for name in sorted(gone):
-        if name in ctx.names or name in built_fx:
-            continue
-        r = _stand_in(name, spec)
-        if r is not None:
-            stand[name] = r
-    ctx.names |= set(stand)
-    # the section's spec name → the drawn node standing for it (an effect
-    # by its scene pipeline's node, a channel by its one node)
-    by_name: dict[str, rgraph.Node] = {}
-    for r in (*rnodes, *stand.values()):
-        if isinstance(r, rgraph.Effect):
-            if r.name == r.effect or r.effect not in by_name:
-                by_name[r.effect] = r
-        elif isinstance(r, rgraph.MediaNode):
-            by_name.setdefault(rgraph.media_name(r.channel), r)
-        elif isinstance(r, rgraph.Fx):
-            by_name.setdefault("fx", r)
-        else:
-            by_name.setdefault(r.name, r)
-    for c in rgraph.MEDIA_CHANNELS:
-        by_name.setdefault(rgraph.media_name(c), nodes[f"render:{rgraph.media_name(c)}"].ref)
-    # a stand-in's inputs are the section's wires into it (its cables in,
-    # and what the layout reads its picture as made of: `media_made`)
-    for w in (spec.wires if spec is not None else ()):
-        r, src = stand.get(w.node), by_name.get(w.src)
-        if r is not None and src is not None and w.port in r.INPUTS and w.node in gone:
+    frame = frame_of(spec, render_graph)
+    built = _built(rnodes)
+    copies = {c.name: c.of for c in frame.copies}
+    # the canvas's names: the eight channels always (plan 32 T10: what a
+    # wire starts from), the rig's clouds, the section's names, All outputs
+    # and every window the renderer drew (and any a wire names)
+    names: list[str] = [rgraph.channel_name(c) for c in rgraph.MEDIA_CHANNELS]
+    names += [r.name for r in rnodes if isinstance(r, rgraph.PointCloud)]
+    names += frame_names(frame)
+    outs = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
+    outs |= {n for n in names if kind_of(n) == "output"}
+    names = [n for n in dict.fromkeys(names) if kind_of(n) not in ("output", rgraph.ALL_OUTPUTS)]
+    names += [rgraph.ALL_OUTPUTS, *sorted(outs, key=lambda n: int(n.partition(".")[2]))]
+    gone = unreached(frame)
+    refs: dict[str, rgraph.Node] = {}
+    stood: set[str] = set()
+    for name in names:
+        r = built.get(name)
+        if r is None:
+            r = _stand_in(name, frame)
+            if r is None:
+                continue
+            stood.add(name)
+        refs[name] = r
+    # a stand-in's inputs are the section's wires into it (what the layout
+    # reads its picture as made of: `media_made`)
+    for w in frame.all_wires():
+        r, src = refs.get(w.node), refs.get(w.src)
+        if w.node in stood and src is not None and w.port in r.INPUTS:
             r.inputs[w.port] = src
-    # the run's head: each pipeline's first cable of its run leaves `frame`,
-    # and the pipeline's own picture feeds `frame` (plan 33 U)
-    heads: dict[int, rgraph.Node] = {}          # id(first of the run) → the picture
-    run_set = set(getattr(render_graph, "run", ()) or ())
-    if "frame" in stand:
-        for end in ends:
-            prev, n = end, end.inputs.get("image")
-            while (isinstance(n, rgraph.Effect) and n.placed is None
-                   and n.effect in run_set):
-                prev, n = n, n.inputs.get("image")
-            if n is not None:
-                heads[id(prev)] = n
-    for r in (*rnodes, *stand.values()):
-        if isinstance(r, rgraph.MediaNode):
-            continue
-        kind = "output" if isinstance(r, rgraph.Output) else "render"
-        n = add_node(VNode(f"render:{r.name}", kind, r.name, ref=r))
-        for port, typ in r.INPUTS.items():
-            add_port(n, VPort(f"rin:{r.name}/{port}", port, IN, typ))
-        if r.OUTPUT is not None:
-            add_port(n, VPort(f"rout:{r.name}", r.OUTPUT, OUT, r.OUTPUT))
+    for name, r in refs.items():
+        kind = kind_of(name)
+        vkind = ("channel" if kind == "channel" else
+                 "output" if kind in ("output", rgraph.ALL_OUTPUTS) else "render")
+        of = copies.get(name, "")
+        n = add_node(VNode(f"render:{name}", vkind, label_of(name, slots, of=of), ref=r,
+                           status=hover_of(name, slots, of=of,
+                                           tip=_tip(reg, name) if kind == "effect" else "")))
+        for port, typ in _takes(kind).items():
+            add_port(n, VPort(f"rin:{name}/{port}", port, IN, typ))
+        made = _makes(kind)
+        if made is not None:
+            add_port(n, VPort(f"rout:{name}", made, OUT, made))
+        if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
+            ctx.first_cloud = name
+    ctx.names = set(refs)
+    ctx.effect_node = {name: name for name in refs if kind_of(name) == "effect"}
+    ctx.effects = sorted(ctx.effect_node, key=len, reverse=True)   # `acid.2` before `acid`
 
     # ---- the params: every one a cable can reach ----
     rows = list(table.bindings)
@@ -1177,8 +1432,8 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                       live=_norm(p)))
         else:
             rid = render_owner(p, ctx)
-            if rid == f"render:{EYE}" and rid not in nodes:
-                add_node(VNode(rid, "render", "eye"))
+            if rid == f"render:{CAMERA}" and rid not in nodes:
+                add_node(VNode(rid, "render", label_of(CAMERA), status=hover_of(CAMERA)))
             owner = nodes.get(rid) if rid is not None else None
             if owner is None:
                 owner = _group_node(nodes, p.group or "misc", add_node)
@@ -1265,31 +1520,27 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                                       ref=(li, env), kind="lane", off=mute or not running,
                                       label=f"lane {li + 1} fires env {env}{why}",
                                       addr=seq_node.port(src).addr))
-    fed: list[str] = []
-    for r in (*rnodes, *stand.values()):
-        for port, src in r.inputs.items():
-            if src is None:
-                continue
-            if port == "image" and heads.get(id(r)) is src:
-                # plan 33 U: the run's first cable is the section's
-                # `frame → <first>.image`; the picture feeds `frame`
-                f = stand["frame"]
-                view.cables.append(VCable(f"wire:frame>{r.name}/{port}", "rout:frame",
-                                          f"rin:{r.name}/{port}", IMAGE, ref=(f, r, port),
-                                          kind="render"))
-                if src.name not in fed:
-                    fed.append(src.name)
-                continue
-            out = (rgraph.media_name(src.channel) if isinstance(src, rgraph.MediaNode)
-                   else src.name)          # a channel's every node is its one node's out
-            view.cables.append(VCable(f"wire:{src.name}>{r.name}/{port}", f"rout:{out}",
-                                      f"rin:{r.name}/{port}", r.INPUTS[port],
-                                      ref=(src, r, port), kind="render"))
-    for name in fed:
-        view.cables.append(VCable(f"{FEEDS}:{name}>frame", f"rout:{name}",
-                                  stub_in("render:frame"), IMAGE, kind=FEEDS,
-                                  label=f"{name} is frame here: the picture this pipeline's "
-                                        "run starts from"))
+    # plan 35 G: each wire of the section, as it stands, a render cable —
+    # `ground`'s from the Ground node (R13), a wire into a
+    # window this rig has not open dormant (plan 35 T4: it builds nothing)
+    windows = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
+    # (plan 30 D1's `after X`, kept in an old preset's frame: what reads X
+    # reads the effect — drawn from it, the cable still X's wire)
+    after = {e.where[1]: e.name for e in frame.effects
+             if e.where is not None and e.where[0] == "after"
+             and not e.where[1].startswith("output.")}
+    for w in frame.all_wires():
+        lay = after.get(w.src) if w.node != after.get(w.src) else None
+        src, dst = f"rout:{lay or w.src}", f"rin:{w.node}/{w.port}"
+        if src not in view.pins or dst not in view.pins:
+            continue
+        shut = (render_graph is not None and kind_of(w.node) == "output"
+                and w.node not in windows)
+        said = (f"no {w.node} this frame" if shut else
+                f"{lay} {D1_AFTER} {w.src}: what reads {w.src} reads it" if lay else "")
+        view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
+                                  _takes(kind_of(w.node)).get(w.port, IMAGE), ref=w,
+                                  kind="render", dormant=shut, off=shut, label=said))
 
     # ---- what is patched; the nodes in column order ----
     hit = {c.src_port for c in view.cables} | {c.dst_port for c in view.cables}
@@ -1308,7 +1559,7 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     # through wire over it)
     cabled: set[str] = set()
     for c in view.cables:
-        if c.kind in ("render", FEEDS):
+        if c.kind == "render":
             continue
         for nid in (view.pins.get(c.src_port, ("",))[0], view.pins.get(c.dst_port, ("",))[0]):
             ref = nodes[nid].ref if nid in nodes else None
@@ -1316,14 +1567,15 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
                 cabled.add(ref.effect)
     for n in nodes.values():
         n.area = area_of(n)
-        # plan 33 U: an unreached node is drawn faint, and so never idle —
-        # it was just added, or it waits to be wired in
-        ref = n.ref
-        n.faint = n.kind == "render" and isinstance(ref, MEDIA_MADE) and (
-            (ref.effect if isinstance(ref, rgraph.Effect) else ref.name) in gone)
-        n.idle = not n.faint and (is_idle(n, macros, named) or (
-            n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled) or (
-            channel_empty(n, reg)))
+        # plan 33 U, plan 35 G: a node of the section that reaches nothing
+        # is drawn faint, and so never idle — it was just added, or it
+        # waits to be wired in; (plan 35 G) a channel with nothing in its
+        # bin and no cable sits on MEDIA's idle line, as an idle macro does
+        n.faint = n.kind in FRAME_VKINDS and n.id.partition(":")[2] in gone
+        n.idle = not n.faint and (
+            (n.kind == "channel" and is_idle(n, macros, named) and channel_empty(n, reg))
+            or (n.kind != "channel" and is_idle(n, macros, named))
+            or (n.kind == "render" and effect_off(n, reg) and n.ref.effect not in cabled))
     view.nodes = list(nodes.values())
     _columns(view, render_graph)
     refresh(view, reg, router, lanes)
@@ -1483,13 +1735,20 @@ def seq_key(reg: Registry) -> tuple:
 # Plan 32 T10 adds a sixth, *media*, between the modulation and the
 # geometry: the eight channels are sources of pictures (what the folder
 # and the feeds say), read by the shaders (an output, an effect's aux, the
-# backdrop under the scene) and by the faces; the backdrop's node with them.
-CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS = (
-    "controllers", "audio", "modulation", "media", "geometry", "shaders")
+# backdrop under the scene) and by the faces.
+#
+# Plan 35 G: the frame's areas by primitive, the way a picture is made —
+# media, the scene, the look-back, the effects, the outputs — where the
+# geometry and the shaders were: the frame is ordinary nodes now, so the
+# areas name what each is, not the pipelines it used to be part of.
+CONTROLLERS, AUDIO, MODULATION, MEDIA = "controllers", "audio", "modulation", "media"
+SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA, OUTPUTS_AREA = "scene", "lookback", "effects", "outputs"
 OTHER = "other"
-AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, GEOMETRY, SHADERS)   # left to right
+AREAS = (CONTROLLERS, AUDIO, MODULATION, MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA,
+         OUTPUTS_AREA)                                       # left to right
 SHARES = {OTHER: AUDIO}       # an area drawn under another's, in its column
-ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, GEOMETRY, SHADERS)
+ORDER = (CONTROLLERS, AUDIO, OTHER, MODULATION, MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA,
+         OUTPUTS_AREA)
 
 # the one table: a node's area by its kind, a group node by its id
 # (``group:<param group>``), a render node by its class (or a base class)
@@ -1499,39 +1758,45 @@ AREA: dict[str, str] = {
     "analyzer": AUDIO,
     "lfo": MODULATION, "env": MODULATION, SEQ: MODULATION,
     "modifier": MODULATION, "macro": MODULATION,
-    "output": SHADERS,
+    "output": OUTPUTS_AREA, "channel": MEDIA,
     # a group node, by its param group
     "group:band": AUDIO, "group:bands": AUDIO, "group:tempo": AUDIO,
     "group:master": AUDIO, "group:audio": AUDIO, "group:scene": AUDIO,
     "group:lfo": MODULATION, "group:mod": MODULATION, "group:macro": MODULATION,
     "group:env": MODULATION, "group:seq": MODULATION,
-    "group:view": GEOMETRY, "group:rot": GEOMETRY, "group:pattern": GEOMETRY,
-    "group:camera": GEOMETRY, "group:eye": GEOMETRY, "group:ghost": GEOMETRY,
-    "group:hands": GEOMETRY, "group:cloud": GEOMETRY,
-    "group:fx": SHADERS, "group:dream": SHADERS, "group:output": SHADERS,
-    "group:overlay": SHADERS,
-    "group:media": MEDIA, "group:backdrop": MEDIA, "group:switch": MEDIA,
-    # a render node, by its class: the geometry and what draws it
-    f"render:{EYE}": GEOMETRY,
-    "Shape": GEOMETRY, "Hands": GEOMETRY, "PointCloud": GEOMETRY, "Scene": GEOMETRY,
-    "HandsLayer": GEOMETRY, "Readout": GEOMETRY, "Cover": GEOMETRY,
+    "group:view": SCENE_AREA, "group:rot": SCENE_AREA, "group:pattern": SCENE_AREA,
+    "group:camera": SCENE_AREA, "group:eye": SCENE_AREA, "group:ghost": SCENE_AREA,
+    "group:hands": SCENE_AREA, "group:cloud": SCENE_AREA, "group:backdrop": SCENE_AREA,
+    "group:dream": LOOKBACK_AREA,
+    "group:fx": EFFECTS_AREA,
+    "group:output": OUTPUTS_AREA, "group:overlay": OUTPUTS_AREA,
+    "group:media": MEDIA, "group:switch": MEDIA,
+    # a render node, by its class. The scene: what it draws and what it is
+    # laid on — the shape, the hands, their layers and guides, a cloud, the
+    # camera it draws through, the backdrop
+    f"render:{CAMERA}": SCENE_AREA,
+    "Shape": SCENE_AREA, "Hands": SCENE_AREA, "HandsLayer": SCENE_AREA, "Readout": SCENE_AREA,
+    "PointCloud": SCENE_AREA, "Scene": SCENE_AREA, "BackdropNode": SCENE_AREA,
+    # the look-back: the ring's pictures
+    "History": LOOKBACK_AREA, "EchoNode": LOOKBACK_AREA, "DreamNode": LOOKBACK_AREA,
+    # the effects and what lays or crops a picture between them (a copy is
+    # an `Effect`: found by its base class)
+    "Effect": EFFECTS_AREA, "Composite": EFFECTS_AREA, "ResizeNode": EFFECTS_AREA,
+    # the windows and All outputs
+    "Output": OUTPUTS_AREA, "GroundNode": OUTPUTS_AREA,
     # the media channels (plan 32 T10), and (plan 33 U) the pictures made
-    # beside them: the backdrop they lie under the scene as, the pattern the
-    # faces draw, a switch picking one of them — and any effect or
-    # composite made of the media alone (`media_made`, by `area_of`)
-    "MediaNode": MEDIA, "BackdropNode": MEDIA, "PatternNode": MEDIA, "SwitchNode": MEDIA,
-    # …and the pictures it goes through: (plan 33 U) the run from `frame`
-    # to the pipeline's end (`fx`)
-    "History": SHADERS, "Capture": SHADERS, "Effect": SHADERS, "Fx": SHADERS,
-    "Composite": SHADERS, "Output": SHADERS, "FrameNode": SHADERS,
+    # beside them: the pattern the faces draw, a switch picking one of them,
+    # a delay's last frame — and any effect or composite made of the media
+    # alone (`media_made`, by `area_of`)
+    "MediaNode": MEDIA, "PatternNode": MEDIA, "SwitchNode": MEDIA, "Delay": MEDIA,
 }
 TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
-          MODULATION: "MODULATION", MEDIA: "MEDIA", GEOMETRY: "GEOMETRY",
-          SHADERS: "SHADERS"}
+          MODULATION: "MODULATION", MEDIA: "MEDIA", SCENE_AREA: "SCENE",
+          LOOKBACK_AREA: "LOOK-BACK", EFFECTS_AREA: "EFFECTS", OUTPUTS_AREA: "OUTPUTS"}
 # a title too long for its room at the floor size (review round 1)
 SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
-                MEDIA: "MED", GEOMETRY: "GEO", SHADERS: "SHD"}
-
+                MEDIA: "MED", SCENE_AREA: "SCN", LOOKBACK_AREA: "LKB", EFFECTS_AREA: "FX",
+                OUTPUTS_AREA: "OUT"}
 COL_W = 260.0          # canvas units between two columns
 ROW_H = 22.0           # one port line
 HEAD_H = 34.0          # a node's title and padding
@@ -1543,26 +1808,27 @@ IDLE_H = HEAD_H        # an area's idle line
 def area_of(n: VNode) -> str:
     """The area node `n` is laid out in (`AREA`): a group node by its id, a
     render node by its class or a base of it (a render class no row names
-    is a shader: it is in the picture's chain), every other node by its
+    is an effect's: it is in the picture's chain), every other node by its
     kind; a node the table does not name is `OTHER`. Plan 33 T6: an
     effect, composite or switch made of the media alone (`media_made`) is
     the media's."""
-    if n.kind == "group" or n.id == f"render:{EYE}":
+    if n.kind == "group" or n.id == f"render:{CAMERA}":
         return AREA.get(n.id, OTHER)
-    if n.kind in ("render", "output") and n.ref is not None:
+    if n.kind in FRAME_VKINDS and n.ref is not None:
         if media_made(n.ref):
             return MEDIA
         for cls in type(n.ref).__mro__:
             if cls.__name__ in AREA:
                 return AREA[cls.__name__]
-        return SHADERS
+        return EFFECTS_AREA
     return AREA.get(n.kind, OTHER)
 
 
 # which kinds may sit idle (`is_idle`): a node of any other kind is always
 # drawn — the analyzer, a modifier just picked (it is dropped onto a cable
-# next), a render node, a connected device, a placeholder (it has rows)
-IDLE_KINDS = ("macro", "lfo", "env", SEQ, "group", "device")
+# next), a render node, a connected device, a placeholder (it has rows);
+# plan 35 G: a channel, while its bin is empty too (`channel_empty`)
+IDLE_KINDS = ("macro", "lfo", "env", SEQ, "group", "device", "channel")
 IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle LFOs"),
               "env": ("idle envelope", "idle envelopes"),
               SEQ: ("idle sequencer", "idle sequencers"),
@@ -1570,10 +1836,10 @@ IDLE_NOUNS = {"macro": ("idle macro", "idle macros"), "lfo": ("idle LFO", "idle 
               "effect": ("off effect", "off effects"),
               "channel": ("empty channel", "empty channels"),
               "off": ("off device", "off devices"), "lost": ("lost device", "lost devices")}
-# plan 32 T10: the backdrop's node (its channel picker, alpha and history
-# switch) is the media area's one setting: drawn with nothing patched, so
-# the area always says what is under the scene
-ALWAYS_DRAWN = ("group:backdrop",)
+# plan 32 T10 drew the backdrop's group node always; plan 35 G: the
+# backdrop is a node of the section, drawn when wired or declared, and its
+# group node idles like any group (none is always drawn)
+ALWAYS_DRAWN: tuple[str, ...] = ()
 NOUN_ORDER = ("macro", "lfo", "env", SEQ, "effect", "channel", "group", "off", "lost")
 
 
@@ -1675,7 +1941,7 @@ def idle_id(area: str) -> str:
     return f"idle:{area}"
 
 
-SHADER_ROW = 4         # the shaders' chain wraps into rows of this many columns (Z rows)
+SHADER_ROW = 4         # the effects' chain wraps into rows of this many columns (Z rows)
 THROUGH = "through"    # a display-only wire over a run of hidden (off) effects
 
 
@@ -1769,28 +2035,22 @@ def _grid(view: View, opened: set, extra: Iterable[VCable]):
     every drawn node but an idle one shown under its line — each area's
     span in columns and its first column. An area's columns are its
     depths (`_depths`, over the drawn nodes' cables and the through
-    wires); the shaders' outputs one past their deepest node, and their
-    depths wrapped into rows of `SHADER_ROW` (Z order: every row left to
-    right). The areas follow one another in `AREAS`; `OTHER` takes the
+    wires); the effects' depths wrapped into rows of `SHADER_ROW` (Z order:
+    every row left to right; plan 35 G: the outputs are an area of their
+    own). The areas follow one another in `AREAS`; `OTHER` takes the
     audio's first column."""
     def gridded(n: VNode) -> bool:
-        return not n.idle or (n.area in opened and n.kind == "render")
+        return not n.idle or (n.area in opened and n.kind in ("render", "channel"))
 
     nodes = [n for n in view.nodes if n.area and gridded(n)]
     ids = {n.id for n in nodes}
     links = [(a, b) for a, b in _links(view, (*view.cables, *extra))
              if a in ids and b in ids]
     depth = _depths(nodes, links)
-    sh = [n for n in nodes if n.area == SHADERS]
-    if any(n.kind == "output" for n in sh):
-        last = max((depth[n.id] for n in sh if n.kind != "output"), default=-1) + 1
-        for n in sh:
-            if n.kind == "output":
-                depth[n.id] = last
     local: dict[str, tuple[int, int]] = {}
     for n in nodes:
         d = depth[n.id]
-        if n.area == SHADERS:
+        if n.area == EFFECTS_AREA:
             local[n.id] = (d % SHADER_ROW, d // SHADER_ROW)
         elif n.area == OTHER:
             local[n.id] = (0, 0)
@@ -1833,7 +2093,7 @@ class Layout:
     title (`titles`, over its first column), each area's idle line
     (`lines`) and the idle nodes it stands for (`idle`); how many columns
     each area spans (`spans`); each laid-out node's grid column (`cols`)
-    and row (`rows`: only the shaders wrap); the through wires over the
+    and row (`rows`: only the effects wrap); the through wires over the
     hidden effects (`throughs`)."""
 
     nodes: dict[str, tuple[float, float]] = field(default_factory=dict)
@@ -1852,22 +2112,33 @@ TAKEN_BACK = (rgraph.Shape, rgraph.PatternNode, rgraph.BackdropNode, rgraph.Swit
 
 
 def returns(view: View, lay: Layout) -> set[str]:
-    """The ids of the wires that run back by design: inside the shaders,
+    """The ids of the wires that run back by design: inside the effects,
     from one row of the wrapped chain to a later one (the row's last
-    output to the next row's first input); and (plan 33 T6) a picture the
-    scene made, taken back from the shaders into a sink that sits left of
-    them (`TAKEN_BACK`: `history → acid.2 → switch.in1`; into the faces,
-    the pattern or the backdrop such a picture is a loop — the scene draws
+    output to the next row's first input); (plan 33 T6) a picture the
+    scene made, taken back into a sink that sits left of where it was made
+    (`TAKEN_BACK`: `lookback → acid.2 → switch.in1`; into the faces, the
+    pattern or the backdrop such a picture is a loop — the scene draws
     them — and is never built) — a picture made of the media alone sits
-    with the media (`media_made`), so its wire runs right. Every other
-    wire runs right."""
+    with the media (`media_made`), so its wire runs right; and (plan 35 G)
+    every wire into `lookback.capture` and into a delay's `image`: what is
+    kept for the frames after, read back where its ring or its delay sits.
+    Every other wire runs right."""
     out = set()
+    order = {a: k for k, a in enumerate(AREAS)}
     for c in (*view.cables, *lay.throughs):
         a, b = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
         if a is None or b is None:
             continue
-        if a.area == b.area == SHADERS and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0) or (a.area == SHADERS and b.area in (MEDIA, GEOMETRY)
-              and isinstance(b.ref, TAKEN_BACK) and c.type == IMAGE):
+        kept = c.dst_port == "rin:lookback/capture" or (
+            isinstance(b.ref, rgraph.Delay) and c.dst_port.endswith("/image"))
+        # (an old preset's D1 `after X` effect, drawn where X's readers read
+        # it: it sits with the effects, its reader may sit left of them)
+        kept = kept or (c.kind == "render" and f" {D1_AFTER} " in c.label)
+        wrapped = (a.area == b.area == EFFECTS_AREA
+                   and lay.rows.get(b.id, 0) > lay.rows.get(a.id, 0))
+        taken = (order.get(a.area, 0) > order.get(b.area, 0) and isinstance(b.ref, TAKEN_BACK)
+                 and c.type == IMAGE)
+        if kept or wrapped or taken:
             out.add(c.id)
     return out
 
@@ -1994,7 +2265,7 @@ def home(n: VNode) -> str:
     content), the show's for the rig (devices — a layered desk's every
     node, a placeholder — sources, the analyzer, the outputs, a session
     group's node)."""
-    if n.kind in ("modifier", "macro", "render", TEMPLATE, *BANK_SCHEMES, SEQ):
+    if n.kind in ("modifier", "macro", "render", "channel", TEMPLATE, *BANK_SCHEMES, SEQ):
         return PRESET
     if n.kind == "group":
         group = n.id.partition(":")[2]
@@ -2118,6 +2389,9 @@ def summary(n: VNode) -> list[str]:
             lines.append(_count(len(pics), "picture port"))
         if params:
             lines.append(_loudest(p for p in params if p.patched))
+        said = getattr(n.ref, "said", "")   # plan 34 T5: the node's own words
+        if said:
+            lines.insert(0, said)
         if isinstance(n.ref, rgraph.SwitchNode):
             lines.insert(0, switch_pick(n))
         if n.faint:                         # plan 33 U: unreached, said first
@@ -2416,13 +2690,15 @@ class Edit:
         self.graph, self.render, self.push = graph, render, push
         self.said = ""
         self.added = ""         # plan 33 U: the node the last add or insert made (its name)
+        self.slots = ()         # plan 35 G: the rig's outputs (a window's name in the words)
 
     # ---- the render graph (plan 28 N4): each returns None (done; its
     # words in `said`) or a refusal in words, nothing changed ----
 
     def wire(self, src_port: str, dst_port: str, dry: bool = False) -> str | None:
-        """A picture from `src_port` into `dst_port` (a geometry cable: the
-        hands node's place). `dry`: only say whether it may be."""
+        """A picture (or, into `scene.geometry`, geometry) from `src_port`
+        into `dst_port`: a wire of the section. `dry`: only say whether it
+        may be."""
         return render_wire(self, src_port, dst_port, dry)
 
     def wire_refusal(self, src_port: str, dst_port: str) -> str | None:
@@ -2431,30 +2707,37 @@ class Edit:
 
     def unwire(self, cable, dst: str | None = None) -> str | None:
         """Take a render cable (a `VCable`, or its two ends; one port's
-        name alone: whatever is wired into it) out of the graph."""
+        name alone: whatever is wired into it) out of the graph — any wire
+        of the section (plan 35 G)."""
         return render_unwire(self, cable, dst)
 
     def add_node(self, kind: str, file: str | None = None, **settings) -> str | None:
-        """The picker: an effect (R25: the file itself when nothing in the
+        """The picker (plan 35 G, `picker`): a frame node (once each), a
+        hands node, an effect (R25: the file itself when nothing in the
         section holds it, else the lowest free instance, switched on), a
-        hands node (`HandsAt(n + 1)`), a composite or (plan 33 U) a switch
-        — an effect, a composite and a switch on no wire (unreached, faint,
-        until one is wired). The new node's name is `added`."""
+        copy of an instance (`file`), a composite, a switch, plan 34's
+        delay, resize, echo (`file`: its index) and dream — each on no wire
+        (unreached, faint, until one is wired). The new node's name is
+        `added`."""
         return render_add(self, kind, file, **settings)
+
+    def starter(self) -> str | None:
+        """The picker's "scene starter" (plan 35 G): `shape → scene.geometry`
+        and `scene → output.all.image` in one landing."""
+        return render_starter(self)
 
     def insert_effect(self, cable, file: str) -> Refusal | None:
         """Plan 33 U: effect `file` onto picture cable `cable` (a `VCable`,
         or its two ends: pins or the section's names): `src → new.image`,
         `new → dst`, in one landing (one undo step) — R25: the file itself
         when nothing in the section holds it, else the lowest free instance,
-        switched on in the same step.
-        Into the run's `frame → fx.image` it is the run's one effect (R9)."""
+        switched on in the same step."""
         why = render_insert(self, cable, file)
         return Refusal(why) if why is not None else None
 
     def switch_channels(self, port: str) -> str | None:
         """R28: the picker's "switch over the channels ▸ faces media /
-        backdrop" — a new switch over `media.a … h` into `port`
+        backdrop" — a new switch over `channel.a … h` into `port`
         (`pattern.media`, `backdrop.image`) at the channel that fed it, one
         undo step (`render_channel_switch`). The switch's name is `added`."""
         return render_channel_switch(self, port)
@@ -2469,14 +2752,15 @@ class Edit:
         return Refusal(why) if why is not None else None
 
     def drop_node(self, node: str) -> str | None:
-        """Delete a render node — an extra effect instance, hands node or
-        composite — out of the section, with every wire on it."""
+        """Delete a render node — any node of the section (plan 35 G): its
+        entry and every wire on it go, in one undo step; a window's wires
+        go (it is the rig's); the camera and a cloud are the rig's."""
         return render_drop(self, node)
 
     remove_render_node = drop_node          # N3's name for it (`remove_node`)
 
     def set_node(self, node: str, **settings) -> str | None:
-        """A node's setting: a hands node's `draw` / `into`, a composite's `blend`."""
+        """A node's setting: a hands node's `draw`, a composite's `blend`."""
         return render_set(self, node, **settings)
 
     # ---- what a pin is ----
@@ -2957,7 +3241,7 @@ class Edit:
             kind = ("modifier" if modmod.number(nid) else "macro" if is_macro(nid)
                     else "render" if nid.startswith("render:")
                     else nid.partition(".")[0] if voice_of(nid) else "")
-        if kind in ("render", "output"):
+        if kind in FRAME_VKINDS:
             return self._render("remove_render_node", nid)
         if kind in BANK_SCHEMES:
             return self.remove_voice(nid, node)
@@ -3065,107 +3349,125 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
 # ---------------------------------------------------------------- render edits (plan 28 N4)
 #
 # The GRAPH page's edits of the render graph: a cable dragged between two
-# image ports is a wire in the preset's `graph` section (`graph.Wire`); a
-# geometry cable from a hands node into the scene or the layer is that
-# node's `into`; the picker adds an effect instance, a hands node or a
-# composite; deleting a render node or cable takes it out of the section.
-# Each edit is a new section read back through `graph.read_graph` with the
-# build's effect files — so a refusal is the very note a preset file would
-# get, in its words, and nothing changes — then landed through the
-# preset's `GraphSection` (`land`: the instances' params declared or
-# dropped, the renderer handed the new wiring, which builds the graph
-# again), one undo step before it (`push`), the preset dirty. The seam
-# with plan 28 N3's modulation edits is the port type: image / geometry /
-# mask cables are these (`RENDER_TYPES`), value / trigger cables N3's.
-
-# the frame's own nodes no wire names, and why
-PLUMBING = {
-    "fx": "is a chain's end: its outputs take it by their switches — wire into an "
-          "output's image to show something else",
-    "composite(": "lays the hands on before the chain (an output's through switch), "
-                  "not a node a wire names",
-    "capture": "holds what the history is wired to: wire into history.image",
-    "shape": "is drawn by the scene, not wired",
-    "readout": "is the hands' guide alone: wire the layer into an output's readout",
-    "cloud": "is drawn by the scene, not wired",
-}
-
-
-def _is_plumbing(name: str) -> bool:
-    return any(name == head or name.startswith(head if head.endswith("(") else head + "(")
-               or (not head.endswith("(") and name.startswith(head + "."))
-               for head in PLUMBING)
-
-
-def _plumbing(name: str) -> str:
-    for head, why in PLUMBING.items():
-        if name == head or name.startswith(head):
-            return f"{name} {why}"
-    return f"{name} is the frame's own, not a node a wire names"
+# picture ports, or geometry into `scene.geometry`, is a wire in the
+# preset's `graph` section (`graph.Wire`); the picker adds a node; deleting
+# a render node or cable takes it out of the section. Each edit is a new
+# section read back through `graph.read_graph` with the build's effect
+# files — so a refusal is the very note a preset file would get, in its
+# words (the types, the loops: plan 34's `wire_loops` and `sink_loops`),
+# and nothing changes — then landed through the preset's `GraphSection`
+# (`land`: the instances' params declared or dropped, the renderer handed
+# the new wiring, which builds the graph again), one undo step before it
+# (`push`), the preset dirty. The seam with plan 28 N3's modulation edits
+# is the port type: image / geometry / mask cables are these
+# (`RENDER_TYPES`), value / trigger cables N3's.
+#
+# Plan 35 G: the section is a wired frame in the owner's ids, and the page
+# edits it as it stands — every node and wire of it deletes (the old
+# frame's own nodes, its run and its default edges were refused; there
+# are none now). What stays refused: a type error, a loop, and the rig's
+# own — a window (delete takes its wires: `OUTPUT_UNWIRED`), the camera and
+# a cloud (`NOT_REMOVABLE`).
 
 
 def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     """A canvas pin or node id (`rout:<node>`, `rin:<node>/<port>`,
     `render:<node>`), or a name as the preset's graph says it → (that
     name — `hands.2`, `acid.2`, `output.2.hands`, `scene.geometry` —,
-    None), or (None, why it is no name a wire may use). An effect's node
-    in any pipeline is its instance (`acid(scene+hands)` → `acid`); a
-    wired output's end stands for the output's image port and what feeds
-    it."""
+    None), or (None, why it is no name a wire may use). Plan 35 G: the
+    canvas's names are the section's (V2), so a pin is its name; the
+    camera and a cloud are the rig's, no name a section says.
+    (`render_graph` is no longer asked: kept for the callers' signature.)"""
     head, _, rest = pin.partition(":")
     if head not in ("rout", "rin", "render") or not rest:
-        node = pin.rpartition(".")[0] if rgraph.wire_node_kind(pin) is None else pin
-        return (pin, None) if rgraph.wire_node_kind(node) is not None else (
-            None, f"no node {pin!r}")
-    built, _, port = rest.partition("/")
-    # plan 33 G: the pipeline's end and the faces are wire ends — each
-    # pipeline's end is `fx.image`, the shape's picture input `shape.faces`
-    # (the nodes themselves stay the frame's own, `PLUMBING`)
-    if head == "rin" and port == "image" and built in rgraph.FX_NAMES.values():
-        return "fx.image", None
-    if head == "rin" and built == "shape" and port == "faces":
-        return "shape.faces", None
-    nodes = getattr(render_graph, "nodes", None) or {}
-    node = nodes.get(built)
-    if node is None and _is_plumbing(built):     # (no graph to ask: by its name)
-        return None, _plumbing(built)
-    if isinstance(node, rgraph.Wired):
-        out = built[len("wire("):-1]
-        if head == "rin":
-            return f"{out}.image", None
-        src = node.inputs["image"]
-        if src is None:
-            return None, f"{out}'s wired picture has no source"
-        return spec_name(f"rout:{src.name}", render_graph)
-    if isinstance(node, rgraph.Effect):
-        name = node.effect
-    elif isinstance(node, rgraph.MediaNode):
-        name = rgraph.media_name(node.channel)      # `media.a(wire)` is channel a's
-    elif isinstance(node, (rgraph.Fx, rgraph.Capture, rgraph.Shape, rgraph.Readout,
-                           rgraph.PointCloud)):
-        return None, _plumbing(built)
-    else:
-        name = built
-        if rgraph.wire_node_kind(name) is None:
-            return None, _plumbing(built)
+        node = pin if kind_of(pin) is not None else pin.rpartition(".")[0]
+        return (pin, None) if kind_of(node) is not None else (None, f"no node {pin!r}")
+    name, _, port = rest.partition("/")
+    kind = kind_of(name)
+    if kind in (CAMERA, "cloud"):
+        return None, NOT_REMOVABLE.format(label=label_of(name))
+    if kind is None:
+        return None, f"no node {name!r}"
     if head == "rin":
-        if isinstance(node, rgraph.Scene) and port.startswith("geometry"):
-            port = "geometry"
         return f"{name}.{port}", None
     return name, None
 
 
+# plan 35 G: the picker's groups, by an item's kind ("" the top level: the
+# scene starter), drawn in this order (ui_graph.render_picker)
+PICKER_GROUP: dict[str, str] = {
+    "starter": "",
+    "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
+    "backdrop": "scene",
+    "lookback": "look-back", "echo": "look-back", "dream": "look-back",
+    "pattern": "pictures", "composite": "pictures", "switch": "pictures",
+    "channels": "pictures", "resize": "pictures", "delay": "pictures",
+    "effect": "effects",
+    "copy": "copy of",
+}
+PICKER_GROUPS = tuple(dict.fromkeys(PICKER_GROUP.values()))
+# the frame kinds the picker adds once each (a second add says so): drawn
+# disabled while the section has one
+ONCE = ("scene", "shape", "backdrop", "pattern", "lookback")
+
+
+def _echo_label(k: int) -> str:
+    """Plan 34's look-back frame item: "echo.1 (newest)" … "echo.32 (oldest)"."""
+    if k == 1:
+        return "echo.1 (newest)"
+    return f"echo.{k} (oldest)" if k == rgraph.MAX_ECHOES else f"echo.{k}"
+
+
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
-    """The right-click picker's list: (kind, file, label) — every effect
-    file this build has, (plan 33 U) a switch, then a hands node and a
-    composite."""
+    """The right-click picker's list (plan 35 G): (kind, file, label), in
+    the owner's groups (`PICKER_GROUP`) — the scene starter; scene ▸ (the
+    scene, the shape, hands, a hands layer, a hands guide, the backdrop);
+    look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
+    and the dream); pictures ▸ (the faces pattern, a composite, a switch,
+    R28's switch over the channels, plan 34's resize and delay); every
+    effect file this build has; and a copy of each effect instance in the
+    section."""
     gs = edit.graph
     files = gs.files() if gs is not None and hasattr(gs, "files") else None
-    out: list[tuple[str, str | None, str]] = [("effect", f, f) for f in sorted(files or ())]
-    # R28: "switch over the channels ▸ faces media / backdrop" (`switch_channels`)
-    return out + [("switch", None, "switch"),
-                  *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
-                  ("hands", None, "hands"), ("composite", None, "composite")]
+    spec = _spec(edit)
+    out: list[tuple[str, str | None, str]] = [("starter", None, "scene starter")]
+    out += [("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
+            ("layer", None, "hands layer"), ("guide", None, "hands guide"),
+            ("backdrop", None, "backdrop")]
+    out += [("lookback", None, "look-back"),
+            *(("echo", str(k), _echo_label(k)) for k in range(1, rgraph.MAX_ECHOES + 1)),
+            ("dream", None, "dream")]
+    out += [("pattern", None, "faces pattern"), ("composite", None, "composite"),
+            ("switch", None, "switch"),
+            *(("channels", port, label) for port, label in CHANNEL_SWITCH_PORTS),
+            ("resize", None, "resize"), ("delay", None, "delay")]
+    out += [("effect", f, f) for f in sorted(files or ())]
+    out += [("copy", name, f"copy of {name}") for name in _instances(spec)]
+    return out
+
+
+def picked(edit: Edit) -> set[str]:
+    """The picker's items already in the section (drawn disabled, plan 35
+    G): the frame kinds there are one of, each echo index, the dream — by
+    their (kind, file) keys' names."""
+    named = _named(_doc(edit))
+    return {n for n in named if kind_of(n) in (*ONCE, "echo", "dream")}
+
+
+def picked_name(kind: str, file: str | None) -> str:
+    """The node a picker item adds once (`picked`'s names): a frame kind
+    itself, `echo.<k>`, the dream; "" for an item there may be many of."""
+    if kind in (*ONCE, "dream"):
+        return kind
+    if kind == "echo":
+        return f"echo.{file}"
+    return ""
+
+
+def _instances(spec) -> list[str]:
+    """The effect instances section `spec` holds (by an entry or a wire),
+    sorted: what a copy may draw again."""
+    return sorted(n for n in frame_names(spec) if kind_of(n) == "effect") if spec else []
 
 
 # R28: the ports "switch over the channels" feeds, and their picker words
@@ -3173,9 +3475,80 @@ CHANNEL_SWITCH_PORTS = (("pattern.media", "faces media"), ("backdrop.image", "ba
 CHANNEL_SWITCH_REFUSAL = "a switch over the channels goes into pattern.media or backdrop.image"
 
 
+def _frame_doc(spec) -> dict:
+    """The section a GRAPH edit starts from (plan 35 G): the landed wired
+    frame; a section from before it as the load wires it (a test's); with
+    none landed, the frame the renderer draws for none — the factory look
+    (`graphmigrate.wired_of(Wiring())`)."""
+    if spec is None:
+        return graphmigrate.wired_of(rgraph.Wiring())
+    if getattr(spec, "wired", False):
+        return spec.to_json()
+    return graphmigrate.wired_section(graphmigrate.renamed(spec.to_json()), spec)
+
+
 def _doc(edit: Edit) -> dict:
+    return _with_frame(copy.deepcopy(_frame_doc(getattr(edit.graph, "spec", None))))
+
+
+def _spec(edit: Edit):
+    """The wired frame the page edits, read."""
     spec = getattr(edit.graph, "spec", None)
-    return copy.deepcopy(spec.to_json()) if spec is not None else {"nodes": []}
+    if spec is not None and getattr(spec, "wired", False):
+        return spec
+    gs = edit.graph
+    files = gs.files() if gs is not None and hasattr(gs, "files") else None
+    try:
+        return rgraph.read_graph(_doc(edit), effects=files)
+    except rgraph.GraphError:
+        return None
+
+
+def _with_frame(doc: dict) -> dict:
+    """`doc` given the wired frame's marker, first (plan 35 F: `"frame":
+    "wired"`), and its nodes list — what every edit lands (`_with_run`'s
+    successor: there is no run to give it)."""
+    if doc.get(rgraph.FRAME_KEY) != rgraph.WIRED_FRAME or next(iter(doc), None) != rgraph.FRAME_KEY:
+        rest = {k: v for k, v in doc.items() if k != rgraph.FRAME_KEY}
+        doc.clear()
+        doc[rgraph.FRAME_KEY] = rgraph.WIRED_FRAME
+        doc.update(rest)
+    doc.setdefault("nodes", [])
+    return doc
+
+
+def _frame_order(wires: list[dict]) -> list[dict]:
+    """`wires` in the order a load writes a wired frame (the global
+    constraints' canonical frame order, `graphmigrate.frame_wires`): the
+    section's own wires first, as they stand, then the frame's — the
+    scene's geometry, `backdrop.scene`, the look-back's picture and
+    occluder, the run, All outputs' picture, hands and guide, the capture's
+    composite and the capture. A stable sort: only `scene.geometry` takes
+    several wires, and theirs keep their order (it is the draw order). So
+    an edit that brings a frame back to a migrated one round-trips
+    (`graphmigrate.unwired`) and saves in the lowest schema again (R10)."""
+    into = {x["to"]: x["from"] for x in wires}
+    run: list[str] = []
+    head = into.get(f"{rgraph.ALL_OUTPUTS}.image")
+    while kind_of(head) == "effect" and head not in run:
+        run.insert(0, head)
+        head = into.get(f"{head}.image")
+    chain = (set(zip(["lookback", *run], [f"{e}.image" for e in run]))
+             if head == "lookback" else set())
+    held = into.get("lookback.capture")
+    comp = held if kind_of(held) == "composite" else None
+    groups = {"scene.geometry": 1, "backdrop.scene": 2, "lookback.image": 3,
+              "lookback.occluder": 4, f"{rgraph.ALL_OUTPUTS}.image": 6,
+              f"{rgraph.ALL_OUTPUTS}.hands": 7, f"{rgraph.ALL_OUTPUTS}.guide": 8,
+              "lookback.capture": 10}
+
+    def group(x: dict) -> int:
+        if (x["from"], x["to"]) in chain:
+            return 5
+        if comp is not None and x["to"].rpartition(".")[0] == comp:
+            return 9
+        return groups.get(x["to"], 0)
+    return sorted(wires, key=group)
 
 
 def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> str | None:
@@ -3185,6 +3558,14 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> st
     if gs is None:
         return "no preset is loaded"
     files = gs.files() if hasattr(gs, "files") else None
+    _with_frame(doc)
+    # a frame node's bare entry is only what keeps it unwired (`_keep_declared`):
+    # once a wire names it again, the wire says it
+    wired = {n for x in doc.get("wires", []) for n in (x["from"], x["to"].rpartition(".")[0])}
+    doc["nodes"] = [e for e in doc["nodes"] if not (
+        e.get("kind") in rgraph.FRAME_KINDS and set(e) <= {"kind", "instance"}
+        and _node_name(e) in wired)]
+    doc["wires"] = _frame_order(doc.get("wires", []))
     if not doc.get("wires"):
         doc.pop("wires", None)
     try:
@@ -3196,15 +3577,12 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> st
     if dry:
         return None
     new = spec.to_json()
-    if new == _doc(edit):
+    if new == _doc(edit) and getattr(edit.graph, "spec", None) is not None:
         edit.said = "already so"
         return None
     if edit.push is not None:
         edit.push(label)
-    if new == {"nodes": []}:                 # nothing left: the default graph, no section
-        gs.land(None, None)
-    else:
-        gs.land(spec, new)
+    gs.land(spec, new)
     edit.said = said
     return None
 
@@ -3213,6 +3591,55 @@ def _entry_name(e: dict) -> str | None:
     if e.get("kind") != "effect" or "file" not in e:
         return None
     return rgraph.instance_name(e["file"], e.get("instance", 1))
+
+
+def _node_name(e: dict) -> str | None:
+    """The node a section entry declares, by its name (plan 35 F's kinds too)."""
+    kind, n = e.get("kind"), e.get("instance", 1)
+    if not isinstance(n, int):
+        return None
+    if kind == "effect":
+        return _entry_name(e)
+    if kind == "hands":
+        return rgraph.wired_hands_name(n)
+    if kind in ("layer", "guide"):
+        return f"{rgraph.wired_hands_name(n)}.{kind}"
+    if kind == "echo":
+        return f"echo.{e.get('index')}"
+    if kind in rgraph.FRAME_KINDS or kind == "dream":
+        return kind
+    if kind in ("composite", "switch", "delay", "resize", "copy"):
+        return kind if n == 1 else f"{kind}.{n}"
+    return None
+
+
+def _named(doc: dict) -> set[str]:
+    """Every name section `doc` says: its entries' and its wires' ends."""
+    out = {x for x in map(_node_name, doc.get("nodes", [])) if x}
+    for x in doc.get("wires", []):
+        out |= {x["from"], x["to"].rpartition(".")[0]}
+    return out
+
+
+def _keep_declared(doc: dict, names: Iterable[str]) -> None:
+    """Each frame node of `names` that the section no longer names (its last
+    wire just went) kept by its entry — a node unwired stays on the canvas,
+    faint ("reaches nothing"), to wire on or delete (plan 35 G); an
+    instance-1 effect by R21's entry. A hands node, a channel, a declared
+    kind keep theirs or need none."""
+    named = _named(doc)
+    for name in dict.fromkeys(names):
+        if name in named:
+            continue
+        kind = kind_of(name)
+        if kind in ("layer", "guide"):
+            n = rgraph.split_instance(rgraph.hands_of(name))[1]
+            doc["nodes"].append({"kind": kind, **({"instance": n} if n != 1 else {})})
+        elif kind in rgraph.FRAME_KINDS:
+            doc["nodes"].append({"kind": kind})
+        elif kind == "effect" and rgraph.split_instance(name)[1] == 1:
+            doc["nodes"].append({"kind": "effect", "file": name})
+        named.add(name)
 
 
 def _unplace(doc: dict, which: Callable[[str, str, str], bool]) -> None:
@@ -3236,26 +3663,33 @@ def _hands_entry(doc: dict, n: int) -> dict | None:
                  and e.get("instance", 1) == n), None)
 
 
-def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None:
+def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
+                doc: dict | None = None) -> str | None:
+    """A wire `src → dst` into the section (the one into `dst` replaced,
+    but a `scene.geometry`'s, which takes several). `doc` (plan 35 T6): the
+    section to wire on — the OUTPUT page's pick, its through taken off
+    first — else the landed one."""
     s, why = spec_name(src, edit.render)
     if s is None:
         return why
     d, why = spec_name(dst, edit.render)
     if d is None:
         return why
-    if rgraph.wire_node_kind(d) is not None:
-        return f"{d} is a node, not a port: a wire goes into {rgraph.WIRE_TO_WORDS}"
+    if kind_of(d) is not None:
+        return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
-    src_kind, dst_kind = rgraph.wire_node_kind(s), rgraph.wire_node_kind(w.node)
-    takes = rgraph.WIRE_TAKES.get(dst_kind or "", {}).get(w.port)
-    makes = rgraph.WIRE_MAKES.get(src_kind or "")
-    if takes == GEOMETRY and makes == GEOMETRY:
-        return _hands_into(edit, s, "scene" if w.node == "scene" else "layer", dry)
-    if takes == MASK and makes == MASK:
-        return "the cover is the history's own: it is wired so already"
-    doc = _doc(edit)
-    doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d] + [w.to_json()]
-    into_effect = dst_kind == "effect"
+    doc = _doc(edit) if doc is None else doc
+    wires = doc.get("wires", [])
+    if d in rgraph.MANY_PORTS:
+        # several wires go in, drawn in section order — a hands node's
+        # before the shape's, the order the frame is written in (plan 35 F)
+        keep = [x for x in wires if (x["from"], x["to"]) != (s, d)]
+        at = next((i for i, x in enumerate(keep) if x["to"] == d and x["from"] == "shape"),
+                  len(keep)) if kind_of(s) == "hands" else len(keep)
+        doc["wires"] = [*keep[:at], w.to_json(), *keep[at:]]
+    else:
+        doc["wires"] = [x for x in wires if x["to"] != d] + [w.to_json()]
+    into_effect = kind_of(w.node) == "effect"
 
     def moves(name: str, key: str, where: str) -> bool:
         # the effect is fed by this wire now — but an aux wire (plan 32 T7)
@@ -3267,82 +3701,39 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None
             return True
         return name == s and not into_effect     # the effect is wired on, elsewhere
     _unplace(doc, moves)
+    gone = {x["from"] for x in wires if x["to"] == d and x not in doc["wires"]}
+    _keep_declared(doc, gone)
     return _land(edit, doc, f"wire {w}", f"wired {w}", dry)
 
 
-def _hands_into(edit: Edit, ghost: str, into: str, dry: bool = False) -> str | None:
-    """A geometry cable: hands node `ghost` drawn in the scene or as the layer."""
-    _, n = rgraph.split_instance(ghost)
-    spec = getattr(edit.graph, "spec", None)
-    wiring = spec.wiring() if spec is not None else rgraph.Wiring()
-    if n not in {h.n for h in wiring.nodes()}:
-        return f"no {ghost} hands node in this graph"
-    layer = wiring.layer_node()
-    if into == "layer" and layer.n != n and layer.into == "layer":
-        return (f"{rgraph.hands_name(layer.n)} makes the layer: put it in the scene first "
-                "(one hands node makes the layer)")
-    doc = _doc(edit)
-    e = _hands_entry(doc, n)
-    if e is None:
-        e = {"kind": "hands", **({"instance": n} if n > 1 else {})}
-        doc["nodes"].insert(0, e)
-    if into == "layer":
-        e.pop("into", None)
-    else:
-        e["into"] = into
-        e.pop("laid", None)
-    if len(e) == 1:
-        doc["nodes"].remove(e)
-    return _land(edit, doc, f"{ghost} into the {into}", f"{ghost} drawn in the {into}", dry)
-
-
 def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
-    if isinstance(cable, VCable):
-        if cable.ref is not None:
-            src_node, node, port = cable.ref
-            src, dst = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
-        else:                                # (its pins name it as well)
-            src, dst = cable.src_port, cable.dst_port
+    """Plan 35 G: any wire of the section goes — the run's, the look-back's,
+    the scene's geometry, a window's — and a frame node it was the last
+    mention of is kept by its entry (`_keep_declared`), drawn faint. The one
+    refusal left is a wire the section does not have."""
+    s: str | None
+    if isinstance(cable, VCable) and isinstance(cable.ref, rgraph.Wire):
+        s, d = cable.ref.src, cable.ref.dst
     else:
-        src = cable
-    s, why = spec_name(src, edit.render)
-    if s is None:
-        return why
-    d = None
-    if dst is not None:
-        d, why = spec_name(dst, edit.render)
-        if d is None:
+        if isinstance(cable, VCable):
+            src, dst = cable.src_port, cable.dst_port
+        else:
+            src = cable
+        s, why = spec_name(src, edit.render)
+        if s is None:
             return why
-    else:                                    # a port's name alone: whatever goes into it
-        s, d = None, s
-    kind = rgraph.wire_node_kind(s) if s is not None else None
-    if rgraph.WIRE_MAKES.get(kind or "") == GEOMETRY:
-        if d == "scene.geometry":
-            return _hands_into(edit, s, "layer")
-        return f"{s} is the layer's geometry: put it in the scene instead"
-    # plan 33 U (R9, R20): the run always runs from frame to fx.image — a
-    # cable of it deleted takes the effect it leads into (the last cable's:
-    # the effect it leaves) out of the run, the run closed over it; the
-    # empty run's own cable stays
-    spec = getattr(edit.graph, "spec", None)
-    if graphmigrate.has_frame_run(spec):
-        run = rgraph.run_of(spec)
-        here = [w for w in _run_cables(run) if w.dst == d and (s is None or w.src == s)]
-        if here and set(_run_cables(run)) <= set(spec.wires):
-            w = here[0]
-            if w.src == "frame" and w.dst == "fx.image":
-                return RUN_KEPT
-            name = w.src if w.dst == "fx.image" else w.node
-            doc = _doc(edit)
-            _lift(doc, name)
-            return _land(edit, doc, f"unwire {w}", f"{name} out of the run: the run closes "
-                                                   "over it")
+        if dst is not None:
+            d, why = spec_name(dst, edit.render)
+            if d is None:
+                return why
+        else:                                # a port's name alone: whatever is wired into it
+            s, d = None, s
     doc = _doc(edit)
     wires = doc.get("wires", [])
     left = [x for x in wires if not (x["to"] == d and (s is None or x["from"] == s))]
-    changed = len(left) != len(wires)
+    gone = [x for x in wires if x not in left]
     doc["wires"] = left
-    if not changed and s is not None:
+    if not gone and s is not None:
         before = copy.deepcopy(doc["nodes"])
 
         def placed_here(name: str, key: str, where: str) -> bool:
@@ -3350,21 +3741,13 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
                 return where == s and d == f"{name}.image"
             return name == s and d == f"{where}.image"
         _unplace(doc, placed_here)
-        changed = doc["nodes"] != before
-    if not changed:
-        said = f"{s} → {d}" if s is not None else d
-        return (f"{said} is the default graph's: no wire says it (wire something else "
-                f"into {d} to replace it)")
-    return _land(edit, doc, f"unwire {d}", f"unwired {d}")
-
-
-def _with_run(doc: dict, spec) -> None:
-    """`doc` given the bare run `frame → fx.image` (R9) when its section
-    says none (`graphmigrate.has_frame_run`): a node added unwired then reads as the free
-    graph's, unreached, and a save writes it as `/5` — no older build's
-    stack ever runs it."""
-    if not graphmigrate.has_frame_run(spec):
-        doc.setdefault("wires", []).append({"from": "frame", "to": "fx.image"})
+        if doc["nodes"] == before:
+            return NO_SUCH_WIRE.format(wire=f"{s} → {d}")
+    elif not gone:
+        return NO_SUCH_WIRE.format(wire=f"→ {d}")
+    _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])])
+    said = f"{s} → {d}" if s is not None else d
+    return _land(edit, doc, f"unwire {d}", f"unwired {said}")
 
 
 def _new_instance(spec, file: str) -> int:
@@ -3377,7 +3760,7 @@ def _new_instance(spec, file: str) -> int:
             held.add(e.n)
     for w in (spec.all_wires() if spec is not None else ()):
         for end in (w.src, w.node):
-            if rgraph.wire_node_kind(end) == "effect":
+            if kind_of(end) == "effect":
                 f, n = rgraph.split_instance(end)
                 if f == file:
                     held.add(n)
@@ -3402,9 +3785,73 @@ def _effect_entry(file: str, n: int) -> dict:
     return {"kind": "effect", "file": file, **({"instance": n} if n != 1 else {})}
 
 
+# what each frame node added from the picker says next (plan 35 G)
+ADDED = {
+    "scene": "wire geometry into scene.geometry, and the scene into a picture port",
+    "shape": "wire it into scene.geometry",
+    "backdrop": "wire a picture into backdrop.image and the scene into backdrop.scene",
+    "pattern": "the shape's faces show it while nothing is wired into shape.faces",
+    "lookback": ("wire a picture into lookback.image, and what it records into "
+                 "lookback.capture"),
+    "layer": "wire it into an output's hands or a composite's over",
+    "guide": "wire it into an output's guide",
+}
+
+
+def _ordinal(k: int) -> str:
+    return f"{k}{'th' if 10 <= k % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(k % 10, 'th')}"
+
+
+def _next(spec, kind: str) -> int:
+    """The next instance of a declared kind (`composite`, `switch`, `delay`,
+    `resize`, `copy`) in section `spec`: one past the highest."""
+    return max([got.n for k, got in (spec.others if spec is not None else ()) if k == kind],
+               default=0) + 1
+
+
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
-    spec = getattr(edit.graph, "spec", None)
-    doc = _doc(edit)
+    if kind == "starter":
+        return render_starter(edit)
+    spec = _spec(edit)
+    doc = _with_frame(_doc(edit))
+    named = _named(doc)
+    if kind in ONCE:
+        label = label_of(kind)
+        if kind in named:
+            return IN_ALREADY.format(label=label)
+        doc["nodes"].append({"kind": kind})
+        edit.added = kind
+        return _land(edit, doc, f"add {kind}", f"{label} added: {ADDED[kind]}")
+    if kind in ("layer", "guide"):
+        held = sorted({1} | {h.n for h in (spec.hands if spec is not None else ())})
+        n = settings.get("instance") or next(
+            (k for k in held if f"{rgraph.wired_hands_name(k)}.{kind}" not in named), None)
+        if n is None or f"{rgraph.wired_hands_name(n)}.{kind}" in named:
+            return IN_ALREADY.format(label=label_of(f"{rgraph.wired_hands_name(n or 1)}.{kind}"))
+        name = edit.added = f"{rgraph.wired_hands_name(n)}.{kind}"
+        doc["nodes"].append({"kind": kind, **({"instance": n} if n != 1 else {})})
+        return _land(edit, doc, f"add {name}", f"{label_of(name)} added: {ADDED[kind]}")
+    if kind == "hands":
+        draw = ({"draw": settings["draw"]} if settings.get("draw", "solid") != "solid" else {})
+        if not {"hands", "hands.layer", "hands.guide"} & named:
+            # hands 1, every frame's: drawn in the scene where there is one,
+            # else as its layer — a hands node with neither is drawn nowhere
+            edit.added = "hands"
+            if "scene" in named:
+                doc["wires"] = [*doc.get("wires", []), {"from": "hands", "to": "scene.geometry"}]
+                said = "Hands added, drawn in the scene"
+            else:
+                doc["nodes"].append({"kind": "layer"})
+                said = "Hands added, drawn alone as its layer: wire Hands layer into a picture port"
+            if draw:
+                doc["nodes"].insert(0, {"kind": "hands", **draw})
+            return _land(edit, doc, "add hands", said)
+        held = {h.n for h in (spec.hands if spec is not None else ())} | {1}
+        n = max(held) + 1
+        doc["nodes"].append({"kind": "hands", "instance": n, **draw})
+        name = edit.added = rgraph.wired_hands_name(n)
+        return _land(edit, doc, f"add {name}", f"{label_of(name)} added: wire it into "
+                                               "scene.geometry, or add its layer")
     if kind == "effect":
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
         if not file or (files is not None and file not in files):
@@ -3412,49 +3859,78 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         n = _new_instance(spec, file)
         doc["nodes"].append(_effect_entry(file, n))
         name = edit.added = rgraph.instance_name(file, n)
-        # plan 33 U: on no wire — it reaches nothing until it is wired in
-        # (R23, plan 33 T7: with or without a run; a section with none gets
-        # the bare `frame → fx.image`, R9, so it saves as the free graph);
+        # plan 33 U: on no wire — it reaches nothing until it is wired in;
         # R25: switched on, so wiring it in shows it
-        _with_run(doc, spec)
         why = _land(edit, doc, f"add {name}", f"{name} added: its params are fx.{name}.*")
         if why is None:
             _switch_on(edit, name)
         return why
+    if kind == "copy":
+        if not file or file not in _instances(spec):
+            return NO_SUCH_COPY.format(of=file)
+        c = rgraph.CopyAt(_next(spec, "copy"), file)
+        doc["nodes"].append(c.to_json())
+        edit.added = c.name
+        return _land(edit, doc, f"add {c.name}",
+                     f"{label_of(c.name, of=file)} added: wire a picture into {c.name}.image "
+                     f"— it draws {file} again there, with its knobs")
     if kind == "switch":
-        n = max([s.n for s in (spec.switches if spec is not None else ())], default=0) + 1
-        sw = rgraph.SwitchAt(n)
+        sw = rgraph.SwitchAt(_next(spec, "switch"))
         doc["nodes"].append(sw.to_json())
         edit.added = sw.name
-        _with_run(doc, spec)
         return _land(edit, doc, f"add {sw.name}",
                      f"{sw.name} added: wire pictures into in1 … in8, pick one with "
                      f"{sw.name}.select")
-    if kind == "hands":
-        wiring = spec.wiring() if spec is not None else rgraph.Wiring()
-        n = max(h.n for h in wiring.nodes()) + 1
-        into = settings.get("into") or ("scene" if wiring.layer_node().into == "layer"
-                                        else "layer")
-        e: dict[str, Any] = {"kind": "hands", "instance": n}
-        if into != "layer":
-            e["into"] = into
-        if settings.get("draw", "solid") != "solid":
-            e["draw"] = settings["draw"]
-        doc["nodes"].append(e)
-        name = edit.added = rgraph.hands_name(n)
-        return _land(edit, doc, f"add {name}", f"{name} added, drawn in the {into}")
     if kind == "composite":
-        n = max([c.n for c in (spec.composites() if spec is not None else ())], default=0) + 1
-        c = rgraph.CompositeAt(n, settings.get("blend", "over"))
+        c = rgraph.CompositeAt(_next(spec, "composite"), settings.get("blend", "over"))
         edit.added = c.name
         doc["nodes"].append(c.to_json())
         return _land(edit, doc, f"add {c.name}", f"{c.name} added: wire its under and over")
-    return f"no node kind {kind!r}: the picker adds an effect, a switch, hands or a composite"
+    if kind in ("delay", "resize"):
+        at = (rgraph.DelayAt if kind == "delay" else rgraph.ResizeAt)(_next(spec, kind))
+        doc["nodes"].append(at.to_json())
+        name = edit.added = at.name
+        how = ("its picture is that one, a frame late" if kind == "delay"
+               else f"it makes it at {name}.size")
+        return _land(edit, doc, f"add {name}",
+                     f"{name} added: wire a picture into {name}.image — {how}")
+    if kind == "echo":
+        try:
+            k = int(file or 1)
+        except ValueError:
+            return f"echo {file!r}: an index from 1 to {rgraph.MAX_ECHOES}"
+        name = f"echo.{k}"
+        if name in named:
+            return IN_ALREADY.format(label=label_of(name))
+        doc["nodes"].append({"kind": "echo", "index": k})
+        edit.added = name
+        return _land(edit, doc, f"add {name}", f"{name} added: the look-back's {_ordinal(k)} "
+                                               "newest frame — wire it into a picture port")
+    if kind == "dream":
+        if "dream" in named:
+            return IN_ALREADY.format(label=label_of("dream"))
+        doc["nodes"].append({"kind": "dream"})
+        edit.added = "dream"
+        return _land(edit, doc, "add dream", "dream added: the look-back's dream buffer — wire "
+                                             "it into a picture port")
+    return f"no node kind {kind!r}: the picker adds what its groups list"
+
+
+def render_starter(edit: Edit) -> str | None:
+    """The picker's "scene starter" (plan 35 G): `shape → scene.geometry` and
+    `scene → output.all.image` in one landing — a blank preset to a scene on
+    every window in one gesture (`STARTER_SAID`)."""
+    doc = _with_frame(_doc(edit))
+    wires = [x for x in doc.get("wires", []) if x["to"] != f"{rgraph.ALL_OUTPUTS}.image"]
+    if {"from": "shape", "to": "scene.geometry"} not in wires:
+        wires.append({"from": "shape", "to": "scene.geometry"})
+    doc["wires"] = [*wires, {"from": "scene", "to": f"{rgraph.ALL_OUTPUTS}.image"}]
+    return _land(edit, doc, "scene starter", STARTER_SAID)
 
 
 def render_channel_switch(edit: Edit, port: str) -> str | None:
     """R28: a new switch over the eight channels into `port`
-    (`pattern.media` or `backdrop.image`) in one landing — `media.a … h →
+    (`pattern.media` or `backdrop.image`) in one landing — `channel.a … h →
     in1 … in8`, the switch into the port in place of whatever fed it — and
     its `select` the channel that fed the port (through a switch already
     there, at that switch's pick), else 1, in the same undo step: headline
@@ -3462,7 +3938,7 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
     a driven `view.media` migrates to (row 350)."""
     if port not in dict(CHANNEL_SWITCH_PORTS):
         return CHANNEL_SWITCH_REFUSAL
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     reg = getattr(edit.graph, "reg", None) or edit.reg
     selects: dict[str, int] = {}
     for sw in (spec.switches if spec is not None else ()):
@@ -3471,16 +3947,14 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
             selects[sw.name] = reg[pid].value
     ch = rgraph.channel_into(spec.wires if spec is not None else (), port, selects)
     k = rgraph.MEDIA_CHANNELS.index(ch) + 1 if ch and ch in rgraph.MEDIA_CHANNELS else 1
-    n = max([sw.n for sw in (spec.switches if spec is not None else ())], default=0) + 1
-    sw = rgraph.SwitchAt(n)
-    doc = _doc(edit)
+    sw = rgraph.SwitchAt(_next(spec, "switch"))
+    doc = _with_frame(_doc(edit))
     doc["nodes"].append(sw.to_json())
     doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != port] + [
-        {"from": f"media.{c}", "to": f"{sw.name}.in{i}"}
+        {"from": rgraph.channel_name(c), "to": f"{sw.name}.in{i}"}
         for i, c in enumerate(rgraph.MEDIA_CHANNELS, 1)] + [{"from": sw.name, "to": port}]
-    _with_run(doc, spec)
     why = _land(edit, doc, f"switch over the channels into {port}",
-                f"{sw.name} over media a … h into {port}, at {rgraph.MEDIA_CHANNELS[k - 1]}")
+                f"{sw.name} over channels a … h into {port}, at {rgraph.MEDIA_CHANNELS[k - 1]}")
     if why is None:
         edit.added = sw.name
         pid = f"{sw.name}.select"
@@ -3495,22 +3969,13 @@ def _touches(x: dict, names: set[str]) -> bool:
 
 # ---- plan 33 U: effects onto picture cables, out of their place ----
 
-def _run_cables(run: tuple[str, ...]) -> list[rgraph.Wire]:
-    """The wires of the run `frame → run… → fx.image`, in order
-    (`frame → fx.image` for the empty one)."""
-    names = ["frame", *run]
-    return [*(rgraph.Wire(a, f"{b}.image") for a, b in zip(names, run)),
-            rgraph.Wire(names[-1], "fx.image")]
-
-
 def _lift(doc: dict, name: str) -> None:
-    """Effect `name` out of where its picture goes, in section `doc`: the
-    wire into its `image` port and every wire out of it gone, and what fed
-    it wired on into each port it fed — the run (or a branch) closed over
-    it, so a run emptied is `frame → fx.image` again (R9). A wire into its
-    `aux` stays; a D1 placement of it goes; (R21) an instance 1 left on no
-    wire stays named, unreached. With nothing wired in, its
-    wires out simply go."""
+    """Effect (or copy) `name` out of where its picture goes, in section
+    `doc`: the wire into its `image` port and every wire out of it gone,
+    and what fed it wired on into each port it fed — the chain closed over
+    it. A wire into its `aux` stays; a D1 placement of it goes; (R21) an
+    instance-1 effect left on no wire stays named, unreached. With nothing
+    wired in, its wires out simply go."""
     wires = doc.get("wires", [])
     into = next((x for x in wires if x["to"] == f"{name}.image"), None)
     outs = [x for x in wires if x["from"] == name]
@@ -3521,8 +3986,8 @@ def _lift(doc: dict, name: str) -> None:
     _unplace(doc, lambda n, key, where: n == name)
     # R21: an instance 1 left on no wire is kept, named (unreached, faint)
     file, n = rgraph.split_instance(name)
-    if n == 1 and not any(_touches(x, {name}) for x in keep) and not any(
-            _entry_name(e) == name for e in doc.get("nodes", [])):
+    if kind_of(name) == "effect" and n == 1 and not any(_touches(x, {name}) for x in keep) \
+            and not any(_entry_name(e) == name for e in doc.get("nodes", [])):
         doc.setdefault("nodes", []).append({"kind": "effect", "file": file})
 
 
@@ -3539,33 +4004,32 @@ def _onto(doc: dict, s: str, d: str, name: str) -> None:
     doc["nodes"] = [e for e in doc.get("nodes", []) if not (
         _entry_name(e) == name and e.get("instance", 1) == 1
         and not any(k in e for k in rgraph.PLACE_KEYS))]
-    doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d] + [
-        {"from": s, "to": f"{name}.image"}, {"from": name, "to": d}]
+    wires = doc.get("wires", [])
+    if d in rgraph.MANY_PORTS:
+        kept = [x for x in wires if (x["from"], x["to"]) != (s, d)]
+    else:
+        kept = [x for x in wires if x["to"] != d]
+    doc["wires"] = kept + [{"from": s, "to": f"{name}.image"}, {"from": name, "to": d}]
 
 
 def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
     """A picture cable as the section names it: (`src`, `dst port`, None),
-    or (None, None, why not). `cable` is a `VCable` (its `ref`'s nodes, else
-    its pins) or its two ends — canvas pins, or the section's names."""
-    if isinstance(cable, VCable):
-        if cable.ref is not None:
-            src_node, node, port = cable.ref
-            a, b = f"rout:{src_node.name}", f"rin:{node.name}/{port}"
-        else:
-            a, b = cable.src_port, cable.dst_port
+    or (None, None, why not). `cable` is a `VCable` (its wire, else its
+    pins) or its two ends — canvas pins, or the section's names."""
+    if isinstance(cable, VCable) and isinstance(cable.ref, rgraph.Wire):
+        s, d = cable.ref.src, cable.ref.dst
     else:
-        a, b = cable
-    s, why = spec_name(a, edit.render)
-    if s is None:
-        return None, None, why
-    d, why = spec_name(b, edit.render)
-    if d is None:
-        return None, None, why
-    if rgraph.wire_node_kind(d) is not None:
-        return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRE_TO_WORDS}"
+        a, b = (cable.src_port, cable.dst_port) if isinstance(cable, VCable) else cable
+        s, why = spec_name(a, edit.render)
+        if s is None:
+            return None, None, why
+        d, why = spec_name(b, edit.render)
+        if d is None:
+            return None, None, why
+    if kind_of(d) is not None:
+        return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
-    takes = rgraph.WIRE_TAKES.get(rgraph.wire_node_kind(w.node) or "", {}).get(w.port)
-    if takes != IMAGE or rgraph.WIRE_MAKES.get(rgraph.wire_node_kind(s) or "") != IMAGE:
+    if _takes(kind_of(w.node)).get(w.port) != IMAGE or _makes(kind_of(s)) != IMAGE:
         return None, None, f"{w} is no picture cable: an effect goes onto a picture"
     return s, d, None
 
@@ -3577,7 +4041,7 @@ def render_insert(edit: Edit, cable, file: str) -> str | None:
     files = edit.graph.files() if hasattr(edit.graph, "files") else None
     if not file or (files is not None and file not in files):
         return f"no {file} effect in this build"
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     n = _new_instance(spec, file)                   # R25: the file itself when none holds it
     name = rgraph.instance_name(file, n)
     doc = _doc(edit)
@@ -3598,7 +4062,7 @@ def render_place(edit: Edit, cable, name: str) -> str | None:
     nm, why = spec_name(name, edit.render)
     if nm is None:
         return why
-    if rgraph.wire_node_kind(nm) != "effect":
+    if kind_of(nm) not in ("effect", "copy"):
         return f"{nm} is no effect: an effect goes onto a picture cable"
     if s == nm or rgraph.Wire(s, d).node == nm:
         return f"{nm} is on that cable already"
@@ -3609,56 +4073,92 @@ def render_place(edit: Edit, cable, name: str) -> str | None:
 
 
 def render_drop(edit: Edit, node: str) -> str | None:
+    """Plan 35 G: any node of the section goes — its entry and every wire
+    touching it, one undo step (an effect or a copy lifted first, so the
+    chain closes over it; a hands node with its layer and its guide, its
+    params kept in the registry; R16, an effect with its copies; R18, the
+    backdrop like an effect — what its `scene` port took goes on to what it
+    fed, and the note says so). A window
+    is the rig's: its wires go, and it shows its ground (`OUTPUT_UNWIRED`,
+    said, no refusal; with none, `NOTHING_TO_DELETE`); All outputs the
+    same. The camera and a cloud are the rig's (`spec_name`)."""
     name, why = spec_name(node, edit.render)
     if name is None:
         return why
-    kind = rgraph.wire_node_kind(name)
+    kind = kind_of(name)
     doc = _doc(edit)
+    slots = getattr(edit, "slots", ())
+    if kind in ("output", rgraph.ALL_OUTPUTS):
+        said = (ALL_UNWIRED if kind == rgraph.ALL_OUTPUTS
+                else OUTPUT_UNWIRED.format(label=label_of(name, slots)))
+        wires = doc.get("wires", [])
+        left = [x for x in wires if x["to"].rpartition(".")[0] != name]
+        if len(left) == len(wires):         # (T5 review: say nothing was done)
+            edit.said = NOTHING_TO_DELETE.format(
+                what="All outputs" if kind == rgraph.ALL_OUTPUTS
+                else f"output {name.partition('.')[2]}")
+            return None
+        doc["wires"] = left
+        _keep_declared(doc, [x["from"] for x in wires if x not in left])
+        return _land(edit, doc, f"unwire {name}", said)
+    label = label_of(name, slots, of=next((c.of for c in getattr(_spec(edit), "copies", ())
+                                           if c.name == name), ""))
     before = copy.deepcopy(doc)
-    if kind == "effect":
-        # (R21, plan 33 T7: instance 1 too — it is in the graph where it is
-        # wired, and dropping it takes it out like any instance: lifted
-        # first, so the unwired entry `_lift` keeps for it goes as well)
-        _lift(doc, name)               # plan 33 U (R9): the run closes over it
-        doc["nodes"] = [e for e in doc["nodes"] if _entry_name(e) != name]
-        names = {name}
-    elif kind in ("ghost", "layer"):
-        _, n = rgraph.split_instance(name)
-        if n == 1:
-            return "hands 1 is the frame's own hands: it stays (switch it off on HANDS)"
-        doc["nodes"] = [e for e in doc["nodes"] if not (e.get("kind") == "hands"
-                                                         and e.get("instance", 1) == n)]
-        names = {rgraph.hands_name(n), rgraph.layer_name(n)}
-    elif kind in ("composite", "switch"):          # (plan 33 S: a switch the same way)
-        _, n = rgraph.split_instance(name)
-        doc["nodes"] = [e for e in doc["nodes"] if not (e.get("kind") == kind
-                                                         and e.get("instance", 1) == n)]
-        names = {name}
-    else:
-        return f"{name} is the frame's own: it stays"
+    names = {name}
+    if kind == "hands":
+        names |= {f"{name}.layer", f"{name}.guide"}
+    # R16: an effect's copies go with it (a copy of nothing is no node), in
+    # the same landing — each lifted, so its chain closes over it too
+    mine = ([_node_name(e) for e in doc.get("nodes", [])
+             if e.get("kind") == "copy" and e.get("of") == name] if kind == "effect" else [])
+    for x in ([name, *mine] if kind in ("effect", "copy") else ()):
+        _lift(doc, x)
+    names |= set(mine)
+    # R18 (final review): the backdrop lifted as an effect is — the picture
+    # into its `scene` port wired on into every port it fed, so deleting
+    # it shows the scene, not black
+    joined: list[dict] = []
+    if kind == "backdrop":
+        wires = doc.get("wires", [])
+        under = next((x["from"] for x in wires if x["to"] == f"{name}.scene"), None)
+        if under is not None:
+            joined = [{"from": under, "to": x["to"]} for x in wires
+                      if x["from"] == name and not _touches({"from": under, "to": x["to"]},
+                                                            names)]
+    doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in names]
+    gone = [x for x in doc.get("wires", []) if _touches(x, names)]
     doc["wires"] = [x for x in doc.get("wires", []) if not _touches(x, names)]
-    if not doc["wires"]:
-        doc.pop("wires")
+    doc["wires"] += [x for x in joined if x not in doc["wires"]]
     _unplace(doc, lambda e, key, where: where in names)
     if doc == before:
-        return f"{name} is not in the preset's graph"
-    return _land(edit, doc, f"delete {name}", f"{name} deleted")
+        return f"{label} is not in the preset's graph"
+    _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])
+                         if n not in names])
+    also = ("" if not mine else ", and its copy" if len(mine) == 1
+            else f", and its {len(mine)} copies")
+    if joined:
+        what = "the scene" if joined[0]["from"] == "scene" else label_of(joined[0]["from"], slots)
+        to = ", ".join(dict.fromkeys(label_of(x["to"].rpartition(".")[0], slots)
+                                     for x in joined))
+        also += f"; {what} goes on to {to}"
+    return _land(edit, doc, f"delete {name}", f"{label} deleted{also}")
 
 
 def render_set(edit: Edit, node: str, **settings) -> str | None:
     name, why = spec_name(node, edit.render)
     if name is None:
         return why
-    kind = rgraph.wire_node_kind(name)
+    kind = kind_of(name)
     doc = _doc(edit)
-    if kind in ("ghost", "layer"):
-        _, n = rgraph.split_instance(name)
+    if kind in ("hands", "layer", "guide"):
+        hands = name if kind == "hands" else rgraph.hands_of(name)
+        _, n = rgraph.split_instance(hands)
         if "into" in settings:
-            return _hands_into(edit, rgraph.hands_name(n), settings["into"])
+            return rgraph.INTO_IS_A_WIRE.format(hands=hands)
         e = _hands_entry(doc, n)
         if e is None:
             if n > 1:
-                return f"no {name} hands node in this graph"
+                return f"no {hands} hands node in this graph"
             e = {"kind": "hands"}
             doc["nodes"].insert(0, e)
         how = settings.get("draw", "solid")
@@ -3668,7 +4168,7 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
             e["draw"] = how
         if len(e) == 1:
             doc["nodes"].remove(e)
-        return _land(edit, doc, f"{name} {how}", f"{rgraph.hands_name(n)} drawn {how}")
+        return _land(edit, doc, f"{hands} {how}", f"{label_of(hands)} drawn {how}")
     if kind == "composite":
         _, n = rgraph.split_instance(name)
         blend = settings.get("blend", "over")
@@ -3680,3 +4180,220 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
                 return _land(edit, doc, f"{name} {blend}", f"{name} laid {blend}")
         return f"no {name} node in this graph"
     return f"{name} has no setting here"
+
+
+# ---- plan 35 T6 (U): the OUTPUT and LOOKBACK pages as views of the wires.
+# A page sets a picture port (a window's, All outputs', the look-back's
+# capture) and a window's "hands through the effects" — each a GRAPH edit
+# through `_land`: one undo step, GRAPH's refusals, and the frame in its
+# canonical wire order, so an edit put back saves in the lowest schema
+# again (R10). The mutes are the window's (row 374), never written here.
+
+AS_ALL = "as All outputs"      # a window's picture port with no wire of its own
+NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the capture: no wire
+# the areas a page lists the graph's pictures in (the canvas's, left to right)
+PICTURE_AREA: dict[str, str] = {
+    "channel": MEDIA, "pattern": MEDIA, "switch": MEDIA, "delay": MEDIA,
+    "scene": SCENE_AREA, "layer": SCENE_AREA, "guide": SCENE_AREA, "backdrop": SCENE_AREA,
+    "lookback": LOOKBACK_AREA, "echo": LOOKBACK_AREA, "dream": LOOKBACK_AREA,
+    "effect": EFFECTS_AREA, "copy": EFFECTS_AREA, "composite": EFFECTS_AREA,
+    "resize": EFFECTS_AREA,
+}
+PICTURE_AREAS = (MEDIA, SCENE_AREA, LOOKBACK_AREA, EFFECTS_AREA)
+THROUGH_NO_LAYER = ("hands through the effects: All outputs lays no hands layer over its "
+                    "picture — wire a hands layer into output.all.hands on GRAPH")
+THROUGH_OWN_PICTURE = ("{label} shows {src} by its own wire: the hands go through All "
+                       "outputs' effects — set its picture to \"as All outputs\" first")
+
+
+def page_spec(spec):
+    """The wired frame a page reads (plan 35 U): `spec` itself when it is
+    one; else (no preset landed, a section from before the wired frame) the
+    frame a GRAPH edit starts from (`_frame_doc`) read — None if it will
+    not read."""
+    if spec is not None and getattr(spec, "wired", False):
+        return spec
+    try:
+        return rgraph.read_graph(_with_frame(copy.deepcopy(_frame_doc(spec))))
+    except rgraph.GraphError:
+        return None
+
+
+def picture_sources(spec) -> list[str]:
+    """Every picture-making node section `spec` reaches or declares
+    (`frame_names`: its entries and its wires' ends), in area order —
+    MEDIA, SCENE, LOOK-BACK, EFFECTS — and section order within one: what
+    a page's picture combo may offer (plan 35 U). No geometry, no window,
+    no `ground` (the combo's "nothing" says that)."""
+    names = [n for n in frame_names(spec) if kind_of(n) in PICTURE_AREA
+             and _makes(kind_of(n)) == IMAGE]
+    return sorted(names, key=lambda n: PICTURE_AREAS.index(PICTURE_AREA[kind_of(n)]))
+
+
+def _window(port: str) -> int | None:
+    """The window `port` is the picture port of (`output.2.image` → 2), or
+    None (All outputs', the capture)."""
+    head, _, rest = port.partition(".")
+    n, _, p = rest.partition(".")
+    return int(n) if head == "output" and n.isdigit() and p == "image" else None
+
+
+def picture_choices(spec, port: str, reg=None) -> list[str]:
+    """A picture combo's items for `port`: a window's "as All outputs",
+    "nothing" and `picture_sources`; All outputs' and the capture's
+    "nothing" and the sources. R17: on an output's port (a window's, All
+    outputs') with `reg` to ask, every channel with a source in its bin
+    (`channel_bins`) too, though nothing wires it yet — after the graph's
+    own, by label — so "this channel on this window" is one pick."""
+    head = [AS_ALL, NOTHING] if _window(port) is not None else [NOTHING]
+    got = picture_sources(spec)
+    if reg is not None and (_window(port) is not None or port == f"{rgraph.ALL_OUTPUTS}.image"):
+        filled = [f"channel.{c}" for c in channel_bins(reg)]
+        got += sorted((c for c in filled if c not in got), key=label_of)
+    return [*head, *got]
+
+
+def _into(spec, dst: str) -> str | None:
+    return next((w.src for w in (spec.wires if spec is not None else ()) if w.dst == dst), None)
+
+
+def picture_now(spec, port: str) -> str:
+    """The combo's pick for `port` as section `spec` wires it: the source's
+    name; `ground`, or no wire (All outputs', the capture), "nothing"; a
+    window with no wire of its own, or putting the hands through All
+    outputs' picture (`is_through`), "as All outputs" (a through over
+    nothing — the scene off — "nothing")."""
+    n = _window(port)
+    if n is not None and is_through(spec, n):
+        under = rgraph.through_of(spec.wiring(), n)[1]
+        return AS_ALL if under is not None else NOTHING
+    src = _into(spec, port)
+    if src is None:
+        return AS_ALL if n is not None else NOTHING
+    return NOTHING if src == rgraph.GROUND else src
+
+
+def picture_label(spec, name: str, slots=()) -> str:
+    """A combo item's words: "as All outputs" and "nothing" as they are,
+    a node by its title (`label_of`; a copy with what it copies)."""
+    if name in (AS_ALL, NOTHING):
+        return name
+    of = next((c.of for c in (getattr(spec, "copies", None) or ()) if c.name == name), "")
+    return label_of(name, slots, of=of)
+
+
+def is_through(spec, n: int) -> bool:
+    """Whether window `n` puts the hands through the effects: its picture
+    a chain over a composite laying a hands layer (`graph.through_of`)."""
+    return spec is not None and rgraph.through_of(spec.wiring(), n) is not None
+
+
+def _drop_through(doc: dict, n: int) -> bool:
+    """Window `n`'s "hands through the effects" taken out of section `doc`
+    (the inverse of `graphmigrate.output_wires` under `Shows(through=
+    True)`): the wire into its picture, the chain of copies back to the
+    composite and the composite — each that nothing else reads, with its
+    entry and its wires — and the `ground` the through put on its hands
+    port, so the layer is laid over again. A through over nothing (the
+    scene off) leaves `ground` on the picture port. False: not through."""
+    wires = doc.get("wires", [])
+    into = {x["to"]: x["from"] for x in wires}
+    port = f"output.{n}."
+    chain: list[str] = []
+    src = into.get(port + "image")
+    while kind_of(src) == "copy" and src not in chain:
+        chain.append(src)
+        src = into.get(f"{src}.image")
+    if kind_of(src) != "composite" or kind_of(into.get(f"{src}.over")) != "layer":
+        return False
+    chain.append(src)
+    under = into.get(f"{src}.under")
+    left = [x for x in wires if x["to"] != port + "image"
+            and not (x["to"] == port + "hands" and x["from"] == rgraph.GROUND)]
+    gone: set[str] = set()
+    for name in chain:                     # the window's end first, back to the composite
+        if any(x["from"] == name for x in left):
+            break                          # (read by something else: kept, and what feeds it)
+        gone.add(name)
+        left = [x for x in left if x["to"].rpartition(".")[0] != name]
+    dropped = [x for x in wires if x not in left]
+    doc["wires"] = left
+    doc["nodes"] = [e for e in doc.get("nodes", []) if _node_name(e) not in gone]
+    if under is None:
+        doc["wires"].append({"from": rgraph.GROUND, "to": port + "image"})
+    _keep_declared(doc, [x["from"] for x in dropped if x["from"] not in gone])
+    return True
+
+
+def set_picture(edit: Edit, port: str, choice: str) -> str | None:
+    """A page's picture combo (plan 35 U): `choice` into `port` — a
+    window's (`output.N.image`), All outputs' or the look-back's capture.
+    A source is `render_wire(…, port)`; "nothing" is `ground` into a
+    window's port, no wire into the others'; "as All outputs" takes the
+    window's own wire away. A window putting the hands through the effects
+    drops that first (`_drop_through`), in the same landing. One undo step;
+    a pick that is so already lands nothing ("already so")."""
+    spec = _spec(edit)
+    if picture_now(spec, port) == choice:
+        edit.said = "already so"
+        return None
+    n = _window(port)
+    doc = _doc(edit)
+    thru = n is not None and _drop_through(doc, n)
+    if choice == NOTHING and n is not None:
+        choice = rgraph.GROUND
+    if choice not in (AS_ALL, NOTHING):
+        if thru:
+            doc["wires"] = [x for x in doc["wires"] if x["to"] != port]
+        return render_wire(edit, choice, port, doc=doc)
+    wires = doc.get("wires", [])
+    left = [x for x in wires if x["to"] != port]
+    gone = [x for x in wires if x not in left]
+    doc["wires"] = left
+    _keep_declared(doc, [x["from"] for x in gone])
+    said = f"{port}: {AS_ALL}" if choice == AS_ALL else f"unwired {port}"
+    return _land(edit, doc, f"unwire {port}", said)
+
+
+def through_refusal(spec, n: int, slots=()) -> str | None:
+    """Why window `n` cannot put the hands through the effects (the
+    checkbox drawn disabled, its hover these words), or None: All outputs
+    lays no hands layer over its picture (R11: no hands to put through),
+    or the window shows a picture of its own by a wire."""
+    if kind_of(_into(spec, f"{rgraph.ALL_OUTPUTS}.hands")) != "layer":
+        return THROUGH_NO_LAYER
+    own = _into(spec, f"output.{n}.image")
+    if own is not None and own != rgraph.GROUND and not is_through(spec, n):
+        return THROUGH_OWN_PICTURE.format(label=label_of(f"output.{n}", slots),
+                                          src=picture_label(spec, own))
+    return None
+
+
+def set_through(edit: Edit, n: int, on: bool) -> str | None:
+    """OUTPUT's "hands through the effects" on window `n` (plan 35 O, T4's
+    carried toggle), as wiring: on, the section plus `graphmigrate.
+    output_wires(spec, n, Shows(through=True))` — a composite laying All
+    outputs' hands layer on its picture's head and a copy of each effect of
+    its run, into `output.n.image` (with the window's picture `ground`, the
+    hands alone through); off, those wires and the composite and copies
+    only they use (`_drop_through`). One undo step each. Refused in words:
+    All outputs laying no hands layer (R11), a window with a picture of
+    its own."""
+    spec = _spec(edit)
+    if spec is None:
+        return "no preset is loaded"
+    label = label_of(f"output.{n}", getattr(edit, "slots", ()))
+    if is_through(spec, n) == on:
+        edit.said = "already so"
+        return None
+    doc = _doc(edit)
+    if not on:
+        _drop_through(doc, n)
+        return _land(edit, doc, f"hands over on output {n}",
+                     f"{label}: the hands over the effects")
+    why = through_refusal(spec, n, getattr(edit, "slots", ()))
+    if why is not None:
+        return why
+    shows = graphmigrate.Shows(scene=_into(spec, f"output.{n}.image") is None, through=True)
+    return _land(edit, graphmigrate.with_output_wires(doc, n, shows),
+                 f"hands through on output {n}", f"{label}: the hands through the effects")

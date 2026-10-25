@@ -553,6 +553,14 @@ class Lookback:
         self._off = np.zeros(MAX_ECHOES, dtype="f4")
         self.error = ""                # _common.glsl did not compile: on the fallback
         self.ring_error = ""           # the history textures could not be made (_ensure)
+        # plan 34 E (row 362): the render graph reads the ring this frame (an
+        # `echo.<k>` or `dream` node, `Graph.reads_ring`, set by the
+        # renderer): the capture goes on with the look-back off, the wake
+        # still shown only with `dream.on`
+        self.keep = False
+        self._made_res = -1            # the `dream.res` the ring was made at (`echo_slot`)
+        self._made_for = (0, 0)        # the render size the last `_ensure` was asked for
+        self.wrote: tuple[int, int] | None = None   # (frame, slot) of the last downsample
         self._build_programs()
 
     def _build_programs(self) -> None:
@@ -601,7 +609,9 @@ class Lookback:
         is captured then (plan 14 WP1)."""
         size = fit_atlas(echo_size(RES[max(0, min(self.state.res, len(RES) - 1))], w, h),
                          self.max_texture())
+        self._made_for = (w, h)        # (plan 34 E: `remaking` asks of this size)
         if size == self.echo and self.atlas is not None:
+            self._made_res = self.state.res      # the same ring at the new res: kept
             return True
         self.release_ring()
         ew, eh = size
@@ -617,6 +627,7 @@ class Lookback:
             return False
         self.ring_error = ""
         self.echo = size
+        self._made_res = self.state.res
         self._fbo.use()
         self.ctx.clear(0.0, 0.0, 0.0, 0.0)
         self._captures.clear()
@@ -764,7 +775,9 @@ class Lookback:
 
     def _capture(self, scene: moderngl.Texture, target: moderngl.Framebuffer) -> None:
         s = self.state
-        if not s.on:
+        # (plan 34 E, row 362: a graph reading the ring keeps it — getattr: a
+        # look-back from before the reload has no `keep`)
+        if not s.on and not getattr(self, "keep", False):
             self.idle()
             return
         _, _, w, h = target.viewport
@@ -781,6 +794,9 @@ class Lookback:
         slot = self._next
         self._captures = [c for c in self._captures if c[0] != slot]
         self._downsample(scene, slot)
+        # (plan 34 E: an echo that took this slot before the capture now
+        # reads nothing rather than this frame's picture)
+        self.wrote = (self.frame, slot)
         if commit:
             self._captures.append((slot, self.clock))
             self._next = (slot + 1) % MAX_ECHOES
@@ -856,6 +872,37 @@ class Lookback:
         if self._captures:
             return self._captures[-1][0]
         return None
+
+    def held(self) -> int:
+        """How many commits the ring holds (plan 34 E: an echo's words)."""
+        return len(self._captures)
+
+    def echo_slot(self, k: int) -> int | None:
+        """The atlas slot of the k-th newest commit (`echo.<k>`, plan 34 E,
+        row 361; 1 the newest), or None while the ring does not hold it:
+        fewer than k commits since it was made, no ring (`ring_error`), or
+        a `dream.res` the ring is about to be made again for — its echoes
+        are gone this frame, and come back one commit at a time."""
+        if self.atlas is None or not 1 <= k <= len(self._captures):
+            return None
+        if self.remaking():
+            return None
+        return self._captures[-k][0]
+
+    def remaking(self) -> bool:
+        """Whether this frame's capture will make the ring again for a
+        `dream.res` change (plan 34 E): the echo size the new res makes at
+        the last capture's size is not the ring's. A res whose size comes
+        out the same (clamped, capped by `fit_atlas`) keeps the ring."""
+        res = self.state.res
+        if self.atlas is None or res == getattr(self, "_made_res", res):
+            return False
+        w, h = getattr(self, "_made_for", (0, 0))
+        if not w or not h:
+            return False
+        size = fit_atlas(echo_size(RES[max(0, min(res, len(RES) - 1))], w, h),
+                         self.max_texture())
+        return size != self.echo
 
     def read_into(self, array: np.ndarray, slot: int | None = None) -> None:
         """glReadPixels of one echo into `array` ((h, w, 4) uint8, any

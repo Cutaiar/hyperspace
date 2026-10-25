@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
-from test_graphview import _in_editor, stacked, views
+from test_graphview import _in_editor, stacked, thru
 from test_graphview_devices import rig_devices
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -30,7 +30,7 @@ from hyperspace import graph as G
 from hyperspace import graphview, modifiers, ui, ui_graph, ui_routing
 from hyperspace.app import CONTROL_SIZE
 from hyperspace.bands import CEIL
-from hyperspace.outputs import Switches
+from hyperspace.graphmigrate import Shows
 from hyperspace.routing import Binding
 
 DT = 1 / 60
@@ -43,15 +43,30 @@ def rig(shell_rig):  # noqa: F811
 
 def party(rig):
     """party-trip on the page: its rows, a render graph with effects, the
-    APC40 listed. Returns the page's state after two frames."""
+    APC40 listed. Returns the page's state after two frames. Plan 35 T5:
+    the canvas is the preset's wired frame, so the frame the render graph
+    is built from — acid and palette in the run, output 2 the hands
+    through them — is landed as the preset's graph too."""
     rig.lib.load("presets", "party-trip")
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches(), Switches(through=True)),
-                                                   stacked(("acid", "palette")),
-                                                   effects=("acid", "palette")))
+    spec = land_frame(rig, stacked(("acid", "palette")), Shows(), Shows(through=True))
+    g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(), Shows(through=True))
+    g.section = spec.to_json()          # (what a reload lands again: test_graph_areas.load)
+    rig.panel.renderer = NS(_graph=g)
     rig.panel.devices = rig_devices(rig)
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     return ui_graph._state(rig.panel)
+
+
+def land_frame(rig, src, *shows):
+    """The wired frame of `src` with output k's overrides for `shows[k - 1]`
+    (`tests/wiredframe.shown`) landed as the loaded preset's graph."""
+    from wiredframe import shown
+    section = shown(src, *shows)
+    spec = G.read_graph(section)
+    assert not spec.notes, spec.notes
+    rig.lib.presets.graph.land(spec, spec.to_json())
+    return spec
 
 
 def node_pair(view, c):
@@ -112,15 +127,15 @@ def test_the_apc40_to_one_shader_is_one_bundle_while_collapsed(rig):
     b = next(b for b in bundles if (b.src, b.dst) == ("device:apc40", "render:shape"))
     assert b.cables == desk_to_shape and b.count == len(desk_to_shape)
     assert (b.src_port, b.dst_port) == ("nout:device:apc40", "nin:render:shape")
-    # only render cables (and the frame's feeds, which are theirs) stay single
-    assert all(c.kind in ("render", graphview.FEEDS) for c, _, _ in singles)
+    # only render cables stay single
+    assert all(c.kind == "render" for c, _, _ in singles)
     # on the page: that bundle is what is drawn, and none of its cables
     assert b.id in st["bundles"]
     assert ui_graph.bundle_thickness(b.count) == ui_graph.BUNDLE_MAX
     assert ui_graph.bundle_thickness(1) == ui_graph.WIRE
     # a render cable with a collapsed end lands on that node's stub
-    wire = next(c for c, _, _ in singles if c.dst_port.startswith("rin:output.1"))
-    assert next(x for x in singles if x[0] is wire)[2] == "nin:render:output.1"
+    wire = next(c for c, _, _ in singles if c.dst_port.startswith("rin:output.all"))
+    assert next(x for x in singles if x[0] is wire)[2] == "nin:render:output.all"
 
 
 def test_a_bundle_splits_into_its_cables_when_both_ends_expand(rig):
@@ -163,7 +178,7 @@ def test_a_bundles_hover_and_side_pane_list_its_rows(rig, monkeypatch):
     assert b.count > 10 and all(c.kind == "route" for c in b.cables)
     tip = graphview.bundle_tip(view, b)
     head, body = tip.split("\n")[:2]
-    assert head == "analyzer  →  shape"
+    assert head == "analyzer  →  Shape"            # (plan 35 G: its label)
     assert body.startswith(f"{b.count} cables: ")
     assert body.endswith(f", + {b.count - 10} more")
     assert body.count(" → ") == 10
@@ -202,7 +217,7 @@ def test_a_drag_onto_a_collapsed_node_offers_its_ports_and_lands_through_edit(
         m.setattr(ed, "accept_new_item", lambda *a: got.__setitem__("accepted", 1) or True)
         m.setattr(ui_graph, "_drag_tip", lambda w: got.__setitem__("tip", w))
         frame(rig.panel, "graph")
-    assert got["accepted"] == 1 and got["tip"] == "let go: pick one of shape's ports"
+    assert got["accepted"] == 1 and got["tip"] == "let go: pick one of Shape's ports"
     held = st["land"]
     assert held is not None and held["fixed"] == "out:lane:3" and held["node"] == "render:shape"
     by_pin = {pin: why for pin, _, _, why in held["choices"]}
@@ -275,19 +290,20 @@ def test_tidy_collapses_all_relays_and_says_what_it_did(rig):
     frame(rig.panel, "graph")
     assert st["said"] == ui_graph.ALREADY_TIDY
     ui_graph.toggle_open(st, "render:shape")
-    rig.lib.presets.layout["render:eye"] = [900, 40]
+    rig.lib.presets.layout["render:camera"] = [900, 40]
     frame(rig.panel, "graph")
-    assert st["applied"]["render:eye"] == (900.0, 40.0)
+    assert st["applied"]["render:camera"] == (900.0, 40.0)
     st["tidy"] = True
     frame(rig.panel, "graph")
     idle = sum(n.idle for n in view.nodes)               # N9: the areas' words
-    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in 7 areas, every one "
+    k = len({n.area for n in view.nodes if not n.idle})     # (plan 35 G: by primitive)
+    assert st["said"] == (f"laid out {len(view.nodes) - idle} nodes in {k} areas, every one "
                           f"collapsed · {idle} idle off the canvas")
     assert st["open"] == set() and rig.lib.presets.layout == {}
     auto = ui_graph.layout_of(st, view)
     assert all(st["applied"][n.id] == auto[n.id] for n in view.nodes
                if not n.idle)                           # N9: an idle node is not placed
-    assert st["applied"]["render:eye"] != (900.0, 40.0)
+    assert st["applied"]["render:camera"] != (900.0, 40.0)
 
 
 def test_beside_shows_only_with_a_selection(rig, monkeypatch):
@@ -565,13 +581,13 @@ def test_a_dormant_bundle_draws_faint_and_a_live_one_moves_without_a_rebuild(
     view, wiring = st["view"], st["wiring"]
     dormant = next(b for b in st["bundles"].values() if b.dormant)
     assert links[ui_graph._id(st, "c:" + dormant.id)][0] == pytest.approx(ui_graph.DORMANT_ALPHA)
-    lfo = st["bundles"]["bundle:lfo.1>render:eye"]
+    lfo = st["bundles"]["bundle:lfo.1>render:camera"]
     assert not lfo.dormant and lfo.live == pytest.approx(0.3)
     assert links[ui_graph._id(st, "c:" + lfo.id)][0] == 1.0
     router.feed("lfo", [0.8, 0.0, 0.0, 0.0])
     frame(rig.panel, "graph")
     assert st["view"] is view and st["wiring"] is wiring
-    assert st["bundles"]["bundle:lfo.1>render:eye"].live == pytest.approx(0.8)
+    assert st["bundles"]["bundle:lfo.1>render:camera"].live == pytest.approx(0.8)
 
 
 def test_a_bundles_menu_and_a_nodes_learn_menu_draw(rig, monkeypatch):
@@ -661,7 +677,7 @@ def test_selecting_an_effect_node_sets_the_shared_selection(rig):
     sel = ui_graph._selection(st, st["view"])
     assert sel is not None and sel[1].id == off.id
     assert rig.panel.fx_selected == off.ref.effect
-    assert graphview.SHADERS in st["idle_open"]
+    assert graphview.EFFECTS_AREA in st["idle_open"]
 
 
 # ---------------------------------------------------------------- the owner, 2026-10-24: a node's controls
@@ -716,7 +732,7 @@ def test_a_media_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
     label's Learn menu) — rate, jog, position, loop, slot and fit."""
     st = party(rig)
     rows = spy_rows(monkeypatch)
-    pick(rig, st, "render:media.a")
+    pick(rig, st, "render:channel.a")
     for key in ("rate", "jog", "pos", "loop", "slot", "fit"):
         assert f"media.a.{key}" in rows, key
 
@@ -726,7 +742,7 @@ def test_a_side_panel_row_edits_through_the_param(rig, monkeypatch):
     (`Param.set_value`): the param moves, and the undo watcher makes one
     step of it, as on the MEDIA page."""
     st = party(rig)
-    pick(rig, st, "render:media.a")
+    pick(rig, st, "render:channel.a")
     u, tick, settle = undo_watch(rig)
     settle()
     u.stack.clear()
@@ -774,12 +790,52 @@ def test_every_nodes_side_panel_draws(rig):
     side panel draws (its rows, its folds, its chip) without an imgui error
     — a toggle's checkbox, a trigger's chip and a combo beside the sliders."""
     st = party(rig)
+    # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
+    e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
+    for kind, f in (("backdrop", None), ("pattern", None), ("guide", None), ("echo", "2"),
+                    ("dream", None), ("delay", None), ("resize", None), ("composite", None)):
+        assert e.add_node(kind, f) is None, kind
+    frame(rig.panel, "graph")
     st["idle_open"] = set(graphview.AREAS) | {graphview.OTHER}
     frame(rig.panel, "graph")
     drawn = [n.id for n in st["view"].nodes if ui_graph.drawn_node(st, n)]
     assert len(drawn) > 40
+    assert {"render:copy", "render:backdrop", "render:pattern", "render:hands.guide",
+            "render:echo.2", "render:dream", "render:delay", "render:resize",
+            "render:output.all", "render:camera"} <= set(drawn)
     for nid in drawn:
         pick(rig, st, nid)
+
+
+def test_every_node_has_a_label_and_a_hover(rig):
+    """Plan 35 G (V's table): every render node of every graph fixture's
+    view is titled by `label_of` and hovers `HOVERS`' line with its id (and
+    its params' prefix where it differs) — never `frame`, `fx`,
+    `grounded` or `capture`."""
+    from test_graph_areas import WIRED as fixtures
+    from test_graph_areas import load_fixture
+    assert graphview.label_of("hands.2") == "Hands 2"
+    assert graphview.label_of("channel.a") == "Channel A"
+    assert graphview.label_of("hands.2.layer") == "Hands layer 2"
+    assert graphview.label_of("echo.3") == "Echo 3"
+    assert graphview.label_of("copy.2", of="acid") == "copy of acid (2)"
+    assert graphview.label_of("acid.2") == "acid 2"
+    assert graphview.label_of("output.all") == "All outputs"
+    assert graphview.label_of("output.2") == "Output 2"
+    assert graphview.label_of("output.2", [NS(n=2, name="projector")]) == "projector"
+    assert graphview.hover_of("lookback").endswith(" · id lookback · params dream.*")
+    assert graphview.hover_of("output.2").endswith(" · id output.2")
+    for fixture in fixtures:
+        st = load_fixture(rig, fixture)
+        for n in st["view"].nodes:
+            if n.kind not in ("render", "output", "channel"):
+                continue
+            assert n.label and n.label not in ("frame", "fx", "grounded", "capture"), (
+                fixture, n.id)
+            name = n.id.partition(":")[2]
+            assert n.status.endswith(f"· id {name}") or f"· id {name} · params " in n.status, (
+                fixture, n.id, n.status)
+            assert n.status.partition(" · id ")[0], (fixture, n.id)
 
 
 def test_home_page_maps_each_node_kind(rig):
@@ -793,7 +849,7 @@ def test_home_page_maps_each_node_kind(rig):
     def home(n):
         got = ui_graph.home_page(n)
         return None if got is None else got[0]
-    key, sel = ui_graph.home_page(view.node("render:media.c"))
+    key, sel = ui_graph.home_page(view.node("render:channel.c"))
     assert key == "media"
     sel(panel)
     assert ui_media._state(panel)["sel"] == "c"
@@ -801,9 +857,20 @@ def test_home_page_maps_each_node_kind(rig):
     assert key == "fx"
     sel(panel)
     assert panel.fx_selected == "acid"
-    assert home(view.node("render:pattern")) == "faces"
-    assert home(view.node("render:backdrop")) == "media"
+    # plan 35 G: the pattern and the backdrop are drawn where the section
+    # names them (party-trip's does not): by their stand-ins
+    V = graphview.VNode
+    assert home(V("render:pattern", "render", "Faces pattern", ref=G.PatternNode())) == "faces"
+    assert home(V("render:backdrop", "render", "Backdrop",
+                  ref=G.BackdropNode("backdrop"))) == "media"
     assert home(view.node("render:shape")) == "view"
+    assert home(view.node("render:lookback")) == "lookback"
+    assert home(view.node("render:output.all")) == "output"
+    # a copy: FX with its original selected
+    key, sel = ui_graph.home_page(view.node("render:copy"))
+    panel.fx_selected = None
+    sel(panel)
+    assert key == "fx" and panel.fx_selected == view.node("render:copy").ref.effect
     key, sel = ui_graph.home_page(view.node("lfo.3"))
     assert key == "lfo"
     sel(panel)
@@ -813,7 +880,7 @@ def test_home_page_maps_each_node_kind(rig):
     sel(panel)
     assert panel._seq_env == 7
     assert home(graphview.VNode(graphview.SEQ, graphview.SEQ, "sequencer")) == "seq"
-    assert home(view.node("render:ghost")) == "hands"
+    assert home(view.node("render:hands")) == "hands"
     assert home(view.node("render:output.1")) == "output"
     assert home(graphview.VNode("render:switch", "render", "switch",
                                 ref=G.SwitchNode("switch"))) is None
@@ -827,7 +894,7 @@ def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
     the node's channel selected there."""
     from hyperspace import ui_media
     st = party(rig)
-    pick(rig, st, "render:media.c")
+    pick(rig, st, "render:channel.c")
     chips = []
     chip = ui.chip
     monkeypatch.setattr(ui, "chip", lambda label, *a, **k: chips.append(label)
@@ -843,18 +910,18 @@ def test_open_on_page_switches_page_and_selects(rig, monkeypatch):
 def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     """The owner (2026-10-24): a switch had no control but Learn. Its side
     panel opens on a row of chips — off, then 1 … 8, each named by what
-    feeds that input ("3 · media.c", "2 · —" for nothing) — the pick lit;
+    feeds that input ("3 · Channel C", "2 · —" for nothing) — the pick lit;
     one click sets `switch.select` through the param, one undo step. The
     select row with its Learn menu sits under them, and the canvas's
     summary says the pick."""
     st = party(rig)
     e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
     assert e.add_node("switch") is None and e.added == "switch"
-    assert e.wire("rout:media.a", "rin:switch/in1") is None
-    assert e.wire("rout:media.c", "rin:switch/in3") is None
+    assert e.wire("rout:channel.a", "rin:switch/in1") is None
+    assert e.wire("rout:channel.c", "rin:switch/in3") is None
     frame(rig.panel, "graph")
     sw = st["view"].node("render:switch")
-    assert ui_graph.switch_feeds(st["view"], sw)[:3] == ["media.a", None, "media.c"]
+    assert ui_graph.switch_feeds(st["view"], sw)[:3] == ["Channel A", None, "Channel C"]
     rows = spy_rows(monkeypatch)
     pick(rig, st, "render:switch")
     u, tick, settle = undo_watch(rig)
@@ -867,8 +934,8 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     frame(rig.panel, "graph")
     monkeypatch.setattr(ui, "lit_chip", lit)
     shown = [x.partition("##")[0] for x in labels if "##graph.side." in x]
-    assert "off" in shown and "3 · media.c" in shown and "2 · —" in shown
-    assert "1 · media.a" in shown and len(shown) == 9
+    assert "off" in shown and "3 · Channel C" in shown and "2 · —" in shown
+    assert "1 · Channel A" in shown and len(shown) == 9
     assert rig.reg["switch.select"].value == 3
     tick()
     settle()
@@ -876,3 +943,31 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     assert "switch.select" in rows
     frame(rig.panel, "graph")
     assert "picks in3" in graphview.summary(st["view"].node("render:switch"))
+
+
+def test_a_resize_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
+    """Plan 34 T5: `resize[.n].*` are rows on the resize's node
+    (`OWNERS["resize"]`), not a `group:resize` node of their own: eight
+    rows drawn, an edit the param's own in one undo step, no home page."""
+    from test_graph_areas import load_fixture
+
+    from hyperspace import params
+    st = load_fixture(rig, "resize-crop")
+    view = st["view"]
+    assert view.node("group:resize") is None
+    n = view.node("render:resize")
+    assert ui_graph.side_groups(rig.panel, n) == [("resize", params.resize_ids("resize"))]
+    assert ui_graph.home_page(n) is None
+    rows = spy_rows(monkeypatch)
+    pick(rig, st, "render:resize")
+    drawn = list(dict.fromkeys(r for r in rows if r.startswith("resize.")))   # (two frames)
+    assert drawn == params.resize_ids("resize")
+    assert len(params.resize_ids("resize")) == 8
+    u, tick, settle = undo_watch(rig)
+    settle()
+    u.stack.clear()
+    p = rig.reg["resize.crop_w"]
+    p.set_value(0.4)
+    tick()
+    settle()
+    assert p.base == pytest.approx(0.4) and len(u.stack) == 1

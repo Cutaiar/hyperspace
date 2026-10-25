@@ -1415,11 +1415,11 @@ def test_the_switches_are_registered_from_the_configs_launch_values(monkeypatch,
     g = _OutGlfw()
     monkeypatch.setattr(app, "glfw", g)
     cfg = _screens_cfg({"name": "glass"}, {"name": "projector", "monitor": 1, "scene": False,
-                                           "through": True, "dim": 0.5})
+                                           "flip_x": True, "dim": 0.5})
     slots, _ = app._windows(False, cfg, tmp_path)
     reg = Registry()
     register_switches(reg, slots)
-    assert reg["output.2.scene"].value is False and reg["output.2.through"].value is True
+    assert reg["output.2.scene"].value is False and reg["output.2.flip_x"].value is True
     assert reg["output.2.dim"].value == 0.5 and reg["output.1.dim"].value == 1.0
     reg["output.2.scene"].set(True)
     log: list[str] = []

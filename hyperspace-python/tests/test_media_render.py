@@ -114,15 +114,17 @@ def test_no_backdrop_graph_unchanged():
     """No backdrop: the default graph is exactly today's, for the default
     views — node for node, in order — and `Wiring()` still compares equal
     to the default (the renderer's graph key)."""
+    from wiredframe import Shows, graph
+
     states = [{}, {"scene": False}, {"through": True}, {"hands": False},
               {"scene": False, "through": True}]
-    one = G.default_graph([_view()])
-    assert _names(one) == ["shape", "ghost", "scene", "cover", "hands", "history", "fx",
-                           "capture", "output.1"]
+    one = G.build_graph([_view()])
+    assert _names(one) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
+                           "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     for kw in states:
-        vs = [_view(**kw), _view()]
-        base = G.default_graph(vs)
-        off = G.default_graph(vs, G.Wiring(backdrop="", backdrop_history=False))
+        shows = [Shows(**kw), Shows()]
+        base = graph(shows)
+        off = graph(shows, G.Wiring(backdrop="", backdrop_history=False))
         assert _names(off) == _names(base)
         assert not any(isinstance(n, G.MediaNode) for n in base.order)
     assert G.Wiring() == G.Wiring(backdrop="")
@@ -137,31 +139,34 @@ def test_the_backdrop_wiring_is_checked():
 
 
 def test_backdrop_history_toggle():
-    """With a backdrop the scene is laid over the channel (`grounded`)
-    before the history, so the effects bend both; the capture takes the
-    scene alone with `backdrop_history` off, the composite with it on —
-    and the hands-only pipeline has no backdrop."""
-    vs = [_view(), _view(scene=False, through=True)]
-    off = G.default_graph(vs, G.Wiring(backdrop="a"))
-    on = G.default_graph(vs, G.Wiring(backdrop="a", backdrop_history=True))
+    """With a backdrop the scene is laid over the channel (`backdrop`,
+    plan 35 T4's name for `grounded`) before the look-back, so the effects
+    bend both; the capture takes the scene alone with `backdrop_history`
+    off, the composite with it on — and the hands alone through the
+    effects have no backdrop."""
+    from wiredframe import Shows, graph
+
+    shows = [Shows(), Shows(scene=False, through=True)]
+    off = graph(shows, G.Wiring(backdrop="a"))
+    on = graph(shows, G.Wiring(backdrop="a", backdrop_history=True))
     for g in (off, on):
-        grounded = g.nodes["grounded"]
+        grounded = g.nodes["backdrop"]
         assert isinstance(grounded, G.Composite) and grounded.blend == "over"
         assert grounded.inputs["over"] is g.nodes["scene"]
         media = grounded.inputs["under"]
-        assert isinstance(media, G.MediaNode) and media.name == "media.a"
+        assert isinstance(media, G.MediaNode) and media.name == "channel.a"
         assert media.channel == "a" and media.alpha_of == "backdrop_alpha"
-        assert g.nodes["history"].inputs["image"] is grounded
+        assert g.nodes["lookback"].inputs["image"] is grounded
         assert g.nodes["scene"].ground == 0.0        # see-through, laid over the backdrop
-        assert g.nodes["composite(hands)"].inputs["under"] is None
-    assert off.nodes["capture"].inputs["image"].name == "scene"
-    assert on.nodes["capture"].inputs["image"].name == "grounded"
-    assert G.default_graph(vs).nodes["scene"].ground is None
+        assert g.nodes["composite"].inputs["under"] is None
+    assert off.nodes["lookback(capture)"].inputs["image"].name == "scene"
+    assert on.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
+    assert graph(shows).nodes["scene"].ground is None
     # the history holding the hands: the hands laid onto what it captures
-    both = G.default_graph(vs, G.Wiring(backdrop="b", backdrop_history=True,
-                                        history="scene+hands"))
-    held = both.nodes["capture"].inputs["image"]
-    assert held.name == G.HISTORY_COMPOSITE and held.inputs["under"].name == "grounded"
+    both = graph(shows, G.Wiring(backdrop="b", backdrop_history=True,
+                                 history="scene+hands"))
+    held = both.nodes["lookback(capture)"].inputs["image"]
+    assert held.name == "composite" and held.inputs["under"].name == "backdrop"
 
 
 def test_the_channels_are_wire_ends():
@@ -176,16 +181,16 @@ def test_the_channels_are_wire_ends():
     assert G.wire_node_kind("media.d") == "media"
     spec = G.read_graph({"wires": [{"from": "media.c", "to": "output.2.image"}]})
     assert spec.notes == () and spec.wiring().wires == (G.Wire("media.c", "output.2.image"),)
-    g = G.default_graph([_view(), _view()], spec.wiring())
+    g = G.build_graph([_view(), _view()], spec.wiring())
     end = g.nodes["output.2"].inputs["image"]
-    assert isinstance(end, G.Wired) and end.inputs["image"].name == "media.c"
+    assert isinstance(end, G.Shown) and end.inputs["image"].name == "channel.c"
     assert isinstance(end.inputs["image"], G.MediaNode)
     assert end.inputs["image"].alpha_of is None
     # the backdrop's channel wired too: two nodes, the wire's at alpha 1
-    both = G.default_graph([_view()], G.Wiring(
+    both = G.build_graph([_view()], G.Wiring(
         backdrop="c", wires=(G.Wire("media.c", "output.1.image"),)))
-    assert both.nodes["media.c"].alpha_of == "backdrop_alpha"
-    assert both.nodes["media.c(wire)"].alpha_of is None
+    assert both.nodes["channel.c"].alpha_of == "backdrop_alpha"
+    assert both.nodes["channel.c(wire)"].alpha_of is None
 
 
 def test_fit_scales():
@@ -319,7 +324,7 @@ def test_backdrop_under_scene(ctx):
     (pic,) = _draw(ctx, r, _empty())
     h, w = pic.shape[:2]
     assert tuple(pic[h // 2, w // 2, :3]) == RED and (pic[..., :3] == RED).all()
-    assert r._graph.nodes["grounded"] and "media.a" in r._graph.timed
+    assert r._graph.nodes["backdrop"] and "channel.a" in r._graph.timed
     (shaped,) = _draw(ctx, r, _shape())
     assert (shaped[..., :3] != RED).any(axis=-1).any()      # the faces over the red
     assert (shaped[..., :3] == RED).all(axis=-1).any()      # and the still between them
@@ -327,7 +332,7 @@ def test_backdrop_under_scene(ctx):
     assert abs(half[h // 2, w // 2, 0] - 128) <= 1 and half[h // 2, w // 2, 1] == 0
     # off again (unwired): the graph without it, the frame black
     (none,) = _draw(ctx, _back(r, ""), _empty())
-    assert "grounded" not in r._graph.nodes and (none[..., :3] == 0).all()
+    assert "backdrop" not in r._graph.nodes and (none[..., :3] == 0).all()
     # (plan 33 T7: no `backdrop.channel` — the wire into `backdrop.image` is it)
 
 
@@ -335,7 +340,7 @@ def test_backdrop_needs_the_channels(ctx):
     """A renderer with no media state draws no backdrop (and builds none)."""
     r = _back(_renderer(ctx, None))
     (pic,) = _draw(ctx, r, _empty())
-    assert "grounded" not in r._graph.nodes and (pic[..., :3] == 0).all()
+    assert "backdrop" not in r._graph.nodes and (pic[..., :3] == 0).all()
 
 
 def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
@@ -345,11 +350,13 @@ def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
     _draw(ctx, r, _empty(backdrop_alpha=0.3))
     assert r._graph is g                                    # alpha is per frame
     _draw(ctx, r, _empty(backdrop_history=True))
-    assert r._graph is not g and r._graph.wiring.backdrop_history
-    assert r._graph.nodes["capture"].inputs["image"].name == "grounded"
+    # (plan 35 T4: what the look-back records is a wire of the graph's)
+    assert r._graph is not g
+    assert r._graph.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
     _draw(ctx, _back(r, "b"), _empty())
     # (the history is the frame's, laid on for the graph alone: the base is the preset's)
-    assert r._graph.wiring.backdrop == "b" and not r.wiring.backdrop_history
+    assert r._graph.nodes["backdrop"].inputs["under"].channel == "b"
+    assert not r.wiring.backdrop_history
 
 
 def test_media_wire_to_output(ctx):
@@ -551,18 +558,18 @@ def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
     placed = (G.EffectAt("acid", 2, after="scene"),)
     effects = ("acid", "acid.2")
     vs = [_view()]
-    base = G.default_graph(vs, G.Wiring(placed=placed), effects=effects)
+    base = G.build_graph(vs, G.Wiring(placed=placed), effects=effects)
     assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
-    on = G.default_graph(vs, G.Wiring(placed=placed, backdrop="a"), effects=effects)
+    on = G.build_graph(vs, G.Wiring(placed=placed, backdrop="a"), effects=effects)
     a2 = on.nodes["acid.2"]
-    assert a2.inputs["image"] is on.nodes["grounded"]
-    assert on.nodes["grounded"].inputs["over"] is on.nodes["scene"]
-    assert on.nodes["history"].inputs["image"] is a2
-    assert on.nodes["capture"].inputs["image"] is on.nodes["scene"]   # the scene alone
-    hist = G.default_graph(vs, G.Wiring(placed=placed, backdrop="a", backdrop_history=True),
+    assert a2.inputs["image"] is on.nodes["backdrop"]
+    assert on.nodes["backdrop"].inputs["over"] is on.nodes["scene"]
+    assert on.nodes["lookback"].inputs["image"] is a2
+    assert on.nodes["lookback(capture)"].inputs["image"] is on.nodes["scene"]   # the scene alone
+    hist = G.build_graph(vs, G.Wiring(placed=placed, backdrop="a", backdrop_history=True),
                            effects=effects)
-    assert hist.nodes["capture"].inputs["image"] is hist.nodes["acid.2"]
-    off = G.default_graph(vs, G.Wiring(placed=placed, backdrop=""), effects=effects)
+    assert hist.nodes["lookback(capture)"].inputs["image"] is hist.nodes["acid.2"]
+    off = G.build_graph(vs, G.Wiring(placed=placed, backdrop=""), effects=effects)
     assert _names(off) == _names(base)
 
 
@@ -582,7 +589,7 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
 
     (pic,) = _draw(ctx, r, _empty(), frames=2)
     assert "acid.2" in r.stats["effects"]
-    assert r._graph.nodes["acid.2"].inputs["image"] is r._graph.nodes["grounded"]
+    assert r._graph.nodes["acid.2"].inputs["image"] is r._graph.nodes["backdrop"]
     assert red(pic) > 0.5, red(pic)
     (shaped,) = _draw(ctx, r, _shape(), frames=2)
     assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
@@ -626,7 +633,7 @@ def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
         assert abs(got[history] - blue) <= 3, (history, got[history])
         assert abs(int(pic[..., 2].min()) - blue) <= 3, (history, pic[..., 2].min())
         # on, the history occludes from its own input; off, from the scene
-        assert ("occluder" in r._graph.nodes["history"].inputs) is not history
+        assert ("occluder" in r._graph.nodes["lookback"].inputs) is not history
     assert abs(got[True] - got[False]) <= 3, got
 
 

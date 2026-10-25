@@ -54,10 +54,10 @@ def test_the_switch_is_built_from_its_wires():
     w = spec.wiring()
     assert G.Wire("media.a", "switch.in1") in w.wires and G.Wire("switch", "pattern.media") \
         in w.wires
-    g = G.default_graph([View(Switches(), (64, 48))], w)
+    g = G.build_graph([View(Switches(), (64, 48))], w)
     sw = g.nodes["switch"]
     assert isinstance(sw, G.SwitchNode)
-    assert sw.inputs["in1"] is g.nodes["media.a"] and sw.inputs["in3"] is g.nodes["media.c"]
+    assert sw.inputs["in1"] is g.nodes["channel.a"] and sw.inputs["in3"] is g.nodes["channel.c"]
     assert sw.inputs["in2"] is None
     assert g.nodes["pattern"].inputs["media"] is sw
 
@@ -65,7 +65,7 @@ def test_the_switch_is_built_from_its_wires():
 def test_a_switch_that_reaches_nothing_has_no_node():
     spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "switch.in1"),
                                 nodes=[SWITCH]))
-    g = G.default_graph([View(Switches(), (64, 48))], spec.wiring())
+    g = G.build_graph([View(Switches(), (64, 48))], spec.wiring())
     assert "switch" not in g.nodes
 
 
@@ -328,7 +328,7 @@ def test_a_migrated_view_media_route_still_switches_the_faces(ctx):
     free = app.presets.graph.free_doc()
     assert SWITCH in free["nodes"] and {"from": "switch", "to": "pattern.media"} in free["wires"]
     for i, c in enumerate("abcdefgh", 1):
-        assert {"from": f"media.{c}", "to": f"switch.in{i}"} in free["wires"]
+        assert {"from": f"channel.{c}", "to": f"switch.in{i}"} in free["wires"]
     for c in "bc":
         m.assign(c, 0, f"file:/fake/{c}.png")
     m.poll(0.0, 0.0)

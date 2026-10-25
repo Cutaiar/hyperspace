@@ -26,6 +26,7 @@ from conftest import (
 from test_plan12_presets import DictSource, NullOut, feats, hold, offset
 
 from hyperspace import apc40, envelope, graphmigrate, lfo, preset, routing, sequencer, tempo
+from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -1721,3 +1722,247 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
     assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
     assert rig.reg["ghost.mirror"].value is False
+
+
+# ---- plan 35 T3: the wired frame's schema (row 385) ----
+
+WIRED_FIXTURES = ("blank-frame", "channel-out-only", "through-one-output")
+FIXTURE_DIR = FACTORY.parents[1] / "tests" / "fixtures" / "presets"
+
+
+def test_a_wired_preset_saves_as_v6(rig):
+    """Row 385: a wired frame `/4` cannot say is written `hyperspace.preset/6`
+    (`schema_of`, where `/5` was); the ladder reads `/2` … `/6`, and a `/7`
+    file is refused in its words — as a plan 33/34 build refuses a `/6`."""
+    assert preset.VERSIONS == (2, 3, 4, 5, 6)
+    assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/6"
+    rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
+    section = rig.presets.graph.free_doc()
+    assert section["frame"] == "wired"
+    edited = {**section, "wires": [w for w in section["wires"]
+                                   if w["to"] != "lookback.capture"]}
+    assert preset.schema_of({"values": {}, "graph": edited}) == "hyperspace.preset/6"
+    assert preset.schema_of({"values": {}, "graph": section}) == preset.SCHEMA
+    put(rig.home, "SEVEN", schema="hyperspace.preset/7")
+    rig.lib.poll()
+    with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+        rig.lib.read("presets", "SEVEN")
+
+
+@pytest.mark.parametrize("name", WIRED_FIXTURES)
+def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
+    """Each of T3's `/6` fixtures, loaded, saved and loaded into a fresh rig,
+    lands the same `GraphSpec`, and saves `/6` again."""
+    src = FIXTURE_DIR / f"{name}.json"
+    assert json.loads(src.read_text())["schema"] == "hyperspace.preset/6"
+    spec, saved = None, None
+    for home in (tmp_path / "a", tmp_path / "b"):
+        (home / "presets").mkdir(parents=True, exist_ok=True)
+        (home / "presets" / src.name).write_text(saved or src.read_text())
+        r = boot(home)
+        r.presets.load(name)
+        got = r.presets.graph.spec
+        assert got is not None and got.wired and not got.notes
+        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        if spec is not None:
+            assert got == spec
+        spec = got
+        saved = r.presets.save_as(name).read_text()
+        assert json.loads(saved)["schema"] == "hyperspace.preset/6"
+
+
+# ---------------------------------------------------------------- a new preset (plan 35 T7)
+
+def _fresh_performance(lib):
+    return {k: v for k, v in lib._fresh_all().items()
+            if k in lib.reg and lib.reg[k].group in PERFORMANCE_GROUPS
+            and not preset.is_instance_id(k) and not preset.is_switch_id(k)
+            and lib.reg[k].group != "modifiers"}
+
+
+def _spoil(rig, name):
+    """A loaded factory preset with a route and a desk row of its own."""
+    rig.presets.load(name)
+    table = rig.router.table
+    table.add(Binding("hand:7", "view.bright", "position"))
+    table.set_desk([*table.desk(), Binding("cc:0:14", "view.speed", "abs", layer="preset")])
+
+
+@pytest.mark.parametrize("name", ["big-blue-wave", "hex-engine"])
+def test_a_new_preset_is_factory_values_and_nothing_wired(rig, name):
+    """Plan 35 T7 (row 387): the library's fresh values for every
+    performance group whatever was loaded, no preset routes, the desk the
+    factory preset layer (written explicitly), the session as it was, and a
+    frame that is only the outputs — black."""
+    lib, reg, table = rig.lib, rig.reg, rig.router.table
+    _spoil(rig, name)
+    kept = reg.snapshot(part="session")
+    assert rig.presets.new() == [preset.NEW_SAID]
+    for k, v in _fresh_performance(lib).items():
+        assert reg[k].value == v, k
+    assert table.routes() == []
+    assert preset.desk_json(table.desk()) == preset.desk_json(preset.fresh_desk())
+    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    assert doc["desk"] == preset.desk_json(preset.fresh_desk())
+    assert doc["routes"] == []
+    assert reg.snapshot(part="session") == kept
+    spec = rig.presets.graph.spec
+    assert spec.to_json() == {"frame": "wired", "nodes": []}
+    assert G.reaches(spec) == frozenset()
+    assert lib.current("presets") == preset.UNTITLED_PRESET
+    assert lib.is_dirty("presets")
+    assert lib.path_of("presets", preset.UNTITLED_PRESET) is None
+
+
+def test_a_new_preset_does_not_depend_on_what_was_loaded(rig):
+    after = []
+    for name in ("big-blue-wave", "hex-engine"):
+        _spoil(rig, name)
+        rig.presets.new()
+        after.append((rig.reg.snapshot(part="performance"),
+                      rig.presets.document(preset.UNTITLED_PRESET)))
+    assert after[0] == after[1]
+
+
+def test_a_new_preset_undoes_in_one_step(rig):
+    from hyperspace import undo
+    from hyperspace.library import Marks
+
+    u = undo.Undo(rig.reg, rig.router.table, marks=Marks(rig.lib))
+    undo.install(u)
+    try:
+        _spoil(rig, "big-blue-wave")
+        u.tick(1.0)
+        u.tick(2.0)
+        before = rig.reg.snapshot(part="performance")
+        loaded = rig.lib.current("presets")
+        rig.presets.new()
+        assert u.stack[-1].label == "new preset"
+        assert u.undo()
+    finally:
+        undo.install(None)
+    assert rig.reg.snapshot(part="performance") == before
+    assert rig.lib.current("presets") == loaded
+    assert len(rig.router.table.routes()) >= 1
+    assert rig.lib.is_dirty("presets")        # (the spoiled preset's dot, back)
+
+
+def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
+    """T7's deferred check (final review): after a preset with a channel's
+    bin, a macro and a modifier, New leaves no bin filled, no macro
+    subscriber and no modifier — and its save writes none of them."""
+    doc = json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())
+    doc.update(name="full", media={"channels": {"a": ["local:x.png"]}},
+               modifiers=[{"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy", None]}])
+    rig.presets.load_doc(doc)
+    table, media = rig.router.table, rig.presets.media
+    assert media.to_json()["channels"] and table.modifiers_doc(rig.reg)
+    assert [m for m in table.macros_doc().values() if m.get("subs")]
+    rig.presets.new()
+    assert not media.to_json().get("channels")
+    assert not table.modifiers_doc(rig.reg)
+    assert not [m for m in table.macros_doc().values() if m.get("subs")]
+    saved = rig.presets.document("blank")
+    assert not saved.get("modifiers") and not (saved.get("media") or {}).get("channels")
+    assert not [m for m in saved["macros"].values() if m.get("subs")]
+
+
+def test_a_new_preset_saves_and_loads_back_empty(rig):
+    _spoil(rig, "big-blue-wave")
+    rig.presets.new()
+    rig.presets.save_as("blank")
+    _spoil(rig, "hex-engine")
+    rig.presets.load("blank")
+    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": []}
+    assert rig.router.table.routes() == []
+    assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
+
+
+@pytest.fixture(scope="module")
+def gl_ctx():
+    try:
+        import moderngl
+
+        c = moderngl.create_context(standalone=True)
+    except Exception as e:  # noqa: BLE001 — any GL failure means skip
+        pytest.skip(f"no standalone GL context available: {e}")
+    yield c
+
+
+def test_a_new_preset_draws_black(rig, gl_ctx):
+    """Plan 35 T7: the blank preset's frame, drawn on two views, is the
+    ground — an opaque black — at each window's centre."""
+    from test_graph_frame import SIZE, _fbo, _px, _tool
+
+    from hyperspace.outputs import Switches, View
+
+    rig.presets.new()
+    spec = rig.presets.graph.spec
+    gl = _tool().Rig("legacy6", "present", gl_ctx)
+    try:
+        gl.renderer.wiring = spec.wiring()
+        vs = [View(Switches(), SIZE, target=_fbo(gl_ctx)) for _ in range(2)]
+        for _ in range(3):
+            gl.frame(vs, SIZE, 1.0)
+        assert gl_ctx.error == "GL_NO_ERROR"
+        for v in vs:
+            assert not v.error, v.error
+            assert tuple(_px(v.target)[SIZE[1] // 2, SIZE[0] // 2]) == (0, 0, 0, 255)
+    finally:
+        gl.close()
+
+
+# ---- plan 34 T4: the resize's values (Review Focus 6) ----
+
+RESIZE_OLD = {"nodes": [{"kind": "resize", "instance": 2}],
+              "wires": [{"from": "frame", "to": "fx.image"},
+                        {"from": "media.a", "to": "resize.2.image"}]}
+
+
+def _resize_section(section=RESIZE_OLD):
+    return graphmigrate.wired_section(graphmigrate.renamed(section), G.read_graph(section))
+
+
+def test_resize_values_save_and_load_with_the_preset(tmp_path):
+    """A preset whose graph holds `resize.2` carries its values: saved and
+    loaded into a fresh rig, `resize.2.crop_x` lands with no unknown-id
+    note, and (R10) the file is `/5` — plan 34's words, the factory frame.
+    A preset without the entry undeclares `resize.2.*`; one with the entry
+    and no wire still declares it (the reach does not decide)."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    r = boot(a)
+    put(a, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
+    r.lib.poll()
+    assert r.presets.load("CROP") == []
+    assert r.reg["resize.2.crop_x"].value == 0.3
+    saved = r.presets.save_as("CROP").read_text()
+    assert json.loads(saved)["schema"] == "hyperspace.preset/5"
+    assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
+    (b / "presets").mkdir(parents=True)
+    (b / "presets" / "crop.json").write_text(saved)
+    r = boot(b)
+    assert r.presets.load("CROP") == []
+    assert r.reg["resize.2.crop_x"].value == 0.3
+    assert not [n for n in r.presets.notes if "unknown id" in n]
+    put(b, "PLAIN", values={})
+    r.lib.poll()
+    r.presets.load("PLAIN")
+    assert not [p for p in r.reg if p.id.startswith("resize.2.")]
+    unwired = {**_resize_section(), "wires": [
+        w for w in _resize_section()["wires"] if w["to"] != "resize.2.image"]}
+    put(b, "UNWIRED", graph=unwired, values={"resize.2.crop_x": 0.7})
+    r.lib.poll()
+    r.presets.load("UNWIRED")
+    assert "resize.2" not in G.reaches(r.presets.graph.spec)
+    assert r.reg["resize.2.crop_x"].value == 0.7
+
+
+def test_a_new_preset_carries_no_resize_values(rig):
+    put(rig.home, "CROP", graph=_resize_section(), values={"resize.2.crop_x": 0.3})
+    rig.lib.poll()
+    rig.presets.load("CROP")
+    assert "resize.2.crop_x" in rig.reg
+    rig.presets.new()
+    assert not [p for p in rig.reg if preset.is_resize_id(p.id)]
+    doc = rig.presets.document(preset.UNTITLED_PRESET)
+    assert not [k for k in doc["values"] if k.startswith("resize")]

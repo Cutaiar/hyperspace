@@ -23,11 +23,14 @@ window-system state is three settings and the params that drive them:
 and, per opened render output N (plan 21 WP4, `register_switches`; the
 config's ``[[output.screens]]``, one output with no list):
 
-  output.N.scene      toggle   the scene on that output
-  output.N.hands      toggle   the ghost hands on that output
-  output.N.through    toggle   the hands through the effects (else over them)
+  output.N.scene      toggle   "picture": the mute on what is wired into its
+                               image (plan 35 O: off, its ground)
+  output.N.hands      toggle   the mute on the hands and the guide wired into it
+  output.N.flip_x/_y  toggle   its mirror (plan 23 WP1)
   output.N.dim        0–1      that output's own dim, times the master —
                                only when the config lists two or more outputs
+
+("hands through the effects" is the preset's wiring, plan 35 O: no switch)
 
 The monitor / fullscreen / overlay params above are output 1's; a later
 output's screen and fullscreen are its config entry's (plan 21 fork F10).
@@ -439,9 +442,12 @@ def _cap(s: str) -> str:
 def register_switches(reg: Registry, slots) -> list[str]:
     """The per-output switches (plan 21 WP4): for each opened render output
     N (an `outputs.Slot`, numbered by its place in the config's list),
-    ``output.N.scene``, ``output.N.hands``, ``output.N.through``,
+    ``output.N.scene`` (labelled "picture") and ``output.N.hands`` — the
+    window's two mutes (plan 35 O, row 374: off, it ignores what is wired
+    into that port; never the preset's structure, never a rebuild) —,
     ``output.N.flip_x`` / ``.flip_y`` (plan 23 WP1: the output's mirror) and
-    — only when the config lists two or more outputs — ``output.N.dim``. They
+    — only when the config lists two or more outputs — ``output.N.dim``.
+    No ``.through``: "hands through the effects" is the preset's wiring. They
     write the slot's `outputs.Switches`, which `app._draw_render` hands the
     renderer each frame in that output's `View`; the renderer only reads
     them (ARCHITECTURE §3).
@@ -471,18 +477,17 @@ def register_switches(reg: Registry, slots) -> list[str]:
                     lambda v: setattr(sw, attr, bool(v)))
 
         whose = f" on {sl.label}" if several else ""
-        reg.toggle(f"{pre}.scene", label("scene"), *flag("scene"), group="output",
-                   tip=f"The scene — the shape, the echoes and the effects{whose}. Off: "
-                       "only the ghost hands, on black. A rig setting: the config's "
-                       "launch value comes back at a restart.", **rig)
+        # plan 35 O (row 374): the window's mutes — the id `scene` kept for
+        # the bindings, the label what it mutes
+        reg.toggle(f"{pre}.scene", label("picture"), *flag("scene"), group="output",
+                   tip=f"The picture wired into this window{whose} (GRAPH, OUTPUT). Off: "
+                       "this window ignores the picture wired into it and shows its "
+                       "ground, the hands over. A mute, not the preset: a rig setting, "
+                       "the config's launch value comes back at a restart.", **rig)
         reg.toggle(f"{pre}.hands", label("hands"), *flag("hands"), group="output",
-                   tip=f"The ghost hands{whose}. Ghost hands (HANDS page) is the switch "
-                       "for every output at once; this one says where they show.", **rig)
-        reg.toggle(f"{pre}.through", label("hands through effects"), *flag("through"),
-                   group="output",
-                   tip=f"Off: the hands are laid over the finished picture{whose}, "
-                       "untouched by the effects. On: the effects bend them with the "
-                       "shape. With no effect on it changes nothing.", **rig)
+                   tip=f"The hands and the guide wired into this window{whose}. Off: "
+                       "a mute — this window ignores them. Ghost hands (HANDS page) is "
+                       "the switch for every output at once.", **rig)
         # plan 23 WP1: this output's mirror, its last step — the scene, the
         # hands and the readout together, to undo a Pepper's Ghost glass
         mirror = ("Ghost mirror (HANDS page) flips the hands only: with this on, "
@@ -495,8 +500,7 @@ def register_switches(reg: Registry, slots) -> list[str]:
         reg.toggle(f"{pre}.flip_y", label("flip Y"), *flag("flip_y"), group="output",
                    tip=f"Mirror the whole picture top-bottom{whose} — for a screen lying "
                        f"flat under a 45° glass. {mirror}", **rig)
-        ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.through", f"{pre}.flip_x",
-                f"{pre}.flip_y"]
+        ids += [f"{pre}.scene", f"{pre}.hands", f"{pre}.flip_x", f"{pre}.flip_y"]
         # one output: the master dim is its dim — unless the config gave it a
         # launch dim of its own, which must then have a fader (review of #124)
         if several or float(sw.dim) < 1.0:

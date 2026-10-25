@@ -19,6 +19,8 @@ from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
+from wiredframe import Shows
+from wiredframe import wiring as wired_for
 
 from hyperspace import devices, graphview, ui_graph, ui_routing
 from hyperspace import graph as G
@@ -41,6 +43,14 @@ def build(rig, render_graph=None, devs=None):
 
 def views(*sw):
     return [View(s, (640, 360)) for s in sw]
+
+
+def thru(w, effects, *shows) -> G.Graph:
+    """Plan 35 T4: the frame `w` draws on one window per state of `shows`
+    (the retired switches as each output's wiring, `tests/wiredframe.py`:
+    `Shows(through=True)` where `Switches(through=True)` was)."""
+    return G.build_graph(views(*(Switches() for _ in shows)), wired_for(w, *shows),
+                         effects=effects)
 
 
 def stacked(effects, wiring=None) -> G.Wiring:
@@ -126,28 +136,33 @@ def test_macro_subs_are_cables_into_base_or_depth(rig):
 
 def test_params_group_under_the_render_node_that_owns_them(rig):
     """The one table (`graphview.OWNERS`): the shape's params on `shape`,
-    an effect's on its node in the scene's pipeline, the chain's own on
-    its end, the look-back's on `history`, the camera's on `eye`, an
-    output's on its output node, the hands' on their hands node; an LFO's
-    knobs on that LFO; a group no render node owns on a node of its own."""
+    an effect's on its node, the look-back's (`dream.*`) on `lookback`, the
+    camera's on `camera`, an output's on its output node, the hands'
+    (`ghost.*`) on their hands node — plan 35 V2: the nodes in the new ids,
+    the params in theirs; an LFO's knobs on that LFO; a group no render
+    node owns on a node of its own."""
     from hyperspace.routing import Binding
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
     rig.router.table.bindings.append(Binding("key:F9", out1, "toggle"))   # a setter onto it
-    g = G.default_graph(views(Switches(), Switches(scene=False, hands=True, through=True)),
-                        stacked(("acid", "palette")), effects=("acid", "palette"))
+    g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(),
+             Shows(scene=False, through=True))
     view = build(rig, g)
     names = {n.id for n in view.nodes}
-    assert {"render:shape", "render:acid", "render:acid(hands)", "render:fx",
-            "render:history", "render:output.1", "render:output.2", "render:eye"} <= names
+    # (plan 35 T4: output 2's hands through are a copy of each effect over a
+    # composite, `copy` …; plan 35 G: no end nor `fx` is drawn — none is a node)
+    assert {"render:shape", "render:acid", "render:copy", "render:lookback",
+            "render:output.1", "render:output.2", "render:output.all",
+            "render:camera"} <= names
+    assert not {n for n in names if n.startswith(("render:shown", "render:history"))}
     assert owner_of(view, "view.bright") == "render:shape"
     rot = next(p.id for p in rig.reg if p.group == "rot" and p.modulatable)
     assert owner_of(view, rot) == "render:shape"
-    assert owner_of(view, "fx.acid.mix") == "render:acid"      # the scene pipeline's node
+    assert owner_of(view, "fx.acid.mix") == "render:acid"
     assert owner_of(view, "fx.palette.mix") == "render:palette"
-    assert owner_of(view, "fx.mix") == "render:fx"
-    assert owner_of(view, "dream.mix") == "render:history"
-    assert owner_of(view, "camera.zoom") == "render:eye"
-    assert owner_of(view, "ghost.alpha") == "render:ghost"
+    assert owner_of(view, "fx.mix") == "group:fx"            # (no pipeline end to own it)
+    assert owner_of(view, "dream.mix") == "render:lookback"
+    assert owner_of(view, "camera.zoom") == "render:camera"
+    assert owner_of(view, "ghost.alpha") == "render:hands"
     assert owner_of(view, out1) == "render:output.1"
     assert owner_of(view, "lfo.1.depth") == "lfo.1"
     assert owner_of(view, "tempo.bpm") == "group:tempo"
@@ -155,7 +170,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     # no render graph: the same params fall to their groups' nodes
     bare = build(rig)
     assert owner_of(bare, "view.bright") == "group:view"
-    assert owner_of(bare, "camera.zoom") == "render:eye"
+    assert owner_of(bare, "camera.zoom") == "render:camera"
     # every param port has a base and a mod stub
     port = view.owner("mod:view.bright")[1]
     assert port.pins[:2] == ("base:view.bright", "mod:view.bright")
@@ -213,35 +228,34 @@ def test_device_nodes_come_from_the_registry_with_their_port_groups(rig):
 
 
 def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
-    """Every input wired in the render graph is one `render` cable of its
-    port's type — geometry into the scene, image along the pipeline, mask
-    into the history — and an effect placed off the default chain (here
-    on the hands' layer before the output, as plan 30's placements do) is
-    a node like any other, its cables image cables."""
-    g = G.Graph()
-    shape = g.add(G.Shape("shape"))
-    hands = g.add(G.Hands("ghost"))
-    scene = g.add(G.Scene("scene", geometries=[hands, shape]))
-    cover = g.add(G.Cover("cover", scene=scene))
-    history = g.add(G.History("history", image=scene, cover=cover))
-    layer = g.add(G.HandsLayer("hands", geometry=hands))
-    placed = g.add(G.Effect("acid.2", image=layer, node="acid.2"))
-    end = g.add(G.Fx("fx", 0, image=history))
-    g.add(G.Output("output.1", 0, image=end, hands=placed))
+    """Plan 35 G: every wire of the wired frame is one `render` cable of its
+    port's type, its `ref` the wire — geometry into the scene, a picture
+    along the chain — and an effect on the hands' layer before an output
+    (as plan 30's placements were) is a node like any other, its cables
+    picture cables. Nothing the render graph makes for itself (an end, the
+    cover, the capture) is drawn: none is a node of the section."""
     from hyperspace.params import Registry
     from hyperspace.routing import Bindings
-    view = graphview.build(Bindings(), Registry(), None, None, g, None)
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "effect", "file": "acid",
+                                                      "instance": 2}],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "hands", "to": "scene.geometry"},
+                                   {"from": "scene", "to": "lookback.image"},
+                                   {"from": "lookback", "to": "output.all.image"},
+                                   {"from": "hands.layer", "to": "acid.2.image"},
+                                   {"from": "acid.2", "to": "output.1.hands"}]})
+    assert not spec.notes
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid.2",))
+    view = graphview.build(Bindings(), Registry(), None, None, g, spec)
     wires = [c for c in view.cables if c.kind == "render"]
-    expect = [(src.name, n.name, port) for n in g.order for port, src in n.inputs.items()
-              if src is not None]
-    assert [(c.ref[0].name, c.ref[1].name, c.ref[2]) for c in wires] == expect
-    by = {(c.ref[0].name, c.ref[1].name): c for c in wires}
-    assert by[("shape", "scene")].type == graphview.GEOMETRY
-    assert by[("cover", "history")].type == graphview.MASK
-    assert by[("hands", "acid.2")].type == graphview.IMAGE
+    assert [c.ref for c in wires] == list(spec.wires)
+    by = {(c.ref.src, c.ref.node): c for c in wires}
+    assert by[("shape", "scene")].type == by[("hands", "scene")].type == graphview.GEOMETRY
+    assert by[("hands.layer", "acid.2")].type == graphview.IMAGE
     assert by[("acid.2", "output.1")].type == graphview.IMAGE
     c = by[("acid.2", "output.1")]
     assert c.src_port == "rout:acid.2" and c.dst_port == "rin:output.1/hands"
+    assert not [n.id for n in view.nodes if "(" in n.id or n.id == "render:shown"]
     assert view.node("render:acid.2").kind == "render"
     assert view.node("render:output.1").kind == "output"
     # plan 32 T7: every port wired but the effect's aux, open until a wire
@@ -249,6 +263,38 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     ports = {p.id: p for p in view.node("render:acid.2").ports}
     assert not ports.pop("rin:acid.2/aux").patched
     assert all(p.patched for p in ports.values())
+
+
+def test_old_layout_positions_follow_the_renamed_ids(rig):
+    """R14: positions saved on the canvas before plan 35 (`render:eye`,
+    `render:history`, `render:media.a`, `render:ghost`, `render:hands` the
+    layer …) are read under the wired frame's ids (`graphmigrate.
+    renamed_layout`), in the preset's layout and in the show's, so the
+    owner's arrangement stays; a layout already in the new ids is as it is."""
+    import json
+
+    from hyperspace import graphmigrate as M
+    from hyperspace.preset import LAYOUT_KEY
+    old = {"render:eye": [1, 2], "render:history": [3, 4], "render:media.a": [5, 6],
+           "render:ghost": [7, 8], "render:hands": [9, 10], "render:readout.2": [11, 12],
+           "render:acid.2": [13, 14], "lfo.1": [15, 16]}
+    new = {"render:camera": [1, 2], "render:lookback": [3, 4], "render:channel.a": [5, 6],
+           "render:hands": [7, 8], "render:hands.layer": [9, 10],
+           "render:hands.2.guide": [11, 12], "render:acid.2": [13, 14], "lfo.1": [15, 16]}
+    assert M.renamed_layout(old) == new
+    assert M.renamed_layout(new) == new           # (new ids: untouched — `render:hands` too)
+    lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
+    lib.load("presets", "party-trip")
+    doc = presets.document("party-trip")
+    doc[LAYOUT_KEY] = old
+    presets.load_doc(doc)
+    assert presets.layout == new
+    project.save("old-show")
+    raw = json.loads(project.path.read_text())
+    raw["layout"] = {"render:eye": [40, 50], "render:output.1": [60, 70]}
+    project.path.write_text(json.dumps(raw))
+    project.load("old-show")
+    assert project.layout == {"render:camera": [40, 50], "render:output.1": [60, 70]}
 
 
 def test_layout_round_trips_through_the_preset_and_the_show(rig):
@@ -297,12 +343,12 @@ def test_layout_round_trips_through_the_preset_and_the_show(rig):
 
 def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     """Every node not placed gets a position, in its area's columns left to
-    right (plan 28 N9: controllers → audio → modulation → geometry →
-    shaders; the render nodes by their depth within theirs, the outputs
-    last); a placed node keeps its own and takes no room."""
+    right (plan 28 N9: controllers → audio → modulation → plan 35 G's media
+    → scene → look-back → effects → outputs; the render nodes by their
+    depth within theirs); a placed node keeps its own and takes no room."""
     rig.lib.load("presets", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
-    g = G.default_graph(views(Switches()), stacked(("acid",)), effects=("acid",))
+    g = G.build_graph(views(Switches()), stacked(("acid",)), effects=("acid",))
     view = build(rig, g)
     placed = {"render:shape": (999.0, 999.0)}
     pos = graphview.auto_layout(view, placed)
@@ -310,13 +356,13 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     x = {nid: xy[0] for nid, xy in pos.items()}
     # N9: the areas' columns, not the kinds' — the analyzer and the tempo
     # are the audio's; an LFO, a modifier and a macro the modulation's
-    col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"], x["render:eye"],
-           x["render:scene"], x["render:history"], x["render:fx"], x["render:output.1"]]
+    col = [x["source:key"], x[graphview.ANALYZER], x["lfo.1"], x["render:camera"],
+           x["render:scene"], x["render:lookback"], x["render:output.all"]]
     # review round 1: lfo-breathe has the acid off and no cable on it: idle, at
-    # the shaders' idle line, and a through wire from where the run starts
-    # (plan 33: `frame`, the history's picture) to the fx
+    # the effects' idle line, and a through wire from where the run starts
+    # (the look-back's picture) to where it ends (plan 35 G: All outputs)
     assert view.node("render:acid").idle
-    assert any(c.src_port == "rout:frame" and c.dst_port.startswith("rin:fx/")
+    assert any(c.src_port == "rout:lookback" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
     assert col == sorted(col) and len(set(col)) == len(col)
     assert x["group:tempo"] == x[graphview.ANALYZER]
@@ -340,6 +386,20 @@ def test_graphview_imports_no_imgui():
     names = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     names |= {n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
     assert not any("imgui" in m for m in names)
+
+
+def test_no_plumbing_words_remain():
+    """Plan 35 T5: the frame is ordinary nodes and wires, so the canvas's
+    words for the old frame's own plumbing are gone, and so are the T3/T4
+    bridges that drew a wired frame in plan 33's words."""
+    from hyperspace import preset, ui_graph
+    for name in ("PLUMBING", "RUN_KEPT", "FEEDS", "FEEDS_NO_DELETE", "FrameNode",
+                 "canvas_name", "run_end", "_with_run", "_framed", "_is_plumbing"):
+        assert not hasattr(graphview, name), name
+    assert not hasattr(ui_graph, "_feeds_cut")
+    assert not hasattr(preset.GraphSection, "said")
+    src = (PKG / "graphview.py").read_text()
+    assert "is the default graph's" not in src and "FX_NAMES" not in src
 
 
 def test_the_routing_page_and_the_graph_page_show_one_table(rig):
@@ -370,12 +430,9 @@ def test_the_page_draws_with_a_factory_preset_and_a_render_graph(rig):
     preset loaded, a render graph with effects, every node expanded and
     collapsed, a route and an effect node selected (the side column), a
     tidy — and nothing raises; the SYSTEM page then has its line."""
-    rig.lib.load("presets", "party-trip")
+    from test_graph_legible import party  # (plan 35 T5: its frame landed as the preset's)
+    party(rig)
     rig.reg["fx.acid.on"].set(1)        # N9: an off effect with no cable is not drawn
-    rig.panel.renderer = type("R", (), {})()
-    rig.panel.renderer._graph = G.default_graph(views(Switches(), Switches(through=True)),
-                                                stacked(("acid", "palette")),
-                                                effects=("acid", "palette"))
     for _ in range(3):
         frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
@@ -433,13 +490,13 @@ def test_a_node_dropped_on_the_canvas_is_saved_in_its_home(rig):
     assert not rig.lib.is_dirty("presets")
 
     def move():
-        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:eye")), imgui.ImVec2(700, 50))
+        ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:render:camera")), imgui.ImVec2(700, 50))
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:lfo.1")), imgui.ImVec2(30, 640))
         ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:analyzer")), imgui.ImVec2(40, 20))
     _in_editor(rig, move)
     frame(rig.panel, "graph")
     # N9: lfo.2 is idle, not drawn
-    assert rig.lib.presets.layout == {"render:eye": [700, 50], "lfo.1": [30, 640]}
+    assert rig.lib.presets.layout == {"render:camera": [700, 50], "lfo.1": [30, 640]}
     assert rig.lib.project.layout == {"analyzer": [40, 20]}
     assert rig.lib.is_dirty("presets")
     # tidy forgets them both
@@ -487,8 +544,7 @@ def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables
     doc = json.loads((Path(__file__).parent / "fixtures" / "presets" /
                       "palette-hands.json").read_text())
     spec = G.read_graph(doc["graph"])
-    g = G.default_graph(views(Switches(), Switches(through=True)), spec.wiring(),
-                        effects=("acid", "palette"))
+    g = thru(spec.wiring(), ("acid", "palette"), Shows(), Shows(through=True))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     node = view.node("render:palette")
     assert node is not None and isinstance(node.ref, G.Effect) and node.ref.placed == "after"
@@ -496,7 +552,7 @@ def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables
     wires = [c for c in view.cables if c.kind == "render"]
     into = [c for c in wires if c.dst_port == "rin:palette/image"]
     out = [c for c in wires if c.src_port == "rout:palette"]
-    assert [c.src_port for c in into] == ["rout:hands"]
+    assert [c.src_port for c in into] == ["rout:hands.layer"]     # (plan 35 V2)
     assert out and all(c.type == graphview.IMAGE for c in (*into, *out))
     assert owner_of(view, "fx.palette.mix") == "render:palette"
 
@@ -606,52 +662,54 @@ def test_a_tidy_is_one_undo_step(tmp_path):
 
 def test_graph_has_media_area(rig):
     """The eight channels are eight source nodes in a titled media area
-    (`render:media.<c>`, an image out each, the channel's params on it),
-    with the backdrop's node beside them, whatever the render graph holds;
-    a channel no cable leaves and whose bin is empty is idle (its area's
-    line). A wire from `media.a` — into an effect's `aux` port, or under
-    the scene as the backdrop — is drawn from the one `media.a` node, and
-    it names `media.a` again when unwired or rewired."""
-    from dataclasses import replace
-
+    (plan 35 V2: `render:channel.<c>`, kind `channel`, a picture out each,
+    the channel's `media.<c>.*` params on it), whatever the render graph
+    holds; a channel no cable leaves and whose bin is empty is idle (its
+    area's line). Plan 35 G: the backdrop is drawn only when the section
+    wires or declares it (its params else on their group's node). A wire
+    from `channel.a` — into an effect's `aux` port, or under the scene as
+    the backdrop — is drawn from the one `channel.a` node, and it names
+    `channel.a` again when unwired or rewired."""
     from hyperspace.media.channels import CHANNELS
 
     view = build(rig)
     media = [n for n in view.nodes if n.area == graphview.MEDIA]
-    chans = [n for n in media if n.id.startswith("render:media.")]
-    assert [n.id for n in chans] == [f"render:media.{c}" for c in CHANNELS]
-    assert all(n.kind == "render" and n.ports[0].id == f"rout:media.{n.id[-1]}"
+    chans = [n for n in media if n.id.startswith("render:channel.")]
+    assert [n.id for n in chans] == [f"render:channel.{c}" for c in CHANNELS]
+    assert all(n.kind == "channel" and n.ports[0].id == f"rout:channel.{n.id[-1]}"
                for n in chans)
-    assert owner_of(view, "media.c.jog") == "render:media.c"
-    assert owner_of(view, "backdrop.alpha") == "render:backdrop"   # plan 33 U: its node
-    assert view.node("render:backdrop").area == graphview.MEDIA
-    assert not view.node("render:backdrop").idle
+    assert owner_of(view, "media.c.jog") == "render:channel.c"
+    assert view.node("render:backdrop") is None
+    assert owner_of(view, "backdrop.alpha") == "group:backdrop"
     assert all(n.idle for n in chans)                       # nothing in a bin, no cable
     assert graphview.TITLES[graphview.MEDIA] == "MEDIA"
-    assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.GEOMETRY)
+    assert graphview.AREAS.index(graphview.MEDIA) < graphview.AREAS.index(graphview.SCENE_AREA)
     lay = graphview.layout(view, collapsed=lambda nid: True)
     assert graphview.MEDIA in lay.titles and lay.idle[graphview.MEDIA]
     assert "8 empty channels" in graphview.idle_words(view.node(i) for i in
                                                        lay.idle[graphview.MEDIA])
     # a bin with something in it: drawn, though nothing is wired
     rig.reg.media.assign("b", 0, "shared:loops/tunnel.mp4")
-    assert not build(rig).node("render:media.b").idle
-    # a wire from media.a into an effect's aux, with the backdrop on a as well
-    spec = G.read_graph({"nodes": [], "wires": [{"from": "media.a", "to": "acid.aux"}]})
-    wiring = replace(spec.wiring(), backdrop="a")
-    g = G.default_graph(views(Switches()), stacked(("acid",), wiring), effects=("acid",))
-    assert {"media.a", "media.a(wire)"} <= set(g.nodes)
-    view = build(rig, g)
-    assert view.node("render:media.a(wire)") is None       # one node per channel
-    froms = [c for c in view.cables if c.src_port == "rout:media.a"]
-    # (plan 33 R: and into the backdrop's sink, the wire `media.a → backdrop.image`)
-    assert {c.dst_port for c in froms} == {"rin:acid/aux", f"rin:{G.GROUNDED}/under",
-                                           "rin:backdrop/image"}
+    assert not build(rig).node("render:channel.b").idle
+    # a wire from channel.a into an effect's aux, with the backdrop on a as well
+    spec = G.read_graph({"frame": "wired", "wires": [
+        {"from": "channel.a", "to": "backdrop.image"}, {"from": "shape", "to": "scene.geometry"},
+        {"from": "scene", "to": "backdrop.scene"}, {"from": "backdrop", "to": "acid.image"},
+        {"from": "channel.a", "to": "acid.aux"}, {"from": "acid", "to": "output.all.image"}]})
+    assert not spec.notes
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    assert {"channel.a", "channel.a(wire)"} <= set(g.nodes)
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    assert view.node("render:channel.a(wire)") is None       # one node per channel
+    froms = [c for c in view.cables if c.src_port == "rout:channel.a"]
+    assert {c.dst_port for c in froms} == {"rin:acid/aux", "rin:backdrop/image"}
     assert all(c.type == graphview.IMAGE for c in froms)
-    assert not view.node("render:media.a").idle
+    assert not view.node("render:channel.a").idle
+    assert view.node("render:backdrop").area == graphview.SCENE_AREA
+    assert owner_of(view, "backdrop.alpha") == "render:backdrop"
     wired = next(c for c in froms if c.dst_port == "rin:acid/aux")
-    assert graphview.spec_name(f"rout:{wired.ref[0].name}", g) == ("media.a", None)
-    assert graphview.spec_name("rout:media.e", g) == ("media.e", None)  # not in the graph
+    assert graphview.spec_name(wired.src_port, g) == ("channel.a", None)
+    assert graphview.spec_name("rout:channel.e", g) == ("channel.e", None)  # not in the graph
 
 
 def test_the_media_area_draws_on_the_page(rig, monkeypatch):
@@ -661,79 +719,98 @@ def test_the_media_area_draws_on_the_page(rig, monkeypatch):
     rig.reg.media.assign("a", 0, "shared:x.png")
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
-    assert "render:media.a" in drawn_ids(rig, monkeypatch)
-    assert "render:media.b" not in drawn_ids(rig, monkeypatch)
+    assert "render:channel.a" in drawn_ids(rig, monkeypatch)
+    assert "render:channel.b" not in drawn_ids(rig, monkeypatch)
 
 
 # ---------------------------------------------------------------- plan 33 T6: the free graph
 
 def test_the_new_nodes_sit_in_their_areas(rig):
-    """Plan 33 U: `frame`, `fx`, `pattern`, `backdrop` and a switch are
-    render nodes on the canvas — the pattern and the backdrop always, as
-    the channels are; `frame` and `fx` in the shaders, the pattern, the
-    backdrop and the switch with the channels in the media — and the
-    params go to the node that owns them: `view.pattern*` and
-    `view.media_*` to the pattern, `backdrop.*` to the backdrop,
-    `switch.select` to its switch, `fx.face_map` to the shape (whose
-    `faces` port is a picture input). The run's first cable leaves
-    `frame`; each pipeline's own picture feeds `frame` (a cable nothing
-    deletes)."""
+    """Plan 33 U, in plan 35's areas: the pattern and a switch are render
+    nodes with the channels in the media, the look-back the look-back's,
+    an effect the effects', All outputs the outputs' — and the params go to
+    the node that owns them: `view.pattern*` and `view.media_*` to the
+    pattern, `switch.select` to its switch, `fx.face_map` to the shape
+    (whose `faces` port is a picture input). Plan 35 G: no `frame`, no
+    `fx`, no feeds — the look-back's picture goes straight into the first
+    effect by its wire; the pattern and the backdrop are drawn only when
+    the section names them."""
     from hyperspace.params import declare_switches
-    spec = G.read_graph({"nodes": [{"kind": "switch"}],
-                         "wires": [{"from": "frame", "to": "acid.image"},
-                                   {"from": "acid", "to": "fx.image"},
-                                   {"from": "media.a", "to": "switch.in1"},
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "switch"}],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "scene", "to": "lookback.image"},
+                                   {"from": "lookback", "to": "acid.image"},
+                                   {"from": "acid", "to": "output.all.image"},
+                                   {"from": "channel.a", "to": "switch.in1"},
                                    {"from": "switch", "to": "pattern.media"}]},
                         effects={"acid"})
+    assert not spec.notes
     declare_switches(rig.reg, ["switch"])
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     area = {n.id: n.area for n in view.nodes}
-    for nid in ("render:pattern", "render:backdrop", "render:switch"):
+    for nid in ("render:pattern", "render:switch", "render:channel.a"):
         assert area[nid] == graphview.MEDIA, nid
-    for nid in ("render:frame", "render:fx"):
-        assert area[nid] == graphview.SHADERS, nid
+    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    assert area["render:acid"] == graphview.EFFECTS_AREA
+    assert area["render:output.all"] == graphview.OUTPUTS_AREA
+    assert "render:backdrop" not in area and "render:frame" not in area
     assert owner_of(view, "view.pattern_mix") == "render:pattern"
     assert owner_of(view, "view.media_alpha") == "render:pattern"
-    assert owner_of(view, "backdrop.alpha") == "render:backdrop"
     assert owner_of(view, "switch.select") == "render:switch"
     assert owner_of(view, "fx.face_map") == "render:shape"
     assert owner_of(view, "view.bright") == "render:shape"
     assert view.node("render:shape").port("rin:shape/faces").type == graphview.IMAGE
     renders = {(c.src_port, c.dst_port) for c in view.cables if c.kind == "render"}
-    assert ("rout:frame", "rin:acid/image") in renders
-    assert ("rout:acid", "rin:fx/image") in renders
+    assert ("rout:lookback", "rin:acid/image") in renders
+    assert ("rout:acid", "rin:output.all/image") in renders
     assert ("rout:switch", "rin:pattern/media") in renders
-    assert ("rout:history", "rin:acid/image") not in renders
-    feeds = [c for c in view.cables if c.kind == graphview.FEEDS]
-    assert [(c.src_port, c.dst_port) for c in feeds] == [("rout:history", "nin:render:frame")]
-    # the stand-ins with no render graph at all
+    assert all(c.kind != "feeds" for c in view.cables)
+    # with no render graph and no section: neither the pattern nor the backdrop
     bare = build(rig)
-    assert bare.node("render:pattern") is not None and bare.node("render:backdrop") is not None
-    assert not bare.node("render:backdrop").idle
-    # names a wire uses, from the canvas's pins
-    assert graphview.spec_name("rout:frame", g) == ("frame", None)
-    assert graphview.spec_name("rin:fx/image", g) == ("fx.image", None)
+    assert bare.node("render:pattern") is None and bare.node("render:backdrop") is None
+    # names a wire uses, from the canvas's pins (plan 35 G: the shape too)
+    assert graphview.spec_name("rout:lookback", g) == ("lookback", None)
+    assert graphview.spec_name("rin:output.all/image", g) == ("output.all.image", None)
     assert graphview.spec_name("rin:shape/faces", g) == ("shape.faces", None)
     assert graphview.spec_name("rin:backdrop/image", g) == ("backdrop.image", None)
-    assert graphview.spec_name("rout:shape", g)[0] is None       # still drawn by the scene
+    assert graphview.spec_name("rout:shape", g) == ("shape", None)
+    assert graphview.spec_name("render:camera", g)[0] is None      # the rig's
 
 
 def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):
-    """An effect wired from a channel into nothing (`media.a → acid.2`) has
-    no render node — it never runs — but the canvas draws it from the
+    """An effect wired from a channel into nothing (`channel.a → acid.2`)
+    has no render node — it never runs — but the canvas draws it from the
     spec: a faint node saying "reaches nothing", its cable in, laid out
     with the media (a picture made of the media alone)."""
-    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
-                         "wires": [{"from": "frame", "to": "fx.image"},
-                                   {"from": "media.a", "to": "acid.2.image"}]},
-                        effects={"acid"})
-    g = G.default_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
+    spec = G.read_graph({"frame": "wired",
+                         "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
+                         "wires": [{"from": "channel.a", "to": "acid.2.image"}]},
+                        effects={"acid", "acid.2"})
+    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
     assert "acid.2" not in g.nodes
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     n = view.node("render:acid.2")
     assert n is not None and n.faint and n.area == graphview.MEDIA
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
-    assert any((c.src_port, c.dst_port) == ("rout:media.a", "rin:acid.2/image")
+    assert any((c.src_port, c.dst_port) == ("rout:channel.a", "rin:acid.2/image")
                for c in view.cables if c.kind == "render")
-    assert not view.node("render:media.a").idle
+    assert not view.node("render:channel.a").idle
+    assert view.node("render:channel.a").faint            # (it reaches nothing either)
+
+
+def test_a_render_nodes_said_is_its_first_line():
+    """Plan 34 T5: a render node's `said` (`Node.said`) is the first line of
+    its summary — after a switch's pick, after the faint word — and a node
+    with none gives the lines it always did."""
+    said = "last frame's · 64×64 half-float"
+    d = G.Delay("delay")
+    d.said = said
+    n = graphview.VNode("render:delay", "render", "delay", ref=d)
+    assert graphview.summary(n)[0] == said
+    n.faint = True
+    assert graphview.summary(n)[:2] == [graphview.REACHES_NOTHING, said]
+    c = G.Composite("composite")
+    assert getattr(c, "said", "") == ""
+    assert graphview.summary(graphview.VNode("render:composite", "render", "composite",
+                                             ref=c)) == ["0 params · 0 patched"]

@@ -281,6 +281,33 @@ replaces a row, rewrite that row instead of adding a new one.
 | **The FX page is a browser of the graph's effect nodes**, grouped by where each ends; it edits no structure. GRAPH adds, inserts and reorders. | `ui_fx.groups`, `graphview.Edit` | row 348 (owner) |
 | **The default graph keeps plan 32's compositing order**; reconciling it is its own session. | `graph.default_graph` | row 351 |
 
+## Feedback (plan 34)
+
+| Decision | Where | Who |
+|---|---|---|
+| **A `delay` picture node, z⁻¹**: its picture is last frame's input, so a loop drawn through one is legal. Its buffer is a half-float ping-pong pair the renderer keeps by name, at the input's own size; it reads nothing on the first frame and after a frame its input read nothing (the faces show the pattern). It has no params: decay, mix and tint are an effect's after it. | `graph.Delay`, `graph.DelayWrite`, `render.DelayPair` | rows 353–357 (owner: "build A") |
+| **A picture of its own size is fitted into a consumer of another shape by cover**; another fit is a resize's. A resize, a delay and an echo are sized on their own, which breaks "the consumer decides" on purpose; an effect after one runs at its size. | `graph.OWN_FIT`, `Node.own_size`, `Renderer._refit` | rows 358, 368 (owner: "avoid writing a 1080p buffer into all the faces") |
+| **A loop through the faces, the backdrop (or, in an old section, the frame) is refused when the section is read, in words that point at a delay**, so a canvas drag goes red instead of landing dormant. In a wired frame two hidden edges stand in for the old five, and any other loop points at a delay too. | `graph.sink_loops`, `loop_words`, `HIDDEN_EDGES`, `LOOP_PLAIN` | row 359 (owner: "with the loop refusal fix"; words rec), 393 |
+| **The look-back's frames are sources**: `echo.1` … `echo.32` (newest first) and `dream`, declared by a node entry. An echo the ring does not hold reads nothing; the ring keeps capturing while one is read, even with the look-back off; they are 8-bit, at the ring's size and cadence, and say so. | `graph.EchoNode`, `DreamNode`, `Lookback.echo_slot` | rows 360–363 (owner: "i also want to be able to do b") |
+| **The downsampler is a `resize`**: the long side in pixels (16–2048, powers of two), `input` or `square`, never a factor; a crop as a centre and a size, modulatable, transparent past the edge; `cover`, `contain` or `stretch`; `linear` (mipmapped past a 2× shrink) or `nearest`. Its values are a preset's, declared from the graph. | `graph.ResizeNode`, `params.declare_resizes` | rows 364–367, 369 (owner: "downsample arbitrarily … crop as well") |
+| **GRAPH**: delay in MEDIA, echo and dream in LOOK-BACK, resize in EFFECTS or MEDIA by what it is made of; the cable into a delay runs back by design; a resize's params are side-panel rows; a node's words are the first line of its summary. | `graphview.AREAS`, `MEDIA_MADE`, `OWNERS` | row 370 (389) |
+| **The schema**: plan 34's words are `/5` words, so a frame that round-trips saves `/5`; one that needs plan 35's vocabulary saves `/6`. Both Macs on this build before saving one. | `graphmigrate.uses_free_words`, `preset.schema_of` | row 371 (385) |
+
+## The frame as wires (plan 35)
+
+| Decision | Where | Who |
+|---|---|---|
+| **The frame is wires.** The shape, the scene, the hands, their layer and guide, the backdrop, the look-back and the outputs are ordinary nodes; a section says `"frame": "wired"` and nothing is built that no wire or entry reaches. `frame`, `fx`, `grounded`, `capture`, `cover` and the pipelines are not nodes. Supersedes row 351. | `graph.build_graph`, `graph.reaches`, `graphmigrate.migrate` | row 372 (owner); 351 |
+| **Names a performer reads, ids too.** `ghost` → `hands`, the layer → `hands.layer`, `readout` → `hands.guide`, `history` → `lookback` (with `capture` merged in), `media.<c>` → `channel.<c>`, `eye` → `camera`. Params keep their ids. Old ids are read for good and renamed on load. | `graph.new_id`, `old_id`, `param_prefix`; `graphmigrate.renamed` | row 373 (owner) |
+| **Picture and hands are each window's mutes; "through" is wiring.** A mute is the rig's, never in a preset, never a rebuild. A hands mute wins over a stand-down. | `overlay.register_switches`, `graph.Output.settle` | row 374 (owner) |
+| **An output shows its own wires, else All outputs (`output.all`), else its ground** (black, or see-through in overlay). `ground` is a source word that goes only into output ports. | `graph.ALL_OUTPUTS`, `GROUND` | rows 375, 376 |
+| **No pipelines.** An effect on a second picture is a `copy` with the instance's knobs and clock; a copy chain over a hands composite stands down while it bends nothing; the direct paint is kept. | `graph.Copy`, `Shown.fallback` | rows 377–379 |
+| **The look-back is one node; its capture is a sink.** What is wired into `lookback.capture` runs even when nothing shows the look-back; the backdrop lays `backdrop.scene` over `backdrop.image`. | `graph.Capture`, `HIDDEN_EDGES` | rows 381, 382, 393 |
+| **Old presets load as today's frame, written once into All outputs**; a save writes the lowest schema that loses nothing (`/4` and `/5` by round trip, `/6` only for the new words). Both Macs must run this build before a `/6` save. | `graphmigrate.frame_wires`, `unwired`; `preset.WIRED_SCHEMA` | rows 383–385 (R10) |
+| **A new preset is the factory's values with nothing wired**, black until something is wired; the desk is the factory layer. | `preset.Presets.new` | rows 386, 387 (owner) |
+| **GRAPH deletes everything.** The refusals left are type errors, loops, the camera and a cloud. The canvas is the section, grouped by primitive. OUTPUT and LOOKBACK are views that edit wires. | `graphview.render_unwire`, `render_drop`, `AREAS` | rows 388–390 |
+| **Point clouds stay the rig's**, drawn in every scene. | `graph.build_graph` | row 391 |
+
 ## Face patterns
 
 | Decision | Where | Who |

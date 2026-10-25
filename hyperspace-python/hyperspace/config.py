@@ -86,9 +86,9 @@ dream.py, too, is imported only when its gate is open.
                             # mode, never a mode switch (fork F10: the config
                             # says; output.monitor / output.fullscreen on the
                             # OUTPUT page are output 1's only)
-    scene = true            # optional launch values of this output's switches:
-    hands = true            #   the scene, the ghost hands, and
-    through = false         #   "hands through effects" (plan 21 WP2)
+    scene = true            # optional launch values of this window's mutes:
+    hands = true            #   the picture, the hands (plan 35: "hands through the
+                            #   effects" is the preset's wiring, no key here), and
     dim = 1.0               #   its own dim, times the master's; under 0.1 is 0.1,
                             #   with a note — the config cannot launch an output black
     flip_x = false          #   mirror this output left-right / top-bottom, its last
@@ -301,7 +301,7 @@ DEFAULTS: dict = {
 # one [[output.screens]] entry's keys and their defaults (plan 21 WP3); the
 # switches are outputs.Switches' launch values
 SCREEN: dict = {"name": "", "monitor": -1, "fullscreen": False,
-                "scene": True, "hands": True, "through": False, "dim": 1.0,
+                "scene": True, "hands": True, "dim": 1.0,
                 "flip_x": False, "flip_y": False,
                 "syphon": "", "ndi": "", "window": True}
 # the keys that publish an output (plan 32 T9): a Syphon server's and an
@@ -310,6 +310,10 @@ PUBLISH_KEYS = ("syphon", "ndi")
 ONE_WINDOW = ("output 1 holds the GL context and paces the loop — it always opens a window "
               "(publish it, or set a later output's window = false)")
 DIM_FLOOR = 0.1          # the config cannot launch an output black (plan 21 fork F4)
+# plan 35 M: an entry's `through` (plan 21 WP2's switch) is the preset's
+# wiring now — read, ignored, said once
+THROUGH_IS_WIRING = ("config: [[output.screens]] output {n}: through is wiring now (plan 35) — "
+                     "OUTPUT's 'hands through the effects' writes it into the preset")
 
 # `[[devices]]` (plan 27 B1): the old per-adapter tables, in today's poll
 # order, each with the kind and the role its entry gets (None: the MIDI
@@ -353,7 +357,9 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
     out = dict(SCREEN)
     where = f"config: [[output.screens]] output {n}:"
     for key in e:
-        if key not in SCREEN:
+        if key == "through":
+            _note(cfg, THROUGH_IS_WIRING.format(n=n))
+        elif key not in SCREEN:
             _note(cfg, f"{where} unknown key {key!r} — ignored")
     name = e.get("name", "")
     out["name"] = name if isinstance(name, str) else str(name)
@@ -362,7 +368,7 @@ def _screen(n: int, e: dict, cfg: dict) -> dict:
         if bad:
             _note(cfg, f"{where} monitor = {e['monitor']!r} is not a screen index — "
                        "using the last position")
-    for key in ("fullscreen", "scene", "hands", "through", "flip_x", "flip_y"):
+    for key in ("fullscreen", "scene", "hands", "flip_x", "flip_y"):
         if key in e:
             if isinstance(e[key], bool):
                 out[key] = e[key]

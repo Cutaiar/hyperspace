@@ -63,7 +63,6 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     `<wiring>/<state>`. Plan 26 A4b: the recorded point cloud listed as a
     `cloud` device, hands present, named `cloud/<state>`, and nothing
     else."""
-    from hyperspace.outputs import NAMES
     from hyperspace.preset import FACTORY_PRESETS
 
     doc = _manifest()
@@ -116,9 +115,13 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # 24th factory preset and a 7th with an effect on; plan 32 T6: + 2 × 8,
     # the two media fixtures'; plan 32 T7: + 3 × 8, the faces' and the aux's;
     # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
-    # plan 33 T5: + 8, the switch onto the faces)
+    # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
+    # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
+    # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
+    # T4: + 2 × 8, the resize into a delay onto the faces and the crop)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
-                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8)
+                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
+                                   + 2 * 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -130,7 +133,8 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     assert len(capped) == 1
     (p, h, s), = capped
     assert (p, h) == (cap["preset"], cap["hands"]) and s.startswith(cap["state"] + "@")
-    routes = set(NAMES.values()) | {"none"}
+    # (plan 35 T4: the retired route table's names, kept as the tool's data)
+    routes = {name for name, _ in tool.ROUTES.values()}
     for e in doc["goldens"]:
         assert e["route"] in routes, e
         assert len(e["sha256"]) == 64
@@ -149,13 +153,30 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
-        assert said["missing"] == [] and said["notes"] == [] and said["hands_shown"]
+        # (plan 35 T3: a wired fixture draws only what it wires — its states
+        # are the windows' mutes, not switches emulated: the blank frame and
+        # the channel alone wire no hands, so none is shown, and the blank
+        # frame builds the outputs and nothing else)
+        assert said["missing"] == [] and said["notes"] == []
+        no_hands = ("blank-frame", "channel-out-only")
+        assert said["hands_shown"] is (slug not in no_hands), slug
+        if slug == "blank-frame":
+            assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
         # the graph landed as the file says it (the section, not a repr of
         # the Wiring: a field added later moves no golden). Plan 32 T6: a
         # media fixture's proof is its channels — a wire with no node, or
-        # no graph at all (the backdrop is a value)
-        assert said["graph"] == json.loads((ROOT / f["file"]).read_text()).get("graph")
-        assert (said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
+        # no graph at all (the backdrop is a value). Plan 35 T3: a wired
+        # frame (`/6`) lands as it reads (`{"frame": "wired"}` with its
+        # empty node list), and the blank one holds nothing at all
+        from hyperspace.graph import read_graph
+
+        file_graph = json.loads((ROOT / f["file"]).read_text()).get("graph")
+        if slug in tool.WIRED_FIXTURES:
+            assert said["graph"] == read_graph(file_graph).to_json()
+        else:
+            assert said["graph"] == file_graph
+        assert ((said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
+                or slug == "blank-frame")
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 
@@ -172,6 +193,35 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
     assert sorted(on) == sorted(_tool().LOOKBACK_ON)
 
 
+# the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
+# `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
+# two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
+# 741 before them are the same list, byte for byte
+GOLDENS_SINCE = ("resize-faces", "resize-crop")
+GOLDENS_DIGEST = "71dcd9c76e2c85807a8ac9273f42ea210468881af21b025dd4a7cca5ad99ad02"
+# the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
+# render nodes are named in the new ids)
+OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
+                    "shown(history)")
+
+
+def test_renaming_moved_no_golden():
+    """Plan 35 T4: `tools/golden_frames.py --names` rewrote the fixtures'
+    recorded render node names in the new ids (`lookback`, `hands.layer`,
+    `lookback(capture)` …) and touched no `goldens` entry — the list is
+    byte for byte the one T3 recorded."""
+    import hashlib
+
+    doc = _manifest()
+    kept = [e for e in doc["goldens"] if e["preset"] not in GOLDENS_SINCE]
+    assert len(kept) == 741
+    assert hashlib.sha256(json.dumps(kept).encode()).hexdigest() == GOLDENS_DIGEST
+    for slug, said in doc["fixtures"].items():
+        names = said["present"].get("nodes") or []
+        assert not set(names) & set(OLD_RENDER_NAMES), (slug, names)
+        assert not any(n.startswith(("media.", "hands(")) for n in names), (slug, names)
+
+
 def test_the_gpu_lines_on_the_system_page():
     """One line per node, its median in ms, under a heading; the note
     alone with no timer queries; nothing before a frame was timed."""
@@ -186,6 +236,9 @@ def test_the_gpu_lines_on_the_system_page():
     assert lines({"gpu_ms": {}, "gpu_note": "no GPU timer queries on this context (Error)"}) \
         == ["gpu: no GPU timer queries on this context (Error)"]
     assert lines({}) == [] and Panel.gpu_lines(SimpleNamespace(renderer=None)) == []
+    # plan 35 T4: the ends that ran, where the pipelines were
+    got = lines({"gpu_ms": {"scene": 1.0}, "gpu_note": "", "ends": ["shown(acid)", "shown(copy)"]})
+    assert got[-1] == "ends: shown(acid) · shown(copy)"
 
 
 # ---------------------------------------------------------------- GL
@@ -271,10 +324,11 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
-    assert r._graph.timed == ["scene", "cover", "hands", "history", "fx", "capture", "output.1"]
+    assert r._graph.timed == ["scene", "lookback(cover)", "hands.layer", "lookback",
+                              "shown(warp)", "lookback(capture)", "output.1"]
     # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
-    assert list(ms) == ["scene", "cover", "hands", "history", "warp", "fx",
-                        "capture", "output.1"]
+    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "warp",
+                        "shown(warp)", "lookback(capture)", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

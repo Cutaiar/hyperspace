@@ -349,6 +349,118 @@
     "none",
     "through"
    ]
+  },
+  "channel-out-only": {
+   "file": "tests/fixtures/presets/channel-out-only.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "resize-crop": {
+   "file": "tests/fixtures/presets/resize-crop.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "delay-faces": {
+   "file": "tests/fixtures/presets/delay-faces.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "delay-trails": {
+   "file": "tests/fixtures/presets/delay-trails.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "echo-faces": {
+   "file": "tests/fixtures/presets/echo-faces.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "blank-frame": {
+   "file": "tests/fixtures/presets/blank-frame.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "through-one-output": {
+   "file": "tests/fixtures/presets/through-one-output.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
+  "resize-faces": {
+   "file": "tests/fixtures/presets/resize-faces.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
   }
  },
  "presets": {
@@ -710,15 +822,15 @@
      ]
     },
     "nodes": [
-     "ghost",
-     "scene",
-     "cover",
      "hands",
-     "history",
-     "fx",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(acid)",
+     "composite",
+     "shown(copy)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -747,15 +859,15 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -784,15 +896,15 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(huecycle)",
+     "composite",
+     "shown(copy.4)",
+     "composite.2",
+     "shown(copy.8)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -822,15 +934,15 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(glimmer)",
+     "composite",
+     "shown(copy.4)",
+     "composite.2",
+     "shown(copy.8)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -868,16 +980,16 @@
      ]
     },
     "nodes": [
-     "ghost",
+     "hands",
      "scene",
-     "cover",
-     "hands.2",
-     "readout",
-     "history",
-     "fx",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.2.layer",
+     "hands.guide",
+     "lookback",
+     "shown(acid)",
+     "composite",
+     "shown(copy)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -920,16 +1032,14 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "wire(output.2)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(huecycle)",
+     "composite",
+     "shown(copy.4)",
+     "shown(acid.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -950,17 +1060,17 @@
     "graph": null,
     "nodes": [
      "scene",
-     "cover",
-     "media.a",
-     "grounded",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "channel.a",
+     "backdrop",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -989,17 +1099,15 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "media.c",
-     "wire(output.2)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "channel.c",
+     "shown(channel.c)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1020,15 +1128,15 @@
     "graph": null,
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1057,16 +1165,16 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "media.a",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "channel.a",
+     "shown(blend)",
+     "composite",
+     "shown(copy)",
+     "composite.2",
+     "shown(copy.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1095,16 +1203,16 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "media.a",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "channel.a",
+     "shown(displace)",
+     "composite",
+     "shown(copy)",
+     "composite.2",
+     "shown(copy.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1155,17 +1263,17 @@
      ]
     },
     "nodes": [
-     "media.a",
+     "channel.a",
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1208,17 +1316,17 @@
     },
     "nodes": [
      "scene",
-     "cover",
-     "media.a",
-     "grounded",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "channel.a",
+     "backdrop",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1264,18 +1372,16 @@
      ]
     },
     "nodes": [
-     "media.a",
+     "channel.a",
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "wire(output.2)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "shown(acid.2)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1332,18 +1438,515 @@
      ]
     },
     "nodes": [
-     "media.b",
-     "media.a",
+     "channel.b",
+     "channel.a",
      "scene",
-     "cover",
-     "hands",
-     "history",
-     "fx",
-     "composite(scene+hands)",
-     "fx(scene+hands)",
-     "composite(hands)",
-     "fx(hands)",
-     "capture",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "channel-out-only": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": false,
+    "graph": {
+     "frame": "wired",
+     "nodes": [],
+     "wires": [
+      {
+       "from": "channel.a",
+       "to": "output.all.image"
+      }
+     ]
+    },
+    "nodes": [
+     "channel.a",
+     "shown(channel.a)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "resize-crop": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": true,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "effect",
+       "file": "acid",
+       "instance": 2
+      },
+      {
+       "kind": "resize"
+      }
+     ],
+     "wires": [
+      {
+       "from": "channel.a",
+       "to": "resize.image"
+      },
+      {
+       "from": "resize",
+       "to": "acid.2.image"
+      },
+      {
+       "from": "acid.2",
+       "to": "output.2.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "lookback",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.capture"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "composite.3",
+     "shown(composite.3)",
+     "channel.a",
+     "resize",
+     "shown(acid.2)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "delay-faces": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": true,
+    "graph": {
+     "nodes": [
+      {
+       "kind": "delay"
+      }
+     ],
+     "wires": [
+      {
+       "from": "frame",
+       "to": "fx.image"
+      },
+      {
+       "from": "scene",
+       "to": "delay.image"
+      },
+      {
+       "from": "delay",
+       "to": "shape.faces"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "delay(write)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "delay-trails": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": true,
+    "graph": {
+     "nodes": [
+      {
+       "kind": "effect",
+       "file": "palette",
+       "instance": 2
+      },
+      {
+       "kind": "effect",
+       "file": "zoomblur",
+       "instance": 2
+      },
+      {
+       "kind": "delay"
+      },
+      {
+       "kind": "composite",
+       "instance": 2,
+       "blend": "add"
+      }
+     ],
+     "wires": [
+      {
+       "from": "frame",
+       "to": "fx.image"
+      },
+      {
+       "from": "delay",
+       "to": "zoomblur.2.image"
+      },
+      {
+       "from": "zoomblur.2",
+       "to": "palette.2.image"
+      },
+      {
+       "from": "scene",
+       "to": "composite.2.under"
+      },
+      {
+       "from": "palette.2",
+       "to": "composite.2.over"
+      },
+      {
+       "from": "composite.2",
+       "to": "output.1.image"
+      },
+      {
+       "from": "composite.2",
+       "to": "delay.image"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.3",
+     "shown(composite.3)",
+     "composite.2",
+     "shown(composite.2)",
+     "delay(write)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "echo-faces": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": true,
+    "graph": {
+     "nodes": [
+      {
+       "kind": "echo",
+       "index": 3
+      }
+     ],
+     "wires": [
+      {
+       "from": "frame",
+       "to": "fx.image"
+      },
+      {
+       "from": "echo.3",
+       "to": "shape.faces"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "blank-frame": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": false,
+    "graph": {
+     "frame": "wired",
+     "nodes": []
+    },
+    "nodes": [
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "through-one-output": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": true,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "effect",
+       "file": "acid"
+      },
+      {
+       "kind": "composite",
+       "instance": 2
+      },
+      {
+       "kind": "copy",
+       "of": "acid"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.capture"
+      },
+      {
+       "from": "lookback",
+       "to": "acid.image"
+      },
+      {
+       "from": "acid",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "lookback",
+       "to": "composite.2.under"
+      },
+      {
+       "from": "hands.layer",
+       "to": "composite.2.over"
+      },
+      {
+       "from": "composite.2",
+       "to": "copy.image"
+      },
+      {
+       "from": "copy",
+       "to": "output.2.image"
+      },
+      {
+       "from": "ground",
+       "to": "output.2.hands"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(acid)",
+     "composite.2",
+     "shown(copy)",
+     "composite",
+     "shown(copy.2)",
+     "composite.3",
+     "shown(copy.3)",
+     "composite.4",
+     "shown(copy.4)",
+     "lookback(capture)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "resize-faces": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": true,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "resize"
+      },
+      {
+       "kind": "delay"
+      }
+     ],
+     "wires": [
+      {
+       "from": "scene",
+       "to": "resize.image"
+      },
+      {
+       "from": "resize",
+       "to": "delay.image"
+      },
+      {
+       "from": "delay",
+       "to": "shape.faces"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "lookback",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.capture"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "lookback(cover)",
+     "hands.layer",
+     "lookback",
+     "shown(lookback)",
+     "composite",
+     "shown(composite)",
+     "composite.2",
+     "shown(composite.2)",
+     "composite.3",
+     "shown(composite.3)",
+     "composite.4",
+     "shown(composite.4)",
+     "resize",
+     "delay(write)",
+     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -10358,6 +10961,841 @@
   },
   {
    "preset": "switch-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "939775c6ba2c2af63d85c1921f7ba9bb640e24449494187a1763bc5ebe941352",
+   "png": "png/939775c6ba2c2af6.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "939775c6ba2c2af63d85c1921f7ba9bb640e24449494187a1763bc5ebe941352",
+   "png": "png/939775c6ba2c2af6.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "939775c6ba2c2af63d85c1921f7ba9bb640e24449494187a1763bc5ebe941352",
+   "png": "png/939775c6ba2c2af6.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "939775c6ba2c2af63d85c1921f7ba9bb640e24449494187a1763bc5ebe941352",
+   "png": "png/939775c6ba2c2af6.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "channel-out-only",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b41e9b2dcc5c4a69af5d99b873b7e22a71bcc7bfc50c647ee44e808114a0dbe2",
+   "png": "png/b41e9b2dcc5c4a69.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "230f41f3ab46af5044cab7074955f1d3f7226cc54246acb634a31c92d15e0a6c",
+   "png": "png/230f41f3ab46af50.png",
+   "wired": "acid.2"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "c8d264fe229014a955fbcd0131ebd65959516c6669a16f3bcf8ea2f5af8aaae1",
+   "png": "png/c8d264fe229014a9.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "c8d264fe229014a955fbcd0131ebd65959516c6669a16f3bcf8ea2f5af8aaae1",
+   "png": "png/c8d264fe229014a9.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-crop",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "74358e39f96570a0f759366b9019e518d1f9ae10b74cd4c482b692113eefaac0",
+   "png": "png/74358e39f96570a0.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "74358e39f96570a0f759366b9019e518d1f9ae10b74cd4c482b692113eefaac0",
+   "png": "png/74358e39f96570a0.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "49297b15ccf90140e15931bd8c2bb4477f6f18aa136b79c1d644a3b9022b59fc",
+   "png": "png/49297b15ccf90140.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "49297b15ccf90140e15931bd8c2bb4477f6f18aa136b79c1d644a3b9022b59fc",
+   "png": "png/49297b15ccf90140.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "delay-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "649cddb34ec6540ba268a5a3c05ca812b44586d28ffd395540b98b42285490af",
+   "png": "png/649cddb34ec6540b.png",
+   "wired": "composite.2"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b41e9b2dcc5c4a69af5d99b873b7e22a71bcc7bfc50c647ee44e808114a0dbe2",
+   "png": "png/b41e9b2dcc5c4a69.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "c8d264fe229014a955fbcd0131ebd65959516c6669a16f3bcf8ea2f5af8aaae1",
+   "png": "png/c8d264fe229014a9.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "c8d264fe229014a955fbcd0131ebd65959516c6669a16f3bcf8ea2f5af8aaae1",
+   "png": "png/c8d264fe229014a9.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "delay-trails",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "6d827fefc97c6d5bf37f9227639aa5cbe4d60e8a1b7bd19a061168d19b41ec3a",
+   "png": "png/6d827fefc97c6d5b.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "6d827fefc97c6d5bf37f9227639aa5cbe4d60e8a1b7bd19a061168d19b41ec3a",
+   "png": "png/6d827fefc97c6d5b.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "27864bb262c5f84e6bb623044fd27253931fddcff90d9a1223b7eaa03519f169",
+   "png": "png/27864bb262c5f84e.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "27864bb262c5f84e6bb623044fd27253931fddcff90d9a1223b7eaa03519f169",
+   "png": "png/27864bb262c5f84e.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "echo-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "scene",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "blank-frame",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "55eb4ec2544454acefb47491515bcf14b7fe23d1fa604329293dd36e0a8a10b2",
+   "png": "png/55eb4ec2544454ac.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "46de90d3d286f6ba794f5f568e111b16b78a396ddf376c4b60ebaf4e3ace5528",
+   "png": "png/46de90d3d286f6ba.png",
+   "wired": "copy"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "052e7ec7efed3f5f640c19510aa2b9f92bde54b214697294d96b30ef7b988d1e",
+   "png": "png/052e7ec7efed3f5f.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "46de90d3d286f6ba794f5f568e111b16b78a396ddf376c4b60ebaf4e3ace5528",
+   "png": "png/46de90d3d286f6ba.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "through-one-output",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cc64dfa7aba056ac0023bdf5dc21d10b808988aea53b43d0e3724563063beaca",
+   "png": "png/cc64dfa7aba056ac.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "cc64dfa7aba056ac0023bdf5dc21d10b808988aea53b43d0e3724563063beaca",
+   "png": "png/cc64dfa7aba056ac.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f130afc1a14847a57a7fa9b3bf8365df7e1651db57418d537fa51c82498c2272",
+   "png": "png/f130afc1a14847a5.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "f130afc1a14847a57a7fa9b3bf8365df7e1651db57418d537fa51c82498c2272",
+   "png": "png/f130afc1a14847a5.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-faces",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "resize-faces",
    "hands": "present",
    "state": "through",
    "route": "none",

@@ -697,8 +697,8 @@ def test_the_default_graphs_history_holds_what_todays_does_never_the_dim(ctx):
             r.wiring = wiring
         out = _dim_frames(ctx, r, dim, frames=8, spin=0.05)
         assert r.lookback.atlas is not None and r.lookback.layers()
-        held = r._graph.nodes["capture"].inputs["image"]
-        assert held.name == ("scene" if wiring is None else "composite(history)")
+        held = r._graph.nodes["lookback(capture)"].inputs["image"]
+        assert held.name == ("scene" if wiring is None else "composite")
         scene = np.frombuffer(r.scene.tex.read(), dtype=np.uint8).copy()
         return out, np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).copy(), scene
 
@@ -2057,3 +2057,27 @@ def test_fit_leaves_no_copy_cut_by_the_edge(ctx, layout):
             if layout != 2 and n > 5:            # a ring of 12 or 40 is past the screen
                 assert _border(off) > 20, (layout, n, w, h)      # cut without Fit
             assert on[..., :3].max() > 20 and _border(on) == 0, (layout, n, w, h)
+
+
+def test_stats_name_the_ends(ctx):
+    """Plan 35 T4: `stats["ends"]` is the `Shown` ends that ran this frame,
+    by name — the picture each shows (`shown(acid)` with acid wired last
+    into All outputs, `shown(lookback)` with no run) — where the pipelines'
+    keys were."""
+    from test_outputs import rig, run, views
+
+    from hyperspace import graph as G
+    from hyperspace import graphmigrate as M
+    from hyperspace.outputs import Switches
+
+    def frame(section):
+        r = rig(ctx, effects=("acid",))
+        r.wiring = G.read_graph(M.wired_section(M.renamed(section), G.read_graph(section))
+                                ).wiring()
+        run(ctx, r, views(ctx, Switches()), frames=1)
+        return r.stats
+
+    acid = frame({"wires": [{"from": "frame", "to": "acid.image"},
+                            {"from": "acid", "to": "fx.image"}]})
+    assert acid["ends"] == ["shown(acid)"] and "pipelines" not in acid
+    assert frame({"wires": [{"from": "frame", "to": "fx.image"}]})["ends"] == ["shown(lookback)"]
