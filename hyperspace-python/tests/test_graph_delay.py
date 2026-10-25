@@ -297,6 +297,40 @@ def test_a_graph_rebuild_keeps_the_delay(ctx):
     assert _mid(got[1]) == RED and _mid(got[2]) == BLUE
 
 
+def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
+    """R19 (final review, row 354 "rebuilds, not loads"): a delay holding
+    red, then `reset_delays` (what a preset load asks) — the next frame
+    reads nothing, the ground, as a first frame does, then the picture
+    again; with no reset a rebuild of the same graph still holds red."""
+    size = (160, 120)
+    pairs = [("media.a", "delay.image"), ("delay", "output.2.image")]
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))), pairs, DELAY)
+    vs, s = _views(ctx, size), _faces()
+    for k in range(2):
+        assert _mid(_frame(ctx, r, s, vs, size, k)[1]) == ((0, 0, 0) if k == 0 else RED)
+    r.wiring = G.read_graph(section(("frame", "fx.image"), *pairs, nodes=DELAY)).wiring()
+    assert _mid(_frame(ctx, r, s, vs, size, 2)[1]) == RED
+    r.reset_delays()
+    assert _mid(_frame(ctx, r, s, vs, size, 3)[1]) == (0, 0, 0)
+    assert _mid(_frame(ctx, r, s, vs, size, 4)[1]) == RED
+
+
+def test_a_preset_load_asks_for_the_reset_and_a_graph_edit_does_not(tmp_path):
+    """R19: `Presets.load_doc` landing a section asks the attached renderer
+    to reset its delays; a GRAPH edit (an `Edit` landing) does not."""
+    from test_graph_edit import wired_rig
+
+    rig, e, _ = wired_rig(tmp_path, slug="delay-trails")
+    calls = []
+    rig.presets.graph.renderer.reset_delays = lambda: calls.append(1)
+    spec = rig.presets.graph.spec
+    w = next(w for w in spec.wires if w.dst != "delay.image" and w.src != "delay")
+    assert e.unwire(f"rout:{w.src}", f"rin:{w.node}/{w.port}") is None
+    assert calls == []
+    rig.lib.load("presets", "delay-trails")
+    assert calls == [1]
+
+
 def test_a_delay_leaving_the_graph_is_released(ctx):
     """Review Focus 4: the delay's wires removed, its pair is kept for
     `SIZED_KEEP_FRAMES - 1` frames (a flick back costs nothing) and

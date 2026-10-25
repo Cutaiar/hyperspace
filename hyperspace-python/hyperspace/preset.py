@@ -1153,6 +1153,11 @@ class Presets:
         # refused whole, never half a graph
         try:
             gs.land(spec, kept, free=section)
+            # R19 (row 354: "rebuilds, not loads"): a load's delays start
+            # empty — no trail of the preset before in this one
+            reset = getattr(gs.renderer, "reset_delays", None)
+            if callable(reset):
+                reset()
             # (after the landing: its instances are declared now)
             gs.held = self._held_retired(kept_retired)
             _, gs.five, _ = gs.read(five.get(GRAPH_KEY)) if isinstance(

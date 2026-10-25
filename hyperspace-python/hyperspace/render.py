@@ -2137,23 +2137,38 @@ class Renderer:
     def delay_pair(self, name: str) -> DelayPair:
         """Delay `name`'s pair (plan 34 D, row 354), made on first ask and
         kept by name across graph rebuilds — an edit elsewhere on GRAPH
-        does not cut the feedback (__dict__: a renderer from before plan 34
-        has none)."""
+        does not cut the feedback; a preset load does (`reset_delays`, R19)
+        (__dict__: a renderer from before plan 34 has none)."""
         pairs = self.__dict__.setdefault("_delays", {})
         got = pairs.get(name)
         if got is None:
             got = pairs[name] = DelayPair()
         return got
 
+    def reset_delays(self) -> None:
+        """R19 (final review, row 354): a preset load landed a new section —
+        at the next turn every pair holds nothing (as on its first frame),
+        so no trail of the last preset shows in the new one. A GRAPH edit
+        or rebuild does not ask: the feedback runs on across those. The
+        textures are kept; only what they hold is forgotten."""
+        self.__dict__["_delays_reset"] = True
+
     def _turn_delays(self, graph: Graph) -> None:
         """Once a frame, before the graph runs: every pair turns (a pair
         written last frame now reads it; one not written holds nothing). A
         pair whose delay is in no node of `graph` counts a frame idle and
         is released at `SIZED_KEEP_FRAMES`, with its refitted picture
-        (`<name>#fit`); one in the graph is idle 0. Never raises."""
+        (`<name>#fit`); one in the graph is idle 0. After `reset_delays`
+        (a load, R19) every pair holds nothing this frame. Never raises."""
         pairs = getattr(self, "_delays", None)
+        reset = getattr(self, "_delays_reset", False)
+        if reset:
+            self._delays_reset = False
         if not pairs:
             return
+        if reset:
+            for pair in pairs.values():
+                pair.wrote = False      # (so `turn` holds nothing this frame)
         held = {n.name for n in getattr(graph, "nodes", {}).values() if isinstance(n, Delay)}
         for name in list(pairs):
             pair = pairs[name]
