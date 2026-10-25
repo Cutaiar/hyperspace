@@ -73,7 +73,7 @@ import moderngl
 from imgui_bundle import imgui
 from imgui_bundle.python_backends.glfw_backend import GlfwRenderer
 
-from . import config, devices, envelope, gamepad, lfo, placement, sequencer, tempo, undo
+from . import config, devices, envelope, gamepad, geometry, lfo, placement, sequencer, tempo, undo
 from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
@@ -1388,6 +1388,10 @@ def main() -> None:
     # the project's startup preset (D11), once, now that everything it lands
     # on exists; a missing one is said on the panel and the app runs on
     library.project.load_startup()
+    # every shape's faces, triangles and UVs built now, off the frame, the
+    # startup preset's shape first, so the first switch to a big one
+    # (rectified 600-cell, 600-cell, 120-cell, Clifford torus) does not stutter
+    geometry.warm_all(first=s.shape)
     # undo (undo.py, plan 15 WP1), built after the startup preset so a
     # launch starts with an empty stack: bases through the registry, table
     # parts through the table, what is loaded through the library's marks;

@@ -144,8 +144,8 @@ the Klein bottle: closed 3D solids, mathematical toys, scenes, and every
 ([`plans/22-polytope-shortlist.md`](plans/22-polytope-shortlist.md)) —
 the 5-cell family through one `perm5` helper, the tesseract and 24-cell
 families through `expand`, the snub 24-cell and grand antiprism, the
-rectified 600-cell (the 600-cell's edge midpoints; its faces take about
-8 s to build the first time they are drawn), the disphenoidal 288-cell
+rectified 600-cell (the 600-cell's edge midpoints; its faces, the
+slowest to build, take under a second), the disphenoidal 288-cell
 (`edges_by_classes`: two edge lengths) and the dual runcinated 5-cell
 (its cells' polar points), four star polychora on the 600-cell's and
 120-cell's corners (`_star`: one distance class; the two with {5/2}
@@ -154,6 +154,13 @@ face pipeline does not have), and more duoprisms and prisms. A solid's
 faces come from the polytope extraction; a star (drawn as what shows: its
 spikes, the core buried) or a compound brings its own. A curve (the toys
 with F 0) draws no points: its samples are not corners.
+
+**The warm-up.** `geometry.warm_all`, started in `app.main` after the
+startup preset, builds every shape's `geom`, `faces`, `face_triangles`
+and `face_uvs` on a daemon thread, the startup shape first, so the first
+switch to a big shape does not stutter. Each shape has its own lock: a
+frame that reaches a shape the warmer is on waits for it, one that wants
+another builds it itself.
 
 **Families and the Shape menu.** Every shape has a `Shape.family`, and
 `geometry.MENU` orders them into the menu's sections: **4D** (regular
