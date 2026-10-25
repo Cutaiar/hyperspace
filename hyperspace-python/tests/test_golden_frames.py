@@ -151,9 +151,15 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
-        # (plan 35 T3: the blank frame and the channel alone wire no hands)
+        # (plan 35 T3: a wired fixture draws only what it wires — its states
+        # are the windows' mutes, not switches emulated: the blank frame and
+        # the channel alone wire no hands, so none is shown, and the blank
+        # frame builds the outputs and nothing else)
         assert said["missing"] == [] and said["notes"] == []
-        assert said["hands_shown"] or slug in ("blank-frame", "channel-out-only")
+        no_hands = ("blank-frame", "channel-out-only")
+        assert said["hands_shown"] is (slug not in no_hands), slug
+        if slug == "blank-frame":
+            assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
         # the graph landed as the file says it (the section, not a repr of
         # the Wiring: a field added later moves no golden). Plan 32 T6: a
         # media fixture's proof is its channels — a wire with no node, or

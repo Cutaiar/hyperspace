@@ -951,7 +951,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert graphmigrate.legacy_values(spec.to_json(), {"fx.acid.on": True}) is None
     assert graphmigrate.legacy_section(spec.to_json()) is None
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/6"          # (plan 35, row 385: /5 before)
+    assert doc["schema"] == "hyperspace.preset/5"          # (R10: /5 can say it)
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()
@@ -977,7 +977,7 @@ def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
     section = rig.presets.graph.said().to_json()
     assert {"kind": "effect", "file": "acid"} in section["nodes"]
     assert graphmigrate.legacy_values(section, {"fx.acid.on": True}) is None
-    assert json.loads(rig.presets.save_as("On").read_text())["schema"] == "hyperspace.preset/6"
+    assert json.loads(rig.presets.save_as("On").read_text())["schema"] == "hyperspace.preset/5"
     rig.reg["fx.acid.on"].set(False)
     assert graphmigrate.legacy_values(section, {"fx.acid.on": False}) is not None
     doc = json.loads(rig.presets.save_as("Off").read_text())

@@ -553,6 +553,25 @@ def test_the_signature_follows_every_picture_port():
                                                                   "instance": 2}]))
 
 
+def test_the_signature_follows_what_the_sinks_read():
+    """T3 review: two frames alike but for what the look-back records
+    (`scene` or `backdrop → lookback.capture`), or what a delay writes,
+    differ in `signature` — the sinks are read by their chains."""
+    head = (("shape", "scene.geometry"), ("channel.a", "backdrop.image"),
+            ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
+            ("lookback", "output.all.image"))
+
+    def sig(*pairs, nodes=()):
+        spec = G.read_graph(wired(*head, *pairs, nodes=nodes))
+        assert not spec.notes, spec.notes
+        return G.signature(G.build_graph(views(1), spec.wiring()))
+
+    assert sig(("scene", "lookback.capture")) != sig(("backdrop", "lookback.capture"))
+    d = [{"kind": "delay"}]
+    assert (sig(("scene", "delay.image"), ("delay", "output.2.image"), nodes=d)
+            != sig(("backdrop", "delay.image"), ("delay", "output.2.image"), nodes=d))
+
+
 def test_the_proof_covers_one_window_and_the_clouds():
     """The window's own frame alone (`SOLO`, and `SOLO_FX` for a preset
     with an effect on) and the recorded point cloud (`CLOUDED`) are cases

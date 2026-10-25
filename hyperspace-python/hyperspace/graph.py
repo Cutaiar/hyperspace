@@ -6238,8 +6238,9 @@ def _sig_chain(n: Node | None, depth: int = 0) -> tuple | None:
     reads), …)) over every port that is wired — an effect's `image` and
     `aux`, a switch's `inN`, a composite's `under`, `over` and `depth`, the
     look-back's `cover` and `occluder`, the scene's geometry (plan 35 T3:
-    every port, named, before T4 deletes the oracle); an end (`Fx`,
-    `Wired`, `Shown`) is passed through, so its name never counts."""
+    every port, named, before T4 deletes the oracle); an end (`Fx` — and
+    `Wired`, an `Fx` subclass, with it — or `Shown`) is passed through, so
+    its name never counts."""
     while isinstance(n, (Fx, Shown)):
         n = n.inputs.get("image")
     if n is None or depth > 64:
@@ -6282,7 +6283,9 @@ def signature(g: Graph) -> tuple:
     Names never count — `fx` and `shown(lookback)` are one end — and a
     copy counts as the `Effect` it draws again. Plan 35 T3: a chain
     follows every wired port by name, and "which" is past the effect
-    (`_sig_what`: a channel's letter, a hands node's instance)."""
+    (`_sig_what`: a channel's letter, a hands node's instance); last, each
+    sink no output shows — the capture, each delay's write — by the chain
+    of what it reads."""
     outs = []
     for out in g.outputs:
         end = out.inputs["image"]
@@ -6297,4 +6300,10 @@ def signature(g: Graph) -> tuple:
                    tuple(sorted(k for k, v in n.inputs.items() if v is not None)))
                   for n in g.order
                   if id(n) in live and not isinstance(n, (Output, Shown, Fx, BackdropNode)))
-    return (*outs, order)
+    # (T3 review: the sinks no output shows — what the look-back records and
+    # what each delay writes — by what they read, port by port)
+    sinks = tuple((_sig_class(n), getattr(n, "delay", None),
+                   tuple((p, _sig_chain(v)) for p, v in sorted(n.inputs.items())
+                         if v is not None))
+                  for n in g.order if isinstance(n, (Capture, DelayWrite)))
+    return (*outs, order, sinks)

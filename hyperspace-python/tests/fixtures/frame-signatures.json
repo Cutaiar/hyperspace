@@ -500,6 +500,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "ember-orbit/states": [
@@ -1001,6 +1026,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -1506,6 +1556,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "inverse-halo/states": [
@@ -2007,6 +2082,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -2512,6 +2612,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "spiral-silk/states": [
@@ -3013,6 +3138,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -3518,6 +3668,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "woven-lattice/states": [
@@ -4019,6 +4194,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -4524,6 +4724,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-faces/states": [
@@ -5025,6 +5250,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -5530,6 +5780,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-wake/states": [
@@ -6031,6 +6306,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -6836,6 +7136,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-acid/states": [
@@ -7637,6 +7962,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -8442,6 +8792,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-noita/states": [
@@ -9245,6 +9620,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-tracer/states": [
@@ -9748,6 +10148,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "legacy6/states": [
@@ -10249,6 +10674,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -10829,6 +11279,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "seq-demo/states": [
@@ -11405,6 +11880,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -11985,6 +12485,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-pinch/states": [
@@ -12563,6 +13088,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-play/states": [
@@ -13066,6 +13616,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-orbit/states": [
@@ -13567,6 +14142,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -14099,6 +14699,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -14645,6 +15278,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -15464,6 +16122,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -16321,6 +17004,40 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Effect",
+       "acid.2",
+       [
+        [
+         "image",
+         [
+          "Scene",
+          null,
+          [
+           [
+            "geometry",
+            [
+             "Shape",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-glass-only/states": [
@@ -16876,6 +17593,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -17516,6 +18266,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -18205,6 +18980,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "media-to-output-2/states": [
@@ -18572,6 +19372,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -19080,6 +19905,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -19716,6 +20566,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "displace-luma/states": [
@@ -20348,6 +21223,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -21144,6 +22044,58 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "Effect",
+             "huecycle.2",
+             [
+              [
+               "image",
+               [
+                "Effect",
+                "acid.2",
+                [
+                 [
+                  "image",
+                  [
+                   "MediaNode",
+                   "a",
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "media-chain-backdrop/states": [
@@ -21883,6 +22835,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "branch-two-sizes/states": [
@@ -22376,6 +23353,49 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "Effect",
+             "acid.2",
+             [
+              [
+               "image",
+               [
+                "MediaNode",
+                "a",
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -23339,6 +24359,74 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "SwitchNode",
+             null,
+             [
+              [
+               "in1",
+               [
+                "MediaNode",
+                "b",
+                []
+               ]
+              ],
+              [
+               "in2",
+               [
+                "MediaNode",
+                "a",
+                []
+               ]
+              ],
+              [
+               "in3",
+               [
+                "Effect",
+                "acid.2",
+                [
+                 [
+                  "image",
+                  [
+                   "MediaNode",
+                   "a",
+                   []
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "delay-faces/states": [
@@ -23946,6 +25034,72 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "DelayWrite",
+    "delay",
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "Delay",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ],
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "Delay",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "delay-trails/states": [
@@ -24481,6 +25635,89 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "DelayWrite",
+    "delay",
+    [
+     [
+      "image",
+      [
+       "Composite",
+       null,
+       [
+        [
+         "over",
+         [
+          "Effect",
+          "palette.2",
+          [
+           [
+            "image",
+            [
+             "Effect",
+             "zoomblur.2",
+             [
+              [
+               "image",
+               [
+                "Delay",
+                null,
+                []
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "under",
+         [
+          "Scene",
+          null,
+          [
+           [
+            "geometry",
+            [
+             "Shape",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ],
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -25083,6 +26320,40 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          [
+           [
+            "faces",
+            [
+             "EchoNode",
+             "echo.3",
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "big-blue-wave/in-scene": [
@@ -25304,6 +26575,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -25635,6 +26939,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "big-blue-wave/solo": [
@@ -25766,6 +27095,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -25989,6 +27343,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -26320,6 +27707,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "ember-orbit/solo": [
@@ -26451,6 +27863,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -26674,6 +28111,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -27005,6 +28475,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hex-engine/solo": [
@@ -27136,6 +28631,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -27359,6 +28879,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -27690,6 +29243,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "inverse-halo/solo": [
@@ -27821,6 +29399,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -28044,6 +29647,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -28375,6 +30011,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "plasma-heart/solo": [
@@ -28506,6 +30167,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -28729,6 +30415,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -29060,6 +30779,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "spiral-silk/solo": [
@@ -29191,6 +30935,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -29414,6 +31183,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -29745,6 +31547,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "strobe-cage/solo": [
@@ -29876,6 +31703,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -30099,6 +31951,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -30430,6 +32315,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "woven-lattice/solo": [
@@ -30561,6 +32471,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -30784,6 +32719,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -31115,6 +33083,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-tumble/solo": [
@@ -31246,6 +33239,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -31469,6 +33487,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -31800,6 +33851,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-faces/solo": [
@@ -31931,6 +34007,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -32161,6 +34262,39 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "PointCloud",
+          null,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-field/in-scene": [
@@ -32382,6 +34516,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -32713,6 +34880,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-field/solo": [
@@ -32844,6 +35036,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -33067,6 +35284,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -33398,6 +35648,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-wake/history+hands": [
@@ -33539,6 +35814,57 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Composite",
+       null,
+       [
+        [
+         "over",
+         [
+          "HandsLayer",
+          1,
+          [
+           [
+            "geometry",
+            [
+             "Hands",
+             1,
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "under",
+         [
+          "Scene",
+          null,
+          [
+           [
+            "geometry",
+            [
+             "Shape",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-wake/solo": [
@@ -33670,6 +35996,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -34021,6 +36372,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -34516,6 +36900,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-trip/solo": [
@@ -34711,6 +37120,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -35041,6 +37475,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -35392,6 +37851,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -35887,6 +38379,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-acid/solo": [
@@ -36082,6 +38599,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -36412,6 +38954,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -36763,6 +39330,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -37258,6 +39858,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-mandala/solo": [
@@ -37453,6 +40078,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -37783,6 +40433,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -38134,6 +40809,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -38629,6 +41337,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-noita/solo": [
@@ -38824,6 +41557,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -39156,6 +41914,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-tracer/in-scene": [
@@ -39377,6 +42160,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -39708,6 +42524,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-tracer/history+hands": [
@@ -39849,6 +42690,57 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Composite",
+       null,
+       [
+        [
+         "over",
+         [
+          "HandsLayer",
+          1,
+          [
+           [
+            "geometry",
+            [
+             "Hands",
+             1,
+             []
+            ]
+           ]
+          ]
+         ]
+        ],
+        [
+         "under",
+         [
+          "Scene",
+          null,
+          [
+           [
+            "geometry",
+            [
+             "Shape",
+             null,
+             []
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "party-tracer/solo": [
@@ -39980,6 +42872,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -40203,6 +43120,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -40534,6 +43484,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "legacy6/solo": [
@@ -40665,6 +43640,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -40893,6 +43893,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "PointCloud",
+          null,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -41148,6 +44181,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -41520,6 +44586,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "lfo-breathe/solo": [
@@ -41667,6 +44758,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -41901,6 +45017,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -42156,6 +45297,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -42528,6 +45702,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "seq-demo/solo": [
@@ -42675,6 +45874,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -42909,6 +46133,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -43164,6 +46413,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -43536,6 +46818,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-fx/solo": [
@@ -43683,6 +46990,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -43917,6 +47249,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -44172,6 +47529,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -44544,6 +47934,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-pinch/solo": [
@@ -44691,6 +48106,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -44914,6 +48354,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -45245,6 +48718,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-play/solo": [
@@ -45376,6 +48874,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -45599,6 +49122,39 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Hands",
+          1,
+          []
+         ]
+        ],
+        [
+         "geometry.2",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]
@@ -45930,6 +49486,31 @@
      "image"
     ]
    ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
+    ]
+   ]
   ]
  ],
  "hands-orbit/solo": [
@@ -46061,6 +49642,31 @@
     null,
     [
      "image"
+    ]
+   ]
+  ],
+  [
+   [
+    "Capture",
+    null,
+    [
+     [
+      "image",
+      [
+       "Scene",
+       null,
+       [
+        [
+         "geometry",
+         [
+          "Shape",
+          null,
+          []
+         ]
+        ]
+       ]
+      ]
+     ]
     ]
    ]
   ]

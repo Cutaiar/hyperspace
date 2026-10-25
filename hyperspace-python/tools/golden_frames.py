@@ -511,7 +511,14 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     """The rig's wired frame (plan 35 T3, row 392): the preset's section as
     the load wired it — or a WIRED variant's (`variant_section` over the
     preset's run, wired as a load wires it) — and each view's state as
-    that output's own wires (`output_wires`); the mutes are all on."""
+    that output's own wires (`output_wires`); the mutes are all on.
+
+    A wired fixture (`WIRED_FIXTURES`, `/6`) is a frame of its own, not
+    today's frame under switches: its section is left as it is, but for
+    a through state where All outputs lays the hands (`_lays_hands`), which
+    takes what OUTPUT's "hands through the effects" writes
+    (`Shows(through=True)`); its scene and hands are the window's
+    mutes (`state_views`). An output draws only what is wired."""
     presets = rig.presets
     if wiring is None:
         wired = presets.graph.free_doc()
@@ -522,8 +529,29 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
         wired = graphmigrate.wired_section(graphmigrate.renamed(vsection),
                                            read_graph(vsection, effects=files))
     for k, (_, sw) in enumerate(states):
-        wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+        if slug not in WIRED_FIXTURES:
+            wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+        elif sw["through"] and _lays_hands(wired):
+            wired = graphmigrate.with_output_wires(wired, k + 1,
+                                                   graphmigrate.Shows(through=True))
     return wired
+
+
+def _lays_hands(section: dict) -> bool:
+    """Whether All outputs lays a hands layer over its picture: only then
+    has "hands through the effects" any hands to put through (a frame that
+    wires no hands shows none, through or not)."""
+    return any(w.get("to") == f"{G.ALL_OUTPUTS}.hands" and w.get("from") != G.GROUND
+               for w in section.get("wires", []))
+
+
+def state_views(slug: str, states, size, targets) -> list[View]:
+    """The rig's windows: every mute on (the states are wiring), but for a
+    wired fixture's, whose picture and hands mutes are its state's."""
+    if slug not in WIRED_FIXTURES:
+        return [View(Switches(), size, target=f) for f in targets]
+    return [View(Switches(scene=sw["scene"], hands=sw["hands"]), size, target=f)
+            for f, (_, sw) in zip(targets, states)]
 
 
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
@@ -544,7 +572,7 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
         rig.list_devices(config)
     try:
         targets = [_target(ctx, size, SAMPLES if k == 0 else 0) for k in range(len(states))]
-        views = [View(Switches(), size, target=f) for f in targets]
+        views = state_views(slug, states, size, targets)
         for _ in range(FRAMES):
             rig.frame(views, logical, dpr)
         assert ctx.error == "GL_NO_ERROR", ctx.error

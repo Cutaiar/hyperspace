@@ -349,7 +349,13 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default,
     section = doc.get(GRAPH_KEY)
     if graphmigrate.needs_free(section, dict(doc.get("values") or {}),
                               graphmigrate.targets(doc, desk), specs):
-        return WIRED_SCHEMA
+        # ruling R10: the lowest schema that loses nothing — a wired frame
+        # whose round trip is plan 33/34's words is `/5`, so the other Mac
+        # on that build still reads it; `/6` only for the wired frame's own
+        if (isinstance(section, dict) and section.get("frame") == "wired"
+                and graphmigrate.unwired(section, specs) is None):
+            return WIRED_SCHEMA
+        return FREE_SCHEMA
     legacy = graphmigrate.legacy_section(section)
     if legacy is not section:
         doc = {k: v for k, v in doc.items() if k != GRAPH_KEY}
@@ -457,9 +463,14 @@ class GraphSection:
         self.free: dict | None = None
         # plan 33 T7: the retired values the load landed (`graphmigrate.
         # landed_retired`: orders, targets, the channel choices), kept beside
-        # the section for a save below /5 (`graphmigrate.with_retired`); a
-        # GRAPH edit keeps them, an fx module's run replaces the effects
+        # the section for a save below /5, the free graph's words
+        # (`graphmigrate.with_retired`; a /5 save writes `backdrop.history`
+        # alone, R10); a GRAPH edit keeps them, an fx module's run replaces
+        # the effects
         self.held: dict[str, Any] = {}
+        # R10 (plan 35 T3 review): the section as plan 33/34 read the file —
+        # what an untouched `/5` save writes back (`Presets._five_section`)
+        self.five: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
         if renderer is not None:
@@ -615,16 +626,17 @@ class GraphSection:
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`)."""
         return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)),
-                self.held_values())
+                self.held_values(), copy.deepcopy(getattr(self, "five", None)))
 
     def put(self, mark: tuple) -> None:
         """Land what `mark` held again (an undo of a load), first. (A mark
         from before plan 33 holds no free section, one from before T7 no
-        retired values.)"""
-        spec, doc, free, held = (*mark, None, None)[:4]
+        retired values, one from before plan 35 T3's review no `/5` one.)"""
+        spec, doc, free, held, five = (*mark, None, None, None)[:5]
         if (spec, doc, free) != (self.spec, self.doc, getattr(self, "free", None)):
             self.land(spec, doc, free)
         self.held = dict(held or {})
+        self.five = copy.deepcopy(five)
 
     def _push(self) -> None:
         r = self.renderer
@@ -962,6 +974,10 @@ class Presets:
         template_rows = self._template_rows(doc)
         kept = doc.get(GRAPH_KEY)
         kept_retired = graphmigrate.held_retired(doc.get("values") or {})
+        # (R10: and the section as plan 33/34 read it — what that build's
+        # `/5` save writes, so an untouched `/5` preset saves as it did)
+        five, _ = graphmigrate.migrate(doc, gs.specs(), desk=copy.deepcopy(template_rows),
+                                       wire=False)
         doc, migrate_notes = graphmigrate.migrate(doc, gs.specs(), desk=template_rows)
         _, kept, _ = gs.read(kept)
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
@@ -1119,6 +1135,8 @@ class Presets:
             gs.land(spec, kept, free=section)
             # (after the landing: its instances are declared now)
             gs.held = self._held_retired(kept_retired)
+            _, gs.five, _ = gs.read(five.get(GRAPH_KEY)) if isinstance(
+                five.get(GRAPH_KEY), dict) else (None, None, [])
             # the modifiers and their params (plan 28 N1), landed with the
             # values: their entries are their params' values
             notes += table.set_modifiers(mods, reg)
@@ -1274,20 +1292,30 @@ class Presets:
         desk_rows = desk_json(table.desk())
         doc["schema"] = schema_of(doc, at_default=self._at_default(), specs=specs,
                                   desk=desk_rows)
-        if doc["schema"] != WIRED_SCHEMA:
+        free_words = (FREE_SCHEMA, WIRED_SCHEMA)
+        if doc["schema"] == FREE_SCHEMA and GRAPH_KEY in doc:
+            # ruling R10 (plan 35 T3 review): a wired frame `/5` can say is
+            # written `/5` — the file's own section when the frame is still
+            # what the load made of it (byte for byte, as `/4` is), else its
+            # round trip in the old ids — and `backdrop.history`, which a
+            # plan 33/34 build declares, back where its registry wrote it
+            five, history = self._five_section(gs, section, specs)
+            doc[GRAPH_KEY] = copy.deepcopy(five)
+            values = graphmigrate.with_history(values, history)
+        if doc["schema"] not in free_words:
             values = graphmigrate.with_retired(values, gs.held_values(), specs)
             if graphmigrate.says_free(section):
                 lv = graphmigrate.legacy_values(section, values, specs,
                                                 graphmigrate.targets(doc, desk_rows))
                 if lv is not None:
                     values.update(lv)
-        if doc["schema"] != WIRED_SCHEMA and GRAPH_KEY in doc:
+        if doc["schema"] not in free_words and GRAPH_KEY in doc:
             legacy = graphmigrate.legacy_section(gs.doc)
             if legacy is None:
                 del doc[GRAPH_KEY]
             else:
                 doc[GRAPH_KEY] = copy.deepcopy(legacy)
-        if doc["schema"] not in (MEDIA_SCHEMA, WIRED_SCHEMA):
+        if doc["schema"] not in (MEDIA_SCHEMA, *free_words):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
         if doc["schema"] == SCHEMA:
@@ -1296,6 +1324,35 @@ class Presets:
                       if k not in self.reg or self.reg[k].group not in V3_GROUPS}
         doc["values"] = values
         return doc
+
+    def _five_section(self, gs: GraphSection, section: dict, specs) -> tuple[dict, bool]:
+        """(the section a `/5` save writes, the `backdrop.history` it says)
+        for wired frame `section` (R10): the file's section as plan 33/34
+        read it (`gs.five`, what that build's save wrote) while the load's
+        frame of it is still `section` — an untouched `/5` preset saves
+        byte for byte — else `section`'s round trip
+        (`graphmigrate.unwired`, the old ids). `backdrop.history` is what
+        the capture wire says where a backdrop is wired, else what the
+        load held."""
+        held = bool(gs.held_values().get("backdrop.history", False))
+        got = graphmigrate.unwired(section, specs)
+        if got is None:                 # (a section in plan 33's words already)
+            return section, held
+        rest, history = got
+        if not any(w.get("to") == "backdrop.image" for w in rest.get("wires", [])):
+            history = held
+        kept = getattr(gs, "five", None)     # (a section from before has none)
+        if isinstance(kept, dict) and not kept.get("frame"):
+            files = gs.files()
+            try:
+                old = read_graph(kept, effects=files)
+                again = read_graph(graphmigrate.wired_section(
+                    graphmigrate.renamed(kept), old, backdrop_history=history), effects=files)
+                if again.to_json() == read_graph(section, effects=files).to_json():
+                    return kept, history
+            except GraphError:
+                pass
+        return rest, history
 
     def _at_default(self) -> Callable[[str, Any], bool]:
         """Whether a value is what a load would land for it missing
@@ -1425,7 +1482,7 @@ class Presets:
         an fx module's) lands, as a build from before T7 landed them —
         `graphmigrate.landed_retired` over the groups' defaults
         (`Library.defaults`) and the effects this build holds: what a save
-        below /5 writes back (`graphmigrate.with_retired`)."""
+        below /5 (/5 and /6 keep none) writes back (`graphmigrate.with_retired`)."""
         defaults: dict[str, Any] = {}
         for g in groups:
             try:

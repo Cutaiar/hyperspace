@@ -926,7 +926,8 @@ def legacy_section(section: Any) -> dict | None:
 def held_retired(values: dict) -> dict:
     """The retired values a file holds (`retired`; `fx.select` was never
     saved): what a load keeps beside the wires (`preset.GraphSection.held`)
-    so a save below `/5` writes them back where the file had them."""
+    so a save below `/5` (the free graph's words, `/5` and `/6`) writes them
+    back where the file had them."""
     return {k: v for k, v in (values or {}).items() if retired(k) and k != "fx.select"}
 
 
@@ -985,6 +986,21 @@ def with_retired(values: dict, held: dict, specs: Specs | None = None) -> dict:
             out.setdefault(f"fx.{name}.order", order if _is_number(order)
                            else int(_file_order(specs, name)))
             out.setdefault(f"fx.{name}.target", _as(int, held.get(f"fx.{name}.target"), 0))
+    return out
+
+
+def with_history(values: dict, history: bool) -> dict:
+    """`values` with `backdrop.history` (a plan 33/34 build's param, the
+    capture wire's now) where that build's registry wrote it, right after
+    `backdrop.alpha` (ruling R10: a `/5` save). A new dict."""
+    out: dict[str, Any] = {}
+    for k, v in values.items():
+        if k != "backdrop.history":
+            out[k] = v
+        if k == "backdrop.alpha":
+            out["backdrop.history"] = bool(history)
+    if "backdrop.history" not in out:
+        out["backdrop.history"] = bool(history)
     return out
 
 

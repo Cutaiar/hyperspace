@@ -319,9 +319,12 @@ graph section writes are the owner's words:
   ladder is the honest place: `/6` is `/5` plus the wired frame in the new
   ids. `VERSIONS` becomes `(2, 3, 4, 5, 6)`, and a plan 33/34 build
   refuses a `/6` file by its ladder's own words rather than loading its
-  values over a default frame. Saves write `/4` or below when the round
-  trip says so, else `/6`; **nothing writes `/5` again**. `/5` stays
-  readable.
+  values over a default frame. Saves write the lowest schema that loses nothing (ruling R10, T3
+  review, superseding "nothing writes `/5` again"): `/4` or below when the
+  round trip says so; `/5` when the frame round-trips into plan 33/34's
+  words but `/4` cannot say them (an untouched `/5` file byte for byte, an
+  edit sayable there as its round trip in the old ids); `/6` only for the
+  wired frame's own words. `/5` stays readable.
 - **The byte-identical `/4` save still holds.** `legacy_section` strips
   the wired frame by round trip (M) and maps every id back through
   `OLD_IDS`, so an untouched `/4` preset writes the same bytes. The 38
@@ -829,7 +832,9 @@ build takes, each cheap to reverse before a preset using it is saved.
 385. **The schema is `hyperspace.preset/6`** (rec, following row 373):
      `/6` is `/5` plus the wired frame in the new ids. `VERSIONS` becomes
      `(2, 3, 4, 5, 6)`; a plan 33/34 build refuses a `/6` file by its
-     ladder's words; nothing writes `/5` again; `/2`–`/5` stay readable;
+     ladder's words; a save writes the lowest schema that loses nothing —
+     `/5` where the frame round-trips into its words (ruling R10, the T3
+     review, superseding "nothing writes `/5` again"); `/2`–`/5` stay readable;
      the `frame` key stays as the section's marker (`read_graph` knows no
      schema). Other: stay `/5` with the marker alone (a plan-34 build
      would then load the values over its default frame, and a `/5`

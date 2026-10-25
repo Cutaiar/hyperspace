@@ -257,22 +257,21 @@ BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                     {"from": "acid.2", "to": "shape.faces"}]}
 
 
-def test_a_branch_saves_as_v6_and_reloads(tmp_path):
-    """A branch `/4` cannot say is `/6` now (plan 35, row 385 — `/5`
-    before; nothing writes `/5` again): its graph the wired frame the load
-    gave it, the branch in the new ids with today's frame around it, and
-    it reloads as it saved."""
+def test_a_branch_saves_as_v5_and_reloads(tmp_path):
+    """A branch `/4` cannot say is `/5` (ruling R10: the lowest schema that
+    loses nothing — its wired frame round-trips into plan 33's words), its
+    graph as plan 33 wrote it, and it reloads as it saved."""
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
-    assert preset.schema_of(doc) == M.WIRED_SCHEMA == "hyperspace.preset/6"
+    assert preset.schema_of(doc) == M.FREE_SCHEMA == "hyperspace.preset/5"
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
     app = make_app(tmp_path)
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
-    assert saved["schema"] == M.WIRED_SCHEMA and saved["graph"]["frame"] == "wired"
-    assert saved["graph"] == G.read_graph(M.migrate(doc, SPECS)[0]["graph"]).to_json()
-    assert {("channel.a", "acid.2.image"), ("acid.2", "shape.faces")} <= wires_of(saved["graph"])
+    # (plan 33 T3: the load gave it its run's head, the empty run — R9)
+    head = {**BRANCH, "wires": [*BRANCH["wires"], {"from": "frame", "to": "fx.image"}]}
+    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == head
     assert app.presets.load_doc(copy.deepcopy(saved)) == []
-    assert app.presets.document("t")["graph"] == saved["graph"]     # and reloads as it saved
+    assert app.presets.document("t")["graph"] == head          # and reloads as it saved
 
 
 def test_a_preset_with_no_free_words_keeps_its_schema():
@@ -296,11 +295,14 @@ def test_no_existing_preset_changes_schema(path):
 
 
 def test_v6_is_refused_by_the_ladder_below(tmp_path):
-    """Row 385: a `/6` save is refused, values and all, by a plan 33/34
-    build's ladder (2 … 5) in its own words."""
+    """Row 385: a `/6` save (a frame only a wired one says: a channel into
+    All outputs) is refused, values and all, by a plan 33/34 build's ladder
+    (2 … 5) in its own words."""
     app = make_app(tmp_path)
-    app.presets.load_doc({"schema": "hyperspace.preset/2", "name": "six", "graph": BRANCH,
-                          "values": {}})
+    app.presets.load_doc({"schema": "hyperspace.preset/6", "name": "six", "values": {},
+                          "graph": {"frame": "wired", "nodes": [],
+                                    "wires": [{"from": "channel.a",
+                                               "to": "output.all.image"}]}})
     app.presets.save_as("six")
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
@@ -328,16 +330,18 @@ def test_a_driven_effect_on_at_mix_zero_stays_in_the_run():
     assert G.run_of(G.read_graph(section)) == ("acid",) and notes == []
 
 
-def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v6():
+def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v5():
     doc = base(**{"fx.acid.on": True})
     cleared = {"nodes": [], "wires": [{"from": "frame", "to": "fx.image"}]}
-    assert preset.schema_of({**doc, "graph": cleared}) == M.WIRED_SCHEMA
+    assert preset.schema_of({**doc, "graph": cleared}) == M.FREE_SCHEMA
+    wired_cleared, _ = M.migrate({**doc, "graph": cleared}, SPECS)      # (R10: and wired)
+    assert preset.schema_of({**doc, "graph": wired_cleared["graph"]}) == M.FREE_SCHEMA
     migrated, _ = M.to_free(doc, SPECS)
-    assert preset.schema_of({**doc, "graph": migrated}) != M.WIRED_SCHEMA    # a /4 can say it
+    assert preset.schema_of({**doc, "graph": migrated}) == preset.SCHEMA     # a /4 can say it
     wired, _ = M.migrate(doc, SPECS)                                        # and its frame
-    assert preset.schema_of({**doc, "graph": wired["graph"]}) != M.WIRED_SCHEMA
+    assert preset.schema_of({**doc, "graph": wired["graph"]}) == preset.SCHEMA
     off = base(**{"fx.acid.on": False})
-    assert preset.schema_of({**off, "graph": cleared}) != M.WIRED_SCHEMA
+    assert preset.schema_of({**off, "graph": cleared}) not in (M.FREE_SCHEMA, M.WIRED_SCHEMA)
 
 
 def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
