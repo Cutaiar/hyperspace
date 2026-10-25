@@ -79,6 +79,38 @@ def test_the_combo_offers_the_graphs_pictures_in_area_order():
     assert graphview.picture_now(spec, "output.all.image") == "acid"
 
 
+def test_output_offers_a_channel_with_a_source_and_picking_wires_it(tmp_path):
+    """R17: OUTPUT's combo also offers every channel whose bin holds a
+    source, though nothing wires it yet — after the graph's own pictures,
+    by label — and its pick wires `channel.<c>` straight into the window's
+    picture (or All outputs'), one landing. An empty channel is not
+    offered, nor is a filled one on the look-back's capture."""
+    from types import SimpleNamespace as NS
+
+    reg = NS(media=NS(channels={"a": NS(bin=[None, None]), "c": NS(bin=[None, "clip-1"]),
+                                "b": NS(bin=["still-2"])}))
+    spec = G.read_graph(DEFAULT)
+    got = graphview.picture_choices(spec, "output.2.image", reg)
+    assert got == ["as All outputs", "nothing", "scene", "hands.layer", "lookback",
+                   "channel.b", "channel.c"]
+    assert graphview.picture_label(spec, "channel.b") == "Channel B"
+    assert graphview.picture_choices(spec, "output.all.image", reg)[-2:] == [
+        "channel.b", "channel.c"]
+    assert "channel.b" not in graphview.picture_choices(spec, "lookback.capture", reg)
+    # a channel the graph wires already is listed once, where the graph has it
+    both = G.read_graph(_with(DEFAULT, ("channel.c", "shape.faces")))
+    assert graphview.picture_choices(both, "output.2.image", reg) == [
+        "as All outputs", "nothing", "channel.c", "scene", "hands.layer", "lookback",
+        "channel.b"]
+    rig, e, pushed = free_rig(tmp_path, *_pairs(DEFAULT))
+    assert graphview.set_picture(e, "output.2.image", "channel.b") is None
+    assert G.Wire("channel.b", "output.2.image") in rig.presets.graph.spec.wires
+    assert shows_line(rig.presets.graph.spec, 2) == "shows: Channel B" and len(pushed) == 1
+    assert graphview.set_picture(e, "output.all.image", "channel.c") is None
+    assert G.Wire("channel.c", "output.all.image") in rig.presets.graph.spec.wires
+    assert len(pushed) == 2
+
+
 def test_picking_a_picture_wires_the_output(tmp_path):
     """The combo's pick of `channel.a` lands `channel.a → output.2.image` in
     one undo step; "nothing" is `ground` there; "as All outputs" removes

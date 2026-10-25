@@ -2018,7 +2018,8 @@ class Panel:
         pick = None
         if opened:
             now = graphview.picture_now(frame, port)
-            for item in graphview.picture_choices(frame, port):
+            # (R17: an output's combo also offers each channel with a source)
+            for item in graphview.picture_choices(frame, port, self.reg):
                 chosen = item == now
                 text = graphview.picture_label(frame, item, slots)
                 if imgui.selectable(f"{text}##{port}.{item}", chosen)[0] and not chosen:

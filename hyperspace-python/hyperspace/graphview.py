@@ -4218,12 +4218,19 @@ def _window(port: str) -> int | None:
     return int(n) if head == "output" and n.isdigit() and p == "image" else None
 
 
-def picture_choices(spec, port: str) -> list[str]:
+def picture_choices(spec, port: str, reg=None) -> list[str]:
     """A picture combo's items for `port`: a window's "as All outputs",
     "nothing" and `picture_sources`; All outputs' and the capture's
-    "nothing" and the sources."""
+    "nothing" and the sources. R17: on an output's port (a window's, All
+    outputs') with `reg` to ask, every channel with a source in its bin
+    (`channel_bins`) too, though nothing wires it yet — after the graph's
+    own, by label — so "this channel on this window" is one pick."""
     head = [AS_ALL, NOTHING] if _window(port) is not None else [NOTHING]
-    return [*head, *picture_sources(spec)]
+    got = picture_sources(spec)
+    if reg is not None and (_window(port) is not None or port == f"{rgraph.ALL_OUTPUTS}.image"):
+        filled = [f"channel.{c}" for c in channel_bins(reg)]
+        got += sorted((c for c in filled if c not in got), key=label_of)
+    return [*head, *got]
 
 
 def _into(spec, dst: str) -> str | None:
