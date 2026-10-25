@@ -1036,6 +1036,28 @@ def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
     assert graphview.render_wire(e, "rout:delay", "rin:shape/faces", dry=True) is None
 
 
+def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
+    """Plan 34 T5 (row 359): a wired frame's other loop (`wobble → acid.aux`
+    with `acid → wobble` already wired) is refused in `LOOP_PLAIN`'s words,
+    which point at a delay; wired through one it lands, the section read
+    with no notes."""
+    rig, e, pushed = free_rig(
+        tmp_path, *FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
+        ("wobble", "output.all.image"),
+        nodes=[{"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wobble"}])
+    before = rig.presets.graph.spec.to_json()
+    why = e.refusal("rout:wobble", "rin:acid/aux")
+    assert isinstance(why, str) and why.startswith("wire ") and "that makes a loop (" in why
+    assert why.endswith(": wire it through a delay for last frame's picture")
+    assert rig.presets.graph.spec.to_json() == before
+    assert e.add_node("delay") is None
+    assert graphview.render_wire(e, "rout:wobble", "rin:delay/image") is None
+    assert graphview.render_wire(e, "rout:delay", "rin:acid/aux") is None
+    spec = rig.presets.graph.spec
+    assert not spec.notes
+    assert any((w.src, w.dst) == ("delay", "acid.aux") for w in spec.wires)
+
+
 def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     """R22: an effect already wired (`acid` in `lookback → acid → wobble →
     output.all`) let go on another picture cable (`wobble →

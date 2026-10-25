@@ -221,7 +221,9 @@ def test_loop_words_in_a_wired_frame():
     assert G.loop_words("a → b → a", {("lookback", "backdrop")}, wired=True) == (
         G.LOOP_BACKDROP.format(path="a → b → a"))
     assert G.loop_words("a → b → a", {("acid", "b")}, wired=True) == (
-        "that makes a loop (a → b → a)")
+        G.LOOP_PLAIN.format(path="a → b → a"))
+    # (an old section keeps plan 34's words)
+    assert G.loop_words("a → b → a", {("acid", "b")}) == G.LOOP_FRAME.format(path="a → b → a")
 
 
 def test_outside_a_wired_frame_nothing_changes():

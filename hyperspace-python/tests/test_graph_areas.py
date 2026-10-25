@@ -719,3 +719,31 @@ def test_the_page_draws_with_the_areas_in_every_state(rig):
     frame(rig.panel, "graph")
     assert st["idle_open"] == set() and st["open"] == set()
     frame(rig.panel, "system")
+
+
+def test_a_resize_sits_by_what_it_is_made_of(rig):
+    """Plan 34 T5: a resize is media-made (`MEDIA_MADE`) as an effect is: fed
+    by a channel it sits in MEDIA with what it feeds, fed by the scene it
+    sits in EFFECTS — and no wire of either runs back. The canvas draws the
+    render node T4 built, not a stand-in of its own."""
+    assert not hasattr(graphview, "ResizeNode")
+    assert graphview.FRAME_CLASS["resize"] is G.ResizeNode
+    assert "resize" in graphview._built([G.ResizeNode("resize")])
+    st = load_fixture(rig, "resize-crop")           # channel.a → resize → acid.2 → output.2
+    view = st["view"]
+    assert view.node("render:resize").area == graphview.MEDIA
+    assert view.node("render:acid.2").area == graphview.MEDIA
+    assert back_wires(view) == []
+    from hyperspace.params import declare_resizes
+    spec = G.read_graph({"frame": "wired", "nodes": [{"kind": "resize"}],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "scene", "to": "lookback.image"},
+                                   {"from": "lookback", "to": "output.all.image"},
+                                   {"from": "scene", "to": "resize.image"},
+                                   {"from": "resize", "to": "output.2.image"}]})
+    assert not spec.notes
+    declare_resizes(rig.reg, ["resize"])
+    g = G.build_graph(views(Switches(), Switches()), spec.wiring(), effects=REAL)
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    assert view.node("render:resize").area == graphview.EFFECTS_AREA
+    assert back_wires(view) == []

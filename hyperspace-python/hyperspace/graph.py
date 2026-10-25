@@ -1359,6 +1359,9 @@ LOOP_BACKDROP = ("that makes a loop through the backdrop ({path}): the backdrop 
                  "the scene's picture — wire it through a delay for last frame's picture")
 LOOP_FRAME = ("that makes a loop through the frame ({path}): frame is the history's "
               "picture — wire it through a delay for last frame's picture")
+# a wired frame's words for any other loop (plan 34 T5, row 359): there is
+# no frame to name, so they point at the delay that makes it legal
+LOOP_PLAIN = "that makes a loop ({path}): wire it through a delay for last frame's picture"
 
 
 def _run_from_frame(src: str, wires) -> bool:
@@ -1644,7 +1647,7 @@ def loop_words(path: str, hops: set[tuple[str, str]], wired: bool = False) -> st
     if ("history", "backdrop") in hops or (
             wired and (("lookback", "backdrop") in hops or ("backdrop", "scene") in hops)):
         return LOOP_BACKDROP.format(path=path)
-    return f"that makes a loop ({path})" if wired else LOOP_FRAME.format(path=path)
+    return (LOOP_PLAIN if wired else LOOP_FRAME).format(path=path)
 
 
 def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ...], list[str]]:

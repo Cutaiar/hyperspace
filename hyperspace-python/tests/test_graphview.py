@@ -797,3 +797,20 @@ def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):
                for c in view.cables if c.kind == "render")
     assert not view.node("render:channel.a").idle
     assert view.node("render:channel.a").faint            # (it reaches nothing either)
+
+
+def test_a_render_nodes_said_is_its_first_line():
+    """Plan 34 T5: a render node's `said` (`Node.said`) is the first line of
+    its summary — after a switch's pick, after the faint word — and a node
+    with none gives the lines it always did."""
+    said = "last frame's · 64×64 half-float"
+    d = G.Delay("delay")
+    d.said = said
+    n = graphview.VNode("render:delay", "render", "delay", ref=d)
+    assert graphview.summary(n)[0] == said
+    n.faint = True
+    assert graphview.summary(n)[:2] == [graphview.REACHES_NOTHING, said]
+    c = G.Composite("composite")
+    assert getattr(c, "said", "") == ""
+    assert graphview.summary(graphview.VNode("render:composite", "render", "composite",
+                                             ref=c)) == ["0 params · 0 patched"]

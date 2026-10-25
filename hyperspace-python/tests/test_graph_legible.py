@@ -943,3 +943,31 @@ def test_the_switch_block_picks_an_input_with_one_click(rig, monkeypatch):
     assert "switch.select" in rows
     frame(rig.panel, "graph")
     assert "picks in3" in graphview.summary(st["view"].node("render:switch"))
+
+
+def test_a_resize_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
+    """Plan 34 T5: `resize[.n].*` are rows on the resize's node
+    (`OWNERS["resize"]`), not a `group:resize` node of their own: eight
+    rows drawn, an edit the param's own in one undo step, no home page."""
+    from test_graph_areas import load_fixture
+
+    from hyperspace import params
+    st = load_fixture(rig, "resize-crop")
+    view = st["view"]
+    assert view.node("group:resize") is None
+    n = view.node("render:resize")
+    assert ui_graph.side_groups(rig.panel, n) == [("resize", params.resize_ids("resize"))]
+    assert ui_graph.home_page(n) is None
+    rows = spy_rows(monkeypatch)
+    pick(rig, st, "render:resize")
+    drawn = list(dict.fromkeys(r for r in rows if r.startswith("resize.")))   # (two frames)
+    assert drawn == params.resize_ids("resize")
+    assert len(params.resize_ids("resize")) == 8
+    u, tick, settle = undo_watch(rig)
+    settle()
+    u.stack.clear()
+    p = rig.reg["resize.crop_w"]
+    p.set_value(0.4)
+    tick()
+    settle()
+    assert p.base == pytest.approx(0.4) and len(u.stack) == 1

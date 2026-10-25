@@ -381,6 +381,11 @@ def _switch_owner(pid: str, ctx: _Ctx) -> str | None:
     return pid.rpartition(".")[0] or None
 
 
+def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
+    # plan 34 T5: `resize[.<n>].<key>` on its resize's node
+    return pid.rpartition(".")[0] or None
+
+
 # a param's group → the canvas node that owns it: a node id, or a rule
 # over the param id (an instance's number, an effect's name). Plan 35 V2:
 # the ids are the wired frame's, the params keep theirs (`graph.
@@ -396,6 +401,7 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
     "backdrop": "backdrop",
     "switch": _switch_owner,
+    "resize": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "dream": rgraph.LOOKBACK,
@@ -2383,6 +2389,9 @@ def summary(n: VNode) -> list[str]:
             lines.append(_count(len(pics), "picture port"))
         if params:
             lines.append(_loudest(p for p in params if p.patched))
+        said = getattr(n.ref, "said", "")   # plan 34 T5: the node's own words
+        if said:
+            lines.insert(0, said)
         if isinstance(n.ref, rgraph.SwitchNode):
             lines.insert(0, switch_pick(n))
         if n.faint:                         # plan 33 U: unreached, said first
