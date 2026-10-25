@@ -1002,6 +1002,24 @@ def test_an_unwired_instance_one_round_trips():
     assert G.read_graph(placed).to_json() == placed
 
 
+def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
+    """Plan 34 L (Review Focus 2): the canvas's dry run reads the loop at
+    read, so `scene → shape.faces` goes red with words that point at a
+    delay — never green, then dormant — and nothing changes. With a delay
+    declared, `delay → shape.faces` lands (the delay's own pin is T5's:
+    this half drives `render_wire` by name)."""
+    from hyperspace import graph as G
+    rig, e, pushed = free_rig(tmp_path, ("frame", "fx.image"))
+    before = rig.presets.graph.spec.to_json()
+    assert e.refusal("rout:scene", "rin:shape/faces") == (
+        "wire scene → shape.faces — " + G.LOOP_FACES.format(path="shape → scene → shape"))
+    assert rig.presets.graph.spec.to_json() == before and pushed == []
+    doc = {**before, "nodes": [*before["nodes"], {"kind": "delay"}]}
+    spec = G.read_graph(doc)
+    rig.presets.graph.land(spec, spec.to_json())
+    assert graphview.render_wire(e, "delay", "shape.faces", dry=True) is None
+
+
 def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     """R22: an effect already wired (`acid` in `frame → acid → wobble →
     fx.image`) let go on another picture cable (`wobble → fx.image`) is

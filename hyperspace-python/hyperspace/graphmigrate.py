@@ -439,18 +439,28 @@ def uses_free_words(spec: G.GraphSpec) -> bool:
     """Whether a graph says anything beyond plan 26–32's: a new wire end
     (`frame`, `fx.image`, `pattern`, `shape.faces`, `backdrop.image`), a
     switch, a channel into an effect (a branch), or an effect wired and
-    reaching nothing."""
-    if spec.switches:
+    reaching nothing. Plan 34 L: or feedback's words — a delay, a resize,
+    a look-back frame or the dream, declared or on a wire (`/5` only)."""
+    if spec.switches or _feedback(spec):
         return True
     for w in spec.all_wires():
-        if (G.wire_node_kind(w.src) in ("frame", "pattern", "switch")
+        if (G.wire_node_kind(w.src) in ("frame", "pattern", "switch", *FEEDBACK)
                 or w.dst in ("fx.image", "shape.faces", "backdrop.image")
-                or G.wire_node_kind(w.node) in ("pattern", "switch")):
+                or G.wire_node_kind(w.node) in ("pattern", "switch", *FEEDBACK)):
             return True
         if G.wire_node_kind(w.src) == "media" and G.wire_node_kind(w.node) == "effect" \
                 and not G.is_aux(w):
             return True
     return bool(_unreached(spec))
+
+
+# plan 34 L: the node kinds feedback adds — none has a word in `/4`
+FEEDBACK = ("delay", "resize", "echo", "dream")
+
+
+def _feedback(spec: G.GraphSpec) -> bool:
+    """Whether the section declares a delay, a resize, an echo or the dream."""
+    return bool(spec.delays or spec.resizes or spec.echoes or spec.dream)
 
 
 def _unreached(spec: G.GraphSpec) -> set[str]:
@@ -487,7 +497,7 @@ def legacy_values(section: dict, values: dict, specs: Specs | None = None,
         spec = G.read_graph(section if isinstance(section, dict) else {}, effects=_files(specs))
     except G.GraphError:
         return None
-    if spec.switches:
+    if spec.switches or _feedback(spec):         # (plan 34 L: no `/4` word for either)
         return None
     driven_fx = _driven_fx(driven)
     # R21: an instance 1 kept on no wire (taken out of the run) and live is
@@ -579,8 +589,8 @@ def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset(),
 
 
 # the wire ends only the free graph has: a wire touching one is plan 33's
-_FREE_SRCS = ("frame", "pattern", "switch")
-_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch")
+_FREE_SRCS = ("frame", "pattern", "switch", "delay", "resize", "echo", "dream")
+_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch", "delay", "resize")
 
 
 def _free_end(w: Any) -> bool:
@@ -618,10 +628,10 @@ def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
 def _free_node(n: Any) -> bool:
     """A node entry only the free graph has: a switch, or (R21) an effect's
     instance 1 named with no placement — a build from before plan 33
-    refuses both."""
+    refuses both; (plan 34 L) a delay, a resize, an echo or the dream."""
     if not isinstance(n, dict):
         return False
-    if n.get("kind") == "switch":
+    if n.get("kind") in ("switch", *FEEDBACK):
         return True
     return (n.get("kind") == "effect" and n.get("instance", 1) == 1
             and not any(k in n for k in G.PLACE_KEYS))
@@ -631,8 +641,9 @@ def legacy_section(section: Any) -> dict | None:
     """`section` as a build from before plan 33 reads it (R10): the wires
     of its runs (`_run_entries`: what `legacy_values` says as orders and
     targets), every wire touching a free-graph end (`frame`, `fx.image`,
-    `pattern`, `shape.faces`, `backdrop.image`, a switch) and the switch
-    nodes and (R21) an unwired instance 1 taken out (`_free_node`). A
+    `pattern`, `shape.faces`, `backdrop.image`, a switch; plan 34's delay,
+    resize, echo and dream) and those nodes and (R21) an unwired instance 1
+    taken out (`_free_node`). A
     section with none of them is returned as it is, the same object; one
     with nothing left (no node, no wire) is None, no
     section, as the GRAPH page lands an emptied graph. None stays None."""

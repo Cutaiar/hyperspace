@@ -126,6 +126,7 @@ import moderngl
 import numpy as np
 
 from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
+from .lookback import MAX_ECHOES
 from .outputs import HANDS, NAMES, PIPELINES, SCENE, SCENE_HANDS, Switches, View
 
 # port types: a colour picture at the frame's size, a one-channel mask at
@@ -343,8 +344,10 @@ _INSTANCE = r"(?:[2-9]|[1-9][0-9]+)"
 _PLACE_NODE = re.compile(rf"scene|history|hands(?:\.{_INSTANCE})?|output\.[1-9][0-9]*")
 # plan 33 G: the wire ends that are no effect — `frame`, the pipeline end
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
-# file may take them, and no effect's place is one of them
-RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch")
+# file may take them, and no effect's place is one of them. Plan 34 L: and
+# feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`
+RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
+            "dream")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -569,6 +572,11 @@ _OUTPUT = re.compile(r"output\.[1-9][0-9]*")
 _COMPOSITE = re.compile(rf"composite(?:\.{_INSTANCE})?")
 _MEDIA = re.compile(rf"media\.[{MEDIA_CHANNELS}]")     # plan 32 R: a channel, a wire's end
 _SWITCH = re.compile(rf"switch(?:\.{_INSTANCE})?")       # plan 33 S: `switch`, `switch.2` …
+# plan 34 L: `delay`, `delay.2` …; `resize`, `resize.2` …; `echo.1` … (the
+# index's range is the entry's to say: `echo.40` is an echo none declares)
+_DELAY = re.compile(rf"delay(?:\.{_INSTANCE})?")
+_RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
+_ECHO = re.compile(r"echo\.[1-9][0-9]*")
 SWITCH_PORTS = tuple(f"in{i}" for i in range(1, 9))
 # what each kind of wireable node makes, and the ports a wire may go into
 # (port → type). The scene's and a layer's geometry ports and the
@@ -581,7 +589,10 @@ WIRE_MAKES = {"scene": IMAGE, "history": IMAGE, "layer": IMAGE, "effect": IMAGE,
               # face pattern as a picture, a switch's selected input; the
               # pipeline end, the faces and the backdrop make nothing
               "frame": IMAGE, "pattern": IMAGE, "switch": IMAGE,
-              "fx": None, "shape": None, "backdrop": None}
+              "fx": None, "shape": None, "backdrop": None,
+              # plan 34 L: last frame's picture, a picture at a size of its
+              # own, a look-back frame and the dream buffer
+              "delay": IMAGE, "resize": IMAGE, "echo": IMAGE, "dream": IMAGE}
 WIRE_TAKES: dict[str, dict[str, str]] = {
     "output": {"image": IMAGE, "hands": IMAGE, "readout": IMAGE},
     "history": {"image": IMAGE, "cover": MASK},
@@ -594,13 +605,17 @@ WIRE_TAKES: dict[str, dict[str, str]] = {
     # backdrop, and a switch's eight pictures
     "fx": {"image": IMAGE}, "pattern": {"media": IMAGE}, "shape": {"faces": IMAGE},
     "backdrop": {"image": IMAGE}, "switch": {p: IMAGE for p in SWITCH_PORTS},
+    # plan 34 L: what a delay keeps for next frame, what a resize crops; an
+    # echo and the dream read the look-back, never a wire
+    "delay": {"image": IMAGE}, "resize": {"image": IMAGE}, "echo": {}, "dream": {},
 }
 TYPE_WORDS = {IMAGE: "a picture", GEOMETRY: "geometry", MASK: "a mask", None: "nothing"}
 WIRE_FROM_WORDS = ("scene, hands …, history, frame, pattern, an effect, a composite, "
-                   "a switch or a channel (media.a …)")
+                   "a switch, a delay, a resize, echo.1 …, dream or a channel (media.a …)")
 WIRE_TO_WORDS = ("output.1 … (image, hands, readout), history.image, fx.image, "
                  "shape.faces, backdrop.image, pattern.media, an effect's image or aux, "
-                 "a composite's under / over, or a switch's in1 … in8")
+                 "a composite's under / over, a switch's in1 … in8, or a delay's or a "
+                 "resize's image")
 # plan 33 G: the kinds whose input ports end a path — what a picture is
 # for. `reaches` follows the picture ports back from these
 SINKS = ("output", "fx", "shape", "pattern", "backdrop", "history")
@@ -615,10 +630,11 @@ def wire_node_kind(name: Any) -> str | None:
         return None
     if name in ("scene", "history", "cover"):
         return name
-    if name in ("frame", "fx", "pattern", "shape", "backdrop"):
+    if name in ("frame", "fx", "pattern", "shape", "backdrop", "dream"):
         return name
     for kind, pat in (("layer", _LAYER), ("ghost", _GHOST), ("output", _OUTPUT),
-                      ("composite", _COMPOSITE), ("media", _MEDIA), ("switch", _SWITCH)):
+                      ("composite", _COMPOSITE), ("media", _MEDIA), ("switch", _SWITCH),
+                      ("delay", _DELAY), ("resize", _RESIZE), ("echo", _ECHO)):
         if pat.fullmatch(name):
             return kind
     if _PLACE_EFFECT.fullmatch(name):
@@ -739,6 +755,136 @@ def _switch_entry(e: dict) -> SwitchAt:
 NODE_KINDS["switch"] = _switch_entry
 
 
+@dataclass(frozen=True)
+class DelayAt:
+    """A delay node the preset's graph adds (plan 34 L): one picture input
+    `image`, and out the picture that came into it last frame (z⁻¹) — so a
+    loop drawn through one is legal (`wire_loops`, `sink_loops`) —
+    `delay`, `delay.2` … One whose picture reaches nothing is unreached
+    and holds no buffer (`reaches`)."""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"delay instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "delay" if self.n == 1 else f"delay.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "delay"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _delay_entry(e: dict) -> DelayAt:
+    _entry_keys(e, "delay", ("instance",))
+    return DelayAt(_instance(e))
+
+
+NODE_KINDS["delay"] = _delay_entry
+
+
+@dataclass(frozen=True)
+class ResizeAt:
+    """A resize node the preset's graph adds (plan 34 L, Z): its input
+    `image` cropped and made at a size of its own (`resize[.n].*`, values,
+    not the graph) — `resize`, `resize.2` …"""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"resize instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "resize" if self.n == 1 else f"resize.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "resize"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _resize_entry(e: dict) -> ResizeAt:
+    _entry_keys(e, "resize", ("instance",))
+    return ResizeAt(_instance(e))
+
+
+NODE_KINDS["resize"] = _resize_entry
+
+
+@dataclass(frozen=True)
+class EchoAt:
+    """A look-back frame as a source (plan 34 L, E): `echo.<n>`, the ring's
+    n-th newest commit (1 the newest, `MAX_ECHOES` the oldest). No input:
+    it is read before this frame's capture writes, so no loop runs
+    through it."""
+
+    n: int
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.n, int) or isinstance(self.n, bool)
+                or not 1 <= self.n <= MAX_ECHOES):
+            raise ValueError(f"echo node: index {self.n!r}, a whole number from 1 to "
+                             f"{MAX_ECHOES}")
+
+    @property
+    def name(self) -> str:
+        return f"echo.{self.n}"
+
+    def to_json(self) -> dict:
+        return {"kind": "echo", "index": self.n}
+
+
+def _echo_entry(e: dict) -> EchoAt:
+    _entry_keys(e, "echo", ("index",))
+    if "index" not in e:
+        raise GraphError("echo node: names no index (echo.1 is the newest)")
+    try:
+        return EchoAt(e["index"])
+    except ValueError as err:
+        raise GraphError(str(err)) from err
+
+
+NODE_KINDS["echo"] = _echo_entry
+
+
+@dataclass(frozen=True)
+class DreamAt:
+    """The look-back's dream buffer as a source (plan 34 L, E): `dream`,
+    one only (`n` is always 1, so `read_graph`'s two-of-one-instance check
+    holds it to one)."""
+
+    @property
+    def n(self) -> int:
+        return 1
+
+    @property
+    def name(self) -> str:
+        return "dream"
+
+    def to_json(self) -> dict:
+        return {"kind": "dream"}
+
+
+def _dream_entry(e: dict) -> DreamAt:
+    _entry_keys(e, "dream", ())
+    return DreamAt()
+
+
+NODE_KINDS["dream"] = _dream_entry
+
+# plan 34 L: the node kinds a section declares by an entry, one per
+# instance, before a wire may name one (as a composite and a switch)
+DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream")
+
+
 def d1_wires(effects) -> list[Wire]:
     """D1's placements (`EffectAt.after` / `into`) as the wires they are
     short for: `after X` is `X → E.image`, `into Y` is `E → Y.image`
@@ -771,10 +917,42 @@ class _WireCtx:
     # the wires are not known, the run is not checked (a drag on the canvas)
     switches: frozenset[str] = frozenset()
     wires: tuple[Wire, ...] | None = None
+    # plan 34 L: the delays, resizes and echoes declared (their names), and
+    # whether the dream is
+    delays: frozenset[str] = frozenset()
+    resizes: frozenset[str] = frozenset()
+    echoes: frozenset[str] = frozenset()
+    dream: bool = False
+
+    def declared(self, kind: str) -> frozenset[str]:
+        """The names of kind `kind` (one of `DECLARED`) the section declares."""
+        return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
+                "resize": self.resizes, "echo": self.echoes,
+                "dream": frozenset({"dream"}) if self.dream else frozenset()}[kind]
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
                     "wire it into output.N.image")
+# plan 34 L: `frame` exists only as the run's head (it is the history's
+# picture as the pipeline starts its effects), so a wire out of it goes into
+# the run's first effect or `fx.image`, nowhere else
+FRAME_SOURCE_REFUSAL = ("frame is the run's head: it goes into the run's first effect or "
+                        "fx.image — the picture before the effects is history, after them "
+                        "the run's last effect")
+# plan 34 L: the default graph's hidden edges — (node, what it reads) — that
+# no wire says: the faces are drawn inside the scene, the faces read the
+# pattern's layer, the history composites the scene and the backdrop under
+# it, and `frame` is the history's picture. `sink_loops` counts them
+FRAME_EDGES = (("scene", "shape"), ("shape", "pattern"), ("history", "scene"),
+               ("history", "backdrop"), ("frame", "history"))
+# the words for a loop the hidden edges close (`loop_words`): which one it
+# runs through, and the delay that makes it legal
+LOOP_FACES = ("that makes a loop through the faces ({path}): the faces are drawn inside "
+              "the scene — wire it through a delay for last frame's picture")
+LOOP_BACKDROP = ("that makes a loop through the backdrop ({path}): the backdrop lies under "
+                 "the scene's picture — wire it through a delay for last frame's picture")
+LOOP_FRAME = ("that makes a loop through the frame ({path}): frame is the history's "
+              "picture — wire it through a delay for last frame's picture")
 
 
 def _run_from_frame(src: str, wires) -> bool:
@@ -825,12 +1003,18 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
     for name, k in ((w.src, src_kind), (node, kind)):
         if k == "effect" and ctx.effects is not None and name not in ctx.effects:
             return f"no {name} effect in this build"
-        if k == "composite" and name not in ctx.composites:
-            return f'no {name} node in this graph (add one: {{"kind": "composite"}})'
-        if k == "switch" and name not in ctx.switches:
-            return f'no {name} node in this graph (add one: {{"kind": "switch"}})'
+        if k in DECLARED and name not in ctx.declared(k):
+            entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
+                     else f'{{"kind": "{k}"}}')
+            return f"no {name} node in this graph (add one: {entry})"
     if kind == "fx" and ctx.wires is not None and not _run_from_frame(w.src, ctx.wires):
         return FX_IMAGE_REFUSAL
+    # plan 34 L: `frame` feeds the run only — but a wire out of it that the
+    # hidden edges alone close into a loop (`frame → shape.faces`) is said
+    # as that loop, by `sink_loops`, which names the delay to put between
+    if (w.src == "frame" and w.dst != "fx.image" and not (kind == "effect" and port == "image")
+            and not sink_loops([w])):
+        return FRAME_SOURCE_REFUSAL
     if src_kind == "layer" and w.src != ctx.layer:
         return f"no {w.src} layer in this graph ({ctx.layer} makes the layer)"
     if w.src == node:
@@ -854,28 +1038,81 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
 def wire_loops(wires: list[Wire]) -> dict[Wire, str]:
     """The wires on a loop — a node reading, through wires, its own
     picture — each with the loop in words (`acid.2 → palette → acid.2`).
-    A wire makes its node depend on its source."""
+    A wire makes its node depend on its source — but (plan 34 L) a wire
+    into a delay: a delay's picture is last frame's, so it depends on
+    nothing this frame, and such a wire is never on a loop."""
     deps: dict[str, set[str]] = {}
     for w in wires:
-        deps.setdefault(w.node, set()).add(w.src)
+        if wire_node_kind(w.node) != "delay":
+            deps.setdefault(w.node, set()).add(w.src)
     out: dict[Wire, str] = {}
     for w in wires:
-        parent: dict[str, str | None] = {w.src: None}
-        todo = [w.src]
-        while todo and w.node not in parent:
-            cur = todo.pop()
-            for d in sorted(deps.get(cur, ())):
-                if d not in parent:
-                    parent[d] = cur
-                    todo.append(d)
-        if w.node not in parent:
+        if wire_node_kind(w.node) == "delay":
             continue
-        path, cur = [], w.node            # w.node … back to w.src, each read by the next
-        while cur is not None:
-            path.append(cur)
-            cur = parent[cur]
-        out[w] = " → ".join([*path, w.node])
+        path = _loop_path(deps, w)
+        if path is not None:
+            out[w] = " → ".join(path)
     return out
+
+
+def _loop_path(deps: dict[str, set[str]], w: Wire) -> list[str] | None:
+    """The loop wire `w` closes over `deps` (node → what it reads), as the
+    names from `w.node` back to it, each read by the next (`[shape, scene,
+    shape]`), or None when `w.node` is not reached from `w.src`."""
+    parent: dict[str, str | None] = {w.src: None}
+    todo = [w.src]
+    while todo and w.node not in parent:
+        cur = todo.pop()
+        for d in sorted(deps.get(cur, ())):
+            if d not in parent:
+                parent[d] = cur
+                todo.append(d)
+    if w.node not in parent:
+        return None
+    path: list[str] = []
+    cur: str | None = w.node             # w.node … back to w.src, each read by the next
+    while cur is not None:
+        path.append(cur)
+        cur = parent[cur]
+    return [*path, w.node]
+
+
+def sink_loops(wires: list[Wire]) -> dict[Wire, str]:
+    """The wires that close a loop through the default graph's hidden edges
+    (plan 34 L: `FRAME_EDGES` — the faces drawn in the scene, the history
+    over the scene and the backdrop, `frame` the history's picture), each
+    with the refusal in words (`loop_words`). Walked in `wires`' order over
+    the hidden edges and the wires already taken: an earlier wire stands,
+    so the one refused is the wire that closes the loop (a drag's own,
+    appended last). A wire into a delay is no dependency (z⁻¹: the loop
+    through one is the point). `wire_loops` has refused the explicit loops
+    first; what it would refuse is left to it."""
+    deps: dict[str, set[str]] = {}
+    for node, reads in FRAME_EDGES:
+        deps.setdefault(node, set()).add(reads)
+    out: dict[Wire, str] = {}
+    for w in wires:
+        if wire_node_kind(w.node) == "delay":
+            continue
+        path = _loop_path(deps, w)
+        if path is None:
+            deps.setdefault(w.node, set()).add(w.src)
+            continue
+        hops = {(path[i + 1], path[i]) for i in range(len(path) - 1)}
+        out[w] = loop_words(" → ".join(path), hops)
+    return out
+
+
+def loop_words(path: str, hops: set[tuple[str, str]]) -> str:
+    """The refusal for a loop `path` (`shape → scene → shape`) whose
+    (reader, read) edges are `hops`: through the faces when it runs
+    through the scene drawing the faces, else through the backdrop when
+    it runs through the history over the backdrop, else through the frame."""
+    if ("scene", "shape") in hops:
+        return LOOP_FACES.format(path=path)
+    if ("history", "backdrop") in hops:
+        return LOOP_BACKDROP.format(path=path)
+    return LOOP_FRAME.format(path=path)
 
 
 def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ...], list[str]]:
@@ -936,6 +1173,14 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
         if w in loops:
             ok.remove(w)
             notes.append(f"wire {w} — that makes a loop ({loops[w]})")
+    # plan 34 L: then a loop through the default graph's hidden edges — the
+    # faces, the backdrop, the frame — refused here, in words, not left to
+    # land dormant at build (`_Wiring._sink` stays the backstop)
+    sinks = sink_loops([*d1, *ok])
+    for w in list(ok):
+        if w in sinks:
+            ok.remove(w)
+            notes.append(f"wire {w} — {sinks[w]}")
     return tuple(w for w in wires if w in ok), notes
 
 
@@ -1075,6 +1320,29 @@ class GraphSpec:
         return tuple(sorted((got for kind, got in self.others if kind == "switch"),
                             key=lambda s: s.n))
 
+    def _of(self, kind: str) -> tuple:
+        return tuple(sorted((got for k, got in self.others if k == kind), key=lambda o: o.n))
+
+    @property
+    def delays(self) -> tuple[DelayAt, ...]:
+        """The delay nodes the section adds (plan 34 L), by instance."""
+        return self._of("delay")
+
+    @property
+    def resizes(self) -> tuple[ResizeAt, ...]:
+        """The resize nodes the section adds (plan 34 L), by instance."""
+        return self._of("resize")
+
+    @property
+    def echoes(self) -> tuple[EchoAt, ...]:
+        """The look-back frames the section reads (plan 34 L), by index."""
+        return self._of("echo")
+
+    @property
+    def dream(self) -> DreamAt | None:
+        """The dream buffer's node, when the section reads it (plan 34 L)."""
+        return next((got for k, got in self.others if k == "dream"), None)
+
     def all_wires(self) -> list[Wire]:
         """Every wire this graph says (plan 28 N4): D1's placements as the
         wires they are short for (`d1_wires`), then the wire list."""
@@ -1191,7 +1459,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                 raise GraphError("two history nodes")
             history = got
         else:
-            if kind in ("composite", "switch") and any(
+            if kind in DECLARED and any(
                     k == kind and o.n == got.n for k, o in others):
                 raise GraphError(f"two {kind} nodes of instance {got.n}")
             others.append((kind, got))
@@ -1238,6 +1506,10 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
                    effects=None if known is None else known | names,
                    composites=frozenset(c.name for c in spec.composites()),
                    switches=frozenset(s.name for s in spec.switches),
+                   delays=frozenset(d.name for d in spec.delays),
+                   resizes=frozenset(r.name for r in spec.resizes),
+                   echoes=frozenset(e.name for e in spec.echoes),
+                   dream=spec.dream is not None,
                    placed={e.name: e.where for e in effects_at if e.placed})
     wires, wire_notes = _read_wires(section["wires"], ctx, d1_wires(effects_at))
     if ctx.effects is not None and wire_notes:
@@ -1287,7 +1559,14 @@ def reaches(spec: GraphSpec) -> frozenset[str]:
     port (`SINKS`: an output, the pipeline end, the faces, the pattern's
     media, the backdrop, the history) — plan 33 G. A node outside it is
     unreached: kept in the preset, drawn faint ("reaches nothing") and
-    never run. Reads D1's placements as the wires they are short for."""
+    never run. Reads D1's placements as the wires they are short for.
+
+    Plan 34 L: a delay's `image` is no sink port of its own — it is one
+    once the delay is reached (its picture read by something that reaches
+    a sink), and then what feeds it is reached too. The walk is that
+    fixpoint: a delay is a node like any other, followed back from only
+    when reached, so a delay that feeds nothing is unreached and holds no
+    buffer, and a loop through one is followed round once."""
     wires = [w for w in spec.all_wires() if w.port in _PICTURE_PORTS]
     into: dict[str, list[str]] = {}
     for w in wires:
@@ -1372,7 +1651,10 @@ def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
     never runs). What is drawn: an output's or the history's port, the
     faces, the pattern's layer, the backdrop (T4), an effect of the run,
     and a placed effect where it sits (D1's own and the wires D1 would
-    write short) — and whatever feeds one of those through a picture port."""
+    write short) — and whatever feeds one of those through a picture port.
+    Plan 34 L: a resize or a delay is kept by the same rule (`reaches`': a
+    delay's input is followed only once the delay is reached), so a wire
+    into an unreached one is dropped and it is never built."""
     wires = [*d1_wires(placed), *edges]
     into: dict[str, list[str]] = {}
     for w in wires:
@@ -1388,7 +1670,8 @@ def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
         got.add(name)
         todo.extend(into.get(name, ()))
     return tuple(w for w in edges
-                 if wire_node_kind(w.node) not in ("effect", "composite", "switch")
+                 if wire_node_kind(w.node) not in ("effect", "composite", "switch", "resize",
+                                                   "delay")
                  or w.node in got)
 
 
