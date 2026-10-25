@@ -138,7 +138,7 @@ from .library import (
     _module_values,
     _write_text,
     bank_doc,
-    read_layout,
+    read_positions,
     slug,
 )
 from .lookback import (
@@ -1244,7 +1244,12 @@ class Presets:
         # 6½. where the GRAPH page's nodes sit (plan 28 N2): none is the
         #     automatic layout; an entry that is not a name and two numbers
         #     is dropped with a note
-        self.layout, bad = read_layout(doc.get(LAYOUT_KEY))
+        #     R15: the file's own ids are kept beside them, so a save below
+        #     `/6` writes the layout as the file had it (`old_layout`)
+        positions, bad = read_positions(doc.get(LAYOUT_KEY))
+        self.layout = graphmigrate.renamed_layout(positions)
+        self._layout_file = copy.deepcopy(positions)
+        self._layout_landed = copy.deepcopy(self.layout)
         if bad:
             notes.append(f"layout: {bad} entr{'y' if bad == 1 else 'ies'} unreadable, ignored")
         # 7. the notes, for the panel
@@ -1335,6 +1340,12 @@ class Presets:
         if doc["schema"] not in (MEDIA_SCHEMA, *free_words):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
+        if LAYOUT_KEY in doc and doc["schema"] != WIRED_SCHEMA:
+            # R15: below `/6` the canvas's old ids, as a build before plan 35
+            # reads them — the file's own keys while untouched
+            old = graphmigrate.old_layout(doc[LAYOUT_KEY], getattr(self, "_layout_file", None),
+                                          getattr(self, "_layout_landed", None))
+            doc[LAYOUT_KEY] = {k: list(old[k]) for k in sorted(old)}
         if doc["schema"] == SCHEMA:
             # (a retired id, written back above, is an effect's: no V3 group)
             values = {k: v for k, v in values.items()

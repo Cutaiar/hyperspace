@@ -118,7 +118,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
 LIBRARY = ROOT / "hyperspace" / "library" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
-           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32"}
+           "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
+           # R15 (final review): a /4 whose GRAPH layout is in the canvas's
+           # old ids (render:media.a, render:hands …), as the owner's are
+           "old-layout": ROOT / "tests" / "fixtures" / "old-canvas-layout"}
 # R14 → R19: a route on each channel choice (a /4 and a /2). Since T5 they
 # load with a switch and save as /5 (row 347), so they are not byte sources
 DRIVEN = ROOT / "tests" / "fixtures" / "plan33-driven"
@@ -167,7 +170,7 @@ def v4_sources() -> list[tuple[str, Path]]:
 # build (0cbbc15, `git archive`d) loading and saving each source untouched
 V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
 V5_SOURCES = ("media-chain-faces", "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-              "delay-trails")
+              "delay-trails", "glimmer-bug")
 
 
 def test_an_untouched_v5_preset_saves_byte_identical(tmp_path):
@@ -175,7 +178,9 @@ def test_an_untouched_v5_preset_saves_byte_identical(tmp_path):
     faces, under the scene, at two sizes), T5's switch and plan 34's
     trails: loaded and saved untouched, each is `/5` again, byte for byte
     what the plan 33/34 build writes (R10, superseding row 385's "nothing
-    writes /5")."""
+    writes /5"). The owner's glimmer-bug carries a GRAPH layout in the
+    canvas's old ids (`render:media.a`, `render:frame` …): R15, it is
+    written in them again (recorded by 052d889, the plan 33 head)."""
     assert sorted(p.stem for p in V5_SAVES.glob("*.json")) == sorted(V5_SOURCES)
     for k, name in enumerate(V5_SOURCES):
         path = SOURCES["presets"] / f"{name}.json"
@@ -192,6 +197,27 @@ def _five_rig(tmp_path, name):
     app = make_app(tmp_path)
     app.lib.load("presets", name)
     return app
+
+
+def test_a_moved_node_in_an_old_layout_saves_below_six_in_the_old_ids(tmp_path):
+    """R15: the owner's glimmer-bug lands its layout in the wired frame's
+    ids (R14); a node moved on GRAPH — one the file placed, one it had no
+    place for — saves `/5` with every key in the canvas's old ids, so the
+    other Mac's build finds them; a `/6` save writes the new ids."""
+    app = _five_rig(tmp_path, "glimmer-bug")
+    pr = app.presets
+    assert "render:channel.a" in pr.layout and "render:media.a" not in pr.layout
+    pr.layout["render:channel.a"] = [10, 20]
+    pr.layout["render:hands.2"] = [30, 40]
+    doc = pr.document("glimmer-bug")
+    assert doc["schema"] == "hyperspace.preset/5"
+    lay = doc["layout"]
+    assert lay["render:media.a"] == [10, 20] and lay["render:ghost.2"] == [30, 40]
+    assert not [k for k in lay if k.startswith(("render:channel.", "render:hands"))]
+    assert list(lay) == sorted(lay)
+    from hyperspace import graphmigrate as M
+
+    assert M.renamed_layout(lay) == pr.layout        # and it reads back where it was
 
 
 def test_an_edited_v5_preset_sayable_in_v5_saves_v5(tmp_path):

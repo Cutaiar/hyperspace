@@ -1362,6 +1362,35 @@ def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def old_canvas_id(nid: str) -> str:
+    """`renamed_canvas_id`'s inverse (R15): a wired frame's canvas id in the
+    old canvas's (`render:hands.2` → `render:ghost.2`, `render:channel.a` →
+    `render:media.a`, `render:camera` → `render:eye`); any other id as it
+    is — a node the old canvas never drew (`render:ground`) among them."""
+    if nid == "render:camera":
+        return "render:eye"
+    head, sep, name = nid.partition(":")
+    if head != "render" or not sep:
+        return nid
+    return f"render:{G.old_id(name)}"
+
+
+def old_layout(layout: dict[str, Any], file: dict[str, Any] | None,
+               landed: dict[str, Any] | None) -> dict[str, Any]:
+    """The GRAPH layout a save below `/6` writes (R15: a build from before
+    plan 35 reads the canvas's old ids, so the other Mac's arrangement
+    stays): the file's own keys while the layout is still what the load
+    made of them (`landed`, so an untouched preset saves byte for byte),
+    else every key in the old ids (`old_canvas_id`), the first position
+    kept where two land on one."""
+    if file is not None and landed is not None and layout == landed:
+        return file
+    out: dict[str, Any] = {}
+    for k, xy in layout.items():
+        out.setdefault(old_canvas_id(k) if isinstance(k, str) else k, xy)
+    return out
+
+
 def renamed(section: Any) -> Any:
     """A `/2`–`/5` section in the new ids (plan 35 V2, row 373): every wire
     end and D1's `after` / `into` through `graph.new_id`, the port

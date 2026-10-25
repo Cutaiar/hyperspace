@@ -213,6 +213,13 @@ def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
     None is an empty map; a value that is no map, an empty map and one drop.
     R14 (plan 35 T5): a layout saved in the canvas's old ids is read in the
     wired frame's (`graphmigrate.renamed_layout`), so its positions stay."""
+    out, bad = read_positions(value)
+    return renamed_layout(out), bad
+
+
+def read_positions(value: Any) -> tuple[dict[str, list[float]], int]:
+    """`read_layout` in the file's own ids, nothing renamed: what a build
+    from before plan 35 read (R15 — a save below `/6` writes these back)."""
     if value is None:
         return {}, 0
     if not isinstance(value, dict):
@@ -229,7 +236,7 @@ def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
             bad += 1
             continue
         out[k] = [round(x), round(y)]
-    return renamed_layout(out), bad
+    return out, bad
 
 # the preset a group resets to; any other group uses one named "default"
 # if it has one, else the values its objects were built with
