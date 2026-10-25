@@ -21,6 +21,7 @@ from test_ui_shell import (
 
 from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
+from test_ui_shell import NARROW_CONTROL
 from hyperspace.library import FACTORY
 from hyperspace.routing import Binding
 
@@ -118,7 +119,8 @@ def test_the_diagram_lights_the_loaded_presets_desk_and_the_invariant_controls(r
     lib.load("presets", "TRIP")
     assert table.layer == "preset" and table.desk()
     inv = _glyphs(table.invariant_rows())
-    assert "⇧" in inv and "S1" in inv
+    assert "⇧" in inv and "SM" in inv
+    assert "S1" not in inv          # the track faders are layered since plan 24 C2 (decision 17)
     frame(panel, "routing")
     lit = ui_desk.lit_cached(panel, table)
     assert set(lit) == _glyphs(b for b in table.desk() if b.enabled) | inv
@@ -159,7 +161,9 @@ def test_the_hover_names_glyph_param_layer_and_akais_name(rig):
     assert "B7" not in ui_desk.lit(table)
     assert "unmapped — dark" in ui_desk.label(table, dark, None)
     # the clip-stop row is free since 2026-10-09 (an empty bank pad held saves)
-    for k in range(1, 9):
+    # but for track 8's, the desk's SAVE since plan 24 C1 (decision 18)
+    assert ui_desk.lit(table)["G6·8"].target == "desk.save"
+    for k in range(1, 8):
         c = next(c for c in apc40.LAYOUT if c.glyph == f"G6·{k}")
         assert c.glyph not in ui_desk.lit(table)
         assert "unmapped — dark" in ui_desk.label(table, c, None)
@@ -258,7 +262,7 @@ def test_the_desk_takes_the_room_it_has():
     panel open, beside it with the panel hidden; a layout unit never
     taller than it is wide."""
     room, E = ui_desk.room, ui_desk.EDGE
-    display = tuple(float(v) for v in CONTROL_SIZE)             # 960 × 900
+    display = tuple(float(v) for v in NARROW_CONTROL)             # 960 × 900
     panel_x = display[0] - ui.PANEL_W - 12
 
     def unit(w, h):
@@ -356,9 +360,10 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
         assert empty and all(g.split("·")[0] in ("G4", "G5") for g in empty)
         assert all(says.pop(g) == "" for g in empty)
         assert len(lit) > 80 and all(says.values())
-        # a label for every lit control (the clip-stop row is free: dark)
+        # a label for every lit control (the clip-stop row is free: dark,
+        # but for track 8's SAVE, plan 24 C1)
         assert set(st["labels"]) == set(says.values()), layer
-        assert not [g for g in says if g in {f"G6·{k}" for k in range(1, 9)}]
+        assert not [g for g in says if g in {f"G6·{k}" for k in range(1, 8)}]
         assert len(st["labels"]) == len(says), layer
         # what reached the draw list: every glyph (dark ones too), and
         # the labels' lines — nothing else, so a dark control has no label
@@ -390,10 +395,10 @@ def test_the_big_desk_labels_every_lit_control_and_never_scrolls(rig, monkeypatc
 
 
 def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
-    """Panel open at the control size: today's drawing — no label — in the
+    """Panel open in a narrow control window: today's drawing — no label — in the
     room left of the panel, never over it."""
     panel = rig.panel
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     rig.lib.load("presets", "TRIP")
     got = _desk_frames(rig, monkeypatch)
     st = ui_desk._state(panel)
@@ -401,15 +406,15 @@ def test_the_small_desk_draws_glyphs_only(rig, monkeypatch):
     glyphs = {c.glyph for c in apc40.LAYOUT}
     assert set(got["texts"]) == glyphs
     x, y, w, h = got["rect"]
-    assert panel._panel_x == CONTROL_SIZE[0] - ui.PANEL_W - 12
+    assert panel._panel_x == NARROW_CONTROL[0] - ui.PANEL_W - 12
     assert x == 12.0 and x + w <= panel._panel_x - 12.0 + 1e-6 and w >= ui_desk.MIN_W
-    assert y + h == CONTROL_SIZE[1] - 12.0 and got["scroll"] == (0.0, 0.0)
+    assert y + h == NARROW_CONTROL[1] - 12.0 and got["scroll"] == (0.0, 0.0)
     assert st["unit"][1] <= st["unit"][0] + 1e-6
     # the chip hides the panel; the next frames the desk is big and its chip brings it back
     assert panel.open
     panel.reg["ui.panel"].set(False)
     got = _desk_frames(rig, monkeypatch)
-    assert got["rect"][2] == CONTROL_SIZE[0] - 24.0 and ui_desk._state(panel)["labels"]
+    assert got["rect"][2] == NARROW_CONTROL[0] - 24.0 and ui_desk._state(panel)["labels"]
 
 
 def test_a_controls_text(rig):
@@ -539,7 +544,7 @@ def test_a_click_picks_and_a_second_click_lets_go(rig, monkeypatch):
     pick moves), and on the ground between the controls (it lets go). A
     pick changes no table and pushes no undo step."""
     panel, table = rig.panel, rig.router.table
-    imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
+    imgui.get_io().display_size = imgui.ImVec2(*NARROW_CONTROL)
     lrn = _learn_over(rig)
     rig.lib.load("presets", "TRIP")
     pushes = _pushes(monkeypatch)
@@ -600,7 +605,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     lrn = _learn_over(rig)
     assert panel.midi is None
     pushes = _pushes(monkeypatch)
-    d5, s3 = _control("D5"), _control("S3")
+    d5, s3 = _control("D5"), _control("SM")       # MASTER: S1–S8 are layered (C2)
     for _ in range(3):
         frame(panel, "view")
     lrn.arm("view.depth4", "desk")
@@ -620,7 +625,7 @@ def test_a_click_completes_an_armed_desk_learn(rig, monkeypatch):
     # the refusals are the knob learn's, and leave it armed
     lrn.arm("view.speed", "desk")
     _click(panel, ui_desk.rect(panel, s3))
-    assert lrn.refused and lrn.last == "S3 (track fader 3) is invariant (the session's) — not learned"
+    assert lrn.refused and lrn.last == "SM (MASTER fader) is invariant (the session's) — not learned"
     assert lrn.learning == "view.speed" and lrn.control is None
     table.set_layer("global")
     frame(panel)
@@ -677,12 +682,26 @@ def test_a_pick_lets_go_by_itself(rig, monkeypatch):
     assert lrn.control is None
     # an invariant pick (framed, dimming nothing) lets go the same way
     panel.reg["ui.desk"].set(True)
-    lrn.pick(_control("S3").source)
+    lrn.pick(_control("SM").source)
     frame(panel)
     assert ui_desk.picking(panel) is None and ui_desk.picked(panel) is not None
-    does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["S3"])
+    does = ui_desk.text(rig.reg, ui_desk.lit_cached(panel, table)["SM"])
     assert ui_desk.footer_line(panel) == (
-        f"S3 (track fader 3) is invariant (the session's): {does} (20 s)", False)
+        f"SM (MASTER fader) is invariant (the session's): {does} (20 s)", False)
     clock[0] += ui_desk.PICK_S + 0.1
     frame(panel)
     assert lrn.control is None
+
+
+def test_the_panel_opens_beside_a_four_by_three_desk():
+    """The desk diagram gets a 4:3 slice of the window's height and the
+    panel the rest (ui.panel_w): the two the same size on the default
+    window, the panel wider on a wider one, never under PANEL_W."""
+    dw, dh = CONTROL_SIZE
+    pw = ui.panel_w(CONTROL_SIZE)
+    desk_w = dw - pw - 3 * ui_desk.EDGE
+    assert abs(desk_w / (dh - 2 * ui_desk.EDGE) - 4 / 3) < 0.02
+    assert abs(pw - desk_w) <= 2
+    assert ui.panel_w((2932, 996)) == 2932 - 36 - int(4 / 3 * 972)
+    assert ui.panel_w((960, 900)) == ui.PANEL_W
+    assert ui.panel_w((1696, 900)) == ui.PANEL_W

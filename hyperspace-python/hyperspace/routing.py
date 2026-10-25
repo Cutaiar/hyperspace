@@ -28,8 +28,10 @@ Sources are one string, ``scheme:address``:
   hat:<DIR>        the d-pad: UP DOWN LEFT RIGHT
   axis:<NAME>      a gamepad axis as a continuous lane in [0, 1]: LX LY RX
                    RY (sticks, resting 0.5, up and right high) and LT RT
-                   (triggers, resting 0). A route on one takes it off its
-                   default camera job (app.py)
+                   (triggers, resting 0); and each stick read as a dial,
+                   L.N … L.NW / R.N … R.NW (gamepad.DIAL_LANES: the stick's
+                   push toward that compass point, resting 0). A route on
+                   one takes its stick off the default camera job (app.py)
   cc:<ch>:<n>      MIDI control change n on 0-based channel ch, or * for any
   note:<ch>:<n>    MIDI note n
   pitch:<ch>       MIDI pitch bend
@@ -49,6 +51,13 @@ Sources are one string, ``scheme:address``:
   hand:<i>         the hand lane at index i on the rig's layout (axes,
                    then presence, then switches) — still read, so an
                    older saved preset plays; nothing writes it any more
+  param:<id>       a param's effective value, as a *sink row*'s source
+                   (plan 27 B3): ``{"source": "param:view.bright",
+                   "target": "bridge:3", "op": "send"}`` sends it out on a
+                   sink port (``<role>:<channel>``); ``lane:<i>`` and
+                   ``lane:*`` are a sink row's other sources. The
+                   session's rows (bindings.json), never performers
+                   (`SINK_OP`, `sink_values`)
 
 Numeric addresses are 0-based (``lfo:0`` is "LFO 1", ``hand:0`` the first
 axis); param ids are 1-based (``lfo.1.depth``, ``macro.1``).
@@ -115,7 +124,9 @@ One performer per parameter — the model (plan 09)::
               lane:0 ──push──▶ macro.2   hand:left.y ──position──▶ fx.mix  × macro.2 (depth sub)
 
 A *performer* is an enabled row whose source is a continuous scheme
-(LANE_SCHEMES) and whose op is in MOD_OPS. A target has at most one:
+(`is_continuous`: anything but a key, pad, D-pad or MIDI row — which
+continuous schemes this rig has is the device registry's, `Router.schemes`)
+and whose op is in MOD_OPS. A target has at most one:
 `Bindings.add` / `bind` raise `Owned(existing, new)` when another enabled
 performer already has it (`Bindings.owner`), and the caller asks — the
 panel's Replace / Keep prompt (ui_routing.py), which a hand learn reaches
@@ -149,12 +160,14 @@ also scaling the pattern inputs the reference fed raw.
 
 Frame order (app.py) is fixed: input adapters (keys, pad, MIDI) →
 ``hands.poll`` (feeds `hand`) → ``output.apply`` → ``mouse.poll`` →
-``audio.step`` (the analyzer) → bridge (feeds `ext`) → ``lfos.step`` +
-``publish`` (feeds `lfo`) → ``Router.modulate`` (every live performer row
-calls modulate) → ``reg.apply()`` → ``integrate`` → ``draw`` →
-``panel.draw``. A lane may
-modulate the analyzer's own params: the offset lands in apply() and the
-next step() reads it, one frame late, like every other modulated value.
+``audio.step`` (the analyzer) → bridge (feeds `ext`) → ``Router.modulate``
+(the modulation patch in dependency order, plan 28 N0: the LFOs step
+inside it and feed `lfo`, every live performer row calls modulate, and a
+param the pass itself reads lands at once) → ``reg.apply()`` (the rest) →
+``integrate`` → ``draw`` → ``panel.draw``. A lane may modulate the
+analyzer's own params: the analyzer ran before the pass, so the offset
+lands in apply() and the next step() reads it, a frame late. The readers
+outside the pass are that and ``output.apply`` (step 5, before it).
 
 Legacy 6 — the parity anchor. The reference drove the planes with
 ``PLANEDRIVE[plane] = dir · out[i] · DRIVE · gain`` in place of the
@@ -248,8 +261,10 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, motion
+from . import apc40, envelope, lfo, modifiers, motion
+from . import patch as patchmod
 from .bands import BANDS, CEIL
+from .modifiers import Modifier, ModState
 from .motion import OFF, Follower, Motion
 from .params import (
     DRIVE,
@@ -274,21 +289,93 @@ LEGACY_MIDI_FILE = Path("midi_map.json")
 # bindings.json holds — outside library/, since it is no group's preset
 FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 
+# the modulator banks (modbank.py, plan 31 B) the modulation patch knows,
+# by scheme: voice n is the node ``<scheme>:<n-1>`` (its kind the scheme),
+# and its knob params ``<scheme>.<n>.<knob>`` (the class's KNOBS) and the
+# bank-wide ones (SHARED) feed it. Known here by class, so a bare router
+# (no bank handed in) still draws an LFO route's source as an LFO. A new
+# kind is one entry here, its scheme in patch.KINDS, and its instance
+# handed to `Router.use_bank`
+BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
+                          envelope.Envelopes.SCHEME: envelope.Envelopes}
+
+# the schemes no device feeds — the analyzer, the LFOs, the envelopes and
+# the sequencer's trigger lanes (plan 31) — in offer order; devices.py's
+# BUILTIN_SCHEMES, restated (routing never imports devices), the two held
+# equal by tests/test_plan31_wiring.py
+BUILTIN_LANES = ("lane", "lfo", "env", "seq")
+
 MIDI_SCHEMES = ("cc", "note", "pitch")
-LANE_SCHEMES = ("lane", "ext", "lfo", "hand", "axis")  # continuous, read by the Router
+# the row kinds the table dispatches itself (plan 27 B2): the keys
+# (`Router.keys`), the pad's buttons and D-pad (`Router.pad`) and MIDI
+# (midi.MidiIO). Every other scheme is a **continuous** source — a lane
+# some device feeds (`lane`, `lfo`, `hand`, `axis`, a new device's role) —
+# so a preset row naming a device this rig lacks is still a performer,
+# dormant until its device feeds (decision 11). Which continuous schemes
+# exist, and in what order a page offers them, is the device registry's
+# (`Router.schemes`, devices.DeviceRegistry.continuous_schemes): there is
+# no fixed list of them here
+ROW_SCHEMES = ("key", "pad", "hat", *MIDI_SCHEMES)
+# a source's device qualifier (plan 27 B2 for MIDI, B6 for every scheme):
+# ``cc@<role>:<ch>:<n>``, ``pitch@<role>:<ch>``, ``pad@<role>:A``,
+# ``axis@<role>:LX`` — the row of a device other than the first one listed
+# that publishes the scheme. An unqualified source is that first device's
+# (MIDI: `Bindings.midi_roles`, the profile-matching rule B2 built; any
+# other scheme: `Bindings.primaries`, the first enabled device of its kind
+# in list order), so every row written before plan 27 means what it meant.
+# The qualifier adds no ``:`` (a role has none). For a continuous scheme
+# the qualified head (``axis@p2``) is its own Router key — its own feed,
+# labels, rests and names — so two pads never overwrite each other
+QUALIFIER = "@"
+
+
+def base_scheme(scheme: str) -> str:
+    """A scheme without its device qualifier: ``cc@launch`` → ``cc``,
+    ``axis@p2`` → ``axis`` (plan 27 B6: any scheme takes one); a scheme
+    with none is returned as it is."""
+    head, at, _ = scheme.partition(QUALIFIER)
+    return head if at else scheme
+
+
+def qualified(scheme: str, role: str) -> str:
+    """`scheme` under the device qualifier `role` (``axis`` + ``p2`` →
+    ``axis@p2``); "" leaves it bare — the primary device's (plan 27 B6)."""
+    return f"{scheme}{QUALIFIER}{role}" if role else scheme
+
+
+def is_continuous(scheme: str) -> bool:
+    """Is `scheme` a continuous source — read by the Router as a lane,
+    driven through a performer row — rather than a row kind the table
+    dispatches (`ROW_SCHEMES`)? Open-ended: a scheme no device of this rig
+    publishes is continuous too, its rows dormant (decision 11)."""
+    return base_scheme(scheme) not in ROW_SCHEMES
 MOD_OPS = ("push", "position")                 # the performer ops: the Router's rows
 # `hold` is a button row's op (plan 15 WP4, fork 13): the target fires
 # once the button has been down HOLD_S, and a shorter press does nothing —
 # the adapter times it (midi.py a note, `Router.pad` a pad button or the
 # D-pad); `act` ignores it, so a key row with it does nothing
 HOLD_S = 0.6       # midi.HOLD_S is the note's; tests hold the two equal
-OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS)
+# a *sink row* (plan 27 B3): a value going *out* of the app — a param's
+# effective norm (``param:<id>``) or an analyzer lane (``lane:<i>``, or
+# ``lane:*`` for every lane from the row's channel on) sent to a sink port,
+# ``<role>:<channel>`` (a device's `sinks`: the bridge's lane k, a
+# `midi-out`'s lane k). Its op is `SINK_OP`; it is the session's (sinks are
+# rig, D1 / D9: bindings.json keeps it), never a performer, never asks
+# Replace / Keep, and nothing in the modulation pass reads it — the sink
+# device does, after `reg.apply()` (`sink_values`)
+SINK_OP = "send"
+SINK_SCHEMES = ("param", "lane")
+OPS = ("fire", "toggle", "step", "set", "abs", "rel", "rel64", "momentary", "hold", *MOD_OPS,
+       SINK_OP)
 # the APC40's two layers (plan 13 §3): a MIDI row's `layer` is None — the
 # control is invariant, the session's, one meaning on both layers — or one
 # of these. The table's `layer` says which is up; SHIFT latches it.
 LAYERS = ("preset", "global")
 SHIFT_SOURCE = f"note:0:{apc40.N_SHIFT}"     # always invariant: it is the latch
 SHIFT_PARAM = "desk.shift"
+# the desk's SAVE (plan 24 C1): held, a bank pad's tap saves into its slot
+# (midi.MidiIO._save_tap); a momentary row on apc40.SAVE, track 8's clip stop
+SAVE_PARAM = "desk.save"
 # knob smoothing (plan 18 WP2): how long a value from one of the desk's
 # absolute knobs or faders takes to arrive (midi.py's glide). One session
 # param for the whole desk. SLEW_MAX_S stays under undo.SETTLE_S by more
@@ -353,19 +440,43 @@ APC_REMAP: dict[tuple[str, str, str, float], tuple[str, str, float]] = {
     (f"cc:0:{apc40.CC_XFADE}", "overlay.bg", "abs", 1.0): ("output.dim", "abs", 1.0),
     **BANK_REMAP,
 }
+# Plan 24 C1 made the render toggles on scene launch 1–4 invariant
+# (apc40.TOGGLES): every preset saved before holds their four factory rows
+# in its desk, and every factory file still does (decision 23: no library
+# file is rewritten; `preset.file_desk`). The session's invariant rows do
+# the same job, so those exact rows drop quietly (in RETIRED_DESK_ROWS).
+TOGGLE_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"note:0:{n}", pid, "toggle", 1.0) for pid, n in zip(apc40.TOGGLES, apc40.N_SCENE))
+# Plan 24 C2 (decision 17, amending D6) frees the track faders S1–S8 for
+# the presets: the audio strip that was invariant on them (the bands'
+# post-drive on 1–6, master.dyn and master.trim on 7–8) moves to the SHIFT
+# layer. A session file from before holds those eight rows with no layer;
+# `remap_factory` gives each exact row the global layer, with a note (the
+# file is backed up and written back once). A fader row the owner changed
+# matches no key and stays invariant: that fader is the owner's on both
+# layers, and a preset's row on it drops with D6's note.
+FADER_SHIFT_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
+    (f"cc:{ch}:{apc40.CC_FADER}", pid, "abs", 1.0)
+    for ch, pid in zip(apc40.TRACK_FADERS, apc40.SHIFT_FADERS))
 # which plan moved or added each source, for the note `remap_factory`
 # writes; a source not named here is plan 09's
 APC_REMAP_PLAN = {f"cc:0:{apc40.CC_XFADE}": "plan 15",
                   f"note:0:{apc40.N_OVERDUB}": "plan 15",
                   **{f"note:{k}:{apc40.N_CLIPSTOP}": "plan 15" for k in range(8)},
-                  **{source: "plan 19" for _k, source in _FAR_PADS}}
+                  **{source: "plan 19" for _k, source in _FAR_PADS},
+                  **{source: "plan 24" for source, *_ in TOGGLE_DESK_ROWS},
+                  **{source: "plan 24" for source, *_ in FADER_SHIFT_ROWS},
+                  f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}": "plan 24"}
 # Factory preset-layer rows a later plan took for the session, as (source,
 # target, op, value): plan 19's sixteen shape pads. Every preset saved
 # before it holds them in its `desk`; `Bindings.set_desk` drops such a row
 # without a note (plan 19 fork 4 — a note means something the owner mapped
 # was dropped), while any other row on those pads keeps the note. Emptying
 # this set brings the note back for all of them.
-RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(BANK_REMAP)
+#
+# …and the four render toggles plan 24 C1 made invariant (TOGGLE_DESK_ROWS).
+RETIRED_DESK_ROWS: frozenset[tuple[str, str, str, float]] = \
+    frozenset(BANK_REMAP) | TOGGLE_DESK_ROWS
 # rows added when nothing uses the note: (source, target, op, value, only
 # when the theme cycle was remapped away)
 APC_NEW_ROWS = (
@@ -374,6 +485,10 @@ APC_NEW_ROWS = (
     (f"note:0:{apc40.N_OVERDUB}", "preset.home", "toggle", 1.0, False),   # plan 15 WP2
     # plan 19 WP2: clip rows 4 and 5 load the bank's slots 9–24
     *[(source, "preset.select", "set", float(k), False) for k, source in _FAR_PADS],
+    # plan 24 C1: the render toggles, invariant now (a session file never
+    # held them: they were the preset layer's), and SAVE on track 8's clip stop
+    *[(source, pid, op, value, False) for source, pid, op, value in sorted(TOGGLE_DESK_ROWS)],
+    (f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary", 1.0, False),
 )
 # plan 15 WP4's clip-stop SAVE AS bar, retired 2026-10-09: an empty bank
 # pad held saves into its own slot (`Param.held` on `preset.select`), and
@@ -526,11 +641,37 @@ class Binding:
 
     @property
     def scheme(self) -> str:
+        """The source's scheme without its device qualifier (``cc@launch:0:7``
+        → ``cc``, ``axis@p2:LX`` → ``axis``; `device` holds the role)."""
+        return base_scheme(self.head)
+
+    @property
+    def head(self) -> str:
+        """The source before its first ``:``, qualifier and all
+        (``axis@p2``): the Router key a continuous row reads its lane
+        under (plan 27 B6)."""
         return self.source.split(":", 1)[0]
+
+    @property
+    def device(self) -> str:
+        """The row's device qualifier — the role after ``@`` — or "" for
+        an unqualified row, the scheme's primary device's
+        (`Bindings.role_of`). Any scheme takes one (plan 27 B6)."""
+        _, at, role = self.head.partition(QUALIFIER)
+        return role if at else ""
 
     @property
     def parts(self) -> list[str]:
         return self.source.split(":")[1:]
+
+    @property
+    def bare(self) -> str:
+        """The source without its device qualifier (``cc@launch:0:7`` →
+        ``cc:0:7``): the control as a device's own profile names it."""
+        if not self.device:
+            return self.source
+        _, _, rest = self.source.partition(":")
+        return f"{self.scheme}:{rest}"
 
     @property
     def key(self) -> str:
@@ -582,15 +723,31 @@ class Binding:
             return -1
 
     @property
+    def is_sink(self) -> bool:
+        """A sink row (plan 27 B3): a param or a lane sent out to a sink
+        port — `target` is ``<role>:<channel>``, not a param id."""
+        return self.op == SINK_OP
+
+    @property
+    def sink(self) -> tuple[str, int]:
+        """A sink row's port as (role, channel); ("", -1) when the target
+        names none."""
+        got = parse_sink(self.target) if self.is_sink else None
+        return got if got is not None else ("", -1)
+
+    @property
     def is_performer(self) -> bool:
         """An enabled push / position row from a continuous source — what
         owns a target. A disabled row keeps its settings and owns nothing."""
-        return self.enabled and self.scheme in LANE_SCHEMES and self.op in MOD_OPS
+        return self.enabled and is_continuous(self.scheme) and self.op in MOD_OPS
 
     @staticmethod
-    def midi_source(kind: str, channel: int | None, number: int = 0) -> str:
+    def midi_source(kind: str, channel: int | None, number: int = 0, role: str = "") -> str:
+        """A MIDI row's source; `role` qualifies it for a MIDI device other
+        than the first listed (``cc@launch:0:7``, plan 27 B2)."""
         ch = "*" if channel is None else str(int(channel))
-        return f"pitch:{ch}" if kind == "pitch" else f"{kind}:{ch}:{int(number)}"
+        head = f"{kind}{QUALIFIER}{role}" if role else kind
+        return f"{head}:{ch}" if kind == "pitch" else f"{head}:{ch}:{int(number)}"
 
     def matches(self, kind: str, channel: int, number: int) -> bool:
         if self.kind != kind:
@@ -600,9 +757,10 @@ class Binding:
         return kind == "pitch" or self.number == number
 
     def overlaps(self, other: Binding) -> bool:
-        """Two MIDI rows on one physical control: the same kind and number
-        on the same channel, or either one on any channel."""
-        if not (self.is_midi and other.kind == self.kind):
+        """Two MIDI rows on one physical control: the same device (the same
+        qualifier, plan 27 B2), the same kind and number on the same
+        channel, or either one on any channel."""
+        if not (self.is_midi and other.kind == self.kind and other.device == self.device):
             return False
         if None not in (self.channel, other.channel) and self.channel != other.channel:
             return False
@@ -629,7 +787,7 @@ class Binding:
             d["motion"] = self.motion.to_json()
         # a performer never picks up (plan 09 d.4: hands grab, they never
         # yield) — the field rides on the dataclass but never on the file
-        if self.scheme in LANE_SCHEMES:
+        if is_continuous(self.scheme):
             d.pop("pickup", None)
         return d
 
@@ -656,18 +814,28 @@ class Binding:
         `when` address when the caller knows the adapter's labels —
         `Router.describe` does; here the row knows only its strings."""
         s = self.scheme
+        if self.is_sink:
+            addr = ":".join(self.parts)
+            if self.source == "lane:*":
+                what = "every lane"
+            else:                        # "lane 3 HIGH", as the ext / LFO rows read
+                what = f"{s} {addr}" + (f" {name}" if name else "")
+            return f"{what} → {self.target}"
         if self.is_midi:
             ch = "any ch" if self.channel is None else f"ch{self.channel + 1}"
+            on = f" on {self.device}" if self.device else ""
             if s == "pitch":
-                return f"MIDI pitch bend {ch}"
+                return f"MIDI pitch bend {ch}{on}"
             what = "CC" if s == "cc" else "note"
             extra = "" if self.op in ("abs", "toggle") else f" {self.op}"
-            return f"MIDI {what} {self.number} {ch}{extra}"
+            return f"MIDI {what} {self.number} {ch}{on}{extra}"
         addr = ":".join(self.parts)
+        on = f" on {self.device}" if self.device else ""     # a second pad's (plan 27 B6)
         if s == "hat":
-            return f"d-pad {addr}"
-        who = name if name and s in LANE_SCHEMES else f"{s} {addr}"
-        if s in LANE_SCHEMES and self.op in MOD_OPS:
+            return f"d-pad {addr}{on}"
+        lane = is_continuous(s)
+        who = (name if name and lane else f"{s} {addr}") + on
+        if lane and self.op in MOD_OPS:
             by = f" × {self.scale}" if self.scale else ""
             when = f" while {gate or self.when}" if self.when else ""
             if self.op == "push":
@@ -717,6 +885,107 @@ def land(p: Param, value: float) -> None:
 
 
 # --------------------------------------------------------------- the table
+
+# ---- sink rows (plan 27 B3) ----
+
+def sink_target(role: str, channel: int) -> str:
+    """A sink port's address, what a sink row's `target` holds:
+    ``bridge:3``."""
+    return f"{role}:{int(channel)}"
+
+
+def parse_sink(target: str) -> tuple[str, int] | None:
+    """``<role>:<channel>`` → (role, channel), or None when `target` is not
+    one (a role is a name without ``:``, the channel a whole number ≥ 0)."""
+    role, colon, ch = str(target).partition(":")
+    if not colon or not role or ":" in ch or not ch.isdigit():
+        return None
+    return role, int(ch)
+
+
+def sink_refusal(b: Binding) -> str | None:
+    """Why a sink row cannot stand, or None: its source must be a param
+    (``param:<id>``) or a lane (``lane:<i>``, ``lane:*``), its target a
+    sink port (``<role>:<channel>``)."""
+    scheme, _, addr = b.source.partition(":")
+    if scheme not in SINK_SCHEMES or not addr:
+        return (f"a sink row sends a param or a lane (param:<id>, lane:<i>), "
+                f"not {b.source!r}")
+    if scheme == "lane" and addr != "*" and not addr.isdigit():
+        return f"{b.source!r} is not a lane (lane:<i> or lane:*)"
+    if parse_sink(b.target) is None:
+        return f"{b.target!r} is not a sink port (<role>:<channel>)"
+    return None
+
+
+def sink_rows_from_send(role: str, send: Iterable, lanes: int | None = None
+                        ) -> tuple[list[Binding], list[str]]:
+    """The bridge's old ``[bridge] send`` list as sink rows on `role`
+    (plan 27 B3), translated once: (rows, what could not be). Slot k of the
+    list — "lane:*", "lane:3", "param:view.bright" in lane order, the stars
+    expanded — becomes the row on ``<role>:<k>``. A star is one row,
+    ``lane:*`` on its first channel, and takes `lanes` channels (the
+    default band layout's count when None) before the next entry, as the
+    old list did on a rig with that many bands (`sink_values`: a row on a
+    channel a star also fills wins it)."""
+    n = len(BANDS) if lanes is None else int(lanes)
+    rows: list[Binding] = []
+    bad: list[str] = []
+    k = 0
+    for spec in send if isinstance(send, list | tuple) else [send]:
+        spec = str(spec)
+        b = Binding(spec, sink_target(role, k), SINK_OP)
+        why = sink_refusal(b)
+        if why is not None:
+            bad.append(f"{spec!r}: {why}")
+            continue
+        rows.append(b)
+        k += n if spec == "lane:*" else 1
+    return rows, bad
+
+
+def sink_values(rows: Iterable[Binding], reg: Registry, analyzer=None,
+                lanes: int = 0) -> dict[int, float]:
+    """This frame's readings for one sink, channel → u in [0, 1] (the
+    device clamps and quantises): what its enabled rows send, read after
+    `reg.apply()`. ``param:<id>`` is the param's **effective** norm
+    (`eff_norm`: base + this frame's modulation; 0 for a trigger or an id
+    the registry lacks, as the bridge always sent); ``lane:<i>`` the
+    analyzer's lane as a route reads it, ``lane / CEIL`` (0 with no
+    analyzer running); ``lane:*`` every lane from its channel on — the
+    analyzer's count, or `lanes` (the count last seen) while none runs, so
+    the lanes fall to 0 once. A row on a channel a star also fills wins
+    it."""
+    out: dict[int, float] = {}
+    rows = [b for b in rows if b.enabled and b.is_sink]
+    if not rows:
+        return out
+    n_live = analyzer.n if analyzer is not None else int(lanes)
+
+    def lane(i: int) -> float:
+        if analyzer is None or not 0 <= i < analyzer.n:
+            return 0.0
+        return float(analyzer.lanes[i]) / CEIL
+
+    for b in rows:                       # the stars first: an explicit row wins its channel
+        if b.source == "lane:*":
+            k = b.sink[1]
+            for i in range(n_live):
+                out[k + i] = lane(i)
+    for b in rows:
+        if b.source == "lane:*":
+            continue
+        k = b.sink[1]
+        if k < 0:
+            continue
+        scheme, _, addr = b.source.partition(":")
+        if scheme == "lane":
+            out[k] = lane(int(addr)) if addr.isdigit() else 0.0
+        elif scheme == "param":
+            p = reg.get(addr)
+            out[k] = 0.0 if p is None or p.kind is Kind.TRIGGER else float(p.eff_norm)
+    return out
+
 
 def bindings_path(home: Path | str | None = None) -> Path:
     """Where the table lives: <home>/bindings.json, home = the working
@@ -779,6 +1048,45 @@ def legacy6_routes() -> list[Binding]:
     return rows
 
 
+def save_refusal(b: Binding) -> str | None:
+    """Why `b` may not drive the desk's SAVE (plan 24 C1), or None: only a
+    `momentary` row may — anything that could leave `desk.save` on (a
+    toggle, a set, a key or pad row that fires) would turn every bank pad's
+    tap into a new preset until something turned it off."""
+    if b.target == SAVE_PARAM and b.op != "momentary":
+        return f"{SAVE_PARAM} takes only a momentary row (held, never latched)"
+    return None
+
+
+def _drop_save_latches(rows: list[Binding]) -> tuple[list[Binding], list[str]]:
+    """`rows` less any row `save_refusal` refuses, with a note for each."""
+    kept, notes = [], []
+    for b in rows:
+        why = save_refusal(b)
+        if why is None:
+            kept.append(b)
+        else:
+            notes.append(f"dropped {b.source} → {b.target} ({b.op}): {why}")
+    return kept, notes
+
+
+def save_missing(rows: Iterable[Binding]) -> str | None:
+    """Plan 24 C1: a table with no row on the desk's SAVE because the owner's
+    own row holds its control (track 8's clip stop: `remap_factory` adds
+    SAVE only where nothing uses the note) — the line that says so on the
+    SYSTEM page, so SAVE's absence is never silent. None when SAVE is there
+    or its control is free (a table with no APC40 rows)."""
+    rows = list(rows)
+    if any(b.target == SAVE_PARAM for b in rows):
+        return None
+    save = Binding(f"note:{apc40.SAVE[1]}:{apc40.SAVE[0]}", SAVE_PARAM, "momentary")
+    mine = next((b for b in rows if b.is_midi and b.overlaps(save)), None)
+    if mine is None:
+        return None
+    return (f"SAVE not added: {save.source} is yours ({mine.target}) — the two-handed "
+            "save needs track 8's clip stop free")
+
+
 def referee(rows: Iterable[Binding]) -> tuple[list[Binding], list[tuple[Binding, str]]]:
     """First performer per target wins: (kept, [(dropped row, why)]).
 
@@ -808,7 +1116,7 @@ def migrate_v1(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     out: list[Binding] = []
     notes: list[str] = []
     for b in rows:
-        if b.scheme not in LANE_SCHEMES:
+        if not is_continuous(b.scheme):
             out.append(b)
             continue
         op = V1_TO_OP.get(b.op)
@@ -874,7 +1182,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
     since plan 13 WP2, any row on a ``theme.*`` param moved to the
     ``preset.*`` param of the same slot (THEME_TO_PRESET); the pad's four
     old factory rows (and B / X's bank rows) moved to the layout of
-    2026-10-14 (PAD_REMAP).
+    2026-10-14 (PAD_REMAP); the track faders' eight invariant audio rows
+    moved to the SHIFT layer (FADER_SHIFT_ROWS, plan 24 C2).
     Idempotent: a second pass finds every old row gone
     and every source taken. Returns (rows, a note per change).
 
@@ -902,6 +1211,11 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
             b = replace(b, target=target, op=op, value=value)
             if plan == "plan 19":
                 b = replace(b, layer=None, feedback="led", on=apc40.GREEN, off=0)
+        elif ((b.source, b.target, b.op, float(b.value)) in FADER_SHIFT_ROWS
+              and b.layer is None):
+            notes.append(f"moved {b.source} → {b.target} to the SHIFT layer (the APC40 "
+                         "map of plan 24: the track faders are the presets')")
+            b = replace(b, layer="global")
         elif (b.source, b.target, b.op, float(b.value)) in PAD_REMAP:
             hit = PAD_REMAP[(b.source, b.target, b.op, float(b.value))]
             if hit is None:
@@ -954,7 +1268,8 @@ def remap_factory(rows: Iterable[Binding]) -> tuple[list[Binding], list[str]]:
 # param's base to `from + m · (to − from)` along the param's own fader
 # (`Router.follow_macros`). A *depth* subscriber scales one route: its row's
 # depth is multiplied by `from + m · (to − from)` with m the macro's
-# effective value, last frame's (`Router.modulate`) — so a performer riding
+# effective value, this frame's (`Router.modulate` runs the macro's node
+# first, plan 28 N0) — so a performer riding
 # a macro moves its depth subscribers only. Polarity is per subscriber; a
 # depth range may cross zero, flipping the route partway through the throw.
 
@@ -1183,9 +1498,12 @@ def register_desk(reg: Registry, table: Bindings) -> None:
     """`desk.shift`: the layer latch as a toggle over the table — on while
     the global layer is up — so SHIFT is a row like any other (a note row
     toggles it, its LED reads it) and a page or key row can reach it too.
-    Never saved, never performed. And `desk.slew`: the table's knob
-    smoothing (plan 18 WP2), a session param a show keeps and no preset
-    may name. The first table a registry meets keeps each."""
+    Never saved, never performed. `desk.save`: the desk's SAVE held (plan
+    24 C1) — a momentary row sets it, and while it is on a bank pad's tap
+    saves instead of loading (midi.py); never saved, never performed. And
+    `desk.slew`: the table's knob smoothing (plan 18 WP2), a session param
+    a show keeps and no preset may name. The first table a registry meets
+    keeps each."""
     if SHIFT_PARAM not in reg:
         reg.toggle(SHIFT_PARAM, "Shift", lambda: table.layer == "global",
                    lambda v: table.set_layer("global" if v else "preset"), group="desk",
@@ -1193,6 +1511,18 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                    tip="The APC40's SHIFT, latched: on, the desk shows the global layer "
                        "(the band strip, the hand feel, BPM, the band scenes); off, the "
                        "loaded preset's. Loading a preset turns it off.")
+    if SAVE_PARAM not in reg:
+        # held by the hand on SAVE, never saved: a reconnect lets go of it
+        # (midi.MidiIO._enter), so a lost note-off cannot leave it down
+        held = [False]
+        reg.toggle(SAVE_PARAM, "Save", lambda: held[0],
+                   lambda v: held.__setitem__(0, bool(v)), group="desk",
+                   persist=False, modulatable=False,
+                   tip="The APC40's SAVE (track 8's clip stop): hold it and tap a bank "
+                       "pad to save the live state into that slot. An empty slot gets a "
+                       "new preset; a filled one gets a new preset too (TRIP → TRIP 2) "
+                       "and the old one stays in the preset list. Nothing is ever "
+                       "overwritten. SAVE alone does nothing.")
     if SLEW_PARAM not in reg:
         reg.continuous(SLEW_PARAM, "Knob smoothing",
                        lambda: getattr(table, "slew", 0.0),
@@ -1203,6 +1533,34 @@ def register_desk(reg: Registry, table: Bindings) -> None:
                            "Off: it jumps a detent at a time, as before. One setting for "
                            "every knob and fader; buttons and the cue knob are not smoothed.")
     _register_pad_feel(reg, table)
+
+
+def declare_modifiers(reg: Registry, mods: Iterable[Modifier]) -> None:
+    """The modifiers' params on `reg` (plan 28 N1), the way `fx.declare`
+    adds an effect's: every ``mod.*`` param dropped, then ``mod.<n>.<p>``
+    for each modifier's kind (`modifiers.PARAMS`), group ``mod`` — a
+    performance group, so preset content — modulatable, a view onto the
+    modifier's `params`. A route onto one of a modifier that went away
+    goes dormant, as for a deleted band."""
+    reg.remove_prefix(modifiers.PREFIX)
+    g = modifiers.GROUP
+    for m in mods:
+        for sp in modifiers.PARAMS[m.kind]:
+            pid, label = modifiers.param_id(m.id, sp.key), f"mod {m.n} {sp.label}"
+            vals, k = m.params, sp.key
+            tip = f"{m.kind} {m.n}: {sp.tip}" if sp.tip else ""
+            if sp.kind == "toggle":
+                reg.toggle(pid, label, lambda v=vals, k=k: v[k] >= 0.5,
+                           lambda x, v=vals, k=k: v.__setitem__(k, 1.0 if x else 0.0),
+                           group=g, tip=tip)
+            elif sp.kind == "enum":
+                reg.enum(pid, label, lambda v=vals, k=k: round(v[k]),
+                         lambda x, v=vals, k=k: v.__setitem__(k, float(int(x))),
+                         list(sp.choices), group=g, tip=tip)
+            else:
+                reg.continuous(pid, label, lambda v=vals, k=k: v[k],
+                               lambda x, v=vals, k=k: v.__setitem__(k, float(x)),
+                               lo=sp.lo, hi=sp.hi, group=g, tip=tip)
 
 
 PAD_FEEL = "desk.pad"     # the pad's feel: PAD_FEEL + ".feel" / ".attack" / …
@@ -1273,14 +1631,18 @@ def dumps_doc(d: dict) -> str:
     as a binding."""
     rows = ",\n".join("  " + json.dumps(b) for b in d["bindings"])
     text = f'{{\n "schema": {json.dumps(d["schema"])},\n'
-    text += f' "profile": {json.dumps(d["profile"])},\n "bindings": [\n{rows}\n ]'
+    text += f' "profile": {json.dumps(d["profile"])},\n'
+    if d.get("sinks_seeded"):            # plan 27 B3: the sinks' `send` lists translated
+        text += f' "sinks_seeded": {json.dumps(d["sinks_seeded"])},\n'
+    text += f' "bindings": [\n{rows}\n ]'
     return text + "\n}\n"
 
 
 def is_session_row(b: Binding) -> bool:
     """A row `bindings.json` keeps (plan 13 §2.2): anything but a performer
     row (push / position, disabled ones too) and a preset-layer MIDI row —
-    those are the loaded preset's."""
+    those are the loaded preset's. A sink row (plan 27 B3, `SINK_OP`) is
+    the session's: sinks are rig (D1 / D9)."""
     return b.op not in MOD_OPS and not (b.is_midi and b.layer == "preset")
 
 
@@ -1330,6 +1692,29 @@ class Bindings:
     # is an edit (`set_routes`), so they are gone before the first frame;
     # this line stays for the session. "" when the load wrote nothing
     said: str = ""
+    # the MIDI devices' roles (plan 27 B2; the device registry sets them,
+    # `DeviceRegistry.midi_roles`: the desk of this table's profile first,
+    # then `[[devices]]` order): an unqualified MIDI row is the first
+    # one's, another device's rows carry its role (``cc@launch:0:7``).
+    # Empty — a bare table, the tests' — every unqualified row is the
+    # one desk's, as before
+    midi_roles: tuple[str, ...] = ()
+    # every other scheme's primary device (plan 27 B6; the registry sets
+    # it, `DeviceRegistry.primaries`): scheme → the role of the first
+    # enabled device of its kind in list order, whose rows are unqualified
+    # (``pad:A`` is the first pad's; a second pad's carry its role,
+    # ``pad@p2:A``). Empty — a bare table — names no role
+    primaries: dict[str, str] = {}  # noqa: RUF012 — never mutated: replaced whole
+    # the schemes delivered as rows, never read as lanes (`_check`): the
+    # table's own kinds, and any a device of this rig adds (`Router.use`)
+    row_schemes: tuple[str, ...] = ROW_SCHEMES
+    # the loaded preset's modifiers (plan 28 N1, `modifiers.Modifier`), in
+    # id order: a tuple, always replaced whole (`set_modifiers`,
+    # `add_modifier`, `remove_modifier`), so a table from before a hot
+    # reload reads the class's empty one. The preset's, never the file's:
+    # `to_json` writes rows only, and `is_session_row` is about rows
+    modifiers: tuple[Modifier, ...] = ()
+    modifiers_serial: int = 0    # bumped by every change: the Router's lanes follow
 
     def __init__(self, bindings: Iterable[Binding] = (), *, path: Path | None = None,
                  profile: str = "apc40"):
@@ -1358,11 +1743,19 @@ class Bindings:
         # the macros' subscribers (plan 13 §2.4), {"macro.N": Macro}
         self.macros: dict[str, Macro] = {}
         self.macros_serial = 0        # bumped by set_macros: Router.follow_macros re-lands
+        # the sink roles whose old `send` list has been translated into sink
+        # rows (plan 27 B3, devices.DeviceRegistry._seed_sinks): kept in the
+        # file, so deleting every row of a role never brings the list back
+        self.sinks_seeded: list[str] = []
         # the desk (plan 13 §3): which layer is up — runtime, never saved,
         # a fresh start is on the preset layer — and two counters the MIDI
         # adapter watches: a layer change or a desk replacement redraws
         # every ring and LED, and a replacement clears the faders' catch
         self.layer = "preset"
+        # the other MIDI roles' layers (plan 27 B2: the latch is per role —
+        # `layer` is the first role's, SHIFT's, `desk.shift`); a role with
+        # no latch of its own stays on the preset layer
+        self.layers: dict[str, str] = {}
         self.layer_serial = 0
         self.desk_serial = 0
         # an edit of a desk row in place (the ROUTING page): a redraw only,
@@ -1424,6 +1817,10 @@ class Bindings:
                 else:
                     t.announce(path, kept=bak)
                     t.write()
+            missing = save_missing(t.bindings)
+            if missing is not None:          # said every launch, never written: the row is yours
+                print(f"bindings: {path}: {missing}", file=sys.stderr)
+                t.said = f"{t.said} · {missing}" if t.said else missing
             return t
         t = cls.factory(profile, path)
         if legacy_midi is not None and legacy_midi.exists():
@@ -1513,8 +1910,15 @@ class Bindings:
         moved = migrate_scales(rows, macros)
         notes += moved
         changed = changed or bool(moved)
+        # a hand-edited row that would latch SAVE on (plan 24 C1): dropped,
+        # said, and the file written back once without it
+        rows, latched = _drop_save_latches(rows)
+        notes += latched
+        changed = changed or bool(latched)
         t = cls(rows, path=path, profile=profile)
         t.macros = macros
+        seeded = data.get("sinks_seeded")
+        t.sinks_seeded = [str(r) for r in seeded] if isinstance(seeded, list) else []
         t.bindings, t.dropped = referee(t.bindings)
         if migrated:
             notes += [f"dropped {b.source} → {b.target}: {why}" for b, why in t.dropped]
@@ -1526,8 +1930,12 @@ class Bindings:
         """The file's dict: the session's controls only (`is_session_row`)
         — never a performer row, a preset-layer row, the macros or any
         values; those are the loaded preset's (plan 13 §2.2)."""
-        return {"schema": SCHEMA, "profile": self.profile,
-                "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
+        d = {"schema": SCHEMA, "profile": self.profile,
+             "bindings": [b.to_json() for b in self.bindings if is_session_row(b)]}
+        seeded = getattr(self, "sinks_seeded", None)      # a table from before a hot reload
+        if seeded:
+            d["sinks_seeded"] = list(seeded)
+        return d
 
     def dumps(self) -> str:
         """The file text: one row per line, so a diff reads as a binding."""
@@ -1570,6 +1978,14 @@ class Bindings:
         and a preset saves."""
         return [b for b in self.bindings if b.op in MOD_OPS]
 
+    def sinks(self, role: str | None = None, *, enabled: bool = True) -> list[Binding]:
+        """The sink rows (plan 27 B3), in table order: those on `role`'s
+        ports (None: every sink), only the enabled ones unless `enabled`
+        is False."""
+        return [b for b in self.bindings
+                if b.is_sink and (role is None or b.sink[0] == role)
+                and (b.enabled or not enabled)]
+
     def owner(self, pid: str) -> Binding | None:
         """The one performer on `pid`, or None — the referee's question."""
         return next((b for b in self.bindings if b.is_performer and b.target == pid), None)
@@ -1583,6 +1999,39 @@ class Bindings:
     def routes_to(self, pid: str) -> list[Binding]:
         return [b for b in self.bindings if b.op in MOD_OPS and b.target == pid]
 
+    # ---- the desk's devices (plan 27 B2) ----
+
+    def primary_role(self) -> str:
+        """The first MIDI role listed — whose rows are unqualified — or ""
+        when the table has been told none."""
+        roles = getattr(self, "midi_roles", ())
+        return roles[0] if roles else ""
+
+    def is_primary(self, role: str | None) -> bool:
+        """Is `role` the first MIDI role (None, "" and any role of a table
+        told none are)?"""
+        roles = getattr(self, "midi_roles", ())
+        return not role or not roles or role == roles[0]
+
+    def role_of(self, b: Binding) -> str:
+        """The role a row belongs to: its qualifier, else — a MIDI row —
+        the first MIDI role's, or — any other row (plan 27 B6) — its
+        scheme's primary device's (`primaries`; "" when told none)."""
+        if b.device:
+            return b.device
+        if b.is_midi:
+            return self.primary_role()
+        return getattr(self, "primaries", {}).get(b.scheme, "")
+
+    def serves(self, role: str | None, b: Binding) -> bool:
+        """Is MIDI row `b` the device of `role`'s? An unqualified row is the
+        first role's (and so is one qualified with that role's name); any
+        other qualified row is its qualifier's only."""
+        q = b.device
+        if self.is_primary(role):
+            return not q or q == role or q == self.primary_role()
+        return q == role
+
     # ---- the desk: two layers under a latched SHIFT (plan 13 §3) ----
 
     def invariant_rows(self) -> list[Binding]:
@@ -1590,25 +2039,27 @@ class Bindings:
         return [b for b in self.bindings if b.is_midi and b.layer is None and b.enabled]
 
     def is_invariant(self, b: Binding, rows: list[Binding] | None = None) -> bool:
-        """Is `b`'s control invariant — SHIFT, or the control of an enabled
-        layer-None row (`rows`, when the caller has them)? A layered row
-        on such a control never acts and never lights (D6)."""
+        """Is `b`'s control invariant — SHIFT (the first role's latch), or
+        the control of an enabled layer-None row on the same device
+        (`rows`, when the caller has them)? A layered row on such a control
+        never acts and never lights (D6)."""
         if not b.is_midi:
             return False
-        if b.overlaps(_SHIFT):
+        if self.is_primary(b.device) and Binding(b.bare, "").overlaps(_SHIFT):
             return True
         inv = self.invariant_rows() if rows is None else rows
         return any(x is not b and b.overlaps(x) for x in inv)
 
     @staticmethod
-    def _controls(rows: Iterable[Binding]) -> tuple[set, set, set]:
+    def _controls(rows: Iterable[Binding], shift: bool = True) -> tuple[set, set, set]:
         """An index of `rows`' controls for `_on`: (kind, channel, number)
         of the one-channel rows, (kind, number) of the any-channel rows,
-        (kind, number) of every row."""
+        (kind, number) of every row — SHIFT's with them for the first
+        role's desk. `rows` are one device's (the qualifier is not in it)."""
         exact: set = set()
         wild: set = set()
         every: set = set()
-        for x in (*rows, _SHIFT):
+        for x in (*rows, *((_SHIFT,) if shift else ())):
             k = (x.kind, x.number)
             every.add(k)
             if x.channel is None:
@@ -1626,41 +2077,78 @@ class Bindings:
             return k in every
         return k in wild or (b.kind, b.channel, b.number) in exact
 
-    def dispatch(self, kind: str, channel: int, number: int) -> list[Binding]:
-        """The rows a MIDI message goes to now: the invariant rows on its
-        control, else the enabled rows of the layer that is up on it —
-        nothing else (D8: no fall-through; a control the up layer does not
-        map does nothing)."""
-        rows = [b for b in self.route(kind, channel, number) if b.enabled]
+    def dispatch(self, kind: str, channel: int, number: int,
+                 role: str | None = None) -> list[Binding]:
+        """The rows a MIDI message from the device of `role` (None: the
+        first MIDI role) goes to now: the invariant rows on its control,
+        else the enabled rows of the layer that is up **on that device**
+        (plan 27 B2: the latch is per role) — nothing else (D8: no
+        fall-through; a control the up layer does not map does nothing)."""
+        rows = [b for b in self.route(kind, channel, number)
+                if b.enabled and self.serves(role, b)]
         inv = [b for b in rows if b.layer is None]
         if inv:
             return inv
-        if kind == "note" and channel == 0 and number == _SHIFT.number:
+        if (self.is_primary(role) and kind == "note" and channel == 0
+                and number == _SHIFT.number):
             return []
-        return [b for b in rows if b.layer == self.layer]
+        layer = self.layer_of(role)
+        return [b for b in rows if b.layer == layer]
 
-    def active(self) -> list[Binding]:
-        """The MIDI rows that show on the desk now: every invariant row, and
-        the up layer's rows on controls that are not invariant."""
-        index = self._controls(self.invariant_rows())      # once a frame: an index,
-        return [b for b in self.midi()                      # not a pairwise scan
-                if b.layer is None or (b.layer == self.layer and not self._on(b, index))]
+    def active(self, role: str | None = None) -> list[Binding]:
+        """The MIDI rows of the device of `role` (None: the first MIDI
+        role) that show on it now: every invariant row, and the up layer's
+        rows on controls that are not invariant."""
+        rows = [b for b in self.midi() if self.serves(role, b)]
+        index = self._controls([b for b in rows if b.layer is None and b.enabled],
+                               shift=self.is_primary(role))     # once a frame: an index,
+        layer = self.layer_of(role)                             # not a pairwise scan
+        return [b for b in rows
+                if b.layer is None or (b.layer == layer and not self._on(b, index))]
 
-    def set_layer(self, layer: str) -> None:
+    def layer_of(self, role: str | None = None) -> str:
+        """The layer up on the device of `role`: the first role's is
+        `layer` (SHIFT's, `desk.shift`); another role's is its own, the
+        preset layer until something latches it."""
+        if self.is_primary(role):
+            return self.layer
+        return self.__dict__.setdefault("layers", {}).get(role, "preset")
+
+    def set_layer(self, layer: str, role: str | None = None) -> None:
         if layer not in LAYERS:
             raise ValueError(f"no layer {layer!r}; one of {', '.join(LAYERS)}")
-        if layer != self.layer:
-            self.layer = layer
-            self.layer_serial += 1
+        if self.is_primary(role):
+            if layer != self.layer:
+                self.layer = layer
+                self.layer_serial += 1
+            return
+        layers = self.__dict__.setdefault("layers", {})
+        if layers.get(role, "preset") != layer:
+            layers[role] = layer
+            serials = self.__dict__.setdefault("layer_serials", {})
+            serials[role] = serials.get(role, 0) + 1
 
-    def toggle_layer(self) -> str:
-        """SHIFT's press: the other layer. Returns the one now up."""
-        self.set_layer("global" if self.layer == "preset" else "preset")
-        return self.layer
+    def layer_serial_of(self, role: str | None = None) -> int:
+        """How many times the layer up on the device of `role` has changed:
+        the first role's is `layer_serial` (SHIFT's), another role's its
+        own count — so a desk redraws and re-arms its faders' pickup only
+        when **its** latch flips (D7, per desk), never on another's."""
+        if self.is_primary(role):
+            return self.layer_serial
+        return self.__dict__.setdefault("layer_serials", {}).get(role, 0)
+
+    def toggle_layer(self, role: str | None = None) -> str:
+        """SHIFT's press: the other layer on that device. Returns the one
+        now up."""
+        self.set_layer("global" if self.layer_of(role) == "preset" else "preset", role)
+        return self.layer_of(role)
 
     def drop_layer(self) -> None:
-        """Back to the preset layer (D4) — what a preset load does."""
+        """Back to the preset layer (D4) on every device — what a preset
+        load does."""
         self.set_layer("preset")
+        for role in list(self.__dict__.setdefault("layers", {})):
+            self.set_layer("preset", role)
 
     def desk(self) -> list[Binding]:
         """The preset layer's rows — what a preset's `desk` holds."""
@@ -1691,6 +2179,8 @@ class Bindings:
             b.layer = "preset"
             if not b.is_midi:
                 notes.append(f"dropped {b.source} → {b.target}: not a desk control")
+            elif save_refusal(b) is not None:
+                notes.append(f"dropped {b.source} → {b.target} ({b.op}): {save_refusal(b)}")
             elif self.is_invariant(b, inv):
                 if (b.source, b.target, b.op, float(b.value)) in RETIRED_DESK_ROWS:
                     continue
@@ -1761,13 +2251,28 @@ class Bindings:
 
     # ---- edits ----
 
+    def _lane_only(self, b: Binding) -> bool:
+        """Is `b`'s source read only as a lane — continuous, and not a
+        scheme some device of this rig delivers as rows (`row_schemes`)?"""
+        return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
+
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
         find its target free, or held by itself. A continuous source has
-        no other op — `abs` is MIDI's, the one path is Router.modulate."""
-        if b.scheme in LANE_SCHEMES and b.op not in MOD_OPS:
+        no other op — `abs` is MIDI's, the one path is Router.modulate. (A
+        scheme a device delivers as rows — `row_schemes`, which the device
+        registry extends through `Router.use` — is not continuous here.)"""
+        if b.is_sink:                # a value going out: no referee (plan 27 B3)
+            why = sink_refusal(b)
+            if why is not None:
+                raise ValueError(why)
+            return
+        if self._lane_only(b) and b.op not in MOD_OPS:
             raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
                              f"one of {', '.join(MOD_OPS)}")
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_performer:
             return
         cur = next((x for x in self.bindings
@@ -1791,6 +2296,9 @@ class Bindings:
         is written unless `write` is False (a knob Learn: the row is the
         loaded preset's, plan 13 §3.3). Returns the rows dropped.
         """
+        why = save_refusal(b)
+        if why is not None:
+            raise ValueError(why)
         if not b.is_midi:
             self.add(b)
             if write:
@@ -1798,7 +2306,9 @@ class Bindings:
             return []
 
         def same_role(x: Binding) -> bool:
-            if x.target != b.target or not x.is_midi:
+            # one control per param *per desk* (plan 27 B2): a knob learned
+            # on a second desk leaves the param's knob on the APC40 alone
+            if x.target != b.target or not x.is_midi or self.role_of(x) != self.role_of(b):
                 return False
             if b.scheme == "note":
                 return x.scheme == "note" and x.op == b.op and x.value == b.value
@@ -1851,7 +2361,7 @@ class Bindings:
         op on a continuous source (`ValueError`), or a second owner still
         standing after the swap (`Owned`)."""
         pid = new.target if target is None else target
-        if new.scheme in LANE_SCHEMES and new.op not in MOD_OPS:
+        if self._lane_only(new) and new.op not in MOD_OPS:
             self._check(new)                     # says why, before anything moves
         cur = self.owner(pid)
         if cur is new:
@@ -1898,6 +2408,78 @@ class Bindings:
         self.notes = []
         self.bindings = [b for b in self.bindings if b.op not in MOD_OPS] + kept
 
+    # ---- the modifiers (plan 28 N1) ----
+
+    def modifier(self, mid: str) -> Modifier | None:
+        return next((m for m in self.modifiers if m.id == mid), None)
+
+    def modifiers_doc(self, reg: Registry | None = None) -> list[dict]:
+        """The preset's ``modifiers`` list: each modifier's entry, its
+        params at their **bases** in `reg` (a performer riding one never
+        reaches the file), else as the modifier holds them."""
+        out = []
+        for m in self.modifiers:
+            bases = {}
+            if reg is not None:
+                for s in modifiers.PARAMS[m.kind]:
+                    p = reg.get(modifiers.param_id(m.id, s.key))
+                    if p is not None:
+                        bases[s.key] = float(p.base)
+            out.append(m.to_json(bases))
+        return out
+
+    def set_modifiers(self, doc, reg: Registry | None = None) -> list[str]:
+        """Replace every modifier with `doc`'s (the preset's list of
+        entries, or Modifier objects), and — given `reg` — their params
+        ``mod.<n>.<p>`` with them (`declare_modifiers`). An entry this
+        build cannot read, or a second one with an id already taken, is
+        dropped; returns a note for each."""
+        notes: list[str] = []
+        mods: dict[str, Modifier] = {}
+        for d in doc or ():
+            try:
+                m = d if isinstance(d, Modifier) else Modifier.from_json(d)
+            except (ValueError, TypeError) as e:
+                notes.append(f"dropped a modifier: {e}")
+                continue
+            if m.id in mods:
+                notes.append(f"dropped a second {m.id}")
+                continue
+            mods[m.id] = m
+        self.modifiers = tuple(sorted(mods.values(), key=lambda m: m.n))
+        self.modifiers_serial = self.modifiers_serial + 1
+        if reg is not None:
+            declare_modifiers(reg, self.modifiers)
+        return notes
+
+    def add_modifier(self, kind: str, inputs: Iterable[str] = (),
+                     reg: Registry | None = None, **params: float) -> Modifier:
+        """A new modifier of `kind` under the next free id (`next_id`)."""
+        m = Modifier(modifiers.next_id(x.id for x in self.modifiers), kind, tuple(inputs),
+                     dict(params))
+        bases = self.modifiers_doc(reg)            # the others keep their bases
+        self.set_modifiers([*bases, m], reg)
+        return self.modifier(m.id)
+
+    def set_modifier_input(self, mid: str, k: int, source: str | None,
+                           reg: Registry | None = None) -> list[str]:
+        """Input `k` of modifier `mid` reads `source` ("" / None: none):
+        the modifier replaced whole (`set_modifiers`, every modifier's
+        params at their bases in `reg`). The callers push the undo step
+        (ROUTING's input combo, the GRAPH page's cable). Returns its notes."""
+        docs = self.modifiers_doc(reg)
+        for d in docs:
+            if d["id"] == mid:
+                ins = list(d["in"])
+                ins[k] = source or None
+                d["in"] = ins
+        return self.set_modifiers(docs, reg)
+
+    def remove_modifier(self, mid: str, reg: Registry | None = None) -> None:
+        """Take a modifier out, its params with it; a route on its lane
+        stays, dormant, until it is removed or the id comes back."""
+        self.set_modifiers([d for d in self.modifiers_doc(reg) if d["id"] != mid], reg)
+
 
 # ---------------------------------------------------------------- router
 
@@ -1905,11 +2487,20 @@ _NO_LANES: dict = {}      # `Router.lane`'s cache before its first miss; never w
 
 
 class Router:
-    """The adapters' lookup and the per-frame modulation pass over one table."""
+    """The adapters' lookup and the per-frame modulation pass over one table.
 
-    def __init__(self, reg: Registry, table: Bindings):
+    `devices` is the rig's device registry (devices.DeviceRegistry, plan 27
+    B2), handed in as an argument — this module imports nothing above it —
+    and asked which continuous schemes there are and in what order a page
+    offers them (`schemes`); None (a bare router, the tests') offers what
+    has been fed or labelled."""
+
+    def __init__(self, reg: Registry, table: Bindings, devices=None):
         self.reg = reg
         self.table = table
+        self.devices = None
+        if devices is not None:
+            self.use(devices)
         self.feeds: dict[str, np.ndarray | None] = {}   # ext/lfo/hand vectors, per frame
         self.labels: dict[str, list[str]] = {}          # scheme → lane names, from the adapter
         # scheme → the lanes an adapter offers as gates, [(index, label)]:
@@ -1932,6 +2523,50 @@ class Router:
         self._macro_bases: dict[str, float] = {}
         self._macros_seen = table.macros_serial
         self._note_macro_bases()
+
+    # ---- the device registry (plan 27 B2) ----
+
+    def use(self, devices) -> None:
+        """Ask `devices` (anything with `continuous_schemes()`, and
+        optionally `row_schemes()` and `midi_roles()`) from now on: which
+        schemes are lanes and in what order (`schemes`), which a device
+        delivers as rows (the referee's `row_schemes`), which MIDI role an
+        unqualified row means (`Bindings.midi_roles`). Called again
+        whenever the device list changes."""
+        self.devices = devices
+        self.follow_devices()
+
+    def follow_devices(self) -> None:
+        """Re-read the registry's row schemes and MIDI roles into the table
+        (the registry's listener calls it when the list changes)."""
+        devs = self.__dict__.get("devices")
+        if devs is None:
+            return
+        rows = getattr(devs, "row_schemes", None)
+        if rows is not None:
+            self.table.row_schemes = tuple(dict.fromkeys((*ROW_SCHEMES, *rows())))
+        roles = getattr(devs, "midi_roles", None)
+        if roles is not None:
+            self.table.midi_roles = tuple(roles())
+        prim = getattr(devs, "primaries", None)
+        if prim is not None:
+            self.table.primaries = dict(prim())
+            self.__dict__.pop("_lanes", None)     # an ``axis@pad`` address may mean another key
+
+    def schemes(self) -> tuple[str, ...]:
+        """The continuous schemes a route can read, in the order a page
+        offers them: the registry's (`continuous_schemes`: the analyzer's
+        `lane` and the LFOs' `lfo` first, then each listed device's feeds
+        in list order), then any other scheme that has been fed or
+        labelled this run. With no registry, `BUILTIN_LANES` (the
+        analyzer, the LFOs, the envelopes, the sequencer) and then whatever
+        has been fed or labelled."""
+        devs = self.__dict__.get("devices")
+        out = list(devs.continuous_schemes()) if devs is not None else [*BUILTIN_LANES]
+        for s in (*self.labels, *self.feeds):
+            if s not in out and is_continuous(s):
+                out.append(s)
+        return tuple(out)
 
     @property
     def names(self) -> dict[str, dict[str, int]]:
@@ -1967,6 +2602,9 @@ class Router:
         if cache is None or len(cache) > 4096:       # addresses typed at the page, say
             cache = self.__dict__["_lanes"] = {}
         scheme, _, addr = source.partition(":")
+        base, at, role = scheme.partition(QUALIFIER)
+        if at and role and getattr(self.table, "primaries", {}).get(base) == role:
+            scheme = base        # qualified with the primary's own role: its lanes (B6)
         m = self.names.get(scheme)
         try:
             i = int(addr)
@@ -2087,25 +2725,43 @@ class Router:
                 if b.modifiers == chord:
                     act(self.reg, b)
 
-    def pad(self, pad, now: float | None = None, *, buttons: bool = True) -> None:
+    def pad(self, pad, now: float | None = None, *, buttons: bool = True,
+            role: str = "") -> None:
         """One frame of the gamepad (`pad` a gamepad.Pad): its axes fed as
         the `axis` lanes (None while no pad is on, so their routes let go),
         then its pad / hat rows — unless `buttons` is False (the frame's
         press completed a learn). A press acts as a note-on does
         (`act`); a `momentary` row lets its toggle go on the release; a
         `hold` row fires once its button has been down HOLD_S (`now`, a
-        monotonic clock; a shorter press does nothing)."""
-        self._publish_axes()
-        self.feed("axis", pad.lanes() if pad.on else None)
-        holds = self.__dict__.setdefault("_pad_holds", {})   # source → press time; None once fired
+        monotonic clock; a shorter press does nothing). The axes' names,
+        labels and rests are the pad's to publish (`pad.publish`, plan 27
+        B2: gamepad.publish), not this table's.
+
+        `role` is the pad's qualifier (plan 27 B6): "" for the primary pad
+        — the unqualified rows and the `axis` lanes, as ever — or a second
+        pad's role, whose lanes are ``axis@<role>`` and whose rows are
+        those qualified with it (``pad@p2:A``); each pad hears only its own."""
+        axis = qualified("axis", role)
+        publish = getattr(pad, "publish", None)
+        if publish is not None:
+            publish(self, axis) if role else publish(self)
+        self.feed(axis, pad.lanes() if pad.on else None)
+        # source → press time (None once fired), one dict per pad
+        holds = (self.__dict__.setdefault("_pad_holds", {}) if not role else
+                 self.__dict__.setdefault("_pad_holds_of", {}).setdefault(role, {}))
         if not pad.on:
             holds.clear()
-            self.felt("axis", None, 0.0)     # the camera job's followers start afresh
+            self.felt(axis, None, 0.0)       # the camera job's followers start afresh
             return
         now = time.monotonic() if now is None else now
+        # each pad hears its own rows: a second pad those qualified with its
+        # role; the primary the bare ones and — as a desk's `serves` — any
+        # qualified with the primary's own role (``pad@pad:A``)
+        own = role or getattr(self.table, "primaries", {}).get("pad", "")
         for b in self.table.of("pad", "hat"):
             code = self._code(b)
-            if code is None or not b.enabled:
+            if code is None or not b.enabled or not (
+                    b.device == role or (not role and own and b.device == own)):
                 continue
             hat = b.scheme == "hat"
             down = bool(pad.hat & code) if hat else pad.down(code)
@@ -2135,20 +2791,10 @@ class Router:
             if pressed and buttons:
                 act(self.reg, b)
 
-    def _publish_axes(self) -> None:
-        """The pad axes' names, labels and rests (gamepad.AXES …), once."""
-        if "axis" in self.names:
-            return
-        from . import gamepad
-        self.labels["axis"] = list(gamepad.AXIS_LABELS)
-        self.rests["axis"] = list(gamepad.AXIS_RESTS)
-        self.names["axis"] = {n: i for i, n in enumerate(gamepad.AXES)}
-
     def claimed(self, scheme: str) -> set[int]:
         """The lanes of `scheme` an enabled route reads — a pad axis with
-        one is off its default camera job (app.py)."""
-        if scheme == "axis":
-            self._publish_axes()
+        one is off its default camera job (gamepad.steer). A named address
+        resolves through what the scheme's device has published."""
         return {i for b in self.table.mods() for s, i in [self.lane(b.source)]
                 if s == scheme and i >= 0}
 
@@ -2202,8 +2848,9 @@ class Router:
     def source_feel(self, scheme: str) -> Motion:
         """A scheme's own feel: the pad's (`table.pad_feel`) for `axis`,
         none for every other source — the analyzer's lanes have theirs in
-        the chain already, a hand has its own smoothing."""
-        return getattr(self.table, "pad_feel", OFF) if scheme == "axis" else OFF
+        the chain already, a hand has its own smoothing. One feel for every
+        pad (plan 27 B6): ``axis@p2`` travels with it too."""
+        return getattr(self.table, "pad_feel", OFF) if base_scheme(scheme) == "axis" else OFF
 
     def feel_of(self, b: Binding) -> Motion:
         """The motion row `b` runs on its reading: its own, or its source's."""
@@ -2243,15 +2890,410 @@ class Router:
             f = movers[key] = Follower(seed)
         return f.step(u, dt, m, rest)
 
-    def modulate(self, analyzer=None, dt: float | None = None) -> None:
+    # ---- the modulation patch (plan 28 N0): the table as a graph, in order ----
+
+    def use_bank(self, bank, clock) -> None:
+        """A modulator bank (modbank.Bank: the LFOs, plan 31 B) and the
+        clock it steps on: from now on its voices step inside `modulate`,
+        each at its node of the patch, after the knob params it reads have
+        landed (decision 7), and it feeds its scheme. Its scheme must be in
+        `BANKS`. A bare router (the tests') steps no bank, and whatever
+        feeds the scheme feeds it."""
+        banks = self.__dict__.setdefault("banks", {})
+        banks[bank.SCHEME] = bank
+        self.clock = clock
+
+    def use_lfos(self, lfos, clock) -> None:
+        """The LFO bank (lfo.LFOs) and its clock: `use_bank`, and `lfos`
+        named for the callers that read the bank off the router."""
+        self.lfos = lfos
+        self.use_bank(lfos, clock)
+
+    def use_sequencer(self, seq, envs, clock=None) -> None:
+        """The step sequencer (sequencer.Sequencer, plan 31 S) and the
+        envelope bank its lanes fire (envelope.Envelopes): from now on it
+        steps inside `modulate`, after every bank's `begin` — so a global
+        ``lfo.trigger`` held for this frame has moved the clock's epoch and
+        the grid re-aligns on the same frame — and before the plan, so the
+        envelope nodes later in it see this frame's fires, stamped at each
+        step's exact time. It feeds ``seq:<i>``, trigger lanes resting at 0
+        (decision 10), which a route can take to any trigger param. `clock`
+        None: the one `use_bank` gave."""
+        self.sequencer, self.seq_envs = seq, envs
+        if clock is not None:
+            self.clock = clock
+
+    def _step_sequencer(self, t: float, clock) -> None:
+        """The sequencer's frame (`use_sequencer`): its fires and stop
+        releases go to the envelope bank by id — one the bank lacks (a lane
+        pointed at a removed extra) is a no-op — and its pulses are fed."""
+        seq = self.__dict__.get("sequencer")
+        if seq is None or clock is None:
+            return
+        envs = self.__dict__.get("seq_envs")
+
+        # each note holds a gate-mode envelope for `seq.gate` of a step at
+        # this frame's bpm and span (a one-shot ignores it), so a pattern
+        # of gate envelopes plays notes rather than one held sustain
+        gate = seq.gate_seconds(clock) if hasattr(seq, "gate_seconds") else None
+
+        def fire(lane, env, at, velocity):
+            if envs is not None:
+                envs.fire(env, at=at, velocity=velocity, gate=gate, owner="seq")
+
+        def release(lane, env, at):
+            # only a note the pattern opened: a held pad's, a hand's or a
+            # fire's note on the same envelope sounds on, its gate still live
+            if envs is not None:
+                envs.release(env, at=at, owner="seq")
+
+        seq.step(t, clock, fire, release)
+        seq.publish(self)                        # its lanes as trigger kinds too
+
+    def bank(self, scheme: str):
+        """The bank handed in for `scheme`, or None."""
+        return self._banks().get(scheme)
+
+    def _banks(self) -> dict:
+        """The banks handed in, by scheme, in the order they came."""
+        return self.__dict__.get("banks") or {}
+
+    def _patch_key(self) -> tuple:
+        """What the patch is made of — the performer rows (each by identity
+        and the fields that make edges), the macros' subscribers, the
+        modifiers (N1, when the table has them), each bank's ids (plan 31
+        B) and the
+        registry's add / remove serial — compared each frame, so the patch
+        is rebuilt only when one of them changes, never per frame."""
+        t = self.table
+        rows = tuple((id(b), b.source, b.target, b.op, b.enabled, b.scale, b.when)
+                     for b in t.bindings if b.op in MOD_OPS)
+        subs = tuple((mid, id(s), s.depth, s.base) for mid, m in t.macros.items() for s in m.subs)
+        mods = (getattr(t, "modifiers_serial", 0),
+                *((getattr(m, "id", ""), getattr(m, "kind", ""),
+                   tuple(getattr(m, "inputs", ()))) for m in _modifiers_of(t)))
+        banks = tuple((scheme, tuple(b.ids())) for scheme, b in self._banks().items())
+        return (id(t), rows, t.macros_serial, subs, mods, banks,
+                getattr(self.reg, "serial", 0))
+
+    def build_patch(self) -> patchmod.Patch:
+        """The modulation graph of this table (patch.py's nodes and edges):
+        every bank voice (when the router steps the bank: each LFO, by id)
+        and modifier first, in their
+        order; then per route, in table order, its source, its gate, its
+        `scale`, its macros' depth subscribers and its target, with a `mod`
+        edge for the row — one cable per route, ``(source, target)`` — and
+        a `when` / `depth` edge for each of the rest; the macros' base
+        subscribers as `base` edges; each voice's knob params (and the
+        bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
+        holds them, into their node. A switched-off row's edges are drawn
+        disabled. No loop is cut here (`patch` does that)."""
+        g = patchmod.Patch()
+        t = self.table
+        for scheme, bank in self._banks().items():
+            for n in bank.ids():
+                g.add(f"{scheme}:{n - 1}", scheme)
+        mods = _modifiers_of(t)
+        for m in mods:
+            g.add(_modifier_node(m), "modifier", delay=getattr(m, "kind", "") == "delay")
+
+        def source(addr: str) -> str:
+            scheme, i = self.lane(addr)
+            if scheme in BANKS and i >= 0:
+                return g.add(f"{scheme}:{i}", scheme).id
+            return g.add(addr, "source").id
+
+        def param(pid: str) -> str:
+            return g.add(pid, "macro" if is_macro(pid) else "param").id
+
+        for m in mods:
+            for inp in getattr(m, "inputs", ()):
+                if inp:                                  # "" is an input not chosen yet
+                    g.link(source(inp), _modifier_node(m), "in")
+        for b in t.routes():
+            cable, on = (b.source, b.target), b.enabled
+            src = source(b.source)
+            gate = source(b.when) if b.when is not None else None
+            scale = param(b.scale) if b.scale is not None else None
+            subs = [param(mid) for mid, _ in t.depth_subs(b)]
+            dst = param(b.target)
+            g.link(src, dst, "mod", cable, on)
+            if gate is not None:
+                g.link(gate, dst, "when", cable, on)
+            if scale is not None:
+                g.link(scale, dst, "depth", cable, on)
+            for mid in subs:
+                g.link(mid, dst, "depth", cable, on)
+        for mid in sorted(t.macros, key=_macro_n):
+            for s in t.macros[mid].subs:
+                if s.base is not None:
+                    g.link(param(mid), param(s.base), "base")
+        voices = [(n.id, n.kind) for n in g.nodes.values() if n.kind in BANKS]
+        for nid, scheme in voices:
+            cls = BANKS[scheme]
+            n = int(nid.split(":")[1]) + 1
+            for k in cls.KNOBS:
+                if f"{scheme}.{n}.{k}" in g.nodes:
+                    g.link(f"{scheme}.{n}.{k}", nid, k)
+            for pid, port in cls.SHARED.items():
+                if pid in g.nodes:
+                    g.link(pid, nid, port)
+        for m in mods:
+            prefix = f"{getattr(m, 'id', '')}."
+            for nid, node in list(g.nodes.items()):
+                if node.kind == "param" and nid.startswith(prefix):
+                    g.link(nid, _modifier_node(m), nid[len(prefix):])
+        return g
+
+    @property
+    def patch(self) -> patchmod.Patch:
+        """The table's modulation patch as `modulate` runs it: `build_patch`,
+        with every loop that passes through no delay modifier broken at its
+        last cable in table order — that cable's edges disabled and a note
+        in `patch_notes` (ROUTING's head shows it), the row itself left in
+        the table and the file as it is. Cached: rebuilt when `_patch_key`
+        moves (the table, the banks' ids, the registry's params), with the
+        evaluation plan `modulate` walks."""
+        d = self.__dict__
+        key = self._patch_key()
+        if d.get("_patch_seen") != key:
+            self._rebuild_patch(key)
+        return d["_patch"]
+
+    @property
+    def patch_notes(self) -> list[str]:
+        """One note per cable the patch keeps off to break a loop."""
+        self.patch                                   # noqa: B018 — current
+        return self.__dict__["_patch_notes"]
+
+    @property
+    def patch_cut(self) -> set[tuple[str, str]]:
+        """The cables, ``(source, target)``, kept off to break a loop."""
+        self.patch                                   # noqa: B018 — current
+        return self.__dict__["_patch_cut"]
+
+    def _rebuild_patch(self, key: tuple) -> None:
+        g = self.build_patch()
+        t = self.table
+        rank: dict[tuple[str, str], int] = {}
+        for k, b in enumerate(t.bindings):
+            if b.op in MOD_OPS:
+                rank[(b.source, b.target)] = k
+        mods = _modifiers_of(t)
+        mod_ids = {_modifier_node(m): getattr(m, "id", "") for m in mods}
+        mod_rank = {node: modifiers.number(mid) or 0 for node, mid in mod_ids.items()}
+        cut: set[tuple[str, str]] = set()
+        cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
+        notes: list[str] = []
+        while True:
+            loops = patchmod.cycles(g)
+            if not loops:
+                break
+            loop = loops[0]
+            said = " → ".join([*loop, loop[0]])
+            hops = set(zip(loop, [*loop[1:], loop[0]], strict=True))
+            on_loop = [e for e in patchmod.ordering(g) if (e.src, e.dst) in hops]
+            cables = {e.cable for e in on_loop if e.cable is not None}
+            if cables:
+                # the loop's last cable in table order
+                off = max(cables, key=lambda c: rank.get(c, -1))
+                g.edges = [replace(e, enabled=False) if e.cable == off else e for e in g.edges]
+                cut.add(off)
+                notes.append(f"loop: {said} needs a delay — "
+                             f"{off[0]} → {off[1]} is off until it has one")
+                continue
+            # a loop of modifiers alone (`in` edges carry no cable): the last
+            # modifier's input on it, in modifier id order, is kept off — that
+            # modifier is dormant until the loop has a delay
+            ins = [e for e in on_loop if e.port == "in" and e.dst in mod_rank]
+            last = max(ins, key=lambda e: mod_rank[e.dst]) if ins else on_loop[-1]
+            g.edges = [replace(e, enabled=False) if e is last else e for e in g.edges]
+            cut_in.add((last.src, last.dst))
+            who = mod_ids.get(last.dst, last.dst)
+            notes.append(f"loop: {said} needs a delay — {who}'s input {last.src} "
+                         f"is off until it has one")
+        # the evaluation plan: per node in order, what `modulate` does there
+        banks = self._banks()
+        reads = {e.src for e in patchmod.ordering(g)}
+        by_target: dict[str, list] = {}
+        for b in t.mods():
+            if (b.source, b.target) not in cut:
+                by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
+        # a delay closing a loop runs before its input (`patch.ordering`):
+        # it emits that input's lane as it stands — last frame's value
+        live = [e for e in g.edges if e.enabled and e.port == "in"]
+        ordered = {id(e) for e in patchmod.ordering(g)}
+        early = {e.dst for e in live if id(e) not in ordered}
+        dormant = {node for _, node in cut_in}
+        plan: list[tuple] = []
+        for node in patchmod.order(g):
+            if node.kind in banks:
+                i = int(node.id.split(":")[1])
+                if i + 1 in banks[node.kind]:          # a gap, or past the last: no voice
+                    plan.append(("bank", node.kind, i))
+            elif node.kind == "modifier" and node.id in mod_ids:
+                plan.append(("modifier", mod_ids[node.id], node.id in early,
+                             node.id in dormant))
+            elif node.kind in ("param", "macro"):
+                rows = by_target.get(node.id, [])
+                land = node.id in reads
+                if rows or land:
+                    plan.append(("param", node.id, rows, land))
+        d = self.__dict__
+        d["_patch"], d["_plan"], d["_patch_seen"] = g, plan, key
+        d["_patch_notes"], d["_patch_cut"] = notes, cut | cut_in
+
+    # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
+
+    def _reading(self, address: str, lanes) -> float | None:
+        """A source address's reading this frame, as a modifier reads its
+        input: the analyzer's lane (`lanes`, already normalised) for
+        ``lane:``, else the scheme's fed vector; None while it is not
+        live — not fed, no such lane, a name the map lacks, NaN."""
+        if not address:
+            return None
+        scheme, i = self.lane(address)
+        vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+        if vec is None or not 0 <= i < len(vec):
+            return None
+        u = float(vec[i])
+        return None if math.isnan(u) else u
+
+    def _step_modifier(self, mid: str, dt: float, lanes=None, *, early: bool = False,
+                       cut: bool = False) -> float | None:
+        """Step one modifier (`modifiers.step`) on its inputs' readings and
+        write its output into its ``mod`` lane — the vector
+        `_publish_modifiers` publishes. One call per node: N0's patch
+        evaluation calls it in dependency order. An input that is not live
+        leaves the node dormant — its lane NaN, so a route on it lets go
+        like a route on that source would — and its memory starts afresh
+        when the input comes back. Returns the output (None: dormant).
+
+        `early` (plan 28 N0): a delay that closes a loop, run before its
+        input — it emits that input's lane as it stands, last frame's
+        value, so the loop is exactly one frame late. `cut`: a modifier
+        whose input `patch` keeps off to break a loop with no delay: dormant."""
+        m = self.table.modifier(mid)
+        vec = self.feeds.get(modifiers.SCHEME)
+        if m is None or vec is None or not 0 <= m.n < len(vec):
+            return None
+        states = self.__dict__.setdefault("_mod_states", {})
+        reads = [self._reading(a, lanes) for a in m.inputs]
+        if early and m.kind == "delay" and not cut:
+            # a delay closing a loop runs before its input (plan 28 N0): its
+            # input's lane as it stands is last frame's value — the loop's
+            # one frame; not stepped yet (the loop's first frame), its rest
+            out = reads[0] if reads[0] is not None else modifiers.REST
+            vec[m.n] = out
+            return float(out)
+        if cut or any(u is None for u in reads):
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        hit = states.get(mid)
+        if hit is None or hit[0] != m.kind:
+            hit = states[mid] = (m.kind, ModState())
+        out = modifiers.step(m, tuple(reads), hit[1], dt)
+        if not math.isfinite(out):
+            # a non-finite output (an input that read ±inf): not live, and
+            # its memory is dropped, so the next finite reading starts afresh
+            states.pop(mid, None)
+            vec[m.n] = math.nan
+            return None
+        vec[m.n] = out
+        return float(out)
+
+    def _publish_modifiers(self) -> None:
+        """The ``mod`` scheme's labels, rests, gates and signal kinds, as
+        an adapter publishes its lanes' — once the table's modifiers
+        change. No modifiers: the scheme is not offered at all."""
+        mods = self.table.modifiers
+        if not mods:
+            for d in (self.feeds, self.labels, self.rests, self.gates, self.lane_kinds):
+                d.pop(modifiers.SCHEME, None)
+            return
+        n = max(m.n for m in mods) + 1
+        labels, kinds = [""] * n, [modifiers.VALUE] * n
+        for m in mods:
+            labels[m.n] = f"{m.n} {m.kind}"
+            kinds[m.n] = m.out
+        sc = modifiers.SCHEME
+        self.labels[sc], self.rests[sc] = labels, [modifiers.REST] * n
+        self.lane_kinds[sc] = kinds
+        # a threshold's fire is a switch a row's `when` can wait on
+        self.gates[sc] = [(m.n, f"mod {m.n} {m.kind}") for m in mods
+                          if m.out == modifiers.TRIGGER]
+        old = self.feeds.get(sc)
+        vec = np.full(n, math.nan)
+        if old is not None:                  # last frame's outputs stand until stepped
+            vec[:min(n, len(old))] = old[:n]
+        self.feed(sc, vec)                   # written in place per node after this
+
+    @property
+    def lane_kinds(self) -> dict[str, list[str]]:
+        """scheme → each lane's signal kind, "value" or "trigger" (decision
+        10), published like `labels` by a source that has triggers: today
+        the ``mod`` lanes, where a threshold's output is a trigger. A
+        trigger lane is still read as a value (1 while it fires, else 0)."""
+        d = self.__dict__.get("_lane_kinds")
+        if d is None:
+            d = self.__dict__["_lane_kinds"] = {}
+        return d
+
+    def _sync_modifiers(self) -> None:
+        """Once the table's modifiers change (`modifiers_serial`, and on the
+        first pass): their lanes republished (`_publish_modifiers`) and a
+        removed modifier's memory dropped. The pass then steps each one at
+        its node, in dependency order (plan 28 N0) — `_step_modifier`."""
+        serial = getattr(self.table, "modifiers_serial", 0)
+        if self.__dict__.get("_mods_seen") == serial and (
+                not self.table.modifiers or modifiers.SCHEME in self.feeds):
+            return
+        self.__dict__["_mods_seen"] = serial
+        self._publish_modifiers()
+        live = {m.id for m in self.table.modifiers}
+        states = self.__dict__.setdefault("_mod_states", {})
+        for mid in [k for k in states if k not in live]:
+            del states[mid]
+
+    def modulate(self, analyzer=None, dt: float | None = None,
+                 now: float | None = None) -> None:
         """The frame's modulation pass — the one path a continuous source
-        has to a param: every enabled performer row whose source is live
-        calls modulate on its target. `analyzer` is the live one, or None
-        while no audio source runs (its lanes are then not a source). `dt`
-        is the frame's, for the rows' motion (`feel_of`); None, a 60 Hz
-        frame. A row that does not act this frame — its source not live,
-        its gate shut — loses its follower, and starts afresh."""
+        has to a param — over the patch **in dependency order** (plan 28
+        N0, decision 7). Every bank begins first (`use_bank`: a held global
+        trigger lands), then the sequencer steps (`use_sequencer`: its
+        fires queued on the envelopes, its pulses fed); at a voice's node — an LFO's — it steps (`now`
+        the frame's time, the clock's when None) and its lane is fed; at a
+        modifier's, `_step_modifier`; at a param's, every enabled performer
+        row on it whose source is live calls modulate on it — depth =
+        value × scale × Π depth subscribers, the follower, push /
+        position — and a param that a later node reads (a `scale`, a macro
+        behind a depth subscriber, an LFO's knob) is landed **now**
+        (`Param.apply` under the frame's mark), so its reader sees this
+        frame's value. Every other param lands in `reg.apply()` as before.
+        `analyzer` is the live one, or None while no audio source runs
+        (its lanes are then not a source). `dt` is the frame's, for the
+        rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
+        act this frame — its source not live, its gate shut — loses its
+        follower, and starts afresh. A cable `patch` keeps off to break a
+        loop does not run."""
         dt = 1 / 60 if dt is None else dt
+        self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
+        self.patch                                   # noqa: B018 — the cached plan, current
+        plan = self.__dict__["_plan"]
+        begin = getattr(self.reg, "begin_frame", None)
+        mark = begin() if begin is not None else None
+        banks = self._banks()
+        fed: dict[str, np.ndarray] = {}
+        clock = self.__dict__.get("clock")
+        t = now if now is not None else getattr(clock, "t", 0.0)
+        for scheme, bank in banks.items():
+            bank.begin(t, clock)
+            bank.publish(self)                   # names, rests; each lane as its voice steps
+            fed[scheme] = self.feeds[scheme]
+        # plan 31 W1: after every `begin` (a held global trigger has moved
+        # the epoch), before the plan (the envelopes step at their nodes)
+        self._step_sequencer(t, clock)
         movers = self.__dict__.setdefault("_movers", {})
         moved: set = set()
         lanes = None if analyzer is None else analyzer.lanes / CEIL
@@ -2259,58 +3301,88 @@ class Router:
         # cache `lane` keeps; a miss or a republished map resolves again
         names = self.names
         cache = self.__dict__.get("_lanes", _NO_LANES)
-        for b in self.table.mods():
-            hit = cache.get(b.source)
-            if hit is None or names.get(hit[0]) is not hit[1]:
-                hit = self._resolve_lane(b.source)
-                cache = self.__dict__["_lanes"]
-            scheme, _, i = hit
-            vec = lanes if scheme == "lane" else self.feeds.get(scheme)
-            if vec is None or not 0 <= i < len(vec):
+        for step in plan:
+            kind = step[0]
+            if kind == "bank":
+                lane = fed.get(step[1])
+                if lane is not None:
+                    i = step[2]
+                    lane[i] = banks[step[1]].step_one(i, dt, t, clock)
                 continue
-            u = float(vec[i])
-            if math.isnan(u):    # this lane's source is out of view
+            if kind == "modifier":
+                self._step_modifier(step[1], dt, lanes, early=step[2], cut=step[3])
                 continue
-            if not self.gated(b):
-                continue         # gate open: apply() writes the base back
-            p = self.reg.get(b.target)
-            if p is None:
-                continue
-            depth = b.value
-            if b.scale is not None:
-                sp = self.reg.get(b.scale)
-                if sp is None:
+            for b, subs in step[2]:
+                hit = cache.get(b.source)
+                if hit is None or names.get(hit[0]) is not hit[1]:
+                    hit = self._resolve_lane(b.source)
+                    cache = self.__dict__["_lanes"]
+                scheme, _, i = hit
+                vec = lanes if scheme == "lane" else self.feeds.get(scheme)
+                if vec is None or not 0 <= i < len(vec):
                     continue
-                depth *= float(sp.value)
-            # the macros' depth subscribers on this route: × from + m·(to − from),
-            # m the macro's effective value — last frame's, as `scale` reads
-            dormant = False
-            for mid, s in self.table.depth_subs(b):
-                mp = self.reg.get(mid)
-                if mp is None:
-                    dormant = True
-                    break
-                depth *= s.at(float(mp.value))
-            if dormant:
-                continue
-            m = self.feel_of(b)
-            if m.on:
-                u = self._move(b, m, u, p, depth, dt, movers)
-                moved.add((b.source, b.target))
-            if b.op == "push":
-                # centred where the source rests — the row's own number, or
-                # the source's as published this frame: idle adds nothing
-                rest = b.rest if b.rest is not None else self.rest_of(b.source)
-                x = depth * (u - rest)
-            else:
-                # position: the source is the fader — the offset that lands
-                # it (p.norm is the base while modulated, the object before)
-                if p.kind is Kind.TEXT or not p.modulatable:
+                u = float(vec[i])
+                if math.isnan(u):    # this lane's source is out of view
                     continue
-                x = min(1.0, max(0.0, depth * u)) - p.norm
-            p.modulate(x)
+                if not self.gated(b):
+                    continue         # gate open: apply() writes the base back
+                p = self.reg.get(b.target)
+                if p is None:
+                    continue
+                depth = b.value
+                if b.scale is not None:
+                    sp = self.reg.get(b.scale)
+                    if sp is None:
+                        continue
+                    depth *= float(sp.value)
+                # the macros' depth subscribers on this route: × from + m·(to − from),
+                # m the macro's effective value — this frame's: its node ran first
+                dormant = False
+                for mid, s in subs:
+                    mp = self.reg.get(mid)
+                    if mp is None:
+                        dormant = True
+                        break
+                    depth *= s.at(float(mp.value))
+                if dormant:
+                    continue
+                m = self.feel_of(b)
+                if m.on:
+                    u = self._move(b, m, u, p, depth, dt, movers)
+                    moved.add((b.source, b.target))
+                if b.op == "push":
+                    # centred where the source rests — the row's own number, or
+                    # the source's as published this frame: idle adds nothing
+                    rest = b.rest if b.rest is not None else self.rest_of(b.source)
+                    x = depth * (u - rest)
+                else:
+                    # position: the source is the fader — the offset that lands
+                    # it (p.norm is the base while modulated, the object before)
+                    if p.kind is Kind.TEXT or not p.modulatable:
+                        continue
+                    x = min(1.0, max(0.0, depth * u)) - p.norm
+                p.modulate(x)
+            if step[3]:              # something later in the pass reads it: land it now
+                q = self.reg.get(step[1])
+                if q is not None and q._base is not None:
+                    q.apply(mark)
         for key in [k for k in movers if k not in moved]:
             del movers[key]
+
+
+def _modifiers_of(table) -> list:
+    """The table's modifiers (plan 28 N1's `Bindings.modifiers`: a list, or
+    a dict by id) — none on a table from before N1."""
+    mods = getattr(table, "modifiers", None) or ()
+    return list(mods.values() if isinstance(mods, dict) else mods)
+
+
+def _modifier_node(m) -> str:
+    """A modifier's node: its output lane's address, ``mod.3`` → ``mod:3``
+    — what a route's source names."""
+    mid = str(getattr(m, "id", ""))
+    head, dot, n = mid.partition(".")
+    return f"{head}:{n}" if dot else f"mod:{mid}"
 
 
 def _resolve(scheme: str, name: str) -> int | None:

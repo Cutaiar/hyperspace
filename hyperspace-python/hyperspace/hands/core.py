@@ -1,4 +1,5 @@
-"""Ultraleap hands — two tracked hands as twelve axes and eight switches.
+"""Ultraleap hands — two tracked hands as twelve axes and eight switches,
+and the dance sources beside them.
 
 The hands are the performing surface; the APC40 stays on presets and
 master controls. Each hand gives the palm's rigid-body pose — six axes by
@@ -14,10 +15,15 @@ when it returns. The output y ∈ [0, 1] goes two ways:
     `push` or `position` anything with it — one performer per param, the
     table's referee asks before a hand takes over. No MIDI in between,
     so no 7-bit steps and no channel shared with the APC40.
-  * outside, to a MIDI port for a DAW (a virtual "Hyperspace Hands" port
-    unless [hands] out names another): per axis 7-bit CC, 14-bit CC,
-    pitch bend or channel pressure on any channel, rate-limited, plus a
-    presence note per hand, and a note per pinch switch.
+  * outside, as MIDI for a DAW: per axis 7-bit CC, 14-bit CC, pitch
+    bend or channel pressure on any channel, rate-limited, plus a
+    presence note per hand, and a note per pinch switch. This module
+    makes the messages and opens no port (plan 27 B3): each frame's go
+    to `outbox`, and whoever carries them out drains it (`carry`) — the
+    host's `hands-daw` sink, a `midi-out` port the `[hands] out` setting
+    becomes (a virtual "Hyperspace Hands" port unless it names another),
+    which also brings the DAW up to date when its port comes back
+    (`resync`). A caller with a port of its own hands it in as `out`.
 
 What Ultraleap reports (LeapC through the ``leap`` Python bindings; units
 are the SDK's, coordinates right-handed with the origin at the camera, +y
@@ -70,14 +76,19 @@ Schmitt edge (`BOX_EDGE`) so a hand on a face does not flicker. The
 sweep sets the box from where the palms went (`_sweep_box`); "reset
 ranges" opens it; no box, the default, bounds nothing.
 
-  {"schema": "hyperspace.hands/2",
+  {"schema": "hyperspace.hands/3",
    "axes": {"left.x": {"lo": -214.2, "hi": 18.5}, …},
-   "box": {"x": [-262.0, 262.0], "y": [71.5, 402.0], "z": null}}
+   "box": {"x": [-262.0, 262.0], "y": [71.5, 402.0], "z": null},
+   "units": {"mm": null, "origin": null, "tilt": 32.0}}
 
 ``box`` is absent or null (no bounds) or has x, y, z each ``[lo, hi]``
-or null (open). A ``/1`` file has no box, is read as it is and is never
-rewritten at load; the first save over a file that is not ``/2`` first
-keeps it beside itself as ``hands.json.bak-v1`` (`_keep`).
+or null (open). ``units`` (plan 26 A2, `Units`) is the calibration from
+the Leap's mm into the shape's units — millimetres per shape unit, the
+Leap point at the world's centre, the tilt toward the eye; null for
+"from the box". A ``/1`` file has no box, a ``/2`` file no units; each
+is read as it is and never rewritten at load; the first save over a file
+that is not ``/3`` first keeps it beside itself as ``hands.json.bak-v1``
+or ``.bak-v2`` (`_keep`).
 
 The tracking service calls back on its own thread; `LeapSource` keeps
 the newest frame under a lock and the render loop reads it once per
@@ -86,9 +97,48 @@ registry.
 
 Beside the features, each frame keeps each hand's skeleton (`skeleton`):
 the palm frame and every digit's four bones, copied into plain floats on
-the SDK thread. It is display data only — the ghost hands draw it
-(hyperspace/ghost.py) — and goes through none of the shaping: no axis,
-no lane, no MIDI reads it.
+the SDK thread. The ghost hands draw it (hyperspace/ghost.py) and it goes
+through none of the axes' shaping: no axis and no MIDI reads it. The
+dance sources do (below).
+
+The dance sources (plan 24 C4, H2) sit beside the twelve axes, routable
+like them and shaped more simply (signal.py: `Smooth`, `Flick`), with no
+setup params and no DAW output:
+
+  hand:<side>.curl.<digit>  how bent each digit is (thumb … pinky), 0
+                            straight … 1 a fist: the bone-to-bone angles
+                            summed (`curls`, `bend`)
+  hand:<side>.spread        how far the fingers fan: index to pinky in
+                            the palm's plane (`spread`)
+  hand:<side>.energy        smoothed speed of the palm and the fingertips
+  hand:<side>.flick         a hit on a sharp flick: spikes to its strength
+                            and decays (`Flick`)
+  hands:gap                 the distance between the two palms (`gap`)
+  hands:twist               one hand's roll against the other's, 0.5 when
+                            they mirror each other (`twist`)
+
+The per-hand ones are lanes of the ``hand`` vector, after the pinch
+switches so no older lane moves (`Layout`); the two-hand ones are a
+scheme of their own, ``hands``, with its own rests. Each reads NaN while
+its hand is away (the pair: either hand), so a row lets go like an
+axis's; the curls and the spread need the skeleton and read NaN without
+one. The constants (ranges, time constants, the flick's thresholds) are
+under `DANCE`.
+
+The grab (plan 24 C5, H1) is a fifth switch per hand, beside the pinches:
+
+  hand:<side>.grab          a closed fist: 1 while the hand is closed, 0
+                            open — the four fingers' curls (`fist`)
+                            through a `Gate`, Schmitt + debounce like a
+                            pinch (`GRAB_CLOSE`, `GRAB_OPEN`, `GRAB_HOLD_S`)
+
+It is a lane after the dance sources (so no older lane moves) and a gate
+the routing UI offers beside the pinches (`Layout.gates`), so a row can
+act only while that hand is closed: the owner's "close a hand near the
+shape and it follows the hand; open it to let go" is `position` rows from
+the hand's roll / pitch / yaw, each `when` ``hand:right.grab``. Like the
+dance sources it has no setup params and no DAW note; it needs the
+skeleton, so with none it never closes.
 """
 
 from __future__ import annotations
@@ -110,11 +160,14 @@ from .signal import (
     HYST_14,
     OUTS,
     RESTS,
+    Flick,
     Follower,
+    Smooth,
     describe,
     encode,
     quantize,
     shape,
+    unit,
     valid,
 )
 from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no hands
@@ -122,7 +175,14 @@ from .tape import STALE_S, TapeSource  # STALE_S: no frame for this long, no han
 SIDES = ("left", "right")
 LEARN_MOVE = 0.25        # y an axis must travel to win a learn
 CAL_FILE = "hands.json"
-CAL_SCHEMA = "hyperspace.hands/2"
+# /3 (plan 26 A2): the file gains "units", the calibration from the Leap's
+# mm into the shape's units; a /2 file reads as it is (units: from the box)
+# and is kept beside itself as hands.json.bak-v2 before the first save
+CAL_SCHEMA = "hyperspace.hands/3"
+# the calibration's tilt when the file names none: the Leap's up turned
+# this far toward the eye, so the eye on the shape's axis sees the hands
+# from above as the ghost hands' own camera does (ghost.ELEVATION)
+UNITS_TILT = 32.0
 CAL_MIN_SAMPLES = 30
 # the interaction box: bounds on the palm, in the Leap's mm (plan 18 WP1)
 BOX_AXES = ("x", "y", "z")
@@ -161,12 +221,6 @@ BIPOLAR = {"x", "z", "roll", "pitch", "yaw"}
 
 DEFAULT_DOFS = ["x", "y", "z", "roll", "pitch", "yaw"]
 DEADZONE_CENTRED = 0.04  # a level hand reads exactly neutral; a height axis starts at 0
-# a lost DAW port is looked for again this often. The same number and the
-# same policy as midi.Ports (reopen only a port that is back; never a new
-# one), spelled twice because this module imports nothing from the package.
-RECONNECT_S = 2.0
-RECONNECT_FAST = 5        # looks at RECONNECT_S, then every RECONNECT_SLOW_S: each
-RECONNECT_SLOW_S = 10.0   # look makes a CoreMIDI client (midi.retry_after, audit R15)
 
 # [hands] in config.toml — the rig, not the performance. The one table:
 # config.DEFAULTS["hands"] is this dict, HandSettings.from_config and
@@ -176,7 +230,10 @@ DEFAULTS: dict = {
     "mode": "desktop",       # desktop | screentop | hmd — where the camera looks from
     "dofs": DEFAULT_DOFS,    # per hand, in axis order
     "out": "Hyperspace Hands",   # MIDI out for a DAW: an existing port by
-                                 # substring, else a virtual port ("" = none)
+                                 # substring, else a virtual port ("" = none).
+                                 # The host's: config.py makes it the
+                                 # `hands-daw` midi-out sink (plan 27 B3);
+                                 # HandsIO opens no port
     "channel": 16,           # 1-based: the default channel every axis starts on
     "cc": 102,               # left hand cc … cc+n−1, right hand cc+n … cc+2n−1
     "presence": True,        # note on/off to the DAW as each hand enters / leaves
@@ -253,6 +310,60 @@ DIGITS = ("thumb", "index", "middle", "ring", "pinky")
 BONES = ("metacarpal", "proximal", "intermediate", "distal")
 _NO_ROT = (0.0, 0.0, 0.0, 1.0)
 
+# ---- the dance sources (plan 24 C4, H2): beside the twelve axes, never
+# instead of them. Per hand, after the pinch switches in the `hand` vector:
+# five curls (DIGITS order), spread, energy, flick; and the two-hand
+# `hands` scheme: gap, twist. Each 0–1, NaN while its hand (or, for the
+# pair, either hand) is away. The curls and the spread read the skeleton
+# (`skeleton`), so a source that gives none (a palm-only fake) reads NaN
+# there; energy and flick fall back to the palm; gap and twist read the
+# features. The numbers below are the shaping (decision register draft
+# rows, plan 24 C4): ranges in the native unit, then time constants.
+DANCE = tuple(f"curl.{f}" for f in DIGITS) + ("spread", "energy", "flick")
+PAIR = ("gap", "twist")
+PAIR_RESTS = (0.0, 0.5)        # gap rests closed, twist level (it is centred)
+# a digit's bend, summed over its joints, degrees: open → 0, a fist → 1.
+# The thumb has one joint fewer that bends much, so its own range
+CURL_RANGE = {"thumb": (10.0, 80.0)}
+CURL_RANGE_FINGER = (20.0, 220.0)
+CURL_S = 0.05                  # s, the curls' and the spread's smoothing (attack = decay)
+# the fan: the angle between the index's and the pinky's proximal bones in
+# the palm's plane, degrees. A finger bent more than ~70° at the knuckle
+# has no direction in that plane: the spread reads 0 (a fist does not fan)
+SPREAD_RANGE = (10.0, 60.0)
+SPREAD_MIN_FLAT = 0.35         # in-plane length / bone length under which a finger is "down"
+# energy: the mean speed of the palm and the five tips, mm/s, over a floor
+# that a still hand's tracking jitter stays under; fast up, slow down
+ENERGY_RANGE = (60.0, 1000.0)
+ENERGY_ATTACK_S = 0.06
+ENERGY_DECAY_S = 0.5
+# flick: the fastest tip (the palm, with no skeleton), mm/s. Fires at ON,
+# re-arms under OFF, strength speed / FULL; past CEILING it is a tracking
+# jump. The hit decays with time constant FLICK_DECAY_S
+FLICK_ON = 1500.0
+FLICK_OFF = 700.0
+FLICK_FULL = 3000.0
+FLICK_CEILING = 10000.0
+FLICK_DECAY_S = 0.15
+SPEED_GAP_S = 0.1              # frames further apart than this measure no speed
+# the pair: the palms' distance, mm; and the twist — the right hand's
+# anatomical roll less the left's, so mirror-image hands (both palms down,
+# a clap) read level and turning a wheel clockwise, as the performer sees
+# it, reads up — degrees each way from level to the ends
+GAP_RANGE = (60.0, 600.0)
+TWIST_FULL = 90.0
+PAIR_S = 0.05                  # s, the pair's smoothing
+# the grab switch (plan 24 C5): a fist is the mean raw curl of the four
+# fingers (the thumb tucks or not — a fist either way). Closes past
+# GRAB_CLOSE, lets go only under GRAB_OPEN (the Schmitt gap: a hand
+# hovering half-closed does not chatter), and an edge must hold
+# GRAB_HOLD_S before it counts. Low enough that a real fist, which may
+# not bend as far as the curl range's top, still closes it
+GRAB_FINGERS = ("index", "middle", "ring", "pinky")
+GRAB_CLOSE = 0.65
+GRAB_OPEN = 0.45
+GRAB_HOLD_S = 0.05
+
 
 def _v3(v) -> tuple[float, float, float]:
     return (float(v.x), float(v.y), float(v.z))
@@ -307,6 +418,192 @@ def skeleton(hand) -> dict:
         "digits": digits,
         "arm": _bone(arm) if arm is not None and hasattr(arm, "prev_joint") else None,
     }
+
+
+def _sub(a, b) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _dot(a, b) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _len(a) -> float:
+    return math.sqrt(_dot(a, a))
+
+
+def _angle(a, b) -> float | None:
+    """Degrees between two vectors; None when either has no length."""
+    la, lb = _len(a), _len(b)
+    if la < 1e-6 or lb < 1e-6:
+        return None
+    return math.degrees(math.acos(min(1.0, max(-1.0, _dot(a, b) / (la * lb)))))
+
+
+def bend(bones: list) -> float:
+    """A digit's bend, degrees: the angles between each bone and the next,
+    summed, skipping a bone with no length (the thumb's metacarpal)."""
+    dirs = [d for d in (_sub(b["next"], b["prev"]) for b in bones) if _len(d) > 1e-6]
+    return sum(a for a in (_angle(u, v) for u, v in itertools.pairwise(dirs)) if a is not None)
+
+
+def curls(skel: dict | None) -> dict[str, float]:
+    """How bent each digit is, 0 (straight) … 1 (a fist), from a `skeleton`:
+    `bend` over CURL_RANGE. Empty when the skeleton has no digits. The
+    raw form the curl lanes smooth, and what a grab switch can read."""
+    digits = (skel or {}).get("digits") or []
+    if len(digits) != len(DIGITS):
+        return {}
+    return {f: unit(bend(d), *CURL_RANGE.get(f, CURL_RANGE_FINGER))
+            for f, d in zip(DIGITS, digits)}
+
+
+def spread(skel: dict | None) -> float | None:
+    """How far the fingers fan, 0 … 1: the angle between the index's and
+    the pinky's proximal bones, both laid into the palm's plane, over
+    SPREAD_RANGE. 0 when either finger points out of the plane (bent
+    down past SPREAD_MIN_FLAT); None with no digits or no palm normal."""
+    digits = (skel or {}).get("digits") or []
+    n = (skel or {}).get("normal")
+    if len(digits) != len(DIGITS) or n is None or _len(n) < 1e-6:
+        return None
+    nn = _len(n)
+    flat = []
+    for f in ("index", "pinky"):
+        b = digits[DIGITS.index(f)][1]                  # the proximal bone
+        d = _sub(b["next"], b["prev"])
+        k = _dot(d, n) / (nn * nn)
+        p = (d[0] - k * n[0], d[1] - k * n[1], d[2] - k * n[2])
+        if _len(d) < 1e-6 or _len(p) < SPREAD_MIN_FLAT * _len(d):
+            return 0.0
+        flat.append(p)
+    a = _angle(*flat)
+    return None if a is None else unit(a, *SPREAD_RANGE)
+
+
+def points(feats: dict, skel: dict | None) -> list[tuple[float, float, float]]:
+    """What energy and flick watch move: the palm, then the five
+    fingertips when the skeleton has them (mm). Empty for a frame without
+    a whole palm: nothing measured."""
+    palm = _palm(feats)
+    if palm is None:
+        return []
+    out = [palm]
+    digits = (skel or {}).get("digits") or []
+    if len(digits) == len(DIGITS):
+        out += [tuple(d[-1]["next"]) for d in digits]
+    return out
+
+
+def _palm(feats: dict) -> tuple[float, float, float] | None:
+    """The palm's (x, y, z) from `features`, None unless all three are finite."""
+    try:
+        p = tuple(float(feats[c]) for c in BOX_AXES)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return p if all(math.isfinite(v) for v in p) else None
+
+
+def twist(left: dict, right: dict) -> float | None:
+    """The right hand's roll less the left's (`features`, anatomical:
+    mirror-image hands read 0), wrapped to ±180°, over ±TWIST_FULL about
+    0.5. None when either roll is missing."""
+    try:
+        d = float(right["roll"]) - float(left["roll"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not math.isfinite(d):
+        return None
+    return unit((d + 180.0) % 360.0 - 180.0, -TWIST_FULL, TWIST_FULL)
+
+
+def gap(left: dict, right: dict) -> float | None:
+    """The distance between the palms (`features` x, y, z) over GAP_RANGE;
+    None without both whole palms."""
+    a, b = _palm(left), _palm(right)
+    return None if a is None or b is None else unit(math.dist(a, b), *GAP_RANGE)
+
+
+def fist(c: dict | None) -> float | None:
+    """How closed the hand is, 0 open … 1 a fist: the mean of the four
+    fingers' curls (`curls`, raw), the thumb left out. None unless all
+    four were read (no skeleton): the grab switch then holds where it is."""
+    try:
+        v = [float(c[f]) for f in GRAB_FINGERS]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return sum(v) / len(v) if all(math.isfinite(x) for x in v) else None
+
+
+def step_grab(gate: Gate, c: dict | None, t: float) -> bool:
+    """Step one hand's grab switch from its raw curls. `Gate` closes
+    *under* its threshold (a pinch's distance), so it is fed how open
+    the hand is, 1 − `fist`: it closes when the fist passes GRAB_CLOSE
+    and lets go when it falls under GRAB_OPEN."""
+    f = fist(c)
+    return gate.step(None if f is None else 1.0 - f, t, close=1.0 - GRAB_CLOSE,
+                     open_=1.0 - GRAB_OPEN, hold=GRAB_HOLD_S)
+
+
+class Dance:
+    """One hand's dance sources at run time — never saved. `curl` is per
+    digit (DIGITS); `raw` the last unsmoothed readings (the curls by
+    digit, the spread, the energy's and the flick's speeds in mm/s), for
+    the page and for anything — a grab switch — that wants the curls
+    before smoothing."""
+
+    def __init__(self) -> None:
+        self.curl = {f: Smooth() for f in DIGITS}
+        self.spread = Smooth()
+        self.energy = Smooth()
+        self.flick = Flick()
+        self.raw: dict = {}
+        self._prev: tuple | None = None     # (t, points) of the last tracking frame
+        self._target = 0.0                  # the energy's last measured target
+
+    def reset(self) -> None:
+        """The hand left: every reading forgets."""
+        for sm in (*self.curl.values(), self.spread, self.energy):
+            sm.y = None
+        self.flick.reset()
+        self.raw, self._prev, self._target = {}, None, 0.0
+
+    def step(self, dt: float, t: float, fresh: bool, feats: dict | None,
+             skel: dict | None) -> None:
+        """One render frame; `feats` None while the hand is away. A fresh
+        tracking frame measures (curls, spread, speeds); every frame
+        smooths, and the flick decays."""
+        if feats is None:
+            self.reset()
+            return
+        top = None
+        if fresh or not self.raw:
+            # no speed measured this frame (the first after a gap, or the
+            # point count changed): the energy falls toward 0 at its decay
+            # rather than holding its last target
+            speed, self._target = None, 0.0
+            pts = points(feats, skel)
+            prev, self._prev = self._prev, (t, pts)
+            if (pts and prev is not None and len(prev[1]) == len(pts)
+                    and 0.0 < t - prev[0] <= SPEED_GAP_S):
+                v = [math.dist(a, b) / (t - prev[0]) for a, b in zip(pts, prev[1])]
+                speed, top = sum(v) / len(v), max(v[1:] or v)
+                self._target = unit(speed, *ENERGY_RANGE)
+            self.raw = {"curl": curls(skel), "spread": spread(skel), "energy": speed,
+                        "flick": top}
+        c = self.raw["curl"]
+        for f in DIGITS:
+            self.curl[f].step(dt, c.get(f), CURL_S, CURL_S)
+        self.spread.step(dt, self.raw["spread"], CURL_S, CURL_S)
+        self.energy.step(dt, self._target, ENERGY_ATTACK_S, ENERGY_DECAY_S)
+        self.flick.step(dt, top, on=FLICK_ON, off=FLICK_OFF, full=FLICK_FULL,
+                        decay_s=FLICK_DECAY_S, ceiling=FLICK_CEILING)
+
+    def values(self) -> list[float]:
+        """The hand's `DANCE` lanes, in order; NaN for a reading it has not got."""
+        nan = lambda y: math.nan if y is None else y
+        return ([nan(self.curl[f].y) for f in DIGITS]
+                + [nan(self.spread.y), nan(self.energy.y), self.flick.y])
 
 
 class OneEuro:
@@ -702,14 +999,91 @@ def inside(box: Box | None, feats: dict, grow: float = 0.0) -> bool:
     return True
 
 
+@dataclass
+class Units:
+    """The calibration from the Leap's millimetres into the shape's units
+    (plan 26 A2): where the hands sit in the one world the shape is drawn
+    in, so the eye (`eye.*`) sees both. A point p (Leap mm) lands at
+
+        world = R_x(tilt) · stage(p − origin) / mm
+
+    where stage is the tracking mode's basis (`ghost.basis`, `ghost.mirror`
+    included) and R_x turns the stage's up `tilt` degrees toward the eye.
+    `mm` is how many millimetres make one shape unit (the shape's unit
+    circumradius) and `origin` the Leap point at the world's centre — each
+    None for "from the box": the box's centre, and the scale that fits the
+    padded box in the eye's frame as the ghost hands' camera fits it
+    (`ghost.calibration`). Room settings, beside the ranges and the box in
+    hands.json; the defaults are all "from the box"."""
+
+    mm: float | None = None
+    origin: tuple[float, float, float] | None = None
+    tilt: float = UNITS_TILT
+
+    def to_json(self) -> dict:
+        return {"mm": None if self.mm is None else round(self.mm, 4),
+                "origin": None if self.origin is None else [round(n, 3) for n in self.origin],
+                "tilt": round(self.tilt, 3)}
+
+
+def load_units(path: Path | None) -> Units:
+    """The calibration in the file, or the defaults (all from the box) when
+    it has none: no file, a /1 or /2 file, ``"units": null``. A bad entry
+    is left at its default and said once on stderr — a typo never moves
+    the hands out of the frame."""
+    if path is None or not path.exists():
+        return Units()
+    try:
+        raw = json.loads(path.read_text()).get("units")
+    except (OSError, ValueError, AttributeError):
+        return Units()
+    if raw is None:
+        return Units()
+    if not isinstance(raw, dict):
+        print(f"hands: {path.name}: units: not an object ({str(raw)[:40]!r}); from the box",
+              file=sys.stderr)
+        return Units()
+
+    def number(v) -> float | None:
+        ok = (isinstance(v, (int, float)) and not isinstance(v, bool)
+              and math.isfinite(float(v)))
+        return float(v) if ok else None
+
+    out = Units()
+    mm, origin, tilt = raw.get("mm"), raw.get("origin"), raw.get("tilt", UNITS_TILT)
+    if mm is not None:
+        n = number(mm)
+        if n is None or n <= 0.0:
+            print(f"hands: {path.name}: units.mm: not a positive number ({str(mm)[:40]!r}); "
+                  "from the box", file=sys.stderr)
+        else:
+            out.mm = n
+    if origin is not None:
+        ns = [number(v) for v in origin] if isinstance(origin, (list, tuple)) else []
+        if len(ns) != 3 or any(n is None for n in ns):
+            print(f"hands: {path.name}: units.origin: not [x, y, z] ({str(origin)[:40]!r}); "
+                  "from the box", file=sys.stderr)
+        else:
+            out.origin = (ns[0], ns[1], ns[2])
+    if tilt is not None:
+        n = number(tilt)
+        if n is None:
+            print(f"hands: {path.name}: units.tilt: not a number ({str(tilt)[:40]!r}); "
+                  f"{UNITS_TILT:g}°", file=sys.stderr)
+        else:
+            out.tilt = n
+    return out
+
+
 def save_calibration(path: Path, ranges: dict[str, tuple[float, float]],
-                     box: Box | None = None) -> None:
+                     box: Box | None = None, units: Units | None = None) -> None:
     data = {"schema": CAL_SCHEMA,
             "axes": {k: {"lo": round(lo, 3), "hi": round(hi, 3)}
                      for k, (lo, hi) in ranges.items()},
             "box": None if box is None else
             {c: None if box.get(c) is None else [round(n, 3) for n in box[c]]
-             for c in BOX_AXES}}
+             for c in BOX_AXES},
+            "units": (units or Units()).to_json()}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=1) + "\n")
 
@@ -914,13 +1288,36 @@ def pinch_name(side: str, finger: str) -> str:
     return f"{side}.pinch.{finger}"
 
 
+def grab_name(side: str) -> str:
+    """A grab switch's address name: "right.grab"."""
+    return f"{side}.grab"
+
+
 def addresses(axes: list[AxisSettings]) -> list[str]:
     """Every hand lane's address name, in lane order: the axes as
     `[hands] dofs` spells them (`AxisSettings.name`, "left.roll"), then
     "left.present" / "right.present", then the pinch switches
-    ("left.pinch.index" … "right.pinch.pinky")."""
+    ("left.pinch.index" … "right.pinch.pinky"), then each hand's dance
+    sources ("left.curl.thumb" … "left.flick", then the right's: `DANCE`),
+    then the grab switches ("left.grab", "right.grab": `grab_name`).
+    The two-hand sources are a scheme of their own: `pair_addresses`."""
     return ([a.name for a in axes] + [f"{s}.present" for s in SIDES]
-            + [pinch_name(s, f) for s in SIDES for f in PINCHES])
+            + [pinch_name(s, f) for s in SIDES for f in PINCHES]
+            + [f"{s}.{k}" for s in SIDES for k in DANCE]
+            + [grab_name(s) for s in SIDES])
+
+
+def _dance_label(kind: str) -> str:
+    """A dance lane's short label, after the side's letter: "curl ind",
+    "spread", "energy", "flick"."""
+    what, _, finger = kind.partition(".")
+    return f"{what} {finger[:3]}" if finger else what
+
+
+def pair_addresses() -> list[str]:
+    """The ``hands`` scheme's lanes — the two hands together — by name:
+    ``hands:gap``, ``hands:twist`` (`PAIR`)."""
+    return list(PAIR)
 
 
 def default_addresses() -> list[str]:
@@ -938,35 +1335,57 @@ class Layout:
     its lane and is what the adapter publishes as ``router.names["hand"]``,
     so a row keeps its axis whatever order or subset `dofs` lists, and a
     name this rig lacks is dormant. ``hand:<i>`` — the lane at index i —
-    still reads, which is why the switches stay last. The labels and the
-    gate list are published beside it (`labels["hand"]`, `gates["hand"]`);
-    `presence` and `gate` are the index maps `lanes()` and `rests()` fill
-    by.
+    still reads, which is why every lane added since goes after the
+    switches (the dance sources, plan 24 C4; then the grab switches, C5):
+    no older lane moves. The labels and the gate list are published beside
+    it (`labels["hand"]`, `gates["hand"]`: the eight pinches, then the two
+    grabs); `presence`, `gate`, `dance` and `grab` are the index maps
+    `lanes()` and `rests()` fill by. Every count here is derived — a
+    caller reads `n`, never a number of its own.
+
+    The two-hand ``hands`` scheme is laid out here too — `pair_names`,
+    `pair_addresses`, `pair_index` (``hands:gap``, ``hands:twist``) — a
+    vector of its own, fed beside the ``hand`` one (`pair_lanes`).
     """
 
-    __slots__ = ("addresses", "gate", "gates", "index", "n", "n_axes", "names", "presence")
+    __slots__ = ("addresses", "dance", "gate", "gates", "grab", "index", "n", "n_axes",
+                 "names", "pair_addresses", "pair_index", "pair_names", "presence")
 
     def __init__(self, axes: list[AxisSettings]):
         self.n_axes = len(axes)
         self.presence = {s: self.n_axes + i for i, s in enumerate(SIDES)}
         self.gate = {(s, f): self.n_axes + len(SIDES) + i * len(PINCHES) + k
                      for i, s in enumerate(SIDES) for k, f in enumerate(PINCHES)}
-        self.n = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
+        base = self.n_axes + len(SIDES) + len(SIDES) * len(PINCHES)
+        self.dance = {(s, k): base + i * len(DANCE) + j
+                      for i, s in enumerate(SIDES) for j, k in enumerate(DANCE)}
+        base += len(SIDES) * len(DANCE)
+        self.grab = {s: base + i for i, s in enumerate(SIDES)}
+        self.n = base + len(SIDES)
         self.names = ([a.label for a in axes]
                       + [f"{s[0].upper()} in" for s in SIDES]
-                      + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES])
+                      + [f"{s[0].upper()} {f[:3]}" for s in SIDES for f in PINCHES]
+                      + [f"{s[0].upper()} {_dance_label(k)}" for s in SIDES for k in DANCE]
+                      + [f"{s[0].upper()} grab" for s in SIDES])
         self.addresses = addresses(axes)
         self.index = {name: i for i, name in enumerate(self.addresses)}
-        self.gates =[(self.gate[(s, f)], self.names[self.gate[(s, f)]])
-                      for s in SIDES for f in PINCHES]
+        self.gates = ([(self.gate[(s, f)], self.names[self.gate[(s, f)]])
+                       for s in SIDES for f in PINCHES]
+                      + [(self.grab[s], self.names[self.grab[s]]) for s in SIDES])
+        self.pair_names = list(PAIR)
+        self.pair_addresses = pair_addresses()
+        self.pair_index = {name: i for i, name in enumerate(self.pair_addresses)}
 
 
 class HandsIO:
     """Polled once per render frame: source → axes → hand lanes, DAW MIDI.
 
-    `source` is anything with ``latest()`` (tests pass a fake); `out` an
-    object with ``send()``, else the port `cfg["out"]` names is opened —
-    and, like midi.Ports, reopened every RECONNECT_S after it fails.
+    `source` is anything with ``latest()`` (tests pass a fake). The DAW
+    messages: with `out` (an object with ``send()``, the caller's — a
+    test's fake, a tool's port) each frame's go straight to it, and one
+    that fails is let go of, never reopened; without one they wait in
+    `outbox` for the frame's carrier (`carry`: the host's `hands-daw`
+    sink, plan 27 B3), and nothing here opens a port.
     """
 
     def __init__(self, settings: HandSettings, cfg: dict | None = None, *, source=None,
@@ -978,6 +1397,9 @@ class HandsIO:
         cal = load_calibration(cal_path)
         # the interaction box, None for no bounds (the default, an old file)
         self.box: Box | None = load_box(cal_path)
+        # the calibration into the shape's units (plan 26 A2), from the box
+        # unless the file says otherwise
+        self.units: Units = load_units(cal_path)
         self.state = []
         for a in settings.axes:
             lo, hi = default_range(a.side, a.feature)
@@ -992,20 +1414,21 @@ class HandsIO:
         self.layout = Layout(settings.axes)
         self._rests: list[float] | None = None      # the rests vector last published
         self.error = ""
-        # the DAW port: an injected one is the caller's and never reopened.
-        # One opened by name is looked for again every RECONNECT_S after it
-        # fails — an existing port only, unless the first open had to make a
-        # virtual one (then a virtual one is made again); the DAW is resynced
-        # when it comes back
-        self._out_match = "" if out is not None else (self.cfg.get("out") or "")
-        self._out_virtual: bool | None = None      # what the first open made
-        self._out_next = 0.0
-        self._out_misses = 0
-        self._lost = False
+        # the DAW messages: a port of the caller's (`out`, never reopened),
+        # else this frame's wait in `outbox` for the carrier (`carry`), which
+        # names its port (`daw`) and says why it has none (`daw_error`)
         self.out = out
+        self.outbox: list[mido.Message] = []
+        self.daw = ""
+        self.daw_error = ""
         self.present = {s: False for s in SIDES}
         # the eight pinch switches, whether or not the ratios are axes
         self.gates = {s: {f: Gate() for f in PINCHES} for s in SIDES}
+        # the dance sources (plan 24 C4): each hand's, and the pair's
+        self.dance = {s: Dance() for s in SIDES}
+        self.pair = {k: Smooth() for k in PAIR}
+        # the grab switches (plan 24 C5): a closed fist, from the curls
+        self.grab = {s: Gate() for s in SIDES}
         self.frame: dict[str, dict | None] = {s: None for s in SIDES}  # native features
         # side → the features of a hand the tracker sees but the box keeps
         # out: absent to everything, drawn hollow on the HANDS page
@@ -1027,8 +1450,6 @@ class HandsIO:
         self._kept = False      # this build's one backup of an old file was made
         self._cal_until = 0.0
         self.cal_note = ""
-        if out is None:
-            self._open()
 
     @property
     def axes(self) -> list[AxisSettings]:
@@ -1044,7 +1465,11 @@ class HandsIO:
 
     @property
     def out_name(self) -> str:
-        return getattr(self.out, "name", "") if self.out is not None else ""
+        """The DAW port's name: the caller's port's, else the one the
+        carrier last sent through (`carry`); "" with none."""
+        if self.out is not None:
+            return getattr(self.out, "name", "")
+        return getattr(self, "daw", "")
 
     def axis(self, name: str) -> int:
         """Index of "left.pitch" etc.; ValueError when there is none."""
@@ -1078,33 +1503,84 @@ class HandsIO:
         so a routing row lets go and the base returns the frame the hand
         leaves; the spring and `hold` shape only the DAW output
         (`Follower.live`; the catch glide on a returning hand is live).
-        Then presence (1 in view, 0 not) and the pinch switches (1 closed)."""
-        lay = self.layout
+        Then presence (1 in view, 0 not), the pinch switches (1 closed),
+        each hand's dance sources (`DANCE`: NaN while the hand is away,
+        or for a reading its source cannot give — no skeleton, no curls),
+        and the grab switches (1 a closed fist, 0 open or away)."""
+        lay = self._layout()
         out = [math.nan] * lay.n
         out[:lay.n_axes] = [st.y if st.follow.live else math.nan for st in self.state]
         for s in SIDES:
             out[lay.presence[s]] = 1.0 if self.present[s] else 0.0
             for f in PINCHES:
                 out[lay.gate[(s, f)]] = 1.0 if self.gates[s][f].on else 0.0
+            if self.present[s]:
+                for k, v in zip(DANCE, self.dance[s].values()):
+                    out[lay.dance[(s, k)]] = v
+            out[lay.grab[s]] = 1.0 if self._grabs()[s].on else 0.0
         return out
 
     def rests(self) -> list[float]:
         """Where each lane idles — the axis's own configured rest, so a
         push row centred on it pushes nothing from an absent hand whatever
-        the setup says `rest` is; presence and pinches 0."""
-        out = [0.0] * self.layout.n
-        out[:self.layout.n_axes] = [float(a.rest_value) for a in self.axes]
+        the setup says `rest` is; presence, pinches, the dance sources and
+        the grabs 0 (an open, still hand)."""
+        lay = self._layout()
+        out = [0.0] * lay.n
+        out[:lay.n_axes] = [float(a.rest_value) for a in self.axes]
         return out
+
+    def pair_lanes(self) -> list[float]:
+        """This frame's ``hands`` vector (`PAIR`: gap, twist), NaN unless
+        both hands are present."""
+        both = all(self.present[s] for s in SIDES)
+        return [self.pair[k].y if both and self.pair[k].y is not None else math.nan
+                for k in PAIR]
+
+    def pair_rests(self) -> list[float]:
+        """Where the ``hands`` lanes idle: the gap closed, the twist level."""
+        return list(PAIR_RESTS)
+
+    def _dances(self, dt: float, t: float, fresh: bool) -> None:
+        """Step each hand's dance sources and the pair's from this frame's
+        features (`frame`, present hands only) and skeletons."""
+        if getattr(self, "dance", None) is None:      # a HandsIO from before a hot reload
+            self.dance = {s: Dance() for s in SIDES}
+            self.pair = {k: Smooth() for k in PAIR}
+        for s in SIDES:
+            self.dance[s].step(dt, t, fresh, self.frame[s], self.skeleton.get(s))
+            # the grab: from this hand's raw curls; a hand that left drops it
+            gate = self._grabs()[s]
+            if self.frame[s] is None:
+                gate.reset()
+            else:
+                step_grab(gate, self.dance[s].raw.get("curl"), t)
+        left, right = self.frame["left"], self.frame["right"]
+        both = left is not None and right is not None
+        for k, fn in (("gap", gap), ("twist", twist)):
+            self.pair[k].step(dt, fn(left, right) if both else None, PAIR_S, PAIR_S)
+
+    def _grabs(self) -> dict[str, Gate]:
+        """The grab switches, made for a HandsIO from before a hot reload."""
+        if getattr(self, "grab", None) is None:
+            self.grab = {s: Gate() for s in SIDES}
+        return self.grab
+
+    def _layout(self) -> Layout:
+        """The layout, rebuilt when it is one from before a hot reload
+        (no address map, no dance, pair or grab lanes)."""
+        if (getattr(self.layout, "pair_index", None) is None
+                or getattr(self.layout, "grab", None) is None):
+            self.layout = Layout(self.axes)
+        return self.layout
 
     def _publish(self, router) -> None:
         """The layout to the router: the address map, names and switches
         once per router (they only change with the setup, which builds a
         new adapter), the rests only when a rest value moved. `feed` is
         every frame."""
-        lay = self.layout
-        if getattr(lay, "index", None) is None:      # a Layout from before a hot reload
-            self.layout = lay = Layout(self.axes)
-        names = getattr(router, "names", None)       # None: a router that knows no names
+        lay = self._layout()
+        names = getattr(router, "names", None)      # None: a router that knows no names
         if router.labels.get("hand") is not lay.names or (
                 names is not None and names.get("hand") is not lay.index):
             router.labels["hand"] = lay.names
@@ -1114,18 +1590,29 @@ class HandsIO:
             # name → lane: how the router finds `hand:right.roll` (row 20)
             if names is not None:
                 names["hand"] = lay.index
+        # the two hands together, `hands:gap` / `hands:twist`: a scheme of
+        # their own, published the same way — no switches among them
+        if router.labels.get("hands") is not lay.pair_names or (
+                names is not None and names.get("hands") is not lay.pair_index):
+            router.labels["hands"] = lay.pair_names
+            router.gates["hands"] = []
+            if names is not None:
+                names["hands"] = lay.pair_index
         rests = self.rests()
         if rests != self._rests or router.rests.get("hand") is not self._rests:
             self._rests = rests
             router.rests["hand"] = rests
+        if router.rests.get("hands") is None:
+            router.rests["hands"] = self.pair_rests()
 
     # ---- per frame ----
 
     def poll(self, dt: float, learn=None, router=None) -> list[mido.Message]:
         """One render frame. `learn` is the host's armed-param state (a
         learn.Learn: `learning`, `learn_source`) a moved axis completes;
-        `router` the routing.Router fed the ``hand`` lanes. Returns what
-        went to the DAW port (for tests and the probe)."""
+        `router` the routing.Router fed the ``hand`` lanes. Returns this
+        frame's DAW messages (for tests and the probe): sent to `out` when
+        there is one, else left in `outbox` for the carrier."""
         g = self.settings
         snap = getattr(self.source, "snapshot", None)
         if snap is not None:          # features and skeletons of one frame
@@ -1135,9 +1622,6 @@ class HandsIO:
         now = self.clock()
         fresh = seq != self._seq
         self._seq = seq
-        if self.out is None and self._out_match and now >= self._out_next:
-            self._open()              # the port was lost: look for it again, before
-            #                           the axes quantise, so a resync resends them now
         msgs: list[mido.Message] = []
         for s, side in enumerate(SIDES):
             h = hands.get(side)
@@ -1178,6 +1662,7 @@ class HandsIO:
                         note=int(self.cfg["note"]) + s, velocity=127 if here else 0))
             msgs += self._pinches(side, s, here, t)
         self._skeletons(skel)
+        self._dances(dt, t, fresh)
         for i, (a, st) in enumerate(zip(self.axes, self.state)):
             h = hands.get(a.side) if self.present[a.side] else None
             if h is None:
@@ -1207,17 +1692,16 @@ class HandsIO:
                 st.next_ok = now + (1.0 / g.rate if g.rate > 0 else 0.0)
                 msgs += encode(a.out, a.channel - 1, a.number, q)
         self._finish_calibration(now)
-        sent = None
-        for m in msgs:
-            if self.out is None:      # no port: dropped; a reopen resyncs the DAW
-                break
-            if self._send(m):
-                sent = m
-        if sent is not None:
-            self.last = describe(sent)
+        if getattr(self, "out", None) is not None:
+            self._deliver(msgs, self._send)
+        else:
+            # the carrier's (the host's hands-daw sink): this frame's only —
+            # a frame no one carried is dropped, as a missing port's always was
+            self.outbox = msgs
         if router is not None:
             live = getattr(self.source, "on", True)
             router.feed("hand", self.lanes() if live else None)
+            router.feed("hands", self.pair_lanes() if live else None)
             self._publish(router)
         if learn is not None:
             self._learn(learn)
@@ -1305,52 +1789,58 @@ class HandsIO:
             depth = float(self.settings.learn_depth)
             learn.learn_source(self.address(best), when=gate, centred=centred, depth=depth)
 
-    def _open(self) -> None:
-        """Open the port the config names; on failure say why once and
-        look again in RECONNECT_S (RECONNECT_SLOW_S after RECONNECT_FAST
-        looks that found nothing). After a loss, only a port that is back
-        (or, if the first open made a virtual port, a new virtual one),
-        and the DAW is brought up to date when it opens."""
-        self._out_misses += 1
-        self._out_next = self.clock() + (RECONNECT_S if self._out_misses <= RECONNECT_FAST
-                                         else RECONNECT_SLOW_S)
-        self.out, err, virtual = _open_out(self._out_match,
-                                           virtual=self._out_virtual is not False)
-        if err and err != self.error:
-            print(f"hands: {err}", file=sys.stderr)
-        self.error = err
-        if self.out is None:
-            return
-        self._out_misses = 0
-        if self._out_virtual is None:
-            self._out_virtual = virtual
-        if self._lost:
-            self._lost = False
-            self._resync()
+    # ---- the DAW messages, out ----
 
-    def _resync(self) -> None:
-        """The port is back after a gap the DAW did not hear: every axis
-        resends its value on the next change-check, and the notes that are
-        on right now (presence, pinches) go out again."""
+    def carry(self, send, name: str = "", error: str = "") -> list[mido.Message]:
+        """This frame's DAW messages (`outbox`) handed to `send` — a
+        callable taking one message, False when its port is gone (then the
+        rest of the frame's are dropped, as a missing port's always were) —
+        and the outbox emptied. The host's `hands-daw` sink calls it after
+        the frame's hands poll (plan 27 B3); `name` is its port's, for the
+        HANDS page (`out_name`), `error` why it has none. Returns what went
+        out."""
+        msgs, self.outbox = self.outbox, []
+        self.daw, self.daw_error = name, error
+        return self._deliver(msgs, send)
+
+    def _deliver(self, msgs: list[mido.Message], send) -> list[mido.Message]:
+        sent = []
+        for m in msgs:
+            if not send(m):
+                break
+            sent.append(m)
+        if sent:
+            self.last = describe(sent[-1])
+        return sent
+
+    def resync(self) -> list[mido.Message]:
+        """The DAW's port is back after a gap it did not hear: every axis
+        resends its value at its next change-check (this frame's, when the
+        carrier asks before the hands poll), and the notes that are on right
+        now (presence, pinches) are returned to go out again first."""
         cfg = self.cfg
         for st in self.state:
             st.q, st.next_ok = None, 0.0
         if self.solo is not None:
-            return
+            return []
         ch = int(cfg["channel"]) - 1
+        out: list[mido.Message] = []
         for s, side in enumerate(SIDES):
             if cfg["presence"] and self.present[side]:
-                self._send(mido.Message("note_on", channel=ch, note=int(cfg["note"]) + s,
+                out.append(mido.Message("note_on", channel=ch, note=int(cfg["note"]) + s,
                                         velocity=127))
             if cfg["pinch_gates"] and cfg["pinch_notes"]:
                 for k, f in enumerate(PINCHES):
                     if self.gates[side][f].on:
-                        self._send(mido.Message(
+                        out.append(mido.Message(
                             "note_on", channel=ch,
                             note=int(cfg["pinch_note"]) + s * len(PINCHES) + k, velocity=127))
+        return out
 
     def _send(self, m: mido.Message) -> bool:
-        """One message to the port; False when the port went away under it."""
+        """One message to the caller's port (`out`); False when it went
+        away under the send — it is let go of and never reopened (the
+        caller's)."""
         if self.out is None:
             return False
         try:
@@ -1360,8 +1850,6 @@ class HandsIO:
             self.error = f"send: {e}"[:120]
             _close_port(self.out)
             self.out = None
-            self._lost = True
-            self._out_next = self.clock() + RECONNECT_S
             return False
 
     # ---- calibration ----
@@ -1460,7 +1948,7 @@ class HandsIO:
         try:
             save_calibration(self.cal_path,
                              {a.name: (st.lo, st.hi) for a, st in zip(self.axes, self.state)},
-                             getattr(self, "box", None))
+                             getattr(self, "box", None), getattr(self, "units", None))
         except OSError as e:
             self.cal_note = f"save: {e}"[:120]
 
@@ -1473,6 +1961,8 @@ class HandsIO:
 def _close_port(port) -> None:
     """Best effort: a dropped or finished port is closed, so a virtual one
     is unregistered rather than left for the next open to find."""
+    # bridge._close_port's twin, kept for the caller's injected `out=`: this
+    # module may not import the host's bridge.py (tests/test_hands_boundary.py)
     if port is not None and hasattr(port, "close"):
         try:
             port.close()
@@ -1480,18 +1970,3 @@ def _close_port(port) -> None:
             pass
 
 
-def _open_out(name: str, *, virtual: bool = True) -> tuple:
-    """(port, error, made_virtual): an existing port matching `name`, else
-    — when `virtual` — a new virtual one called `name`. (None, why, False)
-    when there is no such port or the backend refuses."""
-    if not name:
-        return None, "", False
-    try:
-        hit = next((n for n in mido.get_output_names() if name.lower() in n.lower()), None)
-        if hit:
-            return mido.open_output(hit), "", False
-        if not virtual:
-            return None, f"out {name!r}: no such port", False
-        return mido.open_output(name, virtual=True), "", True
-    except Exception as e:  # noqa: BLE001 — no backend / virtual ports unsupported
-        return None, f"out {name!r}: {e}"[:120], False

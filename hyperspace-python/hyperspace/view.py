@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .geometry import RATE, rot_matrix
+from .geometry import EYE_DISTANCE, EYE_FOV, RATE, rot_matrix
 
 N_MOD = 8   # pattern.mod.* inputs the face shader reads as u_mod[N_MOD]
 RED = (1.0, 43 / 255, 43 / 255)   # the points' colour, and the panel's one accent (ui.RED)
@@ -30,6 +30,17 @@ class ViewState:
     bright: float = 1.0
     points: bool = True
     lines: bool = True
+    # the layers' opacities (plan 24 C2): 1 is the picture as it was before
+    # them, 0 draws the layer fully transparent; each multiplies the alpha
+    # draw_scene already gives an edge or a point
+    lines_alpha: float = 1.0
+    points_alpha: float = 1.0
+    # plan 26 A2b (owner, 2026-10-14): where the strokes' weight lives.
+    # False (the default) — world space: the line width and the point
+    # radius are × camera.zoom, so a stroke grows and shrinks with the shape
+    # (the pre-A2 feel). True — screen space: they keep their pixel weight
+    # whatever the zoom (A2's behaviour)
+    screen_strokes: bool = False
     playing: bool = True
     planes: list[bool] = field(default_factory=lambda: [False, False, True, True, False, False])
     ang: list[float] = field(default_factory=lambda: [0.0] * 6)
@@ -40,8 +51,22 @@ class ViewState:
     held: bool = False           # whether body is the held pose (three_d, as integrate last saw it)
     body: object = None          # a 4D shape's turn before its angles (4×4), None for none
     cut_through: bool = True     # overlay only: fills lower the window's alpha (render.py)
-    zoom: float = 1.0            # camera magnification about the view centre
-    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])  # logical px
+    # plan 26 A2: camera.zoom / camera.pan are the shape's world transform
+    # (geometry.model_matrix): its scale about the world origin and its
+    # position in world units (the unit circumradius; pan.y positive down)
+    zoom: float = 1.0
+    pan: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    # the eye (eye.* — session): the one fixed camera, framed on the Leap
+    # box; the defaults are project_h's divide (geometry.EYE_FOV / EYE_DISTANCE)
+    eye_fov: float = EYE_FOV           # degrees across the shorter side
+    eye_distance: float = EYE_DISTANCE  # world units from the origin
+    # the point clouds (cloud.* — session; plan 26 A4b, graph.PointCloud):
+    # how a recorded or live cloud is drawn in the shared camera. Nothing
+    # reads them until a `cloud` device is listed
+    cloud_size: float = 2.0      # a point's radius, logical px
+    cloud_scale: float = 0.3     # the cloud's units → world units (shape radii)
+    cloud_bright: float = 1.0    # × the point's colour
+    cloud_colors: bool = True    # the cloud's own colours; off (or none): white
     instances: int = 1           # synchronized copies, laid out by inst_layout; 0 draws nothing
     # 0 grid, 1 hex (a honeycomb spiral), 2 ring; 3–8 the 3D lattices: cubic,
     # bcc, fcc, hcp, hex prism, diamond (field.py)
@@ -54,12 +79,24 @@ class ViewState:
     inst_rate: float = 1.0       # motion angular rate, rad/s
     pattern: int = 0             # face pattern mode (0 = flat fill)
     pattern_mix: float = 1.0     # flat ↔ pattern blend
-    bmp_file: str = ""           # bitmap layer over the face pattern, "" = none
-    bmp_alpha: float = 1.0       # bitmap opacity fader
-    bmp_scale: float = 0.9       # bitmap width, face-UV units (face spans 1.0)
-    bmp_mode: int = 0            # bitmap path: 0 still, 1 orbit, 2 fig-8, 3 sway
-    bmp_amp: float = 0.15        # path amplitude about the face centre, UV units
-    bmp_rate: float = 1.0        # path angular rate, rad/s
+    # plan 32 (row 331): a media channel over the face pattern, where the
+    # one bitmap file (view.bmp_*) was; the same alpha, size and path. Which
+    # channel is the preset graph's wire into `pattern.media` (plan 33 T7:
+    # `view.media` is retired)
+    media_alpha: float = 1.0     # its opacity fader
+    media_scale: float = 0.9     # its width, face-UV units (face spans 1.0)
+    media_mode: int = 0          # its path: 0 still, 1 orbit, 2 fig-8, 3 sway
+    media_amp: float = 0.15      # path amplitude about the face centre, UV units
+    media_rate: float = 1.0      # path angular rate, rad/s
+    # the backdrop (row 330): a picture under the scene — which one is the
+    # preset graph's wire into `backdrop.image` (plan 33 T7: `backdrop.channel`
+    # is retired)
+    backdrop_alpha: float = 1.0
+    backdrop_history: bool = False   # the look-back captures the backdrop too
+    # plan 33 S: each switch node's pick (`switch[.n].select`, declared from
+    # the preset's graph: params.declare_switches) — switch name → 0 off,
+    # 1–8 its input; read once a frame by the renderer
+    switch: dict[str, int] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

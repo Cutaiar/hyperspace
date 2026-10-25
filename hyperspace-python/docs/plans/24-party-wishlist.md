@@ -17,9 +17,25 @@ points to it.
 - The party fixes (plan 24) run alongside as a small plan.
 
 (Renumbered 2026-10-14: plan 25 became the shared library, PRs #167/#168.
-Plans 24, 26 and 27 are run together from
-[`24-26-27-orchestrator-prompt.md`](24-26-27-orchestrator-prompt.md); the
-party fixes are its stream C.)
+Plans 24, 26 and 27 were run together from
+[`24-26-27-orchestrator-prompt.md`](24-26-27-orchestrator-prompt.md). As
+built: the party fixes are [`24-party-fixes.md`](24-party-fixes.md), the
+render graph [`26-render-graph.md`](26-render-graph.md) and the device
+registry [`27-device-registry.md`](27-device-registry.md).)
+
+(2026-10-16: the next round is designed. The node editor is
+[`28-node-editor.md`](28-node-editor.md), N1–N4 in one plan with
+modifiers in the preset; the palette's "sync" became **shader nodes**,
+[`30-shader-nodes.md`](30-shader-nodes.md): every effect a bitmap-in,
+bitmap-out node placeable anywhere in the render graph, the palette the
+first one moved. The desk and the faders are in Dylan's hands and are
+not in either plan. Shader nodes are built: the palette can sit on the
+hands only, on one output only, or before the trail —
+[`30-shader-nodes.md`](30-shader-nodes.md). The node editor is built
+too: the modulation runs in dependency order with no one-frame lag,
+modifiers live in the preset, and the GRAPH page draws and edits both
+graphs, the controllers as nodes and the APC40 as two —
+[`28-node-editor.md`](28-node-editor.md).)
 
 ## Render graph design decisions (owner, 2026-10-12)
 
@@ -74,6 +90,12 @@ Why depth is the hard part, from the code (see the shared doc's F2 section):
   F2 step 1 must reproduce pixel for pixel.
 
 ## Controllers as nodes (owner, 2026-10-12)
+
+(Built in plan 28's N5, as a presentation of the rows that exist: each
+listed device a node by role, the APC40 as *apc40* and *apc40 (SHIFT)*,
+a desk template as one subgraph node, a missing role as a grey
+placeholder — [`28-node-editor.md`](28-node-editor.md). Wands and drums
+are plan 29's.)
 
 Each controller instance is a node in the same editor as the render graph:
 *Wand 1*, *Drums*, *Leap*, *APC40*. Each degree of freedom is an output
@@ -159,10 +181,16 @@ appends to F1 (a Device *is* the node class) and N1–N3, with no reordering.
   - The hands must stop being their own subsystem and plug into the render
     pipeline as modular geometry (F2).
 - **Node based editor.** For both modulation and the visual pipeline.
+  (Built in plan 28: the GRAPH page, modifiers, the modulation in
+  dependency order, the render graph's wire list,
+  [`28-node-editor.md`](28-node-editor.md).)
 - **Colour palette sync / transforms.** Other installs at the event used
   restricted palettes. The owner wants a latent transform that maps the HSV
   cylinder onto a subspace that can be defined and moved live, so the
   rainbows land in a chosen slice. The doc calls it the palette fold.
+  (Built: the fold in plan 24; placeable anywhere in the render graph —
+  the hands only, one output only — as a shader node in plan 30,
+  [`30-shader-nodes.md`](30-shader-nodes.md).)
 - **DMX.** Both directions: the visuals drive the lights, and the lights are
   a controllable layer. The main reason is to interface with other people's
   lighting rigs. We own no gear yet, so we need a buy list.

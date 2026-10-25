@@ -17,6 +17,10 @@ from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
+
+# the narrowest control window that opens the panel at ui.PANEL_W (the
+# default before the 4:3 split): the small desk, glyphs only, beside it
+NARROW_CONTROL = (960, 900)
 from hyperspace.control import Control
 from hyperspace.library import Library
 from hyperspace.outputs import Slot
@@ -100,6 +104,7 @@ def build_rig(tmp_path, renderer=None):
     try:
         yield r
     finally:
+        panel.close()                   # the GRAPH page's node editor context, if drawn
         implot.destroy_context(pctx)
         imgui.destroy_context(ctx)
 
@@ -152,33 +157,54 @@ def test_system_page_shows_a_config_error_and_notes(rig, monkeypatch):
     assert not any(s.startswith("config:") for s in drawn)
 
 
-def test_system_page_shows_the_bridge(rig, monkeypatch):
-    """The DAW bridge's state — off, a port error, no port, or the ports and
-    what went out — is on the SYSTEM page (audit P3), where before its only
-    sign of life was a stderr line."""
+def test_system_page_shows_one_line_per_device(rig, monkeypatch):
+    """Plan 27 B1: every listed device — the pad, MIDI, the hands, the
+    bridge — is one line on the SYSTEM page, `role · kind · status · n
+    sources · last`, in the list's order; an `error: …` line is in the
+    warning colour. (Replaces the MIDI and bridge lines of audit P3; the
+    HANDS page keeps its own status.)"""
     import hyperspace.ui as ui_mod
+    from hyperspace import devices
 
-    drawn: list[str] = []
+    drawn: list[tuple[str, bool]] = []
     real_colored, real_disabled = imgui.text_colored, imgui.text_disabled
     monkeypatch.setattr(ui_mod.imgui, "text_colored",
-                        lambda col, s: (drawn.append(s), real_colored(col, s)))
+                        lambda col, s: (drawn.append((s, True)), real_colored(col, s)))
     monkeypatch.setattr(ui_mod.imgui, "text_disabled",
-                        lambda s: (drawn.append(s), real_disabled(s)))
+                        lambda s: (drawn.append((s, False)), real_disabled(s)))
 
-    def shown() -> list[str]:
+    def shown() -> list[tuple[str, bool]]:
         drawn.clear()
         frame(rig.panel, "system")
         imgui.end_frame()
-        return [s for s in drawn if s.startswith(("bridge", "no bridge"))]
+        return [(s, warn) for s, warn in drawn
+                if s.startswith(("no device", "pad  ·", "apc40  ·", "leap  ·", "bridge  ·"))]
 
-    assert shown() == ["no bridge — [bridge] enabled = false"]
-    b = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0)
-    rig.panel.bridge = b
-    assert shown() == ["bridge: no port"]
-    b.on, b.name, b.sent = True, "out IAC Bus 1", 42
-    assert shown() == ["bridge: out IAC Bus 1  ·  pitch, 16 lanes  ·  42 sent"]
-    b.error = "no such port"
-    assert shown() == ["bridge: no such port"]
+    assert shown() == [("no device registry", False)]
+    bridge = SimpleNamespace(on=False, name="", error="", encoding="pitch", room=16, sent=0,
+                             decoder=SimpleNamespace(n=16), close=lambda: None)
+    midi = SimpleNamespace(on=False, name="", error="", last="", profile=None, bindings=[],
+                           close=lambda: None)
+    reg = devices.DeviceRegistry(devices=[
+        devices.PadDevice("pad", io=SimpleNamespace(on=False, usb_pad=None, close=lambda: None)),
+        devices.MidiDevice("apc40", io=midi),
+        devices.OffDevice("leap", "hands"),
+        devices.BridgeDevice("bridge", io=bridge, audio=None)])
+    rig.panel.devices = reg
+    assert shown() == [("pad  ·  gamepad  ·  lost  ·  22 sources", False),
+                       ("apc40  ·  midi  ·  lost  ·  0 sources", False),
+                       ("leap  ·  hands  ·  off  ·  0 sources", False),
+                       ("bridge  ·  bridge  ·  lost  ·  16 sources", False)]
+    bridge.on, bridge.name, bridge.sent = True, "out IAC Bus 1", 42
+    midi.on, midi.name, midi.last = True, "Akai APC40", "cc 0 48 = 64"
+    assert shown()[1] == (("apc40  ·  midi  ·  connected  ·  0 sources  ·  Akai APC40  ·  "
+                           "0 bindings  ·  cc 0 48 = 64"), False)
+    assert shown()[3] == (("bridge  ·  bridge  ·  connected  ·  16 sources  ·  out IAC Bus 1  ·  "
+                           "pitch, 16 lanes  ·  42 sent"), False)
+    bridge.error = "no such port"
+    assert shown()[3] == ("bridge  ·  bridge  ·  error: no such port  ·  16 sources", True)
+    rig.panel.devices = devices.DeviceRegistry([])
+    assert shown() == [("no devices — [[devices]] in config.toml", False)]
 
 
 def _drawn(monkeypatch) -> list[str]:
@@ -832,8 +858,7 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
     frame(rig.panel, "view")
     assert "·  dim black" in drawn
     # a dim the driver refused is said on the OUTPUT page (review of PR #81)
-    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="",
-                                         bitmap_error="")
+    rig.panel.renderer = SimpleNamespace(dim_error="dim: Error: refused", pattern_error="")
     drawn.clear()
     frame(rig.panel, "output")
     assert "dim: Error: refused — the picture is not dimmed" in drawn
@@ -842,9 +867,12 @@ def test_the_dim_is_first_on_output_and_the_footer_says_so_while_dimmed(rig, mon
 def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
     """ROUTING is the one page whose list may outgrow the window: the rows
     scroll inside a child and the page itself never does, so the preset
-    strip and the header stay put (by design; audit U1)."""
+    strip and the header stay put (by design; audit U1). Plan 28 N7: the
+    routes are GRAPH's now — forty of them draw no line here — and the
+    child holds the desk, the macros, the session and the sinks, which
+    overflow it on their own."""
     reg, table = rig.reg, rig.router.table
-    for p in reg:                       # enough rows to overflow: one per free target
+    for p in reg:                       # forty routes: none of them a line here now
         if p.kind is Kind.CONTINUOUS and p.modulatable and table.owner(p.id) is None:
             try:
                 table.add(Binding("lfo:1", p.id, "push", 0.1))
@@ -853,17 +881,18 @@ def test_the_routing_rows_scroll_in_their_own_child(rig, monkeypatch):
         if len(table.routes()) >= 40:
             break
     assert len(table.routes()) >= 40
-    inner = []
-    row = ui_routing._row
+    inner, rows = [], []
+    sinks, row = ui_routing.sinks, ui_routing._row
 
-    def measured(panel, router, b, k):
-        out = row(panel, router, b, k)
-        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child
-        return out
-    monkeypatch.setattr(ui_routing, "_row", measured)
+    def measured(panel, router):
+        sinks(panel, router)
+        inner.append(imgui.get_scroll_max_y())   # inside the ##routes child, at its end
+    monkeypatch.setattr(ui_routing, "sinks", measured)
+    monkeypatch.setattr(ui_routing, "_row", lambda *a: rows.append(a) or row(*a))
     over = _page_scroll(rig, monkeypatch)
     assert over["routing"] == 0, "the ROUTING page itself scrolled"
-    assert inner and inner[-1] > 0, "the rows' child did not scroll with 40 rows"
+    assert inner and inner[-1] > 0, "the child did not scroll with the factory desk"
+    assert rows == []
 
 
 def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeypatch):
@@ -882,7 +911,9 @@ def test_the_routing_page_fits_over_a_loaded_preset_and_a_full_desk(rig, monkeyp
                                      feedback="ring", layer="preset") for k in range(8)],
             *[Binding(f"note:{k}:{0x36}", "view.shape", "set", float(k), feedback="led",
                       layer="preset") for k in range(8)],
-            Binding("cc:0:7", "view.bright", "abs")]          # a fader: dropped, noted
+            # the track faders: the preset's own since plan 24 C2 (decision 17)
+            *[Binding(f"cc:{k}:7", "view.bright", "abs", layer="preset") for k in range(8)],
+            Binding("cc:0:14", "view.bright", "abs")]         # MASTER: dropped, noted
     rig.lib.presets.desk_notes = table.set_desk(full)
     table.set_macros({f"macro.{k}": {"label": f"M{k}", "subs": [
         {"base": "view.depth4", "from": 0.0, "to": 1.0},
@@ -937,7 +968,7 @@ def _sheet_keys() -> tuple[set[str], set[str]]:
     """The GLFW key names and pad buttons the sheet's key column names."""
     keys, pads = set(), set()
     for col, _ in CHEATSHEET:
-        if col in _MOUSE:
+        if col in _MOUSE or col.startswith("APC40 "):    # the desk's rows: not keys
             continue
         if col in _PADS:
             pads.update(_PADS[col])
@@ -1305,6 +1336,19 @@ def test_every_panel_attribute_the_frame_reads_is_a_real_panels(rig):
 
 # ------------------------------------------------- plan 17: the right-click menu
 
+def _a_file_path(rig, monkeypatch) -> str:
+    """A file-path param (Kind.TEXT) drawn on the media page by the
+    panel's own widget (`Panel._path`), as `view.bmp_file` was until plan
+    32 took the one bitmap file away — no page draws a TEXT param of its
+    own now, and the widget's contract still holds. Returns its id."""
+    view, pid = rig.view, "view.test_file"
+    view.test_file = ""
+    rig.reg.text(pid, "Test file", lambda: view.test_file,
+                 lambda v: setattr(view, "test_file", v), group="view")
+    monkeypatch.setattr(type(rig.panel), "_page_media", lambda self, dt: self._path(pid))
+    return pid
+
+
 def menu(panel, monkeypatch, pid: str, page: str, click: str | None = None
          ) -> tuple[list[str], list[str]]:
     """One frame of `page` with the context menu of `pid` open: (the lines
@@ -1463,10 +1507,11 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
                                    "Learn hand/right"]
     assert "Learn" not in items
     # §3: unmapped, a rig with hands → Learn desk · Learn hand ▸ · Route a lane here…
+    # (and, the owner 2026-10-24, Route from ▸ after the Learn items)
     rig.router.table.unbind("view.speed")
     _, items = menu(panel, monkeypatch, "view.speed", "view")
     assert [i for i in items if "/" not in i] == ["Learn desk", "Learn hand ▸",
-                                                  "Route a lane here…"]
+                                                  "Route from ▸", "Route a lane here…"]
     # each arms with its want
     menu(panel, monkeypatch, "view.speed", "view", click="Learn desk")
     assert (lrn.learning, lrn.want) == ("view.speed", "desk")
@@ -1494,13 +1539,15 @@ def test_the_menu_offers_learn_desk_and_learn_hand(rig, monkeypatch):
     _, items = menu(panel, monkeypatch, "dream.gap", "lookback")
     assert _learn_items(items) == ["Learn desk"]
     # a file path: nothing to learn (a knob cannot set a path)
-    assert rig.reg["view.bmp_file"].kind is Kind.TEXT
-    lines, items = menu(panel, monkeypatch, "view.bmp_file", "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    assert rig.reg[path].kind is Kind.TEXT
+    lines, items = menu(panel, monkeypatch, path, "media")
     assert items == [] and "not modulatable" in lines
     # no tracker: Learn desk only — §3: Learn desk · Route a lane here…
     panel.hands = None
     _, items = menu(panel, monkeypatch, "view.speed", "view")
-    assert items == ["Learn desk", "Route a lane here…"]
+    assert [i for i in items if "/" not in i] == ["Learn desk", "Route from ▸",
+                                                  "Route a lane here…"]
     # a rig whose axes are one hand's: that side only
     panel.hands = SimpleNamespace(axes=[SimpleNamespace(side="right")])
     assert panel._hand_sides() == ["right"]
@@ -1769,7 +1816,7 @@ def test_a_picked_control_dims_every_page_but_routing(rig, monkeypatch):
     assert dimmed.pop("routing") == (0, False)
     assert dimmed == {k: (1, True) for k in PAGE_KEYS if k != "routing"}
     assert panel._picking is False                           # only while the page draws
-    lrn.pick(_control("S3").source)                          # invariant: picked for the look only
+    lrn.pick(_control("SM").source)                          # invariant: picked for the look only
     assert ui_desk.picked(panel) is not None and pages() == idle
     lrn.pick(_control("D3").source)
     table.set_layer("global")                                # the session's layer: nothing maps
@@ -1866,12 +1913,13 @@ def test_a_click_on_a_param_maps_the_picked_control(rig, monkeypatch):
         _click(panel, rects[pid])
         assert lrn.control is None and reg[pid].base == before, pid
         assert any(b.source == "cc:*:19" and b.target == pid for b in table.desk()), pid
-    frame(panel, "bitmap")
+    path = _a_file_path(rig, monkeypatch)
+    frame(panel, "media")
     frame(panel)
     lrn.pick(_control("D5").source)
     frame(panel)
     n = len(pushes)
-    _click(panel, rects["view.bmp_file"])
+    _click(panel, rects[path])
     assert lrn.control == "cc:*:20" and len(pushes) == n
     ui_desk.let_go(panel)
     # the big desk: the click that picks brings the panel back under the
@@ -1976,10 +2024,10 @@ def test_the_footer_says_what_is_picked_and_a_click_lets_go(rig, monkeypatch):
     clock[0] += 0.1
     assert footer()[0][0].startswith("·  D3 picked (20 s)")   # the pick is newer: it shows at once
     # an invariant control: why it cannot be mapped, dim
-    lrn.pick(_control("S3").source)
+    lrn.pick(_control("SM").source)                          # MASTER (S1–S8: layered, C2)
     clock[0] += 0.1
     (said,) = footer("view")
-    assert said[0].startswith("·  S3 (track fader 3) is invariant") and said[1] == rgb(ui.DIM)
+    assert said[0].startswith("·  SM (MASTER fader) is invariant") and said[1] == rgb(ui.DIM)
     # with the panel hidden the header alone carries it — the whole line
     panel.reg["ui.panel"].set(False)
     lrn.pick(_control("D3").source)

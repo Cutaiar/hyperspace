@@ -126,7 +126,7 @@ def test_the_default_addresses_are_the_generators():
     names = hands.default_addresses()
     assert names[:6] == [f"left.{a}" for a in hands.DEFAULTS["dofs"]]
     assert names[12:14] == ["left.present", "right.present"]
-    assert names[14:] == [f"{s}.pinch.{f}" for s in hands.SIDES for f in hands.PINCHES]
+    assert names[14:22] == [f"{s}.pinch.{f}" for s in hands.SIDES for f in hands.PINCHES]
 
 
 def test_the_routing_page_offers_and_writes_names(app):
@@ -144,7 +144,8 @@ def test_the_routing_page_offers_and_writes_names(app):
     assert ("hand:right.roll", "hand R roll") in srcs
     gates = ui_routing._gates(app.router)
     assert gates[0] == ("hand:left.pinch.index", "L ind")
-    assert gates[-1] == ("hand:right.pinch.pinky", "R pin")
+    assert gates[7] == ("hand:right.pinch.pinky", "R pin")
+    assert gates[-1] == ("hand:right.grab", "R grab")       # then the grabs (plan 24 C5)
     addrs = [s for s, _ in srcs]
     assert ui_routing._at(app.router, addrs, "hand:7") == addrs.index("hand:right.y")
     assert ui_routing._at(app.router, addrs, "hand:right.nosuch") == -1

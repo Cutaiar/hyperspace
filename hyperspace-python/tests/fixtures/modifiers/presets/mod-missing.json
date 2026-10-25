@@ -1,0 +1,16 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "MOD MISSING",
+ "note": "plan 28 N1's fixture preset: a route onto mod:3, which no modifier publishes, beside one onto mod:1, which one does",
+ "values": {},
+ "routes": [
+  {"source": "mod:3", "target": "view.bright", "op": "push", "value": 0.5},
+  {"source": "mod:1", "target": "view.speed", "op": "push", "value": 0.5}
+ ],
+ "modifiers": [
+  {"id": "mod.1", "kind": "curve", "in": ["lane:0"], "shape": 0.5}
+ ],
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}

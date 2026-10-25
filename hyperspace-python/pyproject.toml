@@ -6,12 +6,14 @@ requires-python = ">=3.12"
 dependencies = [
     # Ultraleap hands (hyperspace/hands): the SDK's own Python wrapper
     # (`leap`, pure Python) over the cffi module it binds (`leapc_cffi`),
-    # built here from the same pinned commit. The Hand Tracking app also
-    # ships a leapc_cffi, but an older app's is built for 3.8 and will not
-    # import under this project's 3.12 — ours is found first on sys.path
-    # (leap appends the app's folder, never prepends it). cffi is the
-    # built module's runtime. Imported only when [hands] is enabled.
-    # Neither is on PyPI: [tool.uv.sources].
+    # built here at `uv sync` from vendor/leapc-cffi: upstream's package at
+    # the same pinned commit, patched to build against whichever Gemini is
+    # installed (libLeapC 5 or 6; see vendor/leapc-cffi/VENDORED.md). The
+    # Hand Tracking app also ships a leapc_cffi, but an older app's is built
+    # for 3.8 and will not import under this project's 3.12 — ours is found
+    # first on sys.path (leap appends the app's folder, never prepends it).
+    # cffi is the built module's runtime. Imported only when [hands] is
+    # enabled. Neither is on PyPI: [tool.uv.sources].
     "cffi>=1.17",
     "leap",
     "leapc-cffi",
@@ -39,6 +41,23 @@ dependencies = [
     # never see one — read over libusb, which libusb-package bundles
     "pyusb>=1.3.1",
     "libusb-package>=1.0.30.0",
+    # OSC devices (osc.py, plan 27 B4): a phone app or any OSC sender as a
+    # `[[devices]] kind = "osc"` entry. Pure Python; imported only when such
+    # an entry opens, so importing app pulls none of it
+    "python-osc>=1.8",
+    # media sources (hyperspace/media, plan 32): each adapter library is
+    # imported only inside the function that opens a source, so importing
+    # app pulls none of them. av = video files (PyAV, bundles FFmpeg)
+    "av>=19",
+    # HEIC/HEIF stills, registered with Pillow inside the decode job
+    "pillow-heif>=1.8",
+    # Syphon clients (macOS only); [opengl] is the client/server the GL
+    # texture path needs
+    "syphon-python[opengl]>=0.2 ; sys_platform == 'darwin'",
+    # NDI receive (cyndilib; pulls pugixml-cython)
+    "cyndilib>=0.1.3",
+    # camera enumeration by name (AVFoundation device list)
+    "pyobjc-framework-avfoundation ; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]
@@ -62,6 +81,7 @@ markers = ["slow: heavy face-extraction tests (~seconds each)"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["vendor/"]   # upstream code, kept in upstream's style
 
 [project.scripts]
 hyperspace = "hyperspace.app:main"
@@ -80,4 +100,5 @@ python-preference = "managed"
 [tool.uv.sources]
 # Ultraleap's Python wrapper, pinned by commit (see the dependency's note)
 leap = { git = "https://github.com/ultraleap/leapc-python-bindings", rev = "2341c6c3db5dc08236bb52890d8c43a224139694", subdirectory = "leapc-python-api" }
-leapc-cffi = { git = "https://github.com/ultraleap/leapc-python-bindings", rev = "2341c6c3db5dc08236bb52890d8c43a224139694", subdirectory = "leapc-cffi" }
+# Its cffi module, vendored at that commit and patched (vendor/leapc-cffi/VENDORED.md)
+leapc-cffi = { path = "vendor/leapc-cffi", editable = false }

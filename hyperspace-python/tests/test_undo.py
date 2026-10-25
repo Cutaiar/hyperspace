@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from conftest import opened_last
 
-from hyperspace import hands, lfo, preset, routing, tempo, undo
+from hyperspace import devices, hands, lfo, preset, routing, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -299,7 +299,7 @@ def test_integrated_state_and_the_clock_are_not_watched(rig):
     reg = rig.reg
     for pid in ("rot.phase.XY", "tempo.bpm", "tempo.nudge", "ui.page", "ui.panel",
                 "output.fullscreen", "output.monitor", "band.select", "band.sel.thr",
-                "preset.select", "fx.select", "desk.shift", "audio.mic", "edit.undo"):
+                "preset.select", "desk.shift", "audio.mic", "edit.undo"):
         assert pid in reg and not undo.watched(reg[pid]), pid
     for pid in ("view.bright", "scene.select", "master.gain", "hands.smooth", "ghost.on",
                 "output.bg", "camera.yaw", "band.0.thr", "macro.1", "lfo.1.rate"):
@@ -1058,8 +1058,10 @@ def test_an_idle_app_makes_no_step(tmp_path):
         panel=SimpleNamespace(restart_requested=False),
         reloader=SimpleNamespace(poll=lambda: None, runtime_error=""),
         draw_render=draw_render, draw_panel=lambda dt, fps: None,
-        restart=lambda: None, quit=lambda: None, pad=None, midi_io=r.midi,
-        hands_io=hands_io, bridge_io=None, dream_io=None, learn=r.learn, undo=r.undo)
+        restart=lambda: None, quit=lambda: None,
+        devices=devices.DeviceRegistry(devices=[devices.MidiDevice("apc40", io=r.midi),
+                                                devices.HandsDevice("leap", io=hands_io)]),
+        dream_io=None, learn=r.learn, undo=r.undo)
 
     def run(n):
         for _ in range(n):

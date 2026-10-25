@@ -145,16 +145,21 @@ def _src(guide: bool = False, tmp=None):
 def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, guide=0,
         alpha=1.0, faces=False):
     """A renderer with `effects` on, the ghost hands on (synthetic), the
-    master dim and the ground as asked."""
-    from hyperspace.fx import FACES, FxState
+    master dim and the ground as asked. Plan 33 R23: the run as a load
+    lands it (`graphmigrate.wiring_of`). `faces`: huecycle on as well, on
+    no wire — what was aimed at the faces until plan 33 draws only where a
+    wire puts it (tests/test_graph_faces.py), so it changes no byte."""
+    from hyperspace.fx import FxState
+    from hyperspace.graphmigrate import wiring_of
     from hyperspace.render import Renderer
 
     fx = FxState()
     for n in effects:
         fx.values[n]["on"] = True
-    if faces:
-        fx.values["huecycle"].update(on=True, target=FACES)
     r = Renderer(ctx, fx=fx)
+    r.wiring = wiring_of(fx)
+    if faces:
+        fx.values["huecycle"]["on"] = True
     r.bg_alpha, r.dim = bg, dim
     if echoes:
         st = r.lookback.state
@@ -164,6 +169,25 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     g.state.on, g.state.alpha, g.state.guide = hands, alpha, guide
     g.source = _src(guide=bool(guide)) if hands else None
     return r
+
+
+def wired(r, section: dict):
+    """`section` (a preset's graph section, plan 28 N4's words) as a load
+    lands it over `r`'s effects: plan 33 R23, `graphmigrate` — the run the
+    effects on make, beside the section's own wires."""
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
+
+    st = r.fx.state
+    return wiring_for(state_values(st), specs_of(st), section)
+
+
+def keep_run(r, wiring):
+    """`wiring` (a placement, a hands node: plan 26–30's words) with `r`'s
+    run kept — the run the rig's effects landed as (plan 33 R23); a wiring
+    that says a run of its own keeps it."""
+    from dataclasses import replace
+
+    return wiring if wiring.run is not None else replace(wiring, run=r.wiring.run)
 
 
 def scene_view() -> object:
@@ -232,6 +256,44 @@ def today(ctx, r, frames=4, t0=2.0, spin=0.05, samples=0, size=(W, H)):
     return px(ctx, win, samples)
 
 
+def _stack_names(r) -> list[str]:
+    """The effects the retired stack ran (plan 33 T7 removed `FxChain.run`):
+    the run's, in its order, those live."""
+    st = r.fx.state
+    return [n for n in (getattr(r.wiring, "run", None) or ()) if st.live(n)]
+
+
+def _stack_active(r) -> bool:
+    """`FxChain.active()` as it was: anything for the stack to run."""
+    return bool(_stack_names(r))
+
+
+def _stack_begin(r, size):
+    """`FxChain.begin` as it was: the first of the pool's textures' framebuffer."""
+    fx = r.fx
+    return fx.pool(size, max(2, len(fx._tex)))[0][1]
+
+
+def _stack_run(r, target, t) -> list[str]:
+    """`FxChain.run` as it was, verbatim in effect: every live effect that
+    built, one after another between the pool's first two textures, the
+    last into `target`; none built, a copy — each pass `run_one`'s."""
+    fx = r.fx
+    fx.state.advance_to(t)
+    passes = [n for n in _stack_names(r) if fx.ready(n)]
+    pool = fx.pool(fx.size, max(2, len(fx._tex)))
+    src = 0
+    if not passes:
+        target.use()
+        pool[0][0].use(location=0)
+        fx._copy_vao.render(moderngl.TRIANGLES, vertices=3)
+    for k, name in enumerate(passes):
+        last = k == len(passes) - 1
+        fx.run_one(name, pool[src][0], target if last else pool[1 - src][1], t)
+        src = 1 - src
+    return passes
+
+
 def _parent_draw(r, s, w, h, t):
     """`Renderer.draw` as it was on the parent commit (plan 20 + WP5),
     verbatim but for `self` → `r`: the reference the default view must
@@ -262,11 +324,11 @@ def _parent_draw(r, s, w, h, t):
         fx = r.fx
         fx.tick()
         fx.opaque = getattr(r, "bg_alpha", 1.0) >= 1.0
-        if fx.active():
-            buf = fx.begin(r.scene.size)
+        if _stack_active(r):
+            buf = _stack_begin(r, r.scene.size)
             lb.composite(r.scene.tex, buf, cover)
             lb.capture(r.scene.tex, buf)
-            fx.run(target, t)
+            _stack_run(r, target, t)
         else:
             lb.composite(r.scene.tex, target, cover)
             lb.capture(r.scene.tex, target)
@@ -329,7 +391,7 @@ def test_one_default_output_is_todays_frame_byte_for_byte(ctx, case, samples):
     assert np.array_equal(got, want), np.abs(got - want).max()
     assert r._frames == {} and r._show_prog is None              # nothing extra made
     assert r.stats["direct"] and r.stats["captures"] == 1
-    assert r.stats["chain_runs"] == (1 if r.fx.active() else 0)
+    assert r.stats["chain_runs"] == (1 if _stack_active(r) else 0)
 
 
 def test_the_frame_through_a_texture_is_the_same_bytes(ctx):
@@ -451,8 +513,14 @@ def test_the_echoes_carry_on_with_the_scene_off_everywhere(ctx):
     assert np.array_equal(a, b)
 
 
-def test_the_history_never_holds_the_hands_in_any_state(ctx):
+def test_the_history_holds_what_it_is_wired_to_and_the_default_graph_wires_it_as_today(ctx):
+    """Plan 26 A3: the history captures the image it is wired to. The
+    default graph wires it to the bare scene, so in every switch state
+    its echoes hold no hands, as before A3; wired to the scene with the
+    hands' layer (`Wiring.history`) they hold the hands."""
     import numpy as np
+
+    from hyperspace.graph import Wiring
 
     S = O.Switches
     bare = rig(ctx, echoes=True, hands=False)
@@ -464,7 +532,15 @@ def test_the_history_never_holds_the_hands_in_any_state(ctx):
         r = rig(ctx, echoes=True)
         run(ctx, r, views(ctx, *combo), frames=6)
         assert r.stats["layer"]
+        assert r._graph.nodes["capture"].inputs["image"] is r._graph.nodes["scene"]
         assert np.array_equal(np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8), want)
+    for combo in ((S(),), (S(hands=False),), (S(scene=False, through=True),)):
+        r = rig(ctx, echoes=True)
+        r.wiring = Wiring(history="scene+hands")
+        run(ctx, r, views(ctx, *combo), frames=6)
+        held = np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8)
+        assert r._graph.nodes["capture"].inputs["image"].name == "composite(history)"
+        assert not np.array_equal(held, want), combo
 
 
 def test_each_output_dims_by_master_times_its_own(ctx):
@@ -592,7 +668,9 @@ def test_a_raising_pipeline_leaves_its_views_on_the_ground_and_the_rest_drawn(ct
     want_hands = run(ctx, rig(ctx, dim=0.5), views(ctx, S(scene=False)))[0]
     r = rig(ctx, dim=0.5)
     with monkeypatch.context() as m:
-        m.setattr(FxChain, "run", lambda self, *a: (_ for _ in ()).throw(RuntimeError("chain")))
+        # plan 30 D0: the frame's effects run one pass each (`FxChain.run_one`)
+        m.setattr(FxChain, "run_one",
+                  lambda self, *a: (_ for _ in ()).throw(RuntimeError("chain")))
         broken, hands = run(ctx, r, (vs := views(ctx, S(), S(scene=False))))
         assert vs[0].error == "SCENE: RuntimeError: chain" and vs[1].error == ""
         assert np.array_equal(broken, want_hands) and np.array_equal(hands, want_hands)

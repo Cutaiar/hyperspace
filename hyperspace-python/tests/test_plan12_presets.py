@@ -34,7 +34,7 @@ from hyperspace.preset import (
     hand,
     pinch,
 )
-from hyperspace.routing import Bindings, Router
+from hyperspace.routing import TOGGLE_DESK_ROWS, Bindings, Router
 
 DT = 1 / 60
 HOLD = 90                # frames: the One Euro and the return spring both settle
@@ -148,6 +148,10 @@ def test_the_party_presets_load_by_f_key_as_presets(tmp_path):
         assert [b.to_json() for b in router.table.routes()] == \
             [b.to_json() for b in FACTORY_PRESETS[slug].routes()], slug
         want = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["desk"]
+        # less the four render toggle rows the files keep and a load drops
+        # quietly: invariant since plan 24 C1 (decisions 18 and 23)
+        want = [d for d in want if (d["source"], d["target"], d["op"], 1.0)
+                not in TOGGLE_DESK_ROWS]
         got = [{k2: v for k2, v in b.to_json().items() if k2 != "layer"}
                for b in router.table.desk()]
         assert got == want, slug
@@ -223,18 +227,22 @@ def test_every_party_preset_has_a_preset_a_card_and_only_real_ids(tmp_path):
     """Each preset (library/presets/party-*.json, named by the
     party.hyp.json bank) names only real params, and its performer card
     exists beside the plan."""
+    from hyperspace.graphmigrate import retired
+
     r = rig(tmp_path=tmp_path, full=True)
+    # (plan 33 T7: and the retired ids — an effect's order, a channel
+    # choice — which a load reads as the graph's wires)
     ids = set(r.reg.ids())
     doc = json.loads((FACTORY / "projects" / "party.hyp.json").read_text())
     for name in PARTY:
-        vals = theme(name)
-        assert set(vals) <= ids, (name, set(vals) - ids)
+        vals = {v for v in theme(name) if not retired(v)}
+        assert vals <= ids, (name, vals - ids)
         assert (FACTORY.parents[1] / "docs" / "plans" / "assets" / "12-presets"
                 / f"{name}.md").is_file(), name
     for group, file in (("fx", "trip.json"), ("dream", "wake.json"), ("fx", "acid.json"),
                         ("fx", "mandala.json"), ("fx", "noita-heavily-tripping.json")):
         vals = json.loads((FACTORY / group / file).read_text())["values"]
-        assert set(vals) <= ids, file
+        assert {v for v in vals if not retired(v)} <= ids, file
     # plan 14 WP5 (decision 24): the effect families on F6–F8
     assert doc["bank"][5:8] == ["ACID", "MANDALA", "NOITA"]
     assert [f"party-{n.lower()}" for n in doc["bank"][:8]] == list(PARTY_BANK)
@@ -407,7 +415,16 @@ def test_trip_left_height_opens_the_pump_through_lfo_depth(tmp_path):
 
 # effects no factory preset needs on, each with the reason (decision 24:
 # every effect reachable from a preset — this list is empty on purpose)
-EFFECTS_IN_NO_PRESET: dict[str, str] = {}
+EFFECTS_IN_NO_PRESET: dict[str, str] = {
+    # plan 24 C6 / decision 23: no preset is authored in that run; the owner's
+    # palettes are made at the venue (fx module presets) and the factory
+    # presets keep the picture they have
+    "palette": "starts at mix 0 and ships no palette; saved palettes are the owner's",
+    # plan 32 T7: these bend the frame by a picture wired into their aux
+    # input; a factory preset ships no media, so there is nothing to wire
+    "displace": "reads its aux input; factory presets wire no media channel",
+    "blend": "reads its aux input; factory presets wire no media channel",
+}
 
 
 def _factory_docs() -> list[dict]:

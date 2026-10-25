@@ -1,0 +1,17 @@
+{
+ "schema": "hyperspace.preset/2",
+ "name": "MOD TEMPLATED",
+ "note": "plan 28 N1's fixture preset: the mod rig template, its smooth overridden (a longer release), a scale of its own",
+ "values": {},
+ "routes": [
+  {"source": "mod:2", "target": "view.bright", "op": "push", "value": 0.4}
+ ],
+ "modifiers": [
+  {"id": "mod.1", "kind": "smooth", "in": ["hand:right.energy"], "attack": 0.05, "release": 1.5},
+  {"id": "mod.2", "kind": "scale", "in": ["mod:1"], "mul": 2.0, "offset": 0.0, "clamp": true}
+ ],
+ "desk_template": "mod rig",
+ "desk": [],
+ "macros": {},
+ "modules": {}
+}

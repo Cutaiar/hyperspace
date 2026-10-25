@@ -6,8 +6,12 @@ save / as… over it — a factory one gets a user shadow, `Library.overwrite`
 — and the desk's layer, PRESET or GLOBAL, SHIFT's latch; then what the
 last learn did, a refusal in the warning colour, and the notes of the
 last load: the desk rows it dropped for sitting on an invariant control,
-the routes the referee refused); then, in one scrolling child, the
-**routes**, the **desk** (the preset layer: one line per row — the
+the routes the referee refused); then a pointer line, "routes and
+modifiers: the GRAPH page" (plan 28 N7: the routes and the MODIFIERS strip
+are drawn there now — a route's row below is drawn by GRAPH's side pane,
+a modifier's block by `modifier_block` there; their functions all stay
+here, and ROUTING is retired in a later pass), the filter beside it; then,
+in one scrolling child, the **desk** (the preset layer: one line per row — the
 control in Akai's words, its target, its op, × — and one dimmed line per
 preset-layer control the preset leaves dark), the **macros** (each knob
 with its label and its base / depth subscribers) and the **session**
@@ -82,13 +86,13 @@ and exactly one owner remains. The owner is named the way its adapter
 names it (`Router.describe`). Rows a preset had to drop for the same
 reason (`table.dropped`) are listed under the header until the next edit.
 
-The filter (plan 17 WP5): one text field on the counts line, left of
-`+ route`. While it holds text, only the lines that match are drawn — in
-every section (and a line a widget is in use on, until it is let go:
-`_shown`) — the counts read "3 of 41 rows" in red and a × beside the
-field clears it. Lower-case; every typed word must be somewhere in what
-the line says (`matches`): a route's sentence, source, target and the
-target's label; a desk, dark or session line's glyph, Akai's name,
+The filter (plan 17 WP5): one text field flush right on the pointer line
+(plan 28 N7: on the counts line, left of `+ route`, before). While it
+holds text, only the lines that match are drawn — in every section (and
+a line a widget is in use on, until it is let go: `_shown`) — and the
+pointer to GRAPH gives way to "3 of 41 rows" in red, a × beside the
+field clearing it. Lower-case; every typed word must be somewhere in what
+the line says (`matches`): a desk, dark or session line's glyph, Akai's name,
 source and (mapped) target and label; a macro's id, label and
 subscribers — a macro that matches is drawn whole. The text is UI state
 (`_state(panel)["find"]`): not a param, not saved, not in a preset, not
@@ -119,9 +123,22 @@ from imgui_bundle import imgui
 from . import apc40, motion, ui, ui_presets, undo
 from .bands import CEIL
 from .library import PRESETS
+from .modifiers import KINDS as MOD_KINDS
+from .modifiers import PARAMS as MOD_PARAMS
+from .modifiers import Modifier
 from .motion import Motion
 from .params import Kind, Param, part_of
-from .routing import SHIFT_PARAM, Binding, Macro, Owned, Router, Sub, base_refusal, factory_desk
+from .routing import (
+    SAVE_PARAM,
+    SHIFT_PARAM,
+    Binding,
+    Macro,
+    Owned,
+    Router,
+    Sub,
+    base_refusal,
+    factory_desk,
+)
 
 NAMING = "routing.preset"  # the head's save as… name field (ui_presets._name_field)
 DEPTH_MOD = 1.0           # ±, the depth slider's throw
@@ -130,7 +147,6 @@ OP_CHIP = {"push": "push", "position": "pos"}
 NEXT_OP = {"push": "position", "position": "push"}
 DEPTH_TIP = {"push": " — 1 is the full throw at a lane's asymptote",
              "position": " — a fraction of the target's throw; 1 is all of it"}
-N_EXT = 16                # ext lanes offered once any ext source is around
 BAR_W = 56.0
 SRC_W = 84.0             # the source combo: a lane's number and name
 DEPTH_W = 112.0
@@ -144,7 +160,10 @@ CONTROL_W = 56.0         # the desk and session lines' control column: a glyph (
 INDENT = 18.0            # a subscriber line under its macro
 PROMPT = "replace##routing"   # the Replace / Keep modal's popup id
 PROMPT_W = 360.0
-FIND_W = 120.0           # the filter field on the counts line
+FIND_W = 120.0           # the filter field on the pointer line
+POINTER = "routes and modifiers: the GRAPH page"     # plan 28 N7: where they went
+POINTER_TIP = ("The routes and the modifiers are edited on the GRAPH page now — drag a "
+               "cable, select it for its row; click to go there")
 # the feel chip (motion.py) cycles auto → follow → spring → still → auto:
 # auto is the source's own feel (Router.feel_of), still turns even that off
 FEEL_CYCLE = (None, "follow", "spring", "off")
@@ -322,15 +341,15 @@ def _session_rows(table) -> tuple[list[Binding], list[Binding]]:
 
 def found(panel, router: Router) -> tuple[int, int]:
     """(lines the filter leaves, lines there are) over the whole page: the
-    routes, the desk's rows and its dark controls, the macros, the
-    session's rows."""
+    desk's rows and its dark controls, the macros, the session's rows,
+    the sinks (plan 28 N7: the routes and the modifiers are GRAPH's)."""
     text, table = _state(panel)["find"], router.table
-    hays = [route_hay(panel, router, b) for b in table.routes()]
-    hays += [control_hay(panel, router, b) for b in table.desk()]
+    hays = [control_hay(panel, router, b) for b in table.desk()]
     hays += [control_hay(panel, router, f, mapped=False) for f in unmapped(table)]
     hays += [macro_hay(panel, router, p) for p in panel.reg.group("macro")]
     inv, glob = _session_rows(table)
     hays += [control_hay(panel, router, b) for b in (*inv, *glob)]
+    hays += [sink_hay(panel, router, b) for b in table.sinks(enabled=False)]
     return sum(matches(panel, router, text, *h) for h in hays), len(hays)
 
 
@@ -481,40 +500,58 @@ def ctx_item(panel, p: Param) -> None:
         imgui.text_disabled("not modulatable")
         return
     if imgui.menu_item_simple("Route a lane here…"):
-        add_route(panel, real.id)
-        panel.reg["ui.page"].set(ui.PAGE_KEYS.index("routing"))
+        b = add_route(panel, real.id)
+        if b is not None:           # plan 28 N7: GRAPH selects it, its row in the pane
+            _state(panel)["reveal"] = b
+        panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))     # plan 28 N7: the routes' page
 
 
 # ---- the rows ----
 
-SOURCE_ORDER = ("hand", "axis", "lfo", "ext")   # the fed schemes, after the analyzer's lanes
+def source_schemes(router: Router) -> list[str]:
+    """The continuous schemes the combo offers after the analyzer's lanes,
+    in order (plan 27 B2: no fixed list here): the router's — the device
+    registry's `continuous_schemes`, `lfo` then each listed device's feeds
+    — then any other scheme a performer row names, so a preset's row on a
+    device this rig lacks still shows its source."""
+    out = [sc for sc in router.schemes() if sc != "lane"]
+    for b in router.table.routes():
+        # its Router key, qualifier and all (``axis@p2``, plan 27 B6)
+        if b.head != "lane" and b.head not in out:
+            out.append(b.head)
+    return out
 
 
 def _sources(panel, router: Router) -> list[tuple[str, str]]:
     """(source, label) the combo offers: every analyzer lane as "i NAME"
     (the names the audio engine publishes each frame, `AudioEngine.publish`),
-    then each fed scheme (SOURCE_ORDER) that is around — its adapter has
-    published labels, it is being fed this frame, or a row names it — one
+    then each continuous scheme the registry lists (`source_schemes`) that
+    is around — its device has published labels, it is being fed this
+    frame, or a row names it — one
     entry per lane, labelled as the adapter says ("lfo LFO 1") or by
     index, and addressed by name where the adapter publishes names
     (`Router.address`: ``hand:right.roll``, decision register row 20).
-    Nothing here knows what a scheme is; the ext lanes are the one case
-    with a fixed count (N_EXT) since the bridge publishes no labels."""
+    Nothing here knows what a scheme is: the bridge publishes its ext
+    lanes' labels like any device (plan 27 B3), and a scheme no device
+    publishes offers the lanes its rows name."""
     labels = getattr(router, "labels", {})
     # the lanes as the engine published them (AudioEngine.publish, each
     # frame); until it has — a panel with no frame loop behind it — the
     # chain's own names, so the combo always offers the lanes
     lanes = labels.get("lane") or panel.audio.chain.band_names
     out = [(f"lane:{i}", f"{i} {name}") for i, name in enumerate(lanes)]
-    for scheme in SOURCE_ORDER:
+    for scheme in source_schemes(router):
         names = labels.get(scheme) or []
         vec = router.feeds.get(scheme)
-        used = any(b.scheme == scheme for b in router.table.bindings)
+        used = any(b.head == scheme for b in router.table.bindings)
         if not (names or vec is not None or used):
             continue
-        n = len(names) or (len(vec) if vec is not None else 0) or (N_EXT if scheme == "ext" else 0)
+        named = [b.index + 1 for b in router.table.bindings if b.head == scheme]
+        n = len(names) or (len(vec) if vec is not None else 0) or max(named, default=0)
+        # a lane published with an empty label is no lane (the `mod`
+        # scheme's index 0 and a removed modifier's place)
         out += [(router.address(scheme, i), f"{scheme} {names[i] if i < len(names) else i}")
-                for i in range(n)]
+                for i in range(n) if not (i < len(names) and names[i] == "")]
     return out
 
 
@@ -650,7 +687,9 @@ def _param_combo(panel, label: str, current: str | None, width: float,
 
 
 def _row(panel, router: Router, b: Binding, k: int) -> bool:
-    """One route, two lines; returns True when the row asked to be deleted."""
+    """One route, two lines; returns True when the row asked to be deleted.
+    The source combo's list is the one `page` built for this draw (the
+    state's "sources"), else built here."""
     reg, st = panel.reg, _state(panel)
     imgui.push_id(k)
     p = reg.get(b.target)
@@ -666,7 +705,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if imgui.is_item_hovered():
         imgui.set_tooltip("Enabled — a dormant row keeps its settings and owns nothing")
     imgui.same_line()
-    sources = _sources(panel, router)
+    sources = st.get("sources") or _sources(panel, router)
     labels = [lb for _, lb in sources]
     cur = _at(router, [s for s, _ in sources], b.source)
     imgui.set_next_item_width(SRC_W)
@@ -925,6 +964,9 @@ def head(panel, router: Router) -> None:
         imgui.text_colored(ui.WARN, f"dropped {b.source} → {b.target}: {why}")
     for note in table.notes:
         imgui.text_disabled(note)
+    # a loop no delay breaks (plan 28 N0): the cable the patch keeps off, while it stands
+    for note in getattr(router, "patch_notes", ()):
+        imgui.text_colored(ui.WARN, note)
 
 
 def _preset_line(panel, pr, table) -> None:
@@ -1045,17 +1087,40 @@ def preset_controls(table) -> list[Binding]:
     return out
 
 
+# `unmapped`'s last answer, against the signature it was worked out for
+_DARK: dict = {}
+
+
+def _dark_signature(table) -> tuple:
+    """Everything `unmapped` reads: the profile (its factory map), the MIDI
+    roles (`is_primary`), and each row's source (scheme, device, channel,
+    number — all `overlaps` compares), layer and enabled flag (which rows
+    are invariant, which are the desk). The target too, though no answer
+    reads it — cheap, and safe. Field values, never row identity."""
+    return (table.profile, tuple(getattr(table, "midi_roles", ())),
+            tuple((b.source, b.layer, b.enabled, b.target) for b in table.bindings))
+
+
 def unmapped(table) -> list[Binding]:
-    """The preset-layer controls the loaded preset leaves dark (D8)."""
-    rows = table.desk()
-    return [f for f in preset_controls(table) if not any(b.overlaps(f) for b in rows)]
+    """The preset-layer controls the loaded preset leaves dark (D8).
+    A pairwise scan of the table (~10 ms on the rig), so the ROUTING page
+    draw remembers the last answer until the table's signature changes."""
+    sig = _dark_signature(table)
+    if _DARK.get("sig") != sig:
+        rows = table.desk()
+        _DARK["rows"] = [f for f in preset_controls(table)
+                         if not any(b.overlaps(f) for b in rows)]
+        _DARK["sig"] = sig
+    return list(_DARK["rows"])
 
 
 def desk_target(p: Param) -> bool:
     """Can a desk control be put on this param? Not on a file path (a knob
-    cannot set one) and not on SHIFT's own param. One rule for the desk
-    rows' target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
-    return p.kind is not Kind.TEXT and p.id != SHIFT_PARAM
+    cannot set one), not on SHIFT's own param, and not on the desk's SAVE
+    (plan 24 C1: a learned toggle or key would latch it on, and every bank
+    pad's tap would then make a new preset). One rule for the desk rows'
+    target combo and for the menu's "Learn desk" (`Panel._desk_target`)."""
+    return p.kind is not Kind.TEXT and p.id not in (SHIFT_PARAM, SAVE_PARAM)
 
 
 def _desk_targets(panel) -> list[Param]:
@@ -1311,6 +1376,240 @@ def macros(panel, router: Router) -> None:
         imgui.text_disabled(NO_MATCH)
 
 
+# ---- the modifiers (plan 28 N1) ----
+#
+# One block per modifier, under the routes:
+#
+#   mod 2  combine   [mod 1 smooth ▾] [0 sub ▾]        ▮▮▮▯▯ 0.42   ×
+#          how ▾   balance ─────────
+#
+# The kind is fixed once added (a combo of `KINDS` beside "+ modifier"
+# picks the next one's); each input is a combo over the route sources
+# (`modifier_sources`: `_sources` plus every modifier's own lane); the
+# params are the panel's own widgets over `mod.<n>.<p>` (so Learn, "Route
+# a lane here…" and the base → effective readout come with them); the bar
+# is the live output. Every edit is the loaded preset's (its dirty dot,
+# one undo step); nothing is written.
+
+MOD_KIND_W = 96.0        # the "+ modifier" kind combo
+MOD_IN_W = 150.0         # an input's source combo
+MOD_ID_W = 52.0          # "mod 2" beside the block
+MOD_STACK_W = 76.0       # plan 28 N7: a stacked block's label column (GRAPH's side pane)
+
+
+def mod_hay(panel, router: Router, m: Modifier) -> tuple[str, ...]:
+    """What the filter searches on a modifier: its id, kind and inputs."""
+    return (m.id, f"mod {m.n}", m.kind, *m.inputs)
+
+
+def modifier_sources(panel, router: Router, mid: str | None = None) -> list[tuple[str, str]]:
+    """(address, label) an input may read: every route source (`_sources`)
+    and every modifier's output lane but `mid`'s own — a modifier reading
+    itself is a loop (N0 refuses one with no delay in it)."""
+    out = [(a, lb) for a, lb in _sources(panel, router) if not a.startswith("mod:")]
+    out += [(m.address, f"mod {m.n} {m.kind}") for m in router.table.modifiers
+            if m.id != mid]
+    return out
+
+
+def add_modifier(panel, kind: str, inputs=(), **params: float) -> Modifier:
+    """"+ modifier": a new `kind` node into the loaded preset, its params
+    declared (`Bindings.add_modifier`); one undo step."""
+    router = router_of(panel)
+    undo.push(f"add modifier {kind}")
+    return router.table.add_modifier(kind, inputs, panel.reg, **params)
+
+
+def set_modifier_input(panel, mid: str, k: int, source: str) -> None:
+    """Input `k` of modifier `mid` reads `source` from now on: the
+    modifier replaced whole (`Bindings.set_modifiers`, its params at their
+    bases), one undo step."""
+    table = router_of(panel).table
+    m = table.modifier(mid)
+    if m is None or not 0 <= k < len(m.inputs) or m.inputs[k] == source:
+        return
+    undo.push(f"modifier input {mid}")
+    table.set_modifier_input(mid, k, source, panel.reg)
+
+
+def remove_modifier(panel, mid: str) -> None:
+    """The ×: the modifier and its params go; a route on its lane stays,
+    dormant. One undo step."""
+    router = router_of(panel)
+    undo.push(f"delete modifier {mid}")
+    router.table.remove_modifier(mid, panel.reg)
+
+
+def modifier_output(router: Router, mid: str) -> float | None:
+    """The modifier's output lane this frame; None while it is dormant."""
+    m = router.table.modifier(mid)
+    vec = router.feeds.get("mod")
+    if m is None or vec is None or not 0 <= m.n < len(vec):
+        return None
+    u = float(vec[m.n])
+    return None if math.isnan(u) else u
+
+
+def _input_combo(panel, router: Router, m: Modifier, k: int,
+                 srcs: list[tuple[str, str]], width: float) -> None:
+    addrs = [a for a, _ in srcs]
+    labels = [lb for _, lb in srcs]
+    cur = _at(router, addrs, m.inputs[k]) if m.inputs[k] else -1
+    shown = labels[cur] if cur >= 0 else (m.inputs[k] or "pick a source")
+    imgui.set_next_item_width(width)
+    if imgui.begin_combo(f"##in{k}", shown):
+        for i, lb in enumerate(labels):
+            sel, _ = imgui.selectable(f"{lb}##{i}", i == cur)
+            if sel:
+                set_modifier_input(panel, m.id, k, addrs[i])
+        imgui.end_combo()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("What this modifier reads — an analyzer lane, a device's lane, "
+                          "an LFO, or another modifier's output")
+
+
+def _mod_bar(router: Router, m: Modifier) -> None:
+    """The live output: a filled bar and its number; "dormant" while an
+    input is not live."""
+    u = modifier_output(router, m.id)
+    h = imgui.get_frame_height()
+    pos = imgui.get_cursor_screen_pos()
+    dl = imgui.get_window_draw_list()
+    x0, y0, x1, y1 = pos.x, pos.y + 3, pos.x + BAR_W, pos.y + h - 3
+    dl.add_rect(imgui.ImVec2(x0, y0), imgui.ImVec2(x1, y1), ui.u32(ui.LINE), 4.0)
+    if u is not None:
+        w = (x1 - x0 - 2) * min(max(u, 0.0), 1.0)
+        dl.add_rect_filled(imgui.ImVec2(x0 + 1, y0 + 1), imgui.ImVec2(x0 + 1 + w, y1 - 1),
+                           ui.u32(imgui.ImVec4(0.92, 0.92, 0.92, 0.85)), 3.0)
+    imgui.dummy(imgui.ImVec2(BAR_W, h))
+    imgui.same_line()
+    imgui.text_disabled("dormant" if u is None else f"{u:.2f}")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(f"{m.address}: what a route on this modifier reads"
+                          + (" — a trigger, 1 while it fires" if m.out == "trigger" else ""))
+
+
+def modifiers(panel, router: Router) -> None:
+    """The MODIFIERS strip: "+ modifier" with its kind, then each modifier
+    — its inputs, its params, its live output, ×. A route reads one by
+    picking ``mod <n>`` in its source combo."""
+    table = router.table
+    st = _state(panel)
+    st.setdefault("mod_kind", "smooth")
+    ui._micro("modifiers")
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Nodes between a source and a route: curve, scale, smooth, "
+                          "combine two, a threshold that fires, a one-frame delay")
+    sp = imgui.get_style().item_spacing.x
+    imgui.same_line(imgui.get_content_region_avail().x
+                    - (MOD_KIND_W + ui.chip_w("+ modifier") + sp))
+    imgui.set_next_item_width(MOD_KIND_W)
+    if imgui.begin_combo("##modkind", st["mod_kind"]):
+        for kind in MOD_KINDS:
+            sel, _ = imgui.selectable(kind, kind == st["mod_kind"])
+            if sel:
+                st["mod_kind"] = kind
+        imgui.end_combo()
+    imgui.same_line()
+    if ui.chip("+ modifier"):
+        add_modifier(panel, st["mod_kind"])
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("A new modifier of this kind; pick its input, then route its "
+                          "output (mod <n>) like any source")
+    mods = table.modifiers
+    if not mods:
+        imgui.text_disabled("no modifiers — routes read their sources as they are")
+        return
+    dead = None
+    drawn = 0
+    for m in mods:
+        if not _shown(panel, router, ("mod", m.id), mod_hay, m):
+            continue
+        drawn += 1
+        if modifier_block(panel, router, m):
+            dead = m.id
+        imgui.separator()
+    if dead is not None:
+        remove_modifier(panel, dead)
+    if not drawn:
+        imgui.text_disabled(NO_MATCH)
+
+
+def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) -> bool:
+    """One modifier's editor — its kind, its inputs (`_input_combo`), its
+    live output, ×, its params as the panel's own widgets — the strip's
+    block, and (plan 28 N7) the GRAPH page's side pane for a selected
+    modifier node, `stacked`: each input on a line of its own and each
+    param under it, for a narrow column. True when its × was clicked (the
+    caller removes it)."""
+    reg = panel.reg
+    sp = imgui.get_style().item_spacing.x
+    dead = False
+    imgui.push_id(f"mod{m.id}")
+    panel._label_cell(f"mod {m.n}", width=MOD_ID_W)
+    imgui.text_colored(ui.DIM, m.kind)
+    srcs = modifier_sources(panel, router, m.id)
+    if stacked:
+        imgui.same_line()
+        _mod_bar(router, m)
+    for k in range(len(m.inputs)):
+        if stacked:
+            imgui.text_disabled(f"in {k + 1}" if len(m.inputs) > 1 else "in")
+            imgui.same_line(MOD_STACK_W)
+            _input_combo(panel, router, m, k, srcs, -1.0)
+            continue
+        imgui.same_line()
+        _input_combo(panel, router, m, k, srcs, MOD_IN_W)
+    if stacked:
+        specs = MOD_PARAMS[m.kind]
+        for s in specs:
+            pid = f"{m.id}.{s.key}"
+            if pid not in reg:
+                continue
+            if s.kind == "toggle":
+                panel._check(pid, s.label)
+                continue
+            imgui.text_disabled(s.label)
+            imgui.same_line(MOD_STACK_W)
+            if s.kind == "enum":
+                panel._combo(pid, -1.0)
+            else:
+                panel._slider(pid, -1.0)
+        imgui.push_style_color(imgui.Col_.text, ui.DIM)
+        dead = ui.chip("× remove")
+        imgui.pop_style_color()
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Remove this modifier — a route on it goes dormant")
+        imgui.pop_id()
+        return dead
+    imgui.same_line()
+    _mod_bar(router, m)
+    imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
+    imgui.push_style_color(imgui.Col_.text, ui.DIM)
+    if ui.chip("×"):
+        dead = True
+    imgui.pop_style_color()
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Remove this modifier — a route on it goes dormant")
+    specs = MOD_PARAMS[m.kind]
+    if specs:
+        imgui.dummy(imgui.ImVec2(MOD_ID_W, 0))
+        width = (imgui.get_content_region_avail().x - MOD_ID_W) / len(specs) - sp
+        for s in specs:
+            pid = f"{m.id}.{s.key}"
+            if pid not in reg:
+                continue
+            imgui.same_line()
+            if s.kind == "toggle":
+                panel._check(pid, s.label)
+            elif s.kind == "enum":
+                panel._combo(pid, width)
+            else:
+                panel._slider(pid, width)
+    imgui.pop_id()
+    return dead
+
+
 # ---- the session's rows, read-only ----
 
 def session(panel, router: Router) -> None:
@@ -1341,19 +1640,65 @@ def session(panel, router: Router) -> None:
             _mark_line(panel, table, b, "session", y0)
 
 
+# ---- the sinks (plan 27 B3) ----
+
+def sink_hay(panel, router: Router, b: Binding) -> tuple[str, ...]:
+    """What the filter searches on a sink row: its source, the param's
+    label, its port and the row's words."""
+    pid = b.source.partition(":")[2] if b.scheme == "param" else None
+    return (b.source, b.target, _label(panel, pid) if pid else "", router.describe(b))
+
+
+def sinks(panel, router: Router) -> None:
+    """The sink rows: what goes *out* — a param's effective value or a
+    lane to a sink port (``param:view.bright → bridge:3``), the session's
+    (bindings.json; sinks are rig). A row's checkbox and its × write the
+    file now; a new one comes from a param's right-click → Learn sink ▸."""
+    table = router.table
+    rows = table.sinks(enabled=False)
+    ui._micro("sinks")
+    imgui.same_line()
+    imgui.text_disabled("the session's — out to a sink · right-click a param: Learn sink")
+    if not rows:
+        imgui.text_disabled("nothing goes out")
+        return
+    shown = [b for b in rows if _shown(panel, router, ("sink", id(b)), sink_hay, b)]
+    if not shown:
+        imgui.text_disabled(NO_MATCH)
+    dead = None
+    for k, b in enumerate(rows):
+        if not any(b is x for x in shown):
+            continue
+        imgui.push_id(f"sink{k}")
+        changed, on = imgui.checkbox("##on", b.enabled)
+        if changed:
+            b.enabled = on
+            table.write()
+        imgui.same_line()
+        (imgui.text if b.enabled else imgui.text_disabled)(router.describe(b))
+        imgui.same_line()
+        if ui.chip("×"):
+            dead = b
+        if imgui.is_item_hovered():
+            imgui.set_tooltip("Stop sending this — bindings.json is written now")
+        imgui.pop_id()
+    if dead is not None:
+        table.remove(dead)
+        table.write()
+
+
 # ---- the page ----
 
 def _find_w(on: bool) -> float:
-    """What the counts line's right side takes: the field, its × while it
-    holds text, and `+ route`."""
+    """What the pointer line's right side takes: the field and its × while
+    it holds text (plan 28 N7: `+ route` is the GRAPH page's drag now)."""
     sp = imgui.get_style().item_spacing.x
-    return FIND_W + sp + ui.chip_w("+ route") + (ui.chip_w("×") + sp if on else 0.0)
+    return FIND_W + sp + (ui.chip_w("×") + sp if on else 0.0)
 
 
 def _find_field(panel) -> None:
-    """The filter, on the counts line and flush right, leaving `+ route`
-    its place: the field and, while it holds text, the × that empties it.
-    Emptying it is one state write — `_state(panel)["find"] = ""`. Drawn
+    """The filter, on the pointer line and flush right: the field and,
+    while it holds text, the × that empties it. Emptying it is one state write — `_state(panel)["find"] = ""`. Drawn
     before the rows: it starts the frame's set of drawn lines."""
     st = _state(panel)
     on = bool(st["find"].strip())               # spaces alone filter nothing
@@ -1393,10 +1738,7 @@ def page(panel, dt: float) -> None:
         return
     head(panel, router)
     imgui.separator()
-    rows = router.table.routes()
     _pick_row(panel)            # the picked desk control: `_mark_line` frames and scrolls to it
-    chain = panel.audio.chain
-    live = "live" if getattr(panel.audio, "on", False) else "no source — lanes idle"
     st = _state(panel)
     if st["find"].strip():                      # filtered: say so, in red
         n, m = found(panel, router)
@@ -1404,50 +1746,27 @@ def page(panel, dt: float) -> None:
         if imgui.is_item_hovered():
             imgui.set_tooltip("The filter hides the rest — × beside it shows every row")
     else:
-        # the counts give way to the field: the longest wording that fits
-        # beside it, the whole of it on hover
-        full = f"{len(rows)} routes  ·  {chain.n} lanes  ·  {live}"
+        # plan 28 N7: the routes and the modifiers are the GRAPH page's now;
+        # their line here points there (a click opens it)
         room = (imgui.get_content_region_avail().x - _find_w(False)
                 - imgui.get_style().item_spacing.x)
-        shown = next((t for t in (full, f"{len(rows)} routes  ·  {chain.n} lanes")
-                      if imgui.calc_text_size(t).x <= room), f"{len(rows)} routes")
-        imgui.text_disabled(shown)
-        if shown != full and imgui.is_item_hovered():
-            imgui.set_tooltip(full)
+        imgui.text_disabled(ui.fit_text(POINTER, room))
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(POINTER_TIP)
+        if imgui.is_item_clicked():
+            panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
     _find_field(panel)
-    if ui.chip("+ route"):
-        pid = f"pattern.mod.{panel.control.selb}"
-        add_route(panel, pid if pid in panel.reg else _targets(panel)[0].id)
-    if imgui.is_item_hovered():
-        imgui.set_tooltip("A new route from the selected band's lane — or right-click "
-                          "any control: Route a lane here…")
-    # the routes, the desk, the macros and the session scroll together if
-    # they must; the head and the counts stay put
+    imgui.dummy(imgui.ImVec2(0, 0))             # ends the line the field leaves open
+    # the desk, the macros, the session and the sinks scroll together if
+    # they must; the head and the pointer stay put
     if imgui.begin_child("##routes", imgui.ImVec2(0, 0)):
-        ui._micro("routes")
-        dead, drawn = None, 0
-        for k, b in enumerate(rows):            # k: its place unfiltered — the imgui id
-            if not _shown(panel, router, ("route", id(b)), route_hay, b):
-                continue
-            drawn += 1
-            if _row(panel, router, b, k):
-                dead = b
-            imgui.separator()
-        if dead is not None:
-            # one undo step (undo.py, plan 15): the row and the depth
-            # subscribers that go with it come back with a Ctrl+Z
-            undo.push(f"delete route {dead.source} → {dead.target}")
-            router.table.remove(dead)
-        if not rows:
-            imgui.text_disabled("no routes — the lanes drive nothing")
-        elif not drawn:
-            imgui.text_disabled(NO_MATCH)
-        imgui.spacing()
         desk(panel, router)
         imgui.separator()
         macros(panel, router)
         imgui.separator()
         session(panel, router)
+        imgui.separator()
+        sinks(panel, router)
         # every line is drawn: a control with no line (dark on the global
         # layer) has nothing to scroll to
         st["goto"] = None

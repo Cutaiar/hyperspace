@@ -46,9 +46,10 @@ Two kinds of file, both plain JSON you can open in a text editor:
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
-— the presets, ``hyperspace.preset/2`` under ``presets/``, which
-preset.py's ``Presets`` loads and writes (the one kind since plan 13
-WP5 made the routing presets presets). For such a group the
+— the presets, ``hyperspace.preset/2`` (``/3`` since plan 31, written
+only when needed: a build that takes /2 alone refuses one, `read`)
+under ``presets/``, which preset.py's ``Presets`` loads and writes (the
+one kind since plan 13 WP5 made the routing presets presets). For such a group the
 library does the file half — list, user-shadows-factory, load / save as
 / delete, the dirty dot, the watch — and the kind's hooks do the
 document half: ``load(doc, path)`` applies it, ``document(name)`` is
@@ -110,6 +111,7 @@ from __future__ import annotations
 import copy
 import itertools
 import json
+import math
 import os
 import re
 import shutil
@@ -121,7 +123,19 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
-from .params import F_KEYS, PERFORMANCE_GROUPS, PLANES, SESSION_GROUPS, Registry
+from .graphmigrate import retired
+from .palettecompat import palette_slice
+from .params import (
+    F_KEYS,
+    PERFORMANCE_GROUPS,
+    PLANES,
+    SESSION_GROUPS,
+    UNITS,
+    UNITS_KEY,
+    Registry,
+    is_instance_id,
+    pan_world,
+)
 
 SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # F_KEYS (8) is the slots a function key reaches, and a show file's bank is
@@ -133,6 +147,17 @@ SLOTS = 24                # the bank: F1–F8, then the desk's clip rows 4 and 5
 # (routing.backup's schema argument)
 BANK8_BACKUP = "2-bank8"
 PRESETS = "presets"       # the presets' group, a document kind (preset.py)
+# <root>/desk/<slug>.json (plan 24 C3): the desk templates — named sets of
+# preset-layer rows a preset's desk can start from (`desk_template`,
+# preset.py `expand_desk`). A module-preset group in the library's tree:
+# the factory's hyperspace/library/desk/ (empty in this build: no folder,
+# so the group lists nothing) and the user's in the library root, which
+# [library] path shares (plan 25). Its files are their own format,
+# DESK_SCHEMA, read only through `desk_template`: the `desk` *param* group
+# (desk.slew, desk.pad.*) has no module-preset strip, and a template is
+# never applied as its module preset
+DESK = "desk"
+DESK_SCHEMA = "hyperspace.desk/1"
 # folders in a library root that are no group: the routing presets' old
 # folder, kept as it was by plan 13's migration and never read again
 LEGACY_DIRS = ("bindings",)
@@ -175,6 +200,34 @@ UNTITLED = "untitled"
 BANK_FULL = "the bank is full: it is in the preset list"
 # what `Project.home` says when the show names no "starts on" (plan 15 WP2)
 HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PRESETS page"
+# plan 28 N2: where the GRAPH page's nodes sit, ``{"<node id>": [x, y]}`` —
+# a show's own key for the rig's nodes (devices, the analyzer, the LFOs,
+# the outputs), a preset's (preset.LAYOUT_KEY) for the look's. No key: every
+# node is laid out automatically, and nothing is dirty
+LAYOUT = "layout"
+
+
+def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
+    """A file's ``layout`` value as {node id: [x, y]} (whole canvas units),
+    and how many entries were not a name and two finite numbers (dropped).
+    None is an empty map; a value that is no map, an empty map and one drop."""
+    if value is None:
+        return {}, 0
+    if not isinstance(value, dict):
+        return {}, 1
+    out: dict[str, list[float]] = {}
+    bad = 0
+    for k, xy in value.items():
+        try:
+            x, y = (float(v) for v in xy)
+        except (TypeError, ValueError):
+            bad += 1
+            continue
+        if not (isinstance(k, str) and k and math.isfinite(x) and math.isfinite(y)):
+            bad += 1
+            continue
+        out[k] = [round(x), round(y)]
+    return out, bad
 
 # the preset a group resets to; any other group uses one named "default"
 # if it has one, else the values its objects were built with
@@ -558,6 +611,21 @@ _LEGACY_LISTS = {
 }
 
 
+def _module_values(group: str, doc: dict) -> dict[str, Any]:
+    """A module preset's values as they land: a camera module from before
+    plan 26 A2 (no `units` marker) stored its pan in logical px, read in
+    world units here (`params.pan_world`), as a whole preset's is in
+    `preset.load_doc` — every road a module's values take (a strip load,
+    a project's module list, a file re-applied, the group's default under
+    `defaults`/`resolved`)."""
+    if group == "camera":
+        doc, _ = pan_world(doc)
+    elif group == "fx":
+        # plan 30 N8: a palette saved as centre/width is read as its slice
+        doc, _ = palette_slice(doc)
+    return dict(doc.get("values") or {})
+
+
 def legacy_slot(slot: dict) -> dict:
     """A presets.json theme as a bank slot: {name, values} keyed by param id."""
     values: dict[str, Any] = {}
@@ -619,6 +687,10 @@ class Project:
         self.active = -1          # the slot last loaded, -1 until one is
         self.bank_error = ""
         self._saved: tuple = ([None] * SLOTS, None)   # bank and startup as on disk
+        # plan 28 N2: the GRAPH page's positions of the rig's nodes, and
+        # those as on disk (`is_dirty`)
+        self.layout: dict[str, list[float]] = {}
+        self._saved_layout: dict[str, list[float]] = {}
 
     # ---- documents ----
 
@@ -638,6 +710,10 @@ class Project:
         # the file's own name, which a launch finds the show by (`stem`)
         self._stem = where[: -len(PROJECT_SUFFIX)] if where.endswith(PROJECT_SUFFIX) else None
         self.session = dict(doc.get("session") or {})
+        # how many shows this project object has taken: a hands node of a
+        # preset's graph is seeded from a show's session once per show
+        # opened (plan 26 A4, preset.GraphSection)
+        self.opened = getattr(self, "opened", 0) + 1
         self.modules = dict(doc.get("modules") or {})
         bank = [str(s) if isinstance(s, str) and s else None
                 for s in list(doc.get("bank") or [])[:SLOTS]]
@@ -645,6 +721,8 @@ class Project:
         self.startup = str(doc["startup"]) if doc.get("startup") else None
         self.active = -1
         self._saved = (list(self.bank), self.startup)
+        self.layout, _ = read_layout(doc.get(LAYOUT))
+        self._saved_layout = copy.deepcopy(self.layout)
 
     @property
     def stem(self) -> str:
@@ -661,6 +739,9 @@ class Project:
             doc["note"] = self.note
         doc.update(startup=self.startup, bank=bank_doc(self.bank), session=self.session,
                    modules=self.modules)
+        layout = getattr(self, "layout", None)
+        if layout:                       # plan 28 N2; a show with none writes none
+            doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
         return doc
 
     def mark(self) -> tuple:
@@ -670,14 +751,19 @@ class Project:
         the live show never reaches a mark."""
         return (self.name, self.note, self.path, self.factory, getattr(self, "_stem", None),
                 copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
-                self.startup, (list(self._saved[0]), self._saved[1]))
+                self.startup, (list(self._saved[0]), self._saved[1]),
+                # plan 28 N2: the GRAPH page's positions of the rig's nodes
+                copy.deepcopy(getattr(self, "layout", {})),
+                copy.deepcopy(getattr(self, "_saved_layout", {})))
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
         else — no file is read or written, no value lands (undo.py does
         that), and `active` is the caller's to recompute (`Marks.put`)."""
         (self.name, self.note, self.path, self.factory, self._stem,
-         session, modules, bank, self.startup, saved) = mark
+         session, modules, bank, self.startup, saved) = mark[:10]
+        if len(mark) > 10:               # plan 28 N2: the show's layout, and as on disk
+            self.layout, self._saved_layout = copy.deepcopy(mark[10]), copy.deepcopy(mark[11])
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -728,13 +814,17 @@ class Project:
                 hook(doc["layout"])                   # its params exist before the values land
                 lib._fresh_of(group)                  # …and their build values are "fresh"
         missing = lib.restore(self.session) if self.session else []
+        # an extra hands node's settings (`ghost.2.*`, plan 26 A4) wait for
+        # the preset whose graph declares the node (`GraphSection` seeds it
+        # from this session): held back, not unknown
+        missing = [pid for pid in missing if not is_instance_id(pid)]
         # ids the file lacks (a param added since) take the state this load
         # left, so an untouched project is not dirty the moment it opens
         for pid, v in (lib.reg.snapshot(part="session") if lib.reg is not None else {}).items():
             self.session.setdefault(pid, v)
         for group, name, doc in docs:
             vals = (lib.reg.snapshot(group) if doc is None
-                    else lib.resolved(group, doc.get("values") or {}))
+                    else lib.resolved(group, _module_values(group, doc)))
             lib._landed(group, name, vals)
             hook = lib._load_hooks.get(group)
             if hook is not None:
@@ -838,16 +928,32 @@ class Project:
         return next((k for k in range(len(self.bank)) if self.bank[k] is None), None)
 
     def save_into(self, k: int) -> bool:
-        """The desk's save (2026-10-09, replacing the clip-stop SAVE AS bar):
-        hold an empty bank pad and the live state is a **new** preset in
-        that pad's slot — `save_new`'s preset, its name and its show write,
-        in slot k rather than the next empty one. A filled slot is never
-        written over: nothing happens and False is returned, so a long
-        press that loaded a preset blinks nothing and says nothing (the
-        `preset.save_empty.k` triggers, one per pad)."""
-        if not 0 <= k < len(self.bank) or self.bank[k] is not None:
+        """The desk's two-handed save (plan 24 C1, decision 18: SAVE held, a
+        bank pad tapped — `Param.save_into`, midi.py `_save_tap`): the live
+        state as a **new** preset in slot k — `save_new`'s preset, its name
+        (`next_name`, from the loaded one: TRIP → TRIP 2) and its show
+        write, in slot k rather than the next empty one. **A filled slot
+        takes the new preset too**: the slot points at it, and the preset
+        it named keeps its file, untouched, and stays in the list, unpadded
+        — exactly as "free this pad (keeps the preset)" leaves it. Nothing
+        is overwritten and nothing goes to the trash (owner, 2026-10-09 and
+        2026-10-14). True when slot k now names the new preset; False for a
+        slot the bank does not have, a save that failed, or a show file
+        that could not take the slot (the preset is then saved and in the
+        list, slot k is as it was, and `bank_error` and the footer say why)."""
+        if not 0 <= k < len(self.bank):
             return False
         return self._save_new(k)
+
+    def save_empty(self, k: int) -> bool:
+        """#158's hold (2026-10-09): an **empty** bank pad held midi.HOLD_S
+        saves into its slot (`save_into`); a filled pad held only loads —
+        nothing happens here and False is returned, so a long press that
+        loaded a preset blinks nothing (`Param.held` on `preset.select`).
+        Saving onto a filled slot is the two-handed save's alone."""
+        if not 0 <= k < len(self.bank) or self.bank[k] is not None:
+            return False
+        return self.save_into(k)
 
     def save_new(self) -> bool:
         """The live state as a **new** preset, named from the loaded one
@@ -886,6 +992,7 @@ class Project:
         if k is None:
             lib.say(warning=f"saved {name} — {BANK_FULL}")
             return True
+        was = self.bank[k]          # a filled slot (`save_into`): its preset stays listed
         self.bank[k] = name
         self.active = k
         try:
@@ -893,14 +1000,18 @@ class Project:
         except (LibraryError, OSError) as e:
             # the preset is saved and loaded, but the show could not take
             # it: the bank stays as the show's file has it, and it is said
-            self.bank[k] = None
+            self.bank[k] = was
             self.active = -1
             self.bank_error = f"presets: {e}"
             lib.say(warning=f"saved {name} — the show could not be written: it is in "
                             f"the preset list ({e})")
-            return True
+            # `save_new` saved what it was asked to (the list has it); a
+            # save into slot `at` did not land there — False, so the desk
+            # blinks nothing over a slot that still names the old preset
+            return at is None
         self._room()
-        lib.say(f"saved {name} → {slot_key(k)}")
+        kept = f" ({was} is still in the preset list)" if was is not None else ""
+        lib.say(f"saved {name} → {slot_key(k)}{kept}")
         return True
 
     def put_slot(self, k: int, name: str) -> None:
@@ -1107,7 +1218,7 @@ class Project:
             self.path = self.path_for(name)
         elif self.path is None:
             self.path = self.path_for(self.name)
-        self.session = lib.reg.snapshot(part="session")
+        self.session = {**self._held_back(), **lib.reg.snapshot(part="session")}
         self.modules = {}
         for group, cur in lib._current.items():
             if cur is None or group in lib._kinds or group not in SESSION_GROUPS:
@@ -1164,6 +1275,7 @@ class Project:
         _write_json(self.path, doc)
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
+        self._saved_layout = copy.deepcopy(getattr(self, "layout", {}))
         self.factory = False                          # your copy now
         return self.path
 
@@ -1175,8 +1287,18 @@ class Project:
         if reg is None:
             return False
         return ((self.path is None and not self.factory)
-                or not undo.alike(self.session, reg.snapshot(part="session"))
-                or (self.bank, self.startup) != self._saved)
+                or not undo.alike(self.session, {**self._held_back(),
+                                                 **reg.snapshot(part="session")})
+                or (self.bank, self.startup) != self._saved
+                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
+
+    def _held_back(self) -> dict:
+        """The session's settings of node instances the registry lacks now
+        (`ghost.2.*` while no preset's graph holds the second hands node,
+        plan 26 A4): kept by a save and never counted as an edit."""
+        reg = self.lib.reg
+        return {pid: v for pid, v in (self.session or {}).items()
+                if is_instance_id(pid) and (reg is None or pid not in reg)}
 
 
 def _kept(path: Path) -> bool:
@@ -1219,12 +1341,25 @@ class Marks:
     def take(self) -> tuple:
         """(the show's mark, {group: landed}, {group: its `extra` hook's
         dict — the band layout}, the loaded preset's note and the notes
-        its load left for the panel)."""
+        its load left for the panel, the loaded preset's graph — plan 26
+        A4, `preset.GraphSection.mark`, None with no presets), the
+        loaded preset's GRAPH page layout (plan 28 N2, `Presets.layout`)
+        and the media channels' bins (plan 32, `Presets.media`)."""
         lib, pre = self.lib, self.lib.presets
+        gs = getattr(pre, "graph", None)
         return (lib.project.mark(), self.lands(),
                 {g: copy.deepcopy(hook()) for g, hook in lib._extra_hooks.items()},
                 (getattr(pre, "note", ""), list(getattr(pre, "notes", ())),
-                 list(getattr(pre, "desk_notes", ()))))
+                 list(getattr(pre, "desk_notes", ()))),
+                gs.mark() if gs is not None else None,
+                copy.deepcopy(getattr(pre, "layout", None) or {}),
+                self._bins(pre))
+
+    @staticmethod
+    def _bins(pre):
+        """The media channels' bins (plan 32), None without them."""
+        media = getattr(pre, "media", None)
+        return media.to_json() if media is not None else None
 
     def lands(self) -> dict:
         """{group: landed} — every group's name, reference and re-apply
@@ -1249,8 +1384,13 @@ class Marks:
         """First in a restore: a group whose layout differs from the
         mark's gets it back through its own `on_layout` hook, so its
         params exist before their values land — the order `_apply_doc`
-        keeps."""
+        keeps. The loaded preset's graph goes back first of all (plan 26
+        A4): an effect instance's params (`fx.acid.2.*`) exist before their
+        values land."""
         lib = self.lib
+        gs = getattr(lib.presets, "graph", None)
+        if len(mark) > 4 and mark[4] is not None and gs is not None:
+            gs.put(mark[4])
         for group, extra in mark[2].items():
             hook, now = lib._layout_hooks.get(group), lib._extra_hooks.get(group)
             if hook is None or now is None or not extra or extra.get("layout") is None:
@@ -1270,9 +1410,14 @@ class Marks:
         the moment they change, and reverting them in memory would make
         the show's dirty dot lie. `last_show` is never rewritten."""
         lib, pr = self.lib, self.lib.project
-        show, landed, _extras, note = mark
+        show, landed, _extras, note = mark[:4]
         if not Project.same_show(show, pr.mark()):
             pr.remark(show)
+        elif len(show) > 10:
+            # the same show: its GRAPH page positions still go back (plan 28
+            # N2; the undo of a tidy) — unlike the bank, they are not in its
+            # file until it is saved
+            pr.layout = copy.deepcopy(show[10])
         for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
             lib.reland(group, (None, None, None))
         for group, was in landed.items():
@@ -1280,6 +1425,11 @@ class Marks:
         if lib.presets is not None:
             lib.presets.note, lib.presets.notes, lib.presets.desk_notes = (
                 note[0], list(note[1]), list(note[2]))
+            if len(mark) > 5:            # the GRAPH page's positions (plan 28 N2)
+                lib.presets.layout = copy.deepcopy(mark[5])
+            media = getattr(lib.presets, "media", None)
+            if len(mark) > 6 and mark[6] is not None and media is not None:
+                media.from_json(mark[6])     # the bins (plan 32)
         pr.follow()
 
 
@@ -1457,6 +1607,13 @@ class Library:
         if self.reg is not None and group not in self._fresh_extra:
             self._fresh_extra[group] = hook()
 
+    def on_apply(self, group: str, hook) -> None:
+        """Register who is handed a module preset of this group as it lands
+        — ``hook(name, doc)``, after its values, inside its undo step (plan
+        33 R12: an fx module's run replaces the loaded graph's). A load
+        through the strip, a step or a file watch: not a rename, not a show."""
+        self.__dict__.setdefault("_apply_hooks", {})[group] = hook
+
     def on_load(self, group: str, hook) -> None:
         """Register who is told the name a load of this group landed — the
         scene combo, so a strip load moves the selected scene."""
@@ -1599,6 +1756,13 @@ class Library:
         p = self.path_of(group, name)
         return p is not None and not self._is_user(p)
 
+    def factory_names(self, group: str) -> tuple[frozenset[str], frozenset[str]]:
+        """(the factory names, every name) of the group's index, in one pass
+        — `is_factory` for a whole list without an index per name."""
+        idx = self._index(group)
+        return (frozenset(n for n, p in idx.items() if not self._is_user(p)),
+                frozenset(idx))
+
     def list(self, group: str, *, hidden: bool = False) -> list[str]:
         """Every preset of the group by name, the user's shadowing the
         factory's. A factory preset × hid (`hide`, plan 19 WP4) is left out
@@ -1722,9 +1886,30 @@ class Library:
             raise LibraryError(f"{path.name} is a {doc['group']} preset, not {group}")
         return doc
 
+    def desk_template(self, name: str) -> dict:
+        """The desk template `name` (plan 24 C3): its file under
+        ``<root>/desk/``, the user's shadowing the factory's like any
+        group's, as ``{"schema": DESK_SCHEMA, "name", "note"?, "desk":
+        [row, …]}`` — the rows in a preset's ``desk`` form (no ``layer``).
+        A template that is not there, or not that format, raises
+        LibraryError; the caller says so and goes on without it."""
+        path = self.path_of(DESK, name)
+        if path is None:
+            raise LibraryError(f"no desk template {name!r}")
+        doc = copy.deepcopy(self._doc(path))
+        if doc.get("schema") != DESK_SCHEMA:
+            raise LibraryError(f"{path.name}: schema {doc.get('schema')!r} is not "
+                               f"{DESK_SCHEMA}")
+        rows = doc.get("desk")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            raise LibraryError(f"{path.name}: its desk is not a list of rows")
+        return doc
+
     # ---- defaults & values ----
 
     def default_name(self, group: str) -> str | None:
+        if group == DESK:          # its folder holds desk templates, never module presets:
+            return None            # a template named "default" is no group default
         name = DEFAULT_NAMES.get(group, "default")
         return name if self.path_of(group, name) is not None else None
 
@@ -1740,7 +1925,7 @@ class Library:
         name = self.default_name(group)
         if name is not None:
             try:
-                out.update(self.read(group, name).get("values") or {})
+                out.update(_module_values(group, self.read(group, name)))
             except LibraryError as e:
                 self.error = f"library: {e}"
                 return out                             # not cached: the file may be fixed
@@ -1843,10 +2028,16 @@ class Library:
             if hook is not None and doc.get("layout") is not None:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
-            values = doc.get("values") or {}
-            missing = [k for k in values if k not in self.reg]
+            values = _module_values(group, doc)
+            # (an fx module's order and target, retired in plan 33 T7, are no
+            # unknown ids: its run is read from them, `Presets._fx_module`)
+            missing = [k for k in values if k not in self.reg and not retired(k)]
             resolved = self.resolved(group, values)
             self.restore(resolved)
+            # (getattr: a Library from before a hot reload has no apply hooks)
+            apply = getattr(self, "_apply_hooks", {}).get(group)
+            if apply is not None:
+                apply(name, doc)
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:
@@ -1931,6 +2122,8 @@ class Library:
         reg = self._need_reg()
         doc = {"schema": PRESET_SCHEMA, "group": group, "name": name,
                "values": reg.snapshot(group)}
+        if group == "camera":
+            doc[UNITS_KEY] = dict(UNITS)     # its pan is in world units (plan 26 A2)
         if extra is None and group in self._extra_hooks:
             extra = self._extra_hooks[group]()
         if extra:
