@@ -119,7 +119,7 @@ from .fx import declare as declare_fx
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
-from .graph import GraphError, GraphSpec, Wiring, read_graph
+from .graph import FRAME_KEY, WIRED_FRAME, GraphError, GraphSpec, Wiring, read_graph
 from .lfo import SHAPES, SYNCS
 from .library import (
     DESK_SCHEMA,
@@ -359,7 +359,7 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default,
         # ruling R10: the lowest schema that loses nothing — a wired frame
         # whose round trip is plan 33/34's words is `/5`, so the other Mac
         # on that build still reads it; `/6` only for the wired frame's own
-        if (isinstance(section, dict) and section.get("frame") == "wired"
+        if (isinstance(section, dict) and section.get(FRAME_KEY) == WIRED_FRAME
                 and graphmigrate.unwired(section, specs) is None):
             return WIRED_SCHEMA
         return FREE_SCHEMA
@@ -943,7 +943,7 @@ class Presets:
         doc = {"schema": SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
-               GRAPH_KEY: read_graph({"frame": "wired"}).to_json()}
+               GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME}).to_json()}
         lib.land_unsaved(GROUP, UNTITLED_PRESET, doc)
         self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
@@ -1378,7 +1378,7 @@ class Presets:
         if not any(w.get("to") == "backdrop.image" for w in rest.get("wires", [])):
             history = held
         kept = getattr(gs, "five", None)     # (a section from before has none)
-        if isinstance(kept, dict) and not kept.get("frame"):
+        if isinstance(kept, dict) and not kept.get(FRAME_KEY):
             files = gs.files()
             try:
                 old = read_graph(kept, effects=files)

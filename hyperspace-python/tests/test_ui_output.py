@@ -208,10 +208,10 @@ def test_a_picture_put_back_saves_in_the_lowest_schema(tmp_path):
     assert app.presets.document("party-trip")["schema"] == M.WIRED_SCHEMA   # (`ground`)
     assert graphview.set_picture(e, "output.2.image", "as All outputs") is None
     assert app.presets.document("party-trip")["schema"] == untouched
-    if graphview.set_through(e, 2, True) is None:
-        assert app.presets.document("party-trip")["schema"] == M.WIRED_SCHEMA
-        assert graphview.set_through(e, 2, False) is None
-        assert app.presets.document("party-trip")["schema"] == untouched
+    assert graphview.set_through(e, 2, True) is None      # (party-trip lays All outputs' hands)
+    assert app.presets.document("party-trip")["schema"] == M.WIRED_SCHEMA
+    assert graphview.set_through(e, 2, False) is None
+    assert app.presets.document("party-trip")["schema"] == untouched
 
 
 def test_open_on_graph_selects_the_window(tmp_path):

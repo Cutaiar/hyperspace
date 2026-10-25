@@ -1560,7 +1560,7 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
 
     from hyperspace.outputs import Switches, View
 
-    rig, e, pushed = wired_rig(tmp_path, slug="glimmer-bug")
+    rig, e, _ = wired_rig(tmp_path, slug="glimmer-bug")
     spec = rig.presets.graph.spec
     into = next(w.src for w in spec.wires if w.dst == "backdrop.scene")
     fed = sorted(w.dst for w in spec.wires if w.src == "backdrop")

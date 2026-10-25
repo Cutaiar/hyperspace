@@ -208,12 +208,6 @@ FACE_PIC = 1024
 OWN_FIT = 0
 
 
-def media_name(c: str) -> str:
-    """Channel `c`'s name as a wire's end before the wired frame (the old
-    id): `media.a` …"""
-    return f"media.{c}"
-
-
 def channel_name(c: str) -> str:
     """Channel `c`'s node, and its name as a wired frame's wire end (plan
     35 V2): `channel.a` …"""
@@ -231,12 +225,6 @@ def layer_name(n: int) -> str:
     """The old id of the hands' layer drawn from the n-th hands node:
     `hands`, `hands.2`, … (plan 35 V2: `hands.layer`, `wired_layer_name`)"""
     return "hands" if n == 1 else f"hands.{n}"
-
-
-def readout_name(n: int) -> str:
-    """The old id of the n-th hands node's readout alone: `readout`,
-    `readout.2`, … (plan 35 V2: `hands.guide`, `wired_guide_name`)"""
-    return "readout" if n == 1 else f"readout.{n}"
 
 
 @dataclass(frozen=True)
@@ -2623,8 +2611,9 @@ class Frame:
     `Renderer._draw_frame` settled before evaluation (the frame's size
     under the cap, the first output's target to bind again after a
     failure, the chain's state), and what the nodes fill in as they run
-    (the cover, the hands' layer, the readout, each pipeline's frame
-    texture, the failures, `stats`, each node's per-frame `data`).
+    (the cover, the hands' layer, the readout, each end's frame texture
+    — `frames`, by the `Shown` end's name —, the failures, `stats`, each
+    node's per-frame `data`).
 
     Plan 33 R: a branch is made at the size its consumer asks
     (`Node.size_for`): `at(size)` is this frame at another size — the
@@ -2729,7 +2718,8 @@ class Node:
     """One node: a unique `name` (the SYSTEM page's line and the timer's
     key), typed input ports (`INPUTS`: port → type) wired to other nodes,
     one output of type `OUTPUT` (None for a sink), and `after`, ordering
-    dependencies that carry no image (the capture after every pipeline).
+    dependencies that carry no image (the capture after every end, each
+    delay's write and each output's hands and guide: `Capture.after`).
 
     `run(frame)` is called once a frame, in the graph's order. A node
     whose picture is a texture overrides `image(frame)` (and `depth` when
@@ -3517,13 +3507,13 @@ class PatternNode(Node):
 
 
 class BackdropNode(Node):
-    """The backdrop (plan 33 G): `backdrop`, the sink whose `image` input
-    takes the place of `backdrop.channel`. It draws nothing itself — the
-    picture on `image` is laid under the scene by `grounded` (a channel
-    straight in: the plan 32 `MediaNode(alpha_of="backdrop_alpha")`; any
-    other picture: `Composite(…, under_alpha_of="backdrop_alpha")`). Built
-    only when `backdrop.image` is wired; `backdrop.alpha` and
-    `backdrop.history` stay params."""
+    """The backdrop's node on the GRAPH canvas only (plan 35): the stand-in
+    `graphview._stand_in` draws for `backdrop` (`graphview.FRAME_CLASS`),
+    never built into a graph and never run. In a wired frame the builder
+    makes `backdrop` itself (`_Build._make`): `backdrop.scene` laid over
+    `backdrop.image` at `backdrop.alpha` — a channel straight in as the
+    plan 32 `MediaNode(alpha_of="backdrop_alpha")`, any other picture a
+    `Composite(…, under_alpha_of="backdrop_alpha")`."""
 
     KIND = "backdrop"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
@@ -3679,7 +3669,7 @@ class Delay(Node):
 class DelayWrite(Node):
     """A delay's other half (plan 34 D): `<delay>(write)`, its `image`
     input painted into the pair's write side once a frame — before the
-    capture (`Capture.after`, as a `Wired` end) — at the size it holds
+    capture (`Capture.after`, as each `Shown` end is) — at the size it holds
     (`held`: its input's own size, else the frame's, row 357), cleared to
     transparent black first. An input that reads nothing this frame leaves
     the pair unwritten (R7): next frame the delay reads nothing, as a
@@ -4287,15 +4277,19 @@ class History(Node):
 
 
 class Capture(Node):
-    """The look-back's capture (`Lookback.capture`): its input — what it
-    is wired to: the scene by default, or the scene with the hands' layer
-    laid on (`Wiring.history`, a `Composite` materialised for it) — into
-    the ring on the echoes' cadence, and out to the dream worker. Exactly
-    once a frame, after every pipeline has composited the history (a
-    capture changes the echoes' weights, ages and tint, so one between
-    two pipelines would give two outputs different echoes), whatever the
-    switches: with no view showing the scene the history and the dream
-    go on, and so do the effects' clocks."""
+    """The look-back's capture (`lookback(capture)`): what is wired into
+    `lookback.capture` — the scene in the factory frame, or any picture
+    (the scene with the hands' layer laid on is a `Composite` wired there)
+    — into the ring on the echoes' cadence, and out to the dream worker.
+    Exactly once a frame, after everything an output shows has read the
+    look-back (`after`: every `Shown` end, each delay's write, each
+    picture laid as an output's hands or guide — a capture changes the
+    echoes' weights, ages and tint, so one between two readers would give
+    two outputs different echoes), whatever
+    the outputs show: with no window showing the look-back the ring and
+    the dream go on, and so do the effects' clocks. (`KIND` keeps the old
+    word `history`, as `History`'s does: only the repr and a port error's
+    words read it, and the two are renamed together or not at all.)"""
 
     KIND = "history"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
@@ -4468,8 +4462,8 @@ class Effect(Node):
     the history's and the composites' (the class docstring of the module:
     "materialised and painted images").
 
-    Plan 30 D1 — **placed** effects (`placed`: "after" / "into", or None in
-    a pipeline's run). One placed after a node that makes a texture (the
+    Plan 30 D1 — **placed** effects (`placed`: "after" / "into", or None for
+    one the wires put where it is). One placed after a node that makes a texture (the
     scene, a hands' layer: `MAKES`; or after such an effect) folds that
     texture once, in its own `run`, into a pool texture held for the
     frame (`makes`): every consumer then reads that one picture — the
@@ -4875,7 +4869,7 @@ class Output(Node):
     def folds(self) -> list[Effect]:
         """The effects placed into this output's picture (plan 30 D1:
         `into: output.<n>`), first applied first: they sit on its `image`
-        port, between it and the pipeline's end."""
+        port, between it and the end it shows (`Shown`)."""
         out: list[Effect] = []
         src = self.inputs["image"]
         while isinstance(src, Effect):
@@ -4996,7 +4990,8 @@ class Graph:
     two is made once into a held texture), `pool` is how many textures
     the effects' pool needs for this graph, and `effects` the effect
     instances the build had (plan 33 R: the renderer builds again when a
-    file comes or goes), `run` the effects of the pipelines' runs.
+    file comes or goes), `run` the effects the wires reach (plan 35: no
+    pipeline's run — the effects in the order the wires put them).
 
     Plan 30 D1: `insert` puts a placed effect on an edge after the graph
     is built (`build_graph`), `dormant` says why a placed effect has no
@@ -5017,11 +5012,11 @@ class Graph:
         # the next frame runs — the build's own are never among them
         self.stood: set[str] = set()
         self.notes: list[str] = []               # D1: placements refused at build
-        # D1: the effects placed out of the runs (dormant ones included):
-        # the renderer's `fx_on` ("an effect bends a pipeline") leaves them out
+        # D1: the effects placed by `after`/`into` (dormant ones included):
+        # the renderer's `fx_on` ("an effect bends the picture") leaves them out
         self.placed_names: frozenset[str] = frozenset()
-        # plan 33 R: the effects of every pipeline's run, first to last —
-        # the renderer's `fx_on` is any of them live
+        # the effects the wires reach, first to last (plan 35: the wired
+        # frame's, no pipeline's run) — the renderer's `fx_on` is any of them live
         self.run: tuple[str, ...] = ()
         self._readers: dict[str, int] = {}
         self._pool: int | None = None
@@ -5077,7 +5072,7 @@ class Graph:
 
     def folds(self, index: int) -> bool:
         """Whether output `index`'s picture goes through an effect placed
-        into it (D1): its pipeline is then never painted direct."""
+        into it (D1): its end is then never painted direct."""
         return any(out.index == index and out.folds for out in self.outputs)
 
     def add(self, node: Node) -> Node:
@@ -5289,8 +5284,8 @@ def _place(g: Graph, placed: list[EffectAt]) -> None:
 
 
 def _placed_nodes(g: Graph, effect: str) -> list[Effect]:
-    """The effect nodes of instance `effect` in `g` (one per pipeline's run,
-    or the one placed)."""
+    """The effect nodes of instance `effect` in `g` (plan 35: the one the
+    wires build, or the one placed — each instance is one node)."""
     return [n for n in g.nodes.values() if isinstance(n, Effect) and n.effect == effect]
 
 

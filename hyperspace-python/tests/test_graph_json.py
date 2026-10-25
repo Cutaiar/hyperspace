@@ -159,7 +159,6 @@ def test_the_wiring_holds_the_hands_nodes_and_one_makes_the_layer():
             G.Wiring(**bad)
     assert [G.hands_name(n) for n in (1, 2)] == ["ghost", "ghost.2"]
     assert [G.layer_name(n) for n in (1, 2)] == ["hands", "hands.2"]
-    assert [G.readout_name(n) for n in (1, 3)] == ["readout", "readout.3"]
 
 
 # ---------------------------------------------------------------- the default graph
