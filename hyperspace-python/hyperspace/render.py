@@ -2064,15 +2064,18 @@ class Renderer:
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
         again when the frame's size changes. Plan 33 R: a key that is
         `(name, size)` (a picture made at another size, `graph.Frame.key`)
-        lives while some frame asks for it (`_prune_sized`). Plan 34 D:
+        lives while some frame asks for it (`_prune_sized`) — R16: as does
+        any other key, after `SIZED_KEEP_FRAMES` idle. Plan 34 D:
         `dtype` "f2" a half-float one (a delay's picture refitted, which
         must not quantise); a stored texture of another dtype is made
         again."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
-        if isinstance(key, tuple):
-            self.__dict__.setdefault("_sized_used", set()).add(key)
+        # R16 (final review): every key asked for is marked — a string
+        # key (an end's `shown(...)`, a `#fit`) is pruned when idle as a
+        # `(name, size)` one is, so a load leaves nothing of the last preset
+        self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if (have is not None and have[0].size == size
                 and getattr(have[0], "dtype", "f1") == dtype):
@@ -2173,9 +2176,10 @@ class Renderer:
 
     def _prune_sized(self) -> None:
         """Once a frame, first: release the pools (`pool_at`) and the frame
-        textures keyed `(name, size)` that no frame has asked for in the
-        last `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a
-        branch unwired — so pictures made at other sizes never pile up,
+        textures (R16: every key — `(name, size)`, an end's `shown(...)`, a
+        `#fit`, a channel's fit) that no frame has asked for in the last
+        `SIZED_KEEP_FRAMES` — a channel whose clip changed size, a branch
+        unwired, the preset before a load — so pictures never pile up,
         and (R29) a switch flicked every frame between branches of other
         sizes reallocates nothing: the branch not picked keeps its
         textures for the next flick."""
@@ -2201,12 +2205,17 @@ class Renderer:
                 tex.release()
         self._pools_used = set()
         frames = getattr(self, "_frames", None) or {}
-        used = getattr(self, "_sized_used", None) or set()
-        for key in [k for k in frames if isinstance(k, tuple) and stale(("frame", k), used)]:
+        used = getattr(self, "_sized_used", None)
+        if used is None:
+            used = self._sized_used = set()
+        for key in [k for k in frames if stale(("frame", k), used)]:
             tex, fbo = frames.pop(key)
-            fbo.release()
-            tex.release()
-        self._sized_used = set()
+            try:
+                fbo.release()
+                tex.release()
+            except Exception:  # noqa: BLE001, S110 — a lost context: nothing to free
+                pass
+        used.clear()
 
     def _hands_failed(self, e: Exception, target: moderngl.Framebuffer, vp: tuple,
                       ghost: Ghost | None = None) -> None:

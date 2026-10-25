@@ -456,3 +456,30 @@ def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
             if keys is not None:
                 assert set(r._frames) == keys
             keys = set(r._frames)
+
+
+def test_a_load_frees_the_last_presets_frame_targets(ctx):
+    """R16 (final review): preset A (channel a through a resize into
+    outputs 2 and 3), then preset B (channel b alone into output 2): 60
+    frames later none of A's frame targets — its `shown(...)` end, the
+    resize's own size, channel a's fit — is held, and what is
+    held is what B alone holds in steady state."""
+    media = _media(a=Still(_rgba(16, 9)), b=Still(_rgba(16, 9, BLUE)))
+    s, vs = _s(size=2), _views(ctx, WIDE, 3)
+    r = _wired_renderer(ctx, media, [*CHANNEL_OUT, ("resize", "output.3.image")], [RESIZE])
+    for k in range(3):
+        _frame(ctx, r, s, vs, WIDE, k)
+    a_keys = set(r._frames)
+    assert {"shown(resize)", "media.a", ("resize#own", (64, 36))} <= a_keys, a_keys
+    b = [("channel.b", "output.2.image")]
+    r.wiring = _spec(*b).wiring()
+    _frame(ctx, r, s, vs, WIDE, 0)
+    b_keys = set(r._frames) - a_keys
+    for k in range(60):
+        _frame(ctx, r, s, vs, WIDE, k)
+    left = set(r._frames)
+    assert not [k for k in left if "resize" in str(k) or "media.a" in str(k)], left
+    fresh = _wired_renderer(ctx, media, b)
+    for k in range(60):
+        _frame(ctx, fresh, s, vs, WIDE, k)
+    assert left == set(fresh._frames) and b_keys <= left, (left, set(fresh._frames))
