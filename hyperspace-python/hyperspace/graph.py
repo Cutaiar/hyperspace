@@ -291,6 +291,8 @@ class Wiring:
     # wire, and any hands node may have a layer (row 380). T2's builder reads
     # it; T1 sets it so a wired section reads
     wired: bool = False
+    # plan 35 F: a wired frame's copies (`CopyAt`: each one's `of`), by instance
+    copies: tuple[CopyAt, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.backdrop, str) or (
@@ -350,7 +352,10 @@ class GraphError(ValueError):
 # hands' layer, the history, an output, an effect instance
 PLACE_KEYS = ("after", "into")
 _INSTANCE = r"(?:[2-9]|[1-9][0-9]+)"
-_PLACE_NODE = re.compile(rf"scene|history|hands(?:\.{_INSTANCE})?|output\.[1-9][0-9]*")
+# (plan 35 V2: and the new ids a wired frame places on — `lookback`, the
+# layers `hands.layer`, `hands.<n>.layer`)
+_PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.layer)?"
+                         r"|output\.[1-9][0-9]*")
 # plan 33 G: the wire ends that are no effect — `frame`, the pipeline end
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
 # file may take them, and no effect's place is one of them. Plan 34 L: and
@@ -1632,8 +1637,14 @@ def _read_wires(raw: Any, ctx: _WireCtx, d1: list[Wire]) -> tuple[tuple[Wire, ..
     # two wires into one port (D1's placements count): each refused, the
     # port keeps its default (or D1's placement). Plan 35 F: but in a wired
     # frame the scene's geometry takes several, drawn in section order
+    # Plan 35 B: and there D1's `into` is a fold of what the port reads
+    # (`_place`, on the built graph), not a second wire into it — so an
+    # output's own picture (a through's copies) and the look-back's take
+    # their wire with an effect placed into them
     into: dict[str, list[Wire]] = {}
-    for w in (*d1, *ok):
+    folds = {w for w in d1 if (w.src in ctx.placed and ctx.placed[w.src][0] == "into")
+             or w.dst.startswith("output.")} if ctx.wired else set()
+    for w in (*(w for w in d1 if w not in folds), *ok):
         into.setdefault(w.dst, []).append(w)
     for dst, ws in into.items():
         if len(ws) > 1 and not (ctx.wired and dst in MANY_PORTS):
@@ -1789,7 +1800,7 @@ class GraphSpec:
             # (no run, no shortening, no backdrop channel); T2 builds them
             return Wiring(draw=first.draw, extra=tuple(h for h in self.hands if h.n != 1),
                           blend=self.laid, placed=placed, wires=self.wires,
-                          composites=self.composites(), wired=True)
+                          composites=self.composites(), wired=True, copies=self.copies)
         run, wires = None, self.wires
         if any(w.src == "frame" or w.dst == "fx.image" for w in wires):
             # plan 33 R: the section says the run (every preset loaded on
@@ -2146,12 +2157,20 @@ def _is_sink(w: Wire) -> bool:
 
 def _wired_reaches(spec: GraphSpec) -> frozenset[str]:
     """`reaches` in a wired frame (plan 35 F): the fixpoint from the sinks."""
-    wires = [w for w in spec.all_wires() if w.src != GROUND]
+    wires = spec.all_wires()
+    has_pattern = any(isinstance(n, PatternAt) for n in spec.frame_nodes)
+    return _wired_reach(wires, has_pattern)
+
+
+def _wired_reach(wires, has_pattern: bool = False) -> frozenset[str]:
+    """The names a wired frame's `wires` reach from the sinks (`reaches`,
+    and the builder's own: plan 35 B builds only these); `has_pattern`, the
+    section declares the faces pattern."""
+    wires = [w for w in wires if w.src != GROUND]
     into: dict[str, list[str]] = {}
     for w in wires:
         into.setdefault(w.node, []).append(w.src)
-    has_pattern = any("pattern" in (w.src, w.node) for w in wires) or any(
-        isinstance(n, PatternAt) for n in spec.frame_nodes)
+    has_pattern = has_pattern or any("pattern" in (w.src, w.node) for w in wires)
     if has_pattern and not any(w.dst == "shape.faces" for w in wires):
         for node, reads in IMPLICIT_EDGES:
             into.setdefault(node, []).append(reads)
@@ -2547,7 +2566,9 @@ class Frame:
         `views`): each output's wired end, settled (`Output.settle`).
         Asked by the pipeline ends, which run after the hands' layer —
         whether a hand shows decides where a through output's picture
-        comes from."""
+        comes from. Plan 35 B: counted through each window's mutes (a
+        window whose picture is muted takes no end), so muting one of two
+        windows puts the other back on the direct paint, with no rebuild."""
         if self._users is None:
             users: dict[str, list[int]] = {}
             for out in self.graph.outputs if self.graph is not None else ():
@@ -3128,6 +3149,8 @@ class Scene(Node):
             with frame.timed(self.name):
                 r.scene.draw_fbo.use()
                 ctx.viewport = (0, 0, *frame.size)
+                if not geometries:        # (plan 35 B: a wired scene with no geometry)
+                    r.clear_scene()
                 for g in geometries:
                     g.draw(frame)
                 r.scene.resolve()
@@ -3636,6 +3659,16 @@ def _ring_holds(frame: Frame) -> str:
     backdrop (`backdrop.history`)."""
     g = frame.graph
     wiring = g.wiring if g is not None else None
+    if getattr(wiring, "wired", False):
+        # plan 35 B: what is wired into `lookback.capture`
+        cap = g.nodes.get("capture")
+        src = cap.inputs.get("image") if cap is not None else None
+        if isinstance(src, Composite) and isinstance(src.inputs.get("over"), HandsLayer):
+            return "the scene + hands"
+        if src is not None and src.name == GROUNDED:
+            return "the scene + backdrop"
+        return "the scene" if isinstance(src, Scene) else (
+            src.name if src is not None else "nothing")
     if getattr(wiring, "history", "scene") == "scene+hands":
         return "the scene + hands"
     if getattr(wiring, "backdrop_history", False) and g is not None and GROUNDED in g.nodes:
@@ -3780,7 +3813,33 @@ class HandsLayer(Node):
     def __init__(self, name: str, after: tuple[Node, ...] = (), readout: str = "through",
                  **inputs: Node | None):
         super().__init__(name, after, **inputs)
+        # "through" / "always" (the default graph's, until T4), or (plan 35
+        # B, a wired frame's) "downstream": split while an effect of
+        # `downstream` — what reads the layer, followed on — is live
         self.readout = readout
+        self.downstream: tuple[str, ...] = ()
+
+    def split(self, frame: Frame) -> bool:
+        """Whether the guide is split out of the layer this frame (once a
+        frame): always while the hands are also in the scene or an effect
+        sits on the layer — the guide is never in a picture the effects
+        bend — else while the layer reaches a live effect (plan 35 B: a
+        wired frame's copies) or, in the default graph, while an effect of
+        the run is on and an output puts the hands through."""
+        key = self.name + "#split"
+        got = frame.data.get(key)
+        if got is None:
+            how = getattr(self, "readout", "through")
+            if how == "always":
+                got = True
+            elif how == "downstream":
+                live = frame.r.fx.state.live
+                got = any(live(e) for e in getattr(self, "downstream", ()))
+            else:
+                got = frame.fx_on and any(v.switches.hands and v.switches.through
+                                          for v in frame.views)
+            frame.data[key] = got
+        return got
 
     def ghost(self, frame: Frame):
         """The `Ghost` this layer draws: its geometry's, or the renderer's."""
@@ -3792,12 +3851,9 @@ class HandsLayer(Node):
         return bool(frame.data.get(self.name + "#drew"))
 
     def run(self, frame: Frame) -> None:
-        r, views = frame.r, frame.views
+        r = frame.r
         frame.data[self.name + "#drew"] = False
-        if self.readout == "always":
-            split = True
-        else:
-            split = frame.fx_on and any(v.switches.hands and v.switches.through for v in views)
+        split = self.split(frame)
         geo = self.inputs["geometry"]
         gh = self.ghost(frame)
         drew = False
@@ -3922,7 +3978,16 @@ class History(Node):
         lb.pull()
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
-        src = self.inputs["image"].image(frame)
+        img = self.inputs["image"]
+        if img is None:
+            # (plan 35 B: a wired look-back with nothing wired into its
+            # image draws nothing over the ground)
+            rect = tuple(dst.viewport)
+            dst.use()
+            frame.ctx.viewport = rect
+            frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+            return
+        src = img.image(frame)
         cover = self.inputs["cover"].image(frame) if self.inputs["cover"] is not None else None
         occ = self.inputs.get("occluder")
         occ = occ.image(frame) if occ is not None else None
@@ -4508,6 +4573,119 @@ class Wired(Fx):
             src.paint(frame, dst)
 
 
+class Copy(Effect):
+    """A copy (plan 35 F, row 377): effect instance `of` drawn again on
+    another picture — `copy`, `copy.2` … — with the instance's knobs, its
+    `FxState.live` and its clock (`effect` is `of`), its own `image` and
+    `aux`. What each pipeline's own run node was (`acid(scene+hands)`),
+    said as a node, made only where a wire says one."""
+
+    KIND = "effect"
+
+    def __init__(self, name: str, of: str, image: Node | None = None,
+                 after: tuple[Node, ...] = ()):
+        super().__init__(of, image=image, node=name, after=after, placed="wire")
+
+
+class Shown(Node):
+    """An output's picture as an end (plan 35 B): `shown(<source>)`, one per
+    distinct source an output's `image` takes (its own wire, else All
+    outputs'), shared by every output showing it — `Fx` and `Wired` made
+    one. As an end it decides where the picture lands (`run`, today's
+    `Fx.run`): straight into its one user's window when exactly one output
+    takes it this frame (`Frame.users`, counted through the mutes) at the
+    frame's size, unflipped, with no tap and no fold — else once into a
+    frame texture under its name, for every output that takes it.
+
+    The stand-down (row 378): a source that is a chain of copies over a
+    composite whose `over` is a hands layer is only itself while it bends
+    the layer — the layer drawn this frame and a copy of the chain live
+    (an empty chain never bends). Otherwise its outputs take `fallback` —
+    the end of the copies' originals over the composite's `under`, or the
+    ground (None) with nothing under — with the layer laid over at the
+    output (`Output.settle`), as `Fx.fallback` was. Any other source is
+    always itself."""
+
+    KIND = "shown"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
+
+    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        self.key = name               # its frame texture's and its routes' key
+        self.fallback: Shown | None = None
+        self.stands = False           # a copy chain over a hands composite (`_Build`)
+        self.copies: tuple[str, ...] = ()     # the chain's copies' effects, first first
+        self.chained = False          # an effect of the graph's run is on its way
+
+    @property
+    def source(self) -> Node | None:
+        """What its chain of effects starts from (the composite that lays
+        the hands on, for a stand-down)."""
+        src = self.inputs["image"]
+        while isinstance(src, Effect):
+            src = src.inputs["image"]
+        return src
+
+    @property
+    def layer(self) -> Node | None:
+        """The layer its composite lays on before the copies (a stand-down's
+        alone), read as wired now (D1 may sit an effect on it)."""
+        src = self.source
+        return src.inputs["over"] if self.stands and isinstance(src, Composite) else None
+
+    def bent(self, frame: Frame) -> bool:
+        """Whether this end is itself this frame (see the class)."""
+        if not getattr(self, "stands", False):
+            return True
+        layer = self.layer
+        if layer is None or layer.image(frame) is None:
+            return False
+        live = frame.r.fx.state.live
+        return any(live(e) for e in self.copies)
+
+    def run(self, frame: Frame) -> None:
+        users = frame.users(self)
+        if not users:
+            return
+        r, views, stats = frame.r, frame.views, frame.stats
+        only = views[users[0]]
+        direct = (len(users) == 1 and only.target is not None
+                  and getattr(only, "tap", None) is None
+                  and tuple(only.rect[2:]) == frame.size
+                  and not getattr(only.switches, "flip_x", False)
+                  and not getattr(only.switches, "flip_y", False)
+                  and not (frame.graph is not None and frame.graph.folds(users[0])))
+        stats["pipelines"].append(self.key)
+        try:
+            if direct:
+                dst, tex = only.target, None
+                dst.viewport = only.rect
+            else:
+                tex, dst = r._frame_target(self.key, frame.size)
+                stats["direct"] = False
+            self.paint(frame, dst)
+            frame.frames[self.key] = tex
+        except Exception as e:  # noqa: BLE001 — one end must not take the others down
+            frame.failed.add(self.key)
+            for i in users:
+                r._view_failed(views[i], self.name, e)
+            r._rebind(frame.target, frame.vp)
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        """Its source into `dst` — `Fx.paint`'s: the clocks moved and a
+        chain run counted when an effect of the graph's run on its way is
+        live this frame (`frame.fx_on`)."""
+        src = self.inputs["image"]
+        live = frame.fx_on and getattr(self, "chained", False)
+        if live:
+            frame.r.fx.state.advance_to(frame.t)
+        if src is not None:
+            src.paint(frame, dst)
+        if live:
+            frame.stats["chain_runs"] += 1
+
+
 def effect_node_name(effect: str, key: int) -> str:
     """The node of effect instance `effect` in pipeline `key`'s run: the
     effect's own name in the scene's pipeline (`palette`, `acid.2`: the
@@ -4537,10 +4715,22 @@ class Output(Node):
     REFS: ClassVar[frozenset[str]] = frozenset({"readout", "depth"})
 
     def __init__(self, name: str, index: int, after: tuple[Node, ...] = (),
-                 blend: str = "over", **inputs: Node | None):
+                 blend: str = "over", mutes: bool = False, **inputs: Node | None):
         super().__init__(name, after, **inputs)
         self.index = index            # the view it draws, in Frame.views
         self.blend = blend
+        # plan 35 O (row 374): a wired frame's output reads its window's
+        # mutes each frame — `scene` (picture) off ignores `image`, `hands`
+        # off ignores `hands` and the guide; never a rebuild. The default
+        # graph's outputs are built from the switches instead (until T4)
+        self.mutes = mutes
+
+    def _muted(self, frame: Frame) -> tuple[bool, bool]:
+        """(the picture muted, the hands and guide muted) this frame."""
+        if not getattr(self, "mutes", False):
+            return False, False
+        sw = frame.views[self.index].switches
+        return not getattr(sw, "scene", True), not getattr(sw, "hands", True)
 
     @property
     def folds(self) -> list[Effect]:
@@ -4566,7 +4756,13 @@ class Output(Node):
         while isinstance(end, Effect):            # D1: the end behind its folds
             end = end.inputs["image"]
         over, blend = self.inputs["hands"], self.blend
-        if isinstance(end, Fx) and not end.bent(frame):
+        no_picture, no_hands = self._muted(frame)
+        if no_picture:
+            end = None
+        if no_hands:
+            over = None
+        if isinstance(end, (Fx, Shown)) and not end.bent(frame):
+            # (plan 35 B: a copy chain's stand-down, as a pipeline's was)
             over, blend = end.layer, end.source.blend
             end = end.fallback
         laid = (over, blend) if over is not None and over.image(frame) is not None else None
@@ -4594,7 +4790,7 @@ class Output(Node):
         # A4: the readout of the node wired to this output's port, and the
         # hands laid over by their own layer's Ghost (a second hands node's
         # on the glass, the first's in the scene on the projector)
-        src = self.inputs["readout"]
+        src = self.inputs["readout"] if not self._muted(frame)[1] else None
         ro = None if src is None else (src.readout_image(frame)
                                        if hasattr(src, "readout_image") else frame.readout)
         try:
@@ -5581,3 +5777,488 @@ def _consumers(g: Graph, node: Node) -> list[tuple[Node, str]]:
     (`Node.REFS`: a depth, the readout, the face buffer)."""
     return [(c, port) for c in g.nodes.values() for port, src in c.inputs.items()
             if src is node and port not in c.REFS and c.INPUTS[port] == IMAGE]
+
+
+# ---------------------------------------------------------------- the wired frame (plan 35 B)
+
+def build_graph(views: list[View], wiring: Wiring, clouds: tuple[str, ...] = (),
+                effects: tuple[str, ...] = ()) -> Graph:
+    """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
+    wires reach (`reaches`: a path to an output's port, All outputs', or
+    the look-back's capture) is built — `{"frame": "wired"}` alone is the
+    outputs and nothing else, black. No node is made before the wires say
+    it; the switches build nothing (`Graph.key` is the views' count: a mute
+    is the window's, read each frame by its `Output`).
+
+    The build, by `_Build`: every reached name its node, made once what it
+    reads is made (the shape and the hands as geometry; the scene, the
+    clouds and the `scene.geometry` wires' sources in wire order, drawn
+    see-through when a `backdrop.scene` wire reads it; the backdrop, the
+    scene laid over `backdrop.image` at `backdrop.alpha`; the look-back
+    over `lookback.image`, its cover made while the scene is; each hands
+    layer and guide drawing its hands node by name — a guide is its
+    layer's split-out picture while that layer is built, as the default
+    graph's in-scene readout was; effects, copies, composites, switches,
+    channels, the pattern, plan 34's delays and ring pictures); then D1's
+    placements (`_place`); then one `Shown` per distinct picture an output
+    takes; then the capture (`lookback.capture`'s) after every end and
+    every delay's write; then one `Output` per view, each port its own
+    wire else All outputs', through its window's mutes.
+
+    The nodes keep the default graph's render names until T4 renames them
+    (`ghost`, `hands`, `readout`, `history`, `media.a`, `grounded`), so
+    the SYSTEM lines and the renderer's ghosts are the ones they were."""
+    g = Graph((len(views),), wiring)
+    g.clouds = tuple(clouds)
+    g.effects = tuple(effects)
+    _Build(g, wiring, len(views)).build()
+    return g
+
+
+def _render_name(where: str) -> str:
+    """A wired frame's D1 place (`hands.2.layer`, `lookback`) as the render
+    graph names the node (`hands.2`, `history`) until T4."""
+    if where == "lookback":
+        return "history"
+    if _LAYER_W.fullmatch(where):
+        return layer_name(split_instance(hands_of(where))[1])
+    return where
+
+
+def _kind(name: str) -> str | None:
+    """A wired frame's kind of `name` (`wire_node_kind(…, wired=True)`)."""
+    return wire_node_kind(name, wired=True)
+
+
+# the order the reached names are first asked for (each makes what it reads
+# first): the frame's own nodes first, as the default graph adds them
+_RANKS = ("pattern", "shape", "hands", "scene", "backdrop", "layer", "guide", "lookback")
+
+
+def _build_rank(name: str) -> tuple[int, str]:
+    kind = _kind(name)
+    return (_RANKS.index(kind) if kind in _RANKS else len(_RANKS)), name
+
+
+def _effects_of(node: Node | None) -> list[Effect]:
+    """The effects (copies too) a picture runs through, first first."""
+    out: list[Effect] = []
+    while isinstance(node, Effect):
+        out.insert(0, node)
+        node = node.inputs["image"]
+    return out
+
+
+class _Build:
+    """`build_graph`'s work (plan 35 B): the reached wires made into nodes,
+    added to `g` in the default graph's order (the frame's own nodes, the
+    run, each through's composite and copies, the ends, the capture, the
+    outputs), so the passes run as today's frame ran them."""
+
+    def __init__(self, g: Graph, wiring: Wiring, count: int):
+        self.g, self.wiring, self.count = g, wiring, count
+        self.have = set(g.effects)
+        wires = tuple(getattr(wiring, "wires", ()))
+        self.reached = _wired_reach(wires)
+        self.wires = [w for w in wires if (w.src in self.reached or w.src == GROUND)
+                      and (_is_sink(w) or w.node in self.reached)]
+        self.into: dict[str, list[Wire]] = {}
+        for w in self.wires:
+            self.into.setdefault(w.dst, []).append(w)
+        self.blends = {c.name: c.blend for c in getattr(wiring, "composites", ())}
+        self.copy_of = {c.name: c.of for c in getattr(wiring, "copies", ())}
+        self.draws = {h.n: h.draw for h in wiring.nodes()}
+        back = self._one("backdrop.image")
+        self.back_channel = (back.src.partition(".")[2]
+                             if back is not None and _kind(back.src) == "channel" else "")
+        self.made: dict[str, Node | None] = {}       # a wire's name → what it reads as
+        self.built: list[Node] = []                  # every node made, in order
+        self.clouds = ([PointCloud(CLOUD_KIND if i == 0 else f"{CLOUD_KIND}.{i + 1}", role)
+                        for i, role in enumerate(g.clouds)] if "scene" in self.reached else [])
+        self.cover: Cover | None = None
+        self.ends: list[Shown] = []
+        self._ends: dict[int, Shown] = {}
+        self._names: set[str] = set()
+
+    # ---- the wires
+
+    def _one(self, dst: str) -> Wire | None:
+        got = self.into.get(dst)
+        return got[0] if got else None
+
+    def _from(self, dst: str) -> Node | None:
+        """What the wire into `dst` reads, made (None: no wire, or nothing)."""
+        w = self._one(dst)
+        return self.node(w.src) if w is not None and w.src != GROUND else None
+
+    def _unique(self, name: str) -> str:
+        out = name
+        while out in self._names or out in ("capture", "cover", "history", GROUNDED):
+            out = f"fx.{out}"
+        self._names.add(out)
+        return out
+
+    def _keep(self, node: Node) -> Node:
+        self._names.add(node.name)
+        self.built.append(node)
+        return node
+
+    # ---- the nodes
+
+    def node(self, name: str) -> Node | None:
+        """Wire name `name`'s node, made on the first ask (what it reads
+        first); a name read through (an effect whose file this build lacks)
+        is what it reads."""
+        if name in self.made:
+            return self.made[name]
+        self.made[name] = None                       # (a loop reads nothing: refused at read)
+        got = self.made[name] = self._make(name)
+        return got
+
+    def _make(self, name: str) -> Node | None:
+        kind = _kind(name)
+        if kind == "shape":
+            return self._keep(Shape("shape", faces=self._from("shape.faces")))
+        if kind == "hands":
+            n = split_instance(name)[1]
+            return self._keep(Hands(hands_name(n), draw=self.draws.get(n, "solid")))
+        if kind == "layer":
+            n = split_instance(hands_of(name))[1]
+            return self._keep(HandsLayer(layer_name(n),
+                                         geometry=self.node(wired_hands_name(n))))
+        if kind == "guide":
+            hands = hands_of(name)
+            if f"{hands}.layer" in self.reached:     # its layer's own split-out guide
+                return self.node(f"{hands}.layer")
+            n = split_instance(hands)[1]
+            return self._keep(Readout(readout_name(n), geometry=self.node(hands)))
+        if kind == "scene":
+            geos = [self.node(w.src) for w in self.into.get("scene.geometry", ())]
+            on_backdrop = any(w.src == "scene" for w in self.into.get("backdrop.scene", ()))
+            return self._keep(Scene("scene", geometries=[*self.clouds,
+                                                         *(x for x in geos if x is not None)],
+                                    ground=0.0 if on_backdrop else None))
+        if kind == "backdrop":
+            over = self._from("backdrop.scene")
+            if self.back_channel:
+                # a channel straight in: the plan 32 backdrop, node for node
+                under = self._keep(MediaNode(media_name(self.back_channel), self.back_channel,
+                                             alpha_of="backdrop_alpha"))
+                return self._keep(Composite(GROUNDED, blend="over", over=over, under=under))
+            wired = self._one("backdrop.image") is not None
+            return self._keep(Composite(GROUNDED, blend="over", over=over,
+                                        under=self._from("backdrop.image"),
+                                        under_alpha_of="backdrop_alpha" if wired else None))
+        if kind == "lookback":
+            image, occ = self._from("lookback.image"), self._from("lookback.occluder")
+            if self.cover is None and "scene" in self.reached:
+                scene = self.node("scene")
+                if scene is not None:
+                    self.cover = self._keep(Cover("cover", scene=scene))
+            return self._keep(History("history", image=image, cover=self.cover, occluder=occ))
+        if kind == "channel":
+            c = name.partition(".")[2]
+            nm = media_name(c) if c != self.back_channel else f"{media_name(c)}(wire)"
+            return self._keep(MediaNode(nm, c))
+        if kind == "pattern":
+            w = self._one("pattern.media")
+            if w is not None and _kind(w.src) == "channel":
+                return self._keep(PatternNode("pattern", channel=w.src.partition(".")[2]))
+            return self._keep(PatternNode("pattern", media=self._from("pattern.media")))
+        if kind in ("effect", "copy"):
+            return self._effect(name, kind)
+        if kind == "composite":
+            blend = self.blends.get(name, "over")
+            return self._keep(Composite(self._unique(name), blend=blend,
+                                        under=self._from(f"{name}.under"),
+                                        over=self._from(f"{name}.over"),
+                                        depth=self._depth() if blend == "depth" else None))
+        if kind == "switch":
+            return self._keep(SwitchNode(name, **{p: self._from(f"{name}.{p}")
+                                                  for p in SWITCH_PORTS
+                                                  if self._one(f"{name}.{p}") is not None}))
+        if kind == "delay":
+            return self._keep(Delay(name))
+        if kind == "echo":
+            return self._keep(EchoNode(name, int(name.partition(".")[2])))
+        if kind == "dream":
+            return self._keep(DreamNode(name))
+        if kind is not None and kind not in ("output", GROUND):
+            self.g.dormant[name] = f"no {name} in this build"
+        return None
+
+    def _effect(self, name: str, kind: str) -> Node | None:
+        """An effect instance's node, or a copy's (plan 35 F: `effect` its
+        original's) — read through while its file is not in this build, as
+        the default graph's run read through one (plan 33 R27)."""
+        effect = name if kind == "effect" else self.copy_of.get(name)
+        if effect is None:
+            return None
+        src = self._from(f"{name}.image")
+        if effect not in self.have:
+            self.g.dormant[name] = f"{name} — no {effect} effect in this build"
+            return src
+        if src is None:
+            self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+            return None
+        if kind == "copy":
+            return self._keep(Copy(self._unique(name), effect, image=src))
+        return self._keep(Effect(name, image=src, node=self._unique(name), placed="wire"))
+
+    def _depth(self) -> Node | None:
+        """The scene, for a depth-aware lay (the hands' `laid: depth`)."""
+        if self.wiring.blend != "depth" or "scene" not in self.reached:
+            return None
+        return self.node("scene")
+
+    def _end(self, src: Node) -> Shown:
+        """Picture `src`'s one end (and, for a copy chain over a hands
+        composite, its stand-down's: the originals over the `under`)."""
+        got = self._ends.get(id(src))
+        if got is not None:
+            return got
+        end = self._ends[id(src)] = Shown(f"shown({src.name})", image=src)
+        self.ends.append(end)
+        copies, n = [], src
+        while isinstance(n, Copy):
+            copies.insert(0, n)
+            n = n.inputs["image"]
+        if isinstance(n, Composite) and isinstance(n.inputs["over"], HandsLayer):
+            end.stands = True
+            end.copies = tuple(c.effect for c in copies)
+            under = n.inputs["under"]
+            if under is not None:
+                end.fallback = self._end(self._originals(under, end.copies))
+        return end
+
+    def _originals(self, under: Node, effects: tuple[str, ...]) -> Node:
+        """The copies' originals over `under`: the effects of the graph that
+        read it in that order, made where the wires made none."""
+        cur = under
+        for e in effects:
+            got = next((n for n in self.built if isinstance(n, Effect)
+                        and not isinstance(n, Copy) and n.effect == e
+                        and n.inputs["image"] is cur), None)
+            cur = got if got is not None else self._keep(
+                Effect(e, image=cur, node=self._unique(e), placed="wire"))
+        return cur
+
+    # ---- the frame
+
+    def build(self) -> None:
+        g, wiring = self.g, self.wiring
+        for name in sorted(self.reached, key=_build_rank):
+            self.node(name)
+        # plan 34 D: each delay's write, once every node is made (a loop
+        # through a delay reads last frame's picture: no dependency)
+        writes = []
+        for d in [n for n in self.built if isinstance(n, Delay)]:
+            src = self._from(f"{d.name}.image")
+            if src is not None:
+                writes.append(self._keep(DelayWrite(f"{d.name}(write)", d.name, image=src)))
+        self._aux()
+        # the run: All outputs' picture back through its effects (what
+        # `frame.fx_on` asks, as of the pipelines' runs)
+        run: list[Effect] = []
+        n = self._from(f"{ALL_OUTPUTS}.image")
+        while isinstance(n, Effect) and not isinstance(n, Copy) and n not in run:
+            run.insert(0, n)
+            n = n.inputs["image"]
+        for e in run:
+            e.placed = None
+        g.run = tuple(e.effect for e in run)
+        # each output's ports: its own wire, else All outputs' (`ground`: nothing)
+        alls = {w.port: w for w in self.wires if w.node == ALL_OUTPUTS}
+        ports = []
+        for i in range(self.count):
+            own = {w.port: w for w in self.wires if w.node == f"output.{i + 1}"}
+            got = {}
+            for p in ("image", "hands", "guide"):
+                w = own.get(p) or alls.get(p)
+                got[p] = self.node(w.src) if w is not None and w.src != GROUND else None
+            ports.append(got)
+        layers = tuple(n for n in self.built if isinstance(n, HandsLayer))
+        shown = [self._end(p["image"]) if p["image"] is not None else None for p in ports]
+        for end in self.ends:
+            end.after = layers                  # whether a hand shows decides the stand-down
+            end.chained = any(e.effect in g.run for e in _effects_of(end.inputs["image"]))
+        held = self._from("lookback.capture")
+        capture = None
+        if held is not None:
+            laid = [x for p in ports for x in (p["hands"], p["guide"]) if x is not None]
+            capture = Capture("capture", image=held,
+                              after=tuple(dict.fromkeys([*self.ends, *writes, *laid])))
+        scene = self.made.get("scene")
+        outputs = []
+        for i, (p, end) in enumerate(zip(ports, shown)):
+            depth = (scene if wiring.blend == "depth" and scene is not None
+                     and (p["hands"] is not None or (end is not None and end.stands)) else None)
+            outputs.append(Output(f"output.{i + 1}", i, after=(capture,) if capture else (),
+                                  blend=wiring.blend, mutes=True, image=end,
+                                  hands=p["hands"], readout=p["guide"], depth=depth))
+        # into the graph in the default graph's order: the frame's own
+        # nodes, the run, each through's composite and copies, the
+        # capture's picture, the ends, the writes, the capture, the outputs
+        made = self.made
+        roots: list[Node | None] = [*self.clouds, made.get("pattern"), made.get("shape")]
+        roots += [n for n in self.built if isinstance(n, Hands)]
+        roots += [made.get("scene"), self.cover]
+        roots += [n for n in self.built if isinstance(n, MediaNode) and n.alpha_of]
+        roots += [n for n in self.built if n.name == GROUNDED]
+        roots += [*layers, *(n for n in self.built if isinstance(n, Readout))]
+        roots += [n for n in self.built if isinstance(n, History)]
+        # (each end right after its chain, as each pipeline's `Fx` was: an
+        # effect placed into an output sits after it, `Graph.insert`)
+        head = self._from(f"{ALL_OUTPUTS}.image")
+        roots += [*run, self._ends.get(id(head)) if head is not None else None]
+        for end in shown:
+            if end is not None and end.stands:
+                roots += [end.source, *_effects_of(end.inputs["image"]), end]
+        roots += [held, *self.ends, *writes, capture, *outputs, *self.built]
+        seen: set[int] = set()
+
+        def add(node: Node | None) -> None:
+            if node is None or id(node) in seen:
+                return
+            seen.add(id(node))
+            for d in node.deps():
+                add(d)
+            g.add(node)
+
+        for node in roots:
+            add(node)
+        # D1: the placements, on the built graph (`after: hands.layer` …
+        # as the render graph names the nodes)
+        loops = placement_loops(wiring.placed)
+        placed = []
+        for e in wiring.placed:
+            if e.name in loops:
+                g.notes.append(f"{e.name} {e.where[0]} {e.where[1]!r} — that makes a loop "
+                               f"({loops[e.name]}); the default placement")
+                continue
+            key, where = e.where
+            placed.append(replace(e, **{key: _render_name(where)}))
+        _place(g, placed)
+        self._split(layers)
+        g.placed_names = frozenset({e.name for e in wiring.placed} | {
+            n.effect for n in g.nodes.values() if isinstance(n, Effect) and n.placed})
+        g.reads_ring = any(isinstance(n, _RingNode) for n in g.nodes.values())
+        g.relink()
+
+    def _aux(self) -> None:
+        """Each aux wire on its effect's or copy's `aux` port (plan 32 R): a
+        source the effect feeds (a loop) is dormant, in words."""
+        for w in self.wires:
+            if w.port != AUX or _kind(w.node) not in ("effect", "copy"):
+                continue
+            target, src = self.made.get(w.node), self.node(w.src)
+            if not isinstance(target, Effect) or target not in self.built or src is None:
+                continue
+            if src is target or id(target) in _upstream(src):
+                self.g.dormant[str(w)] = f"wire {w} — {w.node} feeds {w.src}: that makes a loop"
+                continue
+            target.inputs[AUX] = src
+
+    def _split(self, layers: tuple[HandsLayer, ...]) -> None:
+        """How each layer splits its guide out (`HandsLayer.split`): always
+        while its hands are also in the scene or an effect reads the layer
+        (the guide is never folded), else while an effect it reaches is
+        live (the copies a through output wires)."""
+        readers: dict[int, list[Node]] = {}
+        for c in self.g.nodes.values():
+            for src in c.inputs.values():
+                if src is not None:
+                    readers.setdefault(id(src), []).append(c)
+        scene = self.made.get("scene")
+        held = set(map(id, scene.geometries())) if isinstance(scene, Scene) else set()
+        for layer in layers:
+            on = any(isinstance(c, Effect) and not isinstance(c, Copy)
+                     and c.inputs.get("image") is layer for c in readers.get(id(layer), ()))
+            if id(layer.inputs["geometry"]) in held or on:
+                layer.readout = "always"
+                continue
+            down: list[str] = []
+            todo, seen = [layer], set()
+            while todo:
+                n = todo.pop()
+                for c in readers.get(id(n), ()):
+                    # (past an end an effect folds an output's picture: not
+                    # the layer bent before it, as D1's `into` never split it)
+                    if id(c) in seen or isinstance(c, (Output, Capture, DelayWrite, Shown)):
+                        continue
+                    seen.add(id(c))
+                    if isinstance(c, Effect) and c.effect not in down:
+                        down.append(c.effect)
+                    todo.append(c)
+            layer.readout = "downstream"
+            layer.downstream = tuple(down)
+
+
+# ---------------------------------------------------------------- the proof (plan 35 B)
+
+def _sig_class(n: Node) -> str:
+    """A node's class in `signature`: a copy is the effect it draws again
+    (each pipeline's own run node was an `Effect`: plan 35 V)."""
+    return "Effect" if isinstance(n, Copy) else type(n).__name__
+
+
+def _sig_chain(n: Node | None, depth: int = 0) -> tuple | None:
+    """`n`'s picture back to its sources, as (class, effect, (what its
+    `image`, `under` and `over` read …)); an end (`Fx`, `Wired`, `Shown`)
+    is passed through, so its name never counts."""
+    while isinstance(n, (Fx, Shown)):
+        n = n.inputs.get("image")
+    if n is None or depth > 64:
+        return None
+    ins = tuple(_sig_chain(n.inputs.get(p), depth + 1)
+                for p in ("image", "under", "over") if n.inputs.get(p) is not None)
+    return (_sig_class(n), getattr(n, "effect", None), ins)
+
+
+def _live_nodes(g: Graph) -> set[int]:
+    """The nodes an output, the capture or a delay's write reads (through
+    their inputs, an end's fallback, and the faces pattern the shape reads
+    by name): what the frame can show. The default graph builds pipelines
+    no output takes (an output whose picture a wire replaced): those are
+    not in `signature`."""
+    pattern = g.nodes.get("pattern")
+    todo = [n for n in g.order if isinstance(n, (Output, Capture, DelayWrite))]
+    seen: set[int] = set()
+    while todo:
+        n = todo.pop()
+        if id(n) in seen:
+            continue
+        seen.add(id(n))
+        todo += [v for v in n.inputs.values() if v is not None]
+        fb = getattr(n, "fallback", None)
+        if fb is not None:
+            todo.append(fb)
+        if isinstance(n, Shape) and isinstance(pattern, PatternNode):
+            todo.append(pattern)
+    return seen
+
+
+def signature(g: Graph) -> tuple:
+    """What a graph shows, node for node (plan 35 B, Review Focus 1): per
+    output, (its index, its picture's chain, its hands', its guide's, its
+    blend, its depth's, its end's fallback's chain); then every node the
+    frame can show (`_live_nodes`) in the graph's order but the outputs,
+    the ends (`Fx`, `Wired`, `Shown`) and the default graph's backdrop
+    sink (which draws nothing), each (class, effect, the ports wired).
+    Names never count — `fx` and `shown(lookback)` are one end — and a
+    copy counts as the `Effect` it draws again."""
+    outs = []
+    for out in g.outputs:
+        end = out.inputs["image"]
+        while isinstance(end, Effect):
+            end = end.inputs["image"]
+        outs.append((out.index, _sig_chain(out.inputs["image"]),
+                     _sig_chain(out.inputs["hands"]), _sig_chain(out.inputs["readout"]),
+                     out.blend, _sig_chain(out.inputs["depth"]),
+                     _sig_chain(getattr(end, "fallback", None))))
+    live = _live_nodes(g)
+    order = tuple((_sig_class(n), getattr(n, "effect", None),
+                   tuple(sorted(k for k, v in n.inputs.items() if v is not None)))
+                  for n in g.order
+                  if id(n) in live and not isinstance(n, (Output, Shown, Fx, BackdropNode)))
+    return (*outs, order)

@@ -142,6 +142,7 @@ from .graph import (
     Frame,
     Graph,
     Wiring,
+    build_graph,
     channel_into,
     cloud_roles,
     default_graph,
@@ -1585,10 +1586,16 @@ class Renderer:
         Plan 32 R: so are the frame's backdrop channel and whether the
         history holds it (`backdrop_wiring`), laid onto the preset's wiring
         for the graph alone — `Renderer.wiring` stays the preset's (plan
-        33 R: whose `backdrop` is the section's wire into `backdrop.image`)."""
-        key = graph_key(views)
+        33 R: whose `backdrop` is the section's wire into `backdrop.image`).
+        Plan 35 B: a wired frame (`Wiring.wired`) is `graph.build_graph`'s,
+        keyed by the views' count alone — its switches are mutes, read by
+        each output every frame, never a rebuild."""
         s = s if s is not None else getattr(self, "_view_now", None)
         wiring = self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s)
+        # plan 35 B: a wired frame is built from its wires alone — the key
+        # is the views' count, so a mute (the window's) never rebuilds
+        wired = bool(getattr(wiring, "wired", False))
+        key = (len(views),) if wired else graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
@@ -1597,7 +1604,8 @@ class Renderer:
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
                 or frozenset(getattr(graph, "effects", ())) != effects):
-            graph = self._graph = default_graph(views, wiring, clouds, tuple(sorted(effects)))
+            build = build_graph if wired else default_graph
+            graph = self._graph = build(views, wiring, clouds, tuple(sorted(effects)))
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -1613,6 +1621,8 @@ class Renderer:
         channels to read (`media` None) or no view state (a caller from
         before). A branch into `backdrop.image` takes `backdrop.history`
         as the channel does."""
+        if getattr(wiring, "wired", False):
+            return wiring             # (plan 35: a wired frame says its backdrop in wires)
         letter, hist = "", False
         if s is not None and getattr(self, "media", None) is not None:
             letter = getattr(wiring, "backdrop", "")

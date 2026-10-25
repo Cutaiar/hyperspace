@@ -56,6 +56,7 @@ note elsewhere.
     uv run python tools/golden_frames.py              # diff against the goldens
     uv run python tools/golden_frames.py --record     # (re)record them
     uv run python tools/golden_frames.py --only party-trip,legacy6 [--record]
+    uv run python tools/golden_frames.py --signatures # plan 35: today's frame, node for node
 
 A diff writes a contact sheet of every frame that moved (golden | now |
 difference ×4) under docs/plans/assets/26-render-graph/. `--record` with
@@ -212,14 +213,15 @@ import numpy as np
 
 from hyperspace import config as config_mod
 from hyperspace import devices as devices_mod
-from hyperspace import envelope, lfo, sequencer, tempo
+from hyperspace import envelope, graphmigrate, lfo, sequencer, tempo
+from hyperspace import graph as G
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer, legacy_layout
 from hyperspace.bands import default_params
 from hyperspace.control import Control
 from hyperspace.fx import FxState
 from hyperspace.ghost import GhostState
-from hyperspace.graph import Wiring
+from hyperspace.graph import Wiring, build_graph, default_graph, read_graph, signature
 from hyperspace.hands import HandSettings, HandsIO
 from hyperspace.hands.core import features, skeleton
 from hyperspace.library import Library
@@ -720,11 +722,151 @@ def summary(doc: dict) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- the frame's signatures (plan 35 T2)
+#
+# Plan 35 B (Review Focus 1): every case the goldens draw — each preset and
+# fixture in the eight states as one rig's eight outputs, and the WIRED
+# variants over their presets and states — built twice: by `default_graph`
+# from the switches (today's frame), and by `build_graph` from the preset's
+# section written as a wired frame (`graphmigrate.wired_section`) with each
+# output's state as its own wires (`output_wires`) and every mute on.
+# `graph.signature` must be equal node for node. `--signatures` writes
+# today's half to SIGNATURES, so T4 — which deletes the switch half of
+# `default_graph` — keeps the reference.
+
+SIGNATURES = ROOT / "tests" / "fixtures" / "frame-signatures.json"
+
+
+class Loader:
+    """Each preset loaded as the rig loads it (the real `Presets` over a
+    scratch library, the fixtures copied in), headless: no renderer, no
+    media. `load(slug)` gives the landed spec, its section
+    (`GraphSection.free_doc`: the migrated one) and the effect instances
+    then held."""
+
+    def __init__(self):
+        self._home = tempfile.TemporaryDirectory(prefix="hyperspace-signatures-")
+        home = Path(self._home.name)
+        own = home / "presets"
+        own.mkdir(parents=True, exist_ok=True)
+        for slug in FIXTURE_PRESETS:
+            (own / f"{slug}.json").write_text((FIXTURES / f"{slug}.json").read_text())
+        self.view, self.fx = ViewState(), FxState()
+        chain = Analyzer(Analyser(48_000), default_params(), layout=legacy_layout())
+        reg = build_registry(self.view, Control(chain), SimpleNamespace(chain=chain), None,
+                             DreamState(), self.fx, ghost=GhostState())
+        clock = tempo.Clock(now=lambda: T0)
+        tempo.register(reg, clock)
+        lfo.register(reg, lfo.LFOs(), clock)
+        envs, seq = envelope.Envelopes(), sequencer.Sequencer()
+        envelope.register(reg, envs, clock)
+        sequencer.register(reg, seq, clock)
+        lib = Library(home)
+        lib.attach(reg)
+        router = Router(reg, Bindings())
+        router.use_bank(envs, clock)
+        router.use_sequencer(seq, envs, clock)
+        self.presets = Presets(lib, reg, router)
+
+    def load(self, slug: str):
+        self.presets.load(slug)
+        gs = self.presets.graph
+        return gs.spec, gs.free_doc(), tuple(sorted(self.fx.specs))
+
+    def close(self) -> None:
+        self._home.cleanup()
+
+
+def signature_keys() -> list[str]:
+    """Every case's key, `<slug>/<variant>`: `states` (the eight), or a
+    WIRED variant's name."""
+    keys = [f"{slug}/states" for slug in (*FACTORY_PRESETS, *FIXTURE_PRESETS)]
+    for slug in FACTORY_PRESETS:
+        keys += [f"{slug}/{name}" for name, _, _, which in WIRED
+                 if which is None or slug in which]
+    return keys
+
+
+# a WIRED variant's wiring field → the old section's entry that says it
+_VARIANT_ENTRY = {"hands": lambda v: {"kind": "hands", "into": v},
+                  "blend": lambda v: {"kind": "hands", "laid": v},
+                  "history": lambda v: {"kind": "history", "holds": v}}
+
+
+def signature_case(loader: Loader, key: str):
+    """(the states, the old spec, the old section, the effect instances) of
+    case `key`. A WIRED variant is the golden rig's: a wiring of that one
+    field over the preset's run (`_shoot`), said here as the section that
+    reads as it."""
+    slug, _, variant = key.partition("/")
+    spec, section, effects = loader.load(slug)
+    if variant == "states":
+        return STATES, spec, section, effects
+    _, fields, names, _ = next(v for v in WIRED if v[0] == variant)
+    run = tuple(spec.wiring().run or ()) if spec is not None else ()
+    nodes = [_VARIANT_ENTRY[k](v) for k, v in fields.items()]
+    for e in run:
+        file, n = G.split_instance(e)
+        if n > 1:
+            nodes.append({"kind": "effect", "file": file, "instance": n})
+    wires = (graphmigrate._chain("frame", list(run), "fx.image") if run
+             else [{"from": "frame", "to": "fx.image"}])
+    vsection = {"nodes": nodes, "wires": wires}
+    vspec = read_graph(vsection, effects={e.partition(".")[0] for e in effects})
+    assert vspec.wiring() == replace(Wiring(**fields), run=run), (key, vspec.wiring())
+    return tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects
+
+
+def frame_graphs(states, spec, section, effects):
+    """(today's graph from the switches, the wired frame's, the wired
+    section) for one case (see above)."""
+    views = [View(Switches(**sw), (W, H)) for _, sw in states]
+    old = default_graph(views, spec.wiring() if spec is not None else Wiring(), (), effects)
+    if spec is None:
+        spec, section = read_graph({}), {}
+    wired = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
+    for k, (_, sw) in enumerate(states):
+        wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+    got = read_graph(wired, effects={e.partition(".")[0] for e in effects})
+    assert not got.notes, got.notes
+    mutes_on = [View(Switches(), (W, H)) for _ in states]
+    new = build_graph(mutes_on, got.wiring(), (), effects)
+    return old, new, wired
+
+
+def as_json(sig):
+    """A signature as JSON lists (tuples → lists)."""
+    if isinstance(sig, tuple):
+        return [as_json(x) for x in sig]
+    return sig
+
+
+def record_signatures() -> dict:
+    """Today's signature of every case (`default_graph`), into SIGNATURES."""
+    loader = Loader()
+    try:
+        out = {}
+        for key in signature_keys():
+            old, _, _ = frame_graphs(*signature_case(loader, key))
+            out[key] = as_json(signature(old))
+    finally:
+        loader.close()
+    SIGNATURES.parent.mkdir(parents=True, exist_ok=True)
+    SIGNATURES.write_text(json.dumps(out, indent=1) + "\n")
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--record", action="store_true", help="write the goldens")
     ap.add_argument("--only", default="", help="comma-separated preset slugs")
+    ap.add_argument("--signatures", action="store_true",
+                    help="write today's frame signatures (plan 35 T2) and stop")
     a = ap.parse_args()
+    if a.signatures:
+        got = record_signatures()
+        print(f"wrote {len(got)} frame signatures to {SIGNATURES.relative_to(ROOT)}")
+        return
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
     if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
