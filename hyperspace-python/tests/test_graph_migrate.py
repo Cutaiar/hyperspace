@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,11 +21,13 @@ ROOT = Path(__file__).parent.parent / "hyperspace"
 FILES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
                 *(ROOT / "library" / "fx").glob("*.json")])
 # the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
-# is the free graph's own: nothing to migrate, nothing `/4` can say)
+# is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
+# one, plan 35 T3's, the wired frame's)
 FIXTURES = sorted(p for p in [*(ROOT / "library" / "presets").glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")]
-                  if json.loads(p.read_text()).get("schema") != M.FREE_SCHEMA)
+                  if json.loads(p.read_text()).get("schema") not in (M.FREE_SCHEMA,
+                                                                       M.WIRED_SCHEMA))
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
 SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}
@@ -161,13 +165,13 @@ def test_a_route_onto_view_media_becomes_a_switch():
                      {"source": "lfo:1", "target": "backdrop.channel", "op": "push"}]
     doc["desk"] = [{"source": "midi:cc:1", "target": "view.media", "op": "abs"}]
     out, notes = M.migrate(doc, SPECS)
-    section = out["graph"]
-    assert notes == []
+    section = out["graph"]                  # (plan 35: a wired frame, in the new ids)
+    assert notes == [] and section["frame"] == "wired"
     assert {"kind": "switch"} in section["nodes"]
     assert {"kind": "switch", "instance": 2} in section["nodes"]
     w = wires_of(section)
     for sw, end in (("switch", "pattern.media"), ("switch.2", "backdrop.image")):
-        assert {(f"media.{c}", f"{sw}.in{i}") for i, c in enumerate("abcdefgh", 1)} <= w
+        assert {(f"channel.{c}", f"{sw}.in{i}") for i, c in enumerate("abcdefgh", 1)} <= w
         assert (sw, end) in w
     assert out["values"]["switch.select"] == 2
     assert out["values"]["switch.2.select"] == 4
@@ -253,18 +257,22 @@ BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                     {"from": "acid.2", "to": "shape.faces"}]}
 
 
-def test_a_branch_saves_as_v5_and_reloads(tmp_path):
+def test_a_branch_saves_as_v6_and_reloads(tmp_path):
+    """A branch `/4` cannot say is `/6` now (plan 35, row 385 — `/5`
+    before; nothing writes `/5` again): its graph the wired frame the load
+    gave it, the branch in the new ids with today's frame around it, and
+    it reloads as it saved."""
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
-    assert preset.schema_of(doc) == M.FREE_SCHEMA == "hyperspace.preset/5"
+    assert preset.schema_of(doc) == M.WIRED_SCHEMA == "hyperspace.preset/6"
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
     app = make_app(tmp_path)
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
-    # (plan 33 T3: the load gave it its run's head, the empty run — R9)
-    head = {**BRANCH, "wires": [*BRANCH["wires"], {"from": "frame", "to": "fx.image"}]}
-    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == head
+    assert saved["schema"] == M.WIRED_SCHEMA and saved["graph"]["frame"] == "wired"
+    assert saved["graph"] == G.read_graph(M.migrate(doc, SPECS)[0]["graph"]).to_json()
+    assert {("channel.a", "acid.2.image"), ("acid.2", "shape.faces")} <= wires_of(saved["graph"])
     assert app.presets.load_doc(copy.deepcopy(saved)) == []
-    assert app.presets.document("t")["graph"] == head          # and reloads as it saved
+    assert app.presets.document("t")["graph"] == saved["graph"]     # and reloads as it saved
 
 
 def test_a_preset_with_no_free_words_keeps_its_schema():
@@ -284,22 +292,24 @@ def test_no_existing_preset_changes_schema(path):
     doc = load(path)
     assert preset.schema_of(doc) == doc["schema"] or doc["schema"] not in (
         preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA)
-    assert preset.schema_of(doc) != M.FREE_SCHEMA
+    assert preset.schema_of(doc) != M.WIRED_SCHEMA
 
 
-def test_v5_is_refused_by_the_ladder_below(tmp_path):
+def test_v6_is_refused_by_the_ladder_below(tmp_path):
+    """Row 385: a `/6` save is refused, values and all, by a plan 33/34
+    build's ladder (2 … 5) in its own words."""
     app = make_app(tmp_path)
-    app.presets.load_doc({"schema": "hyperspace.preset/2", "name": "five", "graph": BRANCH,
+    app.presets.load_doc({"schema": "hyperspace.preset/2", "name": "six", "graph": BRANCH,
                           "values": {}})
-    app.presets.save_as("five")
+    app.presets.save_as("six")
     lib = app.lib
-    assert lib.read("presets", "five")["schema"] == M.FREE_SCHEMA
+    assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6)
     try:
-        kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4))
+        kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-            lib.read("presets", "five")
+            lib.read("presets", "six")
     finally:
         kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
 
@@ -318,14 +328,16 @@ def test_a_driven_effect_on_at_mix_zero_stays_in_the_run():
     assert G.run_of(G.read_graph(section)) == ("acid",) and notes == []
 
 
-def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v5():
+def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v6():
     doc = base(**{"fx.acid.on": True})
     cleared = {"nodes": [], "wires": [{"from": "frame", "to": "fx.image"}]}
-    assert preset.schema_of({**doc, "graph": cleared}) == M.FREE_SCHEMA
+    assert preset.schema_of({**doc, "graph": cleared}) == M.WIRED_SCHEMA
     migrated, _ = M.to_free(doc, SPECS)
-    assert preset.schema_of({**doc, "graph": migrated}) != M.FREE_SCHEMA     # a /4 can say it
+    assert preset.schema_of({**doc, "graph": migrated}) != M.WIRED_SCHEMA    # a /4 can say it
+    wired, _ = M.migrate(doc, SPECS)                                        # and its frame
+    assert preset.schema_of({**doc, "graph": wired["graph"]}) != M.WIRED_SCHEMA
     off = base(**{"fx.acid.on": False})
-    assert preset.schema_of({**off, "graph": cleared}) != M.FREE_SCHEMA
+    assert preset.schema_of({**off, "graph": cleared}) != M.WIRED_SCHEMA
 
 
 def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
@@ -353,8 +365,176 @@ def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
     assert "palette" not in G.run_of(after)
     # /4 can still say it: an explicit `after` / `into` is plan 30's word
     assert M.legacy_values(section, _values_of(doc), SPECS) is not None
-    assert preset.schema_of({**doc, "graph": section}) != M.FREE_SCHEMA
+    assert preset.schema_of({**doc, "graph": section}) != M.WIRED_SCHEMA
 
 
 def _values_of(doc: dict) -> dict:
     return doc.get("values") or {}
+
+
+# ---------------------------------------------------------------- plan 35 T3: every section a wired frame
+#
+# Plan 35 M (rows 372, 383–385): every section this build loads lands as a
+# wired frame in the owner's names — `migrate` runs plan 33's steps, then
+# `renamed` (V2: old ids → new), then `wired_section` (today's frame for
+# the default switches, written once into All outputs). `backdrop.history`
+# and the look-back's `holds` are the capture wire now.
+
+TESTS = Path(__file__).parent
+PRESET_FIXTURES = sorted([*(TESTS / "fixtures" / "presets").glob("*.json"),
+                          *(TESTS / "fixtures" / "merge-31-32").glob("*.json")])
+FACTORY = sorted((ROOT / "library" / "presets").glob("*.json"))
+# a name that is only ever an old id (V2): `ghost[.n]`, `readout[.n]`,
+# `history`, `media.<c>` (`hands` is the geometry now, not the old layer)
+_OLD_ONLY = r"ghost(\.[0-9]+)?|readout(\.[0-9]+)?|history|media\.[a-h]"
+
+
+def loaded(tmp_path: Path, path: Path):
+    """`path` loaded as the rig loads it — a factory preset by name, a
+    fixture copied in as a user's preset — on the app's presets: (the graph
+    section's spec, its free section, the load's notes)."""
+    if path.parent != ROOT / "library" / "presets":
+        (tmp_path / "presets").mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, tmp_path / "presets" / path.name)
+    app = make_app(tmp_path)
+    app.lib.load("presets", path.stem)
+    gs = app.presets.graph
+    return gs.spec, gs.free_doc(), list(app.presets.notes)
+
+
+def old_ends(spec: G.GraphSpec) -> list[str]:
+    """Every wire end and D1 place of `spec` that names an old id."""
+    out = []
+    for w in spec.all_wires():
+        for name in (w.src, w.node):
+            if re.fullmatch(_OLD_ONLY, name) or (G.wire_node_kind(name, wired=True) is None
+                                                 and name != G.GROUND):
+                out.append(name)
+        if w.port == "readout":
+            out.append(w.dst)
+    for e in spec.effects:
+        if e.where is not None and (re.fullmatch(_OLD_ONLY, e.where[1])
+                                    or re.fullmatch(r"hands(\.[0-9]+)?", e.where[1])):
+            out.append(f"{e.name} {e.where[0]} {e.where[1]}")
+    return out
+
+
+@pytest.mark.parametrize("path", [*FACTORY, *PRESET_FIXTURES],
+                         ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_every_section_loads_as_a_wired_frame(tmp_path, path):
+    """Every factory preset, every fixture — and so every one of the byte
+    test's 38 sources — lands `spec.wired`, in the new ids, with no graph
+    note (a refused wire, an old id), no `into` or `holds` left in an entry
+    and no retired value left in the registry's way."""
+    spec, section, notes = loaded(tmp_path, path)
+    assert spec is not None and spec.wired, path.name
+    assert section.get(G.FRAME_KEY) == G.WIRED_FRAME
+    assert spec.notes == (), spec.notes
+    assert [n for n in notes if n.startswith("graph:") or "plan 35" in n] == []
+    assert old_ends(spec) == [], path.name
+    assert not any(e.get("kind") in ("history", "lookback") and "holds" in e
+                   or e.get("kind") == "hands" and "into" in e
+                   for e in section.get("nodes", []))
+
+
+def test_old_ids_are_renamed_on_load():
+    """A `/4` section in the old ids loads in the new (V2): the layer of
+    hands 2, the look-back, a channel, D1's `after: hands` — and a plan 34
+    `/5` fixture keeps its delay, zoomblur and composite wires as they are."""
+    doc = {"schema": "hyperspace.preset/4", "name": "renamed",
+           "values": {"fx.palette.on": True, "fx.acid.2.on": True},
+           "graph": {"nodes": [{"kind": "hands", "into": "scene"},
+                               {"kind": "hands", "instance": 2},
+                               {"kind": "history", "holds": "scene+hands"},
+                               {"kind": "effect", "file": "acid", "instance": 2},
+                               {"kind": "effect", "file": "palette", "after": "hands"}],
+                     "wires": [{"from": "hands.2", "to": "output.2.hands"},
+                               {"from": "history", "to": "acid.2.image"},
+                               {"from": "acid.2", "to": "output.1.image"},
+                               {"from": "media.c", "to": "output.2.image"}]}}
+    out, notes = M.migrate(doc, SPECS)
+    section = out["graph"]
+    assert notes == [] and section[G.FRAME_KEY] == G.WIRED_FRAME
+    got = wires_of(section)
+    assert {("hands.2.layer", "output.2.hands"), ("lookback", "acid.2.image"),
+            ("acid.2", "output.1.image"), ("channel.c", "output.2.image")} <= got
+    assert {"kind": "effect", "file": "palette", "after": "hands.layer"} in section["nodes"]
+    spec = G.read_graph(section)
+    assert spec.wired and spec.notes == () and old_ends(spec) == []
+    # a plan 34 `/5` fixture: its own wires, unchanged
+    trails = load(TESTS / "fixtures" / "presets" / "delay-trails.json")
+    own = {(w["from"], w["to"]) for w in trails["graph"]["wires"]
+           if not {w["from"], w["to"].rpartition(".")[0]} & {"frame", "fx"}}
+    assert any("delay" in a or "delay" in b for a, b in own)
+    assert any("zoomblur" in a or "zoomblur" in b for a, b in own)
+    assert any("composite" in a or "composite" in b for a, b in own)
+    out, notes = M.migrate(trails, SPECS)
+    assert notes == [] and own <= wires_of(out["graph"])
+    assert not G.read_graph(out["graph"]).notes
+
+
+def test_a_plan_33_run_becomes_wires_to_all_outputs():
+    doc = {"values": {"fx.acid.on": True},
+           "graph": {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
+                                            {"from": "acid", "to": "fx.image"}]}}
+    out, _ = M.migrate(doc, SPECS)
+    got = wires_of(out["graph"])
+    assert {("lookback", "acid.image"), ("acid", "output.all.image")} <= got
+    assert not any(x in ("frame", "fx") for a, b in got for x in (a, b.rpartition(".")[0]))
+
+
+@pytest.mark.parametrize(("values", "nodes", "pairs"), [
+    ({"backdrop.channel": 3, "backdrop.history": True}, [], [
+        ("shape", "scene.geometry"), ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
+        ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
+        ("hands.layer", "output.all.guide"), ("backdrop", "lookback.capture")]),
+    ({}, [{"kind": "history", "holds": "scene+hands"}], [
+        ("shape", "scene.geometry"), ("scene", "lookback.image"),
+        ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
+        ("hands.layer", "output.all.guide"), ("scene", "composite.under"),
+        ("hands.layer", "composite.over"), ("composite", "lookback.capture")]),
+    ({"backdrop.channel": 3, "backdrop.history": True},
+     [{"kind": "history", "holds": "scene+hands"}], [
+        ("shape", "scene.geometry"), ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
+        ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
+        ("hands.layer", "output.all.guide"), ("backdrop", "composite.under"),
+        ("hands.layer", "composite.over"), ("composite", "lookback.capture")]),
+], ids=["backdrop.history", "holds", "both"])
+def test_backdrop_history_and_holds_become_the_capture_wire(values, nodes, pairs):
+    """T2's variants, reached through `migrate`: the capture wire says what
+    `backdrop.history` and `holds` said, and neither is left behind."""
+    doc = {"values": dict(values), **({"graph": {"nodes": nodes}} if nodes else {})}
+    out, notes = M.migrate(doc, SPECS)
+    section = out["graph"]
+    frame = [(w["from"], w["to"]) for w in section["wires"]
+             if (w["from"], w["to"]) != ("channel.c", "backdrop.image")]
+    assert notes == [] and frame == pairs
+    assert "backdrop.history" not in out["values"] and "backdrop.channel" not in out["values"]
+    assert not any("holds" in e for e in section["nodes"])
+    assert not G.read_graph(section).notes
+
+
+@pytest.mark.parametrize("how", ["route", "desk"])
+def test_a_driven_backdrop_history_is_dropped_with_a_note(how):
+    doc = base(**{"backdrop.history": True, "backdrop.channel": 1, "fx.acid.on": True})
+    row = {"source": "lfo:0" if how == "route" else "midi:cc:1",
+           "target": "backdrop.history", "op": "push" if how == "route" else "abs"}
+    keep = {"source": "lfo:1", "target": "fx.acid.mix", "op": "push"}
+    doc["routes" if how == "route" else "desk"] = [row, keep]
+    out, notes = M.migrate(doc, SPECS)
+    assert notes == [M.DRIVEN_RETIRED_NOTE.format(pid="backdrop.history")]
+    assert M.DRIVEN_RETIRED_NOTE == ("{pid} is a wire now (plan 35): its route is dropped — "
+                                     "pick what the look-back records on LOOKBACK")
+    rows = out["routes" if how == "route" else "desk"]
+    assert [r["target"] for r in rows] == ["fx.acid.mix"]
+    assert ("backdrop", "lookback.capture") in wires_of(out["graph"])
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.stem}")
+def test_no_library_preset_drives_backdrop_history(path):
+    """Row 381: no library preset drives `backdrop.history` (a route on it
+    is dropped with a note), so retiring it costs no preset a look."""
+    assert "backdrop.history" in M.RETIRED
+    assert "backdrop.history" not in M.targets(load(path))
+    out, notes = M.migrate(load(path), SPECS)
+    assert notes == [] and "backdrop.history" not in out["values"]

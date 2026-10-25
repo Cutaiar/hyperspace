@@ -254,8 +254,9 @@ def test_the_wired_frame_builds_what_default_graph_builds(loader, recorded, key)
     with every mute on — node for node `default_graph` from the switches,
     and the reference recorded from it."""
     tool = _tool()
-    states, spec, section, effects = tool.signature_case(loader, key)
-    old, new, _ = tool.frame_graphs(states, spec, section, effects)
+    case = tool.signature_case(loader, key)
+    states = case[0]
+    old, new, _ = tool.frame_graphs(*case)
     assert G.signature(new) == G.signature(old)
     if recorded is not None:
         assert tool.as_json(G.signature(new)) == recorded[key]
@@ -477,3 +478,86 @@ def test_a_copy_chain_stands_down(ctx, rig):
     assert rig.renderer.stats["layer"]
     assert rig.renderer.stats["routes"][1] == ("shown(copy)", False)
     _acid(rig, False)
+
+
+# ---------------------------------------------------------------- T3: R9, and a stronger proof
+
+def test_a_hands_mute_wins_over_a_stand_down():
+    """Ruling R9 (plan 35 T3): a stand-down lays its layer over at the
+    output — but not on a window whose hands are muted: a mute mutes."""
+    sec = M.with_output_wires(the_frame(ACID), 1, M.Shows(through=True))
+    g = G.build_graph(views(1), G.read_graph(sec).wiring(), (), ("acid",))
+    out = g.outputs[0]
+    end = out.inputs["image"]
+    assert isinstance(end, G.Shown) and end.stands
+    layer = end.layer
+    end.bent = lambda frame: False                     # nothing live: it stands down
+    layer.image = lambda frame: "a hand"               # and a hand is drawn
+
+    def frame(**sw):
+        from types import SimpleNamespace
+        return SimpleNamespace(data={}, views=[View(Switches(**sw), SIZE)])
+
+    shown, laid = out.settle(frame())
+    assert shown is end.fallback and laid == (layer, "over")
+    shown, laid = out.settle(frame(hands=False))
+    assert shown is end.fallback and laid is None
+
+
+def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
+    """Carried from T2: in a wired frame any hands node may have a layer, so
+    `laid` sits on the entry whose layer is laid — hands 2's here (hands 1
+    in the scene, hands 2 the layer laid depth-aware), migrated and read
+    with no note, said back on the same entry, and built depth-aware."""
+    old = {"nodes": [{"kind": "hands", "into": "scene"},
+                     {"kind": "hands", "instance": 2, "laid": "depth"}]}
+    assert G.read_graph(old).laid == "depth"
+    sec, notes = M.migrate({"values": {}, "graph": old}, {})
+    spec = G.read_graph(sec["graph"])
+    assert notes == [] and spec.notes == () and spec.wired
+    assert (spec.laid, spec.laid_on) == ("depth", 2)
+    assert {"kind": "hands", "instance": 2, "laid": "depth"} in spec.to_json()["nodes"]
+    again = G.read_graph(spec.to_json())
+    assert (again.laid, again.laid_on) == ("depth", 2) and again.to_json() == spec.to_json()
+    g = G.build_graph(views(1), spec.wiring())
+    assert g.outputs[0].blend == "depth"
+    with pytest.raises(G.GraphError, match="laid twice"):
+        G.read_graph(wired(nodes=[{"kind": "hands", "laid": "add"},
+                                  {"kind": "hands", "instance": 2, "laid": "depth"}]))
+
+
+def test_the_signature_follows_every_picture_port():
+    """Before T4 deletes `default_graph`, `signature` follows every port a
+    picture comes in by — an effect's `aux`, a switch's `inN`, a
+    composite's `depth`, the look-back's `occluder`, the scene's geometry
+    — and names it, so two frames that differ only there differ."""
+    def sig(*pairs, nodes=()):
+        spec = G.read_graph(wired(*pairs, nodes=nodes))
+        assert not spec.notes, spec.notes
+        return G.signature(G.build_graph(views(1), spec.wiring(), (), ("acid",)))
+
+    out = ("acid", "output.all.image")
+    assert (sig(("channel.a", "acid.image"), ("channel.b", "acid.aux"), out)
+            != sig(("channel.b", "acid.image"), ("channel.a", "acid.aux"), out))
+    scene = (("shape", "scene.geometry"), ("scene", "lookback.image"),
+             ("lookback", "acid.image"), out)
+    assert sig(*scene, ("scene", "acid.aux")) != sig(*scene, ("lookback", "acid.aux"))
+    assert "aux" in json.dumps(_tool().as_json(sig(*scene, ("scene", "acid.aux"))))
+    sw = [{"kind": "switch"}]
+    assert (sig(("channel.a", "switch.in1"), ("channel.b", "switch.in2"),
+                ("switch", "output.all.image"), nodes=sw)
+            != sig(("channel.b", "switch.in1"), ("channel.a", "switch.in2"),
+                   ("switch", "output.all.image"), nodes=sw))
+    assert (sig(("hands", "scene.geometry"), *scene)
+            != sig(("hands.2", "scene.geometry"), *scene, nodes=[{"kind": "hands",
+                                                                  "instance": 2}]))
+
+
+def test_the_proof_covers_one_window_and_the_clouds():
+    """The window's own frame alone (`SOLO`, and `SOLO_FX` for a preset
+    with an effect on) and the recorded point cloud (`CLOUDED`) are cases
+    of the proof too, recorded from `default_graph`."""
+    keys = set(_tool().signature_keys())
+    assert {"legacy6/solo", "party-trip/solo", "party-trip/solo-scene+hands+through",
+            "legacy6/cloud", "party-faces/cloud"} <= keys
+    assert "legacy6/solo-scene+hands+through" not in keys

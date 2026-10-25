@@ -328,7 +328,7 @@ def test_a_migrated_view_media_route_still_switches_the_faces(ctx):
     free = app.presets.graph.free_doc()
     assert SWITCH in free["nodes"] and {"from": "switch", "to": "pattern.media"} in free["wires"]
     for i, c in enumerate("abcdefgh", 1):
-        assert {"from": f"media.{c}", "to": f"switch.in{i}"} in free["wires"]
+        assert {"from": f"channel.{c}", "to": f"switch.in{i}"} in free["wires"]
     for c in "bc":
         m.assign(c, 0, f"file:/fake/{c}.png")
     m.poll(0.0, 0.0)

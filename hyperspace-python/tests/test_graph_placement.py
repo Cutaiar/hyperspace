@@ -22,7 +22,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from test_graph_json import Stub, _bare
+from test_graph_json import Stub, _bare, _old
 from test_presets import boot, put
 
 from hyperspace import graph as G
@@ -188,7 +188,7 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
         missing = rig.lib.load(PRESETS, slug)
         assert missing == [] and rig.presets.notes == [], slug
-        assert stub.wiring.placed == want[slug]
+        assert _old(stub.wiring).placed == want[slug]       # (plan 35: in the old words)
         assert not rig.lib.is_dirty(PRESETS), slug
         saved = rig.presets.document(slug)
         assert saved[preset.GRAPH_KEY] == doc["graph"]

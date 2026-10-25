@@ -371,10 +371,10 @@ def test_render_pins_reach_n4s_methods_and_refuse_as_a_refusal(rig):
         "wire ghost → output.1.image — ghost makes geometry, output.1.image takes a picture")
     # input end first: ordered, and it lands
     assert e.connect("rin:output.2/hands", "rout:hands") is None
-    assert rig.lib.presets.graph.spec.wires[0].dst == "output.2.hands"
+    assert rig.lib.presets.graph.said().wires[0].dst == "output.2.hands"
     wire = graphview.VCable("wire:hands>output.2/hands", "rout:hands", "rin:output.2/hands",
                             graphview.IMAGE, kind="render")
-    assert e.disconnect(wire) is None and rig.lib.presets.graph.spec is None
+    assert e.disconnect(wire) is None and rig.lib.presets.graph.said() is None
     got = e.disconnect(wire)
     assert isinstance(got, graphview.Refusal) and "is the default graph's" in got
     got = e.remove_node("render:shape")
@@ -705,7 +705,7 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
 
 
 def wires_of(rig) -> set[tuple[str, str]]:
-    return {(w.src, w.dst) for w in rig.presets.graph.spec.wires}
+    return {(w.src, w.dst) for w in rig.presets.graph.said().wires}
 
 
 def test_the_picker_adds_an_effect_unwired(tmp_path):
@@ -721,11 +721,11 @@ def test_the_picker_adds_an_effect_unwired(tmp_path):
     before = wires_of(rig)
     assert ("switch", None, "switch") in graphview.picker(e)
     assert e.add_node("effect", "acid") is None and e.added == "acid.2"
-    spec = rig.presets.graph.spec
+    spec = rig.presets.graph.said()
     assert G.EffectAt("acid", 2) in spec.effects and wires_of(rig) == before
     assert "acid.2" not in G.reaches(spec) and G.run_of(spec) == ("acid",)
     assert e.add_node("switch") is None and e.added == "switch"
-    spec = rig.presets.graph.spec
+    spec = rig.presets.graph.said()
     assert [s.name for s in spec.switches] == ["switch"] and "switch.select" in rig.reg
     assert wires_of(rig) == before and pushed == ["add acid.2", "add switch"]
     # on the canvas: faint, drawn, saying so
@@ -759,10 +759,10 @@ def test_insert_effect_on_a_render_cable(tmp_path):
     settle(rig)
     assert rig.undo.undo()
     assert ("media.a", "shape.faces") in wires_of(rig)
-    assert "kaleido" not in {x.name for x in rig.presets.graph.spec.effects}
+    assert "kaleido" not in {x.name for x in rig.presets.graph.said().effects}
     # into the empty run: frame → acid → fx.image
     assert e.insert_effect(("frame", "fx.image"), "acid") is None
-    assert G.run_of(rig.presets.graph.spec) == ("acid",)
+    assert G.run_of(rig.presets.graph.said()) == ("acid",)
     assert ("frame", "fx.image") not in wires_of(rig)
     assert e.insert_effect(cable, "teapot") == "no teapot effect in this build"
 
@@ -777,11 +777,11 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     reg = rig.reg
     assert not reg["fx.kaleido.on"].value and not reg["fx.wobble.on"].value
     assert e.insert_effect(("frame", "fx.image"), "kaleido") is None and e.added == "kaleido"
-    assert G.run_of(rig.presets.graph.spec) == ("kaleido",)
+    assert G.run_of(rig.presets.graph.said()) == ("kaleido",)
     assert reg["fx.kaleido.on"].value is True and pushed == ["insert kaleido into frame → fx.image"]
     assert e.add_node("effect", "wobble") is None and e.added == "wobble"
     assert reg["fx.wobble.on"].value is True
-    assert "wobble" in {x.name for x in rig.presets.graph.spec.effects}
+    assert "wobble" in {x.name for x in rig.presets.graph.said().effects}
 
 
 def test_a_second_insert_of_the_same_file_takes_instance_two(tmp_path):
@@ -792,7 +792,7 @@ def test_a_second_insert_of_the_same_file_takes_instance_two(tmp_path):
     assert e.insert_effect(("frame", "fx.image"), "kaleido") is None and e.added == "kaleido"
     assert e.insert_effect(("kaleido", "fx.image"), "kaleido") is None
     assert e.added == "kaleido.2"
-    assert G.run_of(rig.presets.graph.spec) == ("kaleido", "kaleido.2")
+    assert G.run_of(rig.presets.graph.said()) == ("kaleido", "kaleido.2")
     assert rig.reg["fx.kaleido.2.on"].value is True and rig.reg["fx.kaleido.on"].value is True
 
 
@@ -809,7 +809,7 @@ def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
     assert rig.reg["fx.kaleido.on"].value is False
-    assert G.run_of(rig.presets.graph.spec) == () and wires_of(rig) == {("frame", "fx.image")}
+    assert G.run_of(rig.presets.graph.said()) == () and wires_of(rig) == {("frame", "fx.image")}
 
 
 def test_switch_over_the_channels_wires_all_eight_and_keeps_the_channel(tmp_path):
@@ -846,7 +846,7 @@ def test_undo_of_switch_over_the_channels_puts_the_channel_back(tmp_path):
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
     assert wires_of(rig) == {("frame", "fx.image"), ("media.c", "pattern.media")}
-    assert rig.presets.graph.spec.switches == () and "switch.select" not in rig.reg
+    assert rig.presets.graph.said().switches == () and "switch.select" not in rig.reg
 
 
 def test_the_run_keeps_its_frame_head(tmp_path):
@@ -860,10 +860,10 @@ def test_the_run_keeps_its_frame_head(tmp_path):
     rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "wobble.image"),
                               ("wobble", "fx.image"))
     assert e.unwire("acid", "wobble.image") is None
-    assert G.run_of(rig.presets.graph.spec) == ("acid",)
+    assert G.run_of(rig.presets.graph.said()) == ("acid",)
     assert ("wobble", "fx.image") not in wires_of(rig)
     assert e.unwire("acid", "fx.image") is None
-    assert G.run_of(rig.presets.graph.spec) == ()
+    assert G.run_of(rig.presets.graph.said()) == ()
     assert wires_of(rig) == {("frame", "fx.image")}
     n = len(pushed)
     assert e.unwire("frame", "fx.image") == graphview.RUN_KEPT == (
@@ -882,7 +882,7 @@ def test_reordering_the_run_is_rewiring(tmp_path):
     rig, e, pushed = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "wobble.image"),
                               ("wobble", "fx.image"))
     assert e.place_effect(("wobble", "fx.image"), "acid") is None
-    assert G.run_of(rig.presets.graph.spec) == ("wobble", "acid")
+    assert G.run_of(rig.presets.graph.said()) == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → fx.image"]
     assert e.place_effect(("wobble", "acid.image"), "acid") == "acid is on that cable already"
 
@@ -903,7 +903,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
         ("frame", "fx.image"), nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("presets", "Free")
     gs = rig.lib.presets.graph
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.spec.wiring(),
+    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.said().wiring(),
                                                    effects=("wobble", "wobble.2")))
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
@@ -914,9 +914,9 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     st["pin_xy"].update({graphview.stub_out("render:frame"): (0.0, 0.0),
                          graphview.stub_in("render:fx"): (400.0, 0.0)})
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
-    assert G.run_of(gs.spec) == ()
+    assert G.run_of(gs.said()) == ()
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (200.0, 0.0)) is cable
-    assert G.run_of(gs.spec) == ("wobble.2",)
+    assert G.run_of(gs.said()) == ("wobble.2",)
 
 
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
@@ -938,7 +938,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     settle(rig)
     rig.undo.clear()
     assert e.unwire("frame", "acid.image") is None and len(pushed) == 1
-    spec = rig.presets.graph.spec
+    spec = rig.presets.graph.said()
     assert G.run_of(spec) == () and wires_of(rig) == {("frame", "fx.image")}
     assert G.EffectAt("acid", 1) in spec.effects
     assert {"kind": "effect", "file": "acid"} in rig.presets.graph.free_doc()["nodes"]
@@ -951,16 +951,16 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert graphmigrate.legacy_values(spec.to_json(), {"fx.acid.on": True}) is None
     assert graphmigrate.legacy_section(spec.to_json()) is None
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/5"
+    assert doc["schema"] == "hyperspace.preset/6"          # (plan 35, row 385: /5 before)
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()
-    assert G.run_of(rig.presets.graph.spec) == ("acid",)
+    assert G.run_of(rig.presets.graph.said()) == ("acid",)
     # wired in again, it is named by its wires alone
     rig2, e2, _ = free_rig(tmp_path / "again", ("frame", "acid.image"), ("acid", "fx.image"))
     assert e2.unwire("acid", "fx.image") is None
     assert e2.place_effect(("frame", "fx.image"), "acid") is None
-    assert rig2.presets.graph.spec.to_json()["nodes"] == []
+    assert rig2.presets.graph.said().to_json()["nodes"] == []
 
 
 def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
@@ -974,14 +974,15 @@ def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
     rig, e, _ = free_rig(tmp_path, ("frame", "acid.image"), ("acid", "fx.image"))
     rig.reg["fx.acid.on"].set(True)
     assert e.unwire("frame", "acid.image") is None
-    section = rig.presets.graph.spec.to_json()
+    section = rig.presets.graph.said().to_json()
     assert {"kind": "effect", "file": "acid"} in section["nodes"]
     assert graphmigrate.legacy_values(section, {"fx.acid.on": True}) is None
-    assert json.loads(rig.presets.save_as("On").read_text())["schema"] == "hyperspace.preset/5"
+    assert json.loads(rig.presets.save_as("On").read_text())["schema"] == "hyperspace.preset/6"
     rig.reg["fx.acid.on"].set(False)
     assert graphmigrate.legacy_values(section, {"fx.acid.on": False}) is not None
     doc = json.loads(rig.presets.save_as("Off").read_text())
-    assert doc["schema"] != "hyperspace.preset/5" and "graph" not in doc   # (/4 or lower)
+    assert doc["schema"] not in ("hyperspace.preset/5", "hyperspace.preset/6")   # (/4 or lower)
+    assert "graph" not in doc
 
 
 def test_an_unwired_instance_one_round_trips():
@@ -1010,10 +1011,10 @@ def test_a_sink_loop_drag_is_refused_in_words(tmp_path):
     this half drives `render_wire` by name)."""
     from hyperspace import graph as G
     rig, e, pushed = free_rig(tmp_path, ("frame", "fx.image"))
-    before = rig.presets.graph.spec.to_json()
+    before = rig.presets.graph.said().to_json()
     assert e.refusal("rout:scene", "rin:shape/faces") == (
         "wire scene → shape.faces — " + G.LOOP_FACES.format(path="shape → scene → shape"))
-    assert rig.presets.graph.spec.to_json() == before and pushed == []
+    assert rig.presets.graph.said().to_json() == before and pushed == []
     doc = {**before, "nodes": [*before["nodes"], {"kind": "delay"}]}
     spec = G.read_graph(doc)
     rig.presets.graph.land(spec, spec.to_json())
@@ -1037,7 +1038,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
                                             ("wobble", "fx.image")))
     rig.lib.load("presets", "Run")
     gs = rig.lib.presets.graph
-    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.spec.wiring(),
+    rig.panel.renderer = NS(_graph=G.default_graph(views(Switches()), gs.said().wiring(),
                                                    effects=("acid", "wobble")))
     frame(rig.panel, "graph")
     st = ui_graph._state(rig.panel)
@@ -1053,10 +1054,10 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     # on its own cables (frame → acid, acid → wobble), and on nothing: no change
     assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
     assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
-    assert G.run_of(gs.spec) == ("acid", "wobble") and pushed == []
+    assert G.run_of(gs.said()) == ("acid", "wobble") and pushed == []
     cable = next(c for c in view.cables if c.dst_port == "rin:fx/image")
     assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
-    assert G.run_of(gs.spec) == ("wobble", "acid")
+    assert G.run_of(gs.said()) == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → fx.image"]
 
 

@@ -1780,7 +1780,16 @@ class Panel:
         (no renderer, no presets) reads as the default graph."""
         wiring = getattr(self.renderer, "wiring", None) or Wiring()
         presets = getattr(getattr(self, "library", None), "presets", None)
-        spec = getattr(getattr(presets, "graph", None), "spec", None)
+        gs = getattr(presets, "graph", None)
+        spec = getattr(gs, "spec", None)
+        said = getattr(gs, "said", None)
+        if spec is not None and getattr(spec, "wired", False) and callable(said):
+            # plan 35 T3: a migrated wired frame said in the words the pages
+            # were written in (`GraphSection.said`) until T6 makes them
+            # views of the wires; an edited frame is said as it stands
+            spec = said()
+            if not spec.wired:
+                wiring = spec.wiring()
         return wiring, spec
 
     def black_outputs(self) -> list[int]:

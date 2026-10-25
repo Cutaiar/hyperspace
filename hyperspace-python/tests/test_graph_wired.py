@@ -284,14 +284,27 @@ def test_an_old_id_in_a_wired_frame_is_refused(pair, old, new):
 
 
 def test_the_wired_words_are_v6_only():
+    """A wired frame's words are `/6`'s alone. Plan 35 T3 (row 384): one
+    that is not exactly a migrated frame (here every frame kind, a copy, a
+    ground) has no round trip — `legacy_section` gives it back as it is and
+    `needs_free` says `/6`; one that is, below `/6`, says no word of it —
+    the marker, the frame kinds, the copies, `shape`, `ground` and the
+    frame's ports all gone, and the ids the old ones."""
     section = wired(*FULL_WIRES, nodes=FULL_NODES)
     spec = G.read_graph(section)
     assert M.uses_free_words(spec)
-    legacy = M.legacy_section(section)
+    assert M.legacy_section(section) is section and M.needs_free(section, {})
+    frame = M.migrate({"values": {}, "graph": {
+        "nodes": [{"kind": "hands", "into": "scene"}, {"kind": "history", "holds": "scene"}],
+        "wires": [{"from": "media.c", "to": "output.2.image"}]}}, {})[0]["graph"]
+    legacy = M.legacy_section(frame)
+    assert G.FRAME_KEY not in legacy
     kinds = {n.get("kind") for n in legacy.get("nodes", [])}
     assert not kinds & {*G.FRAME_KINDS, "copy"}
+    assert legacy["wires"] == [{"from": "media.c", "to": "output.2.image"}]
     for w in legacy.get("wires", []):
         assert w["to"] not in M._FREE_PORTS
         assert "copy" not in (w["from"], w["to"].rpartition(".")[0])
         assert w["from"] not in ("shape", "ground")
+    assert not M.needs_free(frame, {})
     assert not M.uses_free_words(G.read_graph({}))

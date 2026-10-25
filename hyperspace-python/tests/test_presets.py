@@ -1721,3 +1721,50 @@ def test_a_saved_route_onto_a_setting_is_dropped_with_a_note(rig):
     assert "dropped lfo:0 → ghost.tethers: not modulatable" in notes
     assert (path.read_bytes(), path.stat().st_mtime_ns) == before
     assert rig.reg["ghost.mirror"].value is False
+
+
+# ---- plan 35 T3: the wired frame's schema (row 385) ----
+
+WIRED_FIXTURES = ("blank-frame", "channel-out-only", "through-one-output")
+FIXTURE_DIR = FACTORY.parents[1] / "tests" / "fixtures" / "presets"
+
+
+def test_a_wired_preset_saves_as_v6(rig):
+    """Row 385: a wired frame `/4` cannot say is written `hyperspace.preset/6`
+    (`schema_of`, where `/5` was); the ladder reads `/2` … `/6`, and a `/7`
+    file is refused in its words — as a plan 33/34 build refuses a `/6`."""
+    assert preset.VERSIONS == (2, 3, 4, 5, 6)
+    assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/6"
+    rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
+    section = rig.presets.graph.free_doc()
+    assert section["frame"] == "wired"
+    edited = {**section, "wires": [w for w in section["wires"]
+                                   if w["to"] != "lookback.capture"]}
+    assert preset.schema_of({"values": {}, "graph": edited}) == "hyperspace.preset/6"
+    assert preset.schema_of({"values": {}, "graph": section}) == preset.SCHEMA
+    put(rig.home, "SEVEN", schema="hyperspace.preset/7")
+    rig.lib.poll()
+    with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
+        rig.lib.read("presets", "SEVEN")
+
+
+@pytest.mark.parametrize("name", WIRED_FIXTURES)
+def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
+    """Each of T3's `/6` fixtures, loaded, saved and loaded into a fresh rig,
+    lands the same `GraphSpec`, and saves `/6` again."""
+    src = FIXTURE_DIR / f"{name}.json"
+    assert json.loads(src.read_text())["schema"] == "hyperspace.preset/6"
+    spec, saved = None, None
+    for home in (tmp_path / "a", tmp_path / "b"):
+        (home / "presets").mkdir(parents=True, exist_ok=True)
+        (home / "presets" / src.name).write_text(saved or src.read_text())
+        r = boot(home)
+        r.presets.load(name)
+        got = r.presets.graph.spec
+        assert got is not None and got.wired and not got.notes
+        assert [n for n in r.presets.notes if n.startswith("graph:")] == []
+        if spec is not None:
+            assert got == spec
+        spec = got
+        saved = r.presets.save_as(name).read_text()
+        assert json.loads(saved)["schema"] == "hyperspace.preset/6"

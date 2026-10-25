@@ -3173,14 +3173,44 @@ CHANNEL_SWITCH_PORTS = (("pattern.media", "faces media"), ("backdrop.image", "ba
 CHANNEL_SWITCH_REFUSAL = "a switch over the channels goes into pattern.media or backdrop.image"
 
 
-def _doc(edit: Edit) -> dict:
+def _framed(edit: Edit) -> tuple[Any, tuple[dict, bool] | None]:
+    """(the landed spec, its round trip) — plan 35 T3: every load lands a
+    wired frame; while it is exactly a migrated one (`graphmigrate.unwired`)
+    the page edits it in the words it was written in (plan 33's: the run
+    `frame → … → fx.image`, `into`, `holds`, the old ids — the canvas's
+    render names until T4) and each edit lands wired again (`_land`). An
+    edited frame (no round trip) is edited as it stands (T5's page)."""
     spec = getattr(edit.graph, "spec", None)
+    if spec is None or not getattr(spec, "wired", False):
+        return spec, None
+    gs = edit.graph
+    specs = gs.specs() if hasattr(gs, "specs") else None
+    return spec, graphmigrate.unwired(spec.to_json(), specs)
+
+
+def _spec(edit: Edit):
+    """The section the page edits, read (see `_framed`)."""
+    spec, got = _framed(edit)
+    if got is None:
+        return spec
+    gs = edit.graph
+    files = gs.files() if hasattr(gs, "files") else None
+    return rgraph.read_graph(got[0], effects=files)
+
+
+def _doc(edit: Edit) -> dict:
+    spec, got = _framed(edit)
+    if got is not None:
+        return copy.deepcopy(got[0])
     return copy.deepcopy(spec.to_json()) if spec is not None else {"nodes": []}
 
 
 def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> str | None:
     """Read `doc` back as a preset would (a note is the refusal, nothing
-    changed); else, unless `dry`, the undo step and the landing."""
+    changed); else, unless `dry`, the undo step and the landing. Plan 35
+    T3: an edit of a wired frame in plan 33's words (`_framed`) lands as
+    the wired frame it migrates to (`graphmigrate.wired_section`, the
+    capture as it was)."""
     gs = edit.graph
     if gs is None:
         return "no preset is loaded"
@@ -3199,6 +3229,17 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> st
     if new == _doc(edit):
         edit.said = "already so"
         return None
+    _, got = _framed(edit)
+    if got is not None and not spec.wired:
+        wired = graphmigrate.wired_section(graphmigrate.renamed(new), spec,
+                                           backdrop_history=got[1])
+        try:
+            spec = rgraph.read_graph(wired, effects=files)
+        except rgraph.GraphError as e:
+            return str(e)
+        if spec.notes:
+            return spec.notes[0]
+        new = spec.to_json()
     if edit.push is not None:
         edit.push(label)
     if new == {"nodes": []}:                 # nothing left: the default graph, no section
@@ -3273,7 +3314,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False) -> str | None
 def _hands_into(edit: Edit, ghost: str, into: str, dry: bool = False) -> str | None:
     """A geometry cable: hands node `ghost` drawn in the scene or as the layer."""
     _, n = rgraph.split_instance(ghost)
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)              # (plan 35 T3: in the words the page edits)
     wiring = spec.wiring() if spec is not None else rgraph.Wiring()
     if n not in {h.n for h in wiring.nodes()}:
         return f"no {ghost} hands node in this graph"
@@ -3324,7 +3365,7 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     # cable of it deleted takes the effect it leads into (the last cable's:
     # the effect it leaves) out of the run, the run closed over it; the
     # empty run's own cable stays
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     if graphmigrate.has_frame_run(spec):
         run = rgraph.run_of(spec)
         here = [w for w in _run_cables(run) if w.dst == d and (s is None or w.src == s)]
@@ -3403,7 +3444,7 @@ def _effect_entry(file: str, n: int) -> dict:
 
 
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     doc = _doc(edit)
     if kind == "effect":
         files = edit.graph.files() if hasattr(edit.graph, "files") else None
@@ -3462,7 +3503,7 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
     a driven `view.media` migrates to (row 350)."""
     if port not in dict(CHANNEL_SWITCH_PORTS):
         return CHANNEL_SWITCH_REFUSAL
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     reg = getattr(edit.graph, "reg", None) or edit.reg
     selects: dict[str, int] = {}
     for sw in (spec.switches if spec is not None else ()):
@@ -3577,7 +3618,7 @@ def render_insert(edit: Edit, cable, file: str) -> str | None:
     files = edit.graph.files() if hasattr(edit.graph, "files") else None
     if not file or (files is not None and file not in files):
         return f"no {file} effect in this build"
-    spec = getattr(edit.graph, "spec", None)
+    spec = _spec(edit)
     n = _new_instance(spec, file)                   # R25: the file itself when none holds it
     name = rgraph.instance_name(file, n)
     doc = _doc(edit)

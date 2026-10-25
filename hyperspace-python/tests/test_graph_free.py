@@ -151,25 +151,105 @@ def v4_sources() -> list[tuple[str, Path]]:
     """Every factory preset file (dial's too) and every fixture under
     tests/fixtures/presets/ and tests/fixtures/merge-31-32/, as (kind, path)
     — but a `/5` fixture (plan 33 T4's proofs), which no build before plan
-    33 reads and `test_a_free_fixture_saves_as_five` holds instead."""
+    33 reads and `test_a_free_fixture_saves_as_six` holds instead, and a
+    `/6` one (plan 35 T3's wired frames), which none before plan 35 reads."""
     out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in SOURCES.items():
         out += [(kind, p) for p in sorted(folder.glob("*.json"))
-                if json.loads(p.read_text()).get("schema") != "hyperspace.preset/5"]
+                if json.loads(p.read_text()).get("schema") not in ("hyperspace.preset/5",
+                                                                    "hyperspace.preset/6")]
     return out
 
 
-def test_a_free_fixture_saves_as_five(tmp_path):
+def test_a_free_fixture_saves_as_six(tmp_path):
     """Plan 33 T4's proof presets say what `/4` cannot (a channel through
     effects onto the faces, under the scene, at two sizes), and T5's a
-    switch: loaded and saved untouched they stay `/5`, their graph section
-    as written."""
+    switch: loaded and saved untouched they are `/6` now (plan 35, row 385:
+    nothing writes `/5` again), their graph the wired frame the load
+    landed — each of the file's own wires kept, in the new ids."""
+    from hyperspace import graphmigrate as M
+
     for k, name in enumerate(("media-chain-faces", "media-chain-backdrop",
                               "branch-two-sizes", "switch-faces")):
         path = SOURCES["presets"] / f"{name}.json"
         doc = json.loads(saved_bytes(tmp_path / str(k), "presets", path))
-        assert doc["schema"] == "hyperspace.preset/5", name
-        assert doc["graph"] == json.loads(path.read_text())["graph"], name
+        assert doc["schema"] == "hyperspace.preset/6", name
+        graph = doc["graph"]
+        assert graph[G.FRAME_KEY] == G.WIRED_FRAME and not G.read_graph(graph).notes
+        own = M.renamed(json.loads(path.read_text())["graph"])["wires"]
+        kept = [(w["from"], w["to"]) for w in own
+                if "fx" != w["to"].rpartition(".")[0] and w["from"] != "frame"]
+        assert set(kept) <= {(w["from"], w["to"]) for w in graph["wires"]}, name
+
+
+def test_the_round_trip_is_canonical(tmp_path):
+    """Plan 35 M (row 384, Review Focus 4): for every fixture and every one
+    of the 38 sources, the wired frame the load landed, put back below `/6`
+    (`legacy_section`, its values by `legacy_values`) and loaded again,
+    is the same wired frame — and one `/4` cannot say is given back as it
+    is, `legacy_values` reading it as needing `/6`."""
+    from test_plan31_wiring import make_app
+
+    from hyperspace import graphmigrate as M
+
+    sources = [*v4_sources(), *((kind, p) for kind, folder in SOURCES.items()
+                                for p in sorted(folder.glob("*.json"))
+                                if (kind, p) not in v4_sources())]
+    said = 0
+    for k, (kind, path) in enumerate(sources):
+        home = tmp_path / str(k)
+        if kind != "factory":
+            (home / "presets").mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, home / "presets" / path.name)
+        app = make_app(home)
+        app.lib.load("presets", path.stem)
+        gs = app.presets.graph
+        wired = gs.free_doc()
+        assert wired[G.FRAME_KEY] == G.WIRED_FRAME, path.name
+        doc = app.presets.document(path.stem)
+        specs, driven = gs.specs(), M.targets(doc)
+        back = M.legacy_section(wired)
+        if doc["schema"] == M.WIRED_SCHEMA:
+            assert M.needs_free(wired, doc["values"], driven, specs), path.name
+            continue
+        said += 1
+        again = {k: v for k, v in doc.items() if k != "graph"}
+        if back is not None:
+            again["graph"] = back
+        out, _ = M.migrate(again, specs)
+        assert (G.read_graph(out["graph"]).to_json()
+                == G.read_graph(wired).to_json()), path.name
+    assert said >= 38
+
+
+def test_an_edited_frame_saves_as_v6(tmp_path):
+    """Plan 35 M (Review Focus 4): any edit to the frame fails the round
+    trip — the capture's wire deleted, or a channel in place of the run's
+    last wire into All outputs — so the section `needs_free` and the save
+    is `/6`; untouched, the same preset saves below it."""
+    from test_plan31_wiring import make_app
+
+    from hyperspace import graphmigrate as M
+
+    app = make_app(tmp_path)
+    app.lib.load("presets", "party-trip")
+    gs = app.presets.graph
+    wired = copy.deepcopy(gs.free_doc())
+    assert app.presets.document("party-trip")["schema"] != M.WIRED_SCHEMA
+    last = next(w for w in wired["wires"] if w["to"] == "output.all.image")
+    edits = {"capture": [w for w in wired["wires"]
+                         if (w["from"], w["to"]) != ("scene", "lookback.capture")],
+             "channel": [w if w is not last else {"from": "channel.a", "to": "output.all.image"}
+                         for w in wired["wires"]]}
+    for name, wires in edits.items():
+        edited = {**wired, "wires": wires}
+        assert len(wires) == len(wired["wires"]) - (name == "capture"), name
+        doc = app.presets.document("party-trip")
+        assert M.needs_free(edited, doc["values"], M.targets(doc), gs.specs()), name
+        gs.land(G.read_graph(edited), copy.deepcopy(edited))
+        saved = app.presets.document("party-trip")
+        assert saved["schema"] == "hyperspace.preset/6", name
+        assert saved["graph"] == G.read_graph(edited).to_json(), name
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
@@ -241,7 +321,13 @@ def _module_run(app, module: str) -> tuple[str, ...]:
     doc = app.lib.read("fx", module)
     values = app.lib.resolved("fx", _module_values("fx", doc))
     out, _ = M.migrate({"values": values}, app.presets.graph.specs())
-    return G.run_of(G.read_graph(out["graph"]))
+    return main_run(G.read_graph(out["graph"]))
+
+
+def main_run(spec) -> tuple[str, ...]:
+    """The main run of a wired frame (plan 35 T3: every load's): the
+    effects from the look-back into All outputs."""
+    return G.run_of(spec, "lookback", "output.all.image")
 
 
 def test_loading_an_fx_module_replaces_the_run(tmp_path):
@@ -253,18 +339,18 @@ def test_loading_an_fx_module_replaces_the_run(tmp_path):
     app = make_app(tmp_path)
     app.lib.load("presets", "party-acid")
     gs = app.presets.graph
-    acid_run = G.run_of(gs.spec)
+    acid_run = main_run(gs.spec)
     want = _module_run(app, "mandala")
     assert want and want != acid_run and {"plasma", "kaleido"} <= set(want)
     app.lib.load("fx", "mandala")
-    assert G.run_of(gs.spec) == want
-    assert gs.spec.wiring().run == want
+    assert main_run(gs.spec) == want
     # (its order is no param since T7: held for a /4 save, the module's)
     assert gs.held_values()["fx.kaleido.order"] == 8.0 and app.lib.current("fx") == "mandala"
     assert "fx.kaleido.order" not in app.reg
-    # the save says it in /4 terms: no free word, the run as orders
+    # the save says it in /4 terms: no free word, the run as orders (plan
+    # 35: the module's run where the old one stood — the round trip holds)
     doc = app.presets.document("after")
-    assert doc["schema"] != "hyperspace.preset/5"
+    assert doc["schema"] not in ("hyperspace.preset/5", "hyperspace.preset/6")
     assert "graph" not in doc
 
 
@@ -282,13 +368,13 @@ def test_loading_an_fx_module_keeps_branches(tmp_path):
            "values": {"fx.acid.2.on": True, "fx.warp.on": True}}
     assert app.presets.load_doc(doc) == []
     gs = app.presets.graph
-    assert G.run_of(gs.spec) == ("warp",)
+    assert main_run(gs.spec) == ("warp",)
     app.lib.load("fx", "mandala")
-    assert G.run_of(gs.spec) == _module_run(app, "mandala")
-    for a, b in branch:
-        assert G.Wire(a, b) in gs.spec.wires
+    assert main_run(gs.spec) == _module_run(app, "mandala")
+    for a, b in branch:                                 # (in the new ids: plan 35 V2)
+        assert G.Wire(G.new_id(a), b) in gs.spec.wires
     assert {"kind": "effect", "file": "acid", "instance": 2} in gs.free_doc()["nodes"]
-    assert G.Wire("warp", "fx.image") not in gs.spec.wires
+    assert G.Wire("warp", "output.all.image") not in gs.spec.wires
 
 
 def test_a_module_lands_its_run_over_a_refused_wire_and_says_when_it_cannot(tmp_path):
@@ -303,11 +389,12 @@ def test_a_module_lands_its_run_over_a_refused_wire_and_says_when_it_cannot(tmp_
            "graph": section(("frame", "warp.image"), ("warp", "fx.image"),
                             ("ghost", "output.1.image"))}
     app.presets.load_doc(doc)
-    assert any("ghost makes geometry" in n for n in app.presets.notes)
+    # (plan 35 V2: the old `ghost` is `hands` now, said as such)
+    assert any("hands makes geometry" in n for n in app.presets.notes), app.presets.notes
     gs = app.presets.graph
     app.lib.load("fx", "mandala")
-    assert G.run_of(gs.spec) == _module_run(app, "mandala")
-    assert {"from": "ghost", "to": "output.1.image"} in gs.free_doc()["wires"]
+    assert main_run(gs.spec) == _module_run(app, "mandala")
+    assert {"from": "hands", "to": "output.1.image"} in gs.free_doc()["wires"]
     app.presets.load_doc({"schema": "hyperspace.preset/4", "name": "u", "values": {},
                           "graph": {"nodes": [{"kind": "teapot"}]}})
     app.lib.load("fx", "mandala")
@@ -326,7 +413,7 @@ def test_the_module_hook_survives_a_hot_reload(tmp_path):
     app.lib.__dict__.pop("_apply_hooks", None)          # as before the hook existed
     app.lib.load("presets", "party-acid")
     app.lib.load("fx", "mandala")
-    assert G.run_of(app.presets.graph.spec) == _module_run(app, "mandala")
+    assert main_run(app.presets.graph.spec) == _module_run(app, "mandala")
 
 
 def test_a_module_load_keeps_a_faces_run_that_shares_an_effect(tmp_path):
@@ -348,7 +435,7 @@ def test_a_module_load_keeps_a_faces_run_that_shares_an_effect(tmp_path):
     assert want and "acid" in _module_run(app, "acid")
     app.lib.load("fx", "acid")
     assert G.run_of(gs.spec, "pattern", "shape.faces") == ("acid",)
-    assert G.run_of(gs.spec) == want
+    assert main_run(gs.spec) == want
     assert gs.spec.notes == ()
     assert app.presets.notes == []
 
@@ -379,17 +466,19 @@ def test_a_run_reads_through_an_effect_file_this_machine_lacks():
 def test_the_missing_effects_wires_survive_a_save(tmp_path):
     """R27: a preset whose run names `foo`, loaded on a machine without
     it, loads with no note and saves its wires unchanged, so the Mac that
-    has foo still has its run."""
+    has foo still has its run (plan 35: the run from the look-back into
+    All outputs, `/6`)."""
     from test_plan31_wiring import make_app
 
     app = make_app(tmp_path)
     doc = {"schema": "hyperspace.preset/5", "name": "t", "graph": section(*MISSING_RUN),
            "values": {"fx.acid.on": True}}
     assert app.presets.load_doc(doc) == [] and app.presets.notes == []
-    assert G.run_of(app.presets.graph.spec) == ("foo", "acid")
+    assert main_run(app.presets.graph.spec) == ("foo", "acid")
     out = app.presets.document("t")
-    assert out["schema"] == "hyperspace.preset/5"
-    assert out["graph"]["wires"] == section(*MISSING_RUN)["wires"]
+    assert out["schema"] == "hyperspace.preset/6"
+    run = [("lookback", "foo.image"), ("foo", "acid.image"), ("acid", "output.all.image")]
+    assert set(run) <= {(w["from"], w["to"]) for w in out["graph"]["wires"]}
 
 
 def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
@@ -416,10 +505,10 @@ def test_a_driven_channel_choice_loads_as_a_switch_and_saves_as_five(tmp_path):
             assert app.reg[f"{sw}.select"].value == pick, (name, sw)
             assert {"from": sw, "to": end} in free["wires"]
             for i, c in enumerate("abcdefgh", 1):
-                assert {"from": f"media.{c}", "to": f"{sw}.in{i}"} in free["wires"]
+                assert {"from": f"channel.{c}", "to": f"{sw}.in{i}"} in free["wires"]
             assert not [w for w in free["wires"] if w["to"] == end and w["from"] != sw]
         doc = app.presets.document(name)
-        assert doc["schema"] == "hyperspace.preset/5", name
+        assert doc["schema"] == "hyperspace.preset/6", name
         assert [n for n in doc["graph"]["nodes"] if n["kind"] == "switch"] == [
             {"kind": "switch", **({"instance": 2} if sw == "switch.2" else {})}
             for sw, *_ in switches]
@@ -439,13 +528,13 @@ def test_an_effect_switched_on_in_no_run_adds_nothing_and_saves_as_five(tmp_path
     app = make_app(tmp_path)
     app.lib.load("presets", "party-acid")
     gs = app.presets.graph
-    run = G.run_of(gs.spec)
+    run = main_run(gs.spec)
     off = next(n for n in sorted(app.reg.fx_state.specs)
                if n not in run and not app.reg[f"fx.{n}.on"].value)
     app.reg[f"fx.{off}.on"].set(True)
-    assert G.run_of(gs.spec) == run
+    assert main_run(gs.spec) == run
     doc = app.presets.document("after")
-    assert doc["schema"] == "hyperspace.preset/5" and G.run_of(G.read_graph(doc["graph"])) == run
+    assert doc["schema"] == "hyperspace.preset/6" and main_run(G.read_graph(doc["graph"])) == run
 
 
 def _loaded(ctx, tmp_path, slug: str | None = None, doc: dict | None = None):
@@ -490,11 +579,14 @@ def test_only_wired_effects_have_nodes(ctx, tmp_path):
     from hyperspace.outputs import Switches
 
     app, r = _loaded(ctx, tmp_path, "party-acid")
-    want = G.run_of(app.presets.graph.spec)
+    want = main_run(app.presets.graph.spec)
     assert want and len(want) < len(app.reg.fx_state.specs)
     run(ctx, r, views(ctx, Switches()), frames=1)
     g = r._graph
-    assert [e.effect for e in g.nodes["fx"].effects] == list(want) == list(g.run)
+    # (plan 35: the wired frame's end reads the run — `g.run`, no `fx` node)
+    assert list(want) == list(g.run)
+    end = g.outputs[0].inputs["image"]
+    assert [e.effect for e in G._effects_of(end.inputs["image"])] == list(want)
     assert sorted(n.effect for n in _effect_nodes(g)) == sorted(want)
 
 
@@ -513,7 +605,9 @@ def test_the_run_order_is_the_wire_order(ctx, tmp_path):
     _, r = _loaded(ctx, tmp_path, doc=doc)
     run(ctx, r, views(ctx, Switches()), frames=1)
     g = r._graph
-    assert [e.effect for e in g.nodes["fx"].effects] == ["wobble", "acid"]
+    assert list(g.run) == ["wobble", "acid"]
+    end = g.outputs[0].inputs["image"]
+    assert [e.effect for e in G._effects_of(end.inputs["image"])] == ["wobble", "acid"]
     order = [n.name for n in g.order]
     assert order.index("wobble") < order.index("acid")
     assert r.stats["effects"] == ["wobble", "acid"]

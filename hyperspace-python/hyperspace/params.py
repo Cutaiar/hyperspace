@@ -1207,13 +1207,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
 
     # ---- the backdrop (plan 32 R, row 330): a picture under the scene ----
     # (which is the graph's wire into `backdrop.image`: plan 33 T7 retired
-    # `backdrop.channel`, an old preset's read as that wire)
+    # `backdrop.channel`, an old preset's read as that wire; plan 35 T3
+    # retired `backdrop.history` likewise — what the look-back records is
+    # the wire into `lookback.capture`, `graphmigrate.RETIRED`)
     g = "backdrop"
     r.continuous("backdrop.alpha", "Backdrop alpha", *_attr(view, "backdrop_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"backdrop {v:.2f}", group=g)
-    r.toggle("backdrop.history", "Backdrop in the look-back", *_attr(view, "backdrop_history"),
-             group=g, tip="On, the look-back captures the backdrop with the scene; off, the "
-                          "echoes and the dream are drawn over the backdrop.")
 
     # ---- rotation: per-plane rate and phase ----
     # rate multiplies dt·speed·RATE[p]; signed so a lane can spin a plane

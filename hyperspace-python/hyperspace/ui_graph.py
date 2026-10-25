@@ -292,7 +292,10 @@ def view_of(panel) -> graphview.View | None:
     devices = getattr(panel, "devices", None)
     rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
     gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
-    spec = getattr(gs, "spec", None)
+    # (plan 35 T3: a migrated wired frame drawn in the words the canvas
+    # was written in, `GraphSection.said`, until T5 draws the frame itself)
+    said = getattr(gs, "said", None)
+    spec = said() if callable(said) else getattr(gs, "spec", None)
     lanes = _lanes(panel)
     k = graphview.key(table, reg, router, devices, rgraph, spec)
     if st["view"] is None or st["key"] != k:

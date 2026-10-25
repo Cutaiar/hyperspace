@@ -60,7 +60,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4, 5)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6)      # (plan 35, row 385: /6 the wired frame)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     # the document-only rule (factory presets, `generated`) knows /4 too
     assert preset.schema_of({"values": {"seq.1.1": True}}) == V3
@@ -80,9 +80,10 @@ def test_a_pattern_and_a_bin_save_as_4_and_round_trip(app):
     assert {k for k in doc["values"] if k.startswith(("env.", "seq."))} == {
         k for k in snap if k.startswith(("env.", "seq."))}
     # (plan 33 T7: and the two retired channel choices, written back as a
-    # build from before plan 33 reads them)
+    # build from before plan 33 reads them; plan 35 T3: and `backdrop.history`)
     assert {k for k in doc["values"] if preset.is_media_id(k)} == {
-        k for k in snap if preset.is_media_id(k)} | {"view.media", "backdrop.channel"}
+        k for k in snap if preset.is_media_id(k)} | {"view.media", "backdrop.channel",
+                                                      "backdrop.history"}
     assert doc[preset.MEDIA_KEY] == {"channels": {"a": [CLIP]}}
     app.presets.save_as("both")
     # undo it all, then load

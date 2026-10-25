@@ -588,7 +588,7 @@ def test_this_build_reads_both_and_an_older_build_refuses_a_3(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6)      # (plan 35, row 385: /6 the wired frame)
     app.presets.save_as("plain")
     app.reg["seq.3.3"].set(True)
     app.presets.save_as("pattern")

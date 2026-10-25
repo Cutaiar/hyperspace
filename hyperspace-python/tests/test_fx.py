@@ -1574,7 +1574,7 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
         rig.lib.presets.load_doc(doc)
         wiring = rig.lib.presets.graph.wiring
         stand_in.wiring = wiring
-        stand_in._graph = G.default_graph(views(Switches(), Switches()), wiring,
+        stand_in._graph = G.build_graph(views(Switches(), Switches()), wiring,   # (plan 35)
                                           effects=tuple(sorted(st.specs)))
         rig.panel.fx_selected = "acid.2"
         real = ui.chip
@@ -1624,13 +1624,12 @@ def test_the_retired_ids_are_gone():
     st = FxState()
     r = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), fx=st)
     for pid in ("fx.acid.order", "fx.acid.target", "fx.select", "view.media",
-                "backdrop.channel"):
+                "backdrop.channel", "backdrop.history"):     # (plan 35 T3: the capture wire)
         assert r.get(pid) is None and pid not in r, pid
         with pytest.raises(KeyError):
             r[pid]
     for pid in ("fx.on", "fx.mix", "fx.face_map", "fx.acid.on", "fx.acid.mix",
-                "fx.acid.speed", "fx.acid.blend", "view.media_alpha", "backdrop.alpha",
-                "backdrop.history"):
+                "fx.acid.speed", "fx.acid.blend", "view.media_alpha", "backdrop.alpha"):
         assert pid in r, pid
     assert set(st.values["acid"]) >= {"on", "mix", "speed", "blend"}
     assert not {"order", "target"} & set(st.values["acid"])
@@ -1669,10 +1668,12 @@ def test_an_old_preset_loads_its_retired_ids_without_a_note(tmp_path):
     assert app.presets.load_doc(doc) == []
     assert not [n for n in app.presets.notes if "unknown" in n], app.presets.notes
     spec = app.presets.graph.spec
-    assert G.run_of(spec) == ("warp", "acid")                   # warp's order is the lower
+    # (plan 35 T3: a wired frame — the run from the look-back into All
+    # outputs, the channels in the new ids)
+    assert G.run_of(spec, "lookback", "output.all.image") == ("warp", "acid")   # warp's lower
     assert G.run_of(spec, "pattern", "shape.faces") == ("kaleido",)
-    assert G.Wire("media.b", "pattern.media") in spec.wires
-    assert G.Wire("media.a", "backdrop.image") in spec.wires
+    assert G.Wire("channel.b", "pattern.media") in spec.wires
+    assert G.Wire("channel.a", "backdrop.image") in spec.wires
 
 
 def test_the_channel_choices_are_read_off_the_wires():
@@ -1739,12 +1740,15 @@ def test_an_old_preset_saves_its_retired_ids_back_where_they_were(tmp_path):
     assert keys.index("view.media") + 1 == keys.index("view.media_alpha")
     assert keys.index("backdrop.channel") + 1 == keys.index("backdrop.alpha")
     # warp (@order 20) before acid (30): reorder on GRAPH to acid first
+    # (plan 35 T3: the wired frame's run, rewired where it stands)
     sec = app.presets.graph.free_doc()
-    run = [{"from": "frame", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
-           {"from": "warp", "to": "fx.image"}]
-    keep = [w for w in sec["wires"] if not (w["from"] in ("frame", "acid", "warp")
-                                            and w["to"] != "pattern.media")]
-    sec = {**sec, "wires": [*run, *keep]}
+    run = [{"from": "lookback", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
+           {"from": "warp", "to": "output.all.image"}]
+    old = [w for w in sec["wires"] if w["from"] in ("lookback", "acid", "warp")
+           and w["to"] != "pattern.media"]
+    at = sec["wires"].index(old[0])
+    keep = [w for w in sec["wires"] if w not in old]
+    sec = {**sec, "wires": [*keep[:at], *run, *keep[at:]]}
     from hyperspace import graph as G
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")

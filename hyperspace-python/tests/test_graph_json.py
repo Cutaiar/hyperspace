@@ -35,12 +35,36 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-line
 DEFAULT = G.Wiring()
 
 
+def _old(w: G.Wiring) -> G.Wiring:
+    """The plan 33 wiring a landed wiring says (plan 35 T3: every load lands
+    a wired frame — read back by its round trip, `graphmigrate.unwired`,
+    from the section the wiring was read from, so these tests keep asking
+    what the frame is in the words they were written in). A wiring of no
+    wired frame is itself."""
+    from hyperspace import graphmigrate as M
+
+    if not w.wired:
+        return w
+    nodes = [{"kind": "hands", **({"draw": w.draw} if w.draw != "solid" else {}),
+              **({"laid": w.blend} if w.blend != "over" else {})}]
+    nodes += [{"kind": "hands", "instance": h.n, **({"draw": h.draw} if h.draw != "solid"
+                                                    else {})} for h in w.extra]
+    nodes += [{"kind": "effect", "file": e.file, **({"instance": e.n} if e.n != 1 else {}),
+               e.where[0]: e.where[1]} for e in w.placed]
+    nodes += [c.to_json() for c in (*w.composites, *w.copies)]
+    section = {"frame": "wired", "nodes": nodes, "wires": [x.to_json() for x in w.wires]}
+    got = M.unwired(section)
+    assert got is not None, section
+    return G.read_graph(got[0]).wiring()
+
+
 def _bare(w: G.Wiring) -> G.Wiring:
     """`w` without its run (plan 33 T3: every loaded preset carries its
-    run as wires, `Wiring.run`; these tests are about the rest)."""
+    run as wires, `Wiring.run`; these tests are about the rest), in plan
+    33's words (`_old`)."""
     from dataclasses import replace
 
-    return replace(w, run=None)
+    return replace(_old(w), run=None)
 
 # ---------------------------------------------------------------- the JSON
 
@@ -395,10 +419,10 @@ def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
         assert not [n for n in rig.presets.notes if n.startswith("graph")], slug
         # plan 33 T3: the run as wires, the file's section (none) kept
         assert rig.presets.graph.doc is None and _bare(stub.wiring) == DEFAULT
-        assert stub.wiring.run is not None
+        assert _old(stub.wiring).run is not None and stub.wiring.wired
         assert preset.GRAPH_KEY not in rig.presets.document(name)
         # (plan 33 T3: the dirty dot reads the section as wires — the run)
-        assert json.loads(rig.presets.signature()[4])["wires"][-1]["to"] == "fx.image"
+        assert json.loads(rig.presets.signature()[4])["frame"] == "wired"     # (plan 35)
         assert not rig.lib.is_dirty(PRESETS), slug
 
 
@@ -414,8 +438,12 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     rig.presets.graph.attach(stub)
     missing = rig.lib.load(PRESETS, "hands-lines")
     assert missing == [] and rig.presets.notes == []
-    assert _bare(stub.wiring) == G.Wiring(hands="scene", history="scene+hands", draw="lines")
-    assert stub.wiring.run == ("acid",)            # plan 33 T3: its run, as wires
+    # (plan 35: the hands are in the scene, so what the look-back records is
+    # the scene — the capture wire `scene → lookback.capture` says both
+    # `holds` would, the hands already in its picture)
+    assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
+    assert G.Wire("scene", "lookback.capture") in stub.wiring.wires
+    assert _old(stub.wiring).run == ("acid",)          # plan 33 T3: its run, as wires
     assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
@@ -462,14 +490,14 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     reg = rig.reg
     assert missing == [] and rig.presets.notes == []
     assert reg["fx.acid.twist"].value == 0.3 and reg["fx.acid.2.twist"].value == 1.9
-    assert G.run_of(rig.presets.graph.spec) == ("acid", "acid.2")
+    assert G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
     assert doc["graph"] == graph and doc["values"]["fx.acid.2.twist"] == 1.9
     # an id of an instance the graph does not hold is unknown, as ever
     put(rig.home, "Stray", values={"fx.acid.3.twist": 1.0})
     assert rig.lib.load(PRESETS, "Stray") == ["fx.acid.3.twist"]
-    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec) == ()
+    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ()
     rig.lib.load(PRESETS, "Twice")
     assert reg["fx.acid.2.twist"].value == 1.9
 
@@ -620,11 +648,11 @@ def test_undoing_a_load_puts_the_graph_back_before_the_values(tmp_path):
     rig.undo.clear()
     rig.lib.load(PRESETS, "Twice")
     settle(rig)
-    assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
+    assert rig.reg["fx.acid.2.twist"].value == 1.9 and _old(stub.wiring).hands == "scene"
     assert rig.undo.undo()
     assert "fx.acid.2.twist" not in rig.reg and _bare(stub.wiring) == DEFAULT
     assert rig.undo.redo()
-    assert rig.reg["fx.acid.2.twist"].value == 1.9 and stub.wiring.hands == "scene"
+    assert rig.reg["fx.acid.2.twist"].value == 1.9 and _old(stub.wiring).hands == "scene"
 
 
 # ---------------------------------------------------------------- GL

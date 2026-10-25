@@ -179,7 +179,10 @@ MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 # plan 33 M (row 347): /5 is /4 plus a graph /4 cannot say (a branch, a
 # switch, an unreached effect …) — written only then (`schema_of`)
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
-VERSIONS = (2, 3, 4, 5)
+# plan 35 (row 385): /6 is /5 with the wired frame in the new ids — written
+# where /5 was (`schema_of`); /5 stays readable and nothing writes it again
+WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
+VERSIONS = (2, 3, 4, 5, 6)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -307,9 +310,10 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default,
     """The schema a preset document is written as — the one ladder (D1,
     2026-10-23), the lowest that loses nothing:
 
-    - ``hyperspace.preset/5`` (plan 33 M, row 347) when its ``graph`` uses
-      the free graph's words and ``/4`` cannot say it
-      (`graphmigrate.needs_free`);
+    - ``hyperspace.preset/6`` (plan 35, row 385; plan 33 M's ``/5``, row
+      347, before it) when its ``graph`` uses the free graph's words — a
+      wired frame among them — and ``/4`` cannot say it
+      (`graphmigrate.needs_free`: an edited frame fails the round trip);
     - else ``hyperspace.preset/4`` (plan 32 S, row 337) when it uses media
       (`uses_media`): a bin, a media-family value off its default, or a
       row or wire naming one;
@@ -338,13 +342,14 @@ def schema_of(doc: dict, at_default: Callable[[str, Any], bool] = build_default,
     Plan 33 M: `specs` (effect → its file's `(@order, @mix)`) gives an
     absent order or mix its default, and `desk` is the rows a desk
     template adds under the document's own (`graphmigrate.targets`). Below
-    `/5` the rest of the ladder reads the graph as a build from before
-    plan 33 would get it (`graphmigrate.legacy_section`): the run's wires
-    and the channels' are values there, not wires naming media."""
+    `/6` the rest of the ladder reads the graph as a build from before
+    plan 33 would get it (`graphmigrate.legacy_section`; plan 35: a wired
+    frame by its round trip): the run's wires and the channels' are values
+    there, not wires naming media."""
     section = doc.get(GRAPH_KEY)
     if graphmigrate.needs_free(section, dict(doc.get("values") or {}),
                               graphmigrate.targets(doc, desk), specs):
-        return FREE_SCHEMA
+        return WIRED_SCHEMA
     legacy = graphmigrate.legacy_section(section)
     if legacy is not section:
         doc = {k: v for k, v in doc.items() if k != GRAPH_KEY}
@@ -514,7 +519,10 @@ class GraphSection:
         load: `free_doc`). A `doc` in the free graph's words with no `free`
         (an edit on the GRAPH page) is both: `doc` becomes it as a build
         from before plan 33 reads it (`graphmigrate.legacy_section`), so an
-        edit undone leaves the preset clean.
+        edit undone leaves the preset clean. Plan 35 T3: a wired frame (every
+        load's, every GRAPH edit's) is `free`, and `doc` is its round trip —
+        the section `migrate` wires as exactly it, in the old ids — or the
+        wired frame itself when it has none (an edited frame: `/6`).
 
         An extra hands node declared for the first time this run starts
         from what the open show holds for it (`ghost.2.*` in its session —
@@ -544,15 +552,39 @@ class GraphSection:
         self.free = copy.deepcopy(free)
         self._push()
 
+    def said(self) -> GraphSpec | None:
+        """The landed graph in the words the pages were written in (plan 35
+        T3): a wired frame that is exactly a migrated one, read back by its
+        round trip (`graphmigrate.unwired`) — the run `frame → … →
+        fx.image`, `into`, `holds`, the old ids, as the GRAPH canvas's
+        render names still are until T4 — else the spec as it is (none, a
+        section of before, an edited frame). Kept for the spec it read."""
+        spec = self.spec
+        if spec is None or not spec.wired:
+            return spec
+        held = self.__dict__.get("_said")
+        if held is not None and held[0] is spec:
+            return held[1]
+        got = graphmigrate.unwired(spec.to_json(), self.specs())
+        out = spec
+        if got is not None:
+            try:
+                out = read_graph(got[0], effects=self.files())
+            except GraphError:
+                out = spec
+        self.__dict__["_said"] = (spec, out)
+        return out
+
     def held_values(self) -> dict[str, Any]:
         """The retired values the load read (getattr: a section from before
         plan 33 T7 holds none)."""
         return dict(getattr(self, "held", None) or {})
 
     def free_doc(self) -> dict | None:
-        """The section in the free graph's words (plan 33 M): what a `/5`
-        save writes and what `schema_of` judges — `free` when the load
-        kept the file's section beside it, else `doc`."""
+        """The section in the free graph's words (plan 33 M; plan 35 T3: the
+        wired frame every load lands): what a `/6` save writes and what
+        `schema_of` judges — `free` when the load kept the file's section
+        beside it, else `doc`."""
         free = getattr(self, "free", None)      # (a section from before a hot reload)
         return free if free is not None else self.doc
 
@@ -921,7 +953,11 @@ class Presets:
         #    `backdrop.channel`: no param since plan 33 T7) are dropped from
         #    the values, said by the wires — so never an unknown id — and
         #    held beside them with the file's own section, as a pre-33
-        #    build keeps both: what a save below `/5` writes (R10)
+        #    build keeps both: what a save below `/5` writes (R10). Plan 35
+        #    T3: then in the new ids as a wired frame (`backdrop.history`
+        #    retired into the capture wire, a row on it dropped with a
+        #    note): every load lands one; a save below `/6` writes the
+        #    file's own section back when the frame round-trips (R10 again)
         gs = self._graph_section()
         template_rows = self._template_rows(doc)
         kept = doc.get(GRAPH_KEY)
@@ -1192,8 +1228,8 @@ class Presets:
         table = self.router.table
         # plan 26 A4: the graph the loaded preset carried, as read (a
         # preset with none writes none: the default graph). Plan 33 M: in
-        # the free graph's words while the schema is judged; below /5 it is
-        # put back as a pre-33 build reads it (below)
+        # the free graph's words while the schema is judged; below /6 (plan
+        # 35: /5 before) it is put back as a pre-33 build reads it (below)
         gs = self._graph_section()
         section = gs.free_doc()
         if section is not None:
@@ -1229,7 +1265,7 @@ class Presets:
         # graph (`legacy_section`): a build from before plan 33 never meets
         # one. An untouched load writes the values it landed and the file's
         # own section, so it saves byte for byte as that build would
-        # Plan 33 T7: no param holds a retired id any more, so below /5 they
+        # Plan 33 T7: no param holds a retired id any more, so below /6 they
         # are put back where that build's registry wrote them
         # (`graphmigrate.with_retired`: what the load landed, else what that
         # build's declaration gave) — after the schema is judged, which reads
@@ -1238,20 +1274,20 @@ class Presets:
         desk_rows = desk_json(table.desk())
         doc["schema"] = schema_of(doc, at_default=self._at_default(), specs=specs,
                                   desk=desk_rows)
-        if doc["schema"] != FREE_SCHEMA:
+        if doc["schema"] != WIRED_SCHEMA:
             values = graphmigrate.with_retired(values, gs.held_values(), specs)
             if graphmigrate.says_free(section):
                 lv = graphmigrate.legacy_values(section, values, specs,
                                                 graphmigrate.targets(doc, desk_rows))
                 if lv is not None:
                     values.update(lv)
-        if doc["schema"] != FREE_SCHEMA and GRAPH_KEY in doc:
+        if doc["schema"] != WIRED_SCHEMA and GRAPH_KEY in doc:
             legacy = graphmigrate.legacy_section(gs.doc)
             if legacy is None:
                 del doc[GRAPH_KEY]
             else:
                 doc[GRAPH_KEY] = copy.deepcopy(legacy)
-        if doc["schema"] not in (MEDIA_SCHEMA, FREE_SCHEMA):
+        if doc["schema"] not in (MEDIA_SCHEMA, WIRED_SCHEMA):
             doc.pop(MEDIA_KEY, None)
             values = {k: v for k, v in values.items() if not is_media_id(k)}
         if doc["schema"] == SCHEMA:

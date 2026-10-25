@@ -286,7 +286,7 @@ def test_faces_unwired_draw_as_today(ctx):
     is the frame the pre-plan-33 wiring draws — the faces drawn per face
     with no 1024² pass and nothing of the faces' picture allocated."""
     got, r = _rig_frame(ctx, "party-faces")
-    assert r.wiring.run is not None and not [w for w in r.wiring.wires
+    assert r.wiring.wired and not [w for w in r.wiring.wires          # (plan 35: wired)
                                              if w.dst == "shape.faces"]
     assert r.face_pic.tex is None and r._pic is None and not getattr(r, "_pools", {})
     base, _ = _rig_frame(ctx, "party-faces", wiring=G.Wiring())

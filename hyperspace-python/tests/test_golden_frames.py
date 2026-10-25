@@ -118,9 +118,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # plan 33 T4: + 3 × 8, the faces', the backdrop's and the two sizes' branches;
     # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
-    # onto the faces)
+    # onto the faces; plan 35 T3: + 3 × 8, the three wired frames)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
-                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8)
+                                   + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -151,13 +151,24 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         assert (ROOT / f["file"]).is_file() and slug not in FACTORY_PRESETS
         assert f["states"] == list(doc["states"])
         said = doc["fixtures"][slug]["present"]
-        assert said["missing"] == [] and said["notes"] == [] and said["hands_shown"]
+        # (plan 35 T3: the blank frame and the channel alone wire no hands)
+        assert said["missing"] == [] and said["notes"] == []
+        assert said["hands_shown"] or slug in ("blank-frame", "channel-out-only")
         # the graph landed as the file says it (the section, not a repr of
         # the Wiring: a field added later moves no golden). Plan 32 T6: a
         # media fixture's proof is its channels — a wire with no node, or
-        # no graph at all (the backdrop is a value)
-        assert said["graph"] == json.loads((ROOT / f["file"]).read_text()).get("graph")
-        assert (said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
+        # no graph at all (the backdrop is a value). Plan 35 T3: a wired
+        # frame (`/6`) lands as it reads (`{"frame": "wired"}` with its
+        # empty node list), and the blank one holds nothing at all
+        from hyperspace.graph import read_graph
+
+        file_graph = json.loads((ROOT / f["file"]).read_text()).get("graph")
+        if slug in tool.WIRED_FIXTURES:
+            assert said["graph"] == read_graph(file_graph).to_json()
+        else:
+            assert said["graph"] == file_graph
+        assert ((said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
+                or slug == "blank-frame")
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 

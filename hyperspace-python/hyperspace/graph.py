@@ -1774,6 +1774,9 @@ class GraphSpec:
     # plan 35 F: whether the section says `"frame": "wired"` — every node of
     # the frame in its wires or entries, in the new ids (V2)
     wired: bool = False
+    # plan 35 T3 (row 380): the hands entry `laid` sits on in a wired frame,
+    # where any hands node may have a layer (1 outside one: the layer node's)
+    laid_on: int = 1
 
     @property
     def frame_nodes(self) -> tuple:
@@ -1887,7 +1890,7 @@ class GraphSpec:
         default, in a fixed order (hands by instance, effects by file and
         instance, the history, then later kinds' entries as read)."""
         nodes: list[dict] = []
-        layer = self.wiring().layer_node().n
+        layer = self.laid_on if self.wired else self.wiring().layer_node().n
         hands = {h.n: h for h in self.hands}
         if layer not in hands and self.laid != "over":
             hands[layer] = HandsAt(layer)
@@ -2044,11 +2047,18 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None) -
     except ValueError as err:
         raise GraphError(str(err)) from err
     layer = wiring.layer_node().n
+    if wired and laid:
+        # plan 35 F (row 380, T3): in a wired frame any hands node may have a
+        # layer, so `laid` sits on the entry whose layer is laid — one of them
+        if len(laid) > 1:
+            raise GraphError(" and ".join(f"hands {n}" for n in sorted(laid))
+                             + ": laid twice (one hands entry says how the layer is laid on)")
+        layer = next(iter(laid))
     for n, how in laid.items():
         if n != layer:
             said = wired_hands_name(layer) if wired else hands_name(layer)
             raise GraphError(f"hands {n}: laid {how!r}, but {said} makes the layer")
-    spec = replace(spec, laid=laid.get(layer, "over"))
+    spec = replace(spec, laid=laid.get(layer, "over"), laid_on=layer if wired else 1)
     if "wires" not in section:
         return spec
     # plan 28 N4: the wire list — each wire this build cannot honour (no
@@ -2092,7 +2102,9 @@ def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire,
     kept; a wire on any other missing effect stays refused, as before."""
     every, _ = _read_wires(raw, replace(ctx, effects=None), d1)
     probe = replace(spec, wires=every)
-    missing = {e for head, end in (("frame", "fx.image"), ("pattern", "shape.faces"))
+    # (plan 35 T3: a wired frame's run is the look-back's into All outputs)
+    runs = ((("lookback", f"{ALL_OUTPUTS}.image"),) if ctx.wired else (("frame", "fx.image"),))
+    missing = {e for head, end in (*runs, ("pattern", "shape.faces"))
                for e in run_of(probe, head, end) if split_instance(e)[0] not in files}
     if not missing:
         return wires, notes
@@ -2227,9 +2239,12 @@ def channel_into(wires, port: str, selects: dict[str, int] | None = None) -> str
     `port`, or None (nothing, or a picture that is not a channel's own: a
     branch through an effect). What `view.media` and `backdrop.channel`
     said before plan 33 T7 retired them, read off the section (the MEDIA
-    page's tags, the FACES page's tiles)."""
+    page's tags, the FACES page's tiles). Plan 35 V2: `channel.<c>` in a
+    wired frame, `media.<c>` before it."""
     src = source_into(wires, port, selects)
-    return src.partition(".")[2] if wire_node_kind(src) == "media" else None
+    if wire_node_kind(src) == "media" or wire_node_kind(src, wired=True) == "channel":
+        return src.partition(".")[2]
+    return None
 
 
 def _run_wires(run: tuple[str, ...]) -> set[Wire]:
@@ -4762,8 +4777,9 @@ class Output(Node):
         if no_hands:
             over = None
         if isinstance(end, (Fx, Shown)) and not end.bent(frame):
-            # (plan 35 B: a copy chain's stand-down, as a pipeline's was)
-            over, blend = end.layer, end.source.blend
+            # (plan 35 B: a copy chain's stand-down, as a pipeline's was;
+            # R9, T3: a hands mute wins over it — the layer stays off)
+            over, blend = (end.layer if not no_hands else None), end.source.blend
             end = end.fallback
         laid = (over, blend) if over is not None and over.image(frame) is not None else None
         frame.data[key] = got = (end, laid)
@@ -6202,17 +6218,35 @@ def _sig_class(n: Node) -> str:
     return "Effect" if isinstance(n, Copy) else type(n).__name__
 
 
+def _sig_what(n: Node) -> Any:
+    """Which one of its class a node is, past its name (plan 35 T3): an
+    effect's instance, a channel's letter, a hands node's (its layer's,
+    its guide's) instance, a look-back frame's index."""
+    if isinstance(n, Effect):
+        return n.effect
+    if isinstance(n, (MediaNode, PatternNode)):
+        return getattr(n, "channel", None)
+    if isinstance(n, (Hands, HandsLayer, Readout)):
+        return split_instance(n.name)[1]
+    if isinstance(n, EchoNode):
+        return n.name
+    return None
+
+
 def _sig_chain(n: Node | None, depth: int = 0) -> tuple | None:
-    """`n`'s picture back to its sources, as (class, effect, (what its
-    `image`, `under` and `over` read …)); an end (`Fx`, `Wired`, `Shown`)
-    is passed through, so its name never counts."""
+    """`n`'s picture back to its sources, as (class, which, ((port, what it
+    reads), …)) over every port that is wired — an effect's `image` and
+    `aux`, a switch's `inN`, a composite's `under`, `over` and `depth`, the
+    look-back's `cover` and `occluder`, the scene's geometry (plan 35 T3:
+    every port, named, before T4 deletes the oracle); an end (`Fx`,
+    `Wired`, `Shown`) is passed through, so its name never counts."""
     while isinstance(n, (Fx, Shown)):
         n = n.inputs.get("image")
     if n is None or depth > 64:
         return None
-    ins = tuple(_sig_chain(n.inputs.get(p), depth + 1)
-                for p in ("image", "under", "over") if n.inputs.get(p) is not None)
-    return (_sig_class(n), getattr(n, "effect", None), ins)
+    ins = tuple((p, _sig_chain(v, depth + 1)) for p, v in sorted(n.inputs.items())
+                if v is not None)
+    return (_sig_class(n), _sig_what(n), ins)
 
 
 def _live_nodes(g: Graph) -> set[int]:
@@ -6244,9 +6278,11 @@ def signature(g: Graph) -> tuple:
     blend, its depth's, its end's fallback's chain); then every node the
     frame can show (`_live_nodes`) in the graph's order but the outputs,
     the ends (`Fx`, `Wired`, `Shown`) and the default graph's backdrop
-    sink (which draws nothing), each (class, effect, the ports wired).
+    sink (which draws nothing), each (class, which, the ports wired).
     Names never count — `fx` and `shown(lookback)` are one end — and a
-    copy counts as the `Effect` it draws again."""
+    copy counts as the `Effect` it draws again. Plan 35 T3: a chain
+    follows every wired port by name, and "which" is past the effect
+    (`_sig_what`: a channel's letter, a hands node's instance)."""
     outs = []
     for out in g.outputs:
         end = out.inputs["image"]
@@ -6257,7 +6293,7 @@ def signature(g: Graph) -> tuple:
                      out.blend, _sig_chain(out.inputs["depth"]),
                      _sig_chain(getattr(end, "fallback", None))))
     live = _live_nodes(g)
-    order = tuple((_sig_class(n), getattr(n, "effect", None),
+    order = tuple((_sig_class(n), _sig_what(n),
                    tuple(sorted(k for k, v in n.inputs.items() if v is not None)))
                   for n in g.order
                   if id(n) in live and not isinstance(n, (Output, Shown, Fx, BackdropNode)))
