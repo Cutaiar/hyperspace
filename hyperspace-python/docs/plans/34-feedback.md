@@ -1,8 +1,9 @@
 # Plan 34 — feedback: a delay node, look-back frames as sources, a resize node, loops refused at read
 
-**Status: designed, building (2026-10-24)** on `plan-34-feedback` (cut from
-`plan-33-free-graph` @ 052d889; 3550 tests passed, 2 skipped; 693
-goldens). The owner said "build" on 2026-10-24; the decisions below
+**Status: T1–T3 built; T4–T6 resume on plan 35's model (2026-10-25)** on
+`plan-34-feedback` (cut from `plan-33-free-graph` @ 052d889; 3550 tests
+passed, 2 skipped; 693 goldens. Plan 35 is built on top of T3: 3925
+passed, 741 goldens). The owner said "build" on 2026-10-24; the decisions below
 (rows 353–371) are recommendations the build takes as given. None waits
 for the owner. The build plan is
 [`34-feedback-build.md`](34-feedback-build.md).
@@ -23,6 +24,22 @@ What this plan adds to the free graph (plan 33):
 Base: branch `plan-33-free-graph` @ 052d889. Preset schema stays
 `hyperspace.preset/5`. Register rows from 353; hand checks from 332
 (group AD).
+
+**Amended 2026-10-25 for plan 35.** T1–T3 were built (54b7495..ce0b0c6),
+and then the plan was paused for plan 35, "the frame as wires"
+([`35-free-frame.md`](35-free-frame.md)), which is built on the same
+branch (51ef105..6193cb7). T4–T6 resume on plan 35's model:
+- there is no default graph, `frame`, `fx` or pipeline;
+- `graph.build_graph` builds only what the wires reach;
+- the node ids are the owner's (`lookback`, `hands.layer`, `channel.<c>`);
+- the schema is `/6` for the new vocabulary, and a save writes the lowest
+  schema that loses nothing (plan 35 R10).
+
+Plan 34's own ids (`delay`, `resize`, `echo.k`, `dream`) are unchanged. The
+sections written before plan 35 ("Why the graph cannot do it today", "The
+words", L, D, E) describe plan 33's model, which T1–T3 were built on. Z, G,
+"Not in this plan", Risks, rows 359, 370 and 371, and the hand checks are
+amended below. Where they differ from the earlier sections, they win.
 
 ## What the owner wants (2026-10-24)
 
@@ -337,7 +354,7 @@ face instead of 1024².
 - **How it composes:**
   - `scene → resize → delay → shape.faces`: feedback at 64²–256² on the
     faces. The delay holds `size`², not 1080p.
-  - `media.a → resize → acid.2 → shape.faces`: a clip's effect run at
+  - `channel.a → resize → acid.2 → shape.faces`: a clip's effect run at
     256×144 rather than 1024².
   - `delay → resize → delay.image`: each loop of feedback is cropped. A
     crop of 0.9 is a zoom-in tunnel that the delay compounds.
@@ -347,42 +364,72 @@ face instead of 1024².
     size (`PatternNode.size_for`).
   - `resize → output.2.image`: a low-resolution output, with `nearest`
     for a pixel look.
+- **Under plan 35** (amended 2026-10-25). The node is made by
+  `build_graph`'s `_Build._make`; plan 33's `MAKERS` and `_Wiring` are
+  gone.
+  - A resize no wire takes to an output's port, All outputs' or
+    `lookback.capture` is not built. It is drawn faint, and its params stay
+    while its entry does (`declare_resizes` follows `GraphSpec.resizes`,
+    not the reach), as a switch's `select` does.
+  - A resize reached with no input is dormant, "resize is fed by nothing
+    here: wire its input".
+  - `resize → delay.image` is made into the delay's write by `_Build.build`,
+    before the internal `Capture`, at the resize's size
+    (`DelayWrite.held`).
+  - Its goldens (`resize-faces`, `resize-crop`) are `/6` wired frames, the
+    factory frame's six wires plus the resize's. Each is drawn under the
+    window's mutes, as plan 35's wired fixtures are (`WIRED_FIXTURES`).
 
 ### G — GRAPH (`graphview.py`, `ui_graph.py`)
 
-- **The picker** adds `delay`, `resize` and a **look-back frame ▸** submenu
-  (`echo.1 (newest)`, `echo.2` … `echo.32 (oldest)`, `dream`). Each lands
-  unwired, faint and "reaches nothing", where the menu opened, with the
-  bare run added if the section has none (`_with_run`), as an effect or a
-  switch does. An echo or the dream already in the section is refused in
-  words. Delete removes its entry and its wires.
-- **One node per delay.** The canvas draws `Delay` and its `DelayWrite` as
-  one node, `render:<delay>`. The write's `image` input is the node's input
-  pin `rin:<delay>/image`.
-- **Areas.**
+Amended 2026-10-25: plan 35's GRAPH (its G) built most of this section.
+What it built, and what is left to T5, follows.
+
+- **The picker** (built by plan 35) adds `delay` and `resize` under
+  **pictures ▸**, and `echo.1 (newest)`, `echo.2` … `echo.32 (oldest)` and
+  `dream` under **look-back ▸**. Each lands unwired, faint and "reaches
+  nothing", with the section given the wired-frame marker if it has none
+  (`_with_frame`). An echo or the dream already in the section is drawn
+  disabled, and a second add is refused in words. Delete removes the
+  node's entry and its wires (plan 35: delete works on everything).
+- **One node per delay** (built by plan 35). The canvas draws the
+  section, and a delay's `image` port is its pin `rin:<delay>/image`.
+  Nothing internal, `delay(write)` included, is drawn.
+- **Areas** (built by plan 35, row 389):
 
   | Node | Area |
   |---|---|
-  | `delay`, `echo.k`, `dream` | MEDIA, beside the channels: pictures that start a branch |
-  | `resize` | SHADERS, or MEDIA when made of the media alone (`media_made`) |
+  | `delay` | MEDIA, beside the channels: a picture that starts a branch |
+  | `echo.k`, `dream` | LOOK-BACK: the ring's pictures |
+  | `resize` | EFFECTS, or MEDIA when made of the media alone (`media_made`; T5 adds the resize to `MEDIA_MADE`) |
 
-  `media_made` counts a delay, an echo and the dream as heads, as a channel
-  is. **The cable into a delay's image runs back by design** (`returns`),
-  as a wrapped row's does: it is the picture kept for next frame.
-- **The side panel.** A resize's eight params are rows through
-  `_param_rows`, with no new code: `OWNERS["resize"]` puts
-  `resize[.n].*` on its node, and Learn and Unbind come with the label. The
-  summary's first line is the node's `said`. `home_page` sends an echo and
-  the dream to LOOKBACK. A delay and a resize have no page.
-- **A loop drag is refused, red, in words.** The canvas's dry run
-  (`Edit.refusal` → `_land` → `read_graph`) now sees the loop at read, so
-  `scene → shape.faces` is refused before it lands. The words say to put a
-  delay between.
+  **The cable into a delay's image runs back by design** (`returns`, as
+  is the cable into `lookback.capture`): it is the picture kept for next
+  frame. The original's "a delay, an echo and the dream count as heads in
+  `media_made`" is dropped. Each sits left of EFFECTS already, so what it
+  feeds runs right.
+- **The side panel** (T5). A resize's eight params are rows through
+  `_param_rows`, with no new code: `OWNERS["resize"]` puts `resize[.n].*` on
+  its node, and Learn and Unbind come with the label. The canvas takes the
+  render `ResizeNode` (its stand-in class is deleted). A node's `said` is
+  its summary's first line, after "reaches nothing" when faint.
+  `home_page` sends an echo and the dream to LOOKBACK (built). A delay and
+  a resize have no page.
+- **A loop drag is refused, red, in words** (built: T1 and plan 35). The
+  canvas's dry run (`Edit.refusal` → `_land` → `read_graph`) sees the loop
+  at read. So `scene → shape.faces`, a loop through `shape →
+  scene.geometry`, is refused before it lands, in `LOOP_FACES`' words,
+  which say to put a delay between. T5 gives a wired frame's other loops
+  (`acid → wobble → acid.aux`) the same pointer (`LOOP_PLAIN`).
 
 ## Not in this plan
 
 - **The composed output as a source** (`fx`, or `output.N`, into a
-  delay). The picture after the run is its last effect's (`acid → delay`).
+  delay). *Amended for plan 35: there is no `frame` or `fx`. The picture
+  an output shows is whatever is wired into its `image` (All outputs'
+  else), and that source can be wired into a delay as well. The rest of
+  this bullet is the plan 33 model T1 was built on, and still holds for an
+  old section's read.* The picture after the run is its last effect's (`acid → delay`).
   Before the run it is `history`. `frame` stays the run's head only.
   A wire out of `frame` into anything but an effect's `image` or
   `fx.image` (`frame → delay.image`, `frame → acid.aux`, `frame →
@@ -410,7 +457,9 @@ face instead of 1024².
 - **The goldens are the contract.** Every node before this plan has no
   own size, so the `Effect` own-size path and the refit pass never run for
   a factory preset or a plan-33 fixture. All 693 must match after T1–T5,
-  and a miss is a bug, not a re-record. The new fixtures add 40 goldens (5
+  and a miss is a bug, not a re-record. *Amended for plan 35: T1–T3's 24
+  goldens are in plan 35's base, which has 741 in all, and T4 adds 16
+  (757). Plan 35's signature cases must also still match.* The new fixtures add 40 goldens (5
   fixtures × 8 states): `delay-faces`, `delay-trails`, `echo-faces`,
   `resize-faces` and `resize-crop`. The golden rig is new per shot and draws
   `FRAMES` (8) frames, so a delay golden is seven feedback steps from a
@@ -420,7 +469,11 @@ face instead of 1024².
   with a load note, losing the run and every branch for that load. The
   schema stays `/5` (the constraint), so both Macs must run this build
   before anyone saves a delay, a resize, an echo or the dream. This is the
-  same rule as plan 33's `/5`, one step further. Check 341.
+  same rule as plan 33's `/5`, one step further. Check 341. *Amended for
+  plan 35: a wired frame that round-trips into `/5` words, plan 34's
+  among them, still saves `/5` (R10), and this risk stands for it. A frame
+  that needs plan 35's vocabulary saves `/6`, which a plan 33 build
+  refuses outright (check 352).*
 - **Feedback through the scene is 8-bit there.** The scene's target is
   RGBA8, so `scene → delay → shape.faces` quantises once a loop. A decay
   below 1 by an effect leaves a faint floor rather than fading to black.
@@ -441,7 +494,9 @@ face instead of 1024².
   filter is put back and the resize samples through a sampler object, so
   every other reader samples as before. The mip levels' memory stays
   allocated.
-- **The loop check's hidden edges are conservative.** `history` reads
+- **The loop check's hidden edges are conservative** (an old section's
+  read; in a wired frame the wires say these edges, and only
+  `HIDDEN_EDGES` are hidden, row 393). `history` reads
   `scene` even where the history's image is wired from something else, and
   `frame` reads `history` on every pipeline. A wire that would loop on the
   scene's pipeline is refused even if the only output is the hands-only
@@ -483,7 +538,11 @@ one (row 371, the schema) was the constraint given.
      and point at a delay (owner, 2026-10-24: "with the loop refusal fix";
      the words and the order rule rec). Other: refuse every wire on the
      loop, as `wire_loops` does (a drag would be refused by the run's own
-     wire's words).
+     wire's words). *Amended for plan 35: in a wired frame `FRAME_EDGES` is
+     superseded by row 393's `HIDDEN_EDGES`, and an explicit loop refuses
+     every wire on it (plan 35 R5). `FRAME_EDGES` stands for reading an old
+     section before it migrates. A wired frame's other loops point at a
+     delay too (`LOOP_PLAIN`, T5).*
 360. **Echoes and the dream are declared by a node entry**
      (`{"kind": "echo", "index": k}`, `{"kind": "dream"}`), as a switch is
      (owner, 2026-10-24: "i also want to be able to do b"; the entry rec).
@@ -523,40 +582,53 @@ one (row 371, the schema) was the constraint given.
      preset's values, no module** (rec).
 370. **GRAPH: delay, echo and dream in MEDIA, resize in SHADERS or MEDIA
      by `media_made`, the cable into a delay a return by design, the
-     resize's params side-panel rows** (rec).
+     resize's params side-panel rows** (rec). *Amended for plan 35 (row
+     389's areas): delay in MEDIA, echo and dream in LOOK-BACK, resize in
+     EFFECTS or MEDIA by `media_made`.*
 371. **The schema stays `/5`**: the new words are `/5`-only by
      `uses_free_words`, and a plan-33 build reads such a section as
      unknown and draws the default graph with a note. Both Macs on this
      build before saving one (the constraint given for this plan). Other:
-     `/6` with its own ladder refusal.
+     `/6` with its own ladder refusal. *Amended by plan 35's row 385
+     (R10): `/6` exists now, for plan 35's vocabulary. Plan 34's words are
+     `/5` words, so a wired frame using them that round-trips saves as `/5`
+     and this row holds for it.*
 
-## Hand checks (group AD, from 332; written into `11-hand-checks.md` by T6)
+## Hand checks (group AD, 332–341; written into `11-hand-checks.md` by T6)
+
+Amended 2026-10-25 for plan 35: the ids are the wired frame's. Run them on
+the plan 35 build, after group AE's 342 (a new preset and its scene
+starter) or on the factory frame.
 
 - **332.** The infinite mirror: `scene → delay → shape.faces` on the
   laptop. The faces show the shape within the shape, a frame deeper each
   frame. Judge the look, black faces included.
-- **333.** Trails: the `delay-trails` fixture's graph (`delay →
-  zoomblur.2 → palette.2` with palette.2's val slice to 0.6, `scene →
-  composite.2.under`, `palette.2 → composite.2.over` added, `composite.2 →
-  delay.image` and `output.1.image`; ruling R6, T2). Trails stream toward
-  the centre and fade within a few frames; nothing sticks or burns to white.
+- **333.** Trails: the `delay-trails` fixture's graph, as it migrates
+  (`delay → zoomblur.2 → palette.2` with palette.2's val slice to 0.6,
+  `scene → composite.2.under`, `palette.2 → composite.2.over`,
+  `composite.2 → delay.image` and `output.1.image`; ruling R6, T2). Trails
+  stream toward the centre and fade within a few frames; nothing sticks or
+  burns to white.
 - **334.** The drag: `scene → shape.faces` on GRAPH goes red with the
   faces words, and does not land. Through a delay it lands, and the faces
-  show the scene.
+  show the scene. A loop of effects (`acid → wobble → acid.aux`) goes red
+  with words that say to wire it through a delay.
 - **335.** `echo.4 → shape.faces` with the look-back off. No wake on the
   picture. Change `dream.gap` and see the cadence; change `dream.res` and
-  the faces go back to the pattern for four commits.
+  the faces go back to what they show unwired for four commits.
 - **336.** `dream → shape.faces` with the dream worker running. Without
   it, the node says "no dream worker: reads nothing".
 - **337.** `scene → resize (64, square, nearest) → delay → shape.faces`.
   Pixelated feedback; an LFO on `resize.crop_w` and `crop_h` zooms it
   without a hitch.
-- **338.** `media.a → resize (256) → acid.2 → shape.faces` against
-  `media.a → acid.2 → shape.faces`. `acid.2`'s SYSTEM line drops.
+- **338.** `channel.a → resize (256) → acid.2 → shape.faces` against
+  `channel.a → acid.2 → shape.faces`. `acid.2`'s SYSTEM line drops.
 - **339.** A window resize, and the render cap changed, mid-feedback. No
   black flash and no error.
 - **340.** The frame cost on SYSTEM: `delay(write)` at 1080p against 256²,
-  a resize, four echoes on the faces.
-- **341.** A preset with a delay saved on this build and opened on a
-  plan-33 build: a load note and the default graph, as expected. Both Macs
-  on this build.
+  a resize, four echoes on the faces (with 351, in one sitting).
+- **341.** A preset with a delay on the factory frame, saved on this build
+  (it saves `/5`, R10) and opened on a plan-33 build: a load note and
+  that build's default graph, as expected. A frame that needs plan 35's
+  vocabulary is 352's case instead: refused there. Both Macs on this
+  build.
