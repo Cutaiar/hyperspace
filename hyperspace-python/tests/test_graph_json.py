@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 from test_presets import boot, put
-from wiredframe import Shows, graph, wire_switches, wiring
+from wiredframe import Shows, graph, unwired, wire_switches, wiring
 
 from hyperspace import graph as G
 from hyperspace import preset
@@ -42,7 +42,6 @@ def _old(w: G.Wiring) -> G.Wiring:
     from the section the wiring was read from, so these tests keep asking
     what the frame is in the words they were written in). A wiring of no
     wired frame is itself."""
-    from hyperspace import graphmigrate as M
 
     if not w.wired:
         return w
@@ -54,7 +53,7 @@ def _old(w: G.Wiring) -> G.Wiring:
                e.where[0]: e.where[1]} for e in w.placed]
     nodes += [c.to_json() for c in (*w.composites, *w.copies)]
     section = {"frame": "wired", "nodes": nodes, "wires": [x.to_json() for x in w.wires]}
-    got = M.unwired(section)
+    got = unwired(section)
     assert got is not None, section
     return G.read_graph(got[0]).wiring()
 
@@ -431,7 +430,9 @@ def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
         # plan 33 T3: the run as wires, the file's section (none) kept
         assert rig.presets.graph.doc is None and _bare(stub.wiring) == DEFAULT
         assert _old(stub.wiring).run is not None and stub.wiring.wired
-        assert preset.GRAPH_KEY not in rig.presets.document(name)
+        # (row 394: the save is `/6`, the frame the load landed)
+        doc = rig.presets.document(name)
+        assert doc[preset.GRAPH_KEY] == rig.presets.graph.free_doc(), slug
         # (plan 33 T3: the dirty dot reads the section as wires — the run)
         assert json.loads(rig.presets.signature()[4])["frame"] == "wired"     # (plan 35)
         assert not rig.lib.is_dirty(PRESETS), slug
@@ -441,8 +442,8 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     """`hands-lines` (a fixture, never a factory preset): its graph lands
     — the hands in the scene as lines, the history holding them — on the
     attached renderer, the acid on, the look-back on; nothing missing, no
-    note, a clean dot; a save writes the section back as the file has it,
-    one node per line."""
+    note, a clean dot; a save writes the wired frame the load made of it
+    (row 394), one node per line."""
     rig = boot(tmp_path)
     _fixture_in(rig.home)
     stub = Stub()
@@ -458,10 +459,11 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
-    assert doc[preset.GRAPH_KEY] == json.loads(FIXTURE.read_text())["graph"]
+    assert doc[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
+    assert doc[preset.GRAPH_KEY]["frame"] == "wired"
     text = preset.dumps(doc)
-    assert '"graph": {"nodes": [\n  {"kind": "hands", "into": "scene", "draw": "lines"},\n' \
-        in text
+    first = json.dumps(doc[preset.GRAPH_KEY]["nodes"][0])
+    assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {first}' in text
     # another preset with no graph: back to the default, the section gone
     rig.lib.load(PRESETS, "party-tumble")
     assert _bare(stub.wiring) == DEFAULT and rig.presets.graph.doc is None
@@ -504,7 +506,9 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     assert G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
-    assert doc["graph"] == graph and doc["values"]["fx.acid.2.twist"] == 1.9
+    assert doc["graph"] == rig.presets.graph.free_doc()          # (row 394: the frame)
+    assert {"kind": "effect", "file": "acid", "instance": 2} in doc["graph"]["nodes"]
+    assert doc["values"]["fx.acid.2.twist"] == 1.9
     # an id of an instance the graph does not hold is unknown, as ever
     put(rig.home, "Stray", values={"fx.acid.3.twist": 1.0})
     assert rig.lib.load(PRESETS, "Stray") == ["fx.acid.3.twist"]

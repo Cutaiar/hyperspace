@@ -979,13 +979,11 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert rig2.presets.graph.spec.to_json()["nodes"] == []
 
 
-def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
+def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     """R26 (refines R21), in the wired frame: party-trip with `huecycle`
     taken out of its run on GRAPH (its wires gone, R21's entry keeping it,
-    faint) — while it is on, the save is no older schema's (it cannot say
-    an instance kept unwired and live); switched off, the frame round-trips
-    to the old words (`legacy_values` takes the unwired off entry) and the
-    preset saves as `/4` or lower again, with no graph."""
+    faint) — on or off, the save is `/6` (row 394) with the entry kept and
+    the run as wired, so a reload finds it where it was left."""
     import json
     rig, e, _ = wired_rig(tmp_path, slug="party-trip")
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur", "huecycle")
@@ -995,13 +993,13 @@ def test_an_unwired_instance_one_switched_off_saves_as_four(tmp_path):
     assert run_of(rig) == ("plasma", "kaleido", "zoomblur")
     assert {"kind": "effect", "file": "huecycle"} in rig.presets.graph.spec.to_json()["nodes"]
     rig.reg["fx.huecycle.on"].set(True)
-    on = json.loads(rig.presets.save_as("On").read_text())
-    assert on["schema"] not in ("hyperspace.preset/2", "hyperspace.preset/3",
-                                "hyperspace.preset/4") and "graph" in on
-    rig.reg["fx.huecycle.on"].set(False)
-    off = json.loads(rig.presets.save_as("Off").read_text())
-    assert off["schema"] not in ("hyperspace.preset/5", "hyperspace.preset/6")
-    assert "graph" not in off
+    for name, on in (("On", True), ("Off", False)):
+        rig.reg["fx.huecycle.on"].set(on)
+        doc = json.loads(rig.presets.save_as(name).read_text())
+        assert doc["schema"] == "hyperspace.preset/6", name
+        assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
+        assert G.run_of(G.read_graph(doc["graph"]), "lookback", "output.all.image") == (
+            "plasma", "kaleido", "zoomblur"), name
 
 
 def test_an_unwired_instance_one_round_trips():

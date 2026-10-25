@@ -174,19 +174,19 @@ def test_a_delay_reaches_only_when_read():
     ({"kind": "echo", "index": 2}, [("echo.2", "output.2.image")]),
     ({"kind": "dream"}, [("dream", "output.2.image")]),
 ])
-def test_the_new_words_are_v5_only(node, pairs):
+def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
+    """Plan 34's feedback words (a delay, a resize, an echo, the dream) on a
+    wire and as a bare entry read with no note, and a preset holding them
+    saves `/6` with the node in its frame (row 394)."""
+    from test_plan31_wiring import make_app
+
     sec = section(RUN, *pairs, nodes=[node])
     spec = G.read_graph(sec)
     assert spec.notes == ()
-    assert M.uses_free_words(spec)
-    assert M.legacy_values(sec, {}) is None
-    old = M.legacy_section(sec) or {}
-    kinds = {"delay", "resize", "echo", "dream"}
-    assert not any(n.get("kind") in kinds for n in old.get("nodes", []))
-    assert not any(G.wire_node_kind(w["from"]) in kinds
-                   or G.wire_node_kind(w["to"].rpartition(".")[0]) in kinds
-                   for w in old.get("wires", []))
-    # the entry alone, on no wire and with no run, is a /5 word too
-    bare = {"nodes": [node]}
-    assert M.uses_free_words(G.read_graph(bare))
-    assert M.legacy_section(bare) is None
+    assert G.read_graph({"nodes": [node]}).notes == ()
+    app = make_app(tmp_path)
+    assert app.presets.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
+                                 "values": {}, "graph": sec}) == []
+    doc = app.presets.document("fb")
+    assert doc["schema"] == "hyperspace.preset/6"
+    assert [n for n in doc["graph"]["nodes"] if n.get("kind") == node["kind"]]

@@ -1,4 +1,6 @@
-"""Plan 33 M: old presets as wires, and wires back as /4 values (graphmigrate)."""
+"""Plan 33 M: old presets as wires (graphmigrate). Row 394: one way, on
+load — a save is always `/6`, so nothing writes the wires back as `/4`
+values any more."""
 
 from __future__ import annotations
 
@@ -191,65 +193,15 @@ def test_a_route_onto_only_the_backdrop_takes_the_first_switch():
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_legacy_values_inverts_to_free(path):
+def test_the_migrated_runs_are_the_old_stacks(path):
+    """Every preset from before plan 33: the runs its section is given are
+    the ones the old stack ran from its values (orders, targets) — the
+    migration's half of what `legacy_values` checked both ways until row
+    394 retired the way back."""
     doc = load(path)
-    values = doc.get("values") or {}
     section, _ = M.to_free(doc, SPECS)
-    got = M.legacy_values(section, values, SPECS, M.targets(doc))
-    assert got is not None
     frame, faces = runs(section)
-    for n in [*frame, *faces]:
-        for key in (f"fx.{n}.order", f"fx.{n}.target"):
-            if key in values:
-                assert got[key] == values[key], key
-    for key in ("view.media", "backdrop.channel"):
-        if key in values:
-            assert got[key] == values[key]
-    # and applied, the old rule gives the same runs
-    back = {**values, **got}
-    back = {"values": back, "graph": doc.get("graph"), "routes": doc.get("routes"),
-            "desk": doc.get("desk"), "macros": doc.get("macros")}
-    assert old_run(back, 0) == frame and old_run(back, 1) == faces
-
-
-def test_legacy_values_moves_the_fewest_orders():
-    section = {"nodes": [], "wires": [{"from": "frame", "to": "wobble.image"},
-                                      {"from": "wobble", "to": "acid.image"},
-                                      {"from": "acid", "to": "fx.image"}]}
-    values = {"fx.wobble.on": True, "fx.acid.on": True}
-    got = M.legacy_values(section, values, SPECS)
-    assert got is not None and len(got) == 1          # one move is enough
-    assert old_run({"values": {**values, **got}}) == ["wobble", "acid"]
-
-
-@pytest.mark.parametrize("section", [
-    # a branch
-    {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
-     "wires": [{"from": "media.a", "to": "acid.2.image"}, {"from": "acid.2", "to": "shape.faces"}]},
-    # an unreached effect
-    {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
-     "wires": [{"from": "media.a", "to": "acid.2.image"}]},
-    # a switch
-    {"nodes": [{"kind": "switch"}], "wires": [{"from": "switch", "to": "pattern.media"}]},
-    # a non-channel into the pattern's media
-    {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
-                            {"from": "acid", "to": "pattern.media"}]},
-    # two runs from the frame
-    {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
-                            {"from": "acid", "to": "fx.image"},
-                            {"from": "frame", "to": "warp.image"},
-                            {"from": "warp", "to": "output.2.image"}]},
-])
-def test_legacy_values_is_none_for_what_four_cannot_say(section):
-    values = {"fx.acid.on": True, "fx.warp.on": True, "fx.acid.2.on": True}
-    assert M.legacy_values(section, values, SPECS) is None
-
-
-def test_an_effect_on_outside_every_run_is_not_a_four():
-    section = {"nodes": [], "wires": [{"from": "frame", "to": "acid.image"},
-                                      {"from": "acid", "to": "fx.image"}]}
-    assert M.legacy_values(section, {"fx.acid.on": True, "fx.warp.on": True}, SPECS) is None
-    assert M.legacy_values(section, {"fx.acid.on": True}, SPECS) is not None
+    assert old_run(doc, 0) == frame and old_run(doc, 1) == faces
 
 
 BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -257,41 +209,19 @@ BRANCH = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                     {"from": "acid.2", "to": "shape.faces"}]}
 
 
-def test_a_branch_saves_as_v5_and_reloads(tmp_path):
-    """A branch `/4` cannot say is `/5` (ruling R10: the lowest schema that
-    loses nothing — its wired frame round-trips into plan 33's words), its
-    graph as plan 33 wrote it, and it reloads as it saved."""
+def test_a_branch_saves_as_v6_and_reloads(tmp_path):
+    """A branch saves `/6` (row 394: every save does), its graph the wired
+    frame the load made of it, and it reloads as it saved."""
     doc = {"schema": "hyperspace.preset/2", "name": "t", "graph": BRANCH, "values": {}}
-    assert preset.schema_of(doc) == M.FREE_SCHEMA == "hyperspace.preset/5"
     assert G.read_graph(copy.deepcopy(BRANCH)).to_json() == BRANCH
     app = make_app(tmp_path)
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
-    # (plan 33 T3: the load gave it its run's head, the empty run — R9)
-    head = {**BRANCH, "wires": [*BRANCH["wires"], {"from": "frame", "to": "fx.image"}]}
-    assert saved["schema"] == M.FREE_SCHEMA and saved["graph"] == head
+    wired, _ = M.migrate(doc, app.presets.graph.specs())
+    assert saved["schema"] == M.WIRED_SCHEMA and saved["graph"] == wired["graph"]
+    assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
     assert app.presets.load_doc(copy.deepcopy(saved)) == []
-    assert app.presets.document("t")["graph"] == head          # and reloads as it saved
-
-
-def test_a_preset_with_no_free_words_keeps_its_schema():
-    assert preset.schema_of({"values": {"fx.acid.on": True}}) == preset.SCHEMA
-    hands = {"graph": {"nodes": [{"kind": "effect", "file": "palette", "after": "hands"}]},
-             "values": {"fx.palette.on": True}}
-    assert preset.schema_of(hands) == preset.SCHEMA
-    comp = {"graph": {"nodes": [{"kind": "composite"}],
-                      "wires": [{"from": "scene", "to": "composite.under"},
-                                {"from": "history", "to": "composite.over"},
-                                {"from": "composite", "to": "output.2.image"}]}}
-    assert preset.schema_of(comp) == preset.SCHEMA
-
-
-@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: f"{p.parent.name}/{p.stem}")
-def test_no_existing_preset_changes_schema(path):
-    doc = load(path)
-    assert preset.schema_of(doc) == doc["schema"] or doc["schema"] not in (
-        preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA)
-    assert preset.schema_of(doc) != M.WIRED_SCHEMA
+    assert app.presets.document("t") == saved                 # and reloads as it saved
 
 
 def test_v6_is_refused_by_the_ladder_below(tmp_path):
@@ -330,20 +260,6 @@ def test_a_driven_effect_on_at_mix_zero_stays_in_the_run():
     assert G.run_of(G.read_graph(section)) == ("acid",) and notes == []
 
 
-def test_a_migrated_section_with_its_run_cleared_and_effects_on_saves_v5():
-    doc = base(**{"fx.acid.on": True})
-    cleared = {"nodes": [], "wires": [{"from": "frame", "to": "fx.image"}]}
-    assert preset.schema_of({**doc, "graph": cleared}) == M.FREE_SCHEMA
-    wired_cleared, _ = M.migrate({**doc, "graph": cleared}, SPECS)      # (R10: and wired)
-    assert preset.schema_of({**doc, "graph": wired_cleared["graph"]}) == M.FREE_SCHEMA
-    migrated, _ = M.to_free(doc, SPECS)
-    assert preset.schema_of({**doc, "graph": migrated}) == preset.SCHEMA     # a /4 can say it
-    wired, _ = M.migrate(doc, SPECS)                                        # and its frame
-    assert preset.schema_of({**doc, "graph": wired["graph"]}) == preset.SCHEMA
-    off = base(**{"fx.acid.on": False})
-    assert preset.schema_of({**off, "graph": cleared}) not in (M.FREE_SCHEMA, M.WIRED_SCHEMA)
-
-
 def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
     """The owner, 2026-10-24: a free section shortens no wire, so a pre-33
     section's wire D1 would write short (`scene → acid.2.image`, nothing out
@@ -363,13 +279,10 @@ def test_a_legacy_shortened_placement_migrates_to_an_explicit_after():
     assert ("scene", "acid.2.image") not in wires_of(section)
     assert ("palette", "output.2.image") not in wires_of(section)
     after = G.read_graph(section)
-    assert M.has_frame_run(after) and not after.notes
+    assert not after.notes and any(w.src == "frame" for w in after.all_wires())
     assert {e.name: e.where for e in after.wiring().placed} == {
         e.name: e.where for e in before}
     assert "palette" not in G.run_of(after)
-    # /4 can still say it: an explicit `after` / `into` is plan 30's word
-    assert M.legacy_values(section, _values_of(doc), SPECS) is not None
-    assert preset.schema_of({**doc, "graph": section}) != M.WIRED_SCHEMA
 
 
 def _values_of(doc: dict) -> dict:

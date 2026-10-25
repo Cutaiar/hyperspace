@@ -174,7 +174,10 @@ def test_an_unknown_placement_is_a_note_and_the_default(tmp_path):
     rig.lib.load(PRESETS, "Odd")
     assert rig.presets.notes == [f"graph: {teapot}; the default placement"]
     assert _bare(stub.wiring) == G.Wiring(hands="scene") and rig.reg["view.bright"].value == 3.0
-    assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
+    # (row 394: the save is the frame the load landed, the refused entry kept)
+    saved = rig.presets.document("Odd")[preset.GRAPH_KEY]
+    assert saved == rig.presets.graph.free_doc()
+    assert {"kind": "effect", "file": "palette", "after": "teapot"} in saved["nodes"]
     assert not rig.lib.is_dirty(PRESETS)
 
 
@@ -215,9 +218,9 @@ def test_the_section_round_trips_with_its_placements(tmp_path):
         assert _old(stub.wiring).placed == want[slug]       # (plan 35: in the old words)
         assert not rig.lib.is_dirty(PRESETS), slug
         saved = rig.presets.document(slug)
-        assert saved[preset.GRAPH_KEY] == doc["graph"]
-        line = json.dumps(doc["graph"]["nodes"][0])
-        assert f'"graph": {{"nodes": [\n  {line}\n ]}}' in preset.dumps(saved)
+        assert saved[preset.GRAPH_KEY] == rig.presets.graph.free_doc()     # (row 394)
+        line = json.dumps(saved[preset.GRAPH_KEY]["nodes"][0])
+        assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {line}' in preset.dumps(saved)
     assert rig.reg["fx.acid.2.on"].value and rig.reg["dream.on"].value
 
 

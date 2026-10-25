@@ -3525,8 +3525,8 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     occluder, the run, All outputs' picture, hands and guide, the capture's
     composite and the capture. A stable sort: only `scene.geometry` takes
     several wires, and theirs keep their order (it is the draw order). So
-    an edit that brings a frame back to a migrated one round-trips
-    (`graphmigrate.unwired`) and saves in the lowest schema again (R10)."""
+    an edit that brings a frame back to a migrated one is that frame again,
+    and the preset is clean."""
     into = {x["to"]: x["from"] for x in wires}
     run: list[str] = []
     head = into.get(f"{rgraph.ALL_OUTPUTS}.image")
@@ -4186,8 +4186,8 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
 # A page sets a picture port (a window's, All outputs', the look-back's
 # capture) and a window's "hands through the effects" — each a GRAPH edit
 # through `_land`: one undo step, GRAPH's refusals, and the frame in its
-# canonical wire order, so an edit put back saves in the lowest schema
-# again (R10). The mutes are the window's (row 374), never written here.
+# canonical wire order, so an edit put back leaves the frame as it was.
+# The mutes are the window's (row 374), never written here.
 
 AS_ALL = "as All outputs"      # a window's picture port with no wire of its own
 NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the capture: no wire

@@ -4,10 +4,10 @@ Until plan 33 an effect's place in the picture was a number: `fx.<n>.order`
 in the stack, `fx.<n>.target` (the frame or the faces), and the faces' and
 backdrop's channel were `view.media` / `backdrop.channel`. The free graph
 says all of that as wires, so a preset written before it has to be read as
-wires (`to_free`, `migrate`), and a graph that `/4` can say has to be
-written back as the values a build from before plan 33 reads
-(`legacy_values`). A graph `/4` cannot say is `hyperspace.preset/5`
-(`needs_free`, row 347): the lowest schema that loses nothing.
+wires (`to_free`, `migrate`). A save is always `hyperspace.preset/6`
+(`WIRED_SCHEMA`, row 394, the owner's 2026-10-25 decision: both Macs run
+the same build), so nothing here writes a graph back in older words —
+the migration is one way, on load.
 
 Pure data: it reads dicts and `graph.GraphSpec`, touches no params, preset
 or media module, and nothing here draws.
@@ -27,9 +27,7 @@ Rows 346 and 350 are what it keeps and what it makes:
 Plan 35 M (rows 372, 383–385): then every section is a wired frame in the
 owner's names — `migrate` renames it (`renamed`, V2) and writes today's
 frame as wires (`wired_section`); `backdrop.history` and the look-back's
-`holds` are the capture wire. Below `/6` a wired frame is said by its round
-trip (`unwired`): exactly the frame `migrate` writes for the section left,
-else `hyperspace.preset/6` (`WIRED_SCHEMA`), where `/5` was.
+`holds` are the capture wire.
 """
 
 from __future__ import annotations
@@ -44,7 +42,7 @@ from .outputs import MAX_OUTPUTS
 
 FREE_SCHEMA = "hyperspace.preset/5"
 # plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids — what
-# a save writes where `/5` was (`needs_free`); nothing writes `/5` again
+# every save writes (row 394); `/5` and below are read, never written
 WIRED_SCHEMA = "hyperspace.preset/6"
 # plan 35 M (row 381): `backdrop.history` is the capture wire now
 RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
@@ -92,60 +90,6 @@ def effect_of(pid: str) -> str | None:
     if parts[0] != "fx" or len(parts) < 3:
         return None
     return ".".join(parts[1:-1])
-
-
-# ---------------------------------------------------------------- an old stack's orders
-
-# `fx.<n>.order`'s range on a build from before plan 33 (it clamped there)
-MAX_ORDER = 99
-
-
-def reordered(seq: list[str], orders: dict[str, int], moved: str) -> dict[str, int]:
-    """Orders (0…MAX_ORDER) under which sorting by (order, name) gives
-    `seq`, changing as few effects as possible: `moved` alone when it can
-    be done, else the smallest run of neighbours that can. Returns only
-    the effects whose order changes.
-
-    Plan 33 T7: here, not in fx.py, because a stack's order is now only a
-    `/4` file's word — `legacy_values` writes a run back as the orders a
-    build from before plan 33 sorts into it (it was the FX page's drop,
-    plan 20 WP3, until the stack retired). Pure: it reads nothing but its
-    arguments.
-
-    One run of `seq` is renumbered: the shortest whose two sides already
-    sort as `seq` has them and which has room — as many integers strictly
-    between the orders either side of it as it has effects. It gets those
-    integers evenly spaced (one effect alone: the middle of its gap). So
-    no tie is ever made or relied on, and the name tie-break cannot reorder
-    the result; a tie that is already there and not in the way is left
-    alone. Of two runs of one length, one holding `moved` is taken, then the
-    one further right: the same input always gives the same orders. With no
-    room for a short run the run grows, to the whole list at worst (0…99:
-    up to a hundred effects; past that orders repeat)."""
-    def key(k: int) -> tuple[int, str]:
-        return orders[seq[k]], seq[k]
-    n = len(seq)
-    bad = [k for k in range(1, n) if not key(k - 1) < key(k)]    # seq[k] is out of place
-    if not bad:
-        return {}                                    # it already sorts that way
-    first, last = bad[0], bad[-1]                    # seq[:first] and seq[last:] sort as they are
-    i = seq.index(moved)
-    for size in range(max(1, last - first), n + 1):
-        los = range(min(first, n - size), max(0, last - size) - 1, -1)
-        for lo in sorted(los, key=lambda lo: not lo <= i < lo + size):   # stable: right first
-            hi = lo + size                           # the run is seq[lo:hi]
-            a = orders[seq[lo - 1]] if lo > 0 else -1
-            b = orders[seq[hi]] if hi < n else MAX_ORDER + 1
-            free = b - a - 1                         # the integers strictly between
-            if free < size and size != n:            # no room; the whole list is the last resort
-                continue
-            if size == 1:
-                new = [(a + b) // 2]                 # the middle of the gap
-            else:                                    # evenly through the gap, in seq's order
-                new = [a + 1 + ((2 * j + 1) * free) // (2 * size) for j in range(size)]
-            return {name: o for name, o in zip(seq[lo:hi], new, strict=True)
-                    if o != orders[name]}
-    return {}                                        # not reached: the whole list always returns
 
 
 # ---------------------------------------------------------------- what drives what
@@ -404,7 +348,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     `(@order, @mix)`; an instance takes its file's, and a value the document
     leaves out takes its file's too). The frame run is always written, bare
     `frame → fx.image` when empty, so a migrated section is recognisable
-    (`needs_free`). A
+    (a run's head). A
     section that already has a run from `frame` (or `pattern`), or a wire
     into `pattern.media` / `backdrop.image`, is not given another. A
     section given its frame run first has each wire D1 would write short
@@ -524,410 +468,12 @@ def to_free(doc: dict, specs: Specs) -> tuple[dict, list[str]]:
     return (section if isinstance(section, dict) else {}), notes
 
 
-# ---------------------------------------------------------------- and back to /4
-
-def uses_free_words(spec: G.GraphSpec) -> bool:
-    """Whether a graph says anything beyond plan 26–32's: a new wire end
-    (`frame`, `fx.image`, `pattern`, `shape.faces`, `backdrop.image`), a
-    switch, a channel into an effect (a branch), or an effect wired and
-    reaching nothing. Plan 34 L: or feedback's words — a delay, a resize,
-    a look-back frame or the dream, declared or on a wire (`/5` only).
-    Plan 35 F: or a wired frame, or a copy (`/6` only)."""
-    if spec.wired or spec.copies:
-        return True
-    if spec.switches or _feedback(spec):
-        return True
-    for w in spec.all_wires():
-        if (G.wire_node_kind(w.src) in ("frame", "pattern", "switch", *FEEDBACK)
-                or w.dst in ("fx.image", "shape.faces", "backdrop.image")
-                or G.wire_node_kind(w.node) in ("pattern", "switch", *FEEDBACK)):
-            return True
-        if G.wire_node_kind(w.src) == "media" and G.wire_node_kind(w.node) == "effect" \
-                and not G.is_aux(w):
-            return True
-    return bool(_unreached(spec))
-
-
-# plan 34 L: the node kinds feedback adds — none has a word in `/4`
-FEEDBACK = ("delay", "resize", "echo", "dream")
-
-
-def _feedback(spec: G.GraphSpec) -> bool:
-    """Whether the section declares a delay, a resize, an echo or the dream."""
-    return bool(spec.delays or spec.resizes or spec.echoes or spec.dream)
-
-
-def _unreached(spec: G.GraphSpec) -> set[str]:
-    """Effects the section wires that reach no sink — but a placed one,
-    which the old graph runs where it sits."""
-    placed = {e.name for e in spec.wiring().placed}
-    return _wired_effects(spec) - G.reaches(spec) - placed
-
-
-def _expected(head: str, run: tuple[str, ...], end: str) -> set[G.Wire]:
-    """The wires that touch `head` or `end` when the run is the only path
-    between them: the run's first and last (or the bare `head → end`)."""
-    if not run:
-        return set()
-    return {G.Wire(head, f"{run[0]}.image"), G.Wire(run[-1], end)}
-
-
-def legacy_values(section: dict, values: dict, specs: Specs | None = None,
-                  driven: frozenset[str] = frozenset()) -> dict | None:
-    """The `order` / `target` / `view.media` / `backdrop.channel` values
-    that say `section` in `/4` terms, or None when `/4` cannot: a branch,
-    an unreached effect, more than one run from a head, anything but a
-    channel into `pattern.media` / `backdrop.image`, a switch, a run
-    member that is off, or an effect that is on outside every run.
-
-    The result is what to lay over `values`: an effect's `order` (kept as it
-    is where the run already sorts by `(order, name)`, else
-    `reordered`'s fewest changes), its `target`, and the two channel
-    choices. A key the document does not hold and that needs no change is
-    left out. `specs` gives an absent order or mix its file's default;
-    `driven` is `targets(doc)`, so an effect on at mix 0 and driven is a
-    member as `migrate` has it (R5).
-
-    Plan 35 M (row 384): a wired frame is said by its round trip
-    (`unwired`): None when it is not exactly the frame `migrate` writes for
-    the section left, else that section's values — and `backdrop.history`,
-    which the capture wire says, where there is a backdrop to say it of."""
-    if isinstance(section, dict) and section.get(G.FRAME_KEY) == G.WIRED_FRAME:
-        got = unwired(section, specs)
-        if got is None:
-            return None
-        rest, history = got
-        out = legacy_values(rest, values, specs, driven)
-        backdrop = any(isinstance(w, dict) and w.get("to") == "backdrop.image"
-                       for w in rest.get("wires", []))
-        if out is not None and backdrop and (history or "backdrop.history" in values):
-            out["backdrop.history"] = history
-        return out
-    try:
-        spec = G.read_graph(section if isinstance(section, dict) else {}, effects=_files(specs))
-    except G.GraphError:
-        return None
-    if spec.switches or _feedback(spec):         # (plan 34 L: no `/4` word for either)
-        return None
-    driven_fx = _driven_fx(driven)
-    # R21: an instance 1 kept on no wire (taken out of the run) and live is
-    # unreached, a word `/4` lacks (its stack would run it). R26: one that
-    # is not live is nothing to `/4` — `legacy_section` strips the entry a
-    # build from before plan 33 refuses, and its stack left the effect out
-    if any(e.n == 1 and not e.placed and _live(values, specs, driven_fx, e.name)
-           for e in spec.effects):
-        return None
-    wires = spec.all_wires()
-    runs = {"frame": G.run_of(spec), "pattern": G.run_of(spec, "pattern", "shape.faces")}
-    ends = {"frame": "fx.image", "pattern": "shape.faces"}
-    members = {n for r in runs.values() for n in r}
-    for head, end in ends.items():
-        touching = {w for w in wires if w.src == head or w.dst == end}
-        want = _expected(head, runs[head], end)
-        if touching != want and not (not runs[head] and touching <= {G.Wire(head, end)}):
-            return None
-    for name in members:
-        if sum(1 for w in wires if w.src == name) != 1:
-            return None
-        if not _live(values, specs, driven_fx, name):
-            return None
-    for end in ("pattern.media", "backdrop.image"):
-        for w in wires:
-            if w.dst == end and G.wire_node_kind(w.src) != "media":
-                return None
-    wired = _wired_effects(spec)
-    if _unreached(spec) - members:
-        return None
-    placed = {e.name for e in spec.wiring().placed}
-    for name in _candidates(values, specs):
-        if (name not in members and name not in wired and name not in placed
-                and _live(values, specs, driven_fx, name)):
-            return None
-    out: dict[str, Any] = {}
-    for head, run in runs.items():
-        if not run:
-            continue
-        seq = list(run)
-        orders = {n: _order_of(values, specs, n) for n in seq}
-        new = {**orders, **reordered(seq, orders, seq[-1])}
-        for n in seq:
-            if f"fx.{n}.order" in values or new[n] != orders[n]:
-                out[f"fx.{n}.order"] = new[n] if new[n] != orders[n] else values.get(
-                    f"fx.{n}.order", new[n])
-            if head == "pattern":
-                out[f"fx.{n}.target"] = 1
-            elif f"fx.{n}.target" in values:
-                out[f"fx.{n}.target"] = 0
-    for old, end in (("view.media", "pattern.media"), ("backdrop.channel", "backdrop.image")):
-        src = next((w.src for w in wires if w.dst == end), None)
-        k = CHANNELS.index(src[-1]) + 1 if src is not None else 0
-        if k > 0 or old in values:
-            out[old] = k
-    return out
-
-
-def has_frame_run(spec: G.GraphSpec | None) -> bool:
-    """Whether the section has a run's head: a wire from `frame` or into
-    `fx.image` (what `migrate` always writes). Every preset loaded on this
-    build has one; a section with none (None: no preset loaded, an edit on
-    the GRAPH page with nothing loaded) has the empty run (R23). The GRAPH
-    page's edits ask this too (`graphview`). Plan 35: a wired frame is
-    one too — every load's section is, its frame its wires."""
-    return spec is not None and (spec.wired or any(w.src == "frame" or w.dst == "fx.image"
-                                                   for w in spec.all_wires()))
-
-
-def says_free(section: Any) -> bool:
-    """Whether a graph section says anything in the free graph's terms: a
-    run's head (`has_frame_run`) or a word `/4` lacks (`uses_free_words`).
-    A section this build cannot read says nothing."""
-    if not isinstance(section, dict) or not section:
-        return False
-    try:
-        spec = G.read_graph(section)
-    except G.GraphError:
-        return False
-    return has_frame_run(spec) or uses_free_words(spec)
-
-
-def needs_free(section: Any, values: dict, driven: frozenset[str] = frozenset(),
-               specs: Specs | None = None) -> bool:
-    """Whether a preset's graph section must be written as `/6` (row 347,
-    plan 35 row 385: `/5` before): it has a `frame` run, is a wired frame
-    or uses the free graph's words, and `/4` cannot say it. A section with
-    none of them (plan 26-32's) never is. `specs` gives an absent order or
-    mix its file's default (`legacy_values`)."""
-    return says_free(section) and legacy_values(section, values, specs, driven) is None
-
-
-# the wire ends only the free graph has: a wire touching one is plan 33's.
-# Plan 35 F: and the wired frame's — a copy, `ground`, the shape as a
-# source, the scene's geometry — and the ports only a wired frame has
-_FREE_SRCS = ("frame", "pattern", "switch", "delay", "resize", "echo", "dream",
-              "copy", "ground", "shape")
-_FREE_DSTS = ("fx", "shape", "pattern", "backdrop", "switch", "delay", "resize",
-              "copy", "scene")
-_FREE_PORTS = ("lookback.capture", "lookback.occluder", "backdrop.scene", "output.all.image",
-               "output.all.hands", "output.all.guide")
-
-
-def _free_end(w: Any) -> bool:
-    """Whether wire entry `w` touches an end only the free graph has (its
-    names read in either frame's kinds: plan 35's copy and ground are a
-    wired frame's)."""
-    if not isinstance(w, dict):
-        return False
-    src, dst = w.get("from"), w.get("to")
-    node = dst.rpartition(".")[0] if isinstance(dst, str) else None
-    return (dst in _FREE_PORTS
-            or any(G.wire_node_kind(src, wired=x) in _FREE_SRCS
-                   or G.wire_node_kind(node, wired=x) in _FREE_DSTS for x in (False, True)))
-
-
-RUN_ENDS = (("frame", "fx.image"), ("pattern", "shape.faces"))
-
-
-def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
-    """The (from, to) of every wire of the section's runs — `frame → … →
-    fx.image` and `pattern → … → shape.faces` (or those of `ends`), the
-    wires between their effects too — that `legacy_values` says as orders
-    and targets."""
-    try:
-        spec = G.read_graph(section)
-    except G.GraphError:
-        return set()
-    out: set[tuple[str, str]] = set()
-    for head, end in ends:
-        run = G.run_of(spec, head, end)
-        if not run:
-            continue
-        names = [head, *run]
-        out.update((a, f"{b}.image") for a, b in zip(names, run))
-        out.add((run[-1], end))
-    return out
-
-
-def _free_node(n: Any) -> bool:
-    """A node entry only the free graph has: a switch, or (R21) an effect's
-    instance 1 named with no placement — a build from before plan 33
-    refuses both; (plan 34 L) a delay, a resize, an echo or the dream;
-    (plan 35 F) a copy or a frame kind's entry (`G.FRAME_KINDS`)."""
-    if not isinstance(n, dict):
-        return False
-    if n.get("kind") in ("switch", *FEEDBACK, "copy", *G.FRAME_KINDS):
-        return True
-    return (n.get("kind") == "effect" and n.get("instance", 1) == 1
-            and not any(k in n for k in G.PLACE_KEYS))
-
-
-def _old_dst(dst: Any) -> Any:
-    """A wire's `to` back in the old ids (`_new_dst`'s inverse)."""
-    if not isinstance(dst, str):
-        return dst
-    got = G.old_id(dst)
-    if got != dst:
-        return got
-    node, dot, port = dst.rpartition(".")
-    return f"{G.old_id(node)}{dot}{port}" if dot else dst
-
-
-def _canonical(section: dict, files: set[str] | None) -> dict | None:
-    try:
-        return G.read_graph(section, effects=files).to_json()
-    except G.GraphError:
-        return None
-
-
-def unwired(section: Any, specs: Specs | None = None) -> tuple[dict, bool] | None:
-    """A wired frame's round trip (plan 35 M, row 384): (the section in the
-    old ids that `migrate` writes as exactly this frame, the
-    `backdrop.history` its capture wire says), or None when there is none —
-    the frame was edited, or it says what no section before it can (a copy,
-    a frame node's entry, a picture into All outputs that is not the run).
-
-    The rest: the section with the marker, the frame's own wires (the
-    scene's geometry, `backdrop.scene`, the look-back's picture, occluder
-    and capture — the capture's composite with them —, All outputs' and
-    every `ground`) taken out; the run behind `output.all.image` written as
-    `frame → … → fx.image` again; `into` (a hands node in the scene's
-    geometry) and `holds` (a capture of a composite laying the layer on)
-    put back as read off those wires; every id put back through `old_id`.
-    It is the round trip only when `wired_section` of it is this section
-    (both read: the same `to_json`, so node order and the bare entries a
-    read drops do not count)."""
-    if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
-        return None
-    files = _files(specs)
-    want = _canonical(section, files)
-    if want is None:
-        return None
-    raw = [w for w in section.get("wires") or [] if isinstance(w, dict)]
-    pairs = [(w.get("from"), w.get("to")) for w in raw]
-    if any(_kind(x) == "copy" for a, b in pairs
-           for x in (a, b.rpartition(".")[0] if isinstance(b, str) else None)):
-        return None
-    into = {b: a for a, b in pairs}
-    # the run: All outputs' picture back through its effects to the look-back
-    run: list[str] = []
-    head = into.get(f"{G.ALL_OUTPUTS}.image")
-    while _kind(head) == "effect" and head not in run:
-        run.insert(0, head)
-        head = into.get(f"{head}.image")
-    if head != "lookback":
-        return None
-    run_pairs = set(zip(["lookback", *run], [f"{e}.image" for e in run]))
-    run_pairs.add(((run or ["lookback"])[-1], f"{G.ALL_OUTPUTS}.image"))
-    # the capture: the scene or the backdrop, or a composite of one with the
-    # layer over (`holds: scene+hands`)
-    held = into.get("lookback.capture")
-    holds, comp = "scene", None
-    if _kind(held) == "composite" and _kind(into.get(f"{held}.over")) == "layer":
-        holds, comp, held = "scene+hands", held, into.get(f"{held}.under")
-    history = held == "backdrop"
-    frame_src = {"scene.geometry": None, "backdrop.scene": ("scene",),
-                 "lookback.image": ("scene", "backdrop"), "lookback.occluder": ("scene",),
-                 "lookback.capture": None}
-    wires: list[dict] = []
-    for w, (a, b) in zip(raw, pairs):
-        node = b.rpartition(".")[0] if isinstance(b, str) else None
-        if (a, b) in run_pairs or node == G.ALL_OUTPUTS or a == G.GROUND:
-            continue
-        if b in frame_src and (frame_src[b] is None or a in frame_src[b]):
-            continue
-        if comp is not None and (node == comp or a == comp):
-            continue
-        wires.append({**w, "from": G.old_id(a), "to": _old_dst(b)})
-    wires += _chain("frame", run, "fx.image")
-    in_scene = {a for a, b in pairs if b == "scene.geometry" and _kind(a) == "hands"}
-    nodes: list[dict] = []
-    seen: set[int] = set()
-    for e in section.get("nodes") or []:
-        if not isinstance(e, dict):
-            continue
-        kind = e.get("kind")
-        if kind in (*G.FRAME_KINDS, "copy"):
-            continue
-        if kind == "composite" and comp is not None and _named(
-                "composite", int(e.get("instance", 1))) == comp:
-            continue
-        e = dict(e)
-        if kind == "hands":
-            n = int(e.get("instance", 1))
-            seen.add(n)
-            if G.wired_hands_name(n) in in_scene:
-                e["into"] = "scene"
-        for key in G.PLACE_KEYS:
-            if key in e:
-                e[key] = G.old_id(e[key])
-        nodes.append(e)
-    for name in sorted(in_scene, key=lambda h: G.split_instance(h)[1]):
-        n = G.split_instance(name)[1] if name != "hands" else 1
-        if n not in seen:
-            nodes.append({"kind": "hands", **({"instance": n} if n != 1 else {}),
-                          "into": "scene"})
-    if holds != "scene":
-        nodes.append({"kind": "history", "holds": holds})
-    rest = {"nodes": nodes, "wires": wires}
-    try:
-        old = G.read_graph(rest, effects=files)
-    except G.GraphError:
-        return None
-    # (a placement or wire the read refuses stays as the file had it, refused
-    # again either way: the canonical reads below leave it out on both sides)
-    again = _canonical(wired_section(renamed(rest), old, backdrop_history=history), files)
-    return (rest, history) if again == want else None
-
-
-def legacy_section(section: Any) -> dict | None:
-    """`section` as a build from before plan 33 reads it (R10): the wires
-    of its runs (`_run_entries`: what `legacy_values` says as orders and
-    targets), every wire touching a free-graph end (`frame`, `fx.image`,
-    `pattern`, `shape.faces`, `backdrop.image`, a switch; plan 34's delay,
-    resize, echo and dream) and those nodes and (R21) an unwired instance 1
-    taken out (`_free_node`). A
-    section with none of them is returned as it is, the same object; one
-    with nothing left (no node, no wire) is None, no
-    section, as the GRAPH page lands an emptied graph. None stays None.
-
-    Plan 35 M (row 384): a wired frame is put back by its round trip
-    (`unwired`) and then as above; one with none — an edited frame, a word
-    only `/6` has — is returned as it is (`legacy_values` reads it as
-    needing `/6`)."""
-    if isinstance(section, dict) and section.get(G.FRAME_KEY) == G.WIRED_FRAME:
-        got = unwired(section)
-        return section if got is None else legacy_section(got[0])
-    if not isinstance(section, dict):
-        return section
-    wires = section.get("wires")
-    nodes = section.get("nodes")
-    runs = _run_entries(section) if isinstance(wires, list) else set()
-
-    def free(w: Any) -> bool:
-        return _free_end(w) or (isinstance(w, dict) and (w.get("from"), w.get("to")) in runs)
-
-    free_wires = isinstance(wires, list) and any(free(w) for w in wires)
-    free_nodes = isinstance(nodes, list) and any(_free_node(n) for n in nodes)
-    if not (free_wires or free_nodes):
-        return section
-    out = copy.deepcopy(section)
-    if isinstance(nodes, list):
-        out["nodes"] = [n for n in out["nodes"] if not _free_node(n)]
-    if isinstance(wires, list):
-        out["wires"] = [w for w in out["wires"] if not free(w)]
-        if not out["wires"]:
-            del out["wires"]
-    if not out.get("nodes") and "wires" not in out and set(out) <= {"nodes", "wires"}:
-        return None
-    return out
-
-
-# ---------------------------------------------------------------- the retired ids, written back
+# ---------------------------------------------------------------- the retired ids a file holds
 
 def held_retired(values: dict) -> dict:
     """The retired values a file holds (`retired`; `fx.select` was never
-    saved): what a load keeps beside the wires (`preset.GraphSection.held`)
-    so a save below `/5` (the free graph's words, `/5` and `/6`) writes them
-    back where the file had them."""
+    saved) — the orders an fx module's run is read from (`landed_retired`,
+    `preset.Presets._fx_module`)."""
     return {k: v for k, v in (values or {}).items() if retired(k) and k != "fx.select"}
 
 
@@ -935,8 +481,8 @@ def landed_retired(values: dict, defaults: dict, specs: Specs | None, *, effects
                    channels: bool = True) -> dict:
     """The retired values a build from before plan 33 T7 held after a load
     of `values` (a file's) over `defaults` (its groups' defaults,
-    `Library.defaults`), typed as its registry held them — what its save
-    wrote, so ours can (`with_retired`). With `effects`: every effect
+    `Library.defaults`), typed as its registry held them — what an fx
+    module's run is read from (`module_runs`). With `effects`: every effect
     file's order (a float: a continuous param the load set) and target (an
     int: an enum), each the file's, else the default's, else the file's
     `@order` and the frame — every instance the load's graph holds too
@@ -955,53 +501,6 @@ def landed_retired(values: dict, defaults: dict, specs: Specs | None, *, effects
         out["backdrop.history"] = bool(src.get("backdrop.history", False))
     return out
 
-
-def with_retired(values: dict, held: dict, specs: Specs | None = None) -> dict:
-    """`values` (a registry's snapshot, which declares no retired id since
-    plan 33 T7) with the retired ids a build from before plan 33 declared,
-    each where its registry put it — `fx.<n>.order` and `fx.<n>.target`
-    right after `fx.<n>.blend`, `view.media` before `view.media_alpha`,
-    `backdrop.channel` before `backdrop.alpha` and (plan 35) `backdrop.
-    history` after it — so an untouched `/4` preset saves byte for byte as
-    that build wrote it (Review Focus 1).
-
-    Each takes `held`'s value (what the load landed, `landed_retired`,
-    typed), else what that build's declaration gave it — no load since: the
-    file's `@order` as an int (`specs`), target 0 (the frame), channel 0
-    (off), the backdrop out of the look-back. `legacy_values` then says
-    the graph over these (a run's orders, the channels as wired, the
-    capture). A new dict; `values` is not changed."""
-    out: dict[str, Any] = {}
-    for k, v in values.items():
-        if k == "view.media_alpha" and "view.media" not in values:
-            out["view.media"] = _as(int, held.get("view.media"), 0)
-        if k == "backdrop.alpha" and "backdrop.channel" not in values:
-            out["backdrop.channel"] = _as(int, held.get("backdrop.channel"), 0)
-        out[k] = v
-        if k == "backdrop.alpha" and "backdrop.history" not in values:
-            out["backdrop.history"] = held.get("backdrop.history") is True
-        name = effect_of(k)
-        if name is not None and k == f"fx.{name}.blend":
-            order = held.get(f"fx.{name}.order")
-            out.setdefault(f"fx.{name}.order", order if _is_number(order)
-                           else int(_file_order(specs, name)))
-            out.setdefault(f"fx.{name}.target", _as(int, held.get(f"fx.{name}.target"), 0))
-    return out
-
-
-def with_history(values: dict, history: bool) -> dict:
-    """`values` with `backdrop.history` (a plan 33/34 build's param, the
-    capture wire's now) where that build's registry wrote it, right after
-    `backdrop.alpha` (ruling R10: a `/5` save). A new dict."""
-    out: dict[str, Any] = {}
-    for k, v in values.items():
-        if k != "backdrop.history":
-            out[k] = v
-        if k == "backdrop.alpha":
-            out["backdrop.history"] = bool(history)
-    if "backdrop.history" not in out:
-        out["backdrop.history"] = bool(history)
-    return out
 
 
 def _is_number(v: Any) -> bool:
@@ -1066,6 +565,30 @@ def wiring_of(fx: Any) -> G.Wiring:
 
 def _entry(w: Any) -> tuple[Any, Any] | None:
     return (w.get("from"), w.get("to")) if isinstance(w, dict) else None
+
+
+
+RUN_ENDS = (("frame", "fx.image"), ("pattern", "shape.faces"))
+
+
+def _run_entries(section: dict, ends=RUN_ENDS) -> set[tuple[str, str]]:
+    """The (from, to) of every wire of the section's runs — `frame → … →
+    fx.image` and `pattern → … → shape.faces` (or those of `ends`), the
+    wires between their effects too: what an fx module's run replaces
+    (`module_runs`)."""
+    try:
+        spec = G.read_graph(section)
+    except G.GraphError:
+        return set()
+    out: set[tuple[str, str]] = set()
+    for head, end in ends:
+        run = G.run_of(spec, head, end)
+        if not run:
+            continue
+        names = [head, *run]
+        out.update((a, f"{b}.image") for a, b in zip(names, run))
+        out.add((run[-1], end))
+    return out
 
 
 def module_runs(section: Any, values: dict, specs: Specs,
@@ -1353,42 +876,24 @@ def renamed_layout(layout: dict[str, Any]) -> dict[str, Any]:
     (`_OLD_CANVAS`) is renamed throughout (`renamed_canvas_id`), the
     first position kept where two old ids land on one; any other is as it
     is — so the owner's arrangement follows the rename, and a layout saved
-    since stays put."""
+    since stays put.
+
+    Row 394: a node the wired frame dissolved (`render:frame`,
+    `render:fx`, `render:capture`, `render:cover` …: an old-only id the
+    rename leaves as it is) has no place on the canvas any more and is
+    left out — kept, it would mark the layout old again when the save it
+    is written into (always in today's ids) is read back, and a new
+    `render:hands.2` would be read as the old layer's."""
     if not any(isinstance(k, str) and _OLD_CANVAS.fullmatch(k) for k in layout):
         return layout
     out: dict[str, Any] = {}
     for k, xy in layout.items():
-        out.setdefault(renamed_canvas_id(k) if isinstance(k, str) else k, xy)
+        nk = renamed_canvas_id(k) if isinstance(k, str) else k
+        if isinstance(nk, str) and _OLD_CANVAS.fullmatch(nk):
+            continue                    # (a dissolved node's: nowhere to put it)
+        out.setdefault(nk, xy)
     return out
 
-
-def old_canvas_id(nid: str) -> str:
-    """`renamed_canvas_id`'s inverse (R15): a wired frame's canvas id in the
-    old canvas's (`render:hands.2` → `render:ghost.2`, `render:channel.a` →
-    `render:media.a`, `render:camera` → `render:eye`); any other id as it
-    is — a node the old canvas never drew (`render:ground`) among them."""
-    if nid == "render:camera":
-        return "render:eye"
-    head, sep, name = nid.partition(":")
-    if head != "render" or not sep:
-        return nid
-    return f"render:{G.old_id(name)}"
-
-
-def old_layout(layout: dict[str, Any], file: dict[str, Any] | None,
-               landed: dict[str, Any] | None) -> dict[str, Any]:
-    """The GRAPH layout a save below `/6` writes (R15: a build from before
-    plan 35 reads the canvas's old ids, so the other Mac's arrangement
-    stays): the file's own keys while the layout is still what the load
-    made of them (`landed`, so an untouched preset saves byte for byte),
-    else every key in the old ids (`old_canvas_id`), the first position
-    kept where two land on one."""
-    if file is not None and landed is not None and layout == landed:
-        return file
-    out: dict[str, Any] = {}
-    for k, xy in layout.items():
-        out.setdefault(old_canvas_id(k) if isinstance(k, str) else k, xy)
-    return out
 
 
 def renamed(section: Any) -> Any:

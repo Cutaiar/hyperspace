@@ -215,7 +215,8 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
          "picture; the default wiring")]
     assert _bare(_old(stub.wiring)) == G.Wiring(hands="scene",
                                           wires=(G.Wire("hands", "output.2.hands"),))
-    assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
+    # (row 394: the save is the frame the load landed)
+    assert rig.presets.document("Odd")[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
     assert not rig.lib.is_dirty(PRESETS)
 
 
@@ -563,7 +564,8 @@ def test_no_factory_preset_changes():
 
 def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
     """Each N4 fixture loaded like a user's preset: no note, a clean dot,
-    the renderer handed its wires, the section saved back as the file."""
+    the renderer handed its wires, the save the frame the load landed
+    (row 394)."""
     rig = boot(tmp_path)
     stub = Stub()
     rig.presets.graph.attach(stub)
@@ -574,7 +576,8 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
         dst.write_text((FIXTURES / f"{slug}.json").read_text())
         assert rig.lib.load(PRESETS, slug) == [] and rig.presets.notes == [], slug
         assert not rig.lib.is_dirty(PRESETS), slug
-        assert rig.presets.document(slug)[preset.GRAPH_KEY] == doc["graph"]
+        assert doc["graph"]
+        assert rig.presets.document(slug)[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
     assert _old(stub.wiring).wires == (G.Wire("history", "acid.2.image"),
                                  G.Wire("acid.2", "output.2.image"))
     assert _old(stub.wiring).placed == (G.EffectAt("palette", 1, into="output.1"),)

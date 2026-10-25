@@ -212,7 +212,8 @@ def test_a_missing_template_is_a_note_and_the_overrides_alone(rig):
 def test_every_factory_preset_loads_and_saves_its_plain_desk_as_before(rig):
     """No factory preset names a template: each loads with no template
     note, and what a save would write is its whole desk under ``desk``
-    with no ``desk_template`` key, the keys in the order they always were."""
+    with no ``desk_template`` key, the keys in their order (row 394: the
+    `/6` save's — the wired frame after the name, the bins last)."""
     lib = rig.lib
     for path in sorted((FACTORY / "presets").glob("*.json")):
         assert TEMPLATE_KEY not in json.loads(path.read_text()), path.name
@@ -223,9 +224,10 @@ def test_every_factory_preset_loads_and_saves_its_plain_desk_as_before(rig):
         doc = lib.presets.document(name)
         assert TEMPLATE_KEY not in doc
         assert doc["desk"] == desk_of(rig)
-        assert [k for k in doc if k != "note"] == ["schema", "name", "values", "routes",
-                                                   "desk", "macros", "modules",
-                                                   "units"]      # plan 26 A2's pan marker
+        assert [k for k in doc if k != "note"] == ["schema", "name", "graph", "values",
+                                                   "routes", "desk", "macros", "modules",
+                                                   "units",       # plan 26 A2's pan marker
+                                                   "media"]
 
 
 def test_a_template_fixed_after_the_load_changes_no_override_on_save(rig):

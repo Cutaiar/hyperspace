@@ -286,6 +286,49 @@ def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
             assert got == recorded_said[slug][hands], (slug, hands)
 
 
+def test_every_preset_resaved_as_six_draws_its_goldens(ctx, tmp_path):
+    """Row 394: every factory preset and every fixture, saved untouched as
+    `/6` (`headless.resave`, the road tools/migrate_library.py takes) and
+    drawn from that file on the golden rig (`picture`: hands present, the
+    eight states as wiring), draws exactly its recorded goldens — on the
+    renderer they were recorded on; on another, exactly what the original
+    file draws there. And a value moved in the `/6` moves the picture, so
+    the check can fail."""
+    import json
+
+    from hyperspace import headless
+
+    doc = _manifest()
+    tool = _tool()
+    exact = tool.renderer_name(ctx) == doc["renderer"]
+    golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
+    names = [name for name, _ in tool.STATES]
+    sources = [*((slug, tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json",
+                  True) for slug in tool.FACTORY_PRESETS),
+               *((slug, tool.FIXTURES / f"{slug}.json", False)
+                 for slug in tool.FIXTURE_PRESETS)]
+    for k, (slug, path, factory) in enumerate(sources):
+        raw, _, _ = headless.resave(path, tmp_path / str(k), factory=factory)
+        six = tmp_path / f"{k}-six" / f"{slug}.json"
+        six.parent.mkdir()
+        six.write_bytes(raw)
+        assert json.loads(raw)["schema"] == "hyperspace.preset/6", slug
+        got, _ = tool.picture(six, slug=slug)
+        if exact:
+            want = [golden[(slug, "present", n)] for n in names]
+        else:
+            want, _ = tool.picture(path, slug=slug)
+        assert got == want, slug
+    # (the check sees a value: party-trip brighter is another picture)
+    path = tool.ROOT / "hyperspace" / "library" / "presets" / "party-trip.json"
+    raw, _, _ = headless.resave(path, tmp_path / "bright", factory=True)
+    bright = json.loads(raw)
+    bright["values"]["view.bright"] = bright["values"]["view.bright"] * 0.5 + 0.1
+    moved = tmp_path / "bright.json"
+    moved.write_text(json.dumps(bright))
+    assert tool.picture(moved, slug="party-trip")[0] != tool.picture(path, slug="party-trip")[0]
+
+
 def _rig(ctx, timer_ctx=None):
     """A renderer with an effect on, the look-back on and the hands on
     (test_outputs' rig), and a framebuffer."""
