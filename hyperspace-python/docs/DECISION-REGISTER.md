@@ -21,6 +21,13 @@ answer on how the two combine. Rows 341–352 (plan 33, the free graph) are
 the same kind as 311–339: the owner answered 341, 342, 346, 348 and 350 in
 his own words on 2026-10-24 and accepted the rest as recommended, before
 the build (on `plan-33-free-graph`, PR #235, into `plan-31-32-integration`).
+Rows 353–371 (plan 34, feedback) are the same kind: the owner said "build"
+on 2026-10-24, after seeing the options, and that took every recommendation
+as given. Rows 353 ("build A"), 359 ("with the loop refusal fix"), 360 ("i
+also want to be able to do b") and 368 ("avoid writing a 1080p buffer into
+all the faces") carry his words; the rest are "(rec) — accepted
+2026-10-24" (on `plan-34-feedback`, PR #236; built in two halves around
+plan 35). Three are written as built under plan 35: 359, 370 and 371.
 Rows 372–393 (plan 35, the free frame) are the same kind: the owner
 answered 373, 374 and 387 on 2026-10-24 and accepted the rest as
 recommended, before the build (on `plan-34-feedback`, PR #236).
@@ -365,6 +372,25 @@ here; overturn → the change, then the same.
 | 350 | A switch node; a route on `view.media` / `backdrop.channel` migrates to one | 319 | owner — 2026-10-24 |
 | 351 | *Superseded by 372.* The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
 | 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
+| 353 | A `delay` picture node, z⁻¹: its picture is last frame's input; a loop through one is legal | 332, 333 | owner — 2026-10-24: "build A" |
+| 354 | Delay buffers are the renderer's: a half-float ping-pong pair per delay name, kept across rebuilds, released `SIZED_KEEP_FRAMES` frames after it leaves | 339, 340 | (rec) — accepted 2026-10-24 |
+| 355 | A delay has no params: decay, mix and tint are an effect's or a composite's after it | 333 | (rec) — accepted 2026-10-24 |
+| 356 | Strict z⁻¹: reads nothing on the first frame and after a frame its input read nothing; a size change loses no frame | 332, 339 | (rec) — accepted 2026-10-24 |
+| 357 | A delay holds its input at the input's own size, else the frame's | 337, 338 | (rec) — accepted 2026-10-24 |
+| 358 | A picture of its own size is fitted into a consumer of another shape by cover, about the centre | 335, 337 | (rec) — accepted 2026-10-24 |
+| 359 | The loop refusal at read: a loop through the faces, the backdrop or the frame is refused in words that point at a delay. *Superseded in a wired frame by 393 (`HIDDEN_EDGES`)* | 334 | owner — 2026-10-24: "with the loop refusal fix" (words rec) |
+| 360 | Echoes and the dream are declared by a node entry (`{"kind": "echo", "index": k}`, `{"kind": "dream"}`) | 335, 336 | owner — 2026-10-24: "i also want to be able to do b" (entry rec) |
+| 361 | An echo the ring does not hold reads nothing: before k commits, after the ring is remade, with no ring; the dream before its worker's first result | 335, 336 | (rec) — accepted 2026-10-24 |
+| 362 | The ring keeps capturing while the graph reads an echo or the dream, with the look-back off | 335 | (rec) — accepted 2026-10-24 |
+| 363 | Echoes are what the capture holds, at the ring's size, cadence and 8 bits, said in the node's words | 335, 340 | (rec) — accepted 2026-10-24 |
+| 364 | The downsampler is named `resize` | — | (rec) — accepted 2026-10-24 |
+| 365 | Resize size: the long side in pixels, 16–2048 in powers of two, `input` or `square`, never a factor | 337, 339 | (rec) — accepted 2026-10-24 |
+| 366 | Resize crop: centre x, y and width, height, normalised, modulatable; past the edge transparent; `fit` fills the output | 337 | (rec) — accepted 2026-10-24 |
+| 367 | Resize filter: `linear` (trilinear from mipmaps past a 2× shrink) or `nearest` (kept when laid on a bigger consumer) | 337 | (rec) — accepted 2026-10-24 |
+| 368 | A resize's, a delay's and an echo's size is their own, breaking "the consumer decides" on purpose; an effect after one runs at its size | 337, 338, 340 | owner — 2026-10-24: "avoid writing a 1080p buffer into all the faces" (effect rule rec) |
+| 369 | Resize params are per instance, declared from the graph (`params.declare_resizes`), group `resize`, a preset's values, no module | 337 | (rec) — accepted 2026-10-24 |
+| 370 | GRAPH: delay in MEDIA, echo and dream in LOOK-BACK, resize in EFFECTS or MEDIA by what it is made of (under 389), the cable into a delay a return by design, a resize's params side-panel rows | 334, 338 | (rec) — accepted 2026-10-24 |
+| 371 | The schema: plan 34's words are `/5` words, a wired frame that round-trips saves `/5`, one that needs plan 35's vocabulary `/6` (amended by 385) | 341, 352 | (rec) — accepted 2026-10-24 |
 | 372 | The frame is wires: every node of the frame is ordinary, `"frame": "wired"`, nothing is built that no wire or entry says | 343, 344 | owner — 2026-10-24 |
 | 373 | The vocabulary: labels, hovers and **ids** in the owner's primitives (`ghost` → `hands`, `history` → `lookback`, …); params keep their ids | 345, 350 | owner — 2026-10-24: "approve, but rename ids too" |
 | 374 | The per-output switches: picture and hands are each window's mutes, "through" is wiring, a preset wires All outputs once | 346, 347, 348 | owner — 2026-10-24: as proposed |
@@ -6812,6 +6838,357 @@ The plan lands on `plan-31-32-integration` (PR #235).
   half a second (R29).
 - **Judge it.** Checks 319, 324.
 
+## Plan 34 — feedback (rows 353–371)
+
+Rows 353–371 were decided with the owner on 2026-10-24, the day he asked
+for recursive rendering: he saw the options (A, a `delay` node; B, the
+look-back's frames as sources), said "yeah build A with the loop refusal
+fix. i also want to be able to do b. also, we should be able to downsample
+arbitrarily, so add a downsampler node as well", and then "build". Four
+rows carry his words (353, 359, 360, 368); the rest are recommendations the
+build took, "(rec) — accepted 2026-10-24". Each row says what the build
+did; "Rough edge" and "Judge it" are for the hand checks of group AD
+(checks 332–341), which run with plan 35's group AE. The build ledger's
+rulings are folded into "Built" where they changed what you see: R3, R4,
+R5, R6, R7, R9, R11, R12, R13 (plan 34's own numbering; plan 35 has its
+own). The plan was built in two halves around plan 35 (T1–T3, the pause,
+T4–T6 on plan 35's wired frame), on `plan-34-feedback` (PR #236). Rows 359,
+370 and 371 are written as built under plan 35.
+
+### 353. A `delay` picture node, z⁻¹
+
+- **Answer.** (owner) — 2026-10-24: "yeah build A with the loop refusal
+  fix."
+- **Built.** `graph.Delay`: a picture node with no inputs whose picture is
+  what came into its `image` last frame, written by its other half,
+  `graph.DelayWrite` (`delay(write)` on SYSTEM). A loop drawn through one is
+  legal, so `scene → delay → shape.faces` is the infinite mirror. In a
+  wired frame `_Build.build` adds the write of every delay the wires reach,
+  before the internal `Capture`. Instance names `delay`, `delay.2` ….
+  `tests/test_graph_delay.py::{test_a_delay_shows_last_frames_picture,test_the_delay_write_runs_before_the_capture,test_the_delay_nodes_say_what_they_are}`,
+  `tests/test_graph_feedback.py::{test_a_loop_through_a_delay_is_legal,test_a_delay_into_itself_is_still_refused,test_a_delay_reaches_only_when_read}`;
+  16 goldens: `delay-faces` and `delay-trails`.
+  R6: `delay-trails` was rebuilt so it shows a trail (`delay → zoomblur.2 →
+  palette.2`, val slice 0.6, added over the scene, into the delay and out),
+  `::test_the_trails_show_and_fade`.
+- **Other options.** Look-back frames only (B alone); a `feedback` flag on
+  the faces.
+- **To reverse.** Delete `Delay`, `DelayWrite`, `DelayAt` and
+  `Renderer.delay_pair`; nothing else depends on them but the fixtures.
+- **Rough edge.** Feedback through the scene is 8-bit (the scene's target
+  is RGBA8). The faces show an opaque picture fully: last frame's black
+  background shows as black faces.
+- **Judge it.** Checks 332, 333.
+
+### 354. Delay buffers are the renderer's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `render.DelayPair`: two RGBA half-float pictures per delay
+  name, `Renderer.delay_pair(name)`; `Renderer._turn_delays(graph)` swaps
+  them at the frame's start; kept by name across graph rebuilds; released
+  `SIZED_KEEP_FRAMES` (30) frames after the delay leaves the graph
+  (`tests/test_graph_delay.py::{test_a_delay_ping_pongs_half_float,test_a_graph_rebuild_keeps_the_delay,test_a_delay_leaving_the_graph_is_released}`).
+  R5: `PassTimer` treats a time query inside another as a no-op, because GL
+  allows one active query and `delay(write)` wraps the effect passes it
+  paints (`::test_a_query_inside_another_is_a_no_op`).
+- **Other options.** RGBA8 buffers (a decay below 1 sticks); one pair per
+  graph (an edit elsewhere would cut the feedback).
+- **To reverse.** `DelayPair`'s dtype and key.
+- **Rough edge.** `delay(write)`'s SYSTEM time includes the effects painted
+  inside it (R5). A 1080p delay is 2 × 16.6 MB.
+- **Judge it.** Checks 339, 340.
+
+### 355. A delay has no params
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Delay.INPUTS` is empty and the entry is `{"kind": "delay"}`;
+  decay, mix and tint are an effect's or a composite's after it, the fit a
+  resize's before it (`tests/test_graph_delay.py::test_the_delay_nodes_say_what_they_are`,
+  `tests/test_graph_feedback.py::test_the_new_kinds_read_and_round_trip`).
+  The `delay-trails` fixture is exactly this: the decay is palette.2's val
+  slice.
+- **Other options.** `delay.mix`, `delay.decay`, `delay.fit` params.
+- **To reverse.** Add the params to `Delay` and declare them.
+- **Rough edge.** A decay is two nodes, not a knob on the delay.
+- **Judge it.** Check 333.
+
+### 356. Strict z⁻¹
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The delay reads nothing on the first frame and after a frame
+  in which its input was not written, so the faces show the pattern (the
+  faces-unwired frame, pixel for pixel), an output its ground. A size
+  change remakes only the write side, so no frame is lost. R7 (over the
+  brief): a `DelayWrite` whose input read nothing leaves the pair
+  unwritten, and the delay reads nothing next frame: the pattern, not
+  black, plan 33's rule for a source that reads nothing
+  (`tests/test_graph_delay.py::{test_the_first_frame_reads_nothing_and_the_faces_show_the_pattern,test_a_delay_whose_input_read_nothing_reads_nothing,test_a_size_change_loses_no_frame}`).
+- **Other options.** Hold the last picture while the input is absent (a
+  freeze).
+- **To reverse.** `DelayWrite.run`'s leave-unwritten branch.
+- **Rough edge.** A feed lost to a delay costs one frame of pattern before
+  the faces settle (R7).
+- **Judge it.** Checks 332 (the empty delay), 339.
+
+### 357. A delay holds its input at the input's own size, else the frame's
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `DelayWrite.held(frame)`: the input's `own_size`, else
+  `frame.root.size`; `size_for("image")` says so, so an effect or a resize
+  upstream makes its picture at that size
+  (`tests/test_graph_resize.py::test_a_delay_through_a_resize_holds_a_small_buffer`).
+- **Other options.** Always the frame's; always `FACE_PIC`².
+- **To reverse.** `DelayWrite.held`.
+- **Rough edge.** A delay's size follows its input, so a new input size remakes the write side.
+- **Judge it.** Checks 337, 338.
+
+### 358. A picture of its own size is fitted into another shape by cover
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `graph.OWN_FIT = 0` (cover, about the centre) through
+  `Renderer._refit`, used by `Delay.paint`/`image`, the echoes and the
+  resize; another fit is a resize's `fit`
+  (`tests/test_graph_delay.py::{test_own_fit_is_cover,test_refit_cover_and_contain}`,
+  `tests/test_graph_echo.py::test_an_echo_on_the_faces_is_fitted`). The
+  refit program draws a crop past the source's edge as transparent black
+  (R12); the earlier callers' crops lie inside [0,1] and did not move.
+- **Other options.** Stretch; a fit per consumer port.
+- **To reverse.** `OWN_FIT`.
+- **Rough edge.** A square delay on a wide output is cropped at the sides.
+- **Judge it.** Checks 335, 337.
+
+### 359. The loop refusal at read (as built by T1; superseded in a wired frame by 393)
+
+- **Answer.** (owner) — 2026-10-24: "with the loop refusal fix." The words
+  and the order rule are recommendations, accepted.
+- **Built.** `graph.sink_loops` walks the wires in the section's order over
+  hidden edges that no wire says. For an old section (outside a wired
+  frame) these are `FRAME_EDGES` (the faces drawn in the scene, the pattern
+  under the faces, the history over the scene and the backdrop, `frame` the
+  history's picture); an edge into a delay is no dependency; the later wire
+  is the one refused, and `loop_words` names the faces, the backdrop or
+  the frame and says to wire it through a delay (`LOOP_FACES`,
+  `LOOP_BACKDROP`, `LOOP_FRAME`). R3: where a wire out of `frame` also
+  closes a loop, the loop words win over `FRAME_SOURCE_REFUSAL`
+  (`tests/test_graph_feedback.py::{test_each_sink_loop_is_refused_at_read,test_the_later_wire_closing_a_sink_loop_is_the_one_refused,test_loop_words_name_the_hidden_edge}`,
+  `tests/test_graph_edit.py::test_a_sink_loop_drag_is_refused_in_words`).
+  **Under plan 35 (row 393)** `FRAME_EDGES` is superseded in a wired frame
+  by `HIDDEN_EDGES`, two edges (the wires say the rest), and an explicit
+  loop refuses every wire on it (plan 35 R5); `FRAME_EDGES`,
+  `FRAME_SOURCE_REFUSAL` and `LOOP_FRAME` stand only for reading an old
+  section before it migrates. "Point at a delay" is `LOOP_FACES` and
+  `LOOP_BACKDROP` for the faces and the backdrop, and (T5) `LOOP_PLAIN` for
+  a wired frame's other loops
+  (`tests/test_graph_edit.py::test_a_plain_loop_drag_points_at_a_delay`,
+  `tests/test_graph_wired.py::{test_loops_in_a_wired_frame_keep_plan_34s_words,test_loop_words_in_a_wired_frame}`).
+- **Other options.** Refuse every wire on the loop, as `wire_loops` does.
+- **To reverse.** `sink_loops`, `loop_words`, `_read_wires`.
+- **Rough edge.** The check is conservative on an old section: a wire
+  that would loop on the scene's pipeline is refused even if the only
+  output is the hands-only pipeline. `FRAME_EDGES` is kept for the old
+  section's read, not removed.
+- **Judge it.** Check 334.
+
+### 360. Echoes and the dream are declared by a node entry
+
+- **Answer.** (owner) — 2026-10-24: "i also want to be able to do b." The
+  entry shape is a recommendation, accepted.
+- **Built.** `{"kind": "echo", "index": k}` (k from 1 to
+  `lookback.MAX_ECHOES`, 32) and `{"kind": "dream"}`; `graph.EchoAt`,
+  `DreamAt`, `DECLARED`; two of one instance, or an index out of range, are
+  unreadable in words; a wire into an undeclared one is refused
+  (`tests/test_graph_feedback.py::{test_the_new_kinds_read_and_round_trip,test_the_new_names_are_reserved_kinds,test_a_wire_into_an_undeclared_node_is_refused,test_an_echo_index_out_of_range_is_unreadable,test_two_of_one_instance_are_unreadable}`).
+  GRAPH adds them from look-back ▸ and draws a second add of the same
+  disabled.
+- **Other options.** Undeclared wire names like `channel.a`.
+- **To reverse.** `EchoAt`, `DreamAt`, the picker items.
+- **Rough edge.** Thirty-two echo items on the picker.
+- **Judge it.** Checks 335, 336.
+
+### 361. An echo the ring does not hold reads nothing
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Lookback.echo_slot(k)` is None before k commits, after the
+  ring is remade, or with no ring; R9: also while `dream.res` differs from
+  the ring's, because the ring is remade inside the capture, after the
+  echoes are read, so a resolution change costs one frame of no echo. The
+  dream reads nothing until its worker's first result, with the words "no
+  dream worker: reads nothing" when there is none. A failed remake that
+  released the ring reads nothing, not an error
+  (`tests/test_graph_echo.py::{test_an_echo_past_the_ring_reads_nothing,test_a_res_change_empties_the_echoes,test_a_res_change_to_the_same_size_keeps_the_echoes,test_the_dream_reads_nothing_until_written,test_an_echo_into_hands_reads_nothing_when_the_ring_failed_to_rebuild}`).
+- **Other options.** Hold the oldest; opaque black.
+- **To reverse.** `Lookback.echo_slot`.
+- **Rough edge.** One frame of nothing on a resolution change.
+- **Judge it.** Checks 335, 336.
+
+### 362. The ring keeps capturing while the graph reads an echo or the dream
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `Graph.reads_ring` (any ring node reached) sets
+  `Lookback.keep`, so the capture runs with the look-back off; the wake
+  shows only with `dream.on`
+  (`tests/test_graph_echo.py::test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off`).
+  R11: an echo wired to an output's `hands` is ordered before the capture
+  (it joins the capture's `after`) like one at its `image`, so it shows
+  the frame before, not the frame being drawn
+  (`::test_an_echo_into_an_outputs_hands_reads_last_frames_capture`,
+  `::test_an_echo_read_this_frame_is_last_frames_capture`).
+- **Other options.** An echo needs `dream.on`.
+- **To reverse.** `Graph.reads_ring`, `Lookback.keep`.
+- **Rough edge.** An echo cannot go to an output's `guide` (that port takes
+  a hands layer's guide; refused at read).
+- **Judge it.** Check 335.
+
+### 363. Echoes are what the capture holds, said in the node's words
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** The ring stays one RGBA8 atlas at `dream.res` on its short
+  side, committed every `dream.gap`; the node's `said` gives the size and
+  cadence, and what the capture records ("the scene", "the scene + hands"
+  when both are captured, R10)
+  (`tests/test_graph_echo.py::{test_the_echo_nodes_say_what_they_are,test_echo_words_say_size_and_cadence,test_echo_k_is_the_kth_newest_capture,test_the_echo_faces_fixture_shows_the_ring}`;
+  8 goldens, `echo-faces`).
+- **Other options.** A ring of their own at the frame's size.
+- **To reverse.** `_RingNode.run`'s words, the atlas.
+- **Rough edge.** 8-bit and low-resolution; a full-resolution history is a
+  delay chain.
+- **Judge it.** Checks 335, 340.
+
+### 364. The downsampler is named `resize`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** Kind `resize`, reserved (`tests/test_graph_feedback.py::test_the_new_names_are_reserved_kinds`).
+  Not `scale` (GRAPH's value modifier), not `crop` (a param of it).
+- **Other options.** `downsample`, `scale`, `crop`.
+- **To reverse.** The kind's name in `RESERVED` and `NODE_KINDS`.
+- **Rough edge.** It also makes things bigger.
+- **Judge it.** —
+
+### 365. Resize size: the long side in pixels, stepped
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `view.RESIZE_SIDES = (16, … 2048)` (default 256), `aspect`
+  `input` or `square`; `graph.resize_size(side, aspect, src)`; never a
+  factor of the input
+  (`tests/test_graph_resize.py::{test_resize_size_model,test_a_resize_makes_its_own_size,test_a_size_step_reallocates_once_each_way}`).
+- **Other options.** Width × height free; a factor; an aspect following
+  the crop.
+- **To reverse.** `RESIZE_SIDES`, `resize_size`.
+- **Rough edge.** A route on `size` steps through eight sizes and remakes
+  the delay pair and effect pools after the resize at each step, bounded
+  by `SIZED_KEEP_FRAMES`.
+- **Judge it.** Checks 337, 339.
+
+### 366. Resize crop: a centre and a size, past the edge transparent
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `crop_x`, `crop_y` (centre, y from the top) and `crop_w`,
+  `crop_h` (0.01–1) on the input; `fit` is `cover`, `contain` or `stretch`
+  (`view.RESIZE_FITS` equal to `media_tex.FITS`). R12: `REFIT_FS` draws a
+  crop past the edge as transparent black. A crop is a value, not the
+  graph: changing it builds no new graph
+  (`tests/test_graph_resize.py::{test_the_crop_takes_the_rect,test_a_crop_past_the_edge_is_transparent,test_a_crop_change_is_a_value_never_a_rebuild,test_the_fits_are_the_media_fits}`;
+  8 goldens, `resize-crop`).
+- **Other options.** A corner rect (a zoom would need two routes).
+- **To reverse.** `ResizeNode.made` and `REFIT_FS`.
+- **Rough edge.** A crop of 0.01 magnifies a hundred times, in hard
+  pixels if `nearest`.
+- **Judge it.** Check 337.
+
+### 367. Resize filter: `linear` or `nearest`
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `linear` samples bilinearly and, past a 2× shrink on either
+  axis, builds the input's mipmaps and samples trilinearly through a
+  sampler object; `nearest` samples nearest, unmipmapped, and stays nearest
+  when laid on a bigger consumer
+  (`tests/test_graph_resize.py::{test_nearest_keeps_hard_pixels,test_linear_mipmaps_a_big_reduction}`).
+- **Other options.** Always linear, no mipmaps.
+- **To reverse.** `ResizeNode.made`'s filter branch.
+- **Rough edge.** A mipmapped shrink leaves the input's mip levels (the
+  scene's, a pool texture's) allocated.
+- **Judge it.** Check 337.
+
+### 368. A resize's, a delay's and an echo's size is their own
+
+- **Answer.** (owner) — 2026-10-24: "we should be able to downsample
+  arbitrarily … so we can avoid writing a 1080p buffer into all the faces
+  for no reason." The effect rule is a recommendation, accepted.
+- **Built.** `Node.own_size(frame)` is None for every node of plan 33 and
+  earlier; a delay, an echo, the dream and a resize have one. `size_for`
+  asks an input for its own size; an `Effect` after one runs at it
+  (`Effect.own_size`, its pool keyed by that size); a consumer of another
+  shape gets cover. Nothing earlier has an own size, so no earlier golden
+  runs the new path (`tests/test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size`;
+  `tests/test_graph_resize.py::{test_an_effect_after_a_resize_runs_at_its_size,test_a_delay_through_a_resize_holds_a_small_buffer,test_two_consumers_of_one_resize_refit_from_the_one_small_picture}`).
+- **Other options.** The effect at its consumer's size (the saving lost
+  after the resize).
+- **To reverse.** `own_size` on each node.
+- **Rough edge.** An effect after an own-sized node runs small even where
+  you wanted it big.
+- **Judge it.** Checks 337, 338, 340.
+
+### 369. Resize params are per instance, declared from the graph
+
+- **Answer.** (rec) — accepted 2026-10-24.
+- **Built.** `params.declare_resizes(reg, names)`, called from the
+  section's entries (reached or not), group `resize`, ids
+  `resize[.n].size` … `crop_h`, all modulatable, saved as a preset's values
+  (`tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`),
+  in no module and out of a new preset
+  (`::test_a_new_preset_carries_no_resize_values`). A name that leaves the
+  section drops its params and state; a live state survives a hot reload
+  of `view` (fix round 1)
+  (`tests/test_graph_resize.py::{test_declare_resizes_comes_and_goes,test_the_registry_writes_the_view_states_resizes,test_resize_knobs_survive_a_hot_reload_of_view}`).
+- **Other options.** Params of the node's kind rather than per instance.
+- **To reverse.** `declare_resizes`, `RESIZE_GROUP`.
+- **Rough edge.** An unwired resize keeps its knobs while its entry does.
+- **Judge it.** Check 337.
+
+### 370. GRAPH: where the new nodes sit, as built under row 389
+
+- **Answer.** (rec) — accepted 2026-10-24. *Amended for plan 35's row 389
+  (areas by primitive).*
+- **Built.** The delay in MEDIA, beside the channels (a picture that
+  starts a branch); `echo.k` and the dream in LOOK-BACK; the resize in
+  EFFECTS, or in MEDIA when `media_made` says it is made of the media
+  alone (T4's R13 put the real `ResizeNode` in `MEDIA_MADE` and deleted
+  GRAPH's stand-in class). The cable into a delay's image runs back by
+  design, as the one into `lookback.capture` does. A delay's `image` port
+  is the pin `rin:<delay>/image`; `delay(write)` is not drawn. A resize's
+  eight params are side-panel rows through `OWNERS["resize"]`; a node's
+  `said` is its summary's first line (T5)
+  (`tests/test_graph_areas.py::{test_the_areas_run_by_primitive,test_a_resize_sits_by_what_it_is_made_of}`,
+  `tests/test_graph_legible.py::test_a_resize_nodes_params_are_rows_in_the_side_panel`,
+  `tests/test_graphview.py::test_a_render_nodes_said_is_its_first_line`,
+  `tests/test_graph_edit.py::test_the_picker_groups_by_primitive`).
+- **Other options.** All in MEDIA; a resize always in EFFECTS.
+- **To reverse.** `graphview.AREAS`, `MEDIA_MADE`, `OWNERS`.
+- **Rough edge.** A delay and a resize have no page.
+- **Judge it.** Checks 334, 338.
+
+### 371. The schema: plan 34's words are `/5` words (amended by 385)
+
+- **Answer.** (rec) — accepted 2026-10-24. *Amended by plan 35's row 385
+  (R10).*
+- **Built.** `graphmigrate.uses_free_words` is true for a delay, resize,
+  echo or dream, and `legacy_values` returns None for them (R4), so such a
+  preset cannot be written below `/5`. `/6` exists since plan 35: a wired
+  frame that round-trips through the old words (`graphmigrate.unwired`)
+  saves `/5`, one that needs plan 35's vocabulary saves `/6`. A plan 33
+  build reads the `/5` file with a note ("unknown node kind 'delay'"),
+  draws its default graph and loses the run and every branch for that
+  load; it refuses a `/6` file by the ladder's words. Fixtures:
+  `delay-faces`, `delay-trails`, `echo-faces` are `/5`, `resize-faces` and
+  `resize-crop` are `/6`
+  (`tests/test_graph_feedback.py::test_the_new_words_are_v5_only`,
+  `tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`).
+- **Other options.** `/6` for plan 34 alone, with its own ladder refusal.
+- **To reverse.** `uses_free_words`.
+- **Rough edge.** Both Macs on this build before anyone saves a delay, a
+  resize, an echo or the dream.
+- **Judge it.** Checks 341, 352.
+
 ## Plan 35 — the free frame (rows 372–393)
 
 Rows 372–393 were put to the owner on 2026-10-24, in the session that
@@ -6821,7 +7198,8 @@ rest are recommendations the build took ("(rec)"). Each row says what the
 build did; "Rough edge" and "Judge it" are for the hand checks of group
 AE (checks 342–352). The ledger's rulings R1–R17 are folded into "Built"
 where they changed what you see. The plan is built on `plan-34-feedback`
-(PR #236); plan 34 is paused after its T3 and resumes on this model.
+(PR #236); plan 34 was paused after its T3 and resumed on this model
+(rows 353–371 above, now built; 757 goldens with its T4).
 Row 351 ("the default graph keeps plan 32's compositing order") is
 **superseded by 372**: there is no default graph to keep, and the order is
 the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
@@ -7210,6 +7588,8 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
   `delay`, `resize`, `echo.k` and `dream` ids do not clash with V2.
 - **Other options.** Keep `frame` as a hidden node for the loop check.
 - **To reverse.** `HIDDEN_EDGES`, `loop_words`.
-- **Rough edge.** `FRAME_EDGES` still stands for a section outside a
-  wired frame until plan 34 T4 removes the last of them.
+- **Rough edge.** `FRAME_EDGES` is kept, for reading an old section before
+  it migrates (`graph.sink_loops(wires, wired=False)` walks it when the
+  section is not a wired frame). Plan 34's T4 did not remove it, as this
+  row first said it would.
 - **Judge it.** —

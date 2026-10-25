@@ -1027,6 +1027,47 @@ wires with the mutes all on; `--signatures` adds a missing case to
 re-records an existing one), and `--names` rewrites only the fixtures'
 recorded node names and asserts the `goldens` list is unchanged.
 
+**Feedback: the delay, the echoes and the resize** (plan 34, rows
+353–371; `graph.Delay`, `graph.EchoNode`, `graph.ResizeNode`,
+`params.declare_resizes`). Four node kinds, each added on GRAPH
+(right-click ▸ pictures ▸ **delay** / **resize**, look-back ▸ **echo.k** /
+**dream**) and saved as an entry in the section (`{"kind": "delay"}`,
+`{"kind": "echo", "index": k}`, `{"kind": "dream"}`), instance names
+`delay`, `delay.2` …. **The delay** is last frame's input (z⁻¹): a
+half-float picture the renderer keeps under its name, at its input's own
+size, so a loop drawn through one is legal (`scene → delay →
+shape.faces` is an infinite mirror) and a loop through none is refused when
+the section is read, in words that say to wire it through a delay. It has
+no params: a decay, mix or tint is an effect or a composite after it. It
+reads nothing on the first frame and after a frame its input read
+nothing, and the faces then show the pattern. SYSTEM times it as
+`delay(write)`. **The echoes** are the look-back's commits as pictures,
+`echo.1` the newest, to `echo.32`; at the ring's size, cadence
+(`dream.gap`) and 8 bits, which the node's words say; **the ring keeps
+capturing for one with the look-back off**, and an echo past what the ring
+holds, or one after `dream.res` changed, reads nothing for a frame or
+more. `dream` is the dreamed picture, "no dream worker: reads nothing"
+without the worker. **The resize** crops and makes a picture at a size of
+its own, so a delay fed through it holds a small buffer and an effect after
+it runs small. **`resize[.n].*` are a preset's values** (group `resize`,
+declared from the section's entries, kept while the entry is, all
+modulatable, in no module): `size` (the long side, 16–2048 in powers of
+two; default 256), `aspect` (`input`, `square`), `fit` (`cover`,
+`contain`, `stretch`), `filter` (`linear`, with mipmaps past a 2× shrink,
+or `nearest`) and `crop_x`, `crop_y`, `crop_w`, `crop_h` (the rect's
+centre and size, normalised on the input, y from the top; past the edge is
+transparent). A crop is a value: an LFO on it rebuilds nothing. A size is
+stepped, and a route on it remakes the delay pair and the effect pools
+after the resize at each step, bounded by `SIZED_KEEP_FRAMES`. A loop
+drag on GRAPH is refused red in `LOOP_FACES`, `LOOP_BACKDROP` or (any
+other loop in a wired frame) `LOOP_PLAIN`. **Both Macs:** a graph with
+a delay, resize, echo or dream writes `hyperspace.preset/5` where the
+frame round-trips (`graphmigrate.uses_free_words`), which a plan 33 build
+reads with a note ("unknown node kind 'delay'") and draws its own default
+graph; a frame that needs plan 35's vocabulary writes `/6`, which a plan
+33/34 build refuses. No factory preset has a delay, resize, echo or
+dream. The nodes' internals (`delay(write)`) are not on the canvas.
+
 **Node instances: the naming rule** (plan 26 A0; `params.instance_id`,
 `params.instance_of`, pinned by `tests/test_params.py`). A render node's
 params are `<node>.<key>`, where `<node>` is the node's prefix —
@@ -1423,6 +1464,13 @@ as built.
   ids were renamed (params were not), so a `/6` file read by an older
   build would not make sense even if it were read. See "Presets and the
   wired frame" in §2.
+- **Both Macs on the feedback build too** (plan 34, on the same branch as
+  plan 35): a preset with a `delay`, `resize`, `echo` or `dream` saves
+  `hyperspace.preset/5` where its frame round-trips. A plan 33 build reads
+  that file with a load note (it does not know the node kind), draws its
+  own default graph and loses the run and every branch for that load; a
+  `/6` file is refused there by the ladder's words. So both Macs run this
+  build before anyone saves one. See "Feedback" in §2 (checks 341 and 352).
 - **Both Macs on this build.** A preset that uses media is saved as
   `hyperspace.preset/4` (a `media` section, or any `media.*`, `backdrop.*`
   or `view.media_*` value off its default; `view.media` itself is read as

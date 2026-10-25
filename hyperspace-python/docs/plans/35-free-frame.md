@@ -3,9 +3,11 @@
 **Status: built (2026-10-25)** on `plan-34-feedback` (PR #236; cut at plan
 34 T3, ce0b0c6, 717 goldens; 3925 tests passed, 2 skipped, 741 goldens: the
 717 unmoved and 24 new). Designed with the owner on 2026-10-24 and built
-task by task, each reviewed. **Plan 34 is paused after its T3** and
-resumes on this model: its T4–T6 (the resize, GRAPH, the docs) are built
-next, rebased onto it ("What changes for plan 34"). Preset schema is
+task by task, each reviewed. **Plan 34 was paused after its T3** and
+resumed on this model: its T4–T6 (the resize, GRAPH, the docs) are built
+(a78bb4a..; "What changes for plan 34"), 3953 tests passed, 2 skipped and
+757 goldens with plan 34's T4 (the 741 below are plan 35's own count; T4
+adds 16). Preset schema is
 `hyperspace.preset/6` for the new vocabulary (the node ids are renamed);
 a save writes the lowest schema that loses nothing, so an untouched `/4`
 preset is byte for byte as before and `/5` stays `/5` where it can (R10).
@@ -59,8 +61,9 @@ and areas by primitive (3b3f7f4, 2ea5c8f, fixes 9d0cec9, 983495b); T6 =
 OUTPUT and LOOKBACK as views of the wires (18b1215, fix 13a1633); T7 = the
 new preset (5226e5e); T8 = this documentation. 3925 tests passed, 2
 skipped (the base was 3608). **None of the 717 goldens before the plan
-moved; 24 are new (741).** Plan 34 is paused after its T3 (ce0b0c6) and
-resumes on this model ("What changes for plan 34" below).
+moved; 24 are new (741).** Plan 34 was paused after its T3 (ce0b0c6) and
+resumed on this model ("What changes for plan 34" below); it is built, and
+with its T4 the goldens are 757.
 
 The owner's answers on 2026-10-24: row 373, "approve, but rename ids
 too" (done: `ghost` → `hands`, the layer → `hands.layer`, `readout` →
@@ -943,7 +946,13 @@ and the party's "glass shows the hands only" is still one launch value.
 
 ## What changes for plan 34
 
-Plan 34 T1–T3 are built on the base. T4–T6 are rebased onto this plan:
+Plan 34 resumed and is **built** (2026-10-25): T1–T3 were built on the
+base, and T4 (772e48f, 1fca6ae), T5 (875a44d) and T6 (the docs) were
+rebased onto this plan as below. [`34-feedback.md`](34-feedback.md) has
+"What was built". The 741 goldens above are this plan's own count; plan
+34's T4 adds `resize-faces` and `resize-crop` (16), so **757 with plan
+34's T4**. Row 393 said plan 34's T4 would remove the last of
+`FRAME_EDGES`; it did not, and it stays for reading an old section.
 
 - **T1's words**: `FRAME_SOURCE_REFUSAL` and `LOOP_FRAME` are retired
   (there is no `frame`), and `FRAME_EDGES` becomes `HIDDEN_EDGES`

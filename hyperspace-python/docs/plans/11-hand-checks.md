@@ -5,7 +5,7 @@ Each gives the steps, what passes, what fails and where in the code a
 failure points, and the headless tests that show what "right" looks
 like. [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) is the plain-language
 version, ordered by device, and the place to start; it cites these
-numbers. They run 1–352 (332–341, group AD, are plan 34's and are written with its docs); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
+numbers. They run 1–352 (group AD (332–341) is plan 34's, feedback, on `plan-34-feedback` (PR #236), and runs with group AE); group Y (232–266, 272–276) is plan 28's (261–266 its N7,
 272–276 its N9), 267–271, plan 30's N8 (the palette as compression), are at
 the end of group X, and group Z (277–295) is two parts: 277–279 the
 instanced field from `main`, renumbered from its 144–146 when main was
@@ -4629,6 +4629,183 @@ the same row. *Fail:* mix drops to 0 between fires, a fire reaches less
 than the top, or the GRAPH cable makes another row (`learn.row_for`,
 `graphview.Edit.route_for`).
 
+## AD. Plan 34: feedback
+
+Plan 34 as built is [`34-feedback.md`](34-feedback.md): a **delay** node
+whose picture is last frame's input, so a loop drawn through one is legal;
+the look-back's frames as pictures (`echo.1` … `echo.32`, newest first,
+and `dream`); a **resize** that crops and makes a picture at a size of its
+own; and loops through the faces, the backdrop or the frame refused when
+the section is read, in words that point at a delay. On `plan-34-feedback`
+(PR #236, with plan 35). Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`, with a clip
+(`.mp4`) in `~/Hyperspace-try/media/` on channel A for 338. None of these
+has been run by a person; the goldens were recorded on the build machine.
+
+**How AD and AE relate.** Both groups run on the same build, in one go.
+Plan 35 renamed the nodes and made the frame wires, so every AD check
+starts from a **new preset (342)** and its scene starter, or from the
+factory frame, and names the wired frame's ids (`channel.a`, `lookback`,
+`output.all`, `delay(write)` on SYSTEM). 334's drag is GRAPH's, as 343's
+is: do them one after the other. 340 and 351 are both SYSTEM's frame cost,
+so time them in one sitting. **341 is the `/5` half of 352**: a `/5` file
+with a delay, opened on a plan 33 build, is read with a note; a `/6` file
+there is refused (352). Both Macs run this build before 341 and 352, and
+before anyone saves a delay, a resize, an echo or the dream (`/5`) or
+anything that needs plan 35's vocabulary (`/6`). Group AD assumes the
+control window at its usual 960 × 900. In every graph below, make the
+shape show first (the scene starter, or `shape → scene.geometry`, `scene →
+lookback.image`, `lookback → output.all.image`).
+
+**332. The infinite mirror; an empty delay shows the pattern.** (laptop,
+the copy)
+Headless: `tests/test_graph_delay.py::{test_a_delay_shows_last_frames_picture,test_the_first_frame_reads_nothing_and_the_faces_show_the_pattern,test_a_delay_whose_input_read_nothing_reads_nothing}`, `tests/test_golden_frames.py` (`delay-faces`).
+On a new preset (342) pick the scene starter, then add a `delay` from
+**pictures ▸** and wire `scene → delay.image` and `delay → shape.faces`
+(and turn the faces on). Watch a minute. Then delete the cable `scene →
+delay.image` so the delay's input is nothing, and wait a second; wire it
+back.
+*Pass:* the faces show the shape within the shape, a frame deeper each
+frame, with no error on the control window or SYSTEM, and no cable refused;
+with the cable deleted the faces fall back to the face pattern (as they
+look with `delay` unwired), not black, and come back to the mirror when it
+is wired again. Judge the look, black faces included (the faces show an
+opaque picture fully, and the scene's target is 8-bit).
+*Fail:* a refusal on either drag, black faces after the cable is deleted,
+a stale picture frozen on the faces, or an error line
+(`graph.Delay`, `graph.DelayWrite.run`).
+
+**333. Trails you can see.** (laptop, the copy)
+Headless: `tests/test_graph_delay.py::test_the_trails_show_and_fade`, `tests/test_golden_frames.py` (`delay-trails`).
+Build the `delay-trails` graph: a `zoomblur` (amount about 0.15, glow 0)
+and a `palette` (on, mix 1, val slice to 0.6), a `composite` set to add;
+wire `delay → zoomblur.2 → palette.2`, `scene → composite.2.under`,
+`palette.2 → composite.2.over`, then `composite.2 → delay.image` and
+`composite.2 → output.all.image`. (Or load a preset that has them.)
+*Pass:* the shape leaves trails that stream toward the centre and fade
+within a few frames when it moves; nothing sticks, burns to white or grows
+without end; stopping the shape lets the trail die out. Compare with the
+same graph minus `delay.image`: the trail is the only difference.
+*Fail:* no trail at all (a picture identical to the plain frame), a
+trail that never fades or saturates to white, or flicker from the delay
+swapping (`DelayWrite`, `Renderer._turn_delays`).
+
+**334. The drag: a loop is refused in words; through a delay it lands.**
+(laptop, the copy)
+Headless: `tests/test_graph_edit.py::{test_a_sink_loop_drag_is_refused_in_words,test_a_plain_loop_drag_points_at_a_delay}`, `tests/test_graph_feedback.py::test_each_sink_loop_is_refused_at_read`, `tests/test_graph_wired.py::test_loop_words_in_a_wired_frame`.
+This is GRAPH's drag, as 343 is. With the scene starter, drag `scene`
+onto `shape.faces`. Then add a `delay` and drag `delay` onto
+`shape.faces`, and `scene` onto `delay.image`. Then wire a loop of effects:
+`acid` and `wobble` in a row, and drag `wobble` onto `acid`'s `aux`.
+*Pass:* the first drag goes red and does not land; its words say there is a
+loop through the faces and to wire it through a delay; through a delay it
+lands and the faces show the scene; the loop of effects goes red with words
+that say to wire it through a delay (not the faces); each refusal leaves
+the graph as it was.
+*Fail:* a drag that lands green and then sits dormant, a refusal with no
+words, or words that name the wrong node (`graph.LOOP_FACES`,
+`LOOP_PLAIN`, `graph.sink_loops`).
+
+**335. An echo on the faces, and into an output's hands.** (laptop, the
+copy; the TV for the second window)
+Headless: `tests/test_graph_echo.py::{test_echo_k_is_the_kth_newest_capture,test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off,test_a_res_change_empties_the_echoes,test_an_echo_into_an_outputs_hands_reads_last_frames_capture}`, `tests/test_golden_frames.py` (`echo-faces`).
+Add `echo.4` from **look-back ▸** and wire `echo.4 → shape.faces`, with the
+look-back off (LOOKBACK page). Change `dream.gap` and watch the cadence,
+then change `dream.res`. Then put the look-back back on, delete that wire
+and wire `echo.1 → output.2.hands` (or output 1 on the laptop alone).
+*Pass:* the faces show the shape from four captures back, with no wake on
+the picture and the look-back off; a longer `dream.gap` makes the echo move
+less often; after `dream.res` changes the faces show what they show
+unwired for a few commits and then the echo returns; the echo laid over the
+output is one capture old and moves with the cadence, never the frame
+being drawn; the echo node's words give its size and cadence.
+*Fail:* a wake on the picture with the look-back off, an echo that
+freezes after `dream.res` changes, an echo that shows this frame's picture
+at the hands, or an error (`Lookback.echo_slot`, `graph.EchoNode`).
+
+**336. The dream on the faces.** (laptop, the copy, the dream worker)
+Headless: `tests/test_graph_echo.py::test_the_dream_reads_nothing_until_written`.
+Add `dream` and wire `dream → shape.faces`. Try it with the dream worker
+off and with it running (the dream in LOOKBACK).
+*Pass:* without the worker the node's summary says "no dream worker: reads
+nothing" and the faces show their pattern; with it, the faces show the
+dream's picture once its first result lands.
+*Fail:* black faces without the worker, a node with no explanation, or an
+error (`graph.DreamNode`).
+
+**337. A resize into a delay; an LFO on the crop.** (laptop, the copy)
+Headless: `tests/test_graph_resize.py::{test_a_delay_through_a_resize_holds_a_small_buffer,test_a_crop_change_is_a_value_never_a_rebuild,test_nearest_keeps_hard_pixels,test_the_crop_takes_the_rect}`, `tests/test_golden_frames.py` (`resize-faces`, `resize-crop`).
+Add a `resize` from **pictures ▸** and a `delay`. Wire `scene →
+resize.image`, `resize → delay.image` and `delay → shape.faces`. On the
+resize's side panel set `size` to 64, `aspect` to square and `filter` to
+nearest. Then route an LFO (right-click the param ▸ **Route from**) to `resize.crop_w` and
+`resize.crop_h`, and after that to `resize.crop_x`. Leave it running a
+minute.
+*Pass:* the faces show pixelated feedback (hard pixels, a coarse grid);
+the LFO on the crop zooms and pans it smoothly with no hitch, no
+flash, and nothing added to GRAPH or SYSTEM when it moves; the resize's
+eight params are rows on its side panel and Learn works on them.
+*Fail:* a flash or a hitch each time the crop moves, soft pixels with
+nearest, a crop that cannot be modulated, or a rebuilt graph visible as
+nodes flickering faint (`graph.ResizeNode.made`, `params.declare_resizes`).
+
+**338. A resize before an effect makes the effect cheaper.** (laptop, the
+copy, a clip on channel A)
+Headless: `tests/test_graph_resize.py::{test_an_effect_after_a_resize_runs_at_its_size,test_a_resize_makes_its_own_size}`, `tests/test_golden_frames.py` (`resize-crop`).
+Wire `channel.a → acid.2.image`, `acid.2 → shape.faces` and read
+`acid.2`'s line on SYSTEM. Then insert a `resize` (size 256) between
+`channel.a` and `acid.2` and read the line again.
+*Pass:* the picture on the faces is the same look at a coarser size; the
+`acid.2` line on SYSTEM is lower with the resize than without, and the
+resize shows its own line; the resize sits in MEDIA or EFFECTS (MEDIA when
+nothing but the media feeds it), with its cable out running forward.
+*Fail:* the same `acid.2` time with and without the resize, a resize that
+shows a full-size picture, or a cable running back across the areas
+(`graph.Effect.own_size`, `graphview.MEDIA_MADE`).
+
+**339. A window resize, the render cap, and a modulated resize size,
+mid-feedback.** (laptop, the copy)
+Headless: `tests/test_graph_delay.py::{test_a_size_change_loses_no_frame,test_a_graph_rebuild_keeps_the_delay}`, `tests/test_graph_resize.py::test_a_size_step_reallocates_once_each_way`.
+Run 332's mirror. Drag the control window and the render window's edge,
+and change the render cap. Then, on 337's graph, route an LFO to
+`resize.size` and leave it stepping a minute; watch SYSTEM.
+*Pass:* no black flash and no error through the resizes; the mirror
+carries on; with `resize.size` stepping, the picture changes size at each
+step with no error, and SYSTEM stays steady once each size has been seen
+(the textures it left are kept for half a second and then released).
+*Fail:* a black flash, an error line, a delay that restarts from nothing at
+each step, or a frame time that climbs and keeps climbing under the LFO
+(`render.DelayPair`, `Renderer._prune_sized`, `SIZED_KEEP_FRAMES`).
+
+**340. The frame cost: a delay, a resize, echoes.** (laptop, then the rig;
+with 351, in one sitting)
+No test times a frame. Headless: none.
+On SYSTEM note the frame time and the rate. Then run 332 at the render
+cap and again with a `resize` (size 256) before the delay; then four
+echoes wired on the faces. Write down `delay(write)`, the resize's line and
+the frame time each time. Take 351's before-and-after numbers in the same
+sitting.
+*Pass:* the delay's cost is lower at 256 than at the cap, the resize shows
+a line of its own, the four echoes cost something you can read off SYSTEM,
+and the frame rate holds on the laptop; write the numbers down. Say what
+the rig does.
+*Fail:* a delay at 256 that costs as much as one at the cap, a hitch from
+a node that is wired but unread, or a rate that drops with the look-back
+off and an echo wired (`DelayWrite.held`, `Lookback.keep`).
+
+**341. A `/5` file with a delay on a plan 33 build.** (two Macs, the copy)
+Headless: `tests/test_graph_feedback.py::test_the_new_words_are_v5_only`, `tests/test_presets.py::test_resize_values_save_and_load_with_the_preset`.
+This is the `/5` half of 352. On this build load the factory frame, add a
+delay in a loop (332) and save it under a new name; read its `schema`. Open
+the library on a Mac on a plan 33 build.
+*Pass:* the file says `hyperspace.preset/5`; the plan 33 build opens it
+with a load note ("unknown node kind 'delay'") and draws its own default
+graph, losing the run for that load, as expected; with both Macs on this
+build the preset opens on both and the mirror runs.
+*Fail:* the file says `/6` for a frame that needs nothing of plan 35's, a
+plan 33 build that crashes or refuses the file, or a delay lost on this
+build (`graphmigrate.uses_free_words`, `preset.schema_of`).
+
 ## AE. Plan 35: the free frame
 
 Plan 35 as built is [`35-free-frame.md`](35-free-frame.md): the shape, the
@@ -4640,8 +4817,8 @@ its ground; a window's `picture` and `hands` switches are the rig's mutes;
 wiring it drew; a **new** chip on the PRESET strip starts blank; node ids
 are renamed in the owner's words (`ghost` → `hands`, `history` →
 `lookback`, `media.<c>` → `channel.<c>`; params unchanged). On
-`plan-34-feedback` (PR #236, which also carries plan 34 up to its T3). Run
-on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`,
+`plan-34-feedback` (PR #236, which also carries plan 34, group AD above).
+Run on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`,
 with a clip (`.mp4`) in `~/Hyperspace-try/media/`. **A preset that needs
 the new vocabulary saves as `hyperspace.preset/6`, which an older build
 refuses:** both Macs must run this build before anyone saves one, and

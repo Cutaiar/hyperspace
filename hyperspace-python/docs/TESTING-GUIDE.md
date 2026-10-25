@@ -48,6 +48,11 @@ explained in the [glossary](#glossary) at the end.
    `plan-34-feedback` (PR #236) until it is merged. A frame that needs the
    new vocabulary saves as `hyperspace.preset/6`, which an older build
    refuses, so both Macs must run that build before L162.
+   The feedback entries (L163–L167) are plan 34's, on the same branch:
+   run them on the same build as L158–L162, after L158 (a new preset).
+   A graph with a delay, resize, echo or dream saves `/5` where its frame
+   round-trips, which a plan 33 build reads with a note, so both Macs must
+   run that build before L167.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -140,6 +145,10 @@ changes brightness or volume instead).
     live source), L157 with two Macs on the copy, then A47 with the APC40.
 17. Plan 35's free-frame entries: L158, L159 and L161 on the laptop (L159
     with a clip), L160 at the rig, L162 with two Macs on the copy.
+18. Plan 34's feedback entries, in the same sitting: L163, L164 and L165
+    on the laptop (L165 with a clip, L164 with the dream worker), L166
+    with L161 (the frame cost, the laptop and then the rig), L167 with two
+    Macs on the copy (with L162).
 
 ## Summary
 
@@ -307,6 +316,11 @@ changes brightness or volume instead).
 | L160 | The glass's mutes; hands through the effects on output 2 | 1 | the rig, hands | 347, 348 |
 | L161 | The canvas at distance; SYSTEM before and after | 1 | laptop, the older build | 350, 351 |
 | L162 | A library preset looks the same; a `/6` file on an older build | 1 | two Macs, the copy | 345, 352 |
+| L163 | The infinite mirror, an empty delay, trails (plan 34) | 1 | laptop, the copy | 332, 333 |
+| L164 | A loop refused in words; an echo on the faces and at the hands; the dream | 1 | laptop, the copy, the dream worker | 334, 335, 336 |
+| L165 | A resize into a delay with an LFO on the crop; a resize before an effect; a window resize mid-feedback | 1 | laptop, a clip, the copy | 337, 338, 339 |
+| L166 | The frame cost of a delay, a resize and echoes | 1 | laptop, then the rig | 340 |
+| L167 | A delay saved on this build, opened on a plan 33 build | 1 | two Macs, the copy | 341 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2402,7 +2416,7 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 (it takes a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
-**Right if:** it ends "all 741 frames match their goldens (Apple M3 Max,
+**Right if:** it ends "all 757 frames match their goldens (Apple M3 Max,
 4.1 Metal - 90.5)" (after a macOS update it may add a note naming two
 versions); the pictures show the presets, some with two made-up hands
 (the left open, the right a fist).
@@ -3924,7 +3938,7 @@ through, …) is written as that output's own wires, with the window mutes
 on; and a **signature test** (`graph.signature`, 125 cases in
 `tests/fixtures/frame-signatures.json`) proves the wired frame builds the
 node-for-node frame the deleted `default_graph` built. L82 now ends "all
-741 frames match their goldens".
+757 frames match their goldens".
 
 #### L158. A new preset, and the owner's delete sequence
 
@@ -4019,6 +4033,118 @@ byte-identical; the three `/5` presets re-save as `/5`; the new file says
 the `/6` file.
 
 *(checks 345, 352)*
+
+## Plan 34: feedback (L163–L167)
+
+Plan 34's tests: **five fixtures** (`delay-faces`, `delay-trails`,
+`echo-faces`, `resize-faces`, `resize-crop`) and **40 goldens** in
+`tests/golden/frames/` (24 of them in plan 35's 741, the other 16 make
+757); a delay, an echo or the dream is a `/5` word and the resize's
+fixtures are `/6` wired frames. Run L163–L167 on the same build as
+L158–L162, starting from a new preset (L158).
+
+#### L163. The infinite mirror, an empty delay, trails
+
+**Needs:** laptop; the copy; branch `plan-34-feedback` (PR #236).
+
+**Do:** on a new preset, pick the scene starter; add a `delay` and wire
+`scene → delay.image`, `delay → shape.faces`. Watch the faces, then delete
+the cable into the delay and wait a second, then wire it back. Then build
+the trails graph: `delay → zoomblur.2 → palette.2` (val slice to 0.6),
+`scene` and `palette.2` into a `composite.2` set to add, and `composite.2`
+into both `delay.image` and `output.all.image`.
+
+**Right if:** the faces show the shape within the shape; with the cable
+deleted they show their pattern, not black, and the mirror comes back when
+it is wired; the trails stream toward the centre, fade within a few frames
+and stop when the shape stops, with nothing sticking or burning to white.
+
+**Wrong if:** a refusal, black faces after the delete, a frozen picture,
+a trail that never fades, or no trail at all.
+
+*(checks 332, 333)*
+
+#### L164. A loop refused in words; an echo on the faces and at the hands; the dream
+
+**Needs:** laptop; the copy; the dream worker for the last step; the TV
+for a second window.
+
+**Do:** drag `scene` onto `shape.faces`; then through a `delay`; then
+`wobble` onto `acid`'s `aux` after `acid → wobble`. Add `echo.4` and wire it
+to `shape.faces` with the look-back off; change `dream.gap` and
+`dream.res`. Put the look-back on and wire `echo.1` to an output's
+`hands`. Add `dream` and wire it to `shape.faces`, with and without the
+worker.
+
+**Right if:** each loop drag goes red with words that say to wire it
+through a delay and changes nothing; through a delay it lands; the echo
+shows the shape from four captures back with no wake, moves with
+`dream.gap`, goes back to the pattern for a few commits after `dream.res`
+changes, and at the hands is one capture old; the dream says "no dream
+worker: reads nothing" without its worker.
+
+**Wrong if:** a loop that lands green and then sits dormant, an echo that
+freezes, an echo that shows the frame being drawn, or black faces for the
+dream.
+
+*(checks 334, 335, 336)*
+
+#### L165. A resize into a delay; a resize before an effect; a window resize mid-feedback
+
+**Needs:** laptop; a clip on channel A; the copy.
+
+**Do:** wire `scene → resize → delay → shape.faces` with the resize at
+size 64, square, nearest; route an LFO to `resize.crop_w`, `crop_h` and
+`crop_x`. Then wire `channel.a → acid.2 → shape.faces`, read `acid.2` on
+SYSTEM, and put a resize (256) before it. Last, drag the windows' edges and
+change the render cap during the mirror, and route an LFO to
+`resize.size` for a minute.
+
+**Right if:** the faces show pixelated feedback that zooms and pans
+smoothly under the LFO with no hitch; `acid.2`'s line drops with the resize
+before it; a window resize or a cap change shows no black flash and no
+error; with `resize.size` stepping, the picture changes size at each step
+and SYSTEM stays steady.
+
+**Wrong if:** a flash or hitch as the crop moves, soft pixels with
+nearest, no drop in `acid.2`'s line, or a frame time that keeps climbing.
+
+*(checks 337, 338, 339)*
+
+#### L166. The frame cost of a delay, a resize and echoes
+
+**Needs:** laptop, then the rig; take L161's numbers in the same sitting.
+
+**Do:** note SYSTEM's frame time and rate, then run the mirror at the
+render cap and again with a resize (256) before the delay, then four
+echoes on the faces; write down `delay(write)`, the resize's line and the
+frame time each time.
+
+**Right if:** the delay costs less at 256 than at the cap, the resize has a
+line of its own, the four echoes' cost can be read off SYSTEM, and the
+laptop's rate holds. Write the numbers down.
+
+**Wrong if:** a delay at 256 that costs as much as one at the cap, or a
+hitch from a wired but unread node.
+
+*(check 340)*
+
+#### L167. A delay saved on this build, opened on a plan 33 build
+
+**Needs:** two Macs sharing a library, one on a plan 33 build; the copy.
+
+**Do:** on this build load the factory frame, wire a delay in a loop (L163)
+and save it under a new name; read its `schema`; open the library on the
+plan 33 Mac; then put both Macs on this build.
+
+**Right if:** the file says `hyperspace.preset/5`; the plan 33 build opens
+it with a load note and draws its own default graph; with both Macs on
+this build it opens on both. (A `/6` file on that Mac is refused: L162.)
+
+**Wrong if:** the file says `/6` for a frame that needs nothing of plan
+35's, or the plan 33 build crashes or refuses it.
+
+*(check 341)*
 
 # Part 2 — tests that need hardware
 
