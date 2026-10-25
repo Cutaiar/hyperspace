@@ -3996,20 +3996,22 @@ class ResizeNode(Node):
         size = self.size_for("image", frame)
         at_in = root if size == tuple(root.size) else root.at(size)
         own = self.own_size(frame)
+        # (the input drawn on demand first, outside the timer: its nodes
+        # time themselves, and `resize`'s line is its own refit alone)
+        tex = src.image(at_in)
+        if tex is None:
+            tex = picture(at_in, src, dtype="f2")
+        if tex is None:
+            return None
+        crop = self._crop(st)
+        filt = _pick(RESIZE_FILTERS, st.filter)
+        fit = _pick(range(len(RESIZE_FITS)), st.fit)
+        mip = filt == "linear" and (crop[2] * tex.size[0] / own[0] > 2.0
+                                    or crop[3] * tex.size[1] / own[1] > 2.0)
+        out, fbo = r._frame_target((key, own), own, dtype="f2")
+        fbo.viewport = (0, 0, *own)
         with frame.timed(self.name):
-            tex = src.image(at_in)
-            if tex is None:
-                tex = picture(at_in, src, dtype="f2")
-            if tex is None:
-                return None
-            crop = self._crop(st)
-            filt = _pick(RESIZE_FILTERS, st.filter)
-            mip = filt == "linear" and (crop[2] * tex.size[0] / own[0] > 2.0
-                                        or crop[3] * tex.size[1] / own[1] > 2.0)
-            out, fbo = r._frame_target((key, own), own, dtype="f2")
-            fbo.viewport = (0, 0, *own)
-            r._refit(tex, fbo, crop=crop, fit=RESIZE_FITS.index(_pick(RESIZE_FITS, st.fit)),
-                     filter=filt, mip=mip)
+            r._refit(tex, fbo, crop=crop, fit=fit, filter=filt, mip=mip)
         root.data[key] = out
         return out
 

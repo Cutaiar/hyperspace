@@ -1057,7 +1057,10 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
              "fit": list(RESIZE_FITS), "filter": list(RESIZE_FILTERS)}
     for name, ids in want.items():
         st = state.get(name)
-        if not isinstance(st, ResizeState):
+        # (made only when missing — never by class: after a hot reload of
+        # `view` a live state is the old class's, and its params, bound to
+        # it, are kept below; replacing it would leave them writing a dead one)
+        if st is None:
             st = state[name] = ResizeState()
         for pid, key in zip(ids, _RESIZE_KEYS, strict=True):
             if pid in r:

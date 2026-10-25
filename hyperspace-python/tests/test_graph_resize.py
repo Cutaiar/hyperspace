@@ -401,3 +401,58 @@ def test_the_resize_says_its_size_fit_filter_and_crop(ctx):
     r = _wired_renderer(ctx, _media(), CHANNEL_OUT, [RESIZE])
     _frame(ctx, r, _s(size=2), _views(ctx, WIDE), WIDE)
     assert r._graph.nodes["resize"].said == "its input reads nothing"
+
+
+def test_resize_knobs_survive_a_hot_reload_of_view(monkeypatch):
+    """Review fix round 1: after a hot reload of `view` (`params.ResizeState`
+    a new class), a redeclare keeps the live state the params are bound to —
+    so the knob and the renderer's state stay one."""
+    import dataclasses
+
+    reg = params.Registry()
+    params.declare_resizes(reg, ["resize"])
+    live = reg.resize_state["resize"]
+    reg["resize.crop_x"].set(0.3)
+    reloaded = dataclasses.make_dataclass(
+        "ResizeState", [(f.name, f.type, dataclasses.field(default=f.default))
+                        for f in dataclasses.fields(ResizeState)])
+    monkeypatch.setattr(params, "ResizeState", reloaded)
+    assert params.declare_resizes(reg, ["resize"]) == []
+    assert reg.resize_state["resize"] is live
+    assert reg["resize.crop_x"].value == live.crop_x == 0.3
+    reg["resize.crop_x"].set(0.7)
+    assert reg.resize_state["resize"].crop_x == 0.7
+    params.declare_resizes(reg, ["resize", "resize.2"])
+    assert isinstance(reg.resize_state["resize.2"], reloaded)
+
+
+def test_two_consumers_of_one_resize_refit_from_the_one_small_picture(ctx):
+    """Review fix round 1: `resize` into output 2 (160×90) and onto the faces
+    (1024²) is made once a frame and refitted twice from that one small
+    picture; in steady state no frame target is made."""
+    r = _wired_renderer(ctx, _media(a=Still(_rgba(16, 9))),
+                        [("channel.a", "resize.image"), ("resize", "output.2.image"),
+                         ("resize", "shape.faces")], [RESIZE])
+    calls: list[tuple[int, tuple[int, int]]] = []
+    real = r._refit
+
+    def spy(tex, dst, *a, **k):
+        calls.append((tex.glo, tuple(dst.viewport[2:])))
+        return real(tex, dst, *a, **k)
+
+    r._refit = spy
+    s, vs = _s(size=2), _views(ctx, WIDE)
+    keys = None
+    for k in range(4):
+        calls.clear()
+        _frame(ctx, r, s, vs, WIDE, k)
+        small = _own(r, (64, 36)).glo
+        made = [c for c in calls if c[1] == (64, 36)]
+        fitted = [c for c in calls if c[0] == small]
+        assert len(made) == 1 and made[0][0] != small, calls
+        assert len(fitted) == 2, calls
+        assert {c[1] for c in fitted} == {WIDE, (G.FACE_PIC, G.FACE_PIC)}, calls
+        if k >= 1:
+            if keys is not None:
+                assert set(r._frames) == keys
+            keys = set(r._frames)
