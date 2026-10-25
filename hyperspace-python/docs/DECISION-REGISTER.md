@@ -373,7 +373,7 @@ here; overturn → the change, then the same.
 | 351 | *Superseded by 372.* The default graph keeps plan 32's compositing order | 322 | (rec) — accepted 2026-10-24 |
 | 352 | The switch is a cut, eight inputs, only the selected one runs | 319, 324 | (rec) — accepted 2026-10-24 |
 | 353 | A `delay` picture node, z⁻¹: its picture is last frame's input; a loop through one is legal | 332, 333 | owner — 2026-10-24: "build A" |
-| 354 | Delay buffers are the renderer's: a half-float ping-pong pair per delay name, kept across rebuilds, released `SIZED_KEEP_FRAMES` frames after it leaves | 339, 340 | (rec) — accepted 2026-10-24 |
+| 354 | Delay buffers are the renderer's: a half-float ping-pong pair per delay name, kept across rebuilds, not loads (a preset load resets them: final review R19), released `SIZED_KEEP_FRAMES` frames after it leaves | 339, 340 | (rec) — accepted 2026-10-24 |
 | 355 | A delay has no params: decay, mix and tint are an effect's or a composite's after it | 333 | (rec) — accepted 2026-10-24 |
 | 356 | Strict z⁻¹: reads nothing on the first frame and after a frame its input read nothing; a size change loses no frame | 332, 339 | (rec) — accepted 2026-10-24 |
 | 357 | A delay holds its input at the input's own size, else the frame's | 337, 338 | (rec) — accepted 2026-10-24 |
@@ -404,7 +404,7 @@ here; overturn → the change, then the same.
 | 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through | 345 | (rec) — accepted 2026-10-24 |
 | 383 | Migration writes today's default frame once into All outputs; D1 placements stay entries | 345 | (rec) — accepted 2026-10-24 |
 | 384 | Below `/6` by round trip: a wired frame saves in the old words when it is exactly what `frame_wires` writes | 352 | (rec) — accepted 2026-10-24 |
-| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10) | 352 | (rec) — accepted 2026-10-24 |
+| 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10), and below `/6` the GRAPH layout in the canvas's old ids (final review R15) | 352 | (rec) — accepted 2026-10-24 |
 | 386 | The new preset: fresh values, routes cleared, the desk written as the factory layer, `untitled` and unsaved | 342 | (rec) — accepted 2026-10-24 |
 | 387 | What a new preset's "empty" is: only the outputs, nothing wired, plus a "scene starter" item | 342 | owner — 2026-10-24: as proposed |
 | 388 | GRAPH deletes everything: the refusals left are type errors, loops and the rig's own nodes | 343 | (rec) — accepted 2026-10-24 |

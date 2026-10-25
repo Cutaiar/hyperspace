@@ -69,7 +69,8 @@ holds the digest over them).
 `render.DelayPair`). A node `delay` (`delay.2` …) whose picture is last
 frame's input. The renderer holds a half-float ping-pong pair per delay
 name (`Renderer.delay_pair`), swapped at the start of the frame
-(`Renderer._turn_delays`), kept across graph rebuilds and released
+(`Renderer._turn_delays`), kept across graph rebuilds (not loads: a
+preset load resets them, R19 of the final review) and released
 `SIZED_KEEP_FRAMES` frames after the delay leaves the graph. The delay
 itself has no inputs, so a loop through it is no dependency. Its other
 half, `DelayWrite` (`delay(write)` on SYSTEM), paints the delay's `image`
@@ -193,6 +194,24 @@ The fixtures `delay-faces`, `delay-trails` and `echo-faces` are `/5`,
 
 (Plan 35 has its own R10; "R10" in plan 34's rows means row 385's.)
 
+### Final review fixes (plans 34 + 35, 2026-10-25)
+
+The whole-branch review over 052d889..9bec205 ruled R15–R19; all landed on
+`plan-34-feedback` with a test written first. **R16**: every frame-target
+key asked for is marked, and `Renderer._prune_sized` releases any key idle
+`SIZED_KEEP_FRAMES` — an end's `shown(...)`, a `#fit` (a delay's, an echo's,
+a resize's, an effect's), a channel's fit — not only `(name, size)` keys, so
+a load leaves nothing of the last preset's textures
+(`tests/test_graph_resize.py::test_a_load_frees_the_last_presets_frame_targets`).
+**R19** (row 354 reworded "rebuilds, not loads"): `Presets.load_doc` asks the
+attached renderer to `reset_delays`; at the next turn every pair holds
+nothing (its textures kept), so no trail of the preset before shows. A
+GRAPH edit or rebuild asks nothing and the feedback runs on
+(`tests/test_graph_delay.py::test_a_load_resets_the_delays_and_a_rebuild_keeps_them`,
+`::test_a_preset_load_asks_for_the_reset_and_a_graph_edit_does_not`). R15,
+R17 and R18 are plan 35's (its "What was built"). graph.py's docstrings no
+longer describe pipelines, `grounded` or `Wired` as current.
+
 ## What no person has verified
 
 Every headless test passes (3953 passed, 2 skipped on the build machine,
@@ -256,8 +275,6 @@ Behaviour the owner will meet:
 
 Code the next person will meet (deferred minors from the reviews):
 
-- An effect's root-size `#fit` texture stays allocated after the effect
-  leaves the graph, until a size change or a reload (T2).
 - `Renderer.on_reload` does not drop `_refit_prog` and `_refit_vao`, so an
   edit to `REFIT_FS` will not land live (T2; T4 changed `REFIT_FS`).
 - The comment on `FEEDBACK_FIXTURES` in `tools/golden_frames.py` still

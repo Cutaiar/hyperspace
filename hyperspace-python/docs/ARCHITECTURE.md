@@ -381,7 +381,8 @@ Four node kinds on the wired frame: `delay`, `resize`, `echo.<k>` and
 `dream`. **The delay is z⁻¹ in `build_graph`.** `Delay` has no inputs and
 paints the read side of a half-float ping-pong pair the renderer holds
 under its name (`Renderer.delay_pair`, `render.DelayPair`, swapped by
-`Renderer._turn_delays` at the frame's start, kept across rebuilds and
+`Renderer._turn_delays` at the frame's start, kept across rebuilds — not
+loads: a preset load resets them, `Renderer.reset_delays` — and
 released `SIZED_KEEP_FRAMES` frames after the delay leaves the graph), so
 an edge into it is no dependency and a loop through one is legal.
 `_Build.build` adds, for each delay the wires reach, a `DelayWrite`

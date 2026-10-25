@@ -240,6 +240,39 @@ with no path. A **new** chip sits before **save** on the PRESET strip
 *Tests:* `tests/test_presets.py::{test_a_new_preset_is_factory_values_and_nothing_wired,test_a_new_preset_does_not_depend_on_what_was_loaded,test_a_new_preset_undoes_in_one_step,test_a_new_preset_saves_and_loads_back_empty,test_a_new_preset_draws_black}`,
 `tests/test_ui_presets.py::test_the_strip_has_a_new_chip`.
 
+### Final review fixes (plans 34 + 35, 2026-10-25)
+
+The whole-branch review over 052d889..9bec205 ruled R15–R19 (plan 34's
+ledger); each landed with a test written first. **R15** (R14 must respect
+R10): a save below `/6` writes the GRAPH layout in the canvas's old ids —
+the file's own keys while the layout is what the load made of them, so an
+untouched `/4` or `/5` preset saves byte for byte, else every key through
+`graphmigrate.old_canvas_id` (`render:channel.a` → `render:media.a`,
+`render:hands.2` → `render:ghost.2`, `render:camera` → `render:eye`). The
+`/4` and `/5` byte tests gain sources carrying old-id layouts
+(`tests/fixtures/old-canvas-layout/faces-media-layout.json`, recorded by
+3547a7a; the owner's `glimmer-bug`, recorded by 052d889), and
+`tests/test_graph_free.py::test_a_moved_node_in_an_old_layout_saves_below_six_in_the_old_ids`
+holds an edited one. The 58 Drive presets, copied and re-saved, are byte
+for byte what 052d889 writes (the four with old-id layouts — displace-moo,
+glimmer-bug, moo, reeeeeeeel — differed at 9bec205). **R17**: `Presets.new`
+sets `Presets.unsaved` (a load or a save clears it, through the load hook);
+**save** on the unsaved `untitled` preset opens naming even when a user
+preset named `untitled` exists, and **as…** on it prefills nothing. `new`
+lands through a public `Library.land_unsaved`, not the library's private
+`_apply_doc`/`_landed` (`tests/test_ui_presets.py::test_new_then_save_never_writes_over_a_preset_named_untitled`;
+T7's deferred check, `tests/test_presets.py::test_a_new_preset_empties_the_bins_macros_and_modifiers`).
+**R18**: deleting the backdrop lifts it as an effect is — the picture into
+`backdrop.scene` is wired on into every port the backdrop fed, said
+("Backdrop deleted; the scene goes on to Look-back"); on glimmer-bug the
+frame is not black after it
+(`tests/test_graph_edit.py::test_deleting_the_backdrop_lifts_it_like_an_effect`).
+Also: `BackdropNode` is documented as the canvas's stand-in only (its
+`ui_graph.home_page` branch is live: the stand-in is what the canvas
+draws), `graph.media_name` and `readout_name` are gone, `preset.py` names
+`FRAME_KEY`/`WIRED_FRAME`, and the R10 test's through leg asserts.
+`Capture.KIND` stays `history` (as `History`'s does).
+
 ## What no person has verified
 
 Every headless test passes (3925 passed, 2 skipped on the build machine,
@@ -293,8 +326,6 @@ Behaviour the owner will meet:
 - **Through is refused with the window's own picture** (pick "as All
   outputs" first); **"records: Composite"** reads short for a capture
   through a composite (T6; the longer words are on hover).
-- **A user preset literally named `untitled` makes save overwrite
-  instead of asking for a name (T7).** `as…` also prefills `untitled`.
 
 Code the next person will meet (deferred minors from the reviews):
 
@@ -303,20 +334,12 @@ Code the next person will meet (deferred minors from the reviews):
 - `signature` no longer records `HandsLayer.readout`, `Shown.stands` and
   `Shown.copies`, nor the look-back's options: the goldens guard them by
   pixels (T4). It keeps only the nodes a frame can show (R8).
-- Pre-T4 int-keyed `Renderer._frames` textures are not pruned after a hot
-  reload; `on_reload` should drop non-str, non-tuple keys (T4).
 - `config.py`'s docstring example near line 89 is awkward after the cut
   (T4).
 - `graphview._frame_order` puts the capture composite in group 9, the
   implementer's reading of the canonical order; if `frame_wires` writes it
   differently an edit would save `/6` where `/5` would do (T5). Effect
   hovers use an effect file's `@tip`, with a generic fallback (T5).
-- The R10 test's through leg in `test_ui_output.py` is conditional
-  (`if set_through(...) is None`); it should assert (T6).
-- `Presets.new` calls the library's private `_apply_doc` and `_landed`
-  and gets its dirty dot from a sentinel `()`; use an unsaved flag. There
-  is no test that `new` empties the bins, macros and modifiers, nor that
-  the dirty dot survives an undo of `new` (T7).
 - T2's tests were written after a first cut of the builder, not before
   (a process note).
 
