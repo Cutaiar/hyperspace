@@ -201,6 +201,12 @@ EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
            "to a handful of boxes and wires")
+# 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
+# the canvas: it neither pans nor zooms), the editor's own ground laid
+# over it at 1 − `backdrop_alpha`
+BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
+                "beside it sets how strongly it shows")
+BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 
 
 # ---------------------------------------------------------------- state and context
@@ -225,6 +231,8 @@ def _state(panel) -> dict:
     for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None)):
         st.setdefault(k, make())
     st.setdefault("idle_open", set())       # plan 28 N9: the areas whose idle line is open
+    st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
+    st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
     return st
 
 
@@ -517,7 +525,9 @@ def page(panel, dt: float) -> None:
     st["details_rect"] = (pos, size) if sel else None
     st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
                                         and pos[1] <= mouse.y < pos[1] + size[1])
-    _canvas(panel, st, view, imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0)))
+    canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
+    shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
+    _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     if sel:                             # its bottom is the canvas's: the page ends where it did
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
@@ -655,6 +665,8 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         st["tidy"] = True
     if imgui.is_item_hovered():
         imgui.set_tooltip(TIDY_TIP)
+    imgui.same_line()
+    _backdrop_chips(st)
     label = beside_chip(selected, width, st["beside"])
     if label is not None:
         imgui.same_line()
@@ -675,6 +687,53 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         imgui.text_disabled(st["said"])
     else:
         imgui.text_disabled(EDIT_HINT)
+
+
+def _backdrop_chips(st: dict) -> None:
+    """The head's **output behind** chip and, while it is lit, its alpha."""
+    if ui.lit_chip("output behind##graph", st["backdrop"]):
+        st["backdrop"] = not st["backdrop"]
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(BACKDROP_TIP)
+    if st["backdrop"]:
+        imgui.same_line()
+        imgui.set_next_item_width(imgui.get_font_size() * 6)
+        _, st["backdrop_alpha"] = imgui.slider_float("##graph.backdrop", st["backdrop_alpha"],
+                                                     0.0, 1.0, "%.2f")
+        if imgui.is_item_hovered():
+            imgui.set_tooltip(BACKDROP_TIP)
+
+
+def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],
+                  pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where output 1's picture `pic` (w, h) lies on the page's canvas at
+    `origin`, `avail` big: fitted whole and centred (letterboxed) —
+    (top-left, bottom-right), screen pixels."""
+    aw, ah = max(avail[0], 1.0), max(avail[1], 1.0)
+    pw, ph = max(pic[0], 1), max(pic[1], 1)
+    k = min(aw / pw, ah / ph)
+    w, h = pw * k, ph * k
+    x, y = origin[0] + (aw - w) / 2, origin[1] + (ah - h) / 2
+    return (x, y), (x + w, y + h)
+
+
+def _backdrop(panel, st: dict, origin, avail) -> bool:
+    """Output 1 behind the canvas this frame (and asked for again next
+    frame): drawn on the page's own draw list before the editor opens, so
+    the editor's ground — faded by `_canvas` — and every node lie over it.
+    True when it was drawn."""
+    pv = getattr(panel, "preview", None)
+    if not st["backdrop"] or pv is None:
+        return False
+    pv.want()
+    tex = pv.tex
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return False
+    a, b = backdrop_rect(origin, avail, tuple(tex.size))
+    # GL's rows: bottom first, so the picture is drawn upside down in v
+    imgui.get_window_draw_list().add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a),
+                                           imgui.ImVec2(*b), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+    return True
 
 
 def _area_chips(st: dict) -> None:
@@ -763,8 +822,13 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
 
 
-def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
+def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
+            through: float = 0.0) -> None:
+    """The editor, its ground faded to 1 − `through` over the backdrop."""
     ed.set_current_editor(editor(panel))
+    if through > 0.0:
+        bg = ed.get_style().color_(ed.StyleColor.bg)
+        ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
     ed.begin("##graph", size)
     _place(panel, st, view)
     lay = st["auto"][1]
@@ -806,6 +870,8 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     _hover(st, view)
     _moved(panel, st, view)
     ed.end()
+    if through > 0.0:
+        ed.pop_style_color()
 
 
 def effect_errors(panel, view: graphview.View) -> dict[str, str]:

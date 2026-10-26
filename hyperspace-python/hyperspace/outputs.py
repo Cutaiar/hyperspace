@@ -286,6 +286,47 @@ class Offscreen:
                 pass
 
 
+
+class Preview:
+    """Output 1's picture for the control window (2026-10-26: the GRAPH
+    page's backdrop): a publisher in shape — `_draw_render` adds it to
+    output 1's view, with this tap when the window has none of its own, on
+    a frame after the page `want`ed it — that keeps the texture it is
+    handed. Wanted only while the page draws it, so a closed page costs no
+    copy. `tex` is a texture of the render context, which the control
+    window's shares; None before the first picture."""
+
+    kind = "preview"
+    name = ""
+    status = "waiting"
+    fps = 0.0
+    readback_ms = 0.0
+
+    def __init__(self, ctx: moderngl.Context | None = None):
+        self.tap = Offscreen(ctx) if ctx is not None else None
+        self.tex: Any = None
+        self.wanted = False
+
+    def want(self) -> None:
+        """The page draws the picture this frame: copy it next frame."""
+        self.wanted = True
+
+    def take(self) -> bool:
+        """Was it wanted since the last frame? (and forget the wish)"""
+        wanted, self.wanted = self.wanted, False
+        return wanted
+
+    def publish(self, tex, t: float) -> None:
+        self.tex, self.status = tex, "sending"
+
+    def fail(self, why: str) -> None:
+        self.tex, self.status = None, f"error: {why}"
+
+    def close(self) -> None:
+        self.tex = None
+        if self.tap is not None:
+            self.tap.release()
+
 # a frame texture or a layer into a rect of a presenter's framebuffer:
 # 1:1 by texelFetch (the renderer's SHOW_FS) or scaled by the sampler,
 # times `u_k` (1 for the frame, ghost.alpha for a layer); on an opaque

@@ -1546,3 +1546,30 @@ def test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck(tmp_p
     lines = dict(line.split(" ", 1) for line in out.splitlines() if " " in line)
     assert float(lines["closed"]) < 2.0, out
     assert ended - float(lines["closing"]) < 2.0, (ended, out)
+
+
+def test_the_graph_preview_rides_on_output_1_only_when_asked():
+    """2026-10-26: the GRAPH page's backdrop — an `outputs.Preview` the
+    page `want`ed — joins output 1's view as a publisher, through its own
+    tap (output 1 publishes nothing), flushed for the control window; not
+    asked for, output 1's view is as ever."""
+    from hyperspace.outputs import Preview
+
+    log: list[str] = []
+    g = _SwapGlfw(log, {"w1": (800, 500)})
+    app_glfw, app.glfw = app.glfw, g
+    pv = Preview()
+    pv.tap = object()
+    try:
+        r = _Renderer(log)
+        app._draw_render(r, _Ctx(log), object(), _rig_slots("x"),
+                         flush=lambda: log.append("flush"), preview=pv)
+        pv.want()
+        app._draw_render(r, _Ctx(log), object(), _rig_slots("x"),
+                         flush=lambda: log.append("flush"), preview=pv)
+    finally:
+        app.glfw = app_glfw
+    (quiet,), (asked,) = r.calls
+    assert not quiet.publish and quiet.tap is None
+    assert asked.publish == [pv] and asked.tap is pv.tap
+    assert log.count("flush") == 1 and not pv.wanted

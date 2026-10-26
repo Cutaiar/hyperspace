@@ -760,3 +760,26 @@ def test_insert_effect_lands_where_the_cable_was_clicked(rig):
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (321.0, 654.0)) is None
     placed = {k: v for k, v in rig.lib.presets.layout.items() if v == [321, 654]}
     assert len(placed) == 1 and next(iter(placed)).startswith("render:kaleido")
+
+
+def test_backdrop_is_letterboxed_and_fixed_to_the_page():
+    """Output 1 behind the canvas (2026-10-26): fitted whole and centred in
+    the page's canvas rect, whatever the canvas's pan or zoom."""
+    a, b = ui_graph.backdrop_rect((10.0, 20.0), (400.0, 400.0), (1920, 1080))
+    assert a == (10.0, 20.0 + (400 - 225) / 2) and b == (410.0, 20.0 + (400 + 225) / 2)
+    a, b = ui_graph.backdrop_rect((0.0, 0.0), (400.0, 100.0), (100, 100))
+    assert a == (150.0, 0.0) and b == (250.0, 100.0)
+
+
+def test_preview_is_copied_only_on_a_frame_after_the_page_asked():
+    """`outputs.Preview`: wanted → taken once by the render loop; the page
+    that stops drawing it costs no copy."""
+    from hyperspace.outputs import Preview
+    pv = Preview()
+    assert not pv.take()
+    pv.want()
+    assert pv.take() and not pv.take()
+    pv.publish("tex", 0.0)
+    assert pv.tex == "tex" and pv.status == "sending"
+    pv.fail("lost")
+    assert pv.tex is None

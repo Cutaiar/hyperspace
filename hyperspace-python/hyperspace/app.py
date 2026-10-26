@@ -87,7 +87,7 @@ from .media import proxy as media_proxy
 from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .outputs import Offscreen, Presenter, Slot, Switches, View
+from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .preset import Presets, migrate_home
@@ -594,7 +594,8 @@ def _bands(audio) -> tuple[float, ...]:
         return ()
 
 
-def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) -> None:
+def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
+                 preview=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -615,7 +616,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
        the loop).
 
     What output 1's view caught is raised after the others were presented,
-    as `Renderer.draw` raises it."""
+    as `Renderer.draw` raises it. `preview` (an `outputs.Preview`), when
+    the GRAPH page asked for it, rides on output 1's view as one more
+    publisher — through output 1's own tap, else its own — and is flushed
+    for the control window as a presenter's frame is."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -634,10 +638,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
+    shown_to_panel = preview is not None and preview.take()
+    pubs, tap = first.publishers, first.tap
+    if shown_to_panel:
+        pubs, tap = [*pubs, preview], tap if tap is not None else preview.tap
     try:
         views = [View(first.switches, (fbw, fbh), target=ctx.screen,
                       bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
-                      publish=first.publishers, tap=first.tap)]
+                      publish=pubs, tap=tap)]
         shown = []                      # (slot, view): the presented ones
         pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
         for sl in slots[1:]:
@@ -651,7 +659,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
                                   publish=sl.publishers))
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        if later:
+        if later or shown_to_panel:
             (flush or _gl_flush)()
         for sl, v in shown:
             try:
@@ -1327,6 +1335,7 @@ def main() -> None:
     panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+    panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
     router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
@@ -1474,7 +1483,7 @@ def main() -> None:
     def draw_render(dt: float) -> None:
         # every render output: output 1 drawn, the others presented, the
         # others swapped first and output 1 last (_draw_render)
-        _draw_render(renderer, ctx, s, slots, render_watch)
+        _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1510,7 +1519,7 @@ def main() -> None:
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: _close_publishers(render_win, slots))
+    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close()))
 
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]
