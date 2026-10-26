@@ -404,7 +404,7 @@ here; overturn → the change, then the same.
 | 379 | The direct paint is kept; users counted per frame through the mutes; mutes never rebuild | 351 | (rec) — accepted 2026-10-24 |
 | 380 | Hands: any hands node may have a layer and a guide; `hands.n → scene.geometry` puts it in the scene | 347, 348 | (rec) — accepted 2026-10-24 |
 | 381 | The look-back is one node (`lookback`) with `image`, `capture`, `occluder`; the capture is a sink; `holds` and `backdrop.history` retire | 349 | (rec) — accepted 2026-10-24 |
-| 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through | 345 | (rec) — accepted 2026-10-24 |
+| 382 | The backdrop lays `backdrop.scene` over `backdrop.image`; a scene it reads is drawn see-through (widened to a composite's `over` by 395) | 345 | (rec) — accepted 2026-10-24 |
 | 383 | Migration writes today's default frame once into All outputs; D1 placements stay entries | 345 | (rec) — accepted 2026-10-24 |
 | 384 | Below `/6` by round trip: a wired frame saves in the old words when it is exactly what `frame_wires` writes | 352 | (rec) — accepted 2026-10-24 |
 | 385 | The schema is `hyperspace.preset/6`; a save writes the lowest schema that loses nothing (R10), and below `/6` the GRAPH layout in the canvas's old ids (final review R15) — the save side superseded by 394 | 352 | (rec) — accepted 2026-10-24 |
@@ -417,6 +417,7 @@ here; overturn → the change, then the same.
 | 392 | The golden states as wiring: the tool writes each state's wires with the mutes all on | — | (rec) — accepted 2026-10-24 |
 | 393 | Plan 34's frame words retired: `FRAME_SOURCE_REFUSAL`, `LOOP_FRAME`; `FRAME_EDGES` becomes `HIDDEN_EDGES` | — | (rec) — accepted 2026-10-24 |
 | 394 | Every save is the newest schema (`hyperspace.preset/6`); old schemas load but are never written; the library is migrated once (`tools/migrate_library.py`) | 353 | owner — 2026-10-25: "We don't plan on having long-term support for old schemas … You can assume that anytime we update a schema, both machines will comply with that." |
+| 395 | A picture laid over another — a composite's `over` (blend over or depth) or the backdrop's scene, straight or through effects — keeps its see-through ground: the scene clears to alpha 0, the effects between keep their own alpha | — | owner — 2026-10-25: "build the proper fix" |
 
 "—": no hand check shows it; tests only.
 
@@ -7660,3 +7661,41 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
   written where it landed over `values`, `camera.pan` in world units —
   none changes the picture. The factory files stay `/2` (seq-demo `/3`).
 - **Judge it.** Check 353.
+
+### 395. A picture laid over keeps its see-through ground
+
+- **Answer.** owner — 2026-10-25. Wiring media into a composite's `under`
+  and the scene into its `over` showed one picture or the other, never
+  both, and a trigger raising the mix of an effect between the scene and
+  the composite blacked the media out. Asked for the proper fix.
+- **Why it happened.** Nothing that reached `over` was ever see-through on
+  an opaque window: the scene cleared to the window's ground (alpha 1)
+  unless it was wired straight into `backdrop.scene` (row 382), and every
+  effect pass wrote alpha 1 (`fx.FS_TAIL`, `u_opaque`, plan 14 WP1). An
+  effect at mix 0 is not live and reads through, so the scene's own
+  ground showed; above 0 its pass ran and covered the `under` wherever the
+  shape drew nothing. "over" was "replace".
+- **Built.** `_Build.laid_over(name)`: a picture wired into
+  `backdrop.scene`, or into the `over` of a composite whose blend reads its
+  alpha (over, depth — not "add", where black adds nothing), straight or
+  through effects. A scene laid over is built with `ground` 0 (row 382's
+  rule, widened); each wired effect on such a path is `Effect.laid_over`,
+  so `see_through` and its pass keeps its own alpha (`u_opaque` 0, as an
+  effect on a hands' layer already did; `_pass` now honours `see_through`
+  as `_one` did). Every other effect keeps the window's opaque ground, and
+  the output still lays its picture opaque on the window. Tests:
+  `tests/test_graph_frame.py::test_a_scene_laid_over_by_a_composite_is_drawn_see_through`,
+  `tests/test_media_render.py::test_a_composite_lays_the_scene_and_its_effect_over_the_media`
+  (a red still stays red wherever the shape draws nothing, an effect at
+  full mix included — 0% red before). No golden moved.
+- **Other options.** Use the composite's "add" blend (both show, the
+  scene's black adds nothing, but dark geometry lets the media through);
+  or rewire through `backdrop.scene` (no effect between).
+- **To reverse.** `_Build.laid_over` and `Effect.laid_over`.
+- **Rough edge.** A scene laid over is see-through for every node that
+  reads it (one texture), as one on the backdrop already was. Copies and
+  switches between the scene and the composite are not followed: only
+  effects.
+- **Judge it.** Media into a composite's `under`, the scene into its `over`
+  (through an effect): both show; pull the trigger on the effect's mix and
+  the media stays.
