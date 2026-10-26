@@ -163,10 +163,10 @@ COLOURS = {
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
 }
 DORMANT_ALPHA = 0.22
-THIN, THICK = 1.0, 4.5   # a value cable at rest and at full reading
-WIRE = 2.5               # a render cable, a trigger
-NODE_W = 190.0           # a node's inner width
-PIN = 9.0                # a pin's square
+THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
+WIRE = 3.0               # a render cable, a trigger
+NODE_W = 190.0 * graphview.SCALE    # a node's inner width
+PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
 SIDE_W = 320.0           # the side column, when the page is wide enough for it
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
@@ -196,7 +196,7 @@ FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, t
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
 BUNDLE_STEP = 0.5        # px a cable, past the first
-BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more (2.5 + 9 × 0.5)
+BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
@@ -830,6 +830,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         bg = ed.get_style().color_(ed.StyleColor.bg)
         ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
     ed.begin("##graph", size)
+    imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
@@ -869,6 +870,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _menus(panel, st, view)
     _hover(st, view)
     _moved(panel, st, view)
+    imgui.pop_font()
     ed.end()
     if through > 0.0:
         ed.pop_style_color()

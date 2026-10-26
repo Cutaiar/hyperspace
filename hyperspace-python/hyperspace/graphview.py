@@ -1797,11 +1797,16 @@ TITLES = {CONTROLLERS: "CONTROLLERS", AUDIO: "AUDIO", OTHER: "OTHER",
 SHORT_TITLES = {CONTROLLERS: "CTRL", AUDIO: "AUD", OTHER: "OTH", MODULATION: "MOD",
                 MEDIA: "MED", SCENE_AREA: "SCN", LOOKBACK_AREA: "LKB", EFFECTS_AREA: "FX",
                 OUTPUTS_AREA: "OUT"}
-COL_W = 260.0          # canvas units between two columns
-ROW_H = 22.0           # one port line
-HEAD_H = 34.0          # a node's title and padding
-GAP = 28.0             # between two nodes of a column
-TITLE_H = 64.0         # an area's title, above its first node
+# 2026-10-26 (the laptop's own screen): the canvas's text, boxes, pins and
+# spacing all a quarter bigger than the panel's — one factor, so the
+# layout's units still hold what the page draws in them; each unit whole
+# (the editor puts a node on a whole pixel: a half one reads as a drag)
+SCALE = 1.25
+COL_W = float(round(260 * SCALE))  # canvas units between two columns
+ROW_H = float(round(22 * SCALE))   # one port line
+HEAD_H = float(round(34 * SCALE))  # a node's title and padding
+GAP = float(round(28 * SCALE))     # between two nodes of a column
+TITLE_H = float(round(64 * SCALE))  # an area's title, above its first node
 IDLE_H = HEAD_H        # an area's idle line
 
 
