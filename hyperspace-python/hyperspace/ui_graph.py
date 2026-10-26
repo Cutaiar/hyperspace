@@ -1325,6 +1325,7 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
+    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     return e
 
 

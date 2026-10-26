@@ -296,14 +296,15 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     # does not have is the one refusal)
     assert edit.unwire("lookback", "output.1.image") == graphview.NO_SUCH_WIRE.format(
         wire="lookback → output.1.image")
-    # a D1 placement moves when its effect is wired elsewhere
+    # plan 36 T1: a D1 placement never moves as a drag's side effect — a
+    # wire out of a placed effect is refused in words, nothing changed
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "palette",
                                               "after": "hands"}]})
     rig.lib.load(PRESETS, "Placed")
-    assert edit.wire("palette", "output.1.hands") is None
+    before = rig.presets.graph.spec.to_json()
+    assert edit.wire("palette", "output.1.hands").endswith("one place")
     spec = rig.presets.graph.spec
-    assert G.Wire("palette", "output.1.hands") in spec.wires
-    assert not [e for e in spec.effects if e.placed]
+    assert spec.to_json() == before and [e for e in spec.effects if e.placed]
     # a geometry cable: the hands into the scene is a wire (plan 35 F), before the shape
     assert edit.wire("hands", "scene.geometry") is None
     into = [w.src for w in rig.presets.graph.spec.wires if w.dst == "scene.geometry"]
@@ -751,9 +752,9 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
 def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
     """Plan 32 T7: dragging a channel onto a placed effect's `aux` port is
     a second picture, not a placement — the effect keeps its D1 place and
-    the wire rides beside it; its `image` port still moves it — off its
-    place onto that wire, a branch reaching nothing until it is wired on
-    (a section with a run shortens no wire: the owner, 2026-10-24)."""
+    the wire rides beside it. Plan 36 T1: a wire into its `image` port no
+    longer moves it off its place as a side effect — refused in words,
+    nothing changed."""
     rig, stub, edit, _ = _edit_rig(tmp_path)
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "blend",
                                               "after": "hands"}]})
@@ -763,6 +764,5 @@ def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
     assert spec.effects == (G.EffectAt("blend", 1, after="hands.layer"),)
     assert stub.wiring.placed == (G.EffectAt("blend", 1, after="hands.layer"),)
     assert G.Wire("channel.a", "blend.aux") in stub.wiring.wires
-    assert edit.wire("scene", "blend.image") is None
-    assert stub.wiring.placed == ()
-    assert "blend" in graphview.unreached(rig.presets.graph.spec)
+    assert edit.wire("scene", "blend.image").endswith("one place")
+    assert stub.wiring.placed == (G.EffectAt("blend", 1, after="hands.layer"),)

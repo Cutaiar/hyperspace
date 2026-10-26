@@ -1148,3 +1148,47 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
             out.append(_w(want if want is not None else G.GROUND, port + p))
     return [*entries, *out]
 
+
+
+def through_wires(spec: G.GraphSpec, n: int) -> list[dict]:
+    """OUTPUT's "hands through the effects" on window `n` as the wires it
+    names (plan 36 T1, the live edit — `output_wires` stays the migration's
+    word for the retired switch): a `composite.k` (the lowest free
+    instance, its blend the hands' `laid`) laying All outputs' hands layer
+    `over` the head of All outputs' picture (behind its run; nothing
+    `under` while the window's picture is `ground`: the hands alone), one
+    `copy` of each effect of that run, each with its original's aux wire,
+    `composite.k → copy → … → output.<n>.image`, and `ground →
+    output.<n>.hands` — the layer goes through, not over again. Nothing
+    else: the guide, and every other wire of `spec`, are left as they are.
+    Entries first (the dicts with `kind`), then the wires. `spec` is a
+    wired frame whose All outputs lays a hands layer on (the page refuses
+    otherwise, `graphview.through_refusal`)."""
+    wires = spec.wires
+    allp = {w.port: w.src for w in wires if w.node == G.ALL_OUTPUTS}
+    pictures = [w for w in wires if w.port == "image"]
+    run: list[str] = []
+    head = allp.get("image")
+    while _kind(head) == "effect" and head not in run:
+        run.insert(0, head)
+        head = _src_into(pictures, f"{head}.image")
+    port = f"output.{n}."
+    alone = _src_into(wires, port + "image") == G.GROUND
+    k = _next_composite(spec)
+    comp = _named("composite", k)
+    entries = [G.CompositeAt(k, spec.laid).to_json()]
+    out: list[dict] = []
+    if head is not None and not alone:
+        out.append(_w(head, f"{comp}.under"))
+    out.append(_w(allp["hands"], f"{comp}.over"))
+    src = comp
+    aux = {w.node: w.src for w in wires if w.port == G.AUX}
+    for e, c in zip(run, _next_copies(spec, len(run))):
+        name = _named("copy", c)
+        entries.append(G.CopyAt(c, e).to_json())
+        out.append(_w(src, f"{name}.image"))
+        if e in aux:
+            out.append(_w(aux[e], f"{name}.aux"))
+        src = name
+    out += [_w(src, port + "image"), _w(G.GROUND, port + "hands")]
+    return [*entries, *out]

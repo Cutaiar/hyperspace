@@ -70,7 +70,10 @@ pair; `land_choices` is the picker a drag onto a stub opens.
 `Binding`, into ``mod``), ``setter`` (a desk / pad / key row, into
 ``base``), ``sub`` (a macro subscriber, into ``base`` or ``depth``,
 `ref` (macro id, `Sub`)), ``input`` (a modifier's input), ``render`` (a
-wire of the section, `ref` its `graph.Wire`), ``lane`` (plan 31: a
+wire of the section, `ref` its `graph.Wire` — plan 36 T1: or a bus cable
+of the rig's, ``rout:output.all.<port>`` into a window's same port, `ref`
+its `graph.bus_wire`, drawn while the open show has not cut it and the
+section does not wire that port itself), ``lane`` (plan 31: a
 sequencer lane's envelope binding, `ref` (lane, envelope id) — no row:
 dragging a lane's pin onto an envelope's ``base:env.<n>.fire`` rebinds it,
 and it cannot be deleted). A route's `scale`
@@ -789,7 +792,8 @@ HOVERS: dict[str, str] = {
     "echo": "The k-th newest look-back frame.",
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
-    rgraph.ALL_OUTPUTS: "What every output shows unless its own port is wired.",
+    rgraph.ALL_OUTPUTS: ("The rig's bus: a window shows it by a cable from here (the show's), "
+                         "unless the preset wires that port itself."),
     # R13: `ground`, a source with no render node, drawn so its wires can be seen and deleted
     rgraph.GROUND: ("A window's background where nothing is drawn — the clear colour, or "
                     "see-through in overlay: wired into an output's port, that port shows it."),
@@ -798,6 +802,15 @@ HOVERS: dict[str, str] = {
 OUTPUT_UNWIRED = "{label} is a window of this rig: its wires are gone, it shows its ground"
 ALL_UNWIRED = ("All outputs stays (every window reads it): its wires are gone, so the "
                "windows show their own wires, else their ground")
+# plan 36 T1 (W1, D1): the rig's bus cables from All outputs into each
+# window (`graph.RigWires`, held by the open show), in words
+BUS_SAID = ("the rig's cable (the show's, not the preset's): All outputs' {port} on "
+            "{label} — cut it and {label} shows nothing there")
+BUS_IDLE = "nothing is wired into All outputs' {port}"
+BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port} …)"
+BUS_NO_SHOW = "no show is open: the cables from All outputs are the show's"
+BUS_NO_EFFECT = ("{wire} is the rig's cable: put the effect on All outputs' picture, or "
+                 "wire the window a picture of its own")
 STARTER_SAID = "scene starter: shape → scene → All outputs"
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
@@ -1117,7 +1130,7 @@ def media_made(r) -> bool:
 
 def build(table: Bindings, reg: Registry, router: Router | None = None, devices=None,
           render_graph: rgraph.Graph | None = None, spec=None, *, lanes=None,
-          bands: Iterable[str] | None = None, template=None, slots=()) -> View:
+          bands: Iterable[str] | None = None, template=None, slots=(), rig=None) -> View:
     """The view of `table`, `reg`, `router`, the device registry `devices`
     and the render graph `render_graph` (the renderer's last), with the
     preset's graph `spec` kept on the view. `lanes` are the analyzer's
@@ -1125,8 +1138,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     (else the Router's published ``lane`` labels); `template` the loaded
     preset's desk template as ``(name, rows)`` (plan 28 N5), None when it
     names none; `slots` the rig's outputs (each with `n` and `name`: a
-    window's title is its config name, plan 35 G)."""
+    window's title is its config name, plan 35 G); `rig` the rig's own
+    wires (plan 36 T1, `graph.RigWires`: the bus cables drawn), else the
+    render graph's — what it was built with."""
     view = View(spec=spec)
+    if rig is None:
+        rig = getattr(render_graph, "rig", None)
     nodes: dict[str, VNode] = {}
     src_pins: dict[tuple | str, str] = {}       # lane key → pin
     pin_type: dict[str, str] = {}
@@ -1366,6 +1383,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         made = _makes(kind)
         if made is not None:
             add_port(n, VPort(f"rout:{name}", made, OUT, made))
+        if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
+            for port in rgraph.BUS_PORTS:
+                add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
         if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
             ctx.first_cloud = name
     ctx.names = set(refs)
@@ -1541,6 +1561,29 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         view.cables.append(VCable(cable_id(f"wire:{w.src}>{w.node}/{w.port}"), src, dst,
                                   _takes(kind_of(w.node)).get(w.port, IMAGE), ref=w,
                                   kind="render", dormant=shut, off=shut, label=said))
+    # plan 36 T1 (W1, D1): the rig's bus cables, `output.all.<port> →
+    # output.<n>.<port>` — each standing one the show has not cut, into
+    # every window on the canvas, but where the preset wires that port
+    # itself (its own wire takes it: one wire into a port, always drawn);
+    # dormant into a window not open, or while nothing feeds that port of
+    # All outputs. A render cable like any: delete cuts it (the show's)
+    owned = {w.dst for w in frame.all_wires()}
+    feeds = {w.port for w in frame.all_wires() if w.node == rgraph.ALL_OUTPUTS}
+    standing = rgraph.RigWires() if rig is None else rig
+    for name in sorted((x for x in refs if kind_of(x) == "output"),
+                       key=lambda x: int(x.partition(".")[2])):
+        n = int(name.partition(".")[2])
+        for w in standing.present(rgraph.bus_wire(n, p) for p in rgraph.BUS_PORTS):
+            src, dst = f"rout:{w.src}", f"rin:{w.node}/{w.port}"
+            if w.dst in owned or src not in view.pins or dst not in view.pins:
+                continue
+            shut = render_graph is not None and name not in windows
+            idle = w.port not in feeds
+            said = (f"no {name} this frame" if shut else BUS_IDLE.format(port=w.port) if idle
+                    else BUS_SAID.format(port=w.port, label=label_of(name, slots)))
+            view.cables.append(VCable(cable_id(f"bus:{w.src}>{w.node}/{w.port}"), src, dst,
+                                      IMAGE, ref=w, kind="render", dormant=shut or idle,
+                                      off=shut, label=said))
 
     # ---- what is patched; the nodes in column order ----
     hit = {c.src_port for c in view.cables} | {c.dst_port for c in view.cables}
@@ -2696,6 +2739,9 @@ class Edit:
         self.said = ""
         self.added = ""         # plan 33 U: the node the last add or insert made (its name)
         self.slots = ()         # plan 35 G: the rig's outputs (a window's name in the words)
+        # plan 36 T1: the open show, which holds the rig's own wires (its
+        # `rig`, `graph.RigWires`): a bus cable cut or joined lands there
+        self.show = None
 
     # ---- the render graph (plan 28 N4): each returns None (done; its
     # words in `said`) or a refusal in words, nothing changed ----
@@ -3388,6 +3434,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
         node = pin if kind_of(pin) is not None else pin.rpartition(".")[0]
         return (pin, None) if kind_of(node) is not None else (None, f"no node {pin!r}")
     name, _, port = rest.partition("/")
+    if head == "rout" and _bus_source(name):
+        return name, None                    # plan 36 T1: All outputs' bus pin
     kind = kind_of(name)
     if kind in (CAMERA, "cloud"):
         return None, NOT_REMOVABLE.format(label=label_of(name))
@@ -3556,9 +3604,26 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     return sorted(wires, key=group)
 
 
-def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> str | None:
+def _rig(edit: Edit) -> rgraph.RigWires:
+    """The rig's own wires the open show holds (`edit.show`, plan 36 T1);
+    with no show, the rig as it ships."""
+    return rgraph.rig_of(getattr(edit, "show", None))
+
+
+def _bus_source(name: str | None) -> bool:
+    """Whether `name` is one of All outputs' bus pins (`output.all.image` …)."""
+    head, _, port = (name or "").rpartition(".")
+    return head == rgraph.ALL_OUTPUTS and port in rgraph.BUS_PORTS
+
+
+def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False,
+          rig: rgraph.RigWires | None = None) -> str | None:
     """Read `doc` back as a preset would (a note is the refusal, nothing
-    changed); else, unless `dry`, the undo step and the landing."""
+    changed); else, unless `dry`, the undo step and the landing. `rig`
+    (plan 36 T1): the show's rig wires after the edit, set in the same
+    undo step — refused with no show to hold them."""
+    if rig is not None and rig != _rig(edit) and getattr(edit, "show", None) is None:
+        return BUS_NO_SHOW
     gs = edit.graph
     if gs is None:
         return "no preset is loaded"
@@ -3582,12 +3647,16 @@ def _land(edit: Edit, doc: dict, label: str, said: str, dry: bool = False) -> st
     if dry:
         return None
     new = spec.to_json()
-    if new == _doc(edit) and getattr(edit.graph, "spec", None) is not None:
+    same = new == _doc(edit) and getattr(edit.graph, "spec", None) is not None
+    if same and (rig is None or rig == _rig(edit)):
         edit.said = "already so"
         return None
     if edit.push is not None:
         edit.push(label)
-    gs.land(spec, new)
+    if not same:
+        gs.land(spec, new)
+    if rig is not None and rig != _rig(edit):
+        edit.show.rig = rig
     edit.said = said
     return None
 
@@ -3671,9 +3740,13 @@ def _hands_entry(doc: dict, n: int) -> dict | None:
 def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
                 doc: dict | None = None) -> str | None:
     """A wire `src → dst` into the section (the one into `dst` replaced,
-    but a `scene.geometry`'s, which takes several). `doc` (plan 35 T6): the
-    section to wire on — the OUTPUT page's pick, its through taken off
-    first — else the landed one."""
+    but a `scene.geometry`'s, which takes several) — that one wire and
+    nothing else (plan 36 T1: no placement, switch or other wire moves
+    with it; a placement it would contradict is refused in words by the
+    read). From one of All outputs' bus pins it is the rig's cable into
+    the window's same port (`bus_wire`): the show's, joined, and the
+    preset's own wire into that port, if any, gives the port up to it.
+    `doc` (plan 35 T6): the section to wire on, else the landed one."""
     s, why = spec_name(src, edit.render)
     if s is None:
         return why
@@ -3684,6 +3757,15 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
     doc = _doc(edit) if doc is None else doc
+    if _bus_source(s):
+        if not rgraph.is_bus(w):
+            return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
+        if getattr(edit, "show", None) is None:
+            return BUS_NO_SHOW
+        gone = [x for x in doc.get("wires", []) if x["to"] == d]
+        doc["wires"] = [x for x in doc.get("wires", []) if x["to"] != d]
+        _keep_declared(doc, [x["from"] for x in gone])
+        return _land(edit, doc, f"wire {w}", f"wired {w}", dry, rig=_rig(edit).joining(w))
     wires = doc.get("wires", [])
     if d in rgraph.MANY_PORTS:
         # several wires go in, drawn in section order — a hands node's
@@ -3694,18 +3776,7 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         doc["wires"] = [*keep[:at], w.to_json(), *keep[at:]]
     else:
         doc["wires"] = [x for x in wires if x["to"] != d] + [w.to_json()]
-    into_effect = kind_of(w.node) == "effect"
-
-    def moves(name: str, key: str, where: str) -> bool:
-        # the effect is fed by this wire now — but an aux wire (plan 32 T7)
-        # is a second picture: the effect stays where it sits
-        if name == w.node and not rgraph.is_aux(w):
-            return True
-        target = where if key == "into" or where.startswith("output.") else None
-        if target is not None and f"{target}.image" == d:   # its port takes this wire
-            return True
-        return name == s and not into_effect     # the effect is wired on, elsewhere
-    _unplace(doc, moves)
+    # (plan 36 T1: D1's placements stay where they are — the drag lands one wire)
     gone = {x["from"] for x in wires if x["to"] == d and x not in doc["wires"]}
     _keep_declared(doc, gone)
     return _land(edit, doc, f"wire {w}", f"wired {w}", dry)
@@ -3719,6 +3790,8 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     s: str | None
     if isinstance(cable, VCable) and isinstance(cable.ref, rgraph.Wire):
         s, d = cable.ref.src, cable.ref.dst
+        if rgraph.is_bus(cable.ref):
+            return _cut_bus(edit, cable.ref)
     else:
         if isinstance(cable, VCable):
             src, dst = cable.src_port, cable.dst_port
@@ -3733,6 +3806,8 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
                 return why
         else:                                # a port's name alone: whatever is wired into it
             s, d = None, s
+        if s is not None and rgraph.is_bus(rgraph.Wire(s, d)):
+            return _cut_bus(edit, rgraph.Wire(s, d))
     doc = _doc(edit)
     wires = doc.get("wires", [])
     left = [x for x in wires if not (x["to"] == d and (s is None or x["from"] == s))]
@@ -3749,10 +3824,25 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
         if doc["nodes"] == before:
             return NO_SUCH_WIRE.format(wire=f"{s} → {d}")
     elif not gone:
+        # (plan 36 T1: a window's port with no wire of the preset's: its
+        # one cable is the rig's bus cable, if it stands)
+        port = rgraph.Wire(f"{rgraph.ALL_OUTPUTS}.{d.rpartition('.')[2]}", d)
+        if rgraph.is_bus(port) and _rig(edit).has(port):
+            return _cut_bus(edit, port)
         return NO_SUCH_WIRE.format(wire=f"→ {d}")
     _keep_declared(doc, [n for x in gone for n in (x["from"], x["to"].rpartition(".")[0])])
     said = f"{s} → {d}" if s is not None else d
     return _land(edit, doc, f"unwire {d}", f"unwired {said}")
+
+
+def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
+    """Plan 36 T1: the rig's bus cable `w` cut in the open show — one undo
+    step, the preset untouched; the window shows nothing on that port
+    until the cable is joined again or the preset wires the port."""
+    rig = _rig(edit)
+    if not rig.has(w):
+        return NO_SUCH_WIRE.format(wire=str(w))
+    return _land(edit, _doc(edit), f"cut {w}", f"cut the rig's cable {w}", rig=rig.cutting(w))
 
 
 def _new_instance(spec, file: str) -> int:
@@ -4031,6 +4121,8 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
         d, why = spec_name(b, edit.render)
         if d is None:
             return None, None, why
+    if _bus_source(s):                      # plan 36 T1: the rig's, not the preset's
+        return None, None, BUS_NO_EFFECT.format(wire=f"{s} → {d}")
     if kind_of(d) is not None:
         return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
@@ -4098,14 +4190,22 @@ def render_drop(edit: Edit, node: str) -> str | None:
                 else OUTPUT_UNWIRED.format(label=label_of(name, slots)))
         wires = doc.get("wires", [])
         left = [x for x in wires if x["to"].rpartition(".")[0] != name]
-        if len(left) == len(wires):         # (T5 review: say nothing was done)
+        # plan 36 T1: a window's bus cables are wires into it too — cut
+        # with the rest, in the same step, so it shows its ground
+        rig = _rig(edit)
+        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "show", None) is None else list(
+            rig.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
+                        for p in rgraph.BUS_PORTS))
+        if len(left) == len(wires) and not bus:     # (T5 review: say nothing was done)
             edit.said = NOTHING_TO_DELETE.format(
                 what="All outputs" if kind == rgraph.ALL_OUTPUTS
                 else f"output {name.partition('.')[2]}")
             return None
         doc["wires"] = left
         _keep_declared(doc, [x["from"] for x in wires if x not in left])
-        return _land(edit, doc, f"unwire {name}", said)
+        for w in bus:
+            rig = rig.cutting(w)
+        return _land(edit, doc, f"unwire {name}", said, rig=rig if bus else None)
     label = label_of(name, slots, of=next((c.of for c in getattr(_spec(edit), "copies", ())
                                            if c.name == name), ""))
     before = copy.deepcopy(doc)
@@ -4194,7 +4294,7 @@ def render_set(edit: Edit, node: str, **settings) -> str | None:
 # canonical wire order, so an edit put back leaves the frame as it was.
 # The mutes are the window's (row 374), never written here.
 
-AS_ALL = "as All outputs"      # a window's picture port with no wire of its own
+AS_ALL = "as All outputs"      # a window's picture port by the rig's bus cable (plan 36 T1)
 NOTHING = "nothing"            # a window's: `ground` wired; All outputs', the capture: no wire
 # the areas a page lists the graph's pictures in (the canvas's, left to right)
 PICTURE_AREA: dict[str, str] = {
@@ -4262,19 +4362,22 @@ def _into(spec, dst: str) -> str | None:
     return next((w.src for w in (spec.wires if spec is not None else ()) if w.dst == dst), None)
 
 
-def picture_now(spec, port: str) -> str:
+def picture_now(spec, port: str, rig=None) -> str:
     """The combo's pick for `port` as section `spec` wires it: the source's
     name; `ground`, or no wire (All outputs', the capture), "nothing"; a
-    window with no wire of its own, or putting the hands through All
-    outputs' picture (`is_through`), "as All outputs" (a through over
-    nothing — the scene off — "nothing")."""
+    window with no wire of its own, "as All outputs" while the rig's bus
+    cable into its picture stands (`rig`, plan 36 T1; None: every one),
+    else "nothing"; one putting the hands through All outputs' picture
+    (`is_through`), "as All outputs" (a through over nothing — the scene
+    off — "nothing")."""
     n = _window(port)
-    if n is not None and is_through(spec, n):
-        under = rgraph.through_of(spec.wiring(), n)[1]
+    if n is not None and is_through(spec, n, rig):
+        under = rgraph.through_of(spec.wiring(), n, rig)[1]
         return AS_ALL if under is not None else NOTHING
     src = _into(spec, port)
     if src is None:
-        return AS_ALL if n is not None else NOTHING
+        standing = n is not None and (rig is None or rig.has(rgraph.bus_wire(n, "image")))
+        return AS_ALL if standing else NOTHING
     return NOTHING if src == rgraph.GROUND else src
 
 
@@ -4287,10 +4390,11 @@ def picture_label(spec, name: str, slots=()) -> str:
     return label_of(name, slots, of=of)
 
 
-def is_through(spec, n: int) -> bool:
+def is_through(spec, n: int, rig=None) -> bool:
     """Whether window `n` puts the hands through the effects: its picture
-    a chain over a composite laying a hands layer (`graph.through_of`)."""
-    return spec is not None and rgraph.through_of(spec.wiring(), n) is not None
+    a chain over a composite laying a hands layer (`graph.through_of`;
+    `rig`, the bus cables standing)."""
+    return spec is not None and rgraph.through_of(spec.wiring(), n, rig) is not None
 
 
 def _drop_through(doc: dict, n: int) -> bool:
@@ -4332,35 +4436,37 @@ def _drop_through(doc: dict, n: int) -> bool:
 
 def set_picture(edit: Edit, port: str, choice: str) -> str | None:
     """A page's picture combo (plan 35 U): `choice` into `port` — a
-    window's (`output.N.image`), All outputs' or the look-back's capture.
-    A source is `render_wire(…, port)`; "nothing" is `ground` into a
-    window's port, no wire into the others'; "as All outputs" takes the
-    window's own wire away. A window putting the hands through the effects
-    drops that first (`_drop_through`), in the same landing. One undo step;
-    a pick that is so already lands nothing ("already so")."""
+    window's (`output.N.image`), All outputs' or the look-back's capture —
+    the one wire into that port and nothing else (plan 36 T1). A source is
+    `render_wire(…, port)`; "nothing" is `ground` into a window's port, no
+    wire into the others'; "as All outputs" is the rig's bus cable into the
+    window's picture: its own wire goes and the cable is joined if the show
+    had cut it. A through window's chain is not taken out with it (that is
+    the through tick's): what it leaves reaches nothing, drawn faint. One
+    undo step; a pick that is so already lands nothing ("already so")."""
     spec = _spec(edit)
-    if picture_now(spec, port) == choice:
+    rig = _rig(edit)
+    if picture_now(spec, port, rig) == choice:
         edit.said = "already so"
         return None
     n = _window(port)
     doc = _doc(edit)
-    thru = n is not None and _drop_through(doc, n)
     if choice == NOTHING and n is not None:
         choice = rgraph.GROUND
     if choice not in (AS_ALL, NOTHING):
-        if thru:
-            doc["wires"] = [x for x in doc["wires"] if x["to"] != port]
         return render_wire(edit, choice, port, doc=doc)
     wires = doc.get("wires", [])
     left = [x for x in wires if x["to"] != port]
     gone = [x for x in wires if x not in left]
     doc["wires"] = left
     _keep_declared(doc, [x["from"] for x in gone])
-    said = f"{port}: {AS_ALL}" if choice == AS_ALL else f"unwired {port}"
-    return _land(edit, doc, f"unwire {port}", said)
+    if choice == AS_ALL and n is not None:
+        return _land(edit, doc, f"unwire {port}", f"{port}: {AS_ALL}",
+                     rig=rig.joining(rgraph.bus_wire(n, "image")))
+    return _land(edit, doc, f"unwire {port}", f"unwired {port}")
 
 
-def through_refusal(spec, n: int, slots=()) -> str | None:
+def through_refusal(spec, n: int, slots=(), rig=None) -> str | None:
     """Why window `n` cannot put the hands through the effects (the
     checkbox drawn disabled, its hover these words), or None: All outputs
     lays no hands layer over its picture (R11: no hands to put through),
@@ -4368,7 +4474,7 @@ def through_refusal(spec, n: int, slots=()) -> str | None:
     if kind_of(_into(spec, f"{rgraph.ALL_OUTPUTS}.hands")) != "layer":
         return THROUGH_NO_LAYER
     own = _into(spec, f"output.{n}.image")
-    if own is not None and own != rgraph.GROUND and not is_through(spec, n):
+    if own is not None and own != rgraph.GROUND and not is_through(spec, n, rig):
         return THROUGH_OWN_PICTURE.format(label=label_of(f"output.{n}", slots),
                                           src=picture_label(spec, own))
     return None
@@ -4376,19 +4482,22 @@ def through_refusal(spec, n: int, slots=()) -> str | None:
 
 def set_through(edit: Edit, n: int, on: bool) -> str | None:
     """OUTPUT's "hands through the effects" on window `n` (plan 35 O, T4's
-    carried toggle), as wiring: on, the section plus `graphmigrate.
-    output_wires(spec, n, Shows(through=True))` — a composite laying All
-    outputs' hands layer on its picture's head and a copy of each effect of
-    its run, into `output.n.image` (with the window's picture `ground`, the
-    hands alone through); off, those wires and the composite and copies
-    only they use (`_drop_through`). One undo step each. Refused in words:
+    carried toggle), as wiring — the wires it names and nothing else (plan
+    36 T1: no `_Wiring._put` rule): on, `graphmigrate.through_wires` — a
+    composite laying All outputs' hands layer on its picture's head and a
+    copy of each effect of its run, into `output.n.image` (with the
+    window's picture `ground`, the hands alone through), and `ground` into
+    `output.n.hands` (the layer goes through, not over again); off, those
+    wires and the composite and copies only they use (`_drop_through`).
+    The guide port is never touched. One undo step each. Refused in words:
     All outputs laying no hands layer (R11), a window with a picture of
     its own."""
     spec = _spec(edit)
     if spec is None:
         return "no preset is loaded"
     label = label_of(f"output.{n}", getattr(edit, "slots", ()))
-    if is_through(spec, n) == on:
+    rig = _rig(edit)
+    if is_through(spec, n, rig) == on:
         edit.said = "already so"
         return None
     doc = _doc(edit)
@@ -4396,9 +4505,14 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
         _drop_through(doc, n)
         return _land(edit, doc, f"hands over on output {n}",
                      f"{label}: the hands over the effects")
-    why = through_refusal(spec, n, getattr(edit, "slots", ()))
+    why = through_refusal(spec, n, getattr(edit, "slots", ()), rig)
     if why is not None:
         return why
-    shows = graphmigrate.Shows(scene=_into(spec, f"output.{n}.image") is None, through=True)
-    return _land(edit, graphmigrate.with_output_wires(doc, n, shows),
-                 f"hands through on output {n}", f"{label}: the hands through the effects")
+    got = graphmigrate.through_wires(spec, n)
+    port = f"output.{n}."
+    doc["nodes"] += [x for x in got if "kind" in x]
+    doc["wires"] = [x for x in doc.get("wires", [])
+                    if x["to"] not in (port + "image", port + "hands")]
+    doc["wires"] += [x for x in got if "kind" not in x]
+    return _land(edit, doc, f"hands through on output {n}",
+                 f"{label}: the hands through the effects")

@@ -2,7 +2,8 @@
 
 One frame is drawn per loop; each output — a window on its own screen,
 or an offscreen target standing in for one — shows what the preset's
-graph wires into it (plan 35: its own wires, else All outputs') through
+graph wires into it (plan 35: its own wires; plan 36 T1, else All
+outputs' by the rig's bus cable into that port, `graph.window_ports`) through
 its window's two mutes, the picture and the hands, with its mirror and
 its own dim. A mute is the window's, never the preset's structure: off,
 the window ignores the picture (or the hands and the guide) wired into

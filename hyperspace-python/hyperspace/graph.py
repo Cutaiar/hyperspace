@@ -952,7 +952,7 @@ NODE_KINDS["dream"] = _dream_entry
 
 FRAME_KEY = "frame"           # the section's third key …
 WIRED_FRAME = "wired"         # … and its one value
-ALL_OUTPUTS = "output.all"    # what every output shows unless its own port is wired
+ALL_OUTPUTS = "output.all"    # the bus: what a window shows by the rig's cable from it
 GROUND = "ground"             # a source with no node: wired into an output's port, nothing
 # the frame's entry kinds (`layer` and `guide` take `instance`): a frame
 # node exists when a wire names it or an entry declares it (GRAPH keeps
@@ -986,6 +986,98 @@ OLD_ID_IN_A_WIRED_FRAME = "{old} is the old name (plan 35): in a wired frame it 
 # (a frame kind's entry outside a wired frame: plan 34's table has no such node)
 FRAME_KIND_UNWIRED = ("{kind} node: only in a wired frame (plan 35: the section says "
                       "\"frame\": \"wired\")")
+
+# ---------------------------------------------------------------- the rig's wires (plan 36 T1)
+#
+# Plan 36 W1, decision D1: what reaches a window is a drawn cable. All
+# outputs is a bus: the rig — the open show, `library.Project.rig` — owns
+# one cable per window and port, `output.all.<port> → output.<n>.<port>`
+# for the picture, the hands and the guide (`bus_wire`), present until
+# the show cuts it, drawn on GRAPH and cut or joined there like any wire.
+# A preset's own wire into a window's port takes that port: the bus cable
+# into it is then neither drawn nor read (`window_ports`, the one rule).
+# `RigWires` is the show's word on its own wires — which of the rig's
+# defaults it has cut — and `present` the wires that stand; any other
+# rig-owned wire (plan 36 T2: a cloud's) is one more set of defaults.
+
+BUS_PORTS = ("image", "hands", "guide")      # the ports a bus cable feeds, per window
+
+
+def bus_wire(n: int, port: str) -> Wire:
+    """The rig's bus cable from All outputs into window `n`'s `port`."""
+    return Wire(f"{ALL_OUTPUTS}.{port}", f"output.{n}.{port}")
+
+
+def is_bus(w: Wire) -> bool:
+    """Whether `w` is a bus cable: All outputs' `<port>` into the same port
+    of a window (`output.<n>`)."""
+    head, _, n = w.node.partition(".")
+    return (head == "output" and n.isdecimal() and int(n) >= 1 and w.port in BUS_PORTS
+            and w.src == f"{ALL_OUTPUTS}.{w.port}")
+
+
+@dataclass(frozen=True)
+class RigWires:
+    """The rig's own drawn wires as the show holds them (plan 36 T1): the
+    defaults the show has `cut` — every other default stands. Immutable:
+    `cutting` and `joining` return the new word, so an undo mark holds one
+    by reference. JSON (`to_json`, in the show's file under ``rig``):
+    ``{"cut": [{"from": …, "to": …}, …]}``, sorted; nothing cut is ``{}``."""
+
+    cut: frozenset[Wire] = frozenset()
+
+    def has(self, w: Wire) -> bool:
+        """Whether default `w` stands (is not cut)."""
+        return w not in self.cut
+
+    def present(self, defaults) -> tuple[Wire, ...]:
+        """The `defaults` that stand, in their order."""
+        return tuple(w for w in defaults if w not in self.cut)
+
+    def cutting(self, w: Wire) -> RigWires:
+        return RigWires(self.cut | {w})
+
+    def joining(self, w: Wire) -> RigWires:
+        return RigWires(self.cut - {w})
+
+    def to_json(self) -> dict:
+        if not self.cut:
+            return {}
+        return {"cut": [w.to_json() for w in sorted(self.cut, key=lambda w: (w.dst, w.src))]}
+
+    @classmethod
+    def read(cls, value: Any) -> RigWires:
+        """A show file's ``rig`` value; what is not a wire is left out (a
+        hand-edited file never stops a show from opening)."""
+        cut = value.get("cut") if isinstance(value, dict) else None
+        got: set[Wire] = set()
+        for x in cut if isinstance(cut, list) else ():
+            try:
+                got.add(Wire(x["from"], x["to"]))
+            except (TypeError, KeyError, ValueError):
+                continue
+        return cls(frozenset(got))
+
+
+def rig_of(source: Any) -> RigWires:
+    """The rig wires `source` holds (duck-typed: its `rig`, as the open show
+    `library.Project` has) — the renderer's `rig_source`; None, or a source
+    with none, is the rig as it ships: every default standing."""
+    got = getattr(source, "rig", None)
+    return got if isinstance(got, RigWires) else RigWires()
+
+
+def window_ports(wires, n: int, rig: RigWires | None = None) -> dict[str, Wire | None]:
+    """Window `n`'s three ports (`BUS_PORTS`) → the one wire into each, or
+    None: its own wire of `wires` (the preset's), else the bus cable when
+    `rig` has it standing — then the wire into All outputs' same port (the
+    bus carries it; None while nothing is wired there). Plan 36 W1: nothing
+    else reaches a window."""
+    rig = rig if rig is not None else RigWires()
+    own = {w.port: w for w in wires if w.node == f"output.{n}"}
+    alls = {w.port: w for w in wires if w.node == ALL_OUTPUTS}
+    return {p: own[p] if p in own else (alls.get(p) if rig.has(bus_wire(n, p)) else None)
+            for p in BUS_PORTS}
 
 # V2 (row 373, "approve, but rename ids too"): old wire name → new, for
 # whole names and D1's `after` / `into` values; `<n>` an instance from 2
@@ -2328,18 +2420,14 @@ def _reached_edges(edges: tuple[Wire, ...], run: tuple[str, ...],
 
 # ---------------------------------------------------------------- in words
 
-def output_ports(wiring: Wiring, n: int) -> dict[str, str | None]:
+def output_ports(wiring: Wiring, n: int, rig: RigWires | None = None
+                 ) -> dict[str, str | None]:
     """Output `n`'s three ports under a wired frame (plan 35 T4, `wired`):
-    each port's source, its own wire else All outputs' — None where nothing
+    each port's source by `window_ports` (plan 36 T1: its own wire, else
+    All outputs' by the bus cable `rig` has standing) — None where nothing
     is wired or `ground` is."""
-    w = wired(wiring)
-    own = {x.port: x.src for x in w.wires if x.node == f"output.{n}"}
-    alls = {x.port: x.src for x in w.wires if x.node == ALL_OUTPUTS}
-    out: dict[str, str | None] = {}
-    for p in ("image", "hands", "guide"):
-        src = own.get(p, alls.get(p))
-        out[p] = None if src == GROUND else src
-    return out
+    got = window_ports(wired(wiring).wires, n, rig)
+    return {p: None if w is None or w.src == GROUND else w.src for p, w in got.items()}
 
 
 def _picture_head(wiring: Wiring, src: str | None) -> str | None:
@@ -2354,13 +2442,14 @@ def _picture_head(wiring: Wiring, src: str | None) -> str | None:
     return src
 
 
-def through_of(wiring: Wiring, n: int) -> tuple[str, str | None] | None:
+def through_of(wiring: Wiring, n: int, rig: RigWires | None = None
+               ) -> tuple[str, str | None] | None:
     """(the hands layer output `n` puts through the effects, what it is laid
     over — None: nothing, the hands alone) — plan 35 M: its picture a chain
     over a composite whose `over` is a layer, "hands through the effects"
-    as wiring — or None."""
+    as wiring — or None. `rig`: the bus cables standing (`output_ports`)."""
     w = wired(wiring)
-    head = _picture_head(w, output_ports(w, n)["image"])
+    head = _picture_head(w, output_ports(w, n, rig)["image"])
     if wire_node_kind(head or "", wired=True) != "composite":
         return None
     over = next((x.src for x in w.wires if x.dst == f"{head}.over"), None)
@@ -2369,9 +2458,9 @@ def through_of(wiring: Wiring, n: int) -> tuple[str, str | None] | None:
     return over, next((x.src for x in w.wires if x.dst == f"{head}.under"), None)
 
 
-def through_layer(wiring: Wiring, n: int) -> str | None:
+def through_layer(wiring: Wiring, n: int, rig: RigWires | None = None) -> str | None:
     """The hands layer output `n` puts through the effects (`through_of`), or None."""
-    got = through_of(wiring, n)
+    got = through_of(wiring, n, rig)
     return got[0] if got is not None else None
 
 
@@ -2381,7 +2470,7 @@ def in_scene_hands(wiring: Wiring) -> list[int]:
                   if x.dst == "scene.geometry" and wire_node_kind(x.src, wired=True) == "hands")
 
 
-def hands_words(wiring: Wiring, sw, n: int = 1) -> str:
+def hands_words(wiring: Wiring, sw, n: int = 1, rig: RigWires | None = None) -> str:
     """Where output `n`'s hands come from, in words (the OUTPUT page, plan
     26 A4; plan 35 T4: read off the wires, `wired`): `hands: in the scene`
     (a hands node wired into `scene.geometry`, while its picture shows),
@@ -2391,11 +2480,12 @@ def hands_words(wiring: Wiring, sw, n: int = 1) -> str:
     for a node drawn as lines, and how a layer is laid on when it is not
     plainly over (`· depth-aware`, `· added`). `hands: off` with the
     window's hands muted — but an output whose scene holds the hands says
-    so whatever its mute."""
+    so whatever its mute. `rig`: the bus cables standing (`output_ports`)."""
     w = wired(wiring)
     inside = in_scene_hands(w)
-    thru = through_of(w, n)
-    if (inside and sw.scene and output_ports(w, n)["image"] is not None
+    thru = through_of(w, n, rig)
+    ports = output_ports(w, n, rig)
+    if (inside and sw.scene and ports["image"] is not None
             and not (thru is not None and thru[1] is None)):
         # the scene holds the hands whatever this window's hands mute says
         # (that mute then mutes only the guide)
@@ -2404,8 +2494,7 @@ def hands_words(wiring: Wiring, sw, n: int = 1) -> str:
         return "hands: off"
     if thru is not None:
         return f"hands: through FX{layer_words(w, thru[0])}"
-    over = output_ports(w, n)["hands"]
-    return f"hands: over{layer_words(w, over)}"
+    return f"hands: over{layer_words(w, ports['hands'])}"
 
 
 def _node_words(wiring: Wiring, k: int) -> str:
@@ -4739,9 +4828,10 @@ class Copy(Effect):
 
 class Shown(Node):
     """An output's picture as an end (plan 35 B): `shown(<source>)`, one per
-    distinct source an output's `image` takes (its own wire, else All
-    outputs'), shared by every output showing it — the retired pipelines'
-    ends (`Fx`, and `Wired` for a picture by a wire) made one. As an end it
+    distinct source an output's `image` takes (`window_ports`: its own
+    wire, else All outputs' by the rig's bus cable), shared by every
+    output showing it — the retired pipelines' ends (`Fx`, and `Wired` for
+    a picture by a wire) made one. As an end it
     decides where the picture lands (`run`): straight into its one user's
     window when exactly one output takes it this frame (`Frame.users`,
     counted through the mutes) at the frame's size, unflipped, with no tap
@@ -5374,7 +5464,7 @@ def _consumers(g: Graph, node: Node) -> list[tuple[Node, str]]:
 # ---------------------------------------------------------------- the wired frame (plan 35 B)
 
 def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[str, ...] = (),
-                effects: tuple[str, ...] = ()) -> Graph:
+                effects: tuple[str, ...] = (), rig: RigWires | None = None) -> Graph:
     """A wired frame as a graph (plan 35 B, rows 372 and 379): only what the
     wires reach (`reaches`: a path to an output's port, All outputs', or
     the look-back's capture) is built — `{"frame": "wired"}` alone is the
@@ -5395,7 +5485,9 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     placements (`_place`); then one `Shown` per distinct picture an output
     takes; then the capture (`lookback.capture`'s) after every end and
     every delay's write; then one `Output` per view, each port its own
-    wire else All outputs', through its window's mutes.
+    wire else All outputs' by the bus cable `rig` has standing (plan 36
+    T1, `window_ports`; None: the rig as it ships, every cable standing),
+    through its window's mutes.
 
     Plan 35 T4: every frame is this one's — an unwired `wiring` is wired
     first (`wired`: `Wiring()` the factory look). The render nodes are named
@@ -5407,7 +5499,8 @@ def build_graph(views: list[View], wiring: Wiring | None = None, clouds: tuple[s
     g = Graph(graph_key(views), wiring)
     g.clouds = tuple(clouds)
     g.effects = tuple(effects)
-    _Build(g, wiring, len(views)).build()
+    g.rig = rig if rig is not None else RigWires()
+    _Build(g, wiring, len(views), g.rig).build()
     return g
 
 
@@ -5441,8 +5534,9 @@ class _Build:
     run, each through's composite and copies, the ends, the capture, the
     outputs), so the passes run as today's frame ran them."""
 
-    def __init__(self, g: Graph, wiring: Wiring, count: int):
+    def __init__(self, g: Graph, wiring: Wiring, count: int, rig: RigWires | None = None):
         self.g, self.wiring, self.count = g, wiring, count
+        self.rig = rig if rig is not None else RigWires()     # plan 36 T1: the bus cables
         self.have = set(g.effects)
         wires = tuple(getattr(wiring, "wires", ()))
         # plan 35 T4: a wire into an output this rig has not open (`output.3`
@@ -5703,14 +5797,13 @@ class _Build:
         for e in run:
             e.placed = None
         g.run = tuple(e.effect for e in run)
-        # each output's ports: its own wire, else All outputs' (`ground`: nothing)
-        alls = {w.port: w for w in self.wires if w.node == ALL_OUTPUTS}
+        # each output's ports (plan 36 T1, `window_ports`): its own wire,
+        # else All outputs' by the rig's bus cable while it stands
+        # (`ground`, or nothing: nothing) — no other fallback
         ports = []
         for i in range(self.count):
-            own = {w.port: w for w in self.wires if w.node == f"output.{i + 1}"}
             got = {}
-            for p in ("image", "hands", "guide"):
-                w = own.get(p) or alls.get(p)
+            for p, w in window_ports(self.wires, i + 1, self.rig).items():
                 got[p] = self.node(w.src) if w is not None and w.src != GROUND else None
             ports.append(got)
         layers = tuple(n for n in self.built if isinstance(n, HandsLayer))

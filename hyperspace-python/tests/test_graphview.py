@@ -247,8 +247,12 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
     assert not spec.notes
     g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid.2",))
     view = graphview.build(Bindings(), Registry(), None, None, g, spec)
-    wires = [c for c in view.cables if c.kind == "render"]
+    wires = [c for c in view.cables if c.kind == "render" and not G.is_bus(c.ref)]
     assert [c.ref for c in wires] == list(spec.wires)
+    # plan 36 T1: and the rig's bus cables into the ports the section
+    # leaves to All outputs (its own wire takes output.1.hands)
+    assert [c.ref for c in view.cables if c.kind == "render" and G.is_bus(c.ref)] == [
+        G.bus_wire(1, "image"), G.bus_wire(1, "guide")]
     by = {(c.ref.src, c.ref.node): c for c in wires}
     assert by[("shape", "scene")].type == by[("hands", "scene")].type == graphview.GEOMETRY
     assert by[("hands.layer", "acid.2")].type == graphview.IMAGE

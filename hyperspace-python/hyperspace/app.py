@@ -1384,6 +1384,7 @@ def main() -> None:
     panel.media = media                        # the MEDIA page: the folder and the channels
     renderer.ghost.router = router           # the guide lights what the table routes
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+    renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)

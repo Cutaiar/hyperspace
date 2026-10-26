@@ -6,8 +6,8 @@ picture_sources`, `picture_choices`) whose pick is a GRAPH edit
 (`graphview.set_picture`: `render_wire` into `output.N.image`, `ground`
 for "nothing", the override removed for "as All outputs"), keeps the two
 mutes as the window's own (never the preset), and writes "hands through the
-effects" as wiring (`graphview.set_through`: `graphmigrate.output_wires`
-under `Shows(through=True)`). Every edit lands through GRAPH's `_land`: one
+effects" as wiring (`graphview.set_through`: `graphmigrate.through_wires`,
+plan 36 T1 — only the wires it names). Every edit lands through GRAPH's `_land`: one
 undo step, the same refusals, and an edit put back saves in the lowest
 schema again (R10)."""
 
@@ -151,14 +151,15 @@ def test_picking_a_picture_wires_the_output(tmp_path):
 
 
 def test_through_writes_the_wiring(tmp_path):
-    """`set_through(e, 2, True)` lands `output_wires(…, 2, Shows(through=
-    True))` — the composite and the copies of the run, one undo step;
-    `False` takes them and their wires away, the section its former
-    `to_json()` again."""
+    """`set_through(e, 2, True)` lands `through_wires(…, 2)` — the
+    composite and the copies of the run into the window's picture, `ground`
+    on its hands, one undo step; `False` takes them and their wires away,
+    the section its former `to_json()` again. Plan 36 T1: a picture picked
+    while through is that one wire — the chain stays, faint."""
     rig, e, pushed = free_rig(tmp_path, *_pairs(ACID))
     gs = rig.presets.graph
     before = gs.spec.to_json()
-    want = M.output_wires(G.read_graph(before), 2, M.Shows(through=True))
+    want = M.through_wires(G.read_graph(before), 2)
     assert graphview.set_through(e, 2, True) is None and len(pushed) == 1
     got = gs.spec.to_json()
     assert all(x in got["nodes"] for x in want if "kind" in x)
@@ -169,13 +170,17 @@ def test_through_writes_the_wiring(tmp_path):
     assert graphview.set_through(e, 2, True) is None and e.said == "already so"
     assert graphview.set_through(e, 2, False) is None and len(pushed) == 2
     assert gs.spec.to_json() == before
-    # a picture picked while through: the chain goes with it, nothing left faint
+    # a picture picked while through: that one wire — the chain stays,
+    # reaching nothing (faint), and so does the ground on the hands
     assert graphview.set_through(e, 2, True) is None
+    thru = gs.spec.to_json()
     assert graphview.set_picture(e, "output.2.image", "scene") is None
     got = gs.spec.to_json()
-    assert not any(n.get("kind") in ("composite", "copy") for n in got["nodes"])
+    assert got["nodes"] == thru["nodes"]
     assert sorted(map(str, got["wires"])) == sorted(map(str, [
-        *before["wires"], {"from": "scene", "to": "output.2.image"}]))
+        *(x for x in thru["wires"] if x["to"] != "output.2.image"),
+        {"from": "scene", "to": "output.2.image"}]))
+    assert {"composite", "copy"} <= graphview.unreached(gs.spec)
     # refused in words: a window with its own picture, a frame laying no hands
     why = graphview.set_through(e, 2, True)
     assert why == graphview.THROUGH_OWN_PICTURE.format(label="Output 2", src="Scene")

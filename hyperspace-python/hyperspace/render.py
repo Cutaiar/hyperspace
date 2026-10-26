@@ -149,6 +149,7 @@ from .graph import (
     cloud_roles,
     graph_key,
     param_prefix,
+    rig_of,
     wired,
 )
 from .lookback import DreamState, Lookback
@@ -1046,6 +1047,9 @@ class Renderer:
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
+        # plan 36 T1: whoever holds the rig's own wires (the open show,
+        # `library.Project.rig`, by `app`); None: every bus cable standing
+        self.rig_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the preset's
         # graph section, `preset.GraphSection`); their Ghosts, made on
@@ -1602,19 +1606,24 @@ class Renderer:
         33 R: whose `backdrop` is the section's wire into `backdrop.image`).
         Plan 35 B, T4: every frame is a wired frame, keyed by the views'
         count alone — a window's switches are mutes, read by each output
-        every frame, never a rebuild."""
+        every frame, never a rebuild. Plan 36 T1: the rig's own wires
+        (`rig_source`, the open show: `graph.rig_of`) are part of the key —
+        a bus cable cut on GRAPH builds again."""
         s = s if s is not None else getattr(self, "_view_now", None)
         wiring = wired(self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s))
         key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
+        rig = rig_of(getattr(self, "rig_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
+                or getattr(graph, "rig", None) != rig
                 or frozenset(getattr(graph, "effects", ())) != effects):
-            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)))
+            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
+                                              rig)
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
