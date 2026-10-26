@@ -476,6 +476,7 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     st["flip"].clear()
     before = dict(st["applied"])
     forget(panel, view)
+    st["sat"] = {}                          # the layout's own places go too
     auto = layout_of(st, view)
     moved = sum(1 for n in view.nodes if drawn_node(st, n) and (
                 before.get(n.id) is None or tuple(round(v) for v in before[n.id])
@@ -695,15 +696,22 @@ def _area_chips(st: dict) -> None:
 
 def _place(panel, st: dict, view: graphview.View) -> None:
     """Every node where it belongs this frame: the preset's or the show's
-    position, else its place in its area (`areas_of`) — and each area's
-    idle line; set on the canvas only when that
-    differs from what was last set, so a node being dragged is left alone.
-    A tidy (`tidy`) collapses every node and forgets the canvas's positions
-    in both maps first."""
+    position, else where it already sits on the canvas, else its place in
+    its area (`areas_of`) — and each area's idle line; set on the canvas
+    only when that differs from what was last set, so a node being dragged
+    is left alone. The layout never moves a node that is on the canvas: a
+    node dragged away leaves its spot empty (2026-10-26: no layout runs on
+    its own) — only a new preset, or the head's **tidy** (`tidy`, which
+    collapses every node and forgets the positions in both maps), lays
+    them out."""
     if st["tidy"]:
         st["tidy"] = False
         tidy(panel, st, view)
     pre, show = _layouts(panel)
+    if st.get("layout_of") != id(pre):        # another preset: its own layout
+        st["layout_of"] = id(pre)
+        st["sat"] = {}
+    sat = st.setdefault("sat", {})
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
          frozenset(st["folds"]), frozenset(st["idle_open"]),
@@ -717,8 +725,9 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     for n in view.nodes:
         if not drawn_node(st, n):              # N9: an idle node is not on the canvas
             continue
-        xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
+        xy = stored.get(n.id) or sat.get(n.id) or auto.get(n.id) or (0.0, 0.0)
         target = (float(xy[0]), float(xy[1]))
+        sat.setdefault(n.id, target)
         if applied.get(n.id) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + n.id)), imgui.ImVec2(*target))
             applied[n.id] = target
@@ -1363,10 +1372,15 @@ def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=
     return why
 
 
-def insert_effect(panel, cable: graphview.VCable, file: str) -> str | None:
+def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | None:
     """A render cable's "insert effect ▸ <file>" (plan 33 U): the next
-    instance of `file` onto it, one undo step. Returns the refusal, or None."""
-    return _render_said(panel, render_edit(panel), lambda e: e.insert_effect(cable, file))
+    instance of `file` onto it, one undo step, put where the menu opened
+    (on the cable), never left to the layout. Returns the refusal, or None."""
+    e = render_edit(panel)
+    why = _render_said(panel, e, lambda e: e.insert_effect(cable, file))
+    if why is None and e.added:
+        _place_new(panel, f"render:{e.added}", at)
+    return why
 
 
 def render_node_menu(panel, n) -> None:
@@ -2406,7 +2420,7 @@ def menu(panel, st: dict, view: graphview.View) -> None:
         if b is not None:
             _bundle_menu(panel, st, view, b)
         elif c is not None:
-            _cable_menu(panel, view, c)
+            _cable_menu(panel, view, c, st["menu_at"])
     elif what == "node":
         n = view.node(name)
         if n is not None:
@@ -2438,7 +2452,7 @@ def _pin_menu(panel, view: graphview.View, pin: str) -> None:
     panel._ctx_learn_block(a, panel._real(a))
 
 
-def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
+def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> None:
     """A cable's menu: insert a modifier of a kind (a route's or a
     modifier input's), delete."""
     imgui.text_disabled(cable_tip(view, c).splitlines()[0])
@@ -2452,7 +2466,7 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
         if files and imgui.begin_menu("insert effect"):     # plan 33 U
             for f in files:
                 if imgui.menu_item_simple(f):
-                    insert_effect(panel, c, f)
+                    insert_effect(panel, c, f, at)
             imgui.end_menu()
     if imgui.menu_item_simple("delete"):
         if c.kind == "render":                  # N4: unwire, its own undo step

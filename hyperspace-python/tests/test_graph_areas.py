@@ -269,13 +269,14 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
             assert y1 >= y0 + graphview.height(n0, collapsed=True) + graphview.GAP
     audio = [lay.nodes[n.id][1] for n in view.nodes if n.area == graphview.AUDIO]
     assert lay.titles[graphview.OTHER][1] > max(audio)
-    # a saved position wins, and takes no room
+    # a saved position wins — and the node it left is not moved into the gap
+    # (2026-10-26: no layout runs on its own; only tidy lays out again)
     below = next(n.id for n in drawn if n.column == view.node("render:shape").column
                  and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
     rig.lib.presets.layout["render:shape"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:shape"] == (4000.0, 4000.0)
-    assert st["applied"][below][1] < lay.nodes[below][1]
+    assert st["applied"][below] == lay.nodes[below]
 
 
 def test_tidy_relays_into_areas_and_says_so(rig):
@@ -747,3 +748,15 @@ def test_a_resize_sits_by_what_it_is_made_of(rig):
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     assert view.node("render:resize").area == graphview.EFFECTS_AREA
     assert back_wires(view) == []
+
+
+def test_insert_effect_lands_where_the_cable_was_clicked(rig):
+    """A cable's "insert effect ▸ <file>" puts the new node where the menu
+    opened on the cable (2026-10-26), as the picker does — not wherever the
+    layout would have flowed it."""
+    st = load(rig, "party-trip")
+    view = st["view"]
+    c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
+    assert ui_graph.insert_effect(rig.panel, c, "kaleido", (321.0, 654.0)) is None
+    placed = {k: v for k, v in rig.lib.presets.layout.items() if v == [321, 654]}
+    assert len(placed) == 1 and next(iter(placed)).startswith("render:kaleido")
