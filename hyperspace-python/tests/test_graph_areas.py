@@ -783,3 +783,34 @@ def test_preview_is_copied_only_on_a_frame_after_the_page_asked():
     assert pv.tex == "tex" and pv.status == "sending"
     pv.fail("lost")
     assert pv.tex is None
+
+
+def test_two_fingers_pan_and_cmd_keeps_the_zoom():
+    """2026-10-26: a scroll over the canvas pans it (canvas units: the
+    zoom's pixels), ⌘ with it is the editor's zoom and pans nothing."""
+    st = {"pan": (0.0, 0.0)}
+    assert ui_graph.scroll_pan(st, 2.0, -1.0, 1.0, cmd=False)
+    assert st["pan"] == (-ui_graph.PAN_PX, 2 * ui_graph.PAN_PX)
+    assert ui_graph.scroll_pan(st, 1.0, 0.0, 2.0, cmd=False)
+    assert st["pan"] == (-ui_graph.PAN_PX, 4 * ui_graph.PAN_PX)
+    assert not ui_graph.scroll_pan(st, 3.0, 3.0, 1.0, cmd=True)
+    assert not ui_graph.scroll_pan(st, 0.0, 0.0, 1.0, cmd=False)
+    assert st["pan"] == (-ui_graph.PAN_PX, 4 * ui_graph.PAN_PX)
+
+
+def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
+    """The pan moves every drawn node on the canvas by the same amount and
+    changes no saved position; a node placed from a menu on the panned
+    canvas is saved in the canvas's own units."""
+    st = load(rig, "party-trip")
+    before = dict(st["applied"])
+    st["pan"] = (100.0, -50.0)
+    frame(rig.panel, "graph")
+    moved = [k for k, v in before.items() if k in st["applied"]]
+    assert moved and all(st["applied"][k] == (before[k][0] + 100.0, before[k][1] - 50.0)
+                         for k in moved)
+    assert rig.lib.presets.layout == {}
+    view = st["view"]
+    c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
+    assert ui_graph.insert_effect(rig.panel, c, "kaleido", (400.0, 300.0)) is None
+    assert [300, 350] in rig.lib.presets.layout.values()

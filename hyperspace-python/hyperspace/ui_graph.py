@@ -207,6 +207,11 @@ ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them
 BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
                 "beside it sets how strongly it shows")
 BACKDROP_ALPHA = 0.35    # how strongly it shows by default
+# 2026-10-26 (the trackpad): two fingers moving pan the canvas — the
+# editor itself only zooms on a wheel — and ⌘ with them zooms. GLFW gives
+# a trackpad's scroll as a tenth of its pixels, so 10 px a unit follows
+# the fingers; a mouse's notch is one unit
+PAN_PX = 10.0
 
 
 # ---------------------------------------------------------------- state and context
@@ -233,6 +238,7 @@ def _state(panel) -> dict:
     st.setdefault("idle_open", set())       # plan 28 N9: the areas whose idle line is open
     st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
     st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
+    st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
     return st
 
 
@@ -248,6 +254,7 @@ def editor(panel):
     if st["editor"] is None:
         cfg = ed.Config()
         cfg.settings_file = ""
+        cfg.enable_smooth_zoom = True       # a trackpad's small steps zoom a little each
         st["editor"] = ed.create_editor(cfg)
         st["created"] += 1
         st["applied"] = {}      # a new context knows no position yet
@@ -527,6 +534,7 @@ def page(panel, dt: float) -> None:
                                         and pos[1] <= mouse.y < pos[1] + size[1])
     canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
+    _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     if sel:                             # its bottom is the canvas's: the page ends where it did
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
@@ -704,6 +712,40 @@ def _backdrop_chips(st: dict) -> None:
             imgui.set_tooltip(BACKDROP_TIP)
 
 
+def scroll_pan(st: dict, wheel: float, wheel_h: float, zoom: float, cmd: bool) -> bool:
+    """Two fingers on the trackpad (or a mouse's wheel) over the canvas:
+    the canvas panned by them — `st["pan"]`, in canvas units (`zoom` of
+    them a screen pixel), the picture following the fingers as a page
+    scrolls — unless ⌘ is held, when the wheel is the editor's zoom. True
+    when it panned (the wheel is then the page's, not the editor's)."""
+    if cmd or not (wheel or wheel_h):
+        return False
+    k = PAN_PX * max(zoom, 1e-3)
+    px, py = st["pan"]
+    st["pan"] = (px + wheel_h * k, py + wheel * k)
+    return True
+
+
+def _scroll(st: dict, origin, size) -> None:
+    """The wheel this frame over the canvas (not its details, no popup
+    open) → `scroll_pan`; a panning wheel is taken from imgui before the
+    editor opens, so the editor does not zoom on it too."""
+    io = imgui.get_io()
+    m = imgui.get_mouse_pos()
+    over = (origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1])
+    if (not over or st.get("over_details")
+            or imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)):
+        return
+    zoom = 1.0
+    if st.get("editor") is not None:            # (last frame's zoom: the editor is not open yet)
+        ed.set_current_editor(st["editor"])
+        zoom = ed.get_current_zoom() or 1.0
+    if scroll_pan(st, io.mouse_wheel, io.mouse_wheel_h, zoom, io.key_ctrl or io.key_super):
+        io.mouse_wheel = io.mouse_wheel_h = 0.0
+    else:
+        io.mouse_wheel_h = 0.0                  # ⌘: the editor zooms, never sideways
+
+
 def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],
                   pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
     """Where output 1's picture `pic` (w, h) lies on the page's canvas at
@@ -771,6 +813,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         st["layout_of"] = id(pre)
         st["sat"] = {}
     sat = st.setdefault("sat", {})
+    px, py = st["pan"]                         # the canvas as the fingers moved it
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
          frozenset(st["folds"]), frozenset(st["idle_open"]),
@@ -785,14 +828,14 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         if not drawn_node(st, n):              # N9: an idle node is not on the canvas
             continue
         xy = stored.get(n.id) or sat.get(n.id) or auto.get(n.id) or (0.0, 0.0)
-        target = (float(xy[0]), float(xy[1]))
-        sat.setdefault(n.id, target)
+        sat.setdefault(n.id, (float(xy[0]), float(xy[1])))
+        target = (float(xy[0]) + px, float(xy[1]) + py)
         if applied.get(n.id) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + n.id)), imgui.ImVec2(*target))
             applied[n.id] = target
     for area, xy in lay.lines.items():        # plan 28 N9: each area's idle line
         lid = graphview.idle_id(area)
-        target = (float(xy[0]), float(xy[1]))
+        target = (float(xy[0]) + px, float(xy[1]) + py)
         if applied.get(lid) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + lid)), imgui.ImVec2(*target))
             applied[lid] = target
@@ -816,7 +859,8 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         applied[n.id] = now
         m = pre if graphview.home(n) == graphview.PRESET else show
         if m is not None:
-            m[n.id] = [int(now[0]), int(now[1])]
+            px, py = st["pan"]
+            m[n.id] = [int(now[0] - px), int(now[1] - py)]
         if n.kind == "modifier" or isinstance(n.ref, Effect):   # (plan 33 U: an effect too)
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
@@ -944,8 +988,10 @@ def _titles(st: dict, lay: graphview.Layout) -> None:
     zoom = ed.get_current_zoom() or 1.0
     foot = graphview.TITLE_H - 12.0
     rects = st["title_rects"] = {}
+    px, py = st["pan"]
     for (words, x, y), area in zip(titles(lay), (a for a in graphview.ORDER
                                                  if a in lay.titles), strict=True):
+        x, y = x + px, y + py
         short = graphview.SHORT_TITLES.get(area, words)
         text, size = title_fit(words, short, title_room(lay, area), zoom, em,
                                imgui.calc_text_size(words).x, imgui.calc_text_size(short).x)
@@ -1951,7 +1997,8 @@ def _place_new(panel, nid: str, at) -> None:
     layout: modifiers and macros are the preset's)."""
     pre, _ = _layouts(panel)
     if at and pre is not None:
-        pre[nid] = [round(at[0]), round(at[1])]
+        px, py = _state(panel)["pan"]           # the menu's point is the panned canvas's
+        pre[nid] = [round(at[0] - px), round(at[1] - py)]
 
 
 def add_modifier(panel, kind: str, at=None):
