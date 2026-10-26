@@ -595,6 +595,41 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
     assert "acid.2" in r.stats["effects"] and red(shaped) > 0.2, red(shaped)
 
 
+def test_a_composite_lays_the_scene_and_its_effect_over_the_media(ctx):
+    """A red still into a composite's `under`, the scene into its `over`:
+    with nothing of the shape drawn the frame is the still (the scene laid
+    over is see-through, not an opaque black that covers it); with the
+    shape, its faces cover the still only where they draw. The same through
+    an effect at full mix (a trigger pulled): its pass keeps the scene's
+    see-through ground, so the still is never blacked out."""
+    r = _renderer(ctx, _media(a=Still(_rgba(16, 9))))
+    st = r.fx.state
+    st.values["kaleido"].update(on=True, mix=1.0)
+    assert not r.fx.compile_all()
+
+    def red(pic):
+        return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
+
+    def wire(*pairs, nodes=({"kind": "composite"},)):
+        return G.read_graph({"frame": "wired", "nodes": list(nodes),
+                             "wires": [{"from": a, "to": b} for a, b in pairs]}).wiring()
+
+    r.wiring = wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+                    ("scene", "composite.over"), ("composite", "output.all.image"))
+    (pic,) = _draw(ctx, r, _empty())
+    assert red(pic) == 1.0, red(pic)
+    (shaped,) = _draw(ctx, r, _shape())
+    assert 0.2 < red(shaped) < 1.0, red(shaped)              # the faces over the still
+    r.wiring = wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+                    ("scene", "kaleido.image"), ("kaleido", "composite.over"),
+                    ("composite", "output.all.image"),
+                    nodes=({"kind": "composite"}, {"kind": "effect", "file": "kaleido"}))
+    (pic,) = _draw(ctx, r, _empty(), frames=2)
+    assert "kaleido" in r.stats["effects"] and red(pic) == 1.0, red(pic)
+    (shaped,) = _draw(ctx, r, _shape(), frames=2)
+    assert "kaleido" in r.stats["effects"] and 0.2 < red(shaped) < 1.0, red(shaped)
+
+
 # ---------------------------------------------------------------- the echoes over a backdrop
 
 def _trails(ctx, r, s_on, s_off):

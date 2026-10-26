@@ -261,6 +261,41 @@ def test_a_scene_on_a_backdrop_is_drawn_see_through():
     assert g.nodes["scene"].ground is None
 
 
+def test_a_scene_laid_over_by_a_composite_is_drawn_see_through():
+    """A scene into a composite's `over` — straight, or through effects —
+    clears see-through as one on the backdrop does, and the effects between
+    keep that ground (`Effect.laid_over`), so `over` covers the `under` only
+    where the shape draws. A scene that is the `under`, or an effect that is
+    not laid over anything, keeps the window's opaque ground."""
+    comp, kal = {"kind": "composite"}, {"kind": "effect", "file": "kaleido"}
+    fx = frozenset({"kaleido"})
+
+    def built(*pairs, nodes=(comp,)):
+        return G.build_graph(views(1), G.read_graph(wired(*pairs, nodes=nodes)).wiring(),
+                             effects=fx)
+
+    g = built(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+              ("scene", "composite.over"), ("composite", "output.all.image"))
+    assert g.nodes["scene"].ground == 0.0
+    g = built(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+              ("scene", "kaleido.image"), ("kaleido", "composite.over"),
+              ("composite", "output.all.image"), nodes=(comp, kal))
+    assert g.nodes["scene"].ground == 0.0
+    assert g.nodes["kaleido"].laid_over and g.nodes["kaleido"].see_through
+    g = built(("shape", "scene.geometry"), ("channel.a", "composite.over"),
+              ("scene", "composite.under"), ("composite", "output.all.image"))
+    assert g.nodes["scene"].ground is None
+    g = built(("shape", "scene.geometry"), ("scene", "kaleido.image"),
+              ("kaleido", "output.all.image"), nodes=(kal,))
+    assert g.nodes["scene"].ground is None
+    assert not g.nodes["kaleido"].laid_over and not g.nodes["kaleido"].see_through
+    # "add" ignores the over's alpha (black adds nothing): nothing to keep
+    g = built(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+              ("scene", "composite.over"), ("composite", "output.all.image"),
+              nodes=({"kind": "composite", "blend": "add"},))
+    assert g.nodes["scene"].ground is None
+
+
 def test_the_capture_runs_once_after_every_end():
     sec = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
                 ("lookback", "output.all.image"), ("channel.a", "output.2.image"),

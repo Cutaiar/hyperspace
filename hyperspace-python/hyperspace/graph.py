@@ -4479,6 +4479,10 @@ class Effect(Node):
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "aux": IMAGE}
     OUTPUT = IMAGE
     TIMED = False            # a line on SYSTEM only in a frame it ran (`Graph.timed_in`)
+    # its picture is laid over another (a composite's `over`, the backdrop's
+    # scene: `_Build.laid_over`), so its pass keeps its own alpha — an opaque
+    # ground there would cover the picture under it wherever it draws nothing
+    laid_over = False
     # plan 32 R: `aux` is a second picture the pass reads, not the one it
     # bends — an effect placed after a node leaves an aux reading that node
     REFS: ClassVar[frozenset[str]] = frozenset({"aux"})
@@ -4501,7 +4505,10 @@ class Effect(Node):
 
     @property
     def see_through(self) -> bool:
-        """Its picture is a layer's (premultiplied, see-through ground)."""
+        """Its picture is a layer's (premultiplied, see-through ground), or
+        it is laid over another picture (`laid_over`)."""
+        if self.laid_over:
+            return True
         src = self.inputs["image"]
         while isinstance(src, Effect):
             src = src.inputs["image"]
@@ -4710,7 +4717,7 @@ class Effect(Node):
         tex, fbo = _spare(frame, dst)
         self.inputs["image"].paint(frame, fbo)
         kw = {"aux": aux} if aux is not None else {}
-        kw.update(self._opaque(frame))
+        kw.update({"opaque": 0} if self.see_through else self._opaque(frame))
         with frame.timed(self.name):
             frame.r.fx.run_one(self.effect, tex, dst, frame.t, **kw)
         frame.stats.setdefault("effects", []).append(self.name)
@@ -5471,6 +5478,26 @@ class _Build:
         got = self.into.get(dst)
         return got[0] if got else None
 
+    def laid_over(self, src: str, seen: frozenset[str] = frozenset()) -> bool:
+        """Whether `src`'s picture is laid over another picture: wired into
+        the backdrop's scene or the `over` of a composite that blends by it
+        (over, depth — "add" ignores it: black adds nothing), straight or
+        through effects. A scene laid over clears see-through
+        (`Scene.ground` 0) and the effects between keep that ground
+        (`Effect.laid_over`), so the picture covers what is under it only
+        where it draws."""
+        for w in self.wires:
+            if w.src != src or w.node in seen:
+                continue
+            kind = _kind(w.node)
+            if (w.dst == "backdrop.scene"
+                    or (kind == "composite" and w.port == "over"
+                        and self.blends.get(w.node, "over") != "add")
+                    or (kind == "effect" and w.port == "image"
+                        and self.laid_over(w.node, seen | {w.node}))):
+                return True
+        return False
+
     def _from(self, dst: str) -> Node | None:
         """What the wire into `dst` reads, made (None: no wire, or nothing)."""
         w = self._one(dst)
@@ -5519,10 +5546,9 @@ class _Build:
             return self._keep(Readout(wired_guide_name(n), geometry=self.node(hands)))
         if kind == "scene":
             geos = [self.node(w.src) for w in self.into.get("scene.geometry", ())]
-            on_backdrop = any(w.src == "scene" for w in self.into.get("backdrop.scene", ()))
             return self._keep(Scene("scene", geometries=[*self.clouds,
                                                          *(x for x in geos if x is not None)],
-                                    ground=0.0 if on_backdrop else None))
+                                    ground=0.0 if self.laid_over("scene") else None))
         if kind == "backdrop":
             over = self._from("backdrop.scene")
             if self.back_channel:
@@ -5596,7 +5622,9 @@ class _Build:
             return None
         if kind == "copy":
             return self._keep(Copy(self._unique(name), effect, image=src))
-        return self._keep(Effect(name, image=src, node=self._unique(name), placed="wire"))
+        node = Effect(name, image=src, node=self._unique(name), placed="wire")
+        node.laid_over = self.laid_over(name)
+        return self._keep(node)
 
     def _depth(self) -> Node | None:
         """The scene, for a depth-aware lay (the hands' `laid: depth`)."""
