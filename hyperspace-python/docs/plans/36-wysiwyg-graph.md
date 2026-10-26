@@ -1,7 +1,9 @@
 # Plan 36 — the WYSIWYG graph: no default graph, no hidden edges; look-back and dream as two nodes
 
-**Status: proposed (2026-10-26)**, from the owner's notes after the
-2026-10-25 install, agreed with Dylan. Not built. Plan 37 is the faces
+**Status: building (2026-10-26)** on `plan-36-build` (cut from the quick
+wins, PR #241), from the owner's notes after the 2026-10-25 install,
+agreed with Dylan. **D1–D5 accepted by the owner as recommended
+(2026-10-26).** Build plan [`36-wysiwyg-graph-build.md`](36-wysiwyg-graph-build.md). Plan 37 is the faces
 (their shaders consolidated, faces as a target like any other) and the
 nodes-as-pictures visual language; the quick wins from the same notes
 (insert spawn, no automatic layout, the output behind the canvas, bigger
