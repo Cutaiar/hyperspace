@@ -7900,7 +7900,7 @@ Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommen
 ### 415. Plan 37 is nodes as pictures, and the faces
 
 - **Answer.** owner — 2026-10-26. FL Patcher-style nodes shown as the picture they make; face shaders consolidated and faces as a target like any other.
-- **Built.** Not built. The `acid-scene` preset drawing a wire backwards (area rules) goes there.
+- **Built.** Not built. Specified 2026-10-27 as two independent workstreams, each with its own build plan and decisions D1–D5: [`plans/37a-nodes-as-pictures.md`](plans/37a-nodes-as-pictures.md) (nodes as pictures, the cable palette, legibility from the display) and [`plans/37b-faces.md`](plans/37b-faces.md) (the patterns consolidated, the faces' input like any other, faces per instance). The `acid-scene` preset drawing a wire backwards (area rules) goes to 37A.
 - **Other options.** Fold it into plan 36.
 - **To reverse.** None.
 - **Rough edge.** None.
