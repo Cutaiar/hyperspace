@@ -72,12 +72,15 @@ from __future__ import annotations
 import argparse
 import gc
 import hashlib
+import inspect
 import json
 import os
 import re
 import sys
 import tempfile
 import time
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -335,7 +338,9 @@ class Shot:
     over: bool           # the hands laid over after the pipeline
     sha256: str
     size: tuple[int, int]
-    pixels: np.ndarray   # (h, w, 4) uint8, top row first: for the PNG and a diff
+    # (h, w, 4) uint8, top row first: for the PNG and a diff — None when the
+    # caller's `keep` said the frame is not needed past its hash
+    pixels: np.ndarray | None
     wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
 
     @property
@@ -513,6 +518,126 @@ def context() -> moderngl.Context:
     return _CTX
 
 
+class _Lent(moderngl.Program):
+    """A pooled program as one rig holds it: the pool's linked program
+    under a wrapper of its own. Releasing it (or the rig's end) hands the
+    program back to the pool, never to GL; collecting it does nothing."""
+
+    def __del__(self):
+        pass
+
+    def release(self):
+        pool = self.__dict__.get("_pool")
+        if pool is not None:
+            pool.give_back(self)
+
+
+class ProgramPool:
+    """The golden rigs' shader programs, linked once per process and lent
+    out again (the tool's harness only: the app compiles every program it
+    asks for, as before). Each rig builds a new `Renderer`, which asks for
+    some 26 programs whose sources are the same rig after rig; linking them
+    was most of a rig's cost. A program lent is exactly one freshly linked:
+    within a rig every request gets a program of its own (two `acid`
+    instances never share one), and a program lent again has every uniform
+    and uniform-block binding put back as the link left it (snapshotted
+    then), so nothing a rig set reaches the next and the order the rigs
+    run in moves no pixel. Used only inside `shared_programs`."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self._link = type(ctx).program.__get__(ctx)     # the real compile
+        self._free: dict[str, list[tuple[moderngl.Program, list]]] = {}
+        self._out: list[_Lent] = []
+        self.linked = self.lent = 0
+
+    @staticmethod
+    def _state(prog: moderngl.Program) -> list | None:
+        """Every uniform's value and block's binding as they stand, or None
+        when one cannot be read back (such a program is never pooled)."""
+        got = []
+        try:
+            for name, m in prog._members.items():
+                if isinstance(m, moderngl.Uniform):
+                    got.append((name, "value", m.value))
+                elif isinstance(m, moderngl.UniformBlock):
+                    got.append((name, "binding", m.binding))
+        except Exception:  # noqa: BLE001 — unreadable: link it fresh each time
+            return None
+        return got
+
+    @staticmethod
+    def _restore(prog: moderngl.Program, state: list) -> None:
+        for name, what, v in state:
+            setattr(prog._members[name], what, v)
+
+    _SIGNATURE = inspect.signature(moderngl.Context.program)
+
+    def program(self, *a, **kw) -> moderngl.Program:
+        """`ctx.program(...)`, as moderngl takes it: keyed on every argument
+        (defaults filled in), so only the very same request is lent again."""
+        bound = self._SIGNATURE.bind(self.ctx, *a, **kw)
+        bound.apply_defaults()
+        args = {k: v for k, v in bound.arguments.items() if k != "self"}
+        key = repr(sorted(args.items()))
+        free = self._free.setdefault(key, [])
+        if free:
+            prog, state = free.pop()
+            self._restore(prog, state)
+            self.lent += 1
+        else:
+            prog = self._link(**args)      # a compile error raises here, as before
+            self.linked += 1
+            state = self._state(prog)
+            if state is None:
+                return prog
+        lent = _Lent.__new__(_Lent)
+        lent.__dict__.update(prog.__dict__)
+        lent.extra = None
+        lent._pool, lent._entry, lent._key = self, (prog, state), key
+        self._out.append(lent)
+        return lent
+
+    def give_back(self, lent: _Lent) -> None:
+        entry = lent.__dict__.pop("_entry", None)
+        if entry is None:
+            return                          # (released twice: as GL, a no-op)
+        lent.mglo = moderngl.InvalidObject()
+        self._free[lent._key].append(entry)
+
+    def end(self) -> None:
+        """The rig is done: every program it still holds goes back."""
+        out, self._out = self._out, []
+        for lent in out:
+            self.give_back(lent)
+
+
+_POOL: ProgramPool | None = None
+_LENDING = False
+
+
+@contextmanager
+def shared_programs(ctx: moderngl.Context):
+    """Within this block, `ctx.program` lends from the process's
+    `ProgramPool` (one rig's lifetime: `_shoot`, `picture`); after it,
+    every program the rig held is back in the pool and `ctx.program` is
+    moderngl's own again. Nothing under hyperspace/ knows of it."""
+    global _POOL, _LENDING
+    if _LENDING:
+        yield _POOL
+        return
+    if _POOL is None or _POOL.ctx is not ctx:
+        _POOL = ProgramPool(ctx)
+    _LENDING = True
+    ctx.program = _POOL.program
+    try:
+        yield _POOL
+    finally:
+        del ctx.program
+        _LENDING = False
+        _POOL.end()
+
+
 # the retired `outputs.route`'s table, as data (plan 35 T3: the goldens'
 # states are wiring now, and an output's end is named for its picture, not
 # a pipeline; T4 deleted the table): (scene, hands shown, through with an
@@ -638,13 +763,29 @@ def state_views(slug: str, states, size, targets) -> list[View]:
             for f, (_, sw) in zip(targets, states)]
 
 
+# which frames keep their pixels past the hash: (the shot's key, its
+# sha256) → keep. None keeps every one (a PNG or a contact sheet needs them)
+Keep = Callable[[str, str], bool] | None
+
+
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
-           wiring: dict | None = None, config: str | None = None) -> tuple[list[Shot], dict]:
+           wiring: dict | None = None, config: str | None = None, *,
+           label: str = "{}", keep: Keep = None) -> tuple[list[Shot], dict]:
     """Render one rig's states (under `wiring`, the preset's own when
     None; with `config`'s devices listed, A4b); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
-    rig drew reaches the next. Plan 35 T3 (row 392): each state is its
-    output's wiring (`rig_section`), every window's mutes on."""
+    rig drew reaches the next (its programs are lent from the pool,
+    `shared_programs`, each as freshly linked). Plan 35 T3 (row 392): each
+    state is its output's wiring (`rig_section`), every window's mutes on.
+    Each shot's state is `label` with the state's name in it; its pixels
+    are kept only where `keep` says (each frame is hashed as it is read)."""
+    with shared_programs(context()):
+        return _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config,
+                          label=label, keep=keep)
+
+
+def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
+               label: str, keep: Keep) -> tuple[list[Shot], dict]:
     ctx = context()
     rig = Rig(slug, hands, ctx)
     base = rig.presets.graph.free_doc() or {}
@@ -689,9 +830,12 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
                           if w.get("to") == port), None)
             if wired is not None or key is None:
                 route_name = "none"
-            shots.append(Shot(slug, hands, name, route_name,
-                              bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
-                              tuple(size), raw[::-1].copy(), wired))
+            state = label.format(name)
+            sha = hashlib.sha256(raw.tobytes()).hexdigest()
+            kept = keep is None or keep(f"{slug}|{hands}|{state}", sha)
+            shots.append(Shot(slug, hands, state, route_name, bool(over), sha, tuple(size),
+                              raw[::-1].copy() if kept else None, wired))
+            del raw
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
@@ -712,6 +856,11 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
     asserted on, so a preset this build reads with a note still draws."""
+    with shared_programs(context()):
+        return _picture(source, slug, library, states, hands)
+
+
+def _picture(source, slug, library, states, hands) -> tuple[list[str], list[str]]:
     ctx = context()
     rig = Rig(slug, hands, ctx, source=source, library=library)
     try:
@@ -733,63 +882,106 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
         gc.collect()
 
 
-def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[Shot], dict]:
+@dataclass(frozen=True)
+class Job:
+    """One test's worth of rigs (tests/test_golden_frames.py draws one job
+    per test, so the workers share them out): a factory preset with the
+    hands absent or present — its eight states, the window alone, and with
+    the hands present the WIRED and CLOUDED rigs — a fixture's eight
+    states, or the cap frame."""
+
+    kind: str            # "preset", "fixture" or "cap"
+    slug: str
+    hands: str
+
+    @property
+    def id(self) -> str:
+        return "cap" if self.kind == "cap" else f"{self.slug}|{self.hands}"
+
+
+def job_of(entry: dict) -> str:
+    """The id of the job that draws manifest entry `entry`."""
+    if "@" in entry["state"]:
+        return "cap"
+    return f"{entry['preset']}|{entry['hands']}"
+
+
+def jobs(only: set[str] | None = None, *, cap: bool = True) -> list[Job]:
+    """Every job (or only the presets in `only`), in the goldens' order."""
+    out = [Job("preset", slug, hands) for slug in FACTORY_PRESETS
+           if not only or slug in only for hands in HANDS]
+    out += [Job("fixture", slug, "present") for slug in FIXTURE_PRESETS
+            if not only or slug in only]
+    if cap and (not only or CAP["preset"] in only):
+        out.append(Job("cap", CAP["preset"], CAP["hands"]))
+    return out
+
+
+def run_job(job: Job, keep: Keep = None) -> tuple[list[Shot], dict | None]:
+    """One job's shots, and what the load said (None for the cap)."""
+    slug, hands = job.slug, job.hands
+    if job.kind == "fixture":
+        got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR, keep=keep)
+        gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
+        return got, info
+    if job.kind == "cap":
+        state = dict(STATES)[CAP["state"]]
+        got, _ = _shoot(slug, hands, ((CAP["state"], state),), CAP["size"],
+                        CAP["logical"], CAP["dpr"], keep=keep,
+                        label=f"{{}}@{CAP['size'][0]}x{CAP['size'][1]}-cap1080p")
+        gc.collect()
+        return got, None
+    shots, info = _shoot(slug, hands, STATES, (W, H), (W, H), DPR, keep=keep)
+    gc.collect()
+    # the window's own frame: output 1 alone, so its pipeline is drawn
+    # direct into the multisampled target and the hands' readout is
+    # decided by this one output (see SOLO)
+    for one in SOLO + (SOLO_FX if info["effects_on"] else ()):
+        got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR, keep=keep)
+        gc.collect()
+        shots += got
+    if hands != "present":
+        return shots, info
+    for wired, wiring, names, which in WIRED:
+        if which is not None and slug not in which:
+            continue
+        got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                        (W, H), (W, H), DPR, wiring, keep=keep, label=f"{wired}/{{}}")
+        gc.collect()
+        shots += got
+    for name, toml, names, which in CLOUDED:
+        if slug not in which:
+            continue
+        got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                        (W, H), (W, H), DPR, config=toml, keep=keep, label=f"{name}/{{}}")
+        gc.collect()
+        shots += got
+    return shots, info
+
+
+def render_all(only: set[str] | None = None, *, cap: bool = True,
+               keep: Keep = None) -> tuple[list[Shot], dict]:
     """Every golden (or only the presets in `only`), and per preset what
-    its load said."""
+    its load said; pixels kept where `keep` says (every frame's, if None)."""
     shots: list[Shot] = []
     said: dict[str, dict] = {}
-    for slug in FACTORY_PRESETS:
-        if only and slug not in only:
-            continue
-        for hands in HANDS:
-            got, info = _shoot(slug, hands, STATES, (W, H), (W, H), DPR)
-            gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
-            shots += got
-            said.setdefault(slug, {})[hands] = info
-            # the window's own frame: output 1 alone, so its pipeline is
-            # drawn direct into the multisampled target and the hands'
-            # readout is decided by this one output (see SOLO)
-            solo = SOLO + (SOLO_FX if info["effects_on"] else ())
-            for one in solo:
-                got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR)
-                gc.collect()
-                shots += got
-            if hands != "present":
-                continue
-            for wired, wiring, names, which in WIRED:
-                if which is not None and slug not in which:
-                    continue
-                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
-                                (W, H), (W, H), DPR, wiring)
-                gc.collect()
-                for sh in got:
-                    sh.state = f"{wired}/{sh.state}"
-                shots += got
-            for name, toml, names, which in CLOUDED:
-                if slug not in which:
-                    continue
-                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
-                                (W, H), (W, H), DPR, config=toml)
-                gc.collect()
-                for sh in got:
-                    sh.state = f"{name}/{sh.state}"
-                shots += got
-    for slug in FIXTURE_PRESETS:
-        if only and slug not in only:
-            continue
-        got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR)
-        gc.collect()
+    for job in jobs(only, cap=cap):
+        got, info = run_job(job, keep)
         shots += got
-        said.setdefault(slug, {})["present"] = info
-    if cap and (not only or CAP["preset"] in only):
-        state = dict(STATES)[CAP["state"]]
-        got, _ = _shoot(CAP["preset"], CAP["hands"], ((CAP["state"], state),), CAP["size"],
-                        CAP["logical"], CAP["dpr"])
-        gc.collect()
-        for s in got:
-            s.state = f"{CAP['state']}@{CAP['size'][0]}x{CAP['size'][1]}-cap1080p"
-        shots += got
+        if info is not None:
+            said.setdefault(job.slug, {})[job.hands] = info
     return shots, said
+
+
+def moved_only(doc: dict) -> Keep:
+    """`keep` for a diff: only a frame that is not its golden's."""
+    want = {f"{e['preset']}|{e['hands']}|{e['state']}": e["sha256"] for e in doc["goldens"]}
+    return lambda key, sha: want.get(key) != sha
+
+
+def unrecorded() -> Keep:
+    """`keep` for a record: only a frame whose picture has no PNG yet."""
+    return lambda key, sha: not (GOLDEN / "png" / f"{sha[:16]}.png").exists()
 
 
 def _thumb(pixels: np.ndarray):
@@ -1168,7 +1360,9 @@ def main() -> None:
     if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
     renderer, version = renderer_name(context()), gl_version(context())
-    shots, said = render_all(only)
+    # (pixels kept only where a PNG or the contact sheet needs them)
+    shots, said = render_all(only, keep=unrecorded() if a.record
+                             else moved_only(load_manifest()))
     if a.record:
         doc = record(shots, said, renderer, only, version)
         print(f"recorded {len(shots)} goldens under {GOLDEN.relative_to(ROOT)}")

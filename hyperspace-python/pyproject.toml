@@ -81,7 +81,7 @@ testpaths = ["tests"]
 # the fast tier in parallel; `pytest --all` runs everything; -n0 = serial.
 addopts = "-n auto --dist loadgroup -m 'not golden and not slow and not live'"
 markers = [
-    "golden: golden-frame draws (tests/test_golden_frames.py), ~45 s together",
+    "golden: golden-frame draws (tests/test_golden_frames.py), one test per rig job, ~12 s with -n auto",
     "slow: ~1 s or more each (torch dream, undo, plan 12 presets, whole-library sweeps)",
     "live: Syphon / NDI / real-file loopbacks with timeouts, flaky under load",
     "empty_frame: a bare Renderer keeps the app's empty frame (plan 36 T3)",
