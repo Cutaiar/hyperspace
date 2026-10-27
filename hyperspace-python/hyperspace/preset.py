@@ -171,6 +171,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     declare_switches,
     is_instance_id,
     is_lookback_id,
+    is_lookback_knob,
     is_resize_id,
     is_switch_id,
     pan_world,
@@ -1915,7 +1916,8 @@ def effects_on(routes, values: dict[str, Any],
     """`values` with the effects its routes drive switched on (PR #29's
     rule, for a routes-only file made a full preset): a route into
     ``fx.<name>.*`` sets ``fx.on`` and ``fx.<name>.on``, one into
-    ``fx.mix`` alone sets ``fx.on``, one into ``dream.*`` sets
+    ``fx.mix`` alone sets ``fx.on``, one into the dream's own ``dream.*``
+    (plan 36 T4: not a look-back's trail knob, `params.is_lookback_knob`) sets
     ``dream.on`` — each only when the file does not name it, and, with a
     registry to ask (`has`), only an id that exists. Without it every
     effect a D2 load lands would be at its default, off, and the hand
@@ -1929,7 +1931,10 @@ def effects_on(routes, values: dict[str, Any],
             wants.append("fx.on")
             if len(parts) >= 3 and parts[2] != "on":
                 wants.append(f"fx.{parts[1]}.on")
-        elif parts[0] == "dream" and len(parts) >= 2 and parts[1] != "on":
+        elif (parts[0] == "dream" and len(parts) >= 2 and parts[1] != "on"
+              and not is_lookback_knob(target)):
+            # (plan 36 T4: the dream's own knobs alone — a look-back's trail
+            # knob needs no switch, and must not turn the dream on)
             wants.append("dream.on")
         for pid in wants:
             if pid not in out and (has is None or has(pid)):

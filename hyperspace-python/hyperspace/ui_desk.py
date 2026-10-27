@@ -359,7 +359,9 @@ def offer(panel, table) -> tuple[list[tuple[str, str]], list[tuple[str, list[str
     # (plan 33 T7: whether the faces show a picture is the graph's wire)
     spec = panel.graph_now()[1] if hasattr(panel, "graph_now") else None
     media = learn.faces_media(spec, getattr(getattr(panel, "view", None), "switch", None))
-    out = learn.ranked(params, values, defaults, routed, on_desk, media=media)
+    # (plan 36 T4: a look-back's and the dream's knobs show while drawn)
+    out = learn.ranked(params, values, defaults, routed, on_desk, media=media,
+                       drawn=learn.drawn_of(spec))
     st["offer"] = (key, out)
     return out
 

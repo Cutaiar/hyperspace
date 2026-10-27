@@ -1449,12 +1449,13 @@ def split_lookback(section: Any, look: str) -> Any:
       the old look-back reads the composite.
     - "off": the old look-back drew its picture untouched — its readers
       read that picture, and no look-back is drawn — unless a frame of its
-      ring is read (plan 34's `echo.<k>`, `dream`): then the look-back
-      still records, and only those read it.
+      ring is read (plan 34's `echo.<k>`): then the look-back still
+      records, and only those read it.
 
     Plan 34's `echo.<k>` entries go: each wire from one reads the
     look-back's pin `lookback.echo.<k>`. Plan 34's `dream` (the buffer
-    alone) is the dream node, fed the look-back's trail. Not a wired frame,
+    alone) is the dream node, fed the look-back's trail while one is drawn,
+    else what the look-back recorded (no look-back drawn just to feed it). Not a wired frame,
     or one with no look-back: as it is."""
     if look not in LOOKS:
         raise ValueError(f"look {look!r}: one of {', '.join(LOOKS)}")
@@ -1474,10 +1475,10 @@ def split_lookback(section: Any, look: str) -> Any:
     echoes = [n for n in nodes if isinstance(n, dict) and n.get("kind") == "echo"]
     dreams = [n for n in nodes if isinstance(n, dict) and n.get("kind") == "dream"]
     dream_read = bool(dreams) and any(w.get("from") == "dream" for w in wires)
-    ring_read = dream_read or any(old_echo(w.get("from")) for w in wires)
+    ring_read = any(old_echo(w.get("from")) for w in wires)
     touches = any(str(w.get("to", "")).startswith("lookback.") or w.get("from") == "lookback"
                   for w in wires)
-    if not touches and not ring_read and not echoes:
+    if not touches and not ring_read and not dream_read and not echoes:
         return section
     under, held = into("lookback.image"), into("lookback.capture")
     occ, cover = into("lookback.occluder"), into("lookback.cover")
@@ -1506,7 +1507,12 @@ def split_lookback(section: Any, look: str) -> Any:
             lay.append(_w("lookback", f"{comp.name}.over"))
         head = comp.name
     if dreaming and not any(w.get("to") == "dream.image" for w in lay):
-        lay.append(_w("lookback", "dream.image"))
+        # (fix round 1, M1: plan 34's dream read the buffer of what was
+        # recorded — with no look-back drawn, the dream dreams that picture
+        # itself; with one drawn, its trail)
+        src = "lookback" if (live or ring_read) else (held or under)
+        if src is not None:
+            lay.append(_w(src, "dream.image"))
     if dreaming and not dreams:
         nodes.append(G.DreamAt().to_json())
     at = {"lookback.image": lay, "lookback.capture": record, "lookback.cover": covered}

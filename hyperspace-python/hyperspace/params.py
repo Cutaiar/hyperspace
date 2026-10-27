@@ -1085,6 +1085,14 @@ LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occ
 _LOOKBACK_ID = re.compile(r"dream\.(?:[2-9]|[1-9][0-9]+)\.(" + "|".join(LOOKBACK_KEYS) + ")")
 
 
+def is_lookback_knob(pid: str) -> bool:
+    """Whether `dream.*` param `pid` is a look-back's — its ring and trail,
+    `dream.<key>` or `dream.<n>.<key>` for a key of `LOOKBACK_KEYS` — not the
+    dream node's own (plan 36 T4: `dream.on` gates the dream's alone)."""
+    parts = pid.split(".")
+    return parts[0] == "dream" and len(parts) >= 2 and parts[-1] in LOOKBACK_KEYS
+
+
 def lookback_ids(name: str) -> list[str]:
     """Look-back `name`'s own params (`lookback.2` → `dream.2.echo_mix` …),
     in order; `lookback`'s are the `dream.*` ones."""

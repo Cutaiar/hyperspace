@@ -281,11 +281,85 @@ def test_the_seven_words_refuse_the_old_ports():
 def test_an_fx_module_before_any_preset_fills_nothing_in(tmp_path):
     """The T3 review's leak: an fx module applied before any preset has
     landed goes into the empty wired frame — none of today's frame (no
-    scene, no look-back) is filled in."""
+    scene, no look-back) is filled in. The module's run goes nowhere (no
+    picture into All outputs to run on), and nothing else lands."""
     from hyperspace.headless import make_app
 
     app = make_app(tmp_path)
     assert app.presets.graph.free_doc() is None
+    empty = G.read_graph({"frame": "wired"}).to_json()
+    on, specs = {"fx.on": True, "fx.plasma.on": True}, {"plasma": (10, 1.0)}
+    got, notes = M.module_runs(empty, on, specs)
+    # (the empty frame: nothing to run on — no wire, no node added)
+    assert G.read_graph(got).to_json() == empty and notes == []
+    old, _ = M.module_runs(None, on, specs)      # (the old words' path: today's frame)
+    assert ("plasma", "output.all.image") in [(w["from"], w["to"]) for w in old["wires"]]
+    assert any(w["to"] == "scene.geometry" for w in old["wires"]), "the leak's frame"
     app.lib.load("fx", "mandala")
-    doc = app.presets.graph.free_doc()
-    assert doc is None or not doc.get("wires"), doc
+    # (the run reached nothing: the frame stays the empty one, nothing landed)
+    assert app.presets.graph.free_doc() is None
+
+
+# ---------------------------------------------------------------- fix round 1: `dream.on`'s meaning
+
+def test_click_to_map_offers_a_migrated_tracers_trail_knobs():
+    """`dream.on` gates the dream's knobs alone: a migrated party-tracer
+    (`dream.on` false, its look-back drawn) can show its trail knobs, and
+    click-to-map offers them among its own — the dream's own knobs it
+    cannot show (no dream drawn). With no look-back drawn, the trail knobs
+    are dead."""
+    import json
+    from pathlib import Path
+
+    from hyperspace import learn
+
+    lib = Path(__file__).resolve().parents[1] / "hyperspace" / "library" / "presets"
+    doc = json.loads((lib / "party-tracer.json").read_text())
+    values = doc["values"]
+    assert values["dream.on"] is False
+    drawn = learn.drawn_of(G.read_graph(doc["graph"]))
+    assert "lookback" in drawn and "dream" not in drawn
+    for pid in ("dream.echo_mix", "dream.fade", "dream.echoes", "dream.occlude"):
+        assert learn.cannot_show(pid, values, drawn=drawn) is None, pid
+    assert learn.cannot_show("dream.mix", values, drawn=drawn) == "no dream"
+    assert learn.cannot_show("dream.k", values) == "dream off"       # no graph to ask
+    params = [(pid, "dream") for pid in ("dream.echo_mix", "dream.fade", "dream.mix")]
+    used, _ = learn.ranked(params, values, {}, set(), set(), drawn=drawn)
+    assert [pid for pid, _ in used] == ["dream.echo_mix", "dream.fade"]
+    assert dict(used)["dream.fade"] == learn.ON
+    plain = learn.drawn_of(G.read_graph({"frame": "wired", "wires": [
+        {"from": "scene", "to": "output.all.image"}]}))
+    assert learn.cannot_show("dream.fade", values, drawn=plain) == "no look-back"
+    assert learn.cannot_show("dream.2.fade", values, drawn=drawn) == "no look-back"
+
+
+def test_a_routed_trail_knob_leaves_the_dream_alone():
+    """A routes-only file's route into a look-back's knob switches nothing
+    on (the trail needs no switch); one into the dream's own turns
+    `dream.on` on, as before."""
+    from hyperspace.preset import effects_on
+
+    assert effects_on([{"target": "dream.fade"}], {}) == {}
+    assert effects_on([{"target": "dream.echo_mix"}, {"target": "dream.2.gap"}], {}) == {}
+    assert effects_on([{"target": "dream.mix"}], {}) == {"dream.on": True}
+
+
+def test_the_tracer_only_group_preset_leaves_the_worker_idle(ctx, tmp_path):
+    """The dream group's `tracer-only` (echoes alone, mix 0) says the dream
+    off since plan 36 T4: applied over a frame drawing a dream, the dream
+    passes through and the worker gets no submission; its note says a
+    values-only preset draws no node."""
+    from test_lookback import registry
+
+    from hyperspace.library import Library
+
+    d = DreamState(on=True)
+    reg = registry(d)
+    lib = Library(tmp_path, period=0.0)
+    lib.attach(reg)
+    assert lib.load("dream", "tracer-only") == [] and d.on is False
+    assert "cannot draw or remove a look-back" in lib.read("dream", "tracer-only")["note"]
+    r = _renderer(ctx, _wired(*WAKE, nodes=WAKE_NODES), dream=d)
+    r.dreamer.source = worker = Counting()
+    _frames(ctx, r, _faces(), n=3)
+    assert worker.submits == 0 and r.lookback.held() > 0

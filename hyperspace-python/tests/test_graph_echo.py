@@ -264,16 +264,18 @@ def test_an_echo_into_an_outputs_hands_reads_last_frames_capture(ctx):
 
 
 def test_the_dream_reads_nothing_until_written(ctx):
-    """`dream → output.2.image` (plan 36 T4: the dream node, fed the
-    look-back's trail): off it passes the trail through — nothing in the
-    ring yet, the ground — and says so. On, with pixels written into the
-    dream buffer (a fake worker attached), output 2 shows them laid over
-    at mix 1, and the words name the buffer's size (row 361)."""
+    """`dream → output.2.image` (plan 36 T4: the dream node, fed what the
+    old look-back recorded — the scene; no look-back drawn for it): off it
+    passes the scene through — output 2 is output 1 — and says so. On, with
+    pixels written into the dream buffer (a fake worker attached), output 2
+    shows them laid over at mix 1, and the words name the buffer's size
+    (row 361)."""
     size, s = (160, 120), _faces()
     r = _off(_renderer(ctx, None, [("dream", "output.2.image")], [{"kind": "dream"}]))
+    assert "lookback" not in {n for w in r.wiring.wires for n in (w.src, w.node)}
     vs = _views(ctx, size)
-    out = _frame(ctx, r, s, vs, size, 0)[1]
-    assert _mid(out) == (0, 0, 0)
+    one, out = _frame(ctx, r, s, vs, size, 0)
+    assert (out == one).all()
     assert r._graph.nodes["dream"].said.startswith("off: the picture passes through")
     dr = r.dreamer
     dr.state.on, dr.state.mix, dr.state.darken = True, 1.0, 0.0

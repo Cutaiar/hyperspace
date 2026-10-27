@@ -2276,8 +2276,9 @@ class Renderer:
 
     def _idle_rings(self, graph: Graph) -> None:
         """Each ring whose look-back this graph does not hold forgets its
-        history; one not held for good goes when the graph changes (its
-        textures released). No dream node: `D` forgotten."""
+        history; every one but `lookback`'s is also dropped then, its textures
+        released (made again, clean, when a graph holds it). No dream node:
+        `D` forgotten."""
         rings = getattr(self, "rings", None) or {}
         held = set(getattr(graph, "nodes", {}))
         for name in list(rings):
