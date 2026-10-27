@@ -48,7 +48,8 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     output.all.image`), the first reading the look-back; each output wired
     with the hands through has a copy of each (`Copy`, named `copy`,
     `copy.2` …) over its composite (plan 35 T4, row 377); none given, the
-    end reads the look-back as before D0."""
+    end reads the look-back as before D0. Plan 36 T1: with every window
+    through, the run is built (All outputs' picture) but no end shows it."""
     wires = [{"from": a, "to": f"{b}.image"} for a, b in zip(("frame", *RUN), RUN)]
     section = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [*wires, {"from": RUN[-1], "to": "fx.image"}]}
@@ -58,8 +59,9 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     assert g.run == RUN
     # (R23, plan 33 T7: a wiring that says no run has the empty one)
     assert graph(shows, effects=RUN).run == ()
+    assert "shown(palette)" not in g.nodes and g.nodes["palette"].inputs["image"] is \
+        g.nodes["acid.2"]
     for end, src, names in (
-            ("shown(palette)", "lookback", list(RUN)),
             ("shown(copy.4)", "composite", ["copy", "copy.2", "copy.3", "copy.4"]),
             ("shown(copy.8)", "composite.2", ["copy.5", "copy.6", "copy.7", "copy.8"])):
         run = _effects(g, end)
@@ -67,15 +69,11 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
         assert [e.name for e in run] == names
         assert all(isinstance(e, G.Effect) and e.KIND == "effect" for e in run)
         assert run[0].inputs == {"image": g.nodes[src], "aux": None}
-        assert g.nodes[end].inputs["image"] is run[-1] and g.nodes[end].source is g.nodes[src]
+        assert g.nodes[end].inputs["image"] is run[-1]
         order = [n.name for n in g.order]
         assert [order.index(n) for n in names] == sorted(order.index(n) for n in names)
         assert order.index(names[-1]) < order.index(end)
     assert all(isinstance(g.nodes[f"copy.{k}"], G.Copy) for k in range(2, 9))
-    # the layer and its stand-down still find the composite behind the copies
-    assert g.nodes["shown(copy.4)"].layer is g.nodes["hands.layer"]
-    assert g.nodes["shown(copy.8)"].fallback is None
-    assert g.nodes["shown(copy.4)"].fallback is g.nodes["shown(palette)"]
     # the timed lines are the graph's own: an effect has one only when it runs
     assert not set(g.timed) & {n.name for n in g.order if isinstance(n, G.Effect)}
     assert g.pool == 2

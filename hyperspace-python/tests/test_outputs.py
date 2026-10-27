@@ -853,17 +853,21 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
 
 def test_through_with_no_effect_on_is_hands_over(ctx):
+    """With no effect on, a through window draws what the hands over draws.
+    Plan 36 T1: it shows its own chain as wired (no stand-down to the
+    shared end): its composite is an end of its own, no chain runs."""
     import numpy as np
 
     S = O.Switches
     r = rig(ctx, effects=())
     a, b, c, d = run(ctx, r, wviews(ctx, r, S(), Thru(), S(scene=False), Thru(scene=False)))
     assert np.array_equal(a, b) and np.array_equal(c, d)
-    assert r.stats["ends"] == ["shown(lookback)"] and r.stats["chain_runs"] == 0
+    assert r.stats["ends"] == ["shown(lookback)", "shown(composite)", "shown(composite.2)"]
+    assert r.stats["chain_runs"] == 0
     assert r.stats["readout"] is False
 
 
-def test_through_with_no_hand_showing_runs_nothing_extra(ctx):
+def test_through_with_no_hand_showing_draws_the_same(ctx):
     import numpy as np
 
     S = O.Switches
@@ -878,8 +882,11 @@ def test_through_with_no_hand_showing_runs_nothing_extra(ctx):
             sw = [S(hands=False), Thru(hands=False)]
         a, b = run(ctx, r, wviews(ctx, r, *sw))
         assert np.array_equal(a, b), src
-        assert r.stats["ends"] == ["shown(warp)"] and r.stats["chain_runs"] == 1, src
-        assert r.ghost.readout is None and r._frames.keys() == {"shown(warp)"}, src
+        # (plan 36 T1: the through window shows its own chain, as wired —
+        # no stand-down to the shared end — and draws the same picture)
+        want = ["shown(warp)"] if src == "hands switch off" else ["shown(warp)", "shown(copy)"]
+        assert r.stats["ends"] == want, src
+        assert r.ghost.readout is None, src
 
 
 def test_four_outputs_need_at_most_three_chain_runs(ctx):

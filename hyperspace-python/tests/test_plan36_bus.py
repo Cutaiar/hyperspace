@@ -269,6 +269,38 @@ def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
         rig.close()
 
 
+def test_deleting_a_window_cuts_only_the_bus_cables_drawn(tmp_path):
+    """Review M2: a bus cable into a port the preset wires itself is not
+    drawn, so deleting the window does not cut it — the preset's wire goes,
+    and that cable stands (the port reads All outputs' again by it)."""
+    app, e, _ = _party(tmp_path)
+    assert e.wire("scene", "output.2.hands") is None
+    assert e.drop_node("render:output.2") is None
+    assert app.lib.project.rig.cut == {G.bus_wire(2, "image"), G.bus_wire(2, "guide")}
+    assert _ports(_build(app)[0], 2)["hands"] == "hands.layer"
+
+
+def test_through_refuses_a_window_with_no_picture_or_its_own_hands(tmp_path):
+    """Review M3: with its picture cable cut a window shows no picture to put
+    the hands through; with a hands wire of the preset's own, through would
+    drop it — both refused in words, nothing changed (the toggle is
+    lossless: off puts back exactly what on took)."""
+    app, e, _ = _party(tmp_path)
+    assert e.unwire("output.2.image") is None                    # the bus cable cut
+    before = app.presets.graph.spec.to_json()
+    assert graphview.set_through(e, 2, True) == graphview.THROUGH_NO_PICTURE.format(
+        label="Output 2")
+    assert graphview.set_picture(e, "output.2.image", graphview.AS_ALL) is None
+    assert e.wire("ground", "output.2.hands") is None
+    assert graphview.set_through(e, 2, True) == graphview.THROUGH_OWN_HANDS.format(
+        label="Output 2", src="ground", n=2)
+    assert e.unwire("ground", "output.2.hands") is None
+    assert app.presets.graph.spec.to_json() == before
+    assert graphview.set_through(e, 2, True) is None
+    assert graphview.set_through(e, 2, False) is None
+    assert app.presets.graph.spec.to_json() == before
+
+
 def test_through_writes_only_the_wires_it_names(tmp_path):
     """OUTPUT's "hands through the effects" (plan 36 T1, no `_Wiring._put`
     rule): on, the chain into the window's picture and `ground` on its

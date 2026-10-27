@@ -512,8 +512,14 @@ ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE",
           (False, True, False): ("none", True), (False, True, True): ("HANDS", False)}
 
 
-def expected_route(state: dict, fx_on: bool, visible: bool) -> tuple[str, bool]:
-    """What an output in `state` shows, by today's table (`ROUTES`)."""
+def expected_route(state: dict, fx_on: bool, visible: bool,
+                   through: bool = False) -> tuple[str, bool]:
+    """What an output in `state` shows, by today's table (`ROUTES`). Plan 36
+    T1: an output wired through (`graph.through_of`) shows its chain as
+    wired, every frame — no hand drawn or no effect on, it no longer stands
+    down to the scene with the hands laid over."""
+    if through:
+        return ("SCENE+HANDS" if state["scene"] else "HANDS"), False
     shown = bool(state["hands"]) and bool(visible)
     return ROUTES[(bool(state["scene"]), shown, shown and bool(state["through"]) and fx_on)]
 
@@ -612,7 +618,8 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             # table (`expected_route`) — a picture where it names one, the
             # hands over where it lays them
             key, over = rig.renderer.stats["routes"][k]
-            route_name, hands_over = expected_route(sw, fx_on, visible)
+            route_name, hands_over = expected_route(
+                sw, fx_on, visible, G.through_of(spec.wiring(), k + 1) is not None)
             if wiring is None and slug not in FIXTURE_PRESETS:
                 assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
                     slug, name, key, over)

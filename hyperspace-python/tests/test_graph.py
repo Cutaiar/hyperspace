@@ -127,7 +127,7 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
                                           "cover": g.nodes["lookback(cover)"]}
     end = g.nodes["shown(lookback)"]
     assert end.inputs == {"image": g.nodes["lookback"]}
-    assert end.after == (g.nodes["hands.layer"],) and not end.stands
+    assert end.after == (g.nodes["hands.layer"],)
     assert g.nodes["lookback(capture)"].inputs == {"image": g.nodes["scene"]}
     out = g.nodes["output.1"]
     assert out.index == 0 and out.after == (g.nodes["lookback(capture)"],)
@@ -139,15 +139,16 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     assert "Graph(shape → hands → scene" in repr(g)
 
 
-def test_a_through_output_is_a_composite_its_end_and_a_stand_down():
+def test_a_through_output_is_a_composite_and_its_end():
     """Plan 35 T4 (row 377): the hands through the effects are an output's
     wiring — a composite laying the layer over the look-back (or over
-    nothing, the picture muted), its end standing down for the look-back's
-    while nothing bends it; the hands only where some output's wiring
-    lays them."""
+    nothing, the picture muted); the hands only where some output's wiring
+    lays them. Plan 36 T1: its end is always itself (no stand-down, so no
+    end for the look-back no window shows) and the composite is told the
+    window it is for (`mute_hands`)."""
     g = graph([Shows(through=True), Shows(scene=False, through=True)])
     assert _names(g) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
-                         "lookback", "shown(lookback)", "composite", "shown(composite)",
+                         "lookback", "composite", "shown(composite)",
                          "composite.2", "shown(composite.2)", "lookback(capture)",
                          "output.1", "output.2"]
     assert g.nodes["composite"].inputs == {"under": g.nodes["lookback"],
@@ -155,18 +156,16 @@ def test_a_through_output_is_a_composite_its_end_and_a_stand_down():
     assert g.nodes["composite.2"].inputs == {"under": None, "over": g.nodes["hands.layer"],
                                              "depth": None}
     assert g.nodes["composite.2"].blend == "over"
-    assert g.nodes["lookback(capture)"].after[:3] == tuple(
-        g.nodes[n] for n in ("shown(composite)", "shown(lookback)", "shown(composite.2)"))
+    assert g.nodes["lookback(capture)"].after[:2] == tuple(
+        g.nodes[n] for n in ("shown(composite)", "shown(composite.2)"))
+    assert g.nodes["composite"].mute_hands == (0,)
+    assert g.nodes["composite.2"].mute_hands == (1,)
     # each output's image port is its end; through, the hands go before the
-    # effects, so no layer over; a through end that is not bent this frame
-    # stands down for its fallback (the look-back's, or the ground)
+    # effects, so no layer over
     o1, o2 = g.nodes["output.1"], g.nodes["output.2"]
     assert o1.inputs["image"] is g.nodes["shown(composite)"] and o1.inputs["hands"] is None
     assert o2.inputs["image"] is g.nodes["shown(composite.2)"] and o2.inputs["hands"] is None
     assert o1.inputs["readout"] is o2.inputs["readout"] is g.nodes["hands.layer"]
-    assert g.nodes["shown(composite)"].fallback is g.nodes["shown(lookback)"]
-    assert g.nodes["shown(composite.2)"].fallback is None
-    assert g.nodes["shown(composite.2)"].layer is g.nodes["hands.layer"]
     # an output wired to show no hands: nothing wired to its ports (the layer
     # is All outputs' still, and a window wired to nothing shows its ground)
     g = graph([Shows(hands=False)])
@@ -311,9 +310,11 @@ def test_depth_aware_wiring_hands_each_composite_and_output_the_scenes_depth():
     g = graph([Shows(), Shows(through=True)], G.Wiring(blend="depth"))
     c = g.nodes["composite"]
     assert c.blend == "depth" and c.inputs["depth"] is g.nodes["scene"]
-    for k in (1, 2):
-        o = g.nodes[f"output.{k}"]
-        assert o.blend == "depth" and o.inputs["depth"] is g.nodes["scene"]
+    o1, o2 = g.nodes["output.1"], g.nodes["output.2"]
+    assert o1.blend == "depth" and o1.inputs["depth"] is g.nodes["scene"]
+    # (plan 36 T1: the through window lays no layer itself — its composite
+    # does, depth-aware — so it reads no depth: there is no stand-down to lay for)
+    assert o2.inputs["hands"] is None and o2.inputs["depth"] is None
 
 
 # ---------------------------------------------------------------- GL
@@ -388,18 +389,17 @@ def test_the_graph_is_built_once_per_set_of_switches_and_reused(ctx):
     assert type(r.timer) is PassTimer and old.freed
 
 
-def test_a_pipeline_no_view_routes_to_this_frame_does_not_run(ctx):
+def test_a_through_window_runs_its_chain_as_wired(ctx):
     """The graph for an output wired with the hands through holds its copy
-    chain whether or not a hand shows; which end runs is the stand-down's,
-    per frame: with no hand the run's end alone runs (one chain run, as
-    before), with a hand the copies' (plan 35 B, `Shown.bent`)."""
+    chain and runs it whether or not a hand shows (plan 36 T1: no
+    stand-down; the run's own end, which no window shows, is not built)."""
     from test_outputs import rig, run, wviews
 
     for hands in (False, True):
         r = rig(ctx, hands=hands)
         run(ctx, r, wviews(ctx, r, Thru()), frames=2)
-        assert "shown(copy)" in r._graph.nodes and "shown(warp)" in r._graph.nodes
-        assert r.stats["ends"] == ["shown(copy)" if hands else "shown(warp)"]
+        assert "shown(copy)" in r._graph.nodes and "shown(warp)" not in r._graph.nodes
+        assert r.stats["ends"] == ["shown(copy)"]
         assert r.stats["chain_runs"] == 1 and r.stats["layer"] is hands
         assert r.stats["direct"] is True
 

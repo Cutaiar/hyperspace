@@ -94,11 +94,9 @@ the order are a function of the views' count and the renderer's `Wiring`
 (`graph_key`, `Graph.wiring`): the renderer keeps the last graph and
 builds a new one only when either changes. A window's mutes (picture,
 hands) are read by its output each frame, never a rebuild (row 374).
-Each output is wired to its end; per frame a through output's copies
-whose layer is not bent — no copy live, or no hand drawn — stand down for
-the originals over what the layer was laid onto, with the layer laid over
-at the output instead (`Shown.fallback`, `Output.settle`). An end with no
-output this frame is skipped and its nodes read 0 ms.
+Each output is wired to its end, and shows exactly that (plan 36 T1: the
+through stand-down is gone). An end with no output this frame is skipped
+and its nodes read 0 ms.
 
 **The graph in the preset** (plan 26 A4). A preset may carry a `graph`
 section: plain JSON listing node instances by kind and their wiring,
@@ -4426,6 +4424,20 @@ class Composite(Node):
         # backdrop's `backdrop_alpha`, a branch under the scene), over the
         # ground; None paints `under` as it is
         self.under_alpha_of = under_alpha_of
+        # plan 36 T1 (R9): the windows (indexes into `Frame.views`) whose
+        # picture this composite heads, laying their hands through the
+        # effects — while each has its hands muted it lays nothing over
+        # (`_Build._mute_hands`); () for any other composite
+        self.mute_hands: tuple[int, ...] = ()
+
+    def muted(self, frame: Frame) -> bool:
+        """Whether every window this composite's picture is for has its
+        hands muted this frame (`mute_hands`): its `over` then lays nothing."""
+        if not self.mute_hands:
+            return False
+        views = getattr(frame, "views", None) or ()
+        return all(i < len(views) and not getattr(views[i].switches, "hands", True)
+                   for i in self.mute_hands)
 
     def reads(self, frame: Frame) -> bool:
         return any(n is not None and n.reads(frame)
@@ -4453,7 +4465,7 @@ class Composite(Node):
         else:
             under.paint(frame, dst)
         over = self.inputs["over"]
-        if over is None:
+        if over is None or self.muted(frame):
             return
         try:
             tex = over.image(frame)
@@ -4837,16 +4849,10 @@ class Shown(Node):
     counted through the mutes) at the frame's size, unflipped, with no tap
     and no fold — else once into a frame texture under its name, for every
     output that takes it. Each end that runs is one of `stats["ends"]`, by
-    name (plan 35 T4: where the pipelines' keys were).
-
-    The stand-down (row 378): a source that is a chain of copies over a
-    composite whose `over` is a hands layer is only itself while it bends
-    the layer — the layer drawn this frame and a copy of the chain live
-    (an empty chain never bends). Otherwise its outputs take `fallback` —
-    the end of the copies' originals over the composite's `under`, or the
-    ground (None) with nothing under — with the layer laid over at the
-    output (`Output.settle`), as a through pipeline's was. Any other source is
-    always itself."""
+    name (plan 35 T4: where the pipelines' keys were). Plan 36 T1: an end
+    is always itself — the stand-down (row 378) that swapped a through
+    chain for its originals, frame by frame, is gone: what is wired is
+    what shows."""
 
     KIND = "shown"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
@@ -4855,36 +4861,7 @@ class Shown(Node):
     def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
         super().__init__(name, after, **inputs)
         self.key = name               # its frame texture's and its routes' key
-        self.fallback: Shown | None = None
-        self.stands = False           # a copy chain over a hands composite (`_Build`)
-        self.copies: tuple[str, ...] = ()     # the chain's copies' effects, first first
         self.chained = False          # an effect of the graph's run is on its way
-
-    @property
-    def source(self) -> Node | None:
-        """What its chain of effects starts from (the composite that lays
-        the hands on, for a stand-down)."""
-        src = self.inputs["image"]
-        while isinstance(src, Effect):
-            src = src.inputs["image"]
-        return src
-
-    @property
-    def layer(self) -> Node | None:
-        """The layer its composite lays on before the copies (a stand-down's
-        alone), read as wired now (D1 may sit an effect on it)."""
-        src = self.source
-        return src.inputs["over"] if self.stands and isinstance(src, Composite) else None
-
-    def bent(self, frame: Frame) -> bool:
-        """Whether this end is itself this frame (see the class)."""
-        if not getattr(self, "stands", False):
-            return True
-        layer = self.layer
-        if layer is None or layer.image(frame) is None:
-            return False
-        live = frame.r.fx.state.live
-        return any(live(e) for e in self.copies)
 
     def run(self, frame: Frame) -> None:
         users = frame.users(self)
@@ -4938,9 +4915,8 @@ class Output(Node):
     against the `depth` port's scene), the readout, its mirror, its dim
     (master × its own) — or, for a view with a presenter, the `Handoff`
     that says the same five steps (a presenter lays the hands plain over:
-    the depth stays in this context). Which end it shows this frame is
-    `settle`'s: its wired end, or that end's fallback with the layer over
-    while the end is not bent."""
+    the depth stays in this context). What it shows this frame is
+    `settle`'s: its wired end and layer, through its window's mutes."""
 
     KIND = "output"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "hands": IMAGE, "readout": IMAGE,
@@ -4977,8 +4953,9 @@ class Output(Node):
     def settle(self, frame: Frame) -> tuple[Node | None, tuple[Node, str] | None]:
         """(the end it shows this frame or None for its ground, (the layer
         laid over after it, its blend) or None) — through its window's
-        mutes; a through end that is not bent (`Shown.bent`) stands down
-        for its fallback and its layer goes over here."""
+        mutes, nothing else (plan 36 T1: no stand-down swaps the end; a
+        hands mute inside a through chain is the composite's,
+        `Composite.mute_hands`)."""
         key = self.name + "#settle"
         if key in frame.data:
             return frame.data[key]
@@ -4991,11 +4968,6 @@ class Output(Node):
             end = None
         if no_hands:
             over = None
-        if isinstance(end, Shown) and not end.bent(frame):
-            # (plan 35 B: a copy chain's stand-down, as a pipeline's was;
-            # R9, T3: a hands mute wins over it — the layer stays off)
-            over, blend = (end.layer if not no_hands else None), end.source.blend
-            end = end.fallback
         laid = (over, blend) if over is not None and over.image(frame) is not None else None
         frame.data[key] = got = (end, laid)
         return got
@@ -5528,6 +5500,16 @@ def _effects_of(node: Node | None) -> list[Effect]:
     return out
 
 
+def _through_chain(node: Node | None) -> bool:
+    """Whether picture `node` is a chain of copies over a composite laying a
+    hands layer on — "hands through the effects" as wiring. Order only
+    (plan 36 T1): such a chain is added right after the run, where the
+    through pipelines ran; it shows exactly as wired."""
+    while isinstance(node, Copy):
+        node = node.inputs["image"]
+    return isinstance(node, Composite) and isinstance(node.inputs["over"], HandsLayer)
+
+
 class _Build:
     """`build_graph`'s work (plan 35 B): the reached wires made into nodes,
     added to `g` in the default graph's order (the frame's own nodes, the
@@ -5727,36 +5709,39 @@ class _Build:
         return self.node("scene")
 
     def _end(self, src: Node) -> Shown:
-        """Picture `src`'s one end (and, for a copy chain over a hands
-        composite, its stand-down's: the originals over the `under`)."""
+        """Picture `src`'s one end."""
         got = self._ends.get(id(src))
         if got is not None:
             return got
         end = self._ends[id(src)] = Shown(f"shown({src.name})", image=src)
         self.ends.append(end)
-        copies, n = [], src
-        while isinstance(n, Copy):
-            copies.insert(0, n)
-            n = n.inputs["image"]
-        if isinstance(n, Composite) and isinstance(n.inputs["over"], HandsLayer):
-            end.stands = True
-            end.copies = tuple(c.effect for c in copies)
-            under = n.inputs["under"]
-            if under is not None:
-                end.fallback = self._end(self._originals(under, end.copies))
         return end
 
-    def _originals(self, under: Node, effects: tuple[str, ...]) -> Node:
-        """The copies' originals over `under`: the effects of the graph that
-        read it in that order, made where the wires made none."""
-        cur = under
-        for e in effects:
-            got = next((n for n in self.built if isinstance(n, Effect)
-                        and not isinstance(n, Copy) and n.effect == e
-                        and n.inputs["image"] is cur), None)
-            cur = got if got is not None else self._keep(
-                Effect(e, image=cur, node=self._unique(e), placed="wire"))
-        return cur
+    def _mute_hands(self, ports: list[dict], readers: list[Node]) -> None:
+        """Plan 36 T1 (R9): a window's hands mute inside a through chain.
+        Each composite laying a hands layer `over` at the head of a window's
+        picture chain (through its effects and copies) is told the windows
+        it feeds (`Composite.mute_hands`): while every one of them has its
+        hands muted, it lays nothing over — a mute, read per frame, not a
+        rewire. A composite (or a node of its chain) anything else reads —
+        the capture, a delay, another node — keeps its hands: a mute of one
+        window cannot reach another's picture."""
+        chains: dict[int, tuple[Composite, set[int], set[int]]] = {}
+        for i, p in enumerate(ports):
+            n, mine = p["image"], set()
+            while isinstance(n, Effect):
+                mine.add(id(n))
+                n = n.inputs["image"]
+            if isinstance(n, Composite) and isinstance(n.inputs["over"], HandsLayer):
+                got = chains.setdefault(id(n), (n, set(), set()))
+                got[1].add(i)
+                got[2].update(mine)
+        for comp, windows, mine in chains.values():
+            inside = mine | {id(comp)}
+            foreign = any(v is not None and id(v) in inside
+                          for r in readers if id(r) not in mine and not isinstance(r, Shown)
+                          for v in r.inputs.values())
+            comp.mute_hands = () if foreign else tuple(sorted(windows))
 
     # ---- the frame
 
@@ -5809,7 +5794,9 @@ class _Build:
         layers = tuple(n for n in self.built if isinstance(n, HandsLayer))
         shown = [self._end(p["image"]) if p["image"] is not None else None for p in ports]
         for end in self.ends:
-            end.after = layers                  # whether a hand shows decides the stand-down
+            # (the users an end counts are settled through the layers'
+            # pictures, `Output.settle`: the layers run first)
+            end.after = layers
             end.chained = any(e.effect in g.run for e in _effects_of(end.inputs["image"]))
         held = self._from("lookback.capture")
         capture = None
@@ -5821,10 +5808,12 @@ class _Build:
         outputs = []
         for i, (p, end) in enumerate(zip(ports, shown)):
             depth = (scene if wiring.blend == "depth" and scene is not None
-                     and (p["hands"] is not None or (end is not None and end.stands)) else None)
+                     and p["hands"] is not None else None)
             outputs.append(Output(f"output.{i + 1}", i, after=(capture,) if capture else (),
                                   blend=wiring.blend, image=end,
                                   hands=p["hands"], readout=p["guide"], depth=depth))
+        self._mute_hands(ports, [*self.built, *self.ends, *writes,
+                                 *((capture,) if capture else ())])
         # into the graph in the default graph's order: the frame's own
         # nodes, the run, each through's composite and copies, the
         # capture's picture, the ends, the writes, the capture, the outputs
@@ -5841,8 +5830,8 @@ class _Build:
         head = self._from(f"{ALL_OUTPUTS}.image")
         roots += [*run, self._ends.get(id(head)) if head is not None else None]
         for end in shown:
-            if end is not None and end.stands:
-                roots += [end.source, *_effects_of(end.inputs["image"]), end]
+            if end is not None and _through_chain(end.inputs["image"]):
+                roots += [*_effects_of(end.inputs["image"]), end]
         roots += [held, *self.ends, *writes, capture, *outputs, *self.built]
         seen: set[int] = set()
 
@@ -5966,8 +5955,8 @@ def _sig_chain(n: Node | None, depth: int = 0) -> tuple | None:
 
 def _live_nodes(g: Graph) -> set[int]:
     """The nodes an output, the capture or a delay's write reads (through
-    their inputs, an end's fallback, and the faces pattern the shape reads
-    by name): what the frame can show. The retired default graph built
+    their inputs and the faces pattern the shape reads by name): what the
+    frame can show. The retired default graph built
     pipelines no output took (an output whose picture a wire replaced):
     those were not in `signature`, as recorded."""
     pattern = g.nodes.get("pattern")
@@ -5979,9 +5968,6 @@ def _live_nodes(g: Graph) -> set[int]:
             continue
         seen.add(id(n))
         todo += [v for v in n.inputs.values() if v is not None]
-        fb = getattr(n, "fallback", None)
-        if fb is not None:
-            todo.append(fb)
         if isinstance(n, Shape) and isinstance(pattern, PatternNode):
             todo.append(pattern)
     return seen
@@ -5990,7 +5976,8 @@ def _live_nodes(g: Graph) -> set[int]:
 def signature(g: Graph) -> tuple:
     """What a graph shows, node for node (plan 35 B, Review Focus 1): per
     output, (its index, its picture's chain, its hands', its guide's, its
-    blend, its depth's, its end's fallback's chain); then every node the
+    blend, its depth's, and None — where its end's stand-down was, plan 36
+    T1, kept so the recorded signatures keep their shape); then every node the
     frame can show (`_live_nodes`) in the graph's order but the outputs,
     the ends (`Shown`; the retired `Fx` and `Wired` when it was recorded)
     and the old backdrop sink (which drew nothing), each (class, which, the
@@ -6003,13 +5990,9 @@ def signature(g: Graph) -> tuple:
     of what it reads."""
     outs = []
     for out in g.outputs:
-        end = out.inputs["image"]
-        while isinstance(end, Effect):
-            end = end.inputs["image"]
         outs.append((out.index, _sig_chain(out.inputs["image"]),
                      _sig_chain(out.inputs["hands"]), _sig_chain(out.inputs["readout"]),
-                     out.blend, _sig_chain(out.inputs["depth"]),
-                     _sig_chain(getattr(end, "fallback", None))))
+                     out.blend, _sig_chain(out.inputs["depth"]), None))
     live = _live_nodes(g)
     order = tuple((_sig_class(n), _sig_what(n),
                    tuple(sorted(k for k, v in n.inputs.items() if v is not None)))

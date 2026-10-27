@@ -197,8 +197,12 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 # `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
 # two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
 # 741 before them are the same list, byte for byte
+# Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
+# inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
+# absent|hands+through and `through-one-output` present|scene+through) and
+# the route words of those presets' through states
 GOLDENS_SINCE = ("resize-faces", "resize-crop")
-GOLDENS_DIGEST = "71dcd9c76e2c85807a8ac9273f42ea210468881af21b025dd4a7cca5ad99ad02"
+GOLDENS_DIGEST = "f90e7abf9b31c24c9d9a5bedc42a155bb5c8b00dd19cbdc27eefc91cde31c61b"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",

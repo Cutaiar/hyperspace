@@ -1150,7 +1150,7 @@ def output_wires(spec: G.GraphSpec, n: int, shows: Shows) -> list[dict]:
 
 
 
-def through_wires(spec: G.GraphSpec, n: int) -> list[dict]:
+def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> list[dict]:
     """OUTPUT's "hands through the effects" on window `n` as the wires it
     names (plan 36 T1, the live edit — `output_wires` stays the migration's
     word for the retired switch): a `composite.k` (the lowest free
@@ -1163,7 +1163,9 @@ def through_wires(spec: G.GraphSpec, n: int) -> list[dict]:
     else: the guide, and every other wire of `spec`, are left as they are.
     Entries first (the dicts with `kind`), then the wires. `spec` is a
     wired frame whose All outputs lays a hands layer on (the page refuses
-    otherwise, `graphview.through_refusal`)."""
+    otherwise, `graphview.through_refusal`). `rig` (plan 36 T1): the bus
+    cables standing — a window with no picture of its own and its picture
+    cable cut counts as `ground` (the page refuses that too)."""
     wires = spec.wires
     allp = {w.port: w.src for w in wires if w.node == G.ALL_OUTPUTS}
     pictures = [w for w in wires if w.port == "image"]
@@ -1173,7 +1175,9 @@ def through_wires(spec: G.GraphSpec, n: int) -> list[dict]:
         run.insert(0, head)
         head = _src_into(pictures, f"{head}.image")
     port = f"output.{n}."
-    alone = _src_into(wires, port + "image") == G.GROUND
+    own = _src_into(wires, port + "image")
+    alone = own == G.GROUND or (own is None and rig is not None
+                                and not rig.has(G.bus_wire(n, "image")))
     k = _next_composite(spec)
     comp = _named("composite", k)
     entries = [G.CompositeAt(k, spec.laid).to_json()]

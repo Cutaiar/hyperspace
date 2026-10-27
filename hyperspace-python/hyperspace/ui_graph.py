@@ -1929,9 +1929,11 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     # of their own here: `_act` pushed one; the canvas's render gestures use
     # `render_edit` instead)
     lib = getattr(panel, "library", None)
-    return graphview.Edit(table, panel.reg, router, view, profile,
-                          graph=getattr(getattr(lib, "presets", None), "graph", None),
-                          render=getattr(getattr(panel, "renderer", None), "_graph", None))
+    e = graphview.Edit(table, panel.reg, router, view, profile,
+                       graph=getattr(getattr(lib, "presets", None), "graph", None),
+                       render=getattr(getattr(panel, "renderer", None), "_graph", None))
+    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    return e
 
 
 def _settle(panel, res):

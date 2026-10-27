@@ -588,9 +588,10 @@ def test_a_presenter_lays_the_folded_hands_and_shows_the_folded_frame(ctx):
 
 
 def test_a_placed_effect_alone_bends_no_pipeline(ctx):
-    """With only a placed effect on, `fx_on` is off: a through output
-    stands down for the run's end (no copy chain runs, no second frame
-    texture), no chain runs — and the placed effect still runs."""
+    """With only a placed effect on, `fx_on` is off: no chain runs — and
+    the placed effect still runs. Plan 36 T1: the through output shows its
+    own chain as wired (its copy reads through), no stand-down to the
+    run's end."""
     from test_outputs import keep_run, rig, run, wviews
 
     r = rig(ctx, effects=("warp",))
@@ -600,52 +601,28 @@ def test_a_placed_effect_alone_bends_no_pipeline(ctx):
     run(ctx, r, wviews(ctx, r, S(), Thru()), frames=2)
     assert r.fx.state.live("palette") and r.stats["fx_on"] is False
     assert r.stats["chain_runs"] == 0 and r.stats["effects"] == ["palette"]
-    assert r.stats["routes"] == [("shown(warp)", True), ("shown(warp)", True)]
-    assert r.stats["ends"] == ["shown(warp)"]
+    assert r.stats["routes"] == [("shown(warp)", True), ("shown(copy)", False)]
+    assert r.stats["ends"] == ["shown(warp)", "shown(copy)"]
 
 
-def test_into_a_through_output_standing_down_to_its_ground_is_dormant_for_the_frame(ctx):
+def test_into_a_through_output_folds_its_chain_every_frame(ctx):
     """The palette into output 2, a hands-through glass with the scene off,
-    and no effect of the run on: the output stands down to its ground with
-    the hands over (`settle` → no end, the layer over), so there is nothing
-    to fold — the palette runs nowhere, the output's pixels are the frame
-    with no placement, and the words say so through the dormant path
-    (`Graph.dormant` → OUTPUT's `dormant:` line, `graph_words`). The next
-    frame with an effect on bends the pipeline: the palette folds it and
-    the words go."""
-    import numpy as np
-    from test_outputs import rig, run, views, wviews
-
-    from hyperspace.ui import dormant_lines
+    and no effect of the run on. Plan 36 T1 (no stand-down): the output
+    shows its chain as wired — the hands alone through the run's copy —
+    so the palette folds it this frame, nothing is dormant, and with an
+    effect of the run on it folds it still."""
+    from test_outputs import rig, run, wviews
 
     glass = Thru(scene=False)
-    said = "palette into output 2 — output 2 stands down this frame"
-
-    def frame(placed: bool):
-        r = rig(ctx, effects=())
-        # (warp in the run, off: the frame with no effect until it is on)
-        r.wiring = G.Wiring(run=("warp",))
-        if placed:
-            _palette(r)
-            r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),),
-                                run=("warp",))
-        return r, run(ctx, r, wviews(ctx, r, S(), glass), frames=2)
-
-    _, (a1, a2) = frame(False)
-    r, (b1, b2) = frame(True)
+    r = rig(ctx, effects=())
+    _palette(r)
+    r.wiring = G.Wiring(placed=(G.EffectAt("palette", 1, into="output.2"),), run=("warp",))
+    run(ctx, r, wviews(ctx, r, S(), glass), frames=2)
     g = r._graph
     assert [e.effect for e in g.nodes["output.2"].folds] == ["palette"]
-    assert r.stats["routes"][1] == (None, True)            # its ground, the hands over
-    assert "palette" not in r.stats["effects"]
-    assert np.array_equal(a1, b1) and np.array_equal(a2, b2)   # no pixel moved
-    assert g.dormant == {"palette": said} and g.stood == {"palette"}
-    assert f"dormant: {said}" in dormant_lines(g)
-    spec = G.read_graph({"nodes": [{"kind": "effect", "file": "palette", "into": "output.2"}]})
-    assert G.graph_words(spec, g.dormant) == f"graph: {said}"
-    # an effect of the run on: the glass's pipeline bends, the palette folds it
-    r.fx.state.values["warp"]["on"] = True
-    run(ctx, r, views(ctx, S(), S()), frames=1)
-    g = r._graph
     assert r.stats["routes"][1][0] is not None
     assert "palette" in r.stats["effects"]
     assert "palette" not in g.dormant and not g.stood
+    r.fx.state.values["warp"]["on"] = True
+    run(ctx, r, wviews(ctx, r, S(), glass), frames=1)
+    assert "palette" in r.stats["effects"] and "palette" not in r._graph.dormant

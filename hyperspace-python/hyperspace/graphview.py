@@ -4192,10 +4192,13 @@ def render_drop(edit: Edit, node: str) -> str | None:
         left = [x for x in wires if x["to"].rpartition(".")[0] != name]
         # plan 36 T1: a window's bus cables are wires into it too — cut
         # with the rest, in the same step, so it shows its ground
+        # (only the drawn ones: a bus cable into a port the preset wires
+        # itself is not drawn, and stays as it is — M2)
         rig = _rig(edit)
-        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "show", None) is None else list(
-            rig.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
-                        for p in rgraph.BUS_PORTS))
+        owned = {x["to"] for x in wires}
+        bus = [] if kind == rgraph.ALL_OUTPUTS or getattr(edit, "show", None) is None else [
+            w for w in rig.present(rgraph.bus_wire(int(name.partition(".")[2]), p)
+                                   for p in rgraph.BUS_PORTS) if w.dst not in owned]
         if len(left) == len(wires) and not bus:     # (T5 review: say nothing was done)
             edit.said = NOTHING_TO_DELETE.format(
                 what="All outputs" if kind == rgraph.ALL_OUTPUTS
@@ -4309,6 +4312,13 @@ THROUGH_NO_LAYER = ("hands through the effects: All outputs lays no hands layer 
                     "picture — wire a hands layer into output.all.hands on GRAPH")
 THROUGH_OWN_PICTURE = ("{label} shows {src} by its own wire: the hands go through All "
                        "outputs' effects — set its picture to \"as All outputs\" first")
+# plan 36 T1: a window whose picture cable from All outputs is cut shows no
+# picture to put the hands through; one whose hands port the preset wires
+# keeps that wire (the toggle never drops a wire it did not write)
+THROUGH_NO_PICTURE = ("{label} shows no picture: its cable from All outputs is cut — "
+                      "set its picture to \"as All outputs\" first")
+THROUGH_OWN_HANDS = ("{label}'s hands port is wired ({src} → output.{n}.hands): through "
+                     "puts the hands in its picture instead — unwire that port first")
 
 
 def page_spec(spec):
@@ -4399,8 +4409,7 @@ def is_through(spec, n: int, rig=None) -> bool:
 
 def _drop_through(doc: dict, n: int) -> bool:
     """Window `n`'s "hands through the effects" taken out of section `doc`
-    (the inverse of `graphmigrate.output_wires` under `Shows(through=
-    True)`): the wire into its picture, the chain of copies back to the
+    (the inverse of `graphmigrate.through_wires`, plan 36 T1): the wire into its picture, the chain of copies back to the
     composite and the composite — each that nothing else reads, with its
     entry and its wires — and the `ground` the through put on its hands
     port, so the layer is laid over again. A through over nothing (the
@@ -4470,13 +4479,22 @@ def through_refusal(spec, n: int, slots=(), rig=None) -> str | None:
     """Why window `n` cannot put the hands through the effects (the
     checkbox drawn disabled, its hover these words), or None: All outputs
     lays no hands layer over its picture (R11: no hands to put through),
-    or the window shows a picture of its own by a wire."""
+    the window shows a picture of its own by a wire, (plan 36 T1, `rig`)
+    its picture cable from All outputs is cut so it shows none, or the
+    preset wires its hands port itself — the toggle would drop that wire,
+    and it never drops a wire it did not write (through off puts back
+    exactly what through on took)."""
     if kind_of(_into(spec, f"{rgraph.ALL_OUTPUTS}.hands")) != "layer":
         return THROUGH_NO_LAYER
+    label = label_of(f"output.{n}", slots)
     own = _into(spec, f"output.{n}.image")
     if own is not None and own != rgraph.GROUND and not is_through(spec, n, rig):
-        return THROUGH_OWN_PICTURE.format(label=label_of(f"output.{n}", slots),
-                                          src=picture_label(spec, own))
+        return THROUGH_OWN_PICTURE.format(label=label, src=picture_label(spec, own))
+    if own is None and rig is not None and not rig.has(rgraph.bus_wire(n, "image")):
+        return THROUGH_NO_PICTURE.format(label=label)
+    hands = _into(spec, f"output.{n}.hands")
+    if hands is not None:
+        return THROUGH_OWN_HANDS.format(label=label, src=hands, n=n)
     return None
 
 
@@ -4508,7 +4526,7 @@ def set_through(edit: Edit, n: int, on: bool) -> str | None:
     why = through_refusal(spec, n, getattr(edit, "slots", ()), rig)
     if why is not None:
         return why
-    got = graphmigrate.through_wires(spec, n)
+    got = graphmigrate.through_wires(spec, n, rig)
     port = f"output.{n}."
     doc["nodes"] += [x for x in got if "kind" in x]
     doc["wires"] = [x for x in doc.get("wires", [])
