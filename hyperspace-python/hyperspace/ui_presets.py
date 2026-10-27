@@ -305,7 +305,7 @@ def save_chip(panel, group: str, label: str, lit: bool, *, key: str | None = Non
     _rect(panel, f"{key}.save")
     _state(panel)["save"][key] = (label, bool(lit and cur is not None))
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip(save_tip(lib, group))
+        ui.tooltip(save_tip(lib, group))
     return hit
 
 
@@ -342,7 +342,7 @@ def strip(panel, group: str) -> None:
     imgui.pop_style_color(2)
     _rect(panel, f"strip.{group}.name")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{cur}  ·  {'factory' if factory else 'user'} preset — "
+        ui.tooltip(f"{cur}  ·  {'factory' if factory else 'user'} preset — "
                           "click for the list" if cur else "no preset loaded")
     st["rects"].pop(f"strip.{group}.dot", None)
     if is_dirty:
@@ -370,7 +370,7 @@ def strip(panel, group: str) -> None:
             invalidate(panel, group)
         _rect(panel, f"strip.{group}.new")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A new preset: factory values, nothing wired — "
+            ui.tooltip("A new preset: factory values, nothing wired — "
                               "black until something is wired to an output")
         imgui.same_line()
     # R17: a preset `new` made and nothing saved names itself — a user
@@ -390,7 +390,7 @@ def strip(panel, group: str) -> None:
         _begin_naming(panel, group, "" if unsaved else (cur or ""))
     _rect(panel, f"strip.{group}.as")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Save the group's settings as a new user preset")
+        ui.tooltip("Save the group's settings as a new user preset")
     if not kind:
         imgui.same_line()
         if ui.chip("reset"):
@@ -398,7 +398,7 @@ def strip(panel, group: str) -> None:
         _rect(panel, f"strip.{group}.reset")
         if imgui.is_item_hovered():
             d = lib.default_name(group)
-            imgui.set_tooltip(f"Back to the default preset — {d}" if d
+            ui.tooltip(f"Back to the default preset — {d}" if d
                               else "Back to the values the module started with")
     imgui.pop_id()
 
@@ -479,7 +479,7 @@ def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
             if hit:
                 st["show_hidden"] = not show_hidden
             if imgui.is_item_hovered():
-                imgui.set_tooltip("The factory presets × took off this list: shown struck "
+                ui.tooltip("The factory presets × took off this list: shown struck "
                                   "through, each with unhide. A slot that names one still "
                                   "loads it")
         if bin_:
@@ -492,7 +492,7 @@ def _list_popup(panel, group: str, listing: list[str], cur: str | None) -> None:
                 st["empty_armed"] = None
                 imgui.open_popup("trash")
             if imgui.is_item_hovered():
-                imgui.set_tooltip("What × and rename sent to the trash, and every older "
+                ui.tooltip("What × and rename sent to the trash, and every older "
                                   "version a save replaced: restore puts one back")
         _trash_popup(panel, bin_)
     imgui.end_popup()
@@ -554,7 +554,7 @@ def _list_row(panel, group: str, name: str, cur: str | None, hidden: bool, drawn
                "To the trash (restore it from there); a factory preset of the same name "
                "comes back")
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
+            ui.tooltip(tip)
         if not hit:
             continue
         if chip == "unhide":
@@ -613,7 +613,7 @@ def _trash_popup(panel, bin_: list) -> None:
             rect(f"restore.{i}")
             drawn["rows"].append((item.group, item.name, item.when))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"{item.path.name} — back into {item.group}/, never over a "
+                ui.tooltip(f"{item.path.name} — back into {item.group}/, never over a "
                                   "file: a name that is taken gets the next free one")
             if hit:
                 _said(panel, lib.restore_trash, item)
@@ -639,7 +639,7 @@ def _trash_popup(panel, bin_: list) -> None:
     drawn["empty"] = label
     hov = imgui.is_item_hovered()
     if hov:
-        imgui.set_tooltip("Delete every file listed here for good — the one delete in "
+        ui.tooltip("Delete every file listed here for good — the one delete in "
                           "the app that keeps no copy. Asks once: click again within "
                           f"{EMPTY_S:.0f} s")
     if hit:
@@ -675,7 +675,7 @@ def show_block(panel) -> None:
     ui._readout(proj.name)
     _rect(panel, "show.name")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(str(proj.path) if proj.path else
+        ui.tooltip(str(proj.path) if proj.path else
                           "a factory show — save makes your copy" if factory else
                           "not saved yet — save writes it into the library")
     if proj.is_dirty():
@@ -683,7 +683,7 @@ def show_block(panel) -> None:
         imgui.text_colored(ui.RED, "●")
         _rect(panel, "show.dot")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("the show differs from its file: the session (tempo, hands, "
+            ui.tooltip("the show differs from its file: the session (tempo, hands, "
                               "the analyzer, output) or the bank's presets")
     if factory:
         imgui.same_line(0, 8)
@@ -702,7 +702,7 @@ def show_block(panel) -> None:
         imgui.end_combo()
     _rect(panel, "show.menu")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Open a show: party and house are factory (dim); yours "
+        ui.tooltip("Open a show: party and house are factory (dim); yours "
                           "are in the library")
     imgui.same_line()
     if ui.chip("save"):
@@ -710,7 +710,7 @@ def show_block(panel) -> None:
         invalidate(panel, PROJECT)
     _rect(panel, "show.save")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Save the show — the session (tempo, hands, the analyzer, "
+        ui.tooltip("Save the show — the session (tempo, hands, the analyzer, "
                           "output), its presets and what it starts on"
                           + (" — a factory show: saved as your own copy" if factory else ""))
     imgui.same_line()
@@ -722,7 +722,7 @@ def show_block(panel) -> None:
         _guard(panel, proj.new)
     _rect(panel, "show.new")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A new show: fresh state, the party show's presets")
+        ui.tooltip("A new show: fresh state, the party show's presets")
     imgui.pop_id()
 
 
@@ -762,7 +762,7 @@ def starts_on(panel) -> None:
             set_starts_on(panel, choice[0])
     _rect(panel, "starts_on")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"starts on: {proj.startup or 'none'} — the preset a launch and "
+        ui.tooltip(f"starts on: {proj.startup or 'none'} — the preset a launch and "
                           "opening the show bring up; saved as soon as you pick it. "
                           "Home (fn ←) or OVERDUB, B11 on the desk, loads it")
     imgui.pop_id()
@@ -811,7 +811,7 @@ def preset_bank(panel) -> None:
     r, io, st = panel.reg, imgui.get_io(), _state(panel)
     ui._micro("presets  ·  F1–F8  ·  ⇧ saves  ·  9–24 on the desk")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(
+        ui.tooltip(
             "The show's twenty-four presets, each one a file in the library: the "
             "whole performance — the look, its routes, LFOs and macros, never "
             "the tempo, the hands or the analyzer. Click or F1–F8 loads; "
@@ -875,7 +875,7 @@ def preset_bank(panel) -> None:
             st["rects"]["preset.dot"] = (c.x - SLOT_DOT_R, c.y - SLOT_DOT_R,
                                          c.x + SLOT_DOT_R, c.y + SLOT_DOT_R)
         if hov:
-            imgui.set_tooltip(slot_tip(k, name, gone=gone))
+            ui.tooltip(slot_tip(k, name, gone=gone))
         if far:
             # the slot menu under the select param's own items, a popup per
             # slot (as the rail's pills do for `ui.page`)

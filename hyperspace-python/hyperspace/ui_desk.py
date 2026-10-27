@@ -98,6 +98,7 @@ GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
+CLOSE = "×"                # the header's last chip: close the desk (`ui.desk`)
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
 SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
@@ -381,7 +382,7 @@ def _offer_item(panel, pid: str, why: str, width: float) -> None:
     lo, hi = imgui.get_item_rect_min(), imgui.get_item_rect_max()
     _state(panel).setdefault("offer_rects", {})[pid] = (lo.x, lo.y, hi.x, hi.y)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"put {getattr(picked(panel), 'glyph', '')} on {name}\n{pid} · {why}")
+        ui.tooltip(f"put {getattr(picked(panel), 'glyph', '')} on {name}\n{pid} · {why}")
 
 
 def _offer_all(panel, used, rest) -> None:
@@ -476,7 +477,7 @@ def _offer_chip(panel) -> None:
     if hit:
         imgui.open_popup("##offer_all")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Every param: this preset's first, then the rest by group")
+        ui.tooltip("Every param: this preset's first, then the rest by group")
 
 
 def click(panel, table, c: apc40.Control, b: Binding | None) -> None:
@@ -1036,9 +1037,25 @@ def _chip(panel) -> None:
     if ui.chip(f"{name}##desk"):
         _show_panel(panel, not panel.open)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Hide the panel: the desk takes the whole window and every lit "
+        ui.tooltip("Hide the panel: the desk takes the whole window and every lit "
                           "control carries its name (H brings the panel back)"
                           if name == BIG else "Bring the panel back (H)")
+    imgui.same_line()
+    if ui.chip(f"{CLOSE}##desk"):
+        _close(panel)
+    if imgui.is_item_hovered():
+        ui.tooltip("Close the desk diagram (SYSTEM page: Desk diagram brings it back)")
+
+
+def _close(panel) -> None:
+    """Close the desk (`ui.desk` off); a hidden panel comes back with it,
+    so the window is never left empty."""
+    _show_panel(panel, True)
+    d = panel.reg.get("ui.desk")
+    if d is not None:
+        d.set(False)
+    else:
+        panel.desk = False
 
 
 def _header(panel, table) -> None:
@@ -1049,7 +1066,7 @@ def _header(panel, table) -> None:
     desk), in place of the line's other words where there is not."""
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
-    end = start.x + full - ui.chip_w(BIG) - 8        # where the words stop: the chip
+    end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -1063,7 +1080,7 @@ def _header(panel, table) -> None:
     if alone:
         imgui.text_colored(ui.RED if can else ui.DIM, ui.fit_text(line, end - start.x))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(line)
+            ui.tooltip(line)
     else:
         ui._micro("apc40")
     if alone:
@@ -1077,14 +1094,14 @@ def _header(panel, table) -> None:
         ui._micro(f"{table.layer} layer" + ("  ·  shift" if glob else ""),
                   ui.RED if glob else ui.DIM)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
+            ui.tooltip("The layer that is up — SHIFT (⇧) latches it. Lit controls do "
                               "something on it; dark ones do nothing.")
         page = getattr(table, "page", None)
         if page is not None and hasattr(page, "header"):     # the sequencer page (plan 31 §A)
             imgui.same_line()
             ui._micro(page.header(), ui.RED)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("The sequencer page is up — SEND A lets it go. The clip "
+                ui.tooltip("The sequencer page is up — SEND A lets it go. The clip "
                                   "grid is the lanes' steps, scene 1–5 the lanes, clip stop "
                                   "k the length.")
         imgui.same_line()
@@ -1093,7 +1110,8 @@ def _header(panel, table) -> None:
         if line is not None:
             imgui.same_line(0, 20)
             imgui.text_colored(ui.RED if can else ui.DIM, line)
-    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL), start.y))
+    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL, CLOSE),
+                            start.y))
     _chip(panel)
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
@@ -1157,7 +1175,7 @@ def _body(panel, table) -> None:
     # not this window's while the mouse is on it
     _offer(panel, table, (origin.x, origin.y), (sx, sy))
     if tip is not None:
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
     # the window is hit-tested: a left click on a control is `click`; on
     # the ground between the controls it lets the picked control go
     if hovered and imgui.is_mouse_clicked(0) and mouse.y >= origin.y:

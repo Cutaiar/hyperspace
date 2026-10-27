@@ -18,7 +18,7 @@ from test_graphview import FakeDevice
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
-from hyperspace import devices, graphview, learn, ui_graph, ui_routing
+from hyperspace import devices, gamepad, graphview, learn, ui_graph, ui_pad, ui_routing
 from hyperspace import graph as G
 from hyperspace.devices import Port
 from hyperspace.learn import Learn
@@ -1702,3 +1702,23 @@ def test_a_frame_node_is_added_once(tmp_path):
     assert e.add_node("copy", "acid") is None and e.added == "copy.2"
     assert rig.presets.graph.spec.copies == (G.CopyAt(1, "acid"), G.CopyAt(2, "acid"))
     assert e.add_node("copy", "teapot") == "copy of teapot: no such effect instance in the graph"
+
+
+def test_the_pad_nodes_details_draw_the_pad(rig, monkeypatch):
+    """The pad node selected on GRAPH: its details draw the pad's picture
+    (ui_pad.inline) — every control of its layout — and another device's
+    details do not."""
+    panel = rig.panel
+    frame(panel, "graph")
+    st = ui_graph._state(panel)
+    drew, real = [], ui_pad.inline
+    monkeypatch.setattr(ui_pad, "inline", lambda p: (drew.append(1), real(p)))
+    for nid, want in (("device:pad", [1]), ("device:apc40", [])):
+        drew.clear()
+        imgui.new_frame()
+        imgui.begin("side")
+        ui_graph._side(panel, st, st["view"], ("node", graphview.VNode(nid, "device", nid[7:])))
+        imgui.end()
+        imgui.end_frame()
+        assert drew == want
+    assert ui_pad.rect(panel, gamepad.LAYOUT[0]) is not None    # it really laid the pad out

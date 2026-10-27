@@ -19,6 +19,7 @@ from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
 from hyperspace.params import build_registry
 from hyperspace.render import ViewState
+from hyperspace.ui import PageHistory
 
 # ---- the boundary ----
 
@@ -326,7 +327,7 @@ def _host(log: list[str], *, pad_on=True, pressed=(), held=(), super_=False, sti
     reg.get = lambda pid: SimpleNamespace(fire=lambda: fired.append(pid),
                                           step=lambda a: None, toggle=lambda: None)
     reg.__dict__["fired"] = fired
-    panel = Stub("panel", log, restart_requested=False)
+    panel = Stub("panel", log, restart_requested=False, page=1, history=PageHistory(1))
     renderer = Stub("renderer", log)
     # the four devices as the registry's shims over recording stubs, in
     # today's list order (config.DEVICE_TABLES): the pad, MIDI, the hands,
@@ -553,8 +554,32 @@ def test_the_sticks_camera_job_reads_through_the_pads_feel():
     assert "camera.yaw.nudge" not in log
 
 
+def test_cmd_brackets_go_back_and_forward_through_the_pages_visited():
+    """⌘[ / ⌘] walk `ui.PageHistory` as a browser's back and forward do:
+    a visit made after going back drops the forward run."""
+    g = app.glfw
+    log: list[str] = []
+    h = _host(log)
+    for page in (4, 9):                     # the rail: view → camera → routing
+        h.panel.page = page
+        app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+
+    def press(key: int) -> int:
+        h.keys.super = lambda: True
+        h.keys.pressed = lambda k: k == key
+        app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+        return h.panel.page
+    assert press(g.KEY_LEFT_BRACKET) == 4
+    assert press(g.KEY_LEFT_BRACKET) == 1
+    assert press(g.KEY_LEFT_BRACKET) == 1           # the oldest: nothing further back
+    assert press(g.KEY_RIGHT_BRACKET) == 4
+    h.panel.page = 2                                # a new visit…
+    assert press(g.KEY_RIGHT_BRACKET) == 2          # …and routing is no longer forward
+    assert press(g.KEY_LEFT_BRACKET) == 4
+
+
 def test_the_loop_keys_outside_the_table():
-    """Esc / Q close, Cmd+R restarts the process, and the panel's restart
+    """Q closes (Esc does not), Cmd+R restarts the process, and the panel's restart
     button restarts too — the keys ARCHITECTURE §3.7 lists as loop code.
     R alone is a table row since plan 11: the loop leaves its edge for
     `router.keys`; with ⌘ held the loop claims the edge first, so the
@@ -562,6 +587,10 @@ def test_the_loop_keys_outside_the_table():
     g = app.glfw
     log: list[str] = []
     h = _host(log, pressed={g.KEY_ESCAPE})
+    app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
+    assert "quit" not in log                                    # Esc is no footgun
+    log.clear()
+    h = _host(log, pressed={g.KEY_Q})
     app.frame(h, now=1.0, dt=1 / 60, fps=60.0)
     assert log[2] == "quit" and "restart" not in log
     log.clear()

@@ -481,13 +481,13 @@ def modal(panel) -> None:
         answer(panel, True)
         imgui.close_current_popup()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{who} lets go; {asks}")
+        ui.tooltip(f"{who} lets go; {asks}")
     imgui.same_line()
     if ui.chip("Keep"):
         answer(panel, False)
         imgui.close_current_popup()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Leave the table as it is")
+        ui.tooltip("Leave the table as it is")
     imgui.end_popup()
 
 
@@ -594,7 +594,7 @@ def _gate_combo(router: Router, b: Binding, gates: list[tuple[str, str]], width:
                 b.when = addrs[i]
         imgui.end_combo()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A pinch switch that must be held for this route to act — "
+        ui.tooltip("A pinch switch that must be held for this route to act — "
                           "the same hand movement can then mean two things")
 
 
@@ -679,7 +679,7 @@ def _param_combo(panel, label: str, current: str | None, width: float,
             ui._micro(group or "misc")
         sel, _ = imgui.selectable(f"{p.id}##{p.id}", p.id == current)
         if imgui.is_item_hovered() and p.tip:
-            imgui.set_tooltip(p.tip)
+            ui.tooltip(p.tip)
         if sel:
             picked = p.id
     imgui.end_combo()
@@ -703,7 +703,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         except ValueError as e:
             st["error"] = f"routing: {e}"
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Enabled — a dormant row keeps its settings and owns nothing")
+        ui.tooltip("Enabled — a dormant row keeps its settings and owns nothing")
     imgui.same_line()
     sources = st.get("sources") or _sources(panel, router)
     labels = [lb for _, lb in sources]
@@ -735,14 +735,14 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                 lambda picked=picked: _retarget(router, b, picked))
     if p is None:
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"{b.target}: no such param — the row is dormant")
+            ui.tooltip(f"{b.target}: no such param — the row is dormant")
     elif not p.modulatable and imgui.is_item_hovered():
-        imgui.set_tooltip(f"{b.target} is not modulatable — the row is dormant")
+        ui.tooltip(f"{b.target} is not modulatable — the row is dormant")
     if session:                             # row 19 (a): a route may lean on a session control
         imgui.same_line()
         imgui.text_colored(ui.DIM, SESSION_MARK)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(SESSION_TIP)
+            ui.tooltip(SESSION_TIP)
     imgui.same_line()
     _feel_chip(router, b, feel_w)
     imgui.same_line()
@@ -750,7 +750,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if ui.lit_chip(f"{label}##op", b.op != "push", ui.DIM, imgui.ImVec2(op_w, 0)):
         b.op = NEXT_OP.get(b.op, "push")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("push: depth × (source − rest) added to the base\n"
+        ui.tooltip("push: depth × (source − rest) added to the base\n"
                           "pos:  depth × source is the position across the whole\n"
                           "      control, along its curve, while the source is live\n"
                           "click to switch")
@@ -759,7 +759,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     kill = ui.chip("×")
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Delete this route")
+        ui.tooltip("Delete this route")
     # line 2: depth · rest · scale · live
     imgui.dummy(imgui.ImVec2(18, 0))
     imgui.same_line()
@@ -775,7 +775,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if changed:
         b.value = v
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
+        ui.tooltip("Depth, signed" + DEPTH_TIP.get(b.op, DEPTH_TIP["push"])
                           + "\nctrl-click to type")
     imgui.same_line()
     if b.op == "push":
@@ -792,7 +792,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
         if changed:
             b.rest = v                              # dragged: the row's own number
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Rest — the source reading that pushes nothing"
+            ui.tooltip("Rest — the source reading that pushes nothing"
                               + (" (the source's own)" if auto else " (this row's own)")
                               + "\ndrag to set the row's own; ctrl-click to type")
         imgui.same_line()
@@ -802,14 +802,14 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
                 b.rest = None
             imgui.pop_style_color()
             if imgui.is_item_hovered():
-                imgui.set_tooltip("Back to the source's own rest")
+                ui.tooltip("Back to the source's own rest")
             imgui.same_line()
     gates = _gates(router)
     gate_w = GATE_W if gates else 0.0
     for chip in _depth_chips(router, b):          # read-only: the macro's subscriber
         imgui.text_colored(ui.DIM, chip)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A macro's depth subscriber scales this route "
+            ui.tooltip("A macro's depth subscriber scales this route "
                               "(plan 13 §2.4); edited with the macro, not here")
         imgui.same_line()
     scale = _param_combo(panel, "##scale", b.scale,
@@ -818,7 +818,7 @@ def _row(panel, router: Router, b: Binding, k: int) -> bool:
     if scale is not False:
         b.scale = scale
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A session param whose live value multiplies the depth — "
+        ui.tooltip("A session param whose live value multiplies the depth — "
                           "master.gain, the drive fader, on the rate routes. Never the "
                           "row's own target, never a performance param: a macro scales "
                           "a route through its depth subscriber.")
@@ -856,7 +856,7 @@ def _feel_chip(router: Router, b: Binding, width: float) -> None:
                 + (" (the pad's, on the settings page)" if b.scheme == "axis" else ""))
         now = (auto if b.motion is None else
                "still: the reading as it comes" if not b.motion.on else b.motion.describe())
-        imgui.set_tooltip("Feel: how the reading travels before it acts\n"
+        ui.tooltip("Feel: how the reading travels before it acts\n"
                           "follow  the analyzer's envelope: attack away from rest,\n"
                           "        release back toward it, so a stick let go glides home\n"
                           "spring  a damped spring toward the reading, rings below 1\n"
@@ -890,7 +890,7 @@ def _feel_line(b: Binding) -> None:
         if changed:
             b.motion = m = replace(m, **{k: min(max(v, lo), hi)})
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tip + "\nctrl-click to type")
+            ui.tooltip(tip + "\nctrl-click to type")
     imgui.pop_font()
 
 
@@ -916,7 +916,7 @@ def _live_bar(panel, router: Router, b: Binding, p: Param | None) -> None:
         src = "not live" if u is None else f"{u:.2f}"
         tgt = "—" if p is None else (f"{p.text()} → {panel._eff_text(p)}" if p.modulated
                                      else p.text())
-        imgui.set_tooltip(f"source {src}  ·  target {tgt}")
+        ui.tooltip(f"source {src}  ·  target {tgt}")
 
 
 # ---- the head: the loaded preset, the layer, the last learn, the load's notes ----
@@ -957,7 +957,7 @@ def head(panel, router: Router) -> None:
         more = f"  (+{len(notes) - 1} more)" if len(notes) > 1 else ""
         imgui.text_colored(ui.WARN, f"desk: {notes[0]}{more}")
         if len(notes) > 1 and imgui.is_item_hovered():
-            imgui.set_tooltip("\n".join(notes))
+            ui.tooltip("\n".join(notes))
     # what the referee refused from the last preset (one owner per target)
     # and what a migration dropped or moved, until the next edit
     for b, why in table.dropped:
@@ -976,7 +976,7 @@ def _preset_line(panel, pr, table) -> None:
     imgui.same_line()
     imgui.text(cur or ("—" if pr is not None else "no preset library"))
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The loaded preset: its routes, its desk and its macros are "
+        ui.tooltip("The loaded preset: its routes, its desk and its macros are "
                           "this page. A learn or an edit here changes it — the dot — "
                           "and writes nothing until save" if cur else "no preset loaded")
     edited = pr is not None and cur is not None and ui_presets.dirty(panel, PRESETS)
@@ -993,7 +993,7 @@ def _preset_line(panel, pr, table) -> None:
                     - ui.chip_w(word, "as…") - ui._micro_width(layer) - sp)
     ui._micro(layer, ui.RED if glob else ui.DIM)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
+        ui.tooltip("The desk's layer — SHIFT latches it (desk.shift). Global: "
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     imgui.same_line()
@@ -1012,7 +1012,7 @@ def _preset_line(panel, pr, table) -> None:
         ui_presets._begin_naming(panel, NAMING, cur or "")
     imgui.end_disabled()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Save the live state as a new user preset")
+        ui.tooltip("Save the live state as a new user preset")
 
 
 def _learn_line(panel) -> None:
@@ -1055,7 +1055,7 @@ def _control_cell(table, b: Binding, color=None) -> None:
     else:
         imgui.text_colored(color, control_glyph(table, b))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{control_name(table, b)}  ·  {b.describe()}")
+        ui.tooltip(f"{control_name(table, b)}  ·  {b.describe()}")
 
 
 def _op_text(b: Binding) -> str:
@@ -1143,7 +1143,7 @@ def desk(panel, router: Router) -> None:
     rows = table.desk()
     ui._micro("desk  ·  preset layer")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
+        ui.tooltip("The loaded preset's own controls on the APC40 (SHIFT off). "
                           "A control the preset leaves unmapped is dark and does nothing.")
     imgui.same_line()
     # (the click is the on-screen desk's, once it has one: plan 17 WP4's
@@ -1158,7 +1158,7 @@ def desk(panel, router: Router) -> None:
                 ui.fit_text(short.replace("new rows:", "new:"), room))
     imgui.text_colored(ui.FAINT, said)
     if said != full and imgui.is_item_hovered():
-        imgui.set_tooltip(full)
+        ui.tooltip(full)
     sp = imgui.get_style().item_spacing.x
     op_w = imgui.calc_text_size("step +10").x
     dark = unmapped(table)
@@ -1179,7 +1179,7 @@ def desk(panel, router: Router) -> None:
             b.target = picked
             _desk_edited(table, b)
         if b.target not in panel.reg and imgui.is_item_hovered():
-            imgui.set_tooltip(f"{b.target}: no such param — the control does nothing")
+            ui.tooltip(f"{b.target}: no such param — the control does nothing")
         imgui.same_line()
         imgui.text_disabled(_op_text(b))
         imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
@@ -1188,7 +1188,7 @@ def desk(panel, router: Router) -> None:
             dead = b
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Take this control out of the preset — it goes dark")
+            ui.tooltip("Take this control out of the preset — it goes dark")
         imgui.pop_id()
         _mark_line(panel, table, b, "desk", y0)
     if dead is not None:
@@ -1288,26 +1288,26 @@ def _sub(panel, router: Router, mid: str, s: Sub, shared: dict[str, list[str]]) 
     if changed:
         s.lo, edited = v, True
     if imgui.is_item_hovered():
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
     imgui.same_line()
     imgui.set_next_item_width(SUB_W)
     changed, v = imgui.slider_float("##to", float(s.hi), lo, hi, "to " + fmt)
     if changed:
         s.hi, edited = v, True
     if imgui.is_item_hovered():
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
     if mark:
         imgui.same_line()
         imgui.text_colored(ui.WARN, mark)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"{s.base} is set by {', '.join(others)} too — "
+            ui.tooltip(f"{s.base} is set by {', '.join(others)} too — "
                               "the last write wins")
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w("×"))
     imgui.push_style_color(imgui.Col_.text, ui.DIM)
     kill = ui.chip("×")
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Remove this subscriber")
+        ui.tooltip("Remove this subscriber")
     if edited:
         _macros_edited(table)
     return kill
@@ -1323,7 +1323,7 @@ def macros(panel, router: Router) -> None:
     table = router.table
     ui._micro("macros")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Knobs that do nothing on their own: a base subscriber sets a "
+        ui.tooltip("Knobs that do nothing on their own: a base subscriber sets a "
                           "param as the knob turns, a depth subscriber scales a route")
     shared = shared_bases(table)
     sp = imgui.get_style().item_spacing.x
@@ -1349,7 +1349,7 @@ def macros(panel, router: Router) -> None:
             _macro(table, p.id).subs.append(Sub(base=q.id, lo=q.norm, hi=q.norm))
             _macros_edited(table)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A param whose base this knob sets")
+            ui.tooltip("A param whose base this knob sets")
         imgui.same_line()
         imgui.begin_disabled(not routes)
         if ui.chip("+ depth"):
@@ -1358,7 +1358,7 @@ def macros(panel, router: Router) -> None:
             _macros_edited(table)
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip("A route whose depth this knob scales" if routes
+            ui.tooltip("A route whose depth this knob scales" if routes
                               else "no routes to scale")
         if m is not None:
             dead = None
@@ -1464,7 +1464,7 @@ def _input_combo(panel, router: Router, m: Modifier, k: int,
                 set_modifier_input(panel, m.id, k, addrs[i])
         imgui.end_combo()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("What this modifier reads — an analyzer lane, a device's lane, "
+        ui.tooltip("What this modifier reads — an analyzer lane, a device's lane, "
                           "an LFO, or another modifier's output")
 
 
@@ -1485,7 +1485,7 @@ def _mod_bar(router: Router, m: Modifier) -> None:
     imgui.same_line()
     imgui.text_disabled("dormant" if u is None else f"{u:.2f}")
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{m.address}: what a route on this modifier reads"
+        ui.tooltip(f"{m.address}: what a route on this modifier reads"
                           + (" — a trigger, 1 while it fires" if m.out == "trigger" else ""))
 
 
@@ -1498,7 +1498,7 @@ def modifiers(panel, router: Router) -> None:
     st.setdefault("mod_kind", "smooth")
     ui._micro("modifiers")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Nodes between a source and a route: curve, scale, smooth, "
+        ui.tooltip("Nodes between a source and a route: curve, scale, smooth, "
                           "combine two, a threshold that fires, a one-frame delay")
     sp = imgui.get_style().item_spacing.x
     imgui.same_line(imgui.get_content_region_avail().x
@@ -1514,7 +1514,7 @@ def modifiers(panel, router: Router) -> None:
     if ui.chip("+ modifier"):
         add_modifier(panel, st["mod_kind"])
     if imgui.is_item_hovered():
-        imgui.set_tooltip("A new modifier of this kind; pick its input, then route its "
+        ui.tooltip("A new modifier of this kind; pick its input, then route its "
                           "output (mod <n>) like any source")
     mods = table.modifiers
     if not mods:
@@ -1579,7 +1579,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         dead = ui.chip("× remove")
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Remove this modifier — a route on it goes dormant")
+            ui.tooltip("Remove this modifier — a route on it goes dormant")
         imgui.pop_id()
         return dead
     imgui.same_line()
@@ -1590,7 +1590,7 @@ def modifier_block(panel, router: Router, m: Modifier, stacked: bool = False) ->
         dead = True
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Remove this modifier — a route on it goes dormant")
+        ui.tooltip("Remove this modifier — a route on it goes dormant")
     specs = MOD_PARAMS[m.kind]
     if specs:
         imgui.dummy(imgui.ImVec2(MOD_ID_W, 0))
@@ -1680,7 +1680,7 @@ def sinks(panel, router: Router) -> None:
         if ui.chip("×"):
             dead = b
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Stop sending this — bindings.json is written now")
+            ui.tooltip("Stop sending this — bindings.json is written now")
         imgui.pop_id()
     if dead is not None:
         table.remove(dead)
@@ -1716,7 +1716,7 @@ def _find_field(panel) -> None:
         imgui.is_any_item_active() or imgui.is_popup_open("", imgui.PopupFlags_.any_popup))
     st["kept"], st["drawn"] = st["drawn"], set()
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Show only the lines that say every word typed: a glyph (d3), "
+        ui.tooltip("Show only the lines that say every word typed: a glyph (d3), "
                           "a param (kaleido), a source (lfo 1)")
     imgui.same_line()
     if on:
@@ -1725,7 +1725,7 @@ def _find_field(panel) -> None:
             st["find"] = ""
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Clear the filter — every row is shown")
+            ui.tooltip("Clear the filter — every row is shown")
         imgui.same_line()
 
 
@@ -1744,7 +1744,7 @@ def page(panel, dt: float) -> None:
         n, m = found(panel, router)
         imgui.text_colored(ui.RED, f"{n} of {m} rows")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("The filter hides the rest — × beside it shows every row")
+            ui.tooltip("The filter hides the rest — × beside it shows every row")
     else:
         # plan 28 N7: the routes and the modifiers are the GRAPH page's now;
         # their line here points there (a click opens it)
@@ -1752,7 +1752,7 @@ def page(panel, dt: float) -> None:
                 - imgui.get_style().item_spacing.x)
         imgui.text_disabled(ui.fit_text(POINTER, room))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(POINTER_TIP)
+            ui.tooltip(POINTER_TIP)
         if imgui.is_item_clicked():
             panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
     _find_field(panel)

@@ -12,7 +12,7 @@ it is asserted with slack and reported as unverified.
 import pytest
 from test_fx import PageRig
 
-from hyperspace import patterns, ui_patterns, ui_routing
+from hyperspace import patterns, ui, ui_patterns, ui_routing
 from hyperspace.patterns import INPUTS, MODES, N_INPUTS
 from hyperspace.routing import Binding, Bindings, Macro, Router, Sub
 
@@ -34,9 +34,8 @@ class FacesRig(PageRig):
             return out
         monkeypatch.setattr(imgui, "invisible_button", rec)
         self.tips: list[str] = []
-        real_tip = imgui.set_tooltip
-        monkeypatch.setattr(imgui, "set_tooltip",
-                            lambda t, *a: (self.tips.append(t), real_tip(t.replace("%", "%%")))[1])
+        real_tip = ui.tooltip
+        monkeypatch.setattr(ui, "tooltip", lambda t: (self.tips.append(t), real_tip(t))[1])
 
     def frame(self) -> None:
         from hyperspace.ui import PANEL_W, RAIL_W

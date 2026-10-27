@@ -21,7 +21,7 @@ Sources are one string, ``scheme:address``:
                    modifier no row on the key names is ignored. R, F1–F8
                    and ⇧F1–F8 are rows since plan 11, undo and redo since
                    plan 15 (LOOP_KEY_ROWS). Still app.py's own, outside the
-                   table: Cmd+R, Esc / Q, and the relative writers — ↑/↓,
+                   table: Cmd+R, Q, and the relative writers — ↑/↓,
                    the mouse, and the pad's sticks and triggers while no
                    route names them (they nudge camera params directly)
   pad:<NAME>       a gamepad button by gamepad.py's name ("A", "LB", "LSTICK")
@@ -509,7 +509,7 @@ RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
 # the keys plan 11 moved out of app.py's loop into the table (audit R2;
 # decision register row 7): R resets the camera, F1–F8 load the preset
 # bank's slots 1–8 (param ids are 0-based), ⇧F1–F8 save the live state
-# as them. Cmd+R (restart), Esc / Q and ↑ / ↓ stay in the loop.
+# as them. Cmd+R (restart), Q and ↑ / ↓ stay in the loop.
 # Plan 15 WP1 adds undo and redo, on both ⌘ and Ctrl (fork 1): ⌘Z / Ctrl+Z
 # fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
 # its own row (`Router.keys`).

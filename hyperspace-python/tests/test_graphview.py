@@ -516,7 +516,7 @@ def test_the_editor_context_is_made_once_kept_across_a_reload_and_destroyed_on_c
     monkeypatch.setattr(ed, "create_editor", lambda cfg: made.append(cfg.settings_file)
                         or real_create(cfg))
     monkeypatch.setattr(ed, "destroy_editor", lambda c: gone.append(c) or real_destroy(c))
-    frame(rig.panel)                                 # another page: no context yet
+    frame(rig.panel, "view")                         # another page: no context yet
     assert made == []
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")

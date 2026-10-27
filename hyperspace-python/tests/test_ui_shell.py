@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
+from hyperspace import hands, lfo, routing, tempo, ui, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
@@ -28,7 +28,7 @@ from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
-from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, PageHistory, Panel, apply_style, load_fonts
 from hyperspace.view import ViewState
 
 
@@ -91,6 +91,11 @@ def build_rig(tmp_path, renderer=None):
     lib.attach(reg)
     panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
                   library=lib)
+    # the launch defaults (GRAPH, no desk) asserted once, by
+    # test_the_panel_opens_on_graph_filling_the_window; the rig keeps the
+    # desk up and the VIEW page first, as these tests were measured
+    panel.desk, panel.page = True, PAGE_KEYS.index("view")
+    panel.history = PageHistory(panel.page)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -124,6 +129,21 @@ def frame(panel, page=None):
 
 
 # ---------------------------------------------------------------- pages
+
+def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
+    """The owner, 2026-10-26: the app opens on GRAPH with the desk down
+    and the panel the whole window, 12 px in from each edge."""
+    with build_rig(tmp_path) as r:
+        fresh = Panel(r.panel.control, r.panel.audio, r.view, registry=r.reg)
+        assert PAGE_KEYS[fresh.page] == "graph" and not fresh.desk
+        fresh.router = r.router
+        imgui.new_frame()
+        fresh.draw(1 / 60, 60.0)
+        imgui.end_frame()
+        win = imgui.internal.find_window_by_name("CONTROLS")
+        assert (win.pos.x, win.pos.y, win.size.x, win.size.y) == (12, 12, 820 - 24, 820 - 24)
+        fresh.close()
+
 
 def test_every_page_draws_with_a_library(rig):
     for k, (key, _, _) in enumerate(PAGES):
@@ -957,6 +977,7 @@ def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
 _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": "SPACE",
             "[": "LEFT_BRACKET", "]": "RIGHT_BRACKET", ",": "COMMA", ".": "PERIOD",
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
+            "Cmd+[": "SUPER+LEFT_BRACKET",
             "Home": "HOME"}
 _PADS = {"pad X / B": ["X", "B"], "pad A Y": ["A", "Y"], "LB / RB": ["LB", "RB"],
          "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}
@@ -2256,3 +2277,19 @@ def test_the_footer_names_a_black_output(rig, monkeypatch):
     drawn, _ = _output_page(rig, monkeypatch, "view")
     assert "·  dim black" in drawn and not any(s.endswith(" black") and "output" in s
                                                 for s in drawn)
+
+
+def test_a_long_tooltip_wraps_at_a_readable_width(rig):
+    """The owner, 2026-10-26: a hover's words wrap at `ui.TIP_CH`
+    characters, and a % in them is drawn as itself."""
+    for _ in range(2):                  # a tooltip takes its size a frame late
+        imgui.new_frame()
+        imgui.begin("t")
+        ui.tooltip("word " * 80 + "100%")
+        imgui.end()
+        win = imgui.internal.find_window_by_name("##Tooltip_00")
+        em = imgui.calc_text_size("0").x
+        imgui.end_frame()
+    pad = imgui.get_style().window_padding.x
+    assert win is not None and win.size.x <= em * ui.TIP_CH + 2 * pad + 1
+    assert win.size.y > 3 * imgui.get_text_line_height()

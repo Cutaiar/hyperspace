@@ -196,7 +196,7 @@ def _about(panel, p, mode: int) -> None:
         shown = ui.fit_text(text, stop - imgui.get_cursor_pos_x())
         imgui.text_colored(ui.WARN, shown)
         if shown != text and imgui.is_item_hovered():
-            imgui.set_tooltip(text)
+            ui.tooltip(text)
     elif off:
         imgui.text_colored(ui.WARN, FACES_OFF)
         imgui.same_line()
@@ -229,7 +229,7 @@ def _inputs(panel, mode: int) -> None:
     if ui.chip(label):
         neutral_all(panel)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(ALL_NEUTRAL_TIP)
+        ui.tooltip(ALL_NEUTRAL_TIP)
     ui_presets.strip(panel, "pattern")
     imgui.separator()
     imgui.dummy(imgui.ImVec2(0, 1))
@@ -269,18 +269,18 @@ def _input_row(panel, k: int, mode: int, sp: float) -> None:
     shown = ui.fit_text(what, room)
     imgui.text_colored(ui.FAINT, shown)
     if shown != what and imgui.is_item_hovered():
-        imgui.set_tooltip(what)
+        ui.tooltip(what)
     if link:
         imgui.same_line(x0 + avail - link_w)
         if said:
             if _link(f"{link}##drv.{pid}", ui.TEXT):
                 open_routing(panel, pid)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"{said}\n{ROUTING_TIP}")
+                ui.tooltip(f"{said}\n{ROUTING_TIP}")
         elif _link(f"+ {offer[1]}##route.{pid}", ui.DIM):
             ui_routing.add_route(panel, pid, source=offer[0], depth=ROUTE_DEPTH)
         elif imgui.is_item_hovered():
-            imgui.set_tooltip(f"Route {offer[1]} here: a push at depth {ROUTE_DEPTH}, into "
+            ui.tooltip(f"Route {offer[1]} here: a push at depth {ROUTE_DEPTH}, into "
                               "the loaded preset. ROUTING shows and edits it.")
     imgui.set_cursor_pos_y(imgui.get_cursor_pos_y() - (ROWS_GAP - ROW_GAP))
     # the second line: the slider, then neutral
@@ -293,7 +293,7 @@ def _input_row(panel, k: int, mode: int, sp: float) -> None:
         p.set_value(NEUTRAL)
     imgui.pop_style_color()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(NEUTRAL_TIP)
+        ui.tooltip(NEUTRAL_TIP)
 
 
 def drivers(panel, pid: str) -> str:
