@@ -282,31 +282,91 @@ def ctx():
     gc.collect()
 
 
-def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
-    """Each factory preset in each state it reaches, hands absent and
-    present, and the cap frame: every full-resolution frame's SHA-256 is
-    its golden's. Skips (never passes) on another renderer."""
+@pytest.fixture
+def exact(ctx):
+    """The context, on the renderer the goldens were recorded on — skips
+    (never passes) on another."""
     doc = _manifest()
     tool = _tool()
     here, version = tool.renderer_name(ctx), tool.gl_version(ctx)
-    recorded = f"{doc['renderer']!r} (GL_VERSION {doc['gl_version']!r})"
     if here != doc["renderer"]:
-        pytest.skip(f"the golden frames expect GL_RENDERER {recorded}; "
-                    f"this context is {here!r} (GL_VERSION {version!r}); re-record there "
-                    "with tools/golden_frames.py --record")
-    shots, said = tool.render_all()
-    assert len(shots) == len(doc["goldens"])
+        pytest.skip(f"the golden frames expect GL_RENDERER {doc['renderer']!r} (GL_VERSION "
+                    f"{doc['gl_version']!r}); this context is {here!r} (GL_VERSION "
+                    f"{version!r}); re-record there with tools/golden_frames.py --record")
+    return ctx
+
+
+def _job_ids() -> list[str]:
+    """Every job's id, from the manifest (collection reads no GL and imports
+    no tool; `test_every_golden_belongs_to_one_of_the_tools_jobs` proves
+    the set is the tool's `jobs()`)."""
+    seen: dict[str, None] = {}
+    for e in _manifest()["goldens"]:
+        seen.setdefault(_tool_free_job_of(e))
+    return list(seen)
+
+
+def _tool_free_job_of(e: dict) -> str:
+    # (= tools/golden_frames.py `job_of`, asserted below)
+    return "cap" if "@" in e["state"] else f"{e['preset']}|{e['hands']}"
+
+
+def test_every_golden_belongs_to_one_of_the_tools_jobs():
+    """The goldens are drawn one job per test (`tool.jobs()`: a factory
+    preset with the hands absent or present, a fixture, the cap): every
+    entry belongs to exactly one job the tool draws, and every job has
+    entries — so the jobs' tests together check every golden, and each
+    job's test checks that it drew exactly its own entries."""
+    tool = _tool()
+    doc = _manifest()
+    ids = [j.id for j in tool.jobs()]
+    assert len(set(ids)) == len(ids) and set(ids) == set(_job_ids())
+    assert all(tool.job_of(e) == _tool_free_job_of(e) for e in doc["goldens"])
+    assert sum(1 for e in doc["goldens"] if tool.job_of(e) == "cap") == 1
+
+
+@pytest.mark.parametrize("job_id", _job_ids())
+def test_every_golden_frame_is_drawn_byte_for_byte(exact, job_id, tmp_path):
+    """Each factory preset in each state it reaches, hands absent and
+    present, each fixture, and the cap frame — one job per test: every
+    full-resolution frame's SHA-256 is its golden's, and the job drew
+    exactly its golden entries. Each frame is hashed as it is read and its
+    pixels let go; only a frame that moved keeps them, for a contact sheet
+    (golden PNG | now | difference) named in the failure."""
+    doc = _manifest()
+    tool = _tool()
+    job = next(j for j in tool.jobs() if j.id == job_id)
+    want = {f"{e['preset']}|{e['hands']}|{e['state']}": e for e in doc["goldens"]
+            if tool.job_of(e) == job_id}
+    shots, said = tool.run_job(job, keep=tool.moved_only(doc))
+    assert [s.key for s in shots if s.key not in want] == [], "frames with no golden"
+    assert sorted(s.key for s in shots) == sorted(want), "goldens not drawn"
     moved = tool.diff(shots, doc)
-    assert not moved, (f"frames moved, recorded on {recorded}, drawn on {here!r} "
-                       f"(GL_VERSION {version!r}) — run tools/golden_frames.py for a "
-                       "contact sheet: " + ", ".join(s.key for s, _ in moved))
-    recorded_said = {**doc["presets"], **doc.get("fixtures", {})}
-    for slug, info in said.items():
-        for hands, got in info.items():
-            assert got == recorded_said[slug][hands], (slug, hands)
+    if moved:
+        sheet = tool.contact_sheet(moved, tmp_path / f"golden-diff-{job.slug}.png")
+        here, version = tool.renderer_name(exact), tool.gl_version(exact)
+        pytest.fail(f"{len(moved)} frames moved, recorded on {doc['renderer']!r} (GL_VERSION "
+                    f"{doc['gl_version']!r}), drawn on {here!r} (GL_VERSION {version!r}): "
+                    + ", ".join(s.key for s, _ in moved) + f" — contact sheet: {sheet}")
+    if said is not None:
+        recorded = {**doc["presets"], **doc.get("fixtures", {})}
+        assert said == recorded[job.slug][job.hands], job_id
 
 
-def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path):
+_SHIPPED_FIXTURES = ("palette-glass", "palette-hands", "acid-scene", "wired-outputs")
+
+
+def _resave_sources() -> list[tuple[str, bool]]:
+    """Every factory preset and fixture, by the manifest (its `presets` and
+    `fixtures` are the tool's lists: the no-GL test above)."""
+    doc = _manifest()
+    return [*((slug, True) for slug in doc["presets"]),
+            *((slug, False) for slug in doc["fixtures"])]
+
+
+@pytest.mark.parametrize("slug,factory", _resave_sources(),
+                         ids=[slug for slug, _ in _resave_sources()])
+def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
     """Row 394: every factory preset and every fixture, saved untouched as
     `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
     36 T3) and drawn from that file on the golden rig (`picture`: hands
@@ -315,8 +375,7 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path):
     what the original file draws there. A fixture whose D1 placements the
     retired builder laid on each output's switch state (`_placements_wait`)
     is drawn, old file and `/7`, as the rig ships (`SHIPPED`): the states
-    are emulated only for an old file. And a value moved in the `/7` moves
-    the picture, so the check can fail."""
+    are emulated only for an old file."""
     import json
 
     from hyperspace import headless
@@ -324,29 +383,34 @@ def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path):
     doc = _manifest()
     tool = _tool()
     exact = tool.renderer_name(ctx) == doc["renderer"]
-    golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
-    names = [name for name, _ in tool.STATES]
-    sources = [*((slug, tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json",
-                  True) for slug in tool.FACTORY_PRESETS),
-               *((slug, tool.FIXTURES / f"{slug}.json", False)
-                 for slug in tool.FIXTURE_PRESETS)]
-    for k, (slug, path, factory) in enumerate(sources):
-        raw, _, _ = headless.resave(path, tmp_path / str(k), factory=factory)
-        seven = tmp_path / f"{k}-seven" / f"{slug}.json"
-        seven.parent.mkdir()
-        seven.write_bytes(raw)
-        assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
-        if slug in ("palette-glass", "palette-hands", "acid-scene", "wired-outputs"):
-            got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
-            assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
-            continue
-        got, _ = tool.picture(seven, slug=slug)
-        if exact:
-            want = [golden[(slug, "present", n)] for n in names]
-        else:
-            want, _ = tool.picture(path, slug=slug)
-        assert got == want, slug
-    # (the check sees a value: party-trip brighter is another picture)
+    path = (tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json" if factory
+            else tool.FIXTURES / f"{slug}.json")
+    raw, _, _ = headless.resave(path, tmp_path / "resaved", factory=factory)
+    seven = tmp_path / "seven" / f"{slug}.json"
+    seven.parent.mkdir()
+    seven.write_bytes(raw)
+    assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
+    if slug in _SHIPPED_FIXTURES:
+        got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
+        assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
+        return
+    got, _ = tool.picture(seven, slug=slug)
+    if exact:
+        golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
+        want = [golden[(slug, "present", n)] for n, _ in tool.STATES]
+    else:
+        want, _ = tool.picture(path, slug=slug)
+    assert got == want, slug
+
+
+def test_a_value_moved_in_the_resaved_file_moves_the_picture(ctx, tmp_path):
+    """The resave check can fail: party-trip, its `/7` brighter, is another
+    picture."""
+    import json
+
+    from hyperspace import headless
+
+    tool = _tool()
     path = tool.ROOT / "hyperspace" / "library" / "presets" / "party-trip.json"
     raw, _, _ = headless.resave(path, tmp_path / "bright", factory=True)
     bright = json.loads(raw)
