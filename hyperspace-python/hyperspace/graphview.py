@@ -2370,9 +2370,10 @@ def preset_only(view: View) -> frozenset[str]:
     every node with a cable to one of them (whatever its kind: an LFO routed
     to an effect, a controller bound to a param are drawn, so a moving
     param shows its source; controllers, modulation and macros with no
-    cable to the section are not), and the windows / outputs those reach: each output
-    node a shown output has a cable to, so All outputs' bus cables
-    (``output.all.<port>`` into ``output.N.<port>``) carry the windows in.
+    cable to the section are not), and every output — All outputs and each
+    window, wired or not: they are where a picture is wired to, so one the
+    preset no longer reaches must stay on the canvas to be wired again (the
+    owner, 2026-10-27: unwiring the outputs made them vanish).
     Only a drawing choice: nothing in `view` is changed. A view with no
     section (`view.spec` None) draws everything."""
     if view.spec is None:
@@ -2385,15 +2386,7 @@ def preset_only(view: View) -> frozenset[str]:
         for x, y in ((a, b), (b, a)):
             if x in section and y in have:
                 shown.add(y)
-    grew = True
-    while grew:                          # the bus: a shown output, the windows it feeds
-        grew = False
-        for a, b in ends:
-            for x, y in ((a, b), (b, a)):
-                if (x in shown and y in have and y not in shown
-                        and have[y].kind == "output" and have[x].kind == "output"):
-                    shown.add(y)
-                    grew = True
+    shown |= {nid for nid, n in have.items() if n.kind == "output"}
     return frozenset(shown)
 
 
