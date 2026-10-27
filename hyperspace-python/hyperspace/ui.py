@@ -553,10 +553,11 @@ CHEATSHEET = [
     ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset (fn ←)"),
     ("Cmd+R", "restart process"),
+    ("Cmd+[ ]", "panel page back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
-    ("Esc / Q", "quit"),
+    ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad X / B", "previous / next in the preset list"),
     ("pad A Y", "faces · lines"),
@@ -610,6 +611,30 @@ PAGES = [
 PAGE_KEYS = [k for k, _, _ in PAGES]
 
 
+class PageHistory:
+    """The pages visited, back and forward as a browser's are (⌘[ / ⌘]).
+    `note` records the page open now — a rail click, a key row, a step
+    here — dropping the forward run when it is a new visit; `step(-1)` /
+    `step(1)` returns the page to go to, or None at either end."""
+
+    def __init__(self, page: int):
+        self.visited, self.at = [page], 0
+
+    def note(self, page: int) -> None:
+        if page == self.visited[self.at]:
+            return
+        del self.visited[self.at + 1:]
+        self.visited.append(page)
+        self.at = len(self.visited) - 1
+
+    def step(self, by: int) -> int | None:
+        i = self.at + by
+        if not 0 <= i < len(self.visited):
+            return None
+        self.at = i
+        return self.visited[i]
+
+
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
@@ -635,12 +660,16 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
-        self.desk = True            # the APC40, left of the panel; the whole window without it
+        # the APC40 left of the panel: off at launch, the panel filling the
+        # window instead (the owner, 2026-10-26: GRAPH is where the time goes);
+        # the SYSTEM page's switch brings it back
+        self.desk = False
         # the gamepad over the desk in the same column (ui_pad.py): off at
         # every launch, as the cheat sheet is — the desk keeps its room
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
-        self.page = 1               # index into PAGES; the view page opens first
+        self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
+        self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
@@ -1559,7 +1588,9 @@ class Panel:
         if not self.open:
             return
         io = imgui.get_io()
-        pw = panel_w((io.display_size.x, io.display_size.y))
+        # at launch: right of the desk when it is up, else the whole window
+        pw = (panel_w((io.display_size.x, io.display_size.y)) if getattr(self, "desk", True)
+              else io.display_size.x - 24)
         imgui.set_next_window_pos(
             imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
         )

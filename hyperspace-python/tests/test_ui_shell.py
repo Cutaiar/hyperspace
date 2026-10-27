@@ -28,7 +28,7 @@ from hyperspace.overlay import Output, register_switches
 from hyperspace.params import PLANES, Kind, build_registry
 from hyperspace.preset import Presets
 from hyperspace.routing import Binding, Bindings, Owned, Router, keymap, padmap
-from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, Panel, apply_style, load_fonts
+from hyperspace.ui import CHEATSHEET, PAGE_KEYS, PAGES, PageHistory, Panel, apply_style, load_fonts
 from hyperspace.view import ViewState
 
 
@@ -91,6 +91,11 @@ def build_rig(tmp_path, renderer=None):
     lib.attach(reg)
     panel = Panel(control, audio, view, renderer=renderer, bank=lib.project, registry=reg,
                   library=lib)
+    # the launch defaults (GRAPH, no desk) asserted once, by
+    # test_the_panel_opens_on_graph_filling_the_window; the rig keeps the
+    # desk up and the VIEW page first, as these tests were measured
+    panel.desk, panel.page = True, PAGE_KEYS.index("view")
+    panel.history = PageHistory(panel.page)
     panel.clock, panel.lfos = clock, lfos
     panel.hands, panel.hand_settings = hands_io, settings
     panel.output = output
@@ -124,6 +129,21 @@ def frame(panel, page=None):
 
 
 # ---------------------------------------------------------------- pages
+
+def test_the_panel_opens_on_graph_filling_the_window(tmp_path):
+    """The owner, 2026-10-26: the app opens on GRAPH with the desk down
+    and the panel the whole window, 12 px in from each edge."""
+    with build_rig(tmp_path) as r:
+        fresh = Panel(r.panel.control, r.panel.audio, r.view, registry=r.reg)
+        assert PAGE_KEYS[fresh.page] == "graph" and not fresh.desk
+        fresh.router = r.router
+        imgui.new_frame()
+        fresh.draw(1 / 60, 60.0)
+        imgui.end_frame()
+        win = imgui.internal.find_window_by_name("CONTROLS")
+        assert (win.pos.x, win.pos.y, win.size.x, win.size.y) == (12, 12, 820 - 24, 820 - 24)
+        fresh.close()
+
 
 def test_every_page_draws_with_a_library(rig):
     for k, (key, _, _) in enumerate(PAGES):
@@ -957,6 +977,7 @@ def test_the_meter_tooltip_names_the_plane_from_the_live_table(rig):
 _SYMBOLS = {"←": "LEFT", "→": "RIGHT", "↑": "UP", "↓": "DOWN", "space": "SPACE",
             "[": "LEFT_BRACKET", "]": "RIGHT_BRACKET", ",": "COMMA", ".": "PERIOD",
             "?": "SLASH", "Esc": "ESCAPE", "Cmd+R": "SUPER+R", "Cmd+Z": "SUPER+Z",
+            "Cmd+[": "SUPER+LEFT_BRACKET",
             "Home": "HOME"}
 _PADS = {"pad X / B": ["X", "B"], "pad A Y": ["A", "Y"], "LB / RB": ["LB", "RB"],
          "sticks": ["LSTICK", "RSTICK"], "hold START": ["MENU"]}

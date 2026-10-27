@@ -98,6 +98,7 @@ GAP = EDGE                 # from the cheat sheet
 LABEL_PX = (11.0, 18.0)    # the labels' type size: 0.2 of a unit, kept in this range
 LABEL_LINES = 2            # a label wraps to at most this many lines
 BIG, PANEL = "big", "panel"    # the header's chip: hide the panel / bring it back
+CLOSE = "×"                # the header's last chip: close the desk (`ui.desk`)
 PICK_S = 20.0              # a picked control lets go by itself after this long with no click
 PICK_MOVE = 12.0           # px the mouse must leave a pick's click by before a click can map
 SAYS_S = 0.5               # how long the labels' texts are kept (a renamed preset shows by then)
@@ -1039,6 +1040,22 @@ def _chip(panel) -> None:
         imgui.set_tooltip("Hide the panel: the desk takes the whole window and every lit "
                           "control carries its name (H brings the panel back)"
                           if name == BIG else "Bring the panel back (H)")
+    imgui.same_line()
+    if ui.chip(f"{CLOSE}##desk"):
+        _close(panel)
+    if imgui.is_item_hovered():
+        imgui.set_tooltip("Close the desk diagram (SYSTEM page: Desk diagram brings it back)")
+
+
+def _close(panel) -> None:
+    """Close the desk (`ui.desk` off); a hidden panel comes back with it,
+    so the window is never left empty."""
+    _show_panel(panel, True)
+    d = panel.reg.get("ui.desk")
+    if d is not None:
+        d.set(False)
+    else:
+        panel.desk = False
 
 
 def _header(panel, table) -> None:
@@ -1049,7 +1066,7 @@ def _header(panel, table) -> None:
     desk), in place of the line's other words where there is not."""
     start = imgui.get_cursor_pos()
     full = imgui.get_content_region_avail().x
-    end = start.x + full - ui.chip_w(BIG) - 8        # where the words stop: the chip
+    end = start.x + full - ui.chip_w(BIG, CLOSE) - 8     # where the words stop: the chips
     imgui.set_cursor_pos(_v(start.x, start.y + 3))
     c = picked(panel) if table is not None else None
     line = can = None
@@ -1093,7 +1110,8 @@ def _header(panel, table) -> None:
         if line is not None:
             imgui.same_line(0, 20)
             imgui.text_colored(ui.RED if can else ui.DIM, line)
-    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL), start.y))
+    imgui.set_cursor_pos(_v(start.x + full - ui.chip_w(BIG if panel.open else PANEL, CLOSE),
+                            start.y))
     _chip(panel)
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))

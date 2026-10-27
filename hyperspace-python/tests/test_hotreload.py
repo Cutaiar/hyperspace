@@ -232,7 +232,9 @@ def test_every_package_module_but_the_cold_core_is_watched():
     # must outlive whatever a reload does, being what diagnoses a freeze
     # headless (row 394) is the tests' and tools/migrate_library.py's app,
     # never the running app's
-    cold = {"app", "hotreload", "offline", "watchdog", "headless"}
+    # pinch is cold too: its AppKit monitor adds to the module it was made
+    # in, so a reloaded copy would sum nothing
+    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch"}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 

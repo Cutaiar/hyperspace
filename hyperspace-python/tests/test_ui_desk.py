@@ -197,10 +197,20 @@ def test_the_diagram_draws_on_both_layers_and_hides(rig, monkeypatch):
     imgui.new_frame()
     real(panel)
     imgui.end_frame()
-    assert ids == ["big##desk"]
+    assert ids == ["big##desk", "×##desk"]
     panel.reg["ui.desk"].set(False)
     frame(panel)
     assert len(calls) == 4
+
+
+def test_the_close_chip_closes_the_desk_and_never_leaves_the_window_empty(rig):
+    """The header's × turns `ui.desk` off; a panel the `big` chip hid comes
+    back with it, so the control window is never left blank."""
+    panel = rig.panel
+    panel.reg["ui.panel"].set(False)
+    ui_desk._close(panel)
+    assert not panel.desk
+    assert panel.open
 
 
 def test_the_desk_does_not_jump_when_the_sheet_comes_up(rig, monkeypatch):

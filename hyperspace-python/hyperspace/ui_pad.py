@@ -343,6 +343,21 @@ def diagram(panel) -> None:
         imgui.pop_style_var()
 
 
+def inline(panel) -> None:
+    """The same picture inside the current window, as wide as it has room
+    for and as tall as the pad's shape needs: the GRAPH page's details for
+    the pad node (ui_graph._node_side), whether or not the floating one is up."""
+    w = imgui.get_content_region_avail().x
+    h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
+    if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
+                         | imgui.ChildFlags_.always_use_window_padding,
+                         imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
+        _body(panel, _table(panel))
+    imgui.end_child()
+    imgui.pop_style_var()
+
+
 def state(panel) -> tuple[str, str]:
     """The header's state (the word, the whole of it for the hover): how
     the pad is read, or why there is none."""
