@@ -5052,7 +5052,10 @@ were recorded on the build machine. (Check 342's "black" is superseded by
 362: a new preset now starts with a shape.)
 
 **354. Insert spawns where you click.** (laptop, the copy)
-Headless: the quick wins' tests in `tests/test_graph_edit.py` and `tests/test_ui_graph.py`.
+Headless: `tests/test_graph_areas.py`
+(`test_insert_effect_lands_where_the_cable_was_clicked`) and the picker's
+placement at a point in `tests/test_graph_edit.py`
+(`test_nodes_the_picker_adds_and_delete_removes`).
 On GRAPH, right-click an empty place and add a node, then add one more
 somewhere else.
 *Pass:* each new node appears at the pointer, not at a fixed corner and
@@ -5061,7 +5064,10 @@ not on top of another node.
 
 **355. Nothing moves by itself, and a drag does not snap.** (laptop, the
 copy)
-Headless: `tests/test_ui_graph.py`.
+Headless: `tests/test_graph_areas.py`
+(`test_auto_layout_stacks_each_area_and_keeps_saved_positions`,
+`test_a_panned_canvas_moves_every_node_and_saves_where_they_lie`); no test
+covers the no-snap drag — that is this check.
 Load `party-trip`, open GRAPH, drag two nodes to odd places, load another
 preset and come back, then resize the control window.
 *Pass:* the nodes you placed stay where you put them, a drag stops exactly
@@ -5070,11 +5076,19 @@ your back.
 *Fail:* a node that jumps on release, on a load or on a resize.
 
 **356. The output behind the canvas.** (laptop, the copy)
-Headless: `tests/test_ui_graph.py`.
-Turn on **output behind** on GRAPH's head.
-*Pass:* the output's picture shows behind the nodes at the same scale as
-the canvas and the nodes stay legible over it; off, it goes.
-*Fail:* a picture that is stretched, misplaced, or hides the nodes.
+Headless: `tests/test_graph_areas.py`
+(`test_backdrop_is_letterboxed_and_fixed_to_the_page`,
+`test_preview_is_copied_only_on_a_frame_after_the_page_asked`) and
+`tests/test_app_boundary.py`
+(`test_the_graph_preview_rides_on_output_1_only_when_asked`).
+Open GRAPH: **output behind** on its head is on by default. Pan and zoom
+the canvas, move the alpha slider, then turn it off and on.
+*Pass:* output 1's picture shows behind the nodes letterboxed (its own
+aspect, never stretched) and fixed to the window — it does not pan or
+zoom with the canvas — and the nodes stay legible over it; the slider
+fades it; off, it goes.
+*Fail:* a picture that is stretched, moves with the canvas, or hides the
+nodes.
 
 **357. The canvas is bigger.** (laptop, the copy)
 Open GRAPH at the control window's usual size (960 × 900).
@@ -5203,11 +5217,21 @@ Drive library) — and read its report; then the same with `--apply`. Note
 the backup folder it prints. Let the Drive sync, then open a handful of
 presets on both Macs (`party-trip`, `party-wake`, a macro preset, three
 ordinary ones) and save one untouched.
-*Pass:* the dry run lists every preset `→ 7` with `picture: same` and
-`fixed point: yes`, and writes nothing; `--apply` says where the backup is
+What the tool proves: `round-trip picture: same` draws the old file *as
+this build loads it* (through the same migration) against its written
+`/7` — the save keeps what this build draws, **not** that it draws what
+the `/6` build drew. That parity is by eye: for every preset with a
+look-back or a dream (`party-wake`, `party-tracer`, your tracer presets)
+compare live against the other Mac still on the old build (or a recording) *before*
+updating it, as in 366. A preset whose load says `dream.on is driven` or
+`dream.mix is driven from 0` (a pad or hand on the tracers) now draws its
+trail always and the pad switches only the dream — eyeball those too. An
+old file whose section was "not read" is skipped and never written.
+*Pass:* the dry run lists every preset `→ 7` with `round-trip picture:
+same` and `fixed point: yes`, and writes nothing; `--apply` says where the backup is
 and rewrites them, every file in `presets/` then says
 `hyperspace.preset/7`, names and `hidden.json` unchanged; each preset
-looks as it did on both Macs; the untouched save changes nothing; a second
+looks as it did on the old build (the dream presets eyeballed as above); the untouched save changes nothing; a second
 dry run leaves them all untouched. The build never ran this on your data.
 *Fail:* a preset skipped, a look that moved, a file lost, or a `/7` that
 changes when saved untouched.

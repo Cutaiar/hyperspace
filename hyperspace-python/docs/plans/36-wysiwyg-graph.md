@@ -4,9 +4,10 @@
 wins, PR #241), from the owner's notes after the 2026-10-25 install,
 agreed with Dylan. **D1–D5 accepted by the owner as recommended
 (2026-10-26).** Build plan [`36-wysiwyg-graph-build.md`](36-wysiwyg-graph-build.md).
-Tests at the build's head: fast tier 3941 passed, 2 skipped; goldens 128
-passed (757 pictures, 9 re-recorded, each with its reason under "What
-changed in the build"); the controller's full-suite run may amend these.
+Tests at 1810314: the full suite (`uv run pytest -q --all`) 4155 passed,
+2 skipped — the fast tier 3941 passed, 2 skipped; goldens 128 passed (757
+pictures, 9 re-recorded, each with its reason under "What changed in the
+build"); the final review's fixes add their own tests on top.
 Hand checks 354-369 (group AG); register rows 396-416. Plan 37 is the
 faces (their shaders consolidated, faces as a target like any other) and
 the nodes-as-pictures visual language (FL Patcher-style); the quick wins
