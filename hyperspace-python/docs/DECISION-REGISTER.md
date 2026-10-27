@@ -34,6 +34,7 @@ recommended, before the build (on `plan-34-feedback`, PR #236). Row 394
 is the owner's own, 2026-10-25: every save on the newest schema, which
 supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
 (on `preset-schema-6`).
+Rows 396–400 (plan 36, the WYSIWYG graph) are the plan's D1–D5, accepted by the owner as recommended on 2026-10-26, before the build; rows 401–416 are the controller's rulings during that build (two of them the owner's words, 409 and 412) and are answered "controller — 2026-10-26" (on `plan-36-build`).
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -418,6 +419,27 @@ here; overturn → the change, then the same.
 | 393 | Plan 34's frame words retired: `FRAME_SOURCE_REFUSAL`, `LOOP_FRAME`; `FRAME_EDGES` becomes `HIDDEN_EDGES` | — | (rec) — accepted 2026-10-24 |
 | 394 | Every save is the newest schema (`hyperspace.preset/6`); old schemas load but are never written; the library is migrated once (`tools/migrate_library.py`) | 353 | owner — 2026-10-25: "We don't plan on having long-term support for old schemas … You can assume that anytime we update a schema, both machines will comply with that." |
 | 395 | A picture laid over another — a composite's `over` (blend over or depth) or the backdrop's scene, straight or through effects — keeps its see-through ground: the scene clears to alpha 0, the effects between keep their own alpha | — | owner — 2026-10-25: "build the proper fix" |
+| 396 | D1: All outputs stays as an explicit bus of drawn, rig-owned cables (`output.all.<port> → output.N.<port>`), not deleted | 359–361 | owner — 2026-10-26: accepted as recommended |
+| 397 | D2: one live dream at a time; a second is refused in words | 365, 366 | owner — 2026-10-26: accepted as recommended |
+| 398 | D3: the look-back outputs its trail only; a composite lays it over the picture | 363, 364 | owner — 2026-10-26: accepted as recommended |
+| 399 | D4: "preset only" is on by default for every preset, rig and controller nodes one click away | 367 | owner — 2026-10-26: accepted as recommended |
+| 400 | D5: the factory presets and the Drive library migrate to `/7` in one go, with the same backup, both Macs on this build | 368 | owner — 2026-10-26: accepted as recommended |
+| 401 | The factory `/7` files are regenerated at T4 from their pre-T3 `/6` originals | — | controller — 2026-10-26 |
+| 402 | "No `/6` reader" means no fill-in and no `/6` saves; reading `/4`–`/6` stays as the explicit one-way migration to `/7`, with a note on load | 368 | controller — 2026-10-26 |
+| 403 | The build never runs `migrate_library` on `~/Hyperspace` or the Drive library | 368 | controller — 2026-10-26 |
+| 404 | Plan 36's tasks run one after another, one implementer and one reviewer each | — | controller — 2026-10-26 |
+| 405 | The WYSIWYG rule beats "goldens unmoved": the stand-down is deleted, and a hands mute acts on the hands layer's input | 359, 369 | controller — 2026-10-26 |
+| 406 | `through-one-output|present|scene+through` is re-recorded | 369 | controller — 2026-10-26 |
+| 407 | A cut hidden-edge wire stays cut: the `/7` gate closes the `/6` re-migration on every load | 360 | controller — 2026-10-26 |
+| 408 | The four placement goldens are accepted: `palette-glass` and three `wired-outputs` states | 369 | controller — 2026-10-26 |
+| 409 | Implementers skip the full suite; the controller runs it once before the final review | — | owner — 2026-10-26: "tell implementers to skip the full suite" |
+| 410 | The golden speed-ups start at T4's implementer head and merge back into the build | — | controller — 2026-10-26 |
+| 411 | The new preset's chain is exactly `shape → scene → output.all.image`, plain faces | 362, 363 | controller — 2026-10-26 |
+| 412 | Dream fidelity is deferred: the migrated dream dreams the look-back's occluded trail, and D is not occluded by the shape | 366 | owner — 2026-10-26: deferred; finish and merge plan 36 first |
+| 413 | "Preset only" shows whatever is cabled to the section, of any kind | 367 | controller — 2026-10-26 |
+| 414 | The goldens re-recorded in the build: 9 of 757 | 369 | controller — 2026-10-26 |
+| 415 | Plan 37 is nodes as pictures, and the faces | — | owner — 2026-10-26 |
+| 416 | Plan 36's known follow-ups are recorded, not built | — | controller — 2026-10-26 |
 
 "—": no hand check shows it; tests only.
 
@@ -7699,3 +7721,196 @@ the wires `frame_wires` writes for an old preset. Plan 34's row 359 names
 - **Judge it.** Media into a composite's `under`, the scene into its `over`
   (through an effect): both show; pull the trigger on the effect's mix and
   the media stays.
+
+## Plan 36 — the WYSIWYG graph (rows 396–416)
+
+Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommended on 2026-10-26, before the build. Rows 401–416 are the controller's rulings during the build and the owner's words on it (409, 412, 415); each says what the build did. Built on `plan-36-build` ([`plans/36-wysiwyg-graph.md`](plans/36-wysiwyg-graph.md); hand checks 354–369, group AG).
+
+### 396. D1: All outputs stays as an explicit bus of drawn, rig-owned cables (`output.all.<port> → output.N.<port>`), not deleted
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D1: keep All outputs as a bus or delete it and wire each window. Accepted as recommended: one preset still works on the laptop and the rig, and every cable is visible.
+- **Built.** `graph.RigWires`, `graph.bus_wire`, `graph.window_ports`: one cable per window and port (image, hands, guide, depth: four bus ports), present by default, drawn on GRAPH, cut by Delete, re-added by dragging from All outputs' pin onto the window's same port, saved in the show (`library.Project.rig`, key `"rig"`, written only when something is cut) and undone with the app's undo. A window's port is its own wire, else the standing bus cable, else nothing. A bus cable carries no inserted effect (refused in words). Tests: `tests/test_plan36_bus.py`.
+- **Other options.** Delete All outputs and wire each window.
+- **To reverse.** `graph.window_ports` and the rig's persistence (the `rig` key).
+- **Rough edge.** A cut is the show's, not the preset's: the same preset in another show has its cables.
+- **Judge it.** Checks 359–361.
+
+### 397. D2: one live dream at a time; a second is refused in words
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D2: one dream worker or several sharing it. Accepted as recommended: the worker is one GPU job and several would split the frame rate.
+- **Built.** A second reached `dream` node is refused in words at read (`tests/test_plan36_lookback_dream.py::test_a_second_dream_is_refused_in_words`). `dream.on` off passes the input through and the worker does not run.
+- **Other options.** Several dreams sharing the worker.
+- **To reverse.** The refusal in `graph.py`.
+- **Rough edge.** A refused second dream is an unreached node, drawn faint.
+- **Judge it.** Check 365.
+
+### 398. D3: the look-back outputs its trail only; a composite lays it over the picture
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D3: the look-back's trail only, or also "trail over input". Accepted as recommended: WYSIWYG, and the starters add the composite for you.
+- **Built.** `lookback` outputs the age-weighted trail as a premultiplied picture with alpha and nothing else; the tracers starters wire `scene → lookback → composite (over scene)`. Old presets migrate to that chain.
+- **Other options.** A "trail over input" output on the look-back.
+- **To reverse.** `graph.LookbackAt`'s outputs and `graphview.STARTERS`.
+- **Rough edge.** The common case needs a composite on the canvas.
+- **Judge it.** Checks 363, 364.
+
+### 399. D4: "preset only" is on by default for every preset, rig and controller nodes one click away
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D4: on for every preset or only new ones. Accepted as recommended.
+- **Built.** `graphview.preset_only(view)`; a chip on GRAPH's head, state `st["preset_only"]` (default `ui_graph.PRESET_ONLY`), not keyed to the preset, so it survives loads and hot reload. Row 413 says what it hides.
+- **Other options.** On only for new presets.
+- **To reverse.** `ui_graph.PRESET_ONLY`.
+- **Rough edge.** A factory preset opens with fewer nodes than before; the chip brings the rest back.
+- **Judge it.** Check 367.
+
+### 400. D5: the factory presets and the Drive library migrate to `/7` in one go, with the same backup, both Macs on this build
+
+- **Answer.** owner — 2026-10-26: accepted as recommended. Asked in plan 36 D5. Accepted as recommended; it follows row 394 (no old-schema support).
+- **Built.** `hyperspace.preset/7`; `tools/migrate_library.py` rewrites each preset to the explicit graph it drew, proved by `graph.signature` and the goldens. The 25 factory `/7` files are regenerated (row 401); the owner's library is migrated at the hand check, not by the build (row 403).
+- **Other options.** Migrate on load for ever.
+- **To reverse.** `preset.WIRED_SCHEMA`, `migrate_library`.
+- **Rough edge.** An older build refuses a `/7` file: both Macs update together.
+- **Judge it.** Check 368.
+
+### 401. The factory `/7` files are regenerated at T4 from their pre-T3 `/6` originals
+
+- **Answer.** controller — 2026-10-26. `/7` is unreleased during the build, so T4 could change what a `/7` look-back means; the files T3 wrote held the old coupled look-back.
+- **Built.** The 25 factory `/7` files were regenerated by re-running the migration from their `/6` originals at f1c2846; the sources are kept in `tests/fixtures/factory-sources/`.
+- **Other options.** Keep the T3 files and add a second migration.
+- **To reverse.** Re-run `migrate_library.py --library tests/fixtures/factory-sources --to hyperspace/library/presets`. Cost if wrong: one regenerate step redone.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 402. "No `/6` reader" means no fill-in and no `/6` saves; reading `/4`–`/6` stays as the explicit one-way migration to `/7`, with a note on load
+
+- **Answer.** controller — 2026-10-26. The spec's W3 said no `/6` reader; the build plan said migrate on load. `migrate_library` and the old fixtures need the reader.
+- **Built.** `graphmigrate` reads older schemas into `/7` once and says so on load; nothing older is written.
+- **Other options.** A tool-only reader.
+- **To reverse.** Delete the load-time path. Cost if wrong: a little migration code kept that could have been tool-only.
+- **Rough edge.** None.
+- **Judge it.** Check 368.
+
+### 403. The build never runs `migrate_library` on `~/Hyperspace` or the Drive library
+
+- **Answer.** controller — 2026-10-26. That data is the owner's and outside the worktree.
+- **Built.** Hand check 368 is the run.
+- **Other options.** The build runs it.
+- **To reverse.** Cost if wrong: the owner runs one command.
+- **Rough edge.** None.
+- **Judge it.** Check 368.
+
+### 404. Plan 36's tasks run one after another, one implementer and one reviewer each
+
+- **Answer.** controller — 2026-10-26. No parallel implementers on one branch.
+- **Built.** T1–T7 in order; T5's review overlapped T6's implementer (row 411), T7 overlapped T6's review.
+- **Other options.** Parallel implementers.
+- **To reverse.** Cost if wrong: wall-clock only.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 405. The WYSIWYG rule beats "goldens unmoved": the stand-down is deleted, and a hands mute acts on the hands layer's input
+
+- **Answer.** controller — 2026-10-26. T1's reviewer found the stand-down (`Output.settle`, `Shown.fallback`, bent) was not confined to the mutes: it fired when a hand was absent or no effect was live, painting a chain clean with no drawn wiring. This supersedes an earlier ruling to keep it as the mutes' mechanism.
+- **Built.** The stand-down is gone. A window's hands mute removes the hands layer from that window's chain (a mute, not a rewire). Re-recorded: `party-trip`, `party-noita` and `lfo-breathe` at `|absent|hands+through`; the two resize ones are held by the mute.
+- **Other options.** Keep the stand-down.
+- **To reverse.** Revert the three pictures. Cost if wrong: the owner rejects up to five re-recorded pictures at the hand checks.
+- **Rough edge.** A muted window whose through composite is shared with an unmuted sibling still shows hands (one composite).
+- **Judge it.** Check 369.
+
+### 406. `through-one-output|present|scene+through` is re-recorded
+
+- **Answer.** controller — 2026-10-26. Its old golden drew hands with the hands mute on, which breaks the rule that a mute removes the hands (R9).
+- **Built.** The new frame is byte-identical to the fixture's own `scene` golden, which proves the mute.
+- **Other options.** Keep the old picture.
+- **To reverse.** One picture reverted.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 407. A cut hidden-edge wire stays cut: the `/7` gate closes the `/6` re-migration on every load
+
+- **Answer.** controller — 2026-10-26. T2 noted a `/6` file is re-migrated on every load, so a cut hidden-edge wire came back.
+- **Built.** T3 gates on `/7`; a test cuts a migrated wire, saves, reloads, and it stays cut.
+- **Other options.** Leave it for the final wave.
+- **To reverse.** None; it was on T3's path.
+- **Rough edge.** None.
+- **Judge it.** Check 360.
+
+### 408. The four placement goldens are accepted: `palette-glass` and three `wired-outputs` states
+
+- **Answer.** controller — 2026-10-26. A placement on a window's shared picture was not a wire; the explicit wire the canvas draws is. The reviewer confirmed the diffs are sub-pixel: 104 of 36000 thumbnail pixels, mean 0.18.
+- **Built.** `palette-glass|…|scene+hands+through`; `wired-outputs|…|scene+hands`, `|scene` and `|scene+through`.
+- **Other options.** Keep the old four.
+- **To reverse.** Cost if wrong: four fixtures reverted.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 409. Implementers skip the full suite; the controller runs it once before the final review
+
+- **Answer.** owner — 2026-10-26: "tell implementers to skip the full suite". From T3 the covering tests, the goldens and ruff; from T4 the fast tier, `--all -m golden` and ruff.
+- **Built.** Test tiers (PR #243) and the golden speed-ups are in the build. The final full run also checks `test_desk_coverage::test_the_committed_report_is_fresh`.
+- **Other options.** Run the full suite on every task.
+- **To reverse.** Cost if wrong: a cross-file regression found late and fixed in the final wave.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 410. The golden speed-ups start at T4's implementer head and merge back into the build
+
+- **Answer.** controller — 2026-10-26. Goldens run with no dream worker, so a T4 fix round cannot move them.
+- **Built.** Branch `golden-speedups` (5864615): one golden test per rig job, hashes not held pixels, a shader-program pool in `tools/golden_frames.py`; goldens 12–14 s and 0.33 GB (were 32–64 s and 2 GB), 128 tests; all 757 digests match; nothing under `hyperspace/` changed.
+- **Other options.** Wait for T4's review.
+- **To reverse.** Cost if wrong: one merge conflict in `tests/golden`.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 411. The new preset's chain is exactly `shape → scene → output.all.image`, plain faces
+
+- **Answer.** controller — 2026-10-26. The owner's words: "basic geometry routed into a scene, the scene into the output".
+- **Built.** `Presets.new` lays that chain where GRAPH is looking; the pattern is one visible drag away. T5's review ran alongside T6's implementer, the owner wanting it merged soon.
+- **Other options.** Wire the pattern into the faces too.
+- **To reverse.** Cost if wrong: one wire added to the starter.
+- **Rough edge.** The scene-chain starter drops whatever already fed All outputs' image without saying so.
+- **Judge it.** Checks 362, 363.
+
+### 412. Dream fidelity is deferred: the migrated dream dreams the look-back's occluded trail, and D is not occluded by the shape
+
+- **Answer.** owner — 2026-10-26: deferred; finish and merge plan 36 first. T4's reviewer showed no drawn wiring of `scene → lookback → dream → composite` reproduces the old look exactly.
+- **Built.** The spec's three-node chain is kept. `party-wake` with the worker live looks different from `/6`. Plan 34's `dream → X` now reads trail + D.
+- **Other options.** A separate dream `submit` port apart from the picture it lays over, and an occluder after the dream (the follow-up).
+- **To reverse.** That port and that occluder. Cost if wrong: `party-wake` looks different live until then.
+- **Rough edge.** The old look is not reproduced.
+- **Judge it.** Check 366.
+
+### 413. "Preset only" shows whatever is cabled to the section, of any kind
+
+- **Answer.** controller — 2026-10-26. T6's implementer first hid controllers and modulation even when cabled to a section node (a `PRESET_HIDES` list), against its brief; the controller's T6 fix (1810314) reversed it.
+- **Built.** Shown: the section's nodes, every node with a cable to one of them whatever its kind (an LFO routed to an effect, a controller bound to a param, so a moving param shows its source), and the output nodes the shown outputs reach, so the bus carries the windows in. Controllers, modulation and macros with no cable to the section are hidden, as are group nodes and the camera. Nothing is mutated or laid out again.
+- **Other options.** Hide controllers and modulation always (the implementer's first cut).
+- **To reverse.** `graphview.preset_only`.
+- **Rough edge.** Group nodes and the camera hide unless cabled to a section node, so a param-bearing group vanishes in the default view.
+- **Judge it.** Check 367.
+
+### 414. The goldens re-recorded in the build: 9 of 757
+
+- **Answer.** controller — 2026-10-26. T1 four, T3 four, T4 one (rows 405, 406, 408 and the one here).
+- **Built.** T4: `wired-outputs|present|scene+hands+through` moved 6029 pixels by 1/255 because `history → acid.2` read the off look-back's copy pass and now reads `scene → acid.2`. The other 748 did not move; all 125 frame signatures were re-recorded for the new ids.
+- **Other options.** None.
+- **To reverse.** Each reverts by git.
+- **Rough edge.** None.
+- **Judge it.** Check 369.
+
+### 415. Plan 37 is nodes as pictures, and the faces
+
+- **Answer.** owner — 2026-10-26. FL Patcher-style nodes shown as the picture they make; face shaders consolidated and faces as a target like any other.
+- **Built.** Not built. The `acid-scene` preset drawing a wire backwards (area rules) goes there.
+- **Other options.** Fold it into plan 36.
+- **To reverse.** None.
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 416. Plan 36's known follow-ups are recorded, not built
+
+- **Answer.** controller — 2026-10-26. Reviewer minors that do not change what runs.
+- **Built.** Listed in `plans/36-wysiwyg-graph.md` under "Known follow-ups": dead placement plumbing, `tools/outputs_shots.py:89`, the manifest's stale route words, duplicate helpers.
+- **Other options.** Fix them in the final wave.
+- **To reverse.** None.
+- **Rough edge.** None.
+- **Judge it.** —

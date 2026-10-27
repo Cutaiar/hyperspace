@@ -219,7 +219,8 @@ SCENE      scene      the solid geometries first (a cloud, in-scene hands: depth
 LAYER      lookback(cover)   the faces' mask, only while the look-back occludes
            hands.layer       Ghost.layer: the hands alone, own colour + depth — only if a wire reads it
 BACKDROP   backdrop   the scene over `backdrop.image` at `backdrop.alpha` (plan 35: `grounded` merged)
-HISTORY    lookback   the look-back composite over its `image` (the echoes' clock, the dream pulled)
+HISTORY    lookback   the age-weighted trail of its `image`, alone (plan 36; the echoes' clock);
+                      dream (plan 36) is its own node: its `image` in, the dreamed picture out
 EFFECT     acid … palette, copy …   one node per wired effect instance, and a `copy` for an
                       instance drawn on another picture; on, its pass over its input into a
                       pool texture or its consumer; off, its input read through
@@ -282,8 +283,9 @@ output's `image`, `hands` or `readout`. D1's `after` / `into` are wires
 written short. A wire into `output.<n>.image` gives that output an end
 of its own (`graph.Wired`, `wire(output.<n>)`) showing that picture;
 into `.hands` it lays that node over; into `.readout` that layer's
-guide. An output no wire names is node for node the default graph's,
-following the session's switches, and a load never writes a switch. The
+guide. (Plan 36: an output no wire names shows nothing, or its bus cable's
+picture, never a default; see "The WYSIWYG graph" below.) A load never
+writes a switch. The
 wires ride in `Wiring`, so the graph is rebuilt when they change. A
 refused wire (another type, a missing node or port, two into one port, a
 loop) is a note and that port's default
@@ -417,6 +419,49 @@ is not a node on the canvas, a delay's `image` port is the pin
 `rin:<delay>/image`. Pictures unmoved: the 741 goldens before the resize fixtures
 (`tests/test_graph_delay.py`, `tests/test_graph_echo.py`,
 `tests/test_graph_resize.py`, `tests/test_graph_feedback.py`).
+
+**The WYSIWYG graph** (plan 36, `hyperspace.preset/7`). The graph on GRAPH
+is the whole truth: nothing is filled in at load (`graphmigrate.migrate`'s
+fill-in, `wired()`, `Wiring()` as a fallback, "the default placement", the
+`into`/`after` keys are gone; a preset with no `graph` section is empty),
+no edge is hidden, and a window shows only its own wires.
+
+- **The bus.** All outputs reaches a window only through a drawn cable
+  `output.all.<port> → output.N.<port>` (image, hands, guide, depth: four
+  bus ports). The cables are the rig's (`graph.RigWires`, saved in the show
+  as `library.Project.rig`, `{"cut": [...]}`, written only when something is
+  cut; the renderer reads it through `Renderer.rig_source`, so a cut
+  rebuilds the graph). `graph.window_ports(wires, n, rig)` is the one place
+  a window's port is resolved: its own wire, else the standing bus cable,
+  else nothing. `Output.settle`, `Shown.fallback` and the bent stand-down
+  are deleted; a window's hands mute removes the hands layer from that
+  window's chain (`_Build._mute_hands`).
+- **Hidden edges, now ports.** `pattern → shape.faces` (unwired: plain
+  faces), `scene.cover → lookback.cover`, `hands → hands.layer` and
+  `hands.guide`, `cloud.N → scene.geometry`, `scene.depth →
+  composite.depth` with `blend` a param of each composite. The loop check's
+  `HIDDEN_EDGES` is retired with them.
+- **Look-back and dream.** `lookback` records `image` into its own ring
+  (several may exist) and outputs the trail with alpha; `cover` is its
+  optional mask; `echo.k` are frames of this node's ring. `dream` submits
+  its `image` to the worker at its own cadence and outputs the dreamed
+  picture with its chroma; `dream.on` off passes the input through and
+  stops the worker; one live dream, a second refused in words. Old presets
+  migrate to `scene → lookback → dream → composite → output`.
+- **Schema `/7`.** A save writes `/7` only; `graphmigrate` reads `/4`-`/6`
+  as an explicit one-way migration with a note on load, and
+  `tools/migrate_library.py` rewrites a library (the 25 factory files are
+  its output, their `/6` sources in `tests/fixtures/factory-sources/`).
+  `graph.signature` and the goldens prove each migration.
+- **A new preset and "preset only".** `Presets.new` lays `shape → scene →
+  output.all.image` where GRAPH is looking; `graphview.STARTERS` are
+  pre-wired groups the picker adds. `graphview.preset_only(view)` returns
+  the ids GRAPH draws (the section's nodes, whatever is cabled to them, the
+  outputs they reach); `ui_graph.hidden_ids` hides the rest without
+  mutating or laying out anything.
+- **Known limitation.** The migrated dream dreams the look-back's
+  occluded trail, not the raw capture (`plans/36-wysiwyg-graph.md`,
+  register row 412).
 
 What the order guarantees, each held by tests in `tests/test_render.py`,
 `tests/test_outputs.py`, `tests/test_ghost.py`, `tests/test_graph.py` and
@@ -1310,8 +1355,9 @@ free graph").
 composites echoes over the frame; `DreamWorker` (only with
 `[dream] enabled`) takes frames from the history on its own thread and
 returns dreamed ones without ever blocking the frame. What the history
-captures is wiring (the graph's `capture` node): the scene by default, or
-the scene with the hands when a preset's graph says so.
+captures is wiring (the graph's `capture` node). Since plan 36 the
+look-back and the dream are two nodes ("The WYSIWYG graph" below): the
+dream is no longer pulled by the look-back's run.
 
 **Render graph.** `graph.default_graph` builds the frame as nodes from
 each output's `Switches` (scene, hands, through: which pipeline end

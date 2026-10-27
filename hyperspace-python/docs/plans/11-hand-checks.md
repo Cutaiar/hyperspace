@@ -5035,6 +5035,198 @@ moved, a file renamed or lost, a write inside the backup's folder, or a
 `/6` that changes when saved untouched (`headless.resave`,
 `Presets.document`).
 
+## AG. Plan 36: the WYSIWYG graph
+
+Plan 36 as built is [`36-wysiwyg-graph.md`](36-wysiwyg-graph.md): the graph
+on GRAPH is the whole truth. An output shows only its own wires and **All
+outputs** is a bus of drawn, rig-owned cables; every hidden edge (pattern
+to faces, cover, hands by name, clouds, depth) is a cable; nothing is
+filled in at load; presets are `hyperspace.preset/7`; the look-back and
+the dream are two picture-in nodes; a **new** preset starts with a shape;
+GRAPH has a **preset only** chip. On `plan-36-build`. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`. Checks 354–358
+are the quick wins (PR #241) that this branch is cut from. **A `/7` file
+is refused by an older build:** both Macs must run this build before 368.
+Register rows 396–416. None of these has been run by a person; the goldens
+were recorded on the build machine. (Check 342's "black" is superseded by
+362: a new preset now starts with a shape.)
+
+**354. Insert spawns where you click.** (laptop, the copy)
+Headless: the quick wins' tests in `tests/test_graph_edit.py` and `tests/test_ui_graph.py`.
+On GRAPH, right-click an empty place and add a node, then add one more
+somewhere else.
+*Pass:* each new node appears at the pointer, not at a fixed corner and
+not on top of another node.
+*Fail:* a node that lands elsewhere or covers another.
+
+**355. Nothing moves by itself, and a drag does not snap.** (laptop, the
+copy)
+Headless: `tests/test_ui_graph.py`.
+Load `party-trip`, open GRAPH, drag two nodes to odd places, load another
+preset and come back, then resize the control window.
+*Pass:* the nodes you placed stay where you put them, a drag stops exactly
+where you let go (no snap to a grid), and nothing is laid out again behind
+your back.
+*Fail:* a node that jumps on release, on a load or on a resize.
+
+**356. The output behind the canvas.** (laptop, the copy)
+Headless: `tests/test_ui_graph.py`.
+Turn on **output behind** on GRAPH's head.
+*Pass:* the output's picture shows behind the nodes at the same scale as
+the canvas and the nodes stay legible over it; off, it goes.
+*Fail:* a picture that is stretched, misplaced, or hides the nodes.
+
+**357. The canvas is bigger.** (laptop, the copy)
+Open GRAPH at the control window's usual size (960 × 900).
+*Pass:* the canvas fills the window below the head and the selection pane;
+no node you could place is out of reach.
+*Fail:* a strip of dead space or a cut-off canvas.
+
+**358. Trackpad pan, ⌘ zoom.** (laptop, a trackpad)
+On GRAPH, scroll with two fingers; hold ⌘ and scroll.
+*Pass:* two-finger scroll pans the canvas, ⌘-scroll zooms about the
+pointer, and a mouse wheel still behaves as it did.
+*Fail:* a scroll that zooms without ⌘, or a pan that fights the zoom.
+
+**359. Rewire output 1 and nothing else changes.** (laptop, the TV for two
+windows, the copy)
+Headless: `tests/test_plan36_bus.py::test_rewiring_output_1_changes_that_one_port_and_nothing_else`.
+Load `party-trip` with both windows open. On GRAPH drag a different
+picture (a channel, or an effect's output) onto `output.1.image`. Watch
+both windows and the hands layer. Then, with the hands muted on one window
+(OUTPUT page), look at that window.
+*Pass:* output 1 shows the new picture, and nothing about output 2 or
+output 1's hands or guide changes; the hands layer and guide stay laid
+over what they were wired to, not over the new picture unless you drag
+them there; a muted window shows no hands layer in its chain.
+*Fail:* output 1's hands or guide still laid over the new picture without a
+cable, or output 2 changing (`graph.window_ports`, `_Build._mute_hands`).
+
+**360. Cut a bus cable.** (laptop, the TV, the copy)
+Headless: `tests/test_plan36_bus.py::{test_cutting_a_bus_cable_persists_in_the_show_and_empties_the_port,test_an_undo_puts_a_cut_bus_cable_back}`.
+On GRAPH, find the cables from All outputs to the windows. Select the
+`output.all.image → output.2.image` cable and press Delete. Save the show,
+quit, reopen it. Then undo (⌘Z) once, and drag from All outputs' image pin
+onto output 2's image port.
+*Pass:* output 2 goes to its ground (black, or see-through in overlay) and
+the other cables and windows are untouched; the cut is still there after
+reopening; undo puts the cable back; dragging from the pin re-adds it.
+*Fail:* a picture still reaching output 2, a cut that comes back on its
+own, or a wire cut that you did not select (`graph.RigWires`).
+
+**361. All outputs stays where you put it after "new".** (laptop, the copy)
+Press **new**, then drag the All outputs node somewhere clearly different.
+Press **new** again, load a factory preset, and load the first one back.
+*Pass:* All outputs stays where you dragged it each time; the windows do
+too.
+*Fail:* All outputs snaps back to a default place (`_moved` in the layout
+map).
+
+**362. A new preset shows a shape.** (laptop, the copy)
+Headless: `tests/test_presets.py::{test_a_new_preset_is_factory_values_and_the_scene_chain,test_a_new_preset_draws_a_shape}`.
+Load `party-trip`, change a knob and a route, then press **new**.
+*Pass:* both windows show the shape, plain faces, with the factory's values
+and desk; GRAPH shows `shape → scene → All outputs` laid left to right
+where you were looking, with the windows and their bus cables; undo takes
+you back to `party-trip` in one step.
+*Fail:* black windows, a value left over from the loaded preset, or a
+chain placed off-screen (`Presets.new`).
+
+**363. Each starter.** (laptop, the copy; a clip for the last)
+Headless: `tests/test_graph_starters.py`.
+On a new preset, right-click the canvas and pick each of the starters in
+turn, undoing after each: scene chain, tracers, tracers + dream, dream on a
+picture, a channel to the backdrop. Right-click a cable carrying a picture
+and pick tracers and dream there.
+*Pass:* each lands as one undo step at the pointer, every node and cable
+visible and editable; scene chain shows the shape; tracers shows the shape
+with its trail; the dream ones need the worker (check 365); the channel to
+the backdrop shows the clip behind the scene. A starter that cannot start
+from the cable you clicked says so.
+*Fail:* a starter that wires something hidden, lands out of view, or needs
+two undos.
+
+**364. Tracers without the dream: the worker idle.** (laptop, the copy,
+the dream worker on)
+Headless: `tests/test_plan36_lookback_dream.py::{test_tracers_with_the_dream_off_submit_nothing,test_the_tracer_only_group_preset_leaves_the_worker_idle}`.
+Load `party-trip` or pick the tracers starter. Watch the shape's trail,
+and the dream worker's activity on SYSTEM (or `top`). Switch `dream.on`
+off on the dream node if there is one.
+*Pass:* the trail shows over the shape; with the dream off or absent the
+worker does no work (no submits, no extra load) and the picture passes
+through the dream node unchanged.
+*Fail:* the worker busy with no dream node on, or the trail missing.
+
+**365. The dream alone, on any picture.** (laptop, the copy, a clip, the
+dream worker on)
+Headless: `tests/test_plan36_lookback_dream.py::{test_the_dream_alone_on_a_channel_refreshes,test_a_second_dream_is_refused_in_words}`.
+Pick **dream on a picture**, or wire a channel into a `dream` node and
+the dream into a composite over the scene. Then try adding a second dream.
+*Pass:* the dreamed picture refreshes at the dream's own cadence with no
+look-back in the graph; with `dream.on` off the input passes through; the
+second dream is refused in words and drawn faint.
+*Fail:* a dream that never refreshes without a look-back, or two dreams
+running.
+
+**366. The live dream look on `party-wake`.** (laptop or the rig, the
+dream worker live)
+Load `party-wake` with the worker live and compare the look by eye with
+how it looked on `/6` (a recording, or the other Mac on the old build).
+This is plan 36's known limitation (register row 412, deferred by the
+owner): the migrated dream dreams the look-back's occluded trail, not the
+raw capture, and D is no longer occluded by the shape.
+*Pass:* the look is recognisably the same party look, or the difference is
+one you can name; write down what moved so the follow-up (a separate dream
+`submit` port and an occluder after the dream) can restore it.
+*Fail:* a dream that does not run, or a look you cannot live with.
+
+**367. Preset only, on a factory preset.** (laptop, the copy)
+Headless: `tests/test_graph_preset_only.py`.
+Load a factory preset (`party-trip`), open GRAPH. Read the head line
+(`· N hidden`), then turn **preset only** off and back on.
+*Pass:* with it lit only the preset's own nodes, whatever is cabled to
+them (a moving param shows its LFO or controller), and the windows with
+the bus cables are drawn; the rig's binding cables and uncabled
+controllers are not; off, today's canvas returns and nothing moved.
+Eyeball what is hidden: **group nodes and the camera hide unless cabled to
+a section node**; judge whether any of those should show. The chip stays
+as set across preset loads.
+*Fail:* a node you expected to see missing, a cable to a hidden node, or a
+canvas that lays out again on toggle.
+
+**368. The libraries migrated to `/7`, both Macs.** (two Macs, the shared
+library)
+Headless: `tests/test_migrate_library.py`.
+Put both Macs on this build. On one run the dry run —
+`uv run python tools/migrate_library.py` (it reads `[library] path`, the
+Drive library) — and read its report; then the same with `--apply`. Note
+the backup folder it prints. Let the Drive sync, then open a handful of
+presets on both Macs (`party-trip`, `party-wake`, a macro preset, three
+ordinary ones) and save one untouched.
+*Pass:* the dry run lists every preset `→ 7` with `picture: same` and
+`fixed point: yes`, and writes nothing; `--apply` says where the backup is
+and rewrites them, every file in `presets/` then says
+`hyperspace.preset/7`, names and `hidden.json` unchanged; each preset
+looks as it did on both Macs; the untouched save changes nothing; a second
+dry run leaves them all untouched. The build never ran this on your data.
+*Fail:* a preset skipped, a look that moved, a file lost, or a `/7` that
+changes when saved untouched.
+
+**369. The nine re-recorded goldens, by eye.** (the gate Mac)
+Open the pictures for the nine goldens the build re-recorded (register
+rows 405, 406, 408, 414): `party-trip`, `party-noita` and `lfo-breathe`
+at `|absent|hands+through`; `through-one-output|present|scene+through`;
+`palette-glass|…|scene+hands+through`; `wired-outputs` at `scene+hands`,
+`scene` and `scene+through` and `present|scene+hands+through`
+(`tests/golden/frames/frames.json` names each; `uv run python
+tools/golden_frames.py` writes a sheet).
+*Pass:* each is what its wiring draws: the absent-hand ones show no hands
+layer; `through-one-output` equals its `scene` picture; the `wired-outputs`
+and `palette-glass` ones differ from the old ones only at the edges of
+the placements, and the `acid.2` one by 1/255.
+*Fail:* a picture with hands where the mute is on, or one that moved
+visibly.
+
 ## What no test covers
 
 Only a person can settle these:
@@ -5152,3 +5344,12 @@ Only a person can settle these:
 - the owner's library on both Macs after `tools/migrate_library.py --apply`
   (353): the tool's tests run on a scratch library and its picture check
   on the golden rig, never the Drive sync or the other Mac.
+- the WYSIWYG graph at the machine (354-369): the quick wins' feel with a
+  trackpad (358), output 1 rewired with the hands layer watched (359), a
+  cut bus cable across a save and reopen (360), the starters and the
+  dream with the worker live (363-366: `party-wake`'s look against `/6`
+  is the owner's deferred follow-up), what "preset only" hides (367), and
+  the nine re-recorded goldens by eye (369): the tests draw the pages
+  headless and the pictures were recorded on the build machine;
+- the Drive library migrated to `/7` on both Macs (368): the tool's tests
+  run on a scratch library, never the Drive sync or the other Mac.

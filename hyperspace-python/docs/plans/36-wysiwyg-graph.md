@@ -1,13 +1,17 @@
 # Plan 36 — the WYSIWYG graph: no default graph, no hidden edges; look-back and dream as two nodes
 
-**Status: building (2026-10-26)** on `plan-36-build` (cut from the quick
+**Status: built (2026-10-26)** on `plan-36-build` (cut from the quick
 wins, PR #241), from the owner's notes after the 2026-10-25 install,
 agreed with Dylan. **D1–D5 accepted by the owner as recommended
-(2026-10-26).** Build plan [`36-wysiwyg-graph-build.md`](36-wysiwyg-graph-build.md). Plan 37 is the faces
-(their shaders consolidated, faces as a target like any other) and the
-nodes-as-pictures visual language; the quick wins from the same notes
-(insert spawn, no automatic layout, the output behind the canvas, bigger
-canvas, two-finger pan) are on their own PR.
+(2026-10-26).** Build plan [`36-wysiwyg-graph-build.md`](36-wysiwyg-graph-build.md).
+Tests at the build's head: fast tier 3941 passed, 2 skipped; goldens 128
+passed (757 pictures, 9 re-recorded, each with its reason under "What
+changed in the build"); the controller's full-suite run may amend these.
+Hand checks 354-369 (group AG); register rows 396-416. Plan 37 is the
+faces (their shaders consolidated, faces as a target like any other) and
+the nodes-as-pictures visual language (FL Patcher-style); the quick wins
+from the same notes (insert spawn, no automatic layout, the output behind
+the canvas, bigger canvas, two-finger pan) are on their own PR.
 
 The owner's rule, verbatim in spirit: **the graph on GRAPH is the whole
 truth.** What is drawn is what is saved is what runs. There is no default
@@ -90,7 +94,7 @@ ring; `delay` is a separate z⁻¹ and is the shape we want.
 | today (hidden) | after (drawn) | unwired means |
 |---|---|---|
 | shape reads `pattern` by name | `pattern → shape.faces` | plain faces (no pattern) |
-| cover built from the scene | `scene.cover → lookback.occluder` (a mask port) | no occlusion |
+| cover built from the scene | `scene.cover → lookback.cover` (a mask port) | no occlusion |
 | hands.layer / guide read `hands` by name | `hands → hands.layer.hands`, `hands → hands.guide.hands` | empty layer |
 | clouds injected into the scene | `cloud.N → scene.geometry` (the geometry port takes several) | no cloud |
 | `depth` auto-wired, `blend` global | `scene.depth → composite.depth`; `blend` a param of each composite | no depth test |
@@ -117,7 +121,7 @@ ring; `delay` is a separate z⁻¹ and is the shape we want.
 - **`lookback`** — *picture in → its trail out.* It records whatever is
   wired into `image` into its own ring (`echoes`, `gap`, `res`) and
   outputs the age-weighted trail (`echo_mix`, `fade`, `darken`,
-  `contrast`) as a premultiplied picture with alpha. Optional `occluder`
+  `contrast`) as a premultiplied picture with alpha. Optional `cover`
   mask. `echo.k` outputs stay (frame k of *this* node's ring). Several
   look-backs, each with its own ring. No dream inside it.
 - **`dream`** — *picture in → dreamed picture out.* It submits its input
@@ -176,7 +180,7 @@ It's on by default for a new preset. **Decision D4.**
 | T7 | docs: ARCHITECTURE, DECISIONS, register rows, hand checks | — |
 
 T1 can land on its own and fixes the most visible bug. T2–T3 are one
-schema bump. T4 depends on T2 (the occluder port) and T3 (no implicit
+schema bump. T4 depends on T2 (the cover port) and T3 (no implicit
 look-back).
 
 ## Size
@@ -188,3 +192,136 @@ the edge tables or `wired_of`. 757 goldens (181 PNGs) are drawn through
 signatures are the safety net: none should move, because every preset is
 migrated to the explicit wiring it drew. That makes this a plan-35-sized
 build.
+
+## What changed in the build
+
+The plan above is the design; this is where the build differs from it, or
+chose within it. Each ruling was made by the controller on 2026-10-26 and
+has a row in [`DECISION-REGISTER.md`](../DECISION-REGISTER.md) (396-416),
+the owner to say keep or overturn.
+
+**As built, in the plan's terms.**
+
+- **The cover port is `lookback.cover`**, fed by `scene.cover`; the W2 text
+  and the look-back's W4 text above said `occluder` and are corrected.
+  The look-back's brightness-mask port from `/6` kept its own name.
+- **All outputs is a drawn bus of rig-owned cables** (`graph.RigWires`):
+  one `output.all.<port> → output.N.<port>` per window and port, four bus
+  ports in all (image, hands, guide and depth), drawn on GRAPH, cut by
+  Delete, re-added by dragging from All outputs' pin onto the window's
+  same port, persisted in the show (`library.Project.rig`, file key
+  `"rig"`, written only when something is cut) and undone with the app's
+  undo. A window's port is its own wire, else the standing bus cable,
+  else nothing (`graph.window_ports`).
+- **Look-back = picture in → trail out; dream = picture in → dreamed
+  picture out.** `dream.on` off passes the input through and the worker
+  does not run; one live dream, a second refused in words (D2). The
+  starters lay the composite (D3: trail only).
+- **Schema `/7`.** A save writes `hyperspace.preset/7` and nothing older.
+  The 25 factory presets are `/7` files regenerated by
+  `tools/migrate_library.py` (their `/6` sources are kept in
+  `tests/fixtures/factory-sources/`). Reading `/4`-`/6` survives only as
+  the explicit one-way migration to `/7`, with a note on load.
+- **A new preset** is `shape → scene → output.all.image`, plain faces,
+  no pattern wire; the starters (scene chain, tracers, tracers + dream,
+  dream on a picture, a channel to the backdrop) are the picker's.
+- **Preset only** is on by default for every preset (D4), a chip on the
+  GRAPH head, `· N hidden` on the head line; nothing is mutated and
+  nothing is laid out again.
+- **Goldens re-recorded during the build (9 of 757).** T1 four:
+  `party-trip`, `party-noita` and `lfo-breathe` at `|absent|hands+through`
+  (the hands mute now acts on the hands layer's input to that window's
+  chain, so the stand-down that used to paint the chain clean is gone),
+  and `through-one-output|present|scene+through` (its old golden drew
+  hands with the hands mute on, an R9 violation; the new frame is byte
+  identical to the fixture's own `scene` golden). T3 four:
+  `palette-glass|…|scene+hands+through` and `wired-outputs` at
+  `scene+hands`, `scene` and `scene+through` (a placement on a window's
+  shared picture was not a wire; the explicit wire the canvas draws moves
+  104 of 36000 thumbnail pixels, mean 0.18). T4 one:
+  `wired-outputs|present|scene+hands+through` (6029 pixels by 1/255:
+  `history → acid.2` read the off look-back's copy pass, now
+  `scene → acid.2`). The other 748 did not move; all 125 frame signatures
+  were re-recorded for the new ids.
+
+**Rulings** (the controller's, 2026-10-26; cost-if-wrong in the register).
+
+1. **Factory presets regenerate at T4.** `/7` is unreleased during the
+   build, so T4 may change what a `/7` look-back means and regenerates the
+   25 factory `/7` files by re-running the migration from their pre-T3
+   `/6` originals; "migrate to the explicit wiring it drew" holds either
+   way.
+2. **"No `/6` reader" means no fill-in and no `/6` saves.** Reading
+   `/4`-`/6` survives only as the explicit one-way migration to `/7`
+   (`migrate_library` and the old fixtures need it), with a note on load.
+3. **`migrate_library` is never run on the owner's data by the build**
+   (`~/Hyperspace`, the Drive library): it is the hand check.
+4. **Tasks run one after another**, one implementer and one reviewer per
+   task, not parallel implementers on one branch.
+5. **The WYSIWYG rule beats "goldens unmoved".** The stand-down
+   (`Output.settle`, `Shown.fallback`, bent) is deleted; the hands mute
+   acts on the hands layer's input to that window's chain (a mute, not a
+   rewire); three `…|absent|hands+through` goldens re-recorded to what the
+   wiring draws, the two resize ones held by the mute. Supersedes an
+   earlier ruling to keep the stand-down as the mutes' mechanism.
+6. **`through-one-output|present|scene+through` re-recorded** (see above).
+7. **The `/6` re-migration on every load is T3's to close.** T2's cut
+   hidden-edge wire returned on load; T3 gates on `/7` and tests "cut a
+   migrated wire, save, reload: stays cut".
+8. **The four placement goldens are accepted** (T3, above).
+9. **Implementers skip the full suite** (owner, 2026-10-26): from T3 the
+   covering tests, then from T4 the fast tier plus `--all -m golden` and
+   ruff; the controller runs the full suite once before the final review.
+10. **The golden speed-ups start at T4's implementer head** (e441780), in
+    parallel, merged into the build after T5: one golden test per rig job,
+    hashes not held pixels, a shader-program pool in `tools/golden_frames.py`
+    (goldens 12-14 s and 0.33 GB, were 32-64 s and 2 GB; nothing under
+    `hyperspace/` changed).
+11. **Dream fidelity is kept as the spec's three-node chain** and deferred
+    (below).
+12. **The new preset's chain is exactly `shape → scene →
+    output.all.image`**, plain faces, no pattern wire: the owner's words
+    were "basic geometry routed into a scene, the scene into the output".
+13. **T5's review ran alongside T6's implementer** (the owner wants it
+    merged soon); no fix needed a rebase.
+14. **"Preset only" shows whatever is cabled to the section**, of any
+    kind (an LFO routed to an effect, a controller bound to a param, so a
+    moving param shows its source); controllers, modulation and macros
+    with no cable to the section are hidden, as are group nodes and the
+    camera. T6's implementer first hid controllers and modulation even
+    when cabled; the controller's T6 fix (1810314) reversed that, as the
+    brief had it.
+
+**Known limitation, deferred by the owner (2026-10-26): dream fidelity.**
+The migrated dream dreams the look-back's *occluded trail*, not the raw
+capture, and D is no longer occluded by the shape; no drawn wiring of the
+three nodes reproduces the old look exactly, so `party-wake` with the
+worker live looks different from `/6`. The follow-up is a separate dream
+`submit` port (apart from the picture it lays over) and an occluder after
+the dream. Priority was finishing plan 36; hand check 366 is the look by
+eye. Plan 34's `dream → X` now reads trail + D.
+
+**Known follow-ups** (reviewer minors, none blocking): the `into
+output.N` placements' retired plumbing (`Wiring.placed`, `_WireCtx.placed`,
+`lookback_words`, `output_placement_words`, `graph_words`,
+`Graph.placed_names`) is dead code; `tools/outputs_shots.py:89` crashes
+(`wired_of` on already-wired wiring); an old file with an unreadable
+section is stamped `/7` and not re-migrated; the golden manifest's stale
+route words (~25 entries) want one `--record` pass; `GraphSpec.effect_names`
+and `graphmigrate.section_effects` duplicate each other, as do
+`_through_chain` and `through_of`; `placed_wires`' refused-note filter is
+prefix-based; `laid` depth now applies only to the `laid_on` hands layer
+(a user preset laid depth-aware with `hands.2.layer` on a window changes);
+a window muted while a sibling shares its through composite is not still
+shows hands (one composite); `graphview.build` with no render graph or rig
+draws every bus cable as standing (headless, first frame); dragging
+`render:output.all` with a `pre` entry has no test that `pre` follows; the
+scene-chain starter silently drops what already fed All outputs' image
+(`STARTER_SAID` should name it); the `acid-scene` preset draws a wire
+backwards (area rules; plan 37); `test_desk_coverage::
+test_the_committed_report_is_fresh` is to be checked in the final full
+run.
+
+**Plan 37** is the faces (their shaders consolidated, faces as a target
+like any other) and the nodes-as-pictures visual language (FL
+Patcher-style).

@@ -151,22 +151,27 @@ changes brightness or volume instead).
     Macs on the copy (with L162).
 19. Row 394, last: L168 — the shared library migrated to `/6` with both
     Macs on this build (after L162 and L167, which need an older Mac).
+20. Plan 36, the WYSIWYG graph: L169-L172 on the laptop (L171 with the
+    dream worker, L169 with the TV for two windows), then L173 with both
+    Macs on `plan-36-build` last of all, since a `/7` file is refused by
+    an older build (it supersedes L168's `/6`).
 
 ## Running the automated tests (tiers)
 
-`uv run pytest` is the inner loop: it runs the fast tier (about 3,840
+`uv run pytest` is the inner loop: it runs the fast tier (about 3,940
 tests) on every core, in about 17 s on the owner's Mac. It leaves out three
 tiers that `tests/conftest.py` marks by name:
 
-- `golden`: the golden-frame draws (`tests/test_golden_frames.py`, about
-  45 s together). Run them after touching rendering, shaders, a preset or
+- `golden`: the golden-frame draws (`tests/test_golden_frames.py`: 128
+  tests, one per rig job, comparing hashes, the shader programs pooled;
+  about 12 s and 0.33 GB). Run them after touching rendering, shaders, a preset or
   the graph's evaluation, and once before a merge.
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
 - `live`: Syphon, NDI and file loopbacks with timeouts; they share global
   names, so they run on one worker and can fail under heavy load.
 
-`uv run pytest --all` runs every tier (about 55 s). Pick a tier with
+`uv run pytest --all` runs every tier (about 50 s). Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
 use `-n0` to run serially (for a debugger). A test named by node id is
 still skipped by the default `-m`: add `--all`. A new test that takes a
@@ -344,6 +349,11 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L166 | The frame cost of a delay, a resize and echoes | 1 | laptop, then the rig | 340 |
 | L167 | A delay saved on this build, opened on a plan 33 build | 1 | two Macs, the copy | 341 |
 | L168 | The library migrated to `/6`; both Macs on this build (row 394) | 1 | two Macs, the shared library | 353 |
+| L169 | The quick wins on GRAPH; rewire output 1; cut a bus cable; All outputs stays put (plan 36) | 1 | laptop, the TV, the copy | 354-361 |
+| L170 | A new preset shows a shape; each starter (plan 36) | 1 | laptop, a clip, the copy | 362, 363 |
+| L171 | Tracers without the dream; the dream alone; `party-wake` live (plan 36) | 1 | laptop, the copy, the dream worker | 364-366 |
+| L172 | Preset only; the nine re-recorded goldens (plan 36) | 1 | laptop, the gate Mac | 367, 369 |
+| L173 | The libraries migrated to `/7`; both Macs on this build (plan 36) | 1 | two Macs, the shared library | 368 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -2436,7 +2446,7 @@ on the hands entry), with **Ghost hands** ticked on the HANDS page.
 "Apple M3 Max"); a terminal.
 
 **Do:** in `hyperspace-python/`, run `uv run python tools/golden_frames.py`
-(it takes a minute; it uses a throwaway home folder, never yours). Then
+(it takes under a minute; it uses a throwaway home folder, never yours). Then
 open a few pictures in `tests/golden/frames/png/`.
 
 **Right if:** it ends "all 757 frames match their goldens (Apple M3 Max,
@@ -4197,6 +4207,110 @@ untouched.
 renamed or missing file, or a `/6` that changes on an untouched save.
 
 *(check 353)*
+
+## Plan 36: the WYSIWYG graph (L169-L173)
+
+Plan 36's tests: the fast tier is 3,941 passed (2 skipped) and the goldens
+128 passed over 757 pictures, nine of them re-recorded (hand check 369 and
+register rows 405, 406, 408, 414); `tests/test_plan36_bus.py`,
+`tests/test_plan36_lookback_dream.py`, `tests/test_graph_starters.py` and
+`tests/test_graph_preset_only.py` are its own. A new preset is no longer
+black: L158 above (check 342) describes the plan 35 build, and L170 is its
+replacement. The checks are 354-369 (group AG); a `/7` file is refused by an
+older build, so L173 is last.
+
+#### L169. The quick wins; rewire output 1; cut a bus cable; All outputs stays put
+
+**Needs:** laptop; the TV for two windows; the copy; a trackpad for the pan.
+
+**Do:** on GRAPH, add nodes from the right-click menu, drag nodes about,
+turn **output behind** on, scroll with two fingers and with ⌘. Then load
+`party-trip`, drag another picture onto `output.1.image`, and mute the hands
+on one window. Delete the `output.all.image` to `output.2.image` cable, save,
+reopen, undo, and drag it back from All outputs' pin. Press **new** and drag
+All outputs somewhere else.
+
+**Right if:** nodes appear where you click and stay where you drop them;
+the output shows behind at the canvas scale; two fingers pan and ⌘ zooms;
+rewiring output 1 changes only output 1's image; a cut bus cable empties
+that port and survives a reopen; undo and the pin bring it back; All
+outputs stays where you dragged it.
+
+**Wrong if:** output 1's hands or guide stay laid over the new picture
+without a cable, a cut returns by itself, or All outputs snaps back.
+
+*(checks 354-361)*
+
+#### L170. A new preset shows a shape; each starter
+
+**Needs:** laptop; the copy; a clip for the backdrop starter.
+
+**Do:** press **new**; undo. Then pick each starter from the canvas menu:
+scene chain, tracers, tracers + dream, dream on a picture, a channel to the
+backdrop, undoing after each; right-click a picture cable for the tracers
+and dream ones.
+
+**Right if:** the new preset shows the shape on both windows with the
+factory's values; each starter is one undo step, put at the pointer, every
+node and cable visible.
+
+**Wrong if:** a black window, a value left over, or a starter that wires
+something you cannot see.
+
+*(checks 362, 363)*
+
+#### L171. Tracers without the dream; the dream alone; `party-wake` live
+
+**Needs:** laptop; the copy; the dream worker on (`[dream] enabled`); a
+clip.
+
+**Do:** with the tracers starter, watch the dream worker; add a dream and
+switch `dream.on` off and on; then put a dream on a channel with no
+look-back and try a second dream; load `party-wake` and compare its look
+with how it looked on `/6`.
+
+**Right if:** the worker is idle with no dream on; the dream refreshes on a
+channel alone; the second dream is refused in words; `party-wake` is
+recognisably the party look (it is known to differ: register row 412).
+
+**Wrong if:** the worker busy with no dream on, or a dream that never
+refreshes.
+
+*(checks 364-366)*
+
+#### L172. Preset only; the nine re-recorded goldens
+
+**Needs:** laptop, the copy; the gate Mac for the pictures.
+
+**Do:** load `party-trip`, open GRAPH, read `· N hidden`, turn **preset
+only** off and on; note group nodes and the camera. Open the nine
+re-recorded goldens (check 369 lists them).
+
+**Right if:** only the preset's nodes, what is cabled to them and the
+windows are drawn, nothing moves on toggle; each golden is what its wiring
+draws.
+
+**Wrong if:** a node you need is hidden, or a golden shows hands where the
+mute is on.
+
+*(checks 367, 369)*
+
+#### L173. The libraries migrated to `/7`; both Macs on this build
+
+**Needs:** both Macs on this build, sharing the library.
+
+**Do:** as L168 with `/7`: the dry run, `--apply` (note the backup folder),
+let the cloud sync, open a handful of presets on both Macs, save one
+untouched, run the dry run again.
+
+**Right if:** every preset is listed `→ 7`, `picture: same`, `fixed point:
+yes`; every file then says `hyperspace.preset/7` under its own name; the
+untouched save changes nothing; the second dry run leaves all untouched.
+
+**Wrong if:** a preset skipped, a look moved, a file lost, or a `/7` that
+changes when saved untouched.
+
+*(check 368)*
 
 # Part 2 — tests that need hardware
 
