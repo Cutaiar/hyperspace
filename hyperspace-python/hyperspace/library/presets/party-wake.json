@@ -4,15 +4,20 @@
  "note": "party-wake: a 16-cell on plasma faces and points, spun by the music in the 4D planes, trailing 24 echoes over 1.2 s (each halving in 0.6 s; plan 14 WP6) and the dream under them",
  "graph": {"frame": "wired",
  "nodes": [
-  {"kind": "hands", "laid": "over"}
+  {"kind": "hands", "laid": "over"},
+  {"kind": "composite", "blend": "add"},
+  {"kind": "dream"}
  ],
  "wires": [
   {"from": "shape", "to": "scene.geometry"},
-  {"from": "scene", "to": "lookback.image"},
-  {"from": "lookback", "to": "output.all.image"},
+  {"from": "scene", "to": "lookback.occluder"},
+  {"from": "scene", "to": "composite.under"},
+  {"from": "lookback", "to": "dream.image"},
+  {"from": "dream", "to": "composite.over"},
+  {"from": "composite", "to": "output.all.image"},
   {"from": "hands.layer", "to": "output.all.hands"},
   {"from": "hands.layer", "to": "output.all.guide"},
-  {"from": "scene", "to": "lookback.capture"},
+  {"from": "scene", "to": "lookback.image"},
   {"from": "pattern", "to": "shape.faces"},
   {"from": "scene.cover", "to": "lookback.cover"},
   {"from": "hands", "to": "hands.layer.hands"}

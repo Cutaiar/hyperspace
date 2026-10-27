@@ -179,9 +179,9 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     w = G.Wiring(hands="scene", extra=(G.HandsAt(2, "layer", "lines"),))
     g = graph([Shows(), Shows(scene=False), Shows(scene=False, through=True)], w)
     # (plan 36 T2: the faces' pattern, a wire's node, is built first)
-    assert _names(g) == ["pattern", "shape", "hands", "hands.2", "scene", "lookback(cover)",
-                         "hands.2.layer", "hands.guide", "lookback", "shown(lookback)",
-                         "composite", "shown(composite)", "lookback(capture)",
+    # (plan 36 T4: the old words' look-back off — none drawn)
+    assert _names(g) == ["pattern", "shape", "hands", "hands.2", "scene", "hands.2.layer",
+                         "hands.guide", "shown(scene)", "composite", "shown(composite)",
                          "output.1", "output.2", "output.3"]
     hands, hands2 = g.nodes["hands"], g.nodes["hands.2"]
     assert g.nodes["scene"].inputs == {"geometry": hands, "geometry.2": g.nodes["shape"]}
@@ -190,7 +190,7 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     assert layer.inputs == {"geometry": hands2} and layer.readout == "downstream"
     assert g.nodes["hands.guide"].inputs == {"geometry": hands}
     o1, o2, o3 = (g.nodes[f"output.{k}"] for k in (1, 2, 3))
-    assert o1.inputs["image"] is g.nodes["shown(lookback)"] and o1.inputs["hands"] is None
+    assert o1.inputs["image"] is g.nodes["shown(scene)"] and o1.inputs["hands"] is None
     assert o1.inputs["readout"] is g.nodes["hands.guide"]
     assert o2.inputs["hands"] is layer and o2.inputs["readout"] is layer
     assert o3.inputs["image"] is g.nodes["shown(composite)"] and o3.inputs["readout"] is layer
@@ -198,9 +198,8 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     # a time per node: the scene's hands (its consumer edge), the second
     # instance's layer and guide lines
     assert g.in_scene() == {"hands"}
-    assert g.timed == ["hands", "scene", "lookback(cover)", "hands.2.layer", "hands.guide",
-                       "lookback", "shown(lookback)", "composite", "shown(composite)",
-                       "lookback(capture)", "output.1", "output.2", "output.3"]
+    assert g.timed == ["hands", "scene", "hands.2.layer", "hands.guide", "shown(scene)",
+                       "composite", "shown(composite)", "output.1", "output.2", "output.3"]
     # the projector alone: no layer at all, the second node not built
     g = graph([Shows()], w)
     assert "hands.2" not in g.nodes and "hands.2.layer" not in g.nodes
@@ -250,10 +249,12 @@ def test_the_wiring_in_words():
     assert G.hands_words(wired_wiring(two), S()) == "hands: in the scene (1)"
     assert G.hands_words(wiring(two, Shows(scene=False)), S(scene=False)) == "hands: over (2)"
     assert G.layer_words(TODAY) == ""
-    assert G.lookback_words(TODAY) == "history: the scene"
-    assert G.lookback_words(wired_wiring(G.Wiring(history="scene+hands"))) == \
+    # (plan 36 T4: a look-back drawn — the old words' on, as "trail")
+    assert G.lookback_words(TODAY) == "history: nothing"
+    assert G.lookback_words(wired_wiring(G.Wiring(), "trail")) == "history: the scene"
+    assert G.lookback_words(wired_wiring(G.Wiring(history="scene+hands"), "trail")) == \
         "history: the scene · with the hands"
-    assert G.lookback_words(wired_wiring(G.Wiring(hands="scene"))) == \
+    assert G.lookback_words(wired_wiring(G.Wiring(hands="scene"), "trail")) == \
         "history: the scene · with the hands"
     spec = G.read_graph(json.loads(FIXTURE.read_text())["graph"])
     assert G.graph_words(spec) == \
@@ -305,9 +306,11 @@ def test_the_lookback_page_says_what_the_history_holds():
     `lookback_words` keeps the longer words for the combo's hover."""
     from hyperspace.ui_lookback import capture_line
 
-    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands")))
+    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands"), look="trail"))
     assert capture_line(None) == "records: nothing — the echoes fade"   # (plan 36 T3)
-    assert capture_line(G.read_graph(M.wired_of(G.Wiring()))) == "records: Scene"
+    assert capture_line(G.read_graph(M.wired_of(G.Wiring()))) == (
+        "records: nothing — the echoes fade")        # (plan 36 T4: no look-back drawn)
+    assert capture_line(G.read_graph(M.wired_of(G.Wiring(), look="trail"))) == "records: Scene"
     assert capture_line(held) == "records: Composite"
     assert G.lookback_words(held.wiring()) == "history: the scene · with the hands"
 
@@ -462,9 +465,11 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     # the scene — the capture wire `scene → lookback.capture` says both
     # `holds` would, the hands already in its picture)
     assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
-    assert G.Wire("scene", "lookback.capture") in stub.wiring.wires
+    assert G.Wire("scene", "lookback.image") in stub.wiring.wires     # (plan 36 T4)
     assert _old(stub.wiring).run == ("acid",)          # plan 33 T3: its run, as wires
-    assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
+    # (plan 36 T4: its look-back on is drawn; `dream.on` is the dream's, and
+    # with a dream mix of 0 there is none)
+    assert rig.reg["fx.acid.on"].value and not rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
     assert doc[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
@@ -512,7 +517,7 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     reg = rig.reg
     assert missing == [] and rig.presets.notes == []
     assert reg["fx.acid.twist"].value == 0.3 and reg["fx.acid.2.twist"].value == 1.9
-    assert G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ("acid", "acid.2")
+    assert G.run_back(rig.presets.graph.spec, "output.all.image") == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
     assert doc["graph"] == rig.presets.graph.free_doc()          # (row 394: the frame)
@@ -525,7 +530,7 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     assert rig.lib.load(PRESETS, "Stray") == [] and "fx.acid.3.twist" not in rig.reg
     put(rig.home, "Stray7", schema="hyperspace.preset/7", values={"fx.acid.3.twist": 1.0})
     assert rig.lib.load(PRESETS, "Stray7") == ["fx.acid.3.twist"]
-    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ()
+    assert "fx.acid.2.twist" not in reg and G.run_back(rig.presets.graph.spec, "output.all.image") == ()
     rig.lib.load(PRESETS, "Twice")
     assert reg["fx.acid.2.twist"].value == 1.9
 
@@ -720,8 +725,7 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
     b = run(ctx, two, views(ctx, S()))[0]
     assert two.stats["chain_runs"] == 1 and not np.array_equal(a, b)
     assert list(two.fx._progs) == ["acid"]
-    assert G.run_of(G.read_graph(M.wired_of(G.Wiring(run=("acid", "acid.2")))), "lookback",
-                    "output.all.image") == ("acid", "acid.2")
+    assert G.run_back(G.read_graph(M.wired_of(G.Wiring(run=("acid", "acid.2")))), "output.all.image") == ("acid", "acid.2")
     assert {(w.src, w.dst) for w in two.wiring.wires} >= {("acid", "acid.2.image")}
     # the second acid's own params act: the same rig twice, only
     # acid.2's twist changed (acid's values untouched) — another frame

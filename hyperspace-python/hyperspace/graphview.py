@@ -937,6 +937,18 @@ def _tip(reg, name: str) -> str:
     return (head + "." if dot else tip).strip()
 
 
+ECHO_PINS = 4      # plan 36 T4: the echo pins a look-back always draws (echo.1 … echo.4)
+
+
+def echo_pins(name: str, spec) -> list[str]:
+    """Look-back `name`'s echo pins drawn on the canvas (plan 36 T4): the
+    newest few (`ECHO_PINS`) and every other one a wire of `spec` reads."""
+    wired = {k for w in (spec.all_wires() if spec is not None else ())
+             for got in [rgraph.echo_of(w.src)] if got is not None and got[0] == name
+             for k in [got[1]]}
+    return [f"{name}.echo.{k}" for k in sorted({*range(1, ECHO_PINS + 1), *wired})]
+
+
 def frame_names(spec) -> list[str]:
     """Every node wired frame `spec` names, once, in section order: its
     entries' (the hands, the effects, then the rest as read), then each
@@ -1041,7 +1053,8 @@ def _stand_in(name: str, spec=None) -> rgraph.Node | None:
     if kind == "cloud":
         return rgraph.PointCloud(name, "")
     if kind == "echo":
-        return rgraph.EchoNode(name, int(rest))
+        got = rgraph.echo_of(name)                   # (plan 36 T4: a look-back's pin)
+        return rgraph.EchoNode(name, got[1], lookback=got[0]) if got is not None else None
     if kind in ("output", rgraph.ALL_OUTPUTS):
         return rgraph.Output(name, int(rest) - 1 if rest.isdecimal() else -1)
     if kind == CAMERA:
@@ -1395,6 +1408,9 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             if owner == name:
                 typ = rgraph.WIRED_MAKES[kind_of(pin)]
                 add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
+        if kind == "lookback":                   # plan 36 T4: its own frames, pins
+            for pin in echo_pins(name, frame):
+                add_port(n, VPort(f"rout:{pin}", pin[len(name) + 1:], OUT, IMAGE))
         if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
             ctx.first_cloud = name
     ctx.names = set(refs)
@@ -2198,8 +2214,9 @@ def returns(view: View, lay: Layout) -> set[str]:
         a, b = view.node(node_of(view, c.src_port)), view.node(node_of(view, c.dst_port))
         if a is None or b is None:
             continue
-        kept = c.dst_port == "rin:lookback/capture" or (
-            isinstance(b.ref, rgraph.Delay) and c.dst_port.endswith("/image"))
+        # (plan 36 T4: what a look-back records is its `image`)
+        kept = (isinstance(b.ref, (rgraph.Delay, rgraph.History))
+                and c.dst_port.endswith("/image"))
         # (an old preset's D1 `after X` effect, drawn where X's readers read
         # it: it sits with the effects, its reader may sit left of them)
         kept = kept or (c.kind == "render" and f" {D1_AFTER} " in c.label)
@@ -3595,33 +3612,41 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     """`wires` in the order a load writes a wired frame (the global
     constraints' canonical frame order, `graphmigrate.frame_wires`): the
     section's own wires first, as they stand, then the frame's — the
-    scene's geometry, `backdrop.scene`, the look-back's picture and
-    occluder, the run, All outputs' picture, hands and guide, the capture's
-    composite and the capture. A stable sort: only `scene.geometry` takes
-    several wires, and theirs keep their order (it is the draw order). So
-    an edit that brings a frame back to a migrated one is that frame again,
-    and the preset is clean."""
+    scene's geometry, `backdrop.scene`, the look-back laid on (plan 36 T4:
+    its occluder, the "add" composite and the dream feeding it), the run,
+    All outputs' picture, hands and guide, the recorded picture's composite
+    and the look-back's record (`lookback.image`, where the capture was). A
+    stable sort: only `scene.geometry` takes several wires, and theirs keep
+    their order (it is the draw order). So an edit that brings a frame back
+    to a migrated one is that frame again, and the preset is clean."""
     into = {x["to"]: x["from"] for x in wires}
     run: list[str] = []
     head = into.get(f"{rgraph.ALL_OUTPUTS}.image")
     while kind_of(head) == "effect" and head not in run:
         run.insert(0, head)
         head = into.get(f"{head}.image")
-    chain = (set(zip(["lookback", *run], [f"{e}.image" for e in run]))
-             if head == "lookback" else set())
-    held = into.get("lookback.capture")
+    chain = (set(zip([head, *run], [f"{e}.image" for e in run]))
+             if head is not None and run else set())
+    held = into.get("lookback.image")
     comp = held if kind_of(held) == "composite" else None
-    groups = {"scene.geometry": 1, "backdrop.scene": 2, "lookback.image": 3,
-              "lookback.occluder": 4, f"{rgraph.ALL_OUTPUTS}.image": 6,
+    # (the composite laying the trail on: its `over` the look-back or a dream of it)
+    lays = {x["to"].rpartition(".")[0] for x in wires
+            if x["from"] in ("lookback", "dream") and x["to"].endswith(".over")
+            and kind_of(x["to"].rpartition(".")[0]) == "composite"}
+    groups = {"scene.geometry": 1, "backdrop.scene": 2, "lookback.occluder": 3,
+              "dream.image": 3, f"{rgraph.ALL_OUTPUTS}.image": 6,
               f"{rgraph.ALL_OUTPUTS}.hands": 7, f"{rgraph.ALL_OUTPUTS}.guide": 8,
-              "lookback.capture": 10}
+              "lookback.image": 10}
 
     def group(x: dict) -> int:
         if (x["from"], x["to"]) in chain:
             return 5
         if _drawn_edge(x):
             return 11
-        if comp is not None and x["to"].rpartition(".")[0] == comp:
+        node = x["to"].rpartition(".")[0]
+        if node in lays and node != comp:
+            return 3
+        if comp is not None and node == comp:
             return 9
         return groups.get(x["to"], 0)
     return sorted(wires, key=group)
@@ -3931,8 +3956,8 @@ ADDED = {
     "shape": "wire it into scene.geometry",
     "backdrop": "wire a picture into backdrop.image and the scene into backdrop.scene",
     "pattern": "the shape's faces show it while nothing is wired into shape.faces",
-    "lookback": ("wire a picture into lookback.image, and what it records into "
-                 "lookback.capture"),
+    "lookback": ("wire what it records into lookback.image, and its trail into a "
+                 "composite's over (add) — its echo.1 … pins are its frames"),
     "layer": "wire it into an output's hands or a composite's over",
     "guide": "wire it into an output's guide",
 }
@@ -4035,24 +4060,30 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
         return _land(edit, doc, f"add {name}",
                      f"{name} added: wire a picture into {name}.image — {how}")
     if kind == "echo":
+        # plan 36 T4: an echo is the look-back's own output — its pin; the
+        # item adds the look-back when the section has none
         try:
             k = int(file or 1)
         except ValueError:
             return f"echo {file!r}: an index from 1 to {rgraph.MAX_ECHOES}"
-        name = f"echo.{k}"
-        if name in named:
-            return IN_ALREADY.format(label=label_of(name))
-        doc["nodes"].append({"kind": "echo", "index": k})
-        edit.added = name
-        return _land(edit, doc, f"add {name}", f"{name} added: the look-back's {_ordinal(k)} "
-                                               "newest frame — wire it into a picture port")
+        pin = f"lookback.echo.{k}"
+        if "lookback" in named:
+            edit.added = "lookback"
+            edit.said = (f"{pin} is the look-back's {_ordinal(k)} newest frame — wire it from "
+                         "its pin into a picture port")
+            return None
+        doc["nodes"].append({"kind": "lookback"})
+        edit.added = "lookback"
+        return _land(edit, doc, "add lookback", f"lookback added: {pin} is its {_ordinal(k)} "
+                                                "newest frame — wire it from its pin")
     if kind == "dream":
         if "dream" in named:
             return IN_ALREADY.format(label=label_of("dream"))
         doc["nodes"].append({"kind": "dream"})
         edit.added = "dream"
-        return _land(edit, doc, "add dream", "dream added: the look-back's dream buffer — wire "
-                                             "it into a picture port")
+        return _land(edit, doc, "add dream", "dream added: wire a picture into dream.image, "
+                                             "and the dream into a composite's over — "
+                                             "dream.on turns it on")
     return f"no node kind {kind!r}: the picker adds what its groups list"
 
 

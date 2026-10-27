@@ -120,8 +120,9 @@ def test_no_backdrop_graph_unchanged():
     states = [{}, {"scene": False}, {"through": True}, {"hands": False},
               {"scene": False, "through": True}]
     one = G.build_graph([_view()], wired_wiring(G.Wiring()))
-    assert _names(one) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
-                           "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
+    # (plan 36 T4: the old words' look-back off — none drawn)
+    assert _names(one) == ["pattern", "shape", "hands", "scene", "hands.layer", "shown(scene)",
+                           "output.1"]
     for kw in states:
         shows = [Shows(**kw), Shows()]
         base = graph(shows)
@@ -148,8 +149,10 @@ def test_backdrop_history_toggle():
     from wiredframe import Shows, graph
 
     shows = [Shows(), Shows(scene=False, through=True)]
-    off = graph(shows, G.Wiring(backdrop="a"))
-    on = graph(shows, G.Wiring(backdrop="a", backdrop_history=True))
+    # (plan 36 T4: the look-back drawn — its trail added onto the backdrop's
+    # picture by `composite.2`, the through window's `composite` first)
+    off = graph(shows, G.Wiring(backdrop="a"), look="trail")
+    on = graph(shows, G.Wiring(backdrop="a", backdrop_history=True), look="trail")
     for g in (off, on):
         grounded = g.nodes["backdrop"]
         assert isinstance(grounded, G.Composite) and grounded.blend == "over"
@@ -157,7 +160,8 @@ def test_backdrop_history_toggle():
         media = grounded.inputs["under"]
         assert isinstance(media, G.MediaNode) and media.name == "channel.a"
         assert media.channel == "a" and media.alpha_of == "backdrop_alpha"
-        assert g.nodes["lookback"].inputs["image"] is grounded
+        assert g.nodes["composite.2"].inputs["under"] is grounded
+        assert g.nodes["composite.2"].inputs["over"] is g.nodes["lookback"]
         assert g.nodes["scene"].ground == 0.0        # see-through, laid over the backdrop
         assert g.nodes["composite"].inputs["under"] is None
     assert off.nodes["lookback(capture)"].inputs["image"].name == "scene"
@@ -165,7 +169,7 @@ def test_backdrop_history_toggle():
     assert graph(shows).nodes["scene"].ground is None
     # the history holding the hands: the hands laid onto what it captures
     both = graph(shows, G.Wiring(backdrop="b", backdrop_history=True,
-                                 history="scene+hands"))
+                                 history="scene+hands"), look="trail")
     held = both.nodes["lookback(capture)"].inputs["image"]
     assert held.name == "composite" and held.inputs["under"].name == "backdrop"
 
@@ -242,16 +246,17 @@ def _renderer(ctx, media=None, wires=()):
     return r
 
 
-def _back(r, c: str = "a", history: bool = False):
+def _back(r, c: str = "a", history: bool = False, look: str = "off"):
     """`r` with channel `c` wired under the scene (plan 33 R: the section's
     `media.<c> → backdrop.image`, as `GraphSpec.wiring` lands it — not
     `backdrop.channel`); "" unwires it. `history`: the look-back records the
-    backdrop too (plan 36 T3: a wire, `backdrop → lookback.capture` — no
-    longer laid on per frame from `backdrop.history`)."""
+    backdrop too (plan 36 T3: a wire, `backdrop → lookback.image` — no
+    longer laid on per frame from `backdrop.history`). `look`: the old
+    words' look-back (plan 36 T4: "off" draws none, "trail" draws it)."""
     from dataclasses import replace
 
     r.old_wiring = replace(r.old_wiring, backdrop=c, backdrop_history=history and bool(c))
-    r.wiring = wired_wiring(r.old_wiring)
+    r.wiring = wired_wiring(r.old_wiring, look)
     return r
 
 
@@ -357,7 +362,7 @@ def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
     g = r._graph
     _draw(ctx, r, _empty(backdrop_alpha=0.3))
     assert r._graph is g                                    # alpha is per frame
-    _draw(ctx, _back(r, "a", history=True), _empty())
+    _draw(ctx, _back(r, "a", history=True, look="trail"), _empty())
     # (plan 35 T4: what the look-back records is a wire of the graph's)
     assert r._graph is not g
     assert r._graph.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
@@ -564,18 +569,22 @@ def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
     placed = (G.EffectAt("acid", 2, after="scene"),)
     effects = ("acid", "acid.2")
     vs = [_view()]
-    base = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed)), effects=effects)
+    # (plan 36 T4: the look-back drawn, the old words' on)
+    base = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed), "trail"), effects=effects)
     assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
-    on = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a")), effects=effects)
+    on = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a"), "trail"),
+                       effects=effects)
     a2 = on.nodes["acid.2"]
     assert a2.inputs["image"] is on.nodes["backdrop"]
     assert on.nodes["backdrop"].inputs["over"] is on.nodes["scene"]
-    assert on.nodes["lookback"].inputs["image"] is a2
+    assert on.nodes["composite"].inputs["under"] is a2
     assert on.nodes["lookback(capture)"].inputs["image"] is on.nodes["scene"]   # the scene alone
-    hist = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a", backdrop_history=True)),
-                           effects=effects)
+    hist = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a",
+                                                   backdrop_history=True), "trail"),
+                         effects=effects)
     assert hist.nodes["lookback(capture)"].inputs["image"] is hist.nodes["acid.2"]
-    off = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="")), effects=effects)
+    off = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop=""), "trail"),
+                        effects=effects)
     assert _names(off) == _names(base)
 
 
@@ -643,6 +652,8 @@ def _trails(ctx, r, s_on, s_off):
     frame of `s_off` (nothing of it drawn): what is left is the echoes."""
     st = r.lookback.state
     st.on, st.echoes, st.gap, st.echo_mix, st.fade = True, 4, 0.0, 1.0, 10.0
+    # (plan 36 T4: the look-back drawn, as the old words with it on)
+    r.wiring = wired_wiring(r.old_wiring, "trail")
     size = (96, 64)
     v = View(Switches(), size, target=_fbo(ctx, *size))
     for k in range(4):
@@ -664,6 +675,7 @@ def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
         r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue))))),
                   history=history)
         r.lookback.state.on = True                      # the default echoes
+        r.wiring = wired_wiring(r.old_wiring, "trail")  # (plan 36 T4: drawn)
         size = (96, 64)
         v = View(Switches(), size, target=_fbo(ctx, *size))
         for k in range(60):
@@ -675,7 +687,8 @@ def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
         assert abs(got[history] - blue) <= 3, (history, got[history])
         assert abs(int(pic[..., 2].min()) - blue) <= 3, (history, pic[..., 2].min())
         # on, the history occludes from its own input; off, from the scene
-        assert ("occluder" in r._graph.nodes["lookback"].inputs) is not history
+        occ = r._graph.nodes["lookback"].inputs["occluder"]
+        assert occ.name == ("backdrop" if history else "scene")
     assert abs(got[True] - got[False]) <= 3, got
 
 

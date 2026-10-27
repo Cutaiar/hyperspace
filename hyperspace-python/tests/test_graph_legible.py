@@ -792,7 +792,8 @@ def test_every_nodes_side_panel_draws(rig):
     st = party(rig)
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
     e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
-    # (plan 36 T2: the pattern is in already — the faces' wire says it)
+    # (plan 36 T2: the pattern is in already — the faces' wire says it;
+    # T4: an echo is the look-back's pin — its item adds the look-back)
     for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
                     ("dream", None), ("delay", None), ("resize", None), ("composite", None)):
         assert e.add_node(kind, f) is None, kind
@@ -802,7 +803,7 @@ def test_every_nodes_side_panel_draws(rig):
     drawn = [n.id for n in st["view"].nodes if ui_graph.drawn_node(st, n)]
     assert len(drawn) > 40
     assert {"render:copy", "render:backdrop", "render:pattern", "render:hands.guide",
-            "render:echo.2", "render:dream", "render:delay", "render:resize",
+            "render:lookback", "render:dream", "render:delay", "render:resize",
             "render:output.all", "render:camera"} <= set(drawn)
     for nid in drawn:
         pick(rig, st, nid)
@@ -865,7 +866,10 @@ def test_home_page_maps_each_node_kind(rig):
     assert home(V("render:backdrop", "render", "Backdrop",
                   ref=G.BackdropNode("backdrop"))) == "media"
     assert home(view.node("render:shape")) == "view"
-    assert home(view.node("render:lookback")) == "lookback"
+    # (plan 36 T4: party-trip draws no look-back — its stand-in, and the dream's)
+    assert home(V("render:lookback", "render", "Look-back", ref=G.History("lookback"))) == \
+        "lookback"
+    assert home(V("render:dream", "render", "Dream", ref=G.DreamNode("dream"))) == "lookback"
     assert home(view.node("render:output.all")) == "output"
     # a copy: FX with its original selected
     key, sel = ui_graph.home_page(view.node("render:copy"))

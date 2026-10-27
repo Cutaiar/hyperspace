@@ -59,13 +59,28 @@ def section(src: Any = None, **kw) -> dict:
     return M.wired_section(M.renamed(src), G.read_graph(src), **kw)
 
 
-def shown(src: Any = None, *shows: Shows, **kw) -> dict:
-    """`section(src)` with output k's overrides for `shows[k - 1]`."""
+def old_style(sec: Any) -> bool:
+    """Whether a wired section is in the words before plan 36 T4: its
+    look-back recording `lookback.capture`, or plan 34's `echo.<k>` nodes —
+    what the migration's last step rewrites (`graphmigrate.split_lookback`)."""
+    if not isinstance(sec, dict):
+        return False
+    return (any(isinstance(w, dict) and w.get("to") == "lookback.capture"
+                for w in sec.get("wires") or [])
+            or any(isinstance(n, dict) and n.get("kind") == "echo"
+                   for n in sec.get("nodes") or []))
+
+
+def shown(src: Any = None, *shows: Shows, look: str = "off", **kw) -> dict:
+    """`section(src)` with output k's overrides for `shows[k - 1]` — and
+    (plan 36 T4) an old-style look-back split last, as `look` says the old
+    values had it (`graphmigrate.look_of`: "off" draws none)."""
     sec = section(src, **kw)
     for k, sh in enumerate(shows):
         if sh != Shows():
             sec = M.with_output_wires(sec, k + 1, sh)
-    return M.placed_wires(sec)
+    out = M.placed_wires(sec)
+    return M.split_lookback(out, look) if old_style(out) else out
 
 
 def wiring(src: Any = None, *shows: Shows, **kw) -> G.Wiring:
@@ -107,7 +122,11 @@ def wire_switches(r, *states) -> list[Switches]:
         # tests' rigs mean today's frame by it, said here as `Wiring()`)
         base = r._wiredframe_base = r.wiring if r.wiring is not G.EMPTY else G.Wiring()
     shows = [s.shows if isinstance(s, Thru) else Shows(s.scene, s.hands) for s in states]
-    r.wiring = wiring(base, *shows)
+    # (plan 36 T4: old words' look-back as the renderer's `dream.on` had it)
+    st = getattr(getattr(r, "lookback", None), "state", None)
+    look = (M.look_of({"dream.on": bool(st.on), "dream.mix": st.mix}) if st is not None
+            else "off")
+    r.wiring = wiring(base, *shows, look=look)
     return [Switches(dim=s.dim, flip_x=s.flip_x, flip_y=s.flip_y) for s in states]
 
 
@@ -151,9 +170,73 @@ def _old_dst(dst: Any) -> Any:
 
 def _canonical(section: dict, files: set[str] | None) -> dict | None:
     try:
-        return G.read_graph(section, effects=files).to_json()
+        # (plan 36 T4: a frame before the split, read as the migration reads one)
+        return G.read_graph(section, effects=files, placements=True).to_json()
     except G.GraphError:
         return None
+
+
+def _unsplit(section: dict) -> dict:
+    """Plan 36 T4's look-back split undone, for the round trip below: a
+    frame in the words before T4 again (`graphmigrate.split_lookback`
+    backwards) — the "add" composite laying the trail (or a dream of it) on
+    `X` is `X → lookback.image` and the look-back read in its place, its
+    record `lookback.capture`; a frame with no look-back at all (the old
+    one off) gets the look-back of today's frame back, over the head of All
+    outputs' run (the scene or the backdrop), recording the scene, its
+    cover after the faces' pattern."""
+    wires = [dict(w) for w in section.get("wires") or [] if isinstance(w, dict)]
+    nodes = [dict(n) for n in section.get("nodes") or [] if isinstance(n, dict)]
+    into = {w["to"]: w["from"] for w in wires}
+    lays = [n for n in nodes if n.get("kind") == "composite" and n.get("blend") == "add"
+            and into.get(f"{M._named('composite', int(n.get('instance', 1)))}.over")
+            in ("lookback", "dream")]
+    out: list[dict] = []
+    if lays:
+        comp = M._named("composite", int(lays[0].get("instance", 1)))
+        under, occ = into.get(f"{comp}.under"), into.get("lookback.occluder")
+        nodes = [n for n in nodes if n is not lays[0] and n.get("kind") != "dream"]
+        put = False
+        for w in wires:
+            node = w["to"].rpartition(".")[0]
+            if w["to"] in ("lookback.occluder", "dream.image") or node == comp:
+                if not put:
+                    out.append({"from": under, "to": "lookback.image"})
+                    if occ is not None and occ != under:
+                        out.append({"from": occ, "to": "lookback.occluder"})
+                    put = True
+                continue
+            if w["to"] == "lookback.image":
+                w["to"] = "lookback.capture"
+            if w["from"] == comp:
+                w["from"] = "lookback"
+            out.append(w)
+        return {**section, "nodes": nodes, "wires": out}
+    if any("lookback" in (w["from"], w["to"].rpartition(".")[0]) for w in wires):
+        return section
+    head = into.get(f"{G.ALL_OUTPUTS}.image")
+    run: list[str] = []
+    while M._kind(head) == "effect" and head not in run:
+        run.insert(0, head)
+        head = into.get(f"{head}.image")
+    if head not in ("scene", "backdrop"):
+        return section
+    first = f"{run[0]}.image" if run else f"{G.ALL_OUTPUTS}.image"
+    throughs = {w["to"] for w in wires if w["from"] == head and w["to"].endswith(".under")
+                and M._kind(into.get(w["to"].rpartition(".")[0] + ".over")) == "layer"}
+    for w in wires:
+        if w["from"] == head and (w["to"] == first or w["to"] in throughs):
+            if w["to"] == first:
+                out.append({"from": head, "to": "lookback.image"})
+                if head == "backdrop":
+                    out.append({"from": "scene", "to": "lookback.occluder"})
+            w["from"] = "lookback"
+        out.append(w)
+        if w["to"] == f"{G.ALL_OUTPUTS}.guide":
+            out.append({"from": "scene", "to": "lookback.capture"})
+        if (w["from"], w["to"]) == ("pattern", "shape.faces"):
+            out.append({"from": "scene.cover", "to": "lookback.cover"})
+    return {**section, "nodes": nodes, "wires": out}
 
 
 def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | None:
@@ -176,6 +259,7 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
     if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
         return None
     files = M._files(specs)
+    section = _unsplit(section)              # (plan 36 T4: before the split)
     want = _canonical(section, files)
     if want is None:
         return None

@@ -639,7 +639,12 @@ def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
     tex = gl.texture((w, h), 4)
     fbo = gl.framebuffer(color_attachments=[tex])
     renderer = Renderer(gl)
-    lb, t = renderer.lookback, [0.0]
+    # (plan 36 T4: the look-back and the dream drawn — an old preset's with
+    # both on — and the worker the dream node's)
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
+    renderer.wiring = wired_wiring(Wiring(), "dream")
+    lb, dr, t = renderer.lookback, renderer.dreamer, [0.0]
     room: dict[str, tuple[float, float]] = {}
     try:
         with build_rig(tmp_path, renderer) as rig:
@@ -671,11 +676,11 @@ def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
 
             reg["dream.on"].set(True)
             assert reg["dream.echoes"].value == 8 and lb.state.on
-            lb.source = StandInWorker(WORKER_SHORT)
+            dr.source = StandInWorker(WORKER_SHORT)
             render(40)
-            assert len(lb.thumbnails()) == 8 and lb.dream_frame >= 0 and lb.atlas is not None
+            assert len(lb.thumbnails()) == 8 and dr.dream_frame >= 0 and lb.atlas is not None
             measure("on, worker")
-            lb.source.line = WORKER_LONG
+            dr.source.line = WORKER_LONG
             measure("on, worker saying everything")
             lb.error = "_common.glsl:1: syntax error"     # the post pass on its fallback
             measure("on, worker saying everything, GLSL error")
@@ -683,14 +688,14 @@ def lookback_page_room(tmp_path, monkeypatch) -> dict[str, tuple[float, float]]:
             reg["dream.tint_from"].set(1)                 # the tint from the scene
             measure("on, tint from the scene")
             reg["dream.tint_from"].set(0)
-            lb.source = None
+            dr.source = None
             panel.dream_error = NO_TORCH
             measure("on, no worker: torch missing")
             panel.dream_error = ""
             measure("on, no worker")
             reg["dream.on"].set(False)
             measure("off, no worker")
-            lb.source = StandInWorker(WORKER_LONG)
+            dr.source = StandInWorker(WORKER_LONG)
             measure("off, worker saying everything")
     finally:
         fbo.release()
@@ -2204,7 +2209,8 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     # factory frame: none of its own), then why it is black, or its dim;
     # All outputs' combo first, its picture's source
     shows = [s for s in drawn if s.startswith("shows: ")]
-    assert shows == ["shows: Look-back", "shows: as All outputs",
+    # (plan 36 T4: the startup preset's look-back off — the scene straight)
+    assert shows == ["shows: Scene", "shows: as All outputs",
                      "shows: as All outputs · 60%",
                      "shows: as All outputs · black — nothing switched on",
                      "shows: as All outputs"]
@@ -2240,7 +2246,7 @@ def test_the_output_page_with_one_output_has_no_dim_of_its_own(tmp_path, monkeyp
         assert drawn[drawn.index("1"):drawn.index("1") + 3] == ["1", "picture", "hands"]
         assert "output.1.dim" not in r.reg and not any(s.startswith("paced") for s in drawn)
         assert [s for s in drawn if s.startswith("shows: ")] == [
-            "shows: Look-back", "shows: as All outputs"]
+            "shows: Scene", "shows: as All outputs"]          # (plan 36 T4)
         assert r.reg["output.1.scene"].label == "Picture"
 
 

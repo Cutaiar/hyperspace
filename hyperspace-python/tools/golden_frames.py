@@ -613,6 +613,11 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     if late is not None:
         wired = graphmigrate.placed_wires(wired, {n.partition(".")[0]
                                                   for n in presets.graph.specs()})
+    if late is not None or wiring is not None:
+        # (plan 36 T4: an old file's frame, written here as the migration
+        # writes it, ends with its look-back split as its values had it)
+        values = source_doc(presets, slug).get("values") or {}
+        wired = graphmigrate.split_lookback(wired, graphmigrate.look_of(values))
     return wired
 
 
@@ -1040,26 +1045,30 @@ def signature_case(loader: Loader, key: str):
     its device's role."""
     slug, _, variant = key.partition("/")
     spec, section, effects, wired = loader.load(slug)
+    # (plan 36 T4: the look-back as the old file's values had it)
+    look = graphmigrate.look_of(source_doc(loader.presets, slug).get("values"))
     files = {e.partition(".")[0] for e in effects}
     solo = dict(SOLO + SOLO_FX)
     if variant == "states":
-        return STATES, spec, section, effects, wired, ()
+        return STATES, spec, section, effects, wired, (), look
     if variant in solo:
-        return ((variant, solo[variant]),), spec, section, effects, wired, ()
+        return ((variant, solo[variant]),), spec, section, effects, wired, (), look
     cloud = next((c for c in CLOUDED if c[0] == variant), None)
     if cloud is not None:
         return (tuple((n, dict(STATES)[n]) for n in cloud[2]), spec, section, effects, wired,
-                ("scan",))
+                ("scan",), look)
     _, fields, names, _ = next(v for v in WIRED if v[0] == variant)
     run = tuple(spec.wiring().run or ())
     vsection = variant_section(fields, run)
     vspec = read_graph(vsection, effects=files)
     assert vspec.wiring() == replace(Wiring(**fields), run=run), (key, vspec.wiring())
-    vwired = graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec)
-    return tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, ()
+    vwired = graphmigrate.split_lookback(
+        graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec), look)
+    return (tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, (),
+            look)
 
 
-def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
+def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="off"):
     """(the wired frame's graph, the wired section) for one case (see
     above). `wired`: the frame as the load wired it — checked here to be
     `wired_section` of the old section, so the proof is the load's — None,
@@ -1067,9 +1076,11 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
     files = {e.partition(".")[0] for e in effects}
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
     placed = graphmigrate.placed_wires(made, files)
+    # (plan 36 T4: the look-back split last, as the load's migration does)
+    split = graphmigrate.split_lookback(placed, look)
     if wired is None:
-        wired = placed
-    assert read_graph(placed, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+        wired = split
+    assert read_graph(split, effects=files).to_json() == read_graph(wired, effects=files).to_json()
     # (plan 36 T3: D1's placements sat on each output's state, so the
     # states go on first and the placements are written after, as `_shoot`)
     late = made if placed is not made else None
@@ -1078,7 +1089,7 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
     for k, (_, sw) in enumerate(states):
         wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
     if late is not None:
-        wired = graphmigrate.placed_wires(wired, files)
+        wired = graphmigrate.split_lookback(graphmigrate.placed_wires(wired, files), look)
     got = read_graph(wired, effects=files)
     assert not got.notes, got.notes
     mutes_on = [View(Switches(), (W, H)) for _ in states]

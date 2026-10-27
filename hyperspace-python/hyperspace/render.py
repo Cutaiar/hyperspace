@@ -152,7 +152,7 @@ from .graph import (
     param_prefix,
     rig_of,
 )
-from .lookback import DreamState, Lookback
+from .lookback import Dreamer, DreamState, Lookback
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -1013,7 +1013,13 @@ class Renderer:
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
+        # plan 36 T4 (W4): one ring per look-back node, by its name
+        # (`ring`) — `lookback`'s is this one, on the `dream.*` params'
+        # state — and the dream node's buffer and worker slot, apart from
+        # any look-back (`dreamer.source`: app.py hangs the worker there)
         self.lookback = Lookback(ctx, dream)
+        self.rings: dict[str, Lookback] = {self.lookback.name: self.lookback}
+        self.dreamer = Dreamer(ctx, self.lookback.state)
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
@@ -1335,7 +1341,9 @@ class Renderer:
             self._patterns_mtime = mtime
             self._build_face_program()
             if shared_changed:
-                self.lookback.on_reload()
+                for ring in self.rings.values():
+                    ring.on_reload()
+                self.dreamer.on_reload()
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -1554,11 +1562,10 @@ class Renderer:
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph)
-        # plan 34 E (row 362): a graph reading the ring keeps it capturing
-        # with the look-back off (getattr: a renderer from before has none)
-        lookback = getattr(self, "lookback", None)
-        if lookback is not None:
-            lookback.keep = bool(getattr(graph, "reads_ring", False))
+        # plan 36 T4: a ring no look-back of this graph holds forgets its
+        # history (it starts clean when one is drawn again); the dream
+        # forgets `D` with no dream node, so the worker sleeps
+        self._idle_rings(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -2249,6 +2256,39 @@ class Renderer:
             gh = ghosts[name] = Ghost(self.ctx, state if state is not None else GhostState())
         gh.source, gh.router = self.ghost.source, self.ghost.router
         return gh
+
+    def ring(self, name: str = "lookback", state: DreamState | None = None) -> Lookback:
+        """Look-back `name`'s ring (plan 36 T4), made on first ask: its own
+        echoes, clock and atlas. `lookback`'s is `self.lookback` (the
+        `dream.*` params' state); another's reads `state` (its
+        `dream.<n>.*`, `ViewState.lookback`) when given, else a default."""
+        rings = self.__dict__.setdefault("rings", {})
+        got = rings.get(name)
+        if got is None:
+            if name == "lookback" and getattr(self, "lookback", None) is not None:
+                got = self.lookback
+            else:
+                got = Lookback(self.ctx, state if state is not None else DreamState(), name)
+            rings[name] = got
+        elif state is not None and got.state is not state:
+            got.state = state
+        return got
+
+    def _idle_rings(self, graph: Graph) -> None:
+        """Each ring whose look-back this graph does not hold forgets its
+        history; one not held for good goes when the graph changes (its
+        textures released). No dream node: `D` forgotten."""
+        rings = getattr(self, "rings", None) or {}
+        held = set(getattr(graph, "nodes", {}))
+        for name in list(rings):
+            if name in held:
+                continue
+            rings[name].idle()
+            if name != "lookback":
+                rings.pop(name).release_ring()
+        dreamer = getattr(self, "dreamer", None)
+        if dreamer is not None and "dream" not in held:
+            dreamer.idle()
 
     def drop_ghosts(self, keep: set[str] = frozenset()) -> None:
         """Release every extra hands node's `Ghost` not named in `keep`

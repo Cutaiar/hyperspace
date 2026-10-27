@@ -125,7 +125,12 @@ FRONT, BEHIND = -400.0, 400.0
 def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
-        r.wiring = wired_wiring(keep_run(r, wiring))  # (plan 33 R23: the rig's run kept)
+        # (plan 33 R23: the rig's run kept; plan 36 T4: its look-back drawn
+        # while the rig's `dream.on` is on, as the old words had it)
+        from hyperspace.graphmigrate import look_of
+        st = r.lookback.state
+        r.wiring = wired_wiring(keep_run(r, wiring),
+                                look_of({"dream.on": bool(st.on), "dream.mix": 0.0}))
     if z0 is not None and r.ghost.source is not None:
         r.ghost.source.units = hc.Units(mm=200.0, origin=(0.0, 205.0, z0), tilt=0.0)
     r._no_shape = not shape

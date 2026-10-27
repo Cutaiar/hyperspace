@@ -80,7 +80,7 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     assert g.pool == 2
     # none given: no effect node, and no pool
     bare = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring()))
-    assert bare.nodes["shown(lookback)"].inputs["image"] is bare.nodes["lookback"]
+    assert bare.nodes["shown(scene)"].inputs["image"] is bare.nodes["scene"]   # (plan 36 T4)
     assert bare.pool == 0
 
 
@@ -90,7 +90,8 @@ def test_an_effect_named_like_another_node_is_kept_apart():
     are named apart from any effect (plan 35 T4: `lookback`,
     `lookback(capture)`, `lookback(cover)`)."""
     names = ("capture", "warp")
-    g = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring(run=names)), effects=names)
+    g = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring(run=names), "trail"),
+                      effects=names)
     assert [e.name for e in _effects(g, _end(g))] == ["capture", "warp"]
     assert isinstance(g.nodes["lookback(capture)"], G.Capture)
     assert isinstance(g.nodes["lookback(cover)"], G.Cover)
@@ -196,7 +197,7 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     bare = rig(ctx, effects=())
     bare._graph_for = lambda vs: G.build_graph(vs, wired_wiring(G.Wiring()))   # no effect nodes
     want = run(ctx, bare, views(ctx, S()), frames=3)[0]
-    assert not _effects(bare._graph_for(views(ctx, S())), "shown(lookback)")
+    assert not _effects(bare._graph_for(views(ctx, S())), "shown(scene)")
     assert np.array_equal(got, want)
     # one on: one pass a frame, the off ones around it none
     r = every_one_wired(rig(ctx, effects=("warp",)))

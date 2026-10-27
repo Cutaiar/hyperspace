@@ -166,9 +166,11 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     SWITCH_GROUP,
     UNITS,
     UNITS_KEY,
+    declare_lookbacks,
     declare_resizes,
     declare_switches,
     is_instance_id,
+    is_lookback_id,
     is_resize_id,
     is_switch_id,
     pan_world,
@@ -435,6 +437,8 @@ class GraphSection:
         # plan 34 Z: each resize's values, by its entry — reached or not, so
         # an unwired resize keeps its knobs as an unwired switch its pick
         declare_resizes(reg, [z.name for z in spec.resizes] if spec is not None else [])
+        # plan 36 T4: each extra look-back's own ring and trail, by its entry
+        declare_lookbacks(reg, [lb.name for lb in spec.lookbacks] if spec is not None else [])
         self.spec, self.doc = spec, copy.deepcopy(doc)
         self.free = copy.deepcopy(free)
         self._push()
@@ -818,7 +822,7 @@ class Presets:
                   if k in reg and reg[k].group in PERFORMANCE_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
-                  and not is_resize_id(k)}
+                  and not is_resize_id(k) and not is_lookback_id(k)}
         doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -909,6 +913,7 @@ class Presets:
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
+                  or is_lookback_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
                 # plan 34 Z: and a resize's values; plan 36 T3: and every
@@ -1259,6 +1264,11 @@ class Presets:
         rows = {"routes": [b.to_json() for b in table.routes()],
                 "desk": desk_json(table.desk()), "macros": table.macros_doc()}
         before = gs.free_doc()
+        if before is None:
+            # (plan 36 T4, the T3 review's WYSIWYG leak: before any preset
+            # has landed the frame is the empty wired one — the module's run
+            # goes into it, and nothing of today's frame is filled in)
+            before = read_graph({FRAME_KEY: WIRED_FRAME}).to_json()
         # (its order and target are no params since plan 33 T7: read from
         # the module's file over the group's defaults, as its values land)
         own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))

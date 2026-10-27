@@ -256,7 +256,7 @@ def test_a_moved_node_in_an_old_layout_saves_in_todays_ids(tmp_path):
 def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
     """Row 394: any GRAPH edit — one plan 33's words could say (a picture
     taken off output 2), a copy, `ground`, a channel into All outputs, the
-    capture deleted — saves `/6` with the edited frame as it stands, and
+    faces' pattern taken off — saves `/6` with the edited frame as it stands, and
     no `backdrop.history` (the capture wire says it)."""
     app = _five_rig(tmp_path, "branch-two-sizes")
     gs = app.presets.graph
@@ -268,7 +268,9 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
             "channel into All outputs": [w if w is not head else
                                          {"from": "channel.a", "to": "output.all.image"}
                                          for w in wired["wires"]],
-            "no capture": [w for w in wired["wires"] if w["to"] != "lookback.capture"],
+            # (plan 36 T4: an old file's look-back off is no look-back — the
+            # faces' pattern taken off instead)
+            "plain faces": [w for w in wired["wires"] if w["to"] != "shape.faces"],
             "ground": [*wired["wires"], {"from": "ground", "to": "output.3.image"}]}.items():
         assert wires != wired["wires"], name
         edited = {**wired, "wires": wires}
@@ -319,7 +321,7 @@ def _module_run(app, module: str) -> tuple[str, ...]:
 def main_run(spec) -> tuple[str, ...]:
     """The main run of a wired frame (plan 35 T3: every load's): the
     effects from the look-back into All outputs."""
-    return G.run_of(spec, "lookback", "output.all.image")
+    return G.run_back(spec, "output.all.image")
 
 
 def test_loading_an_fx_module_replaces_the_run(tmp_path):

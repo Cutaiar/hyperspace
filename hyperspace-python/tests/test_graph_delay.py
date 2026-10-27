@@ -62,7 +62,7 @@ def test_the_delay_write_runs_before_the_capture():
     spec = G.read_graph(section(("frame", "fx.image"), ("scene", "delay.image"),
                                 ("delay", "shape.faces"), nodes=DELAY))
     assert not spec.notes, spec.notes
-    g = G.build_graph(vs, wired_wiring(spec.wiring()))
+    g = G.build_graph(vs, wired_wiring(spec.wiring(), "trail"))      # (plan 36 T4: drawn)
     order = [n.name for n in g.order]
     write = g.nodes["delay(write)"]
     assert isinstance(write, G.DelayWrite) and write.delay == "delay"

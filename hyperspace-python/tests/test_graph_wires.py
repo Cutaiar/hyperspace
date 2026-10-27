@@ -119,10 +119,11 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
     o2, o4 = g.nodes["output.2"], g.nodes["output.4"]
     end = o2.inputs["image"]
     assert isinstance(end, G.Shown) and end.inputs["image"] is g.nodes["acid.2"]
-    assert g.nodes["acid.2"].inputs["image"] is g.nodes["lookback"]
+    # (plan 36 T4: the old words' look-back off — the history is its picture)
+    assert g.nodes["acid.2"].inputs["image"] is g.nodes["scene"]
     assert g.nodes["acid.2"].placed == "wire" and "acid.2" in g.placed_names
     assert o2.inputs["hands"] is None and o2.inputs["readout"] is None
-    assert end in g.nodes["lookback(capture)"].after          # the capture after every end
+    assert "lookback(capture)" not in g.nodes                 # (plan 36 T4: none drawn)
     assert (o4.inputs["hands"] is g.nodes["hands.layer"]
             and o4.inputs["readout"] is g.nodes["hands.layer"])
     # output 4 had scene + hands over already: its hands are the layer either way
@@ -280,7 +281,6 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     assert G.Wire("hands.layer", "output.2.hands") in stub.wiring.wires
     assert rig.lib.is_dirty(PRESETS)
     assert preset.GRAPH_KEY in rig.presets.document("Base")
-    assert edit.wire("lookback", "output.2.hands").endswith("or an effect after it over")
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
     wires = set(rig.presets.graph.spec.wires)
     assert G.Wire("scene", "output.2.hands") in wires
@@ -499,9 +499,12 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     assert edit.wire("hands.guide", "output.all.guide") is None
     # (plan 36 T2: the guide draws the hands wired into it — one more wire)
     assert edit.wire("hands", "hands.guide.hands") is None
-    assert edit.insert_effect(("lookback", "output.all.image"), "acid") is None
+    assert edit.insert_effect(("scene", "output.all.image"), "acid") is None
     assert edit.set_node("hands", draw="lines") is None
-    doc, _ = M.migrate(_fixture("hands-lines"), {})
+    # (plan 36 T4: the fixture as it migrates with its look-back off — the
+    # gestures above draw none)
+    old = _fixture("hands-lines")
+    doc, _ = M.seven({**old, "values": {**old["values"], "dream.on": False}}, {})
     want = G.read_graph(doc["graph"])
     got = rig.presets.graph.spec
     assert set(got.wires) == set(want.wires)
@@ -588,7 +591,7 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
         assert doc["graph"]
         assert rig.presets.document(slug)[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
     # (plan 36 T3: the placement `into output.1` is the wires it stood for)
-    assert {G.Wire("lookback", "acid.2.image"), G.Wire("acid.2", "output.2.image"),
+    assert {G.Wire("scene", "acid.2.image"), G.Wire("acid.2", "output.2.image"),
             G.Wire("palette", "output.1.image")} <= set(stub.wiring.wires)
     assert stub.wiring.placed == ()
     assert rig.reg["fx.acid.2.on"].value is True
@@ -614,9 +617,12 @@ def test_the_words_say_the_wires():
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])
     w = wired_wiring(spec.wiring())
     assert output_shows(S(), True, True, 1.0, w, n=2)[0].endswith(" · hands 2 over output 2")
+    # (plan 36 T4: a look-back drawn, the old words' on; what the history
+    # held laid under it is the composite's under now, while it records
+    # the scene)
     assert G.lookback_words(wired_wiring(G.read_graph(
-        {"wires": _wires(("hands", "history.image"))}).wiring())
-                            ) == "history: the scene · the history holds the hands"
+        {"wires": _wires(("hands", "history.image"))}).wiring(), "trail")
+                            ) == "history: the scene"
 
 
 # ---------------------------------------------------------------- GL
@@ -653,7 +659,7 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     _, (b1, _) = frame(("warp",), None)
     _, (c1, _) = frame((), None)
     assert np.array_equal(a1, b1) and np.array_equal(a2, c1) and not np.array_equal(a1, a2)
-    assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("shown(lookback)", False)
+    assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("shown(scene)", False)
     assert r.stats["routes"][0] == ("shown(warp)", False)
 
 
@@ -674,7 +680,7 @@ def test_hands_2_wired_to_the_glass_alone(ctx):
     assert r._graph.nodes["output.2"].inputs["hands"] is r._graph.nodes["hands.2.layer"]
     differ = (a != b).any(axis=2)
     assert differ.any()
-    assert r.stats["routes"] == [("shown(lookback)", False), ("shown(lookback)", True)]
+    assert r.stats["routes"] == [("shown(scene)", False), ("shown(scene)", True)]
     assert g2.tex is not None
 
 

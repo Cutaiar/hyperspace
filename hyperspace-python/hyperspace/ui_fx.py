@@ -44,7 +44,7 @@ from imgui_bundle import imgui
 
 from . import ui
 from .fx import FACE_MAPS, FX_DIR, PER_FACE
-from .graph import _PICTURE_PORTS, run_of, wire_node_kind
+from .graph import _PICTURE_PORTS, run_back, run_of, wire_node_kind
 
 # the groups `groups` makes, as their headers say them
 RUN = "Run"
@@ -106,7 +106,7 @@ def groups(spec) -> list[tuple[str, list[str]]]:
     out_of: dict[str, list] = {}
     for w in wires:
         out_of.setdefault(w.src, []).append(w)
-    run = run_of(spec, "lookback", "output.all.image") if wired else run_of(spec)
+    run = run_back(spec, "output.all.image") if wired else run_of(spec)
     ends: dict[str, dict[str, int]] = {}      # effect → its ends → its distance from each
 
     def follow(node: str, seen: frozenset[str]) -> dict[str, int]:

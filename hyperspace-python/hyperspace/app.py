@@ -1388,8 +1388,8 @@ def main() -> None:
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
-    if dream_io is not None:            # fills the look-back's dream slot
-        renderer.lookback.source = dream_io
+    if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
+        renderer.dreamer.source = dream_io
     # the sticks as dials (gamepad.dial, a prototype): session params on
     # whichever pad is the primary now
     _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1508,14 +1508,14 @@ def main() -> None:
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(name: str | None) -> None:
-        # a preset that asks for the dream — the look-back on with a dream
-        # mix above 0 — with no worker to dream: the look-back shows the
-        # echoes only. Said on the banner (until dismissed), logged once.
-        # Echoes alone (dream.mix 0) are a normal mode and say nothing.
+        # a preset that asks for the dream — a dream node on (plan 36 T4:
+        # `dream.on`) with a mix above 0 — with no worker to dream: the
+        # dream passes its picture through. Said on the banner (until
+        # dismissed), logged once. Echoes alone are a normal mode.
         if reg["dream.on"].base and reg["dream.mix"].base > 0 and dream_io is None:
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
-                              "the look-back shows the echoes only")
+                              "the dream passes its picture through")
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 

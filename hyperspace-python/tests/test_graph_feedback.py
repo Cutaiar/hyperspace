@@ -115,7 +115,7 @@ def test_each_old_hidden_edge_loop_is_left_out_by_the_migration(pairs, refused, 
     nodes = [{"kind": "effect", "file": "acid", "instance": 2}] if "acid.2" in str(pairs) else []
     old = section(*pairs, nodes=nodes)
     assert not any("loop" in n for n in G.read_graph(old).notes)
-    doc, notes = M.migrate({"values": {}, "graph": old}, {})
+    doc, notes = M.seven({"values": {}, "graph": old}, {})
     bad = G.Wire(*refused)
     assert notes == [f"wire {bad} — {getattr(G, words).format(path=path)}"]
     spec = G.read_graph(doc["graph"])
@@ -125,9 +125,10 @@ def test_each_old_hidden_edge_loop_is_left_out_by_the_migration(pairs, refused, 
 
 def test_the_later_wire_closing_a_sink_loop_is_the_one_refused():
     pairs = SINK_LOOPS[2][0]
-    doc, _ = M.migrate({"values": {}, "graph": section(*pairs)}, {})
+    doc, _ = M.seven({"values": {}, "graph": section(*pairs)}, {})
     spec = G.read_graph(doc["graph"])
-    assert G.Wire("lookback", "acid.image") in spec.wires
+    # (plan 36 T4: the look-back off in the old values — its picture, the scene)
+    assert G.Wire("scene", "acid.image") in spec.wires
     assert G.Wire("acid", "output.all.image") in spec.wires
     assert G.Wire("acid", "shape.faces") not in spec.wires
 
@@ -202,4 +203,8 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
                                  "values": {}, "graph": sec}) == []
     doc = app.presets.document("fb")
     assert doc["schema"] == "hyperspace.preset/7"
-    assert [n for n in doc["graph"]["nodes"] if n.get("kind") == node["kind"]]
+    # (plan 36 T4: an echo is its look-back's pin now — the look-back's node)
+    kind = "lookback" if node["kind"] == "echo" else node["kind"]
+    wires = doc["graph"]["wires"]
+    assert ([n for n in doc["graph"]["nodes"] if n.get("kind") == kind]
+            or any(w["from"] == kind or w["to"].startswith(f"{kind}.") for w in wires))

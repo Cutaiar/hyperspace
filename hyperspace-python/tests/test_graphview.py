@@ -56,12 +56,13 @@ def views(*sw):
     return [View(s, (640, 360)) for s in sw]
 
 
-def thru(w, effects, *shows) -> G.Graph:
+def thru(w, effects, *shows, look: str = "off") -> G.Graph:
     """Plan 35 T4: the frame `w` draws on one window per state of `shows`
     (the retired switches as each output's wiring, `tests/wiredframe.py`:
-    `Shows(through=True)` where `Switches(through=True)` was)."""
-    return G.build_graph(views(*(Switches() for _ in shows)), wired_wiring(wired_for(w, *shows)),
-                         effects=effects)
+    `Shows(through=True)` where `Switches(through=True)` was); plan 36 T4:
+    its look-back as `look` says the old words had it."""
+    return G.build_graph(views(*(Switches() for _ in shows)),
+                         wired_wiring(wired_for(w, *shows, look=look)), effects=effects)
 
 
 def stacked(effects, wiring=None) -> G.Wiring:
@@ -156,7 +157,7 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
     rig.router.table.bindings.append(Binding("key:F9", out1, "toggle"))   # a setter onto it
     g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(),
-             Shows(scene=False, through=True))
+             Shows(scene=False, through=True), look="trail")
     _every_file(rig)
     view = build(rig, g)
     names = {n.id for n in view.nodes}
@@ -367,7 +368,9 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     depth within theirs); a placed node keeps its own and takes no room."""
     rig.lib.load("presets", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
-    g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",))), effects=("acid",))
+    # (plan 36 T4: the look-back drawn, as the old words with it on)
+    g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
+                      effects=("acid",))
     _every_file(rig)
     view = build(rig, g)
     placed = {"render:shape": (999.0, 999.0)}
@@ -382,7 +385,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     # the effects' idle line, and a through wire from where the run starts
     # (the look-back's picture) to where it ends (plan 35 G: All outputs)
     assert view.node("render:acid").idle
-    assert any(c.src_port == "rout:lookback" and c.dst_port == "rin:output.all/image"
+    assert any(c.src_port == "rout:composite" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
     assert col == sorted(col) and len(set(col)) == len(col)
     assert x["group:tempo"] == x[graphview.ANALYZER]

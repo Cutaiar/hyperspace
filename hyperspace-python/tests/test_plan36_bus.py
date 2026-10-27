@@ -246,7 +246,7 @@ def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
 
     import numpy as np
     import pytest
-    from test_graph_frame import _draw, _land, _tool, the_frame, wires_of
+    from test_graph_frame import _draw, _land, _tool, landed, wires_of
 
     try:
         import moderngl
@@ -256,7 +256,7 @@ def test_a_cut_cable_draws_what_a_ground_wire_draws_and_rebuilds():
         pytest.skip(f"no standalone GL context available: {err}")
     rig = _tool().Rig("legacy6", "present", ctx)
     try:
-        sec = the_frame({})
+        sec = landed({})
         sec["wires"] += wires_of([("ground", "output.3.hands"), ("ground", "output.3.guide")])
         _land(rig, sec)
         show = SimpleNamespace(rig=G.RigWires())

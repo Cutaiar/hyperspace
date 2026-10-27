@@ -50,12 +50,18 @@ And the three that wrap what exists (A1's call, registered):
   output's end (`Shown`, one per picture an output shows); a copy draws an
   instance again on another picture (a through output's). An effect that
   is off reads its input through: no pass, no texture.
-- **History** (`History`, `Capture`): the look-back (`lookback.Lookback`)
-  as two nodes, because its composite must read the ring before the
-  frame's capture changes it: `lookback` lays the echoes and the dream
-  over its input; `lookback(capture)` puts what `lookback.capture` is
-  wired to — the scene, or the scene with the hands' layer (A3) — into
-  the ring after every composite of the frame has run.
+- **History** (`History`, `Capture`): a look-back (`lookback.Lookback`,
+  one ring per instance: `lookback`, `lookback.2` …) as two nodes, because
+  its trail must read the ring before the frame's capture changes it:
+  `lookback` makes the trail — picture in, trail out, laid over nothing
+  (plan 36 T4, D3: a composite lays it, an "add" one in a single pass) —
+  and `lookback(capture)` puts what its `image` is wired to — the scene,
+  or the scene with the hands' layer (A3) — into the ring after every
+  reader of the frame has run. Its frames are its pins
+  (`lookback.echo.<k>`, `EchoNode`).
+- **Dream** (`DreamNode`; plan 36 T4, W4): picture in → dreamed picture
+  out — its input to the worker, `D` laid over it (`lookback.Dreamer`);
+  `dream.on` off passes its input through. One live dream (D2).
 - **Output** (`Output`): one render output — `fit`, flip, the hands over,
   the readout, the dim — exactly `Renderer._compose`, so an output in
   another context gets the same five-step `outputs.Handoff`.
@@ -588,8 +594,8 @@ def _history_entry(e: dict, wired: bool = False) -> HistoryAt | LookbackAt:
     if e.get("kind") == "lookback":
         if "holds" in e:
             raise GraphError(HOLDS_IS_A_WIRE)
-        _entry_keys(e, "lookback", ())
-        return LookbackAt()
+        _entry_keys(e, "lookback", ("instance",))
+        return LookbackAt(_instance(e))
     if wired:
         raise GraphError(OLD_ID_IN_A_WIRED_FRAME.format(old="history", new=new_id("history")))
     _entry_keys(e, "history", ("holds",))
@@ -637,6 +643,13 @@ _SWITCH = re.compile(rf"switch(?:\.{_INSTANCE})?")       # plan 33 S: `switch`, 
 _DELAY = re.compile(rf"delay(?:\.{_INSTANCE})?")
 _RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
 _ECHO = re.compile(r"echo\.[1-9][0-9]*")
+# plan 36 T4 (W4): a look-back's instances (`lookback`, `lookback.2` …), its
+# echo outputs — pins, frames of its own ring (`lookback.echo.3`,
+# `lookback.2.echo.1`) — and the dream's (`dream`; a second, `dream.2`, is
+# named only to be refused: one live dream at a time, D2)
+_LOOKBACK = re.compile(rf"lookback(?:\.{_INSTANCE})?")
+_ECHO_PIN = re.compile(rf"(lookback(?:\.{_INSTANCE})?)\.echo\.([1-9][0-9]*)")
+_DREAM = re.compile(rf"dream(?:\.{_INSTANCE})?")
 SWITCH_PORTS = tuple(f"in{i}" for i in range(1, 9))
 # what each kind of wireable node makes, and the ports a wire may go into
 # (port → type). The scene's and a layer's geometry ports and the
@@ -929,25 +942,31 @@ NODE_KINDS["echo"] = _echo_entry
 
 @dataclass(frozen=True)
 class DreamAt:
-    """The look-back's dream buffer as a source (plan 34 L, E): `dream`,
-    one only (`n` is always 1, so `read_graph`'s two-of-one-instance check
-    holds it to one)."""
+    """The dream (plan 36 T4, W4; was plan 34's dream-buffer source):
+    picture in → dreamed picture out — `dream`. One live dream at a time
+    (D2: one worker, one GPU job): a second (`{"kind": "dream", "instance":
+    2}`) may be declared, but a wire to or from it is refused in words."""
 
-    @property
-    def n(self) -> int:
-        return 1
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"dream instance {self.n!r}: a whole number from 1")
 
     @property
     def name(self) -> str:
-        return "dream"
+        return "dream" if self.n == 1 else f"dream.{self.n}"
 
     def to_json(self) -> dict:
-        return {"kind": "dream"}
+        d: dict[str, Any] = {"kind": "dream"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
 
 
 def _dream_entry(e: dict) -> DreamAt:
-    _entry_keys(e, "dream", ())
-    return DreamAt()
+    _entry_keys(e, "dream", ("instance",))
+    return DreamAt(_instance(e))
 
 
 NODE_KINDS["dream"] = _dream_entry
@@ -994,13 +1013,34 @@ LAYER_TAKES_HANDS = "{dst} takes a hands node (hands, hands.2 …): the hands it
 
 def pin_node(name: Any) -> str | None:
     """The node pin `name` (`scene.cover`, `scene.depth`) is an output of,
-    or None for a name that is no pin (plan 36 T2)."""
-    return PINS.get(name) if isinstance(name, str) else None
+    or None for a name that is no pin (plan 36 T2). Plan 36 T4: and a
+    look-back's echo (`lookback.2.echo.3` → `lookback.2`)."""
+    if not isinstance(name, str):
+        return None
+    got = PINS.get(name)
+    if got is None:
+        m = _ECHO_PIN.fullmatch(name)
+        return m.group(1) if m is not None else None
+    return got
+
+
+def echo_of(name: Any) -> tuple[str, int] | None:
+    """A look-back's echo pin → (the look-back, k): `lookback.echo.3` →
+    ("lookback", 3) — None for any other name (plan 36 T4)."""
+    m = _ECHO_PIN.fullmatch(name) if isinstance(name, str) else None
+    return (m.group(1), int(m.group(2))) if m is not None else None
+
+
+def capture_name(lookback: str) -> str:
+    """A look-back's capture's render node (`lookback(capture)`,
+    `lookback.2(capture)`): what records its `image` into its ring."""
+    return f"{lookback}(capture)"
+
 
 GONE_IN_A_WIRED_FRAME = ("{name} is gone in a wired frame (plan 35): wire the picture "
                          "straight into an effect, a composite or an output")
 HOLDS_IS_A_WIRE = ("lookback holds: in a wired frame what the look-back records is a wire "
-                   "— wire a picture into lookback.capture")
+                   "— wire a picture into lookback.image")
 INTO_IS_A_WIRE = ("{hands} into: in a wired frame the hands go into the scene by a wire — "
                   "wire {hands} into scene.geometry")
 # plan 36 T3 (W3): D1's `after` / `into` are the wires they stood for since
@@ -1264,7 +1304,10 @@ def _wired_kind(name: str) -> str | None:
     for kind, pat in (("hands", _HANDS_W), ("layer", _LAYER_W), ("guide", _GUIDE_W),
                       ("output", _OUTPUT), ("composite", _COMPOSITE), ("channel", _CHANNEL),
                       ("switch", _SWITCH), ("delay", _DELAY), ("resize", _RESIZE),
-                      ("echo", _ECHO), ("copy", _COPY)):
+                      # plan 36 T4: a look-back's echo pin is an echo; `echo.<k>`
+                      # (plan 34's own node) only an old frame's, read to migrate
+                      ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
+                      ("dream", _DREAM), ("copy", _COPY)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1323,11 +1366,28 @@ class PatternAt(_FrameAt):
 
 @dataclass(frozen=True)
 class LookbackAt(_FrameAt):
-    """The look-back (was `history`, row 381): echoes and the dream over
-    `lookback.image`, recording `lookback.capture`. It replaces `HistoryAt`
-    in a wired frame; what it holds is the capture wire."""
+    """A look-back (was `history`, row 381; plan 36 T4, W4): it records
+    what is wired into its `image` into a ring of its own and makes the
+    trail — picture in, trail out, laid over nothing (D3: a composite lays
+    it). `lookback` is declared by a wire naming it, as a frame kind;
+    `lookback.<n>` by its entry, `{"kind": "lookback", "instance": n}`."""
 
+    n: int = 1
     KIND: ClassVar[str] = "lookback"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"lookback instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "lookback" if self.n == 1 else f"lookback.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "lookback"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
 
 
 @dataclass(frozen=True)
@@ -1477,14 +1537,20 @@ class _WireCtx:
     # `hands`, `hands.2` …), and the copies declared (their names)
     wired: bool = False
     copies: frozenset[str] = frozenset()
+    # plan 36 T4: the look-backs declared (their names: `lookback` by a
+    # wire, `lookback.<n>` by an entry), and whether the read is a
+    # migration's of an old frame (`legacy`: `lookback.capture` and plan
+    # 34's `echo.<k>` are read, to be rewritten — `graphmigrate.split_lookback`)
+    lookbacks: frozenset[str] = frozenset({"lookback"})
+    legacy: bool = False
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
         (a frame kind's: none here — a wire of a wired frame declares it)."""
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
                 "resize": self.resizes, "echo": self.echoes, "copy": self.copies,
-                "dream": frozenset({"dream"}) if self.dream else frozenset()
-                }.get(kind, frozenset())
+                "dream": frozenset({"dream"}) if self.dream else frozenset(),
+                "lookback": self.lookbacks}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -1590,7 +1656,9 @@ def wire_error(w: Wire, ctx: _WireCtx | None = None) -> str | None:
 # plan 35 F: a wired frame's ports (the table of the global constraints):
 # what each kind makes and takes. The shape and the hands make geometry,
 # which goes into the scene alone (several wires, `MANY_PORTS`); the
-# backdrop lays `scene` over `image`; the look-back records `capture`; a
+# backdrop lays `scene` over `image`; a look-back records its `image`
+# (plan 36 T4: and makes the trail, held back by `occluder`'s brightness and
+# the `cover` mask), the dream dreams its `image`; a
 # copy is an effect's; an output and All outputs take a picture, the hands
 # over it and the guide over all; `ground` makes nothing, as a picture
 WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IMAGE,
@@ -1606,23 +1674,32 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "scene": {"geometry": GEOMETRY}, "shape": {"faces": IMAGE},
     "hands": {}, "layer": {"hands": GEOMETRY}, "guide": {"hands": GEOMETRY}, "channel": {},
     GROUND: {}, "cover": {}, DEPTH_PORT: {},
-    "lookback": {"image": IMAGE, "capture": IMAGE, "occluder": IMAGE, "cover": MASK},
+    "lookback": {"image": IMAGE, "occluder": IMAGE, "cover": MASK},
+    "dream": {"image": IMAGE},
     "backdrop": {"image": IMAGE, "scene": IMAGE},
     "copy": {"image": IMAGE, "aux": IMAGE},
     "output": {"image": IMAGE, "hands": IMAGE, "guide": IMAGE, DEPTH_PORT: IMAGE},
     "composite": {**WIRE_TAKES["composite"], DEPTH_PORT: IMAGE},
     **{k: WIRE_TAKES[k] for k in ("effect", "pattern", "switch", "delay",
-                                  "resize", "echo", "dream")},
+                                  "resize", "echo")},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
-                  "shape.faces, backdrop.image / scene, lookback.image / capture / occluder / "
-                  "cover, hands.layer.hands …, hands.guide.hands …, pattern.media, an "
-                  "effect's or a copy's image or aux, a composite's under / over / depth, a "
-                  "switch's in1 … in8, or a delay's or a resize's image")
+                  "shape.faces, backdrop.image / scene, lookback.image / occluder / cover "
+                  "(lookback.2 …), dream.image, hands.layer.hands …, hands.guide.hands …, "
+                  "pattern.media, an effect's or a copy's image or aux, a composite's under "
+                  "/ over / depth, a switch's in1 … in8, or a delay's or a resize's image")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
-                    "hands.guide …, lookback, backdrop, pattern, an effect, a copy, a "
-                    "composite, a switch, a delay, a resize, echo.1 …, dream, a channel "
+                    "hands.guide …, lookback …, lookback.echo.1 …, dream, backdrop, pattern, "
+                    "an effect, a copy, a composite, a switch, a delay, a resize, a channel "
                     "(channel.a …) or ground")
+# plan 36 T4 (W4): the words for what the split took away
+CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what is wired "
+                    "into {node}.image, and a composite lays its trail")
+ECHO_IS_A_PIN = ("{name} is the old name (plan 36): a look-back's frames are its own "
+                 "outputs — lookback.echo.{k}")
+ONE_DREAM = ("{name}: one live dream at a time (one worker, one GPU job) — wire dream, "
+             "or turn it off with dream.on")
+ECHO_RANGE = "{name}: a look-back holds {most} frames (echo.1 the newest … echo.{most})"
 # the look-back paints into what reads it (plan 28): the words for a wire
 # laying it over, either frame's
 _LAID_OVER = ("the {name} paints into what reads it, so it is not laid over: "
@@ -1656,6 +1733,19 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     if kind == "output" and new_id(w.dst) != w.dst:
         return OLD_ID_IN_A_WIRED_FRAME.format(old=w.dst, new=new_id(w.dst))
     takes = WIRED_TAKES[kind]
+    if kind == "lookback" and port == "capture":
+        # plan 36 T4: the look-back records its `image` — an old frame's
+        # capture wire is read only by the migration that rewrites it
+        if not ctx.legacy:
+            return CAPTURE_IS_IMAGE.format(node=node)
+        takes = {**takes, "capture": IMAGE}
+    for name, k in ((w.src, src_kind), (node, kind)):
+        if k == "echo" and echo_of(name) is None and not ctx.legacy:
+            return ECHO_IS_A_PIN.format(name=name, k=split_instance(name)[1])
+        if k == "echo" and echo_of(name) is not None and echo_of(name)[1] > MAX_ECHOES:
+            return ECHO_RANGE.format(name=name, most=MAX_ECHOES)
+        if k == "dream" and name != "dream":
+            return ONE_DREAM.format(name=name)
     if port not in takes:
         names = list(takes) if len(takes) < 4 else [next(iter(takes)), "…", [*takes][-1]]
         said = f"it takes {', '.join(names)}" if takes else "nothing is wired into it"
@@ -1686,6 +1776,13 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
                 n = split_instance(hands)[1]
                 return (f"no {hands} node in this graph (add one: "
                         f'{{"kind": "hands", "instance": {n}}})')
+        if k == "echo" and echo_of(name) is not None:
+            # plan 36 T4: an echo pin is its look-back's: that one declared
+            name, k = echo_of(name)[0], "lookback"
+        if k == "lookback" and name not in ctx.declared("lookback"):
+            n = split_instance(name)[1]
+            return (f"no {name} node in this graph (add one: "
+                    f'{{"kind": "lookback", "instance": {n}}})')
         if k in DECLARED and k not in FRAME_KINDS and name not in ctx.declared(k):
             entry = (f'{{"kind": "echo", "index": {split_instance(name)[1]}}}' if k == "echo"
                      else f'{{"kind": "{k}"}}')
@@ -1694,10 +1791,8 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return f"{node} into itself makes a loop"
     if kind == "output" and port == "guide" and src_kind not in ("layer", "guide", GROUND):
         return f"{w.dst} takes a hands layer or a hands guide (hands.layer, hands.guide …)"
-    if kind == "composite" and port == "over" and src_kind == "lookback":
-        return _LAID_OVER.format(name="lookback")
-    if kind == "output" and port == "hands" and src_kind == "lookback":
-        return _LAID_OVER_OUTPUT.format(name="lookback")
+    # (plan 36 T4: the trail is a picture with alpha, laid on by a composite
+    # like any other — the old "not laid over" refusal is gone)
     for name, k, into in ((node, kind, port != AUX), (w.src, src_kind, False)):
         if k == "effect" and name in ctx.placed and (into or kind != "effect"):
             key, where = ctx.placed[name]
@@ -1705,13 +1800,24 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
     return None
 
 
-def _later(w: Wire, wired: bool) -> bool:
+def _later(w: Wire, wired: bool, legacy: bool = False) -> bool:
     """Whether wire `w` is read only after this frame (no dependency, never
     on a loop): one into a delay (plan 34 L: its picture is last frame's)
     or (plan 35 F) into `lookback.capture`, which the ring records for the
-    frames after, once every end has run."""
-    return (wire_node_kind(w.node, wired=wired) == "delay"
-            or (wired and w.dst == "lookback.capture"))
+    frames after, once every end has run — plan 36 T4: into a look-back's
+    `image`, what it records so (its trail is the frames before this one);
+    but in an old frame (`legacy`, the migration's) `lookback.image` was
+    the picture the trail was laid on, read this frame."""
+    kind = wire_node_kind(w.node, wired=wired)
+    return (kind == "delay"
+            or (wired and (w.dst == "lookback.capture"
+                           or (not legacy and kind == "lookback" and w.port == "image"))))
+
+
+def _legacy(wires) -> bool:
+    """Whether wired `wires` are an old frame's (plan 36 T4): its look-back
+    records `lookback.capture`."""
+    return any(w is not None and w.dst == "lookback.capture" for w in wires)
 
 
 def wire_loops(wires: list[Wire], wired: bool = False) -> dict[Wire, str]:
@@ -1724,11 +1830,12 @@ def wire_loops(wires: list[Wire], wired: bool = False) -> dict[Wire, str]:
     T2: over drawn wires only — a pin (`scene.cover`) is its node, so a
     loop through it runs through the scene."""
     deps: dict[str, set[str]] = {}
+    legacy = wired and _legacy(wires)
     for w in wires:
-        _depend(deps, w, wired)
+        _depend(deps, w, wired, legacy)
     out: dict[Wire, str] = {}
     for w in wires:
-        if _later(w, wired):
+        if _later(w, wired, legacy):
             continue
         path = _loop_path(deps, w)
         if path is not None:
@@ -1736,10 +1843,10 @@ def wire_loops(wires: list[Wire], wired: bool = False) -> dict[Wire, str]:
     return out
 
 
-def _depend(deps: dict[str, set[str]], w: Wire, wired: bool) -> None:
+def _depend(deps: dict[str, set[str]], w: Wire, wired: bool, legacy: bool = False) -> None:
     """Wire `w`'s dependency (`wire_loops`) into `deps`: its node reads its
     source, a pin its node — none for a wire read after the frame."""
-    if not _later(w, wired):
+    if not _later(w, wired, legacy):
         deps.setdefault(w.node, set()).add(w.src)
         if wired and pin_node(w.src) is not None:
             deps.setdefault(w.src, set()).add(pin_node(w.src))
@@ -1754,17 +1861,18 @@ def loop_closers(stand: list[Wire], wires: list[Wire | None]) -> dict[int, str]:
     of an old section's own wires against the frame written for it
     (`graphmigrate.wired_section`)."""
     deps: dict[str, set[str]] = {}
+    legacy = _legacy([*stand, *wires])        # (plan 36 T4: an old frame's, before the split)
     for w in stand:
-        _depend(deps, w, True)
+        _depend(deps, w, True, legacy)
     out: dict[int, str] = {}
     for k, w in enumerate(wires):
-        if w is None or _later(w, True):
+        if w is None or _later(w, True, legacy):
             continue
         path = _loop_path(deps, w)
         if path is not None:
             out[k] = loop_words(" → ".join(path), _hops(path))
             continue
-        _depend(deps, w, True)
+        _depend(deps, w, True, legacy)
     return out
 
 
@@ -2066,8 +2174,15 @@ class GraphSpec:
 
     @property
     def dream(self) -> DreamAt | None:
-        """The dream buffer's node, when the section reads it (plan 34 L)."""
-        return next((got for k, got in self.others if k == "dream"), None)
+        """The dream's node, when the section declares it (plan 34 L; plan
+        36 T4: the one live dream, `dream`)."""
+        return next((got for k, got in self.others if k == "dream" and got.n == 1), None)
+
+    @property
+    def lookbacks(self) -> tuple[LookbackAt, ...]:
+        """The look-backs the section declares by an entry (plan 36 T4:
+        `lookback` may be, `lookback.<n>` must be), by instance."""
+        return self._of("lookback")
 
     def all_wires(self) -> list[Wire]:
         """Every wire this graph says (plan 28 N4): D1's placements as the
@@ -2308,7 +2423,9 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    echoes=frozenset(e.name for e in spec.echoes),
                    dream=spec.dream is not None,
                    placed={e.name: e.where for e in effects_at if e.placed},
-                   wired=wired, copies=frozenset(c.name for c in spec.copies))
+                   wired=wired, copies=frozenset(c.name for c in spec.copies),
+                   lookbacks=frozenset({"lookback", *(lb.name for lb in spec.lookbacks)}),
+                   legacy=placements)
     wires, wire_notes = _read_wires(raw_wires, ctx, d1_wires(effects_at))
     if ctx.effects is not None and wire_notes:
         wires, wire_notes = _through_missing(raw_wires, ctx, d1_wires(effects_at),
@@ -2334,10 +2451,14 @@ def _through_missing(raw: Any, ctx: _WireCtx, d1: list[Wire], wires: tuple[Wire,
     kept; a wire on any other missing effect stays refused, as before."""
     every, _ = _read_wires(raw, replace(ctx, effects=None), d1)
     probe = replace(spec, wires=every)
-    # (plan 35 T3: a wired frame's run is the look-back's into All outputs)
-    runs = ((("lookback", f"{ALL_OUTPUTS}.image"),) if ctx.wired else (("frame", "fx.image"),))
-    missing = {e for head, end in (*runs, ("pattern", "shape.faces"))
-               for e in run_of(probe, head, end) if split_instance(e)[0] not in files}
+    # (plan 35 T3: a wired frame's run is the one into All outputs — plan 36
+    # T4: from whatever heads it, the look-back no longer always does)
+    if ctx.wired:
+        found = list(run_back(probe, f"{ALL_OUTPUTS}.image"))
+    else:
+        found = list(run_of(probe, "frame", "fx.image"))
+    found += run_of(probe, "pattern", "shape.faces")
+    missing = {e for e in found if split_instance(e)[0] not in files}
     if not missing:
         return wires, notes
     back = {w for w in every if w not in wires and (w.src in missing or w.node in missing)}
@@ -2424,6 +2545,19 @@ def _wired_reach(wires) -> frozenset[str]:
         got.add(name)
         todo.extend(into.get(name, ()))
     return frozenset(got)
+
+
+def run_back(spec: GraphSpec, end: str) -> tuple[str, ...]:
+    """The effects wired one after another into input `end`, first first,
+    back to the first source that is no effect — whatever heads them (plan
+    36 T4: All outputs' run starts at the scene, a composite, a look-back)."""
+    wires = [w for w in spec.wires if not is_aux(w)]
+    run: list[str] = []
+    src = next((w.src for w in wires if w.dst == end), None)
+    while src is not None and wire_node_kind(src, wired=spec.wired) == "effect" and src not in run:
+        run.insert(0, src)
+        src = next((w.src for w in wires if w.dst == f"{src}.image"), None)
+    return tuple(run)
 
 
 def run_of(spec: GraphSpec, head: str = "frame", end: str = "fx.image") -> tuple[str, ...]:
@@ -2624,26 +2758,30 @@ def layer_words(wiring: Wiring, layer: str | None = None) -> str:
     return words
 
 
-def lookback_words(wiring: Wiring) -> str:
-    """What the look-back records, in words (the LOOKBACK page, plan 26 A4;
-    plan 35 T4: the wire into `lookback.capture`): `history: the
-    scene`, or `history: the scene · with the hands` — the hands' layer
-    laid on in a composite, or hands drawn inside the scene. Plan 30 D1:
-    then each effect placed on the look-back's way in or after it (`acid 2
-    before the history`); plan 28 N4: a picture wired into the look-back
-    that is not the frame's own (the scene, the backdrop)."""
+def lookback_words(wiring: Wiring, lookback: str = LOOKBACK) -> str:
+    """What a look-back records, in words (the LOOKBACK page, plan 26 A4;
+    plan 36 T4: the wire into its `image`): `history: the scene`, or
+    `history: the scene · with the hands` — the hands' layer laid on in a
+    composite, or hands drawn inside the scene — or the picture wired in
+    when it is not the frame's own (the scene, the backdrop); `history:
+    nothing` with none. Plan 30 D1: then each effect placed on the
+    look-back's way in or after it (`acid 2 before the history`)."""
     w = wiring
-    held = next((x.src for x in w.wires if x.dst == "lookback.capture"), None)
+    held = next((x.src for x in w.wires if x.dst == f"{lookback}.image"), None)
     over = next((x.src for x in w.wires if held is not None and x.dst == f"{held}.over"), None)
     hands = (wire_node_kind(held or "", wired=True) == "composite"
              and wire_node_kind(over or "", wired=True) == "layer") or bool(in_scene_hands(w))
-    words = "history: the scene · with the hands" if hands else "history: the scene"
+    if held is None:
+        words = "history: nothing"
+    elif hands:
+        words = "history: the scene · with the hands"
+    else:
+        words = "history: the scene"
     for e in w.placed:
-        if e.where in (("after", "scene"), ("into", LOOKBACK), ("after", LOOKBACK)):
+        if e.where in (("after", "scene"), ("into", lookback), ("after", lookback)):
             words += " · " + placement_words(e)
-    for x in w.wires:
-        if x.dst == "lookback.image" and x.src not in ("scene", BACKDROP):
-            words += " · " + wire_words(x)
+    if held is not None and not hands and held not in ("scene", BACKDROP):
+        words += " · " + wire_words(Wire(held, f"{lookback}.image"))
     return words
 
 
@@ -3949,28 +4087,69 @@ class DelayWrite(Node):
 
 # ---------------------------------------------------------------- the look-back's frames
 
-class _RingNode(Node):
-    """A picture of the look-back's (plan 34 E, rows 360–363): no inputs,
-    read before this frame's capture writes (every consumer runs before
-    `Capture`: a wired output's end, a delay's write, the faces in the
-    scene), so no loop runs through one. Its own size is the ring's echo
-    size (`Lookback.echo`) while it reads; a consumer of another size gets
-    it fitted by cover (`OWN_FIT`, `Renderer._refit`) — painted, or for one
-    that binds a texture refitted once a frame into a half-float target of
-    its own (`<name>#fit`), as a delay's is. While it reads nothing the
-    faces show the pattern, an output its ground, an effect transparent
-    black."""
+class EchoNode(Node):
+    """A look-back's echo (plan 34 E, rows 360–363; plan 36 T4: one of its
+    outputs, `lookback.echo.<k>`, `lookback.2.echo.<k>` — a pin): the k-th
+    newest commit of *that* look-back's ring (`Lookback.echo_slot`), its
+    slot's rect of the atlas cropped, the samples clamped half a texel
+    inside it so no neighbour bleeds. No inputs: read before this frame's
+    capture writes (every consumer runs before the capture: a wired
+    output's end, a delay's write, the faces in the scene), so no loop
+    runs through one. Its own size is the ring's echo size while it reads;
+    a consumer of another size gets it fitted by cover (`OWN_FIT`,
+    `Renderer._refit`) — painted, or for one that binds a texture refitted
+    once a frame into a half-float target of its own (`<name>#fit`), as a
+    delay's is. It reads nothing before k commits since the ring was made,
+    the frame a `dream.res` change makes it again, or with no ring
+    (`Lookback.ring_error`); the faces then show the pattern, an output its
+    ground, an effect transparent black. What it holds is what its look-back
+    records, 8-bit, at `dream.res` on its short side, every `dream.gap`
+    seconds."""
 
+    KIND = "echo"
     INPUTS: ClassVar[dict[str, str]] = {}
     OUTPUT = IMAGE
     TIMED = False                 # its one pass is its consumer's
 
+    def __init__(self, name: str, k: int, after: tuple[Node, ...] = (),
+                 lookback: str = LOOKBACK):
+        super().__init__(name, after)
+        self.k = k                    # 1 the newest commit, MAX_ECHOES the oldest
+        self.lookback = lookback      # whose ring (plan 36 T4)
+
+    def ring(self, frame: Frame):
+        return frame.r.ring(self.lookback)
+
+    def _slot(self, frame: Frame) -> int | None:
+        """The slot this frame reads: the one `run` took before the capture
+        (fix round 1: a consumer that paints after the capture — an
+        output's `hands` — still reads last frame's commit, not one newer),
+        or None when this frame's capture has written over it since (the
+        oldest slot, re-used). Without a `run` this frame, the slot now."""
+        lb = self.ring(frame)
+        took = frame.root.data.get(self.name + "#slot")
+        if took is None:
+            return lb.echo_slot(self.k)
+        slot, at = took
+        if slot is not None and getattr(lb, "wrote", None) == (at + 1, slot):
+            return None
+        return slot
+
     def _src(self, frame: Frame) -> tuple | None:
         """(texture, crop, clamp) this frame, or None while it reads nothing."""
-        return None
+        lb = self.ring(frame)
+        slot = self._slot(frame)
+        # (fix round 2: a slot taken before a capture whose remake failed —
+        # the ring released, `atlas` None — reads nothing, R7)
+        if slot is None or lb.atlas is None:
+            return None
+        eh = max(int(lb.echo[1]), 1)
+        crop = (0.0, slot / MAX_ECHOES, 1.0, 1.0 / MAX_ECHOES)
+        clamp = (0.0, (slot + 0.5 / eh) / MAX_ECHOES, 1.0, (slot + 1 - 0.5 / eh) / MAX_ECHOES)
+        return lb.atlas, crop, clamp
 
     def own_size(self, frame: Frame) -> tuple[int, int] | None:
-        return tuple(frame.r.lookback.echo) if self._src(frame) is not None else None
+        return tuple(self.ring(frame).echo) if self._src(frame) is not None else None
 
     def reads(self, frame: Frame) -> bool:
         return self._src(frame) is not None
@@ -4002,68 +4181,8 @@ class _RingNode(Node):
             frame.data[key] = out
         return frame.data[key]
 
-
-def _ring_holds(frame: Frame) -> str:
-    """What the capture takes this frame, in words (plan 34 E, row 363;
-    plan 35 B: what is wired into `lookback.capture`): the scene, with the
-    hands' layer laid on, or over the backdrop."""
-    g = frame.graph
-    cap = g.nodes.get(CAPTURE) if g is not None else None
-    src = cap.inputs.get("image") if cap is not None else None
-    if isinstance(src, Composite) and isinstance(src.inputs.get("over"), HandsLayer):
-        return "the scene + hands"
-    if isinstance(src, Composite) and src.name == BACKDROP:
-        return "the scene + backdrop"
-    return "the scene" if isinstance(src, Scene) else (
-        src.name if src is not None else "nothing")
-
-
-class EchoNode(_RingNode):
-    """`echo.<k>` (plan 34 E, rows 360–363): the look-back ring's k-th
-    newest commit (`Lookback.echo_slot`), its slot's rect of the atlas
-    cropped, the samples clamped half a texel inside it so no neighbour
-    bleeds. It reads nothing before k commits since the ring was made,
-    the frame a `dream.res` change makes it again, or with no ring
-    (`Lookback.ring_error`). The ring keeps capturing for it with the
-    look-back off (`Graph.reads_ring`, `Lookback.keep`): what it holds is
-    what the capture takes, 8-bit, at `dream.res` on its short side, every
-    `dream.gap` seconds."""
-
-    KIND = "echo"
-
-    def __init__(self, name: str, k: int, after: tuple[Node, ...] = ()):
-        super().__init__(name, after)
-        self.k = k                    # 1 the newest commit, MAX_ECHOES the oldest
-
-    def _slot(self, frame: Frame) -> int | None:
-        """The slot this frame reads: the one `run` took before the capture
-        (fix round 1: a consumer that paints after the capture — an
-        output's `hands` — still reads last frame's commit, not one newer),
-        or None when this frame's capture has written over it since (the
-        oldest slot, re-used). Without a `run` this frame, the slot now."""
-        lb = frame.r.lookback
-        took = frame.root.data.get(self.name + "#slot")
-        if took is None:
-            return lb.echo_slot(self.k)
-        slot, at = took
-        if slot is not None and getattr(lb, "wrote", None) == (at + 1, slot):
-            return None
-        return slot
-
-    def _src(self, frame: Frame) -> tuple | None:
-        lb = frame.r.lookback
-        slot = self._slot(frame)
-        # (fix round 2: a slot taken before a capture whose remake failed —
-        # the ring released, `atlas` None — reads nothing, R7)
-        if slot is None or lb.atlas is None:
-            return None
-        eh = max(int(lb.echo[1]), 1)
-        crop = (0.0, slot / MAX_ECHOES, 1.0, 1.0 / MAX_ECHOES)
-        clamp = (0.0, (slot + 0.5 / eh) / MAX_ECHOES, 1.0, (slot + 1 - 0.5 / eh) / MAX_ECHOES)
-        return lb.atlas, crop, clamp
-
     def run(self, frame: Frame) -> None:
-        lb = frame.r.lookback
+        lb = self.ring(frame)
         slot = lb.echo_slot(self.k)
         # (before the capture: every consumer of an echo is in `Capture.after`)
         frame.root.data[self.name + "#slot"] = (slot, lb.frame)
@@ -4078,33 +4197,110 @@ class EchoNode(_RingNode):
         w, h = lb.echo
         gap = max(float(lb.state.gap), 0.0)
         every = "every frame" if gap <= 0.0 else f"every {gap:.2f} s"
-        self.said = f"{w}×{h} · {every} · {_ring_holds(frame)}"
+        self.said = f"{w}×{h} · {every} · {_ring_holds(frame, self.lookback)}"
 
 
-class DreamNode(_RingNode):
-    """`dream` (plan 34 E, rows 360–361): the look-back's dream buffer —
-    the dream worker's result at the echo size, a frame or two after the
-    capture it answers. It reads nothing with no worker attached, or
-    before the worker's first result has landed (`Lookback.dream_frame`)."""
+def _ring_holds(frame: Frame, lookback: str = LOOKBACK) -> str:
+    """What look-back `lookback` records this frame, in words (plan 34 E,
+    row 363; plan 36 T4: what is wired into its `image`): the scene, with
+    the hands' layer laid on, or over the backdrop."""
+    g = frame.graph
+    cap = g.nodes.get(capture_name(lookback)) if g is not None else None
+    src = cap.inputs.get("image") if cap is not None else None
+    if isinstance(src, Composite) and isinstance(src.inputs.get("over"), HandsLayer):
+        return "the scene + hands"
+    if isinstance(src, Composite) and src.name == BACKDROP:
+        return "the scene + backdrop"
+    return "the scene" if isinstance(src, Scene) else (
+        src.name if src is not None else "nothing")
+
+
+class DreamNode(Node):
+    """`dream` (plan 36 T4, W4): picture in → dreamed picture out. Its
+    `image` goes to the dream worker at its own cadence — every frame while
+    `dream.on`, downsampled to `dream.res` and read back once
+    (`lookback.Dreamer.submit`) — and its picture is that input with the
+    worker's result `D` laid over at `dream.mix`, re-hued, (de)saturated,
+    tinted (`dream.hue`, `sat`, `tint` …) and graded (`dream.darken`,
+    `contrast`). `dream.on` off passes the input through untouched and
+    submits nothing, so the worker sleeps; so does a dream with no worker,
+    or before its first result has landed. It pulls its own results (no
+    look-back is needed anywhere). One live dream at a time (D2): the
+    graph refuses a wire on a second."""
 
     KIND = "dream"
-    _WHOLE = (0.0, 0.0, 1.0, 1.0)
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = IMAGE
 
-    def _src(self, frame: Frame) -> tuple | None:
-        lb = frame.r.lookback
-        if lb.dream is None or lb.dream_frame < 0:
-            return None
-        return lb.dream, self._WHOLE, None
+    def passes(self, frame: Frame) -> bool:
+        """Whether this frame's picture is its input, untouched (`Dreamer.shows`)."""
+        return not frame.r.dreamer.shows()
 
     def run(self, frame: Frame) -> None:
-        lb = frame.r.lookback
-        if self._src(frame) is not None:
-            w, h = lb.echo
-            self.said = f"{w}×{h} · the dream worker's, a frame or two late"
-        elif lb.source is None:
-            self.said = "no dream worker: reads nothing"
-        else:
+        d = frame.r.dreamer
+        if not d.state.on:
+            d.idle()
+            self.said = "off: the picture passes through, the worker idle"
+            return
+        d.pull()
+        src = self.inputs["image"]
+        if src is not None and d.wants_input():
+            tex = picture(frame, src)
+            if tex is not None:
+                with frame.timed(self.name):
+                    d.submit(tex, *frame.size)
+        if d.ring_error:
+            self.said = d.ring_error
+        elif d.source is None:
+            self.said = "no dream worker: the picture passes through"
+        elif d.dream_frame < 0:
             self.said = "waiting for the dream worker"
+        else:
+            w, h = d.size
+            self.said = f"{w}×{h} · the dream worker's, a frame or two late"
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return (not self.passes(frame)) or (src is not None and src.reads(frame))
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        src = self.inputs["image"]
+        return src.own_size(frame) if self.passes(frame) and src is not None else None
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        src = self.inputs["image"]
+        if self.passes(frame):
+            if src is not None:
+                src.paint(frame, dst)
+                return
+            rect = tuple(dst.viewport)
+            dst.use()
+            frame.ctx.viewport = rect
+            frame.ctx.clear(0.0, 0.0, 0.0, 0.0, viewport=rect)
+            return
+        under = picture(frame, src) if src is not None else None
+        frame.r.dreamer.lay(under, dst)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        src = self.inputs["image"]
+        if self.passes(frame):
+            return src.image(frame) if src is not None else None
+        if self.name not in frame.data:
+            tex, fbo = frame.r._frame_target(frame.key(self.name), frame.size, dtype="f2")
+            fbo.viewport = (0, 0, *frame.size)
+            self.paint(frame, fbo)
+            frame.data[self.name] = tex
+        return frame.data[self.name]
+
+
+def _trail_of(node: Node | None, frame: Frame) -> History | None:
+    """The look-back whose trail `node` is this frame (plan 36 T4): the
+    look-back itself, or a dream passing it through (off, no worker, no
+    result yet) — what an "add" composite lays on in one pass with its
+    `under` (`Composite.paint`), the one-shader look-back's bytes."""
+    while isinstance(node, DreamNode) and node.passes(frame):
+        node = node.inputs["image"]
+    return node if isinstance(node, History) else None
 
 
 # ---------------------------------------------------------------- the resize
@@ -4272,8 +4468,8 @@ class ResizeNode(Node):
 
 class Cover(Node):
     """The faces' coverage mask (`render.CoverTarget`): the scene's faces
-    again, solid, one channel — only while the look-back occludes
-    (`Lookback.wants_cover`). Reads the face buffer the scene pass left,
+    again, solid, one channel — only while a look-back it is wired into
+    occludes (`Lookback.wants_cover`). Reads the face buffer the scene pass left,
     so it runs after the scene it masks."""
 
     KIND = "layer"
@@ -4281,9 +4477,12 @@ class Cover(Node):
     OUTPUT = MASK
     REFS: ClassVar[frozenset[str]] = frozenset({"scene"})   # the face buffer, not the picture
 
+    # plan 36 T4: the look-backs whose `cover` it is (set by the build)
+    wanted_by: tuple[str, ...] = (LOOKBACK,)
+
     def run(self, frame: Frame) -> None:
         frame.cover = None
-        if frame.r.lookback.wants_cover():
+        if any(frame.r.ring(n, _ring_state(frame, n)).wants_cover() for n in self.wanted_by):
             with frame.timed(self.name):
                 frame.cover = frame.r._draw_cover(frame.w, frame.h)
 
@@ -4441,87 +4640,115 @@ class Readout(Node):
 # ---------------------------------------------------------------- history
 
 class History(Node):
-    """The look-back's picture: its input over the echoes and the dream
-    (`Lookback.composite`), occluded by the cover mask when there is one;
-    a copy of the input when the look-back is off. `run` moves the
-    echoes' clock and pulls a finished dream once a frame; the picture
-    is painted into each consumer's framebuffer (the chain's input, or
-    the output itself with no effect on).
-
-    Plan 32 (final review B-I1): `occluder`, whose brightness holds the
-    wake back — the scene alone when the history's picture is the scene
-    over a backdrop the history keeps out of (`backdrop_history` off), so
-    the echoes and the dream show over the backdrop rather than under its
-    brightness. With `backdrop_history` on the echoes hold the backdrop
-    too and the history occludes from its own picture, as without a
-    backdrop: by the scene alone a still backdrop would add onto itself
-    and wash to white. The port is there only when given,
-    so a history without a backdrop is the one it always was, port for
-    port."""
+    """A look-back (`lookback`, `lookback.<n>`; plan 36 T4, W4): picture in
+    → trail out. Its ring (`Renderer.ring`, one per look-back: its own
+    echoes, gap, res and clock) records what is wired into its `image` —
+    by its capture (`Capture`, after every reader of the trail), so the
+    picture wired in is no dependency of the trail — and its picture is
+    the age-weighted trail of the frames before this one (`echo_mix`,
+    `fade`, `darken`, `contrast`), held back where `occluder` is bright and
+    where the `cover` mask is (`occlude`), premultiplied with its alpha.
+    It is laid over nothing (D3): a composite lays it on — an "add" one in
+    a single pass with its `under` (`Composite.paint`, `lay_onto`), the
+    bytes the one-shader look-back drew. `run` moves its clock once a
+    frame. (`KIND` keeps the old word `history`: only the repr and a port
+    error's words read it.)"""
 
     KIND = "history"
-    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE, "cover": MASK}
-
-    def __init__(self, name: str, after: tuple[Node, ...] = (), **inputs: Node | None):
-        if inputs.get("occluder") is not None:
-            self.INPUTS = {**type(self).INPUTS, "occluder": IMAGE}
-        else:
-            inputs.pop("occluder", None)
-        super().__init__(name, after, **inputs)
+    INPUTS: ClassVar[dict[str, str]] = {"occluder": IMAGE, "cover": MASK}
     OUTPUT = IMAGE
 
+    def ring(self, frame: Frame):
+        return frame.r.ring(self.name, _ring_state(frame, self.name))
+
     def run(self, frame: Frame) -> None:
-        lb = frame.r.lookback
+        lb = self.ring(frame)
         lb.tick(frame.t)                 # echo time is seconds (plan 14 WP6)
-        lb.pull()
+        w, h = lb.echo
+        self.said = (lb.ring_error or (f"{w}×{h} · {lb.held()} of {MAX_ECHOES} held · "
+                                       f"{_ring_holds(frame, self.name)}" if w else
+                                       f"records {_ring_holds(frame, self.name)}"))
+
+    def _masks(self, frame: Frame) -> tuple:
+        cover, occ = self.inputs["cover"], self.inputs["occluder"]
+        return (cover.image(frame) if cover is not None else None,
+                picture(frame, occ) if occ is not None else None)
 
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
-        img = self.inputs["image"]
-        if img is None:
-            # (plan 35 B: a wired look-back with nothing wired into its
-            # image draws nothing over the ground)
-            rect = tuple(dst.viewport)
-            dst.use()
-            frame.ctx.viewport = rect
-            frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
-            return
-        src = img.image(frame)
-        cover = self.inputs["cover"].image(frame) if self.inputs["cover"] is not None else None
-        occ = self.inputs.get("occluder")
-        occ = occ.image(frame) if occ is not None else None
+        cover, occ = self._masks(frame)
         with frame.timed(self.name):
-            frame.r.lookback.composite(src, dst, cover, occ)
+            self.ring(frame).trail(dst, cover, occ)
+
+    def lay_onto(self, frame: Frame, under: moderngl.Texture, dst: moderngl.Framebuffer) -> None:
+        """The trail added onto `under` (a picture at the frame's size) into
+        `dst`, in one pass: an "add" composite of this look-back."""
+        cover, occ = self._masks(frame)
+        with frame.timed(self.name):
+            self.ring(frame).trail(dst, cover, occ, under=under)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """The trail made once a frame into a half-float texture of its own
+        (it carries its alpha, and must not quantise before it is laid on),
+        for a consumer that binds a texture: a dream, a composite laying it
+        over, an effect."""
+        key = self.name + "#trail"
+        if key not in frame.data:
+            tex, fbo = frame.r._frame_target(frame.key(key), frame.size, dtype="f2")
+            fbo.viewport = (0, 0, *frame.size)
+            self.paint(frame, fbo)
+            frame.data[key] = tex
+        return frame.data[key]
+
+
+def _ring_state(frame: Frame, name: str):
+    """Look-back `name`'s values (plan 36 T4): the renderer's own
+    `DreamState` for `lookback` (`dream.*`), else the view state's for that
+    instance (`ViewState.lookback`, `dream.<n>.*`: params.declare_lookbacks)
+    — None when none is declared (a default one)."""
+    if name == LOOKBACK:
+        return None
+    return (getattr(frame.s, "lookback", None) or {}).get(name)
+
+
+def _advance_fx(frame: Frame) -> None:
+    """Once a frame, before the outputs (plan 30 D1): any effect on, a
+    placed one too — its clock moves once a frame whether or not its edge
+    had a picture to fold (plan 36 T4: the first capture's, or the graph's
+    before its first output when nothing is recorded)."""
+    if frame.data.get("fx#advanced"):
+        return
+    frame.data["fx#advanced"] = True
+    if (frame.fx_on or _live_now(frame)) and not frame.stats["chain_runs"]:
+        frame.r.fx.state.advance_to(frame.t)
 
 
 class Capture(Node):
-    """The look-back's capture (`lookback(capture)`): what is wired into
-    `lookback.capture` — the scene in the factory frame, or any picture
-    (the scene with the hands' layer laid on is a `Composite` wired there)
-    — into the ring on the echoes' cadence, and out to the dream worker.
-    Exactly once a frame, after everything an output shows has read the
-    look-back (`after`: every `Shown` end, each delay's write, each
-    picture laid as an output's hands or guide — a capture changes the
-    echoes' weights, ages and tint, so one between two readers would give
-    two outputs different echoes), whatever
-    the outputs show: with no window showing the look-back the ring and
-    the dream go on, and so do the effects' clocks. (`KIND` keeps the old
-    word `history`, as `History`'s does: only the repr and a port error's
-    words read it, and the two are renamed together or not at all.)"""
+    """A look-back's capture (`lookback(capture)`, `lookback.2(capture)`):
+    what is wired into its `image` — the scene, or any picture (the scene
+    with the hands' layer laid on is a `Composite` wired there) — into its
+    ring on the echoes' cadence. Exactly once a frame, after everything an
+    output shows has read the trail (`after`: every `Shown` end, each
+    delay's write, each picture laid as an output's hands or guide — a
+    capture changes the echoes' weights and ages, so one between two
+    readers would give two outputs different echoes), whatever the outputs
+    show. (`KIND` keeps the old word `history`, as `History`'s does.)"""
 
     KIND = "history"
     INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
     OUTPUT = None
 
+    def __init__(self, name: str, after: tuple[Node, ...] = (), lookback: str = LOOKBACK,
+                 **inputs: Node | None):
+        super().__init__(name, after, **inputs)
+        self.lookback = lookback
+
     def run(self, frame: Frame) -> None:
         r = frame.r
-        frame.stats["captures"] = 1
-        src = self.inputs["image"].image(frame)
+        frame.stats["captures"] = frame.stats.get("captures", 0) + 1
+        src = picture(frame, self.inputs["image"])
         with frame.timed(self.name):
-            r.lookback.capture(src, r.scene.fbo)
-        # (plan 30 D1: any effect on, a placed one too — its clock moves
-        # once a frame whether or not its edge had a picture to fold)
-        if (frame.fx_on or _live_now(frame)) and not frame.stats["chain_runs"]:
-            r.fx.state.advance_to(frame.t)
+            r.ring(self.lookback, _ring_state(frame, self.lookback)).capture(src, r.scene.fbo)
+        _advance_fx(frame)
 
 
 # ---------------------------------------------------------------- composite
@@ -4576,6 +4803,17 @@ class Composite(Node):
     def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
         r, ctx, size = frame.r, frame.ctx, frame.size
         under = self.inputs["under"]
+        if self.blend == "add" and under is not None and self.under_alpha_of is None:
+            # plan 36 T4: a look-back's trail (straight, or through a dream
+            # passing it on) added onto `under` is one pass — min(under +
+            # trail, 1), the alphas' union: what "add" lays, without the
+            # trail's own texture between (the one-shader look-back's bytes)
+            lb = _trail_of(self.inputs["over"], frame)
+            if lb is not None and not self.muted(frame):
+                tex = picture(frame, under)
+                if tex is not None:
+                    lb.lay_onto(frame, tex, dst)
+                    return
         if under is not None and self.under_alpha_of is not None:
             # (made before the lay: its own passes time themselves; plan 33
             # S: a switch at off, or on an unwired input, is not painted:
@@ -4730,9 +4968,11 @@ class Effect(Node):
         effect folding one): this effect folds it once in its own `run`."""
         src = self.inputs["image"]
         # (plan 33 R: a source that paints itself straight in — the
-        # pattern's seed, `PAINTS` — is painted, as the faces' chain was)
-        return src is not None and ((src.MAKES and not src.PAINTS)
-                                    or (isinstance(src, Effect) and src.makes))
+        # pattern's seed, `PAINTS` — is painted, as the faces' chain was;
+        # plan 36 T4: an effect of All outputs' run — `placed` None — paints
+        # its input as the run always did, the look-back that headed it gone)
+        return src is not None and self.placed is not None and (
+            (src.MAKES and not src.PAINTS) or (isinstance(src, Effect) and src.makes))
 
     @property
     def see_through(self) -> bool:
@@ -5222,9 +5462,6 @@ class Graph:
         self._framed: frozenset[str] | None = None     # plan 33 R: `at_frame`, settled
         # plan 33 S: `pulled`, by the switches' picks (None: not yet asked)
         self._pulled: dict[tuple[int, ...], frozenset[str]] | None = None
-        # plan 34 E (row 362): an `echo.<k>` or the `dream` is in the graph —
-        # the renderer keeps the ring capturing (`Lookback.keep`)
-        self.reads_ring = False
 
     def relink(self) -> None:
         """Count the readers and sort again after inputs were rewired in
@@ -5399,6 +5636,8 @@ class Graph:
         for node in self.order:
             if node.name not in pulled and (node.MAKES or isinstance(node, Effect)):
                 continue
+            if isinstance(node, Output):
+                _advance_fx(frame)       # (plan 36 T4: a frame with no capture too)
             node.run(frame)
 
     def __repr__(self) -> str:
@@ -5559,6 +5798,7 @@ class _Build:
         # global over every output)
         self.laid = {getattr(wiring, "laid_on", 1): wiring.blend}
         self.cover: Cover | None = None
+        self.lookbacks: list[History] = []           # plan 36 T4: each look-back made
         self.ends: list[Shown] = []
         self._ends: dict[int, Shown] = {}
         self._names: set[str] = set()
@@ -5669,10 +5909,13 @@ class _Build:
                                         under=self._from("backdrop.image"),
                                         under_alpha_of="backdrop_alpha" if wired else None))
         if kind == "lookback":
-            # plan 36 T2: its cover mask is the wire into `lookback.cover`
-            image, occ = self._from("lookback.image"), self._from("lookback.occluder")
-            return self._keep(History(LOOKBACK, image=image, cover=self._from("lookback.cover"),
-                                      occluder=occ))
+            # plan 36 T2: its cover mask is the wire into `lookback.cover`;
+            # T4: its `image` is what its capture records (`build`), no
+            # input of the trail's
+            lb = self._keep(History(name, cover=self._from(f"{name}.cover"),
+                                    occluder=self._from(f"{name}.occluder")))
+            self.lookbacks.append(lb)
+            return lb
         if kind == "channel":
             c = name.partition(".")[2]
             nm = channel_name(c) if c != self.back_channel else f"{channel_name(c)}(wire)"
@@ -5706,9 +5949,16 @@ class _Build:
                 return None
             return self._keep(ResizeNode(name, image=src))
         if kind == "echo":
-            return self._keep(EchoNode(name, int(name.partition(".")[2])))
+            # plan 36 T4: a look-back's pin, a frame of its ring — the
+            # look-back made first, so it records
+            got = echo_of(name)
+            if got is None:
+                self.g.dormant[name] = f"no {name} in this build"
+                return None
+            self.node(got[0])
+            return self._keep(EchoNode(name, got[1], lookback=got[0]))
         if kind == "dream":
-            return self._keep(DreamNode(name))
+            return self._keep(DreamNode(name, image=self._from(f"{name}.image")))
         if kind is not None and kind not in ("output", GROUND):
             self.g.dormant[name] = f"no {name} in this build"
         return None
@@ -5823,22 +6073,30 @@ class _Build:
             # pictures, `Output.settle`: the layers run first)
             end.after = layers
             end.chained = any(e.effect in g.run for e in _effects_of(end.inputs["image"]))
-        held = self._from("lookback.capture")
-        capture = None
-        if held is not None:
-            laid = [x for p in ports for x in (p["hands"], p["guide"]) if x is not None]
-            capture = Capture(CAPTURE, image=held,
-                              after=tuple(dict.fromkeys([*self.ends, *writes, *laid])))
+        # plan 36 T4: each look-back's capture, what is wired into its
+        # `image`, after every reader of its trail
+        laid = [x for p in ports for x in (p["hands"], p["guide"]) if x is not None]
+        helds: list[Node] = []
+        captures: list[Capture] = []
+        for lb in self.lookbacks:
+            held = self._from(f"{lb.name}.image")
+            if held is None:
+                continue
+            helds.append(held)
+            captures.append(Capture(capture_name(lb.name), lookback=lb.name, image=held,
+                                    after=tuple(dict.fromkeys([*self.ends, *writes, *laid]))))
+        if self.cover is not None:
+            self.cover.wanted_by = tuple(lb.name for lb in self.lookbacks
+                                         if lb.inputs["cover"] is self.cover)
         outputs = []
         for i, (p, end) in enumerate(zip(ports, shown)):
             # plan 36 T2: the hands laid on as their layer says (`laid`, its
             # hands entry's), depth-aware against the wire into `depth`
-            outputs.append(Output(f"output.{i + 1}", i, after=(capture,) if capture else (),
+            outputs.append(Output(f"output.{i + 1}", i, after=tuple(captures),
                                   blend=_laid_of(p["hands"]), image=end,
                                   hands=p["hands"], readout=p["guide"],
                                   depth=p[DEPTH_PORT] if p["hands"] is not None else None))
-        self._mute_hands(ports, [*self.built, *self.ends, *writes,
-                                 *((capture,) if capture else ())])
+        self._mute_hands(ports, [*self.built, *self.ends, *writes, *captures])
         # into the graph in the default graph's order: the frame's own
         # nodes, the run, each through's composite and copies, the
         # capture's picture, the ends, the writes, the capture, the outputs
@@ -5857,7 +6115,7 @@ class _Build:
         for end in shown:
             if end is not None and _through_chain(end.inputs["image"]):
                 roots += [*_effects_of(end.inputs["image"]), end]
-        roots += [held, *self.ends, *writes, capture, *outputs, *self.built]
+        roots += [*helds, *self.ends, *writes, *captures, *outputs, *self.built]
         seen: set[int] = set()
 
         def add(node: Node | None) -> None:
@@ -5874,7 +6132,6 @@ class _Build:
         self._split(layers)
         g.placed_names = frozenset(
             n.effect for n in g.nodes.values() if isinstance(n, Effect) and n.placed)
-        g.reads_ring = any(isinstance(n, _RingNode) for n in g.nodes.values())
         g.relink()
 
     def _aux(self) -> None:

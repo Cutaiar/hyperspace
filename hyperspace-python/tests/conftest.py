@@ -128,13 +128,17 @@ def _renderers_draw_todays_frame(request, monkeypatch):
         return
     from hyperspace import render
     from hyperspace.graph import Wiring
-    from hyperspace.graphmigrate import wired_wiring
+    from hyperspace.graphmigrate import look_of, wired_wiring
 
     init = render.Renderer.__init__
 
     def today(self, *a, **k):
         init(self, *a, **k)
-        self.wiring = wired_wiring(Wiring())
+        # (plan 36 T4: its look-back as the old words had it — drawn while
+        # `dream.on` was on, with the dream while its mix is above 0)
+        st = self.lookback.state
+        self.wiring = wired_wiring(Wiring(), look_of({"dream.on": bool(st.on),
+                                                      "dream.mix": st.mix}))
 
     monkeypatch.setattr(render.Renderer, "__init__", today)
 

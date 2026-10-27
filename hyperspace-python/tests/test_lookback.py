@@ -186,14 +186,20 @@ def test_capture_cadence(ctx):
 
 
 def test_off_forgets_the_history(ctx):
+    """Plan 36 T4: a look-back drawn is on — taken out of the frame, its
+    ring forgets; drawn again, it starts clean."""
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
+
     rig = Rig(ctx, 200, 128, dream=DreamState(on=True, echoes=4, gap=0.0, res=0))
+    drawn = rig.r.wiring
     for _ in range(4):
         rig.frame()
     assert len(rig.lb.layers()) == 4
-    rig.lb.state.on = False
+    rig.r.wiring = wired_wiring(Wiring())         # (the old words' look-back off)
     rig.frame()
     assert rig.lb.layers() == []
-    rig.lb.state.on = True
+    rig.r.wiring = drawn
     rig.frame()
     assert [round(age * REF_HZ) for _, age in rig.lb.layers()] == [1]
     rig.release()
@@ -207,7 +213,6 @@ def test_res_rebuilds_the_atlas(ctx):
     rig.lb.state.res = 2
     rig.frame()
     assert rig.lb.echo == (400, 256)
-    assert rig.lb.dream.size == (400, 256)
     assert ctx.error == "GL_NO_ERROR"
     rig.release()
 
@@ -256,7 +261,7 @@ def test_composite_matches_numpy_reference(ctx):
     rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=3, gap=0.0, res=0,
                                           echo_mix=0.7, fade=fade_of_decay(0.8), darken=0.25,
                                           contrast=1.6,
-                                          mix=0.5))
+                                          mix=0.0))
     rig.frame()                        # builds the ring; one real capture in slot 0
     lb = rig.lb
     assert lb.echo == (w, h)
@@ -267,8 +272,6 @@ def test_composite_matches_numpy_reference(ctx):
     for k, img in enumerate(imgs):     # slots 1..3 hold frames aged 3, 2, 1
         lb.write_slot(k + 1, img, at=now - (3 - k) / REF_HZ)
     assert [round(age * REF_HZ) for _, age in lb.layers()] == [3, 2, 1]
-    dream = synthetic(h, w, 9)
-    lb.write_from(dream, frame_index=lb.frame)
     rig.fbo.use()
     ctx.viewport = (0, 0, w, h)
     lb.composite(rig.r.scene.tex, rig.fbo)
@@ -276,7 +279,6 @@ def test_composite_matches_numpy_reference(ctx):
     scene = rig.scene().astype(np.float64) / 255.0
     layers = [(img.astype(np.float64) / 255.0, 0.7 * 0.8 ** age)
               for img, age in zip(imgs, (3, 2, 1))]
-    layers.append((dream.astype(np.float64) / 255.0, 0.5))
     ref = reference(scene, layers, 0.25, 1.6)
     err = np.abs(out - ref)
     assert err.max() <= 2.5 / 255, f"max error {err.max() * 255:.2f}/255"
@@ -285,6 +287,33 @@ def test_composite_matches_numpy_reference(ctx):
     assert np.abs(out - scene).mean() > 0.02
     # the black quarter of every layer adds nothing over the scene
     assert np.array_equal((out[:, : w // 4] * 255).round(), (scene[:, : w // 4] * 255).round())
+    rig.release()
+
+
+def test_the_trail_alone_is_the_wake_with_its_alpha(ctx):
+    """Plan 36 T4 (D3): the look-back's own picture is the trail, laid over
+    nothing — premultiplied, its alpha the layers' union — and the fused
+    "add" pass is exactly the scene with that trail added on."""
+    w, h = echo_size(128, 400, 256)
+    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=2, gap=0.0, res=0, echo_mix=0.8,
+                                          fade=FADE_HI, darken=0.0, contrast=1.0, mix=0.0,
+                                          occlude=0.0))
+    rig.frame()
+    lb = rig.lb
+    imgs = [synthetic(h, w, k) for k in range(2)]
+    now = lb.now()
+    for k, img in enumerate(imgs):
+        lb.write_slot(k, img, at=now - (2 - k) / REF_HZ)
+    rig.fbo.use()
+    ctx.viewport = (0, 0, w, h)
+    lb.trail(rig.fbo)
+    out = rig.read().astype(np.float64) / 255.0
+    layers = [(img.astype(np.float64) / 255.0, wgt) for img, (_, wgt) in zip(imgs, lb.weights())]
+    black = np.zeros((h, w, 4))
+    ref = reference(black, layers, 0.0, 1.0, occlude=0.0)
+    assert np.abs(out - ref).max() <= 1.5 / 255
+    assert (out[..., :3] <= out[..., 3:] + 1 / 255).all(), "premultiplied"
+    assert out[:, : w // 4].max() == 0.0, "a black layer covers nothing"
     rig.release()
 
 
@@ -321,6 +350,17 @@ def scene_hue_tint(scene, sat):
     return colorsys.hsv_to_rgb(h, sat, 1.0)
 
 
+def dream_over(under, coloured, mix, darken, contrast):
+    """The dream pass in numpy (plan 36 T4, DREAM_FS): `coloured` graded and
+    laid premultiplied over `under` at `mix`, its luminance its coverage."""
+    c = grade(coloured, contrast, darken)
+    a = mix * c.max(axis=2)
+    out = np.empty_like(under)
+    out[..., :3] = under[..., :3] * (1.0 - a)[..., None] + c * mix
+    out[..., 3] = under[..., 3] + a - under[..., 3] * a
+    return out
+
+
 @pytest.mark.parametrize("chroma_kw, tint_rgb", [
     # the net's own colours re-hued and half desaturated, no tint
     ({"hue": 120.0, "sat": 0.5, "tint": 0.0}, None),
@@ -334,30 +374,30 @@ def scene_hue_tint(scene, sat):
     ({"tint": 1.0, "tint_from": 1, "tint_sat": 0.85}, "scene"),
 ])
 def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
-    """The chroma stage on the dream buffer alone (no echoes): the shader
-    against the numpy transcription, tint colour included — the chosen
-    one, or the hue of the scene's mean, read off the newest echo at
-    capture."""
+    """The chroma stage on the dream buffer (plan 36 T4: the dream node's
+    pass, `Dreamer.lay`, over its picture): the shader against the numpy
+    transcription, tint colour included — the chosen one, or the hue of
+    its input's mean, read off the submit."""
     import colorsys
 
     w, h = echo_size(128, 400, 256)
-    # occlude 0: the scene here is lit everywhere and would cover it all
     state = DreamState(on=True, echoes=0, gap=0.0, res=0, darken=0.2, contrast=1.3, mix=0.6,
                        occlude=0.0, **chroma_kw)
     rig = Rig(ctx, w, h, dream=state)
     rig.frame()
-    lb = rig.lb
-    # a scene with a decided colour cast, captured as the frame loop would
-    # (the echo is the scene itself here: target at the echo size)
+    lb = rig.r.dreamer
+    # a picture with a decided colour cast, submitted as the dream node
+    # would (at the submit size here, so the downsample is one to one)
     scene8 = synthetic(h, w, 21)
     scene8[..., :3] = (scene8[..., :3] * np.array([0.25, 0.55, 1.0])).round().astype(np.uint8)
     rig.r.scene.tex.write(scene8)
+    lb.submit(rig.r.scene.tex, w, h)
+    dream8 = synthetic(h, w, 9)
+    lb._ensure(w, h)
+    lb.write_from(dream8, frame_index=lb.frame)
     rig.fbo.use()
     ctx.viewport = (0, 0, w, h)
-    lb.capture(rig.r.scene.tex, rig.fbo)
-    dream8 = synthetic(h, w, 9)
-    lb.write_from(dream8, frame_index=lb.frame)
-    lb.composite(rig.r.scene.tex, rig.fbo)
+    lb.lay(rig.r.scene.tex, rig.fbo)
     out = rig.read().astype(np.float64) / 255.0
     scene = scene8.astype(np.float64) / 255.0
     dream = dream8.astype(np.float64)[..., :3] / 255.0
@@ -368,18 +408,17 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
         # sits on the exact mean's hue to within a degree or so
         exact = scene_hue_tint(scene, state.tint_sat)
         assert max(exact) - min(exact) > 0.5, "the cast must give a real hue"
-        assert lb.scene_mean == pytest.approx(mean_colour(scene8), abs=1e-6)
-        assert lb.scene_mean == pytest.approx(scene[..., :3].reshape(-1, 3).mean(axis=0),
+        assert lb.input_mean == pytest.approx(mean_colour(scene8), abs=1e-6)
+        assert lb.input_mean == pytest.approx(scene[..., :3].reshape(-1, 3).mean(axis=0),
                                               abs=0.01)
         tint_rgb = lb.tint_rgb()
         assert tint_rgb == pytest.approx(scene_tint(mean_colour(scene8), state.tint_sat))
         assert tint_rgb == pytest.approx(exact, abs=0.03)
     elif tint_rgb is None:
         tint_rgb = colorsys.hsv_to_rgb(state.tint_hue / 360.0, state.tint_sat, 1.0)
-        assert lb.scene_mean is None, "colour mode never reads the echo back"
+        assert lb.input_mean is None, "colour mode never reads the input back"
     coloured = chroma(dream, state.hue, state.sat, state.tint, tint_rgb)
-    rgba = np.concatenate([coloured, np.ones(coloured.shape[:2] + (1,))], axis=2)
-    ref = reference(scene, [(rgba, 0.6)], 0.2, 1.3, occlude=0.0)
+    ref = dream_over(scene, coloured, 0.6, 0.2, 1.3)
     err = np.abs(out - ref)
     assert err.max() <= 2.5 / 255, f"max error {err.max() * 255:.2f}/255"
     assert err.mean() <= 0.4 / 255
@@ -391,11 +430,13 @@ def test_dream_chroma_matches_numpy_reference(ctx, chroma_kw, tint_rgb):
 
 @pytest.mark.parametrize("occlude", [0.0, 0.5, 1.0])
 def test_render_occludes_the_wake(ctx, occlude):
-    """The render over the wake: a lit shape covers the dream beneath it by
-    its brightness × occlude; between the shapes the dream shows whole."""
+    """The render over the wake: a lit shape covers the trail beneath it by
+    its brightness × occlude; between the shapes the trail shows whole
+    (plan 36 T4: an echo — the dream is the dream node's, laid over its
+    picture)."""
     w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=0, gap=0.0, res=0, darken=0.0, contrast=1.0, mix=1.0,
-                   occlude=occlude)
+    d = DreamState(on=True, echoes=1, gap=0.0, res=0, darken=0.0, contrast=1.0, mix=0.0,
+                   echo_mix=1.0, fade=FADE_HI, occlude=occlude)
     rig = Rig(ctx, w, h, dream=d)
     rig.frame()
     # a scene: a bright bar and a faint bar on black; a flat grey dream everywhere
@@ -405,16 +446,17 @@ def test_render_occludes_the_wake(ctx, occlude):
     scene8[:, 100:120, :3] = 20          # faint: 20/255 × 4 ≈ 31 % coverage
     rig.r.scene.tex.write(scene8)
     dream8 = np.full((h, w, 4), 100, dtype=np.uint8)
-    rig.lb.write_from(dream8, frame_index=rig.lb.frame)
+    rig.lb.write_slot(rig.lb._next, dream8, at=rig.lb.now())
+    (_, wgt), = rig.lb.weights()
     rig.fbo.use()
     ctx.viewport = (0, 0, w, h)
     rig.lb.composite(rig.r.scene.tex, rig.fbo)
     out = rig.read().astype(np.float64) / 255.0
-    ref = reference(scene8 / 255.0, [(dream8 / 255.0, 1.0)], 0.0, 1.0, occlude=occlude)
+    ref = reference(scene8 / 255.0, [(dream8 / 255.0, wgt)], 0.0, 1.0, occlude=occlude)
     assert np.abs(out - ref).max() <= 1.5 / 255
-    # between the shapes: the dream, whatever occlude is
+    # between the shapes: the trail, whatever occlude is
     assert np.abs(out[:, 150:, 0] - 100 / 255).max() <= 1 / 255
-    # on the bright bar: the render alone at occlude 1, render + dream at 0
+    # on the bright bar: the render alone at occlude 1, render + trail at 0
     bar = out[:, 40:60, 0]
     want = 200 / 255 + (1.0 - occlude) * 100 / 255
     assert np.abs(bar - min(want, 1.0)).max() <= 1.5 / 255
@@ -424,17 +466,20 @@ def test_render_occludes_the_wake(ctx, occlude):
 @pytest.mark.parametrize("bg_alpha", [1.0, 0.0])
 def test_faces_occlude_the_dream_whatever_their_fill(ctx, bg_alpha):
     """The bug this guards: faces are filled at a few percent alpha, so
-    their brightness alone barely covered the wake and the dream showed
-    through them at occlude 1. The faces' coverage mask covers it fully,
-    on an opaque ground and on overlay's see-through one."""
+    their brightness alone barely covered the wake and it showed through
+    them at occlude 1. The faces' coverage mask covers it fully, on an
+    opaque ground and on overlay's see-through one (plan 36 T4: the wake is
+    the trail, an echo of flat grey)."""
     w, h = 320, 240
-    d = DreamState(on=True, echoes=0, gap=0.0, res=0, mix=1.0, darken=0.0, occlude=1.0)
+    d = DreamState(on=True, echoes=1, gap=1.0, res=0, mix=0.0, darken=0.0, occlude=1.0,
+                   echo_mix=1.0, fade=FADE_HI)
     rig = Rig(ctx, w, h, bg_alpha=bg_alpha, dream=d)
     rig.s.faces, rig.s.lines, rig.s.points = True, False, False
     rig.frame()
     lb = rig.lb
     ew, eh = lb.echo
-    lb.write_from(np.full((eh, ew, 4), 180, dtype=np.uint8), frame_index=lb.frame)
+    grey = np.full((eh, ew, 4), 180, dtype=np.uint8)
+    lb.write_slot(lb._next, grey, at=lb.clock)
     rig.frame()
     out, scene = rig.read().astype(int), rig.scene().astype(int)
     faces = np.frombuffer(rig.r.cover.tex.read(), dtype=np.uint8).reshape(h, w) > 0
@@ -448,6 +493,7 @@ def test_faces_occlude_the_dream_whatever_their_fill(ctx, bg_alpha):
     # and at occlude 0 it shows through the faces again
     d.occlude = 0.0
     rig.s.ang[3] -= 0.03                 # the same pose as the frame just read
+    lb.write_slot(lb._next, grey, at=lb.clock)
     rig.frame()
     out0 = rig.read().astype(int)
     assert (out0[faces][:, :3] > scene[faces][:, :3] + 60).all(axis=1).mean() > 0.9
@@ -462,11 +508,13 @@ def test_dream_chroma_is_neutral_by_default(ctx):
     rig = Rig(ctx, w, h, dream=d)
     rig.frame()
     dream8 = synthetic(h, w, 9)
-    rig.lb.write_from(dream8, frame_index=rig.lb.frame)
-    rig.r.scene.tex.write(np.zeros((h, w, 4), dtype=np.uint8))     # a black scene
+    dr = rig.r.dreamer
+    dr._ensure(w, h)
+    dr.write_from(dream8, frame_index=1)
+    rig.r.scene.tex.write(np.zeros((h, w, 4), dtype=np.uint8))     # a black picture
     rig.fbo.use()
     ctx.viewport = (0, 0, w, h)
-    rig.lb.composite(rig.r.scene.tex, rig.fbo)
+    dr.lay(rig.r.scene.tex, rig.fbo)
     out = rig.read().astype(int)
     # weight 1 over black: the composite is the dream itself (8-bit rounding)
     assert np.abs(out[..., :3] - dream8.astype(int)[..., :3]).max() <= 1
@@ -516,33 +564,33 @@ def test_tint_colour():
 
 
 def test_scene_tint_reads_the_echo_only_when_asked(ctx):
-    """Scene mode costs one echo read-back a frame, on the cadence or off
-    it; colour mode never reads. With a source attached the worker's own
-    read serves both. Switching off clears the mean."""
+    """A tint from the dream's input costs one read-back a frame; colour
+    mode never reads. With a source attached the worker's own read serves
+    both. The dream off clears the mean (plan 36 T4: the dream node's own
+    read of its input, no look-back's)."""
     w, h = echo_size(128, 400, 256)
-    d = DreamState(on=True, echoes=2, gap=3 / REF_HZ, res=0, tint_from=1)
+    d = DreamState(on=True, echoes=2, gap=0.0, res=0, tint_from=1)
     rig = Rig(ctx, w, h, dream=d)
-    lb = rig.lb
+    lb = rig.r.dreamer
     for _ in range(4):
         rig.frame()
-    assert lb.scene_mean is not None
-    assert len(lb.layers()) == 1, "an off-cadence frame is read for the mean, not kept"
-    mean = lb.scene_mean
+    assert lb.input_mean is not None and lb.frame == 4
+    mean = lb.input_mean
     d.tint_from = 0
-    lb.scene_mean = None
+    lb.input_mean = None
     for _ in range(3):
         rig.frame()
-    assert lb.scene_mean is None
+    assert lb.input_mean is None and lb.frame == 4
     d.tint_from = 1
     src = Echo()
     lb.source = src
     n = src.buffers
     rig.frame()
-    assert src.buffers == n + 1 and lb.scene_mean is not None
-    assert lb.scene_mean == pytest.approx(mean, abs=0.05)   # the same scene, near enough
+    assert src.buffers == n + 1 and lb.input_mean is not None
+    assert lb.input_mean == pytest.approx(mean, abs=0.05)   # the same picture, near enough
     d.on = False
     rig.frame()
-    assert lb.scene_mean is None
+    assert lb.input_mean is None
     rig.release()
 
 
@@ -756,29 +804,30 @@ def test_source_protocol():
 
 
 def test_dream_slot_round_trip(ctx):
+    """Plan 36 T4: the dream node submits its own input (the look-back's
+    trail, in an old dream preset's frame) and pulls its own results."""
     w, h = echo_size(128, 400, 256)
     src = Echo()
-    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=0, gap=0.0, res=0, mix=1.0,
-                                          darken=0.0))
-    rig.lb.source = src
+    rig = Rig(ctx, w, h, dream=DreamState(on=True, echoes=1, gap=0.0, res=0, mix=1.0,
+                                          darken=0.0, echo_mix=1.0, fade=FADE_HI))
+    dr = rig.r.dreamer
+    dr.source = src
     rig.frame()
     frame1, idx = src.submitted[-1]
     assert idx == 1 and frame1.shape == (h, w, 4) and src.buffers == 1
-    # the submitted pixels are the newest echo: a downsample of the scene
-    assert frame1.max() > 0
-    # nothing answered yet: the composite is a copy
-    assert rig.lb.dream_frame == -1
-    rig.frame()            # submit 2; latest() now answers submit 1
-    rig.frame()            # pulled before this composite
-    assert rig.lb.dream_frame == 1
+    # nothing answered yet: the dream passes its picture through
+    assert dr.dream_frame == -1
+    rig.frame()            # submit 2 (the trail now holds an echo); answers submit 1
+    rig.frame()            # pulled before this frame's pass
+    assert dr.dream_frame == 1 and src.submitted[1][0].max() > 0
     out = rig.read().astype(int)
     scene = rig.scene().astype(int)
     assert (out[..., :3] >= scene[..., :3]).all()
     assert np.abs(out - scene).mean() > 0.5, "the dream layer must show"
-    # the third capture's submit answered the second; a result already
-    # shown is not uploaded again
-    assert rig.lb.pull() is True and rig.lb.dream_frame == 2
-    assert rig.lb.pull() is False
+    # the third submit answered the second; a result already shown is not
+    # uploaded again
+    assert dr.pull() is True and dr.dream_frame == 2
+    assert dr.pull() is False
     rig.release()
 
 
@@ -795,9 +844,11 @@ def test_read_write_legs(ctx):
     lb.write_slot(lb.newest(), img)
     lb.read_into(buf)
     assert np.array_equal(buf, img)
-    lb.write_from(img, 5)
-    assert lb.dream_frame == 5
-    back = np.frombuffer(lb.dream.read(), dtype=np.uint8).reshape(h, w, 4)
+    dr = rig.r.dreamer
+    dr._ensure(w, h)
+    dr.write_from(img, 5)
+    assert dr.dream_frame == 5
+    back = np.frombuffer(dr.dream.read(), dtype=np.uint8).reshape(h, w, 4)
     assert np.array_equal(back, img)
     rig.release()
 
@@ -809,17 +860,18 @@ def test_copy_path_round_trip_under_budget(ctx):
     w, h = echo_size(256, 1280, 820)
     rig = Rig(ctx, 1280, 820, dream=DreamState(on=True, echoes=1, gap=0.0, res=2))
     rig.frame()
-    lb = rig.lb
+    lb, dr = rig.lb, rig.r.dreamer
+    dr._ensure(1280, 820)
     buf = np.empty((h, w, 4), dtype=np.uint8)
     for _ in range(5):
         lb.read_into(buf)
-        lb.write_from(buf)
+        dr.write_from(buf)
     ctx.finish()
     times = []
     for _ in range(40):
         t0 = time.perf_counter()
         lb.read_into(buf)
-        lb.write_from(buf)
+        dr.write_from(buf)
         ctx.finish()
         times.append(time.perf_counter() - t0)
     p50 = sorted(times)[len(times) // 2] * 1e3
@@ -1349,7 +1401,7 @@ def test_every_dream_label_says_whose_knob_it_is():
         assert reg[pid].label.startswith("Dream "), pid
     assert [reg[pid].label for pid in ui_lookback.SECTIONS["both"]] == [
         "Darken", "Contrast", "Shape hides wake", "Look-back detail"]
-    assert reg["dream.on"].label == "Look-back"
+    assert reg["dream.on"].label == "Dream on"           # (plan 36 T4: the dream's own)
     labels = [p.label for p in reg.group("dream")]
     assert len(set(labels)) == len(labels)          # ROUTING's list tells every one apart
     for p in reg.group("dream"):

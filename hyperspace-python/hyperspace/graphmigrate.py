@@ -34,6 +34,14 @@ pattern, the look-back's cover, a layer's and a guide's hands, the
 scene's depth for `laid: depth` — is written as the wire it stood for
 (`drawn_edges`), on every `/4`–`/6` section, a wired one too, so each
 draws what it drew while nothing is read that no wire says.
+
+Plan 36 T4 (W4): the one-shader look-back (echoes and the dream laid over
+`lookback.image`, recording `lookback.capture`) is two nodes and a
+composite — `split_lookback`, the last step to `/7` (`seven`), keyed on
+the old values (`look_of`): on, it is `X → lookback → composite (add,
+under X) → …` where the look-back sat, and `lookback → dream →` into the
+composite with a dream mix above 0; off, it drew its picture untouched,
+so its readers read that picture and no look-back is drawn.
 """
 
 from __future__ import annotations
@@ -566,7 +574,8 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
     the wiring the default graph builds from the outputs' switches, which
     these rigs still set by hand until T4 retires them. Plan 36 T3: then
     wired as a load wires it (`wired_wiring`) — what a renderer takes;
-    `wired` False keeps those old words (a test reading its `run`)."""
+    `wired` False keeps those old words (a test reading its `run`). Plan 36
+    T4: its look-back as `values` had it (`look_of`)."""
     doc = {"values": dict(values)}
     if section is not None:
         doc["graph"] = section
@@ -574,7 +583,7 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
     section = out.get("graph")
     spec = G.read_graph(section, effects=_files(specs)) if isinstance(section, dict) else None
     got = spec.wiring() if spec is not None else G.Wiring(run=())
-    return wired_wiring(got) if wired else got
+    return wired_wiring(got, look_of(values)) if wired else got
 
 
 def wiring_of(fx: Any) -> G.Wiring:
@@ -649,7 +658,8 @@ def module_runs(section: Any, values: dict, specs: Specs,
         doc = {**(rows or {}), "values": dict(values), "graph": stripped}
         out, notes = migrate(doc, specs)
         sec = out.get("graph") if isinstance(out.get("graph"), dict) else stripped
-        return sec, notes
+        # (plan 36 T4: the old words' look-back as the values have it)
+        return split_lookback(sec, look_of(values)), notes
 
     sec, notes = landed(main | faces)
     if faces and not any(isinstance(w, dict) and w.get("from") == "pattern"
@@ -1208,7 +1218,7 @@ def section_of(wiring: G.Wiring) -> dict:
     return out
 
 
-def wired_of(wiring: G.Wiring, *, placements: bool = True) -> dict:
+def wired_of(wiring: G.Wiring, *, placements: bool = True, look: str = "off") -> dict:
     """An unwired `Wiring` (the words before the wired frame: a rig's, a
     tool's, a test's) as the wired frame the one-way migration writes for
     it (plan 35 T4): `section_of` it, renamed and written as a wired frame
@@ -1218,24 +1228,27 @@ def wired_of(wiring: G.Wiring, *, placements: bool = True) -> dict:
     `frame_wires(read_graph({}))` — today's frame, what a section-less old
     preset migrates to. `placements` False leaves D1's entries as they are
     (the step before `placed_wires`: a test rig lays the retired switch
-    states on first, as the builder placed on each output's state)."""
+    states on first, as the builder placed on each output's state).
+    Plan 36 T4: then the look-back split as `look` says the old values had
+    it (`split_lookback`: the words hold no `dream.on`; "off", the
+    default, draws no look-back) — only with `placements`, the last step."""
     section = section_of(wiring)
     out = wired_section(renamed(section), G.read_graph(section),
                         backdrop_history=wiring.backdrop_history)
-    return placed_wires(out) if placements else out
+    return split_lookback(placed_wires(out), look) if placements else out
 
 
-def wired_wiring(wiring: G.Wiring) -> G.Wiring:
+def wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
     """What a renderer or `graph.build_graph` takes for `wiring` (plan 36
     T3): a wired one is itself; an unwired one is the old words, wired by
-    the one-way migration (`wired_of`) — the explicit step `graph.wired`
-    did unasked before W3."""
-    return wiring if wiring.wired else _wired_wiring(wiring)
+    the one-way migration (`wired_of`, its look-back as `look` says) — the
+    explicit step `graph.wired` did unasked before W3."""
+    return wiring if wiring.wired else _wired_wiring(wiring, look)
 
 
 @functools.lru_cache(maxsize=64)
-def _wired_wiring(wiring: G.Wiring) -> G.Wiring:
-    return G.read_graph(wired_of(wiring)).wiring()
+def _wired_wiring(wiring: G.Wiring, look: str = "off") -> G.Wiring:
+    return G.read_graph(wired_of(wiring, look=look)).wiring()
 
 
 # ---------------------------------------------------------------- D1's placements as wires (plan 36 T3)
@@ -1384,6 +1397,140 @@ def section_effects(section: Any) -> set[str]:
 MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran — save to keep it"
 
 
+# ---------------------------------------------------------------- the look-back split (plan 36 T4)
+#
+# Plan 36 W4: the look-back was one object — a ring of echoes and the dream
+# buffer, laid over `lookback.image` in one shader, recording
+# `lookback.capture`, all of it gated by `dream.on`. Since `/7` a look-back
+# records its `image` and makes its trail; the dream dreams its `image`; a
+# composite lays them on. An old frame is rewritten so (`split_lookback`).
+
+LOOKS = ("off", "trail", "dream")   # the old look-back: off, echoes alone, echoes + dream
+OLD_MIX = 0.7                       # dream.mix's default, for a file that leaves it out
+
+
+def look_of(values: dict | None) -> str:
+    """What an old file's look-back drew (`LOOKS`), by its values: off
+    without `dream.on`; with it, the dream too when `dream.mix` is above 0
+    (whether a worker is enabled is the config's, never the preset's), else
+    the echoes alone."""
+    vals = values or {}
+    if vals.get("dream.on") is not True:
+        return "off"
+    try:
+        mix = float(vals.get("dream.mix", OLD_MIX))
+    except (TypeError, ValueError):
+        mix = OLD_MIX
+    return "dream" if mix > 0.0 else "trail"
+
+
+def _next_composite_of(nodes: list) -> int:
+    held = {int(n.get("instance", 1)) for n in nodes
+            if isinstance(n, dict) and n.get("kind") == "composite"}
+    k = 1
+    while k in held:
+        k += 1
+    return k
+
+
+def split_lookback(section: Any, look: str) -> Any:
+    """An old wired `section`'s one-shader look-back as the two nodes
+    since `/7` (plan 36 T4, W4) — the last step of the migration (after
+    `placed_wires`: a placement `into` the look-back sat on its old picture),
+    applied once, to an old frame only. `look` is what it drew (`look_of`):
+
+    - "trail" or "dream": what was recorded (`lookback.capture`) goes into
+      `lookback.image`; the old picture under (`lookback.image`) into a new
+      composite's `under` (blend add: the trail added on, the old shader's
+      arithmetic) and into `lookback.occluder` (the old default: its own
+      picture's brightness held the wake back) unless one was wired; the
+      cover stays; `lookback` into the composite's `over` — or with
+      "dream" `lookback → dream.image` and `dream` there; every reader of
+      the old look-back reads the composite.
+    - "off": the old look-back drew its picture untouched — its readers
+      read that picture, and no look-back is drawn — unless a frame of its
+      ring is read (plan 34's `echo.<k>`, `dream`): then the look-back
+      still records, and only those read it.
+
+    Plan 34's `echo.<k>` entries go: each wire from one reads the
+    look-back's pin `lookback.echo.<k>`. Plan 34's `dream` (the buffer
+    alone) is the dream node, fed the look-back's trail. Not a wired frame,
+    or one with no look-back: as it is."""
+    if look not in LOOKS:
+        raise ValueError(f"look {look!r}: one of {', '.join(LOOKS)}")
+    if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
+        return section
+    raw = list(section.get("wires") or [])
+    nodes = list(section.get("nodes") or [])
+    wires = [w for w in raw if isinstance(w, dict)]
+
+    def into(port: str) -> Any:
+        return next((w.get("from") for w in wires if w.get("to") == port), None)
+
+    def old_echo(name: Any) -> bool:
+        return (isinstance(name, str) and name.startswith("echo.")
+                and name.partition(".")[2].isdecimal())
+
+    echoes = [n for n in nodes if isinstance(n, dict) and n.get("kind") == "echo"]
+    dreams = [n for n in nodes if isinstance(n, dict) and n.get("kind") == "dream"]
+    dream_read = bool(dreams) and any(w.get("from") == "dream" for w in wires)
+    ring_read = dream_read or any(old_echo(w.get("from")) for w in wires)
+    touches = any(str(w.get("to", "")).startswith("lookback.") or w.get("from") == "lookback"
+                  for w in wires)
+    if not touches and not ring_read and not echoes:
+        return section
+    under, held = into("lookback.image"), into("lookback.capture")
+    occ, cover = into("lookback.occluder"), into("lookback.cover")
+    live = look in ("trail", "dream")
+    dreaming = look == "dream" or dream_read
+    nodes = [n for n in nodes if not (isinstance(n, dict) and n.get("kind") in ("lookback", "echo"))]
+    # the new wires, each group where its old one stood (the canonical
+    # frame order, `graphview._frame_order`): the trail laid on where the
+    # picture under it was wired, the record where the capture was, the
+    # cover where it was
+    lay: list[dict] = []
+    record = [_w(held, "lookback.image")] if (live or ring_read) and held is not None else []
+    covered = [_w(cover, "lookback.cover")] if live and cover is not None else []
+    head = under
+    if live:
+        if occ or under:
+            lay.append(_w(occ or under, "lookback.occluder"))
+        k = _next_composite_of(nodes)
+        comp = G.CompositeAt(k, "add")
+        nodes.append(comp.to_json())
+        if under is not None:
+            lay.append(_w(under, f"{comp.name}.under"))
+        if look == "dream":
+            lay += [_w("lookback", "dream.image"), _w("dream", f"{comp.name}.over")]
+        else:
+            lay.append(_w("lookback", f"{comp.name}.over"))
+        head = comp.name
+    if dreaming and not any(w.get("to") == "dream.image" for w in lay):
+        lay.append(_w("lookback", "dream.image"))
+    if dreaming and not dreams:
+        nodes.append(G.DreamAt().to_json())
+    at = {"lookback.image": lay, "lookback.capture": record, "lookback.cover": covered}
+    out: list[Any] = []
+    for w in raw:
+        if not isinstance(w, dict):
+            out.append(w)
+            continue
+        to = str(w.get("to", ""))
+        if to.startswith("lookback."):
+            out += at.pop(to, [])
+            continue
+        if w.get("from") == "lookback":
+            if head is None:
+                continue                  # (it drew nothing over nothing: the port is unwired)
+            w = {**w, "from": head}
+        elif old_echo(w.get("from")):
+            w = {**w, "from": f"lookback.echo.{w['from'].partition('.')[2]}"}
+        out.append(w)
+    for rest in at.values():                  # (an old wire the frame did not have)
+        out += rest
+    return {**section, "nodes": nodes, "wires": out}
+
+
 def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, list[str]]:
     """Plan 36 T3 (W3, D5): the one-way migration of a `/4`–`/6` document
     (or older: what the loader takes) to `/7` — (the document, the notes).
@@ -1398,7 +1545,12 @@ def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, l
 
     A `/7` document is never handed here: what it says is all there is. A
     pure function of the old document (and the build's effect files), so
-    tools/migrate_library.py and a load write the same `/7`."""
+    tools/migrate_library.py and a load write the same `/7`.
+
+    Plan 36 T4 (W4): last, the look-back split into its two nodes and a
+    composite (`split_lookback`, by `look_of` the file's values), and
+    `dream.on` — which gated the whole look-back — is the dream's own
+    switch: on exactly when the split drew a dream."""
     out, notes = migrate(doc, specs, desk=desk)
     section = out.get("graph")
     if isinstance(section, dict) and section.get(G.FRAME_KEY) == G.WIRED_FRAME:
@@ -1407,9 +1559,14 @@ def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, l
         except G.GraphError:
             pass                            # (unreadable: the loader says so)
         else:
-            section = out["graph"] = placed_wires(section, _files(specs), notes)
-            held = section_effects(section)
+            section = placed_wires(section, _files(specs), notes)
             values = _values(out)
+            section = out["graph"] = split_lookback(section, look_of(values))
+            dreams = any(isinstance(n, dict) and n.get("kind") == "dream"
+                         for n in section.get("nodes") or [])
+            if dreams or "dream.on" in values:
+                values["dream.on"] = dreams
+            held = section_effects(section)
             for pid in [p for p in values if effect_of(p) not in (None, *held)]:
                 del values[pid]
     out["schema"] = WIRED_SCHEMA

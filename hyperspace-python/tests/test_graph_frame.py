@@ -65,9 +65,17 @@ def views(n=2, **sw):
 
 def the_frame(section: dict | None = None, **kw) -> dict:
     """`section` (an old one, before the wired frame) as `migrate` will
-    land it from T3: renamed, then written as a wired frame."""
+    land it from T3: renamed, then written as a wired frame — the step
+    before plan 36 T4's look-back split (read it with `placements`, as
+    the migration does)."""
     section = section or {}
     return M.wired_section(M.renamed(section), G.read_graph(section), **kw)
+
+
+def landed(section: dict | None = None, look: str = "off", **kw) -> dict:
+    """`the_frame` with its look-back split as `look` says (plan 36 T4):
+    the frame a load lands."""
+    return M.split_lookback(the_frame(section, **kw), look)
 
 
 # ---------------------------------------------------------------- frame_wires
@@ -147,7 +155,7 @@ def test_the_wired_section_reads_as_a_wired_frame():
     assert not any(x in ("frame", "fx") for e in got["wires"]
                    for x in (e["from"], e["to"].rpartition(".")[0]))
     assert got["wires"][0] == w("hands.2.layer", "output.2.hands")
-    spec = G.read_graph(got)
+    spec = G.read_graph(got, placements=True)
     assert spec.wired and spec.notes == ()
 
 
@@ -180,13 +188,13 @@ def _for(n: int, got: list[dict]) -> list[dict]:
 def test_output_wires_for_each_state(state):
     """The eight `Shows` against today's `outputs.route` table, output 3 of
     the default section with the run `acid`."""
-    spec = G.read_graph(the_frame(ACID))
+    spec = G.read_graph(the_frame(ACID), placements=True)
     shows = M.Shows(*state)
     assert M.output_wires(spec, 3, shows) == _for(3, STATES[state])
 
 
 def test_through_with_an_empty_run_writes_the_composite_alone():
-    spec = G.read_graph(the_frame({}))
+    spec = G.read_graph(the_frame({}), placements=True)
     assert M.output_wires(spec, 2, M.Shows(through=True)) == [
         {"kind": "composite"}, w("lookback", "composite.under"),
         w("hands.layer", "composite.over"), w("composite", "output.2.image"),
@@ -196,11 +204,12 @@ def test_through_with_an_empty_run_writes_the_composite_alone():
 def test_two_throughs_take_their_own_instances():
     sec = the_frame(ACID)
     sec = M.with_output_wires(sec, 2, M.Shows(through=True))
-    got = M.output_wires(G.read_graph(sec), 3, M.Shows(scene=False, through=True))
+    got = M.output_wires(G.read_graph(sec, placements=True), 3,
+                         M.Shows(scene=False, through=True))
     assert got[:2] == [{"kind": "composite", "instance": 2},
                        {"kind": "copy", "of": "acid", "instance": 2}]
-    assert G.read_graph(M.with_output_wires(sec, 3, M.Shows(scene=False, through=True))
-                        ).notes == ()
+    assert G.read_graph(M.with_output_wires(sec, 3, M.Shows(scene=False, through=True)),
+                        placements=True).notes == ()
 
 
 # ---------------------------------------------------------------- Review Focus 1
@@ -250,7 +259,7 @@ def test_nothing_unreached_is_built():
     assert g.order and all(isinstance(n, G.Output) for n in g.order)
     g = G.build_graph(views(), G.read_graph(wired(("shape", "scene.geometry"))).wiring())
     assert all(isinstance(n, G.Output) for n in g.order)
-    assert g.run == () and not g.reads_ring
+    assert g.run == ()
 
 
 def test_a_scene_on_a_backdrop_is_drawn_see_through():
@@ -302,7 +311,7 @@ def test_the_capture_runs_once_after_every_end():
     sec = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
                 ("lookback", "output.all.image"), ("channel.a", "output.2.image"),
                 ("scene", "delay.image"), ("delay", "output.3.image"),
-                ("scene", "lookback.capture"), nodes=[{"kind": "delay"}])
+                nodes=[{"kind": "delay"}])
     g = G.build_graph(views(3), G.read_graph(sec).wiring())
     caps = [n for n in g.order if isinstance(n, G.Capture)]
     assert len(caps) == 1
@@ -321,7 +330,7 @@ def test_a_copy_reads_its_originals_knobs():
 
 
 def test_one_end_for_two_outputs_of_one_picture_is_built_once():
-    g = G.build_graph(views(2), G.read_graph(the_frame({})).wiring())
+    g = G.build_graph(views(2), G.read_graph(landed({})).wiring())
     ends = [n for n in g.order if isinstance(n, G.Shown)]
     assert len(ends) == 1
     assert all(out.inputs["image"] is ends[0] for out in g.outputs)
@@ -330,7 +339,7 @@ def test_one_end_for_two_outputs_of_one_picture_is_built_once():
 def test_the_hands_guide_is_its_layers_own_while_the_layer_is_built():
     """`hands.guide` is the layer's split-out guide while `hands.layer` is
     built (the default graph's `scene_readout`), else the guide alone."""
-    alone = the_frame({"nodes": [{"kind": "hands", "into": "scene"}]})
+    alone = landed({"nodes": [{"kind": "hands", "into": "scene"}]})
     g = G.build_graph(views(1), G.read_graph(alone).wiring())
     assert isinstance(g.outputs[0].inputs["readout"], G.Readout)
     both = M.with_output_wires(alone, 2, M.Shows(scene=False))
@@ -396,7 +405,7 @@ def test_a_mute_ignores_its_port(ctx, rig):
     section wires `ground → output.2.image`; one whose hands are muted
     shows no layer and no guide — the window wired `ground` into its hands
     and guide."""
-    sec = the_frame({})
+    sec = landed({})
     sec["wires"] += wires_of([("ground", "output.2.image"), ("ground", "output.4.hands"),
                               ("ground", "output.4.guide"), ("ground", "output.5.image"),
                               ("ground", "output.5.hands"), ("ground", "output.5.guide")])
@@ -412,7 +421,7 @@ def test_a_mute_ignores_its_port(ctx, rig):
 
 
 def test_a_mute_never_rebuilds(ctx, rig):
-    _land(rig, the_frame({}))
+    _land(rig, landed({}))
     vs = [View(Switches(), SIZE, target=_fbo(ctx)) for _ in range(2)]
     first = rig.renderer._graph_for(vs)
     for k in range(4):
@@ -425,18 +434,17 @@ def test_one_end_for_two_outputs_of_one_picture(ctx, rig):
     """Two windows taking All outputs' picture share one end, painted once
     into a frame texture; with one window's picture muted the other is
     painted direct again — no rebuild."""
-    _land(rig, the_frame({}))
+    _land(rig, landed({}))
     _draw(ctx, rig, [Switches(), Switches()], frames=1)
     assert rig.renderer.stats["direct"] is False
-    assert rig.renderer.stats["ends"] == ["shown(lookback)"]
+    assert rig.renderer.stats["ends"] == ["shown(scene)"]
     _draw(ctx, rig, [Switches(), Switches(scene=False)], frames=1)
     assert rig.renderer.stats["direct"] is True
 
 
-STAND = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
-              ("scene", "lookback.capture"), ("lookback", "acid.image"),
+STAND = wired(("shape", "scene.geometry"), ("scene", "acid.image"),
               ("acid", "output.all.image"), ("hands.layer", "output.all.hands"),
-              ("hands.layer", "output.all.guide"), ("lookback", "composite.under"),
+              ("hands.layer", "output.all.guide"), ("scene", "composite.under"),
               ("hands.layer", "composite.over"), ("composite", "copy.image"),
               ("copy", "output.2.image"), ("ground", "output.2.hands"),
               ("hands", "hands.layer.hands"),          # plan 36 T2: the layer's hands, a wire
@@ -484,7 +492,7 @@ def test_a_hands_mute_reaches_into_a_through_chain(ctx, rig):
     sec = copy.deepcopy(STAND)
     sec["nodes"] += [{"kind": "composite", "instance": 2}, {"kind": "copy", "instance": 2,
                                                             "of": "acid"}]
-    sec["wires"] += wires_of([("lookback", "composite.2.under"), ("composite.2", "copy.2.image"),
+    sec["wires"] += wires_of([("scene", "composite.2.under"), ("composite.2", "copy.2.image"),
                               ("copy.2", "output.3.image"), ("ground", "output.3.hands"),
                               ("ground", "output.3.guide")])
     _land(rig, sec)
@@ -502,15 +510,15 @@ def test_a_mute_never_reaches_a_composite_another_reader_takes():
     """A composite the look-back also records (or any reader outside the
     window's chain) keeps its hands: one window's mute cannot reach
     another's picture, nor the capture's."""
-    shared = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
-                   ("lookback", "composite.under"), ("hands.layer", "composite.over"),
-                   ("composite", "output.2.image"), ("composite", "lookback.capture"),
+    shared = wired(("shape", "scene.geometry"), ("composite", "lookback.image"),
+                   ("scene", "composite.under"), ("hands.layer", "composite.over"),
+                   ("composite", "output.2.image"),
                    ("lookback", "output.all.image"), nodes=[{"kind": "composite"}])
     g = G.build_graph(views(2), G.read_graph(shared).wiring())
     assert g.nodes["composite"].mute_hands == ()
     alone = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
-                  ("lookback", "composite.under"), ("hands.layer", "composite.over"),
-                  ("composite", "output.2.image"), ("scene", "lookback.capture"),
+                  ("scene", "composite.under"), ("hands.layer", "composite.over"),
+                  ("composite", "output.2.image"),
                   ("lookback", "output.all.image"), nodes=[{"kind": "composite"}])
     g = G.build_graph(views(2), G.read_graph(alone).wiring())
     assert g.nodes["composite"].mute_hands == (1,)
@@ -524,7 +532,7 @@ def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
     old = {"nodes": [{"kind": "hands", "into": "scene"},
                      {"kind": "hands", "instance": 2, "laid": "depth"}]}
     assert G.read_graph(old).laid == "depth"
-    sec, notes = M.migrate({"values": {}, "graph": old}, {})
+    sec, notes = M.seven({"values": {}, "graph": old}, {})
     spec = G.read_graph(sec["graph"])
     assert notes == [] and spec.notes == () and spec.wired
     assert (spec.laid, spec.laid_on) == ("depth", 2)
@@ -576,11 +584,10 @@ def test_the_signature_follows_every_picture_port():
 
 def test_the_signature_follows_what_the_sinks_read():
     """T3 review: two frames alike but for what the look-back records
-    (`scene` or `backdrop → lookback.capture`), or what a delay writes,
+    (`scene` or `backdrop → lookback.image`), or what a delay writes,
     differ in `signature` — the sinks are read by their chains."""
     head = (("shape", "scene.geometry"), ("channel.a", "backdrop.image"),
-            ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
-            ("lookback", "output.all.image"))
+            ("scene", "backdrop.scene"), ("lookback", "output.all.image"))
 
     def sig(*pairs, nodes=()):
         spec = G.read_graph(wired(*head, *pairs, nodes=nodes))
@@ -588,7 +595,7 @@ def test_the_signature_follows_what_the_sinks_read():
         # (two windows: a wire into an output not open builds nothing, T4)
         return G.signature(G.build_graph(views(2), spec.wiring()))
 
-    assert sig(("scene", "lookback.capture")) != sig(("backdrop", "lookback.capture"))
+    assert sig(("scene", "lookback.image")) != sig(("backdrop", "lookback.image"))
     d = [{"kind": "delay"}]
     assert (sig(("scene", "delay.image"), ("delay", "output.2.image"), nodes=d)
             != sig(("backdrop", "delay.image"), ("delay", "output.2.image"), nodes=d))

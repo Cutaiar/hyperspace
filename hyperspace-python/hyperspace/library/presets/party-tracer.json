@@ -4,15 +4,18 @@
  "note": "party-tracer: the 16-cell's points and lines trailing 24 echoes over 1.6 s, each halving in 0.76 s \u2014 the look-back alone, legible at a glance, the same on any screen",
  "graph": {"frame": "wired",
  "nodes": [
-  {"kind": "hands", "laid": "over"}
+  {"kind": "hands", "laid": "over"},
+  {"kind": "composite", "blend": "add"}
  ],
  "wires": [
   {"from": "shape", "to": "scene.geometry"},
-  {"from": "scene", "to": "lookback.image"},
-  {"from": "lookback", "to": "output.all.image"},
+  {"from": "scene", "to": "lookback.occluder"},
+  {"from": "scene", "to": "composite.under"},
+  {"from": "lookback", "to": "composite.over"},
+  {"from": "composite", "to": "output.all.image"},
   {"from": "hands.layer", "to": "output.all.hands"},
   {"from": "hands.layer", "to": "output.all.guide"},
-  {"from": "scene", "to": "lookback.capture"},
+  {"from": "scene", "to": "lookback.image"},
   {"from": "pattern", "to": "shape.faces"},
   {"from": "scene.cover", "to": "lookback.cover"},
   {"from": "hands", "to": "hands.layer.hands"}
@@ -120,7 +123,7 @@
   "camera.pitch": 0.0,
   "camera.pan.x": 0.0,
   "camera.pan.y": 0.0,
-  "dream.on": true,
+  "dream.on": false,
   "dream.mix": 0.0,
   "dream.echo_mix": 0.7,
   "dream.fade": 0.7644,

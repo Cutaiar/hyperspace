@@ -8,14 +8,11 @@
  ],
  "wires": [
   {"from": "shape", "to": "scene.geometry"},
-  {"from": "scene", "to": "lookback.image"},
-  {"from": "lookback", "to": "acid.image"},
+  {"from": "scene", "to": "acid.image"},
   {"from": "acid", "to": "output.all.image"},
   {"from": "hands.layer", "to": "output.all.hands"},
   {"from": "hands.layer", "to": "output.all.guide"},
-  {"from": "scene", "to": "lookback.capture"},
   {"from": "pattern", "to": "shape.faces"},
-  {"from": "scene.cover", "to": "lookback.cover"},
   {"from": "hands", "to": "hands.layer.hands"}
  ]},
  "values": {

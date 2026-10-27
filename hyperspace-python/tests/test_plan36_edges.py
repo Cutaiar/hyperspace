@@ -26,9 +26,14 @@ from hyperspace.params import Registry
 from hyperspace.routing import Bindings
 
 SIZE = (240, 150)
+# (plan 36 T4: the look-back records the scene and its trail is shown)
 FRAME = [("shape", "scene.geometry"), ("scene", "lookback.image"),
          ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
-         ("hands.layer", "output.all.guide"), ("scene", "lookback.capture")]
+         ("hands.layer", "output.all.guide")]
+# the same frame in the words before T4 (a `/6` file's: the look-back laid
+# over `lookback.image`, recording `lookback.capture`) — a migration's input
+OLD_FRAME = [*FRAME, ("scene", "lookback.capture")]
+TRACERS = {"dream.on": True, "dream.mix": 0.0}      # an old file's look-back on, no dream
 
 
 def wired(*pairs, nodes=()):
@@ -61,7 +66,7 @@ def cable(view, src: str, dst: str):
 
 def migrated(section: dict | None = None, values: dict | None = None) -> dict:
     doc = {"values": dict(values or {}), **({"graph": section} if section is not None else {})}
-    out, notes = M.migrate(doc, {})
+    out, notes = M.seven(doc, {})
     assert not notes, notes
     return out["graph"]
 
@@ -158,14 +163,14 @@ def test_wired_the_cover_is_the_scenes_faces_mask():
 
 
 def test_the_migration_wires_the_cover_where_both_are_reached():
-    assert ("scene.cover", "lookback.cover") in pairs_of(migrated())
+    assert ("scene.cover", "lookback.cover") in pairs_of(migrated(values=TRACERS))
     # no look-back reached: no cover
     got = pairs_of(migrated(wired(("shape", "scene.geometry"), ("scene", "output.all.image"))))
     assert ("scene.cover", "lookback.cover") not in got
 
 
 def test_the_canvas_draws_the_cover_cable_from_the_scenes_pin():
-    spec = G.read_graph(migrated())
+    spec = G.read_graph(migrated(values=TRACERS))
     view = view_of(spec, build(spec))
     c = cable(view, "scene.cover", "lookback.cover")
     assert c.type == graphview.MASK
@@ -210,11 +215,11 @@ def test_the_migration_wires_each_layer_and_guide_its_hands():
     got = pairs_of(migrated({"nodes": [{"kind": "hands", "into": "scene"}]}))
     assert ("hands", "hands.guide.hands") in got
     assert ("hands", "hands.layer.hands") not in got          # (no such layer here)
-    got = pairs_of(migrated(wired(*FRAME, ("hands.2.layer", "output.2.hands"),
+    got = pairs_of(migrated(wired(*OLD_FRAME, ("hands.2.layer", "output.2.hands"),
                                   nodes=[{"kind": "hands", "instance": 2}])))
     assert {("hands.2", "hands.2.layer.hands"), ("hands", "hands.layer.hands")} <= set(got)
     # a layer whose hands node the section lacks is left to the read's words
-    got = pairs_of(migrated(wired(*FRAME, nodes=[{"kind": "layer", "instance": 3}])))
+    got = pairs_of(migrated(wired(*OLD_FRAME, nodes=[{"kind": "layer", "instance": 3}])))
     assert ("hands.3", "hands.3.layer.hands") not in got
 
 
@@ -229,14 +234,16 @@ def test_an_unwired_layer_draws_nothing_on_the_golden_rig(ctx, rig):
     it, nothing — the frame is the one with no hands laid over at all."""
     from test_graph_frame import _draw, _land
 
-    _land(rig, migrated(wired(*FRAME)))
+    _land(rig, migrated(wired(*OLD_FRAME), values=TRACERS))
     lit, = _draw(ctx, rig, [Switches()])
     assert rig.renderer.stats["layer"]
-    _land(rig, wired(*FRAME, ("pattern", "shape.faces"), ("scene.cover", "lookback.cover")))
+    # (plan 36 T4: the scene shown straight — a look-back drawn is on, and
+    # its trail would grow between the two draws)
+    plain = [("shape", "scene.geometry"), ("scene", "output.all.image")]
+    _land(rig, wired(*plain, *FRAME[3:], ("pattern", "shape.faces")))
     empty, = _draw(ctx, rig, [Switches()])
     assert not rig.renderer.stats["layer"]
-    _land(rig, wired(*FRAME[:3], ("scene", "lookback.capture"), ("pattern", "shape.faces"),
-                     ("scene.cover", "lookback.cover")))
+    _land(rig, wired(*plain, ("pattern", "shape.faces")))
     bare, = _draw(ctx, rig, [Switches()])
     assert (empty == bare).all() and not (lit == bare).all()
 

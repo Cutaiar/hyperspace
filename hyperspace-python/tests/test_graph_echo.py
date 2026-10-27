@@ -1,7 +1,9 @@
 # ruff: noqa: F811 — `ctx` is test_graph_faces' fixture, taken as each GL test's argument
 """Plan 34 T3 — the look-back's frames as sources (E, rows 360–363):
 `echo.<k>`, the ring's k-th newest commit, and `dream`, the dream buffer,
-wireable into any picture port.
+wireable into any picture port. Plan 36 T4: an echo is the look-back's own
+output, `lookback.echo.<k>` (an old section's `echo.<k>` migrates to it),
+and the dream is the dream node, fed the look-back.
 
 What it must keep honest: echo.1 is the newest commit and echo.k the k-th
 newest; one the ring does not hold yet (fewer than k commits, the ring
@@ -76,7 +78,8 @@ def _near(a, b, d=2):
 
 
 def _off(r, gap=0.0):
-    """The look-back off, a capture every frame."""
+    """A capture every frame (plan 36 T4: the old words' look-back off —
+    drawn only for the echoes read off its ring)."""
     st = r.lookback.state
     st.on, st.gap = False, gap
     return r
@@ -94,12 +97,15 @@ def _three(r, size):
 
 
 def test_the_echo_nodes_say_what_they_are():
-    """The two sources' shapes (the brief's Interfaces), and the graph
-    built from wires out of them: one node each, `reads_ring` set."""
-    for cls, kind in ((G.EchoNode, "echo"), (G.DreamNode, "dream")):
-        assert cls.KIND == kind and cls.INPUTS == {} and cls.OUTPUT == G.IMAGE
-        assert not cls.TIMED
-    assert G.EchoNode("echo.3", 3).k == 3
+    """The two nodes' shapes (plan 36 T4: an echo a look-back's pin, the
+    dream picture in → picture out), and the graph built from an old
+    section's wires out of them: the echo its look-back's, the dream fed
+    the look-back."""
+    assert G.EchoNode.KIND == "echo" and G.EchoNode.INPUTS == {}
+    assert G.EchoNode.OUTPUT == G.IMAGE and not G.EchoNode.TIMED
+    assert G.DreamNode.KIND == "dream" and G.DreamNode.INPUTS == {"image": G.IMAGE}
+    assert G.DreamNode.OUTPUT == G.IMAGE
+    assert G.EchoNode("lookback.echo.3", 3).k == 3
     vs = [View(Switches(), (64, 48)), View(Switches(), (64, 48))]
     spec = G.read_graph({"nodes": [_echo(3), {"kind": "dream"}],
                          "wires": [{"from": "frame", "to": "fx.image"},
@@ -107,11 +113,13 @@ def test_the_echo_nodes_say_what_they_are():
                                    {"from": "dream", "to": "output.2.image"}]})
     assert not spec.notes, spec.notes
     g = G.build_graph(vs, wired_wiring(spec.wiring()))
-    assert isinstance(g.nodes["echo.3"], G.EchoNode) and g.nodes["echo.3"].k == 3
+    echo = g.nodes["lookback.echo.3"]
+    assert isinstance(echo, G.EchoNode) and echo.k == 3 and echo.lookback == "lookback"
     assert isinstance(g.nodes["dream"], G.DreamNode)
-    assert g.nodes["shape"].inputs["faces"] is g.nodes["echo.3"]
-    assert g.reads_ring and not g.dormant
-    assert not G.build_graph(vs, wired_wiring(G.Wiring(run=()))).reads_ring
+    assert g.nodes["dream"].inputs["image"] is g.nodes["lookback"]
+    assert g.nodes["shape"].inputs["faces"] is echo
+    assert not g.dormant
+    assert "lookback" not in G.build_graph(vs, wired_wiring(G.Wiring(run=()))).nodes
 
 
 def test_echo_k_is_the_kth_newest_capture(ctx):
@@ -137,7 +145,7 @@ def test_an_echo_past_the_ring_reads_nothing(ctx):
     _three(r, size)
     (got,) = _frame(ctx, r, s, _views(ctx, size, 1), size, 0)
     assert np.array_equal(got, plain) and r.face_error == ""
-    assert r._graph.nodes["echo.4"].said == f"not held yet: the ring holds 3 of {MAX_ECHOES}"
+    assert r._graph.nodes["lookback.echo.4"].said == f"not held yet: the ring holds 3 of {MAX_ECHOES}"
     r = _off(_renderer(ctx, None, [("echo.4", "output.2.image")], [_echo(4)]))
     _three(r, size)
     out = _frame(ctx, r, s, _views(ctx, size), size, 0)[1]
@@ -157,12 +165,12 @@ def test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off(ctx):
         got = _frame(ctx, r, s, vs, size, k)[0]
         want = _frame(ctx, plain_r, s, plain_vs, size, k)[0]
         assert np.array_equal(got, want), k
-    assert r.lookback.held() == 3 and r.lookback.keep
-    assert plain_r.lookback.held() == 0 and not plain_r.lookback.keep
+    assert r.lookback.held() == 3 and "lookback" in r._graph.nodes
+    assert plain_r.lookback.held() == 0 and "lookback" not in plain_r._graph.nodes
     r.wiring = wired_wiring(G.read_graph({"nodes": [], "wires": [{"from": "frame",
                                                       "to": "fx.image"}]}).wiring())
     _frame(ctx, r, s, vs, size, 3)
-    assert r.lookback.held() == 0 and not r.lookback.keep
+    assert r.lookback.held() == 0
 
 
 def test_an_echo_read_this_frame_is_last_frames_capture(ctx):
@@ -199,15 +207,15 @@ def test_a_res_change_empties_the_echoes(ctx):
     for k in range(4):
         _frame(ctx, r, s, vs, size, k)
     g = r._graph
-    assert g.nodes["echo.1"].said.startswith("344×256 · ")
+    assert g.nodes["lookback.echo.1"].said.startswith("344×256 · ")
     r.lookback.state.res = 3
     reads = []
     for k in range(4, 7):
         _frame(ctx, r, s, vs, size, k)
         g = r._graph
-        reads.append((_reading(g.nodes["echo.1"]), _reading(g.nodes["echo.2"])))
+        reads.append((_reading(g.nodes["lookback.echo.1"]), _reading(g.nodes["lookback.echo.2"])))
         if k == 4:
-            assert g.nodes["echo.1"].said == REMAKING
+            assert g.nodes["lookback.echo.1"].said == REMAKING
     assert reads == [(False, False), (True, False), (True, True)], reads
     assert r.lookback.echo == (512, 384)
 
@@ -226,7 +234,7 @@ def test_a_res_change_to_the_same_size_keeps_the_echoes(ctx):
     r.lookback.state.res = 3
     for k in range(3, 5):
         _frame(ctx, r, s, vs, size, k)
-        assert _reading(r._graph.nodes["echo.1"]), (k, r._graph.nodes["echo.1"].said)
+        assert _reading(r._graph.nodes["lookback.echo.1"]), (k, r._graph.nodes["lookback.echo.1"].said)
     assert r.lookback.echo == (80, 64) and r.lookback.held() == 5
 
 
@@ -240,12 +248,13 @@ def test_an_echo_into_an_outputs_hands_reads_last_frames_capture(ctx):
     r = _off(_renderer(ctx, None, [("echo.1", "output.2.hands")], [_echo(1)]))
     _frame(ctx, r, _empty(), _views(ctx, size), size, 0)
     g = r._graph
-    assert g.nodes["echo.1"] in g.nodes["lookback(capture)"].after
-    assert g.nodes["echo.1"].said == f"not held yet: the ring holds 0 of {MAX_ECHOES}"
+    assert g.nodes["lookback.echo.1"] in g.nodes["lookback(capture)"].after
+    assert g.nodes["lookback.echo.1"].said == f"not held yet: the ring holds 0 of {MAX_ECHOES}"
     # (an echo never reaches a `readout`: that port takes a hands layer's
     # guide, refused at read — what is wired there runs before the capture too)
     spec = G.read_graph({"nodes": [_echo(1)],
                          "wires": [{"from": "echo.1", "to": "output.2.readout"}]})
+    # (an old section's: its own words, before the migration)
     assert spec.notes and "takes a hands layer's guide" in spec.notes[0]
     for k, want in ((1, BLUE), (3, RED)):
         r = _off(_renderer(ctx, None, [(f"echo.{k}", "output.2.hands")], [_echo(k)]))
@@ -255,19 +264,23 @@ def test_an_echo_into_an_outputs_hands_reads_last_frames_capture(ctx):
 
 
 def test_the_dream_reads_nothing_until_written(ctx):
-    """`dream → output.2.image`: the ground, and the words say there is no
-    worker. Pixels written into the dream buffer (a fake worker attached):
-    output 2 shows them, and the words name the echo size (row 361)."""
+    """`dream → output.2.image` (plan 36 T4: the dream node, fed the
+    look-back's trail): off it passes the trail through — nothing in the
+    ring yet, the ground — and says so. On, with pixels written into the
+    dream buffer (a fake worker attached), output 2 shows them laid over
+    at mix 1, and the words name the buffer's size (row 361)."""
     size, s = (160, 120), _faces()
     r = _off(_renderer(ctx, None, [("dream", "output.2.image")], [{"kind": "dream"}]))
     vs = _views(ctx, size)
     out = _frame(ctx, r, s, vs, size, 0)[1]
     assert _mid(out) == (0, 0, 0)
-    assert r._graph.nodes["dream"].said == "no dream worker: reads nothing"
-    lb = r.lookback
-    lb.source = SimpleNamespace(latest=lambda: None, submit=lambda *a: None)
-    ew, eh = lb.echo
-    lb.write_from(_rgba(ew, eh, GREEN), 1)
+    assert r._graph.nodes["dream"].said.startswith("off: the picture passes through")
+    dr = r.dreamer
+    dr.state.on, dr.state.mix, dr.state.darken = True, 1.0, 0.0
+    dr.source = SimpleNamespace(latest=lambda: None, submit=lambda *a: None)
+    assert dr._ensure(*size)
+    ew, eh = dr.size
+    dr.write_from(_rgba(ew, eh, GREEN), 1)
     out = _frame(ctx, r, s, vs, size, 1)[1]
     assert _near(_mid(out), GREEN), _mid(out)
     assert r._graph.nodes["dream"].said.startswith(f"{ew}×{eh} · ")
@@ -278,7 +291,7 @@ def _holds(ctx, size, gap, nodes=(), frames=2):
     vs = _views(ctx, size)
     for k in range(frames):
         _frame(ctx, r, _faces(), vs, size, k)
-    return r._graph.nodes["echo.1"].said
+    return r._graph.nodes["lookback.echo.1"].said
 
 
 def test_echo_words_say_size_and_cadence(ctx):
@@ -318,8 +331,8 @@ def test_the_echo_faces_fixture_shows_the_ring(ctx):
     got, r = _rig_frame(ctx, "echo-faces", frames=8)
     plain, _ = _rig_frame(ctx, "party-faces", frames=8)
     lb = r.lookback
-    assert not lb.state.on and lb.keep and lb.held() >= 3
-    node = r._graph.nodes["echo.3"]
+    assert lb.held() >= 3 and "lookback" in r._graph.nodes
+    node = r._graph.nodes["lookback.echo.3"]
     assert isinstance(node, G.EchoNode) and not node.said.startswith("not held"), node.said
     assert r.face_error == "" and not r._graph.dormant
     assert np.abs(got[..., :3] - plain[..., :3]).max() > 40
@@ -347,9 +360,9 @@ def test_an_echo_into_hands_reads_nothing_when_the_ring_failed_to_rebuild(ctx):
     lb.capture = failed
     out = _frame(ctx, r, _empty(), _views(ctx, size), size, 0)[1]
     assert lb.atlas is None and _near(_mid(out), BLUE), _mid(out)
-    node = r._graph.nodes["echo.1"]
+    node = r._graph.nodes["lookback.echo.1"]
     frame = SimpleNamespace(r=r, ctx=ctx, bg_alpha=1.0, size=size,
-                            data={"echo.1#slot": (2, lb.frame - 1)})
+                            data={"lookback.echo.1#slot": (2, lb.frame - 1)})
     frame.root = frame
     assert node._slot(frame) == 2                   # the slot it took …
     assert not node.reads(frame) and node.own_size(frame) is None   # … reads nothing

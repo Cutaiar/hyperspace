@@ -181,7 +181,7 @@ def test_a_route_onto_view_media_becomes_a_switch():
     assert out["routes"][0]["target"] == "switch.select"
     assert out["routes"][1]["target"] == "switch.2.select"
     assert out["desk"][0]["target"] == "switch.select"
-    spec = G.read_graph(section)
+    spec = G.read_graph(section, placements=True)     # (plan 36 T4: before the split)
     assert not spec.notes and [s.name for s in spec.switches] == ["switch", "switch.2"]
 
 
@@ -218,7 +218,7 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     app = make_app(tmp_path)
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
-    wired, _ = M.migrate(doc, app.presets.graph.specs())
+    wired, _ = M.seven(doc, app.presets.graph.specs())
     assert saved["schema"] == M.WIRED_SCHEMA
     assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
@@ -389,7 +389,7 @@ def test_old_ids_are_renamed_on_load():
     assert any("composite" in a or "composite" in b for a, b in own)
     out, notes = M.migrate(trails, SPECS)
     assert notes == [] and own <= wires_of(out["graph"])
-    assert not G.read_graph(out["graph"]).notes
+    assert not G.read_graph(out["graph"], placements=True).notes     # (before the T4 split)
 
 
 def test_a_plan_33_run_becomes_wires_to_all_outputs():
@@ -435,7 +435,7 @@ def test_backdrop_history_and_holds_become_the_capture_wire(values, nodes, pairs
     assert notes == [] and frame == pairs
     assert "backdrop.history" not in out["values"] and "backdrop.channel" not in out["values"]
     assert not any("holds" in e for e in section["nodes"])
-    assert not G.read_graph(section).notes
+    assert not G.read_graph(section, placements=True).notes          # (before the T4 split)
 
 
 @pytest.mark.parametrize("how", ["route", "desk"])

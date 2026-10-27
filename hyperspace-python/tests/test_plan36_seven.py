@@ -31,12 +31,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
 SIZE = (240, 150)
 SEVEN = M.WIRED_SCHEMA
-# today's frame: what a section-less old preset migrates to (`wired_of(Wiring())`)
-TODAY = [("shape", "scene.geometry"), ("scene", "lookback.image"),
-         ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
-         ("hands.layer", "output.all.guide"), ("scene", "lookback.capture"),
-         ("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
-         ("hands", "hands.layer.hands")]
+# today's frame: what a section-less old preset migrates to (`wired_of(Wiring())`;
+# plan 36 T4: its look-back off in the old values — none drawn)
+TODAY = [("shape", "scene.geometry"), ("scene", "output.all.image"),
+         ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
+         ("pattern", "shape.faces"), ("hands", "hands.layer.hands")]
 
 
 def _views(n: int = 2) -> list[View]:
@@ -178,7 +177,7 @@ def test_the_migration_drops_the_values_of_effects_not_in_the_section():
     out, _ = M.seven(doc, {"acid": (10, 1.0), "palette": (20, 1.0)})
     assert out["schema"] == SEVEN
     assert out["values"] == {"fx.on": True, "fx.acid.on": True, "fx.acid.bend": 0.2}
-    assert ("lookback", "acid.image") in _pairs(out["graph"])
+    assert ("scene", "acid.image") in _pairs(out["graph"])     # (plan 36 T4: no look-back)
 
 
 # ---------------------------------------------------------------- old files, one way
@@ -205,9 +204,11 @@ def test_an_old_file_loads_through_the_migration_with_a_note(tmp_path):
 @pytest.mark.parametrize("slug, want", [
     # into output 2: on its picture, All outputs' by the bus cable it rode
     ("palette-glass", [("huecycle", "palette.image"), ("palette", "output.2.image")]),
-    # after the scene: every picture wire from the scene reads acid.2
-    ("acid-scene", [("scene", "acid.2.image"), ("acid.2", "lookback.image"),
-                    ("acid.2", "lookback.capture")]),
+    # after the scene: every picture wire from the scene reads acid.2 (plan
+    # 36 T4: the look-back on — it records acid.2, and the trail and the
+    # dream are added onto it)
+    ("acid-scene", [("scene", "acid.2.image"), ("acid.2", "composite.under"),
+                    ("acid.2", "lookback.image")]),
     # after the hands' layer: its picture into All outputs, not the guide
     ("palette-hands", [("hands.layer", "palette.image"), ("palette", "output.all.hands"),
                        ("hands.layer", "output.all.guide")]),

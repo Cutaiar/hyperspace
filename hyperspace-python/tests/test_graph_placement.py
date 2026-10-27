@@ -58,12 +58,14 @@ def _wiring(*placed, effects=RUN) -> G.Wiring:
     return G.Wiring(placed=tuple(placed), run=_run(placed, effects))
 
 
-def _graph(views, *placed, effects=RUN):
+def _graph(views, *placed, effects=RUN, look="trail"):
     """`views` (a window's `Switches`, or a `Shows` its output's wiring:
-    plan 35 T4, `tests/wiredframe.py`) over the run with `placed` placed."""
+    plan 35 T4, `tests/wiredframe.py`) over the run with `placed` placed —
+    plan 36 T4: the look-back drawn (`look`), as the old words with it on."""
     if all(isinstance(v, Shows) for v in views):
-        return graph(views, _wiring(*placed, effects=effects), effects=effects)
-    return G.build_graph(views, wired_wiring(_wiring(*placed, effects=effects)), effects=effects)
+        return graph(views, _wiring(*placed, effects=effects), effects=effects, look=look)
+    return G.build_graph(views, wired_wiring(_wiring(*placed, effects=effects), look),
+                         effects=effects)
 
 
 def _end(g: G.Graph, n: int = 1) -> G.Node:
@@ -248,7 +250,7 @@ def test_no_factory_preset_changes_and_the_default_graph_is_identical():
     assert plain.nodes["hands.layer"].readout == "downstream" and plain.pool == 2
     for k in (1, 2, 3):
         assert _run_names(plain, _end(plain, k)) == list(RUN)
-    assert plain.nodes["lookback"].inputs["image"] is plain.nodes["scene"]
+    assert "lookback" not in plain.nodes          # (plan 36 T4: the old words' off)
     assert plain.nodes["output.3"].inputs["hands"] is plain.nodes["hands.layer"]
     refused = G.read_graph({"nodes": [{"kind": "effect", "file": "palette",
                                        "after": "teapot"}]}, effects=FILES)
@@ -299,18 +301,20 @@ def test_after_scene_and_into_the_history_in_the_graph():
     g = _graph(vs, G.EffectAt("acid", 2, after="scene"))
     a2, scene = g.nodes["acid.2"], g.nodes["scene"]
     assert a2.inputs["image"] is scene and a2.makes and not a2.see_through
-    assert g.nodes["lookback"].inputs["image"] is a2
+    # (plan 36 T4: the trail added onto it, held back by it, and recording it)
+    assert g.nodes["composite"].inputs["under"] is a2
+    assert g.nodes["lookback"].inputs["occluder"] is a2
     assert g.nodes["lookback(capture)"].inputs["image"] is a2
     assert g.nodes["lookback(cover)"].inputs["scene"] is scene
-    assert g.readers(a2) == 2
+    assert g.readers(a2) == 3
     at = (G.EffectAt("acid", 2, after="scene"),)
     g = G.build_graph(vs, wired_wiring(G.Wiring(blend="depth", history="scene+hands", placed=at,
-                                   run=_run(at))), effects=RUN)
+                                                run=_run(at)), "trail"), effects=RUN)
     a2 = g.nodes["acid.2"]
     assert g.nodes["composite"].inputs["under"] is a2
     assert g.nodes["composite"].inputs["depth"] is g.nodes["scene"]
     g = _graph(vs, G.EffectAt("acid", 2, into="history"))
-    assert g.nodes["lookback"].inputs["image"] is g.nodes["acid.2"]
+    assert g.nodes["composite"].inputs["under"] is g.nodes["acid.2"]
     assert g.nodes["lookback(capture)"].inputs["image"] is g.nodes["scene"]
 
 
@@ -460,7 +464,8 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
-    r.wiring = wired_wiring(keep_run(r, G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))))
+    r.wiring = wired_wiring(keep_run(r, G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),))),
+                            "trail")
     seen = []
     real = r.lookback.capture
 
@@ -473,7 +478,7 @@ def test_after_scene_feeds_the_history_the_folded_picture(ctx):
     g = r._graph
     a2 = g.nodes["acid.2"]
     assert (g.nodes["lookback(capture)"].inputs["image"] is a2
-            and g.nodes["lookback"].inputs["image"] is a2)
+            and g.nodes["composite"].inputs["under"] is a2)
     assert len(seen) == 3 and all(s is not r.scene.tex for s in seen)
     assert all(any(s is t for t in r.fx._tex) for s in seen)      # the effect's held texture
     assert r.stats["effects"] == ["acid.2"]

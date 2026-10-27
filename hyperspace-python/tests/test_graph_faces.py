@@ -133,11 +133,13 @@ def test_the_faces_nodes_are_built_from_the_wires():
     spec = G.read_graph(section(("frame", "fx.image"), ("media.b", "kaleido.2.image"),
                                 ("kaleido.2", "backdrop.image"),
                                 nodes=[_instance("kaleido", 2)]))
-    g = G.build_graph(vs, wired_wiring(spec.wiring()), effects=("kaleido", "kaleido.2"))
+    g = G.build_graph(vs, wired_wiring(spec.wiring(), "trail"), effects=("kaleido", "kaleido.2"))
     under = g.nodes["backdrop"].inputs["under"]
     assert isinstance(under, G.Effect) and under.effect == "kaleido.2"
     assert g.nodes["backdrop"].under_alpha_of == "backdrop_alpha"
-    assert g.nodes["scene"].ground == 0.0 and g.nodes["lookback"].inputs["image"].name == "backdrop"
+    # (plan 36 T4: the look-back's trail added onto the backdrop's picture)
+    assert g.nodes["scene"].ground == 0.0
+    assert g.nodes["composite"].inputs["under"].name == "backdrop"
     # (plan 35 T4: the backdrop is the composite itself — no sink beside it)
     assert isinstance(g.nodes["backdrop"], G.Composite)
 

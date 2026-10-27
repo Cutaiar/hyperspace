@@ -208,7 +208,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in ("render:shape", "render:camera", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
-    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    # (plan 36 T4: party-trip's look-back was off — none drawn; party-tracer's on)
+    assert "render:lookback" not in area
+    tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
+    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA
     assert {area[k] for k in ("render:acid", "render:palette", "render:copy",
                               "render:composite")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
@@ -299,11 +302,12 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
     # twice — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
-    # group node too (no backdrop in the section: it idles like any group)
-    assert sum(n.idle for n in view.nodes) == 25
+    # group node too (no backdrop in the section: it idles like any group);
+    # plan 36 T4: one more, the frame drawing no look-back (its params' node idles)
+    assert sum(n.idle for n in view.nodes) == 26
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
-                          "collapsed · 25 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 26} nodes in {k} areas, every one "
+                          "collapsed · 26 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -439,7 +443,7 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
         # run's last into All outputs — no `frame`, no end)
         if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
             succ.setdefault(a, set()).add(b)
-    seen, todo = set(), ["render:lookback"]
+    seen, todo = set(), ["render:scene"]             # (plan 36 T4: the run's head)
     while todo:
         k = todo.pop()
         if k not in seen:
@@ -634,7 +638,8 @@ def test_the_areas_run_by_primitive(rig):
     area = {n.id: n.area for n in view.nodes}
     assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
                               "render:hands.layer", "render:camera")} == {graphview.SCENE_AREA}
-    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
+    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA      # (plan 36 T4)
     assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1",
                               "render:output.2")} == {graphview.OUTPUTS_AREA}

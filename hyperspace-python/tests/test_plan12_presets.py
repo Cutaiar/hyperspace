@@ -461,6 +461,23 @@ def test_every_effect_is_on_in_a_factory_preset():
             "tripcolour"} <= party
 
 
+# plan 36 T4: the look-back's knobs (`dream.echo_mix` …) are live while a
+# look-back is drawn; the dream's own (`dream.mix`, the worker's) while a
+# dream is drawn and `dream.on` is on
+DREAM_OWN = ("mix", "hue", "sat", "tint", "tint_from", "tint_hue", "tint_sat", "steps",
+             "step", "k", "layer", "octaves", "mask_decay", "jitter")
+
+
+def _dream_live(presets, pid: str, on) -> bool:
+    """Whether `dream.*` param `pid` acts in the loaded preset's graph."""
+    wires = presets.graph.spec.wires if presets.graph.spec is not None else ()
+    names = {n for w in wires for n in (w.src, w.node)}
+    key = pid.split(".", 1)[1]
+    if key in DREAM_OWN:
+        return "dream" in names and on("dream.on")
+    return "lookback" in names
+
+
 def test_no_factory_knob_is_dead(tmp_path):
     """Plan 19 WP3, the desk's version of the rule below: loaded through
     the real loader (a file with no `desk` key gets the fresh layer), no
@@ -504,7 +521,7 @@ def test_no_factory_knob_is_dead(tmp_path):
                 assert len(parts) == 3 and parts[1] in effects, where
                 assert on("fx.on") and on(f"fx.{parts[1]}.on"), where
             elif parts[0] == "dream":
-                assert on("dream.on"), where
+                assert _dream_live(presets, b.target, on), where
             elif parts[0] == "lfo":
                 assert f"lfo:{int(parts[1]) - 1}" in lfos, where
             elif parts[0] == "macro":
@@ -516,7 +533,7 @@ def test_no_factory_route_drives_an_effect_that_is_off(tmp_path):
     """Plan 14 WP5 (the dead rows): loaded through the real loader, no
     factory preset has a route or a desk row on an effect's param while
     that effect or the chain is off, on the chain's mix with no effect on,
-    or on the look-back with the look-back off."""
+    or on the look-back with the look-back off (plan 36 T4: not drawn)."""
     effects = _effects()
     r = rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
@@ -535,4 +552,4 @@ def test_no_factory_route_drives_an_effect_that_is_off(tmp_path):
             elif parts[0] == "fx" and len(parts) == 3 and parts[1] in effects:
                 assert on("fx.on") and on(f"fx.{parts[1]}.on"), where
             elif parts[0] == "dream" and parts[1] != "on":
-                assert on("dream.on"), where
+                assert _dream_live(presets, b.target, on), where

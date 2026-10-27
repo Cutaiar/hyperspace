@@ -815,6 +815,10 @@
        "kind": "hands",
        "draw": "lines",
        "laid": "over"
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
       }
      ],
      "wires": [
@@ -828,10 +832,18 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
       },
       {
        "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
        "to": "acid.image"
       },
       {
@@ -844,7 +856,7 @@
       },
       {
        "from": "scene",
-       "to": "lookback.capture"
+       "to": "lookback.image"
       },
       {
        "from": "pattern",
@@ -866,8 +878,9 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(acid)",
      "composite",
+     "shown(acid)",
+     "composite.2",
      "shown(copy)",
      "lookback(capture)",
      "output.1",
@@ -897,6 +910,10 @@
       {
        "kind": "effect",
        "file": "palette"
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
       }
      ],
      "wires": [
@@ -906,10 +923,18 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
       },
       {
        "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
        "to": "output.all.image"
       },
       {
@@ -926,7 +951,7 @@
       },
       {
        "from": "scene",
-       "to": "lookback.capture"
+       "to": "lookback.image"
       },
       {
        "from": "pattern",
@@ -947,7 +972,8 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(lookback)",
+     "composite.3",
+     "shown(composite.3)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -989,10 +1015,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "acid.image"
       },
       {
@@ -1020,16 +1042,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1047,15 +1061,12 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(huecycle)",
      "composite.2",
      "shown(copy.8)",
      "composite",
      "shown(palette)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1084,6 +1095,13 @@
        "kind": "effect",
        "file": "acid",
        "instance": 2
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
+      },
+      {
+       "kind": "dream"
       }
      ],
      "wires": [
@@ -1097,10 +1115,22 @@
       },
       {
        "from": "acid.2",
-       "to": "lookback.image"
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "acid.2",
+       "to": "composite.under"
       },
       {
        "from": "lookback",
+       "to": "dream.image"
+      },
+      {
+       "from": "dream",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
        "to": "plasma.image"
       },
       {
@@ -1129,7 +1159,7 @@
       },
       {
        "from": "acid.2",
-       "to": "lookback.capture"
+       "to": "lookback.image"
       },
       {
        "from": "pattern",
@@ -1150,6 +1180,8 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
+     "dream",
+     "composite.3",
      "shown(glimmer)",
      "composite",
      "shown(copy.4)",
@@ -1184,6 +1216,10 @@
       {
        "kind": "hands",
        "instance": 2
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
       }
      ],
      "wires": [
@@ -1201,10 +1237,18 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
       },
       {
        "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
        "to": "acid.image"
       },
       {
@@ -1217,7 +1261,7 @@
       },
       {
        "from": "scene",
-       "to": "lookback.capture"
+       "to": "lookback.image"
       },
       {
        "from": "pattern",
@@ -1244,8 +1288,9 @@
      "hands.2.layer",
      "hands.guide",
      "lookback",
-     "shown(acid)",
      "composite",
+     "shown(acid)",
+     "composite.2",
      "shown(copy)",
      "lookback(capture)",
      "output.1",
@@ -1284,7 +1329,7 @@
      ],
      "wires": [
       {
-       "from": "lookback",
+       "from": "scene",
        "to": "acid.2.image"
       },
       {
@@ -1297,10 +1342,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "acid.image"
       },
       {
@@ -1328,16 +1369,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1355,15 +1388,12 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(huecycle)",
      "composite",
      "shown(copy.4)",
      "shown(palette)",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1404,14 +1434,6 @@
       },
       {
        "from": "backdrop",
-       "to": "lookback.image"
-      },
-      {
-       "from": "scene",
-       "to": "lookback.occluder"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1423,16 +1445,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1442,17 +1456,14 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "channel.a",
      "backdrop",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(backdrop)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1489,10 +1500,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1504,16 +1511,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1523,15 +1522,12 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "channel.c",
      "shown(channel.c)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1568,10 +1564,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1583,16 +1575,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1602,15 +1586,12 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1647,10 +1628,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "blend.image"
       },
       {
@@ -1666,16 +1643,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1685,16 +1654,13 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "channel.a",
      "shown(blend)",
      "composite",
      "shown(copy)",
      "composite.2",
      "shown(copy.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1731,10 +1697,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "displace.image"
       },
       {
@@ -1750,16 +1712,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1769,16 +1723,13 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "channel.a",
      "shown(displace)",
      "composite",
      "shown(copy)",
      "composite.2",
      "shown(copy.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1833,10 +1784,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1848,14 +1795,6 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -1864,15 +1803,12 @@
     "nodes": [
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1922,14 +1858,6 @@
       },
       {
        "from": "backdrop",
-       "to": "lookback.image"
-      },
-      {
-       "from": "scene",
-       "to": "lookback.occluder"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1941,16 +1869,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -1960,17 +1880,14 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "channel.a",
      "backdrop",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(backdrop)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2020,10 +1937,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2035,14 +1948,6 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -2051,14 +1956,11 @@
     "nodes": [
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2119,10 +2021,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2134,14 +2032,6 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -2151,15 +2041,12 @@
      "channel.b",
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2247,10 +2134,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2262,16 +2145,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -2281,10 +2156,8 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -2294,7 +2167,6 @@
      "channel.a",
      "resize",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2338,10 +2210,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2353,14 +2221,6 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -2368,16 +2228,13 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2452,10 +2309,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2467,16 +2320,8 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
        "from": "pattern",
        "to": "shape.faces"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
       },
       {
        "from": "hands",
@@ -2486,10 +2331,8 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.3",
@@ -2497,7 +2340,6 @@
      "composite.2",
      "shown(composite.2)",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2521,15 +2363,11 @@
       {
        "kind": "hands",
        "laid": "over"
-      },
-      {
-       "kind": "echo",
-       "index": 3
       }
      ],
      "wires": [
       {
-       "from": "echo.3",
+       "from": "lookback.echo.3",
        "to": "shape.faces"
       },
       {
@@ -2538,10 +2376,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2554,11 +2388,7 @@
       },
       {
        "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
+       "to": "lookback.image"
       },
       {
        "from": "hands",
@@ -2568,10 +2398,9 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -2650,14 +2479,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "lookback",
        "to": "acid.image"
       },
       {
@@ -2673,7 +2494,7 @@
        "to": "output.all.guide"
       },
       {
-       "from": "lookback",
+       "from": "scene",
        "to": "composite.2.under"
       },
       {
@@ -2697,10 +2518,6 @@
        "to": "shape.faces"
       },
       {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -2708,9 +2525,7 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(acid)",
      "composite.2",
      "shown(copy)",
@@ -2720,7 +2535,6 @@
      "shown(copy.3)",
      "composite.4",
      "shown(copy.4)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -2771,10 +2585,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -2786,14 +2596,6 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "scene.cover",
-       "to": "lookback.cover"
-      },
-      {
        "from": "hands",
        "to": "hands.layer.hands"
       }
@@ -2801,10 +2603,8 @@
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -2815,7 +2615,6 @@
      "shown(composite.4)",
      "resize",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -10823,8 +10622,8 @@
     960,
     600
    ],
-   "sha256": "d6a17a2e936f14623960dcadfdadbea156664f8774b2e6e440936df4935f2645",
-   "png": "png/d6a17a2e936f1462.png",
+   "sha256": "a12de706e48a3359f2843e5a54a3b5cfb0988190ca37361b8e631333517e8c08",
+   "png": "png/a12de706e48a3359.png",
    "wired": "acid.2"
   },
   {

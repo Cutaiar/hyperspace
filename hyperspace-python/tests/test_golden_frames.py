@@ -185,14 +185,20 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
 
 def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
     """The history-with-the-hands goldens cover exactly the factory presets
-    whose file turns the look-back on (elsewhere the history holds nothing
-    the picture shows, so the frame is the default one)."""
+    whose file draws a look-back (elsewhere the history holds nothing the
+    picture shows, so the frame is the default one). Plan 36 T4: a
+    look-back is drawn — a wire into `lookback.image` — where the old file
+    turned it on (`factory-sources`' `dream.on`)."""
     from hyperspace.preset import FACTORY_PRESETS
 
     lib = ROOT / "hyperspace" / "library" / "presets"
+    drawn = [slug for slug in FACTORY_PRESETS
+             if any(w.get("to") == "lookback.image" for w in json.loads(
+                 (lib / f"{slug}.json").read_text())["graph"].get("wires", []))]
     on = [slug for slug in FACTORY_PRESETS
-          if json.loads((lib / f"{slug}.json").read_text()).get("values", {}).get("dream.on")]
-    assert sorted(on) == sorted(_tool().LOOKBACK_ON)
+          if json.loads((_tool().FACTORY_SOURCES / f"{slug}.json").read_text())
+          .get("values", {}).get("dream.on")]
+    assert sorted(drawn) == sorted(on) == sorted(_tool().LOOKBACK_ON)
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
@@ -208,7 +214,11 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop")
 # scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
 # D1's `into output.N` sat on the window's shown picture, which no wire
 # names; as the wire it stood for the edges filter apart, by eye the same)
-GOLDENS_DIGEST = "cf773531678f412df0f3b6cc6c0b7d41dd2c410d001c0b3f32d3931611a18bc1"
+# (plan 36 T4: re-pinned for one golden re-recorded — wired-outputs' present
+# scene+hands+through, 6029 px off by 1/255, mean 0.0029: its `history →
+# acid.2` read the off look-back's copy pass, which no drawn node makes; as
+# `scene → acid.2` the effect folds the scene's own texture)
+GOLDENS_DIGEST = "886d0ce807e1504b546a48adaccd08b1c6bc9fc70f4c7bccccb9e64b6cc704a1"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
@@ -384,11 +394,13 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
+    # (plan 36 T4: the "add" composite laying the trail on — its one pass
+    # is timed as the look-back's)
     assert r._graph.timed == ["scene", "lookback(cover)", "hands.layer", "lookback",
-                              "shown(warp)", "lookback(capture)", "output.1"]
+                              "composite", "shown(warp)", "lookback(capture)", "output.1"]
     # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
-    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "warp",
-                        "shown(warp)", "lookback(capture)", "output.1"]
+    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "composite",
+                        "warp", "shown(warp)", "lookback(capture)", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

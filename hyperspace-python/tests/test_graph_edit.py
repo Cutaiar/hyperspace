@@ -702,7 +702,7 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
         settle(rig)
     else:
         rig = boot(tmp_path)
-    put(rig.home, "Free", schema="hyperspace.preset/6", graph=_section(*pairs, nodes=nodes))
+    put(rig.home, "Free", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes))
     rig.lib.load(PRESETS, "Free")
     assert not [n for n in rig.presets.notes if n.startswith("graph")], rig.presets.notes
     stub = Stub()
@@ -726,7 +726,7 @@ def wires_of(rig) -> set[tuple[str, str]]:
 
 def run_of(rig) -> tuple[str, ...]:
     """The effects from the look-back into All outputs (the run, in wires)."""
-    return G.run_of(rig.presets.graph.spec, "lookback", "output.all.image")
+    return G.run_back(rig.presets.graph.spec, "output.all.image")
 
 
 def test_the_picker_adds_an_effect_unwired(tmp_path):
@@ -919,7 +919,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     from test_presets import put
 
     from hyperspace.outputs import Switches
-    put(rig.lib.home, "Free", schema="hyperspace.preset/6", graph=_section(
+    put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("presets", "Free")
@@ -935,9 +935,9 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     st["pin_xy"].update({graphview.stub_out("render:lookback"): (0.0, 0.0),
                          graphview.stub_in("render:output.all"): (400.0, 0.0)})
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ()
+    assert G.run_back(gs.spec, "output.all.image") == ()
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (200.0, 0.0)) is cable
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("wobble.2",)
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble.2",)
 
 
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
@@ -1002,7 +1002,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
         doc = json.loads(rig.presets.save_as(name).read_text())
         assert doc["schema"] == "hyperspace.preset/7", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
-        assert G.run_of(G.read_graph(doc["graph"]), "lookback", "output.all.image") == (
+        assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
 
 
@@ -1043,7 +1043,7 @@ def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
     with `acid → wobble` already wired) is refused in `LOOP_PLAIN`'s words,
     which point at a delay; wired through one it lands, the section read
     with no notes."""
-    rig, e, pushed = free_rig(
+    rig, e, _ = free_rig(
         tmp_path, *FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
         ("wobble", "output.all.image"),
         nodes=[{"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wobble"}])
@@ -1072,7 +1072,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
 
     from hyperspace import undo as undo_mod
     from hyperspace.outputs import Switches
-    put(rig.lib.home, "Run", schema="hyperspace.preset/6", graph=_section(
+    put(rig.lib.home, "Run", schema="hyperspace.preset/7", graph=_section(
         ("lookback", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
     rig.lib.load("presets", "Run")
     gs = rig.lib.presets.graph
@@ -1092,11 +1092,11 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     # on its own cables (lookback → acid, acid → wobble), and on nothing: no change
     assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
     assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("acid", "wobble")
+    assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble")
     assert pushed == []
     cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("wobble", "acid")
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → output.all.image"]
 
 
@@ -1396,7 +1396,7 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         rig = boot(tmp_path)
     fixture = Path(__file__).parent / "fixtures" / "presets" / f"{slug}.json"
     if slug is None:
-        put(rig.home, "Wired", schema="hyperspace.preset/6", graph=graph)
+        put(rig.home, "Wired", schema="hyperspace.preset/7", graph=graph)
         rig.lib.load(PRESETS, "Wired")
     elif fixture.exists():          # (a graph fixture, loaded and migrated as a file is)
         (rig.home / "presets").mkdir(parents=True, exist_ok=True)
@@ -1541,8 +1541,7 @@ OWNERS = {"frame": "wired", "nodes": [], "wires": [
     {"from": "plasma", "to": "kaleido.image"},
     {"from": "kaleido", "to": "output.all.image"},
     {"from": "hands.layer", "to": "output.all.hands"},
-    {"from": "hands.layer", "to": "output.all.guide"},
-    {"from": "scene", "to": "lookback.capture"}]}
+    {"from": "hands.layer", "to": "output.all.guide"}]}
 
 
 def test_the_owners_sequence(tmp_path):
@@ -1564,7 +1563,8 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
     """R18 (final review): on the owner's glimmer-bug (displace-moo's shape:
     a switch of two channel branches under the scene), deleting the
     backdrop joins what its `scene` port took to what it fed — the scene
-    goes on to the look-back — and says so; drawn, the frame is not black."""
+    goes on to All outputs (plan 36 T4: its look-back was off, so none is
+    drawn) — and says so; drawn, the frame is not black."""
     from test_graph_frame import SIZE, _fbo, _px, _tool
 
     from hyperspace.outputs import Switches, View
@@ -1573,11 +1573,11 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
     spec = rig.presets.graph.spec
     into = next(w.src for w in spec.wires if w.dst == "backdrop.scene")
     fed = sorted(w.dst for w in spec.wires if w.src == "backdrop")
-    assert into == "scene" and fed == ["lookback.image"]
+    assert into == "scene" and fed == ["output.all.image"]
     assert e.drop_node("render:backdrop") is None
-    assert e.said == "Backdrop deleted; the scene goes on to Look-back", e.said
+    assert e.said.startswith("Backdrop deleted; the scene goes on to "), e.said
     wires = wired_wires(rig)
-    assert ("scene", "lookback.image") in wires
+    assert ("scene", "output.all.image") in wires
     assert not [w for w in wires if "backdrop" in w[0] or w[1].startswith("backdrop.")]
     try:
         import moderngl

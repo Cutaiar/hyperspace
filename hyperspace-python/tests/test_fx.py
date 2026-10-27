@@ -1524,7 +1524,7 @@ def test_an_old_preset_loads_its_retired_ids_without_a_note(tmp_path):
     spec = app.presets.graph.spec
     # (plan 35 T3: a wired frame — the run from the look-back into All
     # outputs, the channels in the new ids)
-    assert G.run_of(spec, "lookback", "output.all.image") == ("warp", "acid")   # warp's lower
+    assert G.run_back(spec, "output.all.image") == ("warp", "acid")   # warp's lower
     assert G.run_of(spec, "pattern", "shape.faces") == ("kaleido",)
     assert G.Wire("channel.b", "pattern.media") in spec.wires
     assert G.Wire("channel.a", "backdrop.image") in spec.wires
@@ -1606,14 +1606,16 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     out = app.presets.document("old")
     assert out["schema"] == "hyperspace.preset/7"
     assert not [k for k in out["values"] if M.retired(k)]
-    run = G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image")
+    run = G.run_back(G.read_graph(out["graph"]), "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
     assert G.Wire("channel.b", "pattern.media") in G.read_graph(out["graph"]).all_wires()
     # reorder on GRAPH to acid first (the wired frame's run, rewired where it stands)
     sec = app.presets.graph.free_doc()
-    rerun = [{"from": "lookback", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
+    # (plan 36 T4: the run's head is the scene — no look-back drawn)
+    rerun = [{"from": "scene", "to": "acid.image"}, {"from": "acid", "to": "warp.image"},
              {"from": "warp", "to": "output.all.image"}]
-    old = [w for w in sec["wires"] if w["from"] in ("lookback", "acid", "warp")
+    old = [w for w in sec["wires"] if (w["from"] in ("acid", "warp")
+                                       or (w["from"], w["to"]) == ("scene", "warp.image"))
            and w["to"] != "pattern.media"]
     at = sec["wires"].index(old[0])
     keep = [w for w in sec["wires"] if w not in old]
@@ -1621,6 +1623,6 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
     assert out["schema"] == "hyperspace.preset/7"
-    assert G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image") == (
+    assert G.run_back(G.read_graph(out["graph"]), "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]
