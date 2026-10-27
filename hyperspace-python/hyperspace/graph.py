@@ -1174,7 +1174,7 @@ def rig_of(source: Any) -> RigWires:
 
 
 def window_ports(wires, n: int, rig: RigWires | None = None) -> dict[str, Wire | None]:
-    """Window `n`'s three ports (`BUS_PORTS`) → the one wire into each, or
+    """Window `n`'s four ports (`BUS_PORTS`) → the one wire into each, or
     None: its own wire of `wires` (the preset's), else the bus cable when
     `rig` has it standing — then the wire into All outputs' same port (the
     bus carries it; None while nothing is wired there). Plan 36 W1: nothing
@@ -2260,8 +2260,8 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
     (the reason in words) for anything this build cannot read — a kind
     not in `NODE_KINDS`, a key a node does not take, a value out of its
     choices, two nodes of one instance, two hands layers, `laid` on a
-    hands node that makes no layer. The caller notes it and takes the
-    default graph.
+    hands node that makes no layer. The caller notes it; since plan 36 the
+    section is not read (black), nothing filled in.
 
     Plan 30 D1: a placement this build cannot honour is not a reason to
     drop the graph — both keys at once, a name that is not a string or

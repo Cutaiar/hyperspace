@@ -19,11 +19,23 @@ templates and module presets beside it — and three checks are made:
 - it loads (a file this build refuses is left as it is);
 - the ``/7`` is a fixed point: loaded and saved untouched again it is the
   same bytes;
-- it draws the same picture: the original file and its ``/7`` are each
-  drawn on the golden-frame rig (tools/golden_frames.py `picture`:
+- its save round-trips the picture: the original file and its ``/7`` are
+  each drawn on the golden-frame rig (tools/golden_frames.py `picture`:
   offscreen, the clock pinned, hands present, eight windows on the rig as
   it ships, `SHIPPED`: each shows its own wires, else All outputs' by its
-  bus cables) and every output's hash must match.
+  bus cables) and every output's hash must match. Both are drawn by
+  *this* build — the original through the same one-way migration
+  (`graphmigrate.seven`) a load runs — so "round-trip picture: same"
+  proves the written ``/7`` draws what this build draws of the old file,
+  never that it draws what the ``/6`` build drew. That parity is the
+  migration's tests and the eye: a preset with a look-back or a dream is
+  eyeballed live on the old and new build (hand check 366, party-wake).
+
+An old file (before ``/7``) whose load says its section was "not read"
+(the build refused it: black) is **not written**, whatever ``--force``
+says: its ``/7`` would carry the old words with the migration lost for
+good. A file whose load or save raises (a frame that does not settle
+included) is skipped alone; the run goes on.
 
 The default is a **dry run**: for each preset its file, its name, old schema
 → new, the notes its load made and the checks' results. Nothing is
@@ -71,6 +83,9 @@ if str(ROOT) not in sys.path:
 PRESETS = "presets"
 BACKUP_PREFIX = "library-backup-"
 NEWEST = "hyperspace.preset/7"
+# what a load note says of a graph section the build refused (preset.py:
+# `GraphSection.read`, `UNWIRED_SAID`)
+NOT_READ = "not read — black"
 
 
 @dataclass
@@ -84,7 +99,7 @@ class Result:
     notes: list[str] = field(default_factory=list)
     error: str = ""                 # it does not load (nothing to write)
     fixed: bool = False             # the /7 re-saves as itself
-    picture: str = ""               # "same", "differs (k of n outputs)", or why not drawn
+    picture: str = ""               # the round trip: "same", "differs (k of n outputs)", or why not drawn
     unchanged: bool = False         # the save is the file's own bytes
     data: bytes = b""               # what a write puts there
 
@@ -124,8 +139,10 @@ def preset_files(library: Path) -> list[Path]:
 
 def check(path: Path, library: Path, scratch: Path, *, picture=None) -> Result:
     """Load, save, re-save and draw preset file `path` (`picture`: the
-    golden rig's, `golden_frames.picture`; a test may hand its own)."""
-    from hyperspace import headless
+    golden rig's, `golden_frames.picture`; a test may hand its own). An
+    old file whose section the load did not read is an error: never
+    written (`NOT_READ`)."""
+    from hyperspace import graphmigrate, headless
     from hyperspace.library import LibraryError
 
     res = Result(path.name)
@@ -137,10 +154,15 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None) -> Result:
         return res
     try:
         data, notes, name = headless.resave(path, scratch / "once", library=library)
-    except (LibraryError, ValueError, KeyError, TypeError, OSError) as e:
+    except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.error = f"does not load: {e}"
         return res
     res.data, res.notes, res.name = data, notes, name
+    version = graphmigrate.schema_version(json.loads(original))
+    if (version is None or version < graphmigrate.SEVEN) and any(NOT_READ in n for n in notes):
+        res.error = ("its graph section was not read by this build (black) — writing its /7 "
+                     "would lose the migration for good")
+        return res
     res.new = str(json.loads(data).get("schema"))
     res.unchanged = data == original
     seven = scratch / "seven" / path.name
@@ -149,7 +171,7 @@ def check(path: Path, library: Path, scratch: Path, *, picture=None) -> Result:
     try:
         again, _, _ = headless.resave(seven, scratch / "twice", library=library)
         res.fixed = again == data
-    except (LibraryError, ValueError, KeyError, TypeError, OSError) as e:
+    except (LibraryError, ValueError, KeyError, TypeError, OSError, RuntimeError) as e:
         res.fixed = False
         res.notes = [*res.notes, f"its /7 does not load: {e}"]
     if picture is None:
@@ -222,8 +244,8 @@ def line(r: Result) -> str:
              "ok" if r.ok else "SKIP")
     why = [] if r.ok else [w for w in (
         "" if r.fixed else "its /7 is not a fixed point",
-        "" if r.picture == "same" else f"picture {r.picture}") if w]
-    out = f"{head}{r.new.rpartition('/')[2]}  picture: {r.picture}  fixed point: " \
+        "" if r.picture == "same" else f"round-trip picture {r.picture}") if w]
+    out = f"{head}{r.new.rpartition('/')[2]}  round-trip picture: {r.picture}  fixed point: " \
           f"{'yes' if r.fixed else 'NO'}  {state}" + (f" ({'; '.join(why)})" if why else "")
     for n in r.notes:
         out += f"\n{'':44s}note: {n}"
@@ -256,6 +278,8 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
     print(f"library: {library}  ({len(files)} presets)"
           + ("" if a.apply else f"  — written to {a.to}" if a.to is not None
              else "  — dry run, nothing is written"))
+    print("(round-trip picture: the old file as this build loads it vs its /7 — not parity "
+          "with the /6 build; eyeball dream presets live, hand check 366)")
     forced = set(a.force)
     results: list[Result] = []
     with tempfile.TemporaryDirectory(prefix="hyperspace-migrate-") as scratch:
@@ -293,7 +317,7 @@ def main(argv: list[str] | None = None, *, picture=None) -> int:
         for r in skipped:
             why = r.error or "; ".join(w for w in (
                 "" if r.fixed else "its /7 is not a fixed point",
-                "" if r.picture == "same" else f"picture {r.picture}") if w)
+                "" if r.picture == "same" else f"round-trip picture {r.picture}") if w)
             print(f"  {r.file.removesuffix('.json')}: {why}")
     return 1 if skipped else 0
 

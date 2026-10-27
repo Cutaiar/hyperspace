@@ -163,12 +163,55 @@ def test_a_preset_whose_picture_moves_is_not_written_unless_forced(tmp_path, cap
     assert _tool().main(["--library", str(lib), "--apply"], picture=moved) == 1
     out = capsys.readouterr().out
     assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
-    assert "glimmer-bug: picture differs (8 of 8 outputs)" in out
+    assert "glimmer-bug: round-trip picture differs (8 of 8 outputs)" in out
     assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
         "hyperspace.preset/7"
     assert _tool().main(["--library", str(lib), "--apply", "--force", "glimmer-bug"],
                         picture=moved) == 0
     assert json.loads((lib / "presets" / "glimmer-bug.json").read_text())["schema"] == \
+        "hyperspace.preset/7"
+
+
+def test_an_old_file_whose_section_is_not_read_is_never_written(tmp_path, capsys):
+    """Final review: an old file whose graph section this build refuses
+    loads black with a "not read" note; its /7 would keep the old words with
+    the migration lost for good, so it is skipped — `--force` or not — and
+    the round-trip check (both black) does not pass it."""
+    lib = _library(tmp_path)
+    (lib / "presets" / "broken.json").unlink()
+    odd = {"schema": "hyperspace.preset/6", "name": "odd", "values": {},
+           "graph": {"frame": "wired", "nodes": [{"kind": "warp-drive"}], "wires": []}}
+    (lib / "presets" / "odd.json").write_text(json.dumps(odd))
+    before = _tree(lib)
+    assert _tool().main(["--library", str(lib), "--apply", "--force", "odd"],
+                        picture=same_picture) == 1
+    out = capsys.readouterr().out
+    assert _tree(lib)["presets/odd.json"] == before["presets/odd.json"]
+    assert "odd: its graph section was not read by this build" in out
+    assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
+        "hyperspace.preset/7"
+
+
+def test_a_file_that_raises_runtime_error_is_skipped_alone(tmp_path, capsys, monkeypatch):
+    """Final review: `wired_section`'s "did not settle" (a RuntimeError)
+    skips that one file; the run goes on to the rest."""
+    from hyperspace import headless
+    lib = _library(tmp_path)
+    (lib / "presets" / "broken.json").unlink()
+    real = headless.resave
+
+    def resave(path, scratch, **kw):
+        if Path(path).stem == "glimmer-bug":
+            raise RuntimeError("wired_section: the frame did not settle in 64 rounds")
+        return real(path, scratch, **kw)
+
+    monkeypatch.setattr(headless, "resave", resave)
+    before = _tree(lib)
+    assert _tool().main(["--library", str(lib), "--apply"], picture=same_picture) == 1
+    out = capsys.readouterr().out
+    assert _tree(lib)["presets/glimmer-bug.json"] == before["presets/glimmer-bug.json"]
+    assert "glimmer-bug: does not load: wired_section: the frame did not settle" in out
+    assert json.loads((lib / "presets" / "trip-night.json").read_text())["schema"] == \
         "hyperspace.preset/7"
 
 
@@ -197,7 +240,7 @@ def test_the_real_picture_check_passes_an_old_preset(tmp_path, capsys):
     (lib / "presets" / "broken.json").unlink()
     assert _tool().main(["--library", str(lib), "--apply"]) == 0
     out = capsys.readouterr().out
-    assert out.count("picture: same") == 3
+    assert out.count("round-trip picture: same") == 3
     for name in ("trip-night", "glimmer-bug", "acid-scene"):
         assert json.loads((lib / "presets" / f"{name}.json").read_text())["schema"] == \
             "hyperspace.preset/7"

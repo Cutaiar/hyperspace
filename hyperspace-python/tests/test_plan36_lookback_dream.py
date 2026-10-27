@@ -248,6 +248,53 @@ def test_an_old_dream_preset_migrates_to_the_drawn_chain(values, dream):
     assert out["values"]["dream.mix"] == values["dream.mix"]          # its meaning kept
 
 
+def _route(target):
+    return {"source": "apc40.pad.1", "target": target, "mode": "toggle"}
+
+
+def test_a_driven_dream_on_at_rest_off_draws_the_chain_and_says_so():
+    """Final review: a file with `dream.on` off at rest but a route on it (a
+    pad toggling the tracers live) drew its look-back whenever the pad was
+    on, so the chain is drawn — and with `dream.mix` driven too, the dream
+    — `dream.on` keeping its rest value (the pad switches the dream), and
+    the load says what changed. The routes survive."""
+    doc = {"schema": "hyperspace.preset/2",
+           "values": {"dream.on": False, "dream.mix": 0.0},
+           "routes": [_route("dream.on"), _route("dream.mix")]}
+    out, notes = M.seven(doc, {})
+    got = _pairs(out["graph"])
+    assert ("scene", "lookback.image") in got
+    assert ("lookback", "dream.image") in got and ("dream", "composite.over") in got
+    assert ("composite", "output.all.image") in got
+    assert out["values"]["dream.on"] is False
+    assert [r["target"] for r in out["routes"]] == ["dream.on", "dream.mix"]
+    assert M.LIVE_LOOK_NOTES["dream.on"] in notes
+    assert M.LIVE_LOOK_NOTES["dream.mix"] in notes
+    assert G.read_graph(out["graph"]).notes == ()
+
+
+def test_a_driven_dream_on_with_no_mix_draws_the_trail_alone():
+    out, notes = M.seven({"schema": "hyperspace.preset/6",
+                          "values": {"dream.on": False, "dream.mix": 0.0},
+                          "desk": [{"source": "apc40.pad.2", "target": "dream.on"}]}, {})
+    got = _pairs(out["graph"])
+    assert ("lookback", "composite.over") in got
+    assert not any(n.get("kind") == "dream" for n in out["graph"]["nodes"])
+    assert notes == [M.LIVE_LOOK_NOTES["dream.on"]]
+
+
+def test_a_driven_dream_mix_at_zero_draws_the_dream():
+    """`dream.on` on at rest, `dream.mix` 0 but pushed by a macro: the dream
+    is drawn (it was, once pushed), `dream.on` on."""
+    doc = {"schema": "hyperspace.preset/3", "values": {"dream.on": True, "dream.mix": 0.0},
+           "macros": {"1": {"subs": [{"base": "dream.mix"}]}}}
+    out, notes = M.seven(doc, {})
+    got = _pairs(out["graph"])
+    assert ("lookback", "dream.image") in got and ("dream", "composite.over") in got
+    assert out["values"]["dream.on"] is True
+    assert notes == [M.LIVE_LOOK_NOTES["dream.mix"]]
+
+
 def test_plan_34s_echo_and_dream_readers_fold_into_the_two_nodes():
     """An old section's `echo.3 →` reads the look-back's pin `lookback.echo.3`
     (the look-back off: drawn only to record for it); its `dream →` reads

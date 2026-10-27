@@ -1424,6 +1424,44 @@ def look_of(values: dict | None) -> str:
     return "dream" if mix > 0.0 else "trail"
 
 
+# the load note for a file whose `dream.on` or `dream.mix` something drives
+# (a pad toggling the tracers live): the chain is drawn, and the switch is
+# the dream's alone from here on
+LIVE_LOOK_NOTES = {
+    "dream.on": ("dream.on is driven: dream.on now switches only the dream; the trail is "
+                 "the drawn look-back (plan 36)"),
+    "dream.mix": ("dream.mix is driven from 0: the dream is drawn so it can be pushed in "
+                  "(plan 36)"),
+}
+
+
+def live_look_of(values: dict | None, driven: frozenset[str] | set[str]) -> tuple[str, list[str]]:
+    """`look_of` with what the file drives counted (plan 36 final review):
+    a route, desk row or macro subscriber on `dream.on` drew the look-back
+    whenever it switched it on, so the chain is drawn whatever its rest
+    value — with the dream while `dream.mix` is above 0 or driven; one on
+    `dream.mix` at 0 at rest draws the dream too. (the look, the driven
+    ids that changed it — each said with its `LIVE_LOOK_NOTES`)"""
+    vals = values or {}
+    look = look_of(vals)
+    try:
+        mix = float(vals.get("dream.mix", OLD_MIX))
+    except (TypeError, ValueError):
+        mix = OLD_MIX
+    on_driven = "dream.on" in driven
+    mix_driven = "dream.mix" in driven and mix <= 0.0
+    live: list[str] = []
+    if on_driven:
+        live.append("dream.on")
+        if look == "off":
+            look = "dream" if mix > 0.0 or "dream.mix" in driven else "trail"
+    if mix_driven and look != "off":
+        if look == "trail":
+            look = "dream"
+        live.append("dream.mix")
+    return look, live
+
+
 def _next_composite_of(nodes: list) -> int:
     held = {int(n.get("instance", 1)) for n in nodes
             if isinstance(n, dict) and n.get("kind") == "composite"}
@@ -1554,9 +1592,11 @@ def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, l
     tools/migrate_library.py and a load write the same `/7`.
 
     Plan 36 T4 (W4): last, the look-back split into its two nodes and a
-    composite (`split_lookback`, by `look_of` the file's values), and
-    `dream.on` — which gated the whole look-back — is the dream's own
-    switch: on exactly when the split drew a dream."""
+    composite (`split_lookback`, by `look_of` the file's values — and by
+    what it drives, `live_look_of`: a driven `dream.on`, or a driven
+    `dream.mix` at 0, draws the chain, said), and `dream.on` — which gated
+    the whole look-back — is the dream's own switch: on exactly when the
+    split drew a dream, but for a driven one, whose rest value stands."""
     out, notes = migrate(doc, specs, desk=desk)
     section = out.get("graph")
     if isinstance(section, dict) and section.get(G.FRAME_KEY) == G.WIRED_FRAME:
@@ -1567,10 +1607,15 @@ def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, l
         else:
             section = placed_wires(section, _files(specs), notes)
             values = _values(out)
-            section = out["graph"] = split_lookback(section, look_of(values))
+            look, live = live_look_of(values, targets(out, desk))
+            notes += [LIVE_LOOK_NOTES[pid] for pid in live]
+            section = out["graph"] = split_lookback(section, look)
             dreams = any(isinstance(n, dict) and n.get("kind") == "dream"
                          for n in section.get("nodes") or [])
-            if dreams or "dream.on" in values:
+            if "dream.on" in live and dreams:
+                # (what drives it switches the dream: its rest value stands)
+                values["dream.on"] = values.get("dream.on") is True
+            elif dreams or "dream.on" in values:
                 values["dream.on"] = dreams
             held = section_effects(section)
             for pid in [p for p in values if effect_of(p) not in (None, *held)]:
