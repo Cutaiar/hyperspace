@@ -2364,6 +2364,43 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
     return layout(view, placed, expanded, folds, collapsed, idle_open).nodes
 
 
+# plan 36 T6: the kinds the **preset only** view never draws as a section
+# node's neighbour: the controllers (devices, the keys, the analyzer, a desk
+# template) and the modulation (LFOs, envelopes, the sequencer, modifiers,
+# macros) — the rig's and the performer's, not what the preset says
+PRESET_HIDES = ("device", "source", "analyzer", "template", "lfo", "env", SEQ, "modifier", "macro")
+
+
+def preset_only(view: View) -> frozenset[str]:
+    """The ids of the nodes the **preset only** view draws (plan 36 T6, D4):
+    the preset section's own nodes (`frame_names`, as ``render:<name>``),
+    every node with a cable to one of them but a controller or a modulator
+    (`PRESET_HIDES`), and the windows / outputs those reach: each output
+    node a shown output has a cable to, so All outputs' bus cables
+    (``output.all.<port>`` into ``output.N.<port>``) carry the windows in.
+    Only a drawing choice: nothing in `view` is changed. A view with no
+    section (`view.spec` None) draws everything."""
+    if view.spec is None:
+        return frozenset(n.id for n in view.nodes)
+    have = {n.id: n for n in view.nodes}
+    shown = {f"render:{name}" for name in frame_names(view.spec)} & have.keys()
+    ends = [(node_of(view, c.src_port), node_of(view, c.dst_port)) for c in view.cables]
+    for a, b in ends:
+        for x, y in ((a, b), (b, a)):
+            if x in shown and y in have and have[y].kind not in PRESET_HIDES:
+                shown.add(y)
+    grew = True
+    while grew:                          # the bus: a shown output, the windows it feeds
+        grew = False
+        for a, b in ends:
+            for x, y in ((a, b), (b, a)):
+                if (x in shown and y in have and y not in shown
+                        and have[y].kind == "output" and have[x].kind == "output"):
+                    shown.add(y)
+                    grew = True
+    return frozenset(shown)
+
+
 def home(n: VNode) -> str:
     """Which layout map holds node `n`'s position: the preset's for what
     a preset holds (modifiers, macros, the render nodes, a performance

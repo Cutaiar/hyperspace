@@ -144,6 +144,17 @@ def _renderers_draw_todays_frame(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _graph_page_starts_on_the_full_canvas(monkeypatch):
+    """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
+    the app, hiding the controllers and modulation. The page tests look at
+    the whole canvas, so theirs starts off; tests/test_graph_preset_only.py
+    turns it back on."""
+    from hyperspace import ui_graph
+
+    monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
+
+
+@pytest.fixture(autouse=True)
 def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""

@@ -204,6 +204,12 @@ EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
            "to a handful of boxes and wires")
+# plan 36 T6 (D4): the **preset only** chip starts lit, for every preset
+# (a constant so the tests' autouse fixture can start them on the full canvas)
+PRESET_ONLY = True
+PRESET_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
+                   "they reach. Controllers, modulation and macros are left off the canvas "
+                   "(nothing is changed, only not drawn). Click to show everything.")
 # 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
 # the canvas: it neither pans nor zooms), the editor's own ground laid
 # over it at 1 − `backdrop_alpha`
@@ -242,6 +248,8 @@ def _state(panel) -> dict:
     st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
     st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
+    st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
+    st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
     return st
 
 
@@ -394,7 +402,20 @@ def drawn_node(st: dict, n: graphview.VNode) -> bool:
     """Is node `n` drawn (plan 28 N9)? Every node but an idle one
     (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
     while its area's idle line is open."""
+    if n.id in st.get("hide", ()):         # plan 36 T6: left off by the preset-only view
+        return False
     return not n.idle or n.area in st.setdefault("idle_open", set())
+
+
+def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
+    """Plan 36 T6: the node ids the **preset only** chip leaves off the
+    canvas (`graphview.preset_only` draws the rest); none while it is off.
+    Drawing only: no wire, table or position changes, and the layout
+    (`areas_of`) still lays every node out, so hiding moves nothing."""
+    if not st.get("preset_only", PRESET_ONLY):
+        return frozenset()
+    keep = graphview.preset_only(view)
+    return frozenset(n.id for n in view.nodes if n.id not in keep)
 
 
 def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
@@ -516,6 +537,7 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no router attached")
         return
     st = _state(panel)
+    st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
     sel = _selection(st, view)
     share(panel, st, sel)
     _head(panel, st, view, sel is not None)
@@ -652,8 +674,11 @@ def head_line(st: dict, view: graphview.View) -> str:
     stand for, how many are live."""
     live = sum(1 for c in view.cables if not c.dormant)
     drawn = sum(1 for n in view.nodes if drawn_node(st, n))
-    idle = sum(1 for n in view.nodes if n.idle)
-    nodes = f"{drawn} nodes" + (f" ({idle} idle)" if idle else "")
+    hide = st.get("hide", ())
+    idle = sum(1 for n in view.nodes if n.idle and n.id not in hide)
+    off = sum(1 for n in view.nodes if n.id in hide)
+    nodes = (f"{drawn} nodes" + (f" ({idle} idle)" if idle else "")
+             + (f" · {off} hidden" if off else ""))
     return (f"{nodes}  ·  {st['wires']} wires  ·  {len(view.cables)} cables"
             f"  ·  {live} live")
 
@@ -676,6 +701,11 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         st["tidy"] = True
     if imgui.is_item_hovered():
         imgui.set_tooltip(TIDY_TIP)
+    imgui.same_line()
+    if ui.lit_chip("preset only##graph", st["preset_only"]):
+        st["preset_only"] = not st["preset_only"]
+    if imgui.is_item_hovered():
+        imgui.set_tooltip(PRESET_ONLY_TIP)
     imgui.same_line()
     _backdrop_chips(st)
     label = beside_chip(selected, width, st["beside"])
@@ -895,7 +925,10 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
             _node(st, n, drawn)
     _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
-        _idle_line(st, view, area, lay.idle.get(area, []))
+        ids = lay.idle.get(area, [])
+        if ids and all(i in st["hide"] for i in ids):    # plan 36 T6: nothing there to say
+            continue
+        _idle_line(st, view, area, ids)
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
     wires = 0
