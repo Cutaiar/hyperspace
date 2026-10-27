@@ -204,12 +204,12 @@ def _banner(state) -> None:
         line = f"{sid} — not on this Mac: shows black"
         imgui.text_colored(ui.WARN, ui.fit_text(line, w))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(line)
+            ui.tooltip(line)
     more = len(gone) - BANNER_LINES
     if more > 0:
         imgui.text_disabled(f"and {more} more — each shows black")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("\n".join(gone))
+            ui.tooltip("\n".join(gone))
 
 
 # ---- the library ----
@@ -234,7 +234,7 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
             st["said"] = panel.dialog_error
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("A file anywhere on this Mac, read where it is: listed under "
+        ui.tooltip("A file anywhere on this Mac, read where it is: listed under "
                           "This Mac. Copy to shared puts it in the cloud folder.")
     copy = "Copy to shared"
     imgui.set_next_item_width(-(ui.button_w(copy) + imgui.get_style().item_spacing.x))
@@ -250,7 +250,7 @@ def _library(panel, st: dict, rows_shown: int = LIST_ROWS) -> None:
         copy_to_shared(panel)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip("The picked file copied into the shared folder, so the other Mac "
+        ui.tooltip("The picked file copied into the shared folder, so the other Mac "
                           "has it too" if getattr(folder, "shared", None) is not None else
                           "no shared folder: set [library] path in config.toml")
     rows = items(panel, st["tab"])
@@ -302,7 +302,7 @@ def _row(panel, st: dict, it: Item) -> None:
     elif imgui.is_item_hovered():
         dl.add_rect_filled(a, b, ui.u32(ui.LINE), ui.ROUND)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{it.sid}\n{it.status or READY}"
+        ui.tooltip(f"{it.sid}\n{it.status or READY}"
                           + ("" if picked else "\nclick to pick, then click a bin cell"))
     th = ROW_H - 8
     box = (imgui.ImVec2(a.x + 2, a.y + 1), imgui.ImVec2(a.x + 2 + THUMB_W, a.y + 1 + th))
@@ -513,7 +513,7 @@ def _channels(panel, st: dict, state) -> None:
                        size=imgui.ImVec2(cw, 0)):
             st["sel"] = c
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"channel {c.upper()}: {status}"
+            ui.tooltip(f"channel {c.upper()}: {status}"
                               + ("\nthe backdrop" if backdrop == c else "")
                               + ("\non the faces" if faces == c else ""))
         y = imgui.get_item_rect_max().y + 4
@@ -584,7 +584,7 @@ def _bin(panel, st, state, c, ch, gone, x, y, cw) -> float:
             words.append(f"click: put {_name(pick)} here" if pick else "click: cue it")
             if sid:
                 words.append("right-click: empty it")
-            imgui.set_tooltip("\n".join(words))
+            ui.tooltip("\n".join(words))
         # the slot on the channel: solid red holding a source, a red ring
         # when it is empty (the channel shows black); a held source grey
         if i == on and sid:
@@ -683,7 +683,7 @@ def _selected(panel, st: dict, state) -> None:
     imgui.text_colored(ui.TEXT if sid else ui.FAINT,
                        ui.fit_text(sid if sid else f"slot {ch.index() + 1} is empty", w))
     if sid and imgui.is_item_hovered():
-        imgui.set_tooltip(sid)
+        ui.tooltip(sid)
     if clock:
         imgui.same_line(imgui.get_content_region_avail().x + imgui.get_cursor_pos_x()
                         - ui._readout_width(clock))
@@ -707,7 +707,7 @@ def _pickers(panel, st: dict) -> None:
             imgui.align_text_to_frame_padding()
             imgui.text_colored(ui.TEXT, feed_words(panel, port))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"what the graph wires into {port}: rewire it on GRAPH")
+                ui.tooltip(f"what the graph wires into {port}: rewire it on GRAPH")
         for pid in ("backdrop.alpha", "view.media_alpha"):
             imgui.table_next_column()
             if pid in panel.reg:

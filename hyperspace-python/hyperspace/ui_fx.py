@@ -208,7 +208,7 @@ def page(panel, dt: float) -> None:
             from . import ui_graph  # (late: ui_graph imports this page for its strip)
             ui_graph.select_effect(panel, sel)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("select this effect's node on the GRAPH page and bring it "
+            ui.tooltip("select this effect's node on the GRAPH page and bring it "
                               "on screen")
     strip(panel, sel)
 
@@ -241,7 +241,7 @@ def _effect_row(panel, chain, fx, title: str, name: str, open_: bool) -> None:
                    imgui.ImVec2(avail * NAME_W, 0)):
         panel.fx_selected = name
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{name} — click to play its params below")
+        ui.tooltip(f"{name} — click to play its params below")
     if spec is None:
         imgui.same_line()
         imgui.text_colored(ui.WARN, f"no {fx.file_of(name)} effect in this build")

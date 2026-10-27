@@ -825,3 +825,72 @@ def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
     c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
     assert ui_graph.insert_effect(rig.panel, c, "kaleido", (400.0, 300.0)) is None
     assert [300, 350] in rig.lib.presets.layout.values()
+
+
+def test_a_pinch_zooms_by_just_what_the_fingers_spread(monkeypatch):
+    """2026-10-26: GLFW drops the trackpad's pinch; `pinch` sums the
+    magnify events once, a stale sum is dropped, and the editor's smooth
+    zoom (1.1 a wheel unit) grows the picture by the magnification."""
+    import math
+
+    from hyperspace import pinch
+    now = [100.0]
+    monkeypatch.setattr(pinch.time, "monotonic", lambda: now[0])
+    pinch._add(0.05)
+    pinch._add(0.05)
+    assert pinch.take() == pytest.approx(0.1) and pinch.take() == 0.0
+    pinch._add(0.2)
+    now[0] += 1.0                                       # nothing took it in time
+    assert pinch.take() == 0.0
+    w = ui_graph.pinch_wheel(0.1)
+    assert 1.1 ** w == pytest.approx(1.1) and ui_graph.pinch_wheel(0.0) == 0.0
+    assert ui_graph.pinch_wheel(-0.1) < 0 and math.isfinite(ui_graph.pinch_wheel(-5.0))
+
+
+def test_a_pinch_over_the_canvas_is_the_editors_wheel_and_pans_nothing(monkeypatch):
+    from hyperspace import pinch
+    ctx = imgui.create_context()
+    try:
+        io = imgui.get_io()
+        io.display_size = imgui.ImVec2(400, 400)
+        io.backend_flags |= imgui.BackendFlags_.renderer_has_textures
+        io.add_mouse_pos_event(50, 50)
+        imgui.new_frame()
+        monkeypatch.setattr(pinch, "take", lambda: 0.1)
+        st = {"pan": (0.0, 0.0)}
+        ui_graph._scroll(st, (0, 0), (400, 400))
+        assert io.mouse_wheel == pytest.approx(ui_graph.pinch_wheel(0.1))
+        assert st["pan"] == (0.0, 0.0)
+        imgui.end_frame()
+    finally:
+        imgui.destroy_context(ctx)
+
+
+def test_a_fractional_pan_moves_nothing_it_saves(rig):
+    """A trackpad pans by fractions of a unit, and the editor floors every
+    position it is given: the page pans in whole units, so a pan never
+    reads back as a drag — no position is saved, however long the fingers
+    move (the owner, 2026-10-26: every node drifted toward one point)."""
+    st = load(rig, "party-trip")
+    frame(rig.panel, "graph")
+    for k in range(30):
+        st["pan"] = (37.3 * k - 400.6, -21.7 * k + 150.45)
+        frame(rig.panel, "graph")
+    assert rig.lib.presets.layout == {}
+
+
+def test_esc_closes_the_details(rig):
+    """The owner, 2026-10-26: Esc on GRAPH lets the selection go, so the
+    node's (or bundle's) details close."""
+    st = load(rig, "party-trip")
+    n = next(n for n in st["view"].nodes if ui_graph.drawn_node(st, n))
+    st["select_node"] = n.id
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, st["view"]) == ("node", n)
+    io = imgui.get_io()
+    io.add_key_event(imgui.Key.escape, True)
+    frame(rig.panel, "graph")
+    io.add_key_event(imgui.Key.escape, False)
+    frame(rig.panel, "graph")
+    assert ui_graph._selection(st, st["view"]) is None

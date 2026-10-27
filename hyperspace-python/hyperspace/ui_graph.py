@@ -144,13 +144,14 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 
 from __future__ import annotations
 
+import math
 import time
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
-from . import graphview, modifiers, params, ui, ui_fx, ui_routing, undo
+from . import graphview, modifiers, params, pinch, ui, ui_fx, ui_pad, ui_routing, undo
 from .bands import CEIL
 from .graph import Effect
 from .library import LibraryError
@@ -216,10 +217,10 @@ PRESET_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and 
 BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
                 "beside it sets how strongly it shows")
 BACKDROP_ALPHA = 0.35    # how strongly it shows by default
-# 2026-10-26 (the trackpad): two fingers moving pan the canvas — the
-# editor itself only zooms on a wheel — and ⌘ with them zooms. GLFW gives
-# a trackpad's scroll as a tenth of its pixels, so 10 px a unit follows
-# the fingers; a mouse's notch is one unit
+# 2026-10-26 (the trackpad; ported from Dan's graph-quick-wins): two
+# fingers moving pan the canvas — the editor itself only zooms on a wheel
+# — and ⌘ with them zooms. GLFW gives a trackpad's scroll as a tenth of
+# its pixels, so 10 px a unit follows the fingers; a mouse's notch is one unit
 PAN_PX = 10.0
 
 
@@ -539,6 +540,8 @@ def page(panel, dt: float) -> None:
     st = _state(panel)
     st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
     sel = _selection(st, view)
+    if sel is not None and escaped():           # Esc closes the details: nothing selected
+        st["deselect"], sel = True, None
     share(panel, st, sel)
     _head(panel, st, view, sel is not None)
     imgui.separator()
@@ -571,6 +574,60 @@ def page(panel, dt: float) -> None:
     times = st["times"]
     times.append(time.perf_counter() - t0)
     del times[:-TIMES]
+
+
+def pinch_wheel(magnification: float) -> float:
+    """A pinch's magnification as the editor's smooth-zoom wheel: the
+    editor zooms by `smooth_zoom_power` (1.1) per unit of wheel, so the
+    picture grows by just what the fingers spread."""
+    return math.log(max(1.0 + magnification, 0.05)) / math.log(1.1)
+
+
+def scroll_pan(st: dict, wheel: float, wheel_h: float, zoom: float, cmd: bool) -> bool:
+    """Two fingers on the trackpad (or a mouse's wheel) over the canvas:
+    the canvas panned by them — `st["pan"]`, in canvas units (`zoom` of
+    them a screen pixel), the picture following the fingers as a page
+    scrolls — unless ⌘ is held, when the wheel is the editor's zoom. True
+    when it panned (the wheel is then the page's, not the editor's)."""
+    if cmd or not (wheel or wheel_h):
+        return False
+    k = PAN_PX * max(zoom, 1e-3)
+    px, py = st["pan"]
+    st["pan"] = (px + wheel_h * k, py + wheel * k)
+    return True
+
+
+def panned(st: dict) -> tuple[float, float]:
+    """The pan every position is moved by: `st["pan"]` in whole canvas
+    units. The editor floors a position it is given, so a fractional pan
+    would read back as a drag and be saved — every node creeping a unit a
+    frame (the owner, 2026-10-26)."""
+    px, py = st["pan"]
+    return float(round(px)), float(round(py))
+
+
+def _scroll(st: dict, origin, size) -> None:
+    """The wheel this frame over the canvas (not its details, no popup
+    open) → `scroll_pan`; a panning wheel is taken from imgui before the
+    editor opens, so the editor does not zoom on it too."""
+    io = imgui.get_io()
+    m = imgui.get_mouse_pos()
+    over = (origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1])
+    spread = pinch.take()
+    if (not over or st.get("over_details")
+            or imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)):
+        return
+    if spread:                                  # a pinch: the editor's zoom, at the cursor
+        io.mouse_wheel, io.mouse_wheel_h = pinch_wheel(spread), 0.0
+        return
+    zoom = 1.0
+    if st.get("editor") is not None:            # (last frame's zoom: the editor is not open yet)
+        ed.set_current_editor(st["editor"])
+        zoom = ed.get_current_zoom() or 1.0
+    if scroll_pan(st, io.mouse_wheel, io.mouse_wheel_h, zoom, io.key_ctrl or io.key_super):
+        io.mouse_wheel = io.mouse_wheel_h = 0.0
+    else:
+        io.mouse_wheel_h = 0.0                  # ⌘: the editor zooms, never sideways
 
 
 def details_rect(origin: tuple[float, float], avail: tuple[float, float],
@@ -632,10 +689,20 @@ def effect_node(view: graphview.View, name: str) -> graphview.VNode | None:
                 next((n for n in hits if n.ref.name == name), hits[0] if hits else None))
 
 
+def escaped() -> bool:
+    """Esc pressed this frame, and nothing else wants it: no text field
+    being typed in, no popup open (imgui closes that on Esc itself)."""
+    return (imgui.is_key_pressed(imgui.Key.escape, False)
+            and not imgui.get_io().want_text_input
+            and not imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id))
+
+
 def _select(st: dict, view: graphview.View) -> None:
     """Inside the editor, the nodes drawn: the selection `select_effect` (or
     the FX page) asked for, selected and brought on screen; a frame node
     `select_node` asked for (OUTPUT's "open on GRAPH") the same."""
+    if st.pop("deselect", False):
+        ed.clear_selection()
     nid = st.pop("select_node", None)
     got = view.node(nid) if nid else None
     if got is not None and drawn_node(st, got):
@@ -689,23 +756,23 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
         expand_all(st, view, not any_open)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(ALL_TIP)
+        ui.tooltip(ALL_TIP)
     imgui.same_line()
     if ui.lit_chip("patched only##graph", st["patched_only"]):
         st["patched_only"] = not st["patched_only"]
         st["flip"].clear()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(PATCHED_TIP)
+        ui.tooltip(PATCHED_TIP)
     imgui.same_line()
     if ui.chip("tidy##graph"):
         st["tidy"] = True
     if imgui.is_item_hovered():
-        imgui.set_tooltip(TIDY_TIP)
+        ui.tooltip(TIDY_TIP)
     imgui.same_line()
     if ui.lit_chip("preset only##graph", st["preset_only"]):
         st["preset_only"] = not st["preset_only"]
     if imgui.is_item_hovered():
-        imgui.set_tooltip(PRESET_ONLY_TIP)
+        ui.tooltip(PRESET_ONLY_TIP)
     imgui.same_line()
     _backdrop_chips(st)
     label = beside_chip(selected, width, st["beside"])
@@ -714,13 +781,13 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         if ui.chip(f"{label}##graph"):
             st["beside"] = not st["beside"]
         if imgui.is_item_hovered():
-            imgui.set_tooltip(BESIDE_TIP)
+            ui.tooltip(BESIDE_TIP)
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
     imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(line)
+        ui.tooltip(line)
     _area_chips(st)
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
@@ -735,48 +802,14 @@ def _backdrop_chips(st: dict) -> None:
     if ui.lit_chip("output behind##graph", st["backdrop"]):
         st["backdrop"] = not st["backdrop"]
     if imgui.is_item_hovered():
-        imgui.set_tooltip(BACKDROP_TIP)
+        ui.tooltip(BACKDROP_TIP)
     if st["backdrop"]:
         imgui.same_line()
         imgui.set_next_item_width(imgui.get_font_size() * 6)
         _, st["backdrop_alpha"] = imgui.slider_float("##graph.backdrop", st["backdrop_alpha"],
                                                      0.0, 1.0, "%.2f")
         if imgui.is_item_hovered():
-            imgui.set_tooltip(BACKDROP_TIP)
-
-
-def scroll_pan(st: dict, wheel: float, wheel_h: float, zoom: float, cmd: bool) -> bool:
-    """Two fingers on the trackpad (or a mouse's wheel) over the canvas:
-    the canvas panned by them — `st["pan"]`, in canvas units (`zoom` of
-    them a screen pixel), the picture following the fingers as a page
-    scrolls — unless ⌘ is held, when the wheel is the editor's zoom. True
-    when it panned (the wheel is then the page's, not the editor's)."""
-    if cmd or not (wheel or wheel_h):
-        return False
-    k = PAN_PX * max(zoom, 1e-3)
-    px, py = st["pan"]
-    st["pan"] = (px + wheel_h * k, py + wheel * k)
-    return True
-
-
-def _scroll(st: dict, origin, size) -> None:
-    """The wheel this frame over the canvas (not its details, no popup
-    open) → `scroll_pan`; a panning wheel is taken from imgui before the
-    editor opens, so the editor does not zoom on it too."""
-    io = imgui.get_io()
-    m = imgui.get_mouse_pos()
-    over = (origin[0] <= m.x < origin[0] + size[0] and origin[1] <= m.y < origin[1] + size[1])
-    if (not over or st.get("over_details")
-            or imgui.is_popup_open("", imgui.PopupFlags_.any_popup_id)):
-        return
-    zoom = 1.0
-    if st.get("editor") is not None:            # (last frame's zoom: the editor is not open yet)
-        ed.set_current_editor(st["editor"])
-        zoom = ed.get_current_zoom() or 1.0
-    if scroll_pan(st, io.mouse_wheel, io.mouse_wheel_h, zoom, io.key_ctrl or io.key_super):
-        io.mouse_wheel = io.mouse_wheel_h = 0.0
-    else:
-        io.mouse_wheel_h = 0.0                  # ⌘: the editor zooms, never sideways
+            ui.tooltip(BACKDROP_TIP)
 
 
 def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],
@@ -825,7 +858,7 @@ def _area_chips(st: dict) -> None:
         if ui.chip(label):
             st["frame_area"] = a
         if imgui.is_item_hovered():
-            imgui.set_tooltip(AREA_TIP)
+            ui.tooltip(AREA_TIP)
 
 
 def _place(panel, st: dict, view: graphview.View) -> None:
@@ -846,7 +879,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         st["layout_of"] = id(pre)
         st["sat"] = {}
     sat = st.setdefault("sat", {})
-    px, py = st["pan"]                         # the canvas as the fingers moved it
+    px, py = panned(st)                        # the canvas as the fingers moved it (whole units)
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
          frozenset(st["folds"]), frozenset(st["idle_open"]),
@@ -857,6 +890,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     lay = held[1]
     auto = lay.nodes
     applied = st["applied"]
+    px, py = panned(st)                        # the canvas as the fingers moved it
     for n in view.nodes:
         if not drawn_node(st, n):              # N9: an idle node is not on the canvas
             continue
@@ -894,8 +928,8 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         # preset's All outputs — moves there, or that entry would hold it)
         m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
         if m is not None:
-            px, py = st["pan"]
-            m[n.id] = [int(now[0] - px), int(now[1] - py)]
+            px, py = panned(st)                 # saved in layout units, not panned ones
+            m[n.id] = [round(now[0] - px), round(now[1] - py)]
         if n.kind == "modifier" or isinstance(n.ref, Effect):   # (plan 33 U: an effect too)
             size = ed.get_node_size(ed.NodeId(_id(st, "n:" + n.id)))
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
@@ -1031,7 +1065,7 @@ def _titles(st: dict, lay: graphview.Layout) -> None:
     zoom = ed.get_current_zoom() or 1.0
     foot = graphview.TITLE_H - 12.0
     rects = st["title_rects"] = {}
-    px, py = st["pan"]
+    px, py = panned(st)
     for (words, x, y), area in zip(titles(lay), (a for a in graphview.ORDER
                                                  if a in lay.titles), strict=True):
         x, y = x + px, y + py
@@ -1101,7 +1135,7 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
         toggle_idle(st, area)
     if imgui.is_item_hovered():
         ed.suspend()
-        imgui.set_tooltip(IDLE_TIP)
+        ui.tooltip(IDLE_TIP)
         ed.resume()
     imgui.dummy(imgui.ImVec2(NODE_W, 0))
     imgui.pop_id()
@@ -1201,7 +1235,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         toggle_open(st, n.id)
     if imgui.is_item_hovered():
         ed.suspend()
-        imgui.set_tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
+        ui.tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
         ed.resume()
     if has_out:
         imgui.same_line(NODE_W - PIN)
@@ -1344,7 +1378,7 @@ def _hover(st: dict, view: graphview.View) -> None:
             tip = f"{n.label}\n{n.status}"
     if tip:
         ed.suspend()
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
         ed.resume()
 
 
@@ -1651,6 +1685,8 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
                             if n.kind in graphview.FRAME_VKINDS else n.status)
     if isinstance(n.ref, rgraph.SwitchNode):
         _switch_block(panel, view, n)
+    if n.id == PAD_NODE:                        # the pad, drawn: what each control does
+        ui_pad.inline(panel)
     if _param_rows(panel, st, n):
         return
     for port in n.ports:
@@ -1660,6 +1696,7 @@ def _node_side(panel, st: dict, view: graphview.View, router, n: graphview.VNode
 
 # ---------------------------------------------------------------- a node's controls (2026-10-24)
 
+PAD_NODE = "device:pad"  # the primary pad's node: its details draw the pad (ui_pad.inline)
 FOLD_AT = 12             # more param rows than this: each group under its own header
 UNWIRED = imgui.ImVec4(0.58, 0.58, 0.61, 0.55)   # an input chip nothing feeds: faint
 OPEN_TIP = "Open this node's page, with it selected there"
@@ -1836,7 +1873,7 @@ def _open_chip(panel, n: graphview.VNode) -> None:
     if ui.chip(f"open on {home[0].upper()}##graph.side.open"):
         open_on(panel, home)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(OPEN_TIP)
+        ui.tooltip(OPEN_TIP)
 
 
 def switch_feeds(view: graphview.View, n: graphview.VNode) -> list[str | None]:
@@ -1901,7 +1938,7 @@ def _switch_block(panel, view: graphview.View, n: graphview.VNode) -> None:
                        UNWIRED if unwired else None, size):
             p.set(k)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
+            ui.tooltip(tip)
 
 
 def _route_row(panel, router, view: graphview.View, c: graphview.VCable) -> None:
@@ -2051,7 +2088,7 @@ def _place_new(panel, nid: str, at) -> None:
     layout: modifiers and macros are the preset's)."""
     pre, _ = _layouts(panel)
     if at and pre is not None:
-        px, py = _state(panel)["pan"]           # the menu's point is the panned canvas's
+        px, py = panned(_state(panel))          # the menu's point is the panned canvas's
         pre[nid] = [round(at[0] - px), round(at[1] - py)]
 
 
@@ -2079,7 +2116,7 @@ def in_view(panel) -> tuple[float, float]:
     pan (`st["pan"]`: a stored position is drawn moved by it)."""
     st = _state(panel)
     sx, sy = st.get("seen") or (0.0, 0.0)
-    px, py = st["pan"]
+    px, py = panned(st)
     return (round(sx + IN_VIEW_MARGIN[0] - px), round(sy + IN_VIEW_MARGIN[1] - py))
 
 
@@ -2324,7 +2361,7 @@ def _value_drag(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
 
 def _drag_tip(text: str) -> None:
     ed.suspend()
-    imgui.set_tooltip(text)
+    ui.tooltip(text)
     ed.resume()
 
 
@@ -2724,7 +2761,7 @@ def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
         if imgui.menu_item_simple("delete", enabled=why is None):
             remove_node(panel, n.id)
         if why is not None and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip(why)
+            ui.tooltip(why)
     if n.kind in graphview.FRAME_VKINDS:
         render_node_menu(panel, n)
 

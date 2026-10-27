@@ -86,7 +86,7 @@ pins this order over stubs:
 
 | # | Step | Writes |
 |---|---|---|
-| 0 | `clock.tick(now)`, `reloader.poll()`; Esc / Q quit; ⌘R restarts (claims R's edge first) | — |
+| 0 | `clock.tick(now)`, `reloader.poll()`; Q quits (Esc does not); ⌘R restarts (claims R's edge first) | — |
 | 1 | `router.keys(keys)` — key rows, R, F1–F8 / ⇧F1–F8, ⌘Z among them; ↑ / ↓ ride `view.depth4` (`_ride_depth`) | bases |
 | 2 | `devices.poll(dt, now, router=, learn=)` — **the scene-setter slot**: every open device in `[[devices]]` order is polled (`poll`), offered to an armed Learn (`learn`), then delivers its rows (`act`). The pad: `Pad.poll`, `gamepad.learn_from`, `router.pad(pad)` (the `axis` lanes fed, then the button rows), then the sticks' camera job (`gamepad.steer`: each stick or trigger no route names, through `nudge` / `scale`, `router.claimed("axis")`); each MIDI desk: `MidiIO.poll` — the rows of its layer that is up and the invariant rows, knob glides, an armed desk Learn's candidate; the bridge and a `midi-out`: their ports looked for again; an OSC device: its socket read, its hits as rows; a cloud: its frame. Every ~30 frames the registry also looks at `config.toml`'s mtime (`DeviceRegistry.watch`). Right after it, `media.poll(dt, now)` (plan 32): each of the eight channels checks whether the id at its slot changed (a source opened, the old one queued for the closer thread), steps a timed source's transport and tells its source where to be, and every second asks the resolver again; it decodes, scans and joins nothing | bases (`media.<c>.*` are read, not written) |
 | 3 | `router.follow_macros()` — a macro whose base moved sets its base subscribers' bases | bases |
@@ -975,7 +975,7 @@ is not live is dormant: its lane reads NaN and a route on it lets go
 | `R`, F1–F8, ⇧F1–F8 | key rows (`routing.LOOP_KEY_ROWS`): `camera.reset`, `preset.load.k` → `Project.load_slot`, `preset.save.k` → `Project.save_slot`. Only the first `params.F_KEYS` = 8 slots have keys | base (a trigger) |
 | ⌘Z / Ctrl+Z, with ⇧ | key rows → `edit.undo` / `edit.redo` → `undo.undo()` / `undo.redo()` | the bases and table parts that differ |
 | Home, or the APC40's OVERDUB | `preset.home` → `Project.home`: the show's "starts on" preset loads | a preset load |
-| ⌘R, Esc / Q, ↑ / ↓ | loop code (`app.LOOP_KEYS`): restart, quit, `_ride_depth` on `view.depth4` | ↑ / ↓: base, relative |
+| ⌘R, ⌘[ / ⌘], Q, ↑ / ↓ | loop code (`app.LOOP_KEYS`): restart, the panel's page history (`ui.PageHistory`), quit, `_ride_depth` on `view.depth4` | ↑ / ↓: base, relative |
 | mouse drag / wheel, a pad stick or trigger | `Mouse.poll`; the pad device's camera job (`gamepad.steer`, in `PadDevice.act`) → `nudge` / `scale` | base, relative |
 | a pad button or hat | `Router.pad` → `routing.act` | base |
 | an APC40 knob or fader | the row of the layer that is up, or the invariant row → `Param.set_norm` (a fader after soft pickup; a knob caught at the ring just sent, `apc40.RING_REBASES_KNOB`, hand check 31); smoothed by `desk.slew` | base |

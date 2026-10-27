@@ -14,7 +14,7 @@ fullscreen, overlay) through the output.* params.
 
   ← / →  shape      space  pause      P  points     R  reset view
   [ / ]  brightness , / .  speed      1–6  planes   H  panel
-  M  mic on/off     K  play/pause     0  restart    Esc/Q  quit
+  M  mic on/off     K  play/pause     0  restart    Q  quit
   Cmd+R  restart the whole process (same terminal, cold reload)
   ↑ / ↓  4D perspective — holding accelerates toward the range limit
   drag  orbit       ⇧drag / right-drag  pan   scroll  zoom about cursor
@@ -90,6 +90,7 @@ from .media.folder import MediaFolder
 from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
+from .pinch import install as install_pinch
 from .preset import Presets, migrate_home
 from .render import Renderer
 from .routing import SLEW_DEFAULT_S, Bindings, Router, bindings_path, register_desk
@@ -115,7 +116,8 @@ D4_RAMP = 1.8     # seconds of hold to reach full rate
 # the key / pad / MIDI / lane binding tables live in routing.py (bindings.json);
 # these are the keys the loop still handles itself (the cheat-sheet test reads
 # it). R and F1–F8 / ⇧F1–F8 are table rows since plan 11 (routing.LOOP_KEY_ROWS).
-LOOP_KEYS = ("SUPER+R", "UP", "DOWN", "ESCAPE", "Q")
+LOOP_KEYS = ("SUPER+R", "SUPER+LEFT_BRACKET", "SUPER+RIGHT_BRACKET",
+             "UP", "DOWN", "Q")
 
 
 def _err(where: str, e: Exception) -> str:
@@ -848,7 +850,7 @@ class Keys:
     router's key rows read: pressed() is an edge, shift() / super() /
     control() the modifier state a "key:SHIFT+B" or "key:CONTROL+Z" row
     needs (routing.MODIFIERS). R and F1–F8 / ⇧F1–F8 are
-    table rows since plan 11 WP7; Cmd+R, Esc / Q and ↑ / ↓ stay in the
+    table rows since plan 11 WP7; Cmd+R, Q and ↑ / ↓ stay in the
     loop (`frame`), Cmd+R claiming R's edge before the table reads it.
     """
 
@@ -1069,14 +1071,26 @@ def frame(h: Host, now: float, dt: float, fps: float) -> bool:
     reloader.poll()     # its own throttle clock (monotonic): a file watch, not a frame clock
 
     # ---- polled keys, from either window ----
-    if keys.pressed(glfw.KEY_ESCAPE) or keys.pressed(glfw.KEY_Q):
+    # Esc does not quit: it is too easy to hit mid-show (Q, Ctrl+C or the
+    # window's close button do)
+    if keys.pressed(glfw.KEY_Q):
         h.quit()
     shift = keys.shift()
     # Cmd+R restarts; it claims R's edge first, so the table's `key:R`
     # (camera.reset) never hears it — a press with ⌘ held is the loop's
     if keys.super() and keys.pressed(glfw.KEY_R):
         h.restart()
-    router.keys(keys)         # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
+    # ⌘[ / ⌘] go back / forward through the pages visited, as a browser
+    # does; they claim [ and ]'s edge the same way, so brightness (the
+    # table's bare [ ]) never hears them
+    hist = getattr(h.panel, "history", None)    # (a panel from before a hot reload)
+    if hist is not None:
+        hist.note(h.panel.page)                 # however the page changed since
+        if keys.super():
+            for key, by in ((glfw.KEY_LEFT_BRACKET, -1), (glfw.KEY_RIGHT_BRACKET, 1)):
+                if keys.pressed(key) and (page := hist.step(by)) is not None:
+                    h.panel.page = page
+    router.keys(keys)        # key rows: B / ⇧B, R, F1–F8 / ⇧F1–F8, and the rest
     # ↑/↓ ride depth4 toward its range limit, accelerating with hold
     for key, sgn in ((glfw.KEY_UP, 1.0), (glfw.KEY_DOWN, -1.0)):
         hold = keys.held(key, now)
@@ -1261,6 +1275,7 @@ def main() -> None:
     apply_style()
     load_fonts()
     impl = GlfwRenderer(ctrl_win)
+    install_pinch()     # the trackpad's pinch, which GLFW drops: GRAPH zooms on it
     io = imgui.get_io()
     # hot-reloaded panel code can raise mid-window; let imgui unwind the
     # stack itself instead of asserting the process away

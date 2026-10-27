@@ -14,7 +14,7 @@ from imgui_bundle import imgui
 from test_ui_routing import _drawn
 from test_ui_shell import CONTROL_SIZE, _page_scroll, frame, rig  # noqa: F401 — the fixture
 
-from hyperspace import ui_presets
+from hyperspace import ui, ui_presets
 from hyperspace.library import HOME_UNSET, Library
 from hyperspace.ui import PAGES
 
@@ -127,7 +127,7 @@ def test_starts_on_reads_starts_on_home(rig, monkeypatch):  # noqa: F811
     texts, previews = _drawn(monkeypatch)
     tips: list[str] = []
     monkeypatch.setattr(imgui, "is_item_hovered", lambda *a: True)
-    monkeypatch.setattr(imgui, "set_tooltip", tips.append)
+    monkeypatch.setattr(ui, "tooltip", tips.append)
     frame(panel, "presets")
     frame(panel)
     assert "STARTS ON / HOME" in texts and "STARTS ON" not in texts
@@ -856,7 +856,7 @@ def test_a_slot_whose_preset_is_gone_says_so(rig, monkeypatch):  # noqa: F811
     ui_presets.invalidate(panel, "presets")
     tips: list[str] = []
     with monkeypatch.context() as m:
-        m.setattr(imgui, "set_tooltip", tips.append)
+        m.setattr(ui, "tooltip", tips.append)
         real = imgui.is_item_hovered
         m.setattr(imgui, "is_item_hovered", lambda *a: True)
         frame(panel)

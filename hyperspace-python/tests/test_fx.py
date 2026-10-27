@@ -1196,7 +1196,7 @@ def test_the_map_chips_set_fx_face_map(tmp_path, monkeypatch):
         rig.frame()
         assert ("map.fx.face_map.0", True) in lit and ("map.fx.face_map.1", False) in lit
         tips = []
-        monkeypatch.setattr(imgui, "set_tooltip", lambda t: tips.append(t))
+        monkeypatch.setattr(ui, "tooltip", lambda t: tips.append(t))
         x0, y0, x1, y1 = rig.rects["map.fx.face_map.1"]
         imgui.get_io().add_mouse_pos_event((x0 + x1) / 2, (y0 + y1) / 2)
         for _ in range(3):

@@ -343,6 +343,21 @@ def diagram(panel) -> None:
         imgui.pop_style_var()
 
 
+def inline(panel) -> None:
+    """The same picture inside the current window, as wide as it has room
+    for and as tall as the pad's shape needs: the GRAPH page's details for
+    the pad node (ui_graph._node_side), whether or not the floating one is up."""
+    w = imgui.get_content_region_avail().x
+    h = (w - 2 * PAD) / gamepad.LAYOUT_W * gamepad.LAYOUT_H + 2 * PAD + HEAD_H
+    imgui.push_style_var(imgui.StyleVar_.window_padding, _v(PAD, PAD))
+    if imgui.begin_child("##pad.inline", _v(w, h), imgui.ChildFlags_.borders
+                         | imgui.ChildFlags_.always_use_window_padding,
+                         imgui.WindowFlags_.no_scrollbar | imgui.WindowFlags_.no_scroll_with_mouse):
+        _body(panel, _table(panel))
+    imgui.end_child()
+    imgui.pop_style_var()
+
+
 def state(panel) -> tuple[str, str]:
     """The header's state (the word, the whole of it for the hover): how
     the pad is read, or why there is none."""
@@ -367,13 +382,13 @@ def _header(panel, table) -> None:
     word, why = state(panel)
     ui._micro(word, ui.RED if _pad(panel) is not None else ui.DIM)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{why} The picture is the table's, with or without a pad.")
+        ui.tooltip(f"{why} The picture is the table's, with or without a pad.")
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
         imgui.text_colored(ui.DIM, f"{n} mapped")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Controls with a row in bindings.json. A grey label is the "
+            ui.tooltip("Controls with a row in bindings.json. A grey label is the "
                               "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
@@ -428,7 +443,7 @@ def _body(panel, table) -> None:
             imgui.pop_font()
     imgui.dummy(avail)
     if tip is not None:
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
 
 
 def rect(panel, c: gamepad.Control) -> tuple[float, float, float, float] | None:

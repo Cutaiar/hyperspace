@@ -193,6 +193,20 @@ def load_fonts() -> None:
         imgui.get_io().font_default = _FONTS["ui"]
 
 
+TIP_CH = 65   # a tooltip wraps at this many characters: a readable line (the owner, 2026-10-26)
+
+
+def tooltip(text: str) -> None:
+    """A hover's words as a tooltip, wrapped at `TIP_CH` characters of the
+    tooltip's face — where `imgui.set_tooltip` never wraps — and drawn as
+    they are (set_tooltip reads its text as a format: a % went wrong)."""
+    if imgui.begin_tooltip():
+        imgui.push_text_wrap_pos(imgui.calc_text_size("0").x * TIP_CH)
+        imgui.text_unformatted(text)
+        imgui.pop_text_wrap_pos()
+        imgui.end_tooltip()
+
+
 def _micro(text: str, color: imgui.ImVec4 | None = None) -> None:
     """An uppercase field label in the tracked label face."""
     imgui.push_font(_FONTS["micro"], FONT_MICRO)
@@ -270,7 +284,7 @@ def dirty_dot(tip: str) -> tuple[float, float, float, float]:
     cx = at.x + DOT_R
     imgui.get_window_draw_list().add_circle_filled(imgui.ImVec2(cx, cy), DOT_R, u32(RED))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(tip)
+        tooltip(tip)
     return (cx - DOT_R, cy - DOT_R, cx + DOT_R, cy + DOT_R)
 
 
@@ -558,10 +572,11 @@ CHEATSHEET = [
     ("Cmd+Z", "undo · ⇧ redo (or Ctrl+Z)"),
     ("Home", "home preset (fn ←)"),
     ("Cmd+R", "restart process"),
+    ("Cmd+[ ]", "panel page back · forward"),
     ("H / ?", "panel / this sheet"),
     ("T", "overlay (if config.toml allows)"),
     ("G", "overlay: clicks through / back"),
-    ("Esc / Q", "quit"),
+    ("Q", "quit"),
     # Xbox-layout gamepad, Bluetooth or USB (gamepad.py holds the map)
     ("pad X / B", "previous / next in the preset list"),
     ("pad A Y", "faces · lines"),
@@ -615,6 +630,30 @@ PAGES = [
 PAGE_KEYS = [k for k, _, _ in PAGES]
 
 
+class PageHistory:
+    """The pages visited, back and forward as a browser's are (⌘[ / ⌘]).
+    `note` records the page open now — a rail click, a key row, a step
+    here — dropping the forward run when it is a new visit; `step(-1)` /
+    `step(1)` returns the page to go to, or None at either end."""
+
+    def __init__(self, page: int):
+        self.visited, self.at = [page], 0
+
+    def note(self, page: int) -> None:
+        if page == self.visited[self.at]:
+            return
+        del self.visited[self.at + 1:]
+        self.visited.append(page)
+        self.at = len(self.visited) - 1
+
+    def step(self, by: int) -> int | None:
+        i = self.at + by
+        if not 0 <= i < len(self.visited):
+            return None
+        self.at = i
+        return self.visited[i]
+
+
 class Panel:
     def __init__(self, control: Control, audio: AudioEngine, view: ViewState, renderer=None,
                  bank=None, registry: Registry | None = None, library=None):
@@ -640,12 +679,16 @@ class Panel:
         self.pin_out = [0.0] * N_MAX
         self.open = True
         self.cheatsheet = False     # off at every launch; / brings it up (plan 16 WP1)
-        self.desk = True            # the APC40, left of the panel; the whole window without it
+        # the APC40 left of the panel: off at launch, the panel filling the
+        # window instead (the owner, 2026-10-26: GRAPH is where the time goes);
+        # the SYSTEM page's switch brings it back
+        self.desk = False
         # the gamepad over the desk in the same column (ui_pad.py): off at
         # every launch, as the cheat sheet is — the desk keeps its room
         # until the SYSTEM page's switch asks for the pad
         self.pad_diagram = False
-        self.page = 1               # index into PAGES; the view page opens first
+        self.page = PAGE_KEYS.index("graph")    # index into PAGES; GRAPH opens first
+        self.history = PageHistory(self.page)   # ⌘[ / ⌘]: back and forward (app.frame)
         self.ghosts = 0             # ghost markers drawn this frame (tests read it)
         self._file_dialog = None
         self.reloader = None  # set by app.py; panel only reads status off it
@@ -765,7 +808,7 @@ class Panel:
         if c is None or self.learn is None or not ui_desk.armed(self):
             return
         self._frame_item()
-        imgui.set_tooltip(f"click: put {c.glyph} on {a.label or a.id}")
+        tooltip(f"click: put {c.glyph} on {a.label or a.id}")
         if imgui.is_mouse_clicked(0):
             self.learn.map_picked(a.id, apc40)
 
@@ -1000,7 +1043,7 @@ class Panel:
             return
         t = p.tip if text is None else (text() if callable(text) else text)
         if t:
-            imgui.set_tooltip(t)
+            tooltip(t)
 
     # ---- modulation ghosts: the base is the handle, the effective a white bar ----
 
@@ -1064,7 +1107,7 @@ class Panel:
         dl = imgui.get_window_draw_list()
         dl.add_circle_filled(imgui.ImVec2(r1.x - 5, r0.y + 5), 3.5, u32(RED))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(self._mod_line(p))
+            tooltip(self._mod_line(p))
         self.ghosts += 1
 
     # ---- the track: every slider's rounded ground and red value fill ----
@@ -1522,7 +1565,7 @@ class Panel:
                 self.reg["band.select"].set(i)
             if imgui.is_item_hovered():
                 lo, hi = a.edges(i)
-                imgui.set_tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{self._lane_plane(i)}")
+                tooltip(f"{name} {lo:.0f}–{hi:.0f} Hz{self._lane_plane(i)}")
             # every meter has the menu (plan 17 WP3), each under its own
             # key — the key the rail's pills use — so no two popups share
             # an id with each other or with the band combo's on a page
@@ -1564,7 +1607,9 @@ class Panel:
         if not self.open:
             return
         io = imgui.get_io()
-        pw = panel_w((io.display_size.x, io.display_size.y))
+        # at launch: right of the desk when it is up, else the whole window
+        pw = (panel_w((io.display_size.x, io.display_size.y)) if getattr(self, "desk", True)
+              else io.display_size.x - 24)
         imgui.set_next_window_pos(
             imgui.ImVec2(io.display_size.x - pw - 12, 12), imgui.Cond_.once
         )
@@ -1732,7 +1777,7 @@ class Panel:
                 line = f"{line} ({tip})"     # said on the line where there is room for it
             imgui.text_colored(color, fit_text(line, room))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"{note} ({tip})" if tip else note)
+                tooltip(f"{note} ({tip})" if tip else note)
             if armed and imgui.is_item_clicked():
                 lrn.arm(None)
             elif picked_line and imgui.is_item_clicked():
@@ -1759,7 +1804,7 @@ class Panel:
             imgui.same_line(imgui.get_content_region_avail().x - imgui.calc_text_size(text).x)
             imgui.text_colored(RED if proj.is_dirty() else DIM, text)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("the open show — PRESETS page")
+                tooltip("the open show — PRESETS page")
 
     # ---- pages ----
 
@@ -1950,7 +1995,7 @@ class Panel:
                 imgui.text_colored(WARN if sl.error else FAINT,
                                    fit_text(line, imgui.get_content_region_avail().x))
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(line)
+                    tooltip(line)
             # plan 26 A4: the words say the wiring too — the switches above
             # and the loaded preset's graph set it (`hands: in the scene`);
             # the whole graph in words on the line's hover
@@ -1975,7 +2020,7 @@ class Panel:
             if chip(f"{OPEN_ON_GRAPH}##graph.{pre}"):
                 ui_graph.select_node(self, pre)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
+                tooltip(f"select {graphview.label_of(pre, slots)} on the GRAPH "
                                   "page and bring it on screen")
             for pid, t in flips:            # no dim row: the ticks at the right of this one
                 imgui.same_line()
@@ -1985,7 +2030,7 @@ class Panel:
         for line in dormant_lines(getattr(self.renderer, "_graph", None)):
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(line)
+                tooltip(line)
         self._edit_said("output_said")
         if several:
             w, h = slots[0].size
@@ -2013,7 +2058,7 @@ class Panel:
         if line:
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
-                imgui.set_tooltip(line)
+                tooltip(line)
 
     def _picture_combo(self, frame, port: str, line: str, width: float, warn: bool,
                        tip: str, slots=(), key: str = "output_said", rig=None) -> None:
@@ -2046,7 +2091,7 @@ class Panel:
                     imgui.set_item_default_focus()
             imgui.end_combo()
         elif tip and imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
+            tooltip(tip)
         if pick is not None:
             self._graph_edit(lambda e: graphview.set_picture(e, port, pick), key)
 
@@ -2061,7 +2106,7 @@ class Panel:
         changed, v = imgui.checkbox(f"{THROUGH_WORDS}##through.{n}", on)
         imgui.end_disabled()
         if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip(why or "the hands bent by the effects on this output (written "
+            tooltip(why or "the hands bent by the effects on this output (written "
                               "into the preset's graph: a composite before the effects)")
         if changed:
             self._graph_edit(lambda e: graphview.set_through(e, n, v), "output_said")
@@ -2111,7 +2156,7 @@ class Panel:
             if inert:
                 imgui.pop_style_var()
                 if imgui.is_item_hovered():
-                    imgui.set_tooltip(f"{name} does nothing now: {held}")
+                    tooltip(f"{name} does nothing now: {held}")
         self._check("view.points")
         imgui.same_line()
         self._check("view.lines")
@@ -2349,7 +2394,7 @@ class Panel:
             else:
                 imgui.text_disabled(text)
             if imgui.is_item_hovered():
-                imgui.set_tooltip(
+                tooltip(
                     "this machine's own files: config.toml, bindings.json, windows.json, "
                     "hands.json, last_show, logs" if text.startswith("machine:") else
                     "presets and shows as JSON ([library] path, else $HYPERSPACE_HOME); "
@@ -2589,7 +2634,7 @@ class Panel:
         if line:
             imgui.text_colored(WARN, line)
             if imgui.is_item_hovered():
-                imgui.set_tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
+                tooltip("a frame took over 2 s, or kill -USR1 asked for a dump: "
                                   "every thread's stack, newest at the end")
 
     def _device_lines(self) -> None:
@@ -2630,7 +2675,7 @@ class Panel:
             return
         opened = imgui.tree_node(f"desk log — the last {len(lines)} presses##desklog")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("each press on the desk: the control, what it did, and the "
+            tooltip("each press on the desk: the control, what it did, and the "
                               "layer it was read on (both: the same on either layer)")
         if opened:
             for line in lines:
