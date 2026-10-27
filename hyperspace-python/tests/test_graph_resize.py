@@ -41,14 +41,21 @@ RED, GREEN, BLUE, WHITE = (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255)
 RESIZE = {"kind": "resize"}
 DELAY = {"kind": "delay"}
 ACID2 = {"kind": "effect", "file": "acid", "instance": 2}
-# the factory frame (`G.wired(G.Wiring())`'s six wires, in its order)
-FACTORY_FRAME = (("shape", "scene.geometry"), ("scene", "lookback.image"),
-                 ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
-                 ("hands.layer", "output.all.guide"), ("scene", "lookback.capture"))
+# the factory frame (`wired_wiring(G.Wiring())`'s wires, in its order; plan
+# 36 T4: the look-back off in the old words, so none is drawn)
+FACTORY_FRAME = (("shape", "scene.geometry"), ("scene", "output.all.image"),
+                 ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"))
+
+
+# plan 36 T2: and the hidden edges' wires the factory frame ends with
+FACTORY_EDGES = (("pattern", "shape.faces"), ("hands", "hands.layer.hands"))
 
 
 def test_the_factory_frame_is_the_wired_default():
-    assert tuple((w.src, w.dst) for w in G.wired(G.Wiring()).wires) == FACTORY_FRAME
+    from hyperspace.graphmigrate import wired_wiring
+
+    assert tuple((w.src, w.dst) for w in wired_wiring(G.Wiring()).wires) == (
+        *FACTORY_FRAME, *FACTORY_EDGES)
 
 
 def _spec(*pairs, nodes=(), effects=None):
@@ -238,7 +245,7 @@ def test_an_effect_after_a_resize_runs_at_its_size(ctx):
 def test_a_delay_through_a_resize_holds_a_small_buffer(ctx):
     """Review Focus 5: the owner's headline — the scene at 64² square into
     the delay onto the faces: the delay holds 64×64, its write after the
-    resize and before the capture."""
+    resize and before the outputs."""
     r = _wired_renderer(ctx, None, [("scene", "resize.image"), ("resize", "delay.image"),
                                     ("delay", "shape.faces")], [RESIZE, DELAY])
     s, vs = _s(size=2, aspect=1), _views(ctx, WIDE, 1)
@@ -246,7 +253,8 @@ def test_a_delay_through_a_resize_holds_a_small_buffer(ctx):
         _frame(ctx, r, s, vs, WIDE, k)
     assert r.delay_pair("delay").read[0].size == (64, 64)
     order = [n.name for n in r._graph.order]
-    assert order.index("resize") < order.index("delay(write)") < order.index("lookback(capture)")
+    # (plan 36 T4: no look-back is drawn in this frame — the write before the outputs)
+    assert order.index("resize") < order.index("delay(write)") < order.index("output.1")
 
 
 def test_a_loop_through_a_resize_and_a_delay_is_legal(ctx):

@@ -87,7 +87,7 @@ from .media import proxy as media_proxy
 from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .outputs import Offscreen, Presenter, Slot, Switches, View
+from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
 from .pinch import install as install_pinch
@@ -596,7 +596,8 @@ def _bands(audio) -> tuple[float, ...]:
         return ()
 
 
-def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) -> None:
+def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None,
+                 preview=None) -> None:
     """One render frame onto every output (plan 21 WP3, "the frame in
     app.draw_render"):
 
@@ -617,7 +618,10 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
        the loop).
 
     What output 1's view caught is raised after the others were presented,
-    as `Renderer.draw` raises it."""
+    as `Renderer.draw` raises it. `preview` (an `outputs.Preview`), when
+    the GRAPH page asked for it, rides on output 1's view as one more
+    publisher — through output 1's own tap, else its own — and is flushed
+    for the control window as a presenter's frame is."""
     first = slots[0]
     win = first.win
     glfw.make_context_current(win)
@@ -636,10 +640,14 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
     first.size = (fbw, fbh)
     later = [sl for sl in slots[1:] if sl.opened and sl.presenter is not None]
     offscreen = [sl for sl in slots[1:] if sl.publish_only and sl.offscreen is not None]
+    shown_to_panel = preview is not None and preview.take()
+    pubs, tap = first.publishers, first.tap
+    if shown_to_panel:
+        pubs, tap = [*pubs, preview], tap if tap is not None else preview.tap
     try:
         views = [View(first.switches, (fbw, fbh), target=ctx.screen,
                       bg_alpha=getattr(renderer, "bg_alpha", 1.0), viewport=(0, 0, fbw, fbh),
-                      publish=first.publishers, tap=first.tap)]
+                      publish=pubs, tap=tap)]
         shown = []                      # (slot, view): the presented ones
         pub_size = getattr(renderer, "max_frame", None) or (fbw, fbh)
         for sl in slots[1:]:
@@ -653,7 +661,7 @@ def _draw_render(renderer, ctx, s, slots: list[Slot], watch=None, flush=None) ->
                 views.append(View(sl.switches, sl.size, target=sl.offscreen.fit(sl.size),
                                   publish=sl.publishers))
         renderer.draw_outputs(s, max(w, 1), max(h, 1), fbw / max(w, 1), views)
-        if later:
+        if later or shown_to_panel:
             (flush or _gl_flush)()
         for sl, v in shown:
             try:
@@ -1342,6 +1350,7 @@ def main() -> None:
     panel.envs, panel.seq = envs, seq         # plan 31: what a SEQ page draws
     panel.output = output
     panel.outputs = slots                  # the OUTPUT page: a block per output (plan 21 WP4)
+    panel.preview = Preview(ctx)           # output 1 behind the GRAPH page (2026-10-26)
     router = Router(reg, table)
     router.use_lfos(lfos, clock)           # they step inside the pass (plan 28 N0)
     router.use_bank(envs, clock)           # …and so do the envelopes (plan 31)
@@ -1390,11 +1399,12 @@ def main() -> None:
     panel.media = media                        # the MEDIA page: the folder and the channels
     renderer.ghost.router = router           # the guide lights what the table routes
     renderer.cloud_source = rig              # cloud:<role> → the scene's point clouds (A4b)
+    renderer.rig_source = library.project    # the show's own wires: the bus cables (plan 36 T1)
     media.state.resolver.devices = rig       # ndi: / syphon: / camera: ids → live feeds (plan 32 T8)
     panel.hand_settings = hand_settings
     dream_io, panel.dream_error = _open_dream(reg, cfg)
-    if dream_io is not None:            # fills the look-back's dream slot
-        renderer.lookback.source = dream_io
+    if dream_io is not None:            # what the dream node dreams with (plan 36 T4)
+        renderer.dreamer.source = dream_io
     # the sticks as dials (gamepad.dial, a prototype): session params on
     # whichever pad is the primary now
     _register_dial(reg, lambda: rig.adapter("gamepad"))
@@ -1489,7 +1499,7 @@ def main() -> None:
     def draw_render(dt: float) -> None:
         # every render output: output 1 drawn, the others presented, the
         # others swapped first and output 1 last (_draw_render)
-        _draw_render(renderer, ctx, s, slots, render_watch)
+        _draw_render(renderer, ctx, s, slots, render_watch, preview=panel.preview)
 
     def draw_panel(dt: float, fps: float) -> None:
         # the control window: black ground, then the imgui frame opened
@@ -1513,19 +1523,19 @@ def main() -> None:
     panel.watchdog, panel.render_watch = watchdog, render_watch
 
     def dream_check(name: str | None) -> None:
-        # a preset that asks for the dream — the look-back on with a dream
-        # mix above 0 — with no worker to dream: the look-back shows the
-        # echoes only. Said on the banner (until dismissed), logged once.
-        # Echoes alone (dream.mix 0) are a normal mode and say nothing.
+        # a preset that asks for the dream — a dream node on (plan 36 T4:
+        # `dream.on`) with a mix above 0 — with no worker to dream: the
+        # dream passes its picture through. Said on the banner (until
+        # dismissed), logged once. Echoes alone are a normal mode.
         if reg["dream.on"].base and reg["dream.mix"].base > 0 and dream_io is None:
             why = panel.dream_error or "[dream] enabled = false in config.toml"
             render_watch.warn(f"{name} turns the dream on, but there is no dream worker ({why}); "
-                              "the look-back shows the echoes only")
+                              "the dream passes its picture through")
     presets.listeners.append(dream_check)
     dream_check(library.current("presets"))     # the startup preset has already landed
 
     # both exits close the publishers, in output 1's context (plan 32 T9)
-    publishers = _Closer(lambda: _close_publishers(render_win, slots))
+    publishers = _Closer(lambda: (_close_publishers(render_win, slots), panel.preview.close()))
 
     def all_windows() -> list:            # both exits destroy these before terminate
         return [*(sl.win for sl in slots[1:]), ctrl_win, render_win]

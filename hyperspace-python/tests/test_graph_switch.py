@@ -23,6 +23,7 @@ import numpy as np
 import pytest
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,7 +55,7 @@ def test_the_switch_is_built_from_its_wires():
     w = spec.wiring()
     assert G.Wire("media.a", "switch.in1") in w.wires and G.Wire("switch", "pattern.media") \
         in w.wires
-    g = G.build_graph([View(Switches(), (64, 48))], w)
+    g = G.build_graph([View(Switches(), (64, 48))], wired_wiring(w))
     sw = g.nodes["switch"]
     assert isinstance(sw, G.SwitchNode)
     assert sw.inputs["in1"] is g.nodes["channel.a"] and sw.inputs["in3"] is g.nodes["channel.c"]
@@ -65,7 +66,7 @@ def test_the_switch_is_built_from_its_wires():
 def test_a_switch_that_reaches_nothing_has_no_node():
     spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "switch.in1"),
                                 nodes=[SWITCH]))
-    g = G.build_graph([View(Switches(), (64, 48))], spec.wiring())
+    g = G.build_graph([View(Switches(), (64, 48))], wired_wiring(spec.wiring()))
     assert "switch" not in g.nodes
 
 
@@ -121,7 +122,7 @@ def _renderer(ctx, media=None, pairs=(), nodes=(), instances=None, values=None):
     spec = G.read_graph(section(("frame", "fx.image"), *pairs, nodes=nodes),
                         effects=set(st.specs))
     assert not spec.notes, spec.notes
-    r.wiring = spec.wiring()
+    r.wiring = wired_wiring(spec.wiring())
     return r
 
 

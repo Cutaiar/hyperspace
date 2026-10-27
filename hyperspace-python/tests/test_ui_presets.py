@@ -412,6 +412,10 @@ def test_twenty_four_slots_fit_the_page_with_more_open(rig, monkeypatch):  # noq
     names = sorted(lib.list("presets"), key=lambda n: (-len(n), n))
     pr.bank[:] = [names[k % len(names)] for k in range(24)]
     lib.load("presets", names[0])
+    # (plan 36 T3: the factory `/7` holds the envelopes' values, which this
+    # rig — the panel's, built without them — warns of as unknown; the page
+    # is measured with the status line alone, as on the app)
+    lib.warning = ""
     assert lib.status and len(pr.bank) == 24 and all(pr.bank)
     assert _page_scroll(rig, monkeypatch)["presets"] == 0
     st = ui_presets._state(panel)
@@ -541,6 +545,10 @@ def test_the_dot_is_a_twelve_pixel_disc_and_save_is_lit_while_dirty(rig, monkeyp
     imgui.get_io().display_size = imgui.ImVec2(*CONTROL_SIZE)
     _open_more(monkeypatch)
     lib.project.load_slot(4)                                  # F5: TRIP, a factory preset
+    # (plan 36 T3: the factory `/7` holds the envelopes' values, which this
+    # rig — the panel's, built without them — warns of as unknown; the page
+    # is measured with the status line alone, as on the app)
+    lib.warning = ""
     assert lib.current("presets") == "TRIP" and lib.project.active == 4
     frame(panel, "presets")
     frame(panel)
@@ -629,6 +637,10 @@ def test_the_preset_strip_has_no_reset_and_does_not_overlap(rig, monkeypatch):  
     factory = [n for n in lib.list("presets") if lib.is_factory("presets", n)]
     longest = max(factory, key=lambda n: (len(n), n))
     lib.load("presets", longest)
+    # (plan 36 T3: the factory `/7` holds the envelopes' values, which this
+    # rig — the panel's, built without them — warns of as unknown; the page
+    # is measured with the status line alone, as on the app)
+    lib.warning = ""
     _dirty(rig)
     for group in ui_presets.groups(panel):                    # every module strip dirty too
         if not lib.is_dirty(group):
@@ -894,7 +906,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
 
     panel, lib = rig.panel, rig.lib
     called = []
-    monkeypatch.setattr(lib.presets, "new", lambda: called.append(1) or [preset.NEW_SAID])
+    monkeypatch.setattr(lib.presets, "new", lambda at: called.append(1) or [preset.NEW_SAID])
     frame(panel, "presets")
     frame(panel)
     rects = _rects(panel)

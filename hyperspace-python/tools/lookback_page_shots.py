@@ -196,7 +196,7 @@ def shots(name: str, speed: bool = False, closed: bool = False) -> None:
     view.shape = 3
     view.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     reg["dream.on"].set(True)
-    renderer.lookback.source = StandIn(reg)
+    renderer.dreamer.source = StandIn(reg)
     scene_tex = ctx.texture(RENDER_SIZE, 4)
     scene_fbo = ctx.framebuffer(color_attachments=[scene_tex])
     panel = Panel(r.control, r.audio, view, renderer=renderer, bank=r.lib.project,

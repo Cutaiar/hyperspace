@@ -72,12 +72,15 @@ from __future__ import annotations
 import argparse
 import gc
 import hashlib
+import inspect
 import json
 import os
 import re
 import sys
 import tempfile
 import time
+from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -106,6 +109,11 @@ STATES: tuple[tuple[str, dict], ...] = tuple(
      {"scene": a, "hands": b, "through": c})
     for a in (True, False) for b in (True, False) for c in (False, True))
 HANDS = ("absent", "present")
+# plan 36 T3: eight windows on the rig as it ships — each shows its own
+# wires, else All outputs' by its bus cables (no switch state emulated):
+# what tools/migrate_library.py draws an old file and its `/7` under
+SHIPPED: tuple[tuple[str, dict], ...] = tuple(
+    ("scene+hands", {"scene": True, "hands": True, "through": False}) for _ in range(8))
 # single-output goldens (output 1 alone, 4× MSAA, like the window): every
 # preset × hands in the default state (`Switches()` = scene + hands, no
 # through), and for a preset with an effect on also through. Alone, a
@@ -149,6 +157,11 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # landing through the real `Presets` (`GraphSection`) onto the rig's
 # renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
+# plan 36 T3 (D5): the factory presets are `/7` files; what they were made
+# from — the `/2` (seq-demo `/3`) sources `python -m hyperspace.preset`
+# writes, which tools/migrate_library.py migrated — is read where the
+# proof needs the section before the wired frame (`plan33_section`)
+FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # plan 30 D1: the three placements' proof presets — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
 # the scene (`graph.EffectAt.after` / `into`)
@@ -325,7 +338,9 @@ class Shot:
     over: bool           # the hands laid over after the pipeline
     sha256: str
     size: tuple[int, int]
-    pixels: np.ndarray   # (h, w, 4) uint8, top row first: for the PNG and a diff
+    # (h, w, 4) uint8, top row first: for the PNG and a diff — None when the
+    # caller's `keep` said the frame is not needed past its hash
+    pixels: np.ndarray | None
     wired: str | None = None   # plan 28 N4: what feeds a wired output's picture
 
     @property
@@ -503,6 +518,126 @@ def context() -> moderngl.Context:
     return _CTX
 
 
+class _Lent(moderngl.Program):
+    """A pooled program as one rig holds it: the pool's linked program
+    under a wrapper of its own. Releasing it (or the rig's end) hands the
+    program back to the pool, never to GL; collecting it does nothing."""
+
+    def __del__(self):
+        pass
+
+    def release(self):
+        pool = self.__dict__.get("_pool")
+        if pool is not None:
+            pool.give_back(self)
+
+
+class ProgramPool:
+    """The golden rigs' shader programs, linked once per process and lent
+    out again (the tool's harness only: the app compiles every program it
+    asks for, as before). Each rig builds a new `Renderer`, which asks for
+    some 26 programs whose sources are the same rig after rig; linking them
+    was most of a rig's cost. A program lent is exactly one freshly linked:
+    within a rig every request gets a program of its own (two `acid`
+    instances never share one), and a program lent again has every uniform
+    and uniform-block binding put back as the link left it (snapshotted
+    then), so nothing a rig set reaches the next and the order the rigs
+    run in moves no pixel. Used only inside `shared_programs`."""
+
+    def __init__(self, ctx: moderngl.Context):
+        self.ctx = ctx
+        self._link = type(ctx).program.__get__(ctx)     # the real compile
+        self._free: dict[str, list[tuple[moderngl.Program, list]]] = {}
+        self._out: list[_Lent] = []
+        self.linked = self.lent = 0
+
+    @staticmethod
+    def _state(prog: moderngl.Program) -> list | None:
+        """Every uniform's value and block's binding as they stand, or None
+        when one cannot be read back (such a program is never pooled)."""
+        got = []
+        try:
+            for name, m in prog._members.items():
+                if isinstance(m, moderngl.Uniform):
+                    got.append((name, "value", m.value))
+                elif isinstance(m, moderngl.UniformBlock):
+                    got.append((name, "binding", m.binding))
+        except Exception:  # noqa: BLE001 — unreadable: link it fresh each time
+            return None
+        return got
+
+    @staticmethod
+    def _restore(prog: moderngl.Program, state: list) -> None:
+        for name, what, v in state:
+            setattr(prog._members[name], what, v)
+
+    _SIGNATURE = inspect.signature(moderngl.Context.program)
+
+    def program(self, *a, **kw) -> moderngl.Program:
+        """`ctx.program(...)`, as moderngl takes it: keyed on every argument
+        (defaults filled in), so only the very same request is lent again."""
+        bound = self._SIGNATURE.bind(self.ctx, *a, **kw)
+        bound.apply_defaults()
+        args = {k: v for k, v in bound.arguments.items() if k != "self"}
+        key = repr(sorted(args.items()))
+        free = self._free.setdefault(key, [])
+        if free:
+            prog, state = free.pop()
+            self._restore(prog, state)
+            self.lent += 1
+        else:
+            prog = self._link(**args)      # a compile error raises here, as before
+            self.linked += 1
+            state = self._state(prog)
+            if state is None:
+                return prog
+        lent = _Lent.__new__(_Lent)
+        lent.__dict__.update(prog.__dict__)
+        lent.extra = None
+        lent._pool, lent._entry, lent._key = self, (prog, state), key
+        self._out.append(lent)
+        return lent
+
+    def give_back(self, lent: _Lent) -> None:
+        entry = lent.__dict__.pop("_entry", None)
+        if entry is None:
+            return                          # (released twice: as GL, a no-op)
+        lent.mglo = moderngl.InvalidObject()
+        self._free[lent._key].append(entry)
+
+    def end(self) -> None:
+        """The rig is done: every program it still holds goes back."""
+        out, self._out = self._out, []
+        for lent in out:
+            self.give_back(lent)
+
+
+_POOL: ProgramPool | None = None
+_LENDING = False
+
+
+@contextmanager
+def shared_programs(ctx: moderngl.Context):
+    """Within this block, `ctx.program` lends from the process's
+    `ProgramPool` (one rig's lifetime: `_shoot`, `picture`); after it,
+    every program the rig held is back in the pool and `ctx.program` is
+    moderngl's own again. Nothing under hyperspace/ knows of it."""
+    global _POOL, _LENDING
+    if _LENDING:
+        yield _POOL
+        return
+    if _POOL is None or _POOL.ctx is not ctx:
+        _POOL = ProgramPool(ctx)
+    _LENDING = True
+    ctx.program = _POOL.program
+    try:
+        yield _POOL
+    finally:
+        del ctx.program
+        _LENDING = False
+        _POOL.end()
+
+
 # the retired `outputs.route`'s table, as data (plan 35 T3: the goldens'
 # states are wiring now, and an output's end is named for its picture, not
 # a pipeline; T4 deleted the table): (scene, hands shown, through with an
@@ -512,21 +647,57 @@ ROUTES = {(True, False, False): ("SCENE", False), (True, True, False): ("SCENE",
           (False, True, False): ("none", True), (False, True, True): ("HANDS", False)}
 
 
-def expected_route(state: dict, fx_on: bool, visible: bool) -> tuple[str, bool]:
-    """What an output in `state` shows, by today's table (`ROUTES`)."""
+def expected_route(state: dict, fx_on: bool, visible: bool,
+                   through: bool = False) -> tuple[str, bool]:
+    """What an output in `state` shows, by today's table (`ROUTES`). Plan 36
+    T1: an output wired through (`graph.through_of`) shows its chain as
+    wired, every frame — no hand drawn or no effect on, it no longer stands
+    down to the scene with the hands laid over."""
+    if through:
+        return ("SCENE+HANDS" if state["scene"] else "HANDS"), False
     shown = bool(state["hands"]) and bool(visible)
     return ROUTES[(bool(state["scene"]), shown, shown and bool(state["through"]) and fx_on)]
+
+
+def source_doc(presets, slug: str) -> dict:
+    """Preset `slug`'s file before `/7` (plan 36 T3): a factory preset's
+    source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
+    file as the library has it (a fixture: an old file, a migration input)."""
+    src = FACTORY_SOURCES / f"{slug}.json"
+    if slug in FACTORY_PRESETS and src.is_file():
+        return json.loads(src.read_text())
+    return presets.lib.read("presets", slug)
 
 
 def plan33_section(presets, slug: str) -> tuple[dict, set[str]]:
     """Preset `slug`'s section as plan 33 wrote it (`migrate` with `wire`
     off, after the load declared its instances), and the effect files —
-    what a WIRED variant takes its run from."""
-    doc = presets.lib.read("presets", slug)
+    what a WIRED variant takes its run from (plan 36 T3: of the file
+    before `/7`, `source_doc`)."""
+    doc = source_doc(presets, slug)
     gs = presets.graph
     old, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc), wire=False)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
+
+
+def _placements_wait(presets, slug: str) -> dict | None:
+    """Plan 36 T3: an old file whose wired frame holds D1 placements — the
+    section `migrate` wires for it, before `placed_wires` writes them, for
+    the switch states to be laid over first (the retired builder placed
+    them on the built graph, after every output's state); None for any
+    other (a `/7`, or none placed: the landed section is the one)."""
+    doc = source_doc(presets, slug)
+    if (graphmigrate.schema_version(doc) or 0) >= graphmigrate.SEVEN:
+        return None
+    gs = presets.graph
+    out, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc))
+    section = out.get("graph")
+    if not isinstance(section, dict) or not any(
+            isinstance(e, dict) and any(k in e for k in G.PLACE_KEYS)
+            for e in section.get("nodes") or []):
+        return None
+    return section
 
 
 def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
@@ -542,8 +713,10 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     (`Shows(through=True)`); its scene and hands are the window's
     mutes (`state_views`). An output draws only what is wired."""
     presets = rig.presets
+    late = None
     if wiring is None:
-        wired = presets.graph.free_doc()
+        late = _placements_wait(presets, slug)
+        wired = late if late is not None else presets.graph.free_doc()
     else:
         old, files = plan33_section(presets, slug)
         run = tuple(read_graph(old, effects=files).wiring().run or ())
@@ -552,10 +725,24 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
                                            read_graph(vsection, effects=files))
     for k, (_, sw) in enumerate(states):
         if slug not in WIRED_FIXTURES:
+            if graphmigrate.Shows(**sw) == graphmigrate.Shows() and late is None:
+                # (plan 36 T3: the window as the rig ships it is its own
+                # wires, else All outputs' by its bus — no override to
+                # write; a `/7`'s hands port wired to an effect, D1's old
+                # `after: hands` as wires, would otherwise be undone)
+                continue
             wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
         elif sw["through"] and _lays_hands(wired):
             wired = graphmigrate.with_output_wires(wired, k + 1,
                                                    graphmigrate.Shows(through=True))
+    if late is not None:
+        wired = graphmigrate.placed_wires(wired, {n.partition(".")[0]
+                                                  for n in presets.graph.specs()})
+    if late is not None or wiring is not None:
+        # (plan 36 T4: an old file's frame, written here as the migration
+        # writes it, ends with its look-back split as its values had it)
+        values = source_doc(presets, slug).get("values") or {}
+        wired = graphmigrate.split_lookback(wired, graphmigrate.look_of(values))
     return wired
 
 
@@ -576,13 +763,29 @@ def state_views(slug: str, states, size, targets) -> list[View]:
             for f, (_, sw) in zip(targets, states)]
 
 
+# which frames keep their pixels past the hash: (the shot's key, its
+# sha256) → keep. None keeps every one (a PNG or a contact sheet needs them)
+Keep = Callable[[str, str], bool] | None
+
+
 def _shoot(slug: str, hands: str, states, size, logical, dpr,
-           wiring: dict | None = None, config: str | None = None) -> tuple[list[Shot], dict]:
+           wiring: dict | None = None, config: str | None = None, *,
+           label: str = "{}", keep: Keep = None) -> tuple[list[Shot], dict]:
     """Render one rig's states (under `wiring`, the preset's own when
     None; with `config`'s devices listed, A4b); its shots and what the load
     said. The framebuffers and the renderer are new per rig, so nothing a
-    rig drew reaches the next. Plan 35 T3 (row 392): each state is its
-    output's wiring (`rig_section`), every window's mutes on."""
+    rig drew reaches the next (its programs are lent from the pool,
+    `shared_programs`, each as freshly linked). Plan 35 T3 (row 392): each
+    state is its output's wiring (`rig_section`), every window's mutes on.
+    Each shot's state is `label` with the state's name in it; its pixels
+    are kept only where `keep` says (each frame is hashed as it is read)."""
+    with shared_programs(context()):
+        return _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config,
+                          label=label, keep=keep)
+
+
+def _shoot_rig(slug, hands, states, size, logical, dpr, wiring, config, *,
+               label: str, keep: Keep) -> tuple[list[Shot], dict]:
     ctx = context()
     rig = Rig(slug, hands, ctx)
     base = rig.presets.graph.free_doc() or {}
@@ -612,7 +815,8 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
             # table (`expected_route`) — a picture where it names one, the
             # hands over where it lays them
             key, over = rig.renderer.stats["routes"][k]
-            route_name, hands_over = expected_route(sw, fx_on, visible)
+            route_name, hands_over = expected_route(
+                sw, fx_on, visible, G.through_of(spec.wiring(), k + 1) is not None)
             if wiring is None and slug not in FIXTURE_PRESETS:
                 assert (key is not None, bool(over)) == (route_name != "none", hands_over), (
                     slug, name, key, over)
@@ -626,9 +830,12 @@ def _shoot(slug: str, hands: str, states, size, logical, dpr,
                           if w.get("to") == port), None)
             if wired is not None or key is None:
                 route_name = "none"
-            shots.append(Shot(slug, hands, name, route_name,
-                              bool(over), hashlib.sha256(raw.tobytes()).hexdigest(),
-                              tuple(size), raw[::-1].copy(), wired))
+            state = label.format(name)
+            sha = hashlib.sha256(raw.tobytes()).hexdigest()
+            kept = keep is None or keep(f"{slug}|{hands}|{state}", sha)
+            shots.append(Shot(slug, hands, state, route_name, bool(over), sha, tuple(size),
+                              raw[::-1].copy() if kept else None, wired))
+            del raw
         said = {"missing": sorted(rig.missing), "notes": rig.notes,
                 "effects_on": bool(fx_on), "hands_shown": visible}
         if slug in FIXTURE_PRESETS:     # what the graph landed, and the nodes timed
@@ -649,6 +856,11 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
     the pinned clock — and (each output's SHA-256, the load's notes). Two
     files that draw the same have the same hashes; the frame is never
     asserted on, so a preset this build reads with a note still draws."""
+    with shared_programs(context()):
+        return _picture(source, slug, library, states, hands)
+
+
+def _picture(source, slug, library, states, hands) -> tuple[list[str], list[str]]:
     ctx = context()
     rig = Rig(slug, hands, ctx, source=source, library=library)
     try:
@@ -670,63 +882,106 @@ def picture(source: Path, *, slug: str = "picture", library: Path | None = None,
         gc.collect()
 
 
-def render_all(only: set[str] | None = None, *, cap: bool = True) -> tuple[list[Shot], dict]:
+@dataclass(frozen=True)
+class Job:
+    """One test's worth of rigs (tests/test_golden_frames.py draws one job
+    per test, so the workers share them out): a factory preset with the
+    hands absent or present — its eight states, the window alone, and with
+    the hands present the WIRED and CLOUDED rigs — a fixture's eight
+    states, or the cap frame."""
+
+    kind: str            # "preset", "fixture" or "cap"
+    slug: str
+    hands: str
+
+    @property
+    def id(self) -> str:
+        return "cap" if self.kind == "cap" else f"{self.slug}|{self.hands}"
+
+
+def job_of(entry: dict) -> str:
+    """The id of the job that draws manifest entry `entry`."""
+    if "@" in entry["state"]:
+        return "cap"
+    return f"{entry['preset']}|{entry['hands']}"
+
+
+def jobs(only: set[str] | None = None, *, cap: bool = True) -> list[Job]:
+    """Every job (or only the presets in `only`), in the goldens' order."""
+    out = [Job("preset", slug, hands) for slug in FACTORY_PRESETS
+           if not only or slug in only for hands in HANDS]
+    out += [Job("fixture", slug, "present") for slug in FIXTURE_PRESETS
+            if not only or slug in only]
+    if cap and (not only or CAP["preset"] in only):
+        out.append(Job("cap", CAP["preset"], CAP["hands"]))
+    return out
+
+
+def run_job(job: Job, keep: Keep = None) -> tuple[list[Shot], dict | None]:
+    """One job's shots, and what the load said (None for the cap)."""
+    slug, hands = job.slug, job.hands
+    if job.kind == "fixture":
+        got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR, keep=keep)
+        gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
+        return got, info
+    if job.kind == "cap":
+        state = dict(STATES)[CAP["state"]]
+        got, _ = _shoot(slug, hands, ((CAP["state"], state),), CAP["size"],
+                        CAP["logical"], CAP["dpr"], keep=keep,
+                        label=f"{{}}@{CAP['size'][0]}x{CAP['size'][1]}-cap1080p")
+        gc.collect()
+        return got, None
+    shots, info = _shoot(slug, hands, STATES, (W, H), (W, H), DPR, keep=keep)
+    gc.collect()
+    # the window's own frame: output 1 alone, so its pipeline is drawn
+    # direct into the multisampled target and the hands' readout is
+    # decided by this one output (see SOLO)
+    for one in SOLO + (SOLO_FX if info["effects_on"] else ()):
+        got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR, keep=keep)
+        gc.collect()
+        shots += got
+    if hands != "present":
+        return shots, info
+    for wired, wiring, names, which in WIRED:
+        if which is not None and slug not in which:
+            continue
+        got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                        (W, H), (W, H), DPR, wiring, keep=keep, label=f"{wired}/{{}}")
+        gc.collect()
+        shots += got
+    for name, toml, names, which in CLOUDED:
+        if slug not in which:
+            continue
+        got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
+                        (W, H), (W, H), DPR, config=toml, keep=keep, label=f"{name}/{{}}")
+        gc.collect()
+        shots += got
+    return shots, info
+
+
+def render_all(only: set[str] | None = None, *, cap: bool = True,
+               keep: Keep = None) -> tuple[list[Shot], dict]:
     """Every golden (or only the presets in `only`), and per preset what
-    its load said."""
+    its load said; pixels kept where `keep` says (every frame's, if None)."""
     shots: list[Shot] = []
     said: dict[str, dict] = {}
-    for slug in FACTORY_PRESETS:
-        if only and slug not in only:
-            continue
-        for hands in HANDS:
-            got, info = _shoot(slug, hands, STATES, (W, H), (W, H), DPR)
-            gc.collect()        # the rig's GL objects, freed now (gc_mode auto)
-            shots += got
-            said.setdefault(slug, {})[hands] = info
-            # the window's own frame: output 1 alone, so its pipeline is
-            # drawn direct into the multisampled target and the hands'
-            # readout is decided by this one output (see SOLO)
-            solo = SOLO + (SOLO_FX if info["effects_on"] else ())
-            for one in solo:
-                got, _ = _shoot(slug, hands, (one,), (W, H), (W, H), DPR)
-                gc.collect()
-                shots += got
-            if hands != "present":
-                continue
-            for wired, wiring, names, which in WIRED:
-                if which is not None and slug not in which:
-                    continue
-                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
-                                (W, H), (W, H), DPR, wiring)
-                gc.collect()
-                for sh in got:
-                    sh.state = f"{wired}/{sh.state}"
-                shots += got
-            for name, toml, names, which in CLOUDED:
-                if slug not in which:
-                    continue
-                got, _ = _shoot(slug, hands, tuple((n, dict(STATES)[n]) for n in names),
-                                (W, H), (W, H), DPR, config=toml)
-                gc.collect()
-                for sh in got:
-                    sh.state = f"{name}/{sh.state}"
-                shots += got
-    for slug in FIXTURE_PRESETS:
-        if only and slug not in only:
-            continue
-        got, info = _shoot(slug, "present", STATES, (W, H), (W, H), DPR)
-        gc.collect()
+    for job in jobs(only, cap=cap):
+        got, info = run_job(job, keep)
         shots += got
-        said.setdefault(slug, {})["present"] = info
-    if cap and (not only or CAP["preset"] in only):
-        state = dict(STATES)[CAP["state"]]
-        got, _ = _shoot(CAP["preset"], CAP["hands"], ((CAP["state"], state),), CAP["size"],
-                        CAP["logical"], CAP["dpr"])
-        gc.collect()
-        for s in got:
-            s.state = f"{CAP['state']}@{CAP['size'][0]}x{CAP['size'][1]}-cap1080p"
-        shots += got
+        if info is not None:
+            said.setdefault(job.slug, {})[job.hands] = info
     return shots, said
+
+
+def moved_only(doc: dict) -> Keep:
+    """`keep` for a diff: only a frame that is not its golden's."""
+    want = {f"{e['preset']}|{e['hands']}|{e['state']}": e["sha256"] for e in doc["goldens"]}
+    return lambda key, sha: want.get(key) != sha
+
+
+def unrecorded() -> Keep:
+    """`keep` for a record: only a frame whose picture has no PNG yet."""
+    return lambda key, sha: not (GOLDEN / "png" / f"{sha[:16]}.png").exists()
 
 
 def _thumb(pixels: np.ndarray):
@@ -915,7 +1170,7 @@ class Loader:
         its `wire` off, after the load declared its instances."""
         self.presets.load(slug)
         gs = self.presets.graph
-        doc = self.presets.lib.read("presets", slug)
+        doc = source_doc(self.presets, slug)
         old, _ = graphmigrate.migrate(doc, gs.specs(), desk=self.presets._template_rows(doc),
                                       wire=False)
         effects = tuple(sorted(self.fx.specs))
@@ -982,37 +1237,51 @@ def signature_case(loader: Loader, key: str):
     its device's role."""
     slug, _, variant = key.partition("/")
     spec, section, effects, wired = loader.load(slug)
+    # (plan 36 T4: the look-back as the old file's values had it)
+    look = graphmigrate.look_of(source_doc(loader.presets, slug).get("values"))
     files = {e.partition(".")[0] for e in effects}
     solo = dict(SOLO + SOLO_FX)
     if variant == "states":
-        return STATES, spec, section, effects, wired, ()
+        return STATES, spec, section, effects, wired, (), look
     if variant in solo:
-        return ((variant, solo[variant]),), spec, section, effects, wired, ()
+        return ((variant, solo[variant]),), spec, section, effects, wired, (), look
     cloud = next((c for c in CLOUDED if c[0] == variant), None)
     if cloud is not None:
         return (tuple((n, dict(STATES)[n]) for n in cloud[2]), spec, section, effects, wired,
-                ("scan",))
+                ("scan",), look)
     _, fields, names, _ = next(v for v in WIRED if v[0] == variant)
     run = tuple(spec.wiring().run or ())
     vsection = variant_section(fields, run)
     vspec = read_graph(vsection, effects=files)
     assert vspec.wiring() == replace(Wiring(**fields), run=run), (key, vspec.wiring())
-    vwired = graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec)
-    return tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, ()
+    vwired = graphmigrate.split_lookback(
+        graphmigrate.wired_section(graphmigrate.renamed(vsection), vspec), look)
+    return (tuple((n, dict(STATES)[n]) for n in names), vspec, vsection, effects, vwired, (),
+            look)
 
 
-def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
+def frame_graphs(states, spec, section, effects, wired=None, clouds=(), look="off"):
     """(the wired frame's graph, the wired section) for one case (see
     above). `wired`: the frame as the load wired it — checked here to be
     `wired_section` of the old section, so the proof is the load's — None,
     that alone."""
     files = {e.partition(".")[0] for e in effects}
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
+    placed = graphmigrate.placed_wires(made, files)
+    # (plan 36 T4: the look-back split last, as the load's migration does)
+    split = graphmigrate.split_lookback(placed, look)
     if wired is None:
-        wired = made
-    assert read_graph(made, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+        wired = split
+    assert read_graph(split, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+    # (plan 36 T3: D1's placements sat on each output's state, so the
+    # states go on first and the placements are written after, as `_shoot`)
+    late = made if placed is not made else None
+    if late is not None:
+        wired = late
     for k, (_, sw) in enumerate(states):
         wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+    if late is not None:
+        wired = graphmigrate.split_lookback(graphmigrate.placed_wires(wired, files), look)
     got = read_graph(wired, effects=files)
     assert not got.notes, got.notes
     mutes_on = [View(Switches(), (W, H)) for _ in states]
@@ -1091,7 +1360,9 @@ def main() -> None:
     if only and (unknown := only - set(FACTORY_PRESETS) - set(FIXTURE_PRESETS)):
         ap.error(f"no such preset: {', '.join(sorted(unknown))}")
     renderer, version = renderer_name(context()), gl_version(context())
-    shots, said = render_all(only)
+    # (pixels kept only where a PNG or the contact sheet needs them)
+    shots, said = render_all(only, keep=unrecorded() if a.record
+                             else moved_only(load_manifest()))
     if a.record:
         doc = record(shots, said, renderer, only, version)
         print(f"recorded {len(shots)} goldens under {GOLDEN.relative_to(ROOT)}")

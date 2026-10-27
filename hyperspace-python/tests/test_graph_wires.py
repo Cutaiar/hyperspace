@@ -30,6 +30,7 @@ from wiredframe import Shows, Thru, graph, wire_switches, wiring
 
 from hyperspace import graph as G
 from hyperspace import graphview, preset
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import FACTORY, PRESETS
 from hyperspace.outputs import Switches, View
 
@@ -118,10 +119,11 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
     o2, o4 = g.nodes["output.2"], g.nodes["output.4"]
     end = o2.inputs["image"]
     assert isinstance(end, G.Shown) and end.inputs["image"] is g.nodes["acid.2"]
-    assert g.nodes["acid.2"].inputs["image"] is g.nodes["lookback"]
+    # (plan 36 T4: the old words' look-back off — the history is its picture)
+    assert g.nodes["acid.2"].inputs["image"] is g.nodes["scene"]
     assert g.nodes["acid.2"].placed == "wire" and "acid.2" in g.placed_names
     assert o2.inputs["hands"] is None and o2.inputs["readout"] is None
-    assert end in g.nodes["lookback(capture)"].after          # the capture after every end
+    assert "lookback(capture)" not in g.nodes                 # (plan 36 T4: none drawn)
     assert (o4.inputs["hands"] is g.nodes["hands.layer"]
             and o4.inputs["readout"] is g.nodes["hands.layer"])
     # output 4 had scene + hands over already: its hands are the layer either way
@@ -138,13 +140,13 @@ def test_a_wire_into_an_output_overrides_its_switch_and_an_unnamed_output_keeps_
     assert g.nodes["output.3"].inputs["hands"] is g.nodes["hands.2.layer"]   # its state
     # a wire on a node the built graph lacks is dormant, in words (plan 35
     # T4: an output this rig has not open, in the wired frame's names)
-    g = G.build_graph(_views(S()), G.read_graph(
-        {"wires": _wires(("hands", "output.3.hands"))}).wiring())
+    g = G.build_graph(_views(S()), wired_wiring(G.read_graph(
+        {"wires": _wires(("hands", "output.3.hands"))}).wiring()))
     assert g.dormant == {"hands.layer → output.3.hands":
                          "wire hands.layer → output.3.hands — no output 3 this frame"}
     # a preset load never writes a mute: the windows' switches are as they were
     vs = _views(S(), S(scene=False))
-    G.build_graph(vs, G.read_graph(section, effects=FILES).wiring(), effects=RUN)
+    G.build_graph(vs, wired_wiring(G.read_graph(section, effects=FILES).wiring()), effects=RUN)
     assert [v.switches for v in vs] == [S(), S(scene=False)]
 
 
@@ -212,7 +214,7 @@ def test_a_wire_of_the_wrong_type_or_into_a_missing_port_is_a_note_and_the_defau
     rig.lib.load(PRESETS, "Odd")
     assert rig.presets.notes == [       # (plan 35 V2: in the new ids — `ghost` is `hands`)
         ("graph: wire hands → output.1.image — hands makes geometry, output.1.image takes a "
-         "picture; the default wiring")]
+         "picture; dropped")]                   # (plan 36 T3: no default stands in)
     assert _bare(_old(stub.wiring)) == G.Wiring(hands="scene",
                                           wires=(G.Wire("hands", "output.2.hands"),))
     # (row 394: the save is the frame the load landed)
@@ -268,17 +270,17 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     `lookback` — every wire of the frame an ordinary wire."""
     rig, stub, edit, pushed = _edit_rig(tmp_path)
     rig.presets.save_as("Base")
-    assert not rig.lib.is_dirty(PRESETS) and rig.presets.graph.doc is None
+    base = rig.presets.graph.doc                  # (plan 36 T3: the startup preset's /7)
+    assert not rig.lib.is_dirty(PRESETS)
     assert edit.wire("hands", "output.1.image") == (
         "wire hands → output.1.image — hands makes geometry, output.1.image takes a picture")
-    assert pushed == [] and rig.presets.graph.doc is None
+    assert pushed == [] and rig.presets.graph.doc == base
     assert edit.wire("hands.layer", "output.2.hands") is None
     assert pushed == ["wire hands.layer → output.2.hands"]
     assert edit.said == "wired hands.layer → output.2.hands"
     assert G.Wire("hands.layer", "output.2.hands") in stub.wiring.wires
     assert rig.lib.is_dirty(PRESETS)
     assert preset.GRAPH_KEY in rig.presets.document("Base")
-    assert edit.wire("lookback", "output.2.hands").endswith("or an effect after it over")
     assert edit.wire("scene", "output.2.hands") is None          # replaces it
     wires = set(rig.presets.graph.spec.wires)
     assert G.Wire("scene", "output.2.hands") in wires
@@ -296,13 +298,15 @@ def test_an_edit_lands_the_wire_through_the_preset_and_says_its_refusals(tmp_pat
     # does not have is the one refusal)
     assert edit.unwire("lookback", "output.1.image") == graphview.NO_SUCH_WIRE.format(
         wire="lookback → output.1.image")
-    # a D1 placement moves when its effect is wired elsewhere
+    # plan 36 T3: a D1 placement is the wires it stood for once loaded, so
+    # a wire out of the effect is one more wire — the rest as it was
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "palette",
                                               "after": "hands"}]})
     rig.lib.load(PRESETS, "Placed")
+    before = set(rig.presets.graph.spec.wires)
     assert edit.wire("palette", "output.1.hands") is None
     spec = rig.presets.graph.spec
-    assert G.Wire("palette", "output.1.hands") in spec.wires
+    assert set(spec.wires) - before == {G.Wire("palette", "output.1.hands")}
     assert not [e for e in spec.effects if e.placed]
     # a geometry cable: the hands into the scene is a wire (plan 35 F), before the shape
     assert edit.wire("hands", "scene.geometry") is None
@@ -333,7 +337,7 @@ def test_dragging_an_image_cable_on_the_canvas_edits_the_spec_and_dirties_the_pr
         assert not rig.lib.is_dirty(PRESETS)
         stub = Stub()
         rig.lib.presets.graph.attach(stub)
-        g = G.build_graph(_views(S(), S(scene=False)), stub.wiring,
+        g = G.build_graph(_views(S(), S(scene=False)), wired_wiring(stub.wiring),
                           effects=("plasma", "kaleido", "zoomblur", "huecycle"))
         stub._graph = g
         rig.panel.renderer = stub
@@ -438,7 +442,7 @@ def test_the_picker_adds_an_effect_instance_with_its_params(tmp_path):
     assert edit.wire("composite", "output.1.image") is None
     assert {G.Wire("hands.layer", "composite.over"),
             G.Wire("composite", "output.1.image")} <= set(stub.wiring.wires)
-    g = G.build_graph(_views(S()), stub.wiring)
+    g = G.build_graph(_views(S()), wired_wiring(stub.wiring))
     comp = g.nodes["composite"]
     assert isinstance(comp, G.Composite) and comp.inputs["over"] is g.nodes["hands.layer"]
     assert g.nodes["output.1"].inputs["image"].inputs["image"] is comp
@@ -493,20 +497,25 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     assert edit.unwire("hands.layer", "output.all.guide") is None
     assert edit.drop_node("hands.layer") is None
     assert edit.wire("hands.guide", "output.all.guide") is None
-    assert edit.insert_effect(("lookback", "output.all.image"), "acid") is None
+    # (plan 36 T2: the guide draws the hands wired into it — one more wire)
+    assert edit.wire("hands", "hands.guide.hands") is None
+    assert edit.insert_effect(("scene", "output.all.image"), "acid") is None
     assert edit.set_node("hands", draw="lines") is None
-    doc, _ = M.migrate(_fixture("hands-lines"), {})
+    # (plan 36 T4: the fixture as it migrates with its look-back off — the
+    # gestures above draw none)
+    old = _fixture("hands-lines")
+    doc, _ = M.seven({**old, "values": {**old["values"], "dream.on": False}}, {})
     want = G.read_graph(doc["graph"])
     got = rig.presets.graph.spec
     assert set(got.wires) == set(want.wires)
     assert got.wiring().draw == want.wiring().draw == "lines"
     vs = _views(S(), S(), S())
-    assert repr(G.build_graph(vs, got.wiring(), effects=("acid",))) == repr(
-        G.build_graph(vs, want.wiring(), effects=("acid",)))
+    assert repr(G.build_graph(vs, wired_wiring(got.wiring()), effects=("acid",))) == repr(
+        G.build_graph(vs, wired_wiring(want.wiring()), effects=("acid",)))
 
     def picture(w):
         r = gl_rig(ctx, effects=("acid",), echoes=True)
-        r.wiring = w
+        r.wiring = wired_wiring(w)
         return run(ctx, r, views(ctx, S(), S()), frames=3)
 
     a, b = picture(got.wiring()), picture(want.wiring())
@@ -533,21 +542,24 @@ def test_the_wire_built_check_sees_a_wired_composite():
                                ("hands", "composite.2.over"), ("composite.2", "output.2.image"))}
     spec = G.read_graph(section, effects=FILES)
     assert spec.notes == ()
-    g = G.build_graph(_views(S(), S()), spec.wiring(), effects=RUN)
+    g = G.build_graph(_views(S(), S()), wired_wiring(spec.wiring()), effects=RUN)
     built = sorted(n.name for n in g.nodes.values() if _wire_built(n))
     assert "composite" in built and "composite.2" in built
-    plain = G.build_graph(_views(S(), S()), effects=RUN)
+    plain = G.build_graph(_views(S(), S()), wired_wiring(G.Wiring()), effects=RUN)
     assert not any(_wire_built(n) for n in plain.nodes.values())
 
 
 def test_no_factory_preset_changes():
-    """No library file carries a graph (so no wire): every factory preset
-    loads with the factory frame — which holds nothing a section's wire
-    builds: nothing dormant, every output's picture an end (`Shown`) or
-    the ground, a through output's its own copies."""
-    for path in sorted(FACTORY.rglob("*.json")):
-        doc = json.loads(path.read_text())
-        assert not isinstance(doc, dict) or "graph" not in doc, path
+    """No factory source carries a graph, and (plan 36 T3) each factory
+    `/7` is today's frame with no placement: the factory frame holds
+    nothing a section's wire builds — nothing dormant, every output's
+    picture an end (`Shown`) or the ground, a through output's its own
+    copies."""
+    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):
+        assert "graph" not in json.loads(path.read_text()), path
+    for path in sorted((FACTORY / "presets").glob("*.json")):
+        nodes = json.loads(path.read_text())["graph"]["nodes"]
+        assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path
     for sw in ((Shows(),), (Shows(), Shows(through=True)),
                (Shows(scene=False), Shows(), Shows(through=True)),
                (Shows(scene=False, through=True), Shows(scene=False))):
@@ -578,9 +590,10 @@ def test_the_fixtures_load_clean_through_a_scratch_library(tmp_path):
         assert not rig.lib.is_dirty(PRESETS), slug
         assert doc["graph"]
         assert rig.presets.document(slug)[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
-    assert _old(stub.wiring).wires == (G.Wire("history", "acid.2.image"),
-                                 G.Wire("acid.2", "output.2.image"))
-    assert _old(stub.wiring).placed == (G.EffectAt("palette", 1, into="output.1"),)
+    # (plan 36 T3: the placement `into output.1` is the wires it stood for)
+    assert {G.Wire("scene", "acid.2.image"), G.Wire("acid.2", "output.2.image"),
+            G.Wire("palette", "output.1.image")} <= set(stub.wiring.wires)
+    assert stub.wiring.placed == ()
     assert rig.reg["fx.acid.2.on"].value is True
 
 
@@ -589,7 +602,7 @@ def test_the_words_say_the_wires():
     from hyperspace.ui import output_shows
 
     spec = G.read_graph(_fixture("wired-outputs")["graph"])
-    w = spec.wiring()
+    w = wired_wiring(spec.wiring())            # (plan 36 T3: as the migration wires it)
     assert G.graph_words(spec) == ("graph: acid ×2 · palette on output 1 only · acid 2 reads "
                                    "the history · output 2 shows acid 2")
     assert output_shows(S(), True, True, 1.0, w, n=2)[0] == "acid 2 by a wire"
@@ -600,13 +613,16 @@ def test_the_words_say_the_wires():
     assert groups(G.read_graph({"wires": _wires(("hands", "palette.image"),
                                                 ("palette", "output.2.hands"))})
                   ) == [("→ output 2", ["palette"])]
-    assert output_shows(S(), True, True, 1.0, w, n=1)[0].endswith(
-        "palette on this output only")
+    assert output_shows(S(), True, True, 1.0, w, n=1)[0] == "palette by a wire"
     spec = G.read_graph(_fixture("hands-glass-only")["graph"])
-    w = spec.wiring()
+    w = wired_wiring(spec.wiring())
     assert output_shows(S(), True, True, 1.0, w, n=2)[0].endswith(" · hands 2 over output 2")
-    assert G.lookback_words(G.read_graph({"wires": _wires(("hands", "history.image"))}).wiring()
-                            ) == "history: the scene · the history holds the hands"
+    # (plan 36 T4: a look-back drawn, the old words' on; what the history
+    # held laid under it is the composite's under now, while it records
+    # the scene)
+    assert G.lookback_words(wired_wiring(G.read_graph(
+        {"wires": _wires(("hands", "history.image"))}).wiring(), "trail")
+                            ) == "history: the scene"
 
 
 # ---------------------------------------------------------------- GL
@@ -636,14 +652,14 @@ def test_a_wired_output_shows_its_picture_and_no_other_output_moves(ctx):
     def frame(effects, section):
         r = gl_rig(ctx, effects=effects, hands=False)
         if section is not None:          # (plan 33 R23: the rig's run kept)
-            r.wiring = wired(r, section)
+            r.wiring = wired_wiring(wired(r, section))
         return r, run(ctx, r, views(ctx, S(), S()), frames=2)
 
     r, (a1, a2) = frame(("warp",), {"wires": _wires(("history", "output.2.image"))})
     _, (b1, _) = frame(("warp",), None)
     _, (c1, _) = frame((), None)
     assert np.array_equal(a1, b1) and np.array_equal(a2, c1) and not np.array_equal(a1, a2)
-    assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("shown(lookback)", False)
+    assert r.stats["chain_runs"] == 1 and r.stats["routes"][1] == ("shown(scene)", False)
     assert r.stats["routes"][0] == ("shown(warp)", False)
 
 
@@ -658,13 +674,13 @@ def test_hands_2_wired_to_the_glass_alone(ctx):
 
     r = gl_rig(ctx, effects=())
     r.ghost_states = {"ghost.2": GhostState(on=True)}
-    r.wiring = G.read_graph(_fixture("hands-glass-only")["graph"]).wiring()
+    r.wiring = wired_wiring(G.read_graph(_fixture("hands-glass-only")["graph"]).wiring())
     a, b = run(ctx, r, views(ctx, S(), S()), frames=2)
     g2 = r.ghost_of("ghost.2")
     assert r._graph.nodes["output.2"].inputs["hands"] is r._graph.nodes["hands.2.layer"]
     differ = (a != b).any(axis=2)
     assert differ.any()
-    assert r.stats["routes"] == [("shown(lookback)", False), ("shown(lookback)", True)]
+    assert r.stats["routes"] == [("shown(scene)", False), ("shown(scene)", True)]
     assert g2.tex is not None
 
 
@@ -707,7 +723,7 @@ def test_a_composite_wired_into_an_outputs_hands_is_laid_as_its_own_picture(ctx)
     r = gl_rig(ctx, effects=())
     # (plan 35 T4: output 2's state — the scene and its hands off, the wire
     # into its hands kept — is its wiring; a mute would ignore the wire)
-    r.wiring = wiring(spec, Shows(), Shows(scene=False, hands=False))
+    r.wiring = wired_wiring(wiring(spec, Shows(), Shows(scene=False, hands=False)))
     a, b = run(ctx, r, views(ctx, S(), S()), frames=2)
     comp = r._graph.nodes["composite"]
     assert r._graph.nodes["output.2"].inputs["hands"] is comp
@@ -735,9 +751,9 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
 
     section = {"wires": _wires(("hands", "output.2.hands"), ("hands", "output.3.hands"))}
     r = gl_rig(ctx, effects=("warp",))
-    r.wiring = wired(r, section)                     # (plan 33 R23: warp's run with it)
+    r.wiring = wired_wiring(wired(r, section))  # (plan 33 R23: warp's run with it)
     vs = views(ctx, *wire_switches(r, S(), Thru(), Thru(scene=False)))
-    g = G.build_graph(_views(S(), S(), S()), r.wiring, effects=("warp",))
+    g = G.build_graph(_views(S(), S(), S()), wired_wiring(r.wiring), effects=("warp",))
     o2, o3 = g.nodes["output.2"], g.nodes["output.3"]
     assert (o2.inputs["image"] is g.nodes["shown(warp)"]
             and o2.inputs["hands"] is g.nodes["hands.layer"])
@@ -750,19 +766,15 @@ def test_a_hands_wire_on_a_through_output_replaces_the_switch_hands(ctx):
 
 def test_an_aux_wire_leaves_a_placed_effect_where_it_sits(tmp_path):
     """Plan 32 T7: dragging a channel onto a placed effect's `aux` port is
-    a second picture, not a placement — the effect keeps its D1 place and
-    the wire rides beside it; its `image` port still moves it — off its
-    place onto that wire, a branch reaching nothing until it is wired on
-    (a section with a run shortens no wire: the owner, 2026-10-24)."""
+    a second picture, not a placement — the effect keeps its place and
+    the wire rides beside it. Plan 36 T3: its D1 place is the wires the
+    migration wrote (`hands.layer → blend.image`), and the aux wire lands
+    beside them, nothing else changed."""
     rig, stub, edit, _ = _edit_rig(tmp_path)
     put(rig.home, "Placed", graph={"nodes": [{"kind": "effect", "file": "blend",
                                               "after": "hands"}]})
     rig.lib.load(PRESETS, "Placed")
     assert edit.wire("channel.a", "blend.aux") is None              # (plan 35 V2)
-    spec = rig.presets.graph.spec
-    assert spec.effects == (G.EffectAt("blend", 1, after="hands.layer"),)
-    assert stub.wiring.placed == (G.EffectAt("blend", 1, after="hands.layer"),)
-    assert G.Wire("channel.a", "blend.aux") in stub.wiring.wires
-    assert edit.wire("scene", "blend.image") is None
     assert stub.wiring.placed == ()
-    assert "blend" in graphview.unreached(rig.presets.graph.spec)
+    assert {G.Wire("channel.a", "blend.aux"), G.Wire("hands.layer", "blend.image"),
+            G.Wire("blend", "output.all.hands")} <= set(stub.wiring.wires)

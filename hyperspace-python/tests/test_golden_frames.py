@@ -145,8 +145,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             assert said[hands]["missing"] == [], slug
             assert said[hands]["hands_shown"] is (hands == "present"), slug
     # the fixtures: the tool's list, each a file under tests/fixtures/ and
-    # never a factory preset, loaded with nothing missing and no note, its
-    # graph landed (the wiring the manifest records is not the default)
+    # never a factory preset, loaded with nothing missing and no note — (plan
+    # 36 T3) every fixture an old file, a migration input — its graph landed
+    # as its `/7`
     tool = _tool()
     assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_PRESETS)
     for slug, f in doc["fixture_states"].items():
@@ -157,48 +158,67 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         # are the windows' mutes, not switches emulated: the blank frame and
         # the channel alone wire no hands, so none is shown, and the blank
         # frame builds the outputs and nothing else)
-        assert said["missing"] == [] and said["notes"] == []
+        from hyperspace.preset import NO_GRAPH_SAID
+
+        # (the blank frame: the strip says it holds nothing, plan 36 T3)
+        want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
+        assert said["missing"] == [] and said["notes"] == want, slug
         no_hands = ("blank-frame", "channel-out-only")
         assert said["hands_shown"] is (slug not in no_hands), slug
         if slug == "blank-frame":
             assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
-        # the graph landed as the file says it (the section, not a repr of
-        # the Wiring: a field added later moves no golden). Plan 32 T6: a
-        # media fixture's proof is its channels — a wire with no node, or
-        # no graph at all (the backdrop is a value). Plan 35 T3: a wired
-        # frame (`/6`) lands as it reads (`{"frame": "wired"}` with its
-        # empty node list), and the blank one holds nothing at all
-        from hyperspace.graph import read_graph
+        # the graph landed as its `/7` says it (the section, not a repr of
+        # the Wiring: a field added later moves no golden) — plan 36 T3: a
+        # wired frame that reads as it is, no placement in it, every hands
+        # entry and `laid` written. Plan 35 T3: the blank one holds nothing
+        # but its hands entry
+        from hyperspace.graph import FRAME_KEY, PLACE_KEYS, WIRED_FRAME, read_graph
 
-        file_graph = json.loads((ROOT / f["file"]).read_text()).get("graph")
-        if slug in tool.WIRED_FIXTURES:
-            assert said["graph"] == read_graph(file_graph).to_json()
-        else:
-            assert said["graph"] == file_graph
-        assert ((said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
-                or slug == "blank-frame")
+        landed = said["graph"]
+        assert landed[FRAME_KEY] == WIRED_FRAME and read_graph(landed).to_json() == landed
+        assert not any(k in e for e in landed["nodes"] for k in PLACE_KEYS), slug
+        assert any(e.get("kind") == "hands" and "laid" in e for e in landed["nodes"]), slug
+        assert landed.get("wires") or slug == "blank-frame", slug
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 
 
 def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on():
     """The history-with-the-hands goldens cover exactly the factory presets
-    whose file turns the look-back on (elsewhere the history holds nothing
-    the picture shows, so the frame is the default one)."""
+    whose file draws a look-back (elsewhere the history holds nothing the
+    picture shows, so the frame is the default one). Plan 36 T4: a
+    look-back is drawn — a wire into `lookback.image` — where the old file
+    turned it on (`factory-sources`' `dream.on`)."""
     from hyperspace.preset import FACTORY_PRESETS
 
     lib = ROOT / "hyperspace" / "library" / "presets"
+    drawn = [slug for slug in FACTORY_PRESETS
+             if any(w.get("to") == "lookback.image" for w in json.loads(
+                 (lib / f"{slug}.json").read_text())["graph"].get("wires", []))]
     on = [slug for slug in FACTORY_PRESETS
-          if json.loads((lib / f"{slug}.json").read_text()).get("values", {}).get("dream.on")]
-    assert sorted(on) == sorted(_tool().LOOKBACK_ON)
+          if json.loads((_tool().FACTORY_SOURCES / f"{slug}.json").read_text())
+          .get("values", {}).get("dream.on")]
+    assert sorted(drawn) == sorted(on) == sorted(_tool().LOOKBACK_ON)
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
 # `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
 # two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
 # 741 before them are the same list, byte for byte
+# Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
+# inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
+# absent|hands+through and `through-one-output` present|scene+through) and
+# the route words of those presets' through states
 GOLDENS_SINCE = ("resize-faces", "resize-crop")
-GOLDENS_DIGEST = "71dcd9c76e2c85807a8ac9273f42ea210468881af21b025dd4a7cca5ad99ad02"
+# (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
+# scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
+# D1's `into output.N` sat on the window's shown picture, which no wire
+# names; as the wire it stood for the edges filter apart, by eye the same)
+# (plan 36 T4: re-pinned for one golden re-recorded — wired-outputs' present
+# scene+hands+through, 6029 px off by 1/255, mean 0.0029: its `history →
+# acid.2` read the off look-back's copy pass, which no drawn node makes; as
+# `scene → acid.2` the effect folds the scene's own texture)
+GOLDENS_DIGEST = "886d0ce807e1504b546a48adaccd08b1c6bc9fc70f4c7bccccb9e64b6cc704a1"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
@@ -262,38 +282,100 @@ def ctx():
     gc.collect()
 
 
-def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
-    """Each factory preset in each state it reaches, hands absent and
-    present, and the cap frame: every full-resolution frame's SHA-256 is
-    its golden's. Skips (never passes) on another renderer."""
+@pytest.fixture
+def exact(ctx):
+    """The context, on the renderer the goldens were recorded on — skips
+    (never passes) on another."""
     doc = _manifest()
     tool = _tool()
     here, version = tool.renderer_name(ctx), tool.gl_version(ctx)
-    recorded = f"{doc['renderer']!r} (GL_VERSION {doc['gl_version']!r})"
     if here != doc["renderer"]:
-        pytest.skip(f"the golden frames expect GL_RENDERER {recorded}; "
-                    f"this context is {here!r} (GL_VERSION {version!r}); re-record there "
-                    "with tools/golden_frames.py --record")
-    shots, said = tool.render_all()
-    assert len(shots) == len(doc["goldens"])
+        pytest.skip(f"the golden frames expect GL_RENDERER {doc['renderer']!r} (GL_VERSION "
+                    f"{doc['gl_version']!r}); this context is {here!r} (GL_VERSION "
+                    f"{version!r}); re-record there with tools/golden_frames.py --record")
+    return ctx
+
+
+def _job_ids() -> list[str]:
+    """Every job's id, from the manifest (collection reads no GL and imports
+    no tool; `test_every_golden_belongs_to_one_of_the_tools_jobs` proves
+    the set is the tool's `jobs()`)."""
+    seen: dict[str, None] = {}
+    for e in _manifest()["goldens"]:
+        seen.setdefault(_tool_free_job_of(e))
+    return list(seen)
+
+
+def _tool_free_job_of(e: dict) -> str:
+    # (= tools/golden_frames.py `job_of`, asserted below)
+    return "cap" if "@" in e["state"] else f"{e['preset']}|{e['hands']}"
+
+
+def test_every_golden_belongs_to_one_of_the_tools_jobs():
+    """The goldens are drawn one job per test (`tool.jobs()`: a factory
+    preset with the hands absent or present, a fixture, the cap): every
+    entry belongs to exactly one job the tool draws, and every job has
+    entries — so the jobs' tests together check every golden, and each
+    job's test checks that it drew exactly its own entries."""
+    tool = _tool()
+    doc = _manifest()
+    ids = [j.id for j in tool.jobs()]
+    assert len(set(ids)) == len(ids) and set(ids) == set(_job_ids())
+    assert all(tool.job_of(e) == _tool_free_job_of(e) for e in doc["goldens"])
+    assert sum(1 for e in doc["goldens"] if tool.job_of(e) == "cap") == 1
+
+
+@pytest.mark.parametrize("job_id", _job_ids())
+def test_every_golden_frame_is_drawn_byte_for_byte(exact, job_id, tmp_path):
+    """Each factory preset in each state it reaches, hands absent and
+    present, each fixture, and the cap frame — one job per test: every
+    full-resolution frame's SHA-256 is its golden's, and the job drew
+    exactly its golden entries. Each frame is hashed as it is read and its
+    pixels let go; only a frame that moved keeps them, for a contact sheet
+    (golden PNG | now | difference) named in the failure."""
+    doc = _manifest()
+    tool = _tool()
+    job = next(j for j in tool.jobs() if j.id == job_id)
+    want = {f"{e['preset']}|{e['hands']}|{e['state']}": e for e in doc["goldens"]
+            if tool.job_of(e) == job_id}
+    shots, said = tool.run_job(job, keep=tool.moved_only(doc))
+    assert [s.key for s in shots if s.key not in want] == [], "frames with no golden"
+    assert sorted(s.key for s in shots) == sorted(want), "goldens not drawn"
     moved = tool.diff(shots, doc)
-    assert not moved, (f"frames moved, recorded on {recorded}, drawn on {here!r} "
-                       f"(GL_VERSION {version!r}) — run tools/golden_frames.py for a "
-                       "contact sheet: " + ", ".join(s.key for s, _ in moved))
-    recorded_said = {**doc["presets"], **doc.get("fixtures", {})}
-    for slug, info in said.items():
-        for hands, got in info.items():
-            assert got == recorded_said[slug][hands], (slug, hands)
+    if moved:
+        sheet = tool.contact_sheet(moved, tmp_path / f"golden-diff-{job.slug}.png")
+        here, version = tool.renderer_name(exact), tool.gl_version(exact)
+        pytest.fail(f"{len(moved)} frames moved, recorded on {doc['renderer']!r} (GL_VERSION "
+                    f"{doc['gl_version']!r}), drawn on {here!r} (GL_VERSION {version!r}): "
+                    + ", ".join(s.key for s, _ in moved) + f" — contact sheet: {sheet}")
+    if said is not None:
+        recorded = {**doc["presets"], **doc.get("fixtures", {})}
+        assert said == recorded[job.slug][job.hands], job_id
 
 
-def test_every_preset_resaved_as_six_draws_its_goldens(ctx, tmp_path):
+_SHIPPED_FIXTURES = ("palette-glass", "palette-hands", "acid-scene", "wired-outputs")
+
+
+def _resave_sources() -> list[tuple[str, bool]]:
+    """Every factory preset and fixture, by the manifest (its `presets` and
+    `fixtures` are the tool's lists: the no-GL test above)."""
+    doc = _manifest()
+    return [*((slug, True) for slug in doc["presets"]),
+            *((slug, False) for slug in doc["fixtures"])]
+
+
+@pytest.mark.parametrize("slug,factory", _resave_sources(),
+                         ids=[slug for slug, _ in _resave_sources()])
+def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path, slug, factory):
     """Row 394: every factory preset and every fixture, saved untouched as
-    `/6` (`headless.resave`, the road tools/migrate_library.py takes) and
-    drawn from that file on the golden rig (`picture`: hands present, the
-    eight states as wiring), draws exactly its recorded goldens — on the
-    renderer they were recorded on; on another, exactly what the original
-    file draws there. And a value moved in the `/6` moves the picture, so
-    the check can fail."""
+    `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
+    36 T3) and drawn from that file on the golden rig (`picture`: hands
+    present, the eight states as wiring), draws exactly its recorded
+    goldens — on the renderer they were recorded on; on another, exactly
+    what the original file draws there. A fixture whose D1 placements the
+    retired builder laid on each output's switch state (`_placements_wait`)
+    is drawn, old file and `/7`, as the rig ships (`SHIPPED`): the states
+    are emulated only for an old file."""
     import json
 
     from hyperspace import headless
@@ -301,25 +383,34 @@ def test_every_preset_resaved_as_six_draws_its_goldens(ctx, tmp_path):
     doc = _manifest()
     tool = _tool()
     exact = tool.renderer_name(ctx) == doc["renderer"]
-    golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
-    names = [name for name, _ in tool.STATES]
-    sources = [*((slug, tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json",
-                  True) for slug in tool.FACTORY_PRESETS),
-               *((slug, tool.FIXTURES / f"{slug}.json", False)
-                 for slug in tool.FIXTURE_PRESETS)]
-    for k, (slug, path, factory) in enumerate(sources):
-        raw, _, _ = headless.resave(path, tmp_path / str(k), factory=factory)
-        six = tmp_path / f"{k}-six" / f"{slug}.json"
-        six.parent.mkdir()
-        six.write_bytes(raw)
-        assert json.loads(raw)["schema"] == "hyperspace.preset/6", slug
-        got, _ = tool.picture(six, slug=slug)
-        if exact:
-            want = [golden[(slug, "present", n)] for n in names]
-        else:
-            want, _ = tool.picture(path, slug=slug)
-        assert got == want, slug
-    # (the check sees a value: party-trip brighter is another picture)
+    path = (tool.ROOT / "hyperspace" / "library" / "presets" / f"{slug}.json" if factory
+            else tool.FIXTURES / f"{slug}.json")
+    raw, _, _ = headless.resave(path, tmp_path / "resaved", factory=factory)
+    seven = tmp_path / "seven" / f"{slug}.json"
+    seven.parent.mkdir()
+    seven.write_bytes(raw)
+    assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
+    if slug in _SHIPPED_FIXTURES:
+        got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
+        assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
+        return
+    got, _ = tool.picture(seven, slug=slug)
+    if exact:
+        golden = {(e["preset"], e["hands"], e["state"]): e["sha256"] for e in doc["goldens"]}
+        want = [golden[(slug, "present", n)] for n, _ in tool.STATES]
+    else:
+        want, _ = tool.picture(path, slug=slug)
+    assert got == want, slug
+
+
+def test_a_value_moved_in_the_resaved_file_moves_the_picture(ctx, tmp_path):
+    """The resave check can fail: party-trip, its `/7` brighter, is another
+    picture."""
+    import json
+
+    from hyperspace import headless
+
+    tool = _tool()
     path = tool.ROOT / "hyperspace" / "library" / "presets" / "party-trip.json"
     raw, _, _ = headless.resave(path, tmp_path / "bright", factory=True)
     bright = json.loads(raw)
@@ -367,11 +458,13 @@ def test_each_node_has_a_rolling_median_in_ms(ctx):
     assert r.stats["gpu_ms"] == {}                 # nothing read back yet
     _frames(ctx, r, f, 6)
     ms = r.stats["gpu_ms"]
+    # (plan 36 T4: the "add" composite laying the trail on — its one pass
+    # is timed as the look-back's)
     assert r._graph.timed == ["scene", "lookback(cover)", "hands.layer", "lookback",
-                              "shown(warp)", "lookback(capture)", "output.1"]
+                              "composite", "shown(warp)", "lookback(capture)", "output.1"]
     # plan 30 D0 (decision 5): the effect that ran has its own line, before its end
-    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "warp",
-                        "shown(warp)", "lookback(capture)", "output.1"]
+    assert list(ms) == ["scene", "lookback(cover)", "hands.layer", "lookback", "composite",
+                        "warp", "shown(warp)", "lookback(capture)", "output.1"]
     assert all(v >= 0.0 for v in ms.values())
     assert sum(ms.values()) > 0.0       # (a driver may report a tiny pass as 0)
     assert r.stats["gpu_note"] == ""

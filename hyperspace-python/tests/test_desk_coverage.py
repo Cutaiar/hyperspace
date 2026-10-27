@@ -23,11 +23,16 @@ from pathlib import Path
 import pytest
 from imgui_bundle import imgui
 from test_ui_desk import _control, _pushes
-from test_ui_shell import _click, _learn_over, frame, rig  # noqa: F401 — the fixture
+from test_ui_shell import (  # noqa: F401 — the fixture
+    NARROW_CONTROL,
+    _click,
+    _learn_over,
+    frame,
+    rig,
+)
 
 from hyperspace import apc40, learn, ui_desk
 from hyperspace.app import CONTROL_SIZE
-from test_ui_shell import NARROW_CONTROL
 from hyperspace.learn import DESKED, MOVED, ON, ROUTED, cannot_show, ranked
 from hyperspace.routing import Binding
 
@@ -153,7 +158,11 @@ def test_cannot_show_is_the_rule_by_group():
     assert cannot_show("fx.plasma.level", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.mix", {**v, "fx.on": False}) == "effects off"
     assert cannot_show("fx.on", {**v, "fx.on": False}) is None
-    assert cannot_show("dream.mix", v) == "look-back off"
+    # (plan 36 T4: `dream.on` is the dream's — a look-back's knob shows
+    # while one is drawn, whatever it says)
+    assert cannot_show("dream.mix", v) == "dream off"
+    assert cannot_show("dream.fade", v) is None
+    assert cannot_show("dream.fade", v, drawn=frozenset({"scene"})) == "no look-back"
     assert cannot_show("dream.on", v) is None
     assert cannot_show("rot.rate.XW", v) == "rotation off"
     assert cannot_show("view.plane.XY", v) == "rotation off"

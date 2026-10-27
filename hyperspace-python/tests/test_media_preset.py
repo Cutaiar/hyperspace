@@ -95,10 +95,16 @@ def test_preset_without_media_keeps_every_value_in_six(tmp_path, name):
     base = json.loads((BASE / f"{name}.json").read_text())
     doc = json.loads(save_text(r, name))
     assert doc["schema"] == preset.WIRED_SCHEMA
+    # (plan 36 T3: an effect the migrated section does not name — off, in
+    # no run — has its values dropped with it)
+    held = M.section_effects(doc["graph"])
     kept = {k: v for k, v in base["values"].items()
-            if not k.startswith("view.bmp_") and not M.retired(k)}
+            if not k.startswith("view.bmp_") and not M.retired(k)
+            and M.effect_of(k) in (None, *held)}
     assert {k: doc["values"][k] for k in kept} == kept
-    assert any(k.startswith(LATER_EFFECTS[0].strip(' "')) for k in doc["values"])
+    # (plan 36 T3: a later effect file is in the save only where the
+    # section names it — none of these presets runs displace)
+    assert not any(k.startswith(LATER_EFFECTS[0].strip(' "')) for k in doc["values"])
     assert doc[preset.MEDIA_KEY] == {"channels": {}}
     assert "media.a.slot" in doc["values"] and "view.media_alpha" in doc["values"]
 
@@ -107,7 +113,7 @@ def test_a_media_preset_and_one_without_are_both_six(rig):
     """Row 394: with media or without, the save is `/6`, with the bins (an
     empty section when none is assigned) and every media-family value."""
     doc = rig.presets.document("x")
-    assert doc["schema"] == preset.WIRED_SCHEMA == "hyperspace.preset/6"
+    assert doc["schema"] == preset.WIRED_SCHEMA == "hyperspace.preset/7"
     assert doc[preset.MEDIA_KEY] == {"channels": {}}
     rig.reg.media.assign("a", 0, "shared:loops/tunnel.mp4")
     doc = rig.presets.document("x")
@@ -156,7 +162,7 @@ def test_bins_round_trip(rig, tmp_path):
     rig.reg["media.a.slot"].set(1)
     path = rig.presets.save_as("MEDIA")
     text = path.read_text()
-    assert '"schema": "hyperspace.preset/6"' in text
+    assert '"schema": "hyperspace.preset/7"' in text
     assert '  "a": ["shared:loops/tunnel.mp4", "camera:FaceTime HD Camera"]' in text
     want = m.to_json()
     m.from_json({})

@@ -1077,6 +1077,99 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 36 T4: the extra look-backs' values ----
+# `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
+# the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
+# the look-back's group, declared while the preset's graph holds the entry
+LOOKBACK_KEYS = ("echo_mix", "fade", "echoes", "gap", "darken", "contrast", "occlude", "res")
+_LOOKBACK_ID = re.compile(r"dream\.(?:[2-9]|[1-9][0-9]+)\.(" + "|".join(LOOKBACK_KEYS) + ")")
+
+
+def is_lookback_knob(pid: str) -> bool:
+    """Whether `dream.*` param `pid` is a look-back's — its ring and trail,
+    `dream.<key>` or `dream.<n>.<key>` for a key of `LOOKBACK_KEYS` — not the
+    dream node's own (plan 36 T4: `dream.on` gates the dream's alone)."""
+    parts = pid.split(".")
+    return parts[0] == "dream" and len(parts) >= 2 and parts[-1] in LOOKBACK_KEYS
+
+
+def lookback_ids(name: str) -> list[str]:
+    """Look-back `name`'s own params (`lookback.2` → `dream.2.echo_mix` …),
+    in order; `lookback`'s are the `dream.*` ones."""
+    rest = name.partition(".")[2]
+    return [f"dream.{rest}.{k}" for k in LOOKBACK_KEYS] if rest else [
+        f"dream.{k}" for k in LOOKBACK_KEYS]
+
+
+def is_lookback_id(pid: str) -> bool:
+    """Is `pid` one of an extra look-back's values (`dream.<n>.<key>`, n ≥
+    2) — one that exists only while a preset's graph holds that look-back
+    (plan 36 T4)? A preset load sorts such ids against the graph it lands,
+    as it does a resize's."""
+    return bool(_LOOKBACK_ID.fullmatch(pid))
+
+
+def _lookback_state(r: Registry) -> dict:
+    """The states the extra look-backs' params write, look-back name →
+    `DreamState`: the view state's (`ViewState.lookback`, which the
+    renderer reads once a frame), kept by `build_registry` as
+    `r.lookback_state`; a dict of the registry's own without one."""
+    state = getattr(r, "lookback_state", None)
+    if not isinstance(state, dict):
+        state = r.lookback_state = {}
+    return state
+
+
+def declare_lookbacks(r: Registry, names: Iterable[str]) -> list[str]:
+    """The extra look-backs' params (plan 36 T4), as `declare_resizes` does
+    the resizes': for each `lookback.<n>` (n ≥ 2) `names` holds, its own
+    echo brightness, fade, count, time apart, darken, contrast, shape-hides
+    and detail (`dream.<n>.<key>`, bounds and defaults `dream.<key>`'s),
+    group `dream`, over a `DreamState` made when first declared and kept
+    while the name stays; those of every one no longer named dropped.
+    Returns the ids that appeared or went."""
+    state = _lookback_state(r)
+    want = {n: lookback_ids(n) for n in names if n != "lookback"}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if is_lookback_id(p.id) and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        if st is None:
+            st = state[name] = DreamState()
+        for pid, key in zip(ids, LOOKBACK_KEYS, strict=True):
+            if pid in r:
+                continue
+            base = r.get(f"dream.{key}")
+            label = f"{name} {key.replace('_', ' ')}"
+            tip = (f"{name}'s own: " + base.tip) if base is not None and base.tip else (
+                f"{name}'s {key.replace('_', ' ')}.")
+            if key == "res":
+                r.enum(pid, label, *_attr(st, key), [str(v) for v in RES], group="dream",
+                       modulatable=False, tip=tip)
+            elif key == "echoes":
+                r.continuous(pid, label, *_attr(st, key), lo=0, hi=MAX_ECHOES, integer=True,
+                             group="dream", tip=tip)
+            elif key == "fade":
+                r.continuous(pid, label, *_attr(st, key), lo=FADE_LO, hi=FADE_HI, log=True,
+                             group="dream", tip=tip)
+            elif key == "gap":
+                r.continuous(pid, label, *_attr(st, key), lo=GAP_LO, hi=GAP_HI,
+                             group="dream", modulatable=False, tip=tip)
+            elif key == "contrast":
+                r.continuous(pid, label, *_attr(st, key), lo=0.5, hi=3.0, group="dream",
+                             tip=tip)
+            else:
+                r.continuous(pid, label, *_attr(st, key), lo=0.0, hi=1.0, group="dream",
+                             tip=tip)
+            changed.append(pid)
+    return changed
+
+
 def dream_half_life(k: float) -> int:
     """`dream.k` as its readout: the processed frames in which a frame's
     share of the dream buffer halves, ``log ½ / log(1 − k)``, rounded (the
@@ -1148,6 +1241,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.resize_state = sizes
+    # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
+    rings = getattr(view, "lookback", None)
+    if not isinstance(rings, dict):
+        rings = {}
+        try:
+            view.lookback = rings
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.lookback_state = rings
     chain = lambda: audio.chain
     fmt_speed = lambda x: "stop" if x <= 0 else f"{x:.3f}" if x < 1 else f"{x:.2f}"
 
@@ -1434,14 +1536,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # the labels are the LOOKBACK page's sections (ui_lookback.py): "Echo …"
     # acts on the echoes, "Dream …" on the dream buffer, and the rest on both
     # (plan 20 WP4). Each tip opens with what the knob does.
-    r.toggle("dream.on", "Look-back", *_attr(dream, "on"), group=g,
-             tip="Echoes and the dream, on or off: the frame history composited "
-                 "under the picture — raw echoes, and the dreamed wake once a "
-                 "worker is attached.")
+    # plan 36 T4 (W4): the dream node's own — a look-back drawn is on
+    r.toggle("dream.on", "Dream on", *_attr(dream, "on"), group=g,
+             tip="The dream, on or off: on, the dream node dreams its picture (once a "
+                 "worker is attached); off, it passes the picture through untouched "
+                 "and the worker sleeps.")
     r.continuous("dream.mix", "Dream brightness", *_attr(dream, "mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"{v:.2f}", group=g,
-                 tip="How bright the dream is under the picture: the dream buffer's "
-                     "weight in the composite.")
+                 tip="How bright the dream is over its picture: the dream buffer's "
+                     "weight, laid over what the dream node takes in.")
     r.continuous("dream.echo_mix", "Echo brightness", *_attr(dream, "echo_mix"), lo=0.0, hi=1.0,
                  fmt=lambda v: f"{v:.2f}", group=g,
                  tip="How bright the newest echo is; older ones fade from it by the "

@@ -2,6 +2,7 @@
  "schema": "hyperspace.preset/1",
  "group": "dream",
  "name": "default",
+ "note": "The fresh state: the dream off. Plan 36 T4: these are values only — `dream.on` is the dream node's switch, and a group preset cannot draw or remove a look-back or a dream (the preset's graph does, on GRAPH).",
  "values": {
   "dream.on": false,
   "dream.mix": 0.7,

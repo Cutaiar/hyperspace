@@ -702,7 +702,7 @@ def free_rig(tmp_path, *pairs, nodes=(), undo_rig=False):
         settle(rig)
     else:
         rig = boot(tmp_path)
-    put(rig.home, "Free", schema="hyperspace.preset/6", graph=_section(*pairs, nodes=nodes))
+    put(rig.home, "Free", schema="hyperspace.preset/7", graph=_section(*pairs, nodes=nodes))
     rig.lib.load(PRESETS, "Free")
     assert not [n for n in rig.presets.notes if n.startswith("graph")], rig.presets.notes
     stub = Stub()
@@ -726,7 +726,7 @@ def wires_of(rig) -> set[tuple[str, str]]:
 
 def run_of(rig) -> tuple[str, ...]:
     """The effects from the look-back into All outputs (the run, in wires)."""
-    return G.run_of(rig.presets.graph.spec, "lookback", "output.all.image")
+    return G.run_back(rig.presets.graph.spec, "output.all.image")
 
 
 def test_the_picker_adds_an_effect_unwired(tmp_path):
@@ -791,7 +791,8 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     landing — the first gesture shows something."""
     rig, e, pushed = free_rig(tmp_path, ("lookback", "output.all.image"))
     reg = rig.reg
-    assert not reg["fx.kaleido.on"].value and not reg["fx.wobble.on"].value
+    # (plan 36 T3: neither exists before a gesture names it)
+    assert "fx.kaleido.on" not in reg and "fx.wobble.on" not in reg
     assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido" and run_of(rig) == ("kaleido",)
     assert reg["fx.kaleido.on"].value is True
@@ -819,12 +820,12 @@ def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
     from test_undo import settle
 
     rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"), undo_rig=True)
-    assert rig.reg["fx.kaleido.on"].value is False
+    assert "fx.kaleido.on" not in rig.reg            # (plan 36 T3: not in the section)
     assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
     assert rig.reg["fx.kaleido.on"].value is True
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert rig.reg["fx.kaleido.on"].value is False
+    assert "fx.kaleido.on" not in rig.reg           # (gone with its node: plan 36 T3)
     assert run_of(rig) == () and wires_of(rig) == {("lookback", "output.all.image")}
 
 
@@ -918,7 +919,7 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     from test_presets import put
 
     from hyperspace.outputs import Switches
-    put(rig.lib.home, "Free", schema="hyperspace.preset/6", graph=_section(
+    put(rig.lib.home, "Free", schema="hyperspace.preset/7", graph=_section(
         *FRAME0, ("lookback", "output.all.image"),
         nodes=[{"kind": "effect", "file": "wobble", "instance": 2}]))
     rig.lib.load("presets", "Free")
@@ -934,9 +935,9 @@ def test_dropping_a_free_effect_on_the_run_inserts_it(rig):
     st["pin_xy"].update({graphview.stub_out("render:lookback"): (0.0, 0.0),
                          graphview.stub_in("render:output.all"): (400.0, 0.0)})
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (900.0, 900.0)) is None
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ()
+    assert G.run_back(gs.spec, "output.all.image") == ()
     assert ui_graph.dropped(rig.panel, view, "render:wobble.2", (200.0, 0.0)) is cable
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("wobble.2",)
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble.2",)
 
 
 def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
@@ -967,7 +968,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/6"
+    assert doc["schema"] == "hyperspace.preset/7"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -979,7 +980,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert e2.unwire("acid", "output.all.image") is None
     assert e2.wire("rout:lookback", "rin:output.all/image") is None
     assert e2.place_effect(("lookback", "output.all.image"), "acid") is None
-    assert rig2.presets.graph.spec.to_json()["nodes"] == []
+    assert rig2.presets.graph.spec.to_json()["nodes"] == [{"kind": "hands", "laid": "over"}]
 
 
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
@@ -999,9 +1000,9 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/6", name
+        assert doc["schema"] == "hyperspace.preset/7", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
-        assert G.run_of(G.read_graph(doc["graph"]), "lookback", "output.all.image") == (
+        assert G.run_back(G.read_graph(doc["graph"]), "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
 
 
@@ -1042,7 +1043,7 @@ def test_a_plain_loop_drag_points_at_a_delay(tmp_path):
     with `acid → wobble` already wired) is refused in `LOOP_PLAIN`'s words,
     which point at a delay; wired through one it lands, the section read
     with no notes."""
-    rig, e, pushed = free_rig(
+    rig, e, _ = free_rig(
         tmp_path, *FRAME0, ("lookback", "acid.image"), ("acid", "wobble.image"),
         ("wobble", "output.all.image"),
         nodes=[{"kind": "effect", "file": "acid"}, {"kind": "effect", "file": "wobble"}])
@@ -1071,7 +1072,7 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
 
     from hyperspace import undo as undo_mod
     from hyperspace.outputs import Switches
-    put(rig.lib.home, "Run", schema="hyperspace.preset/6", graph=_section(
+    put(rig.lib.home, "Run", schema="hyperspace.preset/7", graph=_section(
         ("lookback", "acid.image"), ("acid", "wobble.image"), ("wobble", "output.all.image")))
     rig.lib.load("presets", "Run")
     gs = rig.lib.presets.graph
@@ -1091,11 +1092,11 @@ def test_dragging_a_run_member_onto_another_cable_moves_it(rig, monkeypatch):
     # on its own cables (lookback → acid, acid → wobble), and on nothing: no change
     assert ui_graph.dropped(rig.panel, view, "render:acid", (200.0, 0.0)) is None
     assert ui_graph.dropped(rig.panel, view, "render:acid", (500.0, 900.0)) is None
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("acid", "wobble")
+    assert G.run_back(gs.spec, "output.all.image") == ("acid", "wobble")
     assert pushed == []
     cable = next(c for c in view.cables if c.dst_port == "rin:output.all/image")
     assert ui_graph.dropped(rig.panel, view, "render:acid", (800.0, 0.0)) is cable
-    assert G.run_of(gs.spec, "lookback", "output.all.image") == ("wobble", "acid")
+    assert G.run_back(gs.spec, "output.all.image") == ("wobble", "acid")
     assert pushed == ["move acid onto wobble → output.all.image"]
 
 
@@ -1210,6 +1211,11 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
                         lambda pan, q: (seen.append(q.id), real(pan, q)))
     monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: False)
     monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: False)
+    # (plan 36 T3: an effect's params exist where the graph names it)
+    gs = rig.panel.library.presets.graph
+    spec = G.read_graph({**gs.spec.to_json(), "nodes": [
+        *gs.spec.to_json()["nodes"], {"kind": "effect", "file": "glimmer"}]})
+    gs.land(spec, spec.to_json())
     g = rig.reg["fx.glimmer.mix"]
     imgui.new_frame()
     imgui.begin("menu")
@@ -1390,7 +1396,7 @@ def wired_rig(tmp_path, graph=None, *, slug=None, undo_rig=False):
         rig = boot(tmp_path)
     fixture = Path(__file__).parent / "fixtures" / "presets" / f"{slug}.json"
     if slug is None:
-        put(rig.home, "Wired", schema="hyperspace.preset/6", graph=graph)
+        put(rig.home, "Wired", schema="hyperspace.preset/7", graph=graph)
         rig.lib.load(PRESETS, "Wired")
     elif fixture.exists():          # (a graph fixture, loaded and migrated as a file is)
         (rig.home / "presets").mkdir(parents=True, exist_ok=True)
@@ -1464,7 +1470,9 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
         e.said = ""
         assert e.drop_node(f"render:{name}") is None, name
         assert e.said, name
-    assert {k: v for k, v in gs.spec.to_json().items() if v} == {"frame": "wired"}
+    # (plan 36 T3: hands 1 is always there, its entry always written)
+    assert {k: v for k, v in gs.spec.to_json().items() if v} == {
+        "frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
     assert pushed and all(p.startswith(("unwire", "delete")) for p in pushed)
     rig, e, _ = wired_rig(tmp_path / "nodes-first", slug=slug)
     gs = rig.presets.graph
@@ -1533,8 +1541,7 @@ OWNERS = {"frame": "wired", "nodes": [], "wires": [
     {"from": "plasma", "to": "kaleido.image"},
     {"from": "kaleido", "to": "output.all.image"},
     {"from": "hands.layer", "to": "output.all.hands"},
-    {"from": "hands.layer", "to": "output.all.guide"},
-    {"from": "scene", "to": "lookback.capture"}]}
+    {"from": "hands.layer", "to": "output.all.guide"}]}
 
 
 def test_the_owners_sequence(tmp_path):
@@ -1556,7 +1563,8 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
     """R18 (final review): on the owner's glimmer-bug (displace-moo's shape:
     a switch of two channel branches under the scene), deleting the
     backdrop joins what its `scene` port took to what it fed — the scene
-    goes on to the look-back — and says so; drawn, the frame is not black."""
+    goes on to All outputs (plan 36 T4: its look-back was off, so none is
+    drawn) — and says so; drawn, the frame is not black."""
     from test_graph_frame import SIZE, _fbo, _px, _tool
 
     from hyperspace.outputs import Switches, View
@@ -1565,11 +1573,11 @@ def test_deleting_the_backdrop_lifts_it_like_an_effect(tmp_path):
     spec = rig.presets.graph.spec
     into = next(w.src for w in spec.wires if w.dst == "backdrop.scene")
     fed = sorted(w.dst for w in spec.wires if w.src == "backdrop")
-    assert into == "scene" and fed == ["lookback.image"]
+    assert into == "scene" and fed == ["output.all.image"]
     assert e.drop_node("render:backdrop") is None
-    assert e.said == "Backdrop deleted; the scene goes on to Look-back", e.said
+    assert e.said.startswith("Backdrop deleted; the scene goes on to "), e.said
     wires = wired_wires(rig)
-    assert ("scene", "lookback.image") in wires
+    assert ("scene", "output.all.image") in wires
     assert not [w for w in wires if "backdrop" in w[0] or w[1].startswith("backdrop.")]
     try:
         import moderngl
@@ -1605,7 +1613,7 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 
 def test_the_picker_groups_by_primitive(tmp_path):
-    """The picker in the owner's groups: the scene starter, then scene ▸,
+    """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
     look-back ▸, pictures ▸, the effect files, a copy of each effect
     instance in the section — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -1618,7 +1626,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
               ("echo", "32", "echo.32 (oldest)")]
     items = graphview.picker(e)
     assert items == [
-        ("starter", None, "scene starter"),
+        *(("starter", k, w) for k, w in graphview.STARTERS),
         ("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
         ("layer", None, "hands layer"), ("guide", None, "hands guide"),
         ("backdrop", None, "backdrop"),
@@ -1630,18 +1638,19 @@ def test_the_picker_groups_by_primitive(tmp_path):
         *(("effect", f, f) for f in files),
         ("copy", "acid", "copy of acid"), ("copy", "acid.2", "copy of acid.2")]
     groups = [graphview.PICKER_GROUP[k] for k, _, _ in items]
-    assert list(dict.fromkeys(groups)) == ["", "scene", "look-back", "pictures", "effects",
-                                           "copy of"]
+    assert list(dict.fromkeys(groups)) == ["starters", "scene", "look-back", "pictures",
+                                           "effects", "copy of"]
 
 
 def test_the_starter_wires_the_scene_to_all_outputs(tmp_path):
-    """"scene starter" on a blank preset: `shape → scene.geometry` and
-    `scene → output.all.image`, in one undo step, said `STARTER_SAID`."""
+    """The scene chain starter (plan 36 T5; plan 35 G's "scene starter")
+    on a blank preset: `shape → scene.geometry` and `scene →
+    output.all.image`, in one undo step, said `STARTER_SAID`."""
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
     assert e.starter() is None
     assert wired_wires(rig) == {("shape", "scene.geometry"), ("scene", "output.all.image")}
-    assert e.said == graphview.STARTER_SAID == "scene starter: shape → scene → All outputs"
-    assert pushed == ["scene starter"]
+    assert e.said == graphview.STARTER_SAID == "scene chain: shape → scene → All outputs"
+    assert pushed == ["starter: scene chain"]
 
 
 GROUNDED = {"frame": "wired", "wires": [{"from": "scene", "to": "output.all.image"},

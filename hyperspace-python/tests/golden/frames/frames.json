@@ -809,15 +809,66 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
       {
        "kind": "hands",
-       "into": "scene",
-       "draw": "lines"
+       "draw": "lines",
+       "laid": "over"
       },
       {
-       "kind": "history",
-       "holds": "scene+hands"
+       "kind": "composite",
+       "blend": "add"
+      }
+     ],
+     "wires": [
+      {
+       "from": "hands",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
+      },
+      {
+       "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
+       "to": "acid.image"
+      },
+      {
+       "from": "acid",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.guide",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "scene.cover",
+       "to": "lookback.cover"
+      },
+      {
+       "from": "hands",
+       "to": "hands.guide.hands"
       }
      ]
     },
@@ -827,8 +878,9 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(acid)",
      "composite",
+     "shown(acid)",
+     "composite.2",
      "shown(copy)",
      "lookback(capture)",
      "output.1",
@@ -849,11 +901,69 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
       {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
        "kind": "effect",
-       "file": "palette",
-       "after": "hands"
+       "file": "palette"
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
+      },
+      {
+       "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "palette.image"
+      },
+      {
+       "from": "palette",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "scene.cover",
+       "to": "lookback.cover"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
@@ -862,7 +972,8 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(lookback)",
+     "composite.3",
+     "shown(composite.3)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -886,25 +997,76 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
       {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
        "kind": "effect",
-       "file": "palette",
-       "into": "output.2"
+       "file": "palette"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "acid.image"
+      },
+      {
+       "from": "acid",
+       "to": "wobble.image"
+      },
+      {
+       "from": "wobble",
+       "to": "deconverge.image"
+      },
+      {
+       "from": "deconverge",
+       "to": "huecycle.image"
+      },
+      {
+       "from": "huecycle",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      },
+      {
+       "from": "huecycle",
+       "to": "palette.image"
+      },
+      {
+       "from": "palette",
+       "to": "output.2.image"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(huecycle)",
-     "composite",
-     "shown(copy.4)",
      "composite.2",
      "shown(copy.8)",
-     "lookback(capture)",
+     "composite",
+     "shown(palette)",
      "output.1",
      "output.2",
      "output.3",
@@ -923,12 +1085,93 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "acid",
-       "instance": 2,
-       "after": "scene"
+       "instance": 2
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
+      },
+      {
+       "kind": "dream"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "acid.2.image"
+      },
+      {
+       "from": "acid.2",
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "acid.2",
+       "to": "composite.under"
+      },
+      {
+       "from": "lookback",
+       "to": "dream.image"
+      },
+      {
+       "from": "dream",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
+       "to": "plasma.image"
+      },
+      {
+       "from": "plasma",
+       "to": "kaleido.image"
+      },
+      {
+       "from": "kaleido",
+       "to": "fractals.image"
+      },
+      {
+       "from": "fractals",
+       "to": "glimmer.image"
+      },
+      {
+       "from": "glimmer",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "acid.2",
+       "to": "lookback.image"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "scene.cover",
+       "to": "lookback.cover"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
@@ -937,6 +1180,8 @@
      "lookback(cover)",
      "hands.layer",
      "lookback",
+     "dream",
+     "composite.3",
      "shown(glimmer)",
      "composite",
      "shown(copy.4)",
@@ -961,21 +1206,78 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
       {
        "kind": "hands",
-       "into": "scene",
-       "draw": "lines"
+       "draw": "lines",
+       "laid": "over"
       },
       {
        "kind": "hands",
        "instance": 2
+      },
+      {
+       "kind": "composite",
+       "blend": "add"
       }
      ],
      "wires": [
       {
-       "from": "hands.2",
+       "from": "hands.2.layer",
        "to": "output.2.hands"
+      },
+      {
+       "from": "hands",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.occluder"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
+      },
+      {
+       "from": "lookback",
+       "to": "composite.over"
+      },
+      {
+       "from": "composite",
+       "to": "acid.image"
+      },
+      {
+       "from": "acid",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.guide",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "scene.cover",
+       "to": "lookback.cover"
+      },
+      {
+       "from": "hands.2",
+       "to": "hands.2.layer.hands"
+      },
+      {
+       "from": "hands",
+       "to": "hands.guide.hands"
       }
      ]
     },
@@ -986,8 +1288,9 @@
      "hands.2.layer",
      "hands.guide",
      "lookback",
-     "shown(acid)",
      "composite",
+     "shown(acid)",
+     "composite.2",
      "shown(copy)",
      "lookback(capture)",
      "output.1",
@@ -1008,38 +1311,89 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "acid",
        "instance": 2
+      },
+      {
+       "kind": "effect",
+       "file": "palette"
       }
      ],
      "wires": [
       {
-       "from": "palette",
-       "to": "output.1.image"
-      },
-      {
-       "from": "history",
+       "from": "scene",
        "to": "acid.2.image"
       },
       {
        "from": "acid.2",
        "to": "output.2.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "acid.image"
+      },
+      {
+       "from": "acid",
+       "to": "wobble.image"
+      },
+      {
+       "from": "wobble",
+       "to": "deconverge.image"
+      },
+      {
+       "from": "deconverge",
+       "to": "huecycle.image"
+      },
+      {
+       "from": "huecycle",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      },
+      {
+       "from": "huecycle",
+       "to": "palette.image"
+      },
+      {
+       "from": "palette",
+       "to": "output.1.image"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(huecycle)",
      "composite",
      "shown(copy.4)",
+     "shown(palette)",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1057,20 +1411,59 @@
     "notes": [],
     "effects_on": false,
     "hands_shown": true,
-    "graph": null,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
+     "wires": [
+      {
+       "from": "channel.a",
+       "to": "backdrop.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "backdrop.scene"
+      },
+      {
+       "from": "backdrop",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      }
+     ]
+    },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "channel.a",
      "backdrop",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(backdrop)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1089,25 +1482,52 @@
     "effects_on": false,
     "hands_shown": true,
     "graph": {
-     "nodes": [],
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
      "wires": [
       {
-       "from": "media.c",
+       "from": "channel.c",
        "to": "output.2.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "channel.c",
      "shown(channel.c)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1125,18 +1545,53 @@
     "notes": [],
     "effects_on": false,
     "hands_shown": true,
-    "graph": null,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
+     "wires": [
+      {
+       "from": "channel.a",
+       "to": "pattern.media"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      }
+     ]
+    },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1155,26 +1610,57 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
-     "nodes": [],
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
      "wires": [
       {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "blend.aux"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "blend.image"
+      },
+      {
+       "from": "blend",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "channel.a",
      "shown(blend)",
      "composite",
      "shown(copy)",
      "composite.2",
      "shown(copy.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1193,26 +1679,57 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
-     "nodes": [],
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
      "wires": [
       {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "displace.aux"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "displace.image"
+      },
+      {
+       "from": "displace",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "channel.a",
      "shown(displace)",
      "composite",
      "shown(copy)",
      "composite.2",
      "shown(copy.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1231,7 +1748,12 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "acid",
@@ -1245,11 +1767,7 @@
      ],
      "wires": [
       {
-       "from": "frame",
-       "to": "fx.image"
-      },
-      {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "acid.2.image"
       },
       {
@@ -1259,21 +1777,38 @@
       {
        "from": "huecycle.2",
        "to": "shape.faces"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1292,7 +1827,12 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "kaleido",
@@ -1301,32 +1841,53 @@
      ],
      "wires": [
       {
-       "from": "frame",
-       "to": "fx.image"
-      },
-      {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "kaleido.2.image"
       },
       {
        "from": "kaleido.2",
        "to": "backdrop.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "backdrop.scene"
+      },
+      {
+       "from": "backdrop",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "channel.a",
      "backdrop",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(backdrop)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1345,7 +1906,12 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "acid",
@@ -1354,11 +1920,7 @@
      ],
      "wires": [
       {
-       "from": "frame",
-       "to": "fx.image"
-      },
-      {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "acid.2.image"
       },
       {
@@ -1368,20 +1930,37 @@
       {
        "from": "acid.2",
        "to": "output.2.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1400,7 +1979,12 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "acid",
@@ -1412,19 +1996,15 @@
      ],
      "wires": [
       {
-       "from": "frame",
-       "to": "fx.image"
-      },
-      {
-       "from": "media.b",
+       "from": "channel.b",
        "to": "switch.in1"
       },
       {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "switch.in2"
       },
       {
-       "from": "media.a",
+       "from": "channel.a",
        "to": "acid.2.image"
       },
       {
@@ -1434,6 +2014,26 @@
       {
        "from": "switch",
        "to": "shape.faces"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
@@ -1441,15 +2041,12 @@
      "channel.b",
      "channel.a",
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1469,7 +2066,12 @@
     "hands_shown": false,
     "graph": {
      "frame": "wired",
-     "nodes": [],
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
      "wires": [
       {
        "from": "channel.a",
@@ -1501,6 +2103,10 @@
      "frame": "wired",
      "nodes": [
       {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
        "kind": "effect",
        "file": "acid",
        "instance": 2
@@ -1528,10 +2134,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1543,17 +2145,19 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -1563,7 +2167,6 @@
      "channel.a",
      "resize",
      "shown(acid.2)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1582,16 +2185,17 @@
     "effects_on": false,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "delay"
       }
      ],
      "wires": [
-      {
-       "from": "frame",
-       "to": "fx.image"
-      },
       {
        "from": "scene",
        "to": "delay.image"
@@ -1599,21 +2203,38 @@
       {
        "from": "delay",
        "to": "shape.faces"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
      "shown(composite.2)",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1632,7 +2253,12 @@
     "effects_on": true,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "effect",
        "file": "palette",
@@ -1653,10 +2279,6 @@
       }
      ],
      "wires": [
-      {
-       "from": "frame",
-       "to": "fx.image"
-      },
       {
        "from": "delay",
        "to": "zoomblur.2.image"
@@ -1680,15 +2302,37 @@
       {
        "from": "composite.2",
        "to": "delay.image"
+      },
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.3",
@@ -1696,7 +2340,6 @@
      "composite.2",
      "shown(composite.2)",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1715,29 +2358,49 @@
     "effects_on": false,
     "hands_shown": true,
     "graph": {
+     "frame": "wired",
      "nodes": [
       {
-       "kind": "echo",
-       "index": 3
+       "kind": "hands",
+       "laid": "over"
       }
      ],
      "wires": [
       {
-       "from": "frame",
-       "to": "fx.image"
+       "from": "lookback.echo.3",
+       "to": "shape.faces"
       },
       {
-       "from": "echo.3",
-       "to": "shape.faces"
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "scene",
+       "to": "lookback.image"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
      "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -1757,12 +2420,19 @@
   "blank-frame": {
    "present": {
     "missing": [],
-    "notes": [],
+    "notes": [
+     "no graph: nothing is wired \u2014 black until something is wired to an output"
+    ],
     "effects_on": false,
     "hands_shown": false,
     "graph": {
      "frame": "wired",
-     "nodes": []
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ]
     },
     "nodes": [
      "output.1",
@@ -1786,6 +2456,10 @@
      "frame": "wired",
      "nodes": [
       {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
        "kind": "effect",
        "file": "acid"
       },
@@ -1805,14 +2479,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "scene",
-       "to": "lookback.capture"
-      },
-      {
-       "from": "lookback",
        "to": "acid.image"
       },
       {
@@ -1828,7 +2494,7 @@
        "to": "output.all.guide"
       },
       {
-       "from": "lookback",
+       "from": "scene",
        "to": "composite.2.under"
       },
       {
@@ -1846,14 +2512,20 @@
       {
        "from": "ground",
        "to": "output.2.hands"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
      "shown(acid)",
      "composite.2",
      "shown(copy)",
@@ -1863,7 +2535,6 @@
      "shown(copy.3)",
      "composite.4",
      "shown(copy.4)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -1884,6 +2555,10 @@
     "graph": {
      "frame": "wired",
      "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
       {
        "kind": "resize"
       },
@@ -1910,10 +2585,6 @@
       },
       {
        "from": "scene",
-       "to": "lookback.image"
-      },
-      {
-       "from": "lookback",
        "to": "output.all.image"
       },
       {
@@ -1925,17 +2596,15 @@
        "to": "output.all.guide"
       },
       {
-       "from": "scene",
-       "to": "lookback.capture"
+       "from": "hands",
+       "to": "hands.layer.hands"
       }
      ]
     },
     "nodes": [
      "scene",
-     "lookback(cover)",
      "hands.layer",
-     "lookback",
-     "shown(lookback)",
+     "shown(scene)",
      "composite",
      "shown(composite)",
      "composite.2",
@@ -1946,7 +2615,6 @@
      "shown(composite.4)",
      "resize",
      "delay(write)",
-     "lookback(capture)",
      "output.1",
      "output.2",
      "output.3",
@@ -5604,7 +6272,7 @@
    "preset": "party-trip",
    "hands": "absent",
    "state": "scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -5656,14 +6324,14 @@
    "preset": "party-trip",
    "hands": "absent",
    "state": "hands+through",
-   "route": "none",
+   "route": "HANDS",
    "hands_over": false,
    "size": [
     960,
     600
    ],
-   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
-   "png": "png/b6783b14bd504ef1.png"
+   "sha256": "f0eb31225274c7b36586261bb687586d4d06ce65f7f8a621f8c72959ccb09780",
+   "png": "png/f0eb31225274c7b3.png"
   },
   {
    "preset": "party-trip",
@@ -5708,7 +6376,7 @@
    "preset": "party-trip",
    "hands": "absent",
    "state": "solo-scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -6592,7 +7260,7 @@
    "preset": "party-noita",
    "hands": "absent",
    "state": "scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -6644,14 +7312,14 @@
    "preset": "party-noita",
    "hands": "absent",
    "state": "hands+through",
-   "route": "none",
+   "route": "HANDS",
    "hands_over": false,
    "size": [
     960,
     600
    ],
-   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
-   "png": "png/b6783b14bd504ef1.png"
+   "sha256": "b93e58034ff6be294c2d5b809062e6b12c40c40e17d8ee65f9a5c2717cdbf89e",
+   "png": "png/b93e58034ff6be29.png"
   },
   {
    "preset": "party-noita",
@@ -6696,7 +7364,7 @@
    "preset": "party-noita",
    "hands": "absent",
    "state": "solo-scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -7554,7 +8222,7 @@
    "preset": "lfo-breathe",
    "hands": "absent",
    "state": "scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -7606,14 +8274,14 @@
    "preset": "lfo-breathe",
    "hands": "absent",
    "state": "hands+through",
-   "route": "none",
+   "route": "HANDS",
    "hands_over": false,
    "size": [
     960,
     600
    ],
-   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
-   "png": "png/b6783b14bd504ef1.png"
+   "sha256": "ba933a3f9e4236d0a9078ec6070c42f774616b9514b86284628b90c1cf582af2",
+   "png": "png/ba933a3f9e4236d0.png"
   },
   {
    "preset": "lfo-breathe",
@@ -7658,7 +8326,7 @@
    "preset": "lfo-breathe",
    "hands": "absent",
    "state": "solo-scene+hands+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
@@ -9634,14 +10302,15 @@
    "preset": "palette-glass",
    "hands": "present",
    "state": "scene+hands+through",
-   "route": "SCENE+HANDS",
+   "route": "none",
    "hands_over": false,
    "size": [
     960,
     600
    ],
-   "sha256": "504bf93c1cc89486401efd3b235605bc3aede527065690edd003ed6b85049d9f",
-   "png": "png/504bf93c1cc89486.png"
+   "sha256": "91e35f2f9a6daa5164b07865aafaed8db5da41018e04129d0d5df450c96b362f",
+   "png": "png/91e35f2f9a6daa51.png",
+   "wired": "palette"
   },
   {
    "preset": "palette-glass",
@@ -9933,14 +10602,15 @@
    "preset": "wired-outputs",
    "hands": "present",
    "state": "scene+hands",
-   "route": "SCENE",
+   "route": "none",
    "hands_over": true,
    "size": [
     960,
     600
    ],
-   "sha256": "e5668fd6c863465d640f1aa6e4cfe241e45f27452b7ac1c3ff608d3ce5e3e5ac",
-   "png": "png/e5668fd6c863465d.png"
+   "sha256": "26782a2264054d432511143a8a8c84775c2987c33f32cbeda39610f8137ec940",
+   "png": "png/26782a2264054d43.png",
+   "wired": "palette"
   },
   {
    "preset": "wired-outputs",
@@ -9952,8 +10622,8 @@
     960,
     600
    ],
-   "sha256": "d6a17a2e936f14623960dcadfdadbea156664f8774b2e6e440936df4935f2645",
-   "png": "png/d6a17a2e936f1462.png",
+   "sha256": "a12de706e48a3359f2843e5a54a3b5cfb0988190ca37361b8e631333517e8c08",
+   "png": "png/a12de706e48a3359.png",
    "wired": "acid.2"
   },
   {
@@ -9966,8 +10636,8 @@
     960,
     600
    ],
-   "sha256": "96b24d98ee2044ea5e6450a8fd73147f7f596da553282d0f0417ef546fc0f707",
-   "png": "png/96b24d98ee2044ea.png"
+   "sha256": "25e88ae27921d3542cb4420feb03030460aead4098af6c5ed275baf66ab7e8b1",
+   "png": "png/25e88ae27921d354.png"
   },
   {
    "preset": "wired-outputs",
@@ -9979,8 +10649,8 @@
     960,
     600
    ],
-   "sha256": "96b24d98ee2044ea5e6450a8fd73147f7f596da553282d0f0417ef546fc0f707",
-   "png": "png/96b24d98ee2044ea.png"
+   "sha256": "25e88ae27921d3542cb4420feb03030460aead4098af6c5ed275baf66ab7e8b1",
+   "png": "png/25e88ae27921d354.png"
   },
   {
    "preset": "wired-outputs",
@@ -11642,14 +12312,14 @@
    "preset": "through-one-output",
    "hands": "present",
    "state": "scene+through",
-   "route": "SCENE",
+   "route": "SCENE+HANDS",
    "hands_over": false,
    "size": [
     960,
     600
    ],
-   "sha256": "46de90d3d286f6ba794f5f568e111b16b78a396ddf376c4b60ebaf4e3ace5528",
-   "png": "png/46de90d3d286f6ba.png"
+   "sha256": "052e7ec7efed3f5f640c19510aa2b9f92bde54b214697294d96b30ef7b988d1e",
+   "png": "png/052e7ec7efed3f5f.png"
   },
   {
    "preset": "through-one-output",

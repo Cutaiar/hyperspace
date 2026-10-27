@@ -519,7 +519,8 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     assert lib.kinds == ("presets",)
     listing = lib.list("presets")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
-    assert lib.load("presets", "lfo-breathe") == []
+    assert [k for k in lib.load("presets", "lfo-breathe")
+            if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
     assert rig.reg["lfo.1.sync"].value == 3         # lfo-breathe lands its bases: 1 bar
     assert lib.next("presets") == listing[listing.index("lfo-breathe") + 1]
     lib.load("presets", "legacy6")
@@ -533,7 +534,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     path = lib.save_as("presets", "My Routes")
     assert path == tmp_path / "presets" / "my-routes.json"
     doc = json.loads(path.read_text())
-    assert doc["schema"] == "hyperspace.preset/6" and len(doc["routes"]) == 13
+    assert doc["schema"] == "hyperspace.preset/7" and len(doc["routes"]) == 13
     assert lib.current("presets") == "My Routes" and not lib.is_dirty("presets")
     frame(panel)
     # another preset back: the user route goes, the inputs stay

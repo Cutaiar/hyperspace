@@ -26,14 +26,17 @@ from test_presets import boot, put
 from wiredframe import Shows, graph, unwired, wire_switches, wiring
 
 from hyperspace import graph as G
+from hyperspace import graphmigrate as M
 from hyperspace import preset
 from hyperspace.fx import FxState, SpecError, instance_of_name, parse
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.library import FACTORY, PRESETS
 from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "presets" / "hands-lines.json"
 DEFAULT = G.Wiring()
+TODAY = wired_wiring(G.Wiring())       # (plan 36 T3: today's frame, by the migration)
 
 
 def _old(w: G.Wiring) -> G.Wiring:
@@ -175,9 +178,10 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     scene's hands get a line of their own."""
     w = G.Wiring(hands="scene", extra=(G.HandsAt(2, "layer", "lines"),))
     g = graph([Shows(), Shows(scene=False), Shows(scene=False, through=True)], w)
-    assert _names(g) == ["shape", "hands", "hands.2", "scene", "lookback(cover)",
-                         "hands.2.layer", "hands.guide", "lookback", "shown(lookback)",
-                         "composite", "shown(composite)", "lookback(capture)",
+    # (plan 36 T2: the faces' pattern, a wire's node, is built first)
+    # (plan 36 T4: the old words' look-back off — none drawn)
+    assert _names(g) == ["pattern", "shape", "hands", "hands.2", "scene", "hands.2.layer",
+                         "hands.guide", "shown(scene)", "composite", "shown(composite)",
                          "output.1", "output.2", "output.3"]
     hands, hands2 = g.nodes["hands"], g.nodes["hands.2"]
     assert g.nodes["scene"].inputs == {"geometry": hands, "geometry.2": g.nodes["shape"]}
@@ -186,7 +190,7 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     assert layer.inputs == {"geometry": hands2} and layer.readout == "downstream"
     assert g.nodes["hands.guide"].inputs == {"geometry": hands}
     o1, o2, o3 = (g.nodes[f"output.{k}"] for k in (1, 2, 3))
-    assert o1.inputs["image"] is g.nodes["shown(lookback)"] and o1.inputs["hands"] is None
+    assert o1.inputs["image"] is g.nodes["shown(scene)"] and o1.inputs["hands"] is None
     assert o1.inputs["readout"] is g.nodes["hands.guide"]
     assert o2.inputs["hands"] is layer and o2.inputs["readout"] is layer
     assert o3.inputs["image"] is g.nodes["shown(composite)"] and o3.inputs["readout"] is layer
@@ -194,9 +198,8 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     # a time per node: the scene's hands (its consumer edge), the second
     # instance's layer and guide lines
     assert g.in_scene() == {"hands"}
-    assert g.timed == ["hands", "scene", "lookback(cover)", "hands.2.layer", "hands.guide",
-                       "lookback", "shown(lookback)", "composite", "shown(composite)",
-                       "lookback(capture)", "output.1", "output.2", "output.3"]
+    assert g.timed == ["hands", "scene", "hands.2.layer", "hands.guide", "shown(scene)",
+                       "composite", "shown(composite)", "output.1", "output.2", "output.3"]
     # the projector alone: no layer at all, the second node not built
     g = graph([Shows()], w)
     assert "hands.2" not in g.nodes and "hands.2.layer" not in g.nodes
@@ -211,7 +214,7 @@ def test_one_hands_node_feeding_a_scene_and_a_layer_is_timed_by_its_scene():
     w = G.Wiring(hands="scene")
     both = graph([Shows(), Shows(scene=False)], w)
     assert {"hands", "hands.layer"} <= set(both.timed) and both.in_scene() == {"hands"}
-    only = G.build_graph([View(S(), (1, 1))])
+    only = G.build_graph([View(S(), (1, 1))], TODAY)
     assert "hands" not in only.timed and "hands.layer" in only.timed
     shared = G.Hands("ghost")
     a, b = G.Graph(), G.Graph()
@@ -231,24 +234,28 @@ def test_the_wiring_in_words():
     LOOKBACK page's (`lookback_words`), and the graph's one line — read
     off the wires (plan 35 T4: an output's state is its wiring, `Shows`;
     its window's `Switches` the mutes)."""
-    w = DEFAULT
+    w = TODAY
     assert G.hands_words(w, S()) == "hands: over"
     assert G.hands_words(wiring(w, Shows(through=True)), S()) == "hands: through FX"
     assert G.hands_words(w, S(hands=False)) == "hands: off"
-    assert G.hands_words(G.Wiring(blend="depth"), S()) == "hands: over · depth-aware"
-    assert G.hands_words(G.Wiring(blend="add"), S()) == "hands: over · added"
+    assert G.hands_words(wired_wiring(G.Wiring(blend="depth")), S()) == \
+        "hands: over · depth-aware"
+    assert G.hands_words(wired_wiring(G.Wiring(blend="add")), S()) == "hands: over · added"
     lines = G.Wiring(hands="scene", draw="lines")
-    assert G.hands_words(lines, S()) == "hands: in the scene as lines"
+    assert G.hands_words(wired_wiring(lines), S()) == "hands: in the scene as lines"
     assert G.hands_words(wiring(lines, Shows(scene=False, through=True)), S(scene=False)) == \
         "hands: through FX as lines"
     two = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
-    assert G.hands_words(two, S()) == "hands: in the scene (1)"
+    assert G.hands_words(wired_wiring(two), S()) == "hands: in the scene (1)"
     assert G.hands_words(wiring(two, Shows(scene=False)), S(scene=False)) == "hands: over (2)"
-    assert G.layer_words(DEFAULT) == ""
-    assert G.lookback_words(DEFAULT) == "history: the scene"
-    assert G.lookback_words(G.Wiring(history="scene+hands")) == \
+    assert G.layer_words(TODAY) == ""
+    # (plan 36 T4: a look-back drawn — the old words' on, as "trail")
+    assert G.lookback_words(TODAY) == "history: nothing"
+    assert G.lookback_words(wired_wiring(G.Wiring(), "trail")) == "history: the scene"
+    assert G.lookback_words(wired_wiring(G.Wiring(history="scene+hands"), "trail")) == \
         "history: the scene · with the hands"
-    assert G.lookback_words(G.Wiring(hands="scene")) == "history: the scene · with the hands"
+    assert G.lookback_words(wired_wiring(G.Wiring(hands="scene"), "trail")) == \
+        "history: the scene · with the hands"
     spec = G.read_graph(json.loads(FIXTURE.read_text())["graph"])
     assert G.graph_words(spec) == \
         "graph: hands 1 in the scene as lines · history with the hands"
@@ -265,9 +272,10 @@ def test_the_output_pages_shows_line_says_the_wiring():
     lines and blend; the default wiring's words are today's, unchanged."""
     from hyperspace.ui import output_shows
 
-    assert output_shows(S(), False, True, 1.0, DEFAULT) == \
-        output_shows(S(), False, True, 1.0) == ("scene + hands over the effects", "")
-    lines = G.Wiring(hands="scene", draw="lines")
+    assert output_shows(S(), False, True, 1.0, TODAY) == ("scene + hands over the effects", "")
+    # (plan 36 T3: no wiring is the empty frame)
+    assert output_shows(S(), False, True, 1.0)[0].startswith("black")
+    lines = wired_wiring(G.Wiring(hands="scene", draw="lines"))
     assert output_shows(S(), True, True, 1.0, lines) == (
         "scene + hands: in the scene as lines", "")
     # (plan 35 T4: the scene off, the hands over, is the output's wiring; a
@@ -277,7 +285,7 @@ def test_the_output_pages_shows_line_says_the_wiring():
     assert output_shows(S(scene=False), True, True, 1.0, lines)[1] == "no hand"
     thru = wiring(G.Wiring(blend="depth"), Shows(through=True))
     assert output_shows(S(), True, False, 1.0, thru) == ("scene", "")
-    assert output_shows(S(), True, True, 1.0, G.Wiring(blend="depth")) == (
+    assert output_shows(S(), True, True, 1.0, wired_wiring(G.Wiring(blend="depth"))) == (
         "scene + hands over the effects · depth-aware", "")
     two = wiring(G.Wiring(hands="scene", extra=(G.HandsAt(2),)),
                  Shows(scene=False, through=True))
@@ -296,11 +304,13 @@ def test_the_lookback_page_says_what_the_history_holds():
     """Plan 35 T6: "records:" names the source of the wire into
     `lookback.capture` (the hands held: the composite laying them on);
     `lookback_words` keeps the longer words for the combo's hover."""
-    from hyperspace import graphmigrate as M
     from hyperspace.ui_lookback import capture_line
 
-    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands")))
-    assert capture_line(None) == "records: Scene"
+    held = G.read_graph(M.wired_of(G.Wiring(history="scene+hands"), look="trail"))
+    assert capture_line(None) == "records: nothing — the echoes fade"   # (plan 36 T3)
+    assert capture_line(G.read_graph(M.wired_of(G.Wiring()))) == (
+        "records: nothing — the echoes fade")        # (plan 36 T4: no look-back drawn)
+    assert capture_line(G.read_graph(M.wired_of(G.Wiring(), look="trail"))) == "records: Scene"
     assert capture_line(held) == "records: Composite"
     assert G.lookback_words(held.wiring()) == "history: the scene · with the hands"
 
@@ -382,8 +392,8 @@ def test_a_second_acid_is_its_own_params_clock_and_place_in_the_chain():
     assert fx.phase["acid.2"] == 2 * fx.phase["acid"] > 0
     # (plan 33 T7: no order of its own — where it runs is its wires; both on,
     # a load lands them in the run by their file's @order, then by name)
-    from hyperspace.graphmigrate import wiring_of
-    assert wiring_of(fx).run == ("acid", "acid.2")
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
+    assert wiring_for(state_values(fx), specs_of(fx), wired=False).run == ("acid", "acid.2")
     assert "fx.acid.2.order" not in reg
     # a hot edit re-declares the acid file: the second keeps its ids
     declare(reg, fx, {"acid"})
@@ -415,20 +425,21 @@ def _fixture_in(home: Path) -> None:
 
 
 def test_no_factory_preset_carries_a_graph_and_each_loads_as_before(tmp_path):
-    """Every factory preset loads with the default graph, no graph note,
-    a document with no `graph` key and a clean dot; no file under the
-    library has one (no preset is edited or added in this run)."""
+    """Every factory preset loads with today's frame, no graph note and a
+    clean dot. Plan 36 T3: each file is its source's `/7`, so it carries
+    that frame as its graph (its source has none) and lands it as it is."""
     rig = boot(tmp_path)
     stub = Stub()
     rig.presets.graph.attach(stub)
-    for path in sorted((FACTORY / "presets").glob("*.json")):
+    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):
         assert "graph" not in json.loads(path.read_text()), path.name
     for slug in preset.FACTORY_PRESETS:
         rig.lib.load(PRESETS, slug)
         name = rig.lib.current(PRESETS)
         assert not [n for n in rig.presets.notes if n.startswith("graph")], slug
-        # plan 33 T3: the run as wires, the file's section (none) kept
-        assert rig.presets.graph.doc is None and _bare(stub.wiring) == DEFAULT
+        # plan 33 T3: the run as wires; plan 36 T3: the file's own section
+        own = json.loads((FACTORY / "presets" / f"{slug}.json").read_text())["graph"]
+        assert rig.presets.graph.doc == own and _bare(stub.wiring) == DEFAULT
         assert _old(stub.wiring).run is not None and stub.wiring.wired
         # (row 394: the save is `/6`, the frame the load landed)
         doc = rig.presets.document(name)
@@ -454,9 +465,11 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     # the scene — the capture wire `scene → lookback.capture` says both
     # `holds` would, the hands already in its picture)
     assert _bare(stub.wiring) == G.Wiring(hands="scene", draw="lines")
-    assert G.Wire("scene", "lookback.capture") in stub.wiring.wires
+    assert G.Wire("scene", "lookback.image") in stub.wiring.wires     # (plan 36 T4)
     assert _old(stub.wiring).run == ("acid",)          # plan 33 T3: its run, as wires
-    assert rig.reg["fx.acid.on"].value and rig.reg["dream.on"].value
+    # (plan 36 T4: its look-back on is drawn; `dream.on` is the dream's, and
+    # with a dream mix of 0 there is none)
+    assert rig.reg["fx.acid.on"].value and not rig.reg["dream.on"].value
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("hands-lines")
     assert doc[preset.GRAPH_KEY] == rig.presets.graph.free_doc()
@@ -464,15 +477,16 @@ def test_the_proof_preset_loads_its_graph_from_a_scratch_library(tmp_path):
     text = preset.dumps(doc)
     first = json.dumps(doc[preset.GRAPH_KEY]["nodes"][0])
     assert f'"graph": {{"frame": "wired",\n "nodes": [\n  {first}' in text
-    # another preset with no graph: back to the default, the section gone
+    # another preset with today's frame: back to the default
     rig.lib.load(PRESETS, "party-tumble")
-    assert _bare(stub.wiring) == DEFAULT and rig.presets.graph.doc is None
+    assert _bare(stub.wiring) == DEFAULT
 
 
 def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
     """A section this build cannot read never stops the load: the values
-    land, the graph is the default, the note says why, and a save keeps
-    the section as the file had it (a newer build's nodes are not lost)."""
+    land, the graph is — plan 36 T3 — the empty frame (black, never a
+    default), the note says why, and a save keeps the section as the file
+    had it (a newer build's nodes are not lost)."""
     rig = boot(tmp_path)
     stub = Stub()
     rig.presets.graph.attach(stub)
@@ -480,10 +494,10 @@ def test_an_unknown_node_kind_is_a_note_and_the_default_graph(tmp_path):
     put(rig.home, "Odd", values={"view.bright": 3.0}, graph=section)
     rig.lib.load(PRESETS, "Odd")
     assert rig.reg["view.bright"].value == 3.0
-    assert stub.wiring == DEFAULT and rig.presets.graph.spec is None
+    assert stub.wiring == G.EMPTY and rig.presets.graph.spec is None
     note = rig.presets.notes[0]
     assert note.startswith("graph: unknown node kind 'teapot'") and \
-        note.endswith("; the default graph")
+        note.endswith("; not read — black")
     assert rig.presets.document("Odd")[preset.GRAPH_KEY] == section
     assert not rig.lib.is_dirty(PRESETS)
 
@@ -503,16 +517,20 @@ def test_a_preset_says_two_acids_in_data_and_carries_the_seconds_values(tmp_path
     reg = rig.reg
     assert missing == [] and rig.presets.notes == []
     assert reg["fx.acid.twist"].value == 0.3 and reg["fx.acid.2.twist"].value == 1.9
-    assert G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ("acid", "acid.2")
+    assert G.run_back(rig.presets.graph.spec, "output.all.image") == ("acid", "acid.2")
     assert not rig.lib.is_dirty(PRESETS)
     doc = rig.presets.document("Twice")
     assert doc["graph"] == rig.presets.graph.free_doc()          # (row 394: the frame)
     assert {"kind": "effect", "file": "acid", "instance": 2} in doc["graph"]["nodes"]
     assert doc["values"]["fx.acid.2.twist"] == 1.9
     # an id of an instance the graph does not hold is unknown, as ever
+    # (plan 36 T3: an old file's — the migration drops it, the instance
+    # being in no section; a `/7`'s is unknown, as ever)
     put(rig.home, "Stray", values={"fx.acid.3.twist": 1.0})
-    assert rig.lib.load(PRESETS, "Stray") == ["fx.acid.3.twist"]
-    assert "fx.acid.2.twist" not in reg and G.run_of(rig.presets.graph.spec, "lookback", "output.all.image") == ()
+    assert rig.lib.load(PRESETS, "Stray") == [] and "fx.acid.3.twist" not in rig.reg
+    put(rig.home, "Stray7", schema="hyperspace.preset/7", values={"fx.acid.3.twist": 1.0})
+    assert rig.lib.load(PRESETS, "Stray7") == ["fx.acid.3.twist"]
+    assert "fx.acid.2.twist" not in reg and G.run_back(rig.presets.graph.spec, "output.all.image") == ()
     rig.lib.load(PRESETS, "Twice")
     assert reg["fx.acid.2.twist"].value == 1.9
 
@@ -573,9 +591,12 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
     reg = rig.reg
     twice = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}]}
     put(rig.home, "Twice", graph=twice, values={"fx.acid.2.twist": 1.9})
-    put(rig.home, "Plain", values={"fx.acid.2.twist": 0.5, "view.bright": 3.0})
-    put(rig.home, "Newer", graph={"nodes": [{"kind": "cloud", "role": "kinect"}]},
-        values={"fx.acid.2.twist": 0.5})
+    # (plan 36 T3: `/7` files — an old one's stray instance values are
+    # dropped by its migration, a `/7`'s are unknown ids)
+    put(rig.home, "Plain", schema="hyperspace.preset/7",
+        values={"fx.acid.2.twist": 0.5, "view.bright": 3.0})
+    put(rig.home, "Newer", schema="hyperspace.preset/7",
+        graph={"nodes": [{"kind": "cloud", "role": "kinect"}]}, values={"fx.acid.2.twist": 0.5})
     for other in ("Plain", "Newer"):
         rig.lib.load(PRESETS, "Twice")
         assert reg["fx.acid.2.twist"].value == 1.9
@@ -598,7 +619,7 @@ def test_an_instance_id_is_sorted_against_the_graph_the_load_lands(tmp_path):
     finally:
         rig.lib.resolved = real
     assert reg["fx.acid.2.twist"].value == 1.9 and rig.presets.graph.spec is not None
-    assert rig.reg.fx_state.instances == {"acid": 2} and rig.lib.current(PRESETS) == "Twice"
+    assert "acid.2" in rig.reg.fx_state.specs and rig.lib.current(PRESETS) == "Twice"
 
 
 def test_a_second_hands_nodes_settings_survive_reopening_the_show(tmp_path):
@@ -700,10 +721,12 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
     fx = two.fx.state
     fx.set_instances({"acid": 2})
     fx.values["acid.2"].update(on=True, twist=1.5)
-    two.wiring = wiring_of(fx)                   # plan 33 R23: both in the run
+    two.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: both in the run
     b = run(ctx, two, views(ctx, S()))[0]
     assert two.stats["chain_runs"] == 1 and not np.array_equal(a, b)
-    assert list(two.fx._progs) == ["acid"] and two.wiring.run == ("acid", "acid.2")
+    assert list(two.fx._progs) == ["acid"]
+    assert G.run_back(G.read_graph(M.wired_of(G.Wiring(run=("acid", "acid.2")))), "output.all.image") == ("acid", "acid.2")
+    assert {(w.src, w.dst) for w in two.wiring.wires} >= {("acid", "acid.2.image")}
     # the second acid's own params act: the same rig twice, only
     # acid.2's twist changed (acid's values untouched) — another frame
     first = dict(fx.values["acid"])
@@ -714,7 +737,7 @@ def test_two_acids_run_in_one_chain_on_one_program(ctx):
         st.set_instances({"acid": 2})
         st.values["acid"].update(first)
         st.values["acid.2"].update(on=True, twist=twist)
-        r.wiring = wiring_of(st)
+        r.wiring = wired_wiring(wiring_of(st))
         return run(ctx, r, views(ctx, S()))[0], st
 
     c, st_c = frame(0.2)
@@ -739,7 +762,7 @@ def test_a_second_hands_node_is_its_own_ghost_on_the_glass(ctx):
     r = rig(ctx, effects=())
     st2 = GhostState(on=True, alpha=0.25)
     r.ghost_states = {"ghost.2": st2}
-    r.wiring = G.Wiring(hands="scene", extra=(G.HandsAt(2),))
+    r.wiring = wired_wiring(G.Wiring(hands="scene", extra=(G.HandsAt(2),)))
     vs = views(ctx, *wire_switches(r, S(), S(scene=False)))    # (plan 35 T4: the glass's wiring)
     pics = run(ctx, r, vs, frames=PassTimer.LAG + 3)
     g2 = r.ghost_of("ghost.2")
@@ -753,7 +776,7 @@ def test_a_second_hands_node_is_its_own_ghost_on_the_glass(ctx):
         assert {"hands", "scene", "hands.2.layer"} <= set(r.stats["gpu_ms"])
     assert "hands.2" not in r._graph.timed            # its time is its layer's line
     # back to one hands node: the second Ghost is released with its graph
-    r.wiring = G.Wiring()
+    r.wiring = wired_wiring(G.Wiring())
     run(ctx, r, vs, frames=1)
     assert "ghost.2" not in r._ghosts
 
@@ -768,7 +791,7 @@ def test_hands_as_lines_draw_their_edges(ctx):
 
     def pic(w, sw):
         r = rig(ctx, effects=())
-        r.wiring = w
+        r.wiring = wired_wiring(w)
         return run(ctx, r, views(ctx, *wire_switches(r, sw)))[0], r     # (plan 35 T4)
 
     for sw, flag in ((S(scene=False), "layer"), (S(), "in_scene")):

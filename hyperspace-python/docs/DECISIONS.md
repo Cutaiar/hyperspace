@@ -308,6 +308,20 @@ replaces a row, rewrite that row instead of adding a new one.
 | **GRAPH deletes everything.** The refusals left are type errors, loops, the camera and a cloud. The canvas is the section, grouped by primitive. OUTPUT and LOOKBACK are views that edit wires. | `graphview.render_unwire`, `render_drop`, `AREAS` | rows 388–390 |
 | **Point clouds stay the rig's**, drawn in every scene. | `graph.build_graph` | row 391 |
 
+## The WYSIWYG graph (plan 36)
+
+| Decision | Where | Who |
+|---|---|---|
+| **The graph on GRAPH is the whole truth.** What is drawn is what is saved is what runs: no load-time fill-in, no hidden edge, no rewiring the user did not do, no layout that runs by itself. A preset with no `graph` section loads empty. | `graphmigrate`, `graph.build_graph` | plan 36 (owner, 2026-10-26) |
+| **An output shows only its own wires.** Nothing is inherited port by port; the stand-down is deleted; a drag changes the one wire it lands; a window's hands mute removes the hands layer from that window's chain. | `graph.window_ports`, `_Build._mute_hands` | rows 396, 405 |
+| **All outputs is a drawn bus**: one rig-owned cable per window and port (image, hands, guide, depth), shipped wired, cut by Delete, saved in the show (`rig`), re-added by dragging from All outputs' pin. | `graph.RigWires`, `library.Project.rig` | row 396 (D1) |
+| **The hidden edges are cables.** `pattern → shape.faces` (unwired is plain faces), `scene.cover → lookback.cover`, `hands → hands.layer` and `hands.guide`, `cloud.N → scene.geometry`, `scene.depth → composite.depth` with `blend` on each composite. | `graph.py` ports; `graphmigrate` | plan 36 W2 |
+| **Schema `/7`.** A save writes `hyperspace.preset/7` and nothing older; reading `/4`–`/6` is the explicit one-way migration, with a note on load. The factory files are `/7`; the library is migrated by `tools/migrate_library.py`, both Macs on this build. | `preset.WIRED_SCHEMA`, `tools/migrate_library.py` | rows 400–402 (D5) |
+| **Two nodes, not one.** `lookback` is picture in → its trail out (its own ring, optional `cover`); `dream` is picture in → dreamed picture out, `dream.on` off passes through and idles the worker, one live dream. A composite lays either over the picture. | `graph.LookbackAt`, `graph.DreamNode` | rows 397, 398 (D2, D3) |
+| **A new preset is `shape → scene → output.all.image`**, plain faces; the picker's starters (scene chain, tracers, tracers + dream, dream on a picture, a channel to the backdrop) are pre-wired groups, every node and cable visible. | `preset.Presets.new`, `graphview.STARTERS` | row 411 |
+| **"Preset only"** hides every node not in the preset's section or cabled to one (an uncabled controller, modulation or macro, a group node and the camera hide), on by default for every preset. | `graphview.preset_only`, `ui_graph.PRESET_ONLY` | rows 399, 413 (D4) |
+| Dream fidelity, deferred: the migrated dream dreams the occluded trail; a dream `submit` port and an occluder after the dream would restore the old look. | — | row 412 (owner) |
+
 ## Face patterns
 
 | Decision | Where | Who |

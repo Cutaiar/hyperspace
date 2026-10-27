@@ -103,8 +103,11 @@ by its config name), its hover what it does with its id and its params'
 prefix (`graphview.hover_of`), the side panel's header the same
 (`graphview.side_head`). Every node and wire of it deletes; only a type
 error and a loop refuse, and a window keeps itself (its wires go). The
-picker is grouped by primitive — the scene starter (`shape → scene → All
-outputs` in one gesture), scene ▸, look-back ▸, pictures ▸, effects ▸,
+picker is grouped by primitive — starters ▸ (plan 36 T5: the scene chain
+`shape → scene → All outputs`, tracers, tracers + dream, dream on a
+picture, channel to backdrop, each a pre-wired group in one gesture, laid
+left to right where the menu opened; a picture cable's menu has the
+tracers and dream ones, on its picture), scene ▸, look-back ▸, pictures ▸, effects ▸,
 copy of ▸ — a frame node the section has drawn disabled
 (`render_picker`).
 
@@ -164,10 +167,10 @@ COLOURS = {
     graphview.MASK: imgui.ImVec4(0.72, 0.52, 1.0, 1.0),
 }
 DORMANT_ALPHA = 0.22
-THIN, THICK = 1.0, 4.5   # a value cable at rest and at full reading
-WIRE = 2.5               # a render cable, a trigger
-NODE_W = 190.0           # a node's inner width
-PIN = 9.0                # a pin's square
+THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
+WIRE = 3.0               # a render cable, a trigger
+NODE_W = 190.0 * graphview.SCALE    # a node's inner width
+PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
 SIDE_W = 320.0           # the side column, when the page is wide enough for it
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
@@ -197,11 +200,23 @@ FAINT_TIP = (f"{graphview.REACHES_NOTHING}: no path from it ends at an output, t
              "the pattern, the backdrop or the run — it never runs. Wire it in, or drop "
              "it on a picture cable")
 BUNDLE_STEP = 0.5        # px a cable, past the first
-BUNDLE_MAX = 7.0         # the cap: a bundle of ten cables or more (2.5 + 9 × 0.5)
+BUNDLE_MAX = 7.5         # the cap: a bundle of ten cables or more (3 + 9 × 0.5)
 EXPAND_TIP = "Expand this node: a row per port, its real cables"
 COLLAPSE_TIP = "Collapse this node: its title and a few lines, one wire per neighbour"
 ALL_TIP = ("Expand every node (a row per port, every cable) — or collapse them all back "
            "to a handful of boxes and wires")
+# plan 36 T6 (D4): the **preset only** chip starts lit, for every preset
+# (a constant so the tests' autouse fixture can start them on the full canvas)
+PRESET_ONLY = True
+PRESET_ONLY_TIP = ("Lit: only the preset's own nodes, what is wired to them and the windows "
+                   "they reach. Controllers, modulation and macros are left off the canvas "
+                   "(nothing is changed, only not drawn). Click to show everything.")
+# 2026-10-26: output 1's picture behind the canvas, fixed to the page (not
+# the canvas: it neither pans nor zooms), the editor's own ground laid
+# over it at 1 − `backdrop_alpha`
+BACKDROP_TIP = ("Output 1's picture behind the nodes, fixed to the page — the slider "
+                "beside it sets how strongly it shows")
+BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # 2026-10-26 (the trackpad; ported from Dan's graph-quick-wins): two
 # fingers moving pan the canvas — the editor itself only zooms on a wheel
 # — and ⌘ with them zooms. GLFW gives a trackpad's scroll as a tenth of
@@ -231,7 +246,11 @@ def _state(panel) -> dict:
     for k, make in (("open", set), ("bundles", dict), ("wires", int), ("land", lambda: None)):
         st.setdefault(k, make())
     st.setdefault("idle_open", set())       # plan 28 N9: the areas whose idle line is open
+    st.setdefault("backdrop", True)         # 2026-10-26: output 1 behind the canvas
+    st.setdefault("backdrop_alpha", BACKDROP_ALPHA)
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
+    st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
+    st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
     return st
 
 
@@ -384,7 +403,20 @@ def drawn_node(st: dict, n: graphview.VNode) -> bool:
     """Is node `n` drawn (plan 28 N9)? Every node but an idle one
     (`graphview.VNode.idle`: nothing in, nothing out), which is drawn only
     while its area's idle line is open."""
+    if n.id in st.get("hide", ()):         # plan 36 T6: left off by the preset-only view
+        return False
     return not n.idle or n.area in st.setdefault("idle_open", set())
+
+
+def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
+    """Plan 36 T6: the node ids the **preset only** chip leaves off the
+    canvas (`graphview.preset_only` draws the rest); none while it is off.
+    Drawing only: no wire, table or position changes, and the layout
+    (`areas_of`) still lays every node out, so hiding moves nothing."""
+    if not st.get("preset_only", PRESET_ONLY):
+        return frozenset()
+    keep = graphview.preset_only(view)
+    return frozenset(n.id for n in view.nodes if n.id not in keep)
 
 
 def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
@@ -484,6 +516,7 @@ def tidy(panel, st: dict, view: graphview.View) -> str:
     st["flip"].clear()
     before = dict(st["applied"])
     forget(panel, view)
+    st["sat"] = {}                          # the layout's own places go too
     auto = layout_of(st, view)
     moved = sum(1 for n in view.nodes if drawn_node(st, n) and (
                 before.get(n.id) is None or tuple(round(v) for v in before[n.id])
@@ -505,6 +538,7 @@ def page(panel, dt: float) -> None:
         imgui.text_disabled("no router attached")
         return
     st = _state(panel)
+    st["hide"] = hidden_ids(st, view)       # plan 36 T6: before anything asks `drawn_node`
     sel = _selection(st, view)
     if sel is not None and escaped():           # Esc closes the details: nothing selected
         st["deselect"], sel = True, None
@@ -527,8 +561,9 @@ def page(panel, dt: float) -> None:
     st["over_details"] = bool(sel) and (pos[0] <= mouse.x < pos[0] + size[0]
                                         and pos[1] <= mouse.y < pos[1] + size[1])
     canvas = imgui.ImVec2(max(avail.x, 80.0), max(avail.y, 80.0))
+    shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
-    _canvas(panel, st, view, canvas)
+    _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
     if sel:                             # its bottom is the canvas's: the page ends where it did
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
@@ -706,8 +741,11 @@ def head_line(st: dict, view: graphview.View) -> str:
     stand for, how many are live."""
     live = sum(1 for c in view.cables if not c.dormant)
     drawn = sum(1 for n in view.nodes if drawn_node(st, n))
-    idle = sum(1 for n in view.nodes if n.idle)
-    nodes = f"{drawn} nodes" + (f" ({idle} idle)" if idle else "")
+    hide = st.get("hide", ())
+    idle = sum(1 for n in view.nodes if n.idle and n.id not in hide)
+    off = sum(1 for n in view.nodes if n.id in hide)
+    nodes = (f"{drawn} nodes" + (f" ({idle} idle)" if idle else "")
+             + (f" · {off} hidden" if off else ""))
     return (f"{nodes}  ·  {st['wires']} wires  ·  {len(view.cables)} cables"
             f"  ·  {live} live")
 
@@ -730,6 +768,13 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         st["tidy"] = True
     if imgui.is_item_hovered():
         ui.tooltip(TIDY_TIP)
+    imgui.same_line()
+    if ui.lit_chip("preset only##graph", st["preset_only"]):
+        st["preset_only"] = not st["preset_only"]
+    if imgui.is_item_hovered():
+        ui.tooltip(PRESET_ONLY_TIP)
+    imgui.same_line()
+    _backdrop_chips(st)
     label = beside_chip(selected, width, st["beside"])
     if label is not None:
         imgui.same_line()
@@ -752,6 +797,53 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         imgui.text_disabled(EDIT_HINT)
 
 
+def _backdrop_chips(st: dict) -> None:
+    """The head's **output behind** chip and, while it is lit, its alpha."""
+    if ui.lit_chip("output behind##graph", st["backdrop"]):
+        st["backdrop"] = not st["backdrop"]
+    if imgui.is_item_hovered():
+        ui.tooltip(BACKDROP_TIP)
+    if st["backdrop"]:
+        imgui.same_line()
+        imgui.set_next_item_width(imgui.get_font_size() * 6)
+        _, st["backdrop_alpha"] = imgui.slider_float("##graph.backdrop", st["backdrop_alpha"],
+                                                     0.0, 1.0, "%.2f")
+        if imgui.is_item_hovered():
+            ui.tooltip(BACKDROP_TIP)
+
+
+def backdrop_rect(origin: tuple[float, float], avail: tuple[float, float],
+                  pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where output 1's picture `pic` (w, h) lies on the page's canvas at
+    `origin`, `avail` big: fitted whole and centred (letterboxed) —
+    (top-left, bottom-right), screen pixels."""
+    aw, ah = max(avail[0], 1.0), max(avail[1], 1.0)
+    pw, ph = max(pic[0], 1), max(pic[1], 1)
+    k = min(aw / pw, ah / ph)
+    w, h = pw * k, ph * k
+    x, y = origin[0] + (aw - w) / 2, origin[1] + (ah - h) / 2
+    return (x, y), (x + w, y + h)
+
+
+def _backdrop(panel, st: dict, origin, avail) -> bool:
+    """Output 1 behind the canvas this frame (and asked for again next
+    frame): drawn on the page's own draw list before the editor opens, so
+    the editor's ground — faded by `_canvas` — and every node lie over it.
+    True when it was drawn."""
+    pv = getattr(panel, "preview", None)
+    if not st["backdrop"] or pv is None:
+        return False
+    pv.want()
+    tex = pv.tex
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return False
+    a, b = backdrop_rect(origin, avail, tuple(tex.size))
+    # GL's rows: bottom first, so the picture is drawn upside down in v
+    imgui.get_window_draw_list().add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a),
+                                           imgui.ImVec2(*b), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+    return True
+
+
 def _area_chips(st: dict) -> None:
     """The head's area chips (review round 1): CONTROLLERS · AUDIO ·
     MODULATION · MEDIA · SCENE · LOOK-BACK · EFFECTS · OUTPUTS (plan 35 G),
@@ -771,15 +863,23 @@ def _area_chips(st: dict) -> None:
 
 def _place(panel, st: dict, view: graphview.View) -> None:
     """Every node where it belongs this frame: the preset's or the show's
-    position, else its place in its area (`areas_of`) — and each area's
-    idle line; set on the canvas only when that
-    differs from what was last set, so a node being dragged is left alone.
-    A tidy (`tidy`) collapses every node and forgets the canvas's positions
-    in both maps first."""
+    position, else where it already sits on the canvas, else its place in
+    its area (`areas_of`) — and each area's idle line; set on the canvas
+    only when that differs from what was last set, so a node being dragged
+    is left alone. The layout never moves a node that is on the canvas: a
+    node dragged away leaves its spot empty (2026-10-26: no layout runs on
+    its own) — only a new preset, or the head's **tidy** (`tidy`, which
+    collapses every node and forgets the positions in both maps), lays
+    them out."""
     if st["tidy"]:
         st["tidy"] = False
         tidy(panel, st, view)
     pre, show = _layouts(panel)
+    if st.get("layout_of") != id(pre):        # another preset: its own layout
+        st["layout_of"] = id(pre)
+        st["sat"] = {}
+    sat = st.setdefault("sat", {})
+    px, py = panned(st)                        # the canvas as the fingers moved it (whole units)
     stored = {**(show or {}), **(pre or {})}
     k = (id(view), frozenset(st["open"]), frozenset(st["flip"]), st["patched_only"],
          frozenset(st["folds"]), frozenset(st["idle_open"]),
@@ -794,7 +894,8 @@ def _place(panel, st: dict, view: graphview.View) -> None:
     for n in view.nodes:
         if not drawn_node(st, n):              # N9: an idle node is not on the canvas
             continue
-        xy = stored.get(n.id) or auto.get(n.id) or (0.0, 0.0)
+        xy = stored.get(n.id) or sat.get(n.id) or auto.get(n.id) or (0.0, 0.0)
+        sat.setdefault(n.id, (float(xy[0]), float(xy[1])))
         target = (float(xy[0]) + px, float(xy[1]) + py)
         if applied.get(n.id) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + n.id)), imgui.ImVec2(*target))
@@ -823,7 +924,9 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         if was is None or (round(was[0]), round(was[1])) == now:
             continue
         applied[n.id] = now
-        m = pre if graphview.home(n) == graphview.PRESET else show
+        # (plan 36 T5: a node the preset's map already places — a new
+        # preset's All outputs — moves there, or that entry would hold it)
+        m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
         if m is not None:
             px, py = panned(st)                 # saved in layout units, not panned ones
             m[n.id] = [round(now[0] - px), round(now[1] - py)]
@@ -832,9 +935,20 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
             dropped(panel, view, n.id, (now[0] + size.x / 2, now[1] + size.y / 2))
 
 
-def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
+def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
+            through: float = 0.0) -> None:
+    """The editor, its ground faded to 1 − `through` over the backdrop."""
     ed.set_current_editor(editor(panel))
+    if through > 0.0:
+        bg = ed.get_style().color_(ed.StyleColor.bg)
+        ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
+    corner = imgui.get_cursor_screen_pos()
     ed.begin("##graph", size)
+    # plan 36 T5: the canvas point at the view's top-left corner, kept for
+    # what a new preset lays out where you are looking (`in_view`)
+    seen = ed.screen_to_canvas(corner)
+    st["seen"] = (float(seen.x), float(seen.y))
+    imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
@@ -845,7 +959,10 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
             _node(st, n, drawn)
     _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
-        _idle_line(st, view, area, lay.idle.get(area, []))
+        ids = lay.idle.get(area, [])
+        if ids and all(i in st["hide"] for i in ids):    # plan 36 T6: nothing there to say
+            continue
+        _idle_line(st, view, area, ids)
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
     wires = 0
@@ -874,7 +991,10 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2) -> None:
     _menus(panel, st, view)
     _hover(st, view)
     _moved(panel, st, view)
+    imgui.pop_font()
     ed.end()
+    if through > 0.0:
+        ed.pop_style_color()
 
 
 def effect_errors(panel, view: graphview.View) -> dict[str, str]:
@@ -1282,6 +1402,7 @@ def render_edit(panel) -> graphview.Edit:
     rg = getattr(getattr(panel, "renderer", None), "_graph", None)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
+    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     return e
 
 
@@ -1368,8 +1489,8 @@ LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back �
 
 def render_picker(panel, at=None) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
-    (plan 35 G, `graphview.PICKER_GROUP`): the scene starter at the top,
-    then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
+    (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
+    T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
     pictures ▸ (R28's switch over the channels under the switch), effects ▸
     and copy of ▸. A frame node the section has already — the scene, the
     shape, the look-back, the backdrop, the pattern, an echo, the dream —
@@ -1382,11 +1503,6 @@ def render_picker(panel, at=None) -> None:
     for group in graphview.PICKER_GROUPS:
         mine = [it for it in items if graphview.PICKER_GROUP.get(it[0]) == group]
         if not mine:
-            continue
-        if not group:
-            for kind, f, label in mine:
-                if imgui.menu_item_simple(label):
-                    add_render(panel, e, kind, f, at)
             continue
         if not imgui.begin_menu(f"{group}##graph.pick"):
             continue
@@ -1436,17 +1552,35 @@ def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
 
 def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):
     """A render node the picker adds (`Edit.add_node`), one undo step, put
-    where the menu opened. Returns the refusal, or None."""
+    where the menu opened — a starter's group (plan 36 T5) laid left to
+    right from there. Returns the refusal, or None."""
     why = _render_said(panel, e, lambda e: e.add_node(kind, file))
-    if why is None and e.added:
-        _place_new(panel, f"render:{e.added}", at)
+    if why is None:
+        _place_group(panel, e, at)
     return why
 
 
-def insert_effect(panel, cable: graphview.VCable, file: str) -> str | None:
+def add_starter(panel, which: str, cable=None, at=None) -> str | None:
+    """A starter (plan 36 T5, `Edit.starter`) — on picture cable `cable`,
+    from its menu, or (None) from the picker — one undo step, its new nodes
+    laid left to right from where the menu opened. Returns the refusal, or
+    None."""
+    e = render_edit(panel)
+    why = _render_said(panel, e, lambda e: e.starter(which, cable))
+    if why is None:
+        _place_group(panel, e, at)
+    return why
+
+
+def insert_effect(panel, cable: graphview.VCable, file: str, at=None) -> str | None:
     """A render cable's "insert effect ▸ <file>" (plan 33 U): the next
-    instance of `file` onto it, one undo step. Returns the refusal, or None."""
-    return _render_said(panel, render_edit(panel), lambda e: e.insert_effect(cable, file))
+    instance of `file` onto it, one undo step, put where the menu opened
+    (on the cable), never left to the layout. Returns the refusal, or None."""
+    e = render_edit(panel)
+    why = _render_said(panel, e, lambda e: e.insert_effect(cable, file))
+    if why is None and e.added:
+        _place_new(panel, f"render:{e.added}", at)
+    return why
 
 
 def render_node_menu(panel, n) -> None:
@@ -1883,9 +2017,11 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     # of their own here: `_act` pushed one; the canvas's render gestures use
     # `render_edit` instead)
     lib = getattr(panel, "library", None)
-    return graphview.Edit(table, panel.reg, router, view, profile,
-                          graph=getattr(getattr(lib, "presets", None), "graph", None),
-                          render=getattr(getattr(panel, "renderer", None), "_graph", None))
+    e = graphview.Edit(table, panel.reg, router, view, profile,
+                       graph=getattr(getattr(lib, "presets", None), "graph", None),
+                       render=getattr(getattr(panel, "renderer", None), "_graph", None))
+    e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
+    return e
 
 
 def _settle(panel, res):
@@ -1954,6 +2090,34 @@ def _place_new(panel, nid: str, at) -> None:
     if at and pre is not None:
         px, py = panned(_state(panel))          # the menu's point is the panned canvas's
         pre[nid] = [round(at[0] - px), round(at[1] - py)]
+
+
+def _place_group(panel, e: graphview.Edit, at) -> None:
+    """A starter's new nodes (plan 36 T5, `Edit.placed`) laid left to right
+    from where the menu opened (`graphview.chain_layout`), in the step the
+    starter pushed; with no point, the last add's node alone, as before."""
+    if e.placed:
+        if at:
+            for nid, xy in graphview.chain_layout(e.placed, at).items():
+                _place_new(panel, nid, xy)
+    elif e.added:
+        _place_new(panel, f"render:{e.added}", at)
+
+
+# a new preset's chain sits this far in from the view's top-left corner
+IN_VIEW_MARGIN = (graphview.GAP, graphview.TITLE_H)
+
+
+def in_view(panel) -> tuple[float, float]:
+    """Where a new preset's chain goes (plan 36 T5, W5: "laid out where you
+    are looking"), in layout units: the canvas point at the GRAPH page's
+    view's top-left corner, last drawn (`st["seen"]`; the canvas origin
+    before the page has drawn), in by `IN_VIEW_MARGIN`, less the page's
+    pan (`st["pan"]`: a stored position is drawn moved by it)."""
+    st = _state(panel)
+    sx, sy = st.get("seen") or (0.0, 0.0)
+    px, py = panned(st)
+    return (round(sx + IN_VIEW_MARGIN[0] - px), round(sy + IN_VIEW_MARGIN[1] - py))
 
 
 def add_modifier(panel, kind: str, at=None):
@@ -2490,7 +2654,7 @@ def menu(panel, st: dict, view: graphview.View) -> None:
         if b is not None:
             _bundle_menu(panel, st, view, b)
         elif c is not None:
-            _cable_menu(panel, view, c)
+            _cable_menu(panel, view, c, st["menu_at"])
     elif what == "node":
         n = view.node(name)
         if n is not None:
@@ -2522,7 +2686,7 @@ def _pin_menu(panel, view: graphview.View, pin: str) -> None:
     panel._ctx_learn_block(a, panel._real(a))
 
 
-def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
+def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> None:
     """A cable's menu: insert a modifier of a kind (a route's or a
     modifier input's), delete."""
     imgui.text_disabled(cable_tip(view, c).splitlines()[0])
@@ -2536,7 +2700,12 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable) -> None:
         if files and imgui.begin_menu("insert effect"):     # plan 33 U
             for f in files:
                 if imgui.menu_item_simple(f):
-                    insert_effect(panel, c, f)
+                    insert_effect(panel, c, f, at)
+            imgui.end_menu()
+        if imgui.begin_menu("starters"):        # plan 36 T5: laid on this cable's picture
+            for which, label in graphview.STARTERS:
+                if which in graphview.CABLE_STARTERS and imgui.menu_item_simple(label):
+                    add_starter(panel, which, c, at)
             imgui.end_menu()
     if imgui.menu_item_simple("delete"):
         if c.kind == "render":                  # N4: unwire, its own undo step

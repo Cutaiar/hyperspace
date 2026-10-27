@@ -20,6 +20,7 @@ import pytest
 from wiredframe import Shows, Thru, graph
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 
 S = Switches
@@ -48,7 +49,8 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     output.all.image`), the first reading the look-back; each output wired
     with the hands through has a copy of each (`Copy`, named `copy`,
     `copy.2` …) over its composite (plan 35 T4, row 377); none given, the
-    end reads the look-back as before D0."""
+    end reads the look-back as before D0. Plan 36 T1: with every window
+    through, the run is built (All outputs' picture) but no end shows it."""
     wires = [{"from": a, "to": f"{b}.image"} for a, b in zip(("frame", *RUN), RUN)]
     section = {"nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                "wires": [*wires, {"from": RUN[-1], "to": "fx.image"}]}
@@ -58,8 +60,9 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
     assert g.run == RUN
     # (R23, plan 33 T7: a wiring that says no run has the empty one)
     assert graph(shows, effects=RUN).run == ()
+    assert "shown(palette)" not in g.nodes and g.nodes["palette"].inputs["image"] is \
+        g.nodes["acid.2"]
     for end, src, names in (
-            ("shown(palette)", "lookback", list(RUN)),
             ("shown(copy.4)", "composite", ["copy", "copy.2", "copy.3", "copy.4"]),
             ("shown(copy.8)", "composite.2", ["copy.5", "copy.6", "copy.7", "copy.8"])):
         run = _effects(g, end)
@@ -67,21 +70,17 @@ def test_the_default_graph_holds_one_effect_node_per_instance_in_wire_order():
         assert [e.name for e in run] == names
         assert all(isinstance(e, G.Effect) and e.KIND == "effect" for e in run)
         assert run[0].inputs == {"image": g.nodes[src], "aux": None}
-        assert g.nodes[end].inputs["image"] is run[-1] and g.nodes[end].source is g.nodes[src]
+        assert g.nodes[end].inputs["image"] is run[-1]
         order = [n.name for n in g.order]
         assert [order.index(n) for n in names] == sorted(order.index(n) for n in names)
         assert order.index(names[-1]) < order.index(end)
     assert all(isinstance(g.nodes[f"copy.{k}"], G.Copy) for k in range(2, 9))
-    # the layer and its stand-down still find the composite behind the copies
-    assert g.nodes["shown(copy.4)"].layer is g.nodes["hands.layer"]
-    assert g.nodes["shown(copy.8)"].fallback is None
-    assert g.nodes["shown(copy.4)"].fallback is g.nodes["shown(palette)"]
     # the timed lines are the graph's own: an effect has one only when it runs
     assert not set(g.timed) & {n.name for n in g.order if isinstance(n, G.Effect)}
     assert g.pool == 2
     # none given: no effect node, and no pool
-    bare = G.build_graph([View(S(), (10, 10))])
-    assert bare.nodes["shown(lookback)"].inputs["image"] is bare.nodes["lookback"]
+    bare = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring()))
+    assert bare.nodes["shown(scene)"].inputs["image"] is bare.nodes["scene"]   # (plan 36 T4)
     assert bare.pool == 0
 
 
@@ -91,7 +90,8 @@ def test_an_effect_named_like_another_node_is_kept_apart():
     are named apart from any effect (plan 35 T4: `lookback`,
     `lookback(capture)`, `lookback(cover)`)."""
     names = ("capture", "warp")
-    g = G.build_graph([View(S(), (10, 10))], G.Wiring(run=names), effects=names)
+    g = G.build_graph([View(S(), (10, 10))], wired_wiring(G.Wiring(run=names), "trail"),
+                      effects=names)
     assert [e.name for e in _effects(g, _end(g))] == ["capture", "warp"]
     assert isinstance(g.nodes["lookback(capture)"], G.Capture)
     assert isinstance(g.nodes["lookback(cover)"], G.Cover)
@@ -145,9 +145,9 @@ def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuil
     from test_outputs import rig, run, views
 
     r = rig(ctx)
-    r.wiring = G.read_graph({"wires": [{"from": "frame", "to": "acid.image"},
+    r.wiring = wired_wiring(G.read_graph({"wires": [{"from": "frame", "to": "acid.image"},
                                        {"from": "acid", "to": "warp.image"},
-                                       {"from": "warp", "to": "fx.image"}]}).wiring()
+                                       {"from": "warp", "to": "fx.image"}]}).wiring())
     vs = views(ctx, S())
     run(ctx, r, vs, frames=1)
     g = r._graph
@@ -156,13 +156,13 @@ def test_the_renderer_builds_the_run_from_the_wires_and_a_toggle_does_not_rebuil
     r.fx.state.values["acid"]["on"] = True
     run(ctx, r, vs, frames=1)
     assert r._graph is g
-    r.wiring = G.read_graph({"wires": [{"from": "frame", "to": "warp.image"},
-                                       {"from": "warp", "to": "fx.image"}]}).wiring()
+    r.wiring = wired_wiring(G.read_graph({"wires": [{"from": "frame", "to": "warp.image"},
+                                       {"from": "warp", "to": "fx.image"}]}).wiring())
     run(ctx, r, vs, frames=1)
     assert r._graph is not g and _run_of(r._graph, _end(r._graph)) == ["warp"]
     # no run said: the empty run, whatever is on
     r = rig(ctx)
-    r.wiring = G.Wiring()
+    r.wiring = wired_wiring(G.Wiring())
     run(ctx, r, vs, frames=1)
     g = r._graph
     assert _run_of(g, _end(g)) == [] and g.run == ()
@@ -183,9 +183,9 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
         st = r.fx.state
         names = sorted(st.specs, key=lambda n: (st.specs[n].order, n))
         chain = ["frame", *names]
-        r.wiring = wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
+        r.wiring = wired_wiring(wired(r, {"wires": [{"from": a, "to": f"{b}.image"}
                                        for a, b in zip(chain, names)]
-                             + [{"from": names[-1], "to": "fx.image"}]})
+                             + [{"from": names[-1], "to": "fx.image"}]}))
         return r
 
     r = every_one_wired(rig(ctx, effects=()))
@@ -195,9 +195,9 @@ def test_an_off_effect_is_read_through_and_runs_no_pass(ctx):
     assert r.fx._tex == []                                # no texture taken
     assert len(_effects(r._graph, _end(r._graph))) >= 12
     bare = rig(ctx, effects=())
-    bare._graph_for = lambda vs: G.build_graph(vs, G.Wiring())   # no effect nodes
+    bare._graph_for = lambda vs: G.build_graph(vs, wired_wiring(G.Wiring()))   # no effect nodes
     want = run(ctx, bare, views(ctx, S()), frames=3)[0]
-    assert not _effects(bare._graph_for(views(ctx, S())), "shown(lookback)")
+    assert not _effects(bare._graph_for(views(ctx, S())), "shown(scene)")
     assert np.array_equal(got, want)
     # one on: one pass a frame, the off ones around it none
     r = every_one_wired(rig(ctx, effects=("warp",)))
@@ -218,7 +218,7 @@ def test_two_instances_of_one_effect_are_two_nodes_on_one_program(ctx):
     st = r.fx.state
     st.set_instances({"acid": 2})
     st.values["acid"]["on"] = st.values["acid.2"]["on"] = True
-    r.wiring = wiring_of(st)                     # plan 33 R23: both in the run
+    r.wiring = wired_wiring(wiring_of(st))  # plan 33 R23: both in the run
     calls = _count(r)
     run(ctx, r, views(ctx, S()), frames=2)
     g = r._graph
@@ -425,7 +425,7 @@ def test_the_run_draws_what_the_one_block_chain_drew(ctx, monkeypatch, effects):
 
         def bare(vs, o=old):
             from test_outputs import _stack_names
-            g = G.build_graph(vs, thru, (), tuple(sorted(o.fx.state.specs)))
+            g = G.build_graph(vs, wired_wiring(thru), (), tuple(sorted(o.fx.state.specs)))
             g.run = tuple(_stack_names(o))           # (the stack's: `o.wiring`'s run)
             for n in g.order:
                 if isinstance(n, G.Shown):

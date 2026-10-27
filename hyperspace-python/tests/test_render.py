@@ -14,6 +14,7 @@ import pytest
 moderngl = pytest.importorskip("moderngl")
 
 from hyperspace.geometry import SHAPES, geom, project
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.render import render_offscreen
 from hyperspace.view import ViewState
 
@@ -151,7 +152,8 @@ def _on_faces(c: str):
     pattern.media`, where `view.media` chose it)."""
     from hyperspace import graph as G
 
-    return G.Wiring(wires=(G.Wire(f"media.{c}", "pattern.media"),))
+    # (plan 36 T3: wired as the migration writes it)
+    return wired_wiring(G.Wiring(wires=(G.Wire(f"media.{c}", "pattern.media"),)))
 
 
 def test_bitmap_layer(ctx):
@@ -271,7 +273,7 @@ def test_one_clock_reaches_the_patterns_and_the_effects(ctx):
     # — plan 33 R23: in the run, as a load lands it
     from hyperspace.graphmigrate import wiring_of
     r.fx.state.values["warp"]["on"] = True
-    r.wiring = wiring_of(r.fx.state)
+    r.wiring = wired_wiring(wiring_of(r.fx.state))
     r.fx.run_one = lambda name, src, dst, t: seen.append(t)
     fbo = ctx.framebuffer(color_attachments=[ctx.texture((64, 48), 4)])
     fbo.use()
@@ -564,14 +566,16 @@ def _dim_renderer(ctx, *, effect=True, hands=True, bg_alpha=1.0, echoes=False):
     fx = FxState()
     fx.values["warp"]["on"] = effect
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
+    r.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: its run, as a load lands it
     r.bg_alpha = bg_alpha
     r.ghost.state.on, r.ghost.state.alpha = hands, 1.0
     r.ghost.source = _hands() if hands else None
     if echoes:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        r.lookback.source = None
+        # (plan 36 T4: the look-back drawn, as an old preset with it on)
+        from hyperspace.graphmigrate import specs_of, state_values, wiring_for
+        r.wiring = wired_wiring(wiring_for(state_values(fx), specs_of(fx), wired=False), "trail")
     return r
 
 
@@ -694,7 +698,7 @@ def test_the_default_graphs_history_holds_what_todays_does_never_the_dim(ctx):
     def run(dim, wiring=None, hands=False):
         r = _dim_renderer(ctx, effect=False, hands=hands, echoes=True)
         if wiring is not None:
-            r.wiring = wiring
+            r.wiring = wired_wiring(wiring, "trail")
         out = _dim_frames(ctx, r, dim, frames=8, spin=0.05)
         assert r.lookback.atlas is not None and r.lookback.layers()
         held = r._graph.nodes["lookback(capture)"].inputs["image"]
@@ -879,7 +883,7 @@ def test_zero_instances_still_runs_the_look_back_and_the_effects(ctx):
     fx = FxState()
     fx.values["plasma"]["on"] = True
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)        # plan 33 R23: its run, as a load lands it
+    r.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: its run, as a load lands it
     plasma = _inst_frames(ctx, r, [0, 0])
     assert r.stats["fx_on"] and r._face_verts == 0
     assert plasma[..., :3].mean() > 5 and (plasma[..., :3].max(axis=2) > 20).mean() > 0.5
@@ -888,7 +892,8 @@ def test_zero_instances_still_runs_the_look_back_and_the_effects(ctx):
     r = Renderer(ctx)
     st = r.lookback.state
     st.on, st.echoes, st.gap, st.tint_from, st.occlude, st.echo_mix = True, 8, 0.0, 0, 1.0, 0.8
-    r.lookback.source = None
+    from hyperspace.graph import Wiring
+    r.wiring = wired_wiring(Wiring(), "trail")              # (plan 36 T4: drawn)
     assert r.lookback.wants_cover()
     _inst_frames(ctx, r, [1, 1, 1], spin=0.2)                    # fill the ring
     trail = [_inst_frames(ctx, r, [0], t0=2.1 + k / 30)[..., :3] for k in range(3)]
@@ -1104,7 +1109,10 @@ def _wire(r, s):
     values = state_values(st)
     values.update({f"fx.{n}.target": 1 for n in getattr(st, "aimed", ())})
     values["view.media"] = int(getattr(s, "media", 0) or 0)
-    r.wiring = wiring_for(values, specs_of(st))
+    # (plan 36 T4: the look-back drawn while the rig's `dream.on` is on, as
+    # the old words had it)
+    look = "trail" if r.lookback.state.on else "off"
+    r.wiring = wired_wiring(wiring_for(values, specs_of(st), wired=False), look)
     return r
 
 
@@ -1464,8 +1472,7 @@ def test_the_echoes_carry_the_faces_effects(ctx):
         r = Renderer(ctx, fx=fx)
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        r.lookback.source = None
-        _fdraw(ctx, r, _face_view(), frames=6, spin=0.05)
+        _fdraw(ctx, r, _face_view(), frames=6, spin=0.05)  # (plan 36 T4: `_wire` draws it)
         assert r.lookback.atlas is not None and r.lookback.layers()
         return (np.frombuffer(r.lookback.atlas.read(), dtype=np.uint8).astype(int),
                 np.frombuffer(r.scene.tex.read(), dtype=np.uint8).astype(int))
@@ -2072,8 +2079,8 @@ def test_stats_name_the_ends(ctx):
 
     def frame(section):
         r = rig(ctx, effects=("acid",))
-        r.wiring = G.read_graph(M.wired_section(M.renamed(section), G.read_graph(section))
-                                ).wiring()
+        r.wiring = wired_wiring(G.read_graph(M.wired_section(M.renamed(section), G.read_graph(section))
+                                ).wiring())
         run(ctx, r, views(ctx, Switches()), frames=1)
         return r.stats
 

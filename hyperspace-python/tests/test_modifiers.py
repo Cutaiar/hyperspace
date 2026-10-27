@@ -436,6 +436,11 @@ def test_the_routing_page_builds_the_smoothed_energy_times_band_patch(rig):
     fixture's preset."""
     reg, router, presets = rig.reg, rig.router, rig.presets
     panel = panel_of(rig)
+    # (plan 36 T3: acid exists where the graph names it — every file, as
+    # before a graph lands)
+    from hyperspace.fx import declare
+
+    declare(reg, reg.fx_state, reg.fx_state.hold(None))
     router.table.set_routes([])                 # a preset with no routes yet
     hands(router, 0.0)
     offered = dict(ui_routing.modifier_sources(panel, router))

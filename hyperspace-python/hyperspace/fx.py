@@ -241,8 +241,14 @@ class FxState:
     2"), `values`, `phase` and `names()` like any effect, so its params are
     `fx.acid.2.*` by the naming rule (`declare`), it has its own clock,
     and it runs on the file's one program. Instance 1 is the file itself,
-    `acid`, whose params are always declared; where any instance runs is
-    the graph's wires (plan 33).
+    `acid`; where any instance runs is the graph's wires (plan 33).
+
+    Plan 36 T3 (W3): `files` is every effect file on disk (the library the
+    GRAPH picker and the migration read); `specs` is the instances that
+    exist. Until a preset's graph lands that is every file once and the
+    extra instances `set_instances` counts (a rig's, a tool's); once one
+    does (`hold`), exactly the instances its section names — instance 1
+    of a file included — and nothing else has params.
     """
 
     def __init__(self, directory: Path | str = FX_DIR):
@@ -252,6 +258,10 @@ class FxState:
         self.face_map = PER_FACE # fx.face_map — how the faces show a picture wired into them
         self._t_last: float | None = None      # the frame time of the last advance_to
         self.specs: dict[str, EffectSpec] = {}
+        self.files: dict[str, EffectSpec] = {}  # plan 36 T3: every file on disk, held or not
+        # plan 36 T3: the instances a landed graph names (None: none landed —
+        # every file, and `instances`' extras)
+        self.held: frozenset[str] | None = None
         self.values: dict[str, dict[str, Any]] = {}
         self.phase: dict[str, float] = {}
         self.errors: dict[str, str] = {}       # file → why it is not loaded
@@ -307,9 +317,11 @@ class FxState:
                 found[name] = parse(name, (self.dir / fname).read_text())
             except (OSError, SpecError) as e:
                 self.errors[name] = str(e)
-                if name in self.specs:        # a broken edit keeps the last good spec
-                    found[name] = self.specs[name]
-        found.update(self._extras(found))
+                last = (getattr(self, "files", None) or self.specs).get(name)
+                if last is not None:          # a broken edit keeps the last good spec
+                    found[name] = last
+        self.files = dict(found)
+        found = self._wanted(found)
         for name in set(self.specs) - set(found):
             changed.add(name)
             self.values.pop(name, None)
@@ -335,17 +347,51 @@ class FxState:
                 out[f"{file}.{k}"] = replace(spec, label=f"{spec.label} {k}")
         return out
 
+    def _wanted(self, files: dict[str, EffectSpec]) -> dict[str, EffectSpec]:
+        """The instances that exist over the files on disk `files`: the
+        held ones (plan 36 T3, `hold`) whose file is there, else every file
+        and its `instances` extras."""
+        held = getattr(self, "held", None)
+        if held is None:
+            return {**files, **self._extras(files)}
+        out: dict[str, EffectSpec] = {}
+        for name in sorted(held):
+            spec = files.get(name.partition(".")[0])
+            n = instance_of_name(name)
+            if spec is not None and (n is not None or name == spec.name):
+                out[name] = spec if n is None else replace(spec, label=f"{spec.label} {n}")
+        return out
+
     def set_instances(self, counts: dict[str, int]) -> set[str]:
-        """Hold each effect file `counts` names that many times (plan 26 A4:
-        the loaded preset's graph; a file not named, once). Returns the
-        effect names whose params appeared or went (`acid.2`, …) — the
-        registry re-declares those (`declare`). A file that is not on disk
-        keeps its count and gets its instances when it appears."""
+        """Hold each effect file `counts` names that many times (plan 26 A4;
+        a file not named, once) — a rig's or a tool's, with no graph landed
+        (plan 36 T3: it lets go of any `hold`). Returns the effect names
+        whose params appeared or went (`acid.2`, …) — the registry
+        re-declares those (`declare`). A file that is not on disk keeps its
+        count and gets its instances when it appears."""
         self.instances = {f: int(n) for f, n in counts.items() if int(n) > 1}
-        files = {n: s for n, s in self.specs.items() if n in self._files()}
-        want = self._extras(files)
+        self.held = None
+        return self._settle()
+
+    def hold(self, names) -> set[str]:
+        """Plan 36 T3 (W3): exactly the effect instances `names` exist (a
+        landed graph's, `graph.GraphSpec.effect_names`) — instance 1 of a
+        file only when named; None, every file once as before a graph
+        landed. Returns the names whose params appeared or went, as
+        `set_instances`. A name whose file is not on disk gets its instance
+        when the file appears."""
+        self.held = None if names is None else frozenset(names)
+        if names is None:
+            self.instances = {}
+        return self._settle()
+
+    def _settle(self) -> set[str]:
+        """`specs` made what `_wanted` says over the files on disk: the
+        names that went and came."""
+        want = self._wanted(getattr(self, "files", None) or {
+            n: s for n, s in self.specs.items() if not instance_of_name(n)})
         changed: set[str] = set()
-        for name in [n for n in self.specs if n not in files and n not in want]:
+        for name in [n for n in self.specs if n not in want]:
             changed.add(name)
             del self.specs[name]
             self.values.pop(name, None)
@@ -356,11 +402,6 @@ class FxState:
                 self.specs[name] = spec
                 self._adopt(spec, name)
         return changed
-
-    def _files(self) -> set[str]:
-        """The effects that are files (instance 1): every name that carries
-        no instance marker."""
-        return {n for n in self.specs if not instance_of_name(n)}
 
     def file_of(self, name: str) -> str:
         """The effect file an effect name runs (`acid.2` → `acid`)."""

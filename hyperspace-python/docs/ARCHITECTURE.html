@@ -733,7 +733,7 @@
       </div>
       <div class="rrow">
         <div><div class="name">Graph</div><div class="mods">graph</div></div>
-        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the history, the outputs — wired from the outputs' switches and a preset's graph, evaluated once a frame in dependency order. An effect can sit on any image edge. <span>Part of the render stack: reads, never writes.</span></div>
+        <div class="what">The frame as nodes — the shape, the hands and a point cloud as geometry, the scene, layers, composites, one node per effect, the look-back and the dream, the outputs — built from the preset's graph alone (every edge a drawn wire; a window shows its own wires, else All outputs' by the rig's bus cables), evaluated once a frame in dependency order. <span>Part of the render stack: reads, never writes.</span></div>
         <div class="chip c-read">Reads</div>
       </div>
       <div class="rrow">
@@ -864,26 +864,28 @@
         <p>Each shader file in the effects folder <em>is</em> an effect: its
         uniforms become parameters automatically. On the frame each effect is
         a node of the render graph — bitmap in, bitmap out, off ones read
-        straight through — and a preset can place one anywhere there is a
-        picture: on the hands only, on one output only, before the trail. An
-        effect can instead aim at the polytope's faces, which can show the
-        picture per face or in screen space.</p>
+        straight through — and exists only where the preset wires it: on the
+        hands only, on one output only, before the trail, or into the
+        polytope's faces, which can show the picture per face or in screen
+        space.</p>
         <span class="path">fx · graph · glsl · shaders/fx/*.glsl · ui_fx</span>
       </div>
       <div class="sub">
         <h4>Look-back &amp; dream</h4>
-        <p>A history of scene textures composites echoes over the live frame;
-        what it captures — the scene, or the scene with the hands — is wiring.
-        With dreaming enabled, a worker thread pulls frames from that history,
-        runs them through a network on the GPU and hands back dreamed ones —
-        without ever blocking the frame.</p>
+        <p>Two nodes since plan 36. The look-back records the picture wired
+        into it and puts out its trail of echoes; a composite lays it on. The
+        dream takes the picture wired into it and puts out a dreamed one
+        (<code>dream.on</code> off passes it through; one live dream): with
+        dreaming enabled, a worker thread runs frames through a network on the
+        GPU and hands back dreamed ones — without ever blocking the frame.</p>
         <span class="path">lookback · dream</span>
       </div>
       <div class="sub">
         <h4>Outputs</h4>
         <p>Several render outputs: the first is the main window, each later one a
         window in its share group with its own presenter and overlay. Per-output
-        switches decide scene, hands, pass-through and dim; window rectangles are
+        mutes silence its picture and hands, and what it shows is its own wires
+        (else All outputs'); window rectangles are
         remembered per output.</p>
         <span class="path">outputs · overlay · placement</span>
       </div>
@@ -936,9 +938,10 @@
         <p>The frame as wired nodes: the shape, the hands and a point cloud
         share one fixed camera with a depth buffer, so a hand can pass between
         the shape's edges. Zoom and pan move only the shape, in the world. A
-        preset can say its wiring in its file — the hands in the scene or as a
-        layer, an effect twice, an effect placed on one edge, a wire that gives
-        one output its own picture or its own hands — and 596 golden frames pin
+        preset's file says all of its wiring (schema <code>/7</code>: nothing
+        is filled in at load) — the hands in the scene or as a layer, an effect
+        twice, a wire that gives one output its own picture or its own hands —
+        and 757 golden frames pin
         every factory preset's picture, and the fixture presets', to the
         byte.</p>
         <span class="path">graph · render · geometry · tools/golden_frames</span>

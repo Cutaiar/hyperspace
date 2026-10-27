@@ -214,7 +214,8 @@ def test_the_system_page_draws_both_clocks(tmp_path, monkeypatch):
         r.panel.pad = pad
         app._register_dial(r.reg, pad)
         frame(r.panel, "system")                 # no dial routes: the hint
-        assert Presets(r.lib, r.reg, r.router).load("DIAL") == []
+        assert [k for k in Presets(r.lib, r.reg, r.router).load("DIAL")
+                if not k.startswith(("env.", "seq."))] == []  # (plan 36 T3: the `/7`'s envelope ids, this rig has none)
         x, y = at(100)
         pad.frame(axes=[x, -y, -x, y, -1.0, -1.0])
         for _ in range(2):

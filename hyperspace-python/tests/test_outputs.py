@@ -27,6 +27,7 @@ import pytest
 from wiredframe import Thru, wire_switches
 
 from hyperspace import outputs as O
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, fit
 
 # ---------------------------------------------------------------- no GL
@@ -134,21 +135,26 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     no wire — what was aimed at the faces until plan 33 draws only where a
     wire puts it (tests/test_graph_faces.py), so it changes no byte."""
     from hyperspace.fx import FxState
-    from hyperspace.graphmigrate import wiring_of
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
     from hyperspace.render import Renderer
 
     fx = FxState()
     for n in effects:
         fx.values[n]["on"] = True
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)
+    # (plan 36 T3: the run in the old words, for `keep_run`; the renderer
+    # takes it wired, as a load lands it)
+    r.old_wiring = wiring_for(state_values(fx), specs_of(fx), wired=False)
+    r.wiring = wired_wiring(r.old_wiring)
     if faces:
         fx.values["huecycle"]["on"] = True
     r.bg_alpha, r.dim = bg, dim
     if echoes:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.tint_from = True, 8, 0.0, 0
-        r.lookback.source = None
+        # (plan 36 T4: the look-back drawn, as an old preset with it on and
+        # no dream migrates: `scene → lookback → composite (add)`)
+        r.wiring = wired_wiring(r.old_wiring, look="trail")
     g = r.ghost
     g.state.on, g.state.alpha, g.state.guide = hands, alpha, guide
     g.source = _src(guide=bool(guide)) if hands else None
@@ -171,7 +177,7 @@ def keep_run(r, wiring):
     that says a run of its own keeps it."""
     from dataclasses import replace
 
-    return wiring if wiring.run is not None else replace(wiring, run=r.wiring.run)
+    return wiring if wiring.run is not None else replace(wiring, run=r.old_wiring.run)
 
 
 def scene_view() -> object:
@@ -251,7 +257,8 @@ def _stack_names(r) -> list[str]:
     """The effects the retired stack ran (plan 33 T7 removed `FxChain.run`):
     the run's, in its order, those live."""
     st = r.fx.state
-    return [n for n in (getattr(r.wiring, "run", None) or ()) if st.live(n)]
+    old = getattr(r, "old_wiring", None) or r.wiring        # (plan 36 T3: the old words')
+    return [n for n in (getattr(old, "run", None) or ()) if st.live(n)]
 
 
 def _stack_active(r) -> bool:
@@ -311,18 +318,26 @@ def _parent_draw(r, s, w, h, t):
         cover = r._draw_cover(w, h) if lb.wants_cover() else None
         target.viewport = (vx, vy, vw, vh)
         lb.tick(t)
-        lb.pull()
         fx = r.fx
         fx.tick()
         fx.opaque = getattr(r, "bg_alpha", 1.0) >= 1.0
+
+        def composite(dst):
+            # (plan 36 T4: the parent's post pass — off, a copy: the pass
+            # with no echo, the history forgotten; the dream never landed)
+            if lb.state.on:
+                lb.composite(r.scene.tex, dst, cover)
+                lb.capture(r.scene.tex, dst)
+                return
+            lb.idle()
+            lb.composite(r.scene.tex, dst, None)
+            lb._ticked = False
         if _stack_active(r):
             buf = _stack_begin(r, r.scene.size)
-            lb.composite(r.scene.tex, buf, cover)
-            lb.capture(r.scene.tex, buf)
+            composite(buf)
             _stack_run(r, target, t)
         else:
-            lb.composite(r.scene.tex, target, cover)
-            lb.capture(r.scene.tex, target)
+            composite(target)
         try:
             r.ghost.draw(target, vp, t, opaque=fx.opaque)
         except Exception as e:  # noqa: BLE001
@@ -380,8 +395,10 @@ def test_one_default_output_is_todays_frame_byte_for_byte(ctx, case, samples):
     assert ctx.error == "GL_NO_ERROR"
     assert want[..., :3].max() > 50
     assert np.array_equal(got, want), np.abs(got - want).max()
-    assert r._frames == {} and r._show_prog is None              # nothing extra made
-    assert r.stats["direct"] and r.stats["captures"] == 1
+    # nothing extra made (plan 36 T4: the scene shown straight paints its
+    # texture 1:1 with the show program, where the look-back's copy pass was)
+    assert r._frames == {}
+    assert r.stats["direct"] and r.stats["captures"] == int(r.lookback.state.on)
     assert r.stats["chain_runs"] == (1 if _stack_active(r) else 0)
 
 
@@ -399,7 +416,7 @@ def test_the_frame_through_a_texture_is_the_same_bytes(ctx):
         vs = views(ctx, O.Switches(), O.Switches())
         got = run(ctx, r, vs)
         assert r.stats["direct"] is False and r.stats["ends"] == [
-            "shown(warp)" if effects else "shown(lookback)"]
+            "shown(warp)" if effects else "shown(scene)"]
         for g in got:
             assert np.array_equal(g, want)
     # MSAA on the first output: the scene samples follow it, the copy too
@@ -417,7 +434,7 @@ def test_two_outputs_with_the_same_switches_run_the_chain_once(ctx):
         r = rig(ctx)
         run(ctx, r, views(ctx, sw, O.Switches(**vars(sw))), frames=2)
         assert r.stats["chain_runs"] == (1 if sw.scene else 0), sw
-        assert r.stats["captures"] == 1
+        assert r.stats["captures"] == 0          # (plan 36 T4: no look-back drawn)
 
 
 @pytest.mark.parametrize("glass, projector, runs", [
@@ -443,7 +460,7 @@ def test_outputs_that_differ_run_one_chain_per_distinct_input(ctx, glass, projec
     # (plan 35 T4: the layer is drawn while the wiring lays it — a window's
     # hands mute is read at its output, and never rebuilds the graph)
     assert r.stats["layer"] is True
-    assert r.stats["captures"] == 1
+    assert r.stats["captures"] == 0              # (plan 36 T4: no look-back drawn)
 
 
 def test_the_four_scene_and_hands_states_show_their_pictures(ctx):
@@ -795,7 +812,7 @@ def test_each_of_the_eight_states_shows_its_picture(ctx):
     fx = ("warp", "kaleido")
     r = rig(ctx, effects=fx)
     p = run(ctx, r, wviews(ctx, r, *EIGHT))
-    assert len(r.stats["ends"]) == r.stats["chain_runs"] == 3 and r.stats["captures"] == 1
+    assert len(r.stats["ends"]) == r.stats["chain_runs"] == 3 and r.stats["captures"] == 0
     s1, s2, s3, s4, s5, s6, s7, s8 = p
     assert np.array_equal(s3, s4) and np.array_equal(s7, s8)
     assert len({a.tobytes() for a in p}) == 6
@@ -853,17 +870,21 @@ def test_through_bends_the_hands_with_the_shape(ctx):
 
 
 def test_through_with_no_effect_on_is_hands_over(ctx):
+    """With no effect on, a through window draws what the hands over draws.
+    Plan 36 T1: it shows its own chain as wired (no stand-down to the
+    shared end): its composite is an end of its own, no chain runs."""
     import numpy as np
 
     S = O.Switches
     r = rig(ctx, effects=())
     a, b, c, d = run(ctx, r, wviews(ctx, r, S(), Thru(), S(scene=False), Thru(scene=False)))
     assert np.array_equal(a, b) and np.array_equal(c, d)
-    assert r.stats["ends"] == ["shown(lookback)"] and r.stats["chain_runs"] == 0
+    assert r.stats["ends"] == ["shown(scene)", "shown(composite)", "shown(composite.2)"]
+    assert r.stats["chain_runs"] == 0
     assert r.stats["readout"] is False
 
 
-def test_through_with_no_hand_showing_runs_nothing_extra(ctx):
+def test_through_with_no_hand_showing_draws_the_same(ctx):
     import numpy as np
 
     S = O.Switches
@@ -878,8 +899,11 @@ def test_through_with_no_hand_showing_runs_nothing_extra(ctx):
             sw = [S(hands=False), Thru(hands=False)]
         a, b = run(ctx, r, wviews(ctx, r, *sw))
         assert np.array_equal(a, b), src
-        assert r.stats["ends"] == ["shown(warp)"] and r.stats["chain_runs"] == 1, src
-        assert r.ghost.readout is None and r._frames.keys() == {"shown(warp)"}, src
+        # (plan 36 T1: the through window shows its own chain, as wired —
+        # no stand-down to the shared end — and draws the same picture)
+        want = ["shown(warp)"] if src == "hands switch off" else ["shown(warp)", "shown(copy)"]
+        assert r.stats["ends"] == want, src
+        assert r.ghost.readout is None, src
 
 
 def test_four_outputs_need_at_most_three_chain_runs(ctx):

@@ -42,7 +42,11 @@ Two kinds of file, both plain JSON you can open in a text editor:
                   project (an inline theme bank) is migrated by plan 13's
                   first-launch migration (preset.migrate_home: its slots
                   become presets), and one opened by hand later on the
-                  same road (``Project.load``).
+                  same road (``Project.load``). Plan 36 T1: ``rig``, the
+                  show's own wires — ``{"cut": [{"from", "to"}, …]}``, the
+                  bus cables from All outputs into a window this show has
+                  cut on GRAPH (``graph.RigWires``); absent, every one
+                  stands.
 
 A third kind of document is *not* the library's own format but goes
 through the same doors: a **document kind** registered with ``kind()``
@@ -123,6 +127,7 @@ from pathlib import Path
 from typing import Any
 
 from . import undo
+from .graph import RigWires
 from .graphmigrate import renamed_layout, retired
 from .palettecompat import palette_slice
 from .params import (
@@ -205,6 +210,7 @@ HOME_UNSET = "home: this show names no 'starts on' preset — pick one on the PR
 # the outputs), a preset's (preset.LAYOUT_KEY) for the look's. No key: every
 # node is laid out automatically, and nothing is dirty
 LAYOUT = "layout"
+RIG = "rig"            # plan 36 T1: a show's own wires (`graph.RigWires`)
 
 
 def read_layout(value: Any) -> tuple[dict[str, list[float]], int]:
@@ -700,6 +706,11 @@ class Project:
         # those as on disk (`is_dirty`)
         self.layout: dict[str, list[float]] = {}
         self._saved_layout: dict[str, list[float]] = {}
+        # plan 36 T1: the rig's own wires — the bus cables from All outputs
+        # into each window, which this show has cut (`graph.RigWires`) — and
+        # those as on disk; the renderer reads `rig` (its `rig_source`)
+        self.rig = RigWires()
+        self._saved_rig = RigWires()
 
     # ---- documents ----
 
@@ -732,6 +743,7 @@ class Project:
         self._saved = (list(self.bank), self.startup)
         self.layout, _ = read_layout(doc.get(LAYOUT))
         self._saved_layout = copy.deepcopy(self.layout)
+        self.rig = self._saved_rig = RigWires.read(doc.get(RIG))
 
     @property
     def stem(self) -> str:
@@ -751,19 +763,25 @@ class Project:
         layout = getattr(self, "layout", None)
         if layout:                       # plan 28 N2; a show with none writes none
             doc[LAYOUT] = {k: list(layout[k]) for k in sorted(layout)}
+        rig = getattr(self, "rig", RigWires()).to_json()
+        if rig:                          # plan 36 T1; every cable standing writes none
+            doc[RIG] = rig
         return doc
 
     def mark(self) -> tuple:
         """The show as held, opaque, for an undo to hand back (`remark`):
         name, note, path, factory, stem, session, modules, bank, startup
         and the bank and startup as on disk — copies, so a later edit of
-        the live show never reaches a mark."""
+        the live show never reaches a mark; then the GRAPH page's positions
+        of the rig's nodes, and (plan 36 T1) the rig's wires, live and as
+        on disk (immutable: held as they are)."""
         return (self.name, self.note, self.path, self.factory, getattr(self, "_stem", None),
                 copy.deepcopy(self.session), copy.deepcopy(self.modules), list(self.bank),
                 self.startup, (list(self._saved[0]), self._saved[1]),
                 # plan 28 N2: the GRAPH page's positions of the rig's nodes
                 copy.deepcopy(getattr(self, "layout", {})),
-                copy.deepcopy(getattr(self, "_saved_layout", {})))
+                copy.deepcopy(getattr(self, "_saved_layout", {})),
+                getattr(self, "rig", RigWires()), getattr(self, "_saved_rig", RigWires()))
 
     def remark(self, mark: tuple) -> None:
         """Put back what `mark()` returned: the show's own fields, nothing
@@ -773,6 +791,8 @@ class Project:
          session, modules, bank, self.startup, saved) = mark[:10]
         if len(mark) > 10:               # plan 28 N2: the show's layout, and as on disk
             self.layout, self._saved_layout = copy.deepcopy(mark[10]), copy.deepcopy(mark[11])
+        if len(mark) > 12:               # plan 36 T1: the rig's wires, and as on disk
+            self.rig, self._saved_rig = mark[12], mark[13]
         self.session, self.modules = copy.deepcopy(session), copy.deepcopy(modules)
         self.bank = list(bank)
         self._saved = (list(saved[0]), saved[1])
@@ -1285,6 +1305,7 @@ class Project:
         self.lib._sync(self.path)
         self._saved = (list(self.bank), self.startup)
         self._saved_layout = copy.deepcopy(getattr(self, "layout", {}))
+        self._saved_rig = getattr(self, "rig", RigWires())
         self.factory = False                          # your copy now
         return self.path
 
@@ -1299,7 +1320,8 @@ class Project:
                 or not undo.alike(self.session, {**self._held_back(),
                                                  **reg.snapshot(part="session")})
                 or (self.bank, self.startup) != self._saved
-                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {}))
+                or getattr(self, "layout", {}) != getattr(self, "_saved_layout", {})
+                or getattr(self, "rig", RigWires()) != getattr(self, "_saved_rig", RigWires()))
 
     def _held_back(self) -> dict:
         """The session's settings of node instances the registry lacks now
@@ -1425,8 +1447,11 @@ class Marks:
         elif len(show) > 10:
             # the same show: its GRAPH page positions still go back (plan 28
             # N2; the undo of a tidy) — unlike the bank, they are not in its
-            # file until it is saved
+            # file until it is saved; so do the rig's wires (plan 36 T1: the
+            # undo of a bus cable cut on GRAPH)
             pr.layout = copy.deepcopy(show[10])
+            if len(show) > 12:
+                pr.rig = show[12]
         for group in {*lib._current, *lib._loaded, *lib._adopted} - set(landed):
             lib.reland(group, (None, None, None))
         for group, was in landed.items():
@@ -2047,6 +2072,14 @@ class Library:
             apply = getattr(self, "_apply_hooks", {}).get(group)
             if apply is not None:
                 apply(name, doc)
+                # plan 36 T3: a hook that lands a graph declares params (an
+                # fx module's effects exist once its run names them): their
+                # values land now, and are no longer missing
+                late = self.resolved(group, values)
+                if late != resolved:
+                    self.restore(late)
+                    resolved = late
+                missing = [k for k in values if k not in self.reg and not retired(k)]
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:

@@ -84,8 +84,8 @@ Plan 26 A1: those passes are the nodes of a render graph (graph.py).
 count and the wiring do not change — and evaluates it: the nodes run
 once each, in an order settled when the graph was built, and each node
 is timed on the GPU (`PassTimer`, one line per node on the SYSTEM page).
-Plan 35 T4: every graph is a wired frame's (`graph.build_graph`, an
-unwired wiring wired first: `graph.wired`); the pipelines are gone, and
+Plan 35 T4: every graph is a wired frame's (`graph.build_graph`; plan 36
+T3: nothing else — `graph.EMPTY` until a preset lands); the pipelines are gone, and
 every golden frame is drawn byte for byte. The passes themselves (`draw_scene`,
 `_face_picture`, `_draw_cover`, `_compose`, `_show`, `dim_pass`) stay
 here; the nodes call them.
@@ -137,6 +137,7 @@ from .geometry import (
 from .ghost import Ghost, GhostState
 from .glsl import QUAD_VS, common, common_mtime, gl_error
 from .graph import (
+    EMPTY,
     FACE_PIC,
     MEDIA_CHANNELS,
     Delay,
@@ -149,9 +150,9 @@ from .graph import (
     cloud_roles,
     graph_key,
     param_prefix,
-    wired,
+    rig_of,
 )
-from .lookback import DreamState, Lookback
+from .lookback import Dreamer, DreamState, Lookback
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -1012,7 +1013,13 @@ class Renderer:
         # texture takes the sampler units before the scene pass, so the
         # scene texture is never bound while it is the render target
         self.scene = SceneTarget(ctx)
+        # plan 36 T4 (W4): one ring per look-back node, by its name
+        # (`ring`) — `lookback`'s is this one, on the `dream.*` params'
+        # state — and the dream node's buffer and worker slot, apart from
+        # any look-back (`dreamer.source`: app.py hangs the worker there)
         self.lookback = Lookback(ctx, dream)
+        self.rings: dict[str, Lookback] = {self.lookback.name: self.lookback}
+        self.dreamer = Dreamer(ctx, self.lookback.state)
         self.fx = FxChain(ctx, fx)      # every effect node's programs and textures
         # the picture the faces show while something other than the
         # pattern is wired into them (plan 33 R: `shape.faces`, painted by
@@ -1027,6 +1034,9 @@ class Renderer:
         self.face_error = ""
         self._pic: moderngl.Texture | None = None
         self._face_layer = False
+        # plan 36 T2: the faces plain this scene pass — `shape.faces` unwired,
+        # no pattern drawn (`graph.Shape.prepare`; False outside a frame)
+        self._face_plain = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
         # plan 21: the outputs. A picture with more than one consumer (or
         # one not drawn here) ends in a frame texture, one per end (plan 35:
@@ -1036,16 +1046,18 @@ class Renderer:
         self._show_prog: moderngl.Program | None = None
         self._show_vao: moderngl.VertexArray | None = None
         # plan 26 A3: the program a Composite node lays a layer with, on
-        # first use; and the wiring the default graph is built from (where
-        # the hands are drawn, how their layer is laid on, what the history
-        # captures) — today's frame until A4 reads one from a preset
+        # first use; and the wiring the frame is built from — plan 36 T3
+        # (W3): the empty frame (black) until a preset's graph lands one
         self._lay_prog: moderngl.Program | None = None
         self._lay_vao: moderngl.VertexArray | None = None
-        self.wiring = Wiring()
+        self.wiring = EMPTY
         # plan 26 A4b: what the point-cloud nodes read — the device
         # registry (app hands it over; duck-typed: `clouds` and its
         # devices' kinds). None: no cloud is drawn
         self.cloud_source = None
+        # plan 36 T1: whoever holds the rig's own wires (the open show,
+        # `library.Project.rig`, by `app`); None: every bus cable standing
+        self.rig_source = None
         # plan 26 A4: the extra hands nodes' states, by node name (`ghost.2`
         # …), handed over by whoever declared their params (the preset's
         # graph section, `preset.GraphSection`); their Ghosts, made on
@@ -1173,6 +1185,7 @@ class Renderer:
         self.face_error = ""
         self._pic = None
         self._face_layer = False
+        self._face_plain = False
         for res in (old_fx, old_pic, old_pat):
             if res is not None:
                 res.release()
@@ -1328,7 +1341,9 @@ class Renderer:
             self._patterns_mtime = mtime
             self._build_face_program()
             if shared_changed:
-                self.lookback.on_reload()
+                for ring in self.rings.values():
+                    ring.on_reload()
+                self.dreamer.on_reload()
 
     def draw(
         self, s: ViewState, w: int, h: int, dpr: float = 1.0,
@@ -1547,11 +1562,10 @@ class Renderer:
         # plan 34 D: each delay's pair turns — last frame's write is now
         # what its delay reads
         self._turn_delays(graph)
-        # plan 34 E (row 362): a graph reading the ring keeps it capturing
-        # with the look-back off (getattr: a renderer from before has none)
-        lookback = getattr(self, "lookback", None)
-        if lookback is not None:
-            lookback.keep = bool(getattr(graph, "reads_ring", False))
+        # plan 36 T4: a ring no look-back of this graph holds forgets its
+        # history (it starts clean when one is drawn again); the dream
+        # forgets `D` with no dream node, so the worker sleeps
+        self._idle_rings(graph)
         # plan 30 D1: "an effect is on" means one of the pipelines' runs: an
         # effect the preset placed on an edge runs there (and moves its
         # clock in `run_one`) but bends no pipeline, so with only placed
@@ -1580,8 +1594,8 @@ class Renderer:
     def _graph_for(self, views: list[View], s: ViewState | None = None) -> Graph:
         """The render graph for these views: the last one while their count
         and the wiring have not changed (`graph.graph_key`,
-        `Renderer.wiring`), else one built from them (`graph.build_graph`,
-        an unwired wiring wired first: `graph.wired`). getattr: a renderer
+        `Renderer.wiring`), else one built from them (`graph.build_graph`;
+        plan 36 T3: a wired frame only, `graph.EMPTY` for none). getattr: a renderer
         from before the graph
         (or the wiring) has none. Plan 26 A4b: the `cloud` devices the
         registry lists (`cloud_source`) are part of the key, so listing
@@ -1596,25 +1610,27 @@ class Renderer:
         the wiring (`Wiring.wires`, `Wiring.placed`, `Wiring.composites`),
         so an edit on the GRAPH page that lands a new `GraphSpec` builds
         the graph again, with the same refusals (a dormant wire, a loop).
-        Plan 32 R: so are the frame's backdrop channel and whether the
-        history holds it (`backdrop_wiring`), laid onto the preset's wiring
-        for the graph alone — `Renderer.wiring` stays the preset's (plan
-        33 R: whose `backdrop` is the section's wire into `backdrop.image`).
         Plan 35 B, T4: every frame is a wired frame, keyed by the views'
         count alone — a window's switches are mutes, read by each output
-        every frame, never a rebuild."""
-        s = s if s is not None else getattr(self, "_view_now", None)
-        wiring = wired(self.backdrop_wiring(getattr(self, "wiring", None) or Wiring(), s))
+        every frame, never a rebuild. Plan 36 T1: the rig's own wires
+        (`rig_source`, the open show: `graph.rig_of`) are part of the key —
+        a bus cable cut on GRAPH builds again."""
+        # (`s`: the view state, unread since plan 36 T3 — the backdrop is
+        # the section's wires, never laid on per frame)
+        wiring = getattr(self, "wiring", None) or EMPTY
         key = graph_key(views)
         clouds = cloud_roles(getattr(self, "cloud_source", None))
+        rig = rig_of(getattr(self, "rig_source", None))
         fx = getattr(self, "fx", None)
         st = fx.state if fx is not None else None
         effects = frozenset(st.specs) if st is not None else frozenset()
         graph = getattr(self, "_graph", None)
         if (graph is None or graph.key != key or getattr(graph, "wiring", None) != wiring
                 or getattr(graph, "clouds", ()) != clouds
+                or getattr(graph, "rig", None) != rig
                 or frozenset(getattr(graph, "effects", ())) != effects):
-            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)))
+            graph = self._graph = build_graph(views, wiring, clouds, tuple(sorted(effects)),
+                                              rig)
             if fx is not None and hasattr(fx, "fit_pool"):
                 fx.fit_pool(graph.pool)
             # plan 26 A4: a second hands node's Ghost the new graph does
@@ -1622,27 +1638,6 @@ class Renderer:
             self.drop_ghosts({param_prefix(n.name) for n in graph.nodes.values()
                               if isinstance(n, Hands)})
         return graph
-
-    def backdrop_wiring(self, wiring: Wiring, s: ViewState | None) -> Wiring:
-        """`wiring` with the frame's backdrop (plan 32 R, row 330): the
-        channel the preset's graph wires into `backdrop.image` (plan 33 R:
-        `Wiring.backdrop`, the section's — not `backdrop.channel`) and the
-        frame's `backdrop.history` — no channel while there are no media
-        channels to read (`media` None) or no view state (a caller from
-        before). A branch into `backdrop.image` takes `backdrop.history`
-        as the channel does."""
-        if getattr(wiring, "wired", False):
-            return wiring             # (plan 35: a wired frame says its backdrop in wires)
-        letter, hist = "", False
-        if s is not None and getattr(self, "media", None) is not None:
-            letter = getattr(wiring, "backdrop", "")
-        branch = any(w.dst == "backdrop.image" for w in getattr(wiring, "wires", ()))
-        if s is not None and (letter or branch):
-            hist = bool(getattr(s, "backdrop_history", False))
-        if (getattr(wiring, "backdrop", ""), getattr(wiring, "backdrop_history", False)) \
-                == (letter, hist):
-            return wiring
-        return replace(wiring, backdrop=letter, backdrop_history=hist)
 
     # ---- plan 32 T10: what the control panel draws of the media ----
 
@@ -2262,6 +2257,40 @@ class Renderer:
         gh.source, gh.router = self.ghost.source, self.ghost.router
         return gh
 
+    def ring(self, name: str = "lookback", state: DreamState | None = None) -> Lookback:
+        """Look-back `name`'s ring (plan 36 T4), made on first ask: its own
+        echoes, clock and atlas. `lookback`'s is `self.lookback` (the
+        `dream.*` params' state); another's reads `state` (its
+        `dream.<n>.*`, `ViewState.lookback`) when given, else a default."""
+        rings = self.__dict__.setdefault("rings", {})
+        got = rings.get(name)
+        if got is None:
+            if name == "lookback" and getattr(self, "lookback", None) is not None:
+                got = self.lookback
+            else:
+                got = Lookback(self.ctx, state if state is not None else DreamState(), name)
+            rings[name] = got
+        elif state is not None and got.state is not state:
+            got.state = state
+        return got
+
+    def _idle_rings(self, graph: Graph) -> None:
+        """Each ring whose look-back this graph does not hold forgets its
+        history; every one but `lookback`'s is also dropped then, its textures
+        released (made again, clean, when a graph holds it). No dream node:
+        `D` forgotten."""
+        rings = getattr(self, "rings", None) or {}
+        held = set(getattr(graph, "nodes", {}))
+        for name in list(rings):
+            if name in held:
+                continue
+            rings[name].idle()
+            if name != "lookback":
+                rings.pop(name).release_ring()
+        dreamer = getattr(self, "dreamer", None)
+        if dreamer is not None and "dream" not in held:
+            dreamer.idle()
+
     def drop_ghosts(self, keep: set[str] = frozenset()) -> None:
         """Release every extra hands node's `Ghost` not named in `keep`
         (a graph that no longer holds it, a hot reload)."""
@@ -2816,6 +2845,14 @@ class Renderer:
                     p = self._face_prog
                     self._camera_uniforms(p, mats, -1.0)
                     self._face_uniforms(p, s, t_m)
+                    if getattr(self, "_face_plain", False):
+                        # plan 36 T2: `shape.faces` unwired — plain faces, no
+                        # pattern and no media layer (mode 0: FACE_PX's flat face)
+                        p["u_mode"].value = 0
+                        try:
+                            p["u_bmp_on"].value = 0
+                        except KeyError:
+                            pass
                     # the faces' effects' picture, when _draw_frame made one for
                     # this pass: on its own unit, per face or in screen space.
                     # Set every frame — a program keeps its uniforms
@@ -3102,7 +3139,10 @@ def render_offscreen(
     Pattern time defaults to 0.0 so offscreen renders are deterministic.
     `media`: the channels the frame reads (`Renderer.media`), None for none;
     `wiring`: the graph's (`Renderer.wiring` — plan 33 R: a channel on the
-    faces is the wire `media.<c> → pattern.media`), None the default."""
+    faces is the wire `media.<c> → pattern.media`), None today's frame —
+    plan 36 T3: said here, as the tool's own wiring, by the one-way
+    migration of a preset with no section (`graphmigrate.wired_wiring`),
+    never by the renderer, whose own is the empty frame."""
     own = ctx is None
     if own:
         ctx = moderngl.create_context(standalone=True)
@@ -3111,8 +3151,10 @@ def render_offscreen(
     ctx.viewport = (0, 0, w, h)
     r = Renderer(ctx)
     r.media = media
-    if wiring is not None:
-        r.wiring = wiring
+    if wiring is None:
+        from .graphmigrate import wired_wiring
+        wiring = wired_wiring(Wiring())
+    r.wiring = wiring
     r.draw(s, w, h, t_now=t_now)
     data = np.frombuffer(fbo.read(components=3), dtype=np.uint8).reshape(h, w, 3)[::-1]
     fbo.release()

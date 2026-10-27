@@ -189,8 +189,13 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
         for a in CONCERNS:
             others = set().union(*(columns(view, b) for b in graphview.AREAS if b != a))
             assert not columns(view, a) & others, (name, a)
-        assert back_wires(view) == [], (name, fixture)
-        assert back_wires(view, graphview.AREAS) == [], (name, fixture)
+        # (plan 36 T3: acid-scene's `after: scene` is the wires it stood
+        # for — an effect between the scene and the look-back, in the
+        # effects' area, so its cable into the look-back runs back: a
+        # layout the areas do not yet place, noted for T5/T6)
+        back = {"wire:acid.2>lookback/image"} if fixture == "acid-scene" else set()
+        assert set(back_wires(view)) <= back, (name, fixture)
+        assert set(back_wires(view, graphview.AREAS)) <= back, (name, fixture)
     # what lands where, on party-trip's graph
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
@@ -203,7 +208,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     assert {area[k] for k in ("render:shape", "render:camera", "render:hands", "render:scene",
                               "render:hands.layer", "group:hands",
                               "group:cloud")} == {graphview.SCENE_AREA}
-    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    # (plan 36 T4: party-trip's look-back was off — none drawn; party-tracer's on)
+    assert "render:lookback" not in area
+    tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
+    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA
     assert {area[k] for k in ("render:acid", "render:palette", "render:copy",
                               "render:composite")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1", "render:output.2",
@@ -269,13 +277,14 @@ def test_auto_layout_stacks_each_area_and_keeps_saved_positions(rig):
             assert y1 >= y0 + graphview.height(n0, collapsed=True) + graphview.GAP
     audio = [lay.nodes[n.id][1] for n in view.nodes if n.area == graphview.AUDIO]
     assert lay.titles[graphview.OTHER][1] > max(audio)
-    # a saved position wins, and takes no room
+    # a saved position wins — and the node it left is not moved into the gap
+    # (2026-10-26: no layout runs on its own; only tidy lays out again)
     below = next(n.id for n in drawn if n.column == view.node("render:shape").column
                  and lay.nodes[n.id][1] > lay.nodes["render:shape"][1])
     rig.lib.presets.layout["render:shape"] = [4000, 4000]
     frame(rig.panel, "graph")
     assert st["applied"]["render:shape"] == (4000.0, 4000.0)
-    assert st["applied"][below][1] < lay.nodes[below][1]
+    assert st["applied"][below] == lay.nodes[below]
 
 
 def test_tidy_relays_into_areas_and_says_so(rig):
@@ -293,11 +302,12 @@ def test_tidy_relays_into_areas_and_says_so(rig):
     # party-trip: 8 macros, 3 LFOs, the cloud, and acid and palette (off)
     # twice — and the eight media channels, their bins empty (plan 32 T10:
     # the channels' params on their own nodes); plan 35 G: the backdrop's
-    # group node too (no backdrop in the section: it idles like any group)
-    assert sum(n.idle for n in view.nodes) == 25
+    # group node too (no backdrop in the section: it idles like any group);
+    # plan 36 T4: one more, the frame drawing no look-back (its params' node idles)
+    assert sum(n.idle for n in view.nodes) == 26
     k = len({n.area for n in view.nodes if not n.idle})
-    assert st["said"] == (f"laid out {len(view.nodes) - 25} nodes in {k} areas, every one "
-                          "collapsed · 25 idle off the canvas")
+    assert st["said"] == (f"laid out {len(view.nodes) - 26} nodes in {k} areas, every one "
+                          "collapsed · 26 idle off the canvas")
     assert st["idle_open"] == set() and st["open"] == set() and rig.lib.presets.layout == {}
     lay = ui_graph.areas_of(st, view)
     assert all(st["applied"][n.id] == lay.nodes[n.id] for n in view.nodes if not n.idle)
@@ -433,7 +443,7 @@ def test_an_off_effect_with_no_cable_is_idle_and_a_through_wire_spans_it(rig, mo
         # run's last into All outputs — no `frame`, no end)
         if c.kind in ("render", graphview.THROUGH) and a not in hidden and b not in hidden:
             succ.setdefault(a, set()).add(b)
-    seen, todo = set(), ["render:lookback"]
+    seen, todo = set(), ["render:scene"]             # (plan 36 T4: the run's head)
     while todo:
         k = todo.pop()
         if k not in seen:
@@ -628,7 +638,8 @@ def test_the_areas_run_by_primitive(rig):
     area = {n.id: n.area for n in view.nodes}
     assert {area[k] for k in ("render:shape", "render:scene", "render:hands",
                               "render:hands.layer", "render:camera")} == {graphview.SCENE_AREA}
-    assert area["render:lookback"] == graphview.LOOKBACK_AREA
+    tracer = {n.id: n.area for n in load(rig, "party-tracer")["view"].nodes}
+    assert tracer["render:lookback"] == graphview.LOOKBACK_AREA      # (plan 36 T4)
     assert {area[k] for k in ("render:acid", "render:palette")} == {graphview.EFFECTS_AREA}
     assert {area[k] for k in ("render:output.all", "render:output.1",
                               "render:output.2")} == {graphview.OUTPUTS_AREA}
@@ -679,7 +690,8 @@ def test_a_blank_preset_draws_only_the_outputs(rig, monkeypatch):
     view = st["view"]
     drawn = {n.id for n in view.nodes if n.kind in ("render", "output", "channel")
              and not n.idle and n.id != "render:camera"}
-    assert drawn == {"render:output.all", "render:output.1", "render:output.2"}
+    # (plan 36 T3: hands 1's entry is always written, so its node is drawn)
+    assert drawn == {"render:hands", "render:output.all", "render:output.1", "render:output.2"}
     chans_ = [n for n in view.nodes if n.kind == "channel"]
     assert len(chans_) == 8 and all(n.idle and n.area == graphview.MEDIA for n in chans_)
     lay = ui_graph.areas_of(st, view)
@@ -749,6 +761,41 @@ def test_a_resize_sits_by_what_it_is_made_of(rig):
     assert back_wires(view) == []
 
 
+def test_insert_effect_lands_where_the_cable_was_clicked(rig):
+    """A cable's "insert effect ▸ <file>" puts the new node where the menu
+    opened on the cable (2026-10-26), as the picker does — not wherever the
+    layout would have flowed it."""
+    st = load(rig, "party-trip")
+    view = st["view"]
+    c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
+    assert ui_graph.insert_effect(rig.panel, c, "kaleido", (321.0, 654.0)) is None
+    placed = {k: v for k, v in rig.lib.presets.layout.items() if v == [321, 654]}
+    assert len(placed) == 1 and next(iter(placed)).startswith("render:kaleido")
+
+
+def test_backdrop_is_letterboxed_and_fixed_to_the_page():
+    """Output 1 behind the canvas (2026-10-26): fitted whole and centred in
+    the page's canvas rect, whatever the canvas's pan or zoom."""
+    a, b = ui_graph.backdrop_rect((10.0, 20.0), (400.0, 400.0), (1920, 1080))
+    assert a == (10.0, 20.0 + (400 - 225) / 2) and b == (410.0, 20.0 + (400 + 225) / 2)
+    a, b = ui_graph.backdrop_rect((0.0, 0.0), (400.0, 100.0), (100, 100))
+    assert a == (150.0, 0.0) and b == (250.0, 100.0)
+
+
+def test_preview_is_copied_only_on_a_frame_after_the_page_asked():
+    """`outputs.Preview`: wanted → taken once by the render loop; the page
+    that stops drawing it costs no copy."""
+    from hyperspace.outputs import Preview
+    pv = Preview()
+    assert not pv.take()
+    pv.want()
+    assert pv.take() and not pv.take()
+    pv.publish("tex", 0.0)
+    assert pv.tex == "tex" and pv.status == "sending"
+    pv.fail("lost")
+    assert pv.tex is None
+
+
 def test_two_fingers_pan_and_cmd_keeps_the_zoom():
     """2026-10-26: a scroll over the canvas pans it (canvas units: the
     zoom's pixels), ⌘ with it is the editor's zoom and pans nothing."""
@@ -774,7 +821,9 @@ def test_a_panned_canvas_moves_every_node_and_saves_where_they_lie(rig):
     assert moved and all(st["applied"][k] == (before[k][0] + 100.0, before[k][1] - 50.0)
                          for k in moved)
     assert rig.lib.presets.layout == {}
-    ui_graph.add_modifier(rig.panel, "threshold", (400.0, 300.0))
+    view = st["view"]
+    c = next(c for c in view.cables if c.kind == "render" and c.type == graphview.IMAGE)
+    assert ui_graph.insert_effect(rig.panel, c, "kaleido", (400.0, 300.0)) is None
     assert [300, 350] in rig.lib.presets.layout.values()
 
 

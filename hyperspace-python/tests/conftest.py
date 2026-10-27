@@ -117,6 +117,46 @@ def _no_real_midi(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _renderers_draw_todays_frame(request, monkeypatch):
+    """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
+    (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare
+    renderers draw a scene to look at, so here — the tests' word, never the
+    app's — a new one is handed today's frame as the one-way migration
+    writes it for a section-less old preset (`graphmigrate.wired_wiring(
+    Wiring())`). A test marked `empty_frame` gets the app's own."""
+    if request.node.get_closest_marker("empty_frame") is not None:
+        return
+    from hyperspace import render
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import look_of, wired_wiring
+
+    init = render.Renderer.__init__
+
+    def today(self, *a, **k):
+        init(self, *a, **k)
+        # (plan 36 T4: its look-back as the old words had it — drawn while
+        # `dream.on` was on, with the dream while its mix is above 0)
+        st = self.lookback.state
+        self.wiring = wired_wiring(Wiring(), look_of({"dream.on": bool(st.on),
+                                                      "dream.mix": st.mix}))
+
+    monkeypatch.setattr(render.Renderer, "__init__", today)
+
+
+@pytest.fixture(autouse=True)
+def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
+    """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
+    the app, hiding the controllers and modulation. The page tests look at
+    the whole canvas, so theirs starts off; tests/test_graph_preset_only.py
+    turns it back on."""
+    from hyperspace import ui_graph
+
+    if request.node.name == "test_default_is_on":
+        return
+    monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
+
+
+@pytest.fixture(autouse=True)
 def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""

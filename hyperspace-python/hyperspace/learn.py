@@ -86,8 +86,8 @@ from __future__ import annotations
 
 from . import modifiers, undo
 from .envelope import GROUP as ENV_SCHEME
-from .graph import source_into
-from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
+from .graph import pin_node, source_into
+from .params import PERFORMANCE_GROUPS, Kind, Param, Registry, is_lookback_knob
 from .routing import (
     MOD_OPS,
     SAVE_PARAM,
@@ -162,7 +162,8 @@ def blocked(table: Bindings, source: str) -> str | None:
 #   view.screen_strokes                          points and lines both off
 #   fx.mix                                       the effects are off (fx.on)
 #   fx.<effect>.<key> (not .on)                  fx.on off, or that effect off
-#   dream.* (not dream.on)                       the look-back is off (dream.on)
+#   dream.<look-back knob>                       no look-back drawn (plan 36 T4: the graph's)
+#   dream.<dream knob> (not dream.on)            no dream drawn, or the dream off (dream.on)
 #   rot.rate.*, view.plane.*                     rotation is off (view.rotate)
 #
 # Anything else can always show. tools/desk_coverage.py counts with it, and
@@ -173,6 +174,26 @@ _MEDIA = ("view.media_alpha", "view.media_scale", "view.media_mode", "view.media
           "view.media_rate",      # plan 32: the faces' media channel (was view.bmp_*)
           "view.bmp_alpha")       # …and the factory knob 7's alias of view.media_alpha
 _ROTATE = ("rot.rate.", "view.plane.")
+# plan 36 T4 (W4): a look-back's knobs (`params.is_lookback_knob`) show while
+# the graph draws a look-back; every other `dream.*` is the dream node's,
+# shown while a dream is drawn and `dream.on`
+
+
+def drawn_of(spec) -> frozenset[str] | None:
+    """The nodes graph `spec` (a `graph.GraphSpec`) names in its wires —
+    a pin as its node (`lookback.echo.3` the look-back) — what decides
+    whether a look-back's or the dream's knobs can show (plan 36 T4). None
+    with no graph to ask."""
+    if spec is None:
+        return None
+    names = {n for w in spec.all_wires() for n in (w.src, w.node)}
+    return frozenset({*names, *(pin_node(n) for n in names if pin_node(n) is not None)})
+
+
+def _lookback_of(pid: str) -> str:
+    """The look-back a look-back knob is of: `dream.2.fade` → `lookback.2`."""
+    parts = pid.split(".")
+    return "lookback" if len(parts) == 2 else f"lookback.{parts[1]}"
 
 
 def faces_media(spec, selects=None) -> bool | None:
@@ -185,14 +206,17 @@ def faces_media(spec, selects=None) -> bool | None:
     return source_into(spec.all_wires(), "pattern.media", selects) is not None
 
 
-def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
+def cannot_show(pid: str, values, media: bool | None = None,
+                drawn: frozenset[str] | None = None) -> str | None:
     """Why the preset whose bases are `values` ({id: base}; `.get` is all
     that is asked) cannot show `pid`, in a few words ("faces off",
     "kaleido off"), or None when it can — the rule above. A switch the
     values do not name counts as on. `media`: whether its graph wires a
     picture into the faces' layer (`faces_media`); None (no graph to ask)
     counts as wired — `view.media`, which said it before plan 33 T7, is no
-    param any more."""
+    param any more. `drawn`: the nodes the graph names (`drawn_of`) — a
+    look-back's knob shows while its look-back is drawn, the dream's while
+    the dream is (plan 36 T4); None (no graph to ask) counts as drawn."""
     def off(sw: str) -> bool:
         v = values.get(sw)
         return v is not None and not bool(v)
@@ -222,8 +246,13 @@ def cannot_show(pid: str, values, media: bool | None = None) -> str | None:
             name = ".".join(parts[1:-1])
             return f"{name} off" if off(f"fx.{name}.on") else None
         return None
+    if is_lookback_knob(pid):
+        return ("no look-back" if drawn is not None and _lookback_of(pid) not in drawn
+                else None)
     if pid.startswith("dream.") and pid != "dream.on":
-        return "look-back off" if off("dream.on") else None
+        if drawn is not None and "dream" not in drawn:
+            return "no dream"
+        return "dream off" if off("dream.on") else None
     if pid.startswith(_ROTATE):
         return "rotation off" if off("view.rotate") else None
     return None
@@ -242,7 +271,7 @@ ROUTED, MOVED, ON, DESKED = "routed", "moved", "on", "on the desk"
 
 
 def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
-           shows=None, media: bool | None = None
+           shows=None, media: bool | None = None, drawn: frozenset[str] | None = None
            ) -> tuple[list[tuple[str, str]], list[tuple[str, list[str]]]]:
     """Click-to-map's offer (plan 24 C3): the params this preset uses,
     ranked, then the rest by group. A pure function.
@@ -263,7 +292,8 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     meant) — each tier in registry order. A param the preset cannot show is
     never used. `rest` is every other param as [(group, [id, …])], the
     performance groups first, then the session's, each in registry order."""
-    why_not = shows if shows is not None else (lambda pid: cannot_show(pid, values, media))
+    why_not = shows if shows is not None else (
+        lambda pid: cannot_show(pid, values, media, drawn))
     tiers: dict[str, list[str]] = {ROUTED: [], MOVED: [], ON: [], DESKED: []}
     rest: dict[str, list[str]] = {}
     for pid, group in params:
@@ -275,7 +305,7 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
                 tier = ROUTED
             elif pid in defaults and _moved(values.get(pid), defaults[pid]):
                 tier = MOVED
-            elif _switched_on(pid, values):
+            elif _switched_on(pid, values, drawn):
                 tier = ON
         if tier is None:
             rest.setdefault(group, []).append(pid)
@@ -287,9 +317,11 @@ def ranked(params: list[tuple[str, str]], values, defaults, routed, on_desk,
     return used, [(g, rest[g]) for g in groups]
 
 
-def _switched_on(pid: str, values) -> bool:
+def _switched_on(pid: str, values, drawn: frozenset[str] | None = None) -> bool:
     """Is `pid` part of a module `cannot_show` knows that is on — its
-    switch named in `values` and set? (A param of no such module: False.)"""
+    switch named in `values` and set? (A param of no such module: False.)
+    Plan 36 T4: a look-back's knob while its look-back is drawn (`drawn`),
+    the dream's while the dream is drawn and on."""
     if pid.startswith("pattern.") or pid in _PATTERN or pid in _MEDIA:
         return bool(values.get("view.faces"))
     if pid == "view.points_alpha":
@@ -301,8 +333,10 @@ def _switched_on(pid: str, values) -> bool:
     if pid.startswith("fx.") and pid.count(".") >= 2 and not pid.endswith(".on"):
         name = pid.split(".", 1)[1].rsplit(".", 1)[0]
         return bool(values.get("fx.on")) and bool(values.get(f"fx.{name}.on"))
+    if is_lookback_knob(pid):
+        return drawn is not None and _lookback_of(pid) in drawn
     if pid.startswith("dream.") and pid != "dream.on":
-        return bool(values.get("dream.on"))
+        return bool(values.get("dream.on")) and (drawn is None or "dream" in drawn)
     return False
 
 

@@ -23,6 +23,7 @@ import numpy as np
 import pytest
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.media.channels import MediaState
 from hyperspace.media.frame import MediaFrame
 from hyperspace.outputs import Switches, View
@@ -100,9 +101,15 @@ def test_the_faces_wires_are_the_wiring_now():
 def test_the_faces_nodes_are_built_from_the_wires():
     """The pattern node, the shape's `faces` port, the backdrop's sink: the
     pattern node exists only when a wire touches it, `shape.faces` reads
-    what is wired, and a branch under the scene is `grounded`'s `under`."""
+    what is wired, and a branch under the scene is `grounded`'s `under`.
+    Plan 36 T2: a load draws the faces' pattern as its wire, `pattern →
+    shape.faces`; with none the faces are plain and there is no pattern."""
     vs = [View(Switches(), (64, 48))]
-    plain = G.build_graph(vs, G.Wiring(run=()), effects=("acid",))
+    plain = G.build_graph(vs, wired_wiring(G.Wiring(run=())), effects=("acid",))
+    assert plain.nodes["shape"].inputs["faces"] is plain.nodes["pattern"]
+    bare = G.read_graph({"frame": "wired", "wires": [
+        {"from": "shape", "to": "scene.geometry"}, {"from": "scene", "to": "output.all.image"}]})
+    plain = G.build_graph(vs, wired_wiring(bare.wiring()), effects=("acid",))
     assert "pattern" not in plain.nodes and plain.nodes["shape"].inputs["faces"] is None
     assert G.Shape.INPUTS == {"faces": G.IMAGE}
     assert G.PatternNode.KIND == "pattern" and G.PatternNode.INPUTS == {"media": G.IMAGE}
@@ -111,7 +118,7 @@ def test_the_faces_nodes_are_built_from_the_wires():
     assert G.BackdropNode.OUTPUT is None
     spec = G.read_graph(section(("frame", "fx.image"), ("pattern", "acid.image"),
                                 ("acid", "shape.faces")))
-    g = G.build_graph(vs, spec.wiring(), effects=("acid",))
+    g = G.build_graph(vs, wired_wiring(spec.wiring()), effects=("acid",))
     pat, acid = g.nodes["pattern"], g.nodes["acid"]
     assert isinstance(pat, G.PatternNode) and acid.inputs["image"] is pat
     assert g.nodes["shape"].inputs["faces"] is acid and "acid" not in g.run
@@ -119,18 +126,20 @@ def test_the_faces_nodes_are_built_from_the_wires():
     assert order.index("pattern") < order.index("acid") < order.index("shape")
     # a channel straight into the pattern's layer: no fitted node of its own
     spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "pattern.media")))
-    g = G.build_graph(vs, spec.wiring())
+    g = G.build_graph(vs, wired_wiring(spec.wiring()))
     assert g.nodes["pattern"].channel == "a" and not [n for n in g.nodes if n.startswith("media")]
-    assert g.timed == G.build_graph(vs, G.Wiring(run=())).timed
+    assert g.timed == G.build_graph(vs, wired_wiring(G.Wiring(run=()))).timed
     # a branch under the scene
     spec = G.read_graph(section(("frame", "fx.image"), ("media.b", "kaleido.2.image"),
                                 ("kaleido.2", "backdrop.image"),
                                 nodes=[_instance("kaleido", 2)]))
-    g = G.build_graph(vs, spec.wiring(), effects=("kaleido", "kaleido.2"))
+    g = G.build_graph(vs, wired_wiring(spec.wiring(), "trail"), effects=("kaleido", "kaleido.2"))
     under = g.nodes["backdrop"].inputs["under"]
     assert isinstance(under, G.Effect) and under.effect == "kaleido.2"
     assert g.nodes["backdrop"].under_alpha_of == "backdrop_alpha"
-    assert g.nodes["scene"].ground == 0.0 and g.nodes["lookback"].inputs["image"].name == "backdrop"
+    # (plan 36 T4: the look-back's trail added onto the backdrop's picture)
+    assert g.nodes["scene"].ground == 0.0
+    assert g.nodes["composite"].inputs["under"].name == "backdrop"
     # (plan 35 T4: the backdrop is the composite itself — no sink beside it)
     assert isinstance(g.nodes["backdrop"], G.Composite)
 
@@ -191,9 +200,12 @@ def _empty(**kw):
     return ViewState(lines=False, points=False, faces=False, **kw)
 
 
-def _renderer(ctx, media=None, pairs=(), nodes=(), instances=None, values=None):
+def _renderer(ctx, media=None, pairs=(), nodes=(), instances=None, values=None,
+              history=False):
     """A renderer over `media` whose wiring is the section `pairs` says (a
-    run's head always: the section as a load lands it)."""
+    run's head always: the section as a load lands it). `history`: the
+    look-back records the backdrop (plan 36 T3: the capture wire the
+    migration writes for `backdrop.history`, no longer laid on per frame)."""
     from hyperspace.render import Renderer
 
     r = Renderer(ctx)
@@ -207,7 +219,9 @@ def _renderer(ctx, media=None, pairs=(), nodes=(), instances=None, values=None):
     spec = G.read_graph(section(("frame", "fx.image"), *pairs, nodes=nodes),
                         effects=set(st.specs))
     assert not spec.notes, spec.notes
-    r.wiring = spec.wiring()
+    from dataclasses import replace
+
+    r.wiring = wired_wiring(replace(spec.wiring(), backdrop_history=history))
     return r
 
 
@@ -269,7 +283,7 @@ def _rig_frame(ctx, slug, wiring=None, size=(240, 150), frames=4):
     tool = _tool()
     rig = tool.Rig(slug, "absent", ctx)
     if wiring is not None:
-        rig.renderer.wiring = wiring
+        rig.renderer.wiring = wired_wiring(wiring)
     try:
         f = _fbo(ctx, *size)
         vs = [View(Switches(), size, target=f)]
@@ -286,8 +300,9 @@ def test_faces_unwired_draw_as_today(ctx):
     is the frame the pre-plan-33 wiring draws — the faces drawn per face
     with no 1024² pass and nothing of the faces' picture allocated."""
     got, r = _rig_frame(ctx, "party-faces")
-    assert r.wiring.wired and not [w for w in r.wiring.wires          # (plan 35: wired)
-                                             if w.dst == "shape.faces"]
+    # (plan 35: wired; plan 36 T2: the faces' pattern its wire, as a load lands it)
+    assert r.wiring.wired and [w for w in r.wiring.wires if w.dst == "shape.faces"] == [
+        G.Wire("pattern", "shape.faces")]
     assert r.face_pic.tex is None and r._pic is None and not getattr(r, "_pools", {})
     base, _ = _rig_frame(ctx, "party-faces", wiring=G.Wiring())
     assert got[..., :3].max() > 40 and np.array_equal(got, base)

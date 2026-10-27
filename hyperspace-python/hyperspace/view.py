@@ -11,6 +11,7 @@ V3). render.py re-exports it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -128,6 +129,10 @@ class ViewState:
     # plan 34 Z: each resize node's values (`resize[.n].*`, declared from the
     # preset's graph: params.declare_resizes) — resize name → its state
     resize: dict[str, ResizeState] = field(default_factory=dict)
+    # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
+    # the preset's graph: params.declare_lookbacks) — `lookback.<n>` → its
+    # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)
+    lookback: dict[str, Any] = field(default_factory=dict)
     # modulation targets (params.py rot.rate.* / pattern.mod.*): per-plane
     # rate multipliers and the face patterns' inputs — 1.0 is the undriven
     # look; an audio lane routed to them (routing.py) is what the reference

@@ -64,7 +64,7 @@ def shot(ctx, counts: list[int], *, plasma: bool = False,
     if lookback:
         st = r.lookback.state
         st.on, st.echoes, st.gap, st.echo_mix, st.tint_from = True, 8, 1 / 30, 0.8, 0
-        r.lookback.source = None                     # no dream worker: the echoes alone
+        r.dreamer.source = None                      # no dream worker: the echoes alone
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H), 4)])
     s = view()
     for k, n in enumerate(counts):

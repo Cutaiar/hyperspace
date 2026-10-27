@@ -25,6 +25,7 @@ from wiredframe import wiring as wired_for
 from hyperspace import devices, graphview, ui_graph, ui_routing
 from hyperspace import graph as G
 from hyperspace.devices import Port
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 from hyperspace.routing import MOD_OPS
 from hyperspace.ui import PAGES
@@ -37,6 +38,16 @@ def rig(shell_rig):  # noqa: F811
     return shell_rig
 
 
+def _every_file(rig) -> None:
+    """Every effect file's params, as before a graph landed (plan 36 T3:
+    `FxState.hold(None)`) — a canvas these tests build from a render graph
+    no preset's section says."""
+    from hyperspace.fx import declare
+
+    st = rig.reg.fx_state
+    declare(rig.reg, st, st.hold(None))
+
+
 def build(rig, render_graph=None, devs=None):
     return graphview.build(rig.router.table, rig.reg, rig.router, devs, render_graph, None)
 
@@ -45,12 +56,13 @@ def views(*sw):
     return [View(s, (640, 360)) for s in sw]
 
 
-def thru(w, effects, *shows) -> G.Graph:
+def thru(w, effects, *shows, look: str = "off") -> G.Graph:
     """Plan 35 T4: the frame `w` draws on one window per state of `shows`
     (the retired switches as each output's wiring, `tests/wiredframe.py`:
-    `Shows(through=True)` where `Switches(through=True)` was)."""
-    return G.build_graph(views(*(Switches() for _ in shows)), wired_for(w, *shows),
-                         effects=effects)
+    `Shows(through=True)` where `Switches(through=True)` was); plan 36 T4:
+    its look-back as `look` says the old words had it."""
+    return G.build_graph(views(*(Switches() for _ in shows)),
+                         wired_wiring(wired_for(w, *shows, look=look)), effects=effects)
 
 
 def stacked(effects, wiring=None) -> G.Wiring:
@@ -145,7 +157,8 @@ def test_params_group_under_the_render_node_that_owns_them(rig):
     out1 = next(p.id for p in rig.reg if p.id.startswith("output.1."))
     rig.router.table.bindings.append(Binding("key:F9", out1, "toggle"))   # a setter onto it
     g = thru(stacked(("acid", "palette")), ("acid", "palette"), Shows(),
-             Shows(scene=False, through=True))
+             Shows(scene=False, through=True), look="trail")
+    _every_file(rig)
     view = build(rig, g)
     names = {n.id for n in view.nodes}
     # (plan 35 T4: output 2's hands through are a copy of each effect over a
@@ -245,10 +258,14 @@ def test_the_render_graphs_edges_are_image_cables_including_a_placed_effect():
                                    {"from": "hands.layer", "to": "acid.2.image"},
                                    {"from": "acid.2", "to": "output.1.hands"}]})
     assert not spec.notes
-    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid.2",))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()), effects=("acid.2",))
     view = graphview.build(Bindings(), Registry(), None, None, g, spec)
-    wires = [c for c in view.cables if c.kind == "render"]
+    wires = [c for c in view.cables if c.kind == "render" and not G.is_bus(c.ref)]
     assert [c.ref for c in wires] == list(spec.wires)
+    # plan 36 T1: and the rig's bus cables into the ports the section
+    # leaves to All outputs (its own wire takes output.1.hands)
+    assert [c.ref for c in view.cables if c.kind == "render" and G.is_bus(c.ref)] == [
+        G.bus_wire(1, "image"), G.bus_wire(1, "guide"), G.bus_wire(1, "depth")]
     by = {(c.ref.src, c.ref.node): c for c in wires}
     assert by[("shape", "scene")].type == by[("hands", "scene")].type == graphview.GEOMETRY
     assert by[("hands.layer", "acid.2")].type == graphview.IMAGE
@@ -305,7 +322,10 @@ def test_layout_round_trips_through_the_preset_and_the_show(rig):
     from hyperspace.preset import LAYOUT_KEY
     lib, presets, project = rig.lib, rig.lib.presets, rig.lib.project
     lib.load("presets", "party-trip")
-    assert presets.layout == {} and presets.notes == [] and not lib.is_dirty("presets")
+    # (plan 36 T3: the factory `/7` holds the envelopes' and the sequencer's
+    # values, which this rig — the panel's, built without them — lacks)
+    said = [n for n in presets.notes if not n.endswith("…") or "env." not in n]
+    assert presets.layout == {} and said == [] and not lib.is_dirty("presets")
     assert LAYOUT_KEY not in presets.document("party-trip")
     presets.layout["render:shape"] = [520, 40]
     presets.layout["mod.1"] = [260, 300]
@@ -348,7 +368,10 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     depth within theirs); a placed node keeps its own and takes no room."""
     rig.lib.load("presets", "lfo-breathe")
     rig.router.table.add_modifier("smooth", ["lane:0"], rig.reg)
-    g = G.build_graph(views(Switches()), stacked(("acid",)), effects=("acid",))
+    # (plan 36 T4: the look-back drawn, as the old words with it on)
+    g = G.build_graph(views(Switches()), wired_wiring(stacked(("acid",)), "trail"),
+                      effects=("acid",))
+    _every_file(rig)
     view = build(rig, g)
     placed = {"render:shape": (999.0, 999.0)}
     pos = graphview.auto_layout(view, placed)
@@ -362,7 +385,7 @@ def test_auto_layout_gives_every_unplaced_node_a_column(rig):
     # the effects' idle line, and a through wire from where the run starts
     # (the look-back's picture) to where it ends (plan 35 G: All outputs)
     assert view.node("render:acid").idle
-    assert any(c.src_port == "rout:lookback" and c.dst_port == "rin:output.all/image"
+    assert any(c.src_port == "rout:composite" and c.dst_port == "rin:output.all/image"
                for c in graphview.layout(view).throughs)
     assert col == sorted(col) and len(set(col)) == len(col)
     assert x["group:tempo"] == x[graphview.ANALYZER]
@@ -543,11 +566,18 @@ def test_a_d1_placed_effect_from_a_real_spec_is_an_effect_node_with_image_cables
     import json
     doc = json.loads((Path(__file__).parent / "fixtures" / "presets" /
                       "palette-hands.json").read_text())
-    spec = G.read_graph(doc["graph"])
-    g = thru(spec.wiring(), ("acid", "palette"), Shows(), Shows(through=True))
+    # (plan 36 T3: the canvas draws a `/7` frame — the old section migrated,
+    # its placement the wires it stood for)
+    from hyperspace import graphmigrate as M
+
+    old = G.read_graph(doc["graph"])
+    spec = G.read_graph(M.seven(doc, {})[0]["graph"])
+    g = thru(old.wiring(), ("acid", "palette"), Shows(), Shows(through=True))
+    _every_file(rig)
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     node = view.node("render:palette")
-    assert node is not None and isinstance(node.ref, G.Effect) and node.ref.placed == "after"
+    # (plan 36 T3: the placement is the wires it stood for — a wired effect)
+    assert node is not None and isinstance(node.ref, G.Effect) and node.ref.placed == "wire"
     assert view.spec is spec
     wires = [c for c in view.cables if c.kind == "render"]
     into = [c for c in wires if c.dst_port == "rin:palette/image"]
@@ -697,7 +727,7 @@ def test_graph_has_media_area(rig):
         {"from": "scene", "to": "backdrop.scene"}, {"from": "backdrop", "to": "acid.image"},
         {"from": "channel.a", "to": "acid.aux"}, {"from": "acid", "to": "output.all.image"}]})
     assert not spec.notes
-    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()), effects=("acid",))
     assert {"channel.a", "channel.a(wire)"} <= set(g.nodes)
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     assert view.node("render:channel.a(wire)") is None       # one node per channel
@@ -746,7 +776,7 @@ def test_the_new_nodes_sit_in_their_areas(rig):
                         effects={"acid"})
     assert not spec.notes
     declare_switches(rig.reg, ["switch"])
-    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid",))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()), effects=("acid",))
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     area = {n.id: n.area for n in view.nodes}
     for nid in ("render:pattern", "render:switch", "render:channel.a"):
@@ -787,7 +817,7 @@ def test_an_unreached_branch_is_drawn_faint_from_the_spec(rig):
                          "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
                          "wires": [{"from": "channel.a", "to": "acid.2.image"}]},
                         effects={"acid", "acid.2"})
-    g = G.build_graph(views(Switches()), spec.wiring(), effects=("acid", "acid.2"))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()), effects=("acid", "acid.2"))
     assert "acid.2" not in g.nodes
     view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
     n = view.node("render:acid.2")

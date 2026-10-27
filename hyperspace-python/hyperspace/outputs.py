@@ -2,7 +2,8 @@
 
 One frame is drawn per loop; each output — a window on its own screen,
 or an offscreen target standing in for one — shows what the preset's
-graph wires into it (plan 35: its own wires, else All outputs') through
+graph wires into it (plan 35: its own wires; plan 36 T1, else All
+outputs' by the rig's bus cable into that port, `graph.window_ports`) through
 its window's two mutes, the picture and the hands, with its mirror and
 its own dim. A mute is the window's, never the preset's structure: off,
 the window ignores the picture (or the hands and the guide) wired into
@@ -285,6 +286,47 @@ class Offscreen:
             except Exception:  # noqa: BLE001, S110 — teardown is best-effort
                 pass
 
+
+
+class Preview:
+    """Output 1's picture for the control window (2026-10-26: the GRAPH
+    page's backdrop): a publisher in shape — `_draw_render` adds it to
+    output 1's view, with this tap when the window has none of its own, on
+    a frame after the page `want`ed it — that keeps the texture it is
+    handed. Wanted only while the page draws it, so a closed page costs no
+    copy. `tex` is a texture of the render context, which the control
+    window's shares; None before the first picture."""
+
+    kind = "preview"
+    name = ""
+    status = "waiting"
+    fps = 0.0
+    readback_ms = 0.0
+
+    def __init__(self, ctx: moderngl.Context | None = None):
+        self.tap = Offscreen(ctx) if ctx is not None else None
+        self.tex: Any = None
+        self.wanted = False
+
+    def want(self) -> None:
+        """The page draws the picture this frame: copy it next frame."""
+        self.wanted = True
+
+    def take(self) -> bool:
+        """Was it wanted since the last frame? (and forget the wish)"""
+        wanted, self.wanted = self.wanted, False
+        return wanted
+
+    def publish(self, tex, t: float) -> None:
+        self.tex, self.status = tex, "sending"
+
+    def fail(self, why: str) -> None:
+        self.tex, self.status = None, f"error: {why}"
+
+    def close(self) -> None:
+        self.tex = None
+        if self.tap is not None:
+            self.tap.release()
 
 # a frame texture or a layer into a rect of a presenter's framebuffer:
 # 1:1 by texelFetch (the renderer's SHOW_FS) or scaled by the sampler,
