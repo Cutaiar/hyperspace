@@ -351,9 +351,9 @@ def test_a_full_snapshot_from_before_loads_with_no_note_and_no_dot(tmp_path):
     put(rig.home, "before-n8", values=old)
     assert rig.lib.load(PRESETS, "before-n8") == [] and rig.presets.notes == []
     assert not rig.lib.is_dirty(PRESETS)
-    v = rig.reg.fx_state.values["palette"]
-    assert (v["hue_from"], v["hue_to"], v["hue_turn"], v["sat_from"], v["val_to"]) == (
-        0.0, 360.0, 0.0, 0.0, 1.0)
+    # (plan 36 T3: the palette off, in no run, is not in the section — so
+    # it does not exist, and its old ids are dropped with it, said by none)
+    assert "palette" not in rig.reg.fx_state.specs and "fx.palette.on" not in rig.reg
 
 
 def test_the_macros_follow_their_params_and_routes():

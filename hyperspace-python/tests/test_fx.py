@@ -27,6 +27,7 @@ from hyperspace.fx import (
     declare,
     parse,
 )
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.params import Registry
 
 EFFECT = """// @label Test
@@ -256,7 +257,7 @@ def render(ctx, fx: FxState, frames: int = 3) -> np.ndarray:
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)        # plan 33 R23: the run the effects on make, as a load
+    r.wiring = wired_wiring(wiring_of(fx))  # plan 33 R23: the run the effects on make, as a load
     s = ViewState(shape=10, faces=True, pattern=2, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
@@ -411,12 +412,15 @@ def test_factory_presets_name_only_real_params(tmp_path):
             "mandala"} <= set(names)
     for name in names:
         assert lib.load("fx", name) == [], name
-    from hyperspace.graphmigrate import wiring_of
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
+
+    def run_of(st):    # (plan 36 T3: the old words' run, before the wired frame)
+        return wiring_for(state_values(st), specs_of(st), wired=False).run
     lib.load("fx", "noita heavily tripping")
-    assert wiring_of(st).run == ("warp", "fractals", "tripcolour")      # by their @order
+    assert run_of(st) == ("warp", "fractals", "tripcolour")      # by their @order
     assert st.values["warp"]["amount"] == pytest.approx(0.9)
     lib.load("fx", "acid")                           # unnamed ids fall back: warp goes off
-    run = wiring_of(st).run
+    run = run_of(st)
     assert not st.live("warp") and st.live("acid") and "acid" in run and "warp" not in run
 
 
@@ -521,9 +525,9 @@ def test_the_selection_is_a_name_a_load_keeps(tmp_path, monkeypatch):
         rig.frame()
         assert rig.panel.fx_selected == "kaleido.2"
         assert "no effect kaleido.2" in rig.plain
-        rig.panel.fx_selected = "warp"               # a file: its strip, in the graph or not
-        rig.frame()
-        assert "fx.warp.speed" in rig.rects
+        rig.panel.fx_selected = "warp"               # a file the graph does not name:
+        rig.frame()                                  # (plan 36 T3) no such effect either
+        assert "no effect warp" in rig.plain and "fx.warp.speed" not in rig.rects
         assert not any("sel" in k for k in rig.app.presets.document("x")["values"])
     finally:
         rig.close()
@@ -972,6 +976,10 @@ def test_turn_on_is_one_undo_step(tmp_path, monkeypatch):
     st = FxState()
     r = boot(tmp_path / "home", fx=st)
     r.fx = st
+    # (plan 36 T3: warp exists only where a graph names it — one in the run)
+    r.presets.load_doc({"schema": "hyperspace.preset/5", "name": "w", "values": {},
+                        "graph": {"nodes": [], "wires": [{"from": "frame", "to": "warp.image"},
+                                                         {"from": "warp", "to": "fx.image"}]}})
     pushes = []
     real_push = undo.push
     monkeypatch.setattr(undo, "push", lambda *a, **k: (pushes.append(a), real_push(*a, **k))[1])
@@ -1103,7 +1111,7 @@ def face_frame(ctx, fx: FxState, frames: int = 3, pattern: int = 2, faces: tuple
     from hyperspace.view import ViewState
     fbo = ctx.framebuffer(color_attachments=[ctx.renderbuffer((W, H))])
     r = Renderer(ctx, fx=fx)
-    r.wiring = faces_run(*faces)
+    r.wiring = wired_wiring(faces_run(*faces))
     s = ViewState(shape=10, faces=True, pattern=pattern, bright=1.3)
     s.ang = [0.3, 0.7, 1.1, 0.5, 0.9, 1.3]
     for k in range(frames):
@@ -1298,8 +1306,8 @@ def test_the_strip_says_where_its_effect_ends_wherever_it_is_drawn(tmp_path, mon
             imgui.end()
             imgui.end_frame()
         side("acid.3")
-        side("zoomblur")                    # in no group of this graph
-        assert seen[-2:] == [("acid.3", "→ output 2 · → blend aux"), ("zoomblur", None)]
+        side("zoomblur")                    # (plan 36 T3: not in this graph, so no effect)
+        assert seen[-1:] == [("acid.3", "→ output 2 · → blend aux")]
         panel.fx_selected = "acid.3"
         rig.frame()
         assert seen[-1] == ("acid.3", "→ output 2 · → blend aux")
@@ -1419,8 +1427,8 @@ def test_show_on_graph_selects_the_node(tmp_path, monkeypatch):
                "values": {"fx.acid.2.on": True}}
         rig.lib.presets.load_doc(doc)
         wiring = rig.lib.presets.graph.wiring
-        stand_in.wiring = wiring
-        stand_in._graph = G.build_graph(views(Switches(), Switches()), wiring,   # (plan 35)
+        stand_in.wiring = wired_wiring(wiring)
+        stand_in._graph = G.build_graph(views(Switches(), Switches()), wired_wiring(wiring),   # (plan 35)
                                           effects=tuple(sorted(st.specs)))
         rig.panel.fx_selected = "acid.2"
         real = ui.chip
@@ -1596,7 +1604,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
            "media": {"channels": {"b": ["shared:x.png"]}}}
     assert app.presets.load_doc(doc) == []
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/6"
+    assert out["schema"] == "hyperspace.preset/7"
     assert not [k for k in out["values"] if M.retired(k)]
     run = G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image")
     assert run == ("warp", "acid")                     # warp (@order 20) before acid (30)
@@ -1612,7 +1620,7 @@ def test_an_old_preset_saves_no_retired_id(tmp_path):
     sec = {**sec, "wires": [*keep[:at], *rerun, *keep[at:]]}
     app.presets.graph.land(G.read_graph(sec), sec)
     out = app.presets.document("old")
-    assert out["schema"] == "hyperspace.preset/6"
+    assert out["schema"] == "hyperspace.preset/7"
     assert G.run_of(G.read_graph(out["graph"]), "lookback", "output.all.image") == (
         "acid", "warp")
     assert not [k for k in out["values"] if M.retired(k)]

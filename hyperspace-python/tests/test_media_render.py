@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.media import channels
 from hyperspace.media.channels import MediaState
 from hyperspace.media.frame import MediaFrame
@@ -118,7 +119,7 @@ def test_no_backdrop_graph_unchanged():
 
     states = [{}, {"scene": False}, {"through": True}, {"hands": False},
               {"scene": False, "through": True}]
-    one = G.build_graph([_view()])
+    one = G.build_graph([_view()], wired_wiring(G.Wiring()))
     assert _names(one) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                            "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     for kw in states:
@@ -181,14 +182,14 @@ def test_the_channels_are_wire_ends():
     assert G.wire_node_kind("media.d") == "media"
     spec = G.read_graph({"wires": [{"from": "media.c", "to": "output.2.image"}]})
     assert spec.notes == () and spec.wiring().wires == (G.Wire("media.c", "output.2.image"),)
-    g = G.build_graph([_view(), _view()], spec.wiring())
+    g = G.build_graph([_view(), _view()], wired_wiring(spec.wiring()))
     end = g.nodes["output.2"].inputs["image"]
     assert isinstance(end, G.Shown) and end.inputs["image"].name == "channel.c"
     assert isinstance(end.inputs["image"], G.MediaNode)
     assert end.inputs["image"].alpha_of is None
     # the backdrop's channel wired too: two nodes, the wire's at alpha 1
-    both = G.build_graph([_view()], G.Wiring(
-        backdrop="c", wires=(G.Wire("media.c", "output.1.image"),)))
+    both = G.build_graph([_view()], wired_wiring(G.Wiring(
+        backdrop="c", wires=(G.Wire("media.c", "output.1.image"),))))
     assert both.nodes["channel.c"].alpha_of == "backdrop_alpha"
     assert both.nodes["channel.c(wire)"].alpha_of is None
 
@@ -234,18 +235,23 @@ def _renderer(ctx, media=None, wires=()):
     r = Renderer(ctx)
     r.ghost.state.on = False
     r.media = media
-    if wires:
-        r.wiring = G.Wiring(wires=tuple(wires))
+    # (plan 36 T3: the rig's words before the wired frame, kept for `_back`;
+    # the renderer takes them wired, as the migration writes them)
+    r.old_wiring = G.Wiring(wires=tuple(wires))
+    r.wiring = wired_wiring(r.old_wiring)
     return r
 
 
-def _back(r, c: str = "a"):
+def _back(r, c: str = "a", history: bool = False):
     """`r` with channel `c` wired under the scene (plan 33 R: the section's
     `media.<c> → backdrop.image`, as `GraphSpec.wiring` lands it — not
-    `backdrop.channel`); "" unwires it."""
+    `backdrop.channel`); "" unwires it. `history`: the look-back records the
+    backdrop too (plan 36 T3: a wire, `backdrop → lookback.capture` — no
+    longer laid on per frame from `backdrop.history`)."""
     from dataclasses import replace
 
-    r.wiring = replace(r.wiring, backdrop=c)
+    r.old_wiring = replace(r.old_wiring, backdrop=c, backdrop_history=history and bool(c))
+    r.wiring = wired_wiring(r.old_wiring)
     return r
 
 
@@ -337,10 +343,12 @@ def test_backdrop_under_scene(ctx):
 
 
 def test_backdrop_needs_the_channels(ctx):
-    """A renderer with no media state draws no backdrop (and builds none)."""
+    """A renderer with no media state draws no backdrop. Plan 36 T3: the
+    wire builds its node (what is wired is built, never read from the
+    renderer's state), and it draws nothing."""
     r = _back(_renderer(ctx, None))
     (pic,) = _draw(ctx, r, _empty())
-    assert "backdrop" not in r._graph.nodes and (pic[..., :3] == 0).all()
+    assert (pic[..., :3] == 0).all()
 
 
 def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
@@ -349,14 +357,12 @@ def test_the_graph_is_rebuilt_only_when_the_backdrop_changes(ctx):
     g = r._graph
     _draw(ctx, r, _empty(backdrop_alpha=0.3))
     assert r._graph is g                                    # alpha is per frame
-    _draw(ctx, r, _empty(backdrop_history=True))
+    _draw(ctx, _back(r, "a", history=True), _empty())
     # (plan 35 T4: what the look-back records is a wire of the graph's)
     assert r._graph is not g
     assert r._graph.nodes["lookback(capture)"].inputs["image"].name == "backdrop"
     _draw(ctx, _back(r, "b"), _empty())
-    # (the history is the frame's, laid on for the graph alone: the base is the preset's)
     assert r._graph.nodes["backdrop"].inputs["under"].channel == "b"
-    assert not r.wiring.backdrop_history
 
 
 def test_media_wire_to_output(ctx):
@@ -558,18 +564,18 @@ def test_an_effect_after_the_scene_sits_after_the_backdrop_too():
     placed = (G.EffectAt("acid", 2, after="scene"),)
     effects = ("acid", "acid.2")
     vs = [_view()]
-    base = G.build_graph(vs, G.Wiring(placed=placed), effects=effects)
+    base = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed)), effects=effects)
     assert base.nodes["acid.2"].inputs["image"] is base.nodes["scene"]
-    on = G.build_graph(vs, G.Wiring(placed=placed, backdrop="a"), effects=effects)
+    on = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a")), effects=effects)
     a2 = on.nodes["acid.2"]
     assert a2.inputs["image"] is on.nodes["backdrop"]
     assert on.nodes["backdrop"].inputs["over"] is on.nodes["scene"]
     assert on.nodes["lookback"].inputs["image"] is a2
     assert on.nodes["lookback(capture)"].inputs["image"] is on.nodes["scene"]   # the scene alone
-    hist = G.build_graph(vs, G.Wiring(placed=placed, backdrop="a", backdrop_history=True),
+    hist = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="a", backdrop_history=True)),
                            effects=effects)
     assert hist.nodes["lookback(capture)"].inputs["image"] is hist.nodes["acid.2"]
-    off = G.build_graph(vs, G.Wiring(placed=placed, backdrop=""), effects=effects)
+    off = G.build_graph(vs, wired_wiring(G.Wiring(placed=placed, backdrop="")), effects=effects)
     assert _names(off) == _names(base)
 
 
@@ -582,7 +588,7 @@ def test_the_backdrop_shows_through_an_effect_after_the_scene(ctx):
     st.set_instances({"acid": 2})
     st.values["acid.2"].update(on=True, mix=1.0, twist=1.5, bend=0.05)
     assert not r.fx.compile_all()
-    r.wiring = G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),), backdrop="a")
+    r.wiring = wired_wiring(G.Wiring(placed=(G.EffectAt("acid", 2, after="scene"),), backdrop="a"))
 
     def red(pic):
         return ((pic[..., 0] > 200) & (pic[..., 1] < 60) & (pic[..., 2] < 60)).mean()
@@ -614,16 +620,16 @@ def test_a_composite_lays_the_scene_and_its_effect_over_the_media(ctx):
         return G.read_graph({"frame": "wired", "nodes": list(nodes),
                              "wires": [{"from": a, "to": b} for a, b in pairs]}).wiring()
 
-    r.wiring = wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
-                    ("scene", "composite.over"), ("composite", "output.all.image"))
+    r.wiring = wired_wiring(wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+                    ("scene", "composite.over"), ("composite", "output.all.image")))
     (pic,) = _draw(ctx, r, _empty())
     assert red(pic) == 1.0, red(pic)
     (shaped,) = _draw(ctx, r, _shape())
     assert 0.2 < red(shaped) < 1.0, red(shaped)              # the faces over the still
-    r.wiring = wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
+    r.wiring = wired_wiring(wire(("shape", "scene.geometry"), ("channel.a", "composite.under"),
                     ("scene", "kaleido.image"), ("kaleido", "composite.over"),
                     ("composite", "output.all.image"),
-                    nodes=({"kind": "composite"}, {"kind": "effect", "file": "kaleido"}))
+                    nodes=({"kind": "composite"}, {"kind": "effect", "file": "kaleido"})))
     (pic,) = _draw(ctx, r, _empty(), frames=2)
     assert "kaleido" in r.stats["effects"] and red(pic) == 1.0, red(pic)
     (shaped,) = _draw(ctx, r, _shape(), frames=2)
@@ -655,7 +661,8 @@ def test_a_static_backdrop_in_the_history_keeps_its_brightness(ctx):
     blue = 120
     got = {}
     for history in (False, True):
-        r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue))))))
+        r = _back(_renderer(ctx, _media(a=Still(_rgba(16, 9, (0, 0, blue))))),
+                  history=history)
         r.lookback.state.on = True                      # the default echoes
         size = (96, 64)
         v = View(Switches(), size, target=_fbo(ctx, *size))

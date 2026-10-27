@@ -22,7 +22,7 @@ from hyperspace.library import LibraryError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "merge-31-32"
 V2, V3, V4 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/4"
-V6 = "hyperspace.preset/6"
+V6 = "hyperspace.preset/7"   # (plan 36 T3: the save schema, named for the row it pinned)
 CLIP = "shared:loops/tunnel.mp4"
 
 
@@ -41,8 +41,12 @@ def _backdrop(app, c: str | None) -> None:
     if c is None:
         gs.land(None)
         return
-    section = {"wires": [{"from": "frame", "to": "fx.image"},
-                         {"from": f"media.{c}", "to": "backdrop.image"}]}
+    old = {"wires": [{"from": "frame", "to": "fx.image"},
+                     {"from": f"media.{c}", "to": "backdrop.image"}]}
+    # (plan 36 T3: a GRAPH landing is a wired frame — the old words wired)
+    from hyperspace import graphmigrate as M
+
+    section = M.wired_section(M.renamed(old), G.read_graph(old))
     gs.land(G.read_graph(section), section)
 
 
@@ -63,7 +67,7 @@ def _pattern_and_bin(app) -> None:
 
 
 def test_the_ladder_is_one_list():
-    assert preset.VERSIONS == (2, 3, 4, 5, 6)      # (plan 35, row 385: /6 the wired frame)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)   # (plan 35: /6 the wired frame; plan 36 T3: /7)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     assert preset.WIRED_SCHEMA == V6
     # the factory generator's rule (`generated`): /3 for a pattern, else /2

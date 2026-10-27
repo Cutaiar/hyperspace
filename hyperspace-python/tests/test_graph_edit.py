@@ -788,7 +788,8 @@ def test_inserting_an_effect_no_one_holds_uses_instance_one_and_switches_it_on(t
     landing — the first gesture shows something."""
     rig, e, pushed = free_rig(tmp_path, ("lookback", "output.all.image"))
     reg = rig.reg
-    assert not reg["fx.kaleido.on"].value and not reg["fx.wobble.on"].value
+    # (plan 36 T3: neither exists before a gesture names it)
+    assert "fx.kaleido.on" not in reg and "fx.wobble.on" not in reg
     assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
     assert e.added == "kaleido" and run_of(rig) == ("kaleido",)
     assert reg["fx.kaleido.on"].value is True
@@ -816,12 +817,12 @@ def test_undo_of_an_insert_restores_the_on_value_too(tmp_path):
     from test_undo import settle
 
     rig, e, _ = free_rig(tmp_path, ("lookback", "output.all.image"), undo_rig=True)
-    assert rig.reg["fx.kaleido.on"].value is False
+    assert "fx.kaleido.on" not in rig.reg            # (plan 36 T3: not in the section)
     assert e.insert_effect(("lookback", "output.all.image"), "kaleido") is None
     assert rig.reg["fx.kaleido.on"].value is True
     settle(rig)
     assert len(rig.undo.stack) == 1 and rig.undo.undo()
-    assert rig.reg["fx.kaleido.on"].value is False
+    assert "fx.kaleido.on" not in rig.reg           # (gone with its node: plan 36 T3)
     assert run_of(rig) == () and wires_of(rig) == {("lookback", "output.all.image")}
 
 
@@ -964,7 +965,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert n is not None and n.faint and not n.idle
     assert graphview.summary(n)[0] == graphview.REACHES_NOTHING
     doc = json.loads(rig.presets.save_as("Out").read_text())
-    assert doc["schema"] == "hyperspace.preset/6"
+    assert doc["schema"] == "hyperspace.preset/7"
     assert {"kind": "effect", "file": "acid"} in doc["graph"]["nodes"]
     settle(rig)
     assert rig.undo.undo()           # (both unwires inside one settle: one step)
@@ -976,7 +977,7 @@ def test_an_instance_one_effect_taken_out_of_the_run_stays_faint(tmp_path):
     assert e2.unwire("acid", "output.all.image") is None
     assert e2.wire("rout:lookback", "rin:output.all/image") is None
     assert e2.place_effect(("lookback", "output.all.image"), "acid") is None
-    assert rig2.presets.graph.spec.to_json()["nodes"] == []
+    assert rig2.presets.graph.spec.to_json()["nodes"] == [{"kind": "hands", "laid": "over"}]
 
 
 def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
@@ -996,7 +997,7 @@ def test_an_unwired_instance_one_saves_with_its_entry_on_or_off(tmp_path):
     for name, on in (("On", True), ("Off", False)):
         rig.reg["fx.huecycle.on"].set(on)
         doc = json.loads(rig.presets.save_as(name).read_text())
-        assert doc["schema"] == "hyperspace.preset/6", name
+        assert doc["schema"] == "hyperspace.preset/7", name
         assert {"kind": "effect", "file": "huecycle"} in doc["graph"]["nodes"], name
         assert G.run_of(G.read_graph(doc["graph"]), "lookback", "output.all.image") == (
             "plasma", "kaleido", "zoomblur"), name
@@ -1207,6 +1208,11 @@ def test_route_from_lists_the_lfos_and_envelopes_on_a_modulatable_param(banks, r
                         lambda pan, q: (seen.append(q.id), real(pan, q)))
     monkeypatch.setattr(imgui, "begin_menu", lambda label, *a: False)
     monkeypatch.setattr(imgui, "menu_item_simple", lambda label, *a, **k: False)
+    # (plan 36 T3: an effect's params exist where the graph names it)
+    gs = rig.panel.library.presets.graph
+    spec = G.read_graph({**gs.spec.to_json(), "nodes": [
+        *gs.spec.to_json()["nodes"], {"kind": "effect", "file": "glimmer"}]})
+    gs.land(spec, spec.to_json())
     g = rig.reg["fx.glimmer.mix"]
     imgui.new_frame()
     imgui.begin("menu")
@@ -1461,7 +1467,9 @@ def test_every_frame_node_and_wire_deletes(tmp_path, slug):
         e.said = ""
         assert e.drop_node(f"render:{name}") is None, name
         assert e.said, name
-    assert {k: v for k, v in gs.spec.to_json().items() if v} == {"frame": "wired"}
+    # (plan 36 T3: hands 1 is always there, its entry always written)
+    assert {k: v for k, v in gs.spec.to_json().items() if v} == {
+        "frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
     assert pushed and all(p.startswith(("unwire", "delete")) for p in pushed)
     rig, e, _ = wired_rig(tmp_path / "nodes-first", slug=slug)
     gs = rig.presets.graph

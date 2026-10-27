@@ -39,6 +39,7 @@ from test_graph_faces import (
 
 from hyperspace import graph as G
 from hyperspace import media_tex
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.media.frame import MediaFrame
 from hyperspace.outputs import Switches, View
 
@@ -61,7 +62,7 @@ def test_the_delay_write_runs_before_the_capture():
     spec = G.read_graph(section(("frame", "fx.image"), ("scene", "delay.image"),
                                 ("delay", "shape.faces"), nodes=DELAY))
     assert not spec.notes, spec.notes
-    g = G.build_graph(vs, spec.wiring())
+    g = G.build_graph(vs, wired_wiring(spec.wiring()))
     order = [n.name for n in g.order]
     write = g.nodes["delay(write)"]
     assert isinstance(write, G.DelayWrite) and write.delay == "delay"
@@ -290,8 +291,8 @@ def test_a_graph_rebuild_keeps_the_delay(ctx):
     for k in range(2):
         _frame(ctx, r, s, vs, size, k)
     old = r._graph
-    r.wiring = G.read_graph(section(("frame", "fx.image"), *pairs,
-                                    ("media.b", "output.3.image"), nodes=DELAY)).wiring()
+    r.wiring = wired_wiring(G.read_graph(section(("frame", "fx.image"), *pairs,
+                                    ("media.b", "output.3.image"), nodes=DELAY)).wiring())
     got = _frame(ctx, r, s, vs, size, 2)
     assert r._graph is not old and r.delay_pair("delay").holds
     assert _mid(got[1]) == RED and _mid(got[2]) == BLUE
@@ -308,7 +309,7 @@ def test_a_load_resets_the_delays_and_a_rebuild_keeps_them(ctx):
     vs, s = _views(ctx, size), _faces()
     for k in range(2):
         assert _mid(_frame(ctx, r, s, vs, size, k)[1]) == ((0, 0, 0) if k == 0 else RED)
-    r.wiring = G.read_graph(section(("frame", "fx.image"), *pairs, nodes=DELAY)).wiring()
+    r.wiring = wired_wiring(G.read_graph(section(("frame", "fx.image"), *pairs, nodes=DELAY)).wiring())
     assert _mid(_frame(ctx, r, s, vs, size, 2)[1]) == RED
     r.reset_delays()
     assert _mid(_frame(ctx, r, s, vs, size, 3)[1]) == (0, 0, 0)
@@ -344,7 +345,7 @@ def test_a_delay_leaving_the_graph_is_released(ctx):
     for k in range(2):
         _frame(ctx, r, s, vs, size, k)
     assert "delay" in r._delays
-    r.wiring = G.read_graph(section(("frame", "fx.image"))).wiring()
+    r.wiring = wired_wiring(G.read_graph(section(("frame", "fx.image"))).wiring())
     for k in range(SIZED_KEEP_FRAMES - 1):
         _frame(ctx, r, s, vs, size, k)
         assert "delay" in r._delays, k
@@ -404,7 +405,7 @@ def test_nothing_of_plan_33_has_an_own_size(ctx):
     from hyperspace.render import Renderer
 
     vs = [View(Switches(), (240, 150))]
-    graphs = [("default", G.build_graph(vs, G.Wiring(run=())), Renderer(ctx))]
+    graphs = [("default", G.build_graph(vs, wired_wiring(G.Wiring(run=()))), Renderer(ctx))]
     tool = _tool()
     for slug in tool.FIXTURE_PRESETS:
         if slug in PLAN_34:

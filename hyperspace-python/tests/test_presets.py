@@ -59,6 +59,10 @@ def boot(home, show: str | None = "house"):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    # plan 31, as app.main: the envelopes and the sequencer beside the LFOs
+    # (plan 36 T3: the factory `/7` files hold their values)
+    envelope.register(reg, envelope.Envelopes(), clock)
+    sequencer.register(reg, sequencer.Sequencer(), clock)
     # the table before attach, as app.main reads it: the desk's session
     # param (`desk.slew`) is the table's and exists when the show lands
     table = Bindings.load(bindings_path(home), legacy_midi=None)
@@ -103,7 +107,8 @@ def test_a_preset_load_lands_every_base_and_replaces_every_route(rig):
     default — and every performer row is the file's; the input rows stay."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     reg["view.bright"].set(3.3)                         # a view base off default
-    reg["fx.kaleido.on"].set(not reg["fx.kaleido.on"].value)   # an fx toggle
+    reg["fx.on"].set(not reg["fx.on"].value)            # an fx toggle (plan 36 T3: the
+    #                                                     effects are the startup preset's)
     reg["dream.fade"].set(2.0)                          # a dream value
     table.add(Binding("hand:7", "view.speed", "push", 0.3))    # a hand route
     keys = [b.to_json() for b in table.bindings
@@ -584,7 +589,8 @@ def test_module_labels_are_recorded_and_never_chain_load(rig):
     rig.presets.load("LABELS")
     assert lib.current("fx") == "trip" and not lib.is_dirty("fx")
     assert reg.snapshot("fx") == lib.resolved("fx", {"fx.on": True})
-    assert reg["fx.kaleido.on"].value == lib.defaults("fx")["fx.kaleido.on"] != trip["fx.kaleido.on"]
+    # (plan 36 T3: the preset's graph names no kaleido, so it does not exist)
+    assert "fx.kaleido.on" not in reg and trip["fx.kaleido.on"]
     assert lib.current("dream") is None
     reg["fx.mix"].set(0.3)
     assert lib.is_dirty("fx")                               # the dot is live against the load
@@ -612,7 +618,7 @@ def test_a_preset_round_trips(rig):
     assert path == rig.home / "presets" / "round-trip.json"
     doc = json.loads(path.read_text())
     # (row 394: every save is the newest schema)
-    assert doc["schema"] == "hyperspace.preset/6" and doc["name"] == "Round Trip"
+    assert doc["schema"] == "hyperspace.preset/7" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
     assert doc["modules"] == {"fx": "acid"}
     # every performance base, the media family's too — and no retired id
@@ -757,13 +763,14 @@ def expected_desk(slug: str) -> list[dict] | None:
 
 
 def test_the_factory_presets_are_preset_2_performance_files():
-    """Every factory preset is a performance file; its macros are the
-    generator's (plan 13 WP5: lfo-breathe's Breathe, none elsewhere). Each
-    is a /2 but seq-demo, whose pattern makes it the one /3 (plan 31 P):
-    the generator's rule (`factory_schema`), the factory being the build's
-    own stock, never a save (row 394: a save is `/6`)."""
+    """Every factory preset's source is a performance file; its macros are
+    the generator's (plan 13 WP5: lfo-breathe's Breathe, none elsewhere).
+    Each is a /2 but seq-demo, whose pattern makes it the one /3 (plan 31
+    P): the generator's rule (`factory_schema`). Plan 36 T3: the sources
+    (`preset.FACTORY_SOURCES`) are what the factory's `/7` are migrated from
+    (tests/test_plan36_seven.py)."""
     reg_ids = {p.id: p for p in boot_registry()}
-    for path in sorted((FACTORY / "presets").glob("*.json")):
+    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):
         doc = json.loads(path.read_text())
         want = preset.SCHEMA_V3 if path.stem == "seq-demo" else preset.SCHEMA
         assert doc["schema"] == want == preset.factory_schema(doc), path.name
@@ -777,7 +784,7 @@ def test_the_factory_presets_are_preset_2_performance_files():
         for row in doc["routes"]:
             b = Binding.from_json(row)
             assert routing.is_continuous(b.scheme) and b.op in routing.MOD_OPS, (path.name, row)
-    assert json.loads((preset.FACTORY_DIR / "lfo-breathe.json").read_text())["macros"]
+    assert json.loads((preset.FACTORY_SOURCES / "lfo-breathe.json").read_text())["macros"]
     for name in ("house", "party"):
         proj = json.loads((FACTORY / "projects" / f"{name}.hyp.json").read_text())
         assert proj["schema"] == "hyperspace.project/2" and proj["startup"] == proj["bank"][0]
@@ -793,13 +800,13 @@ def test_the_party_presets_routes_are_the_codes():
         "party-tumble", "party-faces", "party-field", "party-wake", "party-trip",
         "party-acid", "party-mandala", "party-noita")
     for slug in preset.PARTY:
-        doc = json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())
+        doc = json.loads((preset.FACTORY_SOURCES / f"{slug}.json").read_text())
         routes = [b.to_json() for b in preset.FACTORY_PRESETS[slug].routes()]
         assert doc["routes"] == routes, slug
         assert doc["name"] == slug.split("-", 1)[1].upper()
     lanes = [b.to_json() for b in routing.legacy6_routes()]
     for name in json.loads((FACTORY / "projects" / "house.hyp.json").read_text())["bank"]:
-        path = preset.FACTORY_DIR / f"{name.lower().replace(' ', '-')}.json"
+        path = preset.FACTORY_SOURCES / f"{name.lower().replace(' ', '-')}.json"
         assert json.loads(path.read_text())["routes"] == lanes, name
 
 
@@ -828,7 +835,7 @@ def test_every_factory_presets_desk_is_the_generators():
     assert desk == from_map
     fresh = preset.desk_json(preset.fresh_desk())
     assert fresh == [d for d in desk if d["target"] not in apc40.TOGGLES] and len(fresh) == 26
-    paths = sorted(preset.FACTORY_DIR.glob("*.json"))
+    paths = sorted(preset.FACTORY_SOURCES.glob("*.json"))
     # 8 house, 9 party, 5 made from routing presets, plan 18's hands-orbit,
     # the gamepad dial's prototype, plan 31's seq-demo
     assert len(paths) == 25
@@ -883,7 +890,7 @@ def test_every_factory_presets_desk_is_the_generators():
                 if inv.is_invariant(Binding.from_json({**d, "layer": "preset"}))] \
             == sorted(routing.TOGGLE_DESK_ROWS), path.name
     for slug in ("party-tumble", "party-faces", "party-field"):
-        assert json.loads((preset.FACTORY_DIR / f"{slug}.json").read_text())["desk"] == desk
+        assert json.loads((preset.FACTORY_SOURCES / f"{slug}.json").read_text())["desk"] == desk
 
 
 def test_write_factory_regenerates_every_factory_file(tmp_path):
@@ -891,7 +898,7 @@ def test_write_factory_regenerates_every_factory_file(tmp_path):
     generator rewrites the party presets' routes, desk and macros and every
     other preset's desk from code, and writes the presets made from routing
     presets whole; everything else in a file is data it keeps."""
-    for path in preset.FACTORY_DIR.glob("*.json"):
+    for path in preset.FACTORY_SOURCES.glob("*.json"):
         spec = preset.FACTORY_PRESETS.get(path.stem)
         if spec is not None and spec.values is not None:
             continue                                     # written whole: none to start from
@@ -901,10 +908,10 @@ def test_write_factory_regenerates_every_factory_file(tmp_path):
             if path.stem in preset.PARTY else doc["macros"]
         (tmp_path / path.name).write_text(json.dumps(doc))
     preset.write_factory(tmp_path)
-    for path in preset.FACTORY_DIR.glob("*.json"):
+    for path in preset.FACTORY_SOURCES.glob("*.json"):
         assert (tmp_path / path.name).read_text() == path.read_text(), path.name
     assert sorted(p.name for p in tmp_path.glob("*.json")) == \
-        sorted(p.name for p in preset.FACTORY_DIR.glob("*.json"))
+        sorted(p.name for p in preset.FACTORY_SOURCES.glob("*.json"))
 
 
 def test_every_factory_presets_hand_rows_are_named():
@@ -939,7 +946,7 @@ def test_the_routing_presets_are_full_factory_presets(rig):
     for name in ("legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play",
                  "hands-orbit"):                         # plan 18 WP4's, made the same way
         assert rig.lib.is_factory("presets", name), name
-        doc = json.loads((preset.FACTORY_DIR / f"{name}.json").read_text())
+        doc = json.loads((preset.FACTORY_SOURCES / f"{name}.json").read_text())
         assert doc == preset.generated(name), name
         rig.reg["view.shape"].set(5)
         rig.presets.load(name)
@@ -1068,7 +1075,7 @@ def test_hands_orbit_is_five_pushes_onto_the_camera(rig):
     assert routing.referee(routes)[1] == []
     spec = preset.FACTORY_PRESETS[ORBIT]
     assert spec.routes is preset.hands_orbit_routes and spec.desk is None
-    doc = json.loads((preset.FACTORY_DIR / f"{ORBIT}.json").read_text())
+    doc = json.loads((preset.FACTORY_SOURCES / f"{ORBIT}.json").read_text())   # (its source)
     assert doc == preset.generated(ORBIT)
     assert doc["values"] == {} and doc["macros"] == {} and "desk" not in doc
     assert rig.lib.is_factory("presets", ORBIT) and ORBIT in rig.lib.list("presets")
@@ -1729,30 +1736,31 @@ FIXTURE_DIR = FACTORY.parents[1] / "tests" / "fixtures" / "presets"
 
 
 def test_a_wired_preset_saves_as_v6(rig):
-    """Row 385, row 394: every save is `hyperspace.preset/6`, the frame
-    edited or not; the ladder reads `/2` … `/6`, and a `/7` file is refused
-    in its words."""
-    assert preset.VERSIONS == (2, 3, 4, 5, 6)
-    assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/6"
+    """Row 385, row 394: every save is the newest schema — plan 36 T3:
+    `hyperspace.preset/7` — the frame edited or not; the ladder reads `/2`
+    … `/7`, and a `/8` file is refused in its words."""
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)
+    assert graphmigrate.WIRED_SCHEMA == preset.WIRED_SCHEMA == "hyperspace.preset/7"
     rig.presets.load_doc({"schema": preset.SCHEMA, "name": "edited", "values": {}})
     section = rig.presets.graph.free_doc()
     assert section["frame"] == "wired"
     edited = {**section, "wires": [w for w in section["wires"]
                                    if w["to"] != "lookback.capture"]}
-    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/6"
+    assert rig.presets.document("edited")["schema"] == "hyperspace.preset/7"
     rig.presets.graph.land(G.read_graph(edited), edited)
     doc = rig.presets.document("edited")
-    assert doc["schema"] == "hyperspace.preset/6" and doc["graph"] == edited
-    put(rig.home, "SEVEN", schema="hyperspace.preset/7")
+    assert doc["schema"] == "hyperspace.preset/7" and doc["graph"] == edited
+    put(rig.home, "EIGHT", schema="hyperspace.preset/8")
     rig.lib.poll()
     with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
-        rig.lib.read("presets", "SEVEN")
+        rig.lib.read("presets", "EIGHT")
 
 
 @pytest.mark.parametrize("name", WIRED_FIXTURES)
 def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
     """Each of T3's `/6` fixtures, loaded, saved and loaded into a fresh rig,
-    lands the same `GraphSpec`, and saves `/6` again."""
+    lands the same `GraphSpec`, and saves `/7` (plan 36 T3) — the second
+    load reads it as it is."""
     src = FIXTURE_DIR / f"{name}.json"
     assert json.loads(src.read_text())["schema"] == "hyperspace.preset/6"
     spec, saved = None, None
@@ -1768,7 +1776,7 @@ def test_a_wired_frame_preset_saves_and_loads(tmp_path, name):
             assert got == spec
         spec = got
         saved = r.presets.save_as(name).read_text()
-        assert json.loads(saved)["schema"] == "hyperspace.preset/6"
+        assert json.loads(saved)["schema"] == "hyperspace.preset/7"
 
 
 # ---------------------------------------------------------------- a new preset (plan 35 T7)
@@ -1807,7 +1815,7 @@ def test_a_new_preset_is_factory_values_and_nothing_wired(rig, name):
     assert doc["routes"] == []
     assert reg.snapshot(part="session") == kept
     spec = rig.presets.graph.spec
-    assert spec.to_json() == {"frame": "wired", "nodes": []}
+    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}   # (plan 36 T3: hands written)
     assert G.reaches(spec) == frozenset()
     assert lib.current("presets") == preset.UNTITLED_PRESET
     assert lib.is_dirty("presets")
@@ -1873,7 +1881,7 @@ def test_a_new_preset_saves_and_loads_back_empty(rig):
     rig.presets.save_as("blank")
     _spoil(rig, "hex-engine")
     rig.presets.load("blank")
-    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": []}
+    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
     assert rig.router.table.routes() == []
     assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
 
@@ -1936,7 +1944,7 @@ def test_resize_values_save_and_load_with_the_preset(tmp_path):
     assert r.presets.load("CROP") == []
     assert r.reg["resize.2.crop_x"].value == 0.3
     saved = r.presets.save_as("CROP").read_text()
-    assert json.loads(saved)["schema"] == "hyperspace.preset/6"
+    assert json.loads(saved)["schema"] == "hyperspace.preset/7"
     assert json.loads(saved)["values"]["resize.2.crop_x"] == 0.3
     (b / "presets").mkdir(parents=True)
     (b / "presets" / "crop.json").write_text(saved)

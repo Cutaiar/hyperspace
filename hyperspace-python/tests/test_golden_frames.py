@@ -145,8 +145,9 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
             assert said[hands]["missing"] == [], slug
             assert said[hands]["hands_shown"] is (hands == "present"), slug
     # the fixtures: the tool's list, each a file under tests/fixtures/ and
-    # never a factory preset, loaded with nothing missing and no note, its
-    # graph landed (the wiring the manifest records is not the default)
+    # never a factory preset, loaded with nothing missing and no note — (plan
+    # 36 T3) every fixture an old file, a migration input — its graph landed
+    # as its `/7`
     tool = _tool()
     assert list(doc["fixture_states"]) == list(doc["fixtures"]) == list(tool.FIXTURE_PRESETS)
     for slug, f in doc["fixture_states"].items():
@@ -157,26 +158,27 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         # are the windows' mutes, not switches emulated: the blank frame and
         # the channel alone wire no hands, so none is shown, and the blank
         # frame builds the outputs and nothing else)
-        assert said["missing"] == [] and said["notes"] == []
+        from hyperspace.preset import NO_GRAPH_SAID
+
+        # (the blank frame: the strip says it holds nothing, plan 36 T3)
+        want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
+        assert said["missing"] == [] and said["notes"] == want, slug
         no_hands = ("blank-frame", "channel-out-only")
         assert said["hands_shown"] is (slug not in no_hands), slug
         if slug == "blank-frame":
             assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
-        # the graph landed as the file says it (the section, not a repr of
-        # the Wiring: a field added later moves no golden). Plan 32 T6: a
-        # media fixture's proof is its channels — a wire with no node, or
-        # no graph at all (the backdrop is a value). Plan 35 T3: a wired
-        # frame (`/6`) lands as it reads (`{"frame": "wired"}` with its
-        # empty node list), and the blank one holds nothing at all
-        from hyperspace.graph import read_graph
+        # the graph landed as its `/7` says it (the section, not a repr of
+        # the Wiring: a field added later moves no golden) — plan 36 T3: a
+        # wired frame that reads as it is, no placement in it, every hands
+        # entry and `laid` written. Plan 35 T3: the blank one holds nothing
+        # but its hands entry
+        from hyperspace.graph import FRAME_KEY, PLACE_KEYS, WIRED_FRAME, read_graph
 
-        file_graph = json.loads((ROOT / f["file"]).read_text()).get("graph")
-        if slug in tool.WIRED_FIXTURES:
-            assert said["graph"] == read_graph(file_graph).to_json()
-        else:
-            assert said["graph"] == file_graph
-        assert ((said["graph"] or {}).get("nodes") or slug in tool.MEDIA_FIXTURES
-                or slug == "blank-frame")
+        landed = said["graph"]
+        assert landed[FRAME_KEY] == WIRED_FRAME and read_graph(landed).to_json() == landed
+        assert not any(k in e for e in landed["nodes"] for k in PLACE_KEYS), slug
+        assert any(e.get("kind") == "hands" and "laid" in e for e in landed["nodes"]), slug
+        assert landed.get("wires") or slug == "blank-frame", slug
     # all three pipelines are reached somewhere, with the hands through an effect
     assert {e["route"] for e in doc["goldens"]} == routes
 
@@ -202,7 +204,11 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 # absent|hands+through and `through-one-output` present|scene+through) and
 # the route words of those presets' through states
 GOLDENS_SINCE = ("resize-faces", "resize-crop")
-GOLDENS_DIGEST = "f90e7abf9b31c24c9d9a5bedc42a155bb5c8b00dd19cbdc27eefc91cde31c61b"
+# (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
+# scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
+# D1's `into output.N` sat on the window's shown picture, which no wire
+# names; as the wire it stood for the edges filter apart, by eye the same)
+GOLDENS_DIGEST = "cf773531678f412df0f3b6cc6c0b7d41dd2c410d001c0b3f32d3931611a18bc1"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",
@@ -290,14 +296,17 @@ def test_every_golden_frame_is_drawn_byte_for_byte(ctx):
             assert got == recorded_said[slug][hands], (slug, hands)
 
 
-def test_every_preset_resaved_as_six_draws_its_goldens(ctx, tmp_path):
+def test_every_preset_resaved_as_seven_draws_its_goldens(ctx, tmp_path):
     """Row 394: every factory preset and every fixture, saved untouched as
-    `/6` (`headless.resave`, the road tools/migrate_library.py takes) and
-    drawn from that file on the golden rig (`picture`: hands present, the
-    eight states as wiring), draws exactly its recorded goldens — on the
-    renderer they were recorded on; on another, exactly what the original
-    file draws there. And a value moved in the `/6` moves the picture, so
-    the check can fail."""
+    `/7` (`headless.resave`, the road tools/migrate_library.py takes; plan
+    36 T3) and drawn from that file on the golden rig (`picture`: hands
+    present, the eight states as wiring), draws exactly its recorded
+    goldens — on the renderer they were recorded on; on another, exactly
+    what the original file draws there. A fixture whose D1 placements the
+    retired builder laid on each output's switch state (`_placements_wait`)
+    is drawn, old file and `/7`, as the rig ships (`SHIPPED`): the states
+    are emulated only for an old file. And a value moved in the `/7` moves
+    the picture, so the check can fail."""
     import json
 
     from hyperspace import headless
@@ -313,11 +322,15 @@ def test_every_preset_resaved_as_six_draws_its_goldens(ctx, tmp_path):
                  for slug in tool.FIXTURE_PRESETS)]
     for k, (slug, path, factory) in enumerate(sources):
         raw, _, _ = headless.resave(path, tmp_path / str(k), factory=factory)
-        six = tmp_path / f"{k}-six" / f"{slug}.json"
-        six.parent.mkdir()
-        six.write_bytes(raw)
-        assert json.loads(raw)["schema"] == "hyperspace.preset/6", slug
-        got, _ = tool.picture(six, slug=slug)
+        seven = tmp_path / f"{k}-seven" / f"{slug}.json"
+        seven.parent.mkdir()
+        seven.write_bytes(raw)
+        assert json.loads(raw)["schema"] == "hyperspace.preset/7", slug
+        if slug in ("palette-glass", "palette-hands", "acid-scene", "wired-outputs"):
+            got, _ = tool.picture(seven, slug=slug, states=tool.SHIPPED)
+            assert got == tool.picture(path, slug=slug, states=tool.SHIPPED)[0], slug
+            continue
+        got, _ = tool.picture(seven, slug=slug)
         if exact:
             want = [golden[(slug, "present", n)] for n in names]
         else:

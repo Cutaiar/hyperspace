@@ -2072,6 +2072,14 @@ class Library:
             apply = getattr(self, "_apply_hooks", {}).get(group)
             if apply is not None:
                 apply(name, doc)
+                # plan 36 T3: a hook that lands a graph declares params (an
+                # fx module's effects exist once its run names them): their
+                # values land now, and are no longer missing
+                late = self.resolved(group, values)
+                if late != resolved:
+                    self.restore(late)
+                    resolved = late
+                missing = [k for k in values if k not in self.reg and not retired(k)]
             self._landed(group, doc.get("name") or name, resolved)
         self.report(missing, f"{group}/{name}")
         if not quiet:

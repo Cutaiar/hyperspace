@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.media.channels import MediaState
 from hyperspace.media.frame import MediaFrame
 from hyperspace.outputs import Switches, View
@@ -144,7 +145,7 @@ def _renderer(ctx, media=None, wires=()):
     r.ghost.state.on = False
     r.media = media
     if wires:
-        r.wiring = G.Wiring(wires=tuple(wires))
+        r.wiring = wired_wiring(G.Wiring(wires=tuple(wires)))
     return r
 
 
@@ -238,7 +239,7 @@ def test_aux_wired_from_channel(ctx):
     r = _renderer(ctx, m)
     r.fx.state.values["blend"].update(on=True, mix=1.0, mode=0)
     # (plan 33 R23: blend in the run, as a load lands it, its aux wired)
-    r.wiring = wired(r, {"wires": [{"from": "media.a", "to": "blend.aux"}]})
+    r.wiring = wired_wiring(wired(r, {"wires": [{"from": "media.a", "to": "blend.aux"}]}))
     from hyperspace.view import ViewState
 
     pic = _draw(ctx, r, ViewState(lines=False, points=False, faces=False), frames=2)

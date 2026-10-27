@@ -471,7 +471,7 @@ def test_nan_never_reaches_a_param_from_an_idle_bank():
 
 # ---- plan 31 P: the envelopes and the sequencer in the preset (row 394: /6) ----
 
-V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/6"
+V2, V3, V6 = "hyperspace.preset/2", "hyperspace.preset/3", "hyperspace.preset/7"  # (plan 36 T3: V6 is the save schema)
 
 
 def _new_ids(doc) -> list[str]:
@@ -491,7 +491,12 @@ def test_an_untouched_preset_saves_as_6_with_every_value(app, tmp_path):
     assert doc["schema"] == V6
     assert "lfos" not in doc and "envs" not in doc
     every = app.reg.snapshot(part="performance")
-    assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")}
+    # (plan 36 T3: but an effect's only where the section names it)
+    from hyperspace import graphmigrate as M
+
+    held = M.section_effects(doc["graph"])
+    assert doc["values"] == {k: v for k, v in every.items() if not k.startswith("mod.")
+                             and M.effect_of(k) in (None, *held)}
     assert "seq.run" not in doc["values"] and _new_ids(doc)
     path = app.presets.save_as("plain")
     first = path.read_bytes()
@@ -554,7 +559,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5, 6)      # (plan 35, row 385: /6 the wired frame)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)   # (plan 35: /6 the wired frame; plan 36 T3: /7)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()

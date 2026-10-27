@@ -191,10 +191,12 @@ def test_wake_and_trip_device_knobs_move_their_bases(slug, targets, tmp_path):
     # SCENE (plan 19 WP3, 4D depth), so only that one param of the eight
     # (TRACER's D8) may move
     from hyperspace import apc40
-    before = {pid: r.reg[pid].norm for pid in ids if pid != apc40.SCENE[0]}
+    # (plan 36 T3: an effect TUMBLE's graph does not name has no params)
+    kept = [pid for pid in ids if pid != apc40.SCENE[0] and pid in r.reg]
+    before = {pid: r.reg[pid].norm for pid in kept}
     inp.queue.append(cc(0x10, 0))
     midi.poll()
-    assert {pid: r.reg[pid].norm for pid in ids if pid != apc40.SCENE[0]} == before
+    assert {pid: r.reg[pid].norm for pid in kept} == before
     assert r.reg[apc40.SCENE[0]].norm == pytest.approx(0.0, abs=0.02)
 
 
@@ -477,8 +479,8 @@ def test_no_factory_knob_is_dead(tmp_path):
     router = Router(r.reg, Bindings())
     presets = Presets(r.lib, r.reg, router)
 
-    def on(pid: str) -> bool:
-        return bool(r.reg[pid].value)
+    def on(pid: str) -> bool:           # (plan 36 T3: an effect not in the graph is off)
+        return pid in r.reg and bool(r.reg[pid].value)
 
     seen = 0
     for doc in _factory_docs():
@@ -520,8 +522,8 @@ def test_no_factory_route_drives_an_effect_that_is_off(tmp_path):
     router = Router(r.reg, Bindings())
     presets = Presets(r.lib, r.reg, router)
 
-    def on(pid: str) -> bool:
-        return bool(r.reg[pid].value)
+    def on(pid: str) -> bool:           # (plan 36 T3: an effect not in the graph is off)
+        return pid in r.reg and bool(r.reg[pid].value)
 
     for doc in _factory_docs():
         presets.load(doc["name"])

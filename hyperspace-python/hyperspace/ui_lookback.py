@@ -110,8 +110,8 @@ def capture_line(spec) -> str:
     """The LOOKBACK page's "records:" (plan 35 U): the source wired into
     `lookback.capture` by its title (`graphview.picture_label`: "Scene"),
     or "nothing — the echoes fade" with no wire there. `spec` is the
-    loaded preset's graph (`graphview.page_spec`: None is the factory
-    frame)."""
+    loaded preset's graph (`graphview.page_spec`: None is the empty
+    frame, plan 36 T3)."""
     spec = graphview.page_spec(spec)
     now = graphview.picture_now(spec, CAPTURE)
     return "records: " + (RECORDS_NOTHING if now == graphview.NOTHING

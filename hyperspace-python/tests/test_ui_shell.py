@@ -97,7 +97,14 @@ def build_rig(tmp_path, renderer=None):
     panel.outputs = slots
     router = Router(reg, table)
     router.table.set_routes(routing.legacy6_routes())   # a house preset's performer rows
-    Presets(lib, reg, router)           # the bank and the preset strip, as app.py builds them
+    presets = Presets(lib, reg, router)  # the bank and the preset strip, as app.py builds them
+    # plan 36 T3: nothing landed is the empty frame (every output black); the
+    # app always lands its startup preset — here today's frame, as one would
+    from hyperspace import graph as G
+    from hyperspace import graphmigrate as M
+
+    today = G.read_graph(M.wired_of(G.Wiring()))
+    presets.graph.land(today, today.to_json())
     panel.router = router
     r = SimpleNamespace(panel=panel, lib=lib, reg=reg, view=view, chain=chain, router=router,
                         slots=slots)
@@ -2168,20 +2175,22 @@ def test_the_output_page_says_what_each_output_shows(rig, monkeypatch):
     from hyperspace.ui import output_shows
 
     # the words, as a pure function of the mutes, the wiring and the frame
-    assert output_shows(S(), False, True, 1.0) == ("scene + hands over the effects", "")
-    assert output_shows(S(), False, False, 1.0) == ("scene", "")
+    # (plan 36 T3: today's frame by the migration; no wiring is the empty one)
+    T = wiring(Wiring())
+    assert output_shows(S(), False, True, 1.0, T) == ("scene + hands over the effects", "")
+    assert output_shows(S(), False, False, 1.0, T) == ("scene", "")
     assert output_shows(S(), True, True, 1.0, wiring(Wiring(), Shows(through=True))) == (
         "scene + hands through the effects", "")
-    assert output_shows(S(scene=False), True, True, 1.0) == ("hands", "")
+    assert output_shows(S(scene=False), True, True, 1.0, T) == ("hands", "")
     assert output_shows(S(), True, True, 1.0,
                         wiring(Wiring(), Shows(scene=False, through=True))) == (
         "hands through the effects", "")
-    assert output_shows(S(hands=False, dim=0.8), True, True, 0.8) == ("scene · 64%", "")
-    assert output_shows(S(scene=False, hands=False), True, True, 1.0) == (
+    assert output_shows(S(hands=False, dim=0.8), True, True, 0.8, T) == ("scene · 64%", "")
+    assert output_shows(S(scene=False, hands=False), True, True, 1.0, T) == (
         "black — nothing switched on", "nothing")
-    assert output_shows(S(scene=False), True, False, 1.0)[1] == "no hand"
-    assert output_shows(S(dim=0.0), True, True, 1.0) == ("black — dim 0", "dim")
-    assert output_shows(S(), True, True, 0.0) == ("black — master dim", "master")
+    assert output_shows(S(scene=False), True, False, 1.0, T)[1] == "no hand"
+    assert output_shows(S(dim=0.0), True, True, 1.0, T) == ("black — dim 0", "dim")
+    assert output_shows(S(), True, True, 0.0, T) == ("black — master dim", "master")
     # on the page
     reg, slots = rig.reg, rig.slots
     reg["output.2.hands"].set(False)

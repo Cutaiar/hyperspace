@@ -436,6 +436,10 @@ def test_a_controls_text(rig):
     assert text(reg, Binding("note:0:94", "view.bright", "step", 3.0)) == "Brightness +3"
     assert text(reg, Binding("note:0:95", "view.bright", "step", -3.0)) == "Brightness -3"
     assert text(reg, Binding("cc:0:48", "view.bright", "abs")) == "Brightness"
+    # (plan 36 T3: an effect's params exist only where the graph names it)
+    from hyperspace.fx import declare
+
+    declare(reg, reg.fx_state, reg.fx_state.hold(None))
     assert text(reg, Binding("cc:*:18", "fx.kaleido.segments", "abs")) \
         == reg["fx.kaleido.segments"].label
     assert text(reg, Binding("cc:0:49", "no.such.param", "abs")) == "no.such.param"

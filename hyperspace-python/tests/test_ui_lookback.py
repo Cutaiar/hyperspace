@@ -34,5 +34,5 @@ def test_records_says_and_sets_the_capture(tmp_path):
     assert gs.spec.to_json() == before and len(pushed) == 3
     # the look-back over nothing: said
     assert draws_over_line(G.read_graph({"frame": "wired"})) == "draws over: nothing"
-    # with no renderer and no preset: the factory frame's words
-    assert capture_line(None) == "records: Scene"
+    # with no renderer and no preset: plan 36 T3 — the empty frame's words
+    assert capture_line(None) == "records: nothing — the echoes fade"

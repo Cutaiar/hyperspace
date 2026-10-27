@@ -76,7 +76,8 @@ packages = ["hyperspace"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: heavy face-extraction tests (~seconds each)"]
+markers = ["slow: heavy face-extraction tests (~seconds each)",
+           "empty_frame: a bare Renderer keeps the app's empty frame (plan 36 T3)"]
 
 [tool.ruff]
 line-length = 100

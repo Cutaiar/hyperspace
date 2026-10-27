@@ -950,6 +950,11 @@ def _launch(home):
     clock = tempo.Clock(now=lambda: 0.0)
     tempo.register(reg, clock)
     lfo.register(reg, lfo.LFOs(), clock)
+    # plan 31, as app.main (plan 36 T3: the factory `/7` files hold their values)
+    from hyperspace import envelope, sequencer
+
+    envelope.register(reg, envelope.Envelopes(), clock)
+    sequencer.register(reg, sequencer.Sequencer(), clock)
     table = app._desk_table(reg, Bindings.load(bindings_path(home), legacy_midi=None))
     lib.attach(reg)
     router = Router(reg, table)

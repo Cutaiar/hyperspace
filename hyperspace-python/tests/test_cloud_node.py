@@ -24,6 +24,7 @@ from hyperspace import devices
 from hyperspace import graph as G
 from hyperspace import outputs as O
 from hyperspace.geometry import EYE_DISTANCE, EYE_FOV, eye_matrix
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.view import ViewState
 
 FIXTURE = Path(__file__).parent / "fixtures" / "clouds" / "knot.npz"
@@ -50,7 +51,7 @@ def registry(home: Path, file: str = "clouds/knot.npz", copy: bool = True,
 
 
 def test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_nothing():
-    """`build_graph(…, clouds)`: one `cloud` node per listed role, named
+    """`build_graph(…, wired_wiring(clouds))`: one `cloud` node per listed role, named
     by the naming rule (`cloud`, `cloud.2`), solid, the scene's first
     geometries (before the hands and the shape), each its own timed line;
     with none the graph is today's, node for node."""
@@ -59,7 +60,7 @@ def test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_not
     assert [n.name for n in G.build_graph(vs, None, ()).order] == \
         [n.name for n in plain.order]
     assert plain.clouds == () and not any(n.KIND == G.CLOUD_KIND for n in plain.order)
-    g = G.build_graph(vs, G.Wiring(hands="scene"), ("scan", "lidar"))
+    g = G.build_graph(vs, wired_wiring(G.Wiring(hands="scene")), ("scan", "lidar"))
     assert g.clouds == ("scan", "lidar")
     scene = g.nodes["scene"]
     geoms = scene.geometries()
@@ -70,7 +71,7 @@ def test_a_listed_cloud_is_the_scenes_first_geometry_and_none_listed_changes_not
     assert g.timed[:3] == ["cloud", "cloud.2", "hands"]
     # the rest of the graph is the one without clouds
     assert [n.name for n in g.order if n.KIND != G.CLOUD_KIND] == \
-        [n.name for n in G.build_graph(vs, G.Wiring(hands="scene")).order]
+        [n.name for n in G.build_graph(vs, wired_wiring(G.Wiring(hands="scene"))).order]
 
 
 def test_the_listed_roles_are_the_cloud_devices_of_the_registry(tmp_path):

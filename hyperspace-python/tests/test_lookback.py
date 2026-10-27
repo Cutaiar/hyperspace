@@ -685,6 +685,11 @@ def test_every_factory_preset_renders_opaque_in_window_mode(ctx, tmp_path, name)
     b.presets.load(json.loads(path.read_text())["name"])
     assert b.lib.current("presets") is not None
     if name in STRESS:
+        # (plan 36 T3: every effect file exists for the stress, as before a
+        # graph landed — `FxState.hold(None)`)
+        from hyperspace.fx import declare
+
+        declare(b.reg, b.r.fx.state, b.r.fx.state.hold(None))
         values = {"view.faces": True, "view.cut_through": True, "view.lines": True,
                   "view.points": True, "fx.on": True, "fx.mix": 1.0, "dream.on": True,
                   "dream.echoes": 6, "dream.gap": 0.0}
@@ -1495,10 +1500,10 @@ def test_the_relabel_changes_no_factory_file(tmp_path):
     from hyperspace import preset
     from hyperspace.library import Library
 
-    for path in preset.FACTORY_DIR.glob("*.json"):
+    for path in preset.FACTORY_SOURCES.glob("*.json"):     # (plan 36 T3: the sources)
         shutil.copy(path, tmp_path / path.name)
     preset.write_factory(tmp_path)
-    for path in preset.FACTORY_DIR.glob("*.json"):
+    for path in preset.FACTORY_SOURCES.glob("*.json"):
         assert (tmp_path / path.name).read_bytes() == path.read_bytes(), path.name
     reg = registry()
     lib = Library(tmp_path / "home", period=0.0)

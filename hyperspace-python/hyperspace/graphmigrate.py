@@ -39,6 +39,7 @@ draws what it drew while nothing is read that no wire says.
 from __future__ import annotations
 
 import copy
+import functools
 import re
 from dataclasses import dataclass, replace
 from typing import Any
@@ -47,9 +48,16 @@ from . import graph as G
 from .outputs import MAX_OUTPUTS
 
 FREE_SCHEMA = "hyperspace.preset/5"
-# plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids — what
-# every save writes (row 394); `/5` and below are read, never written
-WIRED_SCHEMA = "hyperspace.preset/6"
+# plan 35 (row 385): `/6` is `/5` with the wired frame in the new ids;
+# `/5` and below are read, never written
+SIX_SCHEMA = "hyperspace.preset/6"
+# plan 36 T3 (W3, D5): `/7` is the frame that says everything — every hidden
+# edge a wire, every placement a wire, the hands entries and `laid` written,
+# effects only where the section names them. What every save writes (row
+# 394); a `/7` is read as it is, never migrated or filled in. `/4`–`/6` are
+# read only through the one-way migration to it (`seven`)
+WIRED_SCHEMA = "hyperspace.preset/7"
+SEVEN = 7
 # plan 35 M (row 381): `backdrop.history` is the capture wire now
 RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
 # the retired values a wire says now, not a switch (row 381): a row that
@@ -382,7 +390,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
     # placement on an effect not on disk is refused there, and its effect
     # takes the run like any other)
     try:
-        spec = G.read_graph(section, effects=_files(specs))
+        spec = G.read_graph(section, effects=_files(specs), placements=True)
     except G.GraphError:
         spec = None                     # the loader says so and takes the default graph
     if spec is None or spec.wired:
@@ -455,7 +463,7 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
         # the frame off the section as plan 33 left it (old ids)
         sec = out.get("graph") if isinstance(out.get("graph"), dict) else {}
         try:
-            old = G.read_graph(sec, effects=_files(specs))
+            old = G.read_graph(sec, effects=_files(specs), placements=True)
         except G.GraphError:
             return out, notes           # (not reached: plan 33's steps write what reads)
         out["graph"] = wired_section(renamed(sec), old, backdrop_history=held_backdrop,
@@ -527,8 +535,10 @@ def _as(kind, v: Any, default):
 
 def specs_of(fx: Any) -> Specs:
     """An `FxState`'s effect instances as `Specs` — each one's file
-    defaults, `(@order, @mix)`; none for no state."""
-    got = getattr(fx, "specs", None) or {}
+    defaults, `(@order, @mix)`; none for no state. Plan 36 T3: every file
+    on disk (`FxState.files`) with the instances held, so what a landed
+    graph does not name is still a file the next migration reads."""
+    got = {**(getattr(fx, "files", None) or {}), **(getattr(fx, "specs", None) or {})}
     return {n: (int(sp.order), float(sp.mix)) for n, sp in got.items()}
 
 
@@ -542,8 +552,8 @@ def state_values(fx: Any) -> dict:
     return out
 
 
-def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = None
-               ) -> G.Wiring:
+def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = None,
+               *, wired: bool = True) -> G.Wiring:
     """The wiring a preset's `values` (and its `section`, None for none)
     land as — `migrate`, the path a preset load takes, read back
     (`read_graph`). Plan 33 R23: with the order-built stack gone a rig, a
@@ -554,20 +564,24 @@ def wiring_for(values: dict, specs: Specs | None = None, section: dict | None = 
 
     Plan 35 T3: the section as plan 33 writes it (`migrate`'s `wire` off) —
     the wiring the default graph builds from the outputs' switches, which
-    these rigs still set by hand until T4 retires them."""
+    these rigs still set by hand until T4 retires them. Plan 36 T3: then
+    wired as a load wires it (`wired_wiring`) — what a renderer takes;
+    `wired` False keeps those old words (a test reading its `run`)."""
     doc = {"values": dict(values)}
     if section is not None:
         doc["graph"] = section
     out, _ = migrate(doc, specs or {}, wire=False)
     section = out.get("graph")
     spec = G.read_graph(section, effects=_files(specs)) if isinstance(section, dict) else None
-    return spec.wiring() if spec is not None else G.Wiring(run=())
+    got = spec.wiring() if spec is not None else G.Wiring(run=())
+    return wired_wiring(got) if wired else got
 
 
 def wiring_of(fx: Any) -> G.Wiring:
     """`wiring_for` an `FxState` as it stands (`state_values`, `specs_of`):
     the run its switched-on effects make, by their files' `@order` — the
-    one line a rig that sets effects by hand needs (R23)."""
+    one line a rig that sets effects by hand needs (R23). Plan 36 T3: wired
+    as a load wires it (`wired_wiring`), what a renderer takes."""
     return wiring_for(state_values(fx), specs_of(fx))
 
 
@@ -938,8 +952,16 @@ def with_output_wires(section: dict, n: int, shows: Shows) -> dict:
     entries joining the nodes, the wires the wires. A wire into the output
     the read refuses is kept after them as it stands (plan 35 T3: refused
     again at the load, it is said again, as plan 28 N4 says every refused
-    wire)."""
-    spec = G.read_graph(section)
+    wire). Plan 36 T2: then the hidden edges the new wires need
+    (`drawn_edges`: a window's depth for `laid: depth`) — the golden rig's
+    word for a retired switch state over a section."""
+    return drawn_edges(_output_wires_into(section, n, shows))
+
+
+def _output_wires_into(section: dict, n: int, shows: Shows) -> dict:
+    """`with_output_wires` less the hidden edges (`wired_section` writes
+    those once, after every output)."""
+    spec = G.read_graph(section, placements=True)
     got = output_wires(spec, n, shows)
     port = f"output.{n}."
     stood = {(w.src, w.dst) for w in spec.wires}
@@ -949,13 +971,13 @@ def with_output_wires(section: dict, n: int, shows: Shows) -> dict:
             and w.get("to") != port + G.DEPTH_PORT]
     refused = [w for w in mine if (w.get("from"), w.get("to")) not in stood]
     if sorted(map(str, (w for w in mine if w not in refused))) == sorted(map(str, got)):
-        return drawn_edges(section)        # (its own wires say it already: kept where they are)
+        return section                     # (its own wires say it already: kept where they are)
     out = dict(section)
     out["nodes"] = [*section.get("nodes", []), *(e for e in got if "kind" in e)]
     out["wires"] = [*(w for w in section.get("wires", [])
                       if not (isinstance(w, dict) and str(w.get("to", "")).startswith(port))),
                     *(w for w in got if "kind" not in w), *refused]
-    return drawn_edges(out)
+    return out
 
 
 # ---------------------------------------------------------------- the hidden edges as wires (plan 36 T2)
@@ -1012,7 +1034,7 @@ def drawn_edges(section: Any, files: set[str] | None = None, *, guard: bool = Tr
     if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
         return section
     try:
-        spec = G.read_graph(section, effects=files)
+        spec = G.read_graph(section, effects=files, placements=True)
     except G.GraphError:
         return section
     raw = [w for w in section.get("wires") or [] if isinstance(w, dict)]
@@ -1058,31 +1080,15 @@ def _frame_loops(own: list, frame: list[dict]) -> list[tuple[dict, str]]:
     faces drawn in the scene, the history over the scene and the backdrop):
     the frame stands, and of the section's own the later one closing the
     loop goes, with why in words (plan 36 T2: the loop is the drawn
-    frame's now, `graph.loop_words`)."""
-    deps: dict[str, set[str]] = {}
-
-    def dep(w: G.Wire) -> None:
-        if not G._later(w, True):
-            deps.setdefault(w.node, set()).add(w.src)
-            if G.pin_node(w.src) is not None:
-                deps.setdefault(w.src, set()).add(G.pin_node(w.src))
-
-    for x in frame:
-        dep(G.Wire(x["from"], x["to"]))
-    out = []
+    frame's now, `graph.loop_words`; T3: asked of `graph.loop_closers`)."""
+    stand = [G.Wire(x["from"], x["to"]) for x in frame]
+    wires: list[G.Wire | None] = []
     for x in own:
         try:
-            w = G.Wire(x["from"], x["to"])
+            wires.append(G.Wire(x["from"], x["to"]))
         except (KeyError, TypeError, ValueError):
-            continue
-        if G._later(w, True):
-            continue
-        path = G._loop_path(deps, w)
-        if path is not None:
-            out.append((x, G.loop_words(" → ".join(path), G._hops(path))))
-            continue
-        dep(w)
-    return out
+            wires.append(None)
+    return [(own[k], why) for k, why in sorted(G.loop_closers(stand, wires).items())]
 
 
 def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = False,
@@ -1104,7 +1110,9 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
     its hidden edges — one plan 34's `FRAME_EDGES` refused at its read —
     is left out, said in `notes` when given (`_frame_loops`), and the
     frame is the one written for the section without it (as the read
-    without it gave)."""
+    without it gave). Each round leaves out at least one of the section's
+    own wires, so it settles within as many rounds as it has wires; one
+    that did not would be a bug, and says so (T3)."""
     nodes = []
     for e in section.get("nodes") or []:
         if isinstance(e, dict) and e.get("kind") == "hands":
@@ -1114,7 +1122,8 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
         nodes.append(e)
     gone: set[tuple[Any, Any]] = set()      # the section's own wires left out (as written)
     now = spec
-    for _ in range(8):
+    rounds = len(section.get("wires") or []) + 1
+    for _ in range(rounds):
         entries, frame = frame_wires(now, backdrop_history=backdrop_history)
         run = now.wiring().run
         drop = {(w.src, w.dst) for w in G._run_wires(tuple(run))} if run is not None else set()
@@ -1146,12 +1155,14 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
         # backdrop are the section's less what its read would refuse)
         now = replace(spec, wires=tuple(w for w in spec.wires
                                         if (G.new_id(w.src), _new_dst(w.dst)) not in gone))
+    else:
+        raise RuntimeError(f"wired_section: the frame did not settle in {rounds} rounds")
     out = {G.FRAME_KEY: G.WIRED_FRAME, "nodes": [*nodes, *entries], "wires": [*own, *frame]}
     outs = sorted({int(m.group(1)) for w in own if isinstance(w, dict)
                    for m in [re.fullmatch(r"output\.([1-9][0-9]*)\.[a-z]+", str(w.get("to")))]
                    if m is not None and int(m.group(1)) <= MAX_OUTPUTS})
     for n in outs:
-        out = with_output_wires(out, n, Shows())
+        out = _output_wires_into(out, n, Shows())
     return drawn_edges(out)
 
 
@@ -1197,15 +1208,212 @@ def section_of(wiring: G.Wiring) -> dict:
     return out
 
 
-def wired_of(wiring: G.Wiring) -> dict:
-    """An unwired `Wiring` as the wired frame a load lands for it (plan 35
-    T4, `graph.wired`): `section_of` it, renamed and written as a wired
-    frame (`wired_section`), its look-back recording the backdrop where
-    `backdrop_history` says. `Wiring()` is the factory look,
-    `frame_wires(read_graph({}))`."""
+def wired_of(wiring: G.Wiring, *, placements: bool = True) -> dict:
+    """An unwired `Wiring` (the words before the wired frame: a rig's, a
+    tool's, a test's) as the wired frame the one-way migration writes for
+    it (plan 35 T4): `section_of` it, renamed and written as a wired frame
+    (`wired_section`), its look-back recording the backdrop where
+    `backdrop_history` says, and (plan 36 T3) its placements as the wires
+    they stood for (`placed_wires`). `Wiring()` is the factory look,
+    `frame_wires(read_graph({}))` — today's frame, what a section-less old
+    preset migrates to. `placements` False leaves D1's entries as they are
+    (the step before `placed_wires`: a test rig lays the retired switch
+    states on first, as the builder placed on each output's state)."""
     section = section_of(wiring)
-    return wired_section(renamed(section), G.read_graph(section),
-                         backdrop_history=wiring.backdrop_history)
+    out = wired_section(renamed(section), G.read_graph(section),
+                        backdrop_history=wiring.backdrop_history)
+    return placed_wires(out) if placements else out
+
+
+def wired_wiring(wiring: G.Wiring) -> G.Wiring:
+    """What a renderer or `graph.build_graph` takes for `wiring` (plan 36
+    T3): a wired one is itself; an unwired one is the old words, wired by
+    the one-way migration (`wired_of`) — the explicit step `graph.wired`
+    did unasked before W3."""
+    return wiring if wiring.wired else _wired_wiring(wiring)
+
+
+@functools.lru_cache(maxsize=64)
+def _wired_wiring(wiring: G.Wiring) -> G.Wiring:
+    return G.read_graph(wired_of(wiring)).wiring()
+
+
+# ---------------------------------------------------------------- D1's placements as wires (plan 36 T3)
+#
+# Plan 36 W3: `after` / `into` were shorthand the builder turned into edges
+# on the built graph (`_place`, gone). The migration writes each as the
+# wires it stood for, so a `/7` frame holds no placement and draws what the
+# `/6` drew.
+
+# the ports a wire reads something of its source through other than its
+# picture (`graph.Node.REFS`: an output's readout and depth, a composite's
+# depth): an effect placed after the source never sat on them
+_REF_PORTS = frozenset({"guide", G.DEPTH_PORT})
+PLACED_NOWHERE = "{name} {key} {where!r} — {why}: it drew nothing, so it is not wired (plan 36)"
+
+
+def _insert_on(wires: list, src: str, port: str, name: str) -> list:
+    """`wires` with effect `name` on the wire `src → port`: that wire (in
+    its place, or appended when the section has none — a bus cable's)
+    becomes `src → name.image`, then `name → port`."""
+    at = next((k for k, w in enumerate(wires) if isinstance(w, dict)
+               and (w.get("from"), w.get("to")) == (src, port)), None)
+    new = [_w(src, f"{name}.image"), _w(name, port)]
+    if at is None:
+        return [*wires, *new]
+    return [*wires[:at], *new, *wires[at + 1:]]
+
+
+def placed_wires(section: Any, files: set[str] | None = None,
+                 notes: list[str] | None = None) -> Any:
+    """A wired `section` with each D1 placement written as the wires it
+    stood for, and the entry's `after` / `into` dropped (plan 36 T3) —
+    what the builder did on the built graph, said in wires:
+
+    - `into` or `after` `output.<n>`: on output n's picture — its own wire
+      into `output.<n>.image`, else All outputs' (the bus cable it rode);
+    - `into` the look-back or an effect: on the wire into its `image`;
+    - `after` a node: on its picture — `X → e.image`, and every wire that
+      read X's picture (not a reference port, `_REF_PORTS`) reads `e`
+      instead; after the scene while a backdrop lays it over, after the
+      backdrop (plan 32 R, as the builder did).
+
+    One placed on another placed effect is written after it, as the
+    builder placed it. One with nothing to sit on (no wire into the port,
+    a window that shows nothing), or one the read refuses (a name out of
+    the vocabulary, a loop), drew nothing: it is left on no wire, said in
+    `notes`. One after an effect that has copies sits after the original
+    only (one instance is one node). Not a wired frame, one the read
+    refuses, or none placed: as it is."""
+    if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
+        return section
+    try:
+        spec = G.read_graph(section, effects=files, placements=True)
+    except G.GraphError:
+        return section
+    pending = [e for e in spec.effects if e.placed]
+    refused = [n for n in spec.notes if not n.startswith(("wire ", "copy "))]
+    if notes is not None:
+        # (a placement the read refused stood nowhere: its entry is kept,
+        # on no wire, and said)
+        notes += [f"{n}: not wired (plan 36)" for n in refused]
+    if not pending and not refused:
+        return section
+    reached = G.reaches(spec)
+    wires = list(section.get("wires") or [])
+
+    def into(port: str) -> str | None:
+        return next((w.get("from") for w in wires
+                     if isinstance(w, dict) and w.get("to") == port), None)
+
+    def nowhere(e: G.EffectAt, why: str) -> None:
+        if notes is not None:
+            notes.append(PLACED_NOWHERE.format(name=e.name, key=e.where[0], where=e.where[1],
+                                               why=why))
+
+    while pending:
+        waiting = {e.name for e in pending}
+        ready = [e for e in pending if e.where[1] not in waiting]
+        if not ready:                         # (a loop: refused at the read)
+            break
+        for e in ready:
+            pending.remove(e)
+            key, where = e.where
+            if where.startswith("output."):
+                port = f"{where}.image"
+                src = into(port) or into(f"{G.ALL_OUTPUTS}.image")
+                if src is None or src == G.GROUND:
+                    nowhere(e, f"output {where.partition('.')[2]} shows no picture")
+                    continue
+                wires = _insert_on(wires, src, port, e.name)
+            elif key == "into":
+                port = f"{where}.image"
+                src = into(port)
+                if src is None:
+                    nowhere(e, f"nothing goes into {port}")
+                    continue
+                wires = _insert_on(wires, src, port, e.name)
+            else:
+                node = G.BACKDROP if where == "scene" and G.BACKDROP in reached else where
+                read = [k for k, w in enumerate(wires) if isinstance(w, dict)
+                        and w.get("from") == node
+                        and str(w.get("to")).rpartition(".")[2] not in _REF_PORTS]
+                for k in read:
+                    wires[k] = {**wires[k], "from": e.name}
+                at = read[0] if read else len(wires)
+                wires.insert(at, _w(node, f"{e.name}.image"))
+    nodes = [{k: v for k, v in n.items() if k not in G.PLACE_KEYS}
+             if isinstance(n, dict) and n.get("kind") == "effect" else n
+             for n in section.get("nodes") or []]
+    return {**section, "nodes": nodes, "wires": wires}
+
+
+# ---------------------------------------------------------------- the one-way migration to /7 (plan 36 T3)
+
+def schema_version(doc: Any) -> int | None:
+    """The `n` of a preset document's `hyperspace.preset/<n>`, else None."""
+    schema = doc.get("schema") if isinstance(doc, dict) else None
+    if not isinstance(schema, str):
+        return None
+    _, _, v = schema.rpartition("/")
+    return int(v) if v.isdigit() else None
+
+
+def section_effects(section: Any) -> set[str]:
+    """Every effect instance a wired `section` names — by an entry, a wire's
+    end, or a copy's `of` — the effects that exist in its preset (W3)."""
+    out: set[str] = set()
+    if not isinstance(section, dict):
+        return out
+    for e in section.get("nodes") or []:
+        if not isinstance(e, dict):
+            continue
+        if e.get("kind") == "effect" and isinstance(e.get("file"), str):
+            n = e.get("instance", 1)
+            out.add(G.instance_name(e["file"], n if isinstance(n, int) else 1))
+        elif e.get("kind") == "copy" and isinstance(e.get("of"), str):
+            out.add(e["of"])
+    for w in section.get("wires") or []:
+        if isinstance(w, dict):
+            for name in (w.get("from"), _wire_end(w.get("to"))):
+                if _kind(name) == "effect":
+                    out.add(name)
+    return out
+
+
+MIGRATED_NOTE = "{old} migrated to {new} (plan 36): every edge drawn as it ran — save to keep it"
+
+
+def seven(doc: dict, specs: Specs, *, desk: list | None = None) -> tuple[dict, list[str]]:
+    """Plan 36 T3 (W3, D5): the one-way migration of a `/4`–`/6` document
+    (or older: what the loader takes) to `/7` — (the document, the notes).
+    `migrate` (the free graph, the wired frame, every hidden edge as its
+    wire; a document with no section gets today's frame), then each D1
+    placement as the wires it stood for (`placed_wires`), and the values of
+    every effect the section does not name dropped (instance 1 of a file
+    exists only where the section names it). The hands entries and `laid`
+    are the section's own words from here on: a save writes them all
+    (`graph.GraphSpec.to_json`). Its `schema` is `WIRED_SCHEMA`; a section
+    the read refuses is left as it is (the loader says so).
+
+    A `/7` document is never handed here: what it says is all there is. A
+    pure function of the old document (and the build's effect files), so
+    tools/migrate_library.py and a load write the same `/7`."""
+    out, notes = migrate(doc, specs, desk=desk)
+    section = out.get("graph")
+    if isinstance(section, dict) and section.get(G.FRAME_KEY) == G.WIRED_FRAME:
+        try:
+            G.read_graph(section, effects=_files(specs), placements=True)
+        except G.GraphError:
+            pass                            # (unreadable: the loader says so)
+        else:
+            section = out["graph"] = placed_wires(section, _files(specs), notes)
+            held = section_effects(section)
+            values = _values(out)
+            for pid in [p for p in values if effect_of(p) not in (None, *held)]:
+                del values[pid]
+    out["schema"] = WIRED_SCHEMA
+    return out, notes
 
 
 def _src_into(wires, dst: str) -> str | None:

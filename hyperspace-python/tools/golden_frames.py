@@ -106,6 +106,11 @@ STATES: tuple[tuple[str, dict], ...] = tuple(
      {"scene": a, "hands": b, "through": c})
     for a in (True, False) for b in (True, False) for c in (False, True))
 HANDS = ("absent", "present")
+# plan 36 T3: eight windows on the rig as it ships — each shows its own
+# wires, else All outputs' by its bus cables (no switch state emulated):
+# what tools/migrate_library.py draws an old file and its `/7` under
+SHIPPED: tuple[tuple[str, dict], ...] = tuple(
+    ("scene+hands", {"scene": True, "hands": True, "through": False}) for _ in range(8))
 # single-output goldens (output 1 alone, 4× MSAA, like the window): every
 # preset × hands in the default state (`Switches()` = scene + hands, no
 # through), and for a preset with an effect on also through. Alone, a
@@ -149,6 +154,11 @@ CLOUDED: tuple[tuple[str, str, tuple[str, ...], tuple[str, ...]], ...] = (
 # landing through the real `Presets` (`GraphSection`) onto the rig's
 # renderer, hands present, every output state as one rig's outputs
 FIXTURES = ROOT / "tests" / "fixtures" / "presets"
+# plan 36 T3 (D5): the factory presets are `/7` files; what they were made
+# from — the `/2` (seq-demo `/3`) sources `python -m hyperspace.preset`
+# writes, which tools/migrate_library.py migrated — is read where the
+# proof needs the section before the wired frame (`plan33_section`)
+FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # plan 30 D1: the three placements' proof presets — the palette after the
 # hands' layer, the palette into output 2's picture, a second acid after
 # the scene (`graph.EffectAt.after` / `into`)
@@ -524,15 +534,45 @@ def expected_route(state: dict, fx_on: bool, visible: bool,
     return ROUTES[(bool(state["scene"]), shown, shown and bool(state["through"]) and fx_on)]
 
 
+def source_doc(presets, slug: str) -> dict:
+    """Preset `slug`'s file before `/7` (plan 36 T3): a factory preset's
+    source (`FACTORY_SOURCES`, what its `/7` was migrated from), else the
+    file as the library has it (a fixture: an old file, a migration input)."""
+    src = FACTORY_SOURCES / f"{slug}.json"
+    if slug in FACTORY_PRESETS and src.is_file():
+        return json.loads(src.read_text())
+    return presets.lib.read("presets", slug)
+
+
 def plan33_section(presets, slug: str) -> tuple[dict, set[str]]:
     """Preset `slug`'s section as plan 33 wrote it (`migrate` with `wire`
     off, after the load declared its instances), and the effect files —
-    what a WIRED variant takes its run from."""
-    doc = presets.lib.read("presets", slug)
+    what a WIRED variant takes its run from (plan 36 T3: of the file
+    before `/7`, `source_doc`)."""
+    doc = source_doc(presets, slug)
     gs = presets.graph
     old, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc), wire=False)
     files = {n.partition(".")[0] for n in gs.specs()}
     return (old.get("graph") if isinstance(old.get("graph"), dict) else {}), files
+
+
+def _placements_wait(presets, slug: str) -> dict | None:
+    """Plan 36 T3: an old file whose wired frame holds D1 placements — the
+    section `migrate` wires for it, before `placed_wires` writes them, for
+    the switch states to be laid over first (the retired builder placed
+    them on the built graph, after every output's state); None for any
+    other (a `/7`, or none placed: the landed section is the one)."""
+    doc = source_doc(presets, slug)
+    if (graphmigrate.schema_version(doc) or 0) >= graphmigrate.SEVEN:
+        return None
+    gs = presets.graph
+    out, _ = graphmigrate.migrate(doc, gs.specs(), desk=presets._template_rows(doc))
+    section = out.get("graph")
+    if not isinstance(section, dict) or not any(
+            isinstance(e, dict) and any(k in e for k in G.PLACE_KEYS)
+            for e in section.get("nodes") or []):
+        return None
+    return section
 
 
 def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
@@ -548,8 +588,10 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
     (`Shows(through=True)`); its scene and hands are the window's
     mutes (`state_views`). An output draws only what is wired."""
     presets = rig.presets
+    late = None
     if wiring is None:
-        wired = presets.graph.free_doc()
+        late = _placements_wait(presets, slug)
+        wired = late if late is not None else presets.graph.free_doc()
     else:
         old, files = plan33_section(presets, slug)
         run = tuple(read_graph(old, effects=files).wiring().run or ())
@@ -558,10 +600,19 @@ def rig_section(rig: Rig, slug: str, states, wiring: dict | None) -> dict:
                                            read_graph(vsection, effects=files))
     for k, (_, sw) in enumerate(states):
         if slug not in WIRED_FIXTURES:
+            if graphmigrate.Shows(**sw) == graphmigrate.Shows() and late is None:
+                # (plan 36 T3: the window as the rig ships it is its own
+                # wires, else All outputs' by its bus — no override to
+                # write; a `/7`'s hands port wired to an effect, D1's old
+                # `after: hands` as wires, would otherwise be undone)
+                continue
             wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
         elif sw["through"] and _lays_hands(wired):
             wired = graphmigrate.with_output_wires(wired, k + 1,
                                                    graphmigrate.Shows(through=True))
+    if late is not None:
+        wired = graphmigrate.placed_wires(wired, {n.partition(".")[0]
+                                                  for n in presets.graph.specs()})
     return wired
 
 
@@ -922,7 +973,7 @@ class Loader:
         its `wire` off, after the load declared its instances."""
         self.presets.load(slug)
         gs = self.presets.graph
-        doc = self.presets.lib.read("presets", slug)
+        doc = source_doc(self.presets, slug)
         old, _ = graphmigrate.migrate(doc, gs.specs(), desk=self.presets._template_rows(doc),
                                       wire=False)
         effects = tuple(sorted(self.fx.specs))
@@ -1015,11 +1066,19 @@ def frame_graphs(states, spec, section, effects, wired=None, clouds=()):
     that alone."""
     files = {e.partition(".")[0] for e in effects}
     made = graphmigrate.wired_section(graphmigrate.renamed(section or {}), spec)
+    placed = graphmigrate.placed_wires(made, files)
     if wired is None:
-        wired = made
-    assert read_graph(made, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+        wired = placed
+    assert read_graph(placed, effects=files).to_json() == read_graph(wired, effects=files).to_json()
+    # (plan 36 T3: D1's placements sat on each output's state, so the
+    # states go on first and the placements are written after, as `_shoot`)
+    late = made if placed is not made else None
+    if late is not None:
+        wired = late
     for k, (_, sw) in enumerate(states):
         wired = graphmigrate.with_output_wires(wired, k + 1, graphmigrate.Shows(**sw))
+    if late is not None:
+        wired = graphmigrate.placed_wires(wired, files)
     got = read_graph(wired, effects=files)
     assert not got.notes, got.notes
     mutes_on = [View(Switches(), (W, H)) for _ in states]

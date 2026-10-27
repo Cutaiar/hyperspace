@@ -41,7 +41,7 @@ RED, GREEN, BLUE, WHITE = (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255)
 RESIZE = {"kind": "resize"}
 DELAY = {"kind": "delay"}
 ACID2 = {"kind": "effect", "file": "acid", "instance": 2}
-# the factory frame (`G.wired(G.Wiring())`'s six wires, in its order)
+# the factory frame (`wired_wiring(G.Wiring())`'s six wires, in its order)
 FACTORY_FRAME = (("shape", "scene.geometry"), ("scene", "lookback.image"),
                  ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
                  ("hands.layer", "output.all.guide"), ("scene", "lookback.capture"))
@@ -53,7 +53,9 @@ FACTORY_EDGES = (("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
 
 
 def test_the_factory_frame_is_the_wired_default():
-    assert tuple((w.src, w.dst) for w in G.wired(G.Wiring()).wires) == (
+    from hyperspace.graphmigrate import wired_wiring
+
+    assert tuple((w.src, w.dst) for w in wired_wiring(G.Wiring()).wires) == (
         *FACTORY_FRAME, *FACTORY_EDGES)
 
 

@@ -1075,29 +1075,21 @@ def _built(rnodes: Iterable[rgraph.Node]) -> dict[str, rgraph.Node]:
 
 def frame_of(spec, render_graph=None):
     """The wired frame the canvas draws (plan 35 G): the preset's section
-    when it is one (every load's); a section from before it (a test's) as
-    the load would wire it; with none, the frame the renderer drew (its
-    wiring), else `{"frame": "wired"}`'s nothing."""
+    when it is one (every load's); with none, the frame the renderer drew
+    (its wiring), else `{"frame": "wired"}`'s nothing. Plan 36 T3 (W3):
+    nothing else — a section or a wiring from before the wired frame is
+    an old preset's words, which only the one-way migration reads, so the
+    canvas draws the empty frame for it."""
     if spec is not None and getattr(spec, "wired", False):
         return spec
-    try:
-        if spec is not None:
-            doc = graphmigrate.wired_section(graphmigrate.renamed(spec.to_json()), spec)
-        else:
-            wiring = getattr(render_graph, "wiring", None)
-            if wiring is None:
-                return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
-            if getattr(wiring, "wired", False):
-                return rgraph.GraphSpec(
-                    hands=tuple(h for h in wiring.nodes() if h.n != 1 or h.draw != "solid"),
-                    laid=wiring.blend, effects=tuple(wiring.placed),
-                    others=(*(("composite", c) for c in wiring.composites),
-                            *(("copy", c) for c in wiring.copies)),
-                    wires=tuple(wiring.wires), wired=True)
-            doc = graphmigrate.wired_of(wiring)
-        return rgraph.read_graph(doc)
-    except (rgraph.GraphError, ValueError):
-        return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
+    wiring = getattr(render_graph, "wiring", None) if spec is None else None
+    if wiring is not None and getattr(wiring, "wired", False):
+        return rgraph.GraphSpec(
+            hands=tuple(wiring.nodes()), laid=wiring.blend, laid_on=wiring.laid_on,
+            others=(*(("composite", c) for c in wiring.composites),
+                                       *(("copy", c) for c in wiring.copies)),
+            wires=tuple(wiring.wires), wired=True)
+    return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME})
 
 
 # (plan 34 T4: a resize of the media alone too — `channel.a → resize →
@@ -3561,14 +3553,12 @@ CHANNEL_SWITCH_REFUSAL = "a switch over the channels goes into pattern.media or 
 
 def _frame_doc(spec) -> dict:
     """The section a GRAPH edit starts from (plan 35 G): the landed wired
-    frame; a section from before it as the load wires it (a test's); with
-    none landed, the frame the renderer draws for none — the factory look
-    (`graphmigrate.wired_of(Wiring())`)."""
-    if spec is None:
-        return graphmigrate.wired_of(rgraph.Wiring())
-    if getattr(spec, "wired", False):
+    frame. Plan 36 T3 (W3): with none landed (or one from before the wired
+    frame, which never lands), the empty frame the renderer draws for none
+    — an edit adds what it lands and nothing else."""
+    if spec is not None and getattr(spec, "wired", False):
         return spec.to_json()
-    return graphmigrate.wired_section(graphmigrate.renamed(spec.to_json()), spec)
+    return rgraph.read_graph({rgraph.FRAME_KEY: rgraph.WIRED_FRAME}).to_json()
 
 
 def _doc(edit: Edit) -> dict:

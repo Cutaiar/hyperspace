@@ -27,6 +27,7 @@ import pytest
 from wiredframe import Thru, wire_switches
 
 from hyperspace import outputs as O
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, fit
 
 # ---------------------------------------------------------------- no GL
@@ -134,14 +135,17 @@ def rig(ctx, *, effects=("warp",), hands=True, bg=1.0, echoes=False, dim=1.0, gu
     no wire — what was aimed at the faces until plan 33 draws only where a
     wire puts it (tests/test_graph_faces.py), so it changes no byte."""
     from hyperspace.fx import FxState
-    from hyperspace.graphmigrate import wiring_of
+    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
     from hyperspace.render import Renderer
 
     fx = FxState()
     for n in effects:
         fx.values[n]["on"] = True
     r = Renderer(ctx, fx=fx)
-    r.wiring = wiring_of(fx)
+    # (plan 36 T3: the run in the old words, for `keep_run`; the renderer
+    # takes it wired, as a load lands it)
+    r.old_wiring = wiring_for(state_values(fx), specs_of(fx), wired=False)
+    r.wiring = wired_wiring(r.old_wiring)
     if faces:
         fx.values["huecycle"]["on"] = True
     r.bg_alpha, r.dim = bg, dim
@@ -171,7 +175,7 @@ def keep_run(r, wiring):
     that says a run of its own keeps it."""
     from dataclasses import replace
 
-    return wiring if wiring.run is not None else replace(wiring, run=r.wiring.run)
+    return wiring if wiring.run is not None else replace(wiring, run=r.old_wiring.run)
 
 
 def scene_view() -> object:
@@ -251,7 +255,8 @@ def _stack_names(r) -> list[str]:
     """The effects the retired stack ran (plan 33 T7 removed `FxChain.run`):
     the run's, in its order, those live."""
     st = r.fx.state
-    return [n for n in (getattr(r.wiring, "run", None) or ()) if st.live(n)]
+    old = getattr(r, "old_wiring", None) or r.wiring        # (plan 36 T3: the old words')
+    return [n for n in (getattr(old, "run", None) or ()) if st.live(n)]
 
 
 def _stack_active(r) -> bool:

@@ -60,6 +60,7 @@ from .control import Control
 from .geometry import SHAPES, geom, menu
 from .graph import (
     ALL_OUTPUTS,
+    EMPTY,
     GROUND,
     Wiring,
     graph_words,
@@ -72,7 +73,6 @@ from .graph import (
     through_layer,
     through_of,
     wire_words,
-    wired,
 )
 from .hands import panel as ui_hands
 from .media import publish
@@ -332,8 +332,8 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     hand showing), "dim" (its own dim at 0), "master" (the crossfader at
     black — the footer already says "dim black").
 
-    Plan 35 T4: the words read the wires (`graph.wired`: None, or a wiring
-    no preset's graph reached, is the factory look) — "hands through the
+    Plan 35 T4: the words read the wires (plan 36 T3: None is the empty
+    frame, `graph.EMPTY`) — "hands through the
     effects" where output `n`'s picture is a chain over the layer laid on
     (`graph.through_layer`; it bends only with an effect on and a hand
     drawn, else the hands go over), "scene + hands in the scene" where the
@@ -342,7 +342,7 @@ def output_shows(sw, fx_on: bool, visible: bool, master: float,
     by a wire of the output's own (plan 28 N4); the effects placed on what
     it shows (plan 30 D1, `graph.output_placement_words`). Plan 36 T1:
     `rig`, the show's rig wires — a port whose bus cable is cut is empty."""
-    w = wired(wiring)
+    w = wiring if wiring is not None else EMPTY
     k = n if n is not None else 1
     shown = bool(sw.hands) and bool(visible)
     thru = through_of(w, k, rig)
@@ -1821,11 +1821,14 @@ class Panel:
     def graph_now(self):
         """(the renderer's wiring, the loaded preset's graph spec or None):
         what the OUTPUT page says in words (plan 26 A4). Any piece missing
-        (no renderer, no presets) reads as the default graph. Plan 35 T5:
-        the wired frame itself, in the new ids, on every page."""
-        wiring = getattr(self.renderer, "wiring", None) or Wiring()
+        (no renderer, no presets) reads as the empty frame (plan 36 T3:
+        `graph.EMPTY`). Plan 35 T5: the wired frame itself, in the new ids,
+        on every page."""
         presets = getattr(getattr(self, "library", None), "presets", None)
         gs = getattr(presets, "graph", None)
+        # (no renderer: the landed preset's own wiring — what it would hand one)
+        wiring = (getattr(self.renderer, "wiring", None) or getattr(gs, "wiring", None)
+                  or EMPTY)
         return wiring, getattr(gs, "spec", None)
 
     def rig_now(self):

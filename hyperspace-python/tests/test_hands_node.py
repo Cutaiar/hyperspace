@@ -26,6 +26,7 @@ from wiredframe import Thru, wire_switches
 from hyperspace import ghost as G
 from hyperspace import outputs as O
 from hyperspace.graph import HandsAt, Wiring
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.hands import core as hc
 
 S = O.Switches
@@ -124,7 +125,7 @@ FRONT, BEHIND = -400.0, 400.0
 def _rig(ctx, wiring=None, z0=None, *, effects=(), shape=True, **kw):
     r = rig(ctx, effects=effects, **kw)
     if wiring is not None:
-        r.wiring = keep_run(r, wiring)      # (plan 33 R23: the rig's run kept)
+        r.wiring = wired_wiring(keep_run(r, wiring))  # (plan 33 R23: the rig's run kept)
     if z0 is not None and r.ghost.source is not None:
         r.ghost.source.units = hc.Units(mm=200.0, origin=(0.0, 205.0, z0), tilt=0.0)
     r._no_shape = not shape
@@ -325,7 +326,7 @@ def test_a_second_hands_node_on_a_presenter_glass_matches_the_target(ctx):
 
     r = rig(ctx, effects=(), guide=1, dim=0.8)
     r.ghost_states = {"ghost.2": G.GhostState(on=True, alpha=0.25, guide=1)}
-    r.wiring = Wiring(hands="scene", extra=(HandsAt(2),))
+    r.wiring = wired_wiring(Wiring(hands="scene", extra=(HandsAt(2),)))
     pairs = [(S(dim=0.5), (640, 400)), (S(scene=False), (640, 400)),
              (Thru(scene=False), (640, 300))]
     got = _presented(ctx, r, pairs)
@@ -375,6 +376,6 @@ def test_the_hands_have_their_own_line_when_the_scene_draws_them(ctx):
     ms = r.stats["gpu_ms"]
     assert list(ms) == r._graph.timed
     assert list(ms)[:2] == ["hands", "scene"] and "hands.layer" in ms
-    r.wiring = Wiring()
+    r.wiring = wired_wiring(Wiring())
     _draw(ctx, r, vs, frames=PassTimer.LAG + 2)
     assert "hands" not in r.stats["gpu_ms"] and "hands.layer" in r.stats["gpu_ms"]

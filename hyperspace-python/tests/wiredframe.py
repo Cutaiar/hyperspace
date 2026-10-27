@@ -35,8 +35,17 @@ def section(src: Any = None, **kw) -> dict:
         src = G.Wiring()
     if isinstance(src, G.Wiring):
         if src.wired:
-            raise TypeError("a wired Wiring has no section: pass the section")
-        return M.wired_of(src)
+            # (plan 36 T3: `wiring_of` and a renderer hand a wired one —
+            # its section is its wires, as the canvas reads it)
+            return G.GraphSpec(
+                hands=tuple(src.nodes()),
+                laid=src.blend, laid_on=src.laid_on,
+                others=(*(("composite", c) for c in src.composites),
+                        *(("copy", c) for c in src.copies)),
+                wires=tuple(src.wires), wired=True).to_json()
+        # (plan 36 T3: D1's placements are written as wires in `shown`,
+        # after the states — the builder placed on each output's state)
+        return M.wired_of(src, placements=False)
     if isinstance(src, G.GraphSpec):
         src = src.to_json()
     if src.get(G.FRAME_KEY) == G.WIRED_FRAME:
@@ -56,7 +65,7 @@ def shown(src: Any = None, *shows: Shows, **kw) -> dict:
     for k, sh in enumerate(shows):
         if sh != Shows():
             sec = M.with_output_wires(sec, k + 1, sh)
-    return sec
+    return M.placed_wires(sec)
 
 
 def wiring(src: Any = None, *shows: Shows, **kw) -> G.Wiring:
@@ -94,7 +103,9 @@ def wire_switches(r, *states) -> list[Switches]:
     `Switches`: their dim and mirror, every mute on."""
     base = getattr(r, "_wiredframe_base", None)
     if base is None or getattr(r.wiring, "wired", False) is False:
-        base = r._wiredframe_base = r.wiring
+        # (plan 36 T3: a renderer's own wiring is the empty frame; the
+        # tests' rigs mean today's frame by it, said here as `Wiring()`)
+        base = r._wiredframe_base = r.wiring if r.wiring is not G.EMPTY else G.Wiring()
     shows = [s.shows if isinstance(s, Thru) else Shows(s.scene, s.hands) for s in states]
     r.wiring = wiring(base, *shows)
     return [Switches(dim=s.dim, flip_x=s.flip_x, flip_y=s.flip_y) for s in states]

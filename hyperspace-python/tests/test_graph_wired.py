@@ -29,7 +29,7 @@ def test_the_marker_reads_and_round_trips():
     spec = G.read_graph(WIRED)
     assert spec.notes == ()
     assert spec.wired
-    assert spec.to_json() == {"frame": "wired", "nodes": []}
+    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}   # (plan 36 T3: hands written)
     assert not G.read_graph({}).wired
     with pytest.raises(G.GraphError) as err:
         G.read_graph({"frame": "yes"})

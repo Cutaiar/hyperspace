@@ -23,6 +23,7 @@ import pytest
 from wiredframe import Shows, Thru, graph, wire_switches
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.outputs import Switches, View
 
 # ---------------------------------------------------------------- no GL
@@ -43,10 +44,11 @@ def test_the_pipelines_are_gone():
 
 
 def test_no_preset_draws_the_factory_frame():
-    """Plan 35 T4: a wiring no preset's graph reached (`Wiring()`, the app
-    before its first load) is wired as the factory look (`graph.wired`):
-    `frame_wires(read_graph({}))`, signature for signature; a wired one is
-    itself."""
+    """Plan 35 T4: the factory look is `frame_wires(read_graph({}))`,
+    signature for signature. Plan 36 T3 (W3): only the one-way migration
+    writes it (`graphmigrate.wired_wiring` of the old words, `Wiring()`);
+    nothing landed is the empty frame — the outputs alone — and a wired
+    wiring is itself."""
     from hyperspace import graphmigrate as M
 
     entries, wires = M.frame_wires(G.read_graph({}))
@@ -54,10 +56,10 @@ def test_no_preset_draws_the_factory_frame():
     factory = G.read_graph(M.drawn_edges({"frame": "wired", "nodes": entries,
                                           "wires": wires})).wiring()
     one = [View(Switches(), (10, 10))]
-    want = G.signature(G.build_graph(one, factory))
-    assert G.signature(G.build_graph(one, G.wired(G.Wiring()))) == want
-    assert G.signature(G.build_graph(one, G.wired(None))) == want
-    assert G.wired(factory) is factory and G.wired(G.Wiring()).wired
+    want = G.signature(G.build_graph(one, wired_wiring(factory)))
+    assert G.signature(G.build_graph(one, wired_wiring(G.Wiring()))) == want
+    assert [n.name for n in G.build_graph(one, None).order] == ["output.1"]
+    assert wired_wiring(factory) is factory and not hasattr(G, "wired")
 
 
 def test_graph_imports_only_the_render_stack_and_names_no_write():
@@ -100,18 +102,18 @@ def _view(**kw) -> View:
 
 
 def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
-    """One output, no preset: the factory frame (`graph.wired`) — the shape
+    """One output, the factory frame (`graphmigrate.wired_wiring`) — the shape
     into the scene, the cover, the hands (a geometry, A3) into their own
     layer, the look-back, its end, the capture, the output — every node
     after what it depends on, each name once, in the new ids (plan 35 T4),
     a geometry's time counted in whatever draws it (the hands' in their
     layer's: they are in no scene)."""
-    g = G.build_graph([_view()], G.Wiring())
+    g = G.build_graph([_view()], wired_wiring(G.Wiring()))
     assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                          "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     assert g.timed == ["scene", "lookback(cover)", "hands.layer", "lookback", "shown(lookback)",
                        "lookback(capture)", "output.1"]
-    assert g.key == (1,) and g.wiring == G.wired(G.Wiring())
+    assert g.key == (1,) and g.wiring == wired_wiring(G.Wiring())
     seen: list[G.Node] = []
     for n in g.order:
         for d in n.deps():
@@ -176,7 +178,7 @@ def test_a_through_output_is_a_composite_and_its_end():
     assert g.nodes["output.1"].inputs == {"image": None, "hands": None, "readout": None,
                                           "depth": None}
     # nothing wired at all: the outputs and nothing else (Review Focus 2)
-    g = G.build_graph([_view()], G.read_graph({"frame": "wired"}).wiring())
+    g = G.build_graph([_view()], wired_wiring(G.read_graph({"frame": "wired"}).wiring()))
     assert _names(g) == ["output.1"]
 
 
@@ -251,8 +253,8 @@ def test_the_wiring_is_checked_and_its_default_is_todays_frame():
         with pytest.raises(ValueError, match="wiring"):
             G.Wiring(**bad)
     # the same windows under another wiring are another graph
-    a = G.build_graph([_view()], G.Wiring())
-    b = G.build_graph([_view()], G.Wiring(blend="depth"))
+    a = G.build_graph([_view()], wired_wiring(G.Wiring()))
+    b = G.build_graph([_view()], wired_wiring(G.Wiring(blend="depth")))
     assert a.key == b.key and a.wiring != b.wiring
 
 

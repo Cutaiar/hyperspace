@@ -48,6 +48,29 @@ def _no_real_midi(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _renderers_draw_todays_frame(request, monkeypatch):
+    """Plan 36 T3 (W3): the app's `Renderer` starts on the empty frame
+    (`graph.EMPTY`, black) until a preset's graph lands. The tests' bare
+    renderers draw a scene to look at, so here — the tests' word, never the
+    app's — a new one is handed today's frame as the one-way migration
+    writes it for a section-less old preset (`graphmigrate.wired_wiring(
+    Wiring())`). A test marked `empty_frame` gets the app's own."""
+    if request.node.get_closest_marker("empty_frame") is not None:
+        return
+    from hyperspace import render
+    from hyperspace.graph import Wiring
+    from hyperspace.graphmigrate import wired_wiring
+
+    init = render.Renderer.__init__
+
+    def today(self, *a, **k):
+        init(self, *a, **k)
+        self.wiring = wired_wiring(Wiring())
+
+    monkeypatch.setattr(render.Renderer, "__init__", today)
+
+
+@pytest.fixture(autouse=True)
 def _no_undo_left_installed():
     """`undo.install` is one per process (the app has one Undo): a test
     that installs one must not leave it for the next test's push sites."""

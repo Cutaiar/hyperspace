@@ -17,15 +17,19 @@
 
 **The schema a save writes** (row 394, the owner's decision of
 2026-10-25, superseding D1's ladder, R10 and R15): always the newest,
-``hyperspace.preset/6`` (`WIRED_SCHEMA`), in today's words — the wired
-frame (plan 35), today's node ids and canvas ids, every value the
-registry holds (the media family, the envelopes and the sequencer), no
-retired id written back. Both Macs run the same build, so nothing is
-written for an older one. Every older schema still loads (`VERSIONS`):
-``/2`` is the format above, ``/3`` adds the envelopes and the sequencer
-(plan 31), ``/4`` media (plan 32), ``/5`` the free graph (plan 33), each
-migrated on load; a re-save is ``/6``. tools/migrate_library.py rewrites a
-library's presets that way, once.
+``hyperspace.preset/7`` (`WIRED_SCHEMA`), in today's words — the wired
+frame (plan 35) that says everything (plan 36 W3: every edge a wire, the
+hands entries and `laid` written, effects only where the section names
+them), today's node ids and canvas ids, every value the registry holds
+(the media family, the envelopes and the sequencer), no retired id
+written back. Both Macs run the same build, so nothing is written for an
+older one. A ``/7`` is read as it is: nothing is added to it, and one
+with no graph section is black. Every older schema (`VERSIONS`) is read
+only through the one-way migration to ``/7`` (`graphmigrate.seven`), with
+a note: ``/2`` is the format above, ``/3`` adds the envelopes and the
+sequencer (plan 31), ``/4`` media (plan 32), ``/5`` the free graph (plan
+33), ``/6`` the wired frame (plan 35); a re-save is ``/7``.
+tools/migrate_library.py rewrites a library's presets that way, once.
 
 One file per preset, ``<root>/presets/<slug>.json``: the factory ones in
 ``hyperspace/library/presets/``, the user's in ``<home>/presets/``
@@ -83,8 +87,9 @@ an Unbind or a ROUTING-page edit — which change the table and write no
 file — shows as the loaded preset edited; only a save (⇧F, the strip's
 save / as…) writes it.
 
-The factory presets are generated (`python -m hyperspace.preset`,
-`write_factory`, pinned by tests/test_presets.py): the code below holds
+The factory presets' sources are generated (`python -m hyperspace.preset
+DIR`, `write_factory`, pinned by tests/test_presets.py against
+tests/fixtures/factory-sources/presets/): the code below holds
 the generator's inputs — the house presets' routes (the lane rows),
 plan 12's five party presets' routes and their desk blocks, and whole the five that were routing presets (``legacy6``,
 ``lfo-breathe``, ``hands-fx``, ``hands-pinch``, ``hands-play``) and
@@ -92,9 +97,11 @@ plan 18's ``hands-orbit`` and plan 31's ``seq-demo`` (`FACTORY_PRESETS`); every 
 preset layer unless its entry says otherwise. The house presets' and the
 party presets' values are data in their files.
 
-The factory presets' files stay in the schema they were made in (``/2``,
-seq-demo ``/3``: `factory_schema`): the build's own stock, read through
-the same migration on every load.
+Those sources stay in the schema they were made in (``/2``, seq-demo
+``/3``: `factory_schema`). Plan 36 T3 (D5): the factory files themselves
+are their ``/7`` — each source through tools/migrate_library.py (``--to
+hyperspace/library/presets``), a fixed point a load and a save leave as
+it is.
 
 The first launch of this build migrates the home folder once
 (`migrate_home`, plan 13 §6): see "the migration" below.
@@ -117,7 +124,7 @@ from .fx import declare as declare_fx
 from .ghost import GhostState
 from .ghost import prefix as ghost_prefix
 from .ghost import register as declare_ghost
-from .graph import FRAME_KEY, WIRED_FRAME, GraphError, GraphSpec, Wiring, read_graph
+from .graph import EMPTY, FRAME_KEY, WIRED_FRAME, GraphError, GraphSpec, Wiring, read_graph
 from .lfo import SHAPES, SYNCS
 from .library import (
     DESK_SCHEMA,
@@ -178,7 +185,7 @@ SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
 WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6)
+VERSIONS = (2, 3, 4, 5, 6, 7)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -188,6 +195,11 @@ GROUP = PRESETS                   # the library folder, and the strip's group
 # named until it is saved, and what it says
 UNTITLED_PRESET = "untitled"
 NEW_SAID = "new preset: factory values, nothing wired — black until something is wired to an output"
+# plan 36 T3 (W3): a `/7` with no graph section, or an empty one — the strip says so
+NO_GRAPH_SAID = "no graph: nothing is wired — black until something is wired to an output"
+# … and one whose section is not a wired frame (no `"frame": "wired"`)
+UNWIRED_SAID = ("graph: a /7 section is a wired frame (\"frame\": \"wired\"); this one is "
+                "not read — black")
 
 # plan 32 S (row 337): the media section
 MEDIA_KEY = "media"
@@ -195,6 +207,12 @@ BMP_PREFIX = "view.bmp_"          # the one bitmap file's params, gone in plan 3
 
 
 FACTORY_DIR = FACTORY / GROUP
+# plan 36 T3 (D5): what the factory presets are made from — the `/2` (seq-demo
+# `/3`) sources the generator writes (`write_factory`), each migrated to the
+# `/7` in FACTORY_DIR by tools/migrate_library.py (`--to`). A development
+# folder beside the tests (migration inputs), never read by the app
+FACTORY_SOURCES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / \
+    "factory-sources" / GROUP
 
 
 def _names_v3(x) -> bool:
@@ -284,11 +302,14 @@ class GraphSection:
 
     A preset may carry the render graph it wants as plain JSON
     (`graph.GraphSpec`: node instances and their wiring — never a param).
-    No section is the default graph: every preset written before A4, and
-    every factory preset, loads exactly as it did. A section this build
-    cannot read (an unknown node kind, a bad value) is a note and the
-    default graph, never a crash — and the section is kept as the file
-    had it, so a save does not throw away what a newer build wrote.
+    Plan 36 T3 (W3): the section is all there is. A `/7` with none (or an
+    empty one) is the empty frame — black, said (`NO_GRAPH_SAID`); a
+    refused wire is dropped, said, never replaced by a default; a section
+    this build cannot read at all (an unknown node kind, a bad value) is a
+    note and black, never a crash — and that section is kept as the file
+    had it, so a save does not throw away what a newer build wrote. (An
+    old file reaches here only through the one-way migration,
+    `graphmigrate.seven`.)
 
     Landing a graph (`land`) is a scene-setter over three objects:
 
@@ -304,8 +325,11 @@ class GraphSection:
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
       entry, reached or not);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
-      the default graph is built from) and `Renderer.ghost_states` (the
-      extra hands nodes' states, each drawn by its own `Ghost`).
+      the frame is built from: `graph.EMPTY` with nothing landed) and
+      `Renderer.ghost_states` (the extra hands nodes' states, each drawn
+      by its own `Ghost`);
+    - (plan 36 T3) **the effects**: exactly the instances the section
+      names exist (`FxState.hold`) — instance 1 of a file too.
 
     Owned by `Presets` (`Presets.graph`); the app and the tools attach the
     renderer."""
@@ -315,12 +339,12 @@ class GraphSection:
         self.lib = lib                          # the open show's session seeds a new hands node
         self.fx = fx if fx is not None else getattr(reg, "fx_state", None)
         self.renderer = None
-        self.spec: GraphSpec | None = None      # None: the default graph
+        self.spec: GraphSpec | None = None      # None: nothing landed (black)
         self.doc: dict | None = None            # the section a save writes (None: none)
         # plan 33 M: the section as the load wired it, when it is not `doc`
         # — a load's: `doc` is then the file's own section, as read, and
         # this the wired frame the load made of it, which a save writes
-        # (row 394: always `/6`). None: `doc` is the section (a GRAPH edit's)
+        # (row 394: always the newest, `/7`). None: `doc` is the section (a GRAPH edit's)
         self.free: dict | None = None
         self.states: dict[str, GhostState] = {}  # extra hands nodes' states, by node name
         self.declared: set[str] = set()         # the extra hands nodes whose params exist
@@ -334,42 +358,45 @@ class GraphSection:
 
     @property
     def wiring(self) -> Wiring:
-        return self.spec.wiring() if self.spec is not None else Wiring()
+        return self.spec.wiring() if self.spec is not None else EMPTY
 
     def read(self, section) -> tuple[GraphSpec | None, dict | None, list[str]]:
-        """(spec, the section to keep, notes) for a file's ``graph`` value
-        (None: the file has none). Reads, lands nothing.
+        """(spec, the section to keep, notes) for a `/7` file's ``graph``
+        value (None: the file has none). Reads, lands nothing.
 
-        Plan 30 D1: a placement this build cannot honour (a name out of
-        the vocabulary — an effect file that is not on disk among them —,
-        both keys, a loop) is a note and that effect's default placement;
-        the rest of the graph lands, and the section is kept as the file
-        had it (a save does not drop what the file said)."""
-        if section is None:
-            return None, None, []
+        Plan 36 T3 (W3): nothing is filled in. No section, or an empty
+        one, is the empty frame, said (`NO_GRAPH_SAID`); a wire or an entry
+        this build refuses is dropped, said, and the section kept is the
+        one that landed (`to_json`: a save writes what runs); a section it
+        cannot read at all is black — (None, the file's section kept as it
+        was, so a newer build's words survive a save, the note)."""
+        if section is None or section == {} or section == {FRAME_KEY: WIRED_FRAME}:
+            spec = read_graph({FRAME_KEY: WIRED_FRAME})
+            return spec, spec.to_json(), [NO_GRAPH_SAID]
         files = self.files()
         try:
             spec = read_graph(section, effects=files)
         except GraphError as e:
-            return None, copy.deepcopy(section), [f"graph: {e}; the default graph"]
-        if spec.notes:
-            # plan 28 N4: a refused wire leaves its port at the default wiring
-            return spec, copy.deepcopy(section), [
-                f"graph: {n}; the default " + ("wiring" if n.startswith("wire ") else
-                                               "placement") for n in spec.notes]
-        return spec, spec.to_json(), []
+            return None, copy.deepcopy(section), [f"graph: {e}; not read — black"]
+        if not spec.wired:
+            # (an old file's words: only the migration reads them)
+            return None, copy.deepcopy(section), [UNWIRED_SAID]
+        return spec, spec.to_json(), [f"graph: {n}; dropped" for n in spec.notes]
 
     def specs(self) -> dict[str, tuple[int, float]]:
-        """Each effect instance's file defaults, `(@order, @mix)` — what the
-        migration to the free graph reads an absent value as (plan 33 M,
-        `graphmigrate.Specs`); none with no FxState to ask."""
+        """Each effect file's and held instance's defaults, `(@order,
+        @mix)` — what the migration to the free graph reads an absent value
+        as (plan 33 M, `graphmigrate.Specs`); none with no FxState to ask.
+        Plan 36 T3: every file on disk, held by the last graph or not."""
         return graphmigrate.specs_of(getattr(self, "fx", None))
 
     def files(self) -> set[str] | None:
         """The effect files on disk (None: no FxState to ask) — what a
-        placement or a wire may name (plan 30 D1, plan 28 N4)."""
+        wire may name (plan 28 N4); plan 36 T3: held or not."""
         fx = getattr(self, "fx", None)
-        return ({fx.file_of(n) for n in fx.specs}
+        if getattr(fx, "files", None):
+            return set(fx.files)
+        return ({fx.file_of(n) for n in fx.specs}       # (a stand-in FxState: its specs)
                 if fx is not None and getattr(fx, "specs", None) else None)
 
     def land(self, spec: GraphSpec | None, doc: dict | None = None,
@@ -380,14 +407,14 @@ class GraphSection:
         free graph's words when `doc` is the file's from before them (a
         load: `free_doc`). With no `free` (an edit on the GRAPH page) `doc`
         is both. Plan 35 T3: every load's and every GRAPH edit's graph is a
-        wired frame, and that is what a save writes (row 394: `/6`).
+        wired frame, and that is what a save writes (row 394: `/7`, plan 36 T3).
 
         An extra hands node declared for the first time this run starts
         from what the open show holds for it (`ghost.2.*` in its session —
         the show restored before the startup preset brought the node), so
         its settings survive a reopen and the show stays clean; after
         that its kept state is the live one."""
-        wiring = spec.wiring() if spec is not None else Wiring()
+        wiring = spec.wiring() if spec is not None else EMPTY
         reg = self.reg
         want = {ghost_prefix(h.n): h.n for h in wiring.extra}
         for name in sorted(self.declared - set(want)):
@@ -399,7 +426,8 @@ class GraphSection:
                 self._seed(name)
         self.declared = set(want)
         if self.fx is not None:
-            changed = self.fx.set_instances(spec.effect_counts() if spec is not None else {})
+            # plan 36 T3 (W3): the effects the section names, and no others
+            changed = self.fx.hold(spec.effect_names() if spec is not None else frozenset())
             if changed:
                 declare_fx(reg, self.fx, changed)
         # plan 33 S: each switch's `select`, as the effect instances' params
@@ -414,7 +442,7 @@ class GraphSection:
     def free_doc(self) -> dict | None:
         """The section in the free graph's words (plan 33 M; plan 35 T3: the
         wired frame every load lands): what a save writes (row 394: always
-        `/6`) — `free` when the load kept the file's section beside it,
+        `/7`) — `free` when the load kept the file's section beside it,
         else `doc`."""
         free = getattr(self, "free", None)      # (a section from before a hot reload)
         return free if free is not None else self.doc
@@ -444,8 +472,10 @@ class GraphSection:
                     project.session.setdefault(pid, v)
 
     def mark(self) -> tuple:
-        """What is landed, for an undo of a load (`library.Marks`)."""
-        return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)))
+        """What is landed, for an undo of a load (`library.Marks`) — and
+        (plan 36 T3) which effect instances exist (`FxState.held`)."""
+        return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)),
+                getattr(self.fx, "held", None))
 
     def put(self, mark: tuple) -> None:
         """Land what `mark` held again (an undo of a load), first. (A mark
@@ -455,6 +485,13 @@ class GraphSection:
         spec, doc, free = (*mark, None)[:3]
         if (spec, doc, free) != (self.spec, self.doc, getattr(self, "free", None)):
             self.land(spec, doc, free)
+        # plan 36 T3: the instances that existed (every file, before a graph
+        # had landed), as they were
+        fx = self.fx
+        if len(mark) > 3 and fx is not None and getattr(fx, "held", None) != mark[3]:
+            changed = fx.hold(mark[3])
+            if changed:
+                declare_fx(self.reg, fx, changed)
 
     def _push(self) -> None:
         r = self.renderer
@@ -717,6 +754,7 @@ class Presets:
         self.lib, self.reg, self.router = lib, reg, router
         self.note = ""
         self.notes: list[str] = []       # step 1's notes from the last load
+        self.migrated = ""               # plan 36 T3: "/N migrated to /7" when that load was old
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
@@ -781,7 +819,7 @@ class Presets:
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k)}
-        doc = {"schema": SCHEMA, "name": UNTITLED_PRESET, "values": values,
+        doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
                GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME}).to_json()}
@@ -815,24 +853,26 @@ class Presets:
         #    slice reproduces
         doc, palette_notes = palette_slice(doc)
         notes += palette_notes
-        # 0. and its render graph (plan 26 A4): read, not yet landed — no
-        #    section is the default graph; one this build cannot read is a
-        #    note and the default graph. Plan 33 M: read as the free graph
-        #    (`graphmigrate.migrate`: each pipeline's run, the faces' and the
-        #    channels' as wires; a route on a channel choice onto a switch),
-        #    a desk template's rows counted as the desk they expand to. The
-        #    retired values (an effect's order and target, `view.media`,
-        #    `backdrop.channel`: no param since plan 33 T7) are dropped from
-        #    the values, said by the wires — so never an unknown id. Plan 35
-        #    T3: then in the new ids as a wired frame (`backdrop.history`
-        #    retired into the capture wire, a row on it dropped with a
-        #    note): every load lands one, and a save writes it (row 394:
-        #    always `/6`, so nothing of the file's old words is kept for it)
+        # 0. and its render graph (plan 26 A4): read, not yet landed. Plan
+        #    36 T3 (W3): a `/7` is read as it is — no section is the empty
+        #    frame, black, said; nothing is filled in. An older file is
+        #    first rewritten as its `/7` by the one-way migration
+        #    (`graphmigrate.seven`, said): the free graph (plan 33 M), the
+        #    wired frame in the new ids (plan 35), every hidden edge and D1
+        #    placement as its wire, the values of an effect the section does
+        #    not name dropped — a desk template's rows counted as the desk
+        #    they expand to — and a save writes that `/7` (row 394)
         gs = self._graph_section()
         template_rows = self._template_rows(doc)
-        kept = doc.get(GRAPH_KEY)
-        doc, migrate_notes = graphmigrate.migrate(doc, gs.specs(), desk=template_rows)
-        _, kept, _ = gs.read(kept)
+        migrate_notes: list[str] = []
+        migrated = ""
+        version = graphmigrate.schema_version(doc)
+        if version is None or version < graphmigrate.SEVEN:
+            old = str(doc.get("schema"))
+            doc, migrate_notes = graphmigrate.seven(doc, gs.specs(), desk=template_rows)
+            # (said on the strip — `_warn` — but no problem with the file:
+            # not one of `notes`, which say what did not land)
+            migrated = graphmigrate.MIGRATED_NOTE.format(old=old, new=WIRED_SCHEMA)
         spec, section, graph_notes = gs.read(doc.get(GRAPH_KEY))
         notes += graph_notes
         # 1. what the file names that a preset may not carry — all parsed
@@ -868,9 +908,11 @@ class Presets:
             elif pid.startswith(modifiers.PREFIX):
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
-            elif is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid):
+            elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
+                  or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
-                # plan 34 Z: and a resize's values)
+                # plan 34 Z: and a resize's values; plan 36 T3: and every
+                # effect's — instance 1 exists only where its graph names it)
                 later[pid] = v
             elif p is None:
                 unknown.append(pid)
@@ -986,7 +1028,7 @@ class Presets:
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
         try:
-            gs.land(spec, kept, free=section)
+            gs.land(spec, section)
             # R19 (row 354: "rebuilds, not loads"): a load's delays start
             # empty — no trail of the preset before in this one
             reset = getattr(gs.renderer, "reset_delays", None)
@@ -1089,6 +1131,7 @@ class Presets:
             notes.append(f"layout: {bad} entr{'y' if bad == 1 else 'ies'} unreadable, ignored")
         # 7. the notes, for the panel
         self.notes = notes
+        self.migrated = migrated            # plan 36 T3: the one-way migration's word
         self._warn(str(doc.get("name") or (path.stem if path else "preset")))
         return unknown
 
@@ -1106,14 +1149,14 @@ class Presets:
             doc["note"] = self.note
         table = self.router.table
         # plan 26 A4: the graph the loaded preset carried — plan 35 T3: the
-        # wired frame the load or the GRAPH page landed; with none landed
-        # (nothing loaded yet) the frame the renderer draws for none, the
-        # factory look (`graph.wired`), so every `/6` has its frame and its
-        # re-save is the same file
+        # wired frame the load or the GRAPH page landed; plan 36 T3: with
+        # none landed (nothing loaded yet) the empty frame the renderer
+        # draws for none (`graph.EMPTY`), black, so what a save writes is
+        # what was drawn
         gs = self._graph_section()
         section = gs.free_doc()
         if section is None:
-            section = graphmigrate.wired_of(Wiring())
+            section = read_graph({FRAME_KEY: WIRED_FRAME}).to_json()
         doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
         # a preset of four LFOs writes the file it always did
@@ -1121,6 +1164,12 @@ class Presets:
             if bank.doc() != list(bank.DEFAULT):
                 doc[bank.KEY] = bank.doc()
         values = self._values()
+        # plan 36 T3 (W3): an effect exists only where the section names it
+        # — the values of one it does not (a rig's, before any graph
+        # landed) are not the preset's
+        held = graphmigrate.section_effects(doc[GRAPH_KEY])
+        values = {k: v for k, v in values.items()
+                  if graphmigrate.effect_of(k) in (None, *held)}
         doc.update(values=values,
                    routes=[b.to_json() for b in table.routes()],
                    **self._modifiers_part(name),
@@ -1213,8 +1262,11 @@ class Presets:
         # (its order and target are no params since plan 33 T7: read from
         # the module's file over the group's defaults, as its values land)
         own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))
-        new, notes = graphmigrate.module_runs(before, {**self.reg.snapshot(FX_GROUP), **own},
-                                              gs.specs(), rows)
+        # (plan 36 T3: an effect the graph does not name has no params yet —
+        # the module's own values say whether it joins the run)
+        landed = {**self.lib.defaults(FX_GROUP), **_module_values(FX_GROUP, doc),
+                  **self.reg.snapshot(FX_GROUP)}
+        new, notes = graphmigrate.module_runs(before, {**landed, **own}, gs.specs(), rows)
         spec, section, read_notes = gs.read(new)
         if spec is None:
             notes = [*notes, ("its run is not applied — the preset's graph is not one "
@@ -1352,9 +1404,13 @@ class Presets:
     # ---- internals ----
 
     def _warn(self, name: str) -> None:
+        """The strip's warning line: the load's first note — else (plan 36
+        T3) that an old file was migrated to `/7` on load, until it is saved."""
         if self.notes:
             more = f" (+{len(self.notes) - 1} more)" if len(self.notes) > 1 else ""
             self.lib.say(warning=f"preset {name}: {self.notes[0]}{more}")
+        elif getattr(self, "migrated", ""):
+            self.lib.say(warning=f"preset {name}: {self.migrated}")
 
     def _landed(self, name: str | None) -> None:
         """The library's load hook: the bank lights the slot that names
@@ -2070,13 +2126,16 @@ def generated(key: str) -> dict:
     return doc
 
 
-def write_factory(directory: Path = FACTORY_DIR) -> list[Path]:
-    """Regenerate what the factory presets take from code
+def write_factory(directory: Path = FACTORY_SOURCES) -> list[Path]:
+    """Regenerate what the factory presets' sources take from code
     (`python -m hyperspace.preset`): the presets `FACTORY_PRESETS` gives
     values whole (`generated`); the party presets' routes, desk and
     macros; every other preset's ``desk``, the factory preset layer
     (`file_desk`). Every other key in a file — the values, the note, the
-    modules — is data and stays as it is."""
+    modules — is data and stays as it is. Plan 36 T3: the sources
+    (`FACTORY_SOURCES`), old files; the factory's `/7` are their
+    migration (tools/migrate_library.py ``--library <sources' folder>
+    --to hyperspace/library/presets``)."""
     out = []
     for key, spec in FACTORY_PRESETS.items():
         if spec.values is not None:

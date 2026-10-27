@@ -35,6 +35,7 @@ from test_graph_faces import (
 )
 
 from hyperspace import graph as G
+from hyperspace.graphmigrate import wired_wiring
 from hyperspace.lookback import MAX_ECHOES
 from hyperspace.media.frame import MediaFrame
 from hyperspace.outputs import Switches, View
@@ -105,12 +106,12 @@ def test_the_echo_nodes_say_what_they_are():
                                    {"from": "echo.3", "to": "shape.faces"},
                                    {"from": "dream", "to": "output.2.image"}]})
     assert not spec.notes, spec.notes
-    g = G.build_graph(vs, spec.wiring())
+    g = G.build_graph(vs, wired_wiring(spec.wiring()))
     assert isinstance(g.nodes["echo.3"], G.EchoNode) and g.nodes["echo.3"].k == 3
     assert isinstance(g.nodes["dream"], G.DreamNode)
     assert g.nodes["shape"].inputs["faces"] is g.nodes["echo.3"]
     assert g.reads_ring and not g.dormant
-    assert not G.build_graph(vs, G.Wiring(run=())).reads_ring
+    assert not G.build_graph(vs, wired_wiring(G.Wiring(run=()))).reads_ring
 
 
 def test_echo_k_is_the_kth_newest_capture(ctx):
@@ -158,8 +159,8 @@ def test_the_ring_keeps_capturing_for_an_echo_with_the_look_back_off(ctx):
         assert np.array_equal(got, want), k
     assert r.lookback.held() == 3 and r.lookback.keep
     assert plain_r.lookback.held() == 0 and not plain_r.lookback.keep
-    r.wiring = G.read_graph({"nodes": [], "wires": [{"from": "frame",
-                                                      "to": "fx.image"}]}).wiring()
+    r.wiring = wired_wiring(G.read_graph({"nodes": [], "wires": [{"from": "frame",
+                                                      "to": "fx.image"}]}).wiring())
     _frame(ctx, r, s, vs, size, 3)
     assert r.lookback.held() == 0 and not r.lookback.keep
 
@@ -174,7 +175,7 @@ def test_an_echo_read_this_frame_is_last_frames_capture(ctx):
     m = _media(a=still)
     m.channels["a"].fit = 2                                   # stretch: fills
     r = _off(_renderer(ctx, m, [("media.a", "backdrop.image"),
-                                ("echo.1", "output.2.image")], [_echo(1)]))
+                                ("echo.1", "output.2.image")], [_echo(1)], history=True))
     vs = _views(ctx, size)
     s = _empty(backdrop_history=True)
     colours = (RED, GREEN, BLUE, RED, GREEN)

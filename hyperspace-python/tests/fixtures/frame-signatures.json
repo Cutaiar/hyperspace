@@ -16143,17 +16143,17 @@
     ]
    ],
    [
-    "Effect",
-    "palette",
-    [
-     "image"
-    ]
-   ],
-   [
     "History",
     null,
     [
      "cover",
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "palette",
+    [
      "image"
     ]
    ],
@@ -16946,6 +16946,41 @@
     "Composite",
     null,
     [
+     "over"
+    ]
+   ],
+   [
+    "Effect",
+    "acid",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "wobble",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "deconverge",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "huecycle",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Composite",
+    null,
+    [
      "over",
      "under"
     ]
@@ -16981,41 +17016,6 @@
    [
     "Effect",
     "palette",
-    [
-     "image"
-    ]
-   ],
-   [
-    "Composite",
-    null,
-    [
-     "over"
-    ]
-   ],
-   [
-    "Effect",
-    "acid",
-    [
-     "image"
-    ]
-   ],
-   [
-    "Effect",
-    "wobble",
-    [
-     "image"
-    ]
-   ],
-   [
-    "Effect",
-    "deconverge",
-    [
-     "image"
-    ]
-   ],
-   [
-    "Effect",
-    "huecycle",
     [
      "image"
     ]
@@ -17768,13 +17768,6 @@
     ]
    ],
    [
-    "Effect",
-    "acid.2",
-    [
-     "image"
-    ]
-   ],
-   [
     "Cover",
     null,
     [
@@ -17786,6 +17779,13 @@
     1,
     [
      "geometry"
+    ]
+   ],
+   [
+    "Effect",
+    "acid.2",
+    [
+     "image"
     ]
    ],
    [
@@ -19287,13 +19287,6 @@
     ]
    ],
    [
-    "Effect",
-    "palette",
-    [
-     "image"
-    ]
-   ],
-   [
     "Composite",
     null,
     [
@@ -19324,6 +19317,13 @@
    [
     "Effect",
     "huecycle",
+    [
+     "image"
+    ]
+   ],
+   [
+    "Effect",
+    "palette",
     [
      "image"
     ]

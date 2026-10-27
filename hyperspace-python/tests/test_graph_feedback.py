@@ -201,5 +201,5 @@ def test_the_new_words_load_and_save_as_six(tmp_path, node, pairs):
     assert app.presets.load_doc({"schema": "hyperspace.preset/5", "name": "fb",
                                  "values": {}, "graph": sec}) == []
     doc = app.presets.document("fb")
-    assert doc["schema"] == "hyperspace.preset/6"
+    assert doc["schema"] == "hyperspace.preset/7"
     assert [n for n in doc["graph"]["nodes"] if n.get("kind") == node["kind"]]

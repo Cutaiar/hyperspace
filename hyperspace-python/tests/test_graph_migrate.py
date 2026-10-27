@@ -20,16 +20,17 @@ from hyperspace import graphmigrate as M
 from hyperspace.library import LibraryError
 
 ROOT = Path(__file__).parent.parent / "hyperspace"
-FILES = sorted([*(ROOT / "library" / "presets").glob("*.json"),
-                *(ROOT / "library" / "fx").glob("*.json")])
+# plan 36 T3: the factory presets' sources (the factory files are their `/7`)
+SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
+FILES = sorted([*SOURCES.glob("*.json"), *(ROOT / "library" / "fx").glob("*.json")])
 # the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
 # is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
 # one, plan 35 T3's, the wired frame's)
-FIXTURES = sorted(p for p in [*(ROOT / "library" / "presets").glob("*.json"),
+FIXTURES = sorted(p for p in [*SOURCES.glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "presets").glob("*.json"),
                               *(Path(__file__).parent / "fixtures" / "merge-31-32").glob("*.json")]
                   if json.loads(p.read_text()).get("schema") not in (M.FREE_SCHEMA,
-                                                                       M.WIRED_SCHEMA))
+                                                                       M.SIX_SCHEMA))
 EFFECTS = {p.stem: fx.parse(p.stem, p.read_text())
            for p in (ROOT / "shaders" / "fx").glob("*.glsl") if not p.stem.startswith("_")}
 SPECS = {n: (s.order, s.mix) for n, s in EFFECTS.items()}
@@ -218,7 +219,8 @@ def test_a_branch_saves_as_v6_and_reloads(tmp_path):
     assert app.presets.load_doc(copy.deepcopy(doc)) == []
     saved = app.presets.document("t")
     wired, _ = M.migrate(doc, app.presets.graph.specs())
-    assert saved["schema"] == M.WIRED_SCHEMA and saved["graph"] == wired["graph"]
+    assert saved["schema"] == M.WIRED_SCHEMA
+    assert saved["graph"] == G.read_graph(wired["graph"]).to_json()     # (plan 36 T3: hands)
     assert saved["graph"][G.FRAME_KEY] == G.WIRED_FRAME
     assert app.presets.load_doc(copy.deepcopy(saved)) == []
     assert app.presets.document("t") == saved                 # and reloads as it saved
@@ -237,7 +239,7 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
@@ -376,7 +378,7 @@ def test_old_ids_are_renamed_on_load():
     assert {("hands.2.layer", "output.2.hands"), ("lookback", "acid.2.image"),
             ("acid.2", "output.1.image"), ("channel.c", "output.2.image")} <= got
     assert {"kind": "effect", "file": "palette", "after": "hands.layer"} in section["nodes"]
-    spec = G.read_graph(section)
+    spec = G.read_graph(section, placements=True)     # (plan 36 T3: `seven` writes it a wire)
     assert spec.wired and spec.notes == () and old_ends(spec) == []
     # a plan 34 `/5` fixture: its own wires, unchanged
     trails = load(TESTS / "fixtures" / "presets" / "delay-trails.json")

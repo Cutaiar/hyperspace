@@ -154,7 +154,8 @@ def test_a_preset_naming_a_template_loads_its_rows_with_the_overrides_on_top(rig
     put_fixtures(lib)
     lib.presets.load("TEMPLATED")
     assert desk_of(rig) == EXPANDED
-    assert lib.presets.notes == [] and lib.warning == ""
+    # (plan 36 T3: an old file — the strip says it was migrated, nothing else)
+    assert lib.presets.notes == [] and lib.warning == f"preset TEMPLATED: {lib.presets.migrated}"
     assert not lib.is_dirty("presets")
     assert lib.presets.template_of_loaded() == "fixture shape"
 

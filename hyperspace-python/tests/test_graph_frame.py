@@ -372,9 +372,12 @@ def _px(f) -> np.ndarray:
 
 
 def _land(rig, section: dict) -> None:
-    spec = G.read_graph(section, effects={e.partition(".")[0] for e in rig.fx.specs})
+    """`section` landed through the preset's graph (plan 36 T3: its effects
+    exist only so — `FxState.hold`), which hands the renderer its wiring."""
+    spec = G.read_graph(section, effects=set(rig.fx.files))
     assert spec.notes == (), spec.notes
-    rig.renderer.wiring = spec.wiring()
+    rig.presets.graph.land(spec, spec.to_json())
+    assert rig.renderer.wiring == spec.wiring()
 
 
 def _draw(ctx, rig, switches, frames=3):

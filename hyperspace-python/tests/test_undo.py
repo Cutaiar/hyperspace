@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from conftest import opened_last
 
-from hyperspace import devices, hands, lfo, preset, routing, tempo, undo
+from hyperspace import devices, envelope, hands, lfo, preset, routing, sequencer, tempo, undo
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.control import Control
@@ -84,6 +84,10 @@ def boot(home, show: str | None = None, *, fx=None, dream=None, ghost=None):
     lfos = lfo.LFOs(seed=1)
     tempo.register(reg, clock)
     lfo.register(reg, lfos, clock)
+    # plan 31, as app.main: the envelopes and the sequencer beside the LFOs
+    # (plan 36 T3: the factory `/7` files hold their values)
+    envelope.register(reg, envelope.Envelopes(), clock)
+    sequencer.register(reg, sequencer.Sequencer(), clock)
     output = Output(None, None)
     output.register(reg)
     # the desk's session params before attach, as app.main has them (plan 18

@@ -581,7 +581,6 @@ def test_inst_layout_is_declared(tmp_path):
     whole factory layer — loads it as GRID."""
     from test_undo import boot, frames, labels, settle
 
-    from hyperspace.library import FACTORY
     from hyperspace.params import INST_LAYOUT
 
     reg, view, *_ = make(tmp_path / "plain")
@@ -630,8 +629,16 @@ def test_inst_layout_is_declared(tmp_path):
         assert r.view.inst_layout == 2
         assert "view.inst_layout" not in r.presets.load(name), name
         assert r.view.inst_layout == 0 and lay.base == 0, name
-    for f in FACTORY.rglob("*.json"):
+    # (plan 36 T3: the factory `/7` files are full saves — at its default;
+    # their sources, made before it, never name it)
+    import json
+
+    from hyperspace import preset
+
+    for f in preset.FACTORY_SOURCES.glob("*.json"):
         assert "inst_layout" not in f.read_text(), f.name
+    for f in preset.FACTORY_DIR.glob("*.json"):
+        assert json.loads(f.read_text())["values"].get("view.inst_layout", 0) == 0, f.name
 
 
 # ---- plan 26 A0: the naming rule for node instances (ENGINEERING §2) ----
