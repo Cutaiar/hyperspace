@@ -156,20 +156,23 @@ dance floor.
 4. **mask in time**: smooth (exponential), hold. The segment node should own its own smoothing; a general
    version is a delay loop.
 
-With 1 and 2 the stated use cases are all wiring: camera → segment → cut(camera) → composite.over (the
-dancer over the polytope); camera → segment → cut(kaleido branch) (the effect only inside the silhouette);
-camera → segment → matte(invert) → cut(scene) (the scene only outside the dancer); edges → matte → cut(pattern).
+With the segment node making two pictures (§3) and 1 and 2 beside it, the stated use cases are all wiring:
+camera → segment.fg → composite.over (the dancer over the polytope); segment.fg → kaleido (the effect only
+inside the silhouette); segment.fg → matte → cut(scene) (the scene only where the dancer is);
+segment.bg → matte → cut(scene) (the scene only where they are not); edges → matte → cut(pattern).
 
 ## 3. Casting onto the graph: a proposal
 
-Principle: **a mask is a wire type**, the existing `mask`, a one-channel picture of some size; **nodes convert
-both ways explicitly**; the WYSIWYG rule holds (every input is a drawn wire, no default graph). The worker's
-shortcut — reading the camera's numpy frame instead of reading the texture back — is an implementation
-detail the node takes only when its `image` wire comes straight from a channel; the wire is still drawn.
+Principle: **segmentation is one node on any bitmap, foreground and background out as bitmaps** (the owner's
+casting, 2026-10-27); **a mask is a wire type**, the existing `mask`, a one-channel picture of some size, and
+**nodes convert between bitmap and mask explicitly** (`matte`, `cut`); the WYSIWYG rule holds (every input is
+a drawn wire, no default graph). Because the input is any bitmap, the general path is the dream's
+downsample-and-readback; reading the camera's numpy frame instead is a shortcut the node takes only when its
+`image` wire comes straight from a channel, and the wire is still drawn.
 
 | Node | In → out | Params (modulatable unless said) | Notes |
 |---|---|---|---|
-| `segment[.n]` | `image` → mask | `mode` person / subject / motion (choice); `quality` fast / balanced / accurate; `feather`; `smooth`; `invert`; `on` | own size (the model's); one worker per node; `said` carries "256×192 · Vision fast · a frame or two late"; `on` off makes nothing (the cut shows its picture whole) |
+| `segment[.n]` | `image` → two pictures: `segment.fg` and `segment.bg` (pins, like `scene.depth`); optionally `segment.mask` | `mode` person / subject / motion (choice); `quality` fast / balanced / accurate; `feather`; `smooth`; `on` | the owner's casting (2026-10-27): any bitmap in, the foreground and the background out as bitmaps, each the input with its alpha cut by the matte (premultiplied), so either lands straight on a `composite.over`, the faces or an effect; the matte itself is internal unless the `mask` pin is wired. The mask is made at the model's own size and sampled bilinearly at the input's; one worker per node; `said` carries "256×192 · Vision fast · a frame or two late"; `on` off: `fg` is the input whole, `bg` nothing |
 | `matte[.n]` | `image` → mask | `from` luma / alpha / chroma; `key`; `soft`; `invert`; `feather` | one GLSL pass; the general picture → mask |
 | `cut[.n]` | `image`, `mask` → image | `invert`, `amount` | one GLSL pass; alpha ← mask, premultiplied; no mask wired = the picture through |
 | `edges` | an effect file | `threshold`, `glow`, `colour`/`hue by direction` | needs no Python; its picture becomes a mask through `matte` |
@@ -198,8 +201,10 @@ detail the node takes only when its `image` wire comes straight from a channel; 
    proposal is the type: the purple wire exists, it keeps "what is a mask here" visible on GRAPH, and alpha
    stays what it is today (coverage of a picture).
 2. **A mask may be wired as a picture** (one-way promotion) — yes/no.
-3. **`segment` outputs a mask only**, and `cut` makes the picture with alpha; or `segment` also makes the
-   cut camera picture as a pin (`segment.cut`). The proposal is mask only: one node, one job.
+3. **Settled by the owner (2026-10-27): `segment` takes any bitmap and makes two bitmaps, the foreground and
+   the background**, each the input with its alpha cut; bitmap → mask is a separate node (`matte`). Left
+   open: whether the node also exposes its matte as a `segment.mask` pin (cheap; saves a `matte` in the
+   common case) — the proposal is yes.
 4. **Backend**: Apple Vision first (Neural Engine, 3.6 ms, one small pyobjc wheel, macOS-only), torchvision
    second; or torchvision only (no new dependency, shares the GPU). Both can live behind one node.
 5. **Modes in the first build**: person; subject; motion (background model). Person and motion first?
