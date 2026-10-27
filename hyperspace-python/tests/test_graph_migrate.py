@@ -400,22 +400,27 @@ def test_a_plan_33_run_becomes_wires_to_all_outputs():
     assert not any(x in ("frame", "fx") for a, b in got for x in (a, b.rpartition(".")[0]))
 
 
+# plan 36 T2: the hidden edges' wires a migrated frame ends with (`drawn_edges`)
+EDGES = [("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
+         ("hands", "hands.layer.hands")]
+
+
 @pytest.mark.parametrize(("values", "nodes", "pairs"), [
     ({"backdrop.channel": 3, "backdrop.history": True}, [], [
         ("shape", "scene.geometry"), ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
         ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
-        ("hands.layer", "output.all.guide"), ("backdrop", "lookback.capture")]),
+        ("hands.layer", "output.all.guide"), ("backdrop", "lookback.capture"), *EDGES]),
     ({}, [{"kind": "history", "holds": "scene+hands"}], [
         ("shape", "scene.geometry"), ("scene", "lookback.image"),
         ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
         ("hands.layer", "output.all.guide"), ("scene", "composite.under"),
-        ("hands.layer", "composite.over"), ("composite", "lookback.capture")]),
+        ("hands.layer", "composite.over"), ("composite", "lookback.capture"), *EDGES]),
     ({"backdrop.channel": 3, "backdrop.history": True},
      [{"kind": "history", "holds": "scene+hands"}], [
         ("shape", "scene.geometry"), ("scene", "backdrop.scene"), ("backdrop", "lookback.image"),
         ("lookback", "output.all.image"), ("hands.layer", "output.all.hands"),
         ("hands.layer", "output.all.guide"), ("backdrop", "composite.under"),
-        ("hands.layer", "composite.over"), ("composite", "lookback.capture")]),
+        ("hands.layer", "composite.over"), ("composite", "lookback.capture"), *EDGES]),
 ], ids=["backdrop.history", "holds", "both"])
 def test_backdrop_history_and_holds_become_the_capture_wire(values, nodes, pairs):
     """T2's variants, reached through `migrate`: the capture wire says what

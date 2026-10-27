@@ -436,6 +436,7 @@ STAND = wired(("shape", "scene.geometry"), ("scene", "lookback.image"),
               ("hands.layer", "output.all.guide"), ("lookback", "composite.under"),
               ("hands.layer", "composite.over"), ("composite", "copy.image"),
               ("copy", "output.2.image"), ("ground", "output.2.hands"),
+              ("hands", "hands.layer.hands"),          # plan 36 T2: the layer's hands, a wire
               nodes=[{"kind": "composite"}, {"kind": "copy", "of": "acid"}])
 
 
@@ -527,7 +528,16 @@ def test_laid_on_a_second_hands_entry_reads_in_a_wired_frame():
     assert {"kind": "hands", "instance": 2, "laid": "depth"} in spec.to_json()["nodes"]
     again = G.read_graph(spec.to_json())
     assert (again.laid, again.laid_on) == ("depth", 2) and again.to_json() == spec.to_json()
+    # (plan 36 T2: `laid` is hands 2's layer's own — how an output lays that
+    # layer; this frame lays none, the hands are in the scene)
     g = G.build_graph(views(1), spec.wiring())
+    assert g.outputs[0].inputs["hands"] is None and g.outputs[0].blend == "over"
+    laid = G.read_graph({**spec.to_json(), "wires": [
+        *spec.to_json()["wires"], {"from": "hands.2.layer", "to": "output.all.hands"},
+        {"from": "hands.2", "to": "hands.2.layer.hands"}]})
+    assert laid.notes == ()
+    g = G.build_graph(views(1), laid.wiring())
+    assert g.outputs[0].inputs["hands"].name == "hands.2.layer"
     assert g.outputs[0].blend == "depth"
     with pytest.raises(G.GraphError, match="laid twice"):
         G.read_graph(wired(nodes=[{"kind": "hands", "laid": "add"},

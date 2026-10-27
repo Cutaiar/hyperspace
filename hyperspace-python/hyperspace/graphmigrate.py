@@ -28,13 +28,19 @@ Plan 35 M (rows 372, 383–385): then every section is a wired frame in the
 owner's names — `migrate` renames it (`renamed`, V2) and writes today's
 frame as wires (`wired_section`); `backdrop.history` and the look-back's
 `holds` are the capture wire.
+
+Plan 36 T2 (W2): and every edge the builder read by name — the faces'
+pattern, the look-back's cover, a layer's and a guide's hands, the
+scene's depth for `laid: depth` — is written as the wire it stood for
+(`drawn_edges`), on every `/4`–`/6` section, a wired one too, so each
+draws what it drew while nothing is read that no wire says.
 """
 
 from __future__ import annotations
 
 import copy
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from . import graph as G
@@ -381,9 +387,12 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
         spec = None                     # the loader says so and takes the default graph
     if spec is None or spec.wired:
         # (plan 35: a wired frame is the preset's own words — nothing of
-        # plan 33's to add, nothing to rename)
+        # plan 33's to add, nothing to rename; plan 36 T2: but each hidden
+        # edge its builder read is written as the wire it stood for)
         for pid in [p for p in values if retired(p)]:
             del values[pid]
+        if spec is not None and wire:
+            out["graph"] = drawn_edges(section, _files(specs))
         return out, notes
     nodes = list(section.get("nodes", []))
     wires = list(section.get("wires", []))
@@ -449,7 +458,8 @@ def migrate(doc: dict, specs: Specs, *, desk: list | None = None,
             old = G.read_graph(sec, effects=_files(specs))
         except G.GraphError:
             return out, notes           # (not reached: plan 33's steps write what reads)
-        out["graph"] = wired_section(renamed(sec), old, backdrop_history=held_backdrop)
+        out["graph"] = wired_section(renamed(sec), old, backdrop_history=held_backdrop,
+                                     notes=notes)
     return out, notes
 
 
@@ -933,20 +943,150 @@ def with_output_wires(section: dict, n: int, shows: Shows) -> dict:
     got = output_wires(spec, n, shows)
     port = f"output.{n}."
     stood = {(w.src, w.dst) for w in spec.wires}
+    # (plan 36 T2: the window's depth is `drawn_edges`' to say, after)
     mine = [w for w in section.get("wires", [])
-            if isinstance(w, dict) and str(w.get("to", "")).startswith(port)]
+            if isinstance(w, dict) and str(w.get("to", "")).startswith(port)
+            and w.get("to") != port + G.DEPTH_PORT]
     refused = [w for w in mine if (w.get("from"), w.get("to")) not in stood]
     if sorted(map(str, (w for w in mine if w not in refused))) == sorted(map(str, got)):
-        return section                     # (its own wires say it already: kept where they are)
+        return drawn_edges(section)        # (its own wires say it already: kept where they are)
     out = dict(section)
     out["nodes"] = [*section.get("nodes", []), *(e for e in got if "kind" in e)]
     out["wires"] = [*(w for w in section.get("wires", [])
                       if not (isinstance(w, dict) and str(w.get("to", "")).startswith(port))),
                     *(w for w in got if "kind" not in w), *refused]
+    return drawn_edges(out)
+
+
+# ---------------------------------------------------------------- the hidden edges as wires (plan 36 T2)
+#
+# Plan 36 W2: the edges a wired frame's builder read by name — the faces
+# the pattern, the look-back the scene's cover, a layer and a guide their
+# hands node, a composite and an output the scene's depth for the hands'
+# `laid: depth` — are ports now, and a frame from before says each as the
+# wire it stood for (`drawn_edges`), so it draws what it drew. (The rig's
+# own edge, a cloud in the scene, is the rig's wire: `graph.cloud_wire`.)
+
+DEPTH_PIN = "scene.depth"
+COVER_PIN = "scene.cover"
+
+
+def _pictures_of(section: dict, spec: G.GraphSpec) -> list[str]:
+    """Every hands layer and guide `section` names, by a wire's end or an
+    entry, in section order."""
+    names: list[str] = []
+    for w in section.get("wires") or []:
+        if isinstance(w, dict):
+            for x in (w.get("from"), _wire_end(w.get("to"))):
+                if _kind(x) in ("layer", "guide") and x not in names:
+                    names.append(x)
+    for e in spec.frame_nodes:
+        if isinstance(e, (G.LayerAt, G.GuideAt)) and e.name not in names:
+            names.append(e.name)
+    return names
+
+
+def _wire_end(dst: Any) -> str | None:
+    return dst.rpartition(".")[0] if isinstance(dst, str) and "." in dst else None
+
+
+def drawn_edges(section: Any, files: set[str] | None = None, *, guard: bool = True) -> Any:
+    """A wired `section` with each hidden edge its builder read before plan
+    36 written as the wire it stood for (T2, W2), appended after its own
+    wires — so a `/4`–`/6` frame draws what it drew:
+
+    - `pattern → shape.faces`, the shape reached and its faces unwired (the
+      faces drew the pattern; unwired they are plain now);
+    - `scene.cover → lookback.cover`, the look-back and the scene reached
+      (the look-back built its cover from the scene);
+    - `hands.<n> → hands.<n>.layer.hands` / `.guide.hands`, for each layer
+      and guide named with none (each drew its hands node by name);
+    - with `laid: depth` and the scene reached, `scene.depth → <c>.depth`
+      for each composite laid depth-aware, and into each output whose
+      hands port it wires (All outputs' rides the bus to the windows).
+
+    A wire is added only where its port has none, and (`guard`) never one
+    that would close a loop; a section already saying them all is returned
+    as it is (`drawn_edges` twice is once). Not a wired frame, or one the
+    read refuses: as it is."""
+    if not isinstance(section, dict) or section.get(G.FRAME_KEY) != G.WIRED_FRAME:
+        return section
+    try:
+        spec = G.read_graph(section, effects=files)
+    except G.GraphError:
+        return section
+    raw = [w for w in section.get("wires") or [] if isinstance(w, dict)]
+    into = {w.get("to") for w in raw}
+    reach = G._wired_reach(spec.wires)
+    add: list[dict] = []
+
+    def put(src: str, dst: str) -> None:
+        if dst not in into:
+            into.add(dst)
+            add.append(_w(src, dst))
+
+    if "shape" in reach:
+        put("pattern", "shape.faces")
+    if "lookback" in reach and "scene" in reach:
+        put(COVER_PIN, "lookback.cover")
+    held = {1, *(h.n for h in spec.hands)}     # (hands 1 is always there)
+    for name in _pictures_of(section, spec):
+        if G.split_instance(G.hands_of(name))[1] in held:
+            put(G.hands_of(name), f"{name}.hands")
+    if spec.laid == "depth" and "scene" in reach:
+        for c in spec.composites():
+            if c.blend == "depth":
+                put(DEPTH_PIN, f"{c.name}.{G.DEPTH_PORT}")
+        for w in spec.wires:
+            if _kind(w.node) == "output" and w.port == "hands" and w.src != G.GROUND:
+                put(DEPTH_PIN, f"{w.node}.{G.DEPTH_PORT}")
+    if not add:
+        return section
+    # (never a wire on a loop: the edge it stands for was never one either)
+    every = [*spec.wires, *(G.Wire(w["from"], w["to"]) for w in add)]
+    loops = G.wire_loops(every, wired=True) if guard else {}
+    add = [w for w in add if G.Wire(w["from"], w["to"]) not in loops]
+    if not add:
+        return section
+    return {**section, "wires": [*section.get("wires", []), *add]}
+
+
+def _frame_loops(own: list, frame: list[dict]) -> list[tuple[dict, str]]:
+    """The wires of `own` (a section's own, in order) that close a loop
+    through `frame` (the frame `frame_wires` writes for it) — what plan
+    34's hidden edges refused at an old section's read (`FRAME_EDGES`, the
+    faces drawn in the scene, the history over the scene and the backdrop):
+    the frame stands, and of the section's own the later one closing the
+    loop goes, with why in words (plan 36 T2: the loop is the drawn
+    frame's now, `graph.loop_words`)."""
+    deps: dict[str, set[str]] = {}
+
+    def dep(w: G.Wire) -> None:
+        if not G._later(w, True):
+            deps.setdefault(w.node, set()).add(w.src)
+            if G.pin_node(w.src) is not None:
+                deps.setdefault(w.src, set()).add(G.pin_node(w.src))
+
+    for x in frame:
+        dep(G.Wire(x["from"], x["to"]))
+    out = []
+    for x in own:
+        try:
+            w = G.Wire(x["from"], x["to"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if G._later(w, True):
+            continue
+        path = G._loop_path(deps, w)
+        if path is not None:
+            out.append((x, G.loop_words(" → ".join(path), G._hops(path))))
+            continue
+        dep(w)
     return out
 
 
-def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = False) -> dict:
+def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = False,
+                  notes: list[str] | None = None) -> dict:
     """`section` (in the new ids already: `renamed`) as a wired frame (plan
     35 M): `"frame": "wired"` first; the hands entries without `into` and
     no look-back entry (where the hands are and what the look-back holds
@@ -957,10 +1097,14 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
     appended in the canonical order. The section's own wires into an
     output stay as overrides of All outputs, with `_Wiring._put`'s rules
     applied under the default switches (`with_output_wires(…, Shows())`:
-    a picture by a wire drops the guide where the hands were in the scene)."""
-    entries, frame = frame_wires(spec, backdrop_history=backdrop_history)
-    run = spec.wiring().run
-    drop = {(w.src, w.dst) for w in G._run_wires(tuple(run))} if run is not None else set()
+    a picture by a wire drops the guide where the hands were in the scene).
+
+    Plan 36 T2: then each hidden edge as its wire (`drawn_edges`); and a
+    wire of the section's own that closes a loop through the frame and
+    its hidden edges — one plan 34's `FRAME_EDGES` refused at its read —
+    is left out, said in `notes` when given (`_frame_loops`), and the
+    frame is the one written for the section without it (as the read
+    without it gave)."""
     nodes = []
     for e in section.get("nodes") or []:
         if isinstance(e, dict) and e.get("kind") == "hands":
@@ -968,21 +1112,47 @@ def wired_section(section: dict, spec: G.GraphSpec, *, backdrop_history: bool = 
         elif isinstance(e, dict) and e.get("kind") in ("lookback", "history"):
             continue
         nodes.append(e)
-    own = []
-    for w in section.get("wires") or []:
-        if isinstance(w, dict):
-            if (w.get("from"), w.get("to")) in drop:
-                continue
-            w = {**w, **({"from": "lookback"} if w.get("from") == "frame" else {}),
-                 **({"to": "output.all.image"} if w.get("to") == "fx.image" else {})}
-        own.append(w)
+    gone: set[tuple[Any, Any]] = set()      # the section's own wires left out (as written)
+    now = spec
+    for _ in range(8):
+        entries, frame = frame_wires(now, backdrop_history=backdrop_history)
+        run = now.wiring().run
+        drop = {(w.src, w.dst) for w in G._run_wires(tuple(run))} if run is not None else set()
+        own, said = [], []
+        for w in section.get("wires") or []:
+            if isinstance(w, dict):
+                pair = (w.get("from"), w.get("to"))
+                if pair in drop or pair in gone:
+                    continue
+                w = {**w, **({"from": "lookback"} if w.get("from") == "frame" else {}),
+                     **({"to": "output.all.image"} if w.get("to") == "fx.image" else {})}
+                said.append(pair)
+            else:
+                said.append(None)
+            own.append(w)
+        # (the frame's hidden edges count too, as they did: `drawn_edges` of
+        # the frame with the section's own wires, unguarded)
+        probe = {G.FRAME_KEY: G.WIRED_FRAME, "nodes": [*nodes, *entries],
+                 "wires": [*own, *frame]}
+        edges = drawn_edges(probe, guard=False)["wires"][len(own) + len(frame):]
+        loops = _frame_loops(own, [*frame, *edges])
+        if not loops:
+            break
+        for w, why in loops:
+            gone.add(said[next(i for i, x in enumerate(own) if x is w)])
+            if notes is not None:
+                notes.append(f"wire {w['from']} → {w['to']} — {why}")
+        # (read again without them: the run, the look-back's picture, the
+        # backdrop are the section's less what its read would refuse)
+        now = replace(spec, wires=tuple(w for w in spec.wires
+                                        if (G.new_id(w.src), _new_dst(w.dst)) not in gone))
     out = {G.FRAME_KEY: G.WIRED_FRAME, "nodes": [*nodes, *entries], "wires": [*own, *frame]}
     outs = sorted({int(m.group(1)) for w in own if isinstance(w, dict)
                    for m in [re.fullmatch(r"output\.([1-9][0-9]*)\.[a-z]+", str(w.get("to")))]
                    if m is not None and int(m.group(1)) <= MAX_OUTPUTS})
     for n in outs:
         out = with_output_wires(out, n, Shows())
-    return out
+    return drawn_edges(out)
 
 
 def section_of(wiring: G.Wiring) -> dict:
@@ -1185,6 +1355,9 @@ def through_wires(spec: G.GraphSpec, n: int, rig: G.RigWires | None = None) -> l
     if head is not None and not alone:
         out.append(_w(head, f"{comp}.under"))
     out.append(_w(allp["hands"], f"{comp}.over"))
+    if spec.laid == "depth" and "scene" in G._wired_reach(wires):
+        # plan 36 T2: laid depth-aware against the scene's depth, as a wire
+        out.append(_w(DEPTH_PIN, f"{comp}.{G.DEPTH_PORT}"))
     src = comp
     aux = {w.node: w.src for w in wires if w.port == G.AUX}
     for e, c in zip(run, _next_copies(spec, len(run))):

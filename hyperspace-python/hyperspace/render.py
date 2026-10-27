@@ -1028,6 +1028,9 @@ class Renderer:
         self.face_error = ""
         self._pic: moderngl.Texture | None = None
         self._face_layer = False
+        # plan 36 T2: the faces plain this scene pass — `shape.faces` unwired,
+        # no pattern drawn (`graph.Shape.prepare`; False outside a frame)
+        self._face_plain = False
         self.ghost = Ghost(ctx, ghost)  # the hands, last, over everything (ghost.py)
         # plan 21: the outputs. A picture with more than one consumer (or
         # one not drawn here) ends in a frame texture, one per end (plan 35:
@@ -1177,6 +1180,7 @@ class Renderer:
         self.face_error = ""
         self._pic = None
         self._face_layer = False
+        self._face_plain = False
         for res in (old_fx, old_pic, old_pat):
             if res is not None:
                 res.release()
@@ -2825,6 +2829,14 @@ class Renderer:
                     p = self._face_prog
                     self._camera_uniforms(p, mats, -1.0)
                     self._face_uniforms(p, s, t_m)
+                    if getattr(self, "_face_plain", False):
+                        # plan 36 T2: `shape.faces` unwired — plain faces, no
+                        # pattern and no media layer (mode 0: FACE_PX's flat face)
+                        p["u_mode"].value = 0
+                        try:
+                            p["u_bmp_on"].value = 0
+                        except KeyError:
+                            pass
                     # the faces' effects' picture, when _draw_frame made one for
                     # this pass: on its own unit, per face or in screen space.
                     # Set every frame — a program keeps its uniforms

@@ -1,9 +1,10 @@
 """Plan 34 L: feedback's words — `delay`, `resize`, `echo.<k>`, `dream` —
-and the loop check that counts the default graph's hidden edges
-(`FRAME_EDGES`), so a loop through the faces, the backdrop or the frame
-is refused when the section is read, not left to land dormant at build
-(data only: `read_graph`, `wire_loops`, `sink_loops`, `reaches`). The
-delay's node, the echoes' and the resize's are T2–T4's."""
+and the loop check, so a loop through the faces, the backdrop or the frame
+is refused, not left to land dormant at build (data only: `read_graph`,
+`wire_loops`, `reaches`). Plan 36 T2: over drawn wires only — the old
+hidden edges (`FRAME_EDGES`) are gone, and an old section's loop through
+them is the migration's to leave out. The delay's node, the echoes' and
+the resize's are T2–T4's."""
 
 from __future__ import annotations
 
@@ -80,53 +81,66 @@ def test_two_of_one_instance_are_unreadable():
             G.read_graph(section(RUN, nodes=[entry, dict(entry)]))
 
 
+# plan 36 T2: plan 34's hidden edges (`FRAME_EDGES`) are gone — an old
+# section is read as it stands, and a wire of it that closed a loop through
+# them closes one through the frame its migration draws: the migration
+# leaves it out, in the wired frame's words (`graphmigrate.wired_section`),
+# the frame standing — (the old wires, the one left out, as migrated, its
+# words, the loop's path in the new ids)
 SINK_LOOPS = [
-    ([("scene", "shape.faces")], 0, "LOOP_FACES", "shape → scene → shape"),
-    ([("history", "shape.faces")], 0, "LOOP_FACES", "shape → scene → history → shape"),
-    ([("frame", "shape.faces")], 0, "LOOP_FACES",
-     "shape → scene → history → frame → shape"),
-    ([("frame", "acid.image"), ("acid", "fx.image"), ("acid", "shape.faces")], 2,
-     "LOOP_FACES", "shape → scene → history → frame → acid → shape"),
-    ([("pattern", "acid.2.image"), ("acid.2", "shape.faces"), ("scene", "acid.2.aux")], 2,
-     "LOOP_FACES", "acid.2 → shape → scene → acid.2"),
-    ([("scene", "pattern.media")], 0, "LOOP_FACES", "pattern → shape → scene → pattern"),
-    ([("history", "backdrop.image")], 0, "LOOP_BACKDROP", "backdrop → history → backdrop"),
+    ([("scene", "shape.faces")], ("scene", "shape.faces"), "LOOP_FACES",
+     "shape → scene → shape"),
+    ([("history", "shape.faces")], ("lookback", "shape.faces"), "LOOP_FACES",
+     "shape → scene → lookback → shape"),
+    ([("frame", "acid.image"), ("acid", "fx.image"), ("acid", "shape.faces")],
+     ("acid", "shape.faces"), "LOOP_FACES", "shape → scene → lookback → acid → shape"),
+    ([("pattern", "acid.2.image"), ("acid.2", "shape.faces"), ("scene", "acid.2.aux")],
+     ("scene", "acid.2.aux"), "LOOP_FACES", "acid.2 → shape → scene → acid.2"),
+    ([("scene", "pattern.media")], ("scene", "pattern.media"), "LOOP_FACES",
+     "pattern → shape → scene → pattern"),
+    ([("history", "backdrop.image")], ("lookback", "backdrop.image"), "LOOP_BACKDROP",
+     "backdrop → lookback → backdrop"),
+    ([("frame", "acid.image"), ("acid", "history.image")], ("acid", "lookback.image"),
+     "LOOP_PLAIN", "lookback → acid → lookback"),
 ]
 
 
 @pytest.mark.parametrize(("pairs", "refused", "words", "path"), SINK_LOOPS)
-def test_each_sink_loop_is_refused_at_read(pairs, refused, words, path):
-    """Review Focus 2: every loop the hidden edges close is refused when
-    the section is read, the wire refused the one closing it, in words
-    that say which hidden edge it runs through and point at a delay."""
+def test_each_old_hidden_edge_loop_is_left_out_by_the_migration(pairs, refused, words, path):
+    """Review Focus 2, plan 36 T2: a loop the old hidden edges closed is no
+    longer the read's (nothing hidden is read) — the migration leaves the
+    wire closing it out, in words that say which drawn wire it runs
+    through and point at a delay; the rest stands, and the wired frame
+    reads with no note."""
     nodes = [{"kind": "effect", "file": "acid", "instance": 2}] if "acid.2" in str(pairs) else []
-    spec = G.read_graph(section(*pairs, nodes=nodes))
-    bad = G.Wire(*pairs[refused])
-    assert spec.notes == (f"wire {bad} — {getattr(G, words).format(path=path)}",)
-    assert bad not in spec.wires
-    for i, pair in enumerate(pairs):
-        if i != refused:
-            assert G.Wire(*pair) in spec.wires
+    old = section(*pairs, nodes=nodes)
+    assert not any("loop" in n for n in G.read_graph(old).notes)
+    doc, notes = M.migrate({"values": {}, "graph": old}, {})
+    bad = G.Wire(*refused)
+    assert notes == [f"wire {bad} — {getattr(G, words).format(path=path)}"]
+    spec = G.read_graph(doc["graph"])
+    assert spec.notes == () and bad not in spec.wires
+    assert G.Wire("shape", "scene.geometry") in spec.wires          # the frame stands
 
 
 def test_the_later_wire_closing_a_sink_loop_is_the_one_refused():
-    pairs = SINK_LOOPS[3][0]
-    spec = G.read_graph(section(*pairs))
-    assert G.run_of(spec) == ("acid",)
-    assert G.Wire("frame", "acid.image") in spec.wires
+    pairs = SINK_LOOPS[2][0]
+    doc, _ = M.migrate({"values": {}, "graph": section(*pairs)}, {})
+    spec = G.read_graph(doc["graph"])
+    assert G.Wire("lookback", "acid.image") in spec.wires
+    assert G.Wire("acid", "output.all.image") in spec.wires
     assert G.Wire("acid", "shape.faces") not in spec.wires
 
 
-def test_loop_words_name_the_hidden_edge():
-    assert G.loop_words("a → b → a", {("scene", "shape"), ("history", "backdrop")}) == (
+def test_loop_words_name_the_drawn_wire():
+    assert G.loop_words("a → b → a", {("scene", "shape"), ("lookback", "backdrop")}) == (
         G.LOOP_FACES.format(path="a → b → a"))
-    assert G.loop_words("a → b → a", {("history", "backdrop")}) == (
+    assert G.loop_words("a → b → a", {("lookback", "backdrop")}) == (
         G.LOOP_BACKDROP.format(path="a → b → a"))
-    assert G.loop_words("history → frame → history", {("frame", "history")}) == (
-        G.LOOP_FRAME.format(path="history → frame → history"))
-    spec = G.read_graph(section(("frame", "acid.image"), ("acid", "history.image")))
-    assert spec.notes == ("wire acid → history.image — " + G.LOOP_FRAME.format(
-        path="history → frame → acid → history"),)
+    assert G.loop_words("lookback → acid → lookback", {("acid", "lookback")}) == (
+        G.LOOP_PLAIN.format(path="lookback → acid → lookback"))
+    for name in ("FRAME_EDGES", "HIDDEN_EDGES", "IMPLICIT_EDGES", "LOOP_FRAME", "sink_loops"):
+        assert not hasattr(G, name), name
 
 
 def test_a_loop_through_a_delay_is_legal():
@@ -141,7 +155,6 @@ def test_a_loop_through_a_delay_is_legal():
         {"kind": "delay"}]))
     assert spec.notes == ()
     assert G.wire_loops(list(spec.wires)) == {}
-    assert G.sink_loops(list(spec.wires)) == {}
 
 
 def test_a_delay_into_itself_is_still_refused():

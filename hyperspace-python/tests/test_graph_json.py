@@ -175,7 +175,8 @@ def test_two_hands_nodes_one_in_the_scene_one_over_the_glass():
     scene's hands get a line of their own."""
     w = G.Wiring(hands="scene", extra=(G.HandsAt(2, "layer", "lines"),))
     g = graph([Shows(), Shows(scene=False), Shows(scene=False, through=True)], w)
-    assert _names(g) == ["shape", "hands", "hands.2", "scene", "lookback(cover)",
+    # (plan 36 T2: the faces' pattern, a wire's node, is built first)
+    assert _names(g) == ["pattern", "shape", "hands", "hands.2", "scene", "lookback(cover)",
                          "hands.2.layer", "hands.guide", "lookback", "shown(lookback)",
                          "composite", "shown(composite)", "lookback(capture)",
                          "output.1", "output.2", "output.3"]

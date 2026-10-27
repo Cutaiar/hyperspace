@@ -119,7 +119,7 @@ def test_no_backdrop_graph_unchanged():
     states = [{}, {"scene": False}, {"through": True}, {"hands": False},
               {"scene": False, "through": True}]
     one = G.build_graph([_view()])
-    assert _names(one) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
+    assert _names(one) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                            "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     for kw in states:
         shows = [Shows(**kw), Shows()]

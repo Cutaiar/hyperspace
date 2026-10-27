@@ -792,7 +792,8 @@ def test_every_nodes_side_panel_draws(rig):
     st = party(rig)
     # plan 35 T5: and every frame kind and plan 34's nodes, declared (faint)
     e = graphview.Edit(graph=rig.lib.presets.graph, push=lambda label: None)
-    for kind, f in (("backdrop", None), ("pattern", None), ("guide", None), ("echo", "2"),
+    # (plan 36 T2: the pattern is in already — the faces' wire says it)
+    for kind, f in (("backdrop", None), ("guide", None), ("echo", "2"),
                     ("dream", None), ("delay", None), ("resize", None), ("composite", None)):
         assert e.add_node(kind, f) is None, kind
     frame(rig.panel, "graph")

@@ -494,6 +494,8 @@ def test_hands_as_lines_through_the_acid_with_tracers_by_wires_alone(ctx, tmp_pa
     assert edit.unwire("hands.layer", "output.all.guide") is None
     assert edit.drop_node("hands.layer") is None
     assert edit.wire("hands.guide", "output.all.guide") is None
+    # (plan 36 T2: the guide draws the hands wired into it — one more wire)
+    assert edit.wire("hands", "hands.guide.hands") is None
     assert edit.insert_effect(("lookback", "output.all.image"), "acid") is None
     assert edit.set_node("hands", draw="lines") is None
     doc, _ = M.migrate(_fixture("hands-lines"), {})

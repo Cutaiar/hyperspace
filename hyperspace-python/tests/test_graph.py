@@ -50,7 +50,9 @@ def test_no_preset_draws_the_factory_frame():
     from hyperspace import graphmigrate as M
 
     entries, wires = M.frame_wires(G.read_graph({}))
-    factory = G.read_graph({"frame": "wired", "nodes": entries, "wires": wires}).wiring()
+    # (plan 36 T2: with the hidden edges' wires, `drawn_edges`)
+    factory = G.read_graph(M.drawn_edges({"frame": "wired", "nodes": entries,
+                                          "wires": wires})).wiring()
     one = [View(Switches(), (10, 10))]
     want = G.signature(G.build_graph(one, factory))
     assert G.signature(G.build_graph(one, G.wired(G.Wiring()))) == want
@@ -105,7 +107,7 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     a geometry's time counted in whatever draws it (the hands' in their
     layer's: they are in no scene)."""
     g = G.build_graph([_view()], G.Wiring())
-    assert _names(g) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                          "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     assert g.timed == ["scene", "lookback(cover)", "hands.layer", "lookback", "shown(lookback)",
                        "lookback(capture)", "output.1"]
@@ -134,9 +136,9 @@ def test_the_default_graph_for_one_default_view_is_todays_frame_in_order():
     assert out.inputs == {"image": end, "hands": g.nodes["hands.layer"],
                           "readout": g.nodes["hands.layer"], "depth": None}
     assert out.blend == "over" and g.outputs == [out]
-    assert [n.KIND for n in g.order] == ["geometry", "geometry", "scene", "layer", "layer",
+    assert [n.KIND for n in g.order] == ["pattern", "geometry", "geometry", "scene", "layer", "layer",
                                          "history", "shown", "history", "output"]
-    assert "Graph(shape → hands → scene" in repr(g)
+    assert "Graph(pattern → shape → hands → scene" in repr(g)
 
 
 def test_a_through_output_is_a_composite_and_its_end():
@@ -147,7 +149,7 @@ def test_a_through_output_is_a_composite_and_its_end():
     end for the look-back no window shows) and the composite is told the
     window it is for (`mute_hands`)."""
     g = graph([Shows(through=True), Shows(scene=False, through=True)])
-    assert _names(g) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                          "lookback", "composite", "shown(composite)",
                          "composite.2", "shown(composite.2)", "lookback(capture)",
                          "output.1", "output.2"]
@@ -262,7 +264,7 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
     the guide split out of it always (it must never ride the scene)."""
     w = G.Wiring(hands="scene")
     g = graph([Shows(through=True), Shows(scene=False), Shows(scene=False, through=True)], w)
-    assert _names(g) == ["shape", "hands", "scene", "lookback(cover)", "hands.layer",
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.layer",
                          "lookback", "shown(lookback)", "composite", "shown(composite)",
                          "lookback(capture)", "output.1", "output.2", "output.3"]
     scene, hands = g.nodes["scene"], g.nodes["hands"]
@@ -276,7 +278,7 @@ def test_the_hands_in_the_scene_are_its_first_geometry_and_a_glass_still_gets_th
     assert o3.inputs["image"] is g.nodes["shown(composite)"] and o3.inputs["hands"] is None
     # the scene alone shows the hands: no layer, the guide on its own
     g = graph([Shows()], w)
-    assert _names(g) == ["shape", "hands", "scene", "lookback(cover)", "hands.guide",
+    assert _names(g) == ["pattern", "shape", "hands", "scene", "lookback(cover)", "hands.guide",
                          "lookback", "shown(lookback)", "lookback(capture)", "output.1"]
     assert g.nodes["output.1"].inputs["readout"] is g.nodes["hands.guide"]
     assert g.timed == ["hands", "scene", "lookback(cover)", "hands.guide", "lookback",

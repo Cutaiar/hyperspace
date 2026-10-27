@@ -47,8 +47,14 @@ FACTORY_FRAME = (("shape", "scene.geometry"), ("scene", "lookback.image"),
                  ("hands.layer", "output.all.guide"), ("scene", "lookback.capture"))
 
 
+# plan 36 T2: and the hidden edges' wires the factory frame ends with
+FACTORY_EDGES = (("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
+                 ("hands", "hands.layer.hands"))
+
+
 def test_the_factory_frame_is_the_wired_default():
-    assert tuple((w.src, w.dst) for w in G.wired(G.Wiring()).wires) == FACTORY_FRAME
+    assert tuple((w.src, w.dst) for w in G.wired(G.Wiring()).wires) == (
+        *FACTORY_FRAME, *FACTORY_EDGES)
 
 
 def _spec(*pairs, nodes=(), effects=None):

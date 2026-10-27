@@ -164,8 +164,11 @@ def test_a_window_port_is_its_own_wire_else_the_bus_cable_else_nothing():
     same port while the bus cable stands; cut, nothing — no other fallback."""
     wires = [G.Wire("lookback", "output.all.image"), G.Wire("hands.layer", "output.all.hands"),
              G.Wire("scene", "output.1.image")]
-    assert G.window_ports(wires, 1) == {"image": wires[2], "hands": wires[1], "guide": None}
-    assert G.window_ports(wires, 2) == {"image": wires[0], "hands": wires[1], "guide": None}
+    # (plan 36 T2: and the depth the hands are laid against, the fourth port)
+    assert G.window_ports(wires, 1) == {"image": wires[2], "hands": wires[1], "guide": None,
+                                        "depth": None}
+    assert G.window_ports(wires, 2) == {"image": wires[0], "hands": wires[1], "guide": None,
+                                        "depth": None}
     cut = G.RigWires().cutting(G.bus_wire(2, "image")).cutting(G.bus_wire(1, "image"))
     assert G.window_ports(wires, 2, cut)["image"] is None
     assert G.window_ports(wires, 1, cut)["image"] == wires[2]   # its own wire stands
@@ -210,7 +213,7 @@ def test_deleting_a_window_takes_its_bus_cables_too(tmp_path):
     assert graphview.picture_now(app.presets.graph.spec, "output.2.image",
                                  app.lib.project.rig) == graphview.NOTHING
     assert graphview.set_picture(e, "output.2.image", graphview.AS_ALL) is None
-    assert app.lib.project.rig.cut == {G.bus_wire(2, "hands"), G.bus_wire(2, "guide")}
+    assert app.lib.project.rig.cut == {G.bus_wire(2, p) for p in ("hands", "guide", "depth")}
     assert _ports(_build(app)[0], 2)["image"] == _ports(g, 1)["image"]
     assert e.drop_node("render:output.2") is None
     assert e.drop_node("render:output.2") is None
@@ -276,7 +279,7 @@ def test_deleting_a_window_cuts_only_the_bus_cables_drawn(tmp_path):
     app, e, _ = _party(tmp_path)
     assert e.wire("scene", "output.2.hands") is None
     assert e.drop_node("render:output.2") is None
-    assert app.lib.project.rig.cut == {G.bus_wire(2, "image"), G.bus_wire(2, "guide")}
+    assert app.lib.project.rig.cut == {G.bus_wire(2, p) for p in ("image", "guide", "depth")}
     assert _ports(_build(app)[0], 2)["hands"] == "hands.layer"
 
 

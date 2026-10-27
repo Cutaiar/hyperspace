@@ -811,6 +811,11 @@ BUS_SAME_PORT = "All outputs' {port} goes into a window's {port} (output.1.{port
 BUS_NO_SHOW = "no show is open: the cables from All outputs are the show's"
 BUS_NO_EFFECT = ("{wire} is the rig's cable: put the effect on All outputs' picture, or "
                  "wire the window a picture of its own")
+# plan 36 T2 (W2): a listed cloud's wire into the scene, the rig's too
+CLOUD_SAID = ("the rig's cable (the show's, not the preset's): this cloud drawn in the "
+              "scene — cut it and the scene draws no cloud")
+CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
+CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
 STARTER_SAID = "scene starter: shape → scene → All outputs"
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
@@ -936,8 +941,8 @@ def frame_names(spec) -> list[str]:
     """Every node wired frame `spec` names, once, in section order: its
     entries' (the hands, the effects, then the rest as read), then each
     wire's ends (`ground` too, R13: drawn so its wires are seen) — with the hands node each
-    layer or guide draws by name just before it (no wire goes into a layer:
-    it draws its hands, and the hands' params are on that node)."""
+    layer or guide is of just before it (the hands' params are on that
+    node). Plan 36 T2: a pin (`scene.cover`) is its node's."""
     if spec is None:
         return []
     raw: list[str] = [rgraph.wired_hands_name(h.n) for h in spec.hands]
@@ -949,7 +954,7 @@ def frame_names(spec) -> list[str]:
     for w in spec.all_wires():
         raw += [w.src, w.node]
     out: list[str] = []
-    for name in dict.fromkeys(raw):
+    for name in dict.fromkeys(rgraph.pin_node(x) or x for x in raw):
         kind = kind_of(name)
         if kind is None:
             continue
@@ -964,16 +969,16 @@ def unreached(spec) -> frozenset[str]:
     """The nodes of section `spec` that reach no sink (`graph.reaches`):
     drawn faint, never run. Plan 35 G: in a wired frame every kind — a
     node declared or wired with no path to an output's port, All outputs'
-    or the look-back's capture (a hands node reaches with its layer or its
-    guide, which draw it by name; the windows and All outputs are the sinks,
-    never faint). Before the wired frame (a section a test reads as it
-    stands): the effects, composites and switches, as plan 33 drew them. A
-    D1-placed effect sits where it is placed, so it reaches."""
+    or the look-back's capture (plan 36 T2: a hands node by its wire into a
+    layer's or a guide's `hands`, no longer by name; the windows and All
+    outputs are the sinks, never faint). Before the wired frame (a section
+    a test reads as it stands): the effects, composites and switches, as
+    plan 33 drew them. A D1-placed effect sits where it is placed, so it
+    reaches."""
     if spec is None:
         return frozenset()
     got = set(rgraph.reaches(spec)) | {e.name for e in spec.effects if e.placed}
     if getattr(spec, "wired", False):
-        got |= {rgraph.hands_of(n) for n in got if kind_of(n) in ("layer", "guide")}
         # (R15: an effect or a copy no wire feeds reads nothing — never built,
         # faint, its outs kept)
         fed = {w.node for w in spec.all_wires() if w.port == "image"}
@@ -1119,6 +1124,10 @@ def media_made(r) -> bool:
         if isinstance(n, (rgraph.MediaNode, rgraph.PatternNode)):
             heads += 1
             continue
+        if isinstance(n, rgraph.Scene):
+            # a scene picture (plan 36 T2: its faces' pattern is a wire now,
+            # and a scene of patterned faces is still the scene)
+            return False
         ins = [x for x in getattr(n, "inputs", {}).values() if x is not None]
         if not ins:
             if n is not r:
@@ -1347,6 +1356,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     # wire starts from), the rig's clouds, the section's names, All outputs
     # and every window the renderer drew (and any a wire names)
     names: list[str] = [rgraph.channel_name(c) for c in rgraph.MEDIA_CHANNELS]
+    # (plan 36 T2: every listed cloud, built or not — one whose wire the
+    # show has cut is drawn too, to join again)
+    roles = tuple(getattr(render_graph, "clouds", ()) or ())
+    names += [rgraph.cloud_name(i) for i in range(len(roles))]
     names += [r.name for r in rnodes if isinstance(r, rgraph.PointCloud)]
     names += frame_names(frame)
     outs = {r.name for r in rnodes if isinstance(r, rgraph.Output)}
@@ -1386,6 +1399,10 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
         if kind == rgraph.ALL_OUTPUTS:           # plan 36 T1: the bus's pins, one a port
             for port in rgraph.BUS_PORTS:
                 add_port(n, VPort(f"rout:{name}.{port}", port, OUT, IMAGE))
+        for pin, owner in rgraph.PINS.items():   # plan 36 T2: the scene's cover and depth
+            if owner == name:
+                typ = rgraph.WIRED_MAKES[kind_of(pin)]
+                add_port(n, VPort(f"rout:{pin}", pin.rpartition(".")[2], OUT, typ))
         if isinstance(r, rgraph.PointCloud) and ctx.first_cloud is None:
             ctx.first_cloud = name
     ctx.names = set(refs)
@@ -1584,6 +1601,18 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
             view.cables.append(VCable(cable_id(f"bus:{w.src}>{w.node}/{w.port}"), src, dst,
                                       IMAGE, ref=w, kind="render", dormant=shut or idle,
                                       off=shut, label=said))
+    # plan 36 T2 (W2): each listed cloud's wire into the scene — the rig's,
+    # standing until the show cuts it, cut and joined like a bus cable;
+    # dormant while nothing reaches the scene (the cloud is not built)
+    for i in range(len(roles)):
+        w = rgraph.cloud_wire(i)
+        src, dst = f"rout:{w.src}", f"rin:{w.node}/{w.port}"
+        if not standing.has(w) or src not in view.pins or dst not in view.pins:
+            continue
+        idle = "scene" in gone
+        view.cables.append(VCable(cable_id(f"rig:{w.src}>{w.node}/{w.port}"), src, dst,
+                                  GEOMETRY, ref=w, kind="render", dormant=idle,
+                                  label=CLOUD_IDLE if idle else CLOUD_SAID))
 
     # ---- what is patched; the nodes in column order ----
     hit = {c.src_port for c in view.cables} | {c.dst_port for c in view.cables}
@@ -3405,7 +3434,7 @@ def cable_near(view: View, pins: Mapping[str, tuple], point, within: float = NEA
 # a render node or cable takes it out of the section. Each edit is a new
 # section read back through `graph.read_graph` with the build's effect
 # files — so a refusal is the very note a preset file would get, in its
-# words (the types, the loops: plan 34's `wire_loops` and `sink_loops`),
+# words (the types, the loops: `wire_loops`, over the drawn wires),
 # and nothing changes — then landed through the preset's `GraphSection`
 # (`land`: the instances' params declared or dropped, the renderer handed
 # the new wiring, which builds the graph again), one undo step before it
@@ -3437,6 +3466,8 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     if head == "rout" and _bus_source(name):
         return name, None                    # plan 36 T1: All outputs' bus pin
     kind = kind_of(name)
+    if head == "rout" and kind == "cloud":
+        return name, None                    # plan 36 T2: a cloud's wire is the rig's
     if kind in (CAMERA, "cloud"):
         return None, NOT_REMOVABLE.format(label=label_of(name))
     if kind is None:
@@ -3598,10 +3629,25 @@ def _frame_order(wires: list[dict]) -> list[dict]:
     def group(x: dict) -> int:
         if (x["from"], x["to"]) in chain:
             return 5
+        if _drawn_edge(x):
+            return 11
         if comp is not None and x["to"].rpartition(".")[0] == comp:
             return 9
         return groups.get(x["to"], 0)
     return sorted(wires, key=group)
+
+
+def _drawn_edge(x: dict) -> bool:
+    """Whether wire `x` is one of the hidden edges' wires (plan 36 T2,
+    `graphmigrate.drawn_edges`, written last in that order): the faces'
+    pattern, the look-back's cover, a layer's or a guide's hands, a depth."""
+    src, dst = x["from"], x["to"]
+    node, _, port = dst.rpartition(".")
+    return ((src, dst) == ("pattern", "shape.faces")
+            or (src, dst) == (graphmigrate.COVER_PIN, "lookback.cover")
+            or (src == graphmigrate.DEPTH_PIN and port == rgraph.DEPTH_PORT)
+            or (port == "hands" and kind_of(node) in ("layer", "guide")
+                and kind_of(src) == "hands"))
 
 
 def _rig(edit: Edit) -> rgraph.RigWires:
@@ -3691,7 +3737,7 @@ def _named(doc: dict) -> set[str]:
     """Every name section `doc` says: its entries' and its wires' ends."""
     out = {x for x in map(_node_name, doc.get("nodes", [])) if x}
     for x in doc.get("wires", []):
-        out |= {x["from"], x["to"].rpartition(".")[0]}
+        out |= {rgraph.pin_node(x["from"]) or x["from"], x["to"].rpartition(".")[0]}
     return out
 
 
@@ -3702,7 +3748,8 @@ def _keep_declared(doc: dict, names: Iterable[str]) -> None:
     instance-1 effect by R21's entry. A hands node, a channel, a declared
     kind keep theirs or need none."""
     named = _named(doc)
-    for name in dict.fromkeys(names):
+    # (plan 36 T2: a pin is its node's name: `scene.cover` names the scene)
+    for name in dict.fromkeys(rgraph.pin_node(n) or n for n in names):
         if name in named:
             continue
         kind = kind_of(name)
@@ -3757,6 +3804,13 @@ def render_wire(edit: Edit, src: str, dst: str, dry: bool = False,
         return f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
     doc = _doc(edit) if doc is None else doc
+    if kind_of(s) == "cloud":
+        # plan 36 T2: a cloud's one wire is the rig's, into the scene
+        if not rgraph.is_cloud_wire(w):
+            return CLOUD_INTO_SCENE.format(cloud=s)
+        if getattr(edit, "show", None) is None:
+            return BUS_NO_SHOW
+        return _land(edit, doc, f"wire {w}", f"wired {w}", dry, rig=_rig(edit).joining(w))
     if _bus_source(s):
         if not rgraph.is_bus(w):
             return BUS_SAME_PORT.format(port=s.rpartition(".")[2])
@@ -3790,7 +3844,7 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
     s: str | None
     if isinstance(cable, VCable) and isinstance(cable.ref, rgraph.Wire):
         s, d = cable.ref.src, cable.ref.dst
-        if rgraph.is_bus(cable.ref):
+        if rgraph.is_rig(cable.ref):
             return _cut_bus(edit, cable.ref)
     else:
         if isinstance(cable, VCable):
@@ -3806,7 +3860,7 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
                 return why
         else:                                # a port's name alone: whatever is wired into it
             s, d = None, s
-        if s is not None and rgraph.is_bus(rgraph.Wire(s, d)):
+        if s is not None and rgraph.is_rig(rgraph.Wire(s, d)):
             return _cut_bus(edit, rgraph.Wire(s, d))
     doc = _doc(edit)
     wires = doc.get("wires", [])
@@ -3838,7 +3892,8 @@ def render_unwire(edit: Edit, cable, dst: str | None = None) -> str | None:
 def _cut_bus(edit: Edit, w: rgraph.Wire) -> str | None:
     """Plan 36 T1: the rig's bus cable `w` cut in the open show — one undo
     step, the preset untouched; the window shows nothing on that port
-    until the cable is joined again or the preset wires the port."""
+    until the cable is joined again or the preset wires the port. Plan 36
+    T2: and a cloud's wire into the scene (`graph.is_rig`), the same way."""
     rig = _rig(edit)
     if not rig.has(w):
         return NO_SUCH_WIRE.format(wire=str(w))
@@ -4059,7 +4114,9 @@ def render_channel_switch(edit: Edit, port: str) -> str | None:
 
 
 def _touches(x: dict, names: set[str]) -> bool:
-    return x["from"] in names or x["to"].rpartition(".")[0] in names
+    # (plan 36 T2: a wire from a node's pin — `scene.cover` — touches the node)
+    return (x["from"] in names or rgraph.pin_node(x["from"]) in names
+            or x["to"].rpartition(".")[0] in names)
 
 
 # ---- plan 33 U: effects onto picture cables, out of their place ----
@@ -4126,7 +4183,9 @@ def _cable_ends(edit: Edit, cable) -> tuple[str | None, str | None, str | None]:
     if kind_of(d) is not None:
         return None, None, f"{d} is a node, not a port: a wire goes into {rgraph.WIRED_TO_WORDS}"
     w = rgraph.Wire(s, d)
-    if _takes(kind_of(w.node)).get(w.port) != IMAGE or _makes(kind_of(s)) != IMAGE:
+    if (_takes(kind_of(w.node)).get(w.port) != IMAGE or _makes(kind_of(s)) != IMAGE
+            or rgraph.pin_node(s) is not None or w.port == rgraph.DEPTH_PORT):
+        # (plan 36 T2: nor the scene's depth — a depth, not a picture)
         return None, None, f"{w} is no picture cable: an effect goes onto a picture"
     return s, d, None
 

@@ -199,6 +199,11 @@ def unwired(section: Any, specs: M.Specs | None = None) -> tuple[dict, bool] | N
         node = b.rpartition(".")[0] if isinstance(b, str) else None
         if (a, b) in run_pairs or node == G.ALL_OUTPUTS or a == G.GROUND:
             continue
+        # (plan 36 T2: the hidden edges' wires, which `drawn_edges` writes)
+        if (a, b) == ("pattern", "shape.faces") or a in G.PINS or (
+                isinstance(b, str) and b.endswith(".hands") and M._kind(node) in ("layer",
+                                                                               "guide")):
+            continue
         if b in frame_src and (frame_src[b] is None or a in frame_src[b]):
             continue
         if comp is not None and (node == comp or a == comp):

@@ -45,7 +45,10 @@ FULL_WIRES = [
     ("channel.a", "backdrop.image"), ("backdrop", "lookback.image"),
     ("scene", "lookback.capture"), ("lookback", "acid.image"), ("acid", "output.all.image"),
     ("lookback", "copy.image"), ("copy", "output.2.image"),
-    ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide")]
+    ("hands.layer", "output.all.hands"), ("hands.layer", "output.all.guide"),
+    # plan 36 T2: the edges the builder read by name, as wires
+    ("pattern", "shape.faces"), ("scene.cover", "lookback.cover"),
+    ("hands", "hands.layer.hands"), ("hands", "hands.guide.hands")]
 
 
 def test_the_frame_kinds_read_and_round_trip():
@@ -177,7 +180,9 @@ def test_reach_runs_from_the_outputs_and_the_capture():
                                         ("scene", "lookback.capture")))) == {"shape", "scene"}
     faces = [("channel.a", "pattern.media"), ("shape", "scene.geometry"),
              ("scene", "output.1.image")]
-    got = G.reaches(G.read_graph(wired(*faces)))
+    # (plan 36 T2: the faces read the pattern by a wire, never by name)
+    assert {"pattern", "channel.a"}.isdisjoint(G.reaches(G.read_graph(wired(*faces))))
+    got = G.reaches(G.read_graph(wired(*faces, ("pattern", "shape.faces"))))
     assert {"pattern", "channel.a", "shape", "scene"} <= got
     got = G.reaches(G.read_graph(wired(*faces, ("channel.b", "shape.faces"))))
     assert "pattern" not in got and "channel.a" not in got and "channel.b" in got
@@ -199,12 +204,17 @@ def test_loops_in_a_wired_frame_keep_plan_34s_words():
     w = ("lookback", "backdrop.image")
     assert note(w, G.LOOP_BACKDROP.format(path="backdrop → lookback → backdrop")) in spec.notes
     assert G.Wire(*w) not in spec.wires
-    # the hidden edge (lookback, scene): the cover reads the scene's faces
-    spec = G.read_graph(wired(("channel.a", "lookback.image"), ("shape", "scene.geometry"),
-                              ("lookback", "shape.faces")))
-    assert spec.notes == (note(("lookback", "shape.faces"), G.LOOP_FACES.format(
-        path="shape → scene → lookback → shape")),)
-    assert G.HIDDEN_EDGES == (("shape", "pattern"), ("lookback", "scene"))
+    # plan 36 T2: the cover reads the scene's faces by its drawn wire — a pin
+    # of the scene, so a loop through it runs through the scene; unwired, no
+    # edge is read (the old hidden edge (lookback, scene) is gone)
+    loop = (("channel.a", "lookback.image"), ("shape", "scene.geometry"),
+            ("lookback", "shape.faces"))
+    assert G.read_graph(wired(*loop)).notes == ()
+    spec = G.read_graph(wired(*loop, ("scene.cover", "lookback.cover")))
+    assert note(("lookback", "shape.faces"), G.LOOP_FACES.format(
+        path="shape → scene → scene.cover → lookback → shape")) in spec.notes
+    assert G.Wire("lookback", "shape.faces") not in spec.wires
+    assert not hasattr(G, "HIDDEN_EDGES") and not hasattr(G, "IMPLICIT_EDGES")
     # a wire into the capture is recorded for the frames after: no loop
     spec = G.read_graph(wired(("lookback", "acid.image"), ("acid", "lookback.capture"),
                               ("acid", "output.all.image")))
@@ -216,14 +226,11 @@ def test_loops_in_a_wired_frame_keep_plan_34s_words():
 
 
 def test_loop_words_in_a_wired_frame():
-    assert G.loop_words("a → b → a", {("scene", "hands")}, wired=True) == (
+    assert G.loop_words("a → b → a", {("scene", "hands")}) == (
         G.LOOP_FACES.format(path="a → b → a"))
-    assert G.loop_words("a → b → a", {("lookback", "backdrop")}, wired=True) == (
+    assert G.loop_words("a → b → a", {("lookback", "backdrop")}) == (
         G.LOOP_BACKDROP.format(path="a → b → a"))
-    assert G.loop_words("a → b → a", {("acid", "b")}, wired=True) == (
-        G.LOOP_PLAIN.format(path="a → b → a"))
-    # (an old section keeps plan 34's words)
-    assert G.loop_words("a → b → a", {("acid", "b")}) == G.LOOP_FRAME.format(path="a → b → a")
+    assert G.loop_words("a → b → a", {("acid", "b")}) == G.LOOP_PLAIN.format(path="a → b → a")
 
 
 def test_outside_a_wired_frame_nothing_changes():

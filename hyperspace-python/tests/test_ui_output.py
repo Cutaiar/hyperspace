@@ -33,8 +33,12 @@ ACID = M.wired_section(M.renamed({"wires": [{"from": "frame", "to": "acid.image"
 
 
 def _with(section: dict, *pairs) -> dict:
+    """`section` with `pairs` wired — each in place of the wire into its
+    port (plan 36 T2: the faces' pattern wire too: one wire into a port)."""
     out = copy.deepcopy(section)
-    out["wires"] = [*out.get("wires", []), *({"from": a, "to": b} for a, b in pairs)]
+    into = {b for _, b in pairs if b not in G.MANY_PORTS}
+    out["wires"] = [*(w for w in out.get("wires", []) if w["to"] not in into),
+                    *({"from": a, "to": b} for a, b in pairs)]
     return out
 
 
@@ -91,7 +95,8 @@ def test_output_offers_a_channel_with_a_source_and_picking_wires_it(tmp_path):
                                 "b": NS(bin=["still-2"])}))
     spec = G.read_graph(DEFAULT)
     got = graphview.picture_choices(spec, "output.2.image", reg)
-    assert got == ["as All outputs", "nothing", "scene", "hands.layer", "lookback",
+    # (plan 36 T2: the faces' pattern is a picture of the graph's: a wire's)
+    assert got == ["as All outputs", "nothing", "pattern", "scene", "hands.layer", "lookback",
                    "channel.b", "channel.c"]
     assert graphview.picture_label(spec, "channel.b") == "Channel B"
     assert graphview.picture_choices(spec, "output.all.image", reg)[-2:] == [
@@ -119,7 +124,7 @@ def test_picking_a_picture_wires_the_output(tmp_path):
 
     # (the section's own wire first: the order a landing writes, `_frame_order`)
     section = {**DEFAULT, "wires": [{"from": "channel.a", "to": "shape.faces"},
-                                    *DEFAULT["wires"]]}
+                                    *(w for w in DEFAULT["wires"] if w["to"] != "shape.faces")]}
     rig, e, pushed = free_rig(tmp_path, *_pairs(section), undo_rig=True)
     before = rig.presets.graph.spec.to_json()
     assert graphview.set_picture(e, "output.2.image", "channel.a") is None
