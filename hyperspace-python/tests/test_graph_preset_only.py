@@ -41,11 +41,7 @@ def test_on_by_default_the_drawn_set_is_the_sections_and_what_it_reaches(rig):
         for x, y in ((a, b), (b, a)):
             if x in section and view.node(y) is not None:
                 near.add(y)
-    want = section | near
-    want |= {n.id for n in view.nodes if n.kind == "output"
-             and any(graphview.node_of(view, c.src_port) in want | {n.id}
-                     and graphview.node_of(view, c.dst_port) in want | {n.id}
-                     for c in view.cables)}
+    want = section | near | {n.id for n in view.nodes if n.kind == "output"}
     idle = {n.id for n in view.nodes if n.idle}
     assert drawn(st) == want - idle      # (an off effect sits on its idle line)
     for n in view.nodes:        # a controller / modulator is drawn only if cabled to the section
@@ -111,3 +107,25 @@ def test_a_routed_lfo_is_drawn_and_an_unrouted_one_is_hidden(rig):
     view.cables.append(graphview.VCable("c.lfo9", "out:lfo.9", target))
     keep = graphview.preset_only(view)
     assert "lfo.9" in keep and "lfo.8" not in keep
+
+
+def test_the_outputs_stay_drawn_with_nothing_wired_into_them(rig):
+    """The owner, 2026-10-27: cutting the wire into the outputs made All
+    outputs and every window vanish, and nothing could be wired back.
+    The outputs are where a picture is wired to: preset only draws them
+    whatever reaches them."""
+    st = party(rig)
+    view = st["view"]
+    outs = {n.id for n in view.nodes if n.kind == "output"}
+    assert outs and outs <= drawn(st)
+    into = [c for c in view.cables if c.kind == "render"
+            and view.node(graphview.node_of(view, c.dst_port)).kind == "output"
+            and view.node(graphview.node_of(view, c.src_port)).kind != "output"]
+    assert into
+    for c in into:                              # unwired on the canvas, as the owner did
+        assert ui_graph._render_said(rig.panel, ui_graph.render_edit(rig.panel),
+                                     lambda e, c=c: e.unwire(c)) is None
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    st = ui_graph._state(rig.panel)
+    assert outs <= drawn(st)
