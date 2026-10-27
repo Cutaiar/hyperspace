@@ -595,10 +595,13 @@ def test_deleting_a_node_dispatches_by_kind(rig, monkeypatch):
     assert "macro.5" not in table.macros and table.macros_serial > serial
 
 
-def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig):
+def test_a_render_edit_s_line_goes_at_the_next_edit_or_refusal(rig, monkeypatch):
     """`st["said"]` (the last render edit's words on the head) is cleared
     by the next value edit, landed or refused (`_settle`), and by any
     refusal, render or not; a render landing puts its own words back."""
+    # the node editor's reject call segfaults with no editor context, which
+    # only an earlier test in the same process happened to have made
+    monkeypatch.setattr(ui_graph.ed, "reject_deleted_item", lambda: None)
     panel = rig.panel
     st = ui_graph._state(panel)
     landed = SimpleNamespace(said="wired hands → output.2.hands")
