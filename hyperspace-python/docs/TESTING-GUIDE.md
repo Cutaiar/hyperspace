@@ -152,6 +152,26 @@ changes brightness or volume instead).
 19. Row 394, last: L168 — the shared library migrated to `/6` with both
     Macs on this build (after L162 and L167, which need an older Mac).
 
+## Running the automated tests (tiers)
+
+`uv run pytest` is the inner loop: it runs the fast tier (about 3,840
+tests) on every core, in about 17 s on the owner's Mac. It leaves out three
+tiers that `tests/conftest.py` marks by name:
+
+- `golden`: the golden-frame draws (`tests/test_golden_frames.py`, about
+  45 s together). Run them after touching rendering, shaders, a preset or
+  the graph's evaluation, and once before a merge.
+- `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
+  whole-library sweeps).
+- `live`: Syphon, NDI and file loopbacks with timeouts; they share global
+  names, so they run on one worker and can fail under heavy load.
+
+`uv run pytest --all` runs every tier (about 55 s). Pick a tier with
+`-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
+use `-n0` to run serially (for a debugger). A test named by node id is
+still skipped by the default `-m`: add `--all`. A new test that takes a
+second or more goes in the tables at the top of `tests/conftest.py`.
+
 ## Summary
 
 | Entry | What it tests | Part | Needs | Checks |

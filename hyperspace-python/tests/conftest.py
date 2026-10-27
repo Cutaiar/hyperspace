@@ -14,6 +14,75 @@ import os
 
 import pytest
 
+# ---------------------------------------------------------------- test tiers
+# A bare `pytest` runs the fast tier in parallel (pyproject addopts:
+# -n auto -m "not golden and not slow and not live"); `pytest --all` runs
+# everything. The markers are applied here, by name, so no test file carries
+# them: re-measure with `pytest --all --durations=60` and edit these tables
+# when a test is added or its time changes.
+
+_FAST = "not golden and not slow and not live"      # = pyproject's addopts -m
+_GOLDEN_FILES = {"test_golden_frames.py"}
+# whole files: torch on MPS, or loopbacks with multi-second timeouts
+_LIVE_FILES = {"test_media_live.py", "test_media_publish.py"}
+_SLOW_FILES = {"test_dream.py"}
+# single tests, "file::function" (any parametrisation)
+_LIVE_TESTS = {
+    "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
+    "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
+}
+_SLOW_TESTS = {
+    "test_media_core.py::test_heic_opens",
+    "test_media_channels.py::test_close_with_a_hung_source_returns_within_two_seconds",
+    "test_media_channels.py::test_rapid_switching_with_slow_closes_stays_fast_and_balances",
+    "test_media_channels.py::test_a_video_stuck_opening_never_jams_the_closer",
+    "test_media_channels.py::test_a_slow_close_never_holds_the_frame_thread",
+    "test_graph_free.py::test_every_old_preset_saves_as_six_and_is_a_fixed_point",
+    "test_undo.py::test_an_idle_app_makes_no_step",
+    "test_undo.py::test_a_performers_round_off_lights_no_dot",
+    "test_graph_areas.py::test_every_node_has_one_area_and_the_three_concerns_are_separate",
+    "test_ghost.py::test_tethers_draw_only_when_toggled_and_keep_the_alpha",
+    "test_ghost.py::test_a_style_never_draws_the_guide",
+    "test_analyzer.py::test_manual_normalisation_makes_trim_monotonic",
+    "test_geometry.py::test_warm_all_fills_every_shapes_caches",
+    "test_app_boundary.py::test_the_app_exits_within_two_seconds_with_reads_and_a_transcode_stuck",
+    "test_graph_legible.py::test_every_node_has_a_label_and_a_hover",
+    "test_routing.py::test_every_factory_preset_lands_the_same_values_one_frame_earlier",
+    "test_graph_delay.py::test_nothing_of_plan_33_has_an_own_size",
+    "test_plan12_presets.py::test_each_hand_axis_moves_its_target_as_the_table_says",
+    "test_migrate_library.py::test_the_real_picture_check_passes_an_old_preset",
+    "test_watchdog.py::test_a_stall_that_holds_the_gil_is_caught_by_the_c_backstop",
+    "test_render.py::test_nothing_aimed_at_the_faces_is_the_old_frame_exactly",
+    "test_render.py::test_every_layout_and_motion_draws_any_count",
+    "test_desk_coverage.py::test_the_committed_report_is_fresh_and_regenerates_byte_identical",
+    "test_presets.py::test_each_orbit_axis_moves_its_camera_param_as_its_row_says",
+}
+
+
+def pytest_addoption(parser):
+    parser.addoption("--all", action="store_true",
+                     help="run every tier (golden, slow, live), not just the fast one")
+
+
+def pytest_configure(config):
+    # (an explicit `-m` with --all still wins: only the default is lifted)
+    if config.getoption("--all") and config.option.markexpr == _FAST:
+        config.option.markexpr = ""
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        path = item.path.name
+        key = f"{path}::{item.originalname or item.name}"
+        if path in _GOLDEN_FILES:
+            item.add_marker(pytest.mark.golden)
+        if path in _LIVE_FILES or key in _LIVE_TESTS:
+            item.add_marker(pytest.mark.live)
+            # loopbacks share global Syphon / NDI names: one worker at a time
+            item.add_marker(pytest.mark.xdist_group("live"))
+        if path in _SLOW_FILES or key in _SLOW_TESTS:
+            item.add_marker(pytest.mark.slow)
+
 
 @pytest.fixture(autouse=True)
 def _library_home(tmp_path):

@@ -65,6 +65,7 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "playwright>=1.49",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -76,8 +77,15 @@ packages = ["hyperspace"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: heavy face-extraction tests (~seconds each)",
-           "empty_frame: a bare Renderer keeps the app's empty frame (plan 36 T3)"]
+# Tiers (tests/conftest.py applies the markers by name): a bare `pytest` runs
+# the fast tier in parallel; `pytest --all` runs everything; -n0 = serial.
+addopts = "-n auto --dist loadgroup -m 'not golden and not slow and not live'"
+markers = [
+    "golden: golden-frame draws (tests/test_golden_frames.py), ~45 s together",
+    "slow: ~1 s or more each (torch dream, undo, plan 12 presets, whole-library sweeps)",
+    "live: Syphon / NDI / real-file loopbacks with timeouts, flaky under load",
+    "empty_frame: a bare Renderer keeps the app's empty frame (plan 36 T3)",
+]
 
 [tool.ruff]
 line-length = 100
