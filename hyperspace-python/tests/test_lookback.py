@@ -1232,15 +1232,15 @@ def test_the_layer_is_one_menu_of_every_layer(lbpage, monkeypatch):
     a heading per net (not a choice), shallow → deep, each with its long
     description on hover. A pick sets the base — a scene-setter's write and
     one undo step — and the right-click menu is the param's."""
-    from hyperspace import ui_lookback, undo
+    from hyperspace import ui, ui_lookback, undo
     from hyperspace.lookback import LAYER_INFO, LAYERS
     from hyperspace.routing import Bindings, Router
 
     reg, d = lbpage.reg, lbpage.dream
     layer = reg["dream.layer"]
     said: list[str] = []
-    real_say = ui_lookback._say
-    monkeypatch.setattr(ui_lookback, "_say", lambda text: (said.append(text), real_say(text)))
+    real_say = ui.tooltip
+    monkeypatch.setattr(ui, "tooltip", lambda text: (said.append(text), real_say(text)))
     lbpage.frame()
     assert lbpage.widgets().count("dream.layer") == 1
     assert not [w for w in lbpage.widgets() if w.startswith(("chip.", "layer."))]

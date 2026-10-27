@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 from imgui_bundle import imgui, implot
 
-from hyperspace import hands, lfo, routing, tempo, ui_presets, ui_routing
+from hyperspace import hands, lfo, routing, tempo, ui, ui_presets, ui_routing
 from hyperspace.analysis import Analyser
 from hyperspace.analyzer import Analyzer
 from hyperspace.app import CONTROL_SIZE, LOOP_KEYS
@@ -2277,3 +2277,19 @@ def test_the_footer_names_a_black_output(rig, monkeypatch):
     drawn, _ = _output_page(rig, monkeypatch, "view")
     assert "·  dim black" in drawn and not any(s.endswith(" black") and "output" in s
                                                 for s in drawn)
+
+
+def test_a_long_tooltip_wraps_at_a_readable_width(rig):
+    """The owner, 2026-10-26: a hover's words wrap at `ui.TIP_CH`
+    characters, and a % in them is drawn as itself."""
+    for _ in range(2):                  # a tooltip takes its size a frame late
+        imgui.new_frame()
+        imgui.begin("t")
+        ui.tooltip("word " * 80 + "100%")
+        imgui.end()
+        win = imgui.internal.find_window_by_name("##Tooltip_00")
+        em = imgui.calc_text_size("0").x
+        imgui.end_frame()
+    pad = imgui.get_style().window_padding.x
+    assert win is not None and win.size.x <= em * ui.TIP_CH + 2 * pad + 1
+    assert win.size.y > 3 * imgui.get_text_line_height()

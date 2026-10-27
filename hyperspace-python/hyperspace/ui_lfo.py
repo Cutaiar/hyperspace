@@ -133,7 +133,7 @@ def _add_chip(panel, lfos) -> None:
         add_lfo(panel, lfos)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip(add_tip(lfos))
+        ui.tooltip(add_tip(lfos))
 
 
 def add_tip(lfos) -> str:
@@ -204,7 +204,7 @@ def _beats(clock, h: float) -> None:
         dl.add_circle_filled(imgui.ImVec2(x + k * 12, cy), 3.0, ui.u32(col))
     imgui.dummy(imgui.ImVec2(2 * BEAT_R + 10 + BEATS_PER_BAR * 12, h))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"beat {bar + 1} of {BEATS_PER_BAR} — the light is the "
+        ui.tooltip(f"beat {bar + 1} of {BEATS_PER_BAR} — the light is the "
                           "METRONOME LED; the trigger puts beat 1 here")
 
 
@@ -227,7 +227,7 @@ def _strip(panel, lfos, clock, n: int, first: bool = False) -> None:
     if ui.chip(f"×##{p}.del"):
         remove_lfo(panel, lfos, n)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"Remove LFO {n} — the others keep their numbers; a route "
+        ui.tooltip(f"Remove LFO {n} — the others keep their numbers; a route "
                           "from it waits, dormant")
     _scope(lf)
     imgui.same_line()
@@ -266,7 +266,7 @@ def _folded(panel, lfos, n: int, first: bool = False) -> None:
     if hov:
         dl.add_rect_filled(pos, imgui.ImVec2(pos.x + w, pos.y + h),
                            imgui.get_color_u32(imgui.Col_.button_hovered), 4.0)
-        imgui.set_tooltip(f"LFO {n}: out {lf.out:.2f} — click to open it")
+        ui.tooltip(f"LFO {n}: out {lf.out:.2f} — click to open it")
     _thumb(dl, lf, pos.x, pos.y, h)
     # the name, in the label face, centred on the line
     imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
@@ -283,7 +283,7 @@ def _folded(panel, lfos, n: int, first: bool = False) -> None:
     if imgui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
         select(panel, n)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"Open LFO {n} (the open one folds)")
+        ui.tooltip(f"Open LFO {n} (the open one folds)")
     imgui.pop_id()
 
 
@@ -350,6 +350,6 @@ def _scope(lf) -> None:
                          ui.u32(ui.RED))
     imgui.dummy(imgui.ImVec2(SCOPE_W, SCOPE_H))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"two cycles of the shape at depth {lf.depth:.2f}; the red "
+        ui.tooltip(f"two cycles of the shape at depth {lf.depth:.2f}; the red "
                           f"line is the phase now ({lf.x:.2f}), the dot the output "
                           f"({lf.out:.2f}). Rest is 0.5.")

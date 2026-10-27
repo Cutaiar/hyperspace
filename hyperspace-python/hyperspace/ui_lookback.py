@@ -55,7 +55,6 @@ SHORT = {"dream.echo_mix": "brightness", "dream.fade": "fade time", "dream.echoe
 LABEL_W = 94        # a cell's label column: "SHAPE HIDES", the longest, is 88 px
 LAYER_POPUP_H = 520  # the layer menu's most height before it scrolls, px
 THUMB_H = 48        # thumbnail height, px; width follows the echo's aspect
-TIP_W = 380         # this page's own hovers wrap at this width (a set_tooltip line does not)
 STATUS_LINES = 3   # the worker's status is at most this tall; the rest is on its hover
 
 
@@ -148,14 +147,6 @@ def _records_row(panel) -> None:
     panel._edit_said("lookback_said")
 
 
-def _say(text: str) -> None:
-    """A hover that wraps: a layer's, the swatch's and the worker's whole
-    status are longer than a tooltip's one line can be wide."""
-    if imgui.begin_tooltip():
-        imgui.push_text_wrap_pos(TIP_W)
-        imgui.text_unformatted(text)
-        imgui.pop_text_wrap_pos()
-        imgui.end_tooltip()
 
 
 def _cells(panel, lb, table: str, ids) -> None:
@@ -220,7 +211,7 @@ def _layer_menu(panel) -> None:
         # menu and the learn outline (open, the popup is the last window)
         if imgui.is_item_hovered() and now in LAYER_INFO:
             net, _, long = LAYER_INFO[now]
-            _say(f"{now} · {net}\n\n{long}\n\n{a.tip}")
+            ui.tooltip(f"{now} · {net}\n\n{long}\n\n{a.tip}")
         panel._ctx(a)
         panel._learn_frame(a)
         panel._mod_dot(p)
@@ -237,7 +228,7 @@ def _layer_menu(panel) -> None:
             if imgui.selectable(f"{name}##layer.{name}", chosen)[0] and not chosen:
                 p.set(k)
             if imgui.is_item_hovered():
-                _say(f"{name} · {net}\n\n{long}")
+                ui.tooltip(f"{name} · {net}\n\n{long}")
             if chosen and imgui.is_window_appearing():
                 imgui.set_item_default_focus()
                 imgui.set_scroll_here_y()
@@ -293,7 +284,7 @@ def _tint_swatch(panel, lb) -> None:
             says = "the scene's mean hue"
         else:
             says = "the scene's mean hue — nothing captured yet"
-        _say(f"The colour the dream is tinted towards: {says}.")
+        ui.tooltip(f"The colour the dream is tinted towards: {says}.")
 
 
 def _worker(lb):
@@ -354,7 +345,7 @@ def _worker_line(panel, lb) -> None:
     imgui.text_wrapped(shown)
     imgui.pop_style_color()
     if shown != full and imgui.is_item_hovered():
-        _say(full)
+        ui.tooltip(full)
 
 
 def _echo_text(lb) -> str:
@@ -387,7 +378,7 @@ def _thumbnails(panel, lb) -> None:
             imgui.same_line(0, 3)
         imgui.image(tex, size, imgui.ImVec2(*t["uv0"]), imgui.ImVec2(*t["uv1"]))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"echo {k + 1} · {t['age'] * 1000:.0f} ms old · weight "
+            ui.tooltip(f"echo {k + 1} · {t['age'] * 1000:.0f} ms old · weight "
                               f"{t['weight']:.3f}")
     if len(thumbs) > fit:
         imgui.same_line(0, 3)
@@ -398,7 +389,7 @@ def _thumbnails(panel, lb) -> None:
         imgui.image(imgui.ImTextureRef(lb.dream.glo), size, imgui.ImVec2(0, 1),
                     imgui.ImVec2(1, 0))
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"dream buffer · answers frame {lb.dream_frame}")
+            ui.tooltip(f"dream buffer · answers frame {lb.dream_frame}")
     # a hairline under the row: newest at the left, the dream at the end
     r1 = imgui.get_item_rect_max()
     dl = imgui.get_window_draw_list()

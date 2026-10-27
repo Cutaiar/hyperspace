@@ -382,13 +382,13 @@ def _header(panel, table) -> None:
     word, why = state(panel)
     ui._micro(word, ui.RED if _pad(panel) is not None else ui.DIM)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{why} The picture is the table's, with or without a pad.")
+        ui.tooltip(f"{why} The picture is the table's, with or without a pad.")
     if table is not None:
         imgui.same_line()
         n = len(rows_cached(panel, table))
         imgui.text_colored(ui.DIM, f"{n} mapped")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Controls with a row in bindings.json. A grey label is the "
+            ui.tooltip("Controls with a row in bindings.json. A grey label is the "
                               "app's own hand on a free axis, not a row.")
     imgui.set_cursor_pos(start)          # the line is HEAD_H tall whatever is on it
     imgui.dummy(_v(1, HEAD_H - imgui.get_style().item_spacing.y))
@@ -443,7 +443,7 @@ def _body(panel, table) -> None:
             imgui.pop_font()
     imgui.dummy(avail)
     if tip is not None:
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
 
 
 def rect(panel, c: gamepad.Control) -> tuple[float, float, float, float] | None:

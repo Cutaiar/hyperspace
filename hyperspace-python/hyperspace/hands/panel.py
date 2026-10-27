@@ -266,7 +266,7 @@ def _note_line(text: str) -> None:
     shown = ui.fit_text(text, imgui.get_content_region_avail().x)
     imgui.text_colored(ui.WARN, shown)
     if shown != text and imgui.is_item_hovered():
-        imgui.set_tooltip(text)
+        ui.tooltip(text)
 
 
 def ghost_notes(panel) -> list[tuple[str, bool]]:
@@ -293,7 +293,7 @@ def _more_chip(panel, label: str, notes) -> None:
         imgui.open_popup(GHOST_POPUP)
     if imgui.is_item_hovered():
         tip = "Mirror" + (" and Tethers" if "ghost.tethers" in panel.reg else "")
-        imgui.set_tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
+        ui.tooltip("\n".join([f"{tip}, and the ghost's notes.", *(t for t, _ in notes)]))
 
 
 def _more_popup(panel, notes) -> None:
@@ -342,7 +342,7 @@ def _status(io, notes=()) -> None:
     port = io.out_name or "no DAW port"
     imgui.text_disabled(f"{io.status or '—'}  ·  {_ins(io)}  ·  {port}")
     if imgui.is_item_hovered():
-        imgui.set_tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
+        ui.tooltip("● in the box  ·  ◌ tracked, but outside the box: it reads "
                           "absent  ·  ○ not seen")
     # the DAW port is the hands-daw sink's (plan 27 B3): why it has none
     # comes through `HandsIO.carry`, beside the instrument's own error
@@ -487,7 +487,7 @@ def _box(io) -> None:
     imgui.dummy(imgui.ImVec2(BOX_W, BOX_H))
     if imgui.is_item_hovered():
         said = _box_text(box)
-        imgui.set_tooltip("The box from above: the camera at the centre, the "
+        ui.tooltip("The box from above: the camera at the centre, the "
                           "performer at the bottom edge. A dot's size is the hand's "
                           "height, and the gauge at the right shows it "
                           f"({GAUGE_MM[0]:.0f}–{GAUGE_MM[1]:.0f} mm).\n"
@@ -567,7 +567,7 @@ def _axis_row(panel, io, i: int, a, selected: bool, h: float, conflict: bool,
             y += " (DAW only; lane —)"
         raw = "—" if st is None or st.raw is None else \
             f"{st.raw:.1f} {FEATURES[a.feature][0]}"
-        imgui.set_tooltip(f"{a.name}: out {y}  ·  hand {raw}")
+        ui.tooltip(f"{a.name}: out {y}  ·  hand {raw}")
     imgui.same_line()
     q = "" if st is None or st.q is None else f" {st.q}"
     imgui.text_disabled(_out_text(a) + q if a.out != "off" else "off")
@@ -625,7 +625,7 @@ def _grab(io, side: str, v: float) -> None:
     if imgui.is_item_hovered():
         f = fist(io.dance[side].raw.get("curl"))
         level = "—" if f is None else f"{f:.2f}"
-        imgui.set_tooltip(f"hand:{grab_name(side)}: {'closed' if on else 'open'}  ·  "
+        ui.tooltip(f"hand:{grab_name(side)}: {'closed' if on else 'open'}  ·  "
                           f"fist {level} (closes ≥ {GRAB_CLOSE:.2f}, "
                           f"lets go < {GRAB_OPEN:.2f})")
 
@@ -647,7 +647,7 @@ def _dance_bar(address: str, v: float, h: float, *, centred: bool = False) -> No
         dl.add_line(imgui.ImVec2(mx, y1), imgui.ImVec2(mx, y1 + 2), ui.u32(ui.DIM))
     imgui.dummy(imgui.ImVec2(DANCE_BAR_W, h))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"{address}: {v:.3f}" if live else f"{address}: —")
+        ui.tooltip(f"{address}: {v:.3f}" if live else f"{address}: —")
 
 
 def _out_text(a) -> str:
@@ -683,7 +683,7 @@ def _editor(panel, io, settings, k: int) -> None:
     if imgui.small_button("mirror"):
         mirror(settings, a.name)
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
+        ui.tooltip("Copy this axis's feel (not its MIDI out) to the same axis "
                           "on the other hand.")
     if io is not None:
         imgui.same_line()
@@ -693,7 +693,7 @@ def _editor(panel, io, settings, k: int) -> None:
             io.solo = None if solo else k
         imgui.pop_style_color()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Send only this axis to the DAW port — for a DAW's MIDI learn.")
+            ui.tooltip("Send only this axis to the DAW port — for a DAW's MIDI learn.")
     imgui.end_group()
     ui._micro("On exit")
     imgui.same_line(ui.LABEL_W)
@@ -741,7 +741,7 @@ def _transfer(a, st) -> None:
                              ui.u32(ui.RED))
     imgui.dummy(imgui.ImVec2(s, s))
     if imgui.is_item_hovered():
-        imgui.set_tooltip("Hand position across the calibrated range (→) against what "
+        ui.tooltip("Hand position across the calibrated range (→) against what "
                           "the axis outputs before attack/decay (↑). Dead zone and curve "
                           "shape it; the red dot is the hand now.")
 
@@ -761,7 +761,7 @@ def _calibrate(io, settings, k: int) -> None:
         if imgui.small_button(f"calibrate {CAL_SECONDS:.0f} s"):
             io.start_calibration(CAL_SECONDS)
         if imgui.is_item_hovered():
-            imgui.set_tooltip("For the next 20 s, move each hand through everything it "
+            ui.tooltip("For the next 20 s, move each hand through everything it "
                               "should reach. Each axis's range becomes what you covered "
                               "(2nd–98th percentile), saved to hands.json for this box, "
                               "and the box becomes what your palms covered plus "
@@ -770,7 +770,7 @@ def _calibrate(io, settings, k: int) -> None:
         if imgui.small_button("reset ranges"):
             io.reset_ranges()
         if imgui.is_item_hovered():
-            imgui.set_tooltip("Every axis's range back to its default, and the box "
+            ui.tooltip("Every axis's range back to its default, and the box "
                               "opened: a hand counts wherever the tracker sees it. "
                               "Another sweep sets both again.")
     st, a = io.state[k], settings.axes[k]

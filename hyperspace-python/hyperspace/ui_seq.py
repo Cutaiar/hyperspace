@@ -276,7 +276,7 @@ def _heads(panel, seq, x0: float, y: float, cw: float) -> None:
         hit = imgui.invisible_button(f"##seq.head.{si + 1}", imgui.ImVec2(cw, HEAD_H))
         hov = imgui.is_item_hovered()
         if hov:
-            imgui.set_tooltip(f"length {si + 1}: the pattern wraps after step {si + 1}")
+            ui.tooltip(f"length {si + 1}: the pattern wraps after step {si + 1}")
         panel._ctx(a, f".{si + 1}")
         imgui.push_font(ui._FONTS["micro"], ui.FONT_MICRO)
         if hit:
@@ -300,7 +300,7 @@ def _lane_label(panel, seq, envs, li: int, x: float, y: float, h: float,
     if ui.lit_chip(f"{li + 1}##{p}.sel", sel):
         select_lane(panel, li)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"Lane {li + 1} → env {lane.env}: click to select it and open "
+        ui.tooltip(f"Lane {li + 1} → env {lane.env}: click to select it and open "
                           "its envelope")
     imgui.same_line(0, 4)
     panel._lit_button(f"{p}.mute", "M", lane.mute)
@@ -393,7 +393,7 @@ def _strip(panel, seq, envs, n: int) -> None:
         if ui.chip(f"×##{p}.del"):
             remove_env(panel, envs, n)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(f"Remove env {n} — the others keep their numbers; a lane "
+            ui.tooltip(f"Remove env {n} — the others keep their numbers; a lane "
                               "on it fires nothing")
     rows = 5
     fh = imgui.get_frame_height_with_spacing()
@@ -428,7 +428,7 @@ def _add_chip(panel, envs) -> None:
         add_env(panel, envs)
     imgui.end_disabled()
     if imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-        imgui.set_tooltip(add_tip(envs))
+        ui.tooltip(add_tip(envs))
 
 
 def add_tip(envs) -> str:
@@ -468,7 +468,7 @@ def _folded(panel, seq, envs, n: int) -> None:
     if hov:
         dl.add_rect_filled(pos, imgui.ImVec2(pos.x + w, pos.y + h),
                            imgui.get_color_u32(imgui.Col_.button_hovered), 4.0)
-        imgui.set_tooltip(f"env {n} ({_lanes_of(seq, n)}): {STAGES[env.stage]}, "
+        ui.tooltip(f"env {n} ({_lanes_of(seq, n)}): {STAGES[env.stage]}, "
                           f"out {env.out:.2f} — click to open it")
     dl.add_rect(pos, imgui.ImVec2(pos.x + THUMB_W, pos.y + h), ui.u32(ui.LINE))
     _shape(dl, env, pos.x, pos.y + 2, THUMB_W, h - 4, THUMB_SAMPLES, 1.0, 2.5)
@@ -482,7 +482,7 @@ def _folded(panel, seq, envs, n: int) -> None:
     if imgui.arrow_button(f"##{p}.open", imgui.Dir.right) or hit:
         open_strip(panel, n)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"Open env {n} (the open one folds)")
+        ui.tooltip(f"Open env {n} (the open one folds)")
     imgui.pop_id()
 
 
@@ -570,6 +570,6 @@ def _scope(env, height: float) -> None:
     _shape(dl, env, x0 + 2, y0 + 2, SCOPE_W - 4, height - 4, STAGE_SAMPLES, 1.2, 3.0)
     imgui.dummy(imgui.ImVec2(SCOPE_W, height))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(f"the shape at the knobs (peak {env.amount:.2f}, sustain "
+        ui.tooltip(f"the shape at the knobs (peak {env.amount:.2f}, sustain "
                           f"{env.sustain:.2f}); the dot is the level now "
                           f"({env.out:.2f}, {STAGES[env.stage]})")

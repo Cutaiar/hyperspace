@@ -718,31 +718,31 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
         expand_all(st, view, not any_open)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(ALL_TIP)
+        ui.tooltip(ALL_TIP)
     imgui.same_line()
     if ui.lit_chip("patched only##graph", st["patched_only"]):
         st["patched_only"] = not st["patched_only"]
         st["flip"].clear()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(PATCHED_TIP)
+        ui.tooltip(PATCHED_TIP)
     imgui.same_line()
     if ui.chip("tidy##graph"):
         st["tidy"] = True
     if imgui.is_item_hovered():
-        imgui.set_tooltip(TIDY_TIP)
+        ui.tooltip(TIDY_TIP)
     label = beside_chip(selected, width, st["beside"])
     if label is not None:
         imgui.same_line()
         if ui.chip(f"{label}##graph"):
             st["beside"] = not st["beside"]
         if imgui.is_item_hovered():
-            imgui.set_tooltip(BESIDE_TIP)
+            ui.tooltip(BESIDE_TIP)
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
     imgui.text_disabled(ui.fit_text(line, imgui.get_content_region_avail().x))
     if imgui.is_item_hovered():
-        imgui.set_tooltip(line)
+        ui.tooltip(line)
     _area_chips(st)
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
@@ -766,7 +766,7 @@ def _area_chips(st: dict) -> None:
         if ui.chip(label):
             st["frame_area"] = a
         if imgui.is_item_hovered():
-            imgui.set_tooltip(AREA_TIP)
+            ui.tooltip(AREA_TIP)
 
 
 def _place(panel, st: dict, view: graphview.View) -> None:
@@ -1015,7 +1015,7 @@ def _idle_line(st: dict, view: graphview.View, area: str, ids) -> None:
         toggle_idle(st, area)
     if imgui.is_item_hovered():
         ed.suspend()
-        imgui.set_tooltip(IDLE_TIP)
+        ui.tooltip(IDLE_TIP)
         ed.resume()
     imgui.dummy(imgui.ImVec2(NODE_W, 0))
     imgui.pop_id()
@@ -1115,7 +1115,7 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
         toggle_open(st, n.id)
     if imgui.is_item_hovered():
         ed.suspend()
-        imgui.set_tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
+        ui.tooltip(EXPAND_TIP if shut else COLLAPSE_TIP)
         ed.resume()
     if has_out:
         imgui.same_line(NODE_W - PIN)
@@ -1258,7 +1258,7 @@ def _hover(st: dict, view: graphview.View) -> None:
             tip = f"{n.label}\n{n.status}"
     if tip:
         ed.suspend()
-        imgui.set_tooltip(tip)
+        ui.tooltip(tip)
         ed.resume()
 
 
@@ -1739,7 +1739,7 @@ def _open_chip(panel, n: graphview.VNode) -> None:
     if ui.chip(f"open on {home[0].upper()}##graph.side.open"):
         open_on(panel, home)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(OPEN_TIP)
+        ui.tooltip(OPEN_TIP)
 
 
 def switch_feeds(view: graphview.View, n: graphview.VNode) -> list[str | None]:
@@ -1804,7 +1804,7 @@ def _switch_block(panel, view: graphview.View, n: graphview.VNode) -> None:
                        UNWIRED if unwired else None, size):
             p.set(k)
         if imgui.is_item_hovered():
-            imgui.set_tooltip(tip)
+            ui.tooltip(tip)
 
 
 def _route_row(panel, router, view: graphview.View, c: graphview.VCable) -> None:
@@ -2197,7 +2197,7 @@ def _value_drag(panel, st: dict, view: graphview.View, a: str, b: str) -> None:
 
 def _drag_tip(text: str) -> None:
     ed.suspend()
-    imgui.set_tooltip(text)
+    ui.tooltip(text)
     ed.resume()
 
 
@@ -2592,7 +2592,7 @@ def _node_menu(panel, view: graphview.View, n: graphview.VNode) -> None:
         if imgui.menu_item_simple("delete", enabled=why is None):
             remove_node(panel, n.id)
         if why is not None and imgui.is_item_hovered(imgui.HoveredFlags_.allow_when_disabled):
-            imgui.set_tooltip(why)
+            ui.tooltip(why)
     if n.kind in graphview.FRAME_VKINDS:
         render_node_menu(panel, n)
 
