@@ -906,7 +906,7 @@ def test_the_strip_has_a_new_chip(rig, monkeypatch):  # noqa: F811
 
     panel, lib = rig.panel, rig.lib
     called = []
-    monkeypatch.setattr(lib.presets, "new", lambda: called.append(1) or [preset.NEW_SAID])
+    monkeypatch.setattr(lib.presets, "new", lambda at: called.append(1) or [preset.NEW_SAID])
     frame(panel, "presets")
     frame(panel)
     rects = _rects(panel)

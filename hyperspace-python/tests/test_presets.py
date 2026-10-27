@@ -1797,11 +1797,12 @@ def _spoil(rig, name):
 
 
 @pytest.mark.parametrize("name", ["big-blue-wave", "hex-engine"])
-def test_a_new_preset_is_factory_values_and_nothing_wired(rig, name):
+def test_a_new_preset_is_factory_values_and_the_scene_chain(rig, name):
     """Plan 35 T7 (row 387): the library's fresh values for every
     performance group whatever was loaded, no preset routes, the desk the
-    factory preset layer (written explicitly), the session as it was, and a
-    frame that is only the outputs — black."""
+    factory preset layer (written explicitly), the session as it was, and
+    (plan 36 T5, W5) a frame of the scene chain alone — a shape on every
+    window."""
     lib, reg, table = rig.lib, rig.reg, rig.router.table
     _spoil(rig, name)
     kept = reg.snapshot(part="session")
@@ -1815,8 +1816,10 @@ def test_a_new_preset_is_factory_values_and_nothing_wired(rig, name):
     assert doc["routes"] == []
     assert reg.snapshot(part="session") == kept
     spec = rig.presets.graph.spec
-    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}   # (plan 36 T3: hands written)
-    assert G.reaches(spec) == frozenset()
+    assert spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
+            "wires": [{"from": "shape", "to": "scene.geometry"},
+                      {"from": "scene", "to": "output.all.image"}]}   # (plan 36 T3: hands written)
+    assert G.reaches(spec) == frozenset({"shape", "scene"})
     assert lib.current("presets") == preset.UNTITLED_PRESET
     assert lib.is_dirty("presets")
     assert lib.path_of("presets", preset.UNTITLED_PRESET) is None
@@ -1875,13 +1878,16 @@ def test_a_new_preset_empties_the_bins_macros_and_modifiers(rig):
     assert not [m for m in saved["macros"].values() if m.get("subs")]
 
 
-def test_a_new_preset_saves_and_loads_back_empty(rig):
+def test_a_new_preset_saves_and_loads_back_as_the_scene_chain(rig):
     _spoil(rig, "big-blue-wave")
     rig.presets.new()
     rig.presets.save_as("blank")
     _spoil(rig, "hex-engine")
     rig.presets.load("blank")
-    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}]}
+    assert rig.presets.graph.spec.to_json() == {"frame": "wired", "nodes": [{"kind": "hands", "laid": "over"}],
+            "wires": [{"from": "shape", "to": "scene.geometry"},
+                      {"from": "scene", "to": "output.all.image"}]}
+    assert len(rig.presets.layout) == 3
     assert rig.router.table.routes() == []
     assert preset.desk_json(rig.router.table.desk()) == preset.desk_json(preset.fresh_desk())
 
@@ -1897,9 +1903,10 @@ def gl_ctx():
     yield c
 
 
-def test_a_new_preset_draws_black(rig, gl_ctx):
-    """Plan 35 T7: the blank preset's frame, drawn on two views, is the
-    ground — an opaque black — at each window's centre."""
+def test_a_new_preset_draws_a_shape(rig, gl_ctx):
+    """Plan 36 T5 (W5; was plan 35 T7's black): the new preset's frame,
+    drawn on two views through the bus, is not the ground alone — the
+    shape is on each window."""
     from test_graph_frame import SIZE, _fbo, _px, _tool
 
     from hyperspace.outputs import Switches, View
@@ -1915,7 +1922,7 @@ def test_a_new_preset_draws_black(rig, gl_ctx):
         assert gl_ctx.error == "GL_NO_ERROR"
         for v in vs:
             assert not v.error, v.error
-            assert tuple(_px(v.target)[SIZE[1] // 2, SIZE[0] // 2]) == (0, 0, 0, 255)
+            assert (_px(v.target)[..., :3] > 0).any()
     finally:
         gl.close()
 

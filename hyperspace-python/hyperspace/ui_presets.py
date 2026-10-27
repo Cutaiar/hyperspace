@@ -366,12 +366,14 @@ def strip(panel, group: str) -> None:
     imgui.same_line(imgui.get_content_region_avail().x - ui.chip_w(*chips))
     if presets is not None:
         if ui.chip("new##new"):
-            _guard(panel, presets.new)
+            from . import ui_graph  # (late: ui_graph imports ui_routing, which imports this)
+            # plan 36 T5: its chain laid out where the GRAPH page is looking
+            _guard(panel, presets.new, ui_graph.in_view(panel))
             invalidate(panel, group)
         _rect(panel, f"strip.{group}.new")
         if imgui.is_item_hovered():
-            imgui.set_tooltip("A new preset: factory values, nothing wired — "
-                              "black until something is wired to an output")
+            imgui.set_tooltip("A new preset: factory values, shape → scene → All outputs — "
+                              "a shape on every window")
         imgui.same_line()
     # R17: a preset `new` made and nothing saved names itself — a user
     # preset that happens to be called `untitled` is never written over

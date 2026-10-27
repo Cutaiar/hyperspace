@@ -103,8 +103,11 @@ by its config name), its hover what it does with its id and its params'
 prefix (`graphview.hover_of`), the side panel's header the same
 (`graphview.side_head`). Every node and wire of it deletes; only a type
 error and a loop refuse, and a window keeps itself (its wires go). The
-picker is grouped by primitive — the scene starter (`shape → scene → All
-outputs` in one gesture), scene ▸, look-back ▸, pictures ▸, effects ▸,
+picker is grouped by primitive — starters ▸ (plan 36 T5: the scene chain
+`shape → scene → All outputs`, tracers, tracers + dream, dream on a
+picture, channel to backdrop, each a pre-wired group in one gesture, laid
+left to right where the menu opened; a picture cable's menu has the
+tracers and dream ones, on its picture), scene ▸, look-back ▸, pictures ▸, effects ▸,
 copy of ▸ — a frame node the section has drawn disabled
 (`render_picker`).
 
@@ -857,7 +860,9 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         if was is None or (round(was[0]), round(was[1])) == now:
             continue
         applied[n.id] = now
-        m = pre if graphview.home(n) == graphview.PRESET else show
+        # (plan 36 T5: a node the preset's map already places — a new
+        # preset's All outputs — moves there, or that entry would hold it)
+        m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
         if m is not None:
             px, py = st["pan"]
             m[n.id] = [int(now[0] - px), int(now[1] - py)]
@@ -873,7 +878,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     if through > 0.0:
         bg = ed.get_style().color_(ed.StyleColor.bg)
         ed.push_style_color(ed.StyleColor.bg, imgui.ImVec4(bg.x, bg.y, bg.z, bg.w * (1.0 - through)))
+    corner = imgui.get_cursor_screen_pos()
     ed.begin("##graph", size)
+    # plan 36 T5: the canvas point at the view's top-left corner, kept for
+    # what a new preset lays out where you are looking (`in_view`)
+    seen = ed.screen_to_canvas(corner)
+    st["seen"] = (float(seen.x), float(seen.y))
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     _place(panel, st, view)
     lay = st["auto"][1]
@@ -1412,8 +1422,8 @@ LOOKBACK_MENU = "look-back frame"     # plan 34's echo items, under look-back �
 
 def render_picker(panel, at=None) -> None:
     """The picker's render items (`graphview.picker`), grouped by primitive
-    (plan 35 G, `graphview.PICKER_GROUP`): the scene starter at the top,
-    then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
+    (plan 35 G, `graphview.PICKER_GROUP`): starters ▸ at the top (plan 36
+    T5, `graphview.STARTERS`), then scene ▸, look-back ▸ (its look-back frames under `LOOKBACK_MENU`),
     pictures ▸ (R28's switch over the channels under the switch), effects ▸
     and copy of ▸. A frame node the section has already — the scene, the
     shape, the look-back, the backdrop, the pattern, an echo, the dream —
@@ -1426,11 +1436,6 @@ def render_picker(panel, at=None) -> None:
     for group in graphview.PICKER_GROUPS:
         mine = [it for it in items if graphview.PICKER_GROUP.get(it[0]) == group]
         if not mine:
-            continue
-        if not group:
-            for kind, f, label in mine:
-                if imgui.menu_item_simple(label):
-                    add_render(panel, e, kind, f, at)
             continue
         if not imgui.begin_menu(f"{group}##graph.pick"):
             continue
@@ -1480,10 +1485,23 @@ def switch_channels(panel, e: graphview.Edit, port: str, at=None) -> str | None:
 
 def add_render(panel, e: graphview.Edit, kind: str, file: str | None = None, at=None):
     """A render node the picker adds (`Edit.add_node`), one undo step, put
-    where the menu opened. Returns the refusal, or None."""
+    where the menu opened — a starter's group (plan 36 T5) laid left to
+    right from there. Returns the refusal, or None."""
     why = _render_said(panel, e, lambda e: e.add_node(kind, file))
-    if why is None and e.added:
-        _place_new(panel, f"render:{e.added}", at)
+    if why is None:
+        _place_group(panel, e, at)
+    return why
+
+
+def add_starter(panel, which: str, cable=None, at=None) -> str | None:
+    """A starter (plan 36 T5, `Edit.starter`) — on picture cable `cable`,
+    from its menu, or (None) from the picker — one undo step, its new nodes
+    laid left to right from where the menu opened. Returns the refusal, or
+    None."""
+    e = render_edit(panel)
+    why = _render_said(panel, e, lambda e: e.starter(which, cable))
+    if why is None:
+        _place_group(panel, e, at)
     return why
 
 
@@ -2002,6 +2020,34 @@ def _place_new(panel, nid: str, at) -> None:
     if at and pre is not None:
         px, py = _state(panel)["pan"]           # the menu's point is the panned canvas's
         pre[nid] = [round(at[0] - px), round(at[1] - py)]
+
+
+def _place_group(panel, e: graphview.Edit, at) -> None:
+    """A starter's new nodes (plan 36 T5, `Edit.placed`) laid left to right
+    from where the menu opened (`graphview.chain_layout`), in the step the
+    starter pushed; with no point, the last add's node alone, as before."""
+    if e.placed:
+        if at:
+            for nid, xy in graphview.chain_layout(e.placed, at).items():
+                _place_new(panel, nid, xy)
+    elif e.added:
+        _place_new(panel, f"render:{e.added}", at)
+
+
+# a new preset's chain sits this far in from the view's top-left corner
+IN_VIEW_MARGIN = (graphview.GAP, graphview.TITLE_H)
+
+
+def in_view(panel) -> tuple[float, float]:
+    """Where a new preset's chain goes (plan 36 T5, W5: "laid out where you
+    are looking"), in layout units: the canvas point at the GRAPH page's
+    view's top-left corner, last drawn (`st["seen"]`; the canvas origin
+    before the page has drawn), in by `IN_VIEW_MARGIN`, less the page's
+    pan (`st["pan"]`: a stored position is drawn moved by it)."""
+    st = _state(panel)
+    sx, sy = st.get("seen") or (0.0, 0.0)
+    px, py = st["pan"]
+    return (round(sx + IN_VIEW_MARGIN[0] - px), round(sy + IN_VIEW_MARGIN[1] - py))
 
 
 def add_modifier(panel, kind: str, at=None):
@@ -2585,6 +2631,11 @@ def _cable_menu(panel, view: graphview.View, c: graphview.VCable, at=None) -> No
             for f in files:
                 if imgui.menu_item_simple(f):
                     insert_effect(panel, c, f, at)
+            imgui.end_menu()
+        if imgui.begin_menu("starters"):        # plan 36 T5: laid on this cable's picture
+            for which, label in graphview.STARTERS:
+                if which in graphview.CABLE_STARTERS and imgui.menu_item_simple(label):
+                    add_starter(panel, which, c, at)
             imgui.end_menu()
     if imgui.menu_item_simple("delete"):
         if c.kind == "render":                  # N4: unwire, its own undo step

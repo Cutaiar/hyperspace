@@ -816,7 +816,20 @@ CLOUD_SAID = ("the rig's cable (the show's, not the preset's): this cloud drawn 
               "scene — cut it and the scene draws no cloud")
 CLOUD_IDLE = "nothing reaches the scene: the cloud is not drawn"
 CLOUD_INTO_SCENE = "{cloud} is a cloud device: its one wire is into scene.geometry"
-STARTER_SAID = "scene starter: shape → scene → All outputs"
+# plan 36 T5 (W5): the picker's starters ▸ — each a pre-wired group, one
+# undo step, every node and cable ordinary after it. (key, the item's words)
+STARTERS = (("scene", "scene chain"), ("tracers", "tracers"),
+            ("tracers+dream", "tracers + dream"), ("dream", "dream on a picture"),
+            ("backdrop", "channel to backdrop"))
+# the starters a picture cable's menu offers, that cable their picture
+CABLE_STARTERS = ("tracers", "tracers+dream", "dream")
+# the scene chain: a new preset's whole section and the first starter —
+# shape → scene → All outputs, plain faces (no pattern wire)
+SCENE_CHAIN = (("shape", "scene.geometry"), ("scene", f"{rgraph.ALL_OUTPUTS}.image"))
+NEW_CHAIN = ("shape", "scene", rgraph.ALL_OUTPUTS)   # its nodes, left to right
+STARTER_SAID = "scene chain: shape → scene → All outputs"
+NO_STARTER = "no starter {which!r}: the starters are " + ", ".join(w for _, w in STARTERS)
+NO_CABLE_STARTER = "{label} starts from no cable: pick it from the canvas's starters"
 IN_ALREADY = "{label} is in the graph already"
 NOTHING_TO_DELETE = "nothing to delete: {what} has no wires"
 NO_SUCH_WIRE = "{wire}: no such wire"
@@ -1890,6 +1903,14 @@ TITLE_H = float(round(64 * SCALE))  # an area's title, above its first node
 IDLE_H = HEAD_H        # an area's idle line
 
 
+def chain_layout(names: Iterable[str], at: tuple[float, float]) -> dict[str, list[int]]:
+    """Render nodes `names` laid left to right from `at` (layout units),
+    one column (`COL_W`) apart on one row: their layout map entries by
+    canvas id (plan 36 T5: a new preset's chain, a starter's group)."""
+    x, y = at
+    return {f"render:{n}": [round(x + i * COL_W), round(y)] for i, n in enumerate(names)}
+
+
 def area_of(n: VNode) -> str:
     """The area node `n` is laid out in (`AREA`): a group node by its id, a
     render node by its class or a base of it (a render class no row names
@@ -2776,6 +2797,9 @@ class Edit:
         self.graph, self.render, self.push = graph, render, push
         self.said = ""
         self.added = ""         # plan 33 U: the node the last add or insert made (its name)
+        # plan 36 T5: the nodes the last starter added, left to right (each
+        # placed by the page from where the menu opened)
+        self.placed: tuple[str, ...] = ()
         self.slots = ()         # plan 35 G: the rig's outputs (a window's name in the words)
         # plan 36 T1: the open show, which holds the rig's own wires (its
         # `rig`, `graph.RigWires`): a bus cable cut or joined lands there
@@ -2810,10 +2834,12 @@ class Edit:
         `added`."""
         return render_add(self, kind, file, **settings)
 
-    def starter(self) -> str | None:
-        """The picker's "scene starter" (plan 35 G): `shape → scene.geometry`
-        and `scene → output.all.image` in one landing."""
-        return render_starter(self)
+    def starter(self, which: str = "scene", cable=None) -> str | None:
+        """A starter (plan 36 T5, `STARTERS`): its pre-wired group in one
+        landing — `cable` (a picture cable: a `VCable` or its two ends) the
+        picture a tracers or dream starter is laid on. The nodes it added,
+        left to right, are `placed`."""
+        return render_starter(self, which, cable)
 
     def insert_effect(self, cable, file: str) -> Refusal | None:
         """Plan 33 U: effect `file` onto picture cable `cable` (a `VCable`,
@@ -3486,10 +3512,10 @@ def spec_name(pin: str, render_graph=None) -> tuple[str | None, str | None]:
     return name, None
 
 
-# plan 35 G: the picker's groups, by an item's kind ("" the top level: the
-# scene starter), drawn in this order (ui_graph.render_picker)
+# plan 35 G: the picker's groups, by an item's kind, drawn in this order
+# (ui_graph.render_picker; plan 36 T5: the starters first, in their own ▸)
 PICKER_GROUP: dict[str, str] = {
-    "starter": "",
+    "starter": "starters",
     "scene": "scene", "shape": "scene", "hands": "scene", "layer": "scene", "guide": "scene",
     "backdrop": "scene",
     "lookback": "look-back", "echo": "look-back", "dream": "look-back",
@@ -3513,7 +3539,8 @@ def _echo_label(k: int) -> str:
 
 def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     """The right-click picker's list (plan 35 G): (kind, file, label), in
-    the owner's groups (`PICKER_GROUP`) — the scene starter; scene ▸ (the
+    the owner's groups (`PICKER_GROUP`) — starters ▸ (plan 36 T5,
+    `STARTERS`: each item's file its key); scene ▸ (the
     scene, the shape, hands, a hands layer, a hands guide, the backdrop);
     look-back ▸ (the look-back, plan 34's look-back frames echo.1 … echo.32
     and the dream); pictures ▸ (the faces pattern, a composite, a switch,
@@ -3523,7 +3550,7 @@ def picker(edit: Edit) -> list[tuple[str, str | None, str]]:
     gs = edit.graph
     files = gs.files() if gs is not None and hasattr(gs, "files") else None
     spec = _spec(edit)
-    out: list[tuple[str, str | None, str]] = [("starter", None, "scene starter")]
+    out: list[tuple[str, str | None, str]] = [("starter", k, w) for k, w in STARTERS]
     out += [("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
             ("layer", None, "hands layer"), ("guide", None, "hands guide"),
             ("backdrop", None, "backdrop")]
@@ -3975,8 +4002,9 @@ def _next(spec, kind: str) -> int:
 
 
 def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> str | None:
+    edit.placed = ()
     if kind == "starter":
-        return render_starter(edit)
+        return render_starter(edit, file or "scene")
     spec = _spec(edit)
     doc = _with_frame(_doc(edit))
     named = _named(doc)
@@ -4087,16 +4115,122 @@ def render_add(edit: Edit, kind: str, file: str | None = None, **settings) -> st
     return f"no node kind {kind!r}: the picker adds what its groups list"
 
 
-def render_starter(edit: Edit) -> str | None:
-    """The picker's "scene starter" (plan 35 G): `shape → scene.geometry` and
-    `scene → output.all.image` in one landing — a blank preset to a scene on
-    every window in one gesture (`STARTER_SAID`)."""
+def render_starter(edit: Edit, which: str = "scene", cable=None) -> str | None:
+    """A starter (plan 36 T5, W5; plan 35 G's "scene starter" the first):
+    its pre-wired group in one landing — one undo step — every node and
+    cable ordinary after it. `edit.placed` is what it added, left to right
+    (a node already in the section, a channel, All outputs stay where they
+    sit: the page places only these).
+
+    - **scene**: `shape → scene.geometry`, `scene → output.all.image` (in
+      place of whatever fed All outputs; the shape and the scene kept when
+      the section has them) — plain faces, no pattern wire.
+    - **tracers**: the look-back recording the picture, laid on it by a
+      new composite (blend add, `graphmigrate.split_lookback`'s): `picture
+      → lookback.image`, `→ lookback.occluder`, `→ composite.under`,
+      `lookback → composite.over`, the composite where the picture went.
+    - **tracers+dream**: the same with `lookback → dream.image`, `dream →
+      composite.over`.
+    - **dream**: `picture → dream.image`, `→ composite.under`, `dream →
+      composite.over` (blend over: the dream is its picture, dreamed).
+    - **backdrop**: a backdrop, `channel.a → backdrop.image`.
+
+    The picture is `cable`'s source and the composite goes where the cable
+    went; with no cable, the scene, the composite into the one picture
+    port the scene feeds. Where that is not one thing (no scene; the scene
+    feeding no picture port, or several) the starter wires what it can and
+    the words name what is left unwired — it never guesses. A look-back,
+    a dream or a backdrop already in the section is refused in words (one
+    of each: one live dream, D2)."""
+    edit.placed = ()
+    label = dict(STARTERS).get(which)
+    if label is None:
+        return NO_STARTER.format(which=which)
+    src = dst = None
+    if cable is not None:
+        if which not in CABLE_STARTERS:
+            return NO_CABLE_STARTER.format(label=label)
+        src, dst, why = _cable_ends(edit, cable)
+        if why is not None:
+            return why
     doc = _with_frame(_doc(edit))
-    wires = [x for x in doc.get("wires", []) if x["to"] != f"{rgraph.ALL_OUTPUTS}.image"]
-    if {"from": "shape", "to": "scene.geometry"} not in wires:
-        wires.append({"from": "shape", "to": "scene.geometry"})
-    doc["wires"] = [*wires, {"from": "scene", "to": f"{rgraph.ALL_OUTPUTS}.image"}]
-    return _land(edit, doc, "scene starter", STARTER_SAID)
+    before = _named(doc)
+    if which == "scene":
+        wires = [x for x in doc.get("wires", []) if x["to"] != f"{rgraph.ALL_OUTPUTS}.image"]
+        for a, b in SCENE_CHAIN:
+            if {"from": a, "to": b} not in wires:
+                wires.append({"from": a, "to": b})
+        doc["wires"] = wires
+        return _started(edit, doc, before, "shape", "scene", label=label, said=STARTER_SAID)
+    if which == "backdrop":
+        if "backdrop" in before:
+            return IN_ALREADY.format(label=label_of("backdrop"))
+        feed = rgraph.channel_name(rgraph.MEDIA_CHANNELS[0])
+        doc["nodes"].append({"kind": "backdrop"})
+        doc["wires"] = [*doc.get("wires", []), {"from": feed, "to": "backdrop.image"}]
+        return _started(edit, doc, before, "backdrop", label=label,
+                        said=f"{label}: {feed} → backdrop.image — left unwired: backdrop.scene "
+                             "and the backdrop's picture (wire it into a picture port)")
+    looks = which in ("tracers", "tracers+dream")
+    dreams = which in ("tracers+dream", "dream")
+    for kind, wanted in (("lookback", looks), ("dream", dreams)):
+        if wanted and kind in before:
+            return IN_ALREADY.format(label=label_of(kind))
+    unwired: list[str] = []
+    if cable is None:
+        src = "scene" if "scene" in before else None
+        feeds = [x["to"] for x in doc.get("wires", []) if src and x["from"] == src
+                 and _picture_port(x["to"])]
+        dst = feeds[0] if len(feeds) == 1 else None
+        if src is not None and dst is None:
+            unwired.append("the composite's picture (the scene feeds "
+                           + ("no picture port" if not feeds else f"{len(feeds)} ports") + ")")
+    comp = rgraph.CompositeAt(_next(_spec(edit), "composite"), "add" if looks else "over")
+    wires = list(doc.get("wires", []))
+    if dst is not None:     # (what fed picture port `dst` — one wire: the composite does now)
+        wires = [x for x in wires if x["to"] != dst]
+    head = "lookback" if looks else "dream"
+    new = [("lookback", "dream.image")] if which == "tracers+dream" else []
+    new.append(("dream" if dreams else "lookback", f"{comp.name}.over"))
+    ins = ([f"{head}.image"] + (["lookback.occluder"] if looks else []) + [f"{comp.name}.under"])
+    if src is not None:
+        new = [(src, p) for p in ins] + new
+    else:
+        unwired.insert(0, ", ".join(ins) + " (no scene: wire a picture into them)")
+    if dst is not None:
+        new.append((comp.name, dst))
+    elif src is None:
+        unwired.append("the composite's picture")
+    doc["wires"] = wires + [{"from": a, "to": b} for a, b in new]
+    for kind, wanted in (("lookback", looks), ("dream", dreams)):
+        if wanted:
+            doc["nodes"].append({"kind": kind})
+    doc["nodes"].append(comp.to_json())
+    chain = " → ".join([*(["lookback"] if looks else []), *(["dream"] if dreams else []),
+                        comp.name])
+    said = (f"{label}: {chain}" + (f" over {src}" if src else "")
+            + (f" → {dst}" if dst else "")
+            + (" — left unwired: " + "; ".join(unwired) if unwired else ""))
+    order = (*(["lookback"] if looks else []), *(["dream"] if dreams else []), comp.name)
+    return _started(edit, doc, before, *order, label=label, said=said)
+
+
+def _picture_port(port: str) -> bool:
+    """Whether `port` (`node.port`) takes a picture (not a depth, not geometry)."""
+    node, _, p = port.rpartition(".")
+    return _takes(kind_of(node)).get(p) == IMAGE and p != rgraph.DEPTH_PORT
+
+
+def _started(edit: Edit, doc: dict, before: set[str], *order: str, label: str,
+             said: str) -> str | None:
+    """Land a starter's `doc` (one undo step, named for its `label`); on a
+    landing, `edit.placed` the names of `order` the section did not have
+    before (`before`) — what the page lays out left to right."""
+    why = _land(edit, doc, f"starter: {label}", said)
+    if why is None and edit.said != "already so":
+        after = _named(_doc(edit))
+        edit.placed = tuple(n for n in order if n in after and n not in before)
+    return why
 
 
 def render_channel_switch(edit: Edit, port: str) -> str | None:

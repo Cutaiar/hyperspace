@@ -1613,7 +1613,7 @@ def test_deleting_a_window_unwires_it(tmp_path):
 
 
 def test_the_picker_groups_by_primitive(tmp_path):
-    """The picker in the owner's groups: the scene starter, then scene ▸,
+    """The picker in the owner's groups: starters ▸ (plan 36 T5), then scene ▸,
     look-back ▸, pictures ▸, the effect files, a copy of each effect
     instance in the section — each item's group `PICKER_GROUP[kind]`."""
     section = {"frame": "wired", "nodes": [{"kind": "effect", "file": "acid", "instance": 2}],
@@ -1626,7 +1626,7 @@ def test_the_picker_groups_by_primitive(tmp_path):
               ("echo", "32", "echo.32 (oldest)")]
     items = graphview.picker(e)
     assert items == [
-        ("starter", None, "scene starter"),
+        *(("starter", k, w) for k, w in graphview.STARTERS),
         ("scene", None, "scene"), ("shape", None, "shape"), ("hands", None, "hands"),
         ("layer", None, "hands layer"), ("guide", None, "hands guide"),
         ("backdrop", None, "backdrop"),
@@ -1638,18 +1638,19 @@ def test_the_picker_groups_by_primitive(tmp_path):
         *(("effect", f, f) for f in files),
         ("copy", "acid", "copy of acid"), ("copy", "acid.2", "copy of acid.2")]
     groups = [graphview.PICKER_GROUP[k] for k, _, _ in items]
-    assert list(dict.fromkeys(groups)) == ["", "scene", "look-back", "pictures", "effects",
-                                           "copy of"]
+    assert list(dict.fromkeys(groups)) == ["starters", "scene", "look-back", "pictures",
+                                           "effects", "copy of"]
 
 
 def test_the_starter_wires_the_scene_to_all_outputs(tmp_path):
-    """"scene starter" on a blank preset: `shape → scene.geometry` and
-    `scene → output.all.image`, in one undo step, said `STARTER_SAID`."""
+    """The scene chain starter (plan 36 T5; plan 35 G's "scene starter")
+    on a blank preset: `shape → scene.geometry` and `scene →
+    output.all.image`, in one undo step, said `STARTER_SAID`."""
     rig, e, pushed = wired_rig(tmp_path, {"frame": "wired"})
     assert e.starter() is None
     assert wired_wires(rig) == {("shape", "scene.geometry"), ("scene", "output.all.image")}
-    assert e.said == graphview.STARTER_SAID == "scene starter: shape → scene → All outputs"
-    assert pushed == ["scene starter"]
+    assert e.said == graphview.STARTER_SAID == "scene chain: shape → scene → All outputs"
+    assert pushed == ["starter: scene chain"]
 
 
 GROUNDED = {"frame": "wired", "wires": [{"from": "scene", "to": "output.all.image"},

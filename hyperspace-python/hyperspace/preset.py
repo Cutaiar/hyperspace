@@ -118,7 +118,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, graphmigrate, modifiers, routing, tapers, undo
+from . import apc40, graphmigrate, graphview, modifiers, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -197,7 +197,7 @@ GROUP = PRESETS                   # the library folder, and the strip's group
 # plan 35 T7 (row 387): the new preset — what the strip's `new` chip starts,
 # named until it is saved, and what it says
 UNTITLED_PRESET = "untitled"
-NEW_SAID = "new preset: factory values, nothing wired — black until something is wired to an output"
+NEW_SAID = "new preset: factory values, shape → scene → All outputs — a shape on every window"
 # plan 36 T3 (W3): a `/7` with no graph section, or an empty one — the strip says so
 NO_GRAPH_SAID = "no graph: nothing is wired — black until something is wired to an output"
 # … and one whose section is not a wired frame (no `"frame": "wired"`)
@@ -808,15 +808,20 @@ class Presets:
         shadowed, never overwritten)."""
         return self.lib.save_as(GROUP, name)
 
-    def new(self) -> list[str]:
+    def new(self, at: tuple[float, float] = (0.0, 0.0)) -> list[str]:
         """A new preset (plan 35 T7, row 387): the library's fresh values
         for every performance group (the reset `Project.new` uses, so
         nothing of the preset loaded before survives), no routes, the desk
         written out as the factory preset layer (a file with no `desk` key
         gets that layer and `"desk": []` an empty one — the blank preset
-        says which), and a frame of the outputs alone: nothing wired, so
-        black. The session's params stay. One undo step, named `untitled`,
-        dirty and `unsaved` (R17) until it is saved."""
+        says which), and (plan 36 T5, W5) a section of the scene chain
+        alone — `shape → scene → output.all.image`, plain faces
+        (`graphview.SCENE_CHAIN`) — so, with the rig's bus cables, a shape
+        on every window. Its three nodes are laid left to right in the
+        preset's layout map from `at` (layout units: the GRAPH page's
+        `ui_graph.in_view`), not left to the automatic layout. The
+        session's params stay. One undo step, named `untitled`, dirty and
+        `unsaved` (R17) until it is saved."""
         lib, reg = self.lib, self.reg
         undo.push("new preset", load=True)    # the load below joins this step
         values = {k: v for k, v in lib._fresh_all().items()
@@ -827,7 +832,9 @@ class Presets:
         doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
-               GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME}).to_json()}
+               GRAPH_KEY: read_graph({FRAME_KEY: WIRED_FRAME, "wires": [
+                   {"from": a, "to": b} for a, b in graphview.SCENE_CHAIN]}).to_json(),
+               LAYOUT_KEY: graphview.chain_layout(graphview.NEW_CHAIN, at)}
         lib.land_unsaved(GROUP, UNTITLED_PRESET, doc)
         self.unsaved = True               # (after the load hook cleared it)
         lib.say(NEW_SAID)
