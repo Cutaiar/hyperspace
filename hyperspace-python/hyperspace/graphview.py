@@ -2364,18 +2364,13 @@ def auto_layout(view: View, placed: Mapping[str, Any] | None = None,
     return layout(view, placed, expanded, folds, collapsed, idle_open).nodes
 
 
-# plan 36 T6: the kinds the **preset only** view never draws as a section
-# node's neighbour: the controllers (devices, the keys, the analyzer, a desk
-# template) and the modulation (LFOs, envelopes, the sequencer, modifiers,
-# macros) — the rig's and the performer's, not what the preset says
-PRESET_HIDES = ("device", "source", "analyzer", "template", "lfo", "env", SEQ, "modifier", "macro")
-
-
 def preset_only(view: View) -> frozenset[str]:
     """The ids of the nodes the **preset only** view draws (plan 36 T6, D4):
     the preset section's own nodes (`frame_names`, as ``render:<name>``),
-    every node with a cable to one of them but a controller or a modulator
-    (`PRESET_HIDES`), and the windows / outputs those reach: each output
+    every node with a cable to one of them (whatever its kind: an LFO routed
+    to an effect, a controller bound to a param are drawn, so a moving
+    param shows its source; controllers, modulation and macros with no
+    cable to the section are not), and the windows / outputs those reach: each output
     node a shown output has a cable to, so All outputs' bus cables
     (``output.all.<port>`` into ``output.N.<port>``) carry the windows in.
     Only a drawing choice: nothing in `view` is changed. A view with no
@@ -2385,9 +2380,10 @@ def preset_only(view: View) -> frozenset[str]:
     have = {n.id: n for n in view.nodes}
     shown = {f"render:{name}" for name in frame_names(view.spec)} & have.keys()
     ends = [(node_of(view, c.src_port), node_of(view, c.dst_port)) for c in view.cables]
+    section = set(shown)                 # one hop: a neighbour's own cables add nothing
     for a, b in ends:
         for x, y in ((a, b), (b, a)):
-            if x in shown and y in have and have[y].kind not in PRESET_HIDES:
+            if x in section and y in have:
                 shown.add(y)
     grew = True
     while grew:                          # the bus: a shown output, the windows it feeds

@@ -144,13 +144,15 @@ def _renderers_draw_todays_frame(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _graph_page_starts_on_the_full_canvas(monkeypatch):
+def _graph_page_starts_on_the_full_canvas(request, monkeypatch):
     """Plan 36 T6 (D4): the GRAPH page's **preset only** chip starts lit in
     the app, hiding the controllers and modulation. The page tests look at
     the whole canvas, so theirs starts off; tests/test_graph_preset_only.py
     turns it back on."""
     from hyperspace import ui_graph
 
+    if request.node.name == "test_default_is_on":
+        return
     monkeypatch.setattr(ui_graph, "PRESET_ONLY", False)
 
 

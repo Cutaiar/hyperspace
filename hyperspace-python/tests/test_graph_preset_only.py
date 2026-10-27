@@ -39,8 +39,7 @@ def test_on_by_default_the_drawn_set_is_the_sections_and_what_it_reaches(rig):
     for c in view.cables:
         a, b = (graphview.node_of(view, c.src_port), graphview.node_of(view, c.dst_port))
         for x, y in ((a, b), (b, a)):
-            if x in section and view.node(y) is not None \
-                    and view.node(y).kind not in graphview.PRESET_HIDES:
+            if x in section and view.node(y) is not None:
                 near.add(y)
     want = section | near
     want |= {n.id for n in view.nodes if n.kind == "output"
@@ -49,8 +48,9 @@ def test_on_by_default_the_drawn_set_is_the_sections_and_what_it_reaches(rig):
                      for c in view.cables)}
     idle = {n.id for n in view.nodes if n.idle}
     assert drawn(st) == want - idle      # (an off effect sits on its idle line)
-    kinds = {view.node(i).kind for i in drawn(st)}
-    assert not kinds & {"device", "lfo", "env", "macro", "modifier", "source", "analyzer"}
+    for n in view.nodes:        # a controller / modulator is drawn only if cabled to the section
+        if n.kind in ("device", "lfo", "env", "macro", "modifier", "source", "analyzer"):
+            assert (n.id in drawn(st)) == (n.id in near and not n.idle)
     assert any(n.kind == "device" for n in view.nodes)        # they exist, only not drawn
     assert any(n.kind == "output" and ui_graph.drawn_node(st, n) for n in view.nodes)
     assert " hidden" in ui_graph.head_line(st, view)
@@ -94,3 +94,20 @@ def test_hiding_lays_nothing_out(rig):
     frame(rig.panel, "graph")
     frame(rig.panel, "graph")
     assert {k: v for k, v in st["sat"].items() if k in open_sat} == open_sat
+
+
+def test_default_is_on():
+    assert ui_graph.PRESET_ONLY is True
+
+
+def test_a_routed_lfo_is_drawn_and_an_unrouted_one_is_hidden(rig):
+    st = party(rig)
+    view = st["view"]
+    target = next(p for p, (nid, _) in view.pins.items()
+                  if nid == "render:scene")
+    for k in (8, 9):
+        view.nodes.append(graphview.VNode(f"lfo.{k}", "lfo", f"LFO {k}"))
+        view.pins[f"out:lfo.{k}"] = (f"lfo.{k}", "out")
+    view.cables.append(graphview.VCable("c.lfo9", "out:lfo.9", target))
+    keep = graphview.preset_only(view)
+    assert "lfo.9" in keep and "lfo.8" not in keep
