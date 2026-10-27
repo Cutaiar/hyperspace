@@ -2753,9 +2753,15 @@ show: a log that will not open is kept as an error and the loop goes on.
 ## 16. Testing
 
 ```bash
-uv run pytest -q
+uv run pytest -q          # the fast tier, in parallel (~17 s)
+uv run pytest --all -q    # every tier: golden, slow, live (~55 s)
 uv run ruff check .
 ```
+
+- Tiers: `golden`, `slow` and `live` are markers `tests/conftest.py`
+  applies by name (see "Running the automated tests" in
+  `TESTING-GUIDE.md`); the default run is `-n auto` without them. Run
+  `--all` before a merge and after touching rendering or presets.
 
 - Every test runs against its own temporary home: `tests/conftest.py`
   sets `HYPERSPACE_HOME` to the test's `tmp_path` in `os.environ`
