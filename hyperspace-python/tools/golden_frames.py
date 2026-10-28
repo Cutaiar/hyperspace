@@ -186,12 +186,17 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # feather 4) wired straight into All outputs — the mask as a picture. Plan
 # 39 T3's `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
 # scene through kaleido on its picture, the cut over the scene — the
-# kaleidoscope in the still's disc, the scene elsewhere
+# kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
+# `segment-motion` (`/7`, a wired frame): the scene over the still into a
+# motion segment, its foreground into All outputs — the model learns the
+# rig's first frame, its later frames (the pinned clock: the polytope turns,
+# the still does not) are the second picture, so the turning polytope is
+# the foreground and the still is cut away
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
                                    "channel-out-only", "resize-crop", "mask-as-picture",
-                                   "cut-out")
+                                   "cut-out", "segment-motion")
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
@@ -213,7 +218,7 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
                                    "resize-faces", "resize-crop", "edges-scene",
-                                   "mask-as-picture", "cut-out")
+                                   "mask-as-picture", "cut-out", "segment-motion")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
