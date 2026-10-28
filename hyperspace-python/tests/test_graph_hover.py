@@ -12,6 +12,7 @@ lit, a picture cable's red leans toward its maker's dominant hue
 from __future__ import annotations
 
 import colorsys
+import itertools
 import json
 from types import SimpleNamespace as NS
 
@@ -23,7 +24,7 @@ from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel 
 
 from hyperspace import graph as G
 from hyperspace import graphview, ui, ui_graph
-from hyperspace.outputs import HUE_EVERY_S, THUMB_DROP_S, PreviewTextures, dominant_hue
+from hyperspace.outputs import HUE_EVERY_S, HUE_GRID, PreviewTextures, dominant_hue
 from hyperspace.view import RED as RED_RGB
 
 
@@ -171,9 +172,15 @@ def test_the_tint_always_leaves_a_red():
         assert abs(d - trigger) > 10.0 and abs(d - mask) > 60.0
     # no hue to give: red exactly
     assert ui_graph.tint(0.6, 0.0) == pytest.approx(RED_RGB)
-    # warm pictures lean warm, cool ones cool; half way round leans all the way
+    # the yellow-green half leans toward orange, the blue-violet half toward
+    # rose, most at a quarter round; red and cyan (on the axis) not at all
     assert _hue_deg(ui_graph.tint(1 / 6, 1.0)) > 0 > _hue_deg(ui_graph.tint(2 / 3, 1.0))
-    assert abs(_hue_deg(ui_graph.tint(0.5, 1.0))) == pytest.approx(span)
+    assert _hue_deg(ui_graph.tint(0.25, 1.0)) == pytest.approx(span, abs=0.01)
+    assert _hue_deg(ui_graph.tint(0.75, 1.0)) == pytest.approx(-span, abs=0.01)
+    assert _hue_deg(ui_graph.tint(0.5, 1.0)) == pytest.approx(0.0, abs=0.01)
+    # continuous all the way round: no flip anywhere (cyan included)
+    leans = [_hue_deg(ui_graph.tint(k / 720.0, 1.0)) for k in range(721)]
+    assert max(abs(a - b) for a, b in itertools.pairwise(leans)) < 0.2
     # a faint hue leans less than a strong one
     assert abs(_hue_deg(ui_graph.tint(1 / 3, 0.05))) < abs(_hue_deg(ui_graph.tint(1 / 3, 0.5)))
 
@@ -196,41 +203,59 @@ def test_the_dominant_hue_is_a_chroma_weighted_mean():
 # ---------------------------------------------------------------- the hue read's cost
 
 class FakeTex:
+    """A thumbnail whose `read()` must never be called (a stall on the GPU)."""
     def __init__(self, rgb, size=(32, 16)):
-        self.size, self.data, self.reads = size, _solid(rgb, size), 0
+        self.size, self.rgb, self.reads = size, rgb, 0
 
     def read(self):
         self.reads += 1
+        return _solid(self.rgb, self.size)
+
+
+class FakeBuf:
+    def __init__(self, rgb):
+        self.data = _solid(rgb, (HUE_GRID, HUE_GRID))
+
+    def read(self):
         return self.data
 
 
-def test_hues_are_read_one_a_frame_each_at_most_once_a_second_only_while_asked():
+def test_hues_are_read_a_frame_late_one_a_frame_each_once_a_second_only_while_asked():
     clock = Clock()
     th = PreviewTextures(None, clock)
     a, b = FakeTex((0.0, 1.0, 0.0)), FakeTex((0.0, 0.0, 1.0))
     th.tex = {"a": (a, None), "b": (b, None)}
+    started: list[str] = []
+
+    def start(name):                    # the downsample + read_into, as a stand-in
+        started.append(name)
+        th._hue_pending = (name, FakeBuf(th.tex[name][0].rgb))
+    th._hue_start = start
     th.begin_frame()
-    assert a.reads == b.reads == 0                 # not asked: nothing read
+    assert started == []                           # not asked: nothing started
     th.want_hues()
     th.begin_frame()
-    assert a.reads + b.reads == 1                  # one a frame
+    assert len(started) == 1 and th.hues == {}     # one a frame, not yet arrived
+    first = started[0]
     th.begin_frame()
-    assert a.reads == b.reads == 1
+    assert len(started) == 2 and set(th.hues) == {first}     # arrived a frame later
     th.begin_frame()
-    assert a.reads == b.reads == 1                 # each at most once a second
+    assert len(started) == 2                       # each at most once a second
     assert th.hue("a")[0] == pytest.approx(1 / 3, abs=1e-3)
     assert th.hue("b")[0] == pytest.approx(2 / 3, abs=1e-3)
+    assert th.hue_reads == 2
     clock.t += HUE_EVERY_S
     th.want_hues()
     th.begin_frame()
-    assert a.reads + b.reads == 3
-    clock.t += THUMB_DROP_S                        # the page stopped asking
+    assert len(started) == 3
+    th.stop_hues()                                 # the switch went off: none started
     th.begin_frame()
     th.begin_frame()
-    assert a.reads + b.reads == 3
+    assert len(started) == 3 and th.hue_reads == 3     # (the one in flight collected)
     th.tex.pop("a")
     th.drop("a")                                   # dropped: its hue forgotten
     assert th.hue("a") is None and th.hue("b") is not None
+    assert a.reads == b.reads == 0                 # never a texture's read()
 
 
 @pytest.fixture(scope="module")
@@ -242,7 +267,8 @@ def ctx():
     yield c
 
 
-def test_a_real_thumbnails_hue_is_its_pictures(ctx):
+def test_a_real_thumbnails_hue_is_its_pictures_a_frame_later_without_a_texture_read(
+        ctx, monkeypatch):
     th = PreviewTextures(ctx)
     size = (96, 64)
     src = ctx.texture(size, 4, data=_solid((0.9, 0.6, 0.1), size))
@@ -252,10 +278,17 @@ def test_a_real_thumbnails_hue_is_its_pictures(ctx):
     assert th.put("orange", src)
     th.end_frame()
     th.want_hues()
-    th.begin_frame()                               # last frame's thumbnail, read back
+    reads = []
+    real = moderngl.Texture.read
+    monkeypatch.setattr(moderngl.Texture, "read",
+                        lambda self, *a, **k: (reads.append(self), real(self, *a, **k))[1])
+    th.begin_frame()                               # started: downsample + read_into
+    assert th.hue("orange") is None and th.hue_reads == 0
+    th.begin_frame()                               # a frame later: from the buffer
     h, s = th.hue("orange")
     assert h == pytest.approx(colorsys.rgb_to_hsv(0.9, 0.6, 0.1)[0], abs=0.02) and s > 0.5
     assert th.hue_reads == 1 and ctx.error == "GL_NO_ERROR"
+    assert reads == []                             # no texture read: no stall
     th.close()
     src.release()
 

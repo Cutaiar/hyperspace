@@ -231,14 +231,15 @@ FAINT_PIC = 0.4
 THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
 # plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
 # default (plain red), page state only — never the preset's or the show's.
-# Lit, a picture cable's red takes its maker's dominant hue
-# (`PreviewTextures.hue`), compressed onto at most `TINT_SPAN` turns either
-# side of red (`tint`): red stays the colour of a picture cable, its lean
-# says what flows; a picture with hue strength `TINT_FULL` or more leans all
-# the way, a grey one not at all
+# Lit, a picture cable's red leans by its maker's dominant hue
+# (`PreviewTextures.hue`), at most `TINT_SPAN` turns either side of red
+# (`tint`): red stays the colour of a picture cable, its lean says what
+# flows; a picture with hue strength `TINT_FULL` or more leans all the way,
+# a grey one not at all
 TINT_LABEL = "pictures · tint cables##graph"
-TINT_TIP = ("Lit: each picture cable's red leans toward the colour of the picture "
-            "it carries — warmer toward orange, cooler toward rose — read from its "
+TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it "
+            "carries — toward orange for yellow-green pictures, toward rose for "
+            "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
             "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
             "with the preset or the show")
 TINT_SPAN = 20.0 / 360.0
@@ -834,16 +835,18 @@ def _tint_chip(st: dict) -> None:
 
 def tint(hue: float, strength: float) -> tuple[float, float, float]:
     """A picture cable's colour with its picture's dominant `hue` (turns)
-    bled into its red (plan 37 C2, D3): red's hue moved toward `hue` along
-    the shorter way round, the whole circle compressed onto `TINT_SPAN`
-    either side of red (a hue half way round leans all the way; one beside
-    red barely), times how strongly the picture has a hue (`strength` over
-    `TINT_FULL`, at most 1). Red's saturation and value are kept, so the
-    cable is always a red: orange-red at the warm end, rose at the cool."""
+    bled into its red (plan 37 C2, D3): red's hue moved by `TINT_SPAN` ×
+    sin(2π (hue − red)) — a lean that is continuous all the way round: the
+    yellow-green half leans toward orange (most at chartreuse, 90°), the
+    blue-violet half toward rose (most at violet, 270°), and red and cyan,
+    on the axis, not at all (so a cyan-ish moving picture never flips from
+    one end to the other) — times how strongly the picture has a hue
+    (`strength` over `TINT_FULL`, at most 1). Red's saturation and value
+    are kept, so the cable is always a red."""
     h0, s0, v0 = colorsys.rgb_to_hsv(*RED_RGB)
-    d = ((hue - h0 + 0.5) % 1.0) - 0.5              # the signed arc, −½…½ turn
     k = max(0.0, min(1.0, strength / TINT_FULL))
-    return colorsys.hsv_to_rgb((h0 + TINT_SPAN * (d / 0.5) * k) % 1.0, s0, v0)
+    lean = TINT_SPAN * math.sin(2.0 * math.pi * (hue - h0)) * k
+    return colorsys.hsv_to_rgb((h0 + lean) % 1.0, s0, v0)
 
 
 def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
@@ -1036,8 +1039,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         if drawn_node(st, n):
             _node(st, n, drawn)
     _want_thumbs(st, view)              # plan 37 C1: after the nodes, their sizes known
-    if st["tint"] and st["thumbs"] is not None and hasattr(st["thumbs"], "want_hues"):
-        st["thumbs"].want_hues()        # plan 37 C2: the hues, while the switch is lit
+    if st["thumbs"] is not None and hasattr(st["thumbs"], "want_hues"):
+        # plan 37 C2: the hues while the switch is lit, none from the frame it goes off
+        if st["tint"]:
+            st["thumbs"].want_hues()
+        else:
+            st["thumbs"].stop_hues()
     _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
         ids = lay.idle.get(area, [])
