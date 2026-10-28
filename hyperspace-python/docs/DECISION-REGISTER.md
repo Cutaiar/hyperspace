@@ -257,7 +257,7 @@ here; overturn → the change, then the same.
 | 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
 | 231 | The `VALUE` port: a fourth type, used by no node | — | |
 | 232 | The faces target stays an inner chain (the lift as the other option) | 230 | |
-| 233 | `patch.py`'s types: nodes by address or param id, an edge per port | — | |
+| 233 | `modgraph.py`'s types: nodes by address or param id, an edge per port | — | |
 | 234 | Only the params a later node reads land in the pass; the frame's mark | 232 | |
 | 235 | The patch cached on a key built once a frame (about 5 µs a frame dearer) | — | |
 | 236 | A loop through no delay: its last cable off, a note, the row kept (two drafts folded) | 233 | |
@@ -4442,7 +4442,7 @@ Folds two of D1's drafts: the refusals, and the loops.
   from a bitmap. No node publishes or reads one (a test walks every
   `Node` class and the built default graph). `patch.RENDER_VALUE =
   "value"` names it on the modulation side, as a future source whose id
-  is the node's port (`palette:palette`); `patch.py` stays a leaf.
+  is the node's port (`palette:palette`); `modgraph.py` stays a leaf.
   `Node.__init__` already type-checks a wired port, so the first node to
   declare one wires like any other. Nothing to see.
 - **Other options.** A typed shape (a `ValuePort(n, names)` naming the
@@ -4498,13 +4498,13 @@ modifiers alone" is in row 236; N3's "the seam with N4" is in row 268;
 N4's "a hands wire on a through output" is in row 266; N5's "an edit
 inside a template" is in row 274.
 
-### 233. `patch.py`'s types: nodes by address or param id, an edge per port
+### 233. `modgraph.py`'s types: nodes by address or param id, an edge per port
 
-- **Built.** `PatchNode(id, kind, delay=False)`, kinds `source lfo
+- **Built.** `ModNode(id, kind, delay=False)`, kinds `source lfo
   modifier macro param`; a source's, an LFO's or a modifier's id is the
   address a row names (`lane:0`, `lfo:0`, `mod:3`, `hand:right.y`), a
   param's or a macro's its param id — an address has a `:`, an id never
-  does. `PatchEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
+  does. `ModEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
   (a row's gate orders before the row: a gate on an `lfo:` lane needs
   it), `depth`, `base`, `in`, and every LFO knob `shape rate sync depth
   phase reset` plus `trigger` (`lfo.trigger` → every LFO); a modifier's
@@ -4514,7 +4514,7 @@ inside a template" is in row 274.
   at 256).
 - **Other options.** Nodes as a list; a gate folded into the `mod`
   edge; only `depth / rate / phase` as LFO ports (the prompt's list).
-- **To reverse.** Small: `patch.py` is data; the GRAPH page draws from
+- **To reverse.** Small: `modgraph.py` is data; the GRAPH page draws from
   the table, not from it.
 - **Rough edge.** A switched-off row is in the patch as disabled edges
   (not run); a cable cut by a loop looks the same in the patch.
@@ -4536,7 +4536,7 @@ inside a template" is in row 274.
 - **Other options.** Land every param node in the pass (a leaf trigger —
   a band-layout change, `preset.select` — would fire mid-pass, in patch
   order); a per-param flag cleared by `Registry.apply`.
-- **To reverse.** One condition in `_rebuild_patch` (land always).
+- **To reverse.** One condition in `_rebuild_modgraph` (land always).
 - **Rough edge.** A read param lands in patch order, not registry order:
   the same value at another moment in the frame. A test that calls
   `p.apply()` by hand between `modulate` and `reg.apply()` on such a
@@ -4545,7 +4545,7 @@ inside a template" is in row 274.
 
 ### 235. The patch is cached on a key built once a frame
 
-- **Built.** `Router.patch` is rebuilt when `_patch_key` moves: every
+- **Built.** `Router.modgraph` is rebuilt when `_modgraph_key` moves: every
   performer row by identity and its `source target op enabled scale
   when`, `macros_serial`, every macro subscriber (identity, `depth`,
   `base`), the modifiers' `(id, kind, inputs)`, the LFO count and
@@ -4554,7 +4554,7 @@ inside a template" is in row 274.
 - **Other options.** A serial bumped by every table edit door (the table
   is also mutated in place, by ROUTING and by tests: a missed door would
   run a stale patch).
-- **To reverse.** `_patch_key`.
+- **To reverse.** `_modgraph_key`.
 - **Rough edge.** `Router.modulate` costs about 5 µs a frame more:
   31.4 / 30.5 µs on the base, 37.2 / 35.0 µs now (party-trip, 21 routes,
   the hand tape, 2000 frames × 5 rounds, twice), mostly this tuple and
@@ -4584,7 +4584,7 @@ Folds N0's "a loop of modifiers alone".
   `enabled: false` saved); the note in `table.notes` (cleared by any
   edit while the loop stands); labels in the note; cut the loop's first
   input.
-- **To reverse.** `_rebuild_patch`'s loop; two lines in `ui_routing.head`.
+- **To reverse.** `_rebuild_modgraph`'s loop; two lines in `ui_routing.head`.
 - **Rough edge.** The row's checkbox still reads on; the modifier's input
   combo still shows the cut input. The note uses node ids, not labels.
   An LFO owning its own depth, which ran before with a frame of lag, is
@@ -4598,7 +4598,7 @@ Folds N0's two delay drafts.
 - **Built.** An edge into a delay orders like any other (a plain delay
   runs after its input and uses N1's stateful step: its rest first, then
   one frame late), unless the delay reaches that edge's source again
-  (`patch.ordering`): then the edge does not order, the delay runs
+  (`modgraph.ordering`): then the edge does not order, the delay runs
   first and emits its input's lane as it stood — last frame's — so a
   loop through it is exactly one frame late; on the loop's first frame
   it emits its rest (0). `cycles` lists no loop through a delay.
@@ -4606,7 +4606,7 @@ Folds N0's two delay drafts.
   computed lane, stepped statefully, would be two frames late); a
   loop-closing delay that reads NaN when its other source goes (the
   loop could never restart).
-- **To reverse.** `patch.ordering` and `_step_modifier`'s `early`.
+- **To reverse.** `modgraph.ordering` and `_step_modifier`'s `early`.
 - **Rough edge.** If the loop's other source goes away the early delay
   emits its rest, not NaN; it passes ±inf through (harmless:
   `Param.modulate` drops non-finite, and a modifier reading it drops its
@@ -4656,7 +4656,7 @@ Folds N0's two delay drafts.
 - **Rough edge.** It shares the Router's helpers (`_resolve_lane`,
   `gated`, `rest_of`, `feel_of`, `_move`), so it proves timing and
   order, not the helpers. No factory preset carries a modifier or a
-  delay: those are proven by `test_patch` and `test_modifiers` only.
+  delay: those are proven by `test_modgraph` and `test_modifiers` only.
 - **Judge it.** Tests only.
 
 ### 240. The six modifier kinds and their params

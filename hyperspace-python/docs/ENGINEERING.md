@@ -759,7 +759,7 @@ and val ends, the anchors) for a lights sink (plan 29), and an
 image-in `sample` port that would set its params from a bitmap. **No
 node publishes or reads one**
 (`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
-`patch.RENDER_VALUE` names it on the modulation side.
+`modgraph.RENDER_VALUE` names it on the modulation side.
 
 **The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
 the renderer the device registry (`Renderer.cloud_source`); each listed
@@ -2230,7 +2230,7 @@ be a session param; a route may perform a session param, marked
 "session" on its row.
 
 **The order the routes run in** (plan 28 N0). `Router.modulate` runs
-the table as a graph (`patch.py`, ARCHITECTURE §2), each node after
+the table as a graph (`modgraph.py`, ARCHITECTURE §2), each node after
 everything it reads: the LFOs step inside it, a `scale`, a macro's depth
 or an LFO knob a route moves lands before the route that reads it, so an
 LFO on another LFO's depth, a macro scaling a push or a hand on a
@@ -2726,7 +2726,7 @@ are cold: changing them needs Cmd+R. A changed `__init__` does not
 re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
 `shaders/fx/`) and the library's JSON files reload too. Plan 28's
 modules are on the list in dependency order: `modifiers` after
-`motion`, `patch` before `routing`, `graphview` after `osc`, `ui_graph`
+`motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
 on drawing with its zoom and selection.
@@ -2802,7 +2802,7 @@ uv run ruff check .
   `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
   `tests/test_stroke_space.py`.
 - The modulation graph and the node editor (plan 28), all headless:
-  `tests/test_patch.py` (the sort, the loops, the edges the design
+  `tests/test_modgraph.py` (the sort, the loops, the edges the design
   names, a param applied once a frame), `tests/test_modifiers.py` (each
   kind on a scripted input, the preset key, templates, undo, the
   MODIFIERS strip), `tests/test_graphview.py` (the model with no imgui,

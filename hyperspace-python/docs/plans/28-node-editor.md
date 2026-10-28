@@ -88,9 +88,9 @@ general TouchDesigner.
   → lfo:0 needs a delay — lfo:1 → lfo.1.depth is off until it has one`;
   that cable does nothing, its row stays in the table (its checkbox still
   on) and in the file, and the rest of the preset runs.
-- **The graph as data.** `hyperspace/patch.py`, a leaf (imports nothing
+- **The graph as data.** `hyperspace/modgraph.py`, a leaf (imports nothing
   from the package; in `hotreload.MODULES` before `routing`):
-  `PatchNode(id, kind, delay=False)` with kinds `source lfo modifier
+  `ModNode(id, kind, delay=False)` with kinds `source lfo modifier
   macro param` — a source's, an LFO's or a modifier's id is the address
   a row names (`lane:0`, `lfo:0`, `mod:3`), a param's or a macro's its
   param id, so the two never meet; `PatchEdge(src, dst, port, cable,
@@ -104,10 +104,10 @@ general TouchDesigner.
   first, ties in insertion order, `Graph._sort`'s walk); `cycles(patch)`
   lists every elementary loop once over the ordering edges (capped at
   256).
-- **The pass.** `Router.build_patch()` makes the graph from the table
+- **The pass.** `Router.build_modgraph()` makes the graph from the table
   (each performer row, each macro subscriber, each `scale`, each LFO's
-  knob params, each modifier's inputs and params); `Router.patch` caches
-  it with its evaluation plan and is rebuilt only when `_patch_key`
+  knob params, each modifier's inputs and params); `Router.modgraph` caches
+  it with its evaluation plan and is rebuilt only when `_modgraph_key`
   moves (every performer row by identity and its `source target op
   enabled scale when`, the macros, the modifiers' ids, kinds and inputs,
   the LFO count, `Registry.serial`). `Router.modulate(analyzer, dt,
@@ -143,15 +143,15 @@ general TouchDesigner.
 - **Measured** (party-trip, 21 routes, the synthetic hand tape, 2000
   frames × 5 rounds after warm-up, twice): `Router.modulate` 31.4 / 30.5
   µs a frame on the base (the LFOs stepped outside it), 37.2 / 35.0 µs
-  now — about 5 µs more, most of it `_patch_key`'s per-frame tuple and
+  now — about 5 µs more, most of it `_modgraph_key`'s per-frame tuple and
   undo's fingerprint of the modifiers; 0.2% of a 60 Hz frame.
-- **Code.** `patch.py`; `routing.py` `Router.use_lfos`, `_patch_key`,
-  `build_patch`, `patch`, `patch_notes`, `patch_cut`, `_rebuild_patch`,
+- **Code.** `modgraph.py`; `routing.py` `Router.use_lfos`, `_modgraph_key`,
+  `build_modgraph`, `modgraph`, `modgraph_notes`, `modgraph_cut`, `_rebuild_modgraph`,
   `modulate`; `params.py` `Param._mark`, `Param.apply(mark=None)`,
   `Registry.serial` / `frame` / `landed` / `begin_frame`; `lfo.py`
   `LFO.at`, `LFOs.begin`, `step_one` (`step` is both); `app.py` the
   frame; `ui_routing.head` the loop notes.
-- **Tests.** `tests/test_patch.py` (9), notably
+- **Tests.** `tests/test_modgraph.py` (9), notably
   `::test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties`,
   `::test_cycles_finds_every_loop_and_none_through_a_delay`,
   `::test_a_route_a_macro_sub_and_a_scale_are_the_edges_the_design_names`,
@@ -767,10 +767,10 @@ and the page drew in 2.78 ms. In particular:
   which ran before with a frame of lag, is now refused until a delay
   sits in it.
 - **`Router.modulate` is about 5 µs a frame dearer** (31 → 36 µs on
-  party-trip), mostly `_patch_key`'s tuple.
+  party-trip), mostly `_modgraph_key`'s tuple.
 - **The equivalence test holds the lanes and LFO 1 still** (a lagged term
   times a moving one is not a pure shift), and no factory preset carries
-  a modifier or a delay: those are proven by `test_patch` and
+  a modifier or a delay: those are proven by `test_modgraph` and
   `test_modifiers` only. The oracle shares the Router's helpers, so it
   proves timing and order, not the helpers.
 - **Three tools keep the old frame shape**: `tools/preset_shots.py`,
@@ -843,7 +843,7 @@ and the page drew in 2.78 ms. In particular:
   group); older hand checks that say "on ROUTING add a route" are done
   on GRAPH (a note at the top of group Y says so).
 - **The docstring of `graphview.py`** says it imports `routing`,
-  `params`, `graph`, `patch`, `modifiers`: since N3 it imports `learn`
+  `params`, `graph`, `modgraph`, `modifiers`: since N3 it imports `learn`
   too.
 
 ## Decisions
@@ -884,7 +884,7 @@ ROUTING** — the routes and the modifiers now, ROUTING keeping its desk,
 macros, session and sinks until a later pass retires it.
 
 What the run decided where those left a choice (register rows 233–290):
-`patch.py`'s types (233); which params the pass lands and the frame's
+`modgraph.py`'s types (233); which params the pass lands and the frame's
 mark (234); the patch's cache key (235); a loop's cut and its note
 (236); a delay's place in the order (237); the LFOs inside the pass
 (238); the equivalence oracle's shape (239); the modifier kinds' params
