@@ -776,8 +776,8 @@ def test_a_side_panel_row_edits_through_the_param(rig, monkeypatch):
 
 def test_a_big_node_folds_its_groups(rig, monkeypatch):
     """The shape holds about fifty params: more than `FOLD_AT` rows, so each
-    group folds under its own header — a group holding a patched port open,
-    the rest closed (kept per node in the page's state) — and only the open
+    group folds under its own header — the first (primary) group and a
+    group holding a patched port open, the rest closed (kept per node in the page's state) — and only the open
     groups' rows are drawn; within a group the patched ports come first."""
     st = party(rig)
     rows = []                       # every row: a slider, a combo, a toggle's checkbox
@@ -792,7 +792,7 @@ def test_a_big_node_folds_its_groups(rig, monkeypatch):
     assert any(not v for v in folds.values())
     by_param = {p.param: p for p in shape.ports if p.param}
     for g, pids in groups:
-        assert folds[g] == (g in patched), g
+        assert folds[g] == (g in patched or g == groups[0][0]), g
         drawn = [pid for pid in pids if pid in rows]
         assert drawn == (pids if folds[g] else []), g
         flags = [by_param[pid].patched for pid in pids]
@@ -832,6 +832,32 @@ def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
     assert not any(p.param in mods for p in shape.ports)
     assert not any(pid in mods for _, pids in ui_graph.side_groups(rig.panel, shape)
                    for pid in pids)
+
+
+
+def test_the_faces_pattern_group_starts_open_with_nothing_routed(rig, monkeypatch):
+    """The owner, 2026-10-27: the shader's inputs must be shown. With no
+    route onto the pattern node (party-trip's eight lane → pattern.mod
+    routes removed), its pane is still over `FOLD_AT`: the node's primary
+    group ("pattern": selector, mix, the eight) starts open, every row
+    drawn; only the secondary "media" group starts folded."""
+    table = rig.router.table
+    st = party(rig)
+    pat_ids = {p.param for p in st["view"].node("render:pattern").ports if p.param}
+    table.bindings = [b for b in table.bindings if b.target not in pat_ids]
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
+    rows = []
+    one = ui_graph._param_row
+    monkeypatch.setattr(ui_graph, "_param_row", lambda pn, pid: rows.append(pid) or one(pn, pid))
+    pat = pick(rig, st, "render:pattern")
+    assert not any(p.patched for p in pat.ports if p.param)
+    groups = dict(ui_graph.side_groups(rig.panel, pat))
+    assert list(groups) == ["pattern", "media"]
+    assert sum(map(len, groups.values())) > ui_graph.FOLD_AT
+    assert st["side_open"][pat.id] == {"pattern": True, "media": False}
+    assert set(groups["pattern"]) <= set(rows)
+    assert not set(groups["media"]) & set(rows)
 
 
 def test_every_nodes_side_panel_draws(rig):
