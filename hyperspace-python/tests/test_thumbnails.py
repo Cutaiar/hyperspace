@@ -101,7 +101,7 @@ def test_the_count_is_this_frames_copies():
     th = PreviewTextures(None, Clock())
     th.want({"a": "picture", "b": "picture", "c": "picture"})
     _frame(th, {"a": (8, 8), "b": (8, 8)})
-    assert (th.count, th.kept) == (2, 3)
+    assert (th.count, th.kept) == (2, 2)          # c wanted, never made: none kept
     th.want({"a": "picture"})
     _frame(th, {"a": (8, 8)})
     assert th.count == 1
@@ -156,12 +156,16 @@ def _renderer(ctx):
     r.ghost.state.on = False
     r.fx.state.values["kaleido"].update(on=True, mix=1.0)
     assert not r.fx.compile_all()
-    # the scene through an effect to All outputs, and laid over the shape's
-    # own scene again in a composite into output 2: painted and made nodes
+    # the scene through an effect to output 1; into output 2 a composite of
+    # that effect a frame late (a delay) under the look-back's trail picked
+    # by a switch: painted and made nodes, and the stateful kinds
     r.wiring = _wire(("shape", "scene.geometry"), ("scene", "kaleido.image"),
-                     ("kaleido", "output.1.image"), ("scene", "composite.under"),
-                     ("kaleido", "composite.over"), ("composite", "output.2.image"),
-                     nodes=({"kind": "effect", "file": "kaleido"}, {"kind": "composite"}))
+                     ("kaleido", "output.1.image"), ("kaleido", "delay.image"),
+                     ("delay", "composite.under"), ("scene", "lookback.image"),
+                     ("lookback", "switch.in1"), ("switch", "composite.over"),
+                     ("composite", "output.2.image"),
+                     nodes=({"kind": "effect", "file": "kaleido"}, {"kind": "composite"},
+                            {"kind": "delay"}, {"kind": "switch"}))
     return r
 
 
@@ -177,8 +181,10 @@ def _px(fbo) -> np.ndarray:
 
 S = ViewState(shape=10, ang=[0.3, 0.7, 1.1, 0.5, 0.9, 1.3], yaw=0.4, pitch=0.25,
               faces=True, pattern=2)
+S.switch = {"switch": 1}
 EVERY = {"shape": "scene", "scene": "picture", "kaleido": "picture",
-         "composite": "picture", "output.2": "window"}
+         "composite": "picture", "output.2": "window", "delay": "picture",
+         "lookback": "picture", "switch": "picture"}
 
 
 def test_the_outputs_are_byte_identical_with_and_without_thumbnails(ctx):
@@ -198,6 +204,7 @@ def test_the_outputs_are_byte_identical_with_and_without_thumbnails(ctx):
         assert plain.stats["effects"] == wanted.stats["effects"]
         assert plain.stats["chain_runs"] == wanted.stats["chain_runs"]
     assert wanted.thumbs.count == len(EVERY) and plain.thumbs.count == 0
+    assert 0 < wanted.thumbs.repainted < len(EVERY)     # some made, some painted again
     assert set(wanted.thumbs.tex) == set(EVERY) and not plain.thumbs.tex
     # the GPU timer took no query for the thumbnails' passes
     timer = wanted.timer
@@ -314,7 +321,7 @@ def test_on_screen_is_any_overlap():
 
 def test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not(rig, monkeypatch):
     """Headless draw: each picture node drawn asks for its body's picture
-    (`thumb_of`), collapsed and expanded (D2), wants its thumbnail, and a
+    (`_body_of`), collapsed and expanded (D2), wants its thumbnail, and a
     picture node's lines are gone from its body; a text node draws as
     before."""
     st = party(rig)
@@ -322,8 +329,8 @@ def test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not(rig, 
     th = PreviewTextures(None)
     rig.panel.renderer.thumbs = th
     asked: list[str] = []
-    real = ui_graph.thumb_of
-    monkeypatch.setattr(ui_graph, "thumb_of",
+    real = ui_graph._body_of
+    monkeypatch.setattr(ui_graph, "_body_of",
                         lambda st_, n: (asked.append(n.id), real(st_, n))[1])
     lines: list[str] = []
     real_disabled = ui_graph.imgui.text_disabled
@@ -365,11 +372,56 @@ def test_the_system_page_says_the_thumbnails(rig, monkeypatch):
     th.want({"a": "picture", "b": "picture"})
     _frame(th, {"a": (8, 8)})
     rig.panel.renderer = NS(thumbs=th, stats={})
-    assert ui_graph.thumbnail_line(rig.panel) == "thumbnails · 1 copied · 2 kept"
+    assert ui_graph.thumbnail_line(rig.panel) == "thumbnails · 1 copied · 0 repainted · 1 kept"
     drawn: list[str] = []
     real = ui_mod.imgui.text_disabled
     monkeypatch.setattr(ui_mod.imgui, "text_disabled", lambda s: (drawn.append(s), real(s)))
     frame(rig.panel, "system")
-    assert "thumbnails · 1 copied · 2 kept" in drawn
+    assert "thumbnails · 1 copied · 0 repainted · 1 kept" in drawn
     rig.panel.renderer = None
     assert ui_graph.thumbnail_line(rig.panel) == ""
+
+
+def test_a_node_behind_an_unpicked_switch_input_is_not_made(ctx):
+    """Review: a composite only the switch's unpicked input reads made
+    nothing this frame (plan 33 S) — its thumbnail is not copied, its
+    channel is not read for it, and it dims, then goes black a second
+    later; picked again, it is copied again."""
+    from test_graph_faces import Still, _media, _rgba
+    from test_graph_switch import section
+
+    m = _media(a=Still(_rgba(16, 9, (255, 0, 0))), b=Still(_rgba(16, 9, (0, 0, 255))))
+    r = render.Renderer(ctx)
+    r.ghost.state.on = False
+    r.media = m
+    spec = G.read_graph(section(("frame", "fx.image"), ("media.a", "composite.under"),
+                                ("scene", "composite.over"), ("composite", "switch.in2"),
+                                ("media.b", "switch.in1"), ("switch", "output.1.image"),
+                                nodes=[{"kind": "composite"}, {"kind": "switch"}]))
+    assert not spec.notes, spec.notes
+    r.wiring = wired_wiring(spec.wiring())
+    clock = Clock()
+    r.thumbs.clock = clock
+    views = _views(ctx)[:1]
+    s = ViewState(lines=False, points=False, faces=False)
+    s.switch = {"switch": 2}                    # picked: made, copied
+    r.thumbs.want({"composite": "picture"})
+    r.draw_outputs(s, *SIZE, 1.0, views, t_now=2.0)
+    assert r.thumbs.count == 1 and r.thumbs.shade("composite") == 1.0
+    s.switch = {"switch": 1}                    # unpicked: nothing made for it
+    for k in range(2):
+        clock.t += 0.1
+        r.thumbs.want({"composite": "picture"})
+        r.draw_outputs(s, *SIZE, 1.0, views, t_now=2.1 + k / 60)
+        assert r.thumbs.count == 0, k
+        assert {key for key in r._media_now if key[0] == "raw"} == {("raw", "b")}
+        assert "composite" not in r.stats.get("effects", [])
+    assert r.thumbs.shade("composite") == PreviewTextures.DIM
+    clock.t += THUMB_BLACK_S
+    r.thumbs.want({"composite": "picture"})
+    r.draw_outputs(s, *SIZE, 1.0, views, t_now=2.2)
+    assert r.thumbs.count == 0 and r.thumbs.shade("composite") == 0.0
+    s.switch = {"switch": 2}
+    r.thumbs.want({"composite": "picture"})
+    r.draw_outputs(s, *SIZE, 1.0, views, t_now=2.3)
+    assert r.thumbs.count == 1 and r.thumbs.shade("composite") == 1.0

@@ -142,7 +142,6 @@ from .graph import (
     IMAGE,
     MEDIA_CHANNELS,
     Delay,
-    Effect,
     Frame,
     Graph,
     Hands,
@@ -997,6 +996,17 @@ class _Timed:
         return False
 
 
+def _flush() -> None:
+    """glFlush in the current context (the render context, at the end of a
+    frame); best-effort — a thumbnail late by a frame costs nothing."""
+    try:
+        from OpenGL import GL
+
+        GL.glFlush()
+    except Exception:  # noqa: BLE001, S110 — no PyOpenGL, or no current context
+        pass
+
+
 def thumb_source(frame: Frame, name: str, how: str,
                  pulled: frozenset[str] | None = None) -> moderngl.Texture | None:
     """The picture node `name`'s thumbnail is copied from, this frame
@@ -1040,8 +1050,11 @@ def thumb_source(frame: Frame, name: str, how: str,
         node = scene
     if getattr(node, "OUTPUT", None) != IMAGE:
         return None
-    if pulled is not None and node.name not in pulled and (node.MAKES
-                                                          or isinstance(node, Effect)):
+    # (review: every kind — a composite, a delay, a resize, a copy behind a
+    # switch's unpicked input made nothing this frame, and painting it would
+    # pull its inputs: the gated effects, the unpicked channels read and
+    # uploaded — plan 33 S. First, before `reads`, which reads a channel)
+    if pulled is not None and node.name not in pulled:
         return None
     if not node.reads(frame):
         return None
@@ -1770,11 +1783,15 @@ class Renderer:
         thumbnail from this frame's picture of it (`thumb_source`), then the
         names not wanted for a second dropped. Nothing wanted, nothing done:
         a closed page costs nothing. A painted node is painted again here
-        (`graph.picture`, into a frame texture of its own) with the GPU
-        timer muted, so the SYSTEM page's per-node times stay the frame's,
-        and on a copy of the frame's `stats`, so its counts stay the
-        frame's. Never raises: the panel's pictures must not take the frame
-        down."""
+        (`graph.picture`, into a frame texture of its own: counted as
+        `PreviewTextures.repainted`) with the GPU timer muted, so the
+        SYSTEM page's per-node times stay the frame's, and on a copy of the
+        frame's `stats`, so its counts stay the frame's. When anything was
+        copied, the render context is flushed (`glFlush`, as app.py's
+        `_gl_flush` does for a presenter — not `ctx.finish`, a full sync):
+        the control window's context samples the thumbnails, and output 1's
+        swap is not always the next thing to flush. Never raises: the
+        panel's pictures must not take the frame down."""
         frame, self._thumb_frame = getattr(self, "_thumb_frame", None), None
         th = getattr(self, "thumbs", None)
         if th is None:
@@ -1794,18 +1811,23 @@ class Renderer:
             try:
                 pulled = frame.graph.pulled(frame) if frame.graph is not None else None
                 for name, how in wanted.items():
+                    held = len(frame.data)
                     try:
                         src = thumb_source(frame, name, how, pulled)
                     except Exception as e:  # noqa: BLE001 — one node's picture: not the rest
                         th.error = f"{name}: {type(e).__name__}: {e}"[:120]
                         continue
+                    # (a picture the frame had not made — painted, or made
+                    # into a texture — leaves a new entry in the frame's data)
                     if src is not None:
-                        th.put(name, src)
+                        th.put(name, src, repainted=len(frame.data) > held)
             finally:
                 frame.stats.clear()
                 frame.stats.update(saved)
                 if timer is not None:
                     timer._active = was
+            if th.count:
+                _flush()
         th.end_frame()
 
     def media_shown(self, c: str) -> tuple[moderngl.Texture, bool] | None:

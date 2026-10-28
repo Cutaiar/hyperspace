@@ -1356,11 +1356,12 @@ def _want_thumbs(st: dict, view: graphview.View) -> None:
         pv.want()
 
 
-def thumb_of(st: dict, n: graphview.VNode):
+def _body_of(st: dict, n: graphview.VNode):
     """(the texture, the shade it is drawn at) for node `n`'s body this
     frame: its thumbnail and `PreviewTextures.shade` (1 fresh, dimmed,
     0 black) — a geometry's at `FAINT_PIC` of that; output 1's the
-    `Preview`'s picture. (None, 0) with none yet: a black box."""
+    `Preview`'s picture, always at 1 (it has no age: a frame that fails
+    leaves its last picture lit). (None, 0) with none yet: a black box."""
     if by_preview(n):
         pv = st.get("preview")
         tex = getattr(pv, "tex", None)
@@ -1385,7 +1386,7 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
     p1 = imgui.ImVec2(p0.x + NODE_W, p0.y + graphview.THUMB_H)
     dl = imgui.get_window_draw_list()
     dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
-    tex, k = thumb_of(st, n)
+    tex, k = _body_of(st, n)
     if tex is None or k <= 0.0 or getattr(tex, "glo", 0) == 0:
         return
     a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
@@ -1395,12 +1396,15 @@ def _thumb(st: dict, n: graphview.VNode) -> None:
 
 def thumbnail_line(panel) -> str:
     """The SYSTEM page's line for the thumbnails (plan 37 C1): "thumbnails ·
-    N copied · M kept" — the copies the last frame made and the nodes
-    held; "" with no renderer that keeps any."""
+    N copied · K repainted · M kept" — the copies the last frame made, how
+    many of those painted a node again at the frame's size (one that paints
+    into its consumer: the cost AH.2 reads), and the thumbnails held; ""
+    with no renderer that keeps any."""
     th = getattr(getattr(panel, "renderer", None), "thumbs", None)
     if th is None or not hasattr(th, "count"):
         return ""
-    return f"thumbnails · {th.count} copied · {th.kept} kept"
+    return (f"thumbnails · {th.count} copied · {getattr(th, 'repainted', 0)} repainted · "
+            f"{th.kept} kept")
 
 
 def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:

@@ -383,8 +383,10 @@ class PreviewTextures:
     `shade(name)` is 1 when it was copied the renderer's last frame, `DIM`
     while it is less than `THUMB_BLACK_S` old, 0 (black) after — a number
     the page multiplies the picture by, never a copy. `count` is the
-    copies the last frame made (the SYSTEM line), `kept` the textures
-    held. The textures are the render context's, which the control
+    copies the last frame made (the SYSTEM line), `repainted` how many of
+    them were of a picture the frame had not made (a node that paints into
+    its consumer, painted again at the frame's size for its thumbnail),
+    `kept` the thumbnail textures held. The textures are the render context's, which the control
     window's shares, as `Preview`'s is; with no context (a test, a
     stand-in) `put` keeps only the name and the time."""
 
@@ -401,6 +403,7 @@ class PreviewTextures:
         self.frame = 0                          # the renderer's frames ended
         self.made_in: dict[str, int] = {}       # name → the frame it was last copied in
         self.count = 0
+        self.repainted = 0
         self.error = ""
         self._prog = self._vao = self._sampler = None
 
@@ -436,7 +439,9 @@ class PreviewTextures:
 
     @property
     def kept(self) -> int:
-        return len(self.asked)
+        """The thumbnails held: a texture each (with no context, a picture
+        size each — a node copied at least once and not dropped)."""
+        return len(self.tex) if self.ctx is not None else len(self.sizes)
 
     # ---- the renderer's side
 
@@ -448,12 +453,13 @@ class PreviewTextures:
     def begin_frame(self) -> None:
         """A frame's copies start: none counted yet."""
         self.frame += 1
-        self.count = 0
+        self.count = self.repainted = 0
 
-    def put(self, name: str, src) -> bool:
+    def put(self, name: str, src, repainted: bool = False) -> bool:
         """`src` (a texture of the render context) copied into `name`'s
-        thumbnail by one downsample pass; True when it was. A pass that
-        raises leaves the last thumbnail (`error` says why)."""
+        thumbnail by one downsample pass; True when it was. `repainted`: the
+        frame had not made `src`, it was painted for this (`repainted`).
+        A pass that raises leaves the last thumbnail (`error` says why)."""
         try:
             size = tuple(int(v) for v in src.size)
             if self.ctx is not None:
@@ -465,6 +471,7 @@ class PreviewTextures:
         self.made[name] = self.clock()
         self.made_in[name] = self.frame
         self.count += 1
+        self.repainted += bool(repainted)
         return True
 
     def end_frame(self) -> None:
