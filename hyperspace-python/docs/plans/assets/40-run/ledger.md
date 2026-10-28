@@ -36,7 +36,7 @@ See `decisions.md`.
 | T3 save / browse / spawn | `plan-40-t3` | f8d2e73 | built, PR #277; merged locally 19596e8 | fast 4306/2 skipped, goldens 144, --all 4537 | in the plan review | 50i–50s drafts, AK.5–7 |
 | plan review | `plan-40-build` @ 19596e8 vs `main` | — | done: D1–D10 ✅, 1 Important, minors | — | `reports/plan-review.md` | rulings 17–19 |
 | review fixes | `plan-40-fixes` | 19596e8 | **merged** e0675a6 (PR #278) | fast 4320/2 skipped, goldens 144 | — | 50r–50w drafts, AK.f1–f4; rulings 20–22 |
-| T6 docs | `plan-40-t6` | e0675a6 | dispatched | | | 501–525 / 394–401 |
+| T6 docs | `plan-40-t6` | e0675a6 | **merged** b8e8de1 (PR #279) | fast 4320/2 skipped | — | 501–536 / 394–401 |
 
 ## Merges into `plan-40-build`
 (counts after each.)
@@ -260,3 +260,23 @@ See `decisions.md`.
   re-recorded); `--all` **4551 passed, 2 skipped**, no failure; ruff the
   base's 25 pre-existing, none in a plan 40 file. Pushed.
 - **T6** dispatched (Opus, own worktree, branch `plan-40-t6` off e0675a6).
+- **T6** DONE_WITH_CONCERNS → PR #279 (`plan-40-t6`, 6dd8200, b9ee2c5).
+  23 files, +1999, docs only: the spec as built (header, "What changed in
+  the build", the four corrections marked), register rows **501–536** (36
+  rows: D1–D10 as 501–510, then the rulings; 15 and 17 as rows 521 and 524
+  "pending the owner"; the process rulings in the spec's "Process"
+  paragraph, not rows), hand checks 394–401 as group AK, ARCHITECTURE
+  §3.11 "Patches and groups" (no desk-templates paragraph existed; a
+  pointer from §3.6) + §4's table + §3.7's rows, DECISIONS, ENGINEERING,
+  SETUP, CHECKPOINT, TESTING-GUIDE, plans/README, T0's leftovers. Fast
+  4320/2 skipped. Merged `--no-ff` as **b8e8de1**; controller's fast tier
+  4320/2 skipped. **Final**: `plan-40-build` → `main` PR opened (see the
+  ledger's head). Rows 501–536 supersede "501–525" above.
+
+## Final state (2026-10-28)
+`plan-40-build` @ b8e8de1 + this records commit. Gates on e0675a6 (the
+last code commit): fast tier 4320 passed, 2 skipped; `--all` 4551 passed,
+2 skipped; goldens 144, none re-recorded; ruff clean on every plan 40 file.
+Hand checks 394–401 (AK) pending at the machine; rows 501–536 for the
+owner, 521 and 524 pending his answer. Both Macs update together before a
+preset with `groups` is shared.
