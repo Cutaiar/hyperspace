@@ -2109,7 +2109,10 @@ def patch_list(panel) -> list[dict]:
     "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
     picture · out: picture · wants: K1, right hand y, band 1"). A patch
     the library refuses is left out (its words on the footer once).
-    Re-read only when the listing or a file moves."""
+    Asked every frame the canvas's menu is open or a line is dragged, it
+    looks at the disk only on `ui_presets`' poll (plan 40 review fix): the
+    same listing as last time is the same list, with no file stat'ed; a new
+    listing re-reads only when the listing or a file moved."""
     from . import library as libmod
     from . import ui_presets
     lib = getattr(panel, "library", None)
@@ -2117,12 +2120,15 @@ def patch_list(panel) -> list[dict]:
         return []
     st = _state(panel)
     listed = ui_presets.names(panel, libmod.PATCHES)
+    held = st.get("patch_list")
+    if held is not None and held[0] is listed:
+        return held[2]
     paths = [lib.path_of(libmod.PATCHES, n) for n in listed]
     key = tuple((n, str(p), p.stat().st_mtime if p is not None and p.exists() else 0.0)
                 for n, p in zip(listed, paths))
-    held = st.get("patch_list")
-    if held is not None and held[0] == key:
-        return held[1]
+    if held is not None and held[1] == key:
+        st["patch_list"] = (listed, key, held[2])
+        return held[2]
     out = []
     for name, path in zip(listed, paths):
         if path is None:
@@ -2135,7 +2141,7 @@ def patch_list(panel) -> list[dict]:
         out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
                     "words": graphview.patch_words(doc, _glyph(panel)),
                     "ports": tuple(patches.read(doc).ports)})
-    st["patch_list"] = (key, out)
+    st["patch_list"] = (listed, key, out)
     return out
 
 

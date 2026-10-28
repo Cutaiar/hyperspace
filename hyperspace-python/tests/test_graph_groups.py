@@ -1026,6 +1026,29 @@ def test_the_browser_lists_each_patch_with_its_boundary_in_words(rig, monkeypatc
     assert spawns == [("acid-wash", (100.0, 200.0))]
 
 
+def test_the_spawn_menu_open_two_frames_lists_the_patches_once(rig, monkeypatch):
+    """The canvas's **spawn ▸** (and a drag) asks for the list every frame:
+    the library is listed and each file looked up once per `ui_presets`
+    poll, not once a frame; our own save re-lists at once."""
+    from hyperspace import ui_presets
+    trip(rig)
+    ui_presets.invalidate(rig.panel, "patches")
+    lists, paths = [], []
+    lib = rig.panel.library
+    real_list, real_path = lib.list, lib.path_of
+    monkeypatch.setattr(lib, "list", lambda g, **k: (lists.append(g), real_list(g, **k))[1])
+    monkeypatch.setattr(lib, "path_of", lambda g, n: (paths.append(n), real_path(g, n))[1])
+    monkeypatch.setattr(imgui, "begin_menu", lambda *a: False)
+    ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
+    first = list(paths)
+    assert lists == ["patches"] and first.count("acid wash") == 1
+    ui_graph._spawn_menu(rig.panel, (0.0, 0.0))
+    assert lists == ["patches"] and paths == first          # the second frame: no disk
+    ui_presets.invalidate(rig.panel, "patches")
+    assert [r["slug"] for r in ui_graph.patch_list(rig.panel)] == ["acid-wash"]
+    assert lists == ["patches", "patches"]
+
+
 def test_a_dragged_patch_lights_a_cable_it_can_splice_into_and_lands_on_release(rig,
                                                                                  monkeypatch):
     """The drag (hand check 396 covers the gesture itself): while a browser
