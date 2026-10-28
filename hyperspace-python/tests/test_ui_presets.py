@@ -182,8 +182,10 @@ def test_more_opened_holds_a_strip_per_module_and_still_fits(rig, monkeypatch): 
     frame(rig.panel, "presets")
     frame(rig.panel)
     groups = ui_presets.groups(rig.panel)
-    assert {"view", "camera", "fx", "band"} <= set(groups)
+    assert {"view", "camera", "band"} <= set(groups)
     assert all(f"{g:<8s}" in texts for g in groups)
+    # plan 40 T5 (D6): the fx module presets are retired — no fx entry
+    assert "fx" not in groups and f"{'fx':<8s}" not in texts
     assert _page_scroll(rig, monkeypatch)["presets"] == 0
 
 

@@ -580,20 +580,63 @@ def test_home_is_one_undo_step(tmp_path):
 def test_module_labels_are_recorded_and_never_chain_load(rig):
     """D3: `modules` sets the strip's label with a clean dot; the group's
     values are the preset's (over the group default), never the module
-    preset's file; a group the file does not name shows no label."""
+    preset's file; a group the file does not name shows no label. (Plan 40
+    T5: on the dream group — the fx module presets are retired.)"""
     lib, reg = rig.lib, rig.reg
-    lib.load("dream", "wake")
-    trip = lib.read("fx", "trip")["values"]
-    assert trip["fx.kaleido.on"] is True
-    put(rig.home, "LABELS", values={"fx.on": True}, modules={"fx": "trip"})
+    lib.label("camera", "stale")                          # a label from before
+    wake = lib.read("dream", "wake")["values"]
+    assert wake["dream.echoes"] == 24
+    put(rig.home, "LABELS", values={"dream.mix": 0.25}, modules={"dream": "wake"})
     rig.presets.load("LABELS")
-    assert lib.current("fx") == "trip" and not lib.is_dirty("fx")
-    assert reg.snapshot("fx") == lib.resolved("fx", {"fx.on": True})
-    # (plan 36 T3: the preset's graph names no kaleido, so it does not exist)
-    assert "fx.kaleido.on" not in reg and trip["fx.kaleido.on"]
-    assert lib.current("dream") is None
-    reg["fx.mix"].set(0.3)
-    assert lib.is_dirty("fx")                               # the dot is live against the load
+    assert lib.current("dream") == "wake" and not lib.is_dirty("dream")
+    assert reg.snapshot("dream") == lib.resolved("dream", {"dream.mix": 0.25})
+    assert reg["dream.echoes"].base != wake["dream.echoes"]  # the file was never loaded
+    assert lib.current("camera") is None
+    reg["dream.mix"].set(0.3)
+    assert lib.is_dirty("dream")                            # the dot is live against the load
+
+
+def test_an_old_fx_label_loads_quietly_and_saves_without_it(rig):
+    """Plan 40 T5 (D6): a preset that still names an fx module keeps the
+    label on load — it never loaded anything (D3) — with no note, and the
+    next save drops it; the other groups' labels are kept and saved."""
+    lib = rig.lib
+    # (a `/7` with a picture wired, so the load has nothing else to say)
+    acid = json.loads((FACTORY / "presets" / "party-acid.json").read_text())
+    put(rig.home, "OLD", schema=acid["schema"], graph=acid["graph"], values={"fx.on": True},
+        modules={"fx": "trip", "dream": "wake"})
+    rig.presets.load("OLD")
+    assert rig.presets.notes == [] and not lib.warning
+    assert lib.current("fx") == "trip" and lib.current("dream") == "wake"
+    assert not lib.is_dirty("fx")
+    doc = rig.presets.document("OLD")
+    assert doc["modules"] == {"dream": "wake"}
+    path = rig.presets.save_as("Resaved")
+    assert json.loads(path.read_text())["modules"] == {"dream": "wake"}
+
+
+def test_the_fx_presets_are_retired(rig):
+    """Plan 40 T5 (D6, the owner: "retired outright"): no factory fx
+    folder, no fx group in the library's list (so no strip in "more ·
+    module presets"), and the fx defaults are the fresh values even where
+    an old library still keeps an `fx/default.json`; the load hook and its
+    migration are gone (D10: the FX page is untouched)."""
+    lib = rig.lib
+    assert not (FACTORY / "fx").exists()
+    assert "fx" not in lib.groups() and lib.list("fx") == []
+    fresh = lib._fresh_of("fx")
+    assert lib.defaults("fx") == fresh and lib.default_name("fx") is None
+    old = rig.home / "fx"
+    old.mkdir()
+    (old / "default.json").write_text(json.dumps({
+        "schema": "hyperspace.preset/1", "group": "fx", "name": "default",
+        "values": {"fx.mix": 0.25}}))
+    lib._defaults.clear()
+    assert lib.defaults("fx") == fresh and "fx" not in lib.groups()
+    # (the hook, its watch and the run they landed: no name of theirs is left)
+    assert not [n for n in dir(Presets) if "fx" in n]
+    assert not [n for n in dir(graphmigrate) if "module" in n or n.endswith("_runs")]
+    assert "fx" not in getattr(lib, "_apply_hooks", {})
 
 
 # ---------------------------------------------------------------- save
@@ -611,7 +654,7 @@ def test_a_preset_round_trips(rig):
     put(rig.home, "SRC", values={"view.shape": 3}, desk=desk, macros=macros, note="a note",
         routes=[{"source": "hand:7", "target": "view.speed", "op": "push", "value": 0.3}])
     rig.presets.load("SRC")
-    lib.load("fx", "acid")
+    lib.load("dream", "wake")
     rig.reg["camera.zoom"].set(2.0)
     sig = rig.presets.signature()
     path = rig.presets.save_as("Round Trip")
@@ -620,7 +663,7 @@ def test_a_preset_round_trips(rig):
     # (row 394: every save is the newest schema)
     assert doc["schema"] == "hyperspace.preset/7" and doc["name"] == "Round Trip"
     assert doc["desk"] == desk and doc["macros"] == macros and doc["note"] == "a note"
-    assert doc["modules"] == {"fx": "acid"}
+    assert doc["modules"] == {"dream": "wake"}
     # every performance base, the media family's too — and no retired id
     # (plan 33 T7: the wires say them; row 394: nothing writes them back)
     snap = rig.reg.snapshot(part="performance")
@@ -632,7 +675,7 @@ def test_a_preset_round_trips(rig):
     rig.presets.load("Round Trip")
     assert rig.presets.signature() == sig and not lib.is_dirty("presets")
     assert preset.desk_json(table.desk()) == desk and table.macros_doc() == macros
-    assert lib.current("fx") == "acid"
+    assert lib.current("dream") == "wake"
 
 
 # ---------------------------------------------------------------- the desk and the macros

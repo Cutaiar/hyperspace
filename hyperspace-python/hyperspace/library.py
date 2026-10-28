@@ -248,6 +248,13 @@ def read_positions(value: Any) -> tuple[dict[str, list[float]], int]:
 # if it has one, else the values its objects were built with
 DEFAULT_NAMES = {"band": "Balanced"}
 
+# the groups whose module presets are retired outright (plan 40 T5, D6:
+# "It is not a useful representation of shaders anymore"): no strip, no
+# entry in `groups()`, no default preset — `defaults` is the fresh values
+# even where an old `<library>/fx/default.json` survives. Their params are
+# untouched: the effects are the graph's (the FX page, D10, stays)
+RETIRED_MODULES = ("fx",)
+
 # working-directory files that move into the library home on first run
 MIGRATED_FILES = ("config.toml", "midi_map.json")
 LEGACY_BANK = "presets.json"
@@ -1644,8 +1651,9 @@ class Library:
     def on_apply(self, group: str, hook) -> None:
         """Register who is handed a module preset of this group as it lands
         — ``hook(name, doc)``, after its values, inside its undo step (plan
-        33 R12: an fx module's run replaces the loaded graph's). A load
-        through the strip, a step or a file watch: not a rename, not a show."""
+        33 R12 registered the fx module's run here; plan 40 T5 retired it,
+        and no group registers one today). A load through the strip, a step
+        or a file watch: not a rename, not a show."""
         self.__dict__.setdefault("_apply_hooks", {})[group] = hook
 
     def on_load(self, group: str, hook) -> None:
@@ -1721,7 +1729,9 @@ class Library:
     def groups(self) -> list[str]:
         """Every group with a preset folder, a persisted param or a document
         kind — less ``macro``: a macro's meaning is its subscribers, which
-        live in the preset, so it gets no module-preset strip (plan 13 §9)."""
+        live in the preset, so it gets no module-preset strip (plan 13 §9);
+        and less the retired module groups (`RETIRED_MODULES`, plan 40 T5),
+        whatever an old library still keeps in their folders."""
         out = {p.group for p in (self.reg or [])
                if p.persist and p.group and p.group != "macro"}
         out.update(self._kinds)
@@ -1730,7 +1740,7 @@ class Library:
                 out.update(d.name for d in root.iterdir()
                            if d.is_dir() and d.name not in (PROJECTS, TRASH, *LEGACY_DIRS)
                            and not d.name.startswith("."))
-        return sorted(out)
+        return sorted(out - set(RETIRED_MODULES))
 
     def _files(self, group: str) -> dict[str, Path]:
         """slug → path, the user's file shadowing the factory's."""
@@ -1944,6 +1954,8 @@ class Library:
     def default_name(self, group: str) -> str | None:
         if group == DESK:          # its folder holds desk templates, never module presets:
             return None            # a template named "default" is no group default
+        if group in RETIRED_MODULES:   # plan 40 T5: an old fx/default.json is no default
+            return None
         name = DEFAULT_NAMES.get(group, "default")
         return name if self.path_of(group, name) is not None else None
 
@@ -2063,8 +2075,8 @@ class Library:
                 hook(doc["layout"])                    # rebuild params first
                 self._fresh_of(group)                  # …and their build values are "fresh"
             values = _module_values(group, doc)
-            # (an fx module's order and target, retired in plan 33 T7, are no
-            # unknown ids: its run is read from them, `Presets._fx_module`)
+            # (an old module file's retired ids — plan 33 T7's orders and
+            # targets — are no unknown ids: the wires say them now)
             missing = [k for k in values if k not in self.reg and not retired(k)]
             resolved = self.resolved(group, values)
             self.restore(resolved)
