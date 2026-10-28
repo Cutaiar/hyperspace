@@ -394,36 +394,6 @@ def test_a_generator_lights_a_transparent_ground(ctx):
 
 # ---------------------------------------------------------------- presets and the page
 
-def test_factory_presets_name_only_real_params(tmp_path):
-    from hyperspace.analysis import Analyser
-    from hyperspace.analyzer import Analyzer
-    from hyperspace.control import Control
-    from hyperspace.library import Library
-    from hyperspace.params import build_registry
-    from hyperspace.view import ViewState
-    chain = Analyzer(Analyser())
-    st = FxState()
-    lib = Library(tmp_path, period=0.0)
-    reg = build_registry(ViewState(), Control(chain), SimpleNamespace(chain=chain), lib.project,
-                         fx=st)
-    lib.attach(reg)
-    names = lib.list("fx")
-    assert {"noita tripping", "noita heavily tripping", "noita tripping balls", "acid",
-            "mandala"} <= set(names)
-    for name in names:
-        assert lib.load("fx", name) == [], name
-    from hyperspace.graphmigrate import specs_of, state_values, wiring_for
-
-    def run_of(st):    # (plan 36 T3: the old words' run, before the wired frame)
-        return wiring_for(state_values(st), specs_of(st), wired=False).run
-    lib.load("fx", "noita heavily tripping")
-    assert run_of(st) == ("warp", "fractals", "tripcolour")      # by their @order
-    assert st.values["warp"]["amount"] == pytest.approx(0.9)
-    lib.load("fx", "acid")                           # unnamed ids fall back: warp goes off
-    run = run_of(st)
-    assert not st.live("warp") and st.live("acid") and "acid" in run and "warp" not in run
-
-
 def shell(tmp_path):
     """The shell's rig (tests/test_ui_shell.py: the real Panel and its
     pages) at the control size, its renderer a stand-in holding a live

@@ -170,6 +170,12 @@ changes brightness or volume instead).
     L182 with the camera, L183 with a dancer on the projector, L184 with
     the camera on a tripod and the party light, L187 on the show Mac with
     two cameras, and L188 on the projector.
+24. Plan 40, patches, on `plan-40-build`, on the copy with its `[library]
+    path` commented out: L189 (group), then L190 (save and spawn), L191
+    (splice, with the TV or projector as a second window) and L193 (the fx
+    module presets gone) on the laptop; A49 then A50 with the APC40 (Part
+    2); then L192 (the laptop config, no Leap: it uses A49's patch) and
+    L194 (twice) last.
 
 ## Running the automated tests (tiers)
 
@@ -386,6 +392,12 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L186 | Edges on the shape, on the camera, into a cut (plan 39) | 1 | laptop or the projector, a camera | 390 |
 | L187 | Two cameras, two segments; unplug a camera (plan 39) | 1 | show Mac, two cameras | 391, 392 |
 | L188 | A half-transparent face over a bright picture, cut-through on and off (plan 39) | 1 | the projector, a still, the gate Mac | 393 |
+| L189 | Group some nodes, open them, ungroup them (plan 40) | 1 | laptop, the copy | 394 |
+| L190 | Save a group as a patch; spawn it into a new preset; wire as saved (plan 40) | 1 | laptop, the copy | 395 |
+| L191 | Drop a patch on a cable (plan 40) | 1 | laptop, a second screen, the copy | 396 |
+| L192 | A preset that wants a Leap on a rig without one (plan 40) | 1 | laptop (no Leap listed), the copy | 399 |
+| L193 | The fx module presets are gone; the FX page is not (plan 40) | 1 | laptop | 400 |
+| L194 | The same patch twice in one preset (plan 40) | 1 | laptop, the copy | 401 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -434,6 +446,8 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
 | A48 | Hold and take on two desk buttons (plan 38) | 2a | APC40, the copy | 381 |
+| A49 | A patch brings its knob, and a sheet asks when the knob is taken (plan 40) | 2a | APC40, the copy | 397 |
+| A50 | The desk unplugged, said; plugged in, said (plan 40) | 2a | APC40, the copy | 398 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -4751,6 +4765,158 @@ on.
 
 *(check 393)*
 
+## Plan 40: patches (L189-L194)
+
+Plan 40 lets you keep a little machine you built on GRAPH and drop it into
+any other preset. Select some nodes and **Group** them: they fold into one
+box whose plugs are the cables that cross its edge (`+` opens it again).
+**Save as patch…** writes that group, with its knobs and hand moves, to its
+own file (`patches/` in the library). The **patches** chip on GRAPH's head,
+or right-click → **spawn ▸**, puts a copy into whatever preset is loaded,
+under new names so nothing clashes; its plugs start unplugged unless you
+drop it on a cable, which splices it in. If its knob is already used by the
+preset, a sheet asks which one wins. The app also says which devices a
+preset wants that are not plugged in, and says so again when one arrives.
+The old fx "module presets" are gone; the FX page stays.
+
+Run these on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`) with the
+`[library] path` line in the copy's `config.toml` commented out, so a
+saved patch stays on the copy and never reaches the shared Drive folder. A
+preset with a group is a new file version (`/8`) that an older build will
+not open, so **both Macs run this build before such a preset is shared**.
+Its tests: the fast tier is 4,320 passed (2 skipped), the goldens 144
+passed with none moved; its own files are `tests/test_patches.py`,
+`tests/test_graph_groups.py` and `tests/test_device_wants.py`. The checks
+are 394-401 (group AK); the two with the APC40 are A49 and A50 in Part 2.
+
+#### L189. Group some nodes, open them, ungroup them
+
+**Needs:** laptop; the copy.
+
+**Do:** load `party-noita`, open GRAPH, drag a box around `scene`, `warp`,
+`doublevision` and `fractals`, right-click one → **group 4 nodes**. Press
+the group's `+`, drag its title bar, drag one member far out of the tinted
+box, press ⌘Z; press `−`, drag the folded box, ⌘Z. Drop a cable on the
+folded box's plain `in` stub. Right-click it → **ungroup**. Save the preset
+as a copy and open the file in a text editor.
+
+**Right if:** `scene` is left out ("scene is the frame's; left out") and
+one box "group 1" appears with a picture in, a picture out and a row for
+each knob or hand that drives one of the three; nothing changes on the
+projector at any step; `+` shows the three where they were inside a tinted
+box; the members follow the title live; the dragged-out one leaves and one
+⌘Z brings it back; the stub drop goes red with "group 1 is folded: drop it
+on one of its pins, or open it (+)"; ungroup changes nothing but the box.
+The saved file says `hyperspace.preset/8` and has a `groups` line.
+
+**Wrong if:** `scene` joins the group, the picture changes, members jump
+only when you let go, one ⌘Z undoes two things, or an empty menu opens on
+the stub.
+
+*(check 394)*
+
+#### L190. Save a group as a patch; spawn it into a new preset; wire as saved
+
+**Needs:** laptop; the copy.
+
+**Do:** group `warp`, `doublevision` and `fractals` in `party-noita`,
+select the group and press **save as patch…** on its side panel; name it
+"noita core" and save. Look in `~/Hyperspace-try/patches/`. Press **new**,
+press **patches** on GRAPH's head and read the list, then right-click the
+canvas → **spawn ▸ noita core**. Drag `scene` onto the box's `in` plug and
+its `out` plug onto All outputs; then ⌘Z three times. Press **new** again,
+spawn it, and press **wire as saved**. Try to save another group under the
+same name. On PRESETS, open **patches**, rename it, then × it.
+
+**Right if:** only `noita-core.json` is new in the folder; the list shows
+its note and "in: picture · out: picture · wants: …"; the spawn is one
+folded box at the click with two plugs reading "open (was scene)" and
+"open (was tripcolour.image)", and nothing changes on screen until you
+plug it; plugged, the picture is noita's middle; three ⌘Z remove the two
+cables and then everything the spawn brought. **wire as saved** plugs the
+scene and says "no node tripcolour" for the other. The second save is
+refused ("a patch named noita core exists …"). A click on a name in the
+PRESETS fold does nothing; rename and × work.
+
+**Wrong if:** a preset or `bindings.json` changes when you spawn; the
+spawn takes more than one ⌘Z; wire as saved plugs into a socket that
+was already in use; the second save overwrites the first.
+
+*(check 395)*
+
+#### L191. Drop a patch on a cable
+
+**Needs:** laptop; the TV or the projector as a second window; the copy;
+the "noita core" patch from L190.
+
+**Do:** load `party-trip`, open **patches** on GRAPH's head and drag
+"noita core" out of the list over the canvas, then let go on the cable
+from `scene` into `plasma`. Watch the second screen. Press ⌘Z.
+
+**Right if:** while you drag, the cable under the pointer lights; on
+release the three effects sit between `scene` and `plasma` and the second
+screen shows them; one ⌘Z puts the cable back.
+
+**Wrong if:** the list closes as soon as you drag, no cable lights, or the
+splice takes two ⌘Z.
+
+*(check 396)*
+
+#### L192. A preset that wants a Leap on a rig without one
+
+**Needs:** laptop with no hands device in its `config.toml`; the copy; the
+acid wash patch (A49 copies it in).
+
+**Do:** load a preset with acid wash in it (A49), read the group's box and
+GRAPH's head. Press **new** and spawn acid wash; read the head's line.
+Then spawn it into `party-acid` and answer **keep all existing**, Spawn.
+
+**Right if:** the box says "waits for leap (not in this rig): right hand
+y" and the grey Leap placeholder is drawn as before; both spawns end their
+line "waits for leap (not in this rig): right hand y", and the second
+does not mention K1.
+
+**Wrong if:** a spawn says nothing about the Leap, or names K1 after you
+kept it for the preset.
+
+*(check 399)*
+
+#### L193. The fx module presets are gone; the FX page is not
+
+**Needs:** laptop.
+
+**Do:** PRESETS → **more · module presets**. Open the FX tab. Load every
+factory preset. Load one of your own presets from before this build that
+named an fx module, and save it.
+
+**Right if:** no fx entry under module presets; the FX page is as before
+except the small strip under its "effects" title (name, arrows, save,
+as…, reset) is gone; no preset puts a note in the footer; your old preset
+loads quietly and saves without the fx label.
+
+**Wrong if:** an fx strip or fx entry is still there, or a load says
+anything about fx.
+
+*(check 400)*
+
+#### L194. The same patch twice in one preset
+
+**Needs:** laptop; the copy; "noita core" from L190.
+
+**Do:** load `party-noita` and spawn "noita core" twice: Spawn at the
+first sheet, **keep all existing** at the second. Hover both groups. Save,
+load another preset, load it back. Then press **new** and spawn it twice.
+
+**Right if:** two boxes, "group 1" and "group 2"; their hovers say `warp →
+warp.2 …` and `warp → warp.3 …`; the second says "n rows kept by the
+preset", still after the reload. In the new preset the first copy keeps
+the plain names and the second gets `.2`.
+
+**Wrong if:** two copies share a name, or the kept rows are gone after
+the reload.
+
+*(check 401)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -5777,6 +5943,59 @@ by **drop** (register row 438).
 starts a hold.
 
 *(check 381)*
+
+#### A49. A patch brings its knob, and a sheet asks when the knob is taken
+
+**Needs:** the APC40; the copy (with `[library] path` commented out);
+branch `plan-40-build` (plan 40).
+
+**Do:** copy `tests/fixtures/patches/acid-wash.json` from the repo into
+`~/Hyperspace-try/patches/` (acid, wobble and a delay; K1 on acid's speed;
+the right hand's height, smoothed, on wobble's amount). Load `party-acid`
+(where K1 is the brightness) and spawn acid wash from **patches** on
+GRAPH's head. Read the sheet; press **Spawn**; turn K1; ⌘Z; turn K1. Spawn
+again; while the sheet is up, arm a learn and move a hand or a knob. Press
+**keep all existing**, then **Spawn**; turn K1; hover the new box. Spawn
+once more and press **Cancel**. Then load `party-noita` and spawn it
+there.
+
+**Right if:** the sheet says "K1: fx.acid.2.speed (the patch) or
+view.bright (the preset)" with the patch chosen; after Spawn K1 turns the
+new acid's speed and its ring agrees; one ⌘Z takes the whole spawn back
+and K1 is the brightness again; nothing learns while the sheet is up;
+after **keep all existing** K1 stays the brightness and the box says "K1
+kept by the preset"; Cancel adds nothing. In `party-noita` the sheet
+lists only K1, even though the right hand's height already drives warp
+there: the patch reads the hand through its smoothing node, which counts
+as no clash today — say whether it should (register row 514).
+
+**Wrong if:** K1 does the wrong thing after Spawn, a learn completes
+under the sheet, undo takes more than one press, or "kept by the preset"
+is missing.
+
+*(check 397)*
+
+#### A50. The desk unplugged, said; plugged in, said
+
+**Needs:** the APC40; the copy; the preset saved in A49 with acid wash in
+it.
+
+**Do:** quit, unplug the APC40, start the app and load that preset. Read
+the group's box, GRAPH's head, the PRESET strip and the SYSTEM page; hover
+**1 device missing**. Plug the desk in and press nothing. Turn K1.
+
+**Right if:** the box says "waits for apc40 (lost): K1"; the head and the
+strip show **1 device missing**, whose hover lists the desk's controls by
+their names (K1, K2 …); SYSTEM says "wanted by the preset: apc40 — lost;
+n controls wait". When you plug it in the footer says "apc40 connected —
+n controls live" once, the rings light, the warning goes, and K1 turns
+the patch's knob. (With the desk unplugged every party preset shows **1
+device missing**: say whether that is useful or noise.)
+
+**Wrong if:** nothing is said when the desk comes back, it is said twice,
+or the hover reads "CC 48 ch1" instead of K1.
+
+*(check 398)*
 
 ## (b) The hand camera
 
@@ -8005,6 +8224,9 @@ lets you rewire them by dragging.
 **Ground** — the empty background of the picture. The OUTPUT page's
 Ground setting is how see-through it is in overlay mode.
 
+**Group** — several GRAPH boxes folded into one, its plugs the cables
+that cross its edge; `+` opens it in place (plan 40).
+
 **Guide and tethers** — the guide is a gauge drawn beside or on a ghost
 hand showing each axis as a ball or arc; tethers are lines from the
 routed axes to labels naming what they drive.
@@ -8105,6 +8327,9 @@ presets 9–24.
 **Party show** — the factory show the app opens with: F1 TUMBLE, F2
 FACES, F3 FIELD, F4 WAKE, F5 TRIP, F6 ACID, F7 MANDALA, F8 NOITA, slot 9
 TRACER. The **house show** is another factory show (F1 BIG BLUE WAVE).
+
+**Patch** — a group of GRAPH boxes saved with the cables that cross its
+edge, in `patches/` in the library, to drop into any preset (plan 40).
 
 **Pattern** — the texture drawn on the faces (FLAT is plain); chosen on
 the FACES page.

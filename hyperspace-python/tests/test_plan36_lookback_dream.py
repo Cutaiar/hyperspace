@@ -325,28 +325,6 @@ def test_the_seven_words_refuse_the_old_ports():
         f"wire echo.2 → output.2.image — {G.ECHO_IS_A_PIN.format(name='echo.2', k=2)}")
 
 
-def test_an_fx_module_before_any_preset_fills_nothing_in(tmp_path):
-    """The T3 review's leak: an fx module applied before any preset has
-    landed goes into the empty wired frame — none of today's frame (no
-    scene, no look-back) is filled in. The module's run goes nowhere (no
-    picture into All outputs to run on), and nothing else lands."""
-    from hyperspace.headless import make_app
-
-    app = make_app(tmp_path)
-    assert app.presets.graph.free_doc() is None
-    empty = G.read_graph({"frame": "wired"}).to_json()
-    on, specs = {"fx.on": True, "fx.plasma.on": True}, {"plasma": (10, 1.0)}
-    got, notes = M.module_runs(empty, on, specs)
-    # (the empty frame: nothing to run on — no wire, no node added)
-    assert G.read_graph(got).to_json() == empty and notes == []
-    old, _ = M.module_runs(None, on, specs)      # (the old words' path: today's frame)
-    assert ("plasma", "output.all.image") in [(w["from"], w["to"]) for w in old["wires"]]
-    assert any(w["to"] == "scene.geometry" for w in old["wires"]), "the leak's frame"
-    app.lib.load("fx", "mandala")
-    # (the run reached nothing: the frame stays the empty one, nothing landed)
-    assert app.presets.graph.free_doc() is None
-
-
 # ---------------------------------------------------------------- fix round 1: `dream.on`'s meaning
 
 def test_click_to_map_offers_a_migrated_tracers_trail_knobs():

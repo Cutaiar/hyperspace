@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hyperspace import devices, envelope, lfo, patch, routing, sequencer, undo
+from hyperspace import devices, envelope, lfo, modgraph, routing, sequencer, undo
 from hyperspace.envelope import Envelopes
 from hyperspace.lfo import LFOs
 from hyperspace.params import PERFORMANCE_GROUPS, Registry
@@ -67,9 +67,9 @@ def one_shot(r, n: int, attack=0.1, decay=0.2, release=0.3) -> None:
 
 def test_the_kinds_and_schemes_are_registered():
     assert routing.BANKS["env"] is Envelopes and routing.BANKS["lfo"] is LFOs
-    assert "env" in patch.KINDS and Envelopes.KNOBS == patch.ENV_KNOBS
-    assert set(patch.ENV_KNOBS) <= set(patch.PORTS)
-    assert len(set(patch.PORTS)) == len(patch.PORTS)
+    assert "env" in modgraph.KINDS and Envelopes.KNOBS == modgraph.ENV_KNOBS
+    assert set(modgraph.ENV_KNOBS) <= set(modgraph.PORTS)
+    assert len(set(modgraph.PORTS)) == len(modgraph.PORTS)
     assert devices.BUILTIN_SCHEMES == routing.BUILTIN_LANES == ("lane", "lfo", "env", "seq")
     assert {"env", "seq"} <= set(PERFORMANCE_GROUPS)
     r = rig()
@@ -230,7 +230,7 @@ def test_a_route_onto_an_envelopes_fire_starts_it_this_frame():
 def test_an_extra_envelope_routes_and_goes_dormant_when_removed():
     r = rig([Binding("env:5", "t.x", "push", 1.0)])
     frame(r, 0.5)
-    assert "env:5" not in r.router.patch.nodes or r.router.patch.nodes["env:5"].kind == "env"
+    assert "env:5" not in r.router.modgraph.nodes or r.router.modgraph.nodes["env:5"].kind == "env"
     assert ("bank", "env", 5) not in r.router.__dict__["_plan"]
     assert r.envs.add() == 6 and "env.6.attack" in r.reg
     r.reg["env.6.attack"].set(0.1)
@@ -559,7 +559,7 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
     from hyperspace import preset
     from hyperspace.library import LibraryError
 
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)   # (plan 35: /6 the wired frame; plan 36 T3: /7)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 35: /6; plan 36 T3: /7; plan 40 T2: /8)
     app.reg["view.bright"].set(1.5)
     doc = {k: v for k, v in app.presets.document("p").items() if k != "graph"}
     doc["values"] = {k: v for k, v in doc["values"].items()

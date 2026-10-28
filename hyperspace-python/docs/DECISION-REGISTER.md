@@ -39,6 +39,7 @@ Rows 417–500 are plans 37, 38 and 39's, run in parallel on 2026-10-27 and inte
 Rows 417–429 and 460 (plan 37, nodes as pictures and the faces) were written during the 2026-10-27 run, in the owner's absence. 417 is the plan's D1, the list of face patterns that stay, and it is **open** until the owner names the list. 418–421 are D2–D5, "(rec) — accepted by the controller 2026-10-27". 422–429 and 460 are the controller's rulings during the build, answered "controller — 2026-10-27". The plan needed one row more than its thirteen, so it took 460. They were built on `plan-37-pictures`.
 Rows 430–439 and 461–470 (plan 38, hold the projector) are the plan's D1–D5 (430–434), taken as recommended and accepted by the controller on 2026-10-27 for the owner to keep or overturn, then the controller's rulings during its build (on `plan-38-hold`); the plan overflowed its ten rows into 461–470.
 Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the owner's on 2026-10-27, before the build; rows 448–459 and 471–497 are the controller's rulings during that build, answered "controller — 2026-10-27" (twenty rows were assigned, 440–459; the overflow starts at 471, after plan 37's 460 and plan 38's 461–470; on `plan-39-vision`; three of them, 459, 495 and 496, are the seams with plan 38's hold, settled on `plan-37-38-39-integration`).
+Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 2026-10-28, on `plan-40-build`: 501–510 are the plan's D1–D10, every one the owner's on 2026-10-27, before the build; 511–536 are the controller's rulings during the build, answered "controller — 2026-10-27", except 521 and 524, which are **pending the owner** (the schema of a save with no group, and a take-over chip for "wire as saved"). The plan was assigned 471–495, which plans 37–39 had taken, so it took the next free, 501–525, and overflowed into 526–536.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -260,7 +261,7 @@ here; overturn → the change, then the same.
 | 230 | A placed effect aimed at the faces says "on the faces" | 230 | |
 | 231 | The `VALUE` port: a fourth type, used by no node | — | |
 | 232 | The faces target stays an inner chain (the lift as the other option) | 230 | |
-| 233 | `patch.py`'s types: nodes by address or param id, an edge per port | — | |
+| 233 | `modgraph.py`'s types: nodes by address or param id, an edge per port | — | |
 | 234 | Only the params a later node reads land in the pass; the frame's mark | 232 | |
 | 235 | The patch cached on a key built once a frame (about 5 µs a frame dearer) | — | |
 | 236 | A loop through no delay: its last cable off, a note, the row kept (two drafts folded) | 233 | |
@@ -528,6 +529,42 @@ here; overturn → the change, then the same.
 | 498 | While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's | 378 | controller — 2026-10-27 |
 | 499 | While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's | 378 | controller — 2026-10-27 |
 | 500 | A cut shows its picture on GRAPH; a matte and a segment stay text | — | controller — 2026-10-27 |
+| 501 | Plan 40 D1: the new thing is a patch; `patch.py` renamed `modgraph.py` | — | owner — 2026-10-27: "Calling this a patch and renaming the other module is fine." |
+| 502 | Plan 40 D2: host ports land as open pins, spliced, or by one press of wire as saved; never attached by themselves | 395, 396 | owner — 2026-10-27 |
+| 503 | Plan 40 D3: conflicts asked in one sheet, the patch or the preset per row | 397 | owner — 2026-10-27: "choose a resolution for each one: the patch or the existing preset" |
+| 504 | Plan 40 D4: a group saved and folded until `+`, the one sanctioned exception to no hidden edges | 394 | owner — 2026-10-27: "an explicit place where we want to … encapsulate complexity" |
+| 505 | Plan 40 D5: a patch holds only its boundary; it drives a host param, never sets one | 395 | owner — 2026-10-27 |
+| 506 | Plan 40 D6: the fx module presets retired outright, nothing converted | 400 | owner — 2026-10-27: "retired outright" |
+| 507 | Plan 40 D7: `groups` is `/8`; no key, no groups | 394 | owner — 2026-10-27 |
+| 508 | Plan 40 D8: browser and spawn on the control window only | — | owner — 2026-10-27 |
+| 509 | Plan 40 D9: every conflict row starts on the patch, with keep all existing | 397 | owner — 2026-10-27 |
+| 510 | Plan 40 D10: the FX page stays; only the module presets go | 400 | owner — 2026-10-27: "I meant only the module presets." |
+| 511 | The rename covers `modgraph`'s types and private names too | — | controller — 2026-10-27 |
+| 512 | A patch's envelopes are 6 and up in the file; the example's lane is `mod:1` | — | controller — 2026-10-27 |
+| 513 | A host macro is in use by a label, subscriber or row, never its value | 397 | controller — 2026-10-27 |
+| 514 | What a conflict is; a hand read through a modifier is none (for the owner) | 397, 401 | controller — 2026-10-27 |
+| 515 | What a lift writes: `(doc, refused)`, port ids and `was`, value ports derived | 395 | controller — 2026-10-27 |
+| 516 | A hidden factory patch in `hidden.json` under `"patches"` | 395 | controller — 2026-10-27 |
+| 517 | Group moves a member from another group, never nests, numbers past the highest | 394 | controller — 2026-10-27 |
+| 518 | Open / fold is a preset edit, one undo step | 394 | controller — 2026-10-27 |
+| 519 | A deleted member leaves its group lazily | 394 | controller — 2026-10-27 |
+| 520 | Leaves when wholly outside; the folded node drags all; several leavers one step; a stub drop refused | 394 | controller — 2026-10-27 |
+| 521 | A save with no group stays `/7`; `/8` only with a group (controller recommends every save `/8`, row 394) | 394 | **pending the owner** |
+| 522 | The folded node's pins: picture pins, out lanes, param rows, modifier inputs | 394 | controller — 2026-10-27 |
+| 523 | A spawn's open pins and rename map last the session | 395 | controller — 2026-10-27 |
+| 524 | Wire as saved takes only free ports; a take-over chip? | 395 | **pending the owner** |
+| 525 | Save as patch refuses a bad member or another patch's name; one step for `patch`; update beside it | 395 | controller — 2026-10-27 |
+| 526 | A kept row stored with its words; a stale landing refused | 397, 401 | controller — 2026-10-27 |
+| 527 | `Learn.hold` while the sheet is up | 397 | controller — 2026-10-27 |
+| 528 | The wants at a spawn, in the sheet and on the head after | 399 | controller — 2026-10-27 |
+| 529 | **patches** first on GRAPH's head; the drop target a picture cable of the section | 395, 396 | controller — 2026-10-27 |
+| 530 | The arrival: an error is no coming or going; the launch says nothing | 398 | controller — 2026-10-27 |
+| 531 | What `wants` counts, and whose device a row is | 398, 399 | controller — 2026-10-27 |
+| 532 | The words of a row; a missing desk's glyphs | 398 | controller — 2026-10-27 |
+| 533 | The FX page's own fx module strip hidden, not the page | 400 | controller — 2026-10-27 |
+| 534 | A retired module group named; its label loads quietly | 400 | controller — 2026-10-27 |
+| 535 | The party generator keeps the fx families' values inline | — | controller — 2026-10-27 |
+| 536 | Plan 38's PROJECTOR inset fix rides on plan 40's PR | 377 | controller — 2026-10-27 |
 
 "—": no hand check shows it; tests only.
 
@@ -4507,9 +4544,9 @@ Folds two of D1's drafts: the refusals, and the loops.
   291) for a lights sink (plan 29), and
   an image-in `sample` port on the palette that would set its params
   from a bitmap. No node publishes or reads one (a test walks every
-  `Node` class and the built default graph). `patch.RENDER_VALUE =
+  `Node` class and the built default graph). `modgraph.RENDER_VALUE =
   "value"` names it on the modulation side, as a future source whose id
-  is the node's port (`palette:palette`); `patch.py` stays a leaf.
+  is the node's port (`palette:palette`); `modgraph.py` stays a leaf.
   `Node.__init__` already type-checks a wired port, so the first node to
   declare one wires like any other. Nothing to see.
 - **Other options.** A typed shape (a `ValuePort(n, names)` naming the
@@ -4565,13 +4602,13 @@ modifiers alone" is in row 236; N3's "the seam with N4" is in row 268;
 N4's "a hands wire on a through output" is in row 266; N5's "an edit
 inside a template" is in row 274.
 
-### 233. `patch.py`'s types: nodes by address or param id, an edge per port
+### 233. `modgraph.py`'s types: nodes by address or param id, an edge per port
 
-- **Built.** `PatchNode(id, kind, delay=False)`, kinds `source lfo
+- **Built.** `ModNode(id, kind, delay=False)`, kinds `source lfo
   modifier macro param`; a source's, an LFO's or a modifier's id is the
   address a row names (`lane:0`, `lfo:0`, `mod:3`, `hand:right.y`), a
   param's or a macro's its param id — an address has a `:`, an id never
-  does. `PatchEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
+  does. `ModEdge(src, dst, port, cable, enabled)`, ports `mod`, `when`
   (a row's gate orders before the row: a gate on an `lfo:` lane needs
   it), `depth`, `base`, `in`, and every LFO knob `shape rate sync depth
   phase reset` plus `trigger` (`lfo.trigger` → every LFO); a modifier's
@@ -4581,7 +4618,7 @@ inside a template" is in row 274.
   at 256).
 - **Other options.** Nodes as a list; a gate folded into the `mod`
   edge; only `depth / rate / phase` as LFO ports (the prompt's list).
-- **To reverse.** Small: `patch.py` is data; the GRAPH page draws from
+- **To reverse.** Small: `modgraph.py` is data; the GRAPH page draws from
   the table, not from it.
 - **Rough edge.** A switched-off row is in the patch as disabled edges
   (not run); a cable cut by a loop looks the same in the patch.
@@ -4603,7 +4640,7 @@ inside a template" is in row 274.
 - **Other options.** Land every param node in the pass (a leaf trigger —
   a band-layout change, `preset.select` — would fire mid-pass, in patch
   order); a per-param flag cleared by `Registry.apply`.
-- **To reverse.** One condition in `_rebuild_patch` (land always).
+- **To reverse.** One condition in `_rebuild_modgraph` (land always).
 - **Rough edge.** A read param lands in patch order, not registry order:
   the same value at another moment in the frame. A test that calls
   `p.apply()` by hand between `modulate` and `reg.apply()` on such a
@@ -4612,7 +4649,7 @@ inside a template" is in row 274.
 
 ### 235. The patch is cached on a key built once a frame
 
-- **Built.** `Router.patch` is rebuilt when `_patch_key` moves: every
+- **Built.** `Router.modgraph` is rebuilt when `_modgraph_key` moves: every
   performer row by identity and its `source target op enabled scale
   when`, `macros_serial`, every macro subscriber (identity, `depth`,
   `base`), the modifiers' `(id, kind, inputs)`, the LFO count and
@@ -4621,7 +4658,7 @@ inside a template" is in row 274.
 - **Other options.** A serial bumped by every table edit door (the table
   is also mutated in place, by ROUTING and by tests: a missed door would
   run a stale patch).
-- **To reverse.** `_patch_key`.
+- **To reverse.** `_modgraph_key`.
 - **Rough edge.** `Router.modulate` costs about 5 µs a frame more:
   31.4 / 30.5 µs on the base, 37.2 / 35.0 µs now (party-trip, 21 routes,
   the hand tape, 2000 frames × 5 rounds, twice), mostly this tuple and
@@ -4651,7 +4688,7 @@ Folds N0's "a loop of modifiers alone".
   `enabled: false` saved); the note in `table.notes` (cleared by any
   edit while the loop stands); labels in the note; cut the loop's first
   input.
-- **To reverse.** `_rebuild_patch`'s loop; two lines in `ui_routing.head`.
+- **To reverse.** `_rebuild_modgraph`'s loop; two lines in `ui_routing.head`.
 - **Rough edge.** The row's checkbox still reads on; the modifier's input
   combo still shows the cut input. The note uses node ids, not labels.
   An LFO owning its own depth, which ran before with a frame of lag, is
@@ -4665,7 +4702,7 @@ Folds N0's two delay drafts.
 - **Built.** An edge into a delay orders like any other (a plain delay
   runs after its input and uses N1's stateful step: its rest first, then
   one frame late), unless the delay reaches that edge's source again
-  (`patch.ordering`): then the edge does not order, the delay runs
+  (`modgraph.ordering`): then the edge does not order, the delay runs
   first and emits its input's lane as it stood — last frame's — so a
   loop through it is exactly one frame late; on the loop's first frame
   it emits its rest (0). `cycles` lists no loop through a delay.
@@ -4673,7 +4710,7 @@ Folds N0's two delay drafts.
   computed lane, stepped statefully, would be two frames late); a
   loop-closing delay that reads NaN when its other source goes (the
   loop could never restart).
-- **To reverse.** `patch.ordering` and `_step_modifier`'s `early`.
+- **To reverse.** `modgraph.ordering` and `_step_modifier`'s `early`.
 - **Rough edge.** If the loop's other source goes away the early delay
   emits its rest, not NaN; it passes ±inf through (harmless:
   `Param.modulate` drops non-finite, and a modifier reading it drops its
@@ -4723,7 +4760,7 @@ Folds N0's two delay drafts.
 - **Rough edge.** It shares the Router's helpers (`_resolve_lane`,
   `gated`, `rest_of`, `feel_of`, `_move`), so it proves timing and
   order, not the helpers. No factory preset carries a modifier or a
-  delay: those are proven by `test_patch` and `test_modifiers` only.
+  delay: those are proven by `test_modgraph` and `test_modifiers` only.
 - **Judge it.** Tests only.
 
 ### 240. The six modifier kinds and their params
@@ -8015,6 +8052,8 @@ The three plans ran in parallel on 2026-10-27, each on its own branch, and were 
 
 **The integration (rows 498–500).** Taken by the integrator at the plan 37 merge, where plan 37's thumbnails met plan 38's preview renderer (498, 499) and plan 39's kinds (500).
 
+Plan 40's rows (501–536) follow, in their own section at the end.
+
 ### 417. Plan 37 D1: the list of face patterns is the owner's; nothing is dropped until he names it
 
 - **Answer.** owner — 2026-10-27: **"For now, we're going to keep all of the face shaders. We're going to tell you to drop them in the future at our discretion."** All 17 stay; P2 does not run until the owner names a list. The sheets, the migration map and the two questions below stay ready for that day.
@@ -8802,3 +8841,331 @@ The three plans ran in parallel on 2026-10-27, each on its own branch, and were 
 - **To reverse.** One table entry each.
 - **Rough edge.** The node that cuts a dancer out shows no picture on GRAPH; its fg and bg are seen only where they are wired.
 - **Judge it.** —
+
+## Plan 40 — patches (rows 501–536)
+
+Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, before the build ([`plans/40-patches.md`](plans/40-patches.md)); each says what was built against his words. Rows 511–536 are the controller's rulings during the build (2026-10-27 and 2026-10-28, on `plan-40-build`: T0–T5, PRs #269, #274, #272, #271, #276, #277, and the review fixes, #278), each the owner's to keep or overturn; the sub-agents' drafts that were one choice are merged into one row. Two are **pending the owner**: 521 (the schema of a save with no group) and 524 (a take-over chip for "wire as saved"). The plan was assigned 471–495; plans 37–39 and PR #275 had taken through 500, so it took 501–525 and overflowed into 526–536. Hand checks 394–401, group AK.
+
+### 501. Plan 40 D1: the new thing is a **patch**; `patch.py` is renamed `modgraph.py`
+
+- **Answer.** owner — 2026-10-27: "Calling this a patch and renaming the other module is fine."
+- **Built.** T0 (PR #269): `hyperspace/modgraph.py` (the modulation graph as data and its order, plan 28 N0), `tests/test_modgraph.py`; `Router.build_modgraph`, `.modgraph`, `.modgraph_notes`, `.modgraph_cut`; `hotreload.MODULES` names `modgraph`. "k patched" on a node summary stays: it is the same sense. Row 511 says how far the rename went.
+- **Other options.** Another noun (block, rack, module, macro-node).
+- **To reverse.** A sed; nothing persists the names.
+- **Rough edge.** Prose in comments that says "the modulation patch" is unchanged.
+- **Judge it.** — (the suite unmoved).
+
+### 502. Plan 40 D2: a spawn's host ports land as open pins, or spliced on a cable, or wired by one press of **wire as saved** — never attached by themselves
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** `Edit.spawn` lands only the patch's own wires (`patches.spawn` emits only wires with both ends members, and `patches.check` refuses any wire with an end outside the patch: "wire scene → acid.image crosses the edge: a port says it"). The host ports are open pins on the folded group node, "in · open (was scene)". Dropped from the browser on a picture cable whose type matches the patch's one inlet and one outlet, the patch is spliced in (the cable removed, two added, one step). The side pane's **wire as saved** lands each `was` cable whose node the preset has and whose port is free, one step, and refuses the rest in words (row 524). Tests: `tests/test_graph_groups.py::test_spawn_lands_through_the_doors_as_one_step_and_one_undo_takes_it_all` (the section's wires are the host's plus the patch's two), `::test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step`, `::test_wire_as_saved_wires_the_free_ports_and_refuses_a_taken_one`.
+- **Other options.** Attach by the saved names when the host has them (a hidden edge by another name); open pins only.
+- **To reverse.** Not cheap: it is the plan 36 rule.
+- **Rough edge.** Rows 523 and 524.
+- **Judge it.** Checks 395, 396.
+
+### 503. Plan 40 D3: a spawn's conflicts are asked, in one sheet: the patch or the existing preset, per row
+
+- **Answer.** owner — 2026-10-27: "a pop-up that says, hey, these are the conflicts; choose a resolution for each one: the patch or the existing preset."
+- **Built.** `ui_routing.modal` draws the sheet first, in the Replace / Keep popup: one row per conflict ("K1: `fx.acid.2.speed` (the patch) or `view.bright` (the preset)"), **keep all existing**, **take all**, the patch's wants beneath, **Spawn** / **Cancel**. Spawn lands the whole landing with the answers as one undo step; a row the preset keeps is not added and is listed on the group as "K1 kept by the preset" (row 526); Cancel lands nothing and pushes no step. While it is up nothing learns (row 527). The kinds of conflict are row 514's. Tests: `tests/test_ui_routing.py::test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`, `::test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it`.
+- **Other options.** The patch wins, said (the recommendation); the host wins, said.
+- **To reverse.** Medium: the sheet and the `choices` path through `Edit._spawn_rows`.
+- **Rough edge.** A spawn of a cut back into its own preset lists every shared hand axis (row 514).
+- **Judge it.** Check 397.
+
+### 504. Plan 40 D4: a group is saved in the preset and drawn folded until `+` — the one sanctioned exception to "no hidden edges"
+
+- **Answer.** owner — 2026-10-27: "a good middle ground. I know it goes against the no hidden edges rule, but this is an explicit place where we want to say, okay, we want to encapsulate complexity."
+- **Built.** `groups` in the preset after `layout` (`preset.GROUPS_KEY`: `{"id": "group.1", "name", "patch"?, "nodes", "open"}`). Folded, the group is one node at its members' top-left: its name, one pin per crossing picture cable and one row per boundary param (row 522), its status line, plan 37's thumbnail of its last picture outlet. Its internal cables are not drawn; `+` opens it in place, a tinted region with the members at their own positions and every cable drawn. The renderer never hears the word: `graph.build_graph`, the signature and the goldens see the flat graph (a grouped twin of every preset with a main run builds the same signature and draws the same goldens). Nothing else hides a cable. Tests: `tests/test_graph_groups.py::test_a_folded_group_hides_its_members_and_inside_cables_and_reends_the_rest` (folded drawn + hidden = open = ungrouped), `::test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin`, `::test_graph_and_render_never_hear_the_word`, `tests/test_golden_frames.py::test_every_preset_with_its_main_run_grouped_draws_its_goldens`.
+- **Other options.** A session-only fold saved nowhere, like a collapsed node.
+- **To reverse.** Medium: the key and the drawing.
+- **Rough edge.** The head's "N hidden" count includes a folded group's members.
+- **Judge it.** Check 394.
+
+### 505. Plan 40 D5: a patch holds only its boundary — it drives a host param through a port, it never sets one
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** `lift` keeps only its members' values; `check` refuses a host param's value in words; `spawn` keeps only members' values whatever the file says. Tests: `tests/test_patches.py::test_spawn_lands_only_the_members_values`, `::test_check_refuses_each_refusable_thing_in_words`.
+- **Other options.** Carry host values too (`view.bright: 0.8` in the patch): a preset, not a patch.
+- **To reverse.** Small.
+- **Rough edge.** None known.
+- **Judge it.** Check 395.
+
+### 506. Plan 40 D6: the fx module presets are retired outright; nothing converted
+
+- **Answer.** owner — 2026-10-27: "I don't want factory patches from the 6 FX module presets … The FX module should probably be retired outright. It is not a useful representation of shaders anymore."
+- **Built.** T5 (PR #271): the six `hyperspace/library/fx/*.json`, `Presets._fx_module`, `_watch_fx_modules`, `graphmigrate.module_runs` and its helpers are gone; "more · module presets" has no fx row; `Library.defaults("fx")` is the fresh values. An `fx` label in an old file loads quietly and the next save drops it. Rows 533–535 are the build's choices inside it. Tests: `tests/test_presets.py::test_the_fx_presets_are_retired`, `::test_an_old_fx_label_loads_quietly_and_saves_without_it`.
+- **Other options.** Convert the six to factory patches (the recommendation).
+- **To reverse.** A revert of T5 (the six files are in git).
+- **Rough edge.** A user's fx module files on the Drive stay on disk, unreachable.
+- **Judge it.** Check 400.
+
+### 507. Plan 40 D7: `groups` is schema `/8`; the migration is "no key, no groups"
+
+- **Answer.** owner — 2026-10-27: as recommended ("whichever of 37B and this lands second takes `/9`"). 37B took no schema, so `groups` is `/8` (the run's ruling 13).
+- **Built.** `preset.VERSIONS` is 2–8; `graphmigrate.groups_of` reads a file with no key as no groups; a `/9` file is refused. **When** `/8` is written is row 521 (pending the owner). An older build refuses an `/8` file outright ("is not a hyperspace.preset"), so both Macs run this build before a grouped preset is shared. Test: `tests/test_graph_groups.py::test_the_schema_is_eight_and_the_key_absent_is_no_groups`.
+- **Other options.** —
+- **To reverse.** —
+- **Rough edge.** Row 521.
+- **Judge it.** Check 394 (step 10).
+
+### 508. Plan 40 D8: the browser and spawn are the control window's only; nothing on the desk
+
+- **Answer.** owner — 2026-10-27: "control window only."
+- **Built.** No desk row, no pad, no `apc40.py`, `midi.py`, `bindings.default.json` or `ui_desk*.py` change.
+- **Other options.** A bank of patches on the APC40's pads.
+- **To reverse.** A new plan (Dylan's files).
+- **Rough edge.** None.
+- **Judge it.** —
+
+### 509. Plan 40 D9: every conflict row starts on the patch, with one **keep all existing**
+
+- **Answer.** owner — 2026-10-27: as recommended.
+- **Built.** The sheet opens with every row on "the patch"; **keep all existing** flips every row to the preset, **take all** back; a row with no answer lands as the patch. Test: `test_the_conflict_sheet_asks_per_row_preselected_to_the_patch`.
+- **Other options.** Preselected to the preset; unselected.
+- **To reverse.** One line in `ui_graph.spawn`.
+- **Rough edge.** None known.
+- **Judge it.** Check 397.
+
+### 510. Plan 40 D10: the FX page stays; only the module presets go
+
+- **Answer.** owner — 2026-10-27: "I meant only the module presets. I forgot that we did a UI pass on the FX tab a while ago."
+- **Built.** `ui_fx.py` is untouched: the browser of the graph's effect nodes by where each ends, its strip, `Panel.fx_selected`. The one module-preset strip it drew is hidden (row 533).
+- **Other options.** The page goes too.
+- **To reverse.** —
+- **Rough edge.** Row 533.
+- **Judge it.** Check 400.
+
+### 511. The rename covers `modgraph`'s types and private names, not only the four symbols listed
+
+- **Answer.** controller — 2026-10-27 (T0's draft, the run's rulings 4–6).
+- **Built.** `Patch` / `PatchNode` / `PatchEdge` → `ModGraph` / `ModNode` / `ModEdge`; `Router.patch_cut` → `modgraph_cut`; `_patch_key`, `_rebuild_patch` and the cache keys → `_modgraph_*`; two test names. The live docs (ARCHITECTURE, ENGINEERING, DECISIONS, this register, plan 28's two pages) got a sed inside backtick spans; the run records under `plans/assets/28-30-run/` keep the old names. The module's docstring says it "was named `patch`" without the file name, so the build plan's proof grep (`patch\.py|patchmod`) stays empty. Nothing visible.
+- **Other options.** Only the four symbols, leaving a class `Patch` beside plan 40's patches.
+- **To reverse.** A sed.
+- **Rough edge.** `Router.modgraph` (a property) shares the module's name; safe (deferred annotations), tested.
+- **Judge it.** —
+
+### 512. A patch's envelopes are 6 and up, in the file too; the example's lane is `mod:1`
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** Envelopes 1–5 are every preset's (the sequencer's lanes), so `lift` names a patch's envelopes from `env.6` and `check` refuses an `envs` entry 1–5 in words; spawned, an envelope takes the host bank's next id, never below 6. The spec's example routed `mod:0` from `mod.1`; a modifier's lane is `mod:<n>` for `mod.<n>`, so the fixture `tests/fixtures/patches/acid-wash.json` says `mod:1` (the spec is corrected).
+- **Other options.** `env.1`… in the file, mapped at spawn.
+- **To reverse.** `patches.FIRST_ENV` and one test.
+- **Rough edge.** None.
+- **Judge it.** — (`tests/test_patches.py::test_lift_renames_to_the_lowest_ids_and_rebases_the_layout`).
+
+### 513. A host's macro is "in use" by a label, a subscriber or a row onto it — never by its value
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** A patch's `macro.2` keeps its number in a host that does not use it, else takes the lowest free of the eight; with none free, the footer says "macro.2: no free macro — its subscribers not spawned" and its value, subscribers and rows stay out while the rest spawns. A value alone does not count: every factory preset holds `macro.1..8 = 1.0`. Test: `tests/test_patches.py::test_a_macro_with_no_free_number_is_a_note_and_the_rest_spawns`.
+- **Other options.** A value off its default counts; a subscriber only.
+- **To reverse.** `Host.of`'s used set.
+- **Rough edge.** A host macro moved by hand but with no subscriber or label is taken.
+- **Judge it.** Check 397 (step 6).
+
+### 514. What is a conflict: a desk control by overlap, a hand or stick axis that already drives another param, a param another performer owns — and a hand read through a modifier is none
+
+- **Answer.** controller — 2026-10-27 (T1, with the reviewer). **For the owner** on the modifier case.
+- **Built.** `cc:` / `note:` / `pitch:` rows: a **desk** conflict when a host preset-layer row overlaps (`Binding.overlaps`: device, kind, number, channel). `hand:` and `axis:` rows (`patches.ONE_OWNER`): a **source** conflict when a host route reads the same source onto another param (Learn's "one axis, one param"). Any route onto a param the host's `Bindings.owner` already has: a **target** conflict. Every other scheme (a band, an LFO, `lane:`, OSC) may drive any number of params. A row has at most one conflict. **A one-owner source read through a modifier input is never a conflict**: acid-wash's `smooth` reads `hand:right.y`, and spawned into party-noita, where `hand:right.y` drives warp's amount, the sheet lists only K1 — though the spec's D3 example names "`hand:right.y` already owns a param". The lowest free instance may wake a host's dormant rows left on a removed instance's params (as `_new_instance` does on the canvas), unsaid.
+- **Other options.** Check modifier inputs on `ONE_OWNER` schemes too (a few lines in `spawn`), if "one axis, one meaning" is meant; every continuous scheme one-owner; hands only.
+- **To reverse.** `ONE_OWNER`, and the modifier case in `spawn`.
+- **Rough edge.** A noita cut spawned back into party-noita lists every shared hand axis: correct by the rule, a noisy sheet.
+- **Judge it.** Checks 397 (step 5), 401.
+
+### 515. What a lift writes: `(doc, refused)`, port ids and `was`, value ports derived at read
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** `lift(spec, table, values, layout, ids) → (doc, refused)`: the file's dict (name and note empty, the form fills them) and the refusals in words; its third argument is the registry's performance snapshot, so it stays pure. Inlets are `in`, `in.2`…, outlets `out`, `out.2`… in wire order, one per crossing cable; an inlet's `was` is the source's name, an outlet's the port it went into. The value crossings are derived at `read` as `value.<k>` ports, not stored. An extra hands entry's `laid` is not carried (the host's frame has one); a `copy` goes only with its original.
+- **Other options.** A dataclass; refusals inside the doc.
+- **To reverse.** Cheap (T3's call sites).
+- **Rough edge.** `wants` leaves out a row's `when` gate source.
+- **Judge it.** Check 395.
+
+### 516. A hidden factory patch lives in `hidden.json` under `"patches"`
+
+- **Answer.** controller — 2026-10-27 (T1).
+- **Built.** `Library.hide` / `unhide` / `rename` take the patches' kind (`HIDEABLE`); × on a factory patch hides its stem in `hidden.json`'s `"patches"` list, written only when non-empty (a home that hides none writes exactly the old file); rename takes a user patch, less the show repoint. No factory patch ships yet.
+- **Other options.** A second file.
+- **To reverse.** Small.
+- **Rough edge.** An older build that rewrites `hidden.json` drops the key (both Macs update together).
+- **Judge it.** Check 395 (step 7).
+
+### 517. Group: a member of another group moves to the new one, said; a group never holds a group; ids are one past the highest
+
+- **Answer.** controller — 2026-10-27 (T2; the review fixes, 2026-10-27).
+- **Built.** A selected node already in a group leaves it for the new one ("doublevision left group 1 for this group"); a group left empty goes. A folded group's node in the selection is refused ("group.2 is a group: a group holds nodes, not groups; left out"); an open region's title is simply not in the selection. On load a node named by two groups stays in the first, said. The id is `group.<n>`, n one past the highest held (the modifiers' rule), named "group n"; ungrouping the highest lets its number come back. With no bank (a test's bare router), the voices a group may hold are the registry's (`graphview.bank_ids`).
+- **Other options.** Refuse the node; a high-water mark that never reuses a number in a session (`modbank`'s rule).
+- **To reverse.** Small (`Edit.group`'s loop; one line for the numbering).
+- **Rough edge.** Grouping a whole group plus one node moves every member and removes the old group, in one step.
+- **Judge it.** Check 394 (steps 1, 5, 6).
+
+### 518. Open / fold is a preset edit: one undo step, the dirty dot lights
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** `open` is saved in the group's entry (D7's shape), so `+` / `−` is one step and dirties the preset, as dropping a node does; a preset saves with whichever groups were open.
+- **Other options.** `open` as page state, saving only `false` (a second state beside the file; "folded until `+`" a lie on reload).
+- **To reverse.** Small.
+- **Rough edge.** Looking inside a group and folding it again leaves the preset clean only through ⌘Z.
+- **Judge it.** Check 394 (step 3).
+
+### 519. A member deleted while grouped leaves the group lazily
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** Deleting a member does not edit `groups`; the canvas ignores a member the preset no longer holds and a save leaves it out (`Presets.live_groups`), with any group left empty. ⌘Z brings the node back into its group, a modifier too.
+- **Other options.** Edit the list in the delete's step (a value node's delete pushes no marks, so its undo would lose the membership).
+- **To reverse.** Medium.
+- **Rough edge.** The in-memory list can name a deleted node until a save or a load.
+- **Judge it.** Check 394 (step 7).
+
+### 520. The group by the mouse: a member leaves when dropped wholly outside; the folded node drags every member; several leavers are one step; a stub drop is refused
+
+- **Answer.** controller — 2026-10-27 (T2; the review fixes).
+- **Built.** A member dropped with its rect **wholly** outside the region as it stood before the drag leaves the group, at its new place; overlapping keeps it in and the region grows. The folded node has no position of its own (D4): dragging it moves every member by the delta, as the open region's title does, one step. Several members dragged out together are one step ("2 nodes leave noita core"). A cable dropped on a folded group's stub is refused while held: "noita core is folded: drop it on one of its pins, or open it (+)". Tests: `tests/test_graph_groups.py::test_a_member_dragged_out_leaves_the_group`, `::test_a_drag_of_the_folded_node_moves_every_member`, `::test_two_members_dragged_out_together_leave_in_one_step`, `::test_a_drop_on_a_folded_groups_stub_is_refused_in_words`.
+- **Other options.** Any part outside; the centre outside; a folded node that cannot be moved; the group's ports offered through the stub.
+- **To reverse.** Small each.
+- **Rough edge.** A large region needs a long drag to leave; leavers from two open groups in one drop are one step.
+- **Judge it.** Check 394 (steps 4, 8).
+
+### 521. A save with no group stays `/7`; `/8` only when a group exists — **pending the owner**
+
+- **Answer.** **pending the owner.** Built as T2's ruling (the build plan's "a preset without `groups` saves byte for byte as before" and "the factory presets and the library are not rewritten"). The controller recommends the other way: row 394, the owner's own of 2026-10-25, is "every save is the newest schema; migrate the library forward", and D7 cites it — so every save would write `/8`, reading `/7` the identity, the factory files and the Drive library migrated by `tools/migrate_library.py` as plan 36 did (a schema-line rewrite, backups as before).
+- **Built.** `Presets.document` writes `groups` and `hyperspace.preset/8` only when a live group exists; otherwise the file is `/7` byte for byte, so no factory file and no library file moved. This partly revives "the lowest schema that loses nothing" (R10), which row 394 superseded.
+- **Other options.** Every save `/8` (the recommendation): every preset's first line changes on its next save, and the factory resave test moves with it.
+- **To reverse.** One rule in `Presets.document`, then a migration run over the factory files and the library.
+- **Rough edge.** Until the owner answers, a preset's schema line says whether it has a group.
+- **Judge it.** Check 394 (step 10).
+
+### 522. The folded node's pins: one per crossing picture cable, one out pin per member lane leaving, one row per boundary param and per modifier input read from outside
+
+- **Answer.** controller — 2026-10-27 (T2).
+- **Built.** In order: a typed pin per picture cable into a member (keyed by the member's port), one per picture cable out, an out pin per member lane or macro bus leaving, then a row per member param a rig row or crossing route lands on, and a row per member modifier input read from outside. The spec named picture pins and param rows; the rest make "folded + hidden = open = ungrouped" hold for every cable. Value cables to a collapsed far end bundle per (node, pin), so each row keeps its wire. A drag onto a group pin lands on the member's pin behind it (`real_pin`).
+- **Other options.** Value cables leaving a member go to the group's out stub.
+- **To reverse.** Small.
+- **Rough edge.** A param row's one pin stands for both its `base` and `mod` stubs and lands on `mod`, so a desk knob dropped there is refused ("sets a base, not a performer"): open the group to aim at `base`.
+- **Judge it.** Check 394 (step 2).
+
+### 523. A spawn's open pins and rename map last the session; a save drops them
+
+- **Answer.** controller — 2026-10-27 (T3). **For the owner** to see: P2 says "one pin per host port … or open".
+- **Built.** `Edit.spawn` puts the landing's `ports` and `renames` on the live group entry; the folded node draws each still-open port ("in · open (was scene)") and the hover says "spawned as acid → acid.2 …". Undo carries both. `preset.group_entry` writes neither, so after a reload a group whose pins were never wired shows no open pins and no **wire as saved** chip; `+` shows the member's own ports.
+- **Other options.** Keep them in the panel's state (undo would not follow); save them in the preset (a new key, the "where it was" data plan 36 rules out).
+- **To reverse.** Small: two keys and one reader.
+- **Rough edge.** As said: the chip is gone after a reload.
+- **Judge it.** Check 395 (step 4).
+
+### 524. **Wire as saved** takes only free ports and never takes one over — whether a take-over chip should exist is **pending the owner**
+
+- **Answer.** **pending the owner** on the take-over chip. Built (T3) as D2 says: "if the host has those nodes and the ports are free, refused in words otherwise." The reviewers agree refusing is right under D2; a press that silently cut the host's run would be a hidden edit.
+- **Built.** An inlet lands when the preset has its `was` node (the rig's outputs, channels, camera and clouds always count); an outlet when nothing is wired into its `was` port yet (`scene.geometry`, which takes many, excepted). Every other pin is refused in words — "output.all.image is taken", "no node tripcolour" — the whole press one undo step; the chip hides once no pin is open. In `party-trip` the patch's out → `output.all.image` is refused while huecycle feeds it.
+- **Other options.** A second, explicit chip: "wire as saved, replacing huecycle → All outputs", one press, its result drawn. Without it, in every host whose run already feeds All outputs (most), the outlet always refuses and splice is the real path.
+- **To reverse.** One line in `Edit.wire_as_saved` (or a new chip).
+- **Rough edge.** As said.
+- **Judge it.** Check 395 (step 5).
+
+### 525. Save as patch: refused on a member a patch may not hold or on another patch's name; one undo step for the group's `patch`; **update patch** beside it
+
+- **Answer.** controller — 2026-10-27 (T3; the review fixes).
+- **Built.** `Edit.save_patch` asks `patches.select` first: a refusal (a hand-edited group holding `scene`) is shown and nothing is written. A host macro's subscriber on a member does not block; it is said after "saved X as a patch". A name whose slug is already a patch's — yours or a factory one — is refused unless the group is that patch's: "a patch named acid wash exists — Update patch, or another name". The write is `<library>/patches/<slug>.json` alone (atomic, the old text trashed if it changed); setting the group's `patch` is one step ("save <group> as patch <name>"), so the preset's dot lights; ⌘Z gives the old provenance back and leaves the file. A group with a `patch` shows **update patch** beside **save as patch…**, on the side pane and its menu.
+- **Other options.** Block on every word `lift` returns; let a fresh group shadow a factory patch; take "acid wash 2" as presets do; update only.
+- **To reverse.** Small each.
+- **Rough edge.** A × hidden factory patch still blocks its name, and the words do not say it is hidden.
+- **Judge it.** Check 395 (steps 1, 6).
+
+### 526. The landing: a kept row is stored with its words; a landing whose ids were taken while the sheet was up is refused
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** A `kept_by_host` entry is the patch's row after renames plus its control in words (`{"source": "cc:0:48", "target": "fx.acid.2.speed", …, "words": "K1"}`), saved in the group's entry, so the node says "K1 kept by the preset", not "CC 48 ch1". `Edit._spawn_refusal` checks the landing's render names, modifier ids and voices are still free at the press; if not, "the preset changed while the sheet was up: spawn X again", nothing lands, no step — which also makes a second Spawn of the same landing harmless.
+- **Other options.** Store the conflict kind too; recompute the landing at the press and map the answers.
+- **To reverse.** Small.
+- **Rough edge.** A kept row is information only: nothing offers to take it later.
+- **Judge it.** Checks 397, 401.
+
+### 527. While the sheet is up, `Learn.hold`: no source completes a learn, and an armed learn waits
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** `Learn.accepts` says no while held, which every completer asks (hands, desk, pad, OSC, the desk diagram); `ui_routing.modal` keeps the flag in step each frame and `settle_sheet` releases it. Replace / Keep's own way (clearing `learning`) would cancel the user's armed learn.
+- **Other options.** Cancel the armed learn when the sheet opens.
+- **To reverse.** Small.
+- **Rough edge.** None.
+- **Judge it.** Check 397 (step 3).
+
+### 528. The wants at a spawn: the sheet lists them; after the landing the head says what waits, less a row the preset kept
+
+- **Answer.** controller — 2026-10-27 (T3; the review fixes, the plan review's one Important).
+- **Built.** `ui_routing.sheet_wants` runs `devices.wants` over the landing's own rows against the rig: "apc40 (lost): K1", "leap (not in this rig): right hand y". The sheet shows them under the conflicts; after any spawn or splice lands, the head reads "spawned acid wash: …; waits for leap (not in this rig): right hand y", leaving out a row the sheet kept for the preset; nothing is added when every wanted device is connected. The spec's "2 rows wait for leap" became the rows' words, as everywhere else.
+- **Other options.** A count per role; the whole landing's wants, kept rows included.
+- **To reverse.** Small.
+- **Rough edge.** A spawn that raised the sheet says the wants twice; a cancelled spawn says none.
+- **Judge it.** Check 399.
+
+### 529. The browser: **patches** first on GRAPH's head; a dragged patch's drop target is a picture cable of the section
+
+- **Answer.** controller — 2026-10-27 (T3).
+- **Built.** The spec put the chip "beside **new** and the starters"; GRAPH's head has neither (**new** is on the PRESET strip, the starters in the picker), so **patches** is the head's first chip after plan 38's hold chips. Its popup lists each patch with its note and its boundary in words; a click spawns at the canvas's centre, and the canvas's right-click picker has **spawn ▸** (at the click) when a patch exists. Dragged from the popup, the nearest picture cable lights when the patch has exactly one inlet and one outlet of its type and the cable is the section's (not the rig's bus); otherwise the hover says why ("x has 2 picture inlets and 1 outlet: a splice needs one of each"). Letting go on a lit cable splices; anywhere else, nothing.
+- **Other options.** After the tint chip, or on the PRESET strip; an imgui drop target (the editor's links take no payload).
+- **To reverse.** One line (the chip's place).
+- **Rough edge.** The head grows by a chip on a narrow panel; the drag gesture is not driven by a test.
+- **Judge it.** Checks 395, 396.
+
+### 530. The arrival: an error is no coming or going; the launch says nothing
+
+- **Answer.** controller — 2026-10-27 (T4).
+- **Built.** The registry's status comparison ignores an error on an open device (a poll that raised), so a flaky adapter never flaps the footer; its SYSTEM line still says it. A device whose `open()` raised counts as lost while retried, so the open that succeeds is said ("apc40 connected — n controls live"); `wants` reads an error as lost. `open_all` records every status silently, so a launch with the desk plugged in says nothing; a device removed from `config.toml` keeps its old "devices: x removed" note; one added says its status.
+- **Other options.** Say every status change; an `error` want state; say every connected device at launch.
+- **To reverse.** Small.
+- **Rough edge.** A device stuck in an adapter error reads lost and says nothing when the error starts. Two devices reopening through the retry path in one frame still tell the listeners twice (the retry path's own `_changed`, older than this plan).
+- **Judge it.** Check 398 (step 6).
+
+### 531. What `wants` counts, and whose device a row is
+
+- **Answer.** controller — 2026-10-27 (T4; after review).
+- **Built.** Enabled performer routes, enabled preset-layer desk rows and modifier inputs count; never a session row or a disabled one; several rows on one control are one ("K1" once). The role: the row's `@role`; else, for MIDI, the first MIDI role; else the scheme's primary (`DeviceRegistry.primaries()`); else the first listed device publishing the scheme, an off one included; else `SCHEME_ROLE`'s usual name — the canvas placeholder's own order, so hands listed off as `hands1` are wanted as "hands1 (off)", not a phantom "leap (not in this rig)".
+- **Other options.** `SCHEME_ROLE` straight after the MIDI rule (the spec's literal sentence); count disabled or session rows.
+- **To reverse.** Small (`devices._rows_of`, two lookups).
+- **Rough edge.** A `when` gate on another device's source is not counted.
+- **Judge it.** Checks 398, 399.
+
+### 532. The words of a row, and a desk's glyphs for a desk the rig lacks
+
+- **Answer.** controller — 2026-10-27 (T4).
+- **Built.** `routing.row_words`: "right hand y", "hands gap", "band 1", "pad A", "d-pad up", "axis LX", "CC 48 ch1", "note 53 any ch", "pitch bend ch3", "LFO 1", "env 2", "seq lane 4", "mod.3", an OSC address as itself; the caller's names first. A row on a listed desk takes that desk's glyphs ("K1", "D3"); on a desk the rig lacks, only the first role's unqualified rows take the table's profile, so an unplugged APC40 still reads "K1", while `cc@launch:0:7` reads "CC 7 ch1". `graphview.cable_words` calls it, so a cable with no port name reads "right hand y" where it read `hand:right.y`.
+- **Other options.** Always the APC40's glyphs; never glyphs for a missing desk.
+- **To reverse.** Small.
+- **Rough edge.** "axis LX", not "left stick x" (the pad's names live in `gamepad.py`, which imports glfw).
+- **Judge it.** Check 398 (step 3).
+
+### 533. The FX page's own fx module strip is hidden, not the page
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 9).
+- **Built.** P5 said nothing on the FX page referred to the module presets; `ui_fx.page` draws `panel._section("effects", "fx", …)`, whose strip under the title (◀ name ▶ · save · as… · reset) is the fx module-preset strip. D6 retires the mechanism and D10 keeps the page, so `ui_presets.strip` draws nothing for a retired group and `ui_fx.py` is not edited. The page's tests pass unchanged.
+- **Other options.** Keep the strip (the retired mechanism reachable: "save as" would write `<library>/fx/<name>.json`); ask the owner first.
+- **To reverse.** One condition in `ui_presets.strip`.
+- **Rough edge.** The effect list sits one line higher.
+- **Judge it.** Check 400.
+
+### 534. A retired module group is named (`library.RETIRED_MODULES`), and its label in an old file loads quietly
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 10).
+- **Built.** `library.RETIRED_MODULES = ("fx",)`: `groups()` leaves it out, `default_name` is None for it, `preset` reads the same tuple. Inferring "no folder, no group" would have dropped `view`, `rot` and `camera`, which have no factory folder and keep their strips. An old `<library>/fx/` folder is ignored, its files untouched. A preset that names `"modules": {"fx": "trip"}` loads with no note (`lib.current("fx")` reads "trip" until the next load, drawn nowhere) and saves without it.
+- **Other options.** Filter at the fold only; drop folderless groups; drop the label silently.
+- **To reverse.** Empty the tuple.
+- **Rough edge.** User fx module files on the Drive are unreachable from the UI.
+- **Judge it.** Check 400.
+
+### 535. The party generator keeps the three fx families' values inline
+
+- **Answer.** controller — 2026-10-27 (T5, the run's ruling 11).
+- **Built.** `preset.ACID_FX`, `MANDALA_FX`, `NOITA_FX` hold exactly what the retired files held (mandala's old `fx.kaleido.order: 8` included), so `write_factory` is byte-identical; `tools/fx_shots.py` times the "tripping balls" values inline.
+- **Other options.** Fold them into each `party_*_values` (loses the family's name).
+- **To reverse.** —
+- **Rough edge.** `party-acid` and `party-mandala`'s notes still say "the `acid` / `mandala` fx module preset": preset data, reworded at the next factory regeneration.
+- **Judge it.** —
+
+### 536. Plan 38's PROJECTOR inset fix rides on plan 40's PR
+
+- **Answer.** controller — 2026-10-27 (the run's ruling 22).
+- **Built.** `ui_graph._monitor` called `add_rect(…, 0.0, 0, 2.0)`; imgui_bundle's order is `rounding, thickness, flags`, so the float landed in `flags` and raised a TypeError the first time the inset drew: the inset never drew on `main` (since #270). Fixed to `(…, 0.0, 2.0)` in its own commit (86795d5) with a stub-texture test, `tests/test_hold.py::test_the_projector_inset_draws_framed_while_held`; said in the PR body.
+- **Other options.** Cherry-pick it to `main` alone, sooner.
+- **To reverse.** —
+- **Rough edge.** None.
+- **Judge it.** Check 377.

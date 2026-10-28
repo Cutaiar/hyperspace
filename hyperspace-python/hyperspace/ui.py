@@ -36,6 +36,7 @@ from imgui_bundle import imgui
 
 from . import (
     apc40,
+    devices,
     field,
     gamepad,
     graphview,
@@ -466,6 +467,16 @@ def device_lines(registry) -> list[str]:
             line += f"  ·  {last}"
         out.append(line)
     return out
+
+
+def wanted_lines(registry, table) -> list[str]:
+    """Plan 40 T4: the SYSTEM page's lines under the device lines, one per
+    device role the loaded preset's rows want and the rig lacks — "wanted
+    by the preset: leap — not in this rig; 3 rows wait" (`devices.wants`,
+    `devices.wanted_lines`); none without a registry or a table."""
+    if registry is None or table is None:
+        return []
+    return devices.wanted_lines(devices.wants(table, registry))
 
 
 # the wants the menu offers by their own items (desk, the hands, the pad)
@@ -2659,6 +2670,8 @@ class Panel:
                 imgui.text_disabled(line)
         if not len(regs):
             imgui.text_disabled("no devices — [[devices]] in config.toml")
+        for line in devices.wanted_lines(ui_graph.panel_wants(self)):
+            imgui.text_colored(WARN, line)          # plan 40 T4: what the preset waits for
 
     def _publish_lines(self) -> None:
         """Plan 32 T9: one line per output published out (a sink of the

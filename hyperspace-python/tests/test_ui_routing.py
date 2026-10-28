@@ -301,6 +301,108 @@ def test_the_replace_prompt_swaps_the_owner_or_leaves_the_table(rig, tmp_path, m
     panel.open = True
 
 
+def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
+    """Plan 40 T3 (D3, D9): a spawn whose K1 collides (acid-wash into
+    party-trip, where K1 is view.bright) puts up the conflict sheet in the
+    same modal, ahead of any Replace / Keep question: its title, one row
+    per conflict in words, every row on the patch; **keep all existing**
+    flips them, **take all** back; the wants the rig lacks beneath. While it
+    is up the hands learn nothing (the armed learn waits). **keep all
+    existing** + Spawn lands the patch with K1 left on brightness — the
+    patch's row not in the table, kept by the group and said; Cancel on a
+    second spawn lands nothing, not even an undo step."""
+    from test_graph_groups import state, watch, with_patch
+
+    from hyperspace import graphview, undo
+    from hyperspace.learn import Learn
+
+    panel, reg = rig.panel, rig.reg
+    table = rig.router.table
+    with_patch(rig)
+    rig.lib.load("presets", "party-trip")
+    frame(panel, "graph")
+    lrn = panel.learn = Learn(reg, table)
+    lrn.arm("view.speed")
+    assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
+    landing, choices = ui_routing.sheet(panel)
+    assert choices == {0: "patch"}                                     # D9: the patch's
+    assert ui_routing.conflict_words(landing.conflicts[0]) == ("K1", "fx.acid.speed",
+                                                               "view.bright")
+    assert ui_routing.sheet_title(panel, landing) == "spawn acid wash into TRIP"   # (its name)
+    assert ui_routing.sheet_wants(panel, landing) == [
+        "apc40 (not in this rig): K1", "leap (not in this rig): right hand y"]
+    frame(panel)
+    st = ui_routing._state(panel)
+    assert st["modal"] and st["sheet"]
+    # the hands learn nothing while it is up: the learn stays armed, no row lands
+    assert lrn.held and not lrn.accepts("hand:right.x")
+    lrn.learn_source("hand:right.x")
+    assert lrn.learning == "view.speed" and table.owner("view.speed") is None
+    ui_routing.keep_all(panel)
+    assert ui_routing.sheet(panel)[1] == {0: "preset"}
+    ui_routing.keep_all(panel, "patch")                                # take all
+    assert ui_routing.sheet(panel)[1] == {0: "patch"}
+    ui_routing.choose(panel, 0, "preset")
+    assert ui_routing.sheet(panel)[1] == {0: "preset"}
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert ui_routing.settle_sheet(panel, True) is None             # Spawn
+        assert ui_routing.sheet(panel) is None and len(u.stack) == n + 1
+        assert not lrn.held and lrn.accepts("hand:right.x")
+        assert [b.target for b in table.desk() if b.source == "cc:0:48"] == ["view.bright"]
+        assert not [b for b in table.bindings if b.target == "fx.acid.speed" and b.is_midi]
+        (g,) = rig.lib.presets.groups
+        (kept,) = g["kept_by_host"]
+        assert graphview.kept_words(kept) == "K1 kept by the preset"
+        assert "1 row kept by the preset" in ui_graph._state(panel)["said"]
+        frame(panel)
+        assert not ui_routing._state(panel)["modal"]
+        # a second spawn, cancelled: nothing lands, no step
+        before = state(rig)
+        assert ui_graph.spawn(panel, "acid-wash", (0.0, 300.0)) is None
+        frame(panel)
+        assert ui_routing._state(panel)["sheet"]
+        assert ui_routing.settle_sheet(panel, False) is None
+        assert state(rig) == before and len(u.stack) == n + 1
+        assert ui_graph._state(panel)["said"] == "spawn of acid wash cancelled: nothing landed"
+    finally:
+        undo.install(None)
+
+
+def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypatch):
+    """Plan 40 T3 (D3): a Replace / Keep question and a spawn's conflict
+    sheet up together — the modal draws the sheet (its **Spawn**, not
+    **Replace**); once the sheet is answered the question comes next, in
+    the same modal, still unanswered."""
+    from test_graph_groups import with_patch
+
+    from hyperspace import ui
+    panel, table = rig.panel, rig.router.table
+    with_patch(rig)
+    rig.lib.load("presets", "party-trip")
+    frame(panel, "graph")
+    old = Binding("lfo:0", "view.speed", "push", 0.5)
+    new = Binding("lfo:1", "view.speed", "push", 0.5)
+    ui_routing.ask(panel, old, new, lambda: None)
+    assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
+    drawn, real_chip = [], ui.chip
+    monkeypatch.setattr(ui_routing.ui, "chip", lambda label, *a, **k: (
+        drawn.append(label), real_chip(label, *a, **k))[1])
+    frame(panel)
+    st = ui_routing._state(panel)
+    assert st["modal"] and st["sheet"]
+    assert "Spawn##sheet" in drawn and "Replace" not in drawn
+    assert ui_routing.prompt(panel) is not None                        # still asking
+    ui_routing.settle_sheet(panel, False)
+    drawn.clear()
+    frame(panel)
+    assert st["modal"] and not st["sheet"]
+    assert "Replace" in drawn and "Spawn##sheet" not in drawn
+    ui_routing.answer(panel, False)
+    assert table.owner("view.speed") is None
+
+
 def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
         rig, tmp_path, monkeypatch):
     """Plan 13 §2.4: a macro scales a route as its depth subscriber, so the
@@ -516,7 +618,7 @@ def test_the_old_routing_presets_step_load_save_as_presets(rig, tmp_path):
     panel, lib = rig.panel, rig.panel.library
     router = rig.router                             # the one the rig's Presets loads into
     frame(panel, "routing")
-    assert lib.kinds == ("presets",)
+    assert lib.kinds == ("patches", "presets")     # plan 40 T1: patches are spawned
     listing = lib.list("presets")
     assert {"legacy6", "lfo-breathe", "hands-fx", "hands-pinch", "hands-play"} <= set(listing)
     assert [k for k in lib.load("presets", "lfo-breathe")

@@ -699,7 +699,7 @@ class Registry:
 
     # class-level so a registry from before a hot reload has them (plan 28 N0):
     # `serial` moves on every add and remove (the modulation patch's cache
-    # key, `Router.patch`); `frame` is the frame mark `Router.modulate`
+    # key, `Router.modgraph`); `frame` is the frame mark `Router.modulate`
     # opens (`begin_frame`) and `landed` the mark `apply` lands under —
     # the params the pass already landed are skipped — and closes
     serial: int = 0

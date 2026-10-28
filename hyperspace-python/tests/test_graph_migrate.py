@@ -22,7 +22,7 @@ from hyperspace.library import LibraryError
 ROOT = Path(__file__).parent.parent / "hyperspace"
 # plan 36 T3: the factory presets' sources (the factory files are their `/7`)
 SOURCES = Path(__file__).parent / "fixtures" / "factory-sources" / "presets"
-FILES = sorted([*SOURCES.glob("*.json"), *(ROOT / "library" / "fx").glob("*.json")])
+FILES = sorted(SOURCES.glob("*.json"))
 # the presets written before plan 33 (a `/5` fixture — plan 33 T4's proofs —
 # is the free graph's own: nothing to migrate, nothing `/4` can say; a `/6`
 # one, plan 35 T3's, the wired frame's)
@@ -87,8 +87,10 @@ def test_no_library_preset_routes_an_effect_it_leaves_out(path):
 
 def test_mandala_keeps_kaleido_first():
     """`fx.kaleido.order = 8` is read: kaleido sits where it did, right
-    after the plasma (order 5) it folds and before the fractals (60)."""
-    doc = load(ROOT / "library" / "fx" / "mandala.json")
+    after the plasma (order 5) it folds and before the fractals (60).
+    (Plan 40 T5: the mandala fx module preset is retired; its values, which
+    the party-mandala generator keeps, are the old file this reads.)"""
+    doc = {"values": dict(preset.MANDALA_FX)}
     assert doc["values"]["fx.kaleido.order"] == 8
     section, _ = M.to_free(doc, SPECS)
     assert G.run_of(G.read_graph(section)) == ("plasma", "kaleido", "fractals", "glimmer")
@@ -239,7 +241,7 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 40 T2: /8, a /7 with groups)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):

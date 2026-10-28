@@ -759,7 +759,7 @@ and val ends, the anchors) for a lights sink (plan 29), and an
 image-in `sample` port that would set its params from a bitmap. **No
 node publishes or reads one**
 (`tests/test_graph_effects.py::test_the_value_port_type_exists_and_no_node_uses_it`);
-`patch.RENDER_VALUE` names it on the modulation side.
+`modgraph.RENDER_VALUE` names it on the modulation side.
 
 **The point cloud** (`graph.PointCloud`, plan 26 A4b). `app.main` hands
 the renderer the device registry (`Renderer.cloud_source`); each listed
@@ -860,10 +860,13 @@ goes to `hue_turn`). **gradient** maps brightness through the
 first `anchors` (2–4) of four anchor colours, `a1`–`a4` hue / sat / val,
 a grey ramp by default.
 On a see-through ground the result is scaled by the pixel's alpha. A
-saved palette is an `fx` module preset; no palette ships in
-`library/fx/` (the owner's are made at the venue). The folder is polled every 30 frames; a parse
-error keeps the last version, a compile error skips the pass. Factory
-effect presets are `library/fx/*.json`.
+palette is kept in a preset's values, or in a patch with its node (plan
+40); until plan 40 a saved palette was an `fx` module preset, and the fx
+module presets (`library/fx/*.json`) are retired (D6: no factory folder,
+no strip on the FX page, `library.RETIRED_MODULES`; an old
+`<library>/fx/` folder is ignored, its files untouched). The effects folder
+is polled every 30 frames; a parse error keeps the last version, a compile
+error skips the pass.
 
 - **The page** (plan 33, rows 341 and 348): a browser of the effect nodes
   in the loaded graph, not a place structure lives. Bypass (`fx.on`) and
@@ -964,11 +967,12 @@ name)` order; the effects aimed at the faces as `pattern → … →
 shape.faces`; `view.media = k` and `backdrop.channel = k` as channel
 wires; a route onto either as a switch with the old pick and the rows
 retargeted to `switch.select`. An effect left out was off, so the
-picture is the same; one something drives says so in a load note. Loading
-an fx module (`library/fx/*.json`) migrates the module and **replaces**
-the loaded graph's run with it, keeping every other wire
-(`graphmigrate.module_runs`, `Presets._fx_module`, `Library.on_apply`).
-Switching on an effect that is in no run adds nothing to the picture.
+picture is the same; one something drives says so in a load note. (Until
+plan 40, loading an fx module replaced the loaded graph's run with it —
+`graphmigrate.module_runs`, `Presets._fx_module`; the fx module presets
+are retired and those are gone. A reusable run is a patch now: §6, "Groups
+and patches".) Switching on an effect that is in no run adds nothing to
+the picture.
 **Save:** always `hyperspace.preset/6` since row 394 (below, "Presets and
 the wired frame"). Until then plan 33 wrote the lowest schema that lost
 nothing — `/5` only for a graph `/4` could not say, else the section
@@ -1227,8 +1231,9 @@ root and `Library.machine` the home.
 |---|---|---|
 | `presets/<slug>.json` | Your presets (§10). | `hyperspace.preset/2`, or `/3` when it uses plan 31's sequencer, envelopes or LFO count (below) |
 | `projects/<slug>.hyp.json` | Your shows (the code calls them projects). | `hyperspace.project/2` |
-| `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `fx/`, `hands/`, `view/` …). | `hyperspace.preset/1` |
-| `hidden.json` | Factory presets taken off the preset list. | `hyperspace.hidden/1` |
+| `patches/<slug>.json` | Your patches (plan 40): a group of GRAPH nodes and its boundary, spawned into a preset, never loaded. Written only by **save as patch…** / **update patch**; factory ones would ship in `hyperspace/library/patches/` (none does yet). | `hyperspace.patch/1` |
+| `<group>/<slug>.json` | Module presets, one registry group each (`band/`, `dream/`, `hands/`, `view/` …). An `fx/` folder from before plan 40 is ignored: the fx module presets are retired (`library.RETIRED_MODULES`). | `hyperspace.preset/1` |
+| `hidden.json` | Factory presets taken off the preset list; since plan 40 also factory patches, under `"patches"` (written only when one is hidden). | `hyperspace.hidden/1` |
 | `trash/<group>/<slug>.<YYYYMMDD-HHMMSS>.json` | Copies of your files taken before an overwrite, delete or rename. Never watched. | as the original |
 
 **The home** (`Library.machine`; never in a shared folder):
@@ -1239,6 +1244,7 @@ root and `Library.machine` the home.
 | `bindings.json` | The session's controls only: keys, gamepad, and the APC40's invariant and global-layer rows. Delete it to get `hyperspace/bindings.default.json` back. | `hyperspace.bindings/3` |
 | `hands.json` | The hands' calibrated ranges and the interaction box (§12). | `hyperspace.hands/2` |
 | `windows.json` | Where the control window and each render output were at the last quit (§14). Machine-specific; safe to delete. | `hyperspace.windows/1` |
+| `ui.json` | This Mac's panel settings: the GRAPH page's side-pane width (`graph.side_w`, PR #266), written when its grip is let go. Safe to delete. | plain JSON |
 | `last_show` | One line: the file name of the show opened last on this machine. | text |
 | `stall.log` | The watchdog's log (§15). | text |
 | `weights/` | The dream's pretrained network weights, downloaded on first use. | binary |
@@ -1255,7 +1261,7 @@ folder of old routing presets is no longer read.
 
 | File | When | Kept first |
 |---|---|---|
-| `presets/<name>.json`, `<group>/<name>.json` (yours) | A save over it, ⇧F1–F8, × in the preset list, a rename. Never a load. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
+| `presets/<name>.json`, `patches/<name>.json`, `<group>/<name>.json` (yours) | A save over it, ⇧F1–F8, × in the preset list (or the PRESETS page's patches fold), a rename, **update patch**. Never a load or a spawn. | A copy in `trash/<group>/`. A save goes on if the copy fails (and says so); a × or a rename is refused. A save that writes the same text adds nothing. |
 | `projects/<show>.hyp.json` | A bank change, "starts on", save; a rename of a preset it names. Never a load. | The first write that puts a preset past slot 8: `<show>.hyp.json.bak-v2-bank8` (no copy, no write). A rename: a copy in `trash/projects/`. |
 | `bindings.json` | At launch, when a newer build adds factory rows (the bank pads, OVERDUB, the clip-stop row, Home, the undo keys) where the control or key is free. A row you changed is left as you had it. | `bindings.json.bak-v<schema>` (`.bak-v3` for today's files; a dated name if that exists, never over any `.bak-*`). No copy, no rewrite: the table runs from memory for the session and the next launch tries again. |
 | `hands.json` | A calibration sweep or "reset ranges". A schema-1 file is read as it is and never rewritten at launch. | The first rewrite of a schema-1 file: `hands.json.bak-v1`. |
@@ -1314,7 +1320,9 @@ prints the two lines to add; [SETUP.md](SETUP.md) has the steps.
   than load it and strip what it does not know on its next save. This build
   reads every older schema (`/2`–`/5`) and migrates it on load. To move a
   whole library at once: `uv run python tools/migrate_library.py` (a dry
-  run), then `--apply`.
+  run), then `--apply`. Since plan 40 a preset with a group (GRAPH's
+  **Group**) is `hyperspace.preset/8` and one without stays `/7` (register
+  row 521, pending the owner); a build from before plan 40 refuses an `/8`.
 
 The macro candidates to audition (plan 22) are in the owner's library;
 [`plans/22-macro-candidates.md`](plans/22-macro-candidates.md) says what
@@ -1614,7 +1622,7 @@ the panel at 540 and the desk takes what is left.
 | LFO | The tap-tempo clock and the LFOs (four by default, up to 16: `+ lfo`, `×`; above four all but the open strip fold to a line; plan 31). |
 | SEQ | The step sequencer (plan 31, `ui_seq.py`): run · span · restart, length and swing; the 5 × 8 grid in the APC40's LED colours (the playhead's column in red, columns past the length dimmed); each lane's select, mute and envelope; a strip per envelope, one open, `+ env` for extras. |
 | HANDS | The tracker, the box, the axes and their setup, feel and calibration, the ghost hands (§12). |
-| PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10). |
+| PRESETS | The show, "starts on / home", the bank of twenty-four, the preset strip and preset list, module presets under **more** (§10), and your patches under **patches** (rename and ×; a click spawns nothing — spawn is GRAPH's, plan 40). |
 | SYSTEM | Cheat sheet and desk-diagram switches, Restart process, hot reload status, the library path, config errors and notes, the dream worker's state, the stall log's line; **devices**: one line per `[[devices]]` entry — `role · kind · status · n sources · last` (MIDI: the port, its binding count, the last message; the pad's road and its GLFW joystick (`glfw 1`, plan 27 B6); the hands' tracker; a sink's `n sinks`, port and what it sent), `error:` lines in the warning colour; **midi**: knob smoothing, the desk log, the learn line; **gamepad**: the sticks' feel. |
 
 **The FACES page** (`ui_patterns.py`), top to bottom:
@@ -1777,8 +1785,87 @@ retired (plan 28 N7, the owner's decision of 2026-10-20).
   `ui_graph` keeps it) and destroyed on quit and ⌘R before imgui; no
   `NodeEditor.json` is written.
 
+**Groups and patches** (plan 40; `graphview.VGroup`, `ui_graph._group_node`,
+`_region`, `_group_side`; `patches.py`; register rows 501–536).
+
+- **Group.** With two or more nodes selected, the canvas's and a node's
+  right-click menu offer **group N nodes** (`Edit.group`, one undo step).
+  What a group may hold is `patches.select`'s rule, the same one a lift
+  uses: effects, composites, switches, delays, resizes, copies, extra
+  hands, mattes, cuts, segments, modifiers, LFO and envelope voices,
+  macros — never the frame's singletons, an output, the camera, a cloud, a
+  media channel or the sequencer, each refused in words on the head
+  ("scene is the frame's; left out"). A node in another group moves, said;
+  a group never holds a group. The group is `group.<n>` (one past the
+  highest), named "group n", saved in the preset's `groups` (`/8`).
+- **Folded** (the default, D4): one node at its members' top-left with no
+  position of its own — its name, "group · n nodes · from <patch>", its
+  status line (`devices.want_words` over the rows on its members:
+  "waits for apc40 (lost): K1"), plan 37's thumbnail of its last picture
+  outlet, then its pins: one typed pin per picture cable crossing in or
+  out, an out pin per member lane leaving, one row per member param a rig
+  row or crossing route lands on and per member modifier input read from
+  outside (`VGroup.ports`, `ends`, `real`). Its internal cables are not
+  drawn — **the one sanctioned exception to "no hidden edges"**; every
+  crossing cable is re-ended at a pin, so folded drawn + hidden = open =
+  ungrouped (`graphview.wiring(folded=)`). A drag onto a pin lands on the
+  member's pin behind it (`real_pin`); a drop on the plain stub is refused
+  in words. The head's "N hidden" counts folded members.
+- **Open** (`+`; `−` folds; both one undo step and a preset edit): the
+  members at their own positions inside a tinted region drawn under them
+  on the canvas's draw list, its title an editor node over the band so it
+  can be dragged (the members follow live, `_place_groups`; one step on
+  release). A member dropped wholly outside the region it had leaves the
+  group; several dropped out together are one step; the last to leave
+  removes the group. A member deleted while grouped leaves the list at the
+  next save (`Presets.live_groups`).
+- **The group's menu**: open / fold, rename… (the side pane's name field),
+  **save as patch…**, **update patch** (a group spawned from one), ungroup
+  (`Edit.ungroup`: the list goes, every node and cable stays). Delete on a
+  group node is refused in words.
+- **The side pane** of a selected group: the name, its provenance, the
+  status, a chip per member (a click opens the group and selects it), the
+  boundary in words, the rows kept by the preset, and the chips **wire as
+  saved** (a spawned group with open pins; free ports only, refused in
+  words otherwise, one step), **save as patch…** and **update patch**,
+  with the name / note form.
+- **The browser**: **patches**, GRAPH's head's first chip after the hold
+  chips, opens the list (factory then yours, by name, hidden ones out), each
+  line its name, note and boundary in words ("in: picture · out: picture ·
+  wants: K1, right hand y"); a click spawns at the canvas's centre, and
+  the canvas's right-click picker has **spawn ▸** at the click. A line
+  dragged out of the list lights the nearest picture cable it can splice
+  into (one inlet and one outlet of the cable's type; the section's cables,
+  not the rig's bus), and letting go splices it in (`Edit.splice`). The
+  list is re-read when the library's poll hands back a new listing.
+- **Spawn** (`ui_graph.spawn` → `patches.spawn` → `Edit.spawn`): fresh ids
+  by the instance rule (`acid` → `acid.2`), `mod.<next>`, the banks' next
+  voices (envelopes from 6), a free macro; the landing goes through the
+  doors in load order as one undo step, folded, its host ports open pins
+  ("in · open (was scene)") for the session, the rename map on the hover
+  ("spawned as acid → acid.2"). With conflicts, **the sheet** (in
+  `ui_routing.modal`, ahead of Replace / Keep): one row per conflict, each
+  on the patch to start, **keep all existing** / **take all**, the patch's
+  wants, **Spawn** / **Cancel**; `Learn.hold` while it is up. A row the
+  preset keeps lands in the group's `kept_by_host` and is said ("K1 kept
+  by the preset"). After the landing the head says what its rows wait for
+  ("waits for leap (not in this rig): right hand y"). No file is written.
+- **Save as patch** (`Edit.save_patch` → `patches.lift` over
+  `Presets.parts()` → `Library.save_patch`): refused on a member a patch
+  may not hold or on another patch's name; writes
+  `<library>/patches/<slug>.json` and nothing else; sets the group's
+  `patch` (one step).
+- **The wants chip.** GRAPH's head and the PRESET strip show **N devices
+  missing** when a device the loaded preset's rows name is lost, off or
+  not in the rig, its hover one line per role ("apc40 (lost): K1, K2, …");
+  SYSTEM lists "wanted by the preset: leap — not in this rig; 3 rows wait".
+  `devices.wants` is asked once a frame for all three
+  (`ui_graph.panel_wants`). The footer says a device's coming and going
+  ("apc40 connected — n controls live", "apc40 lost — n controls wait").
+
 Every page that is a registry group carries a preset strip for its
-module presets.
+module presets — except FX since plan 40: the fx module presets are
+retired, so `ui_presets.strip` draws nothing for that group.
 
 **Widgets.** A fader fills red from its origin to its value. A param a
 performer (a hand, a band, an LFO) is driving shows its *setting* as the
@@ -2230,7 +2317,7 @@ be a session param; a route may perform a session param, marked
 "session" on its row.
 
 **The order the routes run in** (plan 28 N0). `Router.modulate` runs
-the table as a graph (`patch.py`, ARCHITECTURE §2), each node after
+the table as a graph (`modgraph.py`, ARCHITECTURE §2), each node after
 everything it reads: the LFOs step inside it, a `scale`, a macro's depth
 or an LFO knob a route moves lands before the route that reads it, so an
 LFO on another LFO's depth, a macro scaling a push or a hand on a
@@ -2295,6 +2382,12 @@ nodes the preset holds, whole canvas units, sorted, written only for a
 node dropped by hand). None of the three is written when empty, so a
 preset without them saves byte for byte as before, and none bumps the
 schema. The show keeps the rig's nodes' positions in its own `layout`.
+Since plan 40 a preset may end with `groups` (after `layout`, one group a
+line: `{"id": "group.1", "name": "acid wash", "patch": "acid-wash",
+"nodes": ["render:acid.2", "mod.3"], "open": false}`, and a
+`kept_by_host` list when a spawn's sheet kept rows for the preset); it is
+written only when a group exists, and then the file is
+`hyperspace.preset/8` (§6, "Groups and patches").
 A build from before plans 28 and 30 ignores `modifiers` and `layout` with no
 note and **drops them when it saves**, and opens a `graph` with wires or
 placements as the default graph with a note: keep both Macs of a shared
@@ -2726,7 +2819,7 @@ are cold: changing them needs Cmd+R. A changed `__init__` does not
 re-run on live objects. Shaders (`patterns.glsl`, `_common.glsl`,
 `shaders/fx/`) and the library's JSON files reload too. Plan 28's
 modules are on the list in dependency order: `modifiers` after
-`motion`, `patch` before `routing`, `graphview` after `osc`, `ui_graph`
+`motion`, `modgraph` before `routing`, `graphview` after `osc`, `ui_graph`
 before `ui`. A reload of `ui_graph` keeps the GRAPH page's editor
 context (it is held on the panel, not in the module), so the page goes
 on drawing with its zoom and selection.
@@ -2802,7 +2895,7 @@ uv run ruff check .
   `tests/test_graph_json.py`, `tests/test_cloud_node.py`,
   `tests/test_stroke_space.py`.
 - The modulation graph and the node editor (plan 28), all headless:
-  `tests/test_patch.py` (the sort, the loops, the edges the design
+  `tests/test_modgraph.py` (the sort, the loops, the edges the design
   names, a param applied once a frame), `tests/test_modifiers.py` (each
   kind on a scripted input, the preset key, templates, undo, the
   MODIFIERS strip), `tests/test_graphview.py` (the model with no imgui,

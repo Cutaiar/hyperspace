@@ -6,7 +6,7 @@
    "routes": [row, …],                 the performer rows (routing.Binding)
    "desk":   [row, …],                 the APC40's preset layer (routing.Binding)
    "macros": {"macro.1": {…}, …},      the macros' labels and subscribers
-   "modules": {"fx": "trip", …}}       module-preset labels (D3)
+   "modules": {"dream": "wake", …}}    module-preset labels (D3)
 
 (plan 24 C3: a file may also name a desk template, ``"desk_template":
 "<name>"`` before ``desk``, and then ``desk`` holds only its overrides —
@@ -118,7 +118,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from . import apc40, graphmigrate, graphview, modifiers, routing, tapers, undo
+from . import apc40, graphmigrate, graphview, modifiers, patches, routing, tapers, undo
 from .bands import BANDS
 from .fx import declare as declare_fx
 from .ghost import GhostState
@@ -138,9 +138,9 @@ from .library import (
     PROJECT_SUFFIX,
     PROJECT_V1,
     PROJECTS,
+    RETIRED_MODULES,
     SLOTS,
     LibraryError,
-    _module_values,
     _write_text,
     bank_doc,
     read_positions,
@@ -197,7 +197,11 @@ SCHEMA_V3 = f"{SCHEMA.rpartition('/')[0]}/3"
 MEDIA_SCHEMA = f"{SCHEMA.rpartition('/')[0]}/4"
 FREE_SCHEMA = graphmigrate.FREE_SCHEMA
 WIRED_SCHEMA = graphmigrate.WIRED_SCHEMA
-VERSIONS = (2, 3, 4, 5, 6, 7)
+# plan 40 T2 (D4, D7): `/8` is `/7` plus `groups` — what a save writes only
+# when the preset holds a group (the lowest schema that loses nothing: a
+# preset with none writes `/7`, byte for byte as before)
+GROUPS_SCHEMA = graphmigrate.GROUPS_SCHEMA
+VERSIONS = (2, 3, 4, 5, 6, 7, 8)
 # the registry groups (and lane schemes) a /2 file never names
 V3_GROUPS = ("env", "seq")
 # the preset keys a bank writes only off its default (modbank, plan 31 B)
@@ -306,7 +310,7 @@ def file_desk(profile: str = "apc40") -> list[Binding]:
 # ---- the render graph (plan 26 A4) ----
 
 GRAPH_KEY = "graph"
-FX_GROUP = "fx"          # the effects' module group (`library/fx/*.json`): plan 33 R12
+FX_GROUP = "fx"          # the effects' param group (plan 40 T5: no module presets since D6)
 
 
 class GraphSection:
@@ -615,13 +619,101 @@ MODIFIERS_KEY = "modifiers"
 # line; the rig's nodes are the show's (library.LAYOUT). No key: laid out
 # automatically, no note and no dirt. An older build ignores the key
 LAYOUT_KEY = "layout"
+# plan 40 T2 (P2, D4, D7): the GRAPH page's groups — a fold of the canvas
+# and a list in the file, never a node of the renderer (`build_graph`, the
+# signature and the goldens see the flat graph) — ``[{"id": "group.1",
+# "name": "acid wash", "patch": "acid-wash", "nodes": ["render:acid.2",
+# "mod.3"], "open": false}]``, written after `layout`, only when there is
+# one (then the file is `/8`). `patch` is provenance (the slug it was
+# spawned from), never re-read; a group's position is its members'
+GROUPS_KEY = graphmigrate.GROUPS_KEY
+GROUP_NAME = "group {n}"
+GROUP_GONE = "group {name}: {node} is not in the preset — left out"
+GROUP_REFUSED = "group {name}: {why}"
+GROUP_EMPTY = "group {name}: nothing of it is in the preset — left out"
+GROUP_TWICE = "group {name}: {node} is in group {other} already — left out"
+GROUP_BAD = "groups: an entry that is not a group, ignored"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
 # (plan 33 S: a switch's pick means nothing without the preset's graph;
 # plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's; T3: nor a cut's)
-# (T4: nor a segment's)
+# (T4: nor a segment's) — and (plan 40 T5, D6) the effects', whose module
+# presets are retired outright: a save writes no fx label
 NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
-             SEGMENT_GROUP)
+             SEGMENT_GROUP, FX_GROUP)
+# the groups whose module presets are retired (plan 40 T5, D6,
+# `library.RETIRED_MODULES`): a file that still names one keeps the label
+# on load, quietly — it never loaded anything (D3) — and the next save
+# drops it (`NO_MODULE`)
+
+
+group_number = graphmigrate.group_number    # `group.3` → 3 (the one rule, GRAPH's too)
+
+
+def group_entry(g: dict) -> dict:
+    """A group's entry in the file's key order: id, name, patch (when it
+    has one), nodes, open — and `kept_by_host` (plan 40 T3's rows a spawn's
+    conflict sheet gave the preset) when present."""
+    out = {"id": g["id"], "name": g["name"]}
+    if g.get("patch"):
+        out["patch"] = g["patch"]
+    out["nodes"] = list(g["nodes"])
+    out["open"] = bool(g.get("open"))
+    if g.get("kept_by_host"):
+        out["kept_by_host"] = copy.deepcopy(list(g["kept_by_host"]))
+    return out
+
+
+def read_groups(raw, held, refusal: Callable[[list[str]], tuple[set, list[str]]] | None = None
+                ) -> tuple[list[dict], list[str]]:
+    """A file's `groups` (plan 40 T2, load step 6½) → (the groups, the
+    notes). A member id the preset does not hold (`held`, the canvas ids
+    its graph, modifiers and voices make) is left out with a note ("group
+    acid wash: acid.3 is not in the preset — left out"); one a group may
+    not hold (`refusal(ids)` → (the ids kept, the words for the rest):
+    `patches.select`'s rule) is left out in its words; a node already in an
+    earlier group is left out of the later; a group left with no member is
+    dropped, said; an entry that is not a group is ignored, said. Pure."""
+    groups: list[dict] = []
+    notes: list[str] = []
+    seen: dict[str, str] = {}
+    bad = False
+    for g in raw if isinstance(raw, list) else ([] if raw is None else [raw]):
+        if (not isinstance(g, dict) or not group_number(g.get("id"))
+                or not isinstance(g.get("nodes"), list)):
+            bad = True
+            continue
+        name = g.get("name") if isinstance(g.get("name"), str) and g.get("name") else (
+            GROUP_NAME.format(n=group_number(g["id"])))
+        if any(x["id"] == g["id"] for x in groups):
+            bad = True
+            continue
+        ids = [x for x in dict.fromkeys(g["nodes"]) if isinstance(x, str)]
+        kept = []
+        for cid in ids:
+            if cid not in held:
+                notes.append(GROUP_GONE.format(name=name, node=cid.removeprefix("render:")))
+            elif cid in seen:
+                notes.append(GROUP_TWICE.format(name=name, node=cid.removeprefix("render:"),
+                                                other=seen[cid]))
+            else:
+                kept.append(cid)
+        if refusal is not None and kept:
+            ok, words = refusal(kept)
+            notes += [GROUP_REFUSED.format(name=name, why=w) for w in words]
+            kept = [cid for cid in kept if cid in ok]
+        if not kept:
+            notes.append(GROUP_EMPTY.format(name=name))
+            continue
+        for cid in kept:
+            seen[cid] = name
+        patch = g.get("patch") if isinstance(g.get("patch"), str) else None
+        kept_by = g.get("kept_by_host") if isinstance(g.get("kept_by_host"), list) else None
+        groups.append(group_entry({"id": g["id"], "name": name, "patch": patch, "nodes": kept,
+                                   "open": g.get("open") is True, "kept_by_host": kept_by}))
+    if bad:
+        notes.append(GROUP_BAD)
+    return groups, notes
 
 
 def _bank_prefix(pid: str) -> str:
@@ -749,7 +841,7 @@ def dumps(doc: dict) -> str:
             rows = ",\n".join(f"  {json.dumps(c)}: {json.dumps(b)}"
                                for c, b in v["channels"].items())
             text = '{"channels": {\n' + rows + '\n }}'
-        elif key in ("routes", MODIFIERS_KEY, "desk") and isinstance(v, list):
+        elif key in ("routes", MODIFIERS_KEY, "desk", GROUPS_KEY) and isinstance(v, list):
             if v:
                 rows = ",\n".join("  " + json.dumps(r) for r in v)
                 text = f"[\n{rows}\n ]"
@@ -838,6 +930,8 @@ class Presets:
         self.desk_notes: list[str] = []  # the desk rows the last load dropped (set_desk)
         # plan 28 N2: the GRAPH page's positions of the look's nodes
         self.layout: dict[str, list[float]] = {}
+        # plan 40 T2: the GRAPH page's groups (`GROUPS_KEY` entries)
+        self.groups: list[dict] = []
         # R17 (final review): the live preset came from `new` and has never
         # been saved — save names it (whatever a file of its name holds);
         # a load or a save clears it (`_landed`)
@@ -852,8 +946,6 @@ class Presets:
                  versions=VERSIONS,
                  text=lambda doc: dumps(doc))
         lib.on_load(GROUP, lambda name: self._landed(name))
-        # plan 33 R12: an fx module loaded replaces the graph's runs
-        self._watch_fx_modules()
         lib.presets = self
         self.listeners: list = []        # called with the name after every load (app.py)
 
@@ -922,9 +1014,6 @@ class Presets:
         Returns the unknown ids; the notes land in `notes`."""
         lib, reg, table = self.lib, self.reg, self.router.table
         notes: list[str] = []
-        # plan 33 R12: (again on every load — a Presets from before a hot
-        # reload brought this method never ran the __init__ that registers it)
-        self._watch_fx_modules()
         # 0. the look-back's per-frame ids, read as 60 Hz frames (plan 14
         #    WP6) — a file the launch's migration has not rewritten
         doc, converted = echo_seconds(doc)
@@ -976,7 +1065,7 @@ class Presets:
         # the file, the default four), declared before the values land — so
         # a knob of a voice this registry lacks yet waits in `later`
         members: dict[str, list[int]] = {}
-        for scheme, bank in self._banks().items():
+        for scheme, bank in self.banks().items():
             members[scheme], bank_notes = bank.parse(doc.get(bank.KEY))
             notes += bank_notes
         bank_ids = {f"{s}.{n}." for s, ids in members.items() for n in ids}
@@ -1103,6 +1192,8 @@ class Presets:
         macros = {mid: m.to_json() for mid, m in held.items()}
         modules = dict(doc.get("modules") or {})
         for group in list(modules):
+            if group in RETIRED_MODULES:
+                continue                    # (plan 40 T5: kept, quietly, until a save)
             if group not in PERFORMANCE_GROUPS or group in NO_MODULE:
                 notes.append(f"module {group}: not a performance group, ignored")
                 modules.pop(group)
@@ -1115,7 +1206,7 @@ class Presets:
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
-        held_banks = {s: b.doc() for s, b in self._banks().items()}
+        held_banks = {s: b.doc() for s, b in self.banks().items()}
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -1132,7 +1223,7 @@ class Presets:
             notes += table.set_modifiers(mods, reg)
             values.update(reg.snapshot(group=modifiers.GROUP))
             for scheme, ids in members.items():          # plan 31 B: the banks
-                self._banks()[scheme].set(ids)
+                self.banks()[scheme].set(ids)
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
@@ -1168,7 +1259,7 @@ class Presets:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
             for scheme, ids in held_banks.items():        # the banks as they were
-                bank = self._banks()[scheme]
+                bank = self.banks()[scheme]
                 if bank.doc() != ids:
                     bank.set(ids)
             if gs.mark() != held_graph:          # the graph as it was
@@ -1210,7 +1301,7 @@ class Presets:
         self.note = str(doc.get("note") or "")
         # 6. the module labels: a label and a clean dot, never a load (D3)
         for group in PERFORMANCE_GROUPS:
-            if group in NO_MODULE:
+            if group in NO_MODULE and group not in RETIRED_MODULES:
                 continue
             label = modules.get(group)
             lib.label(group, str(label) if label else None)
@@ -1222,6 +1313,12 @@ class Presets:
         self.layout = graphmigrate.renamed_layout(positions)
         if bad:
             notes.append(f"layout: {bad} entr{'y' if bad == 1 else 'ies'} unreadable, ignored")
+        #     plan 40 T2 (D4): and its groups — a member the graph does not
+        #     hold left out, said, a group left empty dropped; no key is no
+        #     group (`graphmigrate.groups_of`)
+        self.groups, group_notes = read_groups(graphmigrate.groups_of(doc), self._held_canvas(),
+                                               self._groupable)
+        notes += group_notes
         # 7. the notes, for the panel
         self.notes = notes
         self.migrated = migrated            # plan 36 T3: the one-way migration's word
@@ -1253,7 +1350,7 @@ class Presets:
         doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
         # a preset of four LFOs writes the file it always did
-        for bank in self._banks().values():
+        for bank in self.banks().values():
             if bank.doc() != list(bank.DEFAULT):
                 doc[bank.KEY] = bank.doc()
         values = self._values()
@@ -1271,15 +1368,22 @@ class Presets:
         layout = getattr(self, "layout", None)
         if layout:                      # plan 28 N2: a preset with none writes none
             doc[LAYOUT_KEY] = {k: list(layout[k]) for k in sorted(layout)}
+        # plan 40 T2 (D4, D7): the groups, after the layout, each of what the
+        # preset still holds; a preset with none writes none and stays `/7`
+        groups = self.live_groups()
+        if groups:
+            doc[GROUPS_KEY] = groups
+            doc["schema"] = GROUPS_SCHEMA
         # plan 32 S: the channels' bins
         media = self.media
         if media is not None:
             doc[MEDIA_KEY] = media.to_json()
         return doc
 
-    def _banks(self) -> dict:
+    def banks(self) -> dict:
         """The router's modulator banks by scheme (plan 31 B); none on a
-        router that steps none (the tests' bare ones)."""
+        router that steps none (the tests' bare ones). Public (plan 40
+        review fix): GRAPH's spawn reads them for its `patches.Host`."""
         banks = getattr(self.router, "_banks", None)
         return banks() if callable(banks) else {}
 
@@ -1330,80 +1434,6 @@ class Presets:
         own = [d for d in live if not undo.alike(theirs.get(d["id"]), d)]
         return {MODIFIERS_KEY: own} if own else {}
 
-    def _watch_fx_modules(self) -> None:
-        """Hand the library's fx module loads to `_fx_module` (plan 33 R12,
-        `Library.on_apply`): idempotent, so `load_doc` calls it as well as
-        `__init__` and a hot reload that re-classes this object (never
-        re-inits it) is registered at its next preset load. The hook looks
-        the method up at call time, so a re-class reaches it."""
-        on_apply = getattr(self.lib, "on_apply", None)
-        if on_apply is not None:
-            on_apply(FX_GROUP, lambda name, doc: self._fx_module(name, doc))
-
-    def _fx_module(self, name: str, doc: dict) -> None:
-        """An fx module just landed (plan 33 R12, `Library.on_apply`): its
-        run replaces the loaded graph's main run, and its faces run the
-        faces' when it has one (`graphmigrate.module_runs`); every branch,
-        composite, switch and placement stays. Its values are the fx group
-        as the module landed them. A wire the loaded graph had refused stays
-        refused, as the load said, and the rest lands with the module's run
-        (the load's own landing: the spec without it, the section with it).
-        A graph this build cannot read at all is left as it is, said in a
-        note; one that comes out the same is not landed again."""
-        gs = self._graph_section()
-        table = self.router.table
-        rows = {"routes": [b.to_json() for b in table.routes()],
-                "desk": desk_json(table.desk()), "macros": table.macros_doc()}
-        before = gs.free_doc()
-        if before is None:
-            # (plan 36 T4, the T3 review's WYSIWYG leak: before any preset
-            # has landed the frame is the empty wired one — the module's run
-            # goes into it, and nothing of today's frame is filled in)
-            before = read_graph({FRAME_KEY: WIRED_FRAME}).to_json()
-        # (its order and target are no params since plan 33 T7: read from
-        # the module's file over the group's defaults, as its values land)
-        own = self._held_retired(_module_values(FX_GROUP, doc), (FX_GROUP,))
-        # (plan 36 T3: an effect the graph does not name has no params yet —
-        # the module's own values say whether it joins the run)
-        landed = {**self.lib.defaults(FX_GROUP), **_module_values(FX_GROUP, doc),
-                  **self.reg.snapshot(FX_GROUP)}
-        new, notes = graphmigrate.module_runs(before, {**landed, **own}, gs.specs(), rows)
-        spec, section, read_notes = gs.read(new)
-        if spec is None:
-            notes = [*notes, ("its run is not applied — the preset's graph is not one "
-                              "this build reads")]
-        else:
-            notes = [*notes, *read_notes]
-        # (final review, finding 1: every note the module's run makes is
-        # said — a run refused here would otherwise vanish without a word;
-        # one the preset's load already said is not said twice)
-        said = list(getattr(self, "notes", []))
-        for note in (f"fx module {name}: {n}" for n in notes):
-            if note not in said and not any(n == note.partition(": ")[2] for n in said):
-                said.append(note)
-                self.lib.say(warning=note)
-        self.notes = said
-        if spec is None:
-            return
-        if section != before:
-            gs.land(spec, section)
-
-    def _held_retired(self, values: dict, groups=PERFORMANCE_GROUPS) -> dict[str, Any]:
-        """The retired values (plan 33 T7) a load of `values` (a file's, or
-        an fx module's) lands, as a build from before T7 landed them —
-        `graphmigrate.landed_retired` over the groups' defaults
-        (`Library.defaults`) and the effects this build holds: an fx
-        module's run is read from its orders (`_fx_module`)."""
-        defaults: dict[str, Any] = {}
-        for g in groups:
-            try:
-                defaults.update(self.lib.defaults(g))
-            except (LibraryError, AttributeError, KeyError):   # a stand-in library
-                continue
-        return graphmigrate.landed_retired(
-            values, defaults, self._graph_section().specs(), effects=FX_GROUP in groups,
-            channels=bool({"view", "backdrop"} & set(groups)))
-
     def _template_rows(self, doc: dict) -> list | None:
         """A copy of the rows of the desk template `doc` names (plan 24 C3),
         or None: none named, or one the library lacks (the load says so when
@@ -1423,6 +1453,60 @@ class Presets:
         if gs is None:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
         return gs
+
+    def parts(self) -> tuple:
+        """Plan 40 T3: the loaded preset's parts, as `patches.lift` reads them
+        (*save as patch*): the landed section (`GraphSpec`, None with none),
+        the table (`routing.Bindings`: its routes, preset-layer desk,
+        modifiers, macros), the registry's snapshot of the performance
+        params (a modifier's params among them; a held program's own nodes
+        not, as `_values`) and the GRAPH page's layout. Reads only."""
+        hold = getattr(self._graph_section(), "hold", None)
+        only = hold.program_only() if hold is not None else frozenset()
+        values = {k: v for k, v in self.reg.snapshot(part="performance").items()
+                  if k not in only}
+        return (getattr(self._graph_section(), "spec", None), self.router.table, values,
+                dict(getattr(self, "layout", None) or {}))
+
+    def _held_canvas(self) -> set[str]:
+        """Plan 40 T2: the GRAPH canvas ids the loaded preset holds that a
+        group may name — its section's render nodes (``render:acid.2``), its
+        modifiers, its LFOs and envelopes (the bank's ids; with no bank —
+        a test's bare router — the voices the registry holds, the canvas's
+        own rule, `graphview.bank_ids`: never an id nothing holds) and the
+        eight macros."""
+        spec = getattr(self._graph_section(), "spec", None)
+        held = {f"render:{n}" for n in patches.spec_names(spec)}
+        held |= {m.id for m in getattr(self.router.table, "modifiers", ())}
+        banks = self.banks()
+        for scheme in ("lfo", "env"):
+            bank = banks.get(scheme)
+            ids = bank.doc() if bank is not None else graphview.bank_ids(None, self.reg, scheme)
+            held |= {f"{scheme}.{n}" for n in ids}
+        held |= {f"macro.{n}" for n in range(1, patches.MACROS + 1)}
+        return held
+
+    def _groupable(self, ids: list[str]) -> tuple[set[str], list[str]]:
+        """Plan 40 T2: of canvas ids `ids`, those a group may hold and the
+        words for the rest (`patches.select`: the lift's rule)."""
+        members, refused = patches.select(getattr(self._graph_section(), "spec", None),
+                                          self.router.table, ids)
+        return set(members.canvas()), refused
+
+    def live_groups(self) -> list[dict]:
+        """Plan 40 T2: the groups as a save writes them — each member the
+        preset no longer holds (a node deleted since) left out, a group left
+        with none left out — in the file's key order."""
+        groups = getattr(self, "groups", None) or []
+        if not groups:
+            return []
+        held = self._held_canvas()
+        out = []
+        for g in groups:
+            nodes = [cid for cid in g.get("nodes", ()) if cid in held]
+            if nodes:
+                out.append(group_entry({**g, "nodes": nodes}))
+        return out
 
     def template_of_loaded(self) -> str | None:
         """The desk template the loaded preset's file names (plan 24 C3),
@@ -1496,11 +1580,13 @@ class Presets:
                 None if section is None else json.dumps(section, sort_keys=True),
                 table.modifiers_doc(self.reg),
                 # plan 31 B: an LFO added or removed
-                {s: b.doc() for s, b in self._banks().items()},
+                {s: b.doc() for s, b in self.banks().items()},
                 # plan 28 N2: a node moved on the GRAPH page; none, no part
                 json.dumps(getattr(self, "layout", None) or None, sort_keys=True),
                 # plan 32: a bin entry assigned or cleared
-                None if self.media is None else json.dumps(self.media.to_json()))
+                None if self.media is None else json.dumps(self.media.to_json()),
+                # plan 40 T2: a group made, opened, renamed or taken apart
+                json.dumps(getattr(self, "groups", None) or None, sort_keys=True))
 
     # ---- internals ----
 
@@ -1718,8 +1804,8 @@ def party_trip_routes() -> list[Binding]:
 
 # ---- plan 14 WP5 (decision 24): the effect families on F6–F8 ----
 #
-# One effect family each, the effect values from the matching `library/fx`
-# module preset (`fx_module`), and between them every effect in
+# One effect family each, the effect values those of the retired fx module
+# preset of the same name (`ACID_FX`, `MANDALA_FX`, `NOITA_FX`), and between them every effect in
 # shaders/fx on in a party preset: ACID acid · wobble · deconverge · hue
 # cycle; MANDALA plasma · kaleidoscope · fractals · glimmer; NOITA trip
 # warp · trip colour · fractals · double vision. The plan-12 rules that
@@ -1733,12 +1819,21 @@ def party_trip_routes() -> list[Binding]:
 # effect, the left grips the object (as in tumble, faces and wake) and
 # its height adds the second effect.
 
-def fx_module(name: str) -> dict[str, Any]:
-    """A `library/fx` module preset's values — what an effect preset
-    takes its effect settings from (read at generation, so the module
-    file stays the one place they are tuned)."""
-    doc = json.loads((FACTORY / "fx" / f"{name}.json").read_text())
-    return dict(doc.get("values") or {})
+# the effect settings each family takes, as the retired fx module presets
+# of the same names held them (plan 40 T5, D6: those files are gone, their
+# values kept here so the generated presets stay byte-identical)
+ACID_FX: dict[str, Any] = {"fx.acid.on": True, "fx.wobble.on": True,
+                           "fx.deconverge.on": True, "fx.huecycle.on": True}
+MANDALA_FX: dict[str, Any] = {
+    "fx.plasma.on": True, "fx.plasma.level": 0.45, "fx.kaleido.on": True,
+    "fx.kaleido.segments": 8, "fx.kaleido.order": 8, "fx.fractals.on": True,
+    "fx.fractals.ground": 0.6, "fx.fractals.amount": 1.2, "fx.glimmer.on": True,
+    "fx.glimmer.ground": 0.4}
+# Noita's trip stages 0–2 (data/entities/misc/effect_trip_0N.xml, fx_add:
+# each stage's amounts add to the ones before)
+NOITA_FX: dict[str, Any] = {"fx.warp.on": True, "fx.warp.amount": 0.9,
+                            "fx.tripcolour.on": True, "fx.tripcolour.amount": 0.55,
+                            "fx.fractals.on": True, "fx.fractals.amount": 1.4}
 
 
 def party_scene(**view) -> dict[str, Any]:
@@ -1785,7 +1880,7 @@ def party_acid_values() -> dict[str, Any]:
     return {**party_scene(view_shape=11, view_speed=0.3, view_bright=2.0, view_depth4=2.6,
                           view_pattern=1, view_pattern_mix=0.6, camera_zoom=1.1,
                           **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
-            **fx_module("acid"),
+            **ACID_FX,
             "fx.acid.bend": 0.04, "fx.acid.twist": 0.9, "fx.acid.reach": 10.0,
             "fx.acid.breathe": 0.35, "fx.deconverge.amount": 5.0,
             "fx.wobble.amount": 0.004, "fx.huecycle.paint": 0.7, "fx.huecycle.spread": 1.2}
@@ -1818,7 +1913,7 @@ def party_mandala_values() -> dict[str, Any]:
                           view_faces=True, view_pattern=9, camera_zoom=0.7,
                           **{"camera_pan.x": 190.0},
                           **{f"view_plane.{n}": True for n in ("XW", "ZW")}),
-            **fx_module("mandala"),
+            **MANDALA_FX,
             "fx.kaleido.zoom": 1.0, "fx.kaleido.swirl": 0.0, "fx.glimmer.amount": 1.0,
             # tuned for the glass (plan 14 WP5): a black ground
             "fx.plasma.level": 0.0, "fx.fractals.ground": 0.0, "fx.glimmer.ground": 0.0}
@@ -1849,7 +1944,7 @@ def party_noita_values() -> dict[str, Any]:
     return {**party_scene(view_shape=7, view_speed=0.3, view_bright=1.4, view_depth4=2.4,
                           view_pattern=11, view_pattern_mix=0.8, camera_zoom=1.0,
                           **{f"view_plane.{n}": True for n in ("XW", "YW", "ZW")}),
-            **fx_module("noita-heavily-tripping"),
+            **NOITA_FX,
             "fx.doublevision.on": True, "fx.doublevision.amount": 4.0,
             "fx.doublevision.ghost": 0.5, "fx.doublevision.copies": 2}
 

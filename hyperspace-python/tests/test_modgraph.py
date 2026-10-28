@@ -1,5 +1,5 @@
-"""patch.py (plan 28 N0): the modulation graph as data, its order and its
-loops — proved without a Router, then the edges `Router.build_patch`
+"""modgraph.py (plan 28 N0): the modulation graph as data, its order and its
+loops — proved without a Router, then the edges `Router.build_modgraph`
 makes from a route, a macro subscriber and a scale."""
 
 import ast
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from hyperspace import patch as P
+from hyperspace import modgraph as P
 from hyperspace.bands import CEIL
 from hyperspace.params import Registry
 from hyperspace.routing import Binding, Bindings, Macro, Router, Sub
@@ -22,7 +22,7 @@ def _ids(nodes):
 
 
 def test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties():
-    g = P.Patch()
+    g = P.ModGraph()
     for nid, kind in [("view.bright", "param"), ("lane:0", "source"), ("lfo:0", "lfo"),
                       ("lfo.1.depth", "param"), ("hand:right.y", "source"),
                       ("fx.mix", "param"), ("macro.1", "macro")]:
@@ -40,7 +40,7 @@ def test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties():
         if P.orders(g, e):
             assert got.index(e.src) < got.index(e.dst), e
     # no edges: insertion order exactly, and a node added twice stays put
-    h = P.Patch()
+    h = P.ModGraph()
     for nid in ["c", "a", "b", "a"]:
         h.add(nid, "param")
     assert _ids(P.order(h)) == ["c", "a", "b"]
@@ -52,7 +52,7 @@ def test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties():
 
 
 def test_cycles_finds_every_loop_and_none_through_a_delay():
-    g = P.Patch()
+    g = P.ModGraph()
     for nid, kind in [("lfo:0", "lfo"), ("lfo.1.depth", "param"), ("lfo:1", "lfo"),
                       ("lfo.2.rate", "param"), ("view.bright", "param")]:
         g.add(nid, kind)
@@ -72,7 +72,7 @@ def test_cycles_finds_every_loop_and_none_through_a_delay():
     g.link("macro.1", "lfo.2.rate", "base")
     assert len(P.cycles(g)) == 2
     # through a delay modifier: no loop at all
-    d = P.Patch()
+    d = P.ModGraph()
     d.add("hand:right.x", "source")
     d.add("mod:1", "modifier")
     d.add("mod:2", "modifier", delay=True)
@@ -81,13 +81,13 @@ def test_cycles_finds_every_loop_and_none_through_a_delay():
     d.link("mod:1", "mod.1.mul", "mod", ("mod:1", "mod.1.mul"))
     d.link("mod.1.mul", "mod:1", "mul")
     assert P.cycles(d) == [["mod:1", "mod.1.mul"]]
-    m2 = P.Patch()                                      # two modifiers, no cable: still a loop
+    m2 = P.ModGraph()                                      # two modifiers, no cable: still a loop
     m2.add("mod:1", "modifier")
     m2.add("mod:2", "modifier")
     m2.link("mod:2", "mod:1", "in")
     m2.link("mod:1", "mod:2", "in")
     assert P.cycles(m2) == [["mod:1", "mod:2"]]
-    d2 = P.Patch()
+    d2 = P.ModGraph()
     d2.add("mod:1", "modifier")
     d2.add("mod:2", "modifier", delay=True)
     d2.add("mod.1.mul", "param")
@@ -97,7 +97,7 @@ def test_cycles_finds_every_loop_and_none_through_a_delay():
     assert P.cycles(d2) == []
     assert _ids(P.order(d2)) == ["mod:2", "mod.1.mul", "mod:1"]   # the delay emits first
     # a delay closing no loop runs after its input, like any node
-    d3 = P.Patch()
+    d3 = P.ModGraph()
     d3.add("mod:2", "modifier", delay=True)
     d3.add("view.bright", "param")
     d3.add("hand:right.x", "source")
@@ -106,7 +106,7 @@ def test_cycles_finds_every_loop_and_none_through_a_delay():
     assert _ids(P.order(d3)) == ["hand:right.x", "mod:2", "view.bright"]
     assert P.cycles(d3) == []
     # a cut cable (disabled) breaks its loop
-    e = P.Patch()
+    e = P.ModGraph()
     e.add("lfo:0", "lfo")
     e.add("lfo.1.depth", "param")
     e.link("lfo:0", "lfo.1.depth", "mod", ("lfo:0", "lfo.1.depth"), enabled=False)
@@ -129,7 +129,7 @@ def test_a_route_a_macro_sub_and_a_scale_are_the_edges_the_design_names():
     table.macros = {"macro.1": Macro("m", [Sub(depth=("lfo:0", "fx.mix")),
                                            Sub(base="view.speed", lo=0.5, hi=0.25)])}
     router = Router(reg, table)
-    g = router.build_patch()
+    g = router.build_modgraph()
     kinds = {n.id: n.kind for n in g.nodes.values()}
     assert kinds == {
         "lane:0": "source", "view.bright": "param", "master.gain": "param",
@@ -161,13 +161,13 @@ def test_a_route_a_macro_sub_and_a_scale_are_the_edges_the_design_names():
     order = _ids(P.order(g))
     assert order.index("lfo.1.depth") < order.index("lfo:0") < order.index("fx.mix")
     assert order.index("master.gain") < order.index("view.bright")
-    assert router.patch is router.patch                 # cached, not rebuilt per read
+    assert router.modgraph is router.modgraph                 # cached, not rebuilt per read
 
 
-def test_patch_is_a_leaf():
-    """Like graph.py: patch.py imports nothing from the package but the
+def test_modgraph_is_a_leaf():
+    """Like graph.py: modgraph.py imports nothing from the package but the
     leaves `motion` and `tapers` (plan 28 N0)."""
-    tree = ast.parse((PKG / "patch.py").read_text())
+    tree = ast.parse((PKG / "modgraph.py").read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.level:
             assert (node.module or "").split(".")[0] in ("motion", "tapers"), node.module
@@ -196,7 +196,7 @@ def test_a_param_the_pass_lands_is_applied_once_a_frame():
                       Binding("hand:1", "view.faces", "position"),
                       Binding("lfo:0", "view.bright", "push", 1.0, scale="master.gain")])
     router = Router(reg, table)
-    router.patch                                       # noqa: B018 — builds the plan
+    router.modgraph                                       # noqa: B018 — builds the plan
     landed = [s[1] for s in router.__dict__["_plan"] if s[0] == "param" and s[3]]
     assert landed == ["master.gain"]                   # read by the push: lands in the pass
     router.feed("hand", [0.8, 1.0])
@@ -249,7 +249,7 @@ def test_a_modifier_node_runs_in_order_and_its_params_land_first():
     table.add(Binding("mod:1", "view.bright", "push", 0.5))
     router.names["hand"] = {"right.y": 0}
     router.feed("hand", [0.75])                         # mul = −4 + 8 · 0.75 = 2
-    g = router.patch
+    g = router.modgraph
     assert g.nodes["mod:1"].kind == "modifier"
     edges = {(e.src, e.dst, e.port) for e in g.edges}
     assert {("lane:0", "mod:1", "in"), ("mod.1.mul", "mod:1", "mul"),
@@ -277,8 +277,8 @@ def test_a_loop_through_a_delay_runs_exactly_one_frame_late():
     reg, table, router, lane = _mod_rig()
     table.add_modifier("combine", ["lane:0", "mod:2"], reg)          # add
     table.add_modifier("delay", ["mod:1"], reg)
-    assert P.cycles(router.patch) == [] and router.patch_notes == []
-    assert _ids(P.order(router.patch)).index("mod:2") < _ids(P.order(router.patch)).index("mod:1")
+    assert P.cycles(router.modgraph) == [] and router.modgraph_notes == []
+    assert _ids(P.order(router.modgraph)).index("mod:2") < _ids(P.order(router.modgraph)).index("mod:1")
     seen = []
     for _ in range(4):
         router.modulate(lane(0.1))
@@ -295,13 +295,13 @@ def test_a_loop_of_modifiers_alone_keeps_its_last_input_off_with_a_note():
     table.add_modifier("scale", ["mod:2"], reg)
     table.add_modifier("scale", ["mod:1"], reg)
     table.add(Binding("lfo:0", "lfo.1.depth", "push", 0.5))          # LFO 1 on its own depth
-    notes = router.patch_notes
+    notes = router.modgraph_notes
     assert notes == [
         "loop: mod:1 → mod:2 → mod:1 needs a delay — mod.2's input mod:1 is off until it has one",
         ("loop: lfo:0 → lfo.1.depth → lfo:0 needs a delay — lfo:0 → lfo.1.depth is off "
          "until it has one")]
-    assert router.patch_cut == {("mod:1", "mod:2"), ("lfo:0", "lfo.1.depth")}
-    assert P.cycles(router.patch) == []
+    assert router.modgraph_cut == {("mod:1", "mod:2"), ("lfo:0", "lfo.1.depth")}
+    assert P.cycles(router.modgraph) == []
     router.feed("lfo", [0.9])
     router.rests["lfo"] = [0.5]
     router.modulate(lane(0.4))
@@ -320,12 +320,12 @@ def test_a_loop_through_a_scale_or_a_macro_depth_sub_is_cut():
     a = Binding("lfo:0", "master.gain", "push", 0.5)
     b = Binding("lane:0", "lfo.1.depth", "push", 0.5, scale="master.gain")
     router = Router(reg, Bindings([a, b]))
-    assert P.cycles(router.build_patch()) == [["lfo:0", "master.gain", "lfo.1.depth"]]
-    assert router.patch_cut == {("lane:0", "lfo.1.depth")}
+    assert P.cycles(router.build_modgraph()) == [["lfo:0", "master.gain", "lfo.1.depth"]]
+    assert router.modgraph_cut == {("lane:0", "lfo.1.depth")}
     c = Binding("lfo:0", "macro.1", "push", 0.5)
     d = Binding("lane:0", "lfo.1.depth", "push", 0.5)
     table = Bindings([c, d])
     table.macros = {"macro.1": Macro("", [Sub(depth=("lane:0", "lfo.1.depth"))])}
     router = Router(reg, table)
-    assert P.cycles(router.build_patch()) == [["lfo:0", "macro.1", "lfo.1.depth"]]
-    assert router.patch_cut == {("lane:0", "lfo.1.depth")}
+    assert P.cycles(router.build_modgraph()) == [["lfo:0", "macro.1", "lfo.1.depth"]]
+    assert router.modgraph_cut == {("lane:0", "lfo.1.depth")}

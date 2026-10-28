@@ -305,6 +305,18 @@ Two people (or two Macs) can have the same presets: whatever either saves
 shows up on the other. The presets live in a cloud-synced folder; each
 Mac's own settings stay in its home (`~/Hyperspace`).
 
+What is shared, in the library folder: `presets/`, `projects/` (shows),
+`patches/` (plan 40: groups of GRAPH nodes saved with **save as patch…**,
+spawned into any preset), the module preset folders (`band/`, `dream/`,
+`view/` …; an old `fx/` is ignored, the fx module presets being retired),
+`hidden.json` and `trash/`. What stays on each Mac, in its home:
+`config.toml`, `bindings.json`, `hands.json`, `windows.json`, `ui.json`
+(this Mac's panel settings: the GRAPH side pane's width), `last_show`,
+`stall.log`, `weights/`, `media/` (this Mac's own files; shared media go in
+the library's `media/`) and `media-cache/`. Both Macs run the
+same build: a preset with a GRAPH group is a newer file version (`/8`)
+that an older build refuses.
+
 1. Make a folder in your cloud drive, shared with each other (for
    example `Dropbox/Hyperspace`). On iCloud, mark it "Keep Downloaded";
    on Dropbox, "Available offline". Evicted files are invisible to the

@@ -261,8 +261,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import apc40, envelope, lfo, modifiers, motion, seq_page
-from . import patch as patchmod
+from . import apc40, envelope, lfo, modgraph, modifiers, motion, seq_page
 from .bands import BANDS, CEIL
 from .modifiers import Modifier, ModState
 from .motion import OFF, Follower, Motion
@@ -294,7 +293,7 @@ FACTORY_FILE = Path(__file__).with_name("bindings.default.json")
 # and its knob params ``<scheme>.<n>.<knob>`` (the class's KNOBS) and the
 # bank-wide ones (SHARED) feed it. Known here by class, so a bare router
 # (no bank handed in) still draws an LFO route's source as an LFO. A new
-# kind is one entry here, its scheme in patch.KINDS, and its instance
+# kind is one entry here, its scheme in modgraph.KINDS, and its instance
 # handed to `Router.use_bank`
 BANKS: dict[str, type] = {lfo.LFOs.SCHEME: lfo.LFOs,
                           envelope.Envelopes.SCHEME: envelope.Envelopes}
@@ -854,6 +853,73 @@ class Binding:
 
 
 _SHIFT = Binding(SHIFT_SOURCE, SHIFT_PARAM, "toggle")    # the latch's control
+
+
+def row_words(row: Binding | str, names=None) -> str:
+    """A row's source in words (plan 40 T4): what a person calls the
+    control or the lane, without its device's role — the caller says the
+    role. `row` is a `Binding` or its source string. `names(bare source)`
+    is the caller's say first: the desk's glyph where a MIDI profile has
+    one (``cc:0:48`` → "K1", devices.wants hands it `apc40.glyph`), the
+    port's name on the canvas (graphview.cable_words); None or "" falls
+    through to the row's own words —
+
+      ``hand:right.y`` → "right hand y"    ``hands:gap`` → "hands gap"
+      ``lane:0`` → "band 1"                ``pad:A`` → "pad A"
+      ``hat:UP`` → "d-pad up"              ``axis@p2:LX`` → "axis LX"
+      ``cc:0:48`` → "CC 48 ch1"            ``pitch:*`` → "pitch bend any ch"
+      ``lfo:0`` → "LFO 1"                  ``mod:3`` → "mod.3"
+      ``osc1:/fader/1`` → "/fader/1"       anything else → the source
+
+    Pure: reads nothing but its arguments."""
+    source = row.source if isinstance(row, Binding) else str(row)
+    head, colon, addr = source.partition(":")
+    scheme = base_scheme(head)
+    bare = f"{scheme}:{addr}" if colon else scheme
+    if names is not None:
+        said = names(bare)
+        if said:
+            return str(said)
+    if not colon:
+        return source
+    if scheme == "hand":
+        side, _, rest = addr.partition(".")
+        if side in ("left", "right"):
+            return f"{side} hand {rest.replace('.', ' ')}".rstrip()
+        return f"hand {addr.replace('.', ' ')}"
+    if scheme == "hands":
+        return f"hands {addr.replace('.', ' ')}"
+    n = addr.split(":")[0]
+    k = int(n) + 1 if n.isdecimal() else None
+    if scheme == "lane":
+        return f"band {k}" if k is not None else f"band {addr}"
+    if scheme in ("lfo", "env"):
+        return f"{scheme.upper() if scheme == 'lfo' else scheme} {k if k is not None else addr}"
+    if scheme == "seq":
+        return f"seq lane {k}" if k is not None else f"seq {addr}"
+    if scheme == modifiers.SCHEME:
+        return modifiers.id_of(f"{scheme}:{addr}") or source
+    if scheme == "pad":
+        return f"pad {addr}"
+    if scheme == "hat":
+        return f"d-pad {addr.lower()}"
+    if scheme == "axis":
+        return f"axis {addr}"
+    if scheme == "key":
+        return f"key {addr}"
+    if scheme in MIDI_SCHEMES:
+        b = Binding(bare, "")
+        try:
+            ch = "any ch" if b.channel is None else f"ch{b.channel + 1}"
+            num = b.number
+        except ValueError:
+            return source
+        if scheme == "pitch":
+            return f"pitch bend {ch}"
+        return f"{'CC' if scheme == 'cc' else 'note'} {num} {ch}"
+    if addr.startswith("/"):            # an OSC address is itself (plan 27 B4)
+        return addr
+    return source
 
 
 def _macro_n(mid: str) -> int:
@@ -2335,24 +2401,29 @@ class Bindings:
         scheme some device of this rig delivers as rows (`row_schemes`)?"""
         return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
 
+    def refusal(self, b: Binding) -> str | None:
+        """The words `_check` raises `ValueError` with for `b` whoever holds
+        its target — a sink's refusal, an op a continuous source has not, a
+        row no file may hold — or None. Read-only: a caller about to move
+        other rows for `b` asks first (plan 40's spawn: a one-owner
+        source's other rows go only once `b` is sure to land)."""
+        if b.is_sink:
+            return sink_refusal(b)
+        if self._lane_only(b) and b.op not in MOD_OPS:
+            return (f"{b.op!r} is not an op for a {b.scheme} source; "
+                    f"one of {', '.join(MOD_OPS)}")
+        return save_refusal(b)
+
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
         find its target free, or held by itself. A continuous source has
         no other op — `abs` is MIDI's, the one path is Router.modulate. (A
         scheme a device delivers as rows — `row_schemes`, which the device
         registry extends through `Router.use` — is not continuous here.)"""
-        if b.is_sink:                # a value going out: no referee (plan 27 B3)
-            why = sink_refusal(b)
-            if why is not None:
-                raise ValueError(why)
-            return
-        if self._lane_only(b) and b.op not in MOD_OPS:
-            raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
-                             f"one of {', '.join(MOD_OPS)}")
-        why = save_refusal(b)
+        why = self.refusal(b)
         if why is not None:
             raise ValueError(why)
-        if not b.is_performer:
+        if b.is_sink or not b.is_performer:      # a value going out: no referee (plan 27 B3)
             return
         cur = next((x for x in self.bindings
                     if x is not b and x.is_performer and x.target == b.target), None)
@@ -3037,7 +3108,7 @@ class Router:
         """The banks handed in, by scheme, in the order they came."""
         return self.__dict__.get("banks") or {}
 
-    def _patch_key(self) -> tuple:
+    def _modgraph_key(self) -> tuple:
         """What the patch is made of — the performer rows (each by identity
         and the fields that make edges), the macros' subscribers, the
         modifiers (N1, when the table has them), each bank's ids (plan 31
@@ -3055,8 +3126,8 @@ class Router:
         return (id(t), rows, t.macros_serial, subs, mods, banks,
                 getattr(self.reg, "serial", 0))
 
-    def build_patch(self) -> patchmod.Patch:
-        """The modulation graph of this table (patch.py's nodes and edges):
+    def build_modgraph(self) -> modgraph.ModGraph:
+        """The modulation graph of this table (modgraph.py's nodes and edges):
         every bank voice (when the router steps the bank: each LFO, by id)
         and modifier first, in their
         order; then per route, in table order, its source, its gate, its
@@ -3066,8 +3137,8 @@ class Router:
         subscribers as `base` edges; each voice's knob params (and the
         bank-wide ones, ``lfo.trigger``) and each modifier's own params, where the patch
         holds them, into their node. A switched-off row's edges are drawn
-        disabled. No loop is cut here (`patch` does that)."""
-        g = patchmod.Patch()
+        disabled. No loop is cut here (`modgraph` does that)."""
+        g = modgraph.ModGraph()
         t = self.table
         for scheme, bank in self._banks().items():
             for n in bank.ids():
@@ -3125,34 +3196,34 @@ class Router:
         return g
 
     @property
-    def patch(self) -> patchmod.Patch:
-        """The table's modulation patch as `modulate` runs it: `build_patch`,
+    def modgraph(self) -> modgraph.ModGraph:
+        """The table's modulation patch as `modulate` runs it: `build_modgraph`,
         with every loop that passes through no delay modifier broken at its
         last cable in table order — that cable's edges disabled and a note
-        in `patch_notes` (ROUTING's head shows it), the row itself left in
-        the table and the file as it is. Cached: rebuilt when `_patch_key`
+        in `modgraph_notes` (ROUTING's head shows it), the row itself left in
+        the table and the file as it is. Cached: rebuilt when `_modgraph_key`
         moves (the table, the banks' ids, the registry's params), with the
         evaluation plan `modulate` walks."""
         d = self.__dict__
-        key = self._patch_key()
-        if d.get("_patch_seen") != key:
-            self._rebuild_patch(key)
-        return d["_patch"]
+        key = self._modgraph_key()
+        if d.get("_modgraph_seen") != key:
+            self._rebuild_modgraph(key)
+        return d["_modgraph"]
 
     @property
-    def patch_notes(self) -> list[str]:
+    def modgraph_notes(self) -> list[str]:
         """One note per cable the patch keeps off to break a loop."""
-        self.patch                                   # noqa: B018 — current
-        return self.__dict__["_patch_notes"]
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_notes"]
 
     @property
-    def patch_cut(self) -> set[tuple[str, str]]:
+    def modgraph_cut(self) -> set[tuple[str, str]]:
         """The cables, ``(source, target)``, kept off to break a loop."""
-        self.patch                                   # noqa: B018 — current
-        return self.__dict__["_patch_cut"]
+        self.modgraph                                # noqa: B018 — current
+        return self.__dict__["_modgraph_cut"]
 
-    def _rebuild_patch(self, key: tuple) -> None:
-        g = self.build_patch()
+    def _rebuild_modgraph(self, key: tuple) -> None:
+        g = self.build_modgraph()
         t = self.table
         rank: dict[tuple[str, str], int] = {}
         for k, b in enumerate(t.bindings):
@@ -3165,13 +3236,13 @@ class Router:
         cut_in: set[tuple[str, str]] = set()     # (input address, modifier node) kept off
         notes: list[str] = []
         while True:
-            loops = patchmod.cycles(g)
+            loops = modgraph.cycles(g)
             if not loops:
                 break
             loop = loops[0]
             said = " → ".join([*loop, loop[0]])
             hops = set(zip(loop, [*loop[1:], loop[0]], strict=True))
-            on_loop = [e for e in patchmod.ordering(g) if (e.src, e.dst) in hops]
+            on_loop = [e for e in modgraph.ordering(g) if (e.src, e.dst) in hops]
             cables = {e.cable for e in on_loop if e.cable is not None}
             if cables:
                 # the loop's last cable in table order
@@ -3193,19 +3264,19 @@ class Router:
                          f"is off until it has one")
         # the evaluation plan: per node in order, what `modulate` does there
         banks = self._banks()
-        reads = {e.src for e in patchmod.ordering(g)}
+        reads = {e.src for e in modgraph.ordering(g)}
         by_target: dict[str, list] = {}
         for b in t.mods():
             if (b.source, b.target) not in cut:
                 by_target.setdefault(b.target, []).append((b, tuple(t.depth_subs(b))))
-        # a delay closing a loop runs before its input (`patch.ordering`):
+        # a delay closing a loop runs before its input (`modgraph.ordering`):
         # it emits that input's lane as it stands — last frame's value
         live = [e for e in g.edges if e.enabled and e.port == "in"]
-        ordered = {id(e) for e in patchmod.ordering(g)}
+        ordered = {id(e) for e in modgraph.ordering(g)}
         early = {e.dst for e in live if id(e) not in ordered}
         dormant = {node for _, node in cut_in}
         plan: list[tuple] = []
-        for node in patchmod.order(g):
+        for node in modgraph.order(g):
             if node.kind in banks:
                 i = int(node.id.split(":")[1])
                 if i + 1 in banks[node.kind]:          # a gap, or past the last: no voice
@@ -3219,8 +3290,8 @@ class Router:
                 if rows or land:
                     plan.append(("param", node.id, rows, land))
         d = self.__dict__
-        d["_patch"], d["_plan"], d["_patch_seen"] = g, plan, key
-        d["_patch_notes"], d["_patch_cut"] = notes, cut | cut_in
+        d["_modgraph"], d["_plan"], d["_modgraph_seen"] = g, plan, key
+        d["_modgraph_notes"], d["_modgraph_cut"] = notes, cut | cut_in
 
     # ---- the modifiers (plan 28 N1): their output lanes, ``mod:<n>`` ----
 
@@ -3251,7 +3322,7 @@ class Router:
         `early` (plan 28 N0): a delay that closes a loop, run before its
         input — it emits that input's lane as it stands, last frame's
         value, so the loop is exactly one frame late. `cut`: a modifier
-        whose input `patch` keeps off to break a loop with no delay: dormant."""
+        whose input `modgraph` keeps off to break a loop with no delay: dormant."""
         m = self.table.modifier(mid)
         vec = self.feeds.get(modifiers.SCHEME)
         if m is None or vec is None or not 0 <= m.n < len(vec):
@@ -3354,11 +3425,11 @@ class Router:
         (its lanes are then not a source). `dt` is the frame's, for the
         rows' motion (`feel_of`); None, a 60 Hz frame. A row that does not
         act this frame — its source not live, its gate shut — loses its
-        follower, and starts afresh. A cable `patch` keeps off to break a
+        follower, and starts afresh. A cable `modgraph` keeps off to break a
         loop does not run."""
         dt = 1 / 60 if dt is None else dt
         self._sync_modifiers()                   # plan 28 N1: the ``mod:<n>`` lanes
-        self.patch                                   # noqa: B018 — the cached plan, current
+        self.modgraph                                # noqa: B018 — the cached plan, current
         plan = self.__dict__["_plan"]
         begin = getattr(self.reg, "begin_frame", None)
         mark = begin() if begin is not None else None

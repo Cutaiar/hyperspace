@@ -168,7 +168,7 @@ IMAGE, MASK, GEOMETRY = "image", "mask", "geometry"
 VALUE = "value"
 """A port type beside `IMAGE`, `MASK` and `GEOMETRY`: a scalar or a
 small vector of floats a node publishes once a frame (plan 30, "Designed,
-not built: the auxiliary ports"). Plan 28's modulation graph (`patch.py`,
+not built: the auxiliary ports"). Plan 28's modulation graph (`modgraph.py`,
 whose `RENDER_VALUE` is this name) may read one as a source, like a fed
 lane. Two uses are named so the node editor can draw them later without a
 schema change:

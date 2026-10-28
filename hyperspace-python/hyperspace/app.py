@@ -1452,6 +1452,9 @@ def main() -> None:
     router.use(rig)
     learn.devices = rig
     rig.listeners.append(point_at_devices)
+    # plan 40 T4: a device coming or going, said in the footer with what it brings
+    rig.said = lambda role, was, now: library.say(
+        devices.arrival(router.table, rig, role, was, now) or None)
     point_at_devices()
     panel.devices = rig                        # the SYSTEM page's device lines
     panel.media = media                        # the MEDIA page: the folder and the channels
