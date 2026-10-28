@@ -198,7 +198,7 @@ def test_the_example_is_a_patch():
     (lambda d: d["ports"][0].update(type="colour"),
      "port in: type 'colour' is not one of image, mask, geometry, value"),
     (lambda d: d["wires"].append({"from": "acid", "to": "zoomblur.image"}),
-     "wire acid → zoomblur.image: zoomblur is not in the patch and no port covers it"),
+     "wire acid → zoomblur.image crosses the edge: a port says it"),
     (lambda d: d["values"].update({"view.bright": 0.8}),
      "view.bright is the host's: a patch drives a host param, never sets it (D5)"),
     (lambda d: d.update(envs=[3]),
@@ -214,10 +214,40 @@ def test_check_refuses_each_refusable_thing_in_words(edit, said):
     assert said in patches.check(doc), patches.check(doc)
 
 
-def test_a_wire_a_port_covers_is_no_refusal():
+def test_a_wire_across_the_edge_is_refused_even_where_a_port_says_it():
+    """D2, plan 36: a crossing is a port, an open pin — a wire in the file
+    would be landed by a spawn, an attachment by its saved name."""
     doc = example()
-    doc["wires"].append({"from": "scene", "to": "acid.image"})
-    assert patches.check(doc) == []
+    doc["wires"] += [{"from": "scene", "to": "acid.image"},
+                     {"from": "delay", "to": "output.all.image"}]
+    assert patches.check(doc) == [
+        "wire scene → acid.image crosses the edge: a port says it",
+        ("wire delay → output.all.image: output.all is the rig's window; left out — a "
+         "patch's picture leaves by a port")]
+
+
+def test_spawn_lands_only_the_patchs_own_wires():
+    """Whatever the file says (a caller that skipped `check`), `Landing.wires`
+    holds no wire with an end outside the spawned members."""
+    doc = example()
+    doc["wires"] += [{"from": "scene", "to": "acid.image"},
+                     {"from": "delay", "to": "output.all.image"}]
+    landing = spawn(doc, Host(names=frozenset({"acid", "scene"})))
+    mine = {G.instance_name(e["file"], e.get("instance", 1)) if e["kind"] == "effect"
+            else patches.entry_name(e) for e in landing.nodes}
+    assert mine == {"acid.2", "wobble", "delay"}
+    assert landing.wires == ({"from": "acid.2", "to": "wobble.image"},
+                             {"from": "wobble", "to": "delay.image"})
+    for w in landing.wires:
+        assert patches._node_of(w["from"]) in mine and w["to"].rpartition(".")[0] in mine
+
+
+def test_spawn_lands_only_the_members_values():
+    """D5 for any caller: a host param's value in the file does not land."""
+    doc = example()
+    doc["values"]["view.bright"] = 0.8
+    landing = spawn(doc, Host())
+    assert "view.bright" not in landing.values and "fx.acid.speed" in landing.values
 
 
 # ---------------------------------------------------------------- read
@@ -464,13 +494,78 @@ def test_a_macro_with_no_free_number_is_a_note_and_the_rest_spawns():
     assert len(landing.routes) == 2 and landing.modifiers
 
 
-def test_a_full_bank_is_a_note():
+def _with_an_lfo() -> dict:
+    """The example with an LFO read everywhere a lane can be: a route, the
+    second input of a modifier, a macro's depth subscriber, a base on its rate."""
     doc = example()
     doc["lfos"] = [1]
+    doc["values"]["lfo.1.rate"] = 2.0
     doc["routes"].append({"source": "lfo:0", "target": "fx.acid.twist", "op": "push"})
-    landing = spawn(doc, Host(next_voice={"lfo": 17}, room={"lfo": 0}))
-    assert landing.notes == ("lfo.1: the lfo bank is full — not spawned, nor its routes",)
-    assert landing.lfos == () and all(r["source"] != "lfo:16" for r in landing.routes)
+    doc["modifiers"].append({"id": "mod.2", "kind": "combine", "in": ["mod:1", "lfo:0"]})
+    doc["macros"] = {"macro.3": {"subs": [
+        {"depth": {"source": "lfo:0", "target": "fx.acid.twist"}, "from": 0, "to": 1},
+        {"base": "lfo.1.rate", "from": 0, "to": 4},
+        {"base": "fx.acid.reach", "from": 0, "to": 1}]}}
+    assert patches.check(doc) == []
+    return doc
+
+
+def _no_lane(landing, lane: str = "lfo:0") -> None:
+    assert all(r["source"] != lane for r in (*landing.routes, *landing.desk))
+    assert all(lane not in (m.get("in") or ()) for m in landing.modifiers)
+    for mac in landing.macros.values():
+        for s in mac["subs"]:
+            assert (s.get("depth") or {}).get("source") != lane, s
+            assert not str(s.get("base", "")).startswith("lfo.1."), s
+
+
+def test_a_full_bank_is_a_note_and_its_lane_reads_nothing():
+    """The LFO does not spawn: its route, its depth subscriber and its base
+    stay out, the modifier's input on its lane is left empty and said —
+    never `lfo:0`, which would read the host's LFO 1."""
+    landing = spawn(_with_an_lfo(), Host(next_voice={"lfo": 17}, room={"lfo": 0}))
+    assert landing.notes == (
+        "lfo.1: the lfo bank is full — not spawned, nor its routes",
+        "mod.2: its input 2 read lfo.1, which did not spawn — left empty")
+    assert landing.lfos == () and "lfo.1.rate" not in landing.values
+    _no_lane(landing)
+    assert landing.modifiers[1]["in"] == ["mod:1", None]
+    assert landing.macros == {"macro.3": {"subs": [
+        {"base": "fx.acid.reach", "from": 0, "to": 1}]}}
+    assert "lfo.1" not in landing.group["nodes"]
+
+
+def test_used_up_voice_ids_are_a_note():
+    """A bank whose next id is past `modbank.MAX_ID` has no room, however
+    few voices it holds (`Bank.refusal`)."""
+    landing = spawn(_with_an_lfo(), Host(next_voice={"lfo": 65}, room={"lfo": 3}))
+    assert landing.notes[0] == ("lfo.1: lfo ids are used up (64 is the highest) — not "
+                                "spawned, nor its routes")
+    _no_lane(landing)
+
+    class Full:
+        MAX = 16
+
+        def next_id(self):
+            return 65
+
+        def __len__(self):
+            return 2
+    host = Host.of(None, Bindings(), banks={"lfo": Full()})
+    assert host.room["lfo"] == 0 and host.next_voice["lfo"] == 65
+
+
+def test_host_of_without_banks_starts_past_every_voice_the_table_names():
+    """No bank handed in: one past the highest voice id the table's lanes
+    name, and past the default membership (LFOs 1–4, lane envelopes 1–5)."""
+    host = Host.of(*parts(preset("party-noita"))[:2])
+    assert host.next_voice == {"lfo": 5, "env": 6}
+    table = Bindings([Binding("lfo:7", "view.bright", "push")])
+    table.set_modifiers([{"id": "mod.1", "kind": "smooth", "in": ["env:9"]}])
+    host = Host.of(None, table)
+    assert host.next_voice == {"lfo": 9, "env": 11}
+    landing = spawn(_with_an_lfo(), host)
+    assert landing.renames["lfo.1"] == "lfo.9" and landing.lfos == (9,)
 
 
 def test_a_patch_twice_collides_with_itself_row_by_row():

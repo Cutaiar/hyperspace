@@ -56,7 +56,10 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from . import envelope as envmod
 from . import graph as G
+from . import lfo as lfomod
+from . import modbank
 from . import modifiers as modmod
 from .routing import Binding, base_scheme, is_continuous, is_macro
 
@@ -83,7 +86,7 @@ LFO, ENV, MOD, MACRO = "lfo", "env", modmod.SCHEME, "macro"
 VOICES = (LFO, ENV)
 # the sequencer's lane envelopes (`envelope.LANE_ENVS`): every preset's, so a
 # patch never carries one by identity — its envelopes are 6 and up
-LANE_ENVS = (1, 2, 3, 4, 5)
+LANE_ENVS = envmod.LANE_ENVS
 FIRST_ENV = max(LANE_ENVS) + 1
 MACROS = 8                     # macro.1 … macro.8, the rig's eight knobs
 # the rig-side sources one control drives one param from (the Learn rule:
@@ -110,6 +113,8 @@ HOST_MACRO_WORDS = ("{mid} is not in the patch: its subscriber on {pid} stays th
                     "(take {mid} with it)")
 NO_MACRO_NOTE = "{mid}: no free macro — its subscribers not spawned"
 NO_VOICE_NOTE = "{vid}: {why} — not spawned, nor its routes"
+NO_INPUT_NOTE = "{mid}: its input {k} read {vid}, which did not spawn — left empty"
+CROSSES_WORDS = "wire {wire} crosses the edge: a port says it"
 # a node entry of a kind that is no node a section declares but names a
 # thing a patch may not hold (`check`): said as that thing
 _KIND_WORDS = {"output": WINDOW_WORDS, "camera": RIG_WORDS, "cloud": RIG_WORDS,
@@ -355,6 +360,7 @@ class _Renamer:
     members: _Members
     render: dict[tuple[str, int], int] = field(default_factory=dict)
     voices: dict[str, dict[int, int]] = field(default_factory=dict)
+    gone: dict[str, set[int]] = field(default_factory=dict)    # members that did not spawn
 
     def __post_init__(self) -> None:
         self._prefixes = self.members.prefixes()
@@ -383,9 +389,14 @@ class _Renamer:
         return self.voices.get(scheme, {}).get(n, n)
 
     def lane(self, addr: Any) -> Any:
+        """A member's lane renamed; a lane of a member that did not spawn
+        (`gone`: a full bank) resolves to nothing — None, never its old
+        number, which would read the host's voice of that id."""
         hit = _lane(addr)
         if hit is None or hit[1] not in self.members.ids(hit[0]):
             return addr
+        if hit[1] in self.gone.get(hit[0], ()):
+            return None
         return _lane_of(hit[0], self.voice(*hit))
 
     def param(self, pid: Any) -> Any:
@@ -655,18 +666,18 @@ def check(doc: Any) -> list[str]:
             out.append(f"a wire that is not from a node into '<node>.<port>': {w!r}"[:120])
             continue
         src, dst = w["from"], w["to"]
-        # a patch's wires are its own; a cable across the edge is a port
-        covered = any(isinstance(p, Mapping) and ((p.get("to") == dst and p.get("was") == src)
-                                                  or (p.get("from") == src
-                                                      and p.get("was") == dst))
-                      for p in ports)
+        # a patch's wires are its own, both ends in it; a cable across the edge
+        # is a port, never a wire — a wire would be landed by a spawn, an
+        # attachment by its saved name (D2, plan 36: no hidden edge)
         for end in (_node_of(src), dst.rpartition(".")[0]):
-            if end in held or covered:
+            if end in held:
                 continue
-            why = held_words(end)
-            out.append(f"wire {src} → {dst}: " + (
-                why if why is not None and not why.startswith(f"{end}: ")
-                else f"{end} is not in the patch and no port covers it"))
+            # (the rig's own ends said as such; any other end — the scene, a
+            # host effect — is simply across the edge)
+            why = held_words(end) if _kind(end) in ("output", "channel", *RIG_NODES) else None
+            out.append(f"wire {src} → {dst}: {why}" if why is not None
+                       else CROSSES_WORDS.format(wire=f"{src} → {dst}"))
+            break
     for pid in doc.get("values") or {}:
         if str(pid).startswith(modmod.PREFIX):
             out.append(f"{pid} is a modifier's: set in its entry")
@@ -887,13 +898,16 @@ class Host:
     - `modifiers`: the modifier ids held (a new one is one past the highest,
       `modifiers.next_id`);
     - `next_voice` / `room`: each bank's `next_id()` (its high-water rule)
-      and how many voices it may still add;
+      and how many voices it may still add (none once its next id is past
+      `modbank.MAX_ID`, as `Bank.refusal` says);
     - `macros`: the macros in use — a label or a subscriber in the table, or
       a row whose target is the macro (a macro's value alone is no use: the
       eight knobs always have one);
     - `desk`: the preset layer's desk rows; `routes`: the performer rows
-      (`Bindings.owner` for every param is the first enabled performer on it);
-    - `params`: the registry's param ids (None: not asked)."""
+      (`Bindings.owner` for every param is the first enabled performer on it).
+
+    (No registry ids: a route onto a param the host lacks lands dormant, as
+    any route does, and is no conflict — nothing here needs to ask.)"""
 
     names: frozenset[str] = frozenset()
     modifiers: tuple[str, ...] = ()
@@ -902,27 +916,39 @@ class Host:
     macros: frozenset[str] = frozenset()
     desk: tuple[Binding, ...] = ()
     routes: tuple[Binding, ...] = ()
-    params: frozenset[str] | None = None
 
     @classmethod
     def of(cls, spec: G.GraphSpec | None, table, banks: Mapping[str, Any] | None = None,
-           params: Iterable[str] | None = None, held: Iterable[str] = ()) -> Host:
+           held: Iterable[str] = ()) -> Host:
         """The view of a live preset: its landed `spec`, its `table`
         (`routing.Bindings`), its banks by scheme (each with `next_id()`,
-        `MAX` and a length), the registry's ids and the held program's
-        instance names. Reads only."""
+        `MAX` and a length) and the held program's instance names. Reads
+        only. A bank not handed in starts one past the highest voice id the
+        table names (a lane on a row, a modifier input, a depth subscriber)
+        and past its default membership (LFO 5, envelope 6) — never on an
+        id the host may hold."""
         rows = [*table.routes(), *table.desk()]
         used = {mid for mid, m in table.macros.items() if not m.empty}
         used |= {b.target for b in rows if is_macro(b.target)}
-        banks = banks or {}
+        named: dict[str, int] = {LFO: max(lfomod.LFOs.DEFAULT), ENV: max(LANE_ENVS)}
+        addrs = [b.source for b in rows] + [b.when for b in rows if b.when]
+        addrs += [a for m in getattr(table, "modifiers", ()) for a in m.inputs if a]
+        addrs += [s.depth[0] for m in table.macros.values() for s in m.subs if s.depth]
+        for a in addrs:
+            hit = _lane(a)
+            if hit is not None and hit[0] in named:
+                named[hit[0]] = max(named[hit[0]], hit[1])
+        nxt = {s: n + 1 for s, n in named.items()}
+        room = {s: modbank.MAX for s in named}
+        for s, b in (banks or {}).items():
+            nxt[s] = int(b.next_id())
+            room[s] = (0 if nxt[s] > modbank.MAX_ID
+                       else int(getattr(b, "MAX", modbank.MAX)) - len(b))
         return cls(names=spec_names(spec) | frozenset(held),
                    modifiers=tuple(m.id for m in getattr(table, "modifiers", ())),
-                   next_voice={s: int(b.next_id()) for s, b in banks.items()},
-                   room={s: int(getattr(b, "MAX", 16)) - len(b) for s, b in banks.items()},
-                   macros=frozenset(used),
+                   next_voice=nxt, room=room, macros=frozenset(used),
                    desk=tuple(replace(b) for b in table.desk()),
-                   routes=tuple(replace(b) for b in table.routes()),
-                   params=None if params is None else frozenset(params))
+                   routes=tuple(replace(b) for b in table.routes()))
 
     def owner(self, pid: str) -> Binding | None:
         """`Bindings.owner`: the one performer on `pid`, or None."""
@@ -1005,6 +1031,18 @@ def _names_dropped(r: Mapping, gone: _Members) -> bool:
         isinstance(r.get("when"), str) and gone.own_lane(r["when"]))
 
 
+def _sub_dropped(s: Any, gone: _Members) -> bool:
+    """Does macro subscriber `s` name a member that did not spawn — a base
+    on its param, a depth on a route from its lane or onto its param?"""
+    if not isinstance(s, Mapping):
+        return True
+    if gone.owns(s.get("base")):
+        return True
+    dep = s.get("depth")
+    return isinstance(dep, Mapping) and (gone.own_lane(dep.get("source"))
+                                         or gone.owns(dep.get("target")))
+
+
 def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
           patch: str | None = None) -> Landing:
     """What spawning patch `doc` into `host` at canvas point `at` would add
@@ -1015,8 +1053,14 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
     `acid` → `acid.2` where the host has `acid`; a hands node and its layer
     and guide move together); a modifier one past the highest the host
     holds (`modifiers.next_id`); an LFO or envelope the bank's next id (its
-    high-water rule; an envelope 6 or more), none when the bank is full (a
-    note, and its rows not spawned); a macro keeps its number when the host
+    high-water rule; an envelope 6 or more), none when the bank is full or
+    its ids are used up (a note; its rows and the subscribers on its lane
+    not spawned, a modifier input reading it left empty and said — never
+    its old number, which would read the host's voice). The lowest free
+    instance may be one a host's dormant rows still name (a removed
+    `acid.2`'s): they wake with the spawn, as after an add on the canvas.
+    Only the patch's own wires land: a crossing is a port, an open pin
+    (D2). A value lands only for a member's param (D5). A macro keeps its number when the host
     does not use it, else takes the lowest free of the eight, else is a
     note — ``"macro.2: no free macro — its subscribers not spawned"`` — and
     it, its value and every row onto it stay out, the rest spawned.
@@ -1047,13 +1091,16 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
         room = host.room.get(scheme)
         out = {}
         for k, n in enumerate(m.ids(scheme)):
-            if room is not None and k >= room:
+            why = (f"the {scheme} bank is full" if room is not None and k >= room
+                   else f"{scheme} ids are used up ({modbank.MAX_ID} is the highest)"
+                   if start + len(out) > modbank.MAX_ID else None)
+            if why is not None:
                 gone[scheme].append(n)
-                notes.append(NO_VOICE_NOTE.format(
-                    vid=f"{scheme}.{n}", why=f"the {scheme} bank is full"))
+                notes.append(NO_VOICE_NOTE.format(vid=f"{scheme}.{n}", why=why))
                 continue
             out[n] = start + len(out)
         rn.voices[scheme] = out
+        rn.gone[scheme] = set(gone[scheme])
     used = set(host.macros)
     mac_map = {}
     for n in m.macros:
@@ -1084,13 +1131,33 @@ def spawn(doc: Mapping, host: Host, at: tuple[float, float] = (0.0, 0.0), *,
             if new != n:
                 renames[f"{scheme}.{n}"] = f"{scheme}.{new}"
     nodes = tuple(rn.entry(e) for e in p.nodes)
-    wires = tuple(rn.wire(w) for w in p.wires)
-    values = {rn.param(k): v for k, v in p.values.items() if not lost.owns(k)}
-    mods = tuple(rn.modifier(x) for x in p.modifiers)
+    # only the patch's own wires, both ends members: a crossing is a port, an
+    # open pin — never a wire landed by its saved name (D2), whatever the file
+    held = set(m.render)
+    wires = tuple(rn.wire(w) for w in p.wires
+                  if isinstance(w.get("from"), str) and isinstance(w.get("to"), str)
+                  and _node_of(w["from"]) in held and w["to"].rpartition(".")[0] in held)
+    # D5 for any caller, not only one that ran `check`: a member's params only
+    values = {rn.param(k): v for k, v in p.values.items() if m.owns(k) and not lost.owns(k)}
+    mods = []
+    for x in p.modifiers:
+        y = rn.modifier(x)
+        ins = x.get("in")
+        for i, a in enumerate([ins] if isinstance(ins, str) else list(ins or ())):
+            if a and lost.own_lane(a):
+                hit = _lane(a)
+                notes.append(NO_INPUT_NOTE.format(mid=y.get("id"), k=i + 1,
+                                                  vid=f"{hit[0]}.{hit[1]}"))
+        mods.append(y)
+    mods = tuple(mods)
     routes = tuple(rn.row(r) for r in p.routes if not _names_dropped(r, lost))
     desk = tuple(rn.row(r) for r in p.desk if not _names_dropped(r, lost))
-    macros = {f"{MACRO}.{rn.voice(MACRO, _macro_n(k))}": rn.macro(v)
-              for k, v in p.macros.items() if _macro_n(k) not in gone[MACRO]}
+    macros = {}
+    for k, v in p.macros.items():
+        if _macro_n(k) in gone[MACRO]:
+            continue
+        subs = [s for s in v.get("subs") or () if not _sub_dropped(s, lost)]
+        macros[f"{MACRO}.{rn.voice(MACRO, _macro_n(k))}"] = rn.macro({**v, "subs": subs})
     lfos = tuple(rn.voice(LFO, n) for n in kept.lfos)
     envs = tuple(rn.voice(ENV, n) for n in kept.envs)
     ax, ay = float(at[0]), float(at[1])
