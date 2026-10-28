@@ -2085,6 +2085,7 @@ SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows an
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
+WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices.want_words`')
 
 
 def group_entry_of(panel, gid: str) -> dict | None:
@@ -2225,11 +2226,17 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
 def land_spawn(panel, landing, choices, splice=None) -> str | None:
     """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
     one undo step through the doors); its words on the head. Returns the
-    refusal, or None."""
+    refusal, or None. What its rows wait for is said after the landing
+    (plan 40 P4: "…; waits for leap (not in this rig): right hand y") —
+    with no conflict there was no sheet to say it before the press."""
     e = group_edit(panel)
     if e is None:
         return NO_LIBRARY
     why = e.splice(landing, splice, choices) if splice is not None else e.spawn(landing, choices)
+    if why is None and e.said:
+        waits = ui_routing.sheet_wants(panel, landing, choices)
+        if waits:
+            e.said = f"{e.said}; {WAITS_FOR}" + " · ".join(waits)
     return _group_said(panel, e, why)
 
 

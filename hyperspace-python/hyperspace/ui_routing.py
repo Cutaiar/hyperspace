@@ -508,17 +508,23 @@ def conflict_words(c) -> tuple[str, str, str]:
     return row_words(c.control_or_source, glyph), c.patch_target, c.host_target
 
 
-def sheet_wants(panel, landing) -> list[str]:
+def sheet_wants(panel, landing, choices=None) -> list[str]:
     """The patch's wants the rig lacks, one line per device role (plan 40
     P4, T4's words over the landing's rows): "apc40 (lost): K1", "leap (not
-    in this rig): right hand y"."""
+    in this rig): right hand y". With the sheet's `choices` (conflict index
+    → ``"patch"`` / ``"preset"``), a row the preset kept is not the patch's
+    and waits for nothing (what `land_spawn` says after the landing)."""
     from types import SimpleNamespace
 
     from . import devices
     router = router_of(panel)
     host = router.table if router is not None else None
-    rows = [Binding.from_json(dict(r)) for r in landing.routes]
-    rows += [Binding.from_json({**dict(r), "layer": "preset"}) for r in landing.desk]
+    kept = [(c.kind == "desk", dict(c.row)) for k, c in enumerate(landing.conflicts)
+            if (choices or {}).get(k) == "preset"]
+    rows = [Binding.from_json(dict(r)) for r in landing.routes
+            if (False, dict(r)) not in kept]
+    rows += [Binding.from_json({**dict(r), "layer": "preset"}) for r in landing.desk
+             if (True, dict(r)) not in kept]
     mods = []
     for d in landing.modifiers:
         try:

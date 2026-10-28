@@ -742,6 +742,32 @@ def test_a_spawn_with_no_conflict_lands_at_once(rig):
     assert rig.lib.presets.groups[0]["patch"] == "quiet-wash"
     st = ui_graph._state(rig.panel)
     assert st["said"].startswith("spawned acid wash: 4 nodes, its pins open")
+    # P4: no sheet asked, so the spawn says what its rows wait for (this rig lists no leap)
+    assert st["said"].endswith("; waits for leap (not in this rig): right hand y")
+
+
+def test_a_spawn_whose_devices_are_all_there_says_no_wait(rig):
+    """The same spawn into a rig whose leap is connected: no "waits for"."""
+    from test_device_wants import _Live
+
+    doc = json.loads(ACID_WASH.read_text())
+    doc["desk"] = []
+    trip(rig)
+    with_patch(rig, doc, "quiet-wash")
+    rig.panel.devices = devices.DeviceRegistry(devices=[_Live("leap", ("hand", "hands"))])
+    assert ui_graph.spawn(rig.panel, "quiet-wash", (0, 0)) is None
+    said = ui_graph._state(rig.panel)["said"]
+    assert said.startswith("spawned acid wash: 4 nodes") and "waits for" not in said
+
+
+def test_a_row_the_sheet_kept_for_the_preset_waits_for_nothing(rig):
+    """acid-wash's K1 kept for the preset (the sheet's **keep all existing**):
+    the patch's K1 never landed, so only the hand's row is said to wait."""
+    trip(rig)
+    spawned(rig, keep=True)
+    said = ui_graph._state(rig.panel)["said"]
+    assert said.endswith("; waits for leap (not in this rig): right hand y")
+    assert "apc40" not in said
 
 
 def test_splice_on_a_cable_lands_the_patch_in_the_run_in_one_step(rig):
