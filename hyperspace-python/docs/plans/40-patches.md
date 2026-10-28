@@ -26,7 +26,8 @@ the seams.
 A side ask from the same session, its own PR and not part of this plan:
 the GRAPH page's side pane (the one that opens when a node is clicked)
 must be resizable — "for some UI, the little sidebar … is just not wide
-enough."
+enough." Built and merged the same day: PR #266 (`main` @ f984d3b), a
+grip on the column's edge, the width kept per Mac in `<machine>/ui.json`.
 
 ## What is there today (the map, `main` @ f2351a0)
 
@@ -334,13 +335,13 @@ the first and the one missing signal.
   shows before the spawn lists the patch's wants with the same words, so
   nothing is a surprise.
 
-### P5 — the fx module is retired outright (D6, D10)
+### P5 — the fx module presets are retired outright (D6, D10)
 
 The owner, 2026-10-27: "I don't want factory patches from the 6 FX module
 presets … The FX module should probably be retired outright. It is not a
-useful representation of shaders anymore. The UI that is present in that
-FX module is just not in any way, shape, or form conducive to anything
-useful in the graph, so I think it needs to go away."
+useful representation of shaders anymore." And, asked whether that took
+the FX page with it: "I meant only the module presets. I forgot that we
+did a UI pass on the FX tab a while ago."
 
 - **The fx module presets go**: `library/fx/*.json` (the six), the fx
   entry of "more · module presets" on the PRESETS page, the load hook
@@ -350,18 +351,10 @@ useful in the graph, so I think it needs to go away."
   `modules` keeps the label, which never loaded anything (desk D3), and
   the label is dropped on its next save. `band/` (the analyzer's scenes,
   session) and `dream/` stay as they are.
-- **The FX page goes as a page** (D10, the reading of "the UI that is
-  present in that FX module"): `ui_fx.page`, its tab, the groups by where
-  each effect ends, the head's `fx.on` / `fx.mix`. What it drew that GRAPH
-  still needs stays: the **effect strip** (the four params, the annotated
-  uniforms, the compile error, `why_idle` and its mending chips) is
-  already GRAPH's side pane for a selected effect node and keeps living
-  in `ui_fx.py` as that; `Panel.fx_selected` stays as GRAPH's selection.
-  `fx.on` and `fx.mix` move to the side pane's head for any effect node.
-  The patches browser (P3) takes the FX tab's place in the page order.
-- Every golden unmoved: no preset, graph or shader changes. The GRAPH
-  side-pane width ask (the head of this file) is the same pane this
-  leans on, so it lands first.
+- **The FX page stays as it is** (D10): the browser of the graph's effect
+  nodes by where each ends (plan 33 U), its strip, `Panel.fx_selected`.
+  Nothing on it referred to the module presets.
+- Every golden unmoved: no preset, graph or shader changes.
 
 ## Decisions (the owner's, 2026-10-27)
 
@@ -376,7 +369,7 @@ useful in the graph, so I think it needs to go away."
 | D7 | The schema: `groups` is a new key — `/8`, taken with the rule that both Macs update together (row 394)? 37B also claims `/8`. | **Whichever of 37B and this lands second takes `/9`**; the migration is "the key is absent → no groups", nothing else. | as recommended |
 | D8 | The desk: the browser and spawn stay on the control window, or a bank of patches on APC40 pads too? | **Control window only.** The desk and the faders are Dylan's; a pad that spawns at a party is a pad that spawns twice. | control window only |
 | D9 | The conflict sheet's default: every row preselected to the patch, to the existing preset, or unselected so each needs a click? | **Preselected to the patch**, with one **keep all existing** button. | as recommended |
-| D10 | "The UI that is present in that FX module … needs to go away": the FX **page** (`ui_fx.page`, the browser of effects by where each ends) goes with the module presets, its effect strip kept as GRAPH's side pane? | **Yes, as read**: the page and its tab go, the strip stays where GRAPH already uses it (P5). | the controller's reading of the owner's words; the owner to overturn if he meant the presets alone |
+| D10 | "The UI that is present in that FX module … needs to go away": does the FX **page** (`ui_fx.page`, the browser of effects by where each ends) go with the module presets? | (the page goes, the strip stays) | **No — the page stays.** "I meant only the module presets. I forgot that we did a UI pass on the FX tab a while ago." |
 
 ## Order of work
 
@@ -387,13 +380,13 @@ useful in the graph, so I think it needs to go away."
 | T2 | P2: `groups` in the preset (D7's schema), the group node collapsed / open / ungroup / group-from-selection, the tinted region, undo marks | a grouped preset's `build_graph` signature equals its ungrouped twin's; goldens unmoved; a preset without `groups` saves byte for byte |
 | T3 | P3: save as patch / update patch, the browser (GRAPH chip, PRESETS fold, Spawn ▸), spawn through the doors as one step, the **conflict sheet** (D3, D9), splice on a cable, **wire as saved** | spawning `acid-wash` into `party-trip` lands `acid.2`, `wobble.2`, `delay.2`, `mod.<n>`, K1's row and the hand's row; ⌘Z removes all of it; spliced on `scene → warp.image` the run reads `scene → acid.2 → wobble.2 → delay.2 → warp`; a spawn whose K1 collides opens the sheet, and "keep all existing" then Spawn lands the patch's K1 row dormant and said |
 | T4 | P4: `devices.wants`, the chips, the SYSTEM lines, the registry's status-change event and the arrival line | a preset wanting `leap` on a rig without one reports "not in this rig: 3 rows"; a `MidiDevice` going lost → connected fires the listeners once and says the count |
-| T5 | P5: the fx module presets retired (the six files, the fold, the hook, `module_runs`); the FX page retired as a page, the effect strip kept as GRAPH's side pane, `fx.on` / `fx.mix` on the pane's head (D6, D10) | goldens unmoved; every factory preset loads with no note; the strip still draws for a selected effect node; no test or page imports what went |
+| T5 | P5: the fx module presets retired (the six files, the fx entry of the fold, the hook, `module_runs`); the FX page untouched (D6, D10) | goldens unmoved; every factory preset loads with no note; the FX page draws as before; no test or page imports what went |
 | T6 | docs: this spec's "as built", ARCHITECTURE §3 (a "Patches" subsection beside the desk templates), DECISIONS "Presets and the desk", register rows, hand checks group AJ, `plans/README.md` | — |
 
 T0 first; T1 alone; T2 needs T1's reader; T3 needs T1 and T2; T4 is
 independent of T2 and T3 and can land first as its own PR if the owner
-wants the "waits for apc40" line sooner; T5 is independent of all but
-leans on the resizable side pane (the side ask), which lands before it.
+wants the "waits for apc40" line sooner; T5 is independent of all. The
+side ask (the resizable side pane) is merged: PR #266, `main` @ f984d3b.
 
 ## What it does not do
 
@@ -418,7 +411,7 @@ leans on the resizable side pane (the side ask), which lands before it.
 | `preset.py` | the `groups` key, `Presets.document` / `load_doc` one step each, `signature` | 37B: the pattern by name (`/8`) |
 | `devices.py` | `wants`, the status-change event in `poll`, `SCHEME_ROLE` | 39: the segment and camera devices, if any |
 | `library.py` | the `patches` `DocKind`, `save_patch`, the fx fold | — |
-| `ui_fx.py`, `ui.py` | the page and its tab go, the strip stays; `ui_routing.modal` gains the conflict sheet | 37A: nothing; 38: the head |
+| `ui_fx.py`, `ui.py`, `ui_presets.py`, `ui_routing.py` | `ui_fx.py` nothing; the fx entry leaves the PRESETS fold; `ui_routing.modal` gains the conflict sheet | 37A: nothing; 38: the head |
 | `render.py`, `graph.py` | nothing (a reader of `FRAME_KINDS`, `instance_name`, `GraphSpec.to_json`) | 37A: `Thumbs`, `frame.made`; 37B: `Shape`, `PatternNode` |
 | schema | `/8` or `/9` (D7) | 37B `/8` |
 
@@ -467,10 +460,9 @@ six goldens. About plan 36's size.
 6. **Not in this rig, said.** On the laptop config (no Leap), the same
    preset: "leap (not in this rig): right hand y"; the grey placeholder
    node as before.
-7. **The FX page is gone, the strip is not.** No FX tab; click an effect
-   node on GRAPH and its strip is in the side pane with `fx.on` and
-   `fx.mix` at its head; "more · module presets" on PRESETS lists no fx
-   entry; every factory preset loads with no note in the footer.
+7. **The fx modules are gone, the FX page is not.** "more · module
+   presets" on PRESETS lists no fx entry; the FX tab draws as before;
+   every factory preset loads with no note in the footer.
 8. **Twice.** Spawn "noita core" twice into one preset: two groups,
    `.2` and `.3` ids on their hovers, the second's K1 row said as dormant.
 
