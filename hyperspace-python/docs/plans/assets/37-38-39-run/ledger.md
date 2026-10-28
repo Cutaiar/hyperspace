@@ -273,3 +273,20 @@ See `decisions.md`.
    goldens **136 passed, 789 pictures**, `tests/golden` identical to
    2b185ea; signatures unchanged against cb78963. Fast-forwarded.
    Controller's own final gates below.
+
+## Final
+- Integration branch head **4a1e646** (96773ca + the run's records). The
+  controller's own gates on this Mac: fast tier **4227 passed, 2 skipped**;
+  full suite **4449 passed, 2 skipped** (one pre-existing load-flaky media
+  timing test, `test_a_slow_close_never_holds_the_frame_thread`, failed
+  under `-n auto` and passes serially); goldens **136 jobs, 789 pictures**
+  (757 at the base − 0 + 32 for four new fixtures; 8 + 4 re-recorded with
+  their reasons); `frame-signatures.json` unchanged; `hyperspace/library/`
+  byte-identical; ruff: the base's findings only, none in files the run
+  touched.
+- **Final PR #270** `plan-37-38-39-integration → main`, the owner merges.
+  Ahead of it, on their own: **PR #251** (plan 38) and **PR #263** (T0's
+  edges.glsl), both → main; if either lands first, this branch merges
+  `main`.
+- Waits on the owner: plan 37 D1 (the faces' list; two questions in
+  decisions 10), rows 417–500, hand checks 370–393.
