@@ -1954,7 +1954,10 @@ def laid_areas(view: View) -> dict[str, str]:
     that cable runs right). Tie-breaks: a consumer left of what feeds the
     node (a picture of the scene taken back into a switch) is a return by
     design and does not count; neither does a cable kept for the next
-    frame (`kept`: into a look-back's or a delay's `image`); a consumer of
+    frame (`kept`: into a look-back's or a delay's `image`) — such a cable
+    is not counted as a consumer but still counts in `makers`, as a feed
+    bounding its taker from the left, so "not left of what feeds it"
+    holds across every drawn cable, kept ones included; a consumer of
     no area is not counted; a chain whose only consumer is in another area
     goes there whole (consumers first, to a fixed point); what feeds the
     node bounds it from the left (a node of the chain at the earliest
@@ -1980,6 +1983,12 @@ def laid_areas(view: View) -> dict[str, str]:
         if not kept(c, by[b]):
             takers.setdefault(a, []).append(b)
     movable = set(free)
+    # The caps (len(free) + 1 passes each): a pass carries a change one more
+    # node along a chain, so for any chain without a loop — all a built
+    # graph can hold (a loop closes only through a kept cable, which is no
+    # consumer here) — both passes settle before the cap. Should a cap be
+    # hit, the result is partial: some nodes not yet where the rule would
+    # lay them (never a saved position moved; only areas named).
     # the earliest column each may sit at: past every fixed node feeding it
     lo = dict.fromkeys(free, 0)
     for _ in range(len(free) + 1):
