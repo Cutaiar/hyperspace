@@ -205,29 +205,39 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
     """For every factory preset, the section loaded with its main run
     grouped is its ungrouped twin's: the same section, and `build_graph`
     of it the same `graph.signature`. The presets with no main run are
-    named (T1's `NO_RUN`)."""
+    named (T1's `NO_RUN`): none has an effect, so each is proved with every
+    node a group may hold grouped instead (review fix) — party-tracer's and
+    party-wake's look-back, composite (and dream); the other fourteen hold
+    only the frame's own nodes, which no group may (`patches.select`)."""
     assert NO_RUN == {"big-blue-wave", "ember-orbit", "hands-orbit", "hands-play",
                       "hex-engine", "inverse-halo", "legacy6", "party-faces", "party-field",
                       "party-tumble", "party-wake", "plasma-heart", "spiral-silk",
                       "strobe-cage", "woven-lattice", "party-tracer"}
     app = headless.make_app(tmp_path)
-    done = []
+    done, others = [], []
     for path in FACTORY:
-        run = RUNS[path.stem]
-        if not run:
-            continue
         doc = json.loads(path.read_text())
         app.presets.load_doc(doc)
         flat = app.presets.graph.spec
+        ids = [f"render:{n}" for n in RUNS[path.stem]]
+        if not ids:     # no main run (and no effect): every node a group may hold, grouped
+            every = [f"render:{n}" for n in sorted(patches.spec_names(flat))]
+            every += [m.id for m in app.router.table.modifiers]
+            ok = set(patches.select(flat, app.router.table, every)[0].canvas())
+            ids = [i for i in every if i in ok]
+            if not ids:
+                continue
+            others.append(path.stem)
         want = G.signature(G.build_graph(_views(), flat.wiring()))
-        app.presets.load_doc(grouped_twin(doc, [f"render:{n}" for n in run]))
+        app.presets.load_doc(grouped_twin(doc, ids))
         assert app.presets.notes == [], path.stem
-        assert app.presets.groups[0]["nodes"] == [f"render:{n}" for n in run], path.stem
+        assert app.presets.groups[0]["nodes"] == ids, path.stem
         spec = app.presets.graph.spec
         assert spec.to_json() == flat.to_json(), path.stem
         assert G.signature(G.build_graph(_views(), spec.wiring())) == want, path.stem
         done.append(path.stem)
-    assert len(done) == len(FACTORY) - len(NO_RUN) >= 9
+    assert len(done) - len(others) == len(FACTORY) - len(NO_RUN) >= 9
+    assert others == ["party-tracer", "party-wake"]
 
 
 def test_graph_and_render_never_hear_the_word():
@@ -433,13 +443,26 @@ def test_a_drag_of_the_title_moves_every_member_in_one_step(rig):
 
 
 def test_a_drag_of_the_folded_node_moves_every_member(rig):
+    """The folded node dragged by (100, 10): every member's layout moved by
+    exactly that delta from where it was laid, in one undo step; ⌘Z takes
+    every member back."""
     st = noita(rig, [ENTRY])
     at = st["applied"]["group.1"]
-    _moved(rig, st, "group.1", (at[0] + 100, at[1] + 10))
-    lay = rig.lib.presets.layout
-    assert set(NOITA_CORE) <= set(lay)
-    frame(rig.panel, "graph")
-    assert tuple(st["applied"]["group.1"]) == (at[0] + 100, at[1] + 10)
+    was = {m: tuple(ui_graph._laid(rig.panel, st, m)) for m in NOITA_CORE}
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        _moved(rig, st, "group.1", (at[0] + 100, at[1] + 10))
+        lay = rig.lib.presets.layout
+        assert {m: tuple(lay[m]) for m in NOITA_CORE} == {
+            m: (round(x + 100), round(y + 10)) for m, (x, y) in was.items()}
+        assert len(u.stack) == n + 1 and u.stack[-1].label == "move noita core"
+        frame(rig.panel, "graph")
+        assert tuple(st["applied"]["group.1"]) == (at[0] + 100, at[1] + 10)
+        assert u.undo()
+        assert not any(m in rig.lib.presets.layout for m in NOITA_CORE)
+    finally:
+        undo.install(None)
 
 
 def test_a_member_dragged_out_leaves_the_group(rig):
