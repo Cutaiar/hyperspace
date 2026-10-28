@@ -302,14 +302,14 @@ what it shows. Details and the per-output switches are
 ## Share presets with someone
 
 Two people (or two Macs) can have the same presets: whatever either saves
-shows up on the other. The presets live in a cloud-synced folder; each
+shows up on the other. A fresh library is empty: the app starts on a blank preset and an unsaved show called `untitled`, and the shared folder holds the owner's own presets. The presets live in a cloud-synced folder; each
 Mac's own settings stay in its home (`~/Hyperspace`).
 
 What is shared, in the library folder: `presets/`, `projects/` (shows),
 `patches/` (plan 40: groups of GRAPH nodes saved with **save as patch…**,
 spawned into any preset), the module preset folders (`band/`, `dream/`,
-`view/` …; an old `fx/` is ignored, the fx module presets being retired),
-`hidden.json` and `trash/`. What stays on each Mac, in its home:
+`view/` …; an old `fx/` is ignored, the fx module presets being retired)
+and `trash/`. What stays on each Mac, in its home:
 `config.toml`, `bindings.json`, `hands.json`, `windows.json`, `ui.json`
 (this Mac's panel settings: the GRAPH side pane's width), `last_show`,
 `stall.log`, `weights/`, `media/` (this Mac's own files; shared media go in

@@ -100,8 +100,22 @@ Done in the session, on the owner's "deleted immediately":
 Dillon's Mac needs nothing but this build: its own `~/Hyperspace/hidden.json`,
 if any, is read by nothing.
 
-## 5. Hand checks
+## 5. Hand checks and the ledger
 
-The new check at the end of Part 1 of `TESTING-GUIDE.md` (and its number
-in `11-hand-checks.md`): the PRESETS page as D6–D7 describe it, over the
-Drive library; the desk's pads still load and save (D9).
+Hand check **403** (`11-hand-checks.md`, the new entry at the end of Part 1
+of `TESTING-GUIDE.md`): the PRESETS page as D6–D7 describe it, over the
+Drive library; the desk's pads still load and save (D9). Register rows
+**538–541** record D1–D2, D6, D8 and D7 as the owner's own answers.
+
+## 6. The build's numbers
+
+At the merge of `main` (0a32ed0, PR #281) into the branch: the fast tier
+4234 passed, 2 skipped; the full suite (`--all`) 4452 passed, 2 skipped
+(one load-flaky media test passes serially, as before); the goldens 144
+passed, none moved, none re-recorded — the corpus draws exactly what the
+shipped files drew. 56 tests of removed behaviour deleted, 66 added or
+rewritten; `tests/test_party_show.py`, `test_plan12_presets.py` and
+`test_migration.py` gone whole; `tools/bank_demo.py`, `dot_demo.py`,
+`trash_demo.py` and `trash_launch.py` gone. `hyperspace/preset.py` lost
+~1470 lines, `library.py` ~330. Dylan's files (`apc40.py`, `midi.py`)
+carry only comment changes.

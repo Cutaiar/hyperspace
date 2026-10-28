@@ -19,7 +19,7 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`ENGINEERING.md`](ENGINEERING.md): how each part behaves.
   - [`DECISIONS.md`](DECISIONS.md): the decisions in force, and what was
     decided not to build.
-  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–536 (bar
+  - [`DECISION-REGISTER.md`](DECISION-REGISTER.md): rows 34–541 (bar
     109), built on a recommendation and waiting for the owner's keep or
     overturn; row 109 records the owner's plan 25 answers, and some later
     rows are the owner's own answers before a build (plan 40's 501–510
@@ -28,7 +28,7 @@ and a projector. It is one Python process in `hyperspace-python/`.
   - [`TESTING-GUIDE.md`](TESTING-GUIDE.md): everything a person still has
     to test, in plain words, by hardware.
   - [`plans/11-hand-checks.md`](plans/11-hand-checks.md): the same checks,
-    numbered 1–401, with the automated test behind each.
+    numbered 1–403, with the automated test behind each.
   - [`plans/`](plans/README.md) `15-…` to `30-…`: what each plan built
     (plan 23 in part); plan 22 also has a ranked shortlist of new
     4-polytopes and macro candidates to audition; `24-party-wishlist.md`

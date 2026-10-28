@@ -40,6 +40,8 @@ Rows 417–429 and 460 (plan 37, nodes as pictures and the faces) were written d
 Rows 430–439 and 461–470 (plan 38, hold the projector) are the plan's D1–D5 (430–434), taken as recommended and accepted by the controller on 2026-10-27 for the owner to keep or overturn, then the controller's rulings during its build (on `plan-38-hold`); the plan overflowed its ten rows into 461–470.
 Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the owner's on 2026-10-27, before the build; rows 448–459 and 471–497 are the controller's rulings during that build, answered "controller — 2026-10-27" (twenty rows were assigned, 440–459; the overflow starts at 471, after plan 37's 460 and plan 38's 461–470; on `plan-39-vision`; three of them, 459, 495 and 496, are the seams with plan 38's hold, settled on `plan-37-38-39-integration`).
 Rows 501–536 (plan 40, patches) were written during its run on 2026-10-27 and 2026-10-28, on `plan-40-build`: 501–510 are the plan's D1–D10, every one the owner's on 2026-10-27, before the build; 511–536 are the controller's rulings during the build, answered "controller — 2026-10-27", except 521 and 524, which are **pending the owner** (the schema of a save with no group, and a take-over chip for "wire as saved"). The plan was assigned 471–495, which plans 37–39 had taken, so it took the next free, 501–525, and overflowed into 526–536.
+
+Rows 538–541 are the owner's own answers of 2026-10-28, on `worktree-presets-one-tier` (the library goes one-tier: no factory presets, a flat PRESETS page, one show line). Hand check 403.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -566,6 +568,10 @@ here; overturn → the change, then the same.
 | 535 | The party generator keeps the fx families' values inline | — | controller — 2026-10-27 |
 | 536 | Plan 38's PROJECTOR inset fix rides on plan 40's PR | 377 | controller — 2026-10-27 |
 | 537 | A macro's new base subscriber has a throw (from where the param sits to its fader's end); Route from ▸ is one submenu per kind, the macros among them | 402 | owner — 2026-10-28 |
+| 538 | One tier: hidden presets deleted outright, the factory concept removed, every preset deletable | 403 | owner — 2026-10-28 |
+| 539 | The PRESETS page is a flat list: no bank pills, starts-on, preset drop-down or module-preset fold | 403 | owner — 2026-10-28 |
+| 540 | Module presets' UI leaves the PRESETS page; the concept stays for now (to become patches) | 403 | owner — 2026-10-28 |
+| 541 | The show block is one line that says what a show is; the pads are set on the desk only | 403 | owner — 2026-10-28 |
 
 "—": no hand check shows it; tests only.
 
@@ -9223,3 +9229,39 @@ Rows 501–510 are the plan's D1–D10, **every one the owner's, 2026-10-27**, b
   is visible at once, and the knob turned down brings the scene back. A
   param at 0.98 gets a throw of 0.02 up: the ends are there to edit.
 - **Judge it.** Check 402.
+
+### 538. One tier: hidden presets are deleted outright and the factory concept is removed
+
+- **Answer.** owner — 2026-10-28: no factory presets, no hidden presets, no two-tier library, and no hard-coded presets anywhere in the application; every preset is deletable.
+- **Built.** `Library(home_dir, machine=, period=)` has one root. `hyperspace/library/` (the shipped presets, the band and dream module presets, the `party` and `house` shows) left the app, with the generator in `preset.py` and plan 13's migration; the hidden list (`hidden.json`) and `Library.hide` / `unhide` / `is_factory` went with them. `delete` and `rename` work on every preset. The shipped presets live in `tests/corpus/` as test data the app never reads. A fresh library opens an unsaved show called `untitled` with an empty bank and nothing loaded; a save over a name writes over that name's file.
+- **Other options.** Keep the factory tier and hide it from the list; keep the generator for a "restore defaults" command.
+- **To reverse.** Restore the generator and `Library.factory` from the commit before the change.
+- **Rough edge.** A new machine starts empty until the shared Drive library is mounted.
+- **Judge it.** Check 403.
+
+### 539. The PRESETS page is a flat list: no bank pills, no starts-on, no drop-down, no module-preset fold
+
+- **Answer.** owner — 2026-10-28.
+- **Built.** `ui_presets.page` draws the strip (◀ name ● ▶ · new · save · as…), a list filling the page with every preset (click loads; `rename` and `×` chips), the trash foot while the trash holds something, a patches fold and the show line. The sixteen bank pills, the "starts on" picker, the preset drop-down and the module-preset fold are gone, with their helpers (`show_block`, `preset_bank`, `starts_on`, `overview` and the rest).
+- **Other options.** Keep the pills as a second view of the bank.
+- **To reverse.** Restore the removed functions from the commit before the change.
+- **Rough edge.** Nothing on the panel sets a show's startup preset; the file field is still read and written, and Home still loads it.
+- **Judge it.** Check 403.
+
+### 540. Module presets' UI leaves the PRESETS page; the concept stays for now
+
+- **Answer.** owner — 2026-10-28: module presets are to become patches later.
+- **Built.** The PRESETS page no longer lists module presets. The concept stays in `library` and in the files, and each module's strip (band, pattern, …) keeps its own popup list, with × and reset, on its own page.
+- **Other options.** Remove module presets now and fold them into patches.
+- **To reverse.** Put the fold back in `ui_presets.page`.
+- **Rough edge.** Module presets can no longer be seen together; the dream and band module presets that shipped now live in `tests/corpus/` only.
+- **Judge it.** Check 403.
+
+### 541. The show block is one line that says what a show is; the pads are set on the desk only
+
+- **Answer.** owner — 2026-10-28.
+- **Built.** `ui_presets.show_line`: "show · the desk's pads, the session, the rig's wires", then the show's name, a red ● while it has unsaved changes, `open ▾` (the library's shows), `save`, `as…` and `new`. The bank stays twenty-four pads for the desk and the F-keys, and the page has no UI for it.
+- **Other options.** Keep the pill row for the bank on the page.
+- **To reverse.** Restore `show_block` and `preset_bank`.
+- **Rough edge.** The only way to see which preset a pad holds is the desk's LEDs.
+- **Judge it.** Check 403.
