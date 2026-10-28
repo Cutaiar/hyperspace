@@ -104,3 +104,14 @@ Each with how the owner reverses it.
     cold (live threads, as the dream). *Reverse:* remove the three names
     from `HELD_GROUPS` (then a held segment's feather follows the live
     knob on the projector).
+15. **Owner's answer to plan 37 D1 (2026-10-27): keep all 17 face
+    shaders for now**; a list to drop may come later at the owner's
+    discretion. Recorded in register row 417 and the plan file. P2 stays
+    a dry run; nothing to reverse.
+16. **The pattern node's side pane** (owner, 2026-10-27): it showed only
+    `view.pattern`, `view.pattern_mix` and `view.media_*`, not the eight
+    shader inputs (`pattern.mod.0…7`: scale, glow, warp, speed, colour,
+    sharp, …), because `graphview.OWNERS["pattern"]` still said `shape`
+    (a line older than plan 33 U). Fixed as its own PR off `main`
+    (branch `graph-pattern-inputs`), per the owner's ask. *Reverse:* the
+    one line.
