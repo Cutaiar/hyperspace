@@ -35,8 +35,8 @@ See `decisions.md`.
 | T2 the group node | `plan-40-t2` | d08a363 | **merged** f8d2e73 (PR #276) | fast 4294/2 skipped, goldens 144 | approved; minors to the fix pass | 50a–50h drafts, AK.n1–n4 |
 | T3 save / browse / spawn | `plan-40-t3` | f8d2e73 | built, PR #277; merged locally 19596e8 | fast 4306/2 skipped, goldens 144, --all 4537 | in the plan review | 50i–50s drafts, AK.5–7 |
 | plan review | `plan-40-build` @ 19596e8 vs `main` | — | done: D1–D10 ✅, 1 Important, minors | — | `reports/plan-review.md` | rulings 17–19 |
-| review fixes | `plan-40-fixes` | 19596e8 | dispatched | | | |
-| T6 docs | | last | waiting | | | 471–495 / 394–401 |
+| review fixes | `plan-40-fixes` | 19596e8 | **merged** e0675a6 (PR #278) | fast 4320/2 skipped, goldens 144 | — | 50r–50w drafts, AK.f1–f4; rulings 20–22 |
+| T6 docs | `plan-40-t6` | e0675a6 | dispatched | | | 501–525 / 394–401 |
 
 ## Merges into `plan-40-build`
 (counts after each.)
@@ -238,3 +238,25 @@ See `decisions.md`.
   reaches `apc40`, `params`; through `graph`, `moderngl`). **Fix pass
   dispatched** (`briefs/fixes.md`: the Important, the minors, T2's eight,
   plan 38's `_monitor` bug; branch `plan-40-fixes` off 19596e8).
+- **Review fixes** DONE_WITH_CONCERNS → PR #278 (`plan-40-fixes`, 15
+  commits 86795d5…209247d; the plan 38 `add_rect` fix its own, 86795d5).
+  10 files, +511/−99: a spawn says what waits; the empty undo step on a
+  refused landing; `replace_owner` validated before the host's rows move
+  (a read-only `Bindings.refusal` factored out of `_check` in
+  `routing.py`, behaviour unchanged); Save as patch… refuses another
+  patch's slug (a factory one too); the patch list listed once per menu /
+  drag; `Presets.banks()`; the three test gaps; T2's eight minors (fix 12
+  groups every holdable node of the 16 `NO_RUN` presets — none has an
+  effect — proving `party-tracer` and `party-wake`, the other 14 hold only
+  frame nodes; fix 13's fallback is the registry's voices via
+  `graphview.bank_ids`; fix 14 leaves only open-region titles out of
+  Group's selection); plan 38's inset with a stub-texture test in
+  `test_hold.py`; a pollution bug in the `noita()` test helper. Fast
+  4320/2 skipped (+14), goldens 144, `--all` 4550 + the GL flake. Rulings
+  50r–50w, AK.f1–f4. Merged `--no-ff` as **e0675a6**; controller's gates
+  running (the counts for the spec header).
+  Controller's gates on e0675a6: fast tier **4320 passed, 2 skipped**;
+  goldens **144 passed** (136 the base's + 8 grouped-twin proofs, none
+  re-recorded); `--all` **4551 passed, 2 skipped**, no failure; ruff the
+  base's 25 pre-existing, none in a plan 40 file. Pushed.
+- **T6** dispatched (Opus, own worktree, branch `plan-40-t6` off e0675a6).

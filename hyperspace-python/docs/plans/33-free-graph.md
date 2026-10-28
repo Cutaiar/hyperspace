@@ -121,7 +121,9 @@ them `test_every_library_preset_migrates_without_a_note`,
   graph's main run (and its faces run, if the module has one) with the
   module's, keeping every other wire and branch
   (`graphmigrate.module_runs`, `Presets._fx_module`, `Library.on_apply`).
-  The owner's model is "a module is this look's run".
+  The owner's model is "a module is this look's run". (Retired by plan 40,
+  D6: the fx module presets, this hook and `module_runs` are gone; a
+  reusable run is a patch, [`40-patches.md`](40-patches.md).)
 - **Switching an effect on that is in no run adds nothing to the picture
   (R13)** and a later save is `/5`. No factory binding does this.
 

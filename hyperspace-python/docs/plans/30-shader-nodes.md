@@ -337,7 +337,7 @@ any render node.
   29), and an image-in `sample` port on the palette that would set its
   params from a bitmap. **No node publishes or reads one.** On the
   modulation side, `patch.RENDER_VALUE = "value"` names it as a future
-  source whose id is the node's port (`palette:palette`); `patch.py`
+  source whose id is the node's port (`palette:palette`); `modgraph.py`
   does not import the graph.
 - **The faces target stays an inner chain.** `target = faces` runs
   inside the shape's face drawing (`render.face_fx`, `FxChain.run`), not
@@ -346,7 +346,7 @@ any render node.
   shader run the render graph does not show, and a placement in the
   preset's graph does not move it."
 - **Code.** `graph.py`: `VALUE`, `PORT_TYPES`, `placed_chips`.
-  `patch.py`: `RENDER_VALUE`. `fx.py`: the `target` tip. `ui_fx.py`:
+  `modgraph.py`: `RENDER_VALUE`. `fx.py`: the `target` tip. `ui_fx.py`:
   `page` (the second grid), `_chip(…, place=, dormant=)`, `placed_label`,
   `_placed`, `_dormant`, `_status(…, placed, dormant)`,
   `_drop(…, placed)`, `_strip_header(…, place)`, `strip` (computes the

@@ -1,6 +1,20 @@
 # Plan 40 — patches: a group of nodes and its boundary, saved once, spawned anywhere
 
-**Status: agreed, not built (2026-10-27).** Every decision is the owner's,
+**Status: built (2026-10-28)** on `plan-40-build` (T0–T5 and the review
+fixes: PRs #269, #274, #272, #271, #276, #277, #278; T6, these docs, its own
+PR into `plan-40-build`); it goes to `main` in the final PR, which the owner
+merges. At e0675a6: the fast tier 4320 passed, 2 skipped; the full suite
+(`--all`) 4551 passed, 2 skipped; the goldens 144 passed (the 136 before and
+8 grouped-twin proofs), none moved, none re-recorded;
+`tests/fixtures/frame-signatures.json` unchanged. Register rows 501–536
+(501–510 are D1–D10 as built; 511–536 the build's rulings, two of them, 521
+and 524, waiting for the owner; 25 rows were assigned, so the overflow is
+526–536). Hand checks 394–401, group AK. **Both Macs on this build before a
+preset with `groups` is shared**: an older build refuses an `/8` file.
+"What changed in the build" at the end says where the build differs from
+the text above.
+
+**Agreed 2026-10-27.** Every decision is the owner's,
 answered the same day in the session that wrote this; D1–D10 below carry
 his words. The build plan follows, as 37A's did. From
 the owner's ask of 2026-10-27, while plans 37–39 are in flight: "the
@@ -155,7 +169,7 @@ plus one:
  "wires":  [{"from": "acid", "to": "wobble.image"}, {"from": "wobble", "to": "delay.image"}],
  "values": {"fx.acid.on": true, "fx.acid.speed": 0.4, "fx.wobble.on": true, "fx.wobble.amount": 0.3},
  "modifiers": [{"id": "mod.1", "kind": "smooth", "in": ["hand:right.y"], "attack": 0.05}],
- "routes": [{"source": "mod:0", "target": "fx.wobble.amount", "op": "push", "value": 0.3},
+ "routes": [{"source": "mod:1", "target": "fx.wobble.amount", "op": "push", "value": 0.3},
             {"source": "lane:0", "target": "fx.acid.speed", "op": "push", "value": 0.1, "scale": "master.gain"}],
  "desk":   [{"source": "cc:0:48", "target": "fx.acid.speed", "op": "abs", "feedback": "ring"}],
  "macros": {}, "lfos": [], "envs": [],
@@ -163,6 +177,12 @@ plus one:
             {"id": "out", "type": "image", "from": "delay",      "was": "output.all.image"}],
  "layout": {"render:acid": [0, 0], "render:wobble": [260, 0], "render:delay": [520, 0], "mod.1": [0, 200]}}
 ```
+
+(Corrected in the build: the first route's source read `mod:0`. A
+modifier's lane is `mod:<n>` for `mod.<n>` (`modifiers.Modifier.address`),
+so `mod.1`'s is `mod:1`; `mod:0` is no lane and the route would have lain
+dormant. `tests/fixtures/patches/acid-wash.json` is this example with
+`mod:1`; register row 512.)
 
 - `nodes`, `wires`, `values`, `modifiers`, `macros`, `lfos`, `envs`,
   `layout` are a preset's, read by the same code, with the patch's own ids
@@ -192,17 +212,27 @@ plus one:
 - **`patches.lift(spec, table, reg, layout, node_ids) → doc`**: cut a
   patch out of the loaded preset. Renames the members to the lowest ids,
   rebases the layout, classifies every crossing cable. The pure half of
-  **save as patch**.
+  **save as patch**. (Corrected in the build: it is `lift(spec, table,
+  values, layout, node_ids) → (doc, refused)`; its third argument is the
+  registry's performance snapshot, a dict, so it stays pure, and the
+  refusals come back in words beside the file; row 515.)
 - **`patches.spawn(doc, host_spec, host_table, host_banks, at) → Landing`**:
   a `Landing` is the rename map (`acid` → `acid.2` by `_new_instance`'s
   rule, `mod.1` → `mod.<next>`, `lfo.1` → `lfo.<next>` by the bank's
   high-water rule, `macro.N` → a free macro or a refusal), the rewritten
   nodes, wires, values, modifiers, routes, desk rows, subscribers, the
   layout moved to `at`, the group (P2) and the notes. **Pure**: it writes
-  nothing. The app lands it through today's doors (P3).
+  nothing. The app lands it through today's doors (P3). (Corrected in the
+  build: the host is one argument, `spawn(doc, host, at, *, patch)`, with
+  `patches.Host.of(spec, table, banks, held)` reading the host's names,
+  bank room and used macros; a patch's envelopes are `env.6` and up in the
+  file too, row 512.)
 - **Round trip**: `lift(spawn(p))` is `p` again up to ids and position, a
   property test over every factory patch and over a patch cut from each
-  factory preset's effect run.
+  factory preset's effect run. (Corrected in the build: no factory patch
+  ships, and the "effect run" of a `/7` preset is its main run into All
+  outputs, `graph.run_back(spec, "output.all.image")`; 9 factory presets
+  have one and round-trip, the other 16 are named in the test.)
 
 ### P2 — the group node (the preset's, drawn on GRAPH)
 
@@ -225,7 +255,13 @@ plus one:
   cables are not drawn while it is collapsed: **this is the one place
   cables are not on screen, and the owner asked for it; `+` is one press
   away and nothing inside differs from what `+` shows. D4 asks him to
-  confirm it against the hard rule.**
+  confirm it against the hard rule.** (He did: D4. Corrected in the build:
+  an *open* host pin is drawn only for a group spawned this session — the
+  file keeps what the graph holds, so after a save and a reload a pin
+  never wired is gone and `+` shows the member's own port, row 523. The
+  folded node also has an out pin per member lane leaving it and a row per
+  member modifier input read from outside, so every crossing cable has a
+  pin, row 522.)
 - **Open** (`+`, as the template node opens), the members are drawn in
   place at their own positions inside a titled, tinted region with the
   group's name, every internal cable drawn, every member editable as
@@ -256,7 +292,11 @@ plus one:
   **boundary in words** ("in: picture · out: picture · wants: K1, right
   hand, audio band 1"). The PRESETS page gains the same list under a
   **patches** fold where "more · module presets" is today. The canvas's
-  right-click menu gains **Spawn ▸** with the list.
+  right-click menu gains **Spawn ▸** with the list. (Corrected in the
+  build: GRAPH's head has no **new** chip — **new** is on the PRESET strip
+  and the starters are in the canvas's picker — so **patches** is the
+  head's first chip after plan 38's hold chips, row 529; the PRESETS fold
+  sits after "more · module presets", which stays for the other groups.)
 - **Spawn** lands `patches.spawn`'s `Landing` as **one undo step**
   through today's doors, in load order: the group's render nodes and
   internal wires by `gs.land` of the re-read section (so their params
@@ -333,7 +373,10 @@ the first and the one missing signal.
 - A **spawn into a rig that lacks a device says it at the spawn** (the
   notes line: "2 rows wait for leap"), and the sheet that P3's browser
   shows before the spawn lists the patch's wants with the same words, so
-  nothing is a surprise.
+  nothing is a surprise. (Corrected in the build: the line names the rows,
+  as the sheet does — "spawned acid wash: …; waits for leap (not in this
+  rig): right hand y" — and leaves out a row the sheet kept for the
+  preset; row 528.)
 
 ### P5 — the fx module presets are retired outright (D6, D10)
 
@@ -353,7 +396,12 @@ did a UI pass on the FX tab a while ago."
   session) and `dream/` stay as they are.
 - **The FX page stays as it is** (D10): the browser of the graph's effect
   nodes by where each ends (plan 33 U), its strip, `Panel.fx_selected`.
-  Nothing on it referred to the module presets.
+  ~~Nothing on it referred to the module presets.~~ (Corrected in the
+  build: one thing did. `ui_fx.page` draws `panel._section("effects",
+  "fx", …)`, whose strip under the page's title is the fx module-preset
+  strip — ◀ name ▶ · save · as… · reset. It is the retired mechanism's UI,
+  so `ui_presets.strip` draws nothing for a retired group; `ui_fx.py` is
+  untouched and the rest of the page is as it was; row 533.)
 - Every golden unmoved: no preset, graph or shader changes.
 
 ## Decisions (the owner's, 2026-10-27)
@@ -381,12 +429,21 @@ did a UI pass on the FX tab a while ago."
 | T3 | P3: save as patch / update patch, the browser (GRAPH chip, PRESETS fold, Spawn ▸), spawn through the doors as one step, the **conflict sheet** (D3, D9), splice on a cable, **wire as saved** | spawning `acid-wash` into `party-trip` lands `acid.2`, `wobble.2`, `delay.2`, `mod.<n>`, K1's row and the hand's row; ⌘Z removes all of it; spliced on `scene → warp.image` the run reads `scene → acid.2 → wobble.2 → delay.2 → warp`; a spawn whose K1 collides opens the sheet, and "keep all existing" then Spawn lands the patch's K1 row dormant and said |
 | T4 | P4: `devices.wants`, the chips, the SYSTEM lines, the registry's status-change event and the arrival line | a preset wanting `leap` on a rig without one reports "not in this rig: 3 rows"; a `MidiDevice` going lost → connected fires the listeners once and says the count |
 | T5 | P5: the fx module presets retired (the six files, the fx entry of the fold, the hook, `module_runs`); the FX page untouched (D6, D10) | goldens unmoved; every factory preset loads with no note; the FX page draws as before; no test or page imports what went |
-| T6 | docs: this spec's "as built", ARCHITECTURE §3 (a "Patches" subsection beside the desk templates), DECISIONS "Presets and the desk", register rows, hand checks group AJ, `plans/README.md` | — |
+| T6 | docs: this spec's "as built", ARCHITECTURE §3 (a "Patches" subsection beside the desk templates), DECISIONS "Presets and the desk", register rows, hand checks group AK (corrected in the build: AJ is plan 39's), `plans/README.md` | — |
 
 T0 first; T1 alone; T2 needs T1's reader; T3 needs T1 and T2; T4 is
 independent of T2 and T3 and can land first as its own PR if the owner
 wants the "waits for apc40" line sooner; T5 is independent of all. The
 side ask (the resizable side pane) is merged: PR #266, `main` @ f984d3b.
+
+(Corrected in the build: T3's proofs name what `party-trip` does not
+hold. It has no `acid`, `wobble`, `delay` or `warp`, so a first spawn of
+`acid-wash` keeps the bare ids by the instance rule and the second takes
+`acid.2`, `wobble.2`, `delay.2`, `mod.2`; the splice is proved on `scene →
+plasma.image` (the run then reads `scene → acid → wobble → delay →
+plasma`); "the hand's row" reaches the patch through `mod.1`'s input, which
+is no route. The tests assert the rules as they are; ruling 19 in the run
+records.)
 
 ## What it does not do
 
@@ -430,7 +487,7 @@ spawn through the doors on a headless rig as `test_ui_shell.build_rig`
 does it), `test_graph_groups.py` (the canvas), `test_device_wants.py`;
 six goldens. About plan 36's size.
 
-## Hand checks (written into `11-hand-checks.md` by T6, group AJ, numbered after the last group in the file when this lands)
+## Hand checks (written into `11-hand-checks.md` by T6 as group AK, 394–401)
 
 1. **Group and ungroup.** Load `party-noita`, open GRAPH, select
    `warp`, `doublevision` and `fractals` and Group. One node with a
@@ -440,10 +497,17 @@ six goldens. About plan 36's size.
    noita core at the right of the scene: three nodes in a tinted region
    with two open pins. Drag `scene` to its in and its out to `output.all`.
    The picture is noita's middle. ⌘Z twice, then ⌘Z once more: the group
-   is gone with everything it brought.
+   is gone with everything it brought. (Corrected in the build: a spawn
+   lands **folded** — one group node with its two open pins, "in · open
+   (was scene)" and "out · open (was tripcolour.image)"; `+` shows the
+   three nodes in the tinted region. A drag onto an open pin lands on the
+   member's port.)
 3. **Splice.** Load `party-trip`, drag "noita core" from the browser onto
    the cable `scene → trip.image`: the run reads scene → the three →
-   trip, said on the nodes, seen on the projector.
+   trip, said on the nodes, seen on the projector. (Corrected in the
+   build: `party-trip` has no `trip` node; its run is `scene → plasma →
+   kaleido → zoomblur → huecycle → All outputs`, so the cable is `scene →
+   plasma.image` and the run reads scene → the three → plasma.)
 4. **The knobs come with it, and the sheet asks.** Save a patch from a
    group whose effect has K1 and the right hand on it. Spawn it into
    `party-acid`, where K1 is something else: the sheet lists "K1:
@@ -456,7 +520,11 @@ six goldens. About plan 36's size.
    that patch: the group node reads "waits for apc40 (lost): K1"; the
    GRAPH head shows **1 device missing**; SYSTEM lists it. Plug the desk
    in: the footer says "apc40 connected — 1 control live", the ring
-   lights, K1 turns the knob. Nothing was pressed.
+   lights, K1 turns the knob. Nothing was pressed. (Corrected in the
+   build: the count is every control the loaded preset wants of the desk,
+   not the patch's alone — "apc40 connected — n controls live", n being
+   every desk control the preset maps, about 26 on a factory party
+   preset.)
 6. **Not in this rig, said.** On the laptop config (no Leap), the same
    preset: "leap (not in this rig): right hand y"; the grey placeholder
    node as before.
@@ -465,6 +533,13 @@ six goldens. About plan 36's size.
    every factory preset loads with no note in the footer.
 8. **Twice.** Spawn "noita core" twice into one preset: two groups,
    `.2` and `.3` ids on their hovers, the second's K1 row said as dormant.
+   (Corrected in the build: `.2` and `.3` only in a host that already
+   holds `warp`, `doublevision` and `fractals` — `party-noita`; elsewhere
+   the first copy keeps the bare names and the second takes `.2`, by the
+   instance rule. "noita core" carries no K1: its desk rows are D2, D3 and
+   D5–D8 and its hand axes, so the second spawn's sheet lists those
+   against the first copy's, and with **keep all existing** the second
+   group says "n rows kept by the preset".)
 
 ## Follow-ups (not in this plan)
 
@@ -474,3 +549,202 @@ six goldens. About plan 36's size.
 - Patches in a show's bank (slots that spawn, not load) — only if D8
   turns.
 - A patch that carries a media channel's *source list* (not the files).
+
+## What changed in the build
+
+The plan above is the design; this is where the build differs from it, or
+chose within it. Every ruling was made by the controller on 2026-10-27 or
+2026-10-28 and has a row in
+[`DECISION-REGISTER.md`](../DECISION-REGISTER.md): 501–510 are D1–D10 as
+built (the owner's), 511–536 the build's rulings, each the owner's to keep
+or overturn. Two are open and marked **pending the owner**: row 521 (the
+schema of an ungrouped save) and row 524 (a take-over chip for "wire as
+saved"). Built on `plan-40-build` in six code tasks and one fix pass, each
+in its own worktree, each reviewed before it merged: T0 the word (PR #269),
+T1 the patch as data (#274), T4 the wants and the arrival (#272), T5 the fx
+module presets retired (#271), T2 the group node (#276), T3 save, browse
+and spawn (#277), then the plan-level review's fixes (#278). This page is
+T6. The run's ledger, briefs, rulings, reports and reviews are in
+[`assets/40-run/`](assets/40-run/).
+
+**Tests.** At e0675a6 (everything merged): the fast tier `uv run pytest -q`
+**4320 passed, 2 skipped** (4122 at the base, f10f281); the full suite
+`uv run pytest -q --all` **4551 passed, 2 skipped**; the goldens
+`uv run pytest -q --all -m golden` **144 passed** — the 136 before, none
+moved or re-recorded, and 8 new proofs that a grouped twin of each manifest
+preset with a main run draws that preset's recorded goldens;
+`tests/fixtures/frame-signatures.json` unchanged. New test files:
+`tests/test_patches.py` (the file, `check`, `read`, `lift`, `spawn`, the
+round trip, the library kind), `tests/test_graph_groups.py` (the preset's
+`groups`, the group node, the drags, spawn, splice, wire as saved, save as
+patch, the browser), `tests/test_device_wants.py` (`wants`, the chips, the
+arrival). Added to: `test_ui_routing.py` (the conflict sheet),
+`test_ui_presets.py` (the patches fold), `test_presets.py` (the fx label,
+the retired group), `test_golden_frames.py` (the 8 proofs), `test_hold.py`
+(plan 38's inset). Two fixtures, force-added because `tests/fixtures/` is
+ignored: `tests/fixtures/patches/acid-wash.json` (the P1 example) and
+`tests/fixtures/groups/party-noita-grouped.json`. ruff is clean on every
+file the plan touched (the base's 25 pre-existing errors are in `media/`,
+`tools/ingest.py`, plan 39's bench scripts and four tests).
+
+**Hand checks** 394–401, group AK in
+[`11-hand-checks.md`](11-hand-checks.md): the eight above in order (AK.1 is
+394 … AK.8 is 401), with the tasks' own additions folded into the nearest
+one. None has been run by a person.
+
+**Both Macs.** A preset with a group is `hyperspace.preset/8`. An older
+build refuses an `/8` file outright ("is not a hyperspace.preset", the
+ladder's rule since row 394), so both Macs run this build before such a
+preset is shared. (Corrected in the build: the session prompt said an
+older build "drops the key on its save"; it never reads the file.)
+
+**As built, by task.**
+
+- **T0, the word (D1).** `hyperspace/patch.py` is `modgraph.py`, and the
+  rename is wider than the build plan's four symbols: `Patch`, `PatchNode`,
+  `PatchEdge` are `ModGraph`, `ModNode`, `ModEdge`, `Router.patch_cut` is
+  `modgraph_cut`, and the private names followed, so "patch" means the
+  owner's thing and nothing else (row 511). The live docs got the symbol
+  sed; the run records of plans 28–30 keep the old names as history.
+- **T1, the patch as data (P1, D5).** `hyperspace/patches.py` (`check`,
+  `read` → `Patch`, `lift` → `(doc, refused)`, `Host`, `spawn` → `Landing`,
+  `Conflict`), the `patches` document kind in `library.py` (`read_patch`,
+  `save_patch`; `hide` and `rename` widened to it, a hidden factory patch
+  under `hidden.json`'s `"patches"` key, row 516). Departures, each a row:
+  the example's lane is `mod:1` (corrected above); a patch's envelopes are
+  `env.6` and up in the file (row 512); `lift` returns `(doc, refused)`
+  over the registry's snapshot (row 515); the round trip runs over each
+  factory preset's main run into All outputs (`graph.run_back`), because a
+  `/7` frame has no `frame → fx.image` run — 9 presets have one, the 16
+  that do not are named. A macro is "in use" by a label, a subscriber or a
+  row, never by its value (row 513). The conflict kinds: a desk control by
+  `Binding.overlaps`, a `hand:` or `axis:` source that already drives
+  another param, a route onto a param another performer owns (row 514).
+  After review, `check` refuses any wire with an end outside the patch and
+  `spawn` lands only the patch's own wires (D2), and a voice that does not
+  spawn (a full bank) leaves its lane reading nothing.
+- **T4, the wants and the arrival (P4).** `devices.wants` / `Want` /
+  `wants_for` / `want_words` / `want_lines` / `missing_chip` /
+  `wanted_lines` / `arrival`, `SCHEME_ROLE` moved into `devices`,
+  `routing.row_words` (the words of a row, which `graphview.cable_words`
+  now calls), and the registry's status-change event with its `said` hook
+  (app.py's two lines). The role of an unqualified row outside MIDI is the
+  scheme's primary, then the first listed publisher (an off one counts),
+  then `SCHEME_ROLE`'s name (row 531). An error on an open device is no
+  coming or going, and the launch says nothing (row 530). After review
+  `wants` reads each device's `status` directly (0.06 ms, no MIDI port
+  layouts built) and `ui_graph.panel_wants` asks it once a frame for the
+  head, the PRESET strip and SYSTEM.
+- **T5, the fx module presets retired (P5, D6, D10).** The six
+  `library/fx/*.json`, `Presets._fx_module`, `_watch_fx_modules` and
+  `graphmigrate.module_runs` with its helpers are gone;
+  `library.RETIRED_MODULES = ("fx",)` names the retired group (row 534);
+  the FX page's module strip is hidden through `ui_presets.strip` (row 533,
+  P5 corrected above); an `fx` label in an old file loads quietly and the
+  next save drops it; the party generator keeps the three families' values
+  inline (`preset.ACID_FX`, `MANDALA_FX`, `NOITA_FX`), so the factory files
+  are byte-identical (row 535); `tools/fx_shots.py` no longer shoots
+  presets.
+- **T2, the group node (P2, D4, D7).** `preset.GROUPS_KEY` after `layout`,
+  read at load step 6½ (a member the preset lacks, one a group may not hold
+  or one already in a group is left out with a note), in the undo marks and
+  the signature; `/8` is written **only when a group exists** (row 521,
+  pending the owner); `graphview.VGroup` and the `Edit` verbs `group`,
+  `ungroup`, `rename_group`, `set_open`, `move_group`, `leave_groups`, each
+  one undo step; one boundary classifier in `patches` (`select`,
+  `crossing`, `side`) shared by `lift`, Group and the drawn pins. The
+  folded node draws its pins, rows, status line and plan 37's thumbnail of
+  its last picture outlet; the open region is a tinted rectangle with an
+  editor node over its title band, so the title can be dragged and the
+  members follow live. Departures: the folded node has out pins for member
+  lanes and rows for modifier inputs read from outside (row 522); dragging
+  the folded node moves every member (row 520); open / fold is a preset
+  edit (row 518); a deleted member leaves the list lazily (row 519);
+  grouping a member of another group moves it, said (row 517).
+- **T3, save, browse, spawn (P3, D2, D3, D9).** `Edit.spawn` lands a
+  `Landing` in `load_doc`'s order through the doors (`gs.land` of the
+  re-read section, `bank.add`, `add_modifier`, `lib.restore`,
+  `Bindings.add` / `replace_owner`, `bind(write=False)`, `set_macros`, the
+  group and its layout) behind one `_step`; `Edit.splice`,
+  `Edit.wire_as_saved`, `Edit.save_patch`; the conflict sheet in
+  `ui_routing.modal` ahead of Replace / Keep, every row preselected to the
+  patch; `Learn.hold`, so nothing learns while the sheet is up (row 527);
+  the **patches** chip and **spawn ▸**; the drag from the browser onto a
+  picture cable (row 529); the PRESETS fold. Departures: "wire as saved"
+  is a re-read of the section (`render_add` adds nodes, not cables) and
+  takes only free ports (row 524); open pins and the rename map last the
+  session (row 523); a kept row is stored with its words ("K1", row 526);
+  save as patch refuses a member a patch may not hold and any existing
+  patch's name (row 525).
+- **The review fixes (#278).** The plan-level review found one Important:
+  a spawn with no conflicts never said which devices its rows wait for —
+  now the head says "…; waits for leap (not in this rig): right hand y",
+  less any row the sheet kept (row 528). And the minors: a landing refused
+  after its dry run leaves no undo step; a source conflict asks the
+  referee (`Bindings.refusal`, a read-only factoring of `_check` in
+  `routing.py`) before the host's rows go; save as patch never replaces
+  another patch; the patch list is read once per library poll;
+  `Presets.banks()` public; several members dragged out are one step; a
+  drop on a folded group's stub is refused in words; one group-number rule
+  (`graphmigrate.group_number`); an open region's title is left out of
+  Group's selection; the 16 presets with no main run get a grouped-twin
+  proof too (none has an effect, so each is grouped with every node a group
+  may hold: `party-tracer` and `party-wake` prove it, the other 14 hold only
+  the frame's nodes).
+- **Plan 38's inset (row 536).** `ui_graph._monitor` passed `add_rect(…,
+  0.0, 0, 2.0)`, which imgui_bundle's signature (`rounding, thickness,
+  flags`) refuses with a TypeError: the PROJECTOR inset never drew on
+  `main`. One line, its own commit (86795d5), with a stub-texture test, rides
+  on this plan's PR.
+
+**`patches.py` is a leaf over the pure pieces.** It imports `graph`'s
+names, `routing`'s `Binding` and scheme split, `modifiers`, `modbank`,
+`lfo` and `envelope` — no app module directly (an AST test holds it). Through
+`routing` it reaches `apc40` and `params`, and through `graph` `moderngl`,
+as `graphmigrate` does: its docstring's "nothing of the app" means no
+direct import, not an empty import closure.
+
+**Process** (rulings 1–3, 7, 8, 12, 14, 16, 21, in the run records, not
+rows). The base was `plan-37-38-39-integration` @ 2b185ea plus the plan 40
+docs merge (f10f281), which also carried `main` @ f984d3b — the build plan
+said that commit was already under the base; it was not (corrected in the
+build plan). T2 and T3 waited for PR #270 (plans 37–39) to reach `main`,
+which was merged into the build branch once (d08a363, one conflict in
+`ui_graph.py`'s head chips, both sides kept). Register rows are 501–536,
+not the prompt's 471–495, which plans 37–39 and PR #275 had taken. T3's
+own review was folded into the plan-level review. The sub-agents ran on
+Opus; their commits carry its trailer.
+
+**Not verified by any person.** Every drawing: the folded node, its pins,
+rows, status line and thumbnail; the tinted region and its title's live
+follow; the side pane's name input, chips and save form; the conflict
+sheet at its width; the drag from the browser's popup onto a cable and
+the cable's highlight; the open pins; the PRESETS fold; the
+"N devices missing" chip on a narrow PRESET strip; the footer when a real
+APC40 comes back; the FX page without its module strip; the PROJECTOR
+inset on screen. No mouse drag on GRAPH has been driven by a test: the
+drags call the same functions the tests call.
+
+**Known rough edges.**
+- With the APC40 unplugged, every factory preset with desk rows lights
+  **1 device missing** ("apc40 (lost): 26 controls"): correct, and
+  constant on the laptop.
+- A spawned group's open pins and its **wire as saved** chip are gone
+  after a reload (row 523); in any host whose run feeds All outputs, the
+  chip refuses the outlet, "output.all.image is taken" (row 524).
+- A patch read through a modifier input on a hand axis is no conflict,
+  even where the host's own row on that axis drives a param — the spec's
+  D3 example names that very case (row 514, for the owner). Spawning a
+  cut back into its own preset lists every shared hand axis: correct by
+  the one-axis rule, a noisy sheet.
+- A spawn that raises the sheet says its wants twice: in the sheet, then
+  on the head. Nothing is said when a spawn is cancelled.
+- A × hidden factory patch still blocks its name for **save as patch…**
+  (no factory patch ships yet).
+- `party-acid` and `party-mandala`'s notes still say "the `acid` /
+  `mandala` fx module preset" (preset data, unchanged by this plan).
+- User fx module files on the Drive library stay on disk, unreachable
+  from the UI; nothing deletes them.
+- The head's "N hidden" count includes a folded group's members; ids are
+  reused after the highest group is ungrouped (row 517).
+- The status line of a group asks `devices.wants` once a frame per group.

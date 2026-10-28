@@ -34,7 +34,9 @@ templates, the nearest thing to a reusable fragment), and
 - **Dylan's files** untouched: `apc40.py`, `midi.py`,
   `bindings.default.json`, the desk diagram, `ui_desk*.py`.
 - **Both Macs on this build** before a preset with `groups` is shared:
-  an older build drops the key on its save.
+  an older build drops the key on its save. (Corrected in the build: an
+  older build refuses an `/8` file outright, the schema ladder's rule, so
+  it never reads the groups to drop them.)
 - Sub-agents never push to `main`, never merge, never rebase a branch
   another task is on, never dispatch their own sub-agents; commits end
   with the attribution lines the session gives.
@@ -42,7 +44,8 @@ templates, the nearest thing to a reusable fragment), and
 ## The base
 
 **`plan-37-38-39-integration` @ 2b185ea or later** (plan 38 and plan 39
-T0–T4 are on it; `main` @ f984d3b with PR #266 is under it). If that
+T0–T4 are on it; `main` @ f984d3b with PR #266 is under it — corrected
+in the build: it was not; it came in with the plan 40 docs merge). If that
 branch's final PR has already merged to `main`, cut from `main` instead.
 Verify the base before cutting anything; re-check it before each
 worktree. Branch **`plan-40-build`** cut from there; each task's worktree
@@ -62,7 +65,8 @@ start T2 against a base without plan 37's `ui_graph.py` and
 
 Numbers: register rows **471–495**, hand checks **394–401, group AK**
 (the build plan says why). If plan 37A or 37B has taken rows past 470 by
-then, take the next free and say so in the ledger.
+then, take the next free and say so in the ledger. (As built: rows
+501–536, plans 37–39 and PR #275 having taken through 500.)
 
 ## The ledger
 

@@ -702,7 +702,7 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Routing table</div><div class="mods">routing · patch · modifiers</div></div>
+        <div><div class="name">Routing table</div><div class="mods">routing · modgraph · modifiers</div></div>
         <div class="what">The binding rows, the referee, the desk's two layers, the macros, the preset's modifiers, and the one per-frame modulation pass — the table run as a graph, each node after what it reads. <span>Imports nothing above it.</span></div>
         <div class="chip c-offset">Offset</div>
       </div>
@@ -742,7 +742,7 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Library</div><div class="mods">library · preset · config</div></div>
+        <div><div class="name">Library</div><div class="mods">library · preset · patches · config</div></div>
         <div class="what">The library root (the home, or a shared folder), presets, shows, the bank of twenty-four, the trash; the machine home's own files stay apart, <code>config.toml</code> and its device list among them. A preset load replaces the table's performer rows.</div>
         <div class="chip c-base">Base</div>
       </div>
@@ -911,8 +911,13 @@
         factory presets are hidden, never deleted. <code>Library.home</code> is
         the library root (the home, or a shared folder named by
         <code>[library] path</code>); <code>Library.machine</code> is the home
-        for this machine's own files.</p>
-        <span class="path">library · preset · config</span>
+        for this machine's own files. A <em>patch</em> (plan 40) is a group of
+        GRAPH nodes saved with the cables that cross its edge — a knob or a
+        hand kept as the address it is, the scene in and the outputs out kept
+        as typed ports — spawned into any preset under fresh ids as one undo
+        step; on the canvas a <em>group</em> folds its members into one node
+        until <code>+</code>, a list in the preset the renderer never sees.</p>
+        <span class="path">library · preset · patches · config</span>
       </div>
       <div class="sub">
         <h4>Ghost hands</h4>
@@ -932,7 +937,7 @@
         curve, scale, smooth, combine, threshold, delay — sit between a
         source and a route, live in the preset, and publish a lane a route
         reads like any other. A loop runs only through a delay.</p>
-        <span class="path">patch · modifiers · routing · ui_routing</span>
+        <span class="path">modgraph · modifiers · routing · ui_routing</span>
       </div>
       <div class="sub">
         <h4>The node editor</h4>
@@ -1009,7 +1014,7 @@
         <code>placement</code>, <code>geometry</code>,
         <code>tempo</code>, <code>modbank</code>, <code>sequencer</code>, <code>glsl</code>,
         <code>gamepad</code>, <code>apc40</code>, <code>generic</code>,
-        <code>watchdog</code>, <code>patch</code> (the modulation graph's
+        <code>watchdog</code>, <code>modgraph</code> (the modulation graph's
         sorter), and the hands package's signal and tape modules; <code>lfo</code>
         and <code>envelope</code> import only <code>modbank</code>.
       </p>
