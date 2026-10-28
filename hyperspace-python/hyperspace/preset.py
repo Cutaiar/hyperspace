@@ -515,9 +515,15 @@ class GraphSection:
 
     def mark(self) -> tuple:
         """What is landed, for an undo of a load (`library.Marks`) — and
-        (plan 36 T3) which effect instances exist (`FxState.held`)."""
+        (plan 36 T3) which effect instances exist (`FxState.held`). Plan 38
+        B3: while the projector is held, the landed graph's own instances —
+        not those kept for the program, which an undo after Take must not
+        bring back onto a graph that lacks them (unheld the two are one)."""
+        held = getattr(self.fx, "held", None)
+        if getattr(self, "hold", None) is not None and self.spec is not None:
+            held = frozenset(self.spec.effect_names())
         return (self.spec, copy.deepcopy(self.doc), copy.deepcopy(getattr(self, "free", None)),
-                getattr(self.fx, "held", None))
+                held)
 
     def put(self, mark: tuple) -> None:
         """Land what `mark` held again (an undo of a load), first. (A mark

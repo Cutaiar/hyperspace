@@ -176,6 +176,50 @@ def test_an_effects_clock_runs_on_through_hold_land_and_take(rig):
     assert fx.phase["kaleido"] == p and "kaleido" in fx.specs
 
 
+def test_an_undo_after_take_brings_no_program_only_instance_back(rig):
+    """Plan 38 B3 (I-a): a landing's undo mark made while held records the
+    landed graph's own effect instances, not those kept for the program —
+    so after Take, ⌘Z of a step from the hold lands a graph with exactly
+    its instances, and a save carries no dead id."""
+    fx, hold, gs = rig.presets.graph.fx, rig.hold, rig.presets.graph
+    _land(rig, LOOK)
+    rig.undo.clear()
+    hold.engage()
+    straight = {"frame": "wired", "wires": [{"from": "shape", "to": "scene.geometry"},
+                                            {"from": "scene", "to": "output.all.image"}]}
+    for doc in ({"frame": "wired"}, straight):
+        rig.undo.push("land", load=True)
+        _land(rig, doc)
+    assert "kaleido" in fx.specs                         # kept for the program
+    assert hold.take()
+    assert "kaleido" not in fx.specs
+    assert rig.undo.undo()
+    settle(rig)
+    assert set(fx.specs) == set(gs.spec.effect_names())
+    assert not any(k.startswith("fx.kaleido.") for k in rig.presets._values())
+    assert not any(p.id.startswith("fx.kaleido.") for p in rig.reg)
+
+
+def test_program_only_knows_every_kind_and_every_file_live(rig):
+    """Plan 38 B3 (M-a, M-c): a kind `names` settles that `PROGRAM_IDS`
+    lacks raises rather than leak its params into a save; a live `fx` of
+    None (every file exists) makes no effect program-only."""
+    hold = rig.hold
+    _land(rig, LOOK)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    assert any(i.startswith("fx.kaleido.") for i in hold.program_only())
+    real = rig.presets.graph.names
+    rig.presets.graph.names = lambda spec=None: {**real(spec), "fx": None}
+    assert not any(i.startswith("fx.") for i in hold.program_only())
+    hold.kept["matte"] = ["matte"]
+    rig.presets.graph.names = lambda spec=None: {**real(spec), "matte": []}
+    with pytest.raises(KeyError, match="matte"):
+        hold.program_only()
+    rig.presets.graph.names = real
+    del hold.kept["matte"]
+
+
 def test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole(rig):
     """Plan 38 B3 (C1): Drop lands the hold point — the effect, the
     switch's pick, the phase as the projector ran it."""

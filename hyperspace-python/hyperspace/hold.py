@@ -226,15 +226,17 @@ class Hold:
         for kind, held in self.kept.items():
             if not held:
                 continue
-            for n in set(held) - set(live.get(kind) or ()):
-                if kind == "fx":
-                    ids |= {p.id for p in self.reg if p.id.startswith(f"fx.{n}.")}
-                elif kind == "switch":
-                    ids.add(switch_id(n))
-                elif kind == "resize":
-                    ids.update(resize_ids(n))
-                elif kind == "lookback":
-                    ids.update(lookback_ids(n))
+            now = live.get(kind)
+            if now is None:             # (fx: every file exists — every name is live)
+                continue
+            gone = set(held) - set(now)
+            if not gone:
+                continue
+            ids_of = PROGRAM_IDS.get(kind)
+            if ids_of is None:          # a kind `names` settles and this table lacks
+                raise KeyError(f"hold.PROGRAM_IDS has no {kind!r}: its params would be saved")
+            for n in gone:
+                ids |= set(ids_of(self.reg, n))
         return frozenset(ids)
 
     def reset_delays(self) -> None:
@@ -432,6 +434,17 @@ def _preset_part(state, reg):
     keep = {pid: v for pid, v in bases.items()
             if (p := reg.get(pid)) is None or p.group in PERFORMANCE_GROUPS}
     return replace(state, bases=keep)
+
+
+# plan 38 B3: each kind `GraphSection.names` settles → the param ids of an
+# instance of it (`Hold.program_only`). A kind missing here raises there —
+# plan 39's mattes, cuts and segments add theirs at integration
+PROGRAM_IDS: dict[str, Callable[[Any, str], Any]] = {
+    "fx": lambda reg, n: [p.id for p in reg if p.id.startswith(f"fx.{n}.")],
+    "switch": lambda reg, n: [switch_id(n)],
+    "resize": lambda reg, n: resize_ids(n),
+    "lookback": lambda reg, n: lookback_ids(n),
+}
 
 
 class _HeldRig:
