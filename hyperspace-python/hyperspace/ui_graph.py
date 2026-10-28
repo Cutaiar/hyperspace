@@ -131,7 +131,12 @@ frames the canvas on them and says so on the head ("laid out 36 nodes in
 tidy"). The selection shows under the canvas on
 the panel's narrow page; the **details beside / below** chip, drawn only
 while something is selected, moves it (a page 720 px wide puts it in a
-side column by itself, no chip).
+side column by itself, no chip). **The side column is resizable** (the
+owner, 2026-10-27: "for some UI, the little sidebar … is just not wide
+enough"): a grip on its left edge drags it between `SIDE_MIN` and what
+leaves `CANVAS_MIN` of canvas (`side_width`), and the width is this Mac's,
+kept in ``<machine>/ui.json`` (`read_side` / `write_side`, written when
+the drag lets go), so it holds across presets, shows and relaunches.
 
 **The editor context** is the widget's own C++ object: made on the first
 draw of the page, held in the panel's state (``panel._graph``) — not in
@@ -145,8 +150,11 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 from __future__ import annotations
 
 import colorsys
+import json
 import math
+import sys
 import time
+from pathlib import Path
 
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
@@ -173,7 +181,11 @@ THIN, THICK = 1.5, 5.5   # a value cable at rest and at full reading
 WIRE = 3.0               # a render cable, a trigger
 NODE_W = 190.0 * graphview.SCALE    # a node's inner width
 PIN = 12.0               # a pin's square: a bigger target for a trackpad (2026-10-26)
-SIDE_W = 320.0           # the side column, when the page is wide enough for it
+SIDE_W = 320.0           # the side column's width at first, when the page is wide enough for it
+SIDE_MIN = 240.0         # …the narrowest a drag may make it
+CANVAS_MIN = 240.0       # …and the canvas it must leave beside it
+GRIP_W = 8.0             # the drag grip on the column's left edge
+UI_FILE = "ui.json"      # <machine>/ui.json: this Mac's panel settings (the side width)
 WIDE = 720.0             # …which is this wide; narrower, the selection goes below
 BELOW_H = 240.0          # the selection's height below the canvas
 TIMES = 120              # draws the SYSTEM line's median is over
@@ -281,6 +293,11 @@ def _state(panel) -> dict:
     st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
     st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
     st.setdefault("tints", {})              # cable id → its tinted colour, this frame
+    # 2026-10-27: the side column's width (None until this Mac's file has been
+    # asked), whether its grip is held, and the machine folder the width is kept in
+    st.setdefault("side_w", None)
+    st.setdefault("side_drag", False)
+    st.setdefault("machine", None)
     return st
 
 
@@ -583,7 +600,14 @@ def page(panel, dt: float) -> None:
     # top-left), so a selection that narrowed it panned every node (the
     # owner, 2026-10-24). The details are laid over its edge instead.
     origin = imgui.get_cursor_screen_pos()
-    pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide)
+    if st["side_w"] is None:                    # this Mac's width, asked once
+        lib = getattr(panel, "library", None)
+        st["machine"] = getattr(lib, "machine", None)
+        st["side_w"] = (read_side(st["machine"]) if st["machine"] is not None else None) or SIDE_W
+    # (the frame's width is clamped to this page; the remembered one is not,
+    # so a narrow window never shrinks what a wide one was set to)
+    side = side_width(st["side_w"], avail.x)
+    pos, size = details_rect((origin.x, origin.y), (avail.x, avail.y), wide, side)
     # the node editor still sees a right-click over the details (they lie on
     # its canvas): noted here, before it draws, so `_menus` opens no graph
     # menu there and the control's own Learn menu opens (the owner, 2026-10-24)
@@ -600,6 +624,11 @@ def page(panel, dt: float) -> None:
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
         if imgui.begin_child("##graph.side", imgui.ImVec2(*size), imgui.ChildFlags_.borders):
+            if wide:                        # the grip on the column's left edge, then the details
+                top = imgui.get_cursor_screen_pos()
+                _grip(st, pos, size, avail.x, side)
+                imgui.set_cursor_screen_pos(imgui.ImVec2(top.x + GRIP_W, top.y))
+                imgui.indent(GRIP_W)
             _side(panel, st, view, sel)
         imgui.end_child()
         imgui.pop_style_color()
@@ -663,14 +692,83 @@ def _scroll(st: dict, origin, size) -> None:
 
 
 def details_rect(origin: tuple[float, float], avail: tuple[float, float],
-                 wide: bool) -> tuple[tuple[float, float], tuple[float, float]]:
+                 wide: bool, side_w: float = SIDE_W) -> tuple[tuple[float, float], tuple[float, float]]:
     """Where the selection's details are laid over the canvas (screen
-    position, size): a `SIDE_W` column on its right edge when `wide`, else a
+    position, size): a `side_w` column on its right edge when `wide`, else a
     `BELOW_H` band along its bottom. The canvas keeps its size underneath."""
     (x, y), (w, h) = origin, avail
     if wide:
-        return (x + w - SIDE_W, y), (SIDE_W, h)
+        return (x + w - side_w, y), (side_w, h)
     return (x, y + h - BELOW_H), (w, BELOW_H)
+
+
+def side_width(wanted: float, avail_w: float) -> float:
+    """The side column's width on a page `avail_w` wide: `wanted`, held
+    between `SIDE_MIN` and what leaves `CANVAS_MIN` of canvas — and never
+    under `SIDE_MIN`, whatever the page (a page too narrow for both is one
+    the details go below on anyway)."""
+    return max(SIDE_MIN, min(float(wanted), avail_w - CANVAS_MIN))
+
+
+def read_side(machine) -> float | None:
+    """This Mac's remembered side width (``<machine>/ui.json``, key
+    ``graph.side_w``), or None: no file, an unreadable one, or a value that
+    is not a number. Never raises; a bad file costs only the memory."""
+    try:
+        doc = json.loads((Path(machine) / UI_FILE).read_text())
+        w = doc["graph"]["side_w"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return float(w) if isinstance(w, (int, float)) and not isinstance(w, bool) else None
+
+
+def write_side(machine, side_w: float) -> None:
+    """Remember `side_w` in ``<machine>/ui.json``, keeping whatever else
+    the file holds; a write that fails says so on stderr and costs only
+    the memory."""
+    path = Path(machine) / UI_FILE
+    try:
+        doc = json.loads(path.read_text())
+        if not isinstance(doc, dict):
+            doc = {}
+    except (OSError, ValueError):
+        doc = {}
+    graph = doc.get("graph")
+    if not isinstance(graph, dict):
+        graph = doc["graph"] = {}
+    graph["side_w"] = round(float(side_w), 1)
+    try:
+        path.write_text(json.dumps(doc, indent=1) + "\n")
+    except OSError as e:
+        print(f"graph: {UI_FILE} not written ({e})", file=sys.stderr)
+
+
+def _grip(st: dict, pos: tuple[float, float], size: tuple[float, float], avail_w: float,
+          side: float) -> None:
+    """The side column's drag grip (its left edge, `GRIP_W` wide, the
+    column's height), drawn first inside the column's child so it sits
+    over the canvas like the rest of the details. Held, the column follows
+    the mouse (`side_width` keeps it in range); let go, the width is
+    written for this Mac. A faint line while hovered or held, and the
+    east-west cursor."""
+    imgui.set_cursor_screen_pos(imgui.ImVec2(pos[0], pos[1]))
+    imgui.invisible_button("##graph.side.grip", imgui.ImVec2(GRIP_W, max(size[1], 1.0)))
+    hovered, active = imgui.is_item_hovered(), imgui.is_item_active()
+    if active:
+        st["side_w"] = side_width(side - imgui.get_io().mouse_delta.x, avail_w)
+        st["side_drag"] = True
+    elif st.get("side_drag"):
+        st["side_drag"] = False
+        machine = st.get("machine")
+        if machine is not None:
+            write_side(machine, st["side_w"])
+    if hovered or active:
+        imgui.set_mouse_cursor(imgui.MouseCursor_.resize_ew)
+        x = pos[0] + GRIP_W / 2
+        imgui.get_window_draw_list().add_line(
+            imgui.ImVec2(x, pos[1]), imgui.ImVec2(x, pos[1] + size[1]),
+            imgui.get_color_u32(imgui.Col_.separator_active if active else imgui.Col_.separator_hovered),
+            2.0)
 
 
 def share(panel, st: dict, sel) -> None:

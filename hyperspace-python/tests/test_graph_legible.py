@@ -14,6 +14,7 @@ Headless, on the harness N2 and N3 used: the shell's rig
 stand-in adapter (tests/test_graphview_devices.py), and the page drawn
 for real on `imgui_node_editor`. No preset is edited or added."""
 
+import json
 import math
 from types import SimpleNamespace as NS
 
@@ -980,3 +981,76 @@ def test_a_resize_nodes_params_are_rows_in_the_side_panel(rig, monkeypatch):
     tick()
     settle()
     assert p.base == pytest.approx(0.4) and len(u.stack) == 1
+
+
+def test_the_side_column_width_is_clamped_and_this_macs(tmp_path):
+    """The owner (2026-10-27): the details column must be resizable. Its
+    width is held between `SIDE_MIN` and what leaves `CANVAS_MIN` of canvas,
+    laid out by `details_rect`, and remembered per Mac in ``ui.json`` —
+    a missing, broken or wrong-typed file is no width at all, and a write
+    keeps whatever else the file holds."""
+    assert ui_graph.side_width(ui_graph.SIDE_W, 1000.0) == ui_graph.SIDE_W
+    assert ui_graph.side_width(100.0, 1000.0) == ui_graph.SIDE_MIN
+    assert ui_graph.side_width(900.0, 1000.0) == 1000.0 - ui_graph.CANVAS_MIN
+    assert ui_graph.side_width(900.0, 300.0) == ui_graph.SIDE_MIN     # never under the minimum
+    pos, size = ui_graph.details_rect((10.0, 20.0), (1000.0, 600.0), wide=True, side_w=460.0)
+    assert (pos, size) == ((10.0 + 1000.0 - 460.0, 20.0), (460.0, 600.0))
+    assert ui_graph.read_side(tmp_path) is None                        # no file
+    (tmp_path / ui_graph.UI_FILE).write_text("{not json")
+    assert ui_graph.read_side(tmp_path) is None                        # a broken one
+    (tmp_path / ui_graph.UI_FILE).write_text('{"graph": {"side_w": "wide"}, "other": 1}')
+    assert ui_graph.read_side(tmp_path) is None                        # not a number
+    ui_graph.write_side(tmp_path, 460.25)
+    assert ui_graph.read_side(tmp_path) == 460.2                       # rounded to a tenth
+    doc = json.loads((tmp_path / ui_graph.UI_FILE).read_text())
+    assert doc["other"] == 1 and doc["graph"]["side_w"] == 460.2       # the rest kept
+    ui_graph.write_side(tmp_path / "missing" / "dir", 300.0)           # a failed write: no raise
+
+
+def test_the_side_column_takes_its_width_from_this_mac_and_a_drag(rig):
+    """On a wide page the details column is as wide as this Mac remembers
+    (`<machine>/ui.json`, read once, clamped to the page each frame but
+    never overwritten by a narrow one); the grip on its left edge, held and
+    moved, resizes it, and letting go writes the width back."""
+    st = party(rig)
+    io = imgui.get_io()
+
+    def sized(width: float) -> None:                    # a frame with the panel this wide
+        io.display_size = imgui.ImVec2(max(width + 40.0, 820.0), 900.0)
+        rig.panel.reg["ui.page"].set(ui.PAGE_KEYS.index("graph"))
+        imgui.new_frame()
+        imgui.set_window_size("CONTROLS", imgui.ImVec2(width, 876.0))
+        rig.panel.draw(1 / 60, 60.0)
+        imgui.end_frame()
+
+    machine = rig.lib.machine
+    ui_graph.write_side(machine, 460.0)
+    st["side_w"] = st["machine"] = None                 # as before the file was asked
+    _in_editor(rig, link(st, next(iter(st["bundles"]))))
+    sized(1200.0)
+    sized(1200.0)
+    assert ui_graph._selection(st, rig.view) is not None
+    assert st["side_w"] == 460.0 and st["machine"] == machine
+    (x, y), (w, h) = st["details_rect"]
+    assert w == 460.0
+    # a narrow page clamps the frame's column, not the memory
+    st["beside"] = True
+    sized(600.0)
+    assert st["details_rect"][1][0] < 460.0 and st["side_w"] == 460.0
+    sized(1200.0)
+    (x, y), (w, h) = st["details_rect"]
+    assert w == 460.0
+    # the grip: press on the column's left edge, move left, let go
+    io.add_mouse_pos_event(x + ui_graph.GRIP_W / 2, y + h / 2)
+    sized(1200.0)
+    io.add_mouse_button_event(0, True)
+    sized(1200.0)
+    io.add_mouse_pos_event(x + ui_graph.GRIP_W / 2 - 60.0, y + h / 2)
+    sized(1200.0)
+    assert st["side_drag"] and abs(st["side_w"] - 520.0) < 1e-6
+    io.add_mouse_button_event(0, False)
+    sized(1200.0)
+    sized(1200.0)
+    assert not st["side_drag"]
+    assert ui_graph.read_side(machine) == 520.0           # written when the drag let go
+    assert st["details_rect"][1][0] == 520.0
