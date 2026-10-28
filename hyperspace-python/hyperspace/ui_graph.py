@@ -818,21 +818,21 @@ def _hold_chips(panel) -> bool:
         if ui.chip("hold##graph"):
             hold.engage(time.perf_counter())
         if imgui.is_item_hovered():
-            imgui.set_tooltip(holdmod.ENGAGE_TIP)
+            ui.tooltip(holdmod.ENGAGE_TIP)
         return True
     ui.lit_chip("held##graph", True)
     if imgui.is_item_hovered():
-        imgui.set_tooltip(holdmod.ENGAGE_TIP)
+        ui.tooltip(holdmod.ENGAGE_TIP)
     imgui.same_line()
     if ui.chip("take##graph"):
         hold.take()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(holdmod.TAKE_TIP)
+        ui.tooltip(holdmod.TAKE_TIP)
     imgui.same_line()
     if ui.chip("drop##graph"):
         hold.drop()
     if imgui.is_item_hovered():
-        imgui.set_tooltip(holdmod.DROP_TIP)
+        ui.tooltip(holdmod.DROP_TIP)
     return True
 
 
@@ -934,7 +934,7 @@ def _monitor(panel, origin, avail) -> None:
     dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "PROJECTOR")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
-        imgui.set_tooltip(MONITOR_TIP)
+        ui.tooltip(MONITOR_TIP)
 
 
 def _area_chips(st: dict) -> None:

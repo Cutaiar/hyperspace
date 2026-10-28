@@ -78,6 +78,8 @@ from .audio import AudioEngine
 from .bands import CEIL
 from .control import Control
 from .geometry import EYE_DISTANCE, EYE_FOV, px_per_unit
+from .hold import Hold, preview_renderer, preview_size
+from .hold import register as register_hold
 from .hotreload import HotReloader
 from .learn import Learn
 from .library import Library, Marks
@@ -87,8 +89,6 @@ from .media import proxy as media_proxy
 from .media import publish
 from .media.channels import MediaState
 from .media.folder import MediaFolder
-from .hold import Hold, preview_renderer, preview_size
-from .hold import register as register_hold
 from .outputs import Offscreen, Presenter, Preview, Slot, Switches, View
 from .overlay import RENDER_DEFAULT, GlfwBackend, Output, register_switches, render_index
 from .params import Registry, build_registry
