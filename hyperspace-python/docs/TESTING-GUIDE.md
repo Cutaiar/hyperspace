@@ -157,6 +157,11 @@ changes brightness or volume instead).
     dream worker, L169 with the TV for two windows), then L173 with both
     Macs on `plan-36-build` last of all, since a `/7` file is refused by
     an older build (it supersedes L168's `/6`).
+21. Plan 39, vision, after `uv sync` on `plan-39-vision`: L185 and L186
+    on the laptop first (a still and the camera, no person needed), then
+    L182 with the camera, L183 with a dancer on the projector, L184 with
+    the camera on a tripod and the party light, L187 on the show Mac with
+    two cameras, and L188 on the projector.
 
 ## Running the automated tests (tiers)
 
@@ -171,7 +176,9 @@ tiers that `tests/conftest.py` marks by name:
 - `slow`: about 1 s or more each (torch dream, undo, plan 12 presets,
   whole-library sweeps).
 - `live`: Syphon, NDI and file loopbacks with timeouts; they share global
-  names, so they run on one worker and can fail under heavy load.
+  names, so they run on one worker and can fail under heavy load. Plan
+  39's two real-model tests are here too (Apple Vision and torchvision,
+  once each on a made-up frame: `uv run pytest -q --all tests/test_segment.py`).
 
 `uv run pytest --all` runs every tier (about 50 s). Pick a tier with
 `-m golden`, `-m slow` or `-m live` (add `--all` or name the file), and
@@ -359,6 +366,13 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L174 | Hold, then build a new look behind GRAPH (plan 38) | 1 | laptop, a second screen, the copy, music | 377, 378 |
 | L175 | Take and drop (plan 38) | 1 | laptop, a second screen, the copy | 379, 380 |
 | L176 | What a hold costs; a band on a held setting (plan 38) | 1 | the show Mac, music, a Syphon or NDI source | 382, 383 |
+| L182 | A webcam cut by person; the cut-out starter; the quality levels (plan 39) | 1 | show Mac, a camera, the copy | 384, 385 |
+| L183 | The edge and the flicker, with a dancer (plan 39) | 1 | the projector, a camera, a dancer | 386 |
+| L184 | Motion on a still camera, and the party light (plan 39) | 1 | a camera on a tripod, a party light | 387 |
+| L185 | A still as a mask; a mask on a window (plan 39) | 1 | laptop, a still, the copy | 388, 389 |
+| L186 | Edges on the shape, on the camera, into a cut (plan 39) | 1 | laptop or the projector, a camera | 390 |
+| L187 | Two cameras, two segments; unplug a camera (plan 39) | 1 | show Mac, two cameras | 391, 392 |
+| L188 | A half-transparent face over a bright picture, cut-through on and off (plan 39) | 1 | the projector, a still, the gate Mac | 393 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -4398,6 +4412,189 @@ brightness, the frame rate falls with GRAPH closed, or the projector's
 live input stutters.
 
 *(checks 382, 383)*
+## Plan 39: vision (L182-L188)
+
+Plan 39 lets a picture be cut into its foreground and its background:
+a **segment** node takes any picture (a camera above all) and puts out the
+person (`segment.fg`), the room without them (`segment.bg`) and the
+person's shape as a mask (`segment.mask`). A **matte** turns any picture
+into a mask (its bright parts, its coverage, or a colour), a **cut** cuts a
+picture by a mask, and **edges** is a new effect that draws a picture's
+outlines. A mask is a purple cable; wired straight into a window it shows
+white where it passes and black elsewhere. On `plan-39-vision`; run
+`uv sync` first (it adds Apple Vision's Python wrapper). The first time a
+camera opens, macOS asks whether the terminal may use it: allow it. A
+preset with a segment, matte or cut shows black on an older build, so
+**both Macs run this build before such a preset is shared**.
+
+Its tests: the fast tier is 4,105 passed (2 skipped) and the goldens 136
+passed over 789 pictures, 32 of them new and 8 re-recorded (the two
+backdrop fixtures, for the honest cut-through: L188). Its own files are
+`tests/test_fx_edges.py`, `tests/test_graph_masks.py`,
+`tests/test_graph_cut.py`, `tests/test_segment.py`,
+`tests/test_graph_segment.py` and `tests/test_plan39_graph.py`. Two tests
+run the real models once each on a made-up frame; they are in the `live`
+tier, so `uv run pytest -q` leaves them out: run them with
+`uv run pytest -q --all tests/test_segment.py` (Vision only on a Mac). The
+checks are 384-393 (group AJ). Find the new nodes on GRAPH's right-click
+menu: **media ▸** segment, **masks ▸** matte and cut, and starters ▸
+**cut-out**.
+
+#### L182. A webcam cut by person: you over the shape, then the room with your hole
+
+**Needs:** the show Mac (or the laptop) with a camera; the copy.
+
+**Do:** put the camera on channel a (MEDIA). On GRAPH right-click empty
+canvas → starters ▸ cut-out. Stand in front of the camera. Then rewire the
+segment's `bg` pin into the composite's `over` instead of `fg`; then wire
+the segment's `mask` pin to output 2. Step `segment.quality` through fast,
+balanced and accurate, watching the edge, the node's rate and the SYSTEM
+page's frame time. Turn `segment.on` off and on. Use the starter a second
+time, then undo. If plan 38's hold is on this build: HOLD, New, turn a knob
+on the segment, DROP.
+
+**Right if:** you stand over the turning shape with the room gone, the cut
+on you (not upside down, not beside you) a frame or two behind; the node
+says `256×144 · Vision fast · a frame or two late · ~30 fps`; `bg` shows
+the room with a person-shaped hole and the shape through it; output 2
+shows your white silhouette; each quality level gives a finer edge and the
+frame time does not move; off shows the picture unchanged; the second
+starter's nodes and cables are all drawn and one undo removes them; while
+held the projector does not change.
+
+**Wrong if:** the cut is upside down, squashed or beside you; the node
+waits for ever or shows an error (check `uv sync` and the camera
+permission); the frame time rises with the quality; a knob moves the
+projector while held.
+
+*(checks 384, 385)*
+
+#### L183. The edge and the flicker, with a dancer
+
+**Needs:** L182's set-up on the projector; a dancer.
+
+**Do:** with the dancer moving, raise `segment.feather` from 0 to 8, then
+`segment.smooth` from 0 to 0.6; then smooth to 0.95, have the dancer step
+out, and wait.
+
+**Right if:** the feather softens the edge and hides its steps; smooth
+calms the flicker along the edge, at the cost of a trail on fast moves; at
+0.95 the dancer still fades out completely after some seconds.
+
+**Wrong if:** the feather does nothing, or smooth leaves a frozen ghost
+where the dancer stood.
+
+*(check 386)*
+
+#### L184. Motion on a still camera, and the party light
+
+**Needs:** a camera on a tripod pointed at the room; L182's wiring; a party
+light.
+
+**Do:** set `segment.mode` to motion. Walk through the frame; stand still
+for three seconds (`segment.learn`); move again; raise `segment.sense` a
+little. Then sweep the party light across the room.
+
+**Right if:** the walker is cut out and the still room is gone; standing
+still you fade into the room over about three seconds and come back at
+once when you move; more sense ignores small flickers; the swept light
+counts as movement until it has been still for a moment (expected: motion
+cannot tell light from a person).
+
+**Wrong if:** everything stays cut out, or nothing ever is.
+
+*(check 387)*
+
+#### L185. A still as a mask; a mask on a window
+
+**Needs:** the laptop; the copy; a still with a clear bright shape in the
+media folder.
+
+**Do:** load the `cut-out` fixture through a scratch library
+(`tests/fixtures/presets/cut-out.json`), or build it: the still on channel
+a, from masks ▸ a matte and a cut, and a composite; wire `channel.a →
+matte.image`, `matte → cut.mask`, `scene → kaleido.image`, `kaleido →
+cut.image`, `cut → composite.over`, `scene → composite.under`, `composite →
+All outputs`. Turn `matte.key`, `matte.soft`, `matte.feather`; set
+`matte.from` to chroma and turn `matte.hue` onto a colour in the still.
+Turn `cut.amount` to 0.5; turn on `cut.invert`; unwire the mask. Then wire
+the matte straight into All outputs, look at its cable, and try to wire
+the still straight into the cut's mask.
+
+**Right if:** the kaleidoscope shows only where the still is bright (or
+the keyed colour), the right way up, with the shape showing through its
+empty parts; half amount brings it back at half strength elsewhere;
+invert swaps the two; no mask shows the kaleidoscope everywhere. The
+matte on a window is a soft white shape on black filling the window, its
+cable purple into the red pin; the picture into the mask is refused with
+"put a matte between".
+
+**Wrong if:** the cut area is upside down, mirrored or stretched against
+the still, black inside the bright shape, or a knob does nothing.
+
+*(checks 388, 389)*
+
+#### L186. Edges on the shape, on the camera, and into a cut
+
+**Needs:** the laptop or the projector; a camera for the second part.
+
+**Do:** wire `scene → edges → All outputs` and switch edges on. Sweep its
+threshold, raise its glow to 4, try its three colours. Then feed it the
+camera instead. Last, wire `edges → matte → cut.mask` with the pattern
+into the cut's picture.
+
+**Right if:** the shape's lines draw as thin white outlines on black; the
+threshold thins them to only the strong lines; the glow adds a halo; the
+direction colour turns as the shape turns; the room's door frames and
+people's outlines draw steadily from the camera; the pattern shows only
+along the lines.
+
+**Wrong if:** flat areas are not black, the frame's border draws as a
+line, or the camera's picture sparkles everywhere at the default
+threshold.
+
+*(check 390)*
+
+#### L187. Two cameras, two segments; unplug a camera
+
+**Needs:** the show Mac; two cameras.
+
+**Do:** camera 1 on channel a, camera 2 on channel b; add two segments
+(media ▸ twice), one fed by each, each `fg` over the shape on its own
+output; watch the SYSTEM page's frame time. Then unplug camera 1, plug it
+back, delete a segment, and quit.
+
+**Right if:** both cut their own person, each node shows its own rate,
+the frame time stays within the show's budget; unplugged, the node says
+`no frame on channel a: its picture through, whole` and nothing stalls;
+plugged back, the cut returns within a second or two; deleting a node and
+quitting do not hitch.
+
+**Wrong if:** one segment starves, the frame time spikes, the app stalls
+or the last cut stays frozen over a black channel.
+
+*(checks 391, 392)*
+
+#### L188. A half-transparent face over a bright picture, cut-through on and off
+
+**Needs:** the projector (an opaque window); a bright still; the gate Mac
+for the eight re-recorded goldens.
+
+**Do:** put the still on channel a; wire `channel.a → composite.under`,
+`scene → composite.over`, `composite → All outputs`; faces on, lines and
+points off, a pattern with see-through fills. Flip `view.cut_through` a
+few times. Again with the still on the backdrop and `scene →
+backdrop.scene` wired. Open the eight re-recorded goldens
+(`backdrop-still` and `media-chain-backdrop`, the `present` states).
+
+**Right if:** nothing changes when you flip it: the faces sit over the
+white at their own strength, their colour readable; the goldens show the
+same.
+
+**Wrong if:** the faces wash out toward white, or brighten with the switch
+on.
+
+*(check 393)*
 
 # Part 2 — tests that need hardware
 

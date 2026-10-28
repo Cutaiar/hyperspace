@@ -219,6 +219,7 @@ replaces a row, rewrite that row instead of adding a new one.
 | **Hands through effects** (`output.N.through`, off by default). When on, that output's hands' layer is composited after the look-back composite and before the first effect. With the scene off and through on, the output shows the hands alone through the effects. | `graph.default_graph` (`composite(scene+hands)`, `fx(scene+hands)`) | owner (switch); rows 79, 193 (where they go in) |
 | The guide and the tethers' labels are never bent: when hands go through effects, they are drawn in a layer of their own laid on afterwards. | `Ghost.readout` | row 80 |
 | **Instances are laid out by `view.inst_layout`: GRID, HEX or RING.** | `render.inst_positions` | row 71 |
+| **The cut-through blend is a window's, not a ground's** (plan 39 T1): the squared-alpha cut-through (`SRC_ALPHA, ONE_MINUS_SRC_ALPHA`) is taken only when the window is see-through (`Renderer.bg_alpha < 1`, overlay mode); a scene cleared to a zero ground — laid into a composite's `over` or over the backdrop — always takes the separate blend, so its picture is honest premultiplied data and `view.cut_through` changes nothing on an opaque window. Eight backdrop fixture goldens were re-recorded for it, no factory preset's. | `render.draw_scene` | row 448 |
 
 ## Media
 
@@ -331,6 +332,32 @@ replaces a row, rewrite that row instead of adding a new one.
 | **Drop puts back the preset's part**, as one undo step to the hold point (the look, the graph and the show's cables, the routes, the desk's preset layer, the macros, the name and dot); the rig's params stay. | `hold._preset_part`, `undo.Undo.revert` | rows 432 (D3, rec), 438, 439 |
 | **The preview shows only behind GRAPH**, drawn only on frames the page shows it. | `ui_graph._backdrop`, `app._draw_preview` | row 433 (D4, rec) |
 | **A hold holds every output**; the PROJECTOR inset is the laptop's view of the room. | `app._draw_render`, `hold.Hold.program` | row 434 (D5, rec) |
+## Masks are their own wire (plan 39)
+
+The owner's two sentences (2026-10-27), which the plan builds on:
+
+- **One concept.** "I can take an arbitrary bitmap and do foreground/background
+  segmentation on that, and then have those two things come out of that node
+  as two bitmaps. A separate node could handle the conversion of a bitmap
+  into a mask."
+- **Alpha is not a mask.** "Alpha is: how transparent is this thing? A mask
+  means that I have a pattern here, and it's a very binary thing. Either the
+  pixel passes, or it doesn't. I don't necessarily want to ride on alpha to
+  make that happen … have an image as your foreground, then put a mask over
+  that image that cuts out part of that image, and then allow the background
+  to shine through."
+
+| Decision | Where | Who |
+|---|---|---|
+| **A mask is its own wire** (`mask`, purple): one channel, a pixel passes or it does not, at its maker's size; it never rides in a picture's alpha. The converters are explicit: `matte` (picture → mask), `cut` (picture + mask → picture). | `graph.MASK`, `graph.MatteNode`, `graph.CutNode`, `masks.py` | owner (plan 39 decision 1); row 440 |
+| **A mask may be wired where a picture is taken**: white where it passes, black elsewhere, fitted by cover. One-way: a picture into a mask port is refused in words; the converter is always a `matte`. | `graph._Build._taken`, `graph.MaskPicture`, `graph.PICTURE_INTO_MASK` | owner (decision 2); rows 441, 453 |
+| **`segment` takes any picture and makes two**, `segment.fg` and `segment.bg`, and its matte as a third pin, `segment.mask`; picture → mask is the separate `matte`. | `graph.SegmentNode`, `graph.SegmentPin` | owner (decision 3); row 442 |
+| **Apple Vision first** (the Neural Engine), torchvision behind the same node; `[segment] backend` auto picks Vision on macOS. Dependency `pyobjc-framework-vision` (macOS only). | `segment.pick_backend`, `VisionBackend`, `TorchBackend` | owner (decision 4); row 443 |
+| **Person and motion** in this build; `subject` is declared and refused in words. | `segment.mode` | owner (decision 5); rows 444, 486 |
+| **`cut` first**; a `mask` port on `composite` only if the two-node wiring feels like one too many at the machine. | `graph.CutNode` | owner (decision 6); row 445 |
+| **`edges` is an effect file**, landed first. | `shaders/fx/edges.glsl` | owner (decision 7); row 446 |
+| **Plan 39 ran in parallel** with plans 37 and 38, each on its own branch. | `plans/37-38-39-orchestrator-prompt.md` | owner (decision 8); row 447 |
+| A segment's worker exists only on the program renderer; the hold's preview passes a person segment through. A held matte, cut or segment keeps its knobs for the projector. | `Renderer.segment_cfg`, `hold.HELD_GROUPS` | rows 484, 495, 496 |
 
 ## Face patterns
 
