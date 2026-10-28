@@ -153,6 +153,7 @@ from .graph import (
     rig_of,
 )
 from .lookback import Dreamer, DreamState, Lookback
+from .masks import MaskPasses
 from .media_tex import COVER, FIT_FS, MediaTextures, UiTextures, fit_scale
 from .outputs import Handoff, Presenter, Switches, View, capped, fit
 from .patterns import MODES, SPEED
@@ -1204,6 +1205,11 @@ class Renderer:
                 res.release()
         self._dim_prog = self._dim_vao = None
         self.dim_error = ""
+        # plan 39 T2: the mask passes, likewise — compiled again from
+        # masks.py as it is now on the next ask (`mask_passes`)
+        mp = self.__dict__.pop("_mask_passes", None)
+        if mp is not None:
+            mp.release()
         # plan 21's frame textures and the program that shows them: dropped,
         # made again from this module's source on next use. getattr: a
         # renderer from before the outputs existed has none of them
@@ -2053,7 +2059,8 @@ class Renderer:
         self._lay_prog, self._lay_vao = prog, vao
         return prog, vao
 
-    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1"
+    def _frame_target(self, key, size: tuple[int, int], dtype: str = "f1",
+                      components: int = 4
                       ) -> tuple[moderngl.Texture, moderngl.Framebuffer]:
         """The frame texture for an end (plan 35: by its name): RGBA8 at the frame's size,
         LINEAR (a 1:1 show reads it by texelFetch), made on first use and
@@ -2063,7 +2070,8 @@ class Renderer:
         any other key, after `SIZED_KEEP_FRAMES` idle. Plan 34 D:
         `dtype` "f2" a half-float one (a delay's picture refitted, which
         must not quantise); a stored texture of another dtype is made
-        again."""
+        again. Plan 39 T2: `components` 1 a one-channel one (a mask,
+        `masks.MaskPasses`), likewise made again when it differs."""
         frames = getattr(self, "_frames", None)
         if frames is None:
             frames = self._frames = {}
@@ -2073,14 +2081,15 @@ class Renderer:
         self.__dict__.setdefault("_sized_used", set()).add(key)
         have = frames.get(key)
         if (have is not None and have[0].size == size
-                and getattr(have[0], "dtype", "f1") == dtype):
+                and getattr(have[0], "dtype", "f1") == dtype
+                and getattr(have[0], "components", 4) == components):
             return have
         if have is not None:
             for res in (have[1], have[0]):
                 res.release()
             del frames[key]
-        tex = self.ctx.texture(size, 4) if dtype == "f1" else self.ctx.texture(size, 4,
-                                                                                dtype=dtype)
+        tex = (self.ctx.texture(size, components) if dtype == "f1"
+               else self.ctx.texture(size, components, dtype=dtype))
         try:
             tex.repeat_x = tex.repeat_y = False
             tex.filter = (moderngl.LINEAR, moderngl.LINEAR)
@@ -2090,6 +2099,17 @@ class Renderer:
             raise
         frames[key] = (tex, fbo)
         return tex, fbo
+
+    def mask_passes(self) -> MaskPasses:
+        """The mask passes (plan 39 T2, `masks.MaskPasses`): compiled on
+        first ask and kept, handed `_frame_target` for their one-channel
+        targets (late-bound, so a spy on it sees their asks too). What the
+        graph's mask nodes paint through (`graph.MatteNode`, `MaskPicture`)."""
+        got = self.__dict__.get("_mask_passes")
+        if got is None:
+            got = self._mask_passes = MaskPasses(
+                self.ctx, lambda *a, **k: self._frame_target(*a, **k))
+        return got
 
     def _release_frames(self) -> None:
         for tex, fbo in (getattr(self, "_frames", None) or {}).values():

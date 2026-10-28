@@ -158,6 +158,7 @@ from .media import channels as media_channels
 from .modifiers import Modifier
 from .palettecompat import palette_slice
 from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset.* names
+    MATTE_GROUP,
     PAN_IDS,
     PERFORMANCE_GROUPS,
     PLANES,
@@ -167,11 +168,13 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     UNITS,
     UNITS_KEY,
     declare_lookbacks,
+    declare_mattes,
     declare_resizes,
     declare_switches,
     is_instance_id,
     is_lookback_id,
     is_lookback_knob,
+    is_matte_id,
     is_resize_id,
     is_switch_id,
     pan_world,
@@ -326,7 +329,8 @@ class GraphSection:
       S) each switch's `switch[.n].select` (`params.declare_switches`: a
       performance param, its pick in the preset's `values`); and (plan
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
-      entry, reached or not);
+      entry, reached or not); and (plan 39 T2) each matte's `matte[.n].*`
+      (`params.declare_mattes`, likewise);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
       the frame is built from: `graph.EMPTY` with nothing landed) and
       `Renderer.ghost_states` (the extra hands nodes' states, each drawn
@@ -438,6 +442,8 @@ class GraphSection:
         # plan 34 Z: each resize's values, by its entry — reached or not, so
         # an unwired resize keeps its knobs as an unwired switch its pick
         declare_resizes(reg, [z.name for z in spec.resizes] if spec is not None else [])
+        # plan 39 T2: each matte's values, by its entry, as a resize's
+        declare_mattes(reg, [m.name for m in spec.mattes] if spec is not None else [])
         # plan 36 T4: each extra look-back's own ring and trail, by its entry
         declare_lookbacks(reg, [lb.name for lb in spec.lookbacks] if spec is not None else [])
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -545,8 +551,8 @@ LAYOUT_KEY = "layout"
 # the performance groups with no module presets: a macro's meaning is its
 # subscribers and a modifier's params are its entry, both the preset's
 # (plan 33 S: a switch's pick means nothing without the preset's graph;
-# plan 34 Z: nor a resize's values)
-NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP)
+# plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's)
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -828,7 +834,8 @@ class Presets:
                   if k in reg and reg[k].group in PERFORMANCE_GROUPS
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
-                  and not is_resize_id(k) and not is_lookback_id(k)}
+                  and not is_resize_id(k) and not is_lookback_id(k)
+                  and not is_matte_id(k)}
         doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -921,10 +928,10 @@ class Presets:
                 # a modifier's param is set by its entry (`modifiers`), never here
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
-                  or is_lookback_id(pid)
+                  or is_lookback_id(pid) or is_matte_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
-                # plan 34 Z: and a resize's values; plan 36 T3: and every
+                # plan 34 Z: and a resize's values (plan 39 T2: a matte's); plan 36 T3: and every
                 # effect's — instance 1 exists only where its graph names it)
                 later[pid] = v
             elif p is None:

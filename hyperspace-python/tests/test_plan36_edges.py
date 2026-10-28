@@ -158,8 +158,9 @@ def test_wired_the_cover_is_the_scenes_faces_mask():
     assert spec.notes == ("wire scene.cover → acid.image — scene.cover is "
                           + G.PIN_WORDS["scene.cover"],)
     spec = G.read_graph(wired(*FRAME, ("scene", "lookback.cover")))
+    # (plan 39 T2: the refusal names the converter)
     assert spec.notes == (("wire scene → lookback.cover — scene makes a picture, "
-                           "lookback.cover takes a mask"),)
+                           "lookback.cover takes a mask — put a matte between"),)
 
 
 def test_the_migration_wires_the_cover_where_both_are_reached():

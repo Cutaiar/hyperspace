@@ -87,7 +87,16 @@ from .media import channels as media_channels
 from .media.transport import LOOPS as MEDIA_LOOPS
 from .tapers import Taper
 from .tapers import clamp as _clamp
-from .view import RESIZE_ASPECTS, RESIZE_FILTERS, RESIZE_FITS, RESIZE_SIDES, ResizeState
+from .view import (
+    MATTE_FEATHER,
+    MATTE_FROM,
+    RESIZE_ASPECTS,
+    RESIZE_FILTERS,
+    RESIZE_FITS,
+    RESIZE_SIDES,
+    MatteState,
+    ResizeState,
+)
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
 # field.py's layouts, in its order: three flat, then the six 3D lattices
@@ -121,8 +130,10 @@ F_KEYS = 8
 # while its graph holds the switch (declare_switches)
 # `resize` (plan 34 Z): each resize node's size, aspect, fit, filter and
 # crop, the preset's, declared while its graph holds the entry (declare_resizes)
+# `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
+# preset's, declared while its graph holds the entry (declare_mattes)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "matte", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -1077,6 +1088,91 @@ def declare_resizes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 39 T2: the mattes' values ----
+MATTE_GROUP = "matte"
+# `matte[.n].from` is the param; its state's field is `source` (`from` is a keyword)
+_MATTE_KEYS = ("from", "key", "soft", "invert", "feather", "hue", "sat")
+_MATTE_ATTR = {"from": "source"}
+_MATTE_ID = re.compile(r"matte(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_MATTE_KEYS) + ")")
+
+
+def matte_ids(name: str) -> list[str]:
+    """Matte node `name`'s params (`matte.2` → `matte.2.from` …), in order."""
+    return [f"{name}.{k}" for k in _MATTE_KEYS]
+
+
+def is_matte_id(pid: str) -> bool:
+    """Is `pid` one of a matte's values — one that exists only while a
+    preset's graph holds that matte (plan 39 T2)? A preset load sorts such
+    ids against the graph it lands, as it does a resize's."""
+    return bool(_MATTE_ID.fullmatch(pid))
+
+
+def _matte_state(r: Registry) -> dict[str, MatteState]:
+    """The states the matte params write, matte name → `MatteState`: the
+    view state's (`ViewState.mattes`, which the renderer reads once a
+    frame), kept by `build_registry` as `r.matte_state`; a dict of the
+    registry's own for one built without a view (as `_resize_state`)."""
+    state = getattr(r, "matte_state", None)
+    if not isinstance(state, dict):
+        state = r.matte_state = {}
+    return state
+
+
+_MATTE_TIPS = {
+    "from": "What makes a pixel of {name}'s picture pass: its brightness (luma), its "
+            "own coverage (alpha), or how near its colour is to {name}'s hue (chroma).",
+    "key": "Where a pixel of {name}'s picture starts to pass, 0–1: at or past it, it "
+           "passes.",
+    "soft": "The width of {name}'s edge either side of the key: 0 is hard, pass or not.",
+    "invert": "{name} passes what it would not, and the other way round.",
+    "feather": "A blur of {name}'s mask, in pixels: 0 keeps the edge as the key makes it.",
+    "hue": "The colour {name} keys on in chroma, round the wheel (0 red, 0.33 green, "
+           "0.67 blue).",
+    "sat": "How saturated the colour {name} keys on in chroma is: 0 keys the greys.",
+}
+
+
+def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
+    """The mattes' params (plan 39 T2), as `declare_resizes` does the
+    resizes': for each matte `names` holds, `from` (an enum over
+    `MATTE_FROM`), `key` 0–1, `soft` 0–0.5, `invert`, `feather` 0–32 px and
+    the chroma key's `hue` and `sat` (0–1) — group `matte` (a performance
+    group: the preset's), modulatable — over a `MatteState` made when first
+    declared and kept while the name stays; those of every matte no longer
+    named dropped, with their states. Returns the ids that appeared or went."""
+    state = _matte_state(r)
+    want = {n: matte_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == MATTE_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_resizes`')
+        if st is None:
+            st = state[name] = MatteState()
+        for pid, key in zip(ids, _MATTE_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _MATTE_TIPS[key].format(name=name)
+            got = _attr(st, _MATTE_ATTR.get(key, key))
+            if key == "from":
+                r.enum(pid, label, *got, list(MATTE_FROM), group=MATTE_GROUP, tip=tip)
+            elif key == "invert":
+                r.toggle(pid, label, *got, group=MATTE_GROUP, tip=tip)
+            else:
+                hi = {"soft": 0.5, "feather": MATTE_FEATHER}.get(key, 1.0)
+                r.continuous(pid, label, *got, lo=0.0, hi=hi, group=MATTE_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 36 T4: the extra look-backs' values ----
 # `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
 # the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
@@ -1241,6 +1337,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.resize_state = sizes
+    # plan 39 T2: the mattes' values likewise (`ViewState.mattes`)
+    mattes = getattr(view, "mattes", None)
+    if not isinstance(mattes, dict):
+        mattes = {}
+        try:
+            view.mattes = mattes
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.matte_state = mattes
     # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
     rings = getattr(view, "lookback", None)
     if not isinstance(rings, dict):

@@ -119,10 +119,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
     # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
     # T4: + 2 × 8, the resize into a delay onto the faces and the crop;
-    # plan 39 T0: + 8, the scene through edges)
+    # plan 39 T0: + 8, the scene through edges; plan 39 T2: + 8, a matte
+    # wired straight into All outputs)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
                                    + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
-                                   + 2 * 8 + 8)
+                                   + 2 * 8 + 8 + 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -164,7 +165,8 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
         # (the blank frame: the strip says it holds nothing, plan 36 T3)
         want = [NO_GRAPH_SAID] if slug == "blank-frame" else []
         assert said["missing"] == [] and said["notes"] == want, slug
-        no_hands = ("blank-frame", "channel-out-only")
+        # (plan 39 T2: the matte into All outputs wires no hands either)
+        no_hands = ("blank-frame", "channel-out-only", "mask-as-picture")
         assert said["hands_shown"] is (slug not in no_hands), slug
         if slug == "blank-frame":
             assert all(n.startswith("output.") for n in said["nodes"]), said["nodes"]
@@ -210,7 +212,9 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
 # the route words of those presets' through states
-GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene")   # + plan 39 T0's
+# (plan 39 T0's `edges-scene` and T2's `mask-as-picture`: new pictures —
+# none of the 741 moved)
+GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture")
 # (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
 # scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
 # D1's `into output.N` sat on the window's shown picture, which no wire
