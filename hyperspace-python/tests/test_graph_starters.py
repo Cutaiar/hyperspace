@@ -104,7 +104,7 @@ def test_the_starters_are_their_own_submenu_first():
     assert graphview.PICKER_GROUPS[0] == "starters"
     assert [w for _, w in graphview.STARTERS] == [
         "scene chain", "tracers", "tracers + dream", "dream on a picture",
-        "channel to backdrop"]
+        "channel to backdrop", "cut-out"]               # (plan 39 T5: the cut-out)
 
 
 def test_scene_chain_on_a_blank_preset(tmp_path):

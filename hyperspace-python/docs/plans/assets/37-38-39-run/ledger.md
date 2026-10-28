@@ -191,3 +191,110 @@ See `decisions.md`.
   pictures), fast **4046 passed, 2 skipped**. Pushed. T4 dispatched off
   5c3f226 with the plan 38 seam (no workers in the preview) and the flip
   flag in PROMOTE_FS/fit in its brief.
+- **37-C5** DONE_WITH_CONCERNS → PR #261 (`plan-37-c5-docs`, 9ffcd27, docs
+  only): rows **417–429 + 460** (fourteen: D1–D5, then the build's
+  rulings; 460 the sheets/nearest-kept/map), checks **370–376 (AH)**,
+  ARCHITECTURE (the GRAPH page paragraph), DECISIONS ("Nodes as pictures
+  (plan 37)"), the plan file (built: P1, P3; P2 a dry run awaiting the
+  owner's list), README, CHECKPOINT, TESTING-GUIDE. **Merged** into
+  `plan-37-pictures` @ (see git) — **plan 37's branch is complete** bar P2.
+  B4 told to overflow from 461.
+- **38-B4** DONE → PR #262 (`plan-38-b4-docs`, 7d87c9f, docs only): rows
+  **430–439 + 461–470** (twenty: D1–D5 (rec), then the rulings; 460 skipped
+  as plan 37's), checks **377–383 (AI)**, `38-hold.md` corrected ("reads
+  through" row) + "What changed in the build", ARCHITECTURE §2 + Host
+  row + §4 (`hold.py`), DECISIONS table, README, CHECKPOINT, TESTING-GUIDE.
+  **Merged** into `plan-38-hold` @ 24a899f — **plan 38 complete**.
+
+## Merges into the integration branch
+1. **plan 38** — `plan-38-hold` @ 24a899f → `plan-37-38-39-integration`
+   @ **9560027** (clean). Gates: see below (running).
+- **Offered to the owner ahead of the rest** (the prompt's §3): PR #251
+  retargeted at `main`, marked ready (plan 38 + #248's docs); PR #263
+  `plan-39-t0-edges → main` (T0's edges.glsl + #248's docs). If either is
+  merged first, the integration branch merges `main`.
+   Gates on 9560027 (plan 38 in): fast **3990 passed, 2 skipped**; full
+   suite **4201 passed, 2 skipped** (one load-flaky,
+   `test_migrate_library::test_the_real_picture_check_passes_an_old_preset`,
+   passes serially); goldens **128 passed**, 757 pictures unmoved;
+   `frame-signatures.json` unchanged. Pushed.
+- **39-T4** DONE_WITH_CONCERNS → PR #265 (`plan-39-t4-segment`, 4 commits +
+  review dd48e12): `segment.py` (worker, Vision + torch backends,
+  `pick_backend`), `SegmentNode` + pins + motion + the flip everywhere
+  (`PROMOTE_FS`/`fit`/`MaskPicture`/`mask_port`), `declare_segments`,
+  `pyobjc-framework-vision`, the segment-motion fixture (+8 goldens), the
+  plan 38 seam (no worker without `segment_cfg`; close closes only its
+  own). Review `reviews/39-T4-review.md`: Needs fixes — `smooth` quantised
+  to a permanent ghost (now float32), `laid_over` through a segment, plus
+  minors (frame-thread join, shared exit deadline, live-test markers,
+  rows). **Merged** into `plan-39-vision` @ 8a56a20: goldens **136 passed**
+  (789 pictures), fast **4084 passed, 2 skipped**. Pushed. T5 dispatched.
+2. **plan 39 (T0–T4)** — `plan-39-vision` @ 8a56a20 → integration @
+   **2b185ea** (branch `integ-39`, fast-forwarded). One conflict
+   (`preset.py`: the declares into `_settle` through `hold.keep`);
+   `PROGRAM_IDS` + `HELD_GROUPS` gain the three kinds (decisions 14);
+   `masks` on `hotreload.MODULES`. Gates: fast **4120 passed, 2 skipped**;
+   full **4342 passed, 2 skipped** (no flakes this run); goldens **136
+   passed, 789 pictures**, identical to `plan-39-vision`; signatures
+   unchanged. T5/T6 land on `plan-39-vision` and merge after as a second
+   step.
+- **39-T5** DONE_WITH_CONCERNS → PR #267 (`plan-39-t5-graph`, b2ac105 +
+  442cd89 + review ee302ed): picker (masks ▸ with matte/cut; media ▸
+  with segment — the channels stay under pictures ▸; one word to fold
+  back), the cut-out starter (exactly W6's four wires, says what it
+  replaced and that the scene's geometry is unwired on a blank preset),
+  mask cables purple by the maker's type, `segment.N` pins drawn, words
+  on stand-ins, `/7` round trips. Review `reviews/39-T5-review.md`:
+  Approved (minors: `returns()` keyed on the taker; `_fresh` removed; a
+  row for insert-effect on a promoted cable). **Merged** into
+  `plan-39-vision` @ 505739f: fast **4105 passed, 2 skipped**; goldens
+  **136**, 789. Pushed. T6 (docs) dispatched off 505739f; rows overflow
+  from 471.
+- **39-T6** DONE_WITH_CONCERNS → PR #268 (`plan-39-t6-docs`, b18b10e, docs
+  only): rows **440–459 + 471–497** (the eight owner decisions 440–447,
+  then the rulings), checks **384–393 (AJ)**, ARCHITECTURE (port types,
+  node/module/thread tables, boundaries), DECISIONS ("Masks are their
+  own wire"), the plan file (built), README, CHECKPOINT, TESTING-GUIDE,
+  SETUP. **Merged** into `plan-39-vision` @ 2a57af6 — **plan 39's branch
+  is complete**. Final integration agent dispatched: plan 39 (T5–T6) then
+  plan 37 into the integration branch, docs reconciled once.
+3. **plan 39 (T5–T6) then plan 37** — branch `integ-37`: 1feddab (plan 39
+   T5–T6, docs reconciled with plan 38's) then **96773ca** (plan 37
+   C1–C5): `ui_graph.py` resolved (hold chips first, plan 36's, the tint
+   chip last; C1's canvas/node kept); thumbnails read through
+   `ui_graph.picture_sources` → `hold.canvas_renderer` (the preview has
+   its own `PreviewTextures` while held; output 1's node shows the
+   monitor), five tests in `tests/test_hold_thumbnails.py`; `THUMBS["cut"]`
+   added, matte and segment stay text (row 500 — a follow-up); the faces
+   map regenerated for plan 39's fixtures; register rows **417–500** in
+   order (498–500 the integrator's), groups AH/AI/AJ, TESTING-GUIDE
+   renumbered. Gates (integrator): fast **4227 passed, 2 skipped**; full
+   **4449 passed, 2 skipped** (one load-flaky media test, passes serially);
+   goldens **136 passed, 789 pictures**, `tests/golden` identical to
+   2b185ea; signatures unchanged against cb78963. Fast-forwarded.
+   Controller's own final gates below.
+
+## Final
+- Integration branch head **4a1e646** (96773ca + the run's records). The
+  controller's own gates on this Mac: fast tier **4227 passed, 2 skipped**;
+  full suite **4449 passed, 2 skipped** (one pre-existing load-flaky media
+  timing test, `test_a_slow_close_never_holds_the_frame_thread`, failed
+  under `-n auto` and passes serially); goldens **136 jobs, 789 pictures**
+  (757 at the base − 0 + 32 for four new fixtures; 8 + 4 re-recorded with
+  their reasons); `frame-signatures.json` unchanged; `hyperspace/library/`
+  byte-identical; ruff: the base's findings only, none in files the run
+  touched.
+- **Final PR #270** `plan-37-38-39-integration → main`, the owner merges.
+  Ahead of it, on their own: **PR #251** (plan 38) and **PR #263** (T0's
+  edges.glsl), both → main; if either lands first, this branch merges
+  `main`.
+- Waits on the owner: plan 37 D1 (the faces' list; two questions in
+  decisions 10), rows 417–500, hand checks 370–393.
+- **2026-10-27, after the owner's test at the machine ("works fine")**:
+  `main` had moved (PR #266, the GRAPH side column resizable); merged into
+  the integration branch @ eff4263 (two additive hunks in `ui_graph.py`:
+  an import, the page state's defaults). Gates: fast **4229 passed, 2
+  skipped**; full **4452 passed, 2 skipped** (a first run under heavy load
+  had four load failures, all passing on the re-run); goldens **136
+  passed**; signatures unchanged. PR #270 clean for the owner. The
+  owner's D1 answer (keep all 17) is on the branch (9ee0264, c5c0967).

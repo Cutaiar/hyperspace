@@ -1,6 +1,12 @@
 # Plan 39 — vision: foreground and background from any picture, masks as their own wire, edges
 
-**Status: agreed, not built (2026-10-27).** From the owner's ask of 2026-10-27
+**Status: built (2026-10-27)** on `plan-39-vision` (T0–T5, PRs #254, #252,
+#256, #260, #265, #267; merged into `plan-37-38-39-integration` with plan 38).
+Fast tier 4105 passed, 2 skipped; goldens 136 passed over 789 pictures (32
+new, 8 re-recorded, each with its reason under "What changed in the build");
+register rows 440–459 and 471–497; hand checks 384–393 (group AJ). `uv sync`
+on both Macs (`pyobjc-framework-vision`), and both on this build before a preset
+with `segment`, `matte` or `cut` is shared. Agreed 2026-10-27. From the owner's ask of 2026-10-27
 ("take real-time video feeds and segment them into foreground and background,
 possibly doing edge detection as well … use an image as a mask to lay on top
 of other images") and the spike that answered what it needs
@@ -193,6 +199,153 @@ grey, over black), **source** (the input's colour on the edges), **direction**
   backends are tested with a fake worker (as `test_dream.py` does) and one
   marked test each that runs the real model on a synthetic frame.
 
+## What changed in the build
+
+The plan above is the design; this is where the build differs from it, or
+chose within it. Each ruling was made by the controller on 2026-10-27 and
+has a row in [`DECISION-REGISTER.md`](../DECISION-REGISTER.md) (440–447 the
+owner's decisions as built, 448–459 and 471–497 the rulings), the owner to
+say keep or overturn. Built on `plan-39-vision` in six tasks, T0–T5 (PRs
+#254 edges, #252 the honest blend, #256 the mask wire and `matte`, #260
+`cut`, #265 `segment` and the worker, #267 GRAPH and the pages), each
+reviewed, its findings fixed before merge; this page is T6.
+
+**Tests.** At 505739f (T0–T5 merged): the fast tier `uv run pytest -q`
+**4105 passed, 2 skipped** (3958 at the base, cb78963); the goldens
+`uv run pytest -q --all tests/test_golden_frames.py` **136 passed over 789
+pictures** — 757 before, 32 added by the four fixtures (`edges-scene`,
+`mask-as-picture`, `cut-out`, `segment-motion`, 8 each), and 8 re-recorded
+(below); `tests/fixtures/frame-signatures.json` unchanged (125 cases). The
+full suite `--all` at T5's head: 4325 passed, 2 skipped, with one
+GL-under-load failure that passes alone. New test files:
+`tests/test_fx_edges.py`, `tests/test_graph_masks.py`,
+`tests/test_graph_cut.py`, `tests/test_segment.py` (two of its tests run
+the real Vision and torch models once each on a synthetic frame, in the
+`live` tier: `uv run pytest -q --all tests/test_segment.py`),
+`tests/test_graph_segment.py`, `tests/test_plan39_graph.py`. At the merge
+into `plan-37-38-39-integration` (2b185ea, T0–T4 with plan 38): fast 4120,
+full 4342 passed, goldens identical.
+
+**Hand checks** 384–393, group AJ in
+[`11-hand-checks.md`](11-hand-checks.md): the ten above in order (AJ.1 is
+384 … AJ.10 is 393), with the GRAPH canvas steps and the hold folded into
+384 and the hot reload of `masks.py` into 389. None has been run by a
+person.
+
+**Both Macs.** `uv sync` on both (it adds `pyobjc-framework-vision` and
+`pyobjc-framework-coreml` 12.2.2 on macOS; `uv.lock` committed). Both Macs
+run this build before a preset with `segment`, `matte` or `cut` is shared:
+an older build reads such a `/7` section as black with a note.
+
+**As built, in the plan's terms.**
+
+- **The mask wire (W1).** As specified, with the promotion a build-time
+  render node, not `Node.picture_of_mask`: `_Build._taken` reads a mask
+  wired into an image port through one `graph.MaskPicture` per mask node
+  (`<mask>(picture)`: no GRAPH node, untimed, frame-sized — **no
+  `own_size`**), painting `masks.PROMOTE_FS` by cover. The refusal names
+  the matte. `scene.cover` stays a pin into `lookback.cover` alone and is
+  not promoted.
+- **The mask-port refit** (T2's review). A mask port binds the mask
+  refitted by cover to the frame's size (`graph.mask_port`: `MatteNode.image`,
+  `SegmentNode.image`), because `lookback.cover` reads 1:1 by the frame's
+  pixel; the promotion and `CUT_FS` (`u_scale`) fit the native mask
+  themselves, so one mask lands in the same place on every consumer.
+  `ARCHITECTURE.md`'s "a one-channel mask" is now "at its maker's size".
+- **`matte` (W2).** As specified; defaults luma, key 0.5, hard, no feather,
+  the chroma key on green (row 452); the feather two Gaussian passes in R8.
+- **`cut` (W3).** As specified; its own `#cut` target; no mask is the
+  picture byte-identical; `cut.amount` scales colour and alpha together.
+  **Laid-over-ness passes through a cut** (T3's review) and, when its `fg`
+  or `bg` is laid over, through a segment (T4's review), as through an
+  effect, so inserting either changes nothing where nothing is cut. The
+  `cut-out` goldens were re-recorded within T3, which recorded them.
+- **`segment` (W4).** As specified, with these departures: **`fg` and `bg`
+  are cut at the frame's size**, the input read through `OWN_FIT` (W4 said
+  the input's size; `SegmentPin` and `SegmentNode` have no `own_size`, which
+  `test_nothing_of_plan_33_has_an_own_size` holds); **Vision's matte is a
+  fixed 4:3 stretched over the image**, so the worker resamples it to the
+  frame's aspect (256×144 at 16:9; the node says that size, not 256×192);
+  **the orientation flag** is `rows_top_first(frame)` on the maker, read by
+  `graph.mask_of`, honoured by every mask pass (`CUT_FS`, `PROMOTE_FS`, the
+  fit); **the shortcut** also requires a cover fit and no `alpha_of`;
+  **`smooth` is mixed in float** (an 8-bit mix left a ghost near 1);
+  `sense` and `learn` are modulatable too; the motion edge is ±0.04 around
+  `sense` and `learn` a time constant in seconds. The preview renderer (plan
+  38's hold) gets no worker (ruling 13). `[segment]` is read raw (no
+  `config.DEFAULTS` entry).
+- **`edges` (W5).** As specified; source mode keeps the source's alpha
+  (`src × m`, the spec said `src.rgb × m`); `@order 75`.
+- **GRAPH (W6).** `segment` under a new **media ▸** heading (W6's MEDIA;
+  the channels' switch stays under pictures ▸), `matte` and `cut` under
+  **masks ▸**; the cut-out starter (never refused, says what it replaced;
+  adds no shape on a blank preset); a mask maker's cable is purple into a
+  red port; `segment.N`'s pins drawn for every instance; an unbuilt node's
+  state in words. The scene-chain starter now names what it replaced
+  (plan 36's follow-up).
+- **The fixtures (W6).** All four are wired fixtures (`WIRED_FIXTURES`), so
+  **none gets a frame-signature case** — the tool leaves out every wired
+  frame, which has no old section to prove against; each test file pins
+  its built graph's shape instead. `segment-motion`'s "two stills" is the
+  scene's motion over the one still in `tests/golden/media` (the literal
+  two-stills case is a GL test). `edges-scene`, `mask-as-picture`,
+  `cut-out`, `segment-motion` are ordinary files under
+  `tests/fixtures/presets/` (none ignored, none force-added).
+- **The eight goldens (T1, ruling 9).** The honest blend (`render.draw_scene`:
+  the cut-through only on a see-through window) moved
+  `backdrop-still|present|*` and `media-chain-backdrop|present|*` (four
+  states each): a scene laid over the **backdrop** also clears to a zero
+  ground (plan 32 R), which the spike missed by looking only at
+  composites. The old frames squared the faces' alpha and washed them
+  toward white; the new ones draw them at their own opacity. No factory
+  preset moved; `GOLDENS_DIGEST` re-pinned. The rule beat "pictures don't
+  move", as plan 36's ruling 5 did; hand check 393 is the eye's judgement.
+- **At the integration merge** (with plan 38, rulings 12–14): the three
+  declares settle in `GraphSection._settle` through `hold.keep`;
+  `hold.PROGRAM_IDS` and `hold.HELD_GROUPS` gain `matte`, `cut`, `segment`;
+  `masks` is on `hotreload.MODULES` before `render`, `segment` stays cold
+  (live threads). These lines are on `plan-37-38-39-integration`, not on
+  this branch.
+
+**Small edits outside the ownership table**, each disclosed in its task:
+`ui_presets.OVERVIEW_GROUPS` (one word each for `matte`, `cut`,
+`segment`), `view.py` (`MatteState`, `CutState`, `SegmentState`),
+`tests/conftest.py` (the two live tests by name), and the bookkeeping of
+`test_golden_frames.py`, `test_plan12_presets.py` (`edges` on
+`EFFECTS_IN_NO_PRESET`), `test_graph_free.py` (`/7` among the fixtures),
+`test_plan36_edges.py`, `test_hotreload.py`, `test_app_boundary.py`,
+`test_graph.py`, `test_dream.py` (the torch-import check reads
+`segment.py`'s top level), `test_graph_edit.py`, `test_graph_starters.py`.
+
+**The two media-test flakes** (ruling 8): `test_media_render::test_render_thread_never_waits`
+and `test_media_video::test_close_during_long_decode_is_quick` (and, in
+some runs, `test_media_publish`'s NDI timings, `test_dream::test_end_to_end_offscreen`,
+`test_migrate_library::test_the_real_picture_check_passes_an_old_preset`)
+fail now and then under `-n auto` on a loaded machine and pass serially
+(`-n0`); they are not this plan's.
+
+**Not verified by any person.** Every picture is a test's or a golden's.
+Nobody has segmented a real person, on either backend; Vision's
+stretch-over-the-image reading comes from the API's fixed sizes, not from a
+person on camera; the frame time with one or two cameras, the feather's
+cost, the Neural Engine and MPS shared with the dream, chroma on a real
+green screen, motion under party light, and the picker's new headings, the
+cut-out layout and the purple cable on screen are all unchecked. T5 left
+for the machine: checks 384 (the canvas steps and the hold), 389 (the
+cable colour).
+
+**Known rough edges.** A promoted mask cable has no "insert effect ▸" or
+"starters ▸" and dropping an effect onto it does not place it (row 492:
+`graphview._cable_ends` and `ui_graph`'s `c.type` checks);
+`ui_graph.render_picker`'s docstring does not name media ▸ or masks ▸;
+media ▸ holds one item; the cut-out's feed is fixed to channel a;
+`laid_over` does not see through `copy`, `resize` or `delay`; a segment's
+`fg`/`bg` lose an own-sized input's resolution; a backend failing every
+other frame flickers between cut and whole; motion keys shadows and light;
+a held program and its preview differ by design (no worker in the
+preview); no GL test runs a segment worker under a hold; an edit to
+`segment.py` needs a restart; the feather is 8-bit.
+
 ## Not in this plan
 
 - `subject` mode (Vision's subject lift) — declared, refused in words.
@@ -225,7 +378,7 @@ grey, over black), **source** (the input's colour on the edges), **direction**
 - Camera permission: the first `avfoundation` open prompts; `segment` on a
   channel with no frame says "no frame on channel a" and makes nothing.
 
-## Hand checks (group AJ, numbers assigned in the orchestrator prompt)
+## Hand checks (group AJ, 384–393 in [`11-hand-checks.md`](11-hand-checks.md))
 
 1. A webcam on `channel.a`, `segment` in person mode, `segment.fg` on a
    composite over the scene: the person over the polytope, the room gone;

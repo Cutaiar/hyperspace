@@ -2467,6 +2467,9 @@ class Panel:
         graph_ms = ui_graph.timing_line(self)     # plan 28 N2: the GRAPH page's own draw
         if graph_ms:
             imgui.text_disabled(graph_ms)
+        thumbs = ui_graph.thumbnail_line(self)    # plan 37 C1: the GRAPH page's thumbnails
+        if thumbs:
+            imgui.text_disabled(thumbs)
         imgui.spacing()
         self._section("devices")
         self._device_lines()
