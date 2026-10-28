@@ -2169,8 +2169,10 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
     things"): the same widgets, so an edit is the param's — undo, the
     preset's dirt and the modulation as on every page. Several groups get a
     small header each; more than `FOLD_AT` rows fold each group under a
-    collapsing header, a group holding a patched port open at first, the
-    open state kept per node (``st["side_open"]``). False: no param."""
+    collapsing header, the node's primary group (the first, the one that
+    names it: the faces pattern's "pattern" run, 2026-10-27) and a group
+    holding a patched port open at first, the open state kept per node
+    (``st["side_open"]``). False: no param."""
     groups = side_groups(panel, n)
     if not groups:
         return False
@@ -2182,7 +2184,7 @@ def _param_rows(panel, st: dict, n: graphview.VNode) -> bool:
         name = g or "params"
         if fold:
             if g not in opened:
-                opened[g] = g in patched
+                opened[g] = g in patched or g == groups[0][0]
             imgui.set_next_item_open(opened[g], imgui.Cond_.always)
             opened[g] = imgui.collapsing_header(f"{name} · {len(pids)}##fold.{g}")
             if not opened[g]:

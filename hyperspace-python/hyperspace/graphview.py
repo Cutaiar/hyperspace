@@ -408,7 +408,10 @@ def _resize_owner(pid: str, ctx: _Ctx) -> str | None:
 OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "view": _view_owner,
     "rot": "shape",
-    "pattern": "shape",
+    # the faces pattern's eight inputs (`pattern.mod.k`: scale, glow, warp,
+    # speed, colour, sharp …) on the pattern node, with its selector, its mix
+    # and its media (2026-10-27: they sat on the shape's pane, out of reach)
+    "pattern": "pattern",
     # plan 33 U: the backdrop's params on its node, a switch's pick on its switch
     "backdrop": "backdrop",
     "switch": _switch_owner,
@@ -1609,6 +1612,12 @@ def build(table: Bindings, reg: Registry, router: Router | None = None, devices=
     for n in nodes.values():
         if n.kind == "macro":
             n.ports.sort(key=lambda q: q.direction == OUT)
+    # the faces pattern's params in one run: the selector, the mix and the
+    # eight inputs (`_sub_group`'s "pattern"), then its media (2026-10-27)
+    pat = nodes.get("render:pattern")
+    if pat is not None:
+        pat.ports.sort(key=lambda q: (q.param is not None,
+                                      q.param is not None and q.group != "pattern"))
 
     # ---- the cables ----
     cut = set(getattr(router, "patch_cut", ()) or ()) if router is not None else set()
@@ -1832,6 +1841,12 @@ def _sub_group(pid: str, p: Param | None) -> str:
     if p.group in ("fx", "ghost", "output"):
         seg = pid.split(".")
         return ".".join(seg[:2]) if len(seg) > 2 else p.group
+    if p.group == "view":           # the pattern node's (`_view_owner`), 2026-10-27
+        key = pid.partition(".")[2]
+        if key.startswith("pattern"):
+            return "pattern"        # the selector and the mix, with the eight inputs
+        if key.startswith("media_"):
+            return "media"
     return p.group
 
 
