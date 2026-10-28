@@ -1164,7 +1164,7 @@ def _monitor(panel, origin, avail) -> None:
     dl = imgui.get_foreground_draw_list()
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
-    dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 0, 2.0)
+    dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)
     dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "PROJECTOR")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:

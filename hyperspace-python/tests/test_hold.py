@@ -15,6 +15,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from test_ui_shell import rig as shell_rig  # noqa: F401 — an imgui context, for the inset
 from test_undo import boot, frames, settle
 
 from hyperspace import graph as G
@@ -1024,3 +1025,29 @@ def test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole(ctx):
     gs.land(G.read_graph(straight), straight)
     assert not np.array_equal(outputs(), alone)
     assert ctx.error == "GL_NO_ERROR"
+
+
+def test_the_projector_inset_draws_framed_while_held(shell_rig):
+    """GRAPH's PROJECTOR inset (`ui_graph._monitor`) drawn once with a live
+    texture (a stand-in whose `glo` is not 0, as the monitor's is once the
+    held frame is read back): the picture, the red frame and the word land
+    on the foreground draw list. `add_rect`'s thickness is its fifth
+    argument (imgui_bundle: rounding, thickness, flags) — the call raised
+    TypeError the first time a frame reached it."""
+    from imgui_bundle import imgui
+
+    from hyperspace import ui_graph
+    asked = []
+    mon = SimpleNamespace(tex=SimpleNamespace(glo=7, size=(160, 90)),
+                          want=lambda: asked.append(True))
+    panel = SimpleNamespace(hold=SimpleNamespace(on=True), monitor=mon)
+    imgui.new_frame()
+    imgui.begin("probe")
+    try:
+        dl = imgui.get_foreground_draw_list()
+        before = dl.vtx_buffer.size()
+        ui_graph._monitor(panel, (0.0, 0.0), (800.0, 600.0))
+        assert asked == [True] and dl.vtx_buffer.size() > before
+    finally:
+        imgui.end()
+        imgui.end_frame()
