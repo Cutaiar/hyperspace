@@ -13,7 +13,8 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236).
+on `plan-34-feedback` (PR #236); group AI (377–383) is plan 38's, hold
+the projector, on `plan-38-hold`.
 
 ## Before you start
 
@@ -5250,6 +5251,164 @@ and `palette-glass` ones differ from the old ones only at the edges of
 the placements, and the `acid.2` one by 1/255.
 *Fail:* a picture with hands where the mute is on, or one that moved
 visibly.
+
+<!-- AH 370–376: plan 37's, lands with it -->
+
+## AI. Plan 38: hold the projector
+
+Plan 38 as built is [`38-hold.md`](38-hold.md): **hold** (first on GRAPH's
+head, or `output.hold` on a desk button) keeps every output on the wiring
+and the look as they were at the press, still moving with the music, while
+every edit lands as the preview behind GRAPH's nodes, with a red-framed
+PROJECTOR inset showing what the room sees; **take** cuts the preview onto
+the projector, **drop** goes back to the hold point as one undo step. On
+`plan-38-hold`, then `plan-37-38-39-integration`. Run on the copy
+(`export HYPERSPACE_HOME=~/Hyperspace-try`), after `uv sync`. No schema,
+preset or golden changes. Register rows 430–439 and 461–470. None of
+these has been run by a person; the headless tests are all in
+`tests/test_hold.py`.
+
+**377. Hold keeps the projector while a new preset is started.** (the rig,
+projector up, GRAPH open, music playing)
+Headless: `tests/test_hold.py::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`,
+`::test_on_gl_the_projector_keeps_the_held_frame_while_the_preview_shows_the_edit`,
+`::test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`,
+`::test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`,
+`::test_the_program_draws_the_held_look_and_the_live_one_comes_back`,
+`::test_held_the_outputs_draw_the_program_and_the_preview_follows`.
+1. Load a moving look that has an effect and a switch (`party-trip`).
+2. Press **hold**, the first chip on GRAPH's head.
+3. Press **new** on the PRESET strip.
+4. Right-click near the canvas's top-right corner to open the node picker.
+
+*Pass:* the projector keeps the old look, its effect and switch pick
+included, and keeps moving with the music. GRAPH's backdrop shows the new
+preset's shape. The PROJECTOR inset, framed in red in the canvas's corner,
+shows the old look, oriented as output 1, and the head shows the red
+`HELD 0:0x — …` line. The inset sits over the picker in step 4 (row 469:
+known, judge whether it is in the way).
+*Fail:* the projector goes black, which points to `Hold.program` not being
+around `draw_outputs` in `app._draw_render`. The projector loses its
+effect or switch pick at **new**, which points to `GraphSection._settle`
+not asking `hold.keep` (`hold.section` unset in `app.main`). The inset is
+missing, which points to `monitor` not wanted, or output 1 not publishing
+into it.
+
+**378. Building a scene during a hold shows only behind GRAPH.** (same)
+Headless: `::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`,
+`::test_a_bus_cable_cut_after_the_hold_stays_off_the_projector`,
+`::test_on_gl_a_bus_cable_cut_after_the_hold_stays_off_the_projector`,
+`::test_the_canvas_reads_the_previews_graph_while_held`,
+`::test_the_head_line_says_how_long_and_what_changed`.
+1. While held, wire shape → scene → All outputs.
+2. Insert an effect on the scene's cable; delete one the projector shows.
+3. Cut the bus cable into output 2's picture.
+4. Save the preview as a new preset; load it again after Take.
+
+*Pass:* the backdrop shows the new scene with its effect, and the
+projector does not change, not even at the delete. The head line counts
+the changed settings and says "the graph changed". After step 3, output 2
+is black in the preview only. The dormant and refusal lines on GRAPH talk
+about the preview. The saved preset has no values for the projector's
+leftover effects (no note about unknown ids on reload).
+*Fail:* the projector shows the edit, which points to the held wiring or
+held rig cables not applied in `Hold.program`. The preview still feeds
+output 2 after the cut, which points to `rig_source` missing from
+`hold.MIRRORED`. A new node shows a stand-in ref, which points to a read
+of `panel.renderer._graph` not going through `hold.canvas_renderer`. The
+reload notes unknown ids, which points to `Presets._values` not leaving
+out `Hold.program_only()`.
+
+**379. Take cuts the preview onto the projector.** (same, look-back on)
+Headless: `::test_on_gl_the_program_draws_the_held_wiring_while_a_graph_edit_lands`
+(after Take the outputs show the edit's frame),
+`::test_take_lets_go_and_the_program_is_what_is_landed`,
+`::test_an_effects_clock_runs_on_through_hold_land_and_take`,
+`::test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
+1. After 378, turn the look-back on so that trails show.
+2. Press **take**.
+3. Hold a look with an echo, load another preset with GRAPH open, watch
+   the projector, then press **take**.
+
+*Pass:* the projector cuts to the new scene in one frame and the
+look-back's trails carry on through the cut; the red line goes and
+**hold** is back. In step 3 the projector's echo keeps trailing through
+the load, and starts empty only at Take. Say whether the cut reads as
+harsh (row 430).
+*Fail:* a frame of black or a flash, which points to a graph rebuild on
+the program renderer losing its frames. The trails restart, which points
+to the look-back's history cleared on a rebuild. The projector's echo
+cuts at the load, which points to `Presets.load`'s delay reset not going
+through `gs.hold`.
+
+**380. Drop goes back as one undo step.** (same)
+Headless: `::test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`,
+`::test_drop_goes_back_to_the_hold_point_as_one_undo_step`,
+`::test_drop_puts_a_bus_cable_cut_during_the_hold_back`,
+`::test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`,
+`::test_an_undo_after_take_brings_no_program_only_instance_back`.
+1. Note the preset's name and dirty dot.
+2. Press **hold**.
+3. Turn three knobs, rewire on GRAPH and cut a bus cable.
+4. Load another preset from the strip and turn a knob on it.
+5. Dim the room (eye / output).
+6. Press **drop**.
+7. Press ⌘Z once.
+
+*Pass:* after step 6 the canvas, the knobs, the cut cable and the strip's
+name return to what the projector shows, and the dirty dot is as in step
+1. The projector never changes, and the dim from step 5 stays. After step
+7 the other preset comes back with its edits and its dirty dot in one
+press, and the dim still stays.
+*Fail:* the knobs stay moved: undo not handed to the hold (`Hold.undo`).
+The dim reverts: `hold._preset_part`. ⌘Z brings back only part of the
+state and needs a second press: Drop pushes more than one step.
+
+**381. The desk buttons light while held.** (the rig, APC40)
+Headless: `::test_learned_desk_buttons_light_while_held`,
+`::test_the_output_controls`.
+1. With no hold on, learn `output.hold` and `output.take` onto two free
+   desk buttons.
+2. Press the hold button.
+3. Press the take button.
+4. Hold again, then press **drop** on GRAPH.
+
+*Pass:* both LEDs are on while held, and dark after take and after drop.
+The press that learns a button does not hold. (A button learned *during*
+a hold is unlearned by Drop: row 438. Learn before holding.)
+*Fail:* the take LED stays dark while held, which points to its `lit=`
+callback not read by `routing.led_lit`. A learning press engages the hold.
+
+**382. The preview's cost while held.** (show Mac, GRAPH open, SYSTEM page)
+Headless: `::test_held_with_the_page_closed_draws_no_preview`,
+`::test_preview_size_keeps_the_aspect_under_both_caps`,
+`::test_the_preview_renderer_reads_what_the_main_one_does`.
+1. Hold with GRAPH open and note the FPS.
+2. Close GRAPH and note it again.
+3. Wire a Syphon or NDI input into the preview.
+
+*Pass:* the FPS drop with GRAPH open is acceptable; the preview is at
+most 1280 px on its long side. With GRAPH closed the FPS is as unheld. A
+Syphon/NDI input shows in the preview (it may stutter), and the
+projector's copy stays smooth.
+*Fail:* the FPS falls with the page closed, which points to
+`_draw_preview` running without `preview.take()`. The projector's Syphon
+input stutters, which points to the second read starving the first.
+
+**383. A band still pumps a held param.** (the rig, music)
+Headless: `::test_a_modulated_param_rides_its_held_base`,
+`::test_the_turns_speed_and_planes_are_not_held`.
+1. Route a band to `view.bright`.
+2. Press **hold**.
+3. Move `view.bright`'s base on the desk.
+4. Turn the speed knob.
+
+*Pass:* the projector keeps the held brightness and still pumps with the
+band. The preview shows the new base, pumping too. The speed change in
+step 4 turns both, and the red line does not count it (row 431).
+*Fail:* the projector stops pumping, which points to
+`hold.program_value` not adding this frame's offset. The projector jumps
+to the new base, which points to the param not held (`hold.held`).
 
 ## What no test covers
 

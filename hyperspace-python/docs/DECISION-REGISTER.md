@@ -35,6 +35,7 @@ is the owner's own, 2026-10-25: every save on the newest schema, which
 supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
 (on `preset-schema-6`).
 Rows 396–400 (plan 36, the WYSIWYG graph) are the plan's D1–D5, accepted by the owner as recommended on 2026-10-26, before the build; rows 401–416 are the controller's rulings during that build (two of them the owner's words, 409 and 412) and are answered "controller — 2026-10-26" (on `plan-36-build`).
+Rows 430–439 and 461–470 (plan 38, hold the projector) are the plan's D1–D5 (430–434), taken as recommended and accepted by the controller on 2026-10-27 for the owner to keep or overturn, then the controller's rulings during its build (on `plan-38-hold`); the plan overflowed its ten rows into 461–470.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -440,6 +441,26 @@ here; overturn → the change, then the same.
 | 414 | The goldens re-recorded in the build: 9 of 757 | 369 | controller — 2026-10-26 |
 | 415 | Plan 37 is nodes as pictures, and the faces | — | owner — 2026-10-26 |
 | 416 | Plan 36's known follow-ups are recorded, not built | — | controller — 2026-10-26 |
+| 430 | Plan 38 D1: Take is a hard cut, not a crossfade | 379 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 431 | Plan 38 D2: the turn is one for both; speed and the planes are not held | 377, 383 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 432 | Plan 38 D3: Drop puts back the preset's part, not the rig | 380 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 433 | Plan 38 D4: the preview shows only behind GRAPH | 377, 382 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 434 | Plan 38 D5: a hold holds every output | 377 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
+| 435 | The held copy carries the rig's bus cables (plan 36) | 378, 380 | controller — 2026-10-27 |
+| 436 | The preview renderer reads the show's cables, never a default | 378 | controller — 2026-10-27 |
+| 437 | Clouds and the effect files present are one for both | 382 | controller — 2026-10-27 |
+| 438 | Drop also puts back what the show's mark carries, a desk learn among it | 380, 381 | controller — 2026-10-27 |
+| 439 | What Drop's one undo step puts back, and what it leaves | 380 | controller — 2026-10-27 |
+| 461 | The hold chips sit first on GRAPH's head | 377, 378 | controller — 2026-10-27 |
+| 462 | A landing while held keeps the held program's nodes | 377, 378 | controller — 2026-10-27 |
+| 463 | The program's kept params are not the preset's | 378 | controller — 2026-10-27 |
+| 464 | An undo mark made while held records the landed graph's own instances | 380 | controller — 2026-10-27 |
+| 465 | A load's delay reset while held is the preview's | 379 | controller — 2026-10-27 |
+| 466 | The canvas reads the preview's graph while held | 378 | controller — 2026-10-27 |
+| 467 | The preview is drawn with output 1's switches, at full dim | 377 | controller — 2026-10-27 |
+| 468 | The preview renderer lives for the session; its sub-objects are not hot-reload targets | 382 | controller — 2026-10-27 |
+| 469 | The PROJECTOR inset draws on imgui's foreground list | 377 | controller — 2026-10-27 |
+| 470 | The plan 39 seam: no segment workers in the preview | — | controller — 2026-10-27 |
 
 "—": no hand check shows it; tests only.
 
@@ -7914,3 +7935,187 @@ Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommen
 - **To reverse.** None.
 - **Rough edge.** None.
 - **Judge it.** —
+
+## Plan 38 — hold the projector (rows 430–439, 461–470)
+
+Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; the owner did not see them before the build, so each is "(rec) — accepted by the controller 2026-10-27" and is the owner's to keep or overturn. Rows 435–439 and 461–470 are the controller's rulings during the build (tasks B1–B3); the plan needed more than its ten rows, so it took 461 onward (after plan 39's range, 440–459, and plan 37's overflow row 460). Built on `plan-38-hold` ([`plans/38-hold.md`](plans/38-hold.md); hand checks 377–383, group AI).
+
+### 430. D1: Take is a hard cut, not a crossfade
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D1: a cut, or a crossfade over `output.take_fade` seconds.
+- **Built.** **take** (the chip, or `output.take` on a desk button) lets the hold go and the next frame draws every output from what is landed. The look-back's trails carry on through the cut, because they belong to the program's renderer.
+- **Other options.** A crossfade: both renderers draw to the outputs for the fade's length, with a mix pass at the end of the program.
+- **To reverse.** A small follow-up: an `output.take_fade` param, the preview drawn at output size during the fade, one mix pass in `app._draw_render`.
+- **Rough edge.** A cut between two very different looks can read as harsh in the room.
+- **Judge it.** Check 379.
+
+### 431. D2: the turn is one for both; speed and the planes are not held
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D2: hold the turn as well (a second integrator for the program).
+- **Built.** `rot.*`, `view.three_d`, `view.speed` and `view.plane.*` are out of the held set (`hold.ONE_FOR_BOTH`, `ONE_FOR_BOTH_PREFIXES`). The angles are integrated once a frame, before either draw, so turning speed or a plane knob during a hold changes the projector's turn too, and does not count on the red `HELD` line. (Speed and the planes were held in the first cut; B3's review moved them out: they are the integrator's, not the look's.)
+- **Other options.** A second `ViewState` integration for the program, so a speed or plane change waits for Take.
+- **To reverse.** Moderate: a second integrator, and the 3D switch's pose logic made to run twice.
+- **Rough edge.** A speed or plane change made while building the next look is seen in the room at once.
+- **Judge it.** Checks 377, 383.
+
+### 432. D3: Drop puts back the preset's part, not the rig
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D3: Drop restores the preset's part only, or everything since HOLD, rig included.
+- **Built.** Drop is one `Undo.revert` to the hold point, cut down by `hold._preset_part` to the performance groups: the rig's params (`eye.*`, output, hands feel, tempo) stay as they are now. Row 439 lists what is put back.
+- **Other options.** Everything since HOLD, rig included.
+- **To reverse.** Cheap: `hold._preset_part`.
+- **Rough edge.** The rig's drawn cables are part of "the graph", not the rig's params, so Drop puts them back (row 438).
+- **Judge it.** Check 380.
+
+### 433. D4: the preview shows only behind GRAPH
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D4: preview only behind GRAPH, or also on its own window or screen.
+- **Built.** The preview is drawn only on frames where the GRAPH page shows it (`preview.want()` comes only from `ui_graph._backdrop`, which a hold forces on). With the page closed a hold costs one compare per held param.
+- **Other options.** An output marked "preview", excluded from the program.
+- **To reverse.** Moderate: a preview output slot on plan 36's explicit outputs.
+- **Rough edge.** The operator has to be on GRAPH to see what TAKE will put up.
+- **Judge it.** Checks 377, 382.
+
+### 434. D5: a hold holds every output
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D5: every output, or per output (the laptop's output 1 follows the edits while the projector holds).
+- **Built.** One `draw_outputs` runs inside `Hold.program`, so every window and every publish-only output (Syphon, NDI) shows the program. The PROJECTOR inset on GRAPH is the laptop's view of the room.
+- **Other options.** Per output: a program per window.
+- **To reverse.** Large: two programs at once.
+- **Rough edge.** The laptop's own window shows the program too while held.
+- **Judge it.** Check 377.
+
+### 435. The held copy carries the rig's bus cables (plan 36)
+
+- **Answer.** controller — 2026-10-27 (B1). At HOLD the hold keeps the wiring (`Renderer.wiring`), the rig's bus cables (`graph.RigWires` from the renderer's `rig_source`, the open show) and the extra hands states. The program draw hands the renderer a stand-in `rig_source` (`hold._HeldRig`) holding the cables as they stood; a cable cut or joined during the hold counts as "the graph changed" (`Hold.rewired`).
+- **Built.** Cutting a bus cable from All outputs into a window, or joining one, during a hold shows only in the preview behind GRAPH. The projector keeps the cable as it was until TAKE. Tests: `tests/test_hold.py::test_a_bus_cable_cut_after_the_hold_stays_off_the_projector` and its GL twin.
+- **Other options.** Treat the bus as the rig and leave it shared: a cut would go straight to the projector, the "scene built in front of the room" the hold exists to prevent.
+- **To reverse.** Cheap: drop the `rig_source` swap in `Hold.program`.
+- **Rough edge.** None known. The spec's claim that the first cut "works the same once plan 36 makes the graph explicit" was not quite true; this row is the fix.
+- **Judge it.** Checks 378, 380.
+
+### 436. The preview renderer reads the show's cables, never a default
+
+- **Answer.** controller — 2026-10-27 (B1). `hold.mirror` hands the preview renderer `rig_source` along with media, clouds, bands, hands and wiring (`hold.MIRRORED`). Without it the preview had `rig_source=None`, which `graph.rig_of` reads as every bus cable standing: a wire filled in, against plan 36's rule.
+- **Built.** A window whose bus cable the show has cut is black in the preview, as on the projector, rather than showing All outputs.
+- **Other options.** None: this is the rule.
+- **To reverse.** Do not.
+- **Rough edge.** None.
+- **Judge it.** Check 378.
+
+### 437. Clouds and the effect files present are one for both
+
+- **Answer.** controller — 2026-10-27 (B1). `cloud_source` is the device registry (the room) and the effect files present on disk are the disk; neither is the look, so the program and the preview share both. The effect *instances* a landing would remove are kept for the program (row 462).
+- **Built.** A cloud device listed, or an effect file added or removed on disk during a hold, rebuilds the program's graph too.
+- **Other options.** Snapshot both at HOLD. A removed effect file cannot be drawn anyway (its program is gone), so holding the set buys little.
+- **To reverse.** Moderate: a `cloud_source` stand-in like the rig's, and the files frozen for the program's key.
+- **Rough edge.** Saving an effect file during a show changes the projector even while held.
+- **Judge it.** Check 382.
+
+### 438. Drop also puts back what the show's mark carries, a desk learn among it
+
+- **Answer.** controller — 2026-10-27 (B1, B2, B3). Drop goes back through `Undo.revert`, whose checkpoint takes the show's mark; since plan 36 T1 that mark carries the rig's bus cables, the GRAPH layout of the rig's nodes and the show itself. D3's "not the rig" (row 432) filters the rig's *params*, not these. A desk learn made during the hold lands in the preset's desk layer, so Drop takes it back too.
+- **Built.** After DROP the canvas matches the projector exactly, cables included: a bus cable cut during the hold stands again. A button learned during the hold (say `output.take`) is unlearned by Drop; ⌘Z brings the cut and the learn back. Opening a show during a hold and then dropping reopens the earlier show.
+- **Other options.** Keep the cut, the layout and the learn through Drop as "rig"; the projector would then change at Drop, against "the projector never moved". Or leave the show mark out of `_preset_part`.
+- **To reverse.** Moderate: filter the show mark's slots (or the desk layer) out of `_preset_part`.
+- **Rough edge.** The learn is the surprise: learn hold and take onto the desk *before* holding (check 381 says so).
+- **Judge it.** Checks 380, 381.
+
+### 439. What Drop's one undo step puts back, and what it leaves
+
+- **Answer.** controller — 2026-10-27 (B2). Drop is one `Undo.revert` to the hold point's checkpoint, cut down to the preset's part. It puts back the performance values, the graph (the preset's section and, through the show's mark, the rig's bus cables), the routes, the desk's preset layer, the macros, and the loaded preset's name and with it the dirty dot: if TUMBLE was clean at HOLD it is TUMBLE and clean after Drop, even if TRIP was loaded and edited in between. It leaves the rig's params as they are now. One ⌘Z after Drop brings back the whole dropped state: the other preset, its edits, its dirty dot and its graph.
+- **Built.** After DROP the PRESET strip names the preset the projector is showing, its dot as at HOLD; one ⌘Z returns to exactly where the operator was before Drop. Test: `tests/test_hold.py::test_drop_after_a_whole_new_look_is_one_undo_step_back_and_one_forward`.
+- **Other options.** Restore only the held params and the wiring: the canvas would then name one preset while the projector showed another.
+- **To reverse.** Moderate: narrow `_preset_part`, or skip the marks in `Undo.revert`.
+- **Rough edge.** Row 438's learn.
+- **Judge it.** Check 380.
+
+### 461. The hold chips sit first on GRAPH's head
+
+- **Answer.** controller — 2026-10-27 (B1). First on the head, before plan 36's chips: **hold**, or while held a lit **held** then **take** · **drop**; after them collapse/expand, patched only, tidy, **preset only** and output behind. The red `HELD m:ss — …` line goes under the area chips, above the note / last edit / hint line.
+- **Built.** A hold is the first thing the eye meets on GRAPH; plan 36's chips keep their order and `· N hidden` stays in the counts.
+- **Other options.** After **preset only**, or on their own line above the head.
+- **To reverse.** Cheap: one `_hold_chips(panel)` call in `ui_graph._head`.
+- **Rough edge.** On a narrow page three more chips push the counts text right, where `ui.fit_text` cuts it.
+- **Judge it.** Checks 377, 378.
+
+### 462. A landing while held keeps the held program's nodes
+
+- **Answer.** controller — 2026-10-27 (B3's Critical; ruling 12). Every `GraphSection` landing (a load, a GRAPH edit, an undo) settles the effect instances, switch picks, resizes and extra look-backs to its graph, which stripped the program's. Now `GraphSection._settle` asks the hold's `keep(kind, names)` for each kind; while held that returns the landed names plus the program's, snapshotted at engage (`GraphSection.names()`). Take releases the hook and settles to the live graph; Drop releases it before its revert lands the hold point. Ruling 12 allowed plan 38 this edit to `preset.py`'s land block.
+- **Built.** With the projector held, **new**, loading another preset, deleting an effect or switch on GRAPH, or ⌘Z leave the projector's look whole: effects still drawn, switch picks kept, effect clocks running on. After Take the program's effects are gone if the new look lacks them; if it has them, their clocks carry on mid-stride. Tests: `test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`, `test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`, `test_an_effects_clock_runs_on_through_hold_land_and_take`, `test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`.
+- **Other options.** A second `FxState` and registry slice for the program (large); refuse landings while held (defeats the point).
+- **To reverse.** Cheap: the hook defaults to none, and removing the hold removes it.
+- **Rough edge.** While held, the kept instances' params still exist in the registry, so they show on the EFFECTS and desk pages and can be learned; GRAPH does not draw them. An effect deleted during the hold and added again before Take gets the program's kept values, not its defaults. The program graph rebuilds (losslessly) whenever a landing changes the effect set, which corrects B1's note that it "never rebuilds while held". Plan 39's mattes, cuts and segments must join the same hook at integration (the list is in `plans/38-hold.md`).
+- **Judge it.** Checks 377, 378.
+
+### 463. The program's kept params are not the preset's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12b). `Presets._values` leaves out `Hold.program_only()`, the kept instances the live graph lacks; `program_only` reads `hold.PROGRAM_IDS` (kind → ids) and raises `KeyError` for a kind it does not know, so a new kind cannot slip into a save silently.
+- **Built.** Saving during a hold writes only the live graph's values; the dirty dot does not light, or go out, for the projector's leftovers, nor change at Take.
+- **Other options.** Let a save write them: the next load would carry values for nodes the graph lacks, dead ids in the owner's library.
+- **To reverse.** Cheap: drop the filter.
+- **Rough edge.** None known.
+- **Judge it.** Check 378 (save during a hold, then reload).
+
+### 464. An undo mark made while held records the landed graph's own instances
+
+- **Answer.** controller — 2026-10-27 (B3's verification). `GraphSection.mark()` records `spec.effect_names()` while a hold is on and a spec has landed, not `FxState.held` (which then includes the program's kept instances). Unheld the two are equal (plan 36 T3).
+- **Built.** After Take, ⌘Z of a step made during the hold lands exactly that step's graph; no program-only effect comes back, and a save carries no dead id. Test: `test_an_undo_after_take_brings_no_program_only_instance_back`.
+- **Other options.** Have `put` clip the mark to the landed spec's names when no hold is on (equivalent).
+- **To reverse.** Cheap.
+- **Rough edge.** None known.
+- **Judge it.** Check 380.
+
+### 465. A load's delay reset while held is the preview's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12). `Presets.load`'s delay reset (R19) goes to the hold while held (`GraphSection.hold.reset_delays`): the preview renderer's delays are reset and the hold marks itself "loaded". At Take, if a load happened, the projector's renderer is reset.
+- **Built.** Loading during a hold no longer cuts the projector's echo or delay trails; the preview starts empty, as a load should. Take after a load starts the projector's delays empty; Take without one keeps them. Test: `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
+- **Other options.** Never reset at Take: the old preset's trail would bleed into the new look.
+- **To reverse.** Cheap.
+- **Rough edge.** A load made before the preview renderer exists (GRAPH never opened) resets nothing until Take.
+- **Judge it.** Check 379.
+
+### 466. The canvas reads the preview's graph while held
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 13). `hold.canvas_renderer(panel)` returns the preview renderer while held and drawn, otherwise the panel's own; `ui_graph`'s `view_of`, `render_edit` and `_edit` and `ui.py`'s `graph_words` and `dormant_lines` read `_graph` through it.
+- **Built.** While held, nodes added on GRAPH get real refs, and the dormant and refusal lines describe the preview (what TAKE puts up), not the projector. Test: `test_the_canvas_reads_the_previews_graph_while_held`.
+- **Other options.** None worth it.
+- **To reverse.** Cheap.
+- **Rough edge.** Until the preview has been drawn once (the first frame with GRAPH showing) the canvas reads the held graph. Plan 37's thumbnails (`thumbs.want`, the timing line) must read through the same helper; the controller routes them at the plan 37 merge.
+- **Judge it.** Check 378.
+
+### 467. The preview is drawn with output 1's switches, at full dim
+
+- **Answer.** controller — 2026-10-27 (B3). `app._draw_preview` passes output 1's mutes and flips, with dim forced to 1.0 (the first cut used `Switches()` defaults).
+- **Built.** The backdrop while held is oriented and muted like the unheld backdrop (output 1), without the room's dim.
+- **Other options.** `Switches()` defaults, or output 1's dim too.
+- **To reverse.** One line in `app._draw_preview`.
+- **Rough edge.** A flip set for a Pepper's Ghost glass shows mirrored on the laptop; the unheld backdrop already does this.
+- **Judge it.** Check 377.
+
+### 468. The preview renderer lives for the session; its sub-objects are not hot-reload targets
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). The preview renderer is made on first use and kept after Take (its GL objects stay). It joins the hot-reload targets once made, but its sub-objects (its `Fx` chain, look-back, ghosts) are not targets, so a reload of `fx.py` updates them only on the main renderer.
+- **Built.** Nothing new: the first cut's behaviour.
+- **Other options.** Release it at Take or Drop, or add its sub-objects to the targets list (small).
+- **To reverse.** Small.
+- **Rough edge.** After a hot reload of an effect module during a hold, the preview may draw the old code until restart.
+- **Judge it.** Check 382.
+
+### 469. The PROJECTOR inset draws on imgui's foreground list
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). `ui_graph._monitor` draws on the foreground draw list, so the inset sits over popups and menus opened on the canvas (the node picker, context menus) in its corner. The window's draw list would put it under the node editor's child canvas.
+- **Built.** The inset is always visible while held, over anything in the top-right corner.
+- **Other options.** Draw it inside the editor's canvas as a suspended overlay (moderate).
+- **To reverse.** Moderate.
+- **Rough edge.** A picker opened near the top right while held is partly hidden.
+- **Judge it.** Check 377 (open the node picker near the top right while held).
+
+### 470. The plan 39 seam: no segment workers in the preview
+
+- **Answer.** controller — 2026-10-27 (ruling 13). The preview renderer gets no segment workers: a `segment` node in the preview passes through and says "no worker in the preview". `Renderer.close` closes only the workers it made (the preview shares media, hands, look-back and fx state with the main renderer), and the app's close list adds the preview's close. Plan 39 T4 builds this; plan 38 changes nothing for it.
+- **Built.** Nothing in plan 38.
+- **Other options.** A second worker for the preview (twice the GPU cost).
+- **To reverse.** Plan 39's.
+- **Rough edge.** A segment-based look shows unsegmented in the preview until Take.
+- **Judge it.** Plan 39's AJ checks, with a hold on.

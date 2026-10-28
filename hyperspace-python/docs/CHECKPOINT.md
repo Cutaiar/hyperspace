@@ -66,6 +66,20 @@ clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
 
+**Plan 38, hold the projector, is built** on `plan-38-hold`, to merge
+first into `plan-37-38-39-integration` (then the run's final PR to
+`main`) ([`plans/38-hold.md`](plans/38-hold.md)). **hold** keeps every
+output on the wiring, the rig's bus cables and the look as they were at
+the press, still live under the bands and LFOs, while every edit (a
+GRAPH change, **new**, a load) lands as the preview behind GRAPH's
+nodes, drawn by a second renderer only while the page shows it, with a
+PROJECTOR inset of what the room sees; **take** cuts to the preview,
+**drop** goes back to the hold point as one undo step (the preset's
+part, not the rig). A landing during a hold keeps the projector's
+effects, switches and resizes; a load's delay reset goes to the
+preview. Fast tier 3990 passed, full suite 4201 passed (2 skipped),
+goldens unmoved; no schema, preset or golden change.
+
 ## What is left
 
 - **The hand checks.** None has been run by a person. Start from
@@ -74,10 +88,14 @@ before unchanged. No preset was edited or added; `apc40.py` and
   220–276 (N8's palette as compression 267–271, N9's graph by concern
   272–276). Above all: a cable dragged on the GRAPH page (247), which no
   test can do.
+  Plan 38 adds checks 377–383 (group AI, hold the projector): the hold
+  on the rig with the projector up, take, drop, the desk buttons, the
+  preview's cost.
 - **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
   plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
-  299–310).
+  299–310); plan 38's are rows 430–439 (its D1–D5 are 430–434, taken
+  as recommended) and 461–470.
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory
