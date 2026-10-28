@@ -3765,6 +3765,7 @@ def _create(panel, st: dict, view: graphview.View) -> None:
 # ---- plan 28 N7: a drag onto a collapsed node's stub, and landing it ----
 
 BOTH_STUBS = "drag from a port: expand one of the two nodes first"
+GROUP_STUB = "{name} is folded: drop it on one of its pins, or open it (+)"
 LAND_HINT = "let go: pick one of {label}'s ports"
 LAND = "##graph.land"
 
@@ -3772,11 +3773,15 @@ LAND = "##graph.land"
 def stub_refusal(view: graphview.View, a: str, b: str) -> str | None:
     """Why a drag between pins `a` and `b`, one of them a node's stub, can
     open no port picker: both are stubs (once a one-output node's out stub
-    stands for its output, `graphview.stub_pin`), or both are outputs
-    (inputs)."""
+    stands for its output, `graphview.stub_pin`), the stub is a folded
+    group's (its picker would be empty: the group's pins are the drop),
+    or both are outputs (inputs)."""
     if graphview.is_stub(a) and graphview.is_stub(b):
         return BOTH_STUBS
     stub, fixed = (a, b) if graphview.is_stub(a) else (b, a)
+    g = view.group(graphview.stub_node(stub))
+    if g is not None:           # plan 40 review fix: a folded group has no ports to pick
+        return GROUP_STUB.format(name=g.name)
     into = graphview.pin_kind(stub) == graphview.STUB_IN
     if into == (not graphview.is_output(fixed)):
         return graphview.SAME_SIDE

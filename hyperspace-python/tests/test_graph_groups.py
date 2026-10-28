@@ -549,6 +549,17 @@ def test_a_drag_onto_a_group_pin_lands_on_its_member(rig):
     assert graphview.real_pin(st["view"], "rin:warp/image") == "rin:warp/image"
 
 
+def test_a_drop_on_a_folded_groups_stub_is_refused_in_words(rig):
+    """A cable let go on a folded group's stub would open an empty picker
+    (the group is no node with ports): refused while held, in words."""
+    st = noita(rig, [ENTRY])
+    view = st["view"]
+    assert ui_graph.stub_refusal(view, graphview.stub_in("group.1"), "out:lane:3") == (
+        "noita core is folded: drop it on one of its pins, or open it (+)")
+    assert graphview.land_choices(view, ui_graph.edit_of(rig.panel, view), "out:lane:3",
+                                  "group.1") == []           # (what it would have offered)
+
+
 def test_deleting_a_group_node_is_refused_in_words(rig, monkeypatch):
     st = noita(rig, [ENTRY])
     got = []
