@@ -406,6 +406,20 @@
     "through"
    ]
   },
+  "segment-motion": {
+   "file": "tests/fixtures/presets/segment-motion.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
   "delay-faces": {
    "file": "tests/fixtures/presets/delay-faces.json",
    "hands": "present",
@@ -2332,6 +2346,70 @@
      "cut",
      "composite",
      "shown(composite)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "segment-motion": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": false,
+    "hands_shown": false,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
+       "kind": "segment"
+      },
+      {
+       "kind": "composite"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "scene",
+       "to": "composite.over"
+      },
+      {
+       "from": "channel.a",
+       "to": "composite.under"
+      },
+      {
+       "from": "composite",
+       "to": "segment.image"
+      },
+      {
+       "from": "segment.fg",
+       "to": "output.all.image"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "channel.a",
+     "composite",
+     "segment",
+     "shown(segment.fg)",
      "output.1",
      "output.2",
      "output.3",
@@ -12281,6 +12359,110 @@
   },
   {
    "preset": "cut-out",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0af84155993b2d4b92ce60f927931d39ff8af106e6da0d6f4178e30e273ffb24",
+   "png": "png/0af84155993b2d4b.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0af84155993b2d4b92ce60f927931d39ff8af106e6da0d6f4178e30e273ffb24",
+   "png": "png/0af84155993b2d4b.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0af84155993b2d4b92ce60f927931d39ff8af106e6da0d6f4178e30e273ffb24",
+   "png": "png/0af84155993b2d4b.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "0af84155993b2d4b92ce60f927931d39ff8af106e6da0d6f4178e30e273ffb24",
+   "png": "png/0af84155993b2d4b.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "segment-motion",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "segment-motion",
    "hands": "present",
    "state": "through",
    "route": "none",

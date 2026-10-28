@@ -88,6 +88,38 @@ class CutState:
     amount: float = 1.0
 
 
+# plan 39 T4 (W4): a segment's modes — a person model (the worker's), a
+# background model (motion: GLSL on the frame thread), and any subject
+# (declared, refused in words until a later build) — and the model's levels
+SEGMENT_MODES = ("person", "motion", "subject")
+SEGMENT_QUALITY = ("fast", "balanced", "accurate")
+SEGMENT_FEATHER = 32.0    # the most px a segment's feather blurs its matte by
+SEGMENT_LEARN = (0.1, 30.0)   # motion's learn: seconds for a still thing to fade in
+
+
+@dataclass
+class SegmentState:
+    """One segment node's values (plan 39 T4, `segment[.n].*`:
+    params.declare_segments), read once a frame by the renderer
+    (`ViewState.segments`, `graph.Frame.segments`): `mode` an index into
+    `SEGMENT_MODES`, `quality` into `SEGMENT_QUALITY` (the model's level),
+    `feather` a blur of the matte in px, `smooth` 0–1 how much of the last
+    matte each new one keeps (against flicker; 0 the model's matte as it
+    is), `on` (off: the input whole on `fg`, nothing on `bg` and `mask`, the
+    worker idle), and motion's `sense` (how far a pixel must differ from
+    the background to be foreground, 0–1) and `learn` (seconds for a still
+    thing to fade into the background). The defaults add nothing to the
+    model's own matte. A value, never a rebuild."""
+
+    mode: int = 0
+    quality: int = 0
+    feather: float = 0.0
+    smooth: float = 0.0
+    on: bool = True
+    sense: float = 0.1
+    learn: float = 3.0
+
+
 @dataclass
 class ViewState:
     """Mirror of the reference's S object (render-relevant fields)."""
@@ -174,6 +206,9 @@ class ViewState:
     # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
     # preset's graph: params.declare_cuts) — cut name → its state
     cuts: dict[str, CutState] = field(default_factory=dict)
+    # plan 39 T4: each segment node's values (`segment[.n].*`, declared from
+    # the preset's graph: params.declare_segments) — segment name → its state
+    segments: dict[str, SegmentState] = field(default_factory=dict)
     # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
     # the preset's graph: params.declare_lookbacks) — `lookback.<n>` → its
     # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)

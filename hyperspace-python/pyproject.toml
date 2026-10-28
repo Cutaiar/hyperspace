@@ -37,6 +37,12 @@ dependencies = [
     "mlx>=0.20 ; sys_platform == 'darwin'",
     "pyobjc-framework-metal>=12.2 ; sys_platform == 'darwin'",
     "pyobjc-framework-quartz>=12.2 ; sys_platform == 'darwin'",
+    # the segment node's person matte (segment.py, plan 39 T4): Apple Vision
+    # on the Neural Engine, through pyobjc — three small wheels, macOS only.
+    # Imported only inside the worker's first job, so importing app pulls
+    # none of it; elsewhere (or with `[segment] backend = "torch"`) the
+    # torchvision model above stands in
+    "pyobjc-framework-vision>=12.2 ; sys_platform == 'darwin'",
     # wired Xbox 360 pads (gamepad.UsbPad): not HID, so macOS and GLFW
     # never see one — read over libusb, which libusb-package bundles
     "pyusb>=1.3.1",

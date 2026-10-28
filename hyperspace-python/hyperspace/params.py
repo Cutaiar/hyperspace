@@ -94,9 +94,14 @@ from .view import (
     RESIZE_FILTERS,
     RESIZE_FITS,
     RESIZE_SIDES,
+    SEGMENT_FEATHER,
+    SEGMENT_LEARN,
+    SEGMENT_MODES,
+    SEGMENT_QUALITY,
     CutState,
     MatteState,
     ResizeState,
+    SegmentState,
 )
 
 PATTERNS = patterns.NAMES   # the face patterns, in patterns.glsl's mode order
@@ -135,8 +140,11 @@ F_KEYS = 8
 # preset's, declared while its graph holds the entry (declare_mattes)
 # `cut` (plan 39 T3): each cut node's invert and amount, the preset's,
 # declared while its graph holds the entry (declare_cuts)
+# `segment` (plan 39 T4): each segment node's mode, level, feather, smooth,
+# switch and motion's sense and learn, the preset's, declared while its
+# graph holds the entry (declare_segments)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "matte", "cut", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "matte", "cut", "segment", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -1249,6 +1257,99 @@ def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 39 T4: the segments' values ----
+SEGMENT_GROUP = "segment"
+_SEGMENT_KEYS = ("mode", "quality", "feather", "smooth", "on", "sense", "learn")
+_SEGMENT_ID = re.compile(r"segment(?:\.(?:[2-9]|[1-9][0-9]+))?\.("
+                         + "|".join(_SEGMENT_KEYS) + ")")
+
+
+def segment_ids(name: str) -> list[str]:
+    """Segment node `name`'s params (`segment.2` → `segment.2.mode` …), in order."""
+    return [f"{name}.{k}" for k in _SEGMENT_KEYS]
+
+
+def is_segment_id(pid: str) -> bool:
+    """Is `pid` one of a segment's values — one that exists only while a
+    preset's graph holds that segment (plan 39 T4)? A preset load sorts
+    such ids against the graph it lands, as it does a cut's."""
+    return bool(_SEGMENT_ID.fullmatch(pid))
+
+
+def _segment_state(r: Registry) -> dict[str, SegmentState]:
+    """The states the segment params write, segment name → `SegmentState`:
+    the view state's (`ViewState.segments`), kept by `build_registry` as
+    `r.segment_state`; a dict of the registry's own for one built without
+    a view (as `_cut_state`)."""
+    state = getattr(r, "segment_state", None)
+    if not isinstance(state, dict):
+        state = r.segment_state = {}
+    return state
+
+
+_SEGMENT_TIPS = {
+    "mode": "What {name} takes for its foreground: a person (a model on the Neural "
+            "Engine), what moves against a still camera (motion), or any subject (not in "
+            "this build).",
+    "quality": "The person model's level for {name}: fast (256×192 matte), balanced, or "
+               "accurate (finer edges, slower results).",
+    "feather": "A blur of {name}'s matte, in pixels: 0 keeps the model's own edge.",
+    "smooth": "How much of {name}'s last matte each new one keeps, 0–1: against flicker, "
+              "at the cost of a little more trail.",
+    "on": "{name} cuts its picture: off, its foreground is the picture whole, its "
+          "background and matte nothing, and its worker idle.",
+    "sense": "Motion: how far a pixel of {name}'s picture must differ from the background "
+             "it has learnt to be foreground, 0–1.",
+    "learn": "Motion: how many seconds a still thing takes to fade into {name}'s "
+             "background.",
+}
+
+
+def declare_segments(r: Registry, names: Iterable[str]) -> list[str]:
+    """The segments' params (plan 39 T4), as `declare_cuts` does the cuts':
+    for each segment `names` holds, `mode` (person / motion / subject, not
+    modulatable: a model is not started per frame), `quality` (fast /
+    balanced / accurate, not modulatable likewise), `feather` 0–32 px,
+    `smooth` 0–1, `on`, and motion's `sense` 0–1 and `learn` 0.1–30 s —
+    group `segment` (a performance group: the preset's) — over a
+    `SegmentState` made when first declared and kept while the name stays;
+    those of every segment no longer named dropped, with their states.
+    Returns the ids that appeared or went."""
+    state = _segment_state(r)
+    want = {n: segment_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == SEGMENT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_cuts`')
+        if st is None:
+            st = state[name] = SegmentState()
+        for pid, key in zip(ids, _SEGMENT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _SEGMENT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key in ("mode", "quality"):
+                choices = SEGMENT_MODES if key == "mode" else SEGMENT_QUALITY
+                r.enum(pid, label, *got, list(choices), group=SEGMENT_GROUP, tip=tip,
+                       modulatable=False)
+            elif key == "on":
+                r.toggle(pid, label, *got, group=SEGMENT_GROUP, tip=tip)
+            else:
+                lo, hi = {"feather": (0.0, SEGMENT_FEATHER),
+                          "learn": SEGMENT_LEARN}.get(key, (0.0, 1.0))
+                r.continuous(pid, label, *got, lo=lo, hi=hi, group=SEGMENT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 36 T4: the extra look-backs' values ----
 # `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
 # the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
@@ -1431,6 +1532,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.cut_state = cuts
+    # plan 39 T4: the segments' values likewise (`ViewState.segments`)
+    segments = getattr(view, "segments", None)
+    if not isinstance(segments, dict):
+        segments = {}
+        try:
+            view.segments = segments
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.segment_state = segments
     # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
     rings = getattr(view, "lookback", None)
     if not isinstance(rings, dict):

@@ -164,6 +164,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     PERFORMANCE_GROUPS,
     PLANES,
     RESIZE_GROUP,
+    SEGMENT_GROUP,
     SESSION_GROUPS,
     SWITCH_GROUP,
     UNITS,
@@ -172,6 +173,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     declare_lookbacks,
     declare_mattes,
     declare_resizes,
+    declare_segments,
     declare_switches,
     is_cut_id,
     is_instance_id,
@@ -179,6 +181,7 @@ from .params import (  # noqa: F401 — pan_world, UNITS…: re-exported, preset
     is_lookback_knob,
     is_matte_id,
     is_resize_id,
+    is_segment_id,
     is_switch_id,
     pan_world,
     part_of,
@@ -334,7 +337,8 @@ class GraphSection:
       34 Z) each resize's `resize[.n].*` (`params.declare_resizes`, by its
       entry, reached or not); and (plan 39 T2) each matte's `matte[.n].*`
       (`params.declare_mattes`, likewise); and (plan 39 T3) each cut's
-      `cut[.n].*` (`params.declare_cuts`, likewise);
+      `cut[.n].*` (`params.declare_cuts`, likewise); and (plan 39 T4) each
+      segment's `segment[.n].*` (`params.declare_segments`, likewise);
     - **the renderer** (when attached, `attach`): `Renderer.wiring` (what
       the frame is built from: `graph.EMPTY` with nothing landed) and
       `Renderer.ghost_states` (the extra hands nodes' states, each drawn
@@ -450,6 +454,8 @@ class GraphSection:
         declare_mattes(reg, [m.name for m in spec.mattes] if spec is not None else [])
         # plan 39 T3: each cut's values, by its entry, as a matte's
         declare_cuts(reg, [c.name for c in spec.cuts] if spec is not None else [])
+        # plan 39 T4: each segment's values, by its entry, as a cut's
+        declare_segments(reg, [x.name for x in spec.segments] if spec is not None else [])
         # plan 36 T4: each extra look-back's own ring and trail, by its entry
         declare_lookbacks(reg, [lb.name for lb in spec.lookbacks] if spec is not None else [])
         self.spec, self.doc = spec, copy.deepcopy(doc)
@@ -558,7 +564,9 @@ LAYOUT_KEY = "layout"
 # subscribers and a modifier's params are its entry, both the preset's
 # (plan 33 S: a switch's pick means nothing without the preset's graph;
 # plan 34 Z: nor a resize's values; plan 39 T2: nor a matte's; T3: nor a cut's)
-NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP)
+# (T4: nor a segment's)
+NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, CUT_GROUP,
+             SEGMENT_GROUP)
 
 
 def _bank_prefix(pid: str) -> str:
@@ -841,7 +849,8 @@ class Presets:
                   and reg[k].group != modifiers.GROUP and reg[k].persist
                   and not is_instance_id(k) and not is_switch_id(k)
                   and not is_resize_id(k) and not is_lookback_id(k)
-                  and not is_matte_id(k) and not is_cut_id(k)}
+                  and not is_matte_id(k) and not is_cut_id(k)
+                  and not is_segment_id(k)}
         doc = {"schema": WIRED_SCHEMA, "name": UNTITLED_PRESET, "values": values,
                "routes": [], "macros": {}, "modules": {},
                "desk": desk_json(fresh_desk(self.router.table.profile)),
@@ -935,6 +944,7 @@ class Presets:
                 notes.append(f"{pid} is a modifier's: set in its entry, ignored")
             elif (is_instance_id(pid) or is_switch_id(pid) or is_resize_id(pid)
                   or is_lookback_id(pid) or is_matte_id(pid) or is_cut_id(pid)
+                  or is_segment_id(pid)
                   or graphmigrate.effect_of(pid) is not None):
                 # (plan 33 S: a switch's `select` too — its graph declares it;
                 # plan 34 Z: and a resize's values (plan 39 T2: a matte's, T3: a

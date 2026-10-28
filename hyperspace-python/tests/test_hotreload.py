@@ -235,8 +235,9 @@ def test_every_package_module_but_the_cold_core_is_watched():
     # pinch is cold too: its AppKit monitor adds to the module it was made
     # in, so a reloaded copy would sum nothing
     # masks (plan 39 T2) is cold for now: hotreload.py is plan 38's file in
-    # the 37/38/39 run — it goes on MODULES (before render) at integration
-    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "masks"}
+    # the 37/38/39 run — it goes on MODULES (before render) at integration;
+    # segment (plan 39 T4) is cold for the same reason (its workers outlive a reload)
+    cold = {"app", "hotreload", "offline", "watchdog", "headless", "pinch", "masks", "segment"}
     assert names - cold == set(_watched()), sorted((names - cold) ^ set(_watched()))
 
 
