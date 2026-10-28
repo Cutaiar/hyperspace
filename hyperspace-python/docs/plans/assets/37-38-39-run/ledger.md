@@ -290,3 +290,11 @@ See `decisions.md`.
   `main`.
 - Waits on the owner: plan 37 D1 (the faces' list; two questions in
   decisions 10), rows 417–500, hand checks 370–393.
+- **2026-10-27, after the owner's test at the machine ("works fine")**:
+  `main` had moved (PR #266, the GRAPH side column resizable); merged into
+  the integration branch @ eff4263 (two additive hunks in `ui_graph.py`:
+  an import, the page state's defaults). Gates: fast **4229 passed, 2
+  skipped**; full **4452 passed, 2 skipped** (a first run under heavy load
+  had four load failures, all passing on the re-run); goldens **136
+  passed**; signatures unchanged. PR #270 clean for the owner. The
+  owner's D1 answer (keep all 17) is on the branch (9ee0264, c5c0967).
