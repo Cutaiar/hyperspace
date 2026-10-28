@@ -4294,24 +4294,42 @@ class Edit:
         """A member dragged out of its region (**ungroup one**): its id taken
         from the list — and, with `at`, its new position written — one undo
         step; the last member leaving takes the group with it, said."""
-        g = self._group(gid)
-        if g is None:
-            return NO_GROUP.format(gid=gid)
-        if nid not in g["nodes"]:
+        return self.leave_groups([(gid, nid, at)])
+
+    def leave_groups(self, moves: Iterable[tuple[str, str, tuple[float, float] | None]]
+                     ) -> str | None:
+        """Several members dragged out of their regions at once — each
+        ``(group id, node id, at)`` — as **one** undo step (plan 40 review
+        fix: one gesture, one ⌘Z): each id taken from its list and its new
+        position written; a group its last member leaves goes, said."""
+        todo: list[tuple[dict, str, Any]] = []
+        for gid, nid, at in moves:
+            g = self._group(gid)
+            if g is None:
+                return NO_GROUP.format(gid=gid)
+            if nid in g["nodes"] and not any(t[1] == nid for t in todo):
+                todo.append((g, nid, at))
+        if not todo:
             return None
-        self._step(f"{nid} leaves {g['name']}")
-        g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
-        if at is not None:
-            lay = getattr(self.presets, "layout", None)
-            if lay is None:
-                lay = self.presets.layout = {}
-            lay[nid] = [round(float(at[0])), round(float(at[1]))]
-        node = nid.removeprefix("render:")
-        if not g["nodes"]:
-            self._groups().remove(g)
-            self.said = LEFT_EMPTY.format(node=node, name=g["name"])
-        else:
-            self.said = LEFT_GROUP.format(node=node, name=g["name"])
+        hit = list({id(g): g for g, _, _ in todo}.values())
+        self._step(f"{todo[0][1]} leaves {hit[0]['name']}" if len(todo) == 1 else
+                   f"{len(todo)} nodes leave {', '.join(g['name'] for g in hit)}")
+        lay = getattr(self.presets, "layout", None)
+        for g, nid, at in todo:
+            g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
+            if at is not None:
+                if lay is None:
+                    lay = self.presets.layout = {}
+                lay[nid] = [round(float(at[0])), round(float(at[1]))]
+        said = []
+        for g in hit:
+            node = ", ".join(nid.removeprefix("render:") for gg, nid, _ in todo if gg is g)
+            if not g["nodes"]:
+                self._groups().remove(g)
+                said.append(LEFT_EMPTY.format(node=node, name=g["name"]))
+            else:
+                said.append(LEFT_GROUP.format(node=node, name=g["name"]))
+        self.said = "; ".join(said)
         return None
 
     # ---- plan 40 T3: patches (P3, D2, D3, D9) — a spawn is a fragment of a

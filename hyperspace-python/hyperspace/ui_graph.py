@@ -1244,6 +1244,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
     pre, show = _layouts(panel)
     applied = st["applied"]
     carried = _moved_groups(panel, st, view, applied)    # plan 40 T2: a group's drop first
+    moves = []
     for n in view.nodes:
         if not drawn_node(st, n) or n.id in carried:   # plan 28 N9: an idle node is not drawn
             continue
@@ -1252,10 +1253,17 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         was = applied.get(n.id)
         if was is None or (round(was[0]), round(was[1])) == now:
             continue
-        if _left_group(panel, st, view, n, now):        # plan 40 T2: ungroup one
-            applied[n.id] = now
-            continue
+        moves.append((n, now))
+    # plan 40 T2: ungroup one — every member dropped outside its region (the
+    # regions as they were before this drop) leaves in one undo step
+    left = {n.id: out for n, now in moves
+            if (out := _left_group(st, view, n, now, applied)) is not None}
+    if left:
+        leave_groups(panel, list(left.values()))
+    for n, now in moves:
         applied[n.id] = now
+        if n.id in left:
+            continue
         # (plan 36 T5: a node the preset's map already places — a new
         # preset's All outputs — moves there, or that entry would hold it)
         m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
@@ -1734,6 +1742,13 @@ def leave_group(panel, gid: str, nid: str, at=None) -> str | None:
     return None if e is None else _group_said(panel, e, e.leave_group(gid, nid, at))
 
 
+def leave_groups(panel, moves) -> str | None:
+    """Members dropped out of their regions together — ``(group id, node
+    id, at)`` each — one undo step (`Edit.leave_groups`)."""
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.leave_groups(moves))
+
+
 def selected_ids(st: dict) -> list[str]:
     """The canvas ids of the selected nodes (a group's node as its id, an
     open group's title as its group's), in selection order."""
@@ -1874,23 +1889,24 @@ def _moved_groups(panel, st: dict, view: graphview.View, applied: dict) -> set[s
     return moved
 
 
-def _left_group(panel, st: dict, view: graphview.View, n: graphview.VNode,
-                now: tuple[float, float]) -> bool:
+def _left_group(st: dict, view: graphview.View, n: graphview.VNode,
+                now: tuple[float, float], applied: dict
+                ) -> tuple[str, str, tuple[float, float]] | None:
     """Node `n`, an open group's member, dropped at `now` (canvas units):
     when its rect lies wholly outside the region its group had before the
-    drag (`graphview.leaves`), it leaves the group — its position written
-    in the same step (`Edit.leave_group`). True when it left."""
+    drag (`graphview.leaves`, over `applied`: where each member was), it
+    leaves the group — (the group's id, its id, its new position in layout
+    units) for `Edit.leave_groups`, which `_moved` calls once for every
+    leaver of the drop. None when it stays."""
     g = graphview.group_of(view, n.id)
     if g is None or not g.open:
-        return False
-    applied = st["applied"]
+        return None
     before = {m.id: applied[m.id] for m in g.members if m.id in applied}
     w, h = _size(st, n.id)
     if not graphview.leaves(group_area(st, g, before), (now[0], now[1], now[0] + w, now[1] + h)):
-        return False
+        return None
     px, py = panned(st)
-    leave_group(panel, g.id, n.id, (now[0] - px, now[1] - py))
-    return True
+    return g.id, n.id, (now[0] - px, now[1] - py)
 
 
 def _region(st: dict, g) -> None:

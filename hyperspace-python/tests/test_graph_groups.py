@@ -449,6 +449,34 @@ def test_a_member_dragged_out_leaves_the_group(rig):
         undo.install(None)
 
 
+def test_two_members_dragged_out_together_leave_in_one_step(rig):
+    """Two members of an open group box-selected and dragged out in one
+    drop: both leave, both positions written, **one** undo step — and one
+    ⌘Z puts both back in the group."""
+    st = noita(rig, [dict(ENTRY, open=True)])
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        at = {m: st["applied"][m] for m in NOITA_CORE[1:]}
+
+        def drag():
+            for m, (x, y) in at.items():
+                ed.set_node_position(ed.NodeId(ui_graph._id(st, "n:" + m)),
+                                     imgui.ImVec2(x + 3000, y + 3000))
+        _in_editor(rig, drag)
+        frame(rig.panel, "graph")
+        assert rig.lib.presets.groups[0]["nodes"] == NOITA_CORE[:1]
+        assert len(u.stack) == n + 1 and u.stack[-1].label == "2 nodes leave noita core"
+        assert st["said"] == "doublevision, fractals left noita core"
+        px, py = ui_graph.panned(st)
+        assert {m: rig.lib.presets.layout[m] for m in at} == {
+            m: [round(x + 3000 - px), round(y + 3000 - py)] for m, (x, y) in at.items()}
+        frame(rig.panel, "graph")
+        assert u.undo() and rig.lib.presets.groups[0]["nodes"] == NOITA_CORE
+    finally:
+        undo.install(None)
+
+
 def test_the_last_member_leaving_takes_the_group():
     from types import SimpleNamespace
     pre = SimpleNamespace(groups=[{"id": "group.1", "name": "one", "nodes": ["render:warp"],
