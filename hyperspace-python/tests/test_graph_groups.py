@@ -698,7 +698,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
     app = headless.make_app(tmp_path)
     app.lib.load("presets", "party-trip")
     pre, table, reg = app.presets, app.router.table, app.reg
-    u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre._banks)
+    u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre.banks)
     undo.install(u)
     try:
         u.tick(1.0)
@@ -707,13 +707,13 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
                            push=lambda label: undo.push(label, load=True))
         e.presets = pre
         before = (pre.signature(), dict(pre.layout), list(pre.groups), table.macros_doc())
-        landing = patches.spawn(BREATH, patches.Host.of(pre.graph.spec, table, pre._banks()),
+        landing = patches.spawn(BREATH, patches.Host.of(pre.graph.spec, table, pre.banks()),
                                 (40.0, 60.0))
         assert landing.renames == {"lfo.1": "lfo.5"}
         n = len(u.stack)
         assert e.spawn(landing) is None
         assert len(u.stack) == n + 1 and u.stack[-1].label == "spawn breath"
-        assert pre._banks()["lfo"].doc() == [1, 2, 3, 4, 5]
+        assert pre.banks()["lfo"].doc() == [1, 2, 3, 4, 5]
         assert reg["lfo.5.rate"].value == pytest.approx(0.3)
         assert ("lfo:4", "fx.acid.speed") in {(b.source, b.target) for b in table.routes()}
         assert table.macros_doc()["macro.3"]["subs"] == [
@@ -724,7 +724,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
         assert u.undo()
         assert (pre.signature(), dict(pre.layout), list(pre.groups),
                 table.macros_doc()) == before
-        assert pre._banks()["lfo"].doc() == [1, 2, 3, 4] and "lfo.5.rate" not in reg
+        assert pre.banks()["lfo"].doc() == [1, 2, 3, 4] and "lfo.5.rate" not in reg
     finally:
         undo.install(None)
 

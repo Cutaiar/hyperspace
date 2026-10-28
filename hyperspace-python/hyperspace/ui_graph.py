@@ -2201,7 +2201,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     stem = path.name[:-5] if path is not None else patches.slug(str(doc.get("name") or slug))
     at = view_centre(panel) if at is None else (float(at[0]), float(at[1]))
     gs = pre.graph
-    host = patches.Host.of(gs.spec, e.table, pre._banks(), _held_names(gs))
+    host = patches.Host.of(gs.spec, e.table, pre.banks(), _held_names(gs))
     landing = patches.spawn(doc, host, at, patch=stem)
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,

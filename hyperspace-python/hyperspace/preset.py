@@ -1068,7 +1068,7 @@ class Presets:
         # the file, the default four), declared before the values land — so
         # a knob of a voice this registry lacks yet waits in `later`
         members: dict[str, list[int]] = {}
-        for scheme, bank in self._banks().items():
+        for scheme, bank in self.banks().items():
             members[scheme], bank_notes = bank.parse(doc.get(bank.KEY))
             notes += bank_notes
         bank_ids = {f"{s}.{n}." for s, ids in members.items() for n in ids}
@@ -1209,7 +1209,7 @@ class Presets:
         held_graph, held_values = gs.mark(), reg.snapshot(part="performance")
         # (membership and every bank voice's values, before anything moves)
         held_mods = table.modifiers_doc(reg)
-        held_banks = {s: b.doc() for s, b in self._banks().items()}
+        held_banks = {s: b.doc() for s, b in self.banks().items()}
         # from here to the values landing, anything that raises puts the
         # graph that was there back, with its instances' values: a load is
         # refused whole, never half a graph
@@ -1226,7 +1226,7 @@ class Presets:
             notes += table.set_modifiers(mods, reg)
             values.update(reg.snapshot(group=modifiers.GROUP))
             for scheme, ids in members.items():          # plan 31 B: the banks
-                self._banks()[scheme].set(ids)
+                self.banks()[scheme].set(ids)
             late: list[str] = []
             for pid, v in later.items():
                 p = reg.get(pid)
@@ -1262,7 +1262,7 @@ class Presets:
             if table.modifiers_doc(reg) != held_mods:     # the modifiers as they were
                 table.set_modifiers(held_mods, reg)
             for scheme, ids in held_banks.items():        # the banks as they were
-                bank = self._banks()[scheme]
+                bank = self.banks()[scheme]
                 if bank.doc() != ids:
                     bank.set(ids)
             if gs.mark() != held_graph:          # the graph as it was
@@ -1353,7 +1353,7 @@ class Presets:
         doc[GRAPH_KEY] = copy.deepcopy(section)
         # plan 31 B: a bank's membership, only where it is not the default —
         # a preset of four LFOs writes the file it always did
-        for bank in self._banks().values():
+        for bank in self.banks().values():
             if bank.doc() != list(bank.DEFAULT):
                 doc[bank.KEY] = bank.doc()
         values = self._values()
@@ -1383,9 +1383,10 @@ class Presets:
             doc[MEDIA_KEY] = media.to_json()
         return doc
 
-    def _banks(self) -> dict:
+    def banks(self) -> dict:
         """The router's modulator banks by scheme (plan 31 B); none on a
-        router that steps none (the tests' bare ones)."""
+        router that steps none (the tests' bare ones). Public (plan 40
+        review fix): GRAPH's spawn reads them for its `patches.Host`."""
         banks = getattr(self.router, "_banks", None)
         return banks() if callable(banks) else {}
 
@@ -1478,7 +1479,7 @@ class Presets:
         spec = getattr(self._graph_section(), "spec", None)
         held = {f"render:{n}" for n in patches.spec_names(spec)}
         held |= {m.id for m in getattr(self.router.table, "modifiers", ())}
-        banks = self._banks()
+        banks = self.banks()
         for scheme in ("lfo", "env"):
             bank = banks.get(scheme)
             ids = bank.doc() if bank is not None else range(1, 100)
@@ -1580,7 +1581,7 @@ class Presets:
                 None if section is None else json.dumps(section, sort_keys=True),
                 table.modifiers_doc(self.reg),
                 # plan 31 B: an LFO added or removed
-                {s: b.doc() for s, b in self._banks().items()},
+                {s: b.doc() for s, b in self.banks().items()},
                 # plan 28 N2: a node moved on the GRAPH page; none, no part
                 json.dumps(getattr(self, "layout", None) or None, sort_keys=True),
                 # plan 32: a bin entry assigned or cleared
