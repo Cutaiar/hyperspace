@@ -381,18 +381,29 @@ def view_of(panel) -> graphview.View | None:
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
     lanes = _lanes(panel)
-    k = graphview.key(table, reg, router, devices, rgraph, spec)
+    # plan 40 T2: the preset's groups (made, opened, renamed: a new view)
+    groups = getattr(getattr(getattr(panel, "library", None), "presets", None), "groups", None)
+    k = (graphview.key(table, reg, router, devices, rgraph, spec), groups_key(groups))
     if st["view"] is None or st["key"] != k:
         chain = getattr(getattr(panel, "audio", None), "chain", None)
         bands = (getattr(router, "labels", {}).get("lane")
                  or (getattr(chain, "band_names", None) if chain is not None else None))
         st["view"] = graphview.build(table, reg, router, devices, rgraph, spec,
                                      lanes=lanes, bands=bands, template=template_of(panel),
-                                     slots=getattr(panel, "outputs", None) or ())
+                                     slots=getattr(panel, "outputs", None) or (),
+                                     groups=groups)
         st["key"] = k
     else:
         graphview.refresh(st["view"], reg, router, lanes, lambda nid: collapsed(st, nid))
     return st["view"]
+
+
+def groups_key(groups) -> tuple:
+    """Plan 40 T2: what the view's groups are made of, cheaply compared
+    each frame (`view_of`)."""
+    return tuple((g.get("id"), g.get("name"), tuple(g.get("nodes") or ()), bool(g.get("open")),
+                  g.get("patch"), len(g.get("kept_by_host") or ()))
+                 for g in groups or () if isinstance(g, dict))
 
 
 def template_of(panel):
@@ -460,11 +471,14 @@ def hidden_ids(st: dict, view: graphview.View) -> frozenset[str]:
     """Plan 36 T6: the node ids the **preset only** chip leaves off the
     canvas (`graphview.preset_only` draws the rest); none while it is off.
     Drawing only: no wire, table or position changes, and the layout
-    (`areas_of`) still lays every node out, so hiding moves nothing."""
+    (`areas_of`) still lays every node out, so hiding moves nothing.
+    Plan 40 T2 (D4): and a folded group's members, whatever the chip —
+    their group's node stands for them until +."""
+    fold = frozenset(graphview.folded(view))
     if not st.get("preset_only", PRESET_ONLY):
-        return frozenset()
+        return fold
     keep = graphview.preset_only(view)
-    return frozenset(n.id for n in view.nodes if n.id not in keep)
+    return frozenset(n.id for n in view.nodes if n.id not in keep) | fold
 
 
 def _drawn_id(st: dict, view: graphview.View, nid: str) -> bool:
@@ -833,6 +847,12 @@ def _select(st: dict, view: graphview.View) -> None:
     `select_node` asked for (OUTPUT's "open on GRAPH") the same."""
     if st.pop("deselect", False):
         ed.clear_selection()
+    gid = st.pop("select_group", None)          # plan 40 T2: Rename… (its side pane's name)
+    g = view.group(gid) if gid else None
+    if g is not None:
+        ed.clear_selection()
+        ed.select_node(ed.NodeId(_id(st, "n:" + (region_id(g.id) if g.open else g.id))))
+        return
     nid = st.pop("select_node", None)
     got = view.node(nid) if nid else None
     if got is not None and drawn_node(st, got):
@@ -1197,6 +1217,7 @@ def _place(panel, st: dict, view: graphview.View) -> None:
         if applied.get(n.id) != target:
             ed.set_node_position(ed.NodeId(_id(st, "n:" + n.id)), imgui.ImVec2(*target))
             applied[n.id] = target
+    _place_groups(panel, st, view, applied, px, py)     # plan 40 T2
     for area, xy in lay.lines.items():        # plan 28 N9: each area's idle line
         lid = graphview.idle_id(area)
         target = (float(xy[0]) + px, float(xy[1]) + py)
@@ -1212,13 +1233,17 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         return
     pre, show = _layouts(panel)
     applied = st["applied"]
+    carried = _moved_groups(panel, st, view, applied)    # plan 40 T2: a group's drop first
     for n in view.nodes:
-        if not drawn_node(st, n):              # plan 28 N9: an idle node is not on the canvas
+        if not drawn_node(st, n) or n.id in carried:   # plan 28 N9: an idle node is not drawn
             continue
         p = ed.get_node_position(ed.NodeId(_id(st, "n:" + n.id)))
         now = (float(round(p.x)), float(round(p.y)))
         was = applied.get(n.id)
         if was is None or (round(was[0]), round(was[1])) == now:
+            continue
+        if _left_group(panel, st, view, n, now):        # plan 40 T2: ungroup one
+            applied[n.id] = now
             continue
         applied[n.id] = now
         # (plan 36 T5: a node the preset's map already places — a new
@@ -1257,11 +1282,20 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _place(panel, st, view)
     lay = st["auto"][1]
     _titles(st, lay)                    # plan 28 N9: behind the nodes
+    st["regions"] = {}
+    for g in view.groups:               # plan 40 T2: an open group's region, under its nodes
+        if g.open:
+            _region(st, g)
     st["errors"] = effect_errors(panel, view)
     drawn: set[str] = set()
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
+    for g in view.groups:               # plan 40 T2: a folded group's node, an open one's title
+        if g.open:
+            _region_title(panel, st, g)
+        else:
+            _group_node(panel, st, view, g, drawn)
     _want_thumbs(st, view)              # plan 37 C1: after the nodes, their sizes known
     if st["thumbs"] is not None and hasattr(st["thumbs"], "want_hues"):
         # plan 37 C2: the hues while the switch is lit, none from the frame it goes off
@@ -1302,7 +1336,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     _create(panel, st, view)
     _delete(panel, st, view)
     _menus(panel, st, view)
-    _hover(st, view)
+    _hover(st, view, panel)
     _moved(panel, st, view)
     imgui.pop_font()
     ed.end()
@@ -1489,7 +1523,8 @@ def _wiring(st: dict, view: graphview.View):
         st["throughs"] = {c.id: c for c in lay.throughs}
         held = st["wiring"] = (k, graphview.wiring(
             view, lambda nid: collapsed(st, nid), lambda c: drawn_cable(st, c),
-            lambda nid: _drawn_id(st, view, nid), lay.throughs))
+            lambda nid: _drawn_id(st, view, nid), lay.throughs,
+            folded=graphview.folded(view)))     # plan 40 T2 (D4)
     else:
         graphview.readings(held[1][1])
     return held[1]
@@ -1588,6 +1623,416 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.end_node()
 
 
+# ---------------------------------------------------------------- plan 40 T2: groups (P2, D4)
+#
+# A group of the loaded preset (`graphview.VGroup`, the preset's `groups`)
+# is drawn as one node while it is folded (`_group_node`: its name and +,
+# its picture pins, a row per boundary param with its cable, its status —
+# what it waits for, P4 — and its last picture outlet's thumbnail); its
+# members are left off the canvas (`hidden_ids`) and so is every cable with
+# both ends inside — the one place a cable is folded away, the owner's
+# (D4). Open, its members are drawn where they sit inside a tinted region
+# (`_region`) whose title (`_region_title`: its name and -) drags every
+# member by the same delta (one undo step); a member dragged out of the
+# region leaves the group. Right-click with nodes selected → Group; a
+# group's menu → Open / Fold, Rename…, Ungroup; each one undo step
+# (`group_edit`: the page's `Edit` with `undo.push(label, load=True)`).
+
+GROUP_TINT = imgui.ImVec4(0.38, 0.72, 1.0, 0.07)     # an open group's region, under its nodes
+GROUP_EDGE = imgui.ImVec4(0.38, 0.72, 1.0, 0.40)
+GROUP_TITLE = imgui.ImVec4(0.38, 0.72, 1.0, 0.22)    # its title bar
+GROUP_BAR = graphview.ROW_H                          # the title bar's height, canvas units
+REGION = "region:"                                   # an open group's title node: region:group.1
+OPEN_GROUP_TIP = "Open this group in place: its nodes where they sit, every cable drawn"
+FOLD_GROUP_TIP = ("Fold this group: one node, its inside cables folded away until + "
+                  "(the owner's one exception to no hidden cables, D4)")
+REGION_TIP = "Drag the title to move every node of the group; drag a node out to take it out"
+
+
+def region_id(gid: str) -> str:
+    """An open group's title node on the canvas."""
+    return f"{REGION}{gid}"
+
+
+def group_at(view: graphview.View, name: str):
+    """The group a canvas node name stands for — a folded group's node
+    (``group.1``) or an open one's title (``region:group.1``) — or None."""
+    return view.group(name.removeprefix(REGION))
+
+
+def group_edit(panel) -> graphview.Edit | None:
+    """The page's `Edit` for the group verbs: the router's table and the
+    preset's graph section (`patches.select` reads both), the loaded
+    `Presets` (its `groups` and `layout`), one undo step per verb pushed
+    with the library's marks (`load=True`: they carry both)."""
+    e = edit_of(panel)
+    if e is None:
+        return None
+    e.push = lambda label: undo.push(label, load=True)
+    e.presets = getattr(getattr(panel, "library", None), "presets", None)
+    return e
+
+
+def _group_said(panel, e: graphview.Edit, why: str | None) -> str | None:
+    st = _state(panel)
+    _note(st, why)
+    if why is None and e.said:
+        st["said"] = e.said
+    return why
+
+
+def group_nodes(panel, ids) -> dict | None:
+    """Group (plan 40 T2): canvas ids `ids` made one group, folded — what
+    the lift's rule leaves out said on the head ("scene is the frame's;
+    left out"). Returns the entry, or None."""
+    e = group_edit(panel)
+    if e is None:
+        return None
+    entry, said = e.group(ids)
+    _group_said(panel, e, "; ".join(said) if said else None)
+    if entry is not None:
+        _state(panel)["said"] = e.said
+    return entry
+
+
+def ungroup(panel, gid: str) -> str | None:
+    """Ungroup: the group's entry gone, every node and cable where it was."""
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.ungroup(gid))
+
+
+def rename_group(panel, gid: str, name: str) -> str | None:
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.rename_group(gid, name))
+
+
+def set_open(panel, gid: str, on: bool) -> str | None:
+    """Open (`+`) or Fold (`-`) a group: the preset's, one undo step."""
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.set_open(gid, on))
+
+
+def move_group(panel, gid: str, delta, positions) -> str | None:
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.move_group(gid, delta, positions))
+
+
+def leave_group(panel, gid: str, nid: str, at=None) -> str | None:
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.leave_group(gid, nid, at))
+
+
+def selected_ids(st: dict) -> list[str]:
+    """The canvas ids of the selected nodes (a group's node as its id, an
+    open group's title as its group's), in selection order."""
+    if st.get("editor") is None:
+        return []
+    out = []
+    for nk in ed.get_selected_nodes():
+        name = st["names"].get(nk.id(), "")[2:]
+        if name and not name.startswith("idle:"):
+            out.append(name.removeprefix(REGION))
+    return list(dict.fromkeys(out))
+
+
+def group_status(panel, view: graphview.View, g) -> str:
+    """A group node's status line (plan 40 P4, T4's words): what its
+    members' rows wait for — "waits for apc40 (lost): K1" — "" when every
+    device is there, or with no device registry (a panel from a test).
+    Once a frame per group."""
+    from . import devices  # (late, as `panel_wants`)
+    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
+    if rig is None or router is None:
+        return ""
+    key = (imgui.get_frame_count(), id(rig), id(router.table), id(view))
+    cache = panel.__dict__.get("_group_wants")
+    if cache is None or cache[0] != key:
+        cache = panel.__dict__["_group_wants"] = (key, {})
+    got = cache[1].get(g.id)
+    if got is None:
+        got = cache[1][g.id] = devices.want_words(
+            devices.wants_for(router.table, rig, graphview.group_params(g)))
+    return got
+
+
+def group_tip(panel, view: graphview.View, g) -> str:
+    """Hovering a group's node: its name, its nodes, its provenance, its
+    boundary in words, what it waits for, and how to open it."""
+    names = [m.label for m in g.members]
+    more = len(names) - 6
+    lines = [g.name, f"{len(names)} node{'s' if len(names) != 1 else ''}: "
+             + ", ".join(names[:6]) + (f", + {more} more" if more > 0 else "")]
+    if g.patch:
+        lines.append(f"from patch {g.patch}")
+    lines += graphview.group_words(view, g)[:graphview.TIP_ROWS]
+    status = group_status(panel, view, g)
+    if status:
+        lines.append(status)
+    lines.append("- folds it" if g.open else "+ opens it in place")
+    return "\n".join(lines)
+
+
+def _laid(panel, st: dict, nid: str):
+    """Where node `nid` sits in layout units: the preset's or the show's
+    position, else where the canvas put it, else its place in its area."""
+    pre, show = _layouts(panel)
+    for m in (pre, show, st.get("sat"), st["auto"][1].nodes if st.get("auto") else None):
+        if m and m.get(nid) is not None:
+            return m[nid]
+    return None
+
+
+def _size(st: dict, nid: str) -> tuple[float, float]:
+    sz = ed.get_node_size(ed.NodeId(_id(st, "n:" + nid)))
+    return ((float(sz.x) if sz.x > 0 else NODE_W),
+            (float(sz.y) if sz.y > 0 else graphview.HEAD_H))
+
+
+def group_area(st: dict, g, positions) -> tuple[float, float, float, float] | None:
+    """An open group's region on the canvas from its members' `positions`
+    (canvas units): their rect, `graphview.GAP` round it and the title bar
+    above."""
+    area = graphview.region(g.rect(positions, lambda nid: _size(st, nid)))
+    if area is None:
+        return None
+    return (area[0], area[1] - GROUP_BAR, area[2], area[3])
+
+
+def _place_groups(panel, st: dict, view: graphview.View, applied: dict,
+                  px: float, py: float) -> None:
+    """Each group's node where it belongs this frame (`_place`): a folded
+    one at its members' top-left (D4: it has no position of its own), an
+    open one's title over its members' region — and, while that title is
+    dragged, its members follow it on the canvas (written on the drop:
+    `_moved_groups`)."""
+    for g in view.groups:
+        laid = {m.id: _laid(panel, st, m.id) for m in g.members}
+        laid = {k: v for k, v in laid.items() if v is not None}
+        if not laid:
+            continue
+        if g.open:
+            area = group_area(st, g, laid)
+            if area is None:
+                continue
+            nid, target = region_id(g.id), (area[0] + px, area[1] + py)
+        else:
+            nid = g.id
+            target = (min(float(v[0]) for v in laid.values()) + px,
+                      min(float(v[1]) for v in laid.values()) + py)
+        k = ed.NodeId(_id(st, "n:" + nid))
+        if applied.get(nid) != target:
+            ed.set_node_position(k, imgui.ImVec2(*target))
+            applied[nid] = target
+        elif g.open and imgui.is_mouse_down(imgui.MouseButton_.left):
+            p = ed.get_node_position(k)
+            dx, dy = float(round(p.x)) - target[0], float(round(p.y)) - target[1]
+            if dx or dy:                       # the title held and moved: the members follow
+                for m in g.members:
+                    a = applied.get(m.id)
+                    if a is not None:
+                        ed.set_node_position(ed.NodeId(_id(st, "n:" + m.id)),
+                                             imgui.ImVec2(a[0] + dx, a[1] + dy))
+
+
+def _moved_groups(panel, st: dict, view: graphview.View, applied: dict) -> set[str]:
+    """A group's node (folded) or title (open) dropped somewhere new: every
+    member moved by the same delta, in the preset's layout — one undo step
+    (`Edit.move_group`). Returns the members it moved (their drop is this
+    one, not theirs)."""
+    moved: set[str] = set()
+    for g in view.groups:
+        nid = region_id(g.id) if g.open else g.id
+        p = ed.get_node_position(ed.NodeId(_id(st, "n:" + nid)))
+        now = (float(round(p.x)), float(round(p.y)))
+        was = applied.get(nid)
+        if was is None or (round(was[0]), round(was[1])) == now:
+            continue
+        applied[nid] = now
+        dx, dy = now[0] - was[0], now[1] - was[1]
+        laid = {m.id: _laid(panel, st, m.id) for m in g.members}
+        move_group(panel, g.id, (dx, dy), {k: v for k, v in laid.items() if v is not None})
+        for m in g.members:
+            a = applied.get(m.id)
+            if a is not None:
+                applied[m.id] = (a[0] + dx, a[1] + dy)
+                moved.add(m.id)
+    return moved
+
+
+def _left_group(panel, st: dict, view: graphview.View, n: graphview.VNode,
+                now: tuple[float, float]) -> bool:
+    """Node `n`, an open group's member, dropped at `now` (canvas units):
+    when its rect lies wholly outside the region its group had before the
+    drag (`graphview.leaves`), it leaves the group — its position written
+    in the same step (`Edit.leave_group`). True when it left."""
+    g = graphview.group_of(view, n.id)
+    if g is None or not g.open:
+        return False
+    applied = st["applied"]
+    before = {m.id: applied[m.id] for m in g.members if m.id in applied}
+    w, h = _size(st, n.id)
+    if not graphview.leaves(group_area(st, g, before), (now[0], now[1], now[0] + w, now[1] + h)):
+        return False
+    px, py = panned(st)
+    leave_group(panel, g.id, n.id, (now[0] - px, now[1] - py))
+    return True
+
+
+def _region(st: dict, g) -> None:
+    """An open group's region (plan 40 T2): a tinted, edged rectangle round
+    its members as they sit this frame, its title bar's band on top — on
+    the canvas's own draw list before the nodes, so under them."""
+    pos = {}
+    for m in g.members:
+        p = ed.get_node_position(ed.NodeId(_id(st, "n:" + m.id)))
+        pos[m.id] = (float(p.x), float(p.y))
+    area = group_area(st, g, pos)
+    if area is None:
+        return
+    dl = imgui.get_window_draw_list()
+    a, b = imgui.ImVec2(area[0], area[1]), imgui.ImVec2(area[2], area[3])
+    dl.add_rect_filled(a, b, ui.u32(GROUP_TINT), 6.0)
+    dl.add_rect_filled(a, imgui.ImVec2(area[2], area[1] + GROUP_BAR), ui.u32(GROUP_TITLE), 6.0)
+    dl.add_rect(a, b, ui.u32(GROUP_EDGE), 6.0, 1.5)
+    st.setdefault("regions", {})[g.id] = area
+
+
+def _region_title(panel, st: dict, g) -> None:
+    """An open group's title: its name and -, a node of its own with no
+    ground (the region is drawn under it), as wide as the region — dragged,
+    it moves every member (`_moved_groups`)."""
+    area = st.get("regions", {}).get(g.id)
+    width = max((area[2] - area[0]) if area else NODE_W, NODE_W) - 2 * 8.0
+    clear = imgui.ImVec4(0, 0, 0, 0)
+    ed.push_style_color(ed.StyleColor.node_bg, clear)
+    ed.push_style_color(ed.StyleColor.node_border, clear)
+    ed.begin_node(ed.NodeId(_id(st, "n:" + region_id(g.id))))
+    imgui.push_id(region_id(g.id))
+    imgui.text(ui.fit_text(g.name, width - 40))
+    if imgui.is_item_hovered():
+        ed.suspend()
+        ui.tooltip(REGION_TIP)
+        ed.resume()
+    imgui.same_line(max(width - 24, 40))
+    if imgui.small_button("-"):
+        set_open(panel, g.id, False)
+    if imgui.is_item_hovered():
+        ed.suspend()
+        ui.tooltip(FOLD_GROUP_TIP)
+        ed.resume()
+    imgui.dummy(imgui.ImVec2(width, 0))
+    imgui.pop_id()
+    ed.end_node()
+    ed.pop_style_color(2)
+
+
+def _group_node(panel, st: dict, view: graphview.View, g, drawn: set[str]) -> None:
+    """A folded group (plan 40 T2): a node like a collapsed render node —
+    its stubs, its name and +, its last picture outlet's picture (plan 37),
+    its status (what it waits for), then a row per boundary pin: each
+    picture cable in and out, each member lane going out, each member param
+    a rig row or a crossing route lands on — its cable drawn into it — and
+    the rows a spawn's sheet kept for the preset."""
+    ed.begin_node(ed.NodeId(_id(st, "n:" + g.id)))
+    imgui.push_id(g.id)
+    # (its stubs: where a cable no boundary pin names would end — none, by
+    # `attach_groups`; kept so no cable can lose an end)
+    _stub(st, graphview.stub_in(g.id), ed.PinKind.input, False, drawn)
+    imgui.same_line()
+    imgui.text(ui.fit_text(g.name, NODE_W - 40 - 2 * PIN))
+    imgui.same_line(NODE_W - 30 - PIN)
+    if imgui.small_button("+"):
+        set_open(panel, g.id, True)
+    if imgui.is_item_hovered():
+        ed.suspend()
+        ui.tooltip(OPEN_GROUP_TIP)
+        ed.resume()
+    imgui.same_line(NODE_W - PIN)
+    _stub(st, graphview.stub_out(g.id), ed.PinKind.output, False, drawn)
+    n = view.node(g.thumb) if g.thumb else None
+    if n is not None and n.thumb is not None:   # plan 37: its last picture outlet's
+        _thumb(st, n)
+    k = len(g.members)
+    imgui.text_disabled(ui.fit_text(f"group · {k} node{'s' if k != 1 else ''}"
+                                    + (f" · from {g.patch}" if g.patch else ""), NODE_W))
+    status = group_status(panel, view, g)
+    if status:
+        imgui.text_colored(ui.WARN, ui.fit_text(status, NODE_W))
+    for port in g.ports:
+        _port(st, port, drawn)
+    for row in g.kept_by_host:
+        imgui.text_disabled(ui.fit_text(graphview.kept_words(row), NODE_W))
+    imgui.dummy(imgui.ImVec2(NODE_W, 0))
+    imgui.pop_id()
+    ed.end_node()
+
+
+def _group_side(panel, st: dict, view: graphview.View, g) -> None:
+    """A selected group's side pane (plan 40 T2): its name (Enter renames,
+    one undo step), its provenance, what it waits for, its nodes as chips
+    (a click opens the group and selects that node), its boundary in words,
+    the rows kept for the preset, and T3's chips (`_group_chips`)."""
+    ui._micro("group")
+    names = st.setdefault("group_names", {})
+    if names.get(g.id, (None, None))[0] != g.name:
+        names[g.id] = (g.name, g.name)
+    imgui.set_next_item_width(imgui.get_content_region_avail().x)
+    entered, text = imgui.input_text("##graph.group.name", names[g.id][1],
+                                     imgui.InputTextFlags_.enter_returns_true)
+    names[g.id] = (g.name, text)
+    if entered:
+        rename_group(panel, g.id, text)
+    if g.patch:
+        imgui.text_disabled(f"from patch {g.patch}")
+    status = group_status(panel, view, g)
+    if status:
+        imgui.text_colored(ui.WARN, status)
+    imgui.text_disabled(("open" if g.open else "folded") + " · right-click it: "
+                        + ("Fold" if g.open else "Open") + ", Rename…, Ungroup")
+    ui._micro("nodes")
+    for i, m in enumerate(g.members):
+        if i:
+            imgui.same_line()
+            if imgui.get_content_region_avail().x < ui.chip_w(m.label):
+                imgui.new_line()
+        if ui.chip(f"{m.label}##graph.group.{m.id}"):
+            if not g.open:
+                set_open(panel, g.id, True)
+            st["select_node"] = m.id
+    words = graphview.group_words(view, g)
+    if words:
+        ui._micro("boundary")
+        for line in words:
+            imgui.text_wrapped(line)
+    for row in g.kept_by_host:
+        imgui.text_disabled(graphview.kept_words(row))
+    _group_chips(panel, g)
+
+
+def _group_chips(panel, g) -> None:
+    """Plan 40 T3's seam: the group's **save as patch** / **update patch**
+    / **wire as saved** chips go here. T2 draws none."""
+
+
+def _group_menu(panel, st: dict, view: graphview.View, g) -> None:
+    """A group's right-click menu: Open / Fold, Rename… (the side pane's
+    name, the group selected), Ungroup."""
+    imgui.text_disabled(g.name)
+    if imgui.menu_item_simple("fold" if g.open else "open"):
+        set_open(panel, g.id, not g.open)
+    if imgui.menu_item_simple("rename…"):
+        st["select_group"] = g.id
+    if imgui.menu_item_simple("ungroup"):
+        ungroup(panel, g.id)
+
+
+def _group_item(panel, st: dict) -> None:
+    """The menus' **Group** item, while two nodes or more are selected."""
+    sel = st.get("menu_sel") or []
+    if len(sel) >= 2 and imgui.menu_item_simple(f"group {len(sel)} nodes"):
+        group_nodes(panel, sel)
+
+
 # ---------------------------------------------------------------- plan 37 C1: the thumbnails
 
 def thumb_name(n: graphview.VNode) -> str:
@@ -1625,6 +2070,12 @@ def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
         if rect is not None and not on_screen(rect, *where(n.id)):
             continue
         out[thumb_name(n)] = n.thumb
+    for g in view.groups:               # plan 40 T2: a folded group's last picture outlet
+        n = view.node(g.thumb) if not g.open and g.thumb else None
+        if n is None or n.thumb is None or by_preview(n):
+            continue
+        if rect is None or on_screen(rect, *where(g.id)):
+            out[thumb_name(n)] = n.thumb
     return out
 
 
@@ -1814,7 +2265,7 @@ def cable_tip(view: graphview.View, c: graphview.VCable) -> str:
     return "\n".join(lines)
 
 
-def _hover(st: dict, view: graphview.View) -> None:
+def _hover(st: dict, view: graphview.View, panel=None) -> None:
     tip = None
     names = st["names"]
     link = ed.get_hovered_link().id()
@@ -1828,6 +2279,12 @@ def _hover(st: dict, view: graphview.View) -> None:
         tip = (graphview.bundle_tip(view, bundle) if bundle is not None
                else cable_tip(view, c) if c is not None
                else f"{through.label}\n{THROUGH_NO_DELETE}" if through is not None else None)
+    elif pin and graphview.is_group_pin(names.get(pin, "")):      # plan 40 T2
+        g = graphview.view_group_of_pin(view, names[pin])
+        port = g.port(names[pin]) if g is not None else None
+        if port is not None:
+            rows = [graphview.cable_words(view, c) for c in g.rows.get(port.id, ())]
+            tip = "\n".join([f"{g.name} · {port.name}", *rows[:graphview.TIP_ROWS]])
     elif pin and graphview.is_stub(names.get(pin, "")):
         n = view.node(graphview.stub_node(names[pin]))
         if n is not None:
@@ -1845,7 +2302,10 @@ def _hover(st: dict, view: graphview.View) -> None:
     elif node:
         n = view.node(names.get(node, "")[2:])
         err = st.get("errors", {}).get(n.id) if n is not None else None
-        if err:                             # plan 33 U: a compile error is its hover
+        g = group_at(view, names.get(node, "")[2:]) if n is None else None
+        if g is not None:                   # plan 40 T2
+            tip = group_tip(panel, view, g) if panel is not None else g.name
+        elif err:                             # plan 33 U: a compile error is its hover
             tip = f"{n.label}\n{err}"
         elif n is not None and n.thumb is not None and st.get("thumb_hover") == n.id:
             tip = thumb_tip(st, n)          # plan 37 C2: on its picture
@@ -2099,6 +2559,9 @@ def _selection(st: dict, view: graphview.View):
         n = view.node(names.get(nk.id(), "")[2:])
         if n is not None:
             return ("node", n)
+        g = group_at(view, names.get(nk.id(), "")[2:])     # plan 40 T2
+        if g is not None:
+            return ("group", g)
     return None
 
 
@@ -2129,6 +2592,13 @@ def _side(panel, st: dict, view: graphview.View, sel) -> None:
         c = obj
         ui._micro(c.kind)
         _route_row(panel, router, view, c)
+        return
+    if what == "group":                         # plan 40 T2
+        imgui.push_id(f"graph.side.{obj.id}")
+        try:
+            _group_side(panel, st, view, obj)
+        finally:
+            imgui.pop_id()
         return
     n = obj
     imgui.push_id(f"graph.side.{n.id}")
@@ -2866,6 +3336,8 @@ def _create(panel, st: dict, view: graphview.View) -> None:
             pa, pb = st["names"].get(got[0]), st["names"].get(got[1])
             if pa and pb:                   # plan 28 N7: a one-output node's out stub
                 pa, pb = graphview.stub_pin(view, pa), graphview.stub_pin(view, pb)
+                # (plan 40 T2: a folded group's pin is its member's)
+                pa, pb = graphview.real_pin(view, pa), graphview.real_pin(view, pb)
             if pa and pb and pa != pb:
                 if graphview.is_stub(pa) or graphview.is_stub(pb):   # plan 28 N7
                     _stub_drag(panel, st, view, pa, pb)
@@ -3065,6 +3537,9 @@ def _delete(panel, st: dict, view: graphview.View) -> None:
                 n = view.node(names.get(nk.id(), "")[2:])
                 if n is None:
                     ed.reject_deleted_item()
+                    g = group_at(view, names.get(nk.id(), "")[2:])     # plan 40 T2
+                    if g is not None:
+                        _note(st, graphview.GROUP_NO_DELETE.format(name=g.name))
                     continue
                 DELETE_NODE.get(n.kind, _rig_node_cut)(panel, st, view, n)
             lk = ed.LinkId()
@@ -3106,6 +3581,7 @@ def _menus(panel, st: dict, view: graphview.View) -> None:
         subject = None
     if subject is not None:
         st["menu"], st["menu_at"] = subject, (at.x, at.y)
+        st["menu_sel"] = selected_ids(st)       # plan 40 T2: what Group would group
         imgui.open_popup(MENU)
     if imgui.begin_popup(MENU):
         menu(panel, st, view)
@@ -3136,9 +3612,14 @@ def menu(panel, st: dict, view: graphview.View) -> None:
             _cable_menu(panel, view, c, st["menu_at"])
     elif what == "node":
         n = view.node(name)
+        g = group_at(view, name) if n is None else None
         if n is not None:
+            _group_item(panel, st)              # plan 40 T2: with nodes selected
             _node_menu(panel, view, n)
+        elif g is not None:
+            _group_menu(panel, st, view, g)
     elif what == "picker":
+        _group_item(panel, st)                  # plan 40 T2: with nodes selected
         picker(panel, view, st["menu_at"])
 
 
