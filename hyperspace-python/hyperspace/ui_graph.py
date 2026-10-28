@@ -1164,7 +1164,7 @@ def _monitor(panel, origin, avail) -> None:
     dl = imgui.get_foreground_draw_list()
     dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
                  imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
-    dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 0, 2.0)
+    dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 2.0)
     dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "PROJECTOR")
     m = imgui.get_mouse_pos()
     if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
@@ -1244,6 +1244,7 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
     pre, show = _layouts(panel)
     applied = st["applied"]
     carried = _moved_groups(panel, st, view, applied)    # plan 40 T2: a group's drop first
+    moves = []
     for n in view.nodes:
         if not drawn_node(st, n) or n.id in carried:   # plan 28 N9: an idle node is not drawn
             continue
@@ -1252,10 +1253,17 @@ def _moved(panel, st: dict, view: graphview.View) -> None:
         was = applied.get(n.id)
         if was is None or (round(was[0]), round(was[1])) == now:
             continue
-        if _left_group(panel, st, view, n, now):        # plan 40 T2: ungroup one
-            applied[n.id] = now
-            continue
+        moves.append((n, now))
+    # plan 40 T2: ungroup one — every member dropped outside its region (the
+    # regions as they were before this drop) leaves in one undo step
+    left = {n.id: out for n, now in moves
+            if (out := _left_group(st, view, n, now, applied)) is not None}
+    if left:
+        leave_groups(panel, list(left.values()))
+    for n, now in moves:
         applied[n.id] = now
+        if n.id in left:
+            continue
         # (plan 36 T5: a node the preset's map already places — a new
         # preset's All outputs — moves there, or that entry would hold it)
         m = pre if graphview.home(n) == graphview.PRESET or (pre and n.id in pre) else show
@@ -1734,16 +1742,26 @@ def leave_group(panel, gid: str, nid: str, at=None) -> str | None:
     return None if e is None else _group_said(panel, e, e.leave_group(gid, nid, at))
 
 
+def leave_groups(panel, moves) -> str | None:
+    """Members dropped out of their regions together — ``(group id, node
+    id, at)`` each — one undo step (`Edit.leave_groups`)."""
+    e = group_edit(panel)
+    return None if e is None else _group_said(panel, e, e.leave_groups(moves))
+
+
 def selected_ids(st: dict) -> list[str]:
-    """The canvas ids of the selected nodes (a group's node as its id, an
-    open group's title as its group's), in selection order."""
+    """The canvas ids of the selected nodes (a folded group's node as its
+    id), in selection order — what **Group** groups. An open group's title
+    is left out (plan 40 review fix): a box-select across an open region
+    takes its title with its members, and the group is not what was meant
+    ("group.1 is a group: … left out" was noise)."""
     if st.get("editor") is None:
         return []
     out = []
     for nk in ed.get_selected_nodes():
         name = st["names"].get(nk.id(), "")[2:]
-        if name and not name.startswith("idle:"):
-            out.append(name.removeprefix(REGION))
+        if name and not name.startswith(("idle:", REGION)):
+            out.append(name)
     return list(dict.fromkeys(out))
 
 
@@ -1874,23 +1892,24 @@ def _moved_groups(panel, st: dict, view: graphview.View, applied: dict) -> set[s
     return moved
 
 
-def _left_group(panel, st: dict, view: graphview.View, n: graphview.VNode,
-                now: tuple[float, float]) -> bool:
+def _left_group(st: dict, view: graphview.View, n: graphview.VNode,
+                now: tuple[float, float], applied: dict
+                ) -> tuple[str, str, tuple[float, float]] | None:
     """Node `n`, an open group's member, dropped at `now` (canvas units):
     when its rect lies wholly outside the region its group had before the
-    drag (`graphview.leaves`), it leaves the group — its position written
-    in the same step (`Edit.leave_group`). True when it left."""
+    drag (`graphview.leaves`, over `applied`: where each member was), it
+    leaves the group — (the group's id, its id, its new position in layout
+    units) for `Edit.leave_groups`, which `_moved` calls once for every
+    leaver of the drop. None when it stays."""
     g = graphview.group_of(view, n.id)
     if g is None or not g.open:
-        return False
-    applied = st["applied"]
+        return None
     before = {m.id: applied[m.id] for m in g.members if m.id in applied}
     w, h = _size(st, n.id)
     if not graphview.leaves(group_area(st, g, before), (now[0], now[1], now[0] + w, now[1] + h)):
-        return False
+        return None
     px, py = panned(st)
-    leave_group(panel, g.id, n.id, (now[0] - px, now[1] - py))
-    return True
+    return g.id, n.id, (now[0] - px, now[1] - py)
 
 
 def _region(st: dict, g) -> None:
@@ -2085,6 +2104,7 @@ SAVE_PATCH_TIP = ("Save this group as a patch: its nodes, values, wires, rows an
 SHEET_UP = "{n} control{s} the preset already uses: the sheet asks which keeps each"
 SPAWN_CANCELLED = "spawn of {name} cancelled: nothing landed"
 NO_LIBRARY = "no library: nothing to spawn"
+WAITS_FOR = "waits for "    # plan 40 P4: a spawn's rows the rig lacks (`devices.want_words`')
 
 
 def group_entry_of(panel, gid: str) -> dict | None:
@@ -2108,7 +2128,10 @@ def patch_list(panel) -> list[dict]:
     "slug", "note", "words", "ports"}`` (`graphview.patch_words`: "in:
     picture · out: picture · wants: K1, right hand y, band 1"). A patch
     the library refuses is left out (its words on the footer once).
-    Re-read only when the listing or a file moves."""
+    Asked every frame the canvas's menu is open or a line is dragged, it
+    looks at the disk only on `ui_presets`' poll (plan 40 review fix): the
+    same listing as last time is the same list, with no file stat'ed; a new
+    listing re-reads only when the listing or a file moved."""
     from . import library as libmod
     from . import ui_presets
     lib = getattr(panel, "library", None)
@@ -2116,12 +2139,15 @@ def patch_list(panel) -> list[dict]:
         return []
     st = _state(panel)
     listed = ui_presets.names(panel, libmod.PATCHES)
+    held = st.get("patch_list")
+    if held is not None and held[0] is listed:
+        return held[2]
     paths = [lib.path_of(libmod.PATCHES, n) for n in listed]
     key = tuple((n, str(p), p.stat().st_mtime if p is not None and p.exists() else 0.0)
                 for n, p in zip(listed, paths))
-    held = st.get("patch_list")
-    if held is not None and held[0] == key:
-        return held[1]
+    if held is not None and held[1] == key:
+        st["patch_list"] = (listed, key, held[2])
+        return held[2]
     out = []
     for name, path in zip(listed, paths):
         if path is None:
@@ -2134,7 +2160,7 @@ def patch_list(panel) -> list[dict]:
         out.append({"name": name, "slug": path.name[:-5], "note": str(doc.get("note") or ""),
                     "words": graphview.patch_words(doc, _glyph(panel)),
                     "ports": tuple(patches.read(doc).ports)})
-    st["patch_list"] = (key, out)
+    st["patch_list"] = (listed, key, out)
     return out
 
 
@@ -2194,7 +2220,7 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
     stem = path.name[:-5] if path is not None else patches.slug(str(doc.get("name") or slug))
     at = view_centre(panel) if at is None else (float(at[0]), float(at[1]))
     gs = pre.graph
-    host = patches.Host.of(gs.spec, e.table, pre._banks(), _held_names(gs))
+    host = patches.Host.of(gs.spec, e.table, pre.banks(), _held_names(gs))
     landing = patches.spawn(doc, host, at, patch=stem)
     if splice is not None:
         why = graphview.splice_target(e, splice, landing.group.get("name") or stem,
@@ -2225,11 +2251,17 @@ def spawn(panel, slug: str, at=None, splice=None) -> str | None:
 def land_spawn(panel, landing, choices, splice=None) -> str | None:
     """Land `landing` with the sheet's `choices` (`Edit.spawn` / `Edit.splice`:
     one undo step through the doors); its words on the head. Returns the
-    refusal, or None."""
+    refusal, or None. What its rows wait for is said after the landing
+    (plan 40 P4: "…; waits for leap (not in this rig): right hand y") —
+    with no conflict there was no sheet to say it before the press."""
     e = group_edit(panel)
     if e is None:
         return NO_LIBRARY
     why = e.splice(landing, splice, choices) if splice is not None else e.spawn(landing, choices)
+    if why is None and e.said:
+        waits = ui_routing.sheet_wants(panel, landing, choices)
+        if waits:
+            e.said = f"{e.said}; {WAITS_FOR}" + " · ".join(waits)
     return _group_said(panel, e, why)
 
 
@@ -3736,6 +3768,7 @@ def _create(panel, st: dict, view: graphview.View) -> None:
 # ---- plan 28 N7: a drag onto a collapsed node's stub, and landing it ----
 
 BOTH_STUBS = "drag from a port: expand one of the two nodes first"
+GROUP_STUB = "{name} is folded: drop it on one of its pins, or open it (+)"
 LAND_HINT = "let go: pick one of {label}'s ports"
 LAND = "##graph.land"
 
@@ -3743,11 +3776,15 @@ LAND = "##graph.land"
 def stub_refusal(view: graphview.View, a: str, b: str) -> str | None:
     """Why a drag between pins `a` and `b`, one of them a node's stub, can
     open no port picker: both are stubs (once a one-output node's out stub
-    stands for its output, `graphview.stub_pin`), or both are outputs
-    (inputs)."""
+    stands for its output, `graphview.stub_pin`), the stub is a folded
+    group's (its picker would be empty: the group's pins are the drop),
+    or both are outputs (inputs)."""
     if graphview.is_stub(a) and graphview.is_stub(b):
         return BOTH_STUBS
     stub, fixed = (a, b) if graphview.is_stub(a) else (b, a)
+    g = view.group(graphview.stub_node(stub))
+    if g is not None:           # plan 40 review fix: a folded group has no ports to pick
+        return GROUP_STUB.format(name=g.name)
     into = graphview.pin_kind(stub) == graphview.STUB_IN
     if into == (not graphview.is_output(fixed)):
         return graphview.SAME_SIDE

@@ -2401,24 +2401,29 @@ class Bindings:
         scheme some device of this rig delivers as rows (`row_schemes`)?"""
         return is_continuous(b.scheme) and b.scheme not in getattr(self, "row_schemes", ())
 
+    def refusal(self, b: Binding) -> str | None:
+        """The words `_check` raises `ValueError` with for `b` whoever holds
+        its target — a sink's refusal, an op a continuous source has not, a
+        row no file may hold — or None. Read-only: a caller about to move
+        other rows for `b` asks first (plan 40's spawn: a one-owner
+        source's other rows go only once `b` is sure to land)."""
+        if b.is_sink:
+            return sink_refusal(b)
+        if self._lane_only(b) and b.op not in MOD_OPS:
+            return (f"{b.op!r} is not an op for a {b.scheme} source; "
+                    f"one of {', '.join(MOD_OPS)}")
+        return save_refusal(b)
+
     def _check(self, b: Binding) -> None:
         """The referee: a performer joining the table (or waking up) must
         find its target free, or held by itself. A continuous source has
         no other op — `abs` is MIDI's, the one path is Router.modulate. (A
         scheme a device delivers as rows — `row_schemes`, which the device
         registry extends through `Router.use` — is not continuous here.)"""
-        if b.is_sink:                # a value going out: no referee (plan 27 B3)
-            why = sink_refusal(b)
-            if why is not None:
-                raise ValueError(why)
-            return
-        if self._lane_only(b) and b.op not in MOD_OPS:
-            raise ValueError(f"{b.op!r} is not an op for a {b.scheme} source; "
-                             f"one of {', '.join(MOD_OPS)}")
-        why = save_refusal(b)
+        why = self.refusal(b)
         if why is not None:
             raise ValueError(why)
-        if not b.is_performer:
+        if b.is_sink or not b.is_performer:      # a value going out: no referee (plan 27 B3)
             return
         cur = next((x for x in self.bindings
                     if x is not b and x.is_performer and x.target == b.target), None)

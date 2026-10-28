@@ -77,6 +77,16 @@ def groups_of(doc: Any) -> list:
     """Plan 40 T2, the one step from `/7` to `/8`: the key is absent → no
     groups (a `/7`, a migrated older file and a `/8` without one alike)."""
     return list(doc.get(GROUPS_KEY) or []) if isinstance(doc, dict) else []
+
+
+def group_number(gid: Any) -> int:
+    """`group.3` → 3; 0 for anything else (plan 40: a group's id, read by
+    the preset's load and by GRAPH's Group — the one rule, kept here, a
+    leaf both import)."""
+    head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
+    return int(n) if head == "group" and dot and n.isdecimal() and int(n) >= 1 else 0
+
+
 # plan 35 M (row 381): `backdrop.history` is the capture wire now
 RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
 # the retired values a wire says now, not a switch (row 381): a row that

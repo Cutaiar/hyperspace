@@ -370,6 +370,39 @@ def test_the_conflict_sheet_asks_per_row_preselected_to_the_patch(rig):
         undo.install(None)
 
 
+def test_the_sheet_is_drawn_ahead_of_a_replace_question_up_with_it(rig, monkeypatch):
+    """Plan 40 T3 (D3): a Replace / Keep question and a spawn's conflict
+    sheet up together — the modal draws the sheet (its **Spawn**, not
+    **Replace**); once the sheet is answered the question comes next, in
+    the same modal, still unanswered."""
+    from test_graph_groups import with_patch
+
+    from hyperspace import ui
+    panel, table = rig.panel, rig.router.table
+    with_patch(rig)
+    rig.lib.load("presets", "party-trip")
+    frame(panel, "graph")
+    old = Binding("lfo:0", "view.speed", "push", 0.5)
+    new = Binding("lfo:1", "view.speed", "push", 0.5)
+    ui_routing.ask(panel, old, new, lambda: None)
+    assert ui_graph.spawn(panel, "acid-wash", (0.0, 0.0)) is None
+    drawn, real_chip = [], ui.chip
+    monkeypatch.setattr(ui_routing.ui, "chip", lambda label, *a, **k: (
+        drawn.append(label), real_chip(label, *a, **k))[1])
+    frame(panel)
+    st = ui_routing._state(panel)
+    assert st["modal"] and st["sheet"]
+    assert "Spawn##sheet" in drawn and "Replace" not in drawn
+    assert ui_routing.prompt(panel) is not None                        # still asking
+    ui_routing.settle_sheet(panel, False)
+    drawn.clear()
+    frame(panel)
+    assert st["modal"] and not st["sheet"]
+    assert "Replace" in drawn and "Spawn##sheet" not in drawn
+    ui_routing.answer(panel, False)
+    assert table.owner("view.speed") is None
+
+
 def test_the_scale_choices_leave_out_the_macros_and_a_macro_shows_its_owner(
         rig, tmp_path, monkeypatch):
     """Plan 13 §2.4: a macro scales a route as its depth subscriber, so the

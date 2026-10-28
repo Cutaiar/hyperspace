@@ -1010,3 +1010,12 @@ def test_the_patches_fold_lists_patches_hides_a_factory_one_and_renames_yours(
     assert [n for n, _, _ in drawn["rows"]] == ["their wash"]
     assert drawn["foot"] == ["show hidden (1)"]
     assert lib.list(PATCHES) == ["their wash"]
+    # × on yours: to the trash (restorable), not hidden
+    trashed = len(lib.trash())
+    monkeypatch.setattr(ui, "chip", lambda label, *a, **k: (
+        label == "×##×.their wash" or real_chip(label, *a, **k)))
+    frame(panel)
+    monkeypatch.setattr(ui, "chip", real_chip)
+    assert lib.list(PATCHES) == [] and lib.hidden(PATCHES) == frozenset({"acid-wash"})
+    assert not (lib.home / PATCHES / "their-wash.json").exists()
+    assert len(lib.trash()) == trashed + 1 and lib.trash()[0].group == PATCHES

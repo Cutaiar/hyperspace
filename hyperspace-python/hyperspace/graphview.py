@@ -3008,13 +3008,8 @@ NOTHING_OPEN = "no pin of {name} is open"
 SAVED_PATCH = "saved {name} as a patch"
 UPDATED_PATCH = "updated patch {name}"
 PATCH_NEEDS_NAME = "a patch needs a name"
+PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 RIG_KINDS = ("output", "channel", "camera", "cloud")   # always there: the rig's own nodes
-
-
-def _group_n(gid: Any) -> int:
-    """`group.3` → 3; 0 for anything else."""
-    head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
-    return int(n) if head == "group" and dot and n.isdecimal() else 0
 
 
 def group_pin(gid: str, direction: str, key: str) -> str:
@@ -4179,7 +4174,7 @@ class Edit:
         groups = self._groups()
         if groups is None:
             raise ValueError(NO_PRESET_GROUPS)
-        n = max((_group_n(g.get("id")) for g in groups), default=0) + 1
+        n = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0) + 1
         g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
         if entry.get("patch"):
             g["patch"] = str(entry["patch"])
@@ -4293,24 +4288,42 @@ class Edit:
         """A member dragged out of its region (**ungroup one**): its id taken
         from the list — and, with `at`, its new position written — one undo
         step; the last member leaving takes the group with it, said."""
-        g = self._group(gid)
-        if g is None:
-            return NO_GROUP.format(gid=gid)
-        if nid not in g["nodes"]:
+        return self.leave_groups([(gid, nid, at)])
+
+    def leave_groups(self, moves: Iterable[tuple[str, str, tuple[float, float] | None]]
+                     ) -> str | None:
+        """Several members dragged out of their regions at once — each
+        ``(group id, node id, at)`` — as **one** undo step (plan 40 review
+        fix: one gesture, one ⌘Z): each id taken from its list and its new
+        position written; a group its last member leaves goes, said."""
+        todo: list[tuple[dict, str, Any]] = []
+        for gid, nid, at in moves:
+            g = self._group(gid)
+            if g is None:
+                return NO_GROUP.format(gid=gid)
+            if nid in g["nodes"] and not any(t[1] == nid for t in todo):
+                todo.append((g, nid, at))
+        if not todo:
             return None
-        self._step(f"{nid} leaves {g['name']}")
-        g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
-        if at is not None:
-            lay = getattr(self.presets, "layout", None)
-            if lay is None:
-                lay = self.presets.layout = {}
-            lay[nid] = [round(float(at[0])), round(float(at[1]))]
-        node = nid.removeprefix("render:")
-        if not g["nodes"]:
-            self._groups().remove(g)
-            self.said = LEFT_EMPTY.format(node=node, name=g["name"])
-        else:
-            self.said = LEFT_GROUP.format(node=node, name=g["name"])
+        hit = list({id(g): g for g, _, _ in todo}.values())
+        self._step(f"{todo[0][1]} leaves {hit[0]['name']}" if len(todo) == 1 else
+                   f"{len(todo)} nodes leave {', '.join(g['name'] for g in hit)}")
+        lay = getattr(self.presets, "layout", None)
+        for g, nid, at in todo:
+            g["nodes"] = [cid for cid in g["nodes"] if cid != nid]
+            if at is not None:
+                if lay is None:
+                    lay = self.presets.layout = {}
+                lay[nid] = [round(float(at[0])), round(float(at[1]))]
+        said = []
+        for g in hit:
+            node = ", ".join(nid.removeprefix("render:") for gg, nid, _ in todo if gg is g)
+            if not g["nodes"]:
+                self._groups().remove(g)
+                said.append(LEFT_EMPTY.format(node=node, name=g["name"]))
+            else:
+                said.append(LEFT_GROUP.format(node=node, name=g["name"]))
+        self.said = "; ".join(said)
         return None
 
     # ---- plan 40 T3: patches (P3, D2, D3, D9) — a spawn is a fragment of a
@@ -4400,7 +4413,12 @@ class Edit:
             return why
         self._step(label)
         why = self._land_quiet(doc, label, "")
-        if why is not None:                 # (the dry run said it would land)
+        if why is not None:
+            # unreachable in practice: the dry run read this same doc (already
+            # normalised by it) over the same files and said it lands. Were it
+            # reached, nothing has been written yet, so the step just pushed
+            # closes with nothing to put back and `Undo._close` takes it off
+            # the stack (tests/test_graph_groups.py proves it)
             return why
         table, reg = self.table, self.reg
         notes = list(landing.notes)
@@ -4475,6 +4493,9 @@ class Edit:
                     table.add(b)
                     continue
                 if c.kind == "source":      # one axis, one param (`Learn._place`)
+                    why = table.refusal(b)  # asked first: the host's rows go only
+                    if why is not None:     # once the patch's is sure to land
+                        raise ValueError(why)
                     for x in [x for x in table.routes()
                               if x.source == b.source and x.target != b.target]:
                         table.remove(x)
@@ -4571,6 +4592,12 @@ class Edit:
         name = str(name or "").strip()
         if not name:
             return PATCH_NEEDS_NAME
+        stem = patches.slug(name)
+        lib = getattr(self.presets, "lib", None)
+        if (g.get("patch") != stem and lib is not None
+                and lib.path_of("patches", stem) is not None):     # (library.PATCHES)
+            # (review fix) another patch has this file: Save as never replaces it
+            return PATCH_EXISTS.format(name=name)
         spec, table, values, layout = self.presets.parts()
         _, refused = patches.select(spec, table, g["nodes"])
         if refused:
