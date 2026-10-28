@@ -224,7 +224,7 @@ def test_the_canvas_knows_the_segment():
 
     assert graphview.LABELS["segment"] == "Segment" and graphview.HOVERS["segment"]
     assert graphview.FRAME_CLASS["segment"] is G.SegmentNode
-    assert graphview.PICKER_GROUP["segment"] == "pictures"
+    assert graphview.PICKER_GROUP["segment"] == "media"      # (plan 39 T5: W6's MEDIA)
     stand = graphview._stand_in("segment.2")
     assert isinstance(stand, G.SegmentNode) and stand.name == "segment.2"
     owner = graphview.OWNERS["segment"]
