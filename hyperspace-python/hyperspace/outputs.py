@@ -28,6 +28,7 @@ moderngl and glsl at most — never app, ui or params — and the
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -359,6 +360,48 @@ void main() {
 """
 
 
+# plan 37 C2 (D3): a thumbnail's dominant hue, for the GRAPH head's
+# **pictures · tint cables** switch — read from the thumbnail (never the
+# full picture) at most once a second a node, at most one node a frame,
+# only while the page asks (`want_hues`); a grid of about `HUE_GRID` ×
+# `HUE_GRID` texels of it is what is weighed
+HUE_EVERY_S = 1.0
+HUE_GRID = 16
+
+
+def dominant_hue(data: bytes, size: tuple[int, int], grid: int = HUE_GRID
+                 ) -> tuple[float, float]:
+    """The dominant hue of an RGBA8 picture (`data`, rows of `size` (w, h)
+    texels): (hue in turns, 0 red · ⅓ green · ⅔ blue; how strongly, 0–1).
+    Each texel of a strided `grid` × `grid` sample is a vector in the hue
+    plane (x = r − (g + b)/2, y = √3/2 (g − b): its length is its chroma),
+    and the hue is their sum's angle — a mean weighted by chroma, so grey,
+    black and white texels weigh nothing. How strongly is the sum's length
+    over the texels weighed: 0 for a grey picture (no hue: the cable stays
+    plain red), up to 1 for one pure colour."""
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    sx, sy = max(1, w // grid), max(1, h // grid)
+    x = y = 0.0
+    n = 0
+    k = math.sqrt(3.0) / 2.0
+    for row in range(sy // 2, h, sy):
+        base = row * w * 4
+        for col in range(sx // 2, w, sx):
+            i = base + col * 4
+            if i + 2 >= len(data):
+                break
+            r, g, b = data[i] / 255.0, data[i + 1] / 255.0, data[i + 2] / 255.0
+            x += r - (g + b) / 2.0
+            y += k * (g - b)
+            n += 1
+    if n == 0:
+        return 0.0, 0.0
+    strength = math.hypot(x, y) / n
+    if strength < 1e-6:
+        return 0.0, 0.0
+    return (math.atan2(y, x) / (2.0 * math.pi)) % 1.0, min(1.0, strength)
+
+
 def thumb_size(src: tuple[int, int], px: int = THUMB_PX) -> tuple[int, int]:
     """A thumbnail's size for a picture of size `src`: its long side `px`,
     the picture's aspect (never under one texel, never above the source)."""
@@ -406,6 +449,12 @@ class PreviewTextures:
         self.repainted = 0
         self.error = ""
         self._prog = self._vao = self._sampler = None
+        # plan 37 C2: each name's dominant hue (`dominant_hue`) and when it
+        # was read; when the page last asked for hues (`want_hues`)
+        self.hues: dict[str, tuple[float, float]] = {}
+        self.hue_at: dict[str, float] = {}
+        self.hue_asked: float | None = None
+        self.hue_reads = 0
 
     # ---- the page's side
 
@@ -443,6 +492,17 @@ class PreviewTextures:
         size each — a node copied at least once and not dropped)."""
         return len(self.tex) if self.ctx is not None else len(self.sizes)
 
+    def want_hues(self) -> None:
+        """The page tints its picture cables (plan 37 C2): keep reading the
+        thumbnails' hues — one a frame, each at most once a second — until
+        it has not asked for `THUMB_DROP_S`."""
+        self.hue_asked = self.clock()
+
+    def hue(self, name: str) -> tuple[float, float] | None:
+        """`name`'s dominant hue as last read ((hue, strength): `dominant_hue`),
+        or None: never read, or dropped."""
+        return self.hues.get(name)
+
     # ---- the renderer's side
 
     def take(self) -> dict[str, str]:
@@ -454,6 +514,30 @@ class PreviewTextures:
         """A frame's copies start: none counted yet."""
         self.frame += 1
         self.count = self.repainted = 0
+        self._read_hue()
+
+    def _read_hue(self) -> None:
+        """Plan 37 C2: while the page asks (`want_hues`), the one thumbnail
+        whose hue is oldest — and at least `HUE_EVERY_S` old — read back
+        (a 192-texel RGBA8 texture: ~80 KB, one `glGetTexImage`) and
+        weighed (`dominant_hue`). Run before this frame's copies, so the
+        texture read is last frame's, long since drawn: no wait on this
+        frame's work. Never raises: a hue must not take the frame down."""
+        if self.hue_asked is None or self.clock() - self.hue_asked >= THUMB_DROP_S:
+            return
+        now = self.clock()
+        due = [(self.hue_at.get(n, -math.inf), n) for n in self.tex
+               if now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
+        if not due:
+            return
+        _, name = min(due)
+        self.hue_at[name] = now
+        tex = self.tex[name][0]
+        try:
+            self.hues[name] = dominant_hue(tex.read(), tuple(tex.size))
+            self.hue_reads += 1
+        except Exception as e:  # noqa: BLE001 — a hue is a nicety
+            self.error = f"hue {name}: {type(e).__name__}: {e}"[:120]
 
     def put(self, name: str, src, repainted: bool = False) -> bool:
         """`src` (a texture of the render context) copied into `name`'s
@@ -481,7 +565,8 @@ class PreviewTextures:
             self.drop(name)
 
     def drop(self, name: str) -> None:
-        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted):
+        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
+                  self.hues, self.hue_at):
             d.pop(name, None)
         got = self.tex.pop(name, None)
         if got is not None:
