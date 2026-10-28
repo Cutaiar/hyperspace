@@ -96,3 +96,11 @@ Each with how the owner reverses it.
 12b. **Ruling 12 extends to `Presets._values`**: a save during a hold
     leaves out the instances kept only for the projector (else dead ids
     land in the library). One line; the hook's twin. *Reverse:* with 12.
+14. **`matte`, `cut` and `segment` are held groups** (`hold.HELD_GROUPS`,
+    added by the plan 39 integrator): a knob turned on a held node moves
+    the preview, not the projector, like `resize`/`switch`. Also at that
+    merge: the three declares inside `GraphSection._settle` through
+    `hold.keep`; `PROGRAM_IDS` entries; `masks` hot-reloadable, `segment`
+    cold (live threads, as the dream). *Reverse:* remove the three names
+    from `HELD_GROUPS` (then a held segment's feather follows the live
+    knob on the projector).
