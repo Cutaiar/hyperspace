@@ -33,8 +33,9 @@ See `decisions.md`.
 | T4 devices.wants + arrival | `plan-40-t4` | 51106e1 | **merged** b0b23f3 (PR #272) | fast 4139/2 skipped, goldens 136 | reviewed, 1 Important fixed | 47a–47f drafts |
 | T5 fx modules retired | `plan-40-t5` | 51106e1 | **merged** 3094691 (PR #271) | fast 4097/2 skipped, goldens 136 | controller | rulings 9–11 |
 | T2 the group node | `plan-40-t2` | d08a363 | **merged** f8d2e73 (PR #276) | fast 4294/2 skipped, goldens 144 | approved; minors to the fix pass | 50a–50h drafts, AK.n1–n4 |
-| T3 save / browse / spawn | `plan-40-t3` | f8d2e73 | dispatched | | | |
-| review | | after T5 | waiting | | | |
+| T3 save / browse / spawn | `plan-40-t3` | f8d2e73 | built, PR #277; merged locally 19596e8 | fast 4306/2 skipped, goldens 144, --all 4537 | in the plan review | 50i–50s drafts, AK.5–7 |
+| plan review | `plan-40-build` @ 19596e8 vs `main` | — | done: D1–D10 ✅, 1 Important, minors | — | `reports/plan-review.md` | rulings 17–19 |
+| review fixes | `plan-40-fixes` | 19596e8 | dispatched | | | |
 | T6 docs | | last | waiting | | | 471–495 / 394–401 |
 
 ## Merges into `plan-40-build`
@@ -205,3 +206,35 @@ See `decisions.md`.
   394 (every save the newest schema) — put to the owner (ruling 15).
   f8d2e73 **pushed**.
 - **T3** dispatched (Opus, own worktree, branch `plan-40-t3` off f8d2e73).
+- **T3** DONE_WITH_CONCERNS → PR #277 (`plan-40-t3`, 9915a63, 7cba583).
+  9 files, +1608: `Edit.spawn` / `splice` / `wire_as_saved` / `save_patch`
+  on the edit layer, `ui_graph` browser chip + **Spawn ▸** + the cable drop
+  target + the side pane chips, `ui_routing.modal`'s conflict sheet,
+  `ui_presets`' patches fold, `Learn.hold`, `Presets.parts()`. Dylan's
+  files, the renderer, goldens, library untouched. Fast 4306/2 skipped
+  (+12), goldens 144, `--all` 4537/2 skipped. Rulings 50i–50s; concerns:
+  nothing seen by a person; **wire as saved refuses a fed port** (50j, for
+  the owner); the spec's examples do not match `party-trip` (no acid /
+  wobble / delay / warp), so the tests use the second spawn for `.2` and
+  splice on `scene → plasma.image`. Merged `--no-ff` as **19596e8**
+  locally; controller's gates running. **Plan-level review dispatched**
+  (`briefs/review-plan.md`, T3's task review folded in — ruling 16).
+  Controller's gates on 19596e8: fast tier **4306 passed, 2 skipped**;
+  goldens **144 passed**; `--all` **4536 passed, 2 skipped, 1 failed** —
+  `test_migrate_library::test_the_real_picture_check_passes_an_old_preset`
+  ("cannot create vertex array": GL contention under `-n auto`), passes
+  serially. Pushed.
+- **Plan review** (`reports/plan-review.md`, over 19596e8 vs `main`):
+  **D1–D10 all compliant**; the thirteen proofs settle; T3 (a)–(i) all
+  ✅. No Critical; **one Important**: a spawn with no conflicts never says
+  which devices its rows wait for (`Landing.wants` read by nothing; the
+  words exist in `ui_routing.sheet_wants`). Minors: an empty undo step on
+  a landing refused after the dry run; a source conflict removes the
+  host's rows before `replace_owner`; Save as patch… replaces a same-slug
+  patch silently; the patch list rebuilt every frame of a menu / drag;
+  `pre._banks()` private; three test gaps; for the owner: 50j (a take-over
+  chip for a fed port) and 50i (open pins last the session); T6: do not
+  say `patches.py` "imports nothing from the app" (through `routing` it
+  reaches `apc40`, `params`; through `graph`, `moderngl`). **Fix pass
+  dispatched** (`briefs/fixes.md`: the Important, the minors, T2's eight,
+  plan 38's `_monitor` bug; branch `plan-40-fixes` off 19596e8).

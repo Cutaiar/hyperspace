@@ -84,3 +84,27 @@ reverses it.
     as plan 36 did (a schema-line rewrite only; backups as before). Built
     as 50g until the owner answers; the review-fix pass flips it on his
     word. *Reverse:* one rule in `preset.schema_of` and a migration run.
+16. **T3's task-scoped review is folded into the plan-level review** (the
+    session prompt's one review after T5): T3 is the last code task, its
+    diff is the last thing the plan review reads, and a separate pass
+    would read the same lines twice. The plan review's brief names T3's
+    doubts (a)–(i) explicitly. *Reverse:* none.
+17. **"Wire as saved" refuses a port the host already feeds** (T3's 50j;
+    "output.all.image is taken"), as D2's text says ("if the host has
+    those nodes and the ports are free, refused in words otherwise").
+    Taking the port over would cut the host's run silently. **For the
+    owner**: whether a separate, explicit take-over chip ("wire as saved,
+    replacing huecycle → All outputs") should exist — without it, in any
+    host whose run already feeds All outputs the outlet always refuses.
+    No code now; a register row.
+18. **A spawned group's open pins and its rename map last the session**
+    (T3's 50i): a save drops them, so after a reload a group whose pins
+    were never wired shows no in / out pins, while P2 says "one pin per
+    host port … or open". Reasoned (the file keeps what the graph holds;
+    an open pin is a session affordance); **for the owner**, a register
+    row beside 17.
+19. **T3's spawn tests use `party-trip`'s real contents**: it holds none of
+    the spec's acid / wobble / delay / warp, so a first spawn keeps bare
+    ids by the instance rule, the second spawn proves `.2`, and the splice
+    proof is on `scene → plasma.image`; the hand reaches the patch through
+    `mod.1`'s input. T6 corrects the build plan's examples in "as built".

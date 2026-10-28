@@ -6,7 +6,7 @@ Read first: `/Users/dallman/.claude/jobs/45478892/tmp/run/briefs/reviewer-common
 build, not one task).
 
 - Worktree to read in: `/Users/dallman/antigrav_repos/hyperspace/.claude/worktrees/plan-40-build`
-  (branch `plan-40-build` @ **HEAD_SHA**; run commands from its
+  (branch `plan-40-build` @ **19596e8**; run commands from its
   `hyperspace-python/`). **Read-only**: do not change its working tree,
   index, HEAD or any branch.
 - Diff: `git diff origin/main...HEAD` — the whole plan (T0, T1, T2, T3, T4,
@@ -88,3 +88,27 @@ As reviewer-common.md says: spec compliance per decision D1–D10 (a line
 each), strengths, issues as Critical / Important / Minor with
 **file:line and a fix for each**, assessment. Then write the same report
 to `/Users/dallman/.claude/jobs/45478892/tmp/run/reports/plan-review.md`.
+
+## T3 had no task-scoped review: give it one inside this pass
+T3 (PR #277, commits 9915a63 and 7cba583, diff `f8d2e73...19596e8`) is reviewed here for the
+first time. Read `reports/t3-report.md` and `decisions/t3.md` (rulings 50i–50s, AK.5–AK.7)
+and settle, with file:line: (a) `Edit.spawn` lands in load order through the doors with one
+`undo.push` before the first write and none after; Cancel pushes nothing; (b) D2: the
+section's wires after a menu / chip spawn = before + the patch's internal wires; splice adds
+exactly two and removes one in the same step; **wire as saved** refuses a fed port in words
+(50j: "output.all.image is taken" — judge whether refusing is right under D2 or whether the
+port should be taken over, and say which the owner should rule on); (c) the sheet: drawn in
+`ui_routing.modal` ahead of Replace / Keep, rows preselected to the patch, **keep all
+existing** / **take all**, the wants beneath, Spawn / Cancel; `kept_by_host` written and said;
+the new `Learn.hold` flag (50n) blocks every completer while the sheet is up and releases on
+both buttons; (d) no file written by a spawn — the scratch-home diff test is strict (every
+file under the home and the library, bytes compared); save as patch writes exactly one file;
+(e) the browser's drag source and the cable drop target: only a cable whose type matches a
+patch with exactly one inlet and one outlet accepts; nothing routes a patch drop through
+`open_land`; (f) the PRESETS **patches** fold: hide / trash / rename through `Library` with
+`PATCHES`, no spawn from there; (g) "a patch twice": `.2` / `.3` ids by the instance rule, a
+second group, the sheet asked for the colliding rig rows; (h) the spec's examples vs
+`party-trip` (no acid / wobble / delay / warp in it): the tests use the second spawn for `.2`
+and splice on `scene → plasma.image` — confirm they still prove what the build plan's proofs
+ask; (i) `Presets.parts()` and anything T3 added to `patches.py` or `learn.py` is minimal and
+tested.
