@@ -1750,15 +1750,18 @@ def leave_groups(panel, moves) -> str | None:
 
 
 def selected_ids(st: dict) -> list[str]:
-    """The canvas ids of the selected nodes (a group's node as its id, an
-    open group's title as its group's), in selection order."""
+    """The canvas ids of the selected nodes (a folded group's node as its
+    id), in selection order — what **Group** groups. An open group's title
+    is left out (plan 40 review fix): a box-select across an open region
+    takes its title with its members, and the group is not what was meant
+    ("group.1 is a group: … left out" was noise)."""
     if st.get("editor") is None:
         return []
     out = []
     for nk in ed.get_selected_nodes():
         name = st["names"].get(nk.id(), "")[2:]
-        if name and not name.startswith("idle:"):
-            out.append(name.removeprefix(REGION))
+        if name and not name.startswith(("idle:", REGION)):
+            out.append(name)
     return list(dict.fromkeys(out))
 
 

@@ -382,6 +382,25 @@ def test_the_right_click_menus_offer_group_with_two_nodes_selected(rig, monkeypa
     assert rig.lib.presets.groups[0]["open"] is True
 
 
+def test_a_box_select_across_an_open_group_leaves_its_title_out_of_group(rig):
+    """A box-select across an open region takes its title node with its
+    members; **Group** groups the members (moving them, said) and says
+    nothing of "group.1 is a group" — the title is not in the selection (a
+    folded group's node still is)."""
+    st = noita(rig, [dict(ENTRY, open=True)])
+    title = ui_graph.region_id("group.1")
+    _in_editor(rig, lambda: [ed.select_node(ed.NodeId(ui_graph._id(st, "n:" + nid)), True)
+                             for nid in (title, *NOITA_CORE[:2])])
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert st["menu_sel"] == NOITA_CORE[:2]
+    entry = ui_graph.group_nodes(rig.panel, st["menu_sel"])
+    assert entry["nodes"] == NOITA_CORE[:2] and "is a group" not in st["note"]
+    frame(rig.panel, "graph")
+    _in_editor(rig, lambda: ed.select_node(ed.NodeId(ui_graph._id(st, "n:group.2")), False))
+    _in_editor(rig, lambda: st.__setitem__("menu_sel", ui_graph.selected_ids(st)))
+    assert st["menu_sel"] == ["group.2"]
+
+
 def test_ungroup_leaves_every_node_and_cable_where_it_was(rig):
     st = noita(rig)
     flat = (rig.lib.presets.graph.spec.to_json(), [b.to_json() for b in rig.router.table.bindings],
