@@ -6,42 +6,36 @@ there today" map before any task; its file:line references are to `main`
 (2026-10-27)**; build what the "the owner" column says, not the
 recommendation where the two differ (D3, D4, D6, D10).
 
-Branch `plan-40-build`, cut from **`plan-37-38-39-integration` @ 2b185ea
-or later** (plan 38 and plan 39 T0–T4 are on it; `main` @ f984d3b, with
-PR #266's resizable side pane, is under it). Each task in its own
-worktree off `plan-40-build` (`plan-40-t<n>`), merged into it when green;
-the final PR is `plan-40-build` → `main`, the owner merges. Work in
-`hyperspace-python/`. Tests: `uv run pytest -q …` from there (the fast
-tier; `--all` for everything, `--all -m golden` for the goldens).
+Branch `plan-40-build`, cut from **`plan-37-38-39-integration` @ 07885a2
+or later**: plans 37, 38 and 39 are all on it (their run finished
+2026-10-27 evening; final PR #270 → `main` is open for the owner), and
+`main` @ f984d3b, with PR #266's resizable side pane, is under it. Each
+task in its own worktree off `plan-40-build` (`plan-40-t<n>`), merged
+into it when green. Work in `hyperspace-python/`. Tests: `uv run pytest
+-q …` from there (the fast tier; `--all` for everything, `--all -m
+golden` for the goldens).
 
-**Running beside plans 37–39** (their orchestrator's state, 2026-10-27
-evening, confirmed in git): plan 39's T5 (`graphview.py` tables) and T6
-(docs) and the whole of plan 37 (`ui_graph.py` `_canvas` / `_node` /
-hover, `graphview.py` `build` / `summary` / `laid_areas`, `render.py`,
-`outputs.py`, one SYSTEM line in `ui.py`) land on the integration branch
-after this plan has started, and the integration branch's final PR to
-`main` opens two to three hours after. `routing.py`, `devices.py`,
-`library.py`, `ui_routing.py`, `modgraph.py` are free. So:
+**The final PR.** If #270 has merged by the time this plan's PR opens,
+the PR is `plan-40-build` → `main` (merge `main` into `plan-40-build`
+first; it should be a no-op or docs only). If #270 is still open, the PR
+targets `plan-37-38-39-integration` and is retargeted to `main` when
+#270 lands — never a second copy of plans 37–39 into `main`. The owner
+merges.
 
-- **T0, T1, T4 and T5 start at once** (T0 first, alone, then the three
-  in parallel): none of them touches the regions above. T0's one import
-  line in `graphview.py` and T4's one chip on the head are the whole
-  overlap, and both merge mechanically.
-- **T2 and T3 wait for the integration branch's final PR to merge to
-  `main`** (or, if the owner says go sooner, for plan 37 to be on the
-  integration branch): the controller then merges `main` (or the
-  integration head) into `plan-40-build` once, re-runs the fast tier,
-  and cuts T2 from that. T2 and T3 are the canvas work and would
-  otherwise conflict with plan 37's `_node`, `build` and `summary`. By
-  the build plan's own order T2 needs T1 anyway, and T1 is the longest
-  task, so the wait is mostly absorbed.
-- `preset.py`: plan 38's hook lives in `GraphSection._settle` / `names`
-  / `_values` and plan 39's declares in `_settle`; this plan's T2 touches
-  `document`, `load_doc` step 6½ and `signature`, and T5 the module
-  hooks — different functions, keep it that way.
-- The schema number (D7): 37B took none, so `groups` is `/8` unless
-  something else has taken it by the time T2 cuts; the migration is "the
-  key is absent → no groups".
+**What landed under this plan's feet**, so the briefs know where to
+tread: plan 37 rewrote `ui_graph.py`'s `_canvas`, `_node`, hover and the
+head's chips and `graphview.py`'s `build`, `summary` / `VNode`,
+`laid_areas`, with `THUMBS` on the renderer (`render._for_the_panel`,
+`outputs.PreviewTextures`); plan 38 owns the head's hold chips and
+`GraphSection._settle` / `names` / `_values` in `preset.py`; plan 39's
+declares sit in `_settle` and its tables in `graphview`. This plan's T2
+touches `preset.py`'s `document`, `load_doc` step 6½ and `signature`,
+and T5 the module hooks — different functions, keep it that way. The
+spec's file:line map was written against `main` @ f2351a0 and these
+files have moved: read the code, not the numbers. The schema number
+(D7): 37B took none, so `groups` is `/8`; the migration is "the key is
+absent → no groups". `routing.py`, `devices.py`, `library.py`,
+`ui_routing.py` and `modgraph.py` were touched by none of the three.
 
 ## Global constraints
 
@@ -441,12 +435,13 @@ gone; the FX page is untouched; no preset or golden moves.
 ## Order
 
 T0 first, alone (a rename touching three files and the docs; everything
-after it cuts from the branch with it in). Then T1 and T4 in parallel
-(T4 touches `devices.py`, `routing.row_words`, the SYSTEM page and the
-head's chip; T1 touches `patches.py` and `library.py`). T2 after T1. T3
-after T2 (and reads T4's `wants` if it is in; else `Landing.wants`). T5
-in parallel with any of T1–T3 (it touches `preset.py`'s module hooks,
-`library.py`'s defaults, `ui_presets.py`; T1's `library.py` change is a
-new kind beside the old — merge is mechanical). T6 last, after a
-reviewer sub-agent has read T1–T5's diff against the spec's decisions
-and the global constraints and its findings are fixed in place.
+after it cuts from the branch with it in). Then T1, T4 and T5 in
+parallel (T4 touches `devices.py`, `routing.row_words`, the SYSTEM page
+and the head's chip; T1 touches `patches.py` and `library.py`; T5
+`preset.py`'s module hooks, `library.py`'s defaults, `ui_presets.py` —
+T1's `library.py` change is a new kind beside the old, the merge is
+mechanical). T2 after T1. T3 after T2 (and reads T4's `wants` if it is
+in; else `Landing.wants`). T6 last, after a reviewer sub-agent has read
+T1–T5's diff against the spec's decisions and the global constraints and
+its findings are fixed in place. Nothing waits on plans 37–39 any more:
+they are on the base.

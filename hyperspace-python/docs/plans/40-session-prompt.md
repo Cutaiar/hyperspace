@@ -41,24 +41,27 @@ templates, the nearest thing to a reusable fragment), and
 
 ## The base
 
-**`plan-37-38-39-integration` @ 2b185ea or later** (plan 38 and plan 39
-T0–T4 are on it; `main` @ f984d3b with PR #266 is under it). If that
-branch's final PR has already merged to `main`, cut from `main` instead.
-Verify the base before cutting anything; re-check it before each
-worktree. Branch **`plan-40-build`** cut from there; each task's worktree
-`plan-40-t<n>` cut from `plan-40-build` as it stands when the task
-starts. Merge each task into `plan-40-build` when its report says DONE
-with the numbers and you have run its tests yourself.
+**`plan-37-38-39-integration` @ 07885a2 or later**: plans 37, 38 and 39
+are all on it (their run is complete; PR #270 → `main` is open for the
+owner), and `main` @ f984d3b with PR #266 is under it. If #270 has
+already merged, cut from `main` instead. Verify the base before cutting
+anything; re-check it before each worktree. Branch **`plan-40-build`**
+cut from there, and its first commit a merge of `plan-40-patches` (the
+three plan 40 docs, PR #264) so T6 edits them in place; each task's
+worktree `plan-40-t<n>` cut from `plan-40-build` as it stands when the
+task starts. Merge each task into `plan-40-build` when its report says
+DONE with the numbers and you have run its tests yourself.
 
-**The order, because plans 37 and 39 are still landing** (the build
-plan's "Running beside plans 37–39" says why): T0 first, alone; then T1,
-T4 and T5 in parallel; **T2 and T3 only after the integration branch's
-final PR has merged to `main`** — merge `main` into `plan-40-build`
-once, run the fast tier, then cut T2; T3 after T2; review; T6 last. If
-the owner says to go sooner, T2 may cut once plan 37 is on the
-integration branch, and the controller merges that head instead. Do not
-start T2 against a base without plan 37's `ui_graph.py` and
-`graphview.py`: that is the one conflict worth waiting for.
+**The order:** T0 first, alone; then T1, T4 and T5 in parallel; T2 after
+T1; T3 after T2; review; T6 last. Nothing waits on plans 37–39: they are
+on the base. The spec's file:line map predates them — the briefs say
+"read the code, not the numbers", and the build plan's "What landed
+under this plan's feet" says which functions moved.
+
+**The final PR:** `plan-40-build` → `main` if #270 has merged by then
+(merge `main` in first); else → `plan-37-38-39-integration`, retargeted
+to `main` when #270 lands. Never carry plans 37–39 into `main` a second
+time.
 
 Numbers: register rows **471–495**, hand checks **394–401, group AK**
 (the build plan says why). If plan 37A or 37B has taken rows past 470 by
