@@ -1456,6 +1456,20 @@ class Presets:
             gs = self.graph = GraphSection(self.reg, lib=self.lib)
         return gs
 
+    def parts(self) -> tuple:
+        """Plan 40 T3: the loaded preset's parts, as `patches.lift` reads them
+        (*save as patch*): the landed section (`GraphSpec`, None with none),
+        the table (`routing.Bindings`: its routes, preset-layer desk,
+        modifiers, macros), the registry's snapshot of the performance
+        params (a modifier's params among them; a held program's own nodes
+        not, as `_values`) and the GRAPH page's layout. Reads only."""
+        hold = getattr(self._graph_section(), "hold", None)
+        only = hold.program_only() if hold is not None else frozenset()
+        values = {k: v for k, v in self.reg.snapshot(part="performance").items()
+                  if k not in only}
+        return (getattr(self._graph_section(), "spec", None), self.router.table, values,
+                dict(getattr(self, "layout", None) or {}))
+
     def _held_canvas(self) -> set[str]:
         """Plan 40 T2: the GRAPH canvas ids the loaded preset holds that a
         group may name — its section's render nodes (``render:acid.2``), its
