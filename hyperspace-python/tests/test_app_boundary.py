@@ -28,7 +28,8 @@ import sys
 import hyperspace.app
 gated = ("hyperspace.midi", "hyperspace.bridge", "hyperspace.dream", "hyperspace.osc",
          "leap", "torch", "pythonosc",
-         "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation")
+         "av", "pillow_heif", "syphon", "cyndilib", "AVFoundation",
+         "hyperspace.segment", "Vision", "Vision._Vision", "CoreML", "torchvision")
 print(sorted(m for m in gated if m in sys.modules), "hyperspace.hands" in sys.modules)
 """
 
@@ -41,7 +42,10 @@ def test_importing_app_leaves_every_gated_adapter_unimported():
     same way before they exist). The hands *package* is the one exception,
     on purpose: its settings register and its page draws whether or not
     the tracker is on (`_hand_settings`, `ui.py`), and `hands/core.py`
-    imports `leap` only inside `LeapSource`. In a subprocess, because this
+    imports `leap` only inside `LeapSource`. Plan 39 T4: nor the segment
+    worker (`segment.py`, imported by the renderer on a segment's first
+    need), Apple Vision through pyobjc, or torchvision — each imported
+    inside the worker's first job. In a subprocess, because this
     test session has long since imported them all itself."""
     out = subprocess.run([sys.executable, "-c", IMPORT_SCRIPT], capture_output=True, text=True,
                          check=False, cwd=str(Path(__file__).parents[1]), timeout=120)
