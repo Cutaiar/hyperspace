@@ -1027,7 +1027,7 @@ def test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole(ctx):
     assert ctx.error == "GL_NO_ERROR"
 
 
-def test_the_projector_inset_draws_framed_while_held(shell_rig):
+def test_the_projector_inset_draws_framed_while_held(shell_rig):  # noqa: F811
     """GRAPH's PROJECTOR inset (`ui_graph._monitor`) drawn once with a live
     texture (a stand-in whose `glo` is not 0, as the monitor's is once the
     held frame is read back): the picture, the red frame and the word land
