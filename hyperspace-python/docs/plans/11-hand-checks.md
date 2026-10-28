@@ -13,7 +13,7 @@ merged in, and 280–295 plan 31's (286–295 the APC40 page, on
 `plan-31-a1`); group AA (296–316) is plan 32's, and 317 the two plans
 together; group AC (318–331) is plan 33's, the free graph, on
 `plan-33-free-graph`; group AE (342–352) is plan 35's, the free frame,
-on `plan-34-feedback` (PR #236).
+on `plan-34-feedback` (PR #236). Past 352: check 353 (group AF) is row 394's, group AG (354–369) is plan 36's, and group AH (370–376) is plan 37's, nodes as pictures and the faces, on `plan-37-pictures`.
 
 ## Before you start
 
@@ -5251,6 +5251,76 @@ the placements, and the `acid.2` one by 1/255.
 *Fail:* a picture with hands where the mute is on, or one that moved
 visibly.
 
+## AH. Plan 37: nodes as pictures, and the faces
+
+Plan 37 as built is [`37-pictures-and-faces.md`](37-pictures-and-faces.md). On GRAPH, every node that makes a picture is drawn as that picture: a small live thumbnail is made only for nodes that are on screen and drawn. Hovering the picture gives the node's lines, the picture's size and its GPU time. A head chip, **pictures · tint cables**, is off by default and tints picture cables by what flows. An effect is laid in the area of its consumers, so `acid-scene` draws forward. The faces are a dry run: [`assets/37-faces/`](assets/37-faces/) holds a sheet of all 17 modes and the migration map, and nothing is dropped until the owner names the list.
+
+These checks need `plan-37-pictures`. Run them on the copy (`export HYPERSPACE_HOME=~/Hyperspace-try`). Register rows 417–429 and 460. None has been run by a person. No golden moved. Check 375's second half waits for the owner's list and for P2, which follows it.
+
+**370. Every picture node shows its picture.** (laptop, GRAPH, a party preset)
+Headless: `tests/test_thumbnails.py` (`test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not`, `test_a_thumbnail_is_the_pictures_aspect_and_shows_it`, `test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none`); for the tint, `tests/test_graph_hover.py` (`test_lit_a_picture_cable_takes_its_makers_hue_and_off_it_is_red_again`, `test_the_tint_always_leaves_a_red`, `test_a_real_thumbnails_hue_is_its_pictures_a_frame_later_without_a_texture_read`).
+1. Load `party-trip` (or any party preset) and open GRAPH with **preset only** lit.
+2. Look at each node of the frame: the channel, the pattern, the scene, the effects, the composites, the look-back and the outputs.
+3. On FX, turn an effect's mix up and down.
+4. Light **pictures · tint cables** on the head. Wait a second or two, then turn it off again.
+*Pass:* every picture node's body is a small moving picture. An effect's picture differs from its input's and follows the mix. The shape shows the scene, faint. Output 1 shows the window, and output 2 shows its window without the hands laid on. With the switch lit, the picture cables out of a yellow-green picture lean orange and those out of a blue-violet picture lean rose. A red, cyan or grey picture's cables stay plain red. Every cable is still clearly red, and none looks like a trigger (amber) or a mask (purple). SYSTEM's fps is unchanged with the switch lit on a 20-node preset. With the switch off, every cable is plain red again.
+*Fail:* a black box on a node that draws: its kind is missing from `graphview.THUMBS`, or `render.thumb_source` returned None. A picture upside down: the GL row flip in `ui_graph._thumb`. A frozen picture: the page is not wanting it (`thumb_wants`). Cables that never change: no hues read, either because the thumbnails were never copied or because `want_hues` was not called. A cable that reads as amber or purple: `TINT_SPAN` is too wide.
+
+**371. What the thumbnails cost.** (the show Mac, GRAPH open, twenty nodes on screen)
+Headless: `tests/test_thumbnails.py` (`test_graph_picture_is_asked_only_for_the_wanted_nodes`, `test_the_outputs_are_byte_identical_with_and_without_thumbnails`, `test_a_node_behind_an_unpicked_switch_input_is_not_made`).
+1. With GRAPH closed, note SYSTEM's frame time and the GPU per-node lines.
+2. Open GRAPH and pan until about twenty picture nodes are on screen. Read SYSTEM again: the `thumbnails · N copied · K repainted · M kept` line and the frame time.
+3. Light **pictures · tint cables** and read the frame time once more.
+*Pass:* N is about twenty, the frame still runs at the show's rate, and the per-node GPU lines are unchanged by the thumbnails, with the tint on or off.
+*Fail:* frames dropped while K is high: painted-direct nodes are being repainted at full size (row 426), so try fewer on screen. GPU lines that grow with GRAPH open: the timer is not muted in `Renderer._thumbnails`. A stutter with the tint lit: the hue collect waiting on the GPU (row 428).
+
+**372. Collapse and expand: the thumbnail stays.** (laptop, GRAPH)
+Headless: `tests/test_thumbnails.py::test_the_page_draws_a_thumbnail_on_every_picture_node_collapsed_or_not` (its expanded half), `tests/test_graph_legible.py::test_every_node_starts_collapsed_with_at_most_five_lines` (the height).
+1. Expand an effect node with **+**, then collapse it.
+2. Do the same to a channel whose picture is portrait.
+*Pass:* expanded, the picture sits above the ports. Collapsed, the node is the title and the picture. Either way, the column below is not overlapped. The portrait picture is letterboxed in the same 16:9 box, and the layout does not move.
+*Fail:* the picture is gone when expanded (the order in `_node`). Nodes overlap (`graphview.height` and `_thumb`'s box disagree).
+
+**373. Hover a thumbnail: the node's lines, the size, the GPU time.** (laptop, GRAPH, a party preset)
+Headless: `tests/test_graph_hover.py` (`test_a_picture_nodes_hover_is_its_summary_its_size_and_its_gpu_time`, `test_the_page_finds_the_gpu_time_by_the_render_nodes_name`, `test_a_switch_and_an_unreached_node_say_so_on_hover`, `test_the_page_draws_with_the_switch_lit_and_a_thumbnail_hovered`).
+1. Load `party-trip` and open GRAPH.
+2. Rest the pointer on the scene node's picture, then on an effect's, then on output 2's.
+3. Rest it on the scene node's title.
+*Pass:* on a picture, a tooltip with the title, the node's lines ("4 picture ports", an effect's param counts), `1920×1080 picture` (the window's size), and `gpu 0.xx ms` matching SYSTEM's line for that node. On the title, the old hover (the status, or nothing).
+*Fail:*
+- No tooltip on the picture: `_thumb`'s `is_item_hovered` is not working inside the editor, or `st["thumb_hover"]` is being reset after the nodes are drawn. The fallback is to test the dummy's rect (`get_item_rect_min/max`) against `imgui.get_mouse_pos()` taken to canvas space (`ed.screen_to_canvas`).
+- No size line: `VNode.picture` is unset (`_want_thumbs`).
+- No GPU line on a timed node: the name differs from `thumb_name`. Compare with SYSTEM's lines.
+
+**374. Hidden: its thumbnail stops being made.** (laptop, GRAPH, SYSTEM)
+Headless: `tests/test_thumbnails.py` (`test_the_page_wants_the_picture_nodes_it_draws_on_screen`, `test_wanted_is_made_next_frame_and_dropped_after_a_second_unwanted`, `test_a_node_that_made_nothing_is_dimmed_then_black_after_a_second`).
+1. Turn **preset only** off, get many picture nodes on screen, and read SYSTEM's `thumbnails · N copied · K repainted · M kept`.
+2. Light **preset only**, or pan nodes off screen, and read the line again after a second.
+3. On a switch, pick another input and watch the node behind the input you left.
+*Pass:* N drops by the number of nodes no longer drawn, and M follows within a second. The node behind the unpicked input goes grey at once and black a second later. It comes back when you pick its input again.
+*Fail:* N unchanged: hidden nodes are still wanted (`drawn_node`, `thumb_wants`). M never falls: `end_frame` is not dropping. The unpicked node keeps moving: the `Graph.pulled` gate in `render.thumb_source`.
+
+**375. The faces: the owner's list, then the FACES page after P2.** (the laptop, then the show Mac)
+Headless: `tests/test_faces_map.py` (the map is current); after P2, `tests/test_patterns.py` (the kept modes' table, shader and pixels) and the re-recorded goldens named in P2's commit.
+1. Before P2, open `docs/plans/assets/37-faces/sheet.png` and `heart-sheet.png`, and the FACES page with music for METER, PULSE and SPEED. Name the modes to keep. With the list, answer row 417's two questions: renumber or tombstones, and the `preset.py` edit.
+2. Read `migration-map.md`'s "nearest kept" for the modes you drop and say whether each is right (row 460).
+3. After P2, open FACES. Only the kept modes' chips are there, in the old order, each with its swatch and its one line. The eight inputs' rows are unchanged.
+4. Load each preset that the map lists as *on screen* with a dropped mode. Each shows its nearest kept mode, and its card's note says "pattern X was retired; now Y".
+5. Turn the desk's pattern knob from end to end. It walks the kept modes only, with no blank stop.
+6. With both Macs updated, load a preset from the Drive library that was saved before P2 with a dropped mode. It shows the nearest kept mode, never white faces or the wrong pattern.
+*Pass:* every step as described. Until the list arrives, steps 1 and 2 are the whole check.
+*Fail:* a dropped mode's chip on FACES: `ui_patterns` still reads the full list. A preset on the wrong pattern: the indices shifted without the value remap (P2's index step). White faces: a stale index reached the shader's fallthrough `return vec4(1.0)`.
+
+**376. `acid-scene` on GRAPH: no cable runs backwards.** (laptop, a scratch home with no `[library]` and no devices)
+Headless: `tests/test_graph_areas.py` (`test_no_cable_runs_backwards_across_areas` over every factory preset and every graph fixture, `test_a_node_is_laid_where_its_consumers_are`, and `test_auto_layout_stacks_each_area_and_keeps_saved_positions`, which shows no layout runs by itself).
+1. Copy `tests/fixtures/presets/acid-scene.json` into the scratch home's `presets/`.
+2. Load it and open GRAPH. If anything was saved, press **tidy** once.
+3. Follow acid.2: from the scene into the look-back's picture and its occluder, and on to the composite.
+4. Drag acid.2 somewhere else, wait a few frames, then reload.
+5. This step shows a known rough edge. In a scratch copy of a user preset that has a saved position for an acid.2-style effect (placed in the EFFECTS region, feeding the look-back), click the LOOK-BACK chip or title.
+*Pass:* acid.2 stands in LOOK-BACK, left of the look-back. Every cable out of it runs left to right, and the EFFECTS area starts with the composite. After the drag it stays where it was dropped, through later frames and after the reload. In step 5, the saved effect keeps its position in the EFFECTS region but now belongs to LOOK-BACK, so LOOK-BACK's frame reaches over to it. Judge whether that reads acceptably. One **tidy** ends it (row 429).
+*Fail:* acid.2 in EFFECTS with a cable curling back into the look-back (`laid_areas` is not applied in `build`). A node that jumps back after a drag (a layout running by itself).
+
 ## What no test covers
 
 Only a person can settle these:
@@ -5377,3 +5447,11 @@ Only a person can settle these:
   headless and the pictures were recorded on the build machine;
 - the Drive library migrated to `/7` on both Macs (368): the tool's tests
   run on a scratch library, never the Drive sync or the other Mac.
+- nodes as pictures at the machine (370–376). The tests copy thumbnails on a standalone context and draw the page headless. Only a person can judge:
+  - how the thumbnails read at the canvas's zooms, and the faint shape (370);
+  - the tint by eye (370);
+  - the thumbnails' cost on the show Mac (371);
+  - the hover inside `imgui_node_editor` (373), which the tests drive through a stand-in;
+  - that the control window sees this frame's thumbnails (`_thumbnails` flushes);
+  - the face patterns themselves (375), which only the owner can name;
+  - the moved effect's area frame on a preset saved before plan 37 (376).

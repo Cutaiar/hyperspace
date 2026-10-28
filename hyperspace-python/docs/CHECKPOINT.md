@@ -66,7 +66,36 @@ clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
 
+**Plan 37, nodes as pictures and the faces, is built** on
+`plan-37-pictures` (2026-10-27; [`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md)).
+It runs with plans 38 (the hold) and 39 (vision) and merges last into
+`plan-37-38-39-integration`.
+
+- **Pictures on GRAPH.** Every node that makes a picture is drawn as it.
+  The thumbnail is made at the frame's end only for nodes on screen, and
+  moves no output pixel. Hovering it gives the node's lines, the size and
+  the GPU time.
+- **The tint.** A head chip, `pictures · tint cables`, is off by default
+  and leans each picture cable's red by what flows.
+- **The area rule.** An effect is laid in the area of its consumers, so
+  `acid-scene` draws forward.
+- **The faces are a dry run.** Sheets of all 17 modes and a generated
+  migration map are in [`plans/assets/37-faces/`](plans/assets/37-faces/).
+  Nothing is dropped until the owner names the list.
+
+At 48b263e the fast tier was 4035 passed, 2 skipped, and the goldens 128
+passed, with all 757 pictures unmoved. No preset was edited.
+
 ## What is left
+
+- **Plan 37: the owner's list of face patterns** (register row 417, D1).
+  The sheets are in `plans/assets/37-faces/`. With the list, the owner
+  also says whether to renumber `view.pattern` or keep tombstones, and the
+  controller allows the `preset.py` edit. Then P2 runs: shaders and modes
+  dropped, presets migrated to their nearest kept mode with a note, and
+  only those presets' goldens re-recorded. Hand checks 370–376 (group AH)
+  can run now; only the second half of 375 waits for P2. The owner's keep
+  or overturn on rows 417–429 and 460 is also still to come.
 
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
