@@ -4400,7 +4400,12 @@ class Edit:
             return why
         self._step(label)
         why = self._land_quiet(doc, label, "")
-        if why is not None:                 # (the dry run said it would land)
+        if why is not None:
+            # unreachable in practice: the dry run read this same doc (already
+            # normalised by it) over the same files and said it lands. Were it
+            # reached, nothing has been written yet, so the step just pushed
+            # closes with nothing to put back and `Undo._close` takes it off
+            # the stack (tests/test_graph_groups.py proves it)
             return why
         table, reg = self.table, self.reg
         notes = list(landing.notes)

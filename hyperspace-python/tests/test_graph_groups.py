@@ -746,6 +746,30 @@ def test_a_spawn_with_no_conflict_lands_at_once(rig):
     assert st["said"].endswith("; waits for leap (not in this rig): right hand y")
 
 
+def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatch):
+    """`Edit.spawn` pushes its one step after the dry run; were the real
+    landing then refused (the dry run rules it out), nothing was written,
+    so the step closes empty and leaves the stack — no empty ⌘Z."""
+    doc = json.loads(ACID_WASH.read_text())
+    doc["desk"] = []
+    trip(rig)
+    with_patch(rig, doc, "quiet-wash")
+    before = state(rig)
+    real = graphview._land
+    monkeypatch.setattr(graphview, "_land", lambda edit, d, label, said, dry=False, rig=None:
+                        real(edit, d, label, said, dry=dry, rig=rig) if dry else "refused")
+    u = watch(rig)
+    try:
+        n = len(u.stack)
+        assert ui_graph.spawn(rig.panel, "quiet-wash", (0, 0)) == "refused"
+        assert len(u.stack) == n + 1                    # pushed before the first write…
+        u.tick(10.0)
+        u.tick(11.0)
+        assert len(u.stack) == n and state(rig) == before
+    finally:
+        undo.install(None)
+
+
 def test_a_spawn_whose_devices_are_all_there_says_no_wait(rig):
     """The same spawn into a rig whose leap is connected: no "waits for"."""
     from test_device_wants import _Live
