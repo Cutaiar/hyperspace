@@ -889,6 +889,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
             st["beside"] = not st["beside"]
         if imgui.is_item_hovered():
             ui.tooltip(BESIDE_TIP)
+    _wants_chip(panel)                      # plan 40 T4: N devices missing
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
@@ -905,6 +906,27 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
         imgui.text_disabled(st["said"])
     else:
         imgui.text_disabled(EDIT_HINT)
+
+
+def _wants_chip(panel) -> None:
+    """Plan 40 T4: **N devices missing** on the line after the chips before
+    it, its hover one line per device the loaded preset wants and the rig
+    lacks ("apc40 (lost): K1, K2", `devices.want_lines`); nothing when
+    every wanted device is there, or with no registry (a panel from a
+    test). The PRESET strip draws the same chip (ui_presets.strip)."""
+    from . import devices  # (late: the GRAPH page's imports stay as they are)
+    rig, router = getattr(panel, "devices", None), getattr(panel, "router", None)
+    if rig is None or router is None:
+        return
+    ws = devices.wants(router.table, rig)
+    text = devices.missing_chip(ws)
+    if text is None:
+        return
+    imgui.same_line()
+    ui.chip(f"{text}##wants")
+    if imgui.is_item_hovered():
+        ui.tooltip("\n".join(["the preset's rows that wait for a device:",
+                              *devices.want_lines(ws)]))
 
 
 def _hold_chips(panel) -> bool:
