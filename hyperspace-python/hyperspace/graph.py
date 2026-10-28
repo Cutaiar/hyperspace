@@ -140,10 +140,23 @@ import numpy as np
 from .geometry import EYE_DISTANCE, EYE_FOV, EYE_NEAR, eye_matrix
 from .lookback import MAX_ECHOES
 from .outputs import View
-from .view import RESIZE_ASPECTS, RESIZE_FILTERS, RESIZE_FITS, RESIZE_SIDES, ResizeState
+from .view import (
+    MATTE_FEATHER,
+    MATTE_FROM,
+    RESIZE_ASPECTS,
+    RESIZE_FILTERS,
+    RESIZE_FITS,
+    RESIZE_SIDES,
+    MatteState,
+    ResizeState,
+)
 
 # port types: a colour picture at the frame's size, a one-channel mask at
-# the frame's size, or draw calls (a geometry, drawn by its scene or layer)
+# its maker's size, or draw calls (a geometry, drawn by its scene or layer).
+# Plan 39 T2 (W1): a mask is a pattern — a pixel passes (1) or it does not
+# (0), a value between only an edge a softness or a feather asked for — on
+# its own wire, never in a picture's alpha; wired where a picture is taken
+# it reads as one (white where it passes: `MaskPicture`), one way only
 IMAGE, MASK, GEOMETRY = "image", "mask", "geometry"
 # plan 30 D2: the fourth port type, designed and not built
 VALUE = "value"
@@ -393,9 +406,10 @@ _PLACE_NODE = re.compile(rf"scene|history|lookback|hands(?:\.{_INSTANCE})?(?:\.l
 # `fx`, the faces' `shape`, `pattern`, `backdrop`, `switch` — so no effect
 # file may take them, and no effect's place is one of them. Plan 34 L: and
 # feedback's `delay`, `resize`, `echo` (`echo.<k>`) and `dream`. Plan 35 F:
-# and the wired frame's `copy` (`copy.<n>`) and the source word `ground`
+# and the wired frame's `copy` (`copy.<n>`) and the source word `ground`.
+# Plan 39 T2: and the mask node `matte` (`matte.<n>`)
 RESERVED = ("frame", "fx", "pattern", "shape", "backdrop", "switch", "delay", "resize", "echo",
-            "dream", "copy", "ground")
+            "dream", "copy", "ground", "matte")
 _PLACE_EFFECT = re.compile(rf"(?!(?:{'|'.join(RESERVED)})(?![a-z0-9_]))"
                            rf"[a-z][a-z0-9_]*(?:\.{_INSTANCE})?")
 PLACE_WORDS = {"after": "scene, hands, hands.2 …, history, output.1 …, or an effect",
@@ -642,6 +656,7 @@ _SWITCH = re.compile(rf"switch(?:\.{_INSTANCE})?")       # plan 33 S: `switch`, 
 # index's range is the entry's to say: `echo.40` is an echo none declares)
 _DELAY = re.compile(rf"delay(?:\.{_INSTANCE})?")
 _RESIZE = re.compile(rf"resize(?:\.{_INSTANCE})?")
+_MATTE = re.compile(rf"matte(?:\.{_INSTANCE})?")         # plan 39 T2: `matte`, `matte.2` …
 _ECHO = re.compile(r"echo\.[1-9][0-9]*")
 # plan 36 T4 (W4): a look-back's instances (`lookback`, `lookback.2` …), its
 # echo outputs — pins, frames of its own ring (`lookback.echo.3`,
@@ -902,6 +917,37 @@ def _resize_entry(e: dict) -> ResizeAt:
 
 
 NODE_KINDS["resize"] = _resize_entry
+
+
+@dataclass(frozen=True)
+class MatteAt:
+    """A matte node the preset's graph adds (plan 39 T2, W2): its input
+    `image` made a mask — by brightness, coverage or a keyed hue
+    (`matte[.n].*`, values, not the graph) — `matte`, `matte.2` …"""
+
+    n: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.n, int) or isinstance(self.n, bool) or self.n < 1:
+            raise ValueError(f"matte instance {self.n!r}: a whole number from 1")
+
+    @property
+    def name(self) -> str:
+        return "matte" if self.n == 1 else f"matte.{self.n}"
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": "matte"}
+        if self.n != 1:
+            d["instance"] = self.n
+        return d
+
+
+def _matte_entry(e: dict) -> MatteAt:
+    _entry_keys(e, "matte", ("instance",))
+    return MatteAt(_instance(e))
+
+
+NODE_KINDS["matte"] = _matte_entry
 
 
 @dataclass(frozen=True)
@@ -1307,7 +1353,7 @@ def _wired_kind(name: str) -> str | None:
                       # plan 36 T4: a look-back's echo pin is an echo; `echo.<k>`
                       # (plan 34's own node) only an old frame's, read to migrate
                       ("echo", _ECHO_PIN), ("echo", _ECHO), ("lookback", _LOOKBACK),
-                      ("dream", _DREAM), ("copy", _COPY)):
+                      ("dream", _DREAM), ("copy", _COPY), ("matte", _MATTE)):
         if pat.fullmatch(name):
             return kind
     if new_id(name) != name or name == "cover":
@@ -1491,7 +1537,8 @@ del _cls
 # instance, before a wire may name one (as a composite and a switch).
 # Plan 35 F: and a copy, which always needs its entry, and the frame's
 # kinds — but a wire of a wired frame naming one of those declares it
-DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "copy", *FRAME_KINDS)
+DECLARED = ("composite", "switch", "delay", "resize", "echo", "dream", "copy", "matte",
+            *FRAME_KINDS)
 
 
 def d1_wires(effects) -> list[Wire]:
@@ -1543,6 +1590,8 @@ class _WireCtx:
     # 34's `echo.<k>` are read, to be rewritten — `graphmigrate.split_lookback`)
     lookbacks: frozenset[str] = frozenset({"lookback"})
     legacy: bool = False
+    # plan 39 T2: the mattes declared (their names)
+    mattes: frozenset[str] = frozenset()
 
     def declared(self, kind: str) -> frozenset[str]:
         """The names of kind `kind` (one of `DECLARED`) the section declares
@@ -1550,7 +1599,7 @@ class _WireCtx:
         return {"composite": self.composites, "switch": self.switches, "delay": self.delays,
                 "resize": self.resizes, "echo": self.echoes, "copy": self.copies,
                 "dream": frozenset({"dream"}) if self.dream else frozenset(),
-                "lookback": self.lookbacks}.get(kind, frozenset())
+                "lookback": self.lookbacks, "matte": self.mattes}.get(kind, frozenset())
 
 
 FX_IMAGE_REFUSAL = ("fx.image takes the run from frame; to replace an output's picture "
@@ -1667,7 +1716,9 @@ WIRED_MAKES = {"scene": IMAGE, "shape": GEOMETRY, "hands": GEOMETRY, "layer": IM
                "composite": IMAGE, "pattern": IMAGE, "switch": IMAGE, "delay": IMAGE,
                "resize": IMAGE, "echo": IMAGE, "dream": IMAGE,
                # plan 36 T2: the scene's pins (`PINS`)
-               "cover": MASK, DEPTH_PORT: IMAGE}
+               "cover": MASK, DEPTH_PORT: IMAGE,
+               # plan 39 T2: a matte makes a mask of its picture
+               "matte": MASK}
 # plan 36 T2 (W2): every edge a port — a layer's and a guide's hands, the
 # look-back's cover mask, a composite's and an output's depth
 WIRED_TAKES: dict[str, dict[str, str]] = {
@@ -1682,16 +1733,21 @@ WIRED_TAKES: dict[str, dict[str, str]] = {
     "composite": {**WIRE_TAKES["composite"], DEPTH_PORT: IMAGE},
     **{k: WIRE_TAKES[k] for k in ("effect", "pattern", "switch", "delay",
                                   "resize", "echo")},
+    "matte": {"image": IMAGE},
 }
 WIRED_TO_WORDS = ("output.1 …, output.all (image, hands, guide, depth), scene.geometry, "
                   "shape.faces, backdrop.image / scene, lookback.image / occluder / cover "
                   "(lookback.2 …), dream.image, hands.layer.hands …, hands.guide.hands …, "
                   "pattern.media, an effect's or a copy's image or aux, a composite's under "
-                  "/ over / depth, a switch's in1 … in8, or a delay's or a resize's image")
+                  "/ over / depth, a switch's in1 … in8, or a delay's, a resize's or a "
+                  "matte's image")
 WIRED_FROM_WORDS = ("scene, scene.cover, scene.depth, shape, hands …, hands.layer …, "
                     "hands.guide …, lookback …, lookback.echo.1 …, dream, backdrop, pattern, "
-                    "an effect, a copy, a composite, a switch, a delay, a resize, a channel "
-                    "(channel.a …) or ground")
+                    "an effect, a copy, a composite, a switch, a delay, a resize, a matte, "
+                    "a channel (channel.a …) or ground")
+# plan 39 T2 (W1, decision 2): a picture into a mask port is refused with the
+# converter's name; the promotion runs the other way only
+PICTURE_INTO_MASK = "{src} makes a picture, {dst} takes a mask — put a matte between"
 # plan 36 T4 (W4): the words for what the split took away
 CAPTURE_IS_IMAGE = ("{node}.capture is gone (plan 36): a look-back records what is wired "
                     "into {node}.image, and a composite lays its trail")
@@ -1765,7 +1821,10 @@ def _wired_error(w: Wire, ctx: _WireCtx) -> str | None:
         return LAYER_TAKES_HANDS.format(dst=w.dst)
     if makes == GEOMETRY and want != GEOMETRY and kind != "output":
         return GEOMETRY_INTO_SCENE.format(src=w.src)
-    if makes != want:
+    if makes == IMAGE and want == MASK:
+        return PICTURE_INTO_MASK.format(src=w.src, dst=w.dst)
+    # plan 39 T2 (W1): a mask goes where a picture is taken — it reads as one
+    if makes != want and not (makes == MASK and want == IMAGE):
         return f"{w.src} makes {TYPE_WORDS[makes]}, {w.dst} takes {TYPE_WORDS[want]}"
     for name, k in ((w.src, src_kind), (node, kind)):
         if k == "effect" and ctx.effects is not None and name not in ctx.effects:
@@ -2168,6 +2227,11 @@ class GraphSpec:
         return self._of("resize")
 
     @property
+    def mattes(self) -> tuple[MatteAt, ...]:
+        """The matte nodes the section adds (plan 39 T2), by instance."""
+        return self._of("matte")
+
+    @property
     def echoes(self) -> tuple[EchoAt, ...]:
         """The look-back frames the section reads (plan 34 L), by index."""
         return self._of("echo")
@@ -2420,6 +2484,7 @@ def read_graph(section: Any, effects: set[str] | frozenset[str] | None = None, *
                    switches=frozenset(s.name for s in spec.switches),
                    delays=frozenset(d.name for d in spec.delays),
                    resizes=frozenset(r.name for r in spec.resizes),
+                   mattes=frozenset(m.name for m in spec.mattes),
                    echoes=frozenset(e.name for e in spec.echoes),
                    dream=spec.dream is not None,
                    placed={e.name: e.where for e in effects_at if e.placed},
@@ -2998,6 +3063,14 @@ class Frame:
     def root(self) -> Frame:
         """The frame itself: what `at` made this one from, or this one."""
         return self.parent if self.parent is not None else self
+
+    @property
+    def mattes(self) -> dict[str, Any]:
+        """Plan 39 T2: each matte's values this frame (matte name → its
+        `view.MatteState`): the view state's (`ViewState.mattes`, the
+        `matte[.n].*` params') — what `MatteNode` makes its mask by, a value,
+        never a rebuild (getattr: a view state from before the matte has none)."""
+        return getattr(self.root.s, "mattes", None) or {}
 
     def at(self, size: tuple[int, int]) -> Frame:
         """This frame at `size` (see the class): made once a frame per
@@ -4464,6 +4537,154 @@ class ResizeNode(Node):
         self.said = said
 
 
+# ---------------------------------------------------------------- the masks (plan 39 T2)
+
+# (the values of a matte with none this frame: read, never written)
+_MATTE_DEFAULT = MatteState()
+
+
+class MatteNode(Node):
+    """A matte (plan 39 T2, W2): `matte`, `matte.2` …, its `image` input
+    made a mask — a one-channel 8-bit texture at the input's own size (its
+    own size, else the frame's): from the picture's brightness, its own
+    coverage (how a cut picture becomes a mask again) or its closeness to a
+    keyed hue (`matte.from`), passing at `key`, a `soft` edge about it,
+    `invert`, and a `feather` blur (two separable passes inside the node,
+    only when > 0) — `ViewState.mattes`, read as `Frame.mattes`: values,
+    never a rebuild. The passes are the renderer's (`masks.MaskPasses`,
+    `Renderer.mask_passes`).
+
+    Made once a frame on the first ask (`made`, the root's data), into a
+    frame target keyed `(<name>#mask, size)`; a mask consumer
+    (`lookback.cover`) binds it as it is, a picture consumer gets it through
+    the promotion (`MaskPicture`, the build's). While its input reads
+    nothing it makes no mask; fed by nothing it is not built and says so."""
+
+    KIND = "matte"
+    INPUTS: ClassVar[dict[str, str]] = {"image": IMAGE}
+    OUTPUT = MASK
+    TIMED = True
+
+    def __init__(self, name: str, image: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, image=image)
+
+    def state(self, frame: Frame) -> MatteState:
+        """This frame's values (`Frame.mattes`), else the defaults."""
+        return frame.mattes.get(self.name) or _MATTE_DEFAULT
+
+    def size_for(self, port: str, frame: Frame) -> tuple[int, int]:
+        """What `image` is made at: its input's own size, else the frame's."""
+        if port == "image":
+            src = self.inputs["image"]
+            own = src.own_size(frame) if src is not None else None
+            return tuple(own) if own is not None else tuple(frame.root.size)
+        return super().size_for(port, frame)
+
+    def own_size(self, frame: Frame) -> tuple[int, int] | None:
+        """Its mask's size: its input's (W2)."""
+        return self.size_for("image", frame)
+
+    def reads(self, frame: Frame) -> bool:
+        src = self.inputs["image"]
+        return src is not None and src.reads(frame)
+
+    def made(self, frame: Frame) -> moderngl.Texture | None:
+        """The mask, made once a frame (the root's data) — None while the
+        input reads nothing."""
+        root = frame.root
+        key = self.name + "#mask"
+        if key in root.data:
+            return root.data[key]
+        root.data[key] = None
+        src = self.inputs["image"]
+        if src is None or not src.reads(frame):
+            return None
+        size = self.size_for("image", frame)
+        at_in = root if size == tuple(root.size) else root.at(size)
+        # (the input drawn on demand first, outside the timer: its nodes
+        # time themselves, and the matte's line is its own passes alone)
+        tex = src.image(at_in)
+        if tex is None:
+            tex = picture(at_in, src)
+        if tex is None:
+            return None
+        st = self.state(frame)
+        with frame.timed(self.name):
+            out = frame.r.mask_passes().matte(
+                tex, key, size, source=_pick(range(len(MATTE_FROM)), st.source),
+                level=float(st.key), soft=float(st.soft), invert=bool(st.invert),
+                feather=float(st.feather), hue=float(st.hue), sat=float(st.sat))
+        root.data[key] = out
+        return out
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """Its mask (the `MASK` contract: one channel, at its own size)."""
+        return self.made(frame)
+
+    def run(self, frame: Frame) -> None:
+        """What it says (GRAPH's summary)."""
+        if not self.reads(frame):
+            self.said = "its input reads nothing: no mask"
+            return
+        st = self.state(frame)
+        w, h = self.own_size(frame)
+        said = f"{w}×{h} mask · {_pick(MATTE_FROM, st.source)} at {float(st.key):.2f}"
+        if float(st.soft) > 0.0:
+            said += f" ± {float(st.soft):.2f}"
+        if st.invert:
+            said += " · inverted"
+        feather = min(max(float(st.feather), 0.0), MATTE_FEATHER)
+        if feather > 0.0:
+            said += f" · feather {feather:g} px"
+        self.said = said
+
+
+class MaskPicture(Node):
+    """A mask read as a picture (plan 39 T2, W1, decision 2): what a mask
+    wired into a picture port is to that port — white (premultiplied,
+    opaque) where it passes, black elsewhere, at the consumer's size, the
+    mask fitted by cover as an own-sized node's picture is
+    (`masks.PROMOTE_FS`). The build makes one per mask node a picture port
+    reads (`_Build._taken`), named `<mask>(picture)`: the drawn wire is the
+    mask's, the promotion only how the port reads it — no node on GRAPH,
+    no edge of its own. One way only: a picture into a mask port is refused
+    (`PICTURE_INTO_MASK`). While the mask reads nothing it paints the
+    ground, as a resize reading nothing does."""
+
+    KIND = "mask→picture"
+    INPUTS: ClassVar[dict[str, str]] = {"mask": MASK}
+    OUTPUT = IMAGE
+    TIMED = False             # (one cheap pass; the mask's maker times its own)
+
+    def __init__(self, name: str, mask: Node | None = None, after: tuple[Node, ...] = ()):
+        super().__init__(name, after, mask=mask)
+
+    def reads(self, frame: Frame) -> bool:
+        m = self.inputs["mask"]
+        return m is not None and m.reads(frame)
+
+    def paint(self, frame: Frame, dst: moderngl.Framebuffer) -> None:
+        m = self.inputs["mask"]
+        tex = m.image(frame) if m is not None else None
+        if tex is not None:
+            frame.r.mask_passes().promote(tex, dst)
+            return
+        rect = tuple(dst.viewport)
+        dst.use()
+        frame.ctx.viewport = rect
+        frame.ctx.clear(0.0, 0.0, 0.0, frame.bg_alpha, viewport=rect)
+
+    def image(self, frame: Frame) -> moderngl.Texture | None:
+        """The picture at the frame's size, painted once a frame (`#picture`)."""
+        key = self.name + "#picture"
+        if key not in frame.data:
+            tex, fbo = frame.r._frame_target(frame.key(key), frame.size)
+            fbo.viewport = (0, 0, *frame.size)
+            self.paint(frame, fbo)
+            frame.data[key] = tex
+        return frame.data[key]
+
+
 # ---------------------------------------------------------------- layers
 
 class Cover(Node):
@@ -5802,6 +6023,7 @@ class _Build:
         self.ends: list[Shown] = []
         self._ends: dict[int, Shown] = {}
         self._names: set[str] = set()
+        self._pictures: dict[int, MaskPicture] = {}  # plan 39 T2: each mask read as a picture
 
     # ---- the wires
 
@@ -5830,9 +6052,25 @@ class _Build:
         return False
 
     def _from(self, dst: str) -> Node | None:
-        """What the wire into `dst` reads, made (None: no wire, or nothing)."""
+        """What the wire into `dst` reads, made (None: no wire, or nothing)
+        — a mask into a picture port as its picture (`_taken`)."""
         w = self._one(dst)
-        return self.node(w.src) if w is not None and w.src != GROUND else None
+        return self._taken(self.node(w.src), w) if w is not None and w.src != GROUND else None
+
+    def _taken(self, src: Node | None, w: Wire) -> Node | None:
+        """`src` as wire `w`'s port takes it (plan 39 T2, W1): a mask into a
+        picture port is read through its one `MaskPicture`; anything else
+        as it is."""
+        if src is None or src.OUTPUT != MASK:
+            return src
+        kind = _kind(w.node)
+        if WIRED_TAKES.get(kind, {}).get(w.port) != IMAGE:
+            return src
+        got = self._pictures.get(id(src))
+        if got is None:
+            got = self._pictures[id(src)] = self._keep(
+                MaskPicture(f"{src.name}(picture)", mask=src))
+        return got
 
     def _unique(self, name: str) -> str:
         out = name
@@ -5948,6 +6186,13 @@ class _Build:
                 self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
                 return None
             return self._keep(ResizeNode(name, image=src))
+        if kind == "matte":
+            # plan 39 T2: as a resize — fed by nothing, it builds nothing
+            src = self._from(f"{name}.image")
+            if src is None:
+                self.g.dormant[name] = f"{name} is fed by nothing here: wire its input"
+                return None
+            return self._keep(MatteNode(name, image=src))
         if kind == "echo":
             # plan 36 T4: a look-back's pin, a frame of its ring — the
             # look-back made first, so it records
@@ -6064,7 +6309,8 @@ class _Build:
         for i in range(self.count):
             got = {}
             for p, w in window_ports(self.wires, i + 1, self.rig).items():
-                got[p] = self.node(w.src) if w is not None and w.src != GROUND else None
+                got[p] = (self._taken(self.node(w.src), w)
+                          if w is not None and w.src != GROUND else None)
             ports.append(got)
         layers = tuple(n for n in self.built if isinstance(n, HandsLayer))
         shown = [self._end(p["image"]) if p["image"] is not None else None for p in ports]
@@ -6140,7 +6386,7 @@ class _Build:
         for w in self.wires:
             if w.port != AUX or _kind(w.node) not in ("effect", "copy"):
                 continue
-            target, src = self.made.get(w.node), self.node(w.src)
+            target, src = self.made.get(w.node), self._taken(self.node(w.src), w)
             if not isinstance(target, Effect) or target not in self.built or src is None:
                 continue
             if src is target or id(target) in _upstream(src):
