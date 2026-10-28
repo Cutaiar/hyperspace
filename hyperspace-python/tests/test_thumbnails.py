@@ -16,7 +16,8 @@ from types import SimpleNamespace as NS
 import moderngl
 import numpy as np
 import pytest
-from test_graph_legible import party
+from conftest import seed
+from test_graph_legible import party as _party
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -41,6 +42,12 @@ class Clock:
 
     def __call__(self):
         return self.t
+
+def party(rig):
+    """`test_graph_legible.party` over the corpus: party-trip is test data
+    since 2026-10-28, seeded into the rig's home first (never over a file)."""
+    seed(rig.lib.home, "presets")
+    return _party(rig)
 
 
 def _frame(th: PreviewTextures, made: dict) -> None:

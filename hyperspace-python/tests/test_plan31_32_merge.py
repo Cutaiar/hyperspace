@@ -70,10 +70,6 @@ def test_the_ladder_is_one_list():
     assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 35: /6; plan 36 T3: /7; plan 40 T2: /8)
     assert (preset.SCHEMA, preset.SCHEMA_V3, preset.MEDIA_SCHEMA) == (V2, V3, V4)
     assert preset.WIRED_SCHEMA == V6
-    # the factory generator's rule (`generated`): /3 for a pattern, else /2
-    assert preset.factory_schema({"values": {"seq.1.1": True}}) == V3
-    assert preset.factory_schema({"lfos": [1, 2]}) == V3
-    assert preset.factory_schema({"values": {"view.media_alpha": 1.0}}) == V2
 
 
 def test_a_pattern_and_a_bin_save_as_6_and_round_trip(app):

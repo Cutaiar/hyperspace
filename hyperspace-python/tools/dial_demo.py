@@ -13,6 +13,9 @@ the frames render; the wall time each frame took is recorded beside it.
     HYPERSPACE_HOME=$(mktemp -d) xvfb-run -a -s "-screen 0 2400x1200x24" \\
         uv run python tools/dial_demo.py [--out DIR] [--scale 0.5]
 
+(The throwaway home is seeded with the test corpus first — DIAL is
+`tests/corpus/presets/dial.json`; a fresh library ships no presets.)
+
 Writes, under --out (default docs/plans/assets/28-gamepad-dial/):
   dial-trace.csv     a row per frame: phase, both sticks, each stick's
                      reading and sector, the camera and W-rate params the
@@ -47,11 +50,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for _p in (ROOT, ROOT / "tests"):
+    if str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 import glfw
 import numpy as np
+from conftest import seed
 from OpenGL import GL
 from PIL import Image, ImageDraw, ImageFont
 
@@ -422,6 +427,7 @@ def main() -> None:
     home = Path(os.environ.get("HYPERSPACE_HOME", ""))
     if not home or not home.is_dir():
         raise SystemExit("set HYPERSPACE_HOME to a throwaway folder")
+    seed(home)                                   # the corpus: DIAL among its presets
     (home / "config.toml").write_text(
         '[output]\nrender = "720p"\n[dream]\nenabled = false\n[hands]\nenabled = false\n'
         '[midi]\nenabled = false\n[gamepad]\nusb = false\n')

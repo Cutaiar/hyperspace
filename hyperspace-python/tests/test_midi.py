@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import mido
 import pytest
+from conftest import seed
 
 from hyperspace import apc40, hands, lfo, tempo
 from hyperspace.analysis import Analyser
@@ -50,6 +51,7 @@ def rig(tmp_path):
     control = Control(chain)
     audio = SimpleNamespace(chain=chain)
     view = ViewState()
+    seed(tmp_path)              # the corpus: the party show's bank, TUMBLE first
     lib = Library(tmp_path)
     presets = lib.project
     reg = build_registry(view, control, audio, presets)

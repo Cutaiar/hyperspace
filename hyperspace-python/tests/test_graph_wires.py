@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS
 from test_graph_json import Stub, _bare, _old
 from test_presets import boot, put
 from wiredframe import Shows, Thru, graph, wire_switches, wiring
@@ -31,11 +32,13 @@ from wiredframe import Shows, Thru, graph, wire_switches, wiring
 from hyperspace import graph as G
 from hyperspace import graphview, preset
 from hyperspace.graphmigrate import wired_wiring
-from hyperspace.library import FACTORY, PRESETS
+from hyperspace.library import PRESETS
 from hyperspace.outputs import Switches, View
 
 S = Switches
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
+# the corpus presets' sources (plan 36 T3: the corpus files are their `/7`)
+SOURCES = Path(__file__).resolve().parent / "fixtures" / "factory-sources" / "presets"
 WIRED = ("hands-glass-only", "wired-outputs")
 FILES = {"warp", "acid", "palette", "kaleido"}
 RUN = ("warp", "acid", "acid.2", "palette")
@@ -549,15 +552,15 @@ def test_the_wire_built_check_sees_a_wired_composite():
     assert not any(_wire_built(n) for n in plain.nodes.values())
 
 
-def test_no_factory_preset_changes():
-    """No factory source carries a graph, and (plan 36 T3) each factory
-    `/7` is today's frame with no placement: the factory frame holds
+def test_no_corpus_preset_places_an_effect():
+    """No corpus source carries a graph, and (plan 36 T3) each corpus
+    `/7` is today's frame with no placement: the default frame holds
     nothing a section's wire builds — nothing dormant, every output's
     picture an end (`Shown`) or the ground, a through output's its own
     copies."""
-    for path in sorted(preset.FACTORY_SOURCES.glob("*.json")):
+    for path in sorted(SOURCES.glob("*.json")):
         assert "graph" not in json.loads(path.read_text()), path
-    for path in sorted((FACTORY / "presets").glob("*.json")):
+    for path in sorted((CORPUS / "presets").glob("*.json")):
         nodes = json.loads(path.read_text())["graph"]["nodes"]
         assert not any(k in e for e in nodes for k in G.PLACE_KEYS), path
     for sw in ((Shows(),), (Shows(), Shows(through=True)),

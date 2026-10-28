@@ -14,7 +14,7 @@ show them, and the chain a through wire over the off effects. The head's
 area chips and a click on a title frame an area.
 
 Headless, on N7's harness (tests/test_graph_legible.py): the shell's rig
-with a factory preset loaded through the scratch library, a render graph
+with a corpus preset loaded through the scratch library, a render graph
 built by `graph.default_graph` — party-trip's two-effect graph, and the
 real chain of every effect file this build has, wired by each graph
 fixture under tests/fixtures/presets — the APC40 as a real
@@ -27,6 +27,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from conftest import CORPUS, seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graph_legible import party
@@ -41,8 +42,8 @@ from hyperspace.graphmigrate import Shows
 from hyperspace.outputs import Switches
 from hyperspace.routing import Binding
 
-FACTORY = sorted(p.stem for p in (Path(graphview.__file__).parent / "library" / "presets")
-                 .glob("*.json"))
+# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+CORPUS_PRESETS = sorted(p.stem for p in (CORPUS / "presets").glob("*.json"))
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "presets"
 # (plan 33 T6: the `/5` fixtures — T4's and T5's proofs, a channel's own
 # shaders into the faces, the backdrop, a switch — are laid out with the rest)
@@ -58,11 +59,12 @@ CONCERNS = (graphview.AUDIO, graphview.SCENE_AREA, graphview.LOOKBACK_AREA, grap
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)
     return shell_rig
 
 
 def load(rig, name, graph=None):
-    """Factory preset `name` on the page (party-trip's render graph and
+    """Corpus preset `name` on the page (party-trip's render graph and
     devices, `party`, or render graph `graph`), its state after two frames."""
     party(rig)
     if graph is not None:
@@ -143,7 +145,7 @@ def back_wires(view, idle_open=()):
 # ---------------------------------------------------------------- the areas
 
 def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
-    """Over every factory preset on party-trip's graph, and over party-trip
+    """Over every corpus preset on party-trip's graph, and over party-trip
     on the app's whole chain wired by each graph fixture: every node is in
     one area of `ORDER`, by the one table; the areas' columns run left to
     right and never share a column — but *other*, under the audio in its
@@ -161,7 +163,7 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
     (shaders); a picture the scene made, taken back into a switch with the
     media, runs back by design (`graphview.returns`)."""
     assert set(FREE) <= set(WIRED)
-    cases = [(name, None) for name in FACTORY]
+    cases = [(name, None) for name in CORPUS_PRESETS]
     cases += [("party-trip", f) for f in (None, *WIRED) if f not in FREE]
     cases += [(f, f) for f in FREE]
     for name, fixture in cases:
@@ -650,17 +652,17 @@ def backward_across_areas(view):
     return out
 
 
-@pytest.mark.parametrize("name", [*(("factory", n) for n in FACTORY),
+@pytest.mark.parametrize("name", [*(("corpus", n) for n in CORPUS_PRESETS),
                                   *(("fixture", n) for n in WIRED)],
                          ids=lambda t: f"{t[0]}:{t[1]}")
 def test_no_cable_runs_backwards_across_areas(rig, name):
-    """Plan 37 P3, D5 (the rules): every factory preset, and every graph
+    """Plan 37 P3, D5 (the rules): every corpus preset, and every graph
     fixture, loaded as the preset on a fresh canvas (none carries a saved
     position): no cable runs from an area into one left of it. Before C3,
     `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
     into LOOK-BACK — acid.2 sits between the scene and the look-back."""
     where, preset = name
-    view = (load(rig, preset) if where == "factory" else load_fixture(rig, preset))["view"]
+    view = (load(rig, preset) if where == "corpus" else load_fixture(rig, preset))["view"]
     assert backward_across_areas(view) == [], preset
 
 

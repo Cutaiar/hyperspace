@@ -120,7 +120,7 @@ def test_a_switch_is_a_node_kind_that_may_stand_alone():
 
 ROOT = Path(__file__).resolve().parents[1]
 SAVES = ROOT / "tests" / "fixtures" / "plan33-v4-saves"
-# plan 36 T3: the factory presets' sources (the factory files are their `/7`)
+# plan 36 T3: the corpus presets' sources (the corpus files are their `/7`)
 LIBRARY = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 SOURCES = {"presets": ROOT / "tests" / "fixtures" / "presets",
            "merge-31-32": ROOT / "tests" / "fixtures" / "merge-31-32",
@@ -157,12 +157,12 @@ def test_the_wiring_holds_the_run_and_leaves_its_wires_out():
 
 def old_sources() -> list[tuple[str, Path]]:
     """Every preset file this tree holds in an older schema or the newest,
-    as (kind, path): the factory's sources (dial's too), every fixture under
+    as (kind, path): the corpus's sources (dial's too), every fixture under
     tests/fixtures/presets/, merge-31-32/, old-canvas-layout/ and
     plan33-driven/, and the bytes older builds saved, kept from the
     byte-identical tests row 394 retired (plan33-v4-saves/: the base build's
     `/2`–`/4` saves; plan35-v5-saves/: plan 33/34's `/5`) — `/2` to `/6`."""
-    out = [("factory", p) for p in sorted(LIBRARY.glob("*.json"))]
+    out = [("source", p) for p in sorted(LIBRARY.glob("*.json"))]
     for kind, folder in {**SOURCES, "driven": DRIVEN, "v4-saves": SAVES,
                          "v5-saves": V5_SAVES}.items():
         out += [(kind, p) for p in sorted(folder.glob("*.json"))]
@@ -200,7 +200,7 @@ def _six(raw: bytes, name: str) -> dict:
 
 def test_every_old_preset_saves_as_six_and_is_a_fixed_point(tmp_path):
     """Row 394 (the owner, 2026-10-25: both Macs always on the newest
-    schema): every preset — the factory's and every fixture, `/2` to `/6`
+    schema): every preset — the corpus's sources and every fixture, `/2` to `/6`
     — loaded into a scratch library and saved untouched is
     `hyperspace.preset/6`, its graph the wired frame, no retired id in its
     values and its GRAPH layout in today's canvas ids; and that `/6`,
@@ -284,7 +284,7 @@ def test_an_edited_frame_saves_as_six_as_edited(tmp_path):
         assert "backdrop.history" not in doc["values"], name
 
 
-def test_an_untouched_factory_preset_saves_as_its_load(tmp_path):
+def test_an_untouched_corpus_preset_saves_as_its_load(tmp_path):
     """Row 394: party-trip untouched saves `/6`, its graph exactly the wired
     frame the load landed (`free_doc`) — the frame is the save."""
     from test_plan31_wiring import make_app
@@ -297,13 +297,13 @@ def test_an_untouched_factory_preset_saves_as_its_load(tmp_path):
 
 
 def saved_bytes(home: Path, kind: str, path: Path) -> bytes:
-    """`path` loaded into a scratch library at `home` (a fixture copied in
-    as a user's preset; a factory one by name) and saved untouched under
-    the name it loaded as: the bytes on disk (`headless.resave`, the road
+    """`path` loaded into a scratch library at `home` (copied in as a
+    preset of its own, whatever `kind`) and saved untouched under the name
+    it loaded as: the bytes on disk (`headless.resave`, the road
     tools/migrate_library.py takes)."""
     from hyperspace import headless
 
-    raw, _, _ = headless.resave(path, home, factory=kind == "factory")
+    raw, _, _ = headless.resave(path, home)
     return raw
 
 

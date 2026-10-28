@@ -1182,7 +1182,7 @@ def _kept(path: Path) -> bool:
 
 
 def _and(items: list[str]) -> str:
-    """``F6``, ``F6 and 'starts on'``, ``F2, F6 and slot 9``."""
+    """``F6``, ``F6 and the startup preset``, ``F2, F6 and slot 9``."""
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
 
 
@@ -1276,7 +1276,7 @@ class Marks:
         panel, and the bank's lit slot.
         The show's own fields go back (`Project.remark`) only when the
         show itself differs — the undo of a show load. Otherwise the bank
-        and "starts on" are left as they are: they are in the show's file
+        and startup are left as they are: they are in the show's file
         the moment they change, and reverting them in memory would make
         the show's dirty dot lie. `last_show` is never rewritten."""
         lib, pr = self.lib, self.lib.project
@@ -1387,7 +1387,7 @@ class Library:
         last (plan 15 WP4: two presets put into slots one after the other,
         a slot cleared twice). Every line that reports something that just
         happened goes through here (plan 16 WP7: an empty F-key pressed
-        twice, home with no "starts on" pressed twice); a plain assignment
+        twice, home with no startup preset pressed twice); a plain assignment
         is for clearing a line, and is not counted — so nothing that
         assigned the same words every frame could hold the footer open."""
         said = self.__dict__.setdefault("said", {})   # (a Library from before a hot reload)
@@ -1896,14 +1896,17 @@ class Library:
         return self._step(group, -1)
 
     def save_as(self, group: str, name: str, *, extra: dict | None = None) -> Path:
-        """Write the group's bases as a user preset and make it current.
-        A file already there whose text differs is copied to the trash
-        first (`to_trash`); a save that changes nothing trashes nothing,
-        and a copy that fails does not stop the save — `warning` says the
-        old file was not kept (plan 15 fork 6)."""
+        """Write the group's bases as a preset and make it current — over
+        the file the name already resolves to (`path_of`: the one the list
+        found it by, whatever its stem — one tier, 2026-10-28: a save never
+        leaves a second file of the same name beside the first), else a new
+        ``<slug>.json``. A file already there whose text differs is copied
+        to the trash first (`to_trash`); a save that changes nothing trashes
+        nothing, and a copy that fails does not stop the save — `warning`
+        says the old file was not kept (plan 15 fork 6)."""
         self.writable()
         doc = self.document(group, name, extra=extra)
-        path = self.home / group / f"{slug(name)}.json"
+        path = self.path_of(group, name) or self.home / group / f"{slug(name)}.json"
         kind = self._kinds.get(group)
         text = (kind.text(doc) if kind is not None and kind.text is not None
                 else _json_text(doc))
@@ -2010,7 +2013,7 @@ class Library:
            edit); the loaded preset keeps its clean reference under the new
            name, so an unsaved edit stays one, and the load hook is told;
         5. every ``hyperspace.project/2`` show in ``<home>/projects`` whose
-           bank or "starts on" names the old preset is copied to the trash,
+           bank or startup names the old preset is copied to the trash,
            then written with the new name — the open show through its
            `Project` (its dot and the bank's light stay right). A show whose
            copy or write fails is left as it is; a schema-1 show is left

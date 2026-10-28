@@ -14,6 +14,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import seed
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
 
@@ -31,6 +32,7 @@ SHIFT = "note:0:98"
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 
@@ -288,8 +290,8 @@ def test_a_templated_desk_is_one_collapsed_node_whose_edits_write_overrides(rig)
     assert (lib.home / DESK / TEMPLATE.name).read_bytes() == before
 
 
-def test_a_factory_preset_draws_no_template_node(rig):
-    """Every factory preset has a plain desk section: no template node."""
+def test_a_corpus_preset_draws_no_template_node(rig):
+    """Every corpus preset has a plain desk section: no template node."""
     rig.lib.load("presets", "party-trip")
     assert ui_graph.template_of(rig.panel) is None
     view = build(rig, rig_devices(rig), ui_graph.template_of(rig.panel))

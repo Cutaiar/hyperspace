@@ -243,14 +243,14 @@ like the rename above. The SYSTEM page shows both.
                             # typically a cloud-synced one (Dropbox, iCloud Drive,
                             # Syncthing…) shared with whoever you trade presets with.
                             # It holds the library: presets/, projects/, the module
-                            # groups (fx/, dream/, band/…), hidden.json and trash/.
+                            # groups (fx/, dream/, band/…) and trash/.
                             # Machine files stay in the home: this config.toml,
                             # bindings.json, hands.json, windows.json, last_show,
                             # logs and weights/. `~` is expanded; a relative path is
                             # relative to this file's folder. If the folder is
                             # missing at launch it is never created: a warning says
                             # so, the SYSTEM page shows it in red, every save is
-                            # refused and only factory presets list — fix the folder
+                            # refused and nothing lists — fix the folder
                             # (or the path) and restart. tools/move_library.py copies
                             # an existing library into it.
 """

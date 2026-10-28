@@ -50,14 +50,14 @@ whose bytes the save would not change (already ``/7`` and a fixed point)
 is left untouched. A preset that failed a check is **not written** and is
 listed at the end — unless ``--force NAME`` (its file stem; repeatable)
 names it, which writes it despite a picture or fixed-point difference (a
-file that does not load has nothing to write). ``hidden.json`` is never
-touched: no name changes.
+file that does not load has nothing to write). No name changes.
 
 ``--to FOLDER`` (plan 36 T3) writes each preset that passed into FOLDER
 under its own file name instead — the library is read, never written, so
-no backup is made. The factory presets are made so, from their sources:
-``--library tests/fixtures/factory-sources --to hyperspace/library/presets``
-(with ``$HYPERSPACE_HOME`` pointed at a scratch folder).
+no backup is made. The test corpus was made so, from the retired
+generator's sources: ``--library tests/fixtures/factory-sources --to
+tests/corpus/presets`` (with ``$HYPERSPACE_HOME`` pointed at a scratch
+folder).
 
 The library is ``--library``, else the config's ``[library] path`` (the
 machine home's config.toml), else the machine home. Exit status: 0 when

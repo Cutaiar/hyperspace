@@ -4,15 +4,17 @@
 The layout (`apc40.LAYOUT`): one entry per control the protocol names,
 none overlapping, a unique short glyph each, and a glyph for every MIDI
 row shipped. The diagram (ui_desk.py): what it lights is the layer that
-is up — a factory preset's desk plus the invariant controls, then the
+is up — the loaded preset's desk plus the invariant controls, then the
 global layer after SHIFT — read from the table with no MIDI device. The
 ROUTING rows print the glyph. Headless imgui, a library on tmp_path.
 """
 
 import json
 
+from conftest import CORPUS
 from imgui_bundle import imgui
 from test_ui_shell import (
+    NARROW_CONTROL,
     _click,
     _learn_over,
     frame,
@@ -21,8 +23,6 @@ from test_ui_shell import (
 
 from hyperspace import apc40, routing, ui, ui_desk, ui_routing
 from hyperspace.app import CONTROL_SIZE
-from test_ui_shell import NARROW_CONTROL
-from hyperspace.library import FACTORY
 from hyperspace.routing import Binding
 
 # ---------------------------------------------------------------- the layout
@@ -96,13 +96,14 @@ def _shipped_midi_rows() -> list[str]:
     srcs += [b.source for b in routing.factory_desk("apc40")]
     session = json.loads(routing.FACTORY_FILE.read_text())
     srcs += [r["source"] for r in session["bindings"]]
-    for f in sorted((FACTORY / "presets").glob("*.json")):
+    for f in sorted((CORPUS / "presets").glob("*.json")):
         srcs += [r["source"] for r in json.loads(f.read_text()).get("desk") or []]
     return [s for s in srcs if s.startswith(("cc:", "note:"))]
 
 
 def test_every_midi_row_shipped_has_a_glyph():
-    """DEFAULT_MAP, the factory session table and every factory preset's desk."""
+    """DEFAULT_MAP, the factory session table and every corpus preset's desk
+    (tests/corpus: the presets the build shipped until 2026-10-28)."""
     srcs = _shipped_midi_rows()
     assert len(srcs) > 200
     assert [s for s in srcs if apc40.glyph(s) is None] == []

@@ -513,7 +513,7 @@ RETIRED_ROWS: frozenset[tuple[str, str, str, float]] = frozenset(
 # fire `edit.undo`, ⌘⇧Z / Ctrl+⇧Z fire `edit.redo` — a chord fires only
 # its own row (`Router.keys`).
 # Plan 15 WP2 adds Home (fn ← on a laptop; fork 7): it fires `preset.home`,
-# which loads the preset the show starts on.
+# which loads the show's startup preset.
 # F_KEYS (params): the F-key rows are the bank's first eight slots
 LOOP_KEY_ROWS = (
     ("R", "camera.reset", "fire"),
@@ -1088,7 +1088,7 @@ def keymap() -> list[Binding]:
 
 def padmap() -> list[Binding]:
     """Xbox-layout gamepad buttons and the d-pad. B / X step the preset
-    list — the PRESETS page's drop-down, by name, a new save included
+    list — the PRESETS page's list, by name, a new save included
     (`Project.walk`), not the bank the desk walks — A / Y the faces and
     lines; the left-stick click resets the camera, the right-stick click
     the 4D spin; START (``pad:MENU``) held HOLD_S saves the live state as

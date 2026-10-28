@@ -1163,7 +1163,7 @@ def _preset_line(panel, pr, table) -> None:
                           "the session's controls, never learned (a learn is refused); "
                           "preset: the loaded preset's desk. A preset load drops to it.")
     imgui.same_line()
-    # the preset strip's own save chip: "save copy" on a factory preset,
+    # the preset strip's own save chip,
     # lit while there is something to save (plan 19 WP5)
     if lib is None:
         imgui.begin_disabled()

@@ -142,6 +142,26 @@ branch. At e0675a6 the fast tier is 4320 passed, 2 skipped, the full suite
 proofs), none moved. No preset was edited or added; Dylan's files are
 untouched.
 
+**Plan 41, the PRESETS page and one tier, is built** (2026-10-28,
+[`plans/41-presets-one-tier.md`](plans/41-presets-one-tier.md), every
+decision the owner's, from his ask of that day). The library has **one
+tier**: nothing ships with the app, nothing is "factory", nothing is
+hidden, every preset is listed, loaded, renamed and trashed alike, and a
+fresh library opens an unsaved `untitled` show on a blank preset. The
+twenty-five presets the build shipped, their generator and the `party` /
+`house` shows left the app; the files are the golden frames' corpus now
+(`tests/corpus/`, `tools/golden_frames.py` `CORPUS_PRESETS`, the test
+harness's `seed`), and the goldens' subjects and hashes are unchanged.
+The band scenes are code data (`hyperspace/scenes/band/`). The PRESETS
+page is the preset strip over a flat list of every preset (click loads;
+rename, ×), the trash at its foot, the patches fold and one line for the
+show (what it is, its name ●, open ▾, save, as…, new) — no pills, no
+"starts on", no drop-down, no module-preset fold. The pads are the desk's
+to set; `startup` stays in the show file for Home. The Drive library's
+`hidden.json` was deleted and the four unhidden shipped presets adopted
+as the owner's own, lower-cased (`dial`, `trip`, `plasma heart`,
+`seq-demo`). Dylan's files are untouched. **Both Macs on this build.**
+
 ## What is left
 
 - **Plan 37: the owner's list of face patterns** (register row 417, D1).
@@ -179,11 +199,11 @@ untouched.
   drops a preset's modifiers and positions when it saves (row 277), and
   refuses a preset with a GRAPH group outright (plan 40's `groups` key,
   `hyperspace.preset/8`).
-- **The owner's creative pass** on the new mechanisms, which no factory
-  preset uses yet: fader sets for S1–S8, hand mappings (the dance sources,
+- **The owner's creative pass** on the new mechanisms, which few of his
+  presets use yet: fader sets for S1–S8, hand mappings (the dance sources,
   the grab), dance presets, palettes and where they sit, modifier
-  patches, desk templates, and the factory presets' graph wiring (hands
-  in the scene, as lines, in the history, on one output); touch shows.
+  patches, desk templates, and the presets' graph wiring (hands in the
+  scene, as lines, in the history, on one output); touch shows.
 - **Plan 29**, the devices: wands, drums, a Kinect or other depth sensor
   (the point-cloud node is ready for it), DMX / sACN lights, bulbs, a
   generic on-screen desk.

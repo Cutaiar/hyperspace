@@ -7,6 +7,7 @@ like any other `axis` route, taking its whole stick off the camera job."""
 import math
 
 import pytest
+from conftest import seed
 from test_pad_learn import ScriptedPad, rig  # noqa: F401 — the fixture, re-exported
 from test_routing import rig as full_rig
 
@@ -144,6 +145,7 @@ def test_a_stick_that_is_no_dial_still_learns_its_axis(rig):  # noqa: F811
 
 
 def test_the_dial_preset_fills_both_clocks(tmp_path):
+    seed(tmp_path)                        # the corpus: DIAL among the shipped presets
     r = full_rig(tmp_path=tmp_path, full=True)
     router = Router(r.reg, Bindings())
     assert Presets(r.lib, r.reg, router).load("DIAL") == []

@@ -397,12 +397,18 @@ def app(tmp_path):
 
 
 def make_app(tmp_path, plan31: bool = True):
-    """The app's registry, library, router and presets; `plan31` False is
-    a build from before plan 31 — no envelopes, no sequencer. (Row 394:
+    """The app's registry, library, router and presets over `tmp_path`,
+    seeded with the corpus first (conftest.seed: the presets the build once
+    shipped, the dream module presets and the party show, so the home is
+    the one these tests were written on); `plan31` False is a build from
+    before plan 31 — no envelopes, no sequencer. (Row 394:
     `hyperspace.headless.make_app`, so tools/migrate_library.py saves
     through the same app without importing a test.)"""
+    from conftest import seed
+
     from hyperspace import headless
 
+    seed(tmp_path)
     return headless.make_app(tmp_path, plan31)
 
 
@@ -582,10 +588,10 @@ def test_this_build_reads_every_old_schema_and_an_older_build_refuses_a_6(app):
         kinds["presets"] = replace(kinds["presets"], versions=preset.VERSIONS)
 
 
-# ---- plan 31 P: the factory seq-demo ----
+# ---- plan 31 P: the corpus's seq-demo ----
 
 def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
-    """The factory seq-demo: kick 1 and 5, snare 3 and 7, hats on every
+    """The corpus's seq-demo: kick 1 and 5, snare 3 and 7, hats on every
     step at half a bar, one-shot envelopes on brightness, zoom and the
     deconverge. It loads stopped (decision 8); with play pressed at the
     golden rig's clock — triggered at T0 = 2.0, play and a restart on the
@@ -593,10 +599,11 @@ def test_seq_demo_is_the_pattern_and_plays_once_play_is_pressed(app):
     kick; the hat that fired with it (70 ms) is over and the snare (step 3,
     at 2.267) is still to come. tools/golden_frames.py draws that frame;
     two more 16ths on, the snare and the hat of step 3 are mid-hit too."""
-    from hyperspace import preset
+    import json
 
-    doc = preset.generated("seq-demo")
-    assert doc["schema"] == V3
+    from conftest import CORPUS
+
+    doc = json.loads((CORPUS / "presets" / "seq-demo.json").read_text())
     on = {(ln, s) for ln in range(1, 6) for s in range(1, 9)
           if doc["values"].get(f"seq.{ln}.{s}")}
     assert on == {(1, 1), (1, 5), (2, 3), (2, 7), *((3, s) for s in range(1, 9))}

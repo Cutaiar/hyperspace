@@ -24,6 +24,7 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import CORPUS, seed
 from imgui_bundle import imgui
 from imgui_bundle import imgui_node_editor as ed
 from test_graphview import _in_editor
@@ -42,6 +43,7 @@ ENTRY = {"id": "group.1", "name": "noita core", "nodes": NOITA_CORE, "open": Fal
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: party-noita and the rest, one tier)
     return shell_rig
 
 
@@ -86,8 +88,9 @@ def main_run(doc: dict) -> tuple[str, ...]:
     return G.run_back(G.read_graph(doc["graph"]), "output.all.image")
 
 
-FACTORY = sorted(preset.FACTORY_DIR.glob("*.json"))
-RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in FACTORY}
+# the corpus: the presets the build once shipped (tests/corpus/presets, one tier)
+CORPUS_PRESETS = sorted((CORPUS / "presets").glob("*.json"))
+RUNS = {p.stem: main_run(json.loads(p.read_text())) for p in CORPUS_PRESETS}
 NO_RUN = {slug for slug, run in RUNS.items() if not run}
 
 
@@ -120,7 +123,7 @@ def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
 
 
 def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path):
-    app = headless.make_app(tmp_path)
+    app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
     app.presets.groups = [dict(ENTRY, patch="noita-core")]
     doc = app.presets.document("noita grouped")
@@ -140,21 +143,21 @@ def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path
 
 def test_the_fixture_twin_resaves_byte_for_byte(tmp_path):
     """The grouped fixture (party-noita and one group, `/8`) loaded and saved
-    untouched is the same bytes — and so is every factory preset, with no
+    untouched is the same bytes — and so is every corpus preset, with no
     groups, its `/7` (a preset from before this plan saves byte for byte)."""
     raw = FIXTURE.read_bytes()
     assert json.loads(raw)["schema"] == "hyperspace.preset/8"
     again, notes, _ = headless.resave(FIXTURE, tmp_path / "twin")
     assert notes == [] and again == raw
-    for k, path in enumerate(FACTORY):
+    for k, path in enumerate(CORPUS_PRESETS):
         data = path.read_bytes()
-        again, _, _ = headless.resave(path, tmp_path / f"f{k}", factory=True)
+        again, _, _ = headless.resave(path, tmp_path / f"f{k}")
         assert again == data and b'"groups"' not in again, path.name
 
 
 def test_a_member_the_graph_lacks_is_dropped_with_a_note(tmp_path):
     app = headless.make_app(tmp_path)
-    doc = json.loads((preset.FACTORY_DIR / "party-noita.json").read_text())
+    doc = json.loads((CORPUS / "presets" / "party-noita.json").read_text())
     doc = grouped_twin(doc, ["render:warp", "render:acid.3"], "acid wash")
     doc["groups"] += [{"id": "group.2", "name": "gone", "nodes": ["render:kaleido"],
                        "open": True},
@@ -195,7 +198,7 @@ def test_with_no_bank_the_held_voices_are_the_ones_the_registry_holds(rig):
 
 
 def test_signature_changes_when_a_group_is_made_and_a_save_drops_a_deleted_member(tmp_path):
-    app = headless.make_app(tmp_path)
+    app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-noita")
     clean = app.presets.signature()
     assert not app.lib.is_dirty("presets")
@@ -219,7 +222,7 @@ def _views(n=2):
 
 
 def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
-    """For every factory preset, the section loaded with its main run
+    """For every corpus preset, the section loaded with its main run
     grouped is its ungrouped twin's: the same section, and `build_graph`
     of it the same `graph.signature`. The presets with no main run are
     named (T1's `NO_RUN`): none has an effect, so each is proved with every
@@ -232,7 +235,7 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
                       "strobe-cage", "woven-lattice", "party-tracer"}
     app = headless.make_app(tmp_path)
     done, others = [], []
-    for path in FACTORY:
+    for path in CORPUS_PRESETS:
         doc = json.loads(path.read_text())
         app.presets.load_doc(doc)
         flat = app.presets.graph.spec
@@ -253,7 +256,7 @@ def test_a_grouped_preset_builds_the_graph_of_its_ungrouped_twin(tmp_path):
         assert spec.to_json() == flat.to_json(), path.stem
         assert G.signature(G.build_graph(_views(), spec.wiring())) == want, path.stem
         done.append(path.stem)
-    assert len(done) - len(others) == len(FACTORY) - len(NO_RUN) >= 9
+    assert len(done) - len(others) == len(CORPUS_PRESETS) - len(NO_RUN) >= 9
     assert others == ["party-tracer", "party-wake"]
 
 
@@ -809,7 +812,7 @@ def test_a_spawn_with_a_voice_and_a_subscriber_is_one_step_through_the_banks(tmp
     and one ⌘Z takes the voice, the value, the route, the subscriber, the
     group and its layout back off."""
     assert patches.check(BREATH) == []
-    app = headless.make_app(tmp_path)
+    app = headless.make_app(seed(tmp_path))
     app.lib.load("presets", "party-trip")
     pre, table, reg = app.presets, app.router.table, app.reg
     u = undo.Undo(reg, table, marks=Marks(app.lib), banks=pre.banks)

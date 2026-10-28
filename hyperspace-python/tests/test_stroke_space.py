@@ -43,7 +43,7 @@ def test_the_switch_is_in_a_saved_preset_and_loads_back(tmp_path):
     path.write_text(json.dumps(doc))
     rig.presets.load_doc(doc, path)
     assert rig.view.screen_strokes is True
-    # a preset without the key (every factory file) lands world space
+    # a preset without the key (every corpus file) lands world space
     del doc["values"]["view.screen_strokes"]
     rig.presets.load_doc(doc, path)
     assert rig.view.screen_strokes is False

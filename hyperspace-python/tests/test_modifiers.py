@@ -13,8 +13,8 @@ source, the preset / bindings split, a route onto a missing modifier, the
 template override, the strip building "right hand energy, smoothed, times
 band 0, into acid mix" through the page's own functions, an older preset
 without the key, undo, and Learn. The presets are fixtures under
-tests/fixtures/modifiers/, loaded through a scratch library; no preset in
-hyperspace/library/ is touched.
+tests/fixtures/modifiers/, loaded through a scratch library beside the
+corpus's presets (tests/corpus, seeded).
 """
 
 import json
@@ -361,7 +361,7 @@ def test_a_template_may_carry_modifiers_and_a_preset_overrides_by_id(rig):
 
 
 def test_an_older_preset_without_the_key_loads_as_before(rig):
-    """Every factory preset has no `modifiers`: it loads with no note,
+    """Every corpus preset has no `modifiers`: it loads with no note,
     holds none, and saves without the key — the same document as the
     base build's (no `mod.*` id among its values)."""
     lib, presets, table = rig.lib, rig.presets, rig.router.table

@@ -475,13 +475,18 @@ def test_the_default_map_is_sorted_as_plan_13_says():
             "layer": "global"} in doc["bindings"]
 
 
-def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsys):
+def test_an_old_bindings_file_is_sorted_in_memory_and_its_preset_rows_carried(tmp_path, capsys):
+    """A schema-2 `bindings.json` (every row, no layers) loads sorted in
+    memory: the session's rows on their layers, the preset-layer rows
+    carried off the table (`carried`), a row of mine on an invariant
+    control kept invariant, one on SHIFT's note dropped with a note. The
+    file itself is left alone (plan 13's first-launch rewrite is gone with
+    the two-tier library, 2026-10-28)."""
     path = bindings_path(tmp_path)
     hand = path.with_name("bindings.json.bak-mine")
     hand.write_text("mine")
     v2 = {"schema": routing.SCHEMA_V2, "profile": "apc40",      # every row: the preset layer too
           "bindings": [b.to_json() for b in Bindings.factory().bindings]}
-    v2["schema"] = routing.SCHEMA_V2
     new = {"hands.smooth", "hands.response", "hands.catch", "hands.sel.return", "tempo.bpm",
            routing.SHIFT_PARAM}
     v2["bindings"] = [{k: v for k, v in b.items() if k != "layer"} for b in v2["bindings"]
@@ -493,38 +498,26 @@ def test_an_old_bindings_file_gets_its_layers_once_with_a_backup(tmp_path, capsy
     ]
     v2["bindings"] = [b for b in v2["bindings"]
                       if not (b["source"] == "cc:0:14" and b["target"] == "master.gain")]
-    path.write_text(json.dumps(v2))
+    text = json.dumps(v2)
+    path.write_text(text)
     t = Bindings.load(path, legacy_midi=None)
-    # the sort is in memory; the file, holding preset-layer rows, is the
-    # first-launch migration's to rewrite (plan 13 WP5): it keeps them in
-    # a preset first, then backs the file up and writes the session's part
     assert capsys.readouterr().err == "" and t.carried is not None
-    from test_routing import migrate_home
-    migrate_home(tmp_path, t)
-    err = capsys.readouterr().err
     layer = {(b.source, b.target): b.layer for b in t.midi()}
     assert layer[("cc:*:16", "band.sel.trim")] == "global"        # identical: the factory's
-    assert layer[("cc:0:48", "view.bright")] == "preset"
     assert layer[(f"note:0:{apc40.N_TAP}", "tempo.tap")] is None
     assert layer[("cc:0:14", "view.speed")] is None               # mine, on an invariant control
-    assert layer[("cc:0:87", "view.inst_amp")] == "preset"        # mine, anywhere else
+    carried = {(d["source"], d["target"]) for d in t.carried.desk or []}
+    assert ("cc:0:48", "view.bright") in carried                   # the preset layer: carried
+    assert ("cc:0:87", "view.inst_amp") in carried                 # mine, anywhere else
     for pid in new:                                               # the global rows and SHIFT added
         assert any(b.target == pid for b in t.midi()), pid
     # a row of mine on SHIFT's note would keep the latch off: dropped, noted
     # (review of PR #63), and SHIFT is the latch
     assert [b.target for b in t.dispatch("note", 0, SHIFT)] == [routing.SHIFT_PARAM]
     assert any("SHIFT is the desk's layer latch" in n for n in t.notes)
-    assert "sorted" in err and "kept as bindings.json.bak-v2" in err
-    assert json.loads(path.with_name("bindings.json.bak-v2").read_text()) == v2
-    assert hand.read_text() == "mine"
-    doc = json.loads(path.read_text())
-    assert doc["schema"] == routing.SCHEMA and doc == t.to_json()
-    # once: the second load finds a schema-3 file and says nothing
-    again = Bindings.load(path, legacy_midi=None)
-    assert again.to_json() == t.to_json() and not again.changed
-    assert capsys.readouterr().err == ""
+    assert path.read_text() == text and hand.read_text() == "mine"   # nothing written
     assert sorted(p.name for p in tmp_path.glob("bindings.json.bak-*")) == [
-        "bindings.json.bak-mine", "bindings.json.bak-v2"]
+        "bindings.json.bak-mine"]
 
 
 # ------------------------------------------------------ plan 15 WP1: undo
@@ -863,7 +856,7 @@ def test_the_bank_pads_are_invariant(rig):
     assert notes == [f"dropped note:{ch}:{n} → view.points: that control is invariant, the "
                      "session's (plan 13 D6)" for _k, (n, ch) in want]
     assert [(b.to_json(), b.layer) for b in t.midi() if b.layer != "preset"] == rows
-    # no factory preset's desk names a pad of rows 4 or 5
+    # no corpus preset's desk names a pad of rows 4 or 5
     for name in lib.list("presets"):
         desk = lib.read("presets", name).get("desk") or []
         assert not [d for d in desk if d["source"].startswith("note:")

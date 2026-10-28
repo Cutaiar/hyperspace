@@ -19,7 +19,7 @@ fake bus, so a desk can be missing at launch and plugged in later):
   hands feed `hand` and `hands` through `hands/device.py`;
 - **schemes from the registry**: the router's continuous schemes and their
   order, the learn's wants, the referee's row schemes;
-- **nothing old moves**: a pre-run `bindings.json` and every factory preset
+- **nothing old moves**: a pre-run `bindings.json` and every corpus preset
   load with no note and no dirt with two desks listed.
 """
 
@@ -28,6 +28,7 @@ from __future__ import annotations
 from types import SimpleNamespace as NS
 
 import pytest
+from conftest import seed
 from test_midi import cc, note
 
 import hyperspace.gamepad as gp
@@ -148,6 +149,7 @@ def build(tmp_path, monkeypatch):
         chain = Analyzer(Analyser())
         control = Control(chain)
         audio = NS(chain=chain, on=False)
+        seed(tmp_path)                 # the corpus: the shipped presets, the party show
         lib = Library(tmp_path)
         reg = build_registry(ViewState(), control, audio, lib.project)
         lib.attach(reg)
@@ -486,7 +488,7 @@ def test_schemes_wants_and_row_schemes_come_from_the_registry(build):
 def test_a_pre_run_bindings_json_and_every_preset_load_quietly_with_two_desks(build):
     """The acceptance's other half: a `bindings.json` written before plan
     27 (today's factory file) loads with no note, no rewrite, nothing
-    said; every factory preset then loads with no desk note and no dirt
+    said; every corpus preset then loads with no desk note and no dirt
     with two desks and the pad listed; the APC40's rows are exactly the
     file's, unqualified."""
     text = routing.FACTORY_FILE.read_text()

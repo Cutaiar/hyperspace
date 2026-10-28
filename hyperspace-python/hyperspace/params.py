@@ -1648,7 +1648,7 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
     # `view.media` — an old preset's is read as that wire, `graphmigrate`)
     r.continuous("view.media_alpha", "Media alpha", *_attr(view, "media_alpha"),
                  lo=0.0, hi=1.0, fmt=lambda v: f"media alpha {v:.2f}", group=g)
-    # the factory desk's knob 7 (apc40.DEFAULT_MAP, every factory preset's
+    # the default desk's knob 7 (apc40.DEFAULT_MAP, a fresh preset's
     # desk) is `view.bmp_alpha`: kept as a view onto `view.media_alpha`, so
     # the row means what it always meant — the opacity of the picture on
     # the faces. An alias: never saved (a preset writes view.media_alpha),

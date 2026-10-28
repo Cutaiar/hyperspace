@@ -18,6 +18,7 @@ from types import SimpleNamespace as NS
 
 import moderngl
 import pytest
+from conftest import seed
 from test_graph_legible import party
 from test_ui_shell import frame
 from test_ui_shell import rig as shell_rig  # noqa: F401 — the headless panel fixture
@@ -38,6 +39,7 @@ class Clock:
 
 @pytest.fixture()
 def rig(shell_rig):  # noqa: F811
+    seed(shell_rig.lib.home)         # (the corpus: the presets the tests load by slug)
     return shell_rig
 
 

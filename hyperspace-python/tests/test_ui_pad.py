@@ -10,13 +10,13 @@ imgui, a library on tmp_path — no pad is plugged in anywhere here.
 
 from imgui_bundle import imgui
 from test_ui_shell import (
+    NARROW_CONTROL,
     frame,
     rig,  # noqa: F401 — the headless panel fixture
 )
 
 from hyperspace import apc40, gamepad, ui_desk, ui_pad
 from hyperspace.app import CONTROL_SIZE
-from test_ui_shell import NARROW_CONTROL
 from hyperspace.routing import Binding, padmap
 
 # ---------------------------------------------------------------- the layout
