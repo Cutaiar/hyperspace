@@ -770,6 +770,27 @@ def test_a_landing_refused_after_its_dry_run_leaves_no_undo_step(rig, monkeypatc
         undo.install(None)
 
 
+def test_a_source_conflict_the_table_refuses_leaves_the_hosts_rows_whole():
+    """A one-owner source answered "the patch" whose row the referee refuses
+    (`abs` is no op for a hand axis): the host's row on that source stays —
+    the refusal is asked before any row moves — and the refusal is a note."""
+    from types import SimpleNamespace
+
+    from hyperspace.routing import Binding, Bindings
+    host = Binding("hand:right.y", "view.bright", "position")
+    table = Bindings([host])
+    row = {"source": "hand:right.y", "target": "fx.acid.speed", "op": "abs", "value": 0.5}
+    c = patches.Conflict("source", "hand:right.y", "view.bright", "fx.acid.speed", row,
+                         host.to_json())
+    landing = SimpleNamespace(routes=[row], desk=[], conflicts=[c])
+    e = graphview.Edit(table)
+    notes: list[str] = []
+    assert e._spawn_rows(landing, {0: graphview.PATCH_SIDE}, notes) == []
+    assert table.bindings == [host]
+    (note,) = notes
+    assert note.startswith("hand:right.y → fx.acid.speed: 'abs' is not an op for a hand source")
+
+
 def test_a_spawn_whose_devices_are_all_there_says_no_wait(rig):
     """The same spawn into a rig whose leap is connected: no "waits for"."""
     from test_device_wants import _Live

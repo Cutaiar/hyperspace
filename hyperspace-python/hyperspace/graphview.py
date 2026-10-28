@@ -4480,6 +4480,9 @@ class Edit:
                     table.add(b)
                     continue
                 if c.kind == "source":      # one axis, one param (`Learn._place`)
+                    why = table.refusal(b)  # asked first: the host's rows go only
+                    if why is not None:     # once the patch's is sure to land
+                        raise ValueError(why)
                     for x in [x for x in table.routes()
                               if x.source == b.source and x.target != b.target]:
                         table.remove(x)
