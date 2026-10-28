@@ -118,10 +118,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # plan 33 T5: + 8, the switch onto the faces; plan 34 T2: + 2 × 8, the
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
     # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
-    # T4: + 2 × 8, the resize into a delay onto the faces and the crop)
+    # T4: + 2 × 8, the resize into a delay onto the faces and the crop;
+    # plan 39 T0: + 8, the scene through edges)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
                                    + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
-                                   + 2 * 8)
+                                   + 2 * 8 + 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -209,7 +210,7 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
 # the route words of those presets' through states
-GOLDENS_SINCE = ("resize-faces", "resize-crop")
+GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene")   # + plan 39 T0's
 # (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
 # scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
 # D1's `into output.N` sat on the window's shown picture, which no wire
