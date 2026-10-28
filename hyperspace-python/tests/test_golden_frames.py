@@ -219,7 +219,12 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene")   # + plan 39 T0'
 # scene+hands+through, 6029 px off by 1/255, mean 0.0029: its `history →
 # acid.2` read the off look-back's copy pass, which no drawn node makes; as
 # `scene → acid.2` the effect folds the scene's own texture)
-GOLDENS_DIGEST = "886d0ce807e1504b546a48adaccd08b1c6bc9fc70f4c7bccccb9e64b6cc704a1"
+# (plan 39 T1: re-pinned for eight goldens re-recorded — backdrop-still's and
+# media-chain-backdrop's present scene, scene+through, scene+hands,
+# scene+hands+through: the cut-through blend is the window's, so the scene
+# laid over the backdrop (zero ground, plan 32 R) no longer squares its alpha
+# and its faces no longer wash toward white; sha256 and png only)
+GOLDENS_DIGEST = "ac516263b005abff61c7cd0fc7cefe9f92bb44616aed1eb1dee3270781dbbd17"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",

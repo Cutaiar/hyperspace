@@ -2782,7 +2782,13 @@ class Renderer:
         # Only on a see-through ground (overlay mode): on an opaque one the
         # frame stays alpha 1 everywhere, so the desktop never shows through
         # the window (plan 14 WP1 — the Pepper's Ghost rig)
-        if s.cut_through and bg_alpha < 1.0:
+        # plan 39 T1 (alpha is honest): the see-through *window*'s ground
+        # (`bg_alpha`), never a laid-over scene's zero one (`scene_ground`):
+        # a scene in a composite's `over` (PR #240) or laid over the
+        # backdrop (`backdrop.scene`, plan 32 R — the case that moved the
+        # backdrop goldens). There the plain blend squared the alpha
+        # against a colour of c·a, so what lay under showed too much
+        if s.cut_through and float(getattr(self, "bg_alpha", 1.0)) < 1.0:
             blend = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA)
         else:
             blend = (moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA,
