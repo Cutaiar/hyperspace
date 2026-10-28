@@ -6,18 +6,42 @@ there today" map before any task; its file:line references are to `main`
 (2026-10-27)**; build what the "the owner" column says, not the
 recommendation where the two differ (D3, D4, D6, D10).
 
-Branch `plan-40-build`, cut from `main` @ f984d3b or later (PR #266, the
-resizable side pane, is in). Each task in its own worktree off
-`plan-40-build` (`plan-40-t<n>`), merged into it when green; the final
-PR is `plan-40-build` → `main`, the owner merges. Work in
+Branch `plan-40-build`, cut from **`plan-37-38-39-integration` @ 2b185ea
+or later** (plan 38 and plan 39 T0–T4 are on it; `main` @ f984d3b, with
+PR #266's resizable side pane, is under it). Each task in its own
+worktree off `plan-40-build` (`plan-40-t<n>`), merged into it when green;
+the final PR is `plan-40-build` → `main`, the owner merges. Work in
 `hyperspace-python/`. Tests: `uv run pytest -q …` from there (the fast
 tier; `--all` for everything, `--all -m golden` for the goldens).
 
-If `plan-37-38-39-integration` has merged to `main` before this starts,
-cut from that `main`; if it merges during the run, the controller merges
-`main` into `plan-40-build` once, before T6, and the schema number is
-settled then (D7: whichever of 37B and this lands second takes the next
-number; the migration is "the key is absent → no groups").
+**Running beside plans 37–39** (their orchestrator's state, 2026-10-27
+evening, confirmed in git): plan 39's T5 (`graphview.py` tables) and T6
+(docs) and the whole of plan 37 (`ui_graph.py` `_canvas` / `_node` /
+hover, `graphview.py` `build` / `summary` / `laid_areas`, `render.py`,
+`outputs.py`, one SYSTEM line in `ui.py`) land on the integration branch
+after this plan has started, and the integration branch's final PR to
+`main` opens two to three hours after. `routing.py`, `devices.py`,
+`library.py`, `ui_routing.py`, `modgraph.py` are free. So:
+
+- **T0, T1, T4 and T5 start at once** (T0 first, alone, then the three
+  in parallel): none of them touches the regions above. T0's one import
+  line in `graphview.py` and T4's one chip on the head are the whole
+  overlap, and both merge mechanically.
+- **T2 and T3 wait for the integration branch's final PR to merge to
+  `main`** (or, if the owner says go sooner, for plan 37 to be on the
+  integration branch): the controller then merges `main` (or the
+  integration head) into `plan-40-build` once, re-runs the fast tier,
+  and cuts T2 from that. T2 and T3 are the canvas work and would
+  otherwise conflict with plan 37's `_node`, `build` and `summary`. By
+  the build plan's own order T2 needs T1 anyway, and T1 is the longest
+  task, so the wait is mostly absorbed.
+- `preset.py`: plan 38's hook lives in `GraphSection._settle` / `names`
+  / `_values` and plan 39's declares in `_settle`; this plan's T2 touches
+  `document`, `load_doc` step 6½ and `signature`, and T5 the module
+  hooks — different functions, keep it that way.
+- The schema number (D7): 37B took none, so `groups` is `/8` unless
+  something else has taken it by the time T2 cuts; the migration is "the
+  key is absent → no groups".
 
 ## Global constraints
 
