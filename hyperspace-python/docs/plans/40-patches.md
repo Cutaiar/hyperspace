@@ -1,6 +1,8 @@
 # Plan 40 — patches: a group of nodes and its boundary, saved once, spawned anywhere
 
-**Status: spec (2026-10-27), awaiting the owner's decisions D1–D8.** From
+**Status: agreed, not built (2026-10-27).** Every decision is the owner's,
+answered the same day in the session that wrote this; D1–D10 below carry
+his words. The build plan follows, as 37A's did. From
 the owner's ask of 2026-10-27, while plans 37–39 are in flight: "the
 concept of patches … group some nodes together and then save that grouping
 of nodes and the connections between them (crucially, the connections
@@ -19,7 +21,12 @@ The old answer — a module preset per param group, then a whole preset —
 says why in the map below, and replaces it with one noun.
 
 Independent of plans 37A, 37B, 38 and 39; "Independence" at the end lists
-the seams. Build plan to follow the decisions, as 37A's did.
+the seams.
+
+A side ask from the same session, its own PR and not part of this plan:
+the GRAPH page's side pane (the one that opens when a node is clicked)
+must be resizable — "for some UI, the little sidebar … is just not wide
+enough."
 
 ## What is there today (the map, `main` @ f2351a0)
 
@@ -253,11 +260,30 @@ plus one:
   through today's doors, in load order: the group's render nodes and
   internal wires by `gs.land` of the re-read section (so their params
   exist), the voices by `bank.add(n)`, the modifiers by `add_modifier`,
-  the values by `lib.restore`, the routes by `Bindings.add` (a performer
-  conflict handled by D3), the desk rows by `bind(write=False)` (a knob
-  conflict handled by D3), the subscribers by `set_macros`, the group and
-  its layout at the drop point. The preset's dirty dot lights; no file is
-  written until a save.
+  the values by `lib.restore`, the routes by `Bindings.add` or
+  `replace_owner`, the desk rows by `bind(write=False)`, the subscribers
+  by `set_macros`, the group and its layout at the drop point. The
+  preset's dirty dot lights; no file is written until a save.
+- **The conflict sheet** (D3, the owner's words: "a pop-up that says,
+  hey, these are the conflicts; choose a resolution for each one: the
+  patch or the existing preset"). Before anything lands, `patches.spawn`'s
+  `Landing` lists every rig port that collides with the host: a knob or
+  button the host's preset layer already maps (`Binding.overlaps`), a
+  performer source that already owns a host param, a patch route onto a
+  host param another performer owns (`Bindings.owner`). If the list is
+  empty the spawn lands at once. Otherwise one modal, drawn where the
+  Replace / Keep prompt is drawn (`ui_routing.modal`, first in
+  `Panel.draw`), lists each conflict in words — "K1: `view.bright` (the
+  preset) or `fx.acid.2.speed` (the patch)" — with a two-way choice per
+  row, **every row preselected to the patch** (D9), a **keep all
+  existing** button that flips them, and **Spawn** / **Cancel**. Spawn
+  lands the whole `Landing` with the choices applied as one undo step; a
+  row the preset keeps lands the patch's row dormant-by-conflict and
+  said on the group node ("K1 kept by the preset"). Cancel lands
+  nothing. While the sheet is up the hands learn nothing, as with the
+  Replace / Keep prompt. The sheet also lists the patch's wants (P4)
+  beneath the conflicts, so a device the rig lacks is read before the
+  press.
 - **Where it lands** (D2): spawned from the right-click menu, the group's
   members appear at the click with the patch's relative layout — the
   patch's own, not an auto layout — and every host port is an **open pin
@@ -271,8 +297,8 @@ plus one:
 - **Fresh ids are said**: the group's hover lists the rename map ("acid →
   acid.2") for the session.
 - **A patch twice** in one preset is two groups with two id sets; its rig
-  ports collide (one knob, one param) and D3 says who wins; the second's
-  losing rows land dormant-by-conflict and are said.
+  ports collide (one knob, one param) and the sheet asks, row by row;
+  the losing rows land dormant-by-conflict and are said.
 
 ### P4 — what the preset wants and the rig lacks; the arrival
 
@@ -308,30 +334,49 @@ the first and the one missing signal.
   shows before the spawn lists the patch's wants with the same words, so
   nothing is a surprise.
 
-### P5 — the fx module presets become factory patches (D6)
+### P5 — the fx module is retired outright (D6, D10)
 
-`library/fx/acid.json`, `mandala`, `noita-tripping`,
-`noita-heavily-tripping`, `noita-tripping-balls`, `trip` are rewritten as
-factory patches (their effect runs as nodes and wires, one `image` inlet
-and outlet, their values), the fx fold of "more · module presets" is the
-patches list, `Presets._fx_module` and `graphmigrate.module_runs` go, a
-show or preset that still names an fx module in `modules` keeps the label
-and nothing loads (D3 of the desk already says a label never chain-loads).
-`band/` (the analyzer's scenes, session) and `dream/` stay as they are.
-Every golden unmoved: no preset changes.
+The owner, 2026-10-27: "I don't want factory patches from the 6 FX module
+presets … The FX module should probably be retired outright. It is not a
+useful representation of shaders anymore. The UI that is present in that
+FX module is just not in any way, shape, or form conducive to anything
+useful in the graph, so I think it needs to go away."
 
-## Decisions for the owner
+- **The fx module presets go**: `library/fx/*.json` (the six), the fx
+  entry of "more · module presets" on the PRESETS page, the load hook
+  `Presets._fx_module` and `graphmigrate.module_runs`, `FX_GROUP`'s
+  defaults as a module (`Library.defaults("fx")` is the fresh values).
+  Nothing is converted. A show or preset that still names an fx module in
+  `modules` keeps the label, which never loaded anything (desk D3), and
+  the label is dropped on its next save. `band/` (the analyzer's scenes,
+  session) and `dream/` stay as they are.
+- **The FX page goes as a page** (D10, the reading of "the UI that is
+  present in that FX module"): `ui_fx.page`, its tab, the groups by where
+  each effect ends, the head's `fx.on` / `fx.mix`. What it drew that GRAPH
+  still needs stays: the **effect strip** (the four params, the annotated
+  uniforms, the compile error, `why_idle` and its mending chips) is
+  already GRAPH's side pane for a selected effect node and keeps living
+  in `ui_fx.py` as that; `Panel.fx_selected` stays as GRAPH's selection.
+  `fx.on` and `fx.mix` move to the side pane's head for any effect node.
+  The patches browser (P3) takes the FX tab's place in the page order.
+- Every golden unmoved: no preset, graph or shader changes. The GRAPH
+  side-pane width ask (the head of this file) is the same pane this
+  leans on, so it lands first.
 
-| # | question | recommendation |
-|---|---|---|
-| D1 | The word. `patch.py` is the modulation graph's order (map item 7). Call the new thing **patch** and rename the module, or call the new thing something else (**block**, **rack**, **module**, **macro-node**)? | **Patch**, the owner's word and the modular word for exactly this. Rename `patch.py` → `modgraph.py` (`patchmod` → `modgraph`, `build_patch` → `build_modgraph`, `patch_notes` → `modgraph_notes`) as the mechanical T0: three files, no behaviour. "k patched" on a node summary stays, it is the same sense. |
-| D2 | Where a spawn's host ports land: open pins only; open pins, plus **splice** when dropped on a matching cable, plus a one-press **wire as saved** chip (P3); or attach by the saved names automatically when the host has them? | **Open pins + splice + the chip.** Automatic attachment is a hidden edge by another name and the hard rule forbids it; splice is the same gesture as insert, and the chip is one press with its result drawn. |
-| D3 | A spawn's rig port collides with the host (K1 already on `view.bright`; `hand:right.y` already owns a param): the **patch wins** and the displaced row is said; the **host wins** and the patch's row lands dormant and said; or **ask** per conflict (the Replace / Keep prompt, once per row)? | **The patch wins, said, one undo step.** You asked for the patch and its knob is part of it; ⌘Z puts the host's row back. The browser's sheet lists the conflicts before the press, so it is not a surprise. Asking per row makes a six-knob patch six prompts. |
-| D4 | The group node: saved in the preset (`groups`) and drawn collapsed with its internal cables folded away — confirm against the hard rule — or a session-only fold saved nowhere, like collapsed nodes? | **Saved, collapsed by default**, and the rule holds in spirit: nothing is added, nothing is laid out, and `+` shows exactly what is inside. The owner asked for the node; a fold the preset forgets is not a node. |
-| D5 | What a patch may hold beyond its nodes: **only the boundary** (a host param is reached by a port, never carried as a value), or also **values of host params** (`view.bright: 0.8` as part of the patch)? | **Only the boundary.** A patch that sets the shape's brightness is a preset; a patch that *drives* it is a patch. Keeps lift ⇄ spawn a clean round trip and two patches from fighting over a singleton. |
-| D6 | The fx module presets: converted to factory patches and the mechanism retired (P5), or left beside patches? | **Converted and retired.** The owner's "didn't really work" is the mandate; six files, one fold, two functions. `band/` and `dream/` stay: they are session scenes and one-group moods, not compositions. |
-| D7 | The schema: `groups` is a new key — `/8`, taken with the rule that both Macs update together (row 394)? 37B also claims `/8`. | **Whichever of 37B and this lands second takes `/9`**; the migration is "the key is absent → no groups", nothing else. |
-| D8 | The desk: the browser and spawn stay on the control window, or a bank of patches on APC40 pads too? | **Control window only.** The desk and the faders are Dylan's; a pad that spawns at a party is a pad that spawns twice. |
+## Decisions (the owner's, 2026-10-27)
+
+| # | question | recommendation | the owner |
+|---|---|---|---|
+| D1 | The word. `patch.py` is the modulation graph's order (map item 7). Call the new thing **patch** and rename the module, or call the new thing something else (**block**, **rack**, **module**, **macro-node**)? | **Patch**, the owner's word and the modular word for exactly this. Rename `patch.py` → `modgraph.py` (`patchmod` → `modgraph`, `build_patch` → `build_modgraph`, `patch_notes` → `modgraph_notes`) as the mechanical T0: three files, no behaviour. "k patched" on a node summary stays, it is the same sense. | "Calling this a patch and renaming the other module is fine." |
+| D2 | Where a spawn's host ports land: open pins only; open pins, plus **splice** when dropped on a matching cable, plus a one-press **wire as saved** chip (P3); or attach by the saved names automatically when the host has them? | **Open pins + splice + the chip.** Automatic attachment is a hidden edge by another name and the hard rule forbids it; splice is the same gesture as insert, and the chip is one press with its result drawn. | as recommended |
+| D3 | A spawn's rig port collides with the host (K1 already on `view.bright`; `hand:right.y` already owns a param): the **patch wins** and the displaced row is said; the **host wins** and the patch's row lands dormant and said; or **ask** per conflict? | (the patch wins, said) | **Ask, in one sheet**: "a pop-up that says, hey, these are the conflicts; choose a resolution for each one: the patch or the existing preset." Built as P3's conflict sheet. |
+| D4 | The group node: saved in the preset (`groups`) and drawn collapsed with its internal cables folded away — confirm against the hard rule — or a session-only fold saved nowhere, like collapsed nodes? | **Saved, collapsed by default**, and the rule holds in spirit: nothing is added, nothing is laid out, and `+` shows exactly what is inside. | **Saved, folded until `+`**: "a good middle ground. I know it goes against the no hidden edges rule, but this is an explicit place where we want to say, okay, we want to encapsulate complexity." The one sanctioned exception to the rule, recorded as such. |
+| D5 | What a patch may hold beyond its nodes: **only the boundary** (a host param is reached by a port, never carried as a value), or also **values of host params** (`view.bright: 0.8` as part of the patch)? | **Only the boundary.** A patch that sets the shape's brightness is a preset; a patch that *drives* it is a patch. | as recommended |
+| D6 | The fx module presets: converted to factory patches and the mechanism retired, or left beside patches? | (converted and retired) | **No conversion; retired outright.** "I don't want factory patches from the 6 FX module presets … The FX module should probably be retired outright. It is not a useful representation of shaders anymore." P5. |
+| D7 | The schema: `groups` is a new key — `/8`, taken with the rule that both Macs update together (row 394)? 37B also claims `/8`. | **Whichever of 37B and this lands second takes `/9`**; the migration is "the key is absent → no groups", nothing else. | as recommended |
+| D8 | The desk: the browser and spawn stay on the control window, or a bank of patches on APC40 pads too? | **Control window only.** The desk and the faders are Dylan's; a pad that spawns at a party is a pad that spawns twice. | control window only |
+| D9 | The conflict sheet's default: every row preselected to the patch, to the existing preset, or unselected so each needs a click? | **Preselected to the patch**, with one **keep all existing** button. | as recommended |
+| D10 | "The UI that is present in that FX module … needs to go away": the FX **page** (`ui_fx.page`, the browser of effects by where each ends) goes with the module presets, its effect strip kept as GRAPH's side pane? | **Yes, as read**: the page and its tab go, the strip stays where GRAPH already uses it (P5). | the controller's reading of the owner's words; the owner to overturn if he meant the presets alone |
 
 ## Order of work
 
@@ -340,14 +385,15 @@ Every golden unmoved: no preset changes.
 | T0 | D1's rename, `patch.py` → `modgraph.py` | the suite unmoved |
 | T1 | P1: `patches.py` (`read`, `check`, `lift`, `spawn`), the `DocKind`, `<library>/patches/`, the rename rules, the boundary classifier | the round trip over every factory preset's effect run; a patch with a macro and no free macro is refused in words; a lift that names `scene` refuses it and keeps the rest |
 | T2 | P2: `groups` in the preset (D7's schema), the group node collapsed / open / ungroup / group-from-selection, the tinted region, undo marks | a grouped preset's `build_graph` signature equals its ungrouped twin's; goldens unmoved; a preset without `groups` saves byte for byte |
-| T3 | P3: save as patch / update patch, the browser (GRAPH chip, PRESETS fold, Spawn ▸), spawn through the doors as one step, splice on a cable, **wire as saved** | spawning `acid-wash` into `party-trip` lands `acid.2`, `wobble.2`, `delay.2`, `mod.<n>`, K1's row and the hand's row; ⌘Z removes all of it; spliced on `scene → warp.image` the run reads `scene → acid.2 → wobble.2 → delay.2 → warp` |
+| T3 | P3: save as patch / update patch, the browser (GRAPH chip, PRESETS fold, Spawn ▸), spawn through the doors as one step, the **conflict sheet** (D3, D9), splice on a cable, **wire as saved** | spawning `acid-wash` into `party-trip` lands `acid.2`, `wobble.2`, `delay.2`, `mod.<n>`, K1's row and the hand's row; ⌘Z removes all of it; spliced on `scene → warp.image` the run reads `scene → acid.2 → wobble.2 → delay.2 → warp`; a spawn whose K1 collides opens the sheet, and "keep all existing" then Spawn lands the patch's K1 row dormant and said |
 | T4 | P4: `devices.wants`, the chips, the SYSTEM lines, the registry's status-change event and the arrival line | a preset wanting `leap` on a rig without one reports "not in this rig: 3 rows"; a `MidiDevice` going lost → connected fires the listeners once and says the count |
-| T5 | P5: the six fx modules as factory patches, the fold, the hook retired | each converted patch spawned into **new** draws what the module loaded onto **new** drew (a golden per patch, six new) |
+| T5 | P5: the fx module presets retired (the six files, the fold, the hook, `module_runs`); the FX page retired as a page, the effect strip kept as GRAPH's side pane, `fx.on` / `fx.mix` on the pane's head (D6, D10) | goldens unmoved; every factory preset loads with no note; the strip still draws for a selected effect node; no test or page imports what went |
 | T6 | docs: this spec's "as built", ARCHITECTURE §3 (a "Patches" subsection beside the desk templates), DECISIONS "Presets and the desk", register rows, hand checks group AJ, `plans/README.md` | — |
 
 T0 first; T1 alone; T2 needs T1's reader; T3 needs T1 and T2; T4 is
 independent of T2 and T3 and can land first as its own PR if the owner
-wants the "waits for apc40" line sooner; T5 needs T3.
+wants the "waits for apc40" line sooner; T5 is independent of all but
+leans on the resizable side pane (the side ask), which lands before it.
 
 ## What it does not do
 
@@ -372,6 +418,7 @@ wants the "waits for apc40" line sooner; T5 needs T3.
 | `preset.py` | the `groups` key, `Presets.document` / `load_doc` one step each, `signature` | 37B: the pattern by name (`/8`) |
 | `devices.py` | `wants`, the status-change event in `poll`, `SCHEME_ROLE` | 39: the segment and camera devices, if any |
 | `library.py` | the `patches` `DocKind`, `save_patch`, the fx fold | — |
+| `ui_fx.py`, `ui.py` | the page and its tab go, the strip stays; `ui_routing.modal` gains the conflict sheet | 37A: nothing; 38: the head |
 | `render.py`, `graph.py` | nothing (a reader of `FRAME_KINDS`, `instance_name`, `GraphSpec.to_json`) | 37A: `Thumbs`, `frame.made`; 37B: `Shape`, `PatternNode` |
 | schema | `/8` or `/9` (D7) | 37B `/8` |
 
@@ -404,11 +451,14 @@ six goldens. About plan 36's size.
 3. **Splice.** Load `party-trip`, drag "noita core" from the browser onto
    the cable `scene → trip.image`: the run reads scene → the three →
    trip, said on the nodes, seen on the projector.
-4. **The knobs come with it.** Save a patch from a group whose effect has
-   K1 and the right hand on it. Spawn it into `party-acid`, where K1 is
-   something else: the sheet says "K1 is on view.bright — the patch takes
-   it"; after the spawn K1 turns the patch's knob and the ring agrees;
-   ⌘Z gives K1 back.
+4. **The knobs come with it, and the sheet asks.** Save a patch from a
+   group whose effect has K1 and the right hand on it. Spawn it into
+   `party-acid`, where K1 is something else: the sheet lists "K1:
+   view.bright (the preset) · fx.acid.2.speed (the patch)" preselected to
+   the patch; Spawn, and K1 turns the patch's knob and the ring agrees;
+   ⌘Z gives K1 back. Spawn again, press **keep all existing**, Spawn: K1
+   still turns brightness and the group node says "K1 kept by the
+   preset". Cancel on a third spawn lands nothing.
 5. **Not connected, said.** With the APC40 unplugged, load a preset with
    that patch: the group node reads "waits for apc40 (lost): K1"; the
    GRAPH head shows **1 device missing**; SYSTEM lists it. Plug the desk
@@ -417,9 +467,10 @@ six goldens. About plan 36's size.
 6. **Not in this rig, said.** On the laptop config (no Leap), the same
    preset: "leap (not in this rig): right hand y"; the grey placeholder
    node as before.
-7. **The factory patches.** On **new**, spawn each of the six converted
-   patches wired scene → in, out → output.all, and compare by eye with
-   the fx module of the same name loaded on `main`'s build.
+7. **The FX page is gone, the strip is not.** No FX tab; click an effect
+   node on GRAPH and its strip is in the side pane with `fx.on` and
+   `fx.mix` at its head; "more · module presets" on PRESETS lists no fx
+   entry; every factory preset loads with no note in the footer.
 8. **Twice.** Spawn "noita core" twice into one preset: two groups,
    `.2` and `.3` ids on their hovers, the second's K1 row said as dormant.
 
