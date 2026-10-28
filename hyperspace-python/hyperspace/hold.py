@@ -64,12 +64,23 @@ from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any
 
-from .params import PERFORMANCE_GROUPS, lookback_ids, resize_ids, switch_id
+from .params import (
+    PERFORMANCE_GROUPS,
+    cut_ids,
+    lookback_ids,
+    matte_ids,
+    resize_ids,
+    segment_ids,
+    switch_id,
+)
 from .undo import alike
 
 # the performance groups the renderer reads, held for the program; the
 # rest of the preset's part is one for both (the module's docstring)
-HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch", "resize")
+HELD_GROUPS = ("view", "camera", "pattern", "dream", "fx", "backdrop", "switch", "resize",
+               # plan 39 T2–T4: the mattes', cuts' and segments' knobs (the
+               # renderer reads their states, as a resize's)
+               "matte", "cut", "segment")
 # …less the params the integrator reads before either draw: holding the 3D
 # switch alone would draw the program's pose with the preview's body
 # (plan 38 B3: and the turn's speed and planes, which the draw never reads —
@@ -444,6 +455,10 @@ PROGRAM_IDS: dict[str, Callable[[Any, str], Any]] = {
     "switch": lambda reg, n: [switch_id(n)],
     "resize": lambda reg, n: resize_ids(n),
     "lookback": lambda reg, n: lookback_ids(n),
+    # plan 39 T2–T4: a matte's, a cut's and a segment's values, by entry
+    "matte": lambda reg, n: matte_ids(n),
+    "cut": lambda reg, n: cut_ids(n),
+    "segment": lambda reg, n: segment_ids(n),
 }
 
 

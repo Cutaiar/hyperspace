@@ -181,11 +181,22 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # in3 the still through acid.2: never made)
 # Plan 35 T3's `channel-out-only` (`hyperspace.preset/6`): channel a's still
 # wired straight into All outputs, nothing else — no scene pass. Plan 34
-# T4's `resize-crop` (a wired frame, below)
+# T4's `resize-crop` (a wired frame, below). Plan 39 T2's `mask-as-picture`
+# (`/7`, a wired frame): channel a's still through a matte (luma, key 0.95,
+# feather 4) wired straight into All outputs — the mask as a picture. Plan
+# 39 T3's `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
+# scene through kaleido on its picture, the cut over the scene — the
+# kaleidoscope in the still's disc, the scene elsewhere. Plan 39 T4's
+# `segment-motion` (`/7`, a wired frame): the scene over the still into a
+# motion segment, its foreground into All outputs — the model learns the
+# rig's first frame, its later frames (the pinned clock: the polytope turns,
+# the still does not) are the second picture, so the turning polytope is
+# the foreground and the still is cut away
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-                                   "channel-out-only", "resize-crop")
+                                   "channel-out-only", "resize-crop", "mask-as-picture",
+                                   "cut-out", "segment-motion")
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
@@ -203,12 +214,15 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # scene made at 64² square, nearest, into a delay onto the faces (`scene →
 # resize → delay → shape.faces`) — and `resize-crop`, channel a's still
 # cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
+# Plan 39 T0's one (a `/7` wired frame): the scene through `edges` at its
+# defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
-                                   "resize-faces", "resize-crop")
+                                   "resize-faces", "resize-crop", "edges-scene",
+                                   "mask-as-picture", "cut-out", "segment-motion")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
-                                    "through-one-output", "resize-faces")
+                                    "through-one-output", "resize-faces", "edges-scene")
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 

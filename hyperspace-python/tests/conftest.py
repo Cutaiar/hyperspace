@@ -30,6 +30,10 @@ _SLOW_FILES = {"test_dream.py"}
 _LIVE_TESTS = {
     "test_media_render.py::test_a_syphon_frame_samples_through_the_fit_pass",
     "test_media_core.py::test_bad_file_is_an_error",      # polls; fails under load
+    # plan 39 T4: the real segment backends, once each on a synthetic frame
+    # (one worker at a time: torch must not share MPS with another test)
+    "test_segment.py::test_vision_runs_once_on_a_synthetic_frame",
+    "test_segment.py::test_torch_runs_once_on_a_synthetic_frame",
 }
 _SLOW_TESTS = {
     "test_media_core.py::test_heic_opens",

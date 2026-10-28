@@ -212,12 +212,144 @@ def test_program_only_knows_every_kind_and_every_file_live(rig):
     real = rig.presets.graph.names
     rig.presets.graph.names = lambda spec=None: {**real(spec), "fx": None}
     assert not any(i.startswith("fx.") for i in hold.program_only())
-    hold.kept["matte"] = ["matte"]
-    rig.presets.graph.names = lambda spec=None: {**real(spec), "matte": []}
-    with pytest.raises(KeyError, match="matte"):
+    # (a made-up kind: plan 39's matte, cut and segment are on the table now)
+    hold.kept["future"] = ["future"]
+    rig.presets.graph.names = lambda spec=None: {**real(spec), "future": []}
+    with pytest.raises(KeyError, match="future"):
         hold.program_only()
     rig.presets.graph.names = real
-    del hold.kept["matte"]
+    del hold.kept["future"]
+
+
+# plan 39 (at the 37/38/39 integration): a look with a matte, a cut and a
+# segment — the scene keyed by the matte, its segment's fg cut by it
+MASKS = {"frame": "wired",
+         "nodes": [{"kind": "matte"}, {"kind": "cut"}, {"kind": "segment"}],
+         "wires": [{"from": a, "to": b} for a, b in (
+             ("shape", "scene.geometry"), ("scene", "matte.image"), ("matte", "cut.mask"),
+             ("scene", "segment.image"), ("segment.fg", "cut.image"),
+             ("cut", "output.all.image"))]}
+MASK_KINDS = ("matte", "cut", "segment")
+
+
+def _mask_states(reg):
+    from hyperspace.params import _cut_state, _matte_state, _segment_state
+
+    return {"matte": _matte_state(reg), "cut": _cut_state(reg), "segment": _segment_state(reg)}
+
+
+def _wired(wiring, kind: str) -> bool:
+    return any(str(w).find(kind) >= 0 for w in getattr(wiring, "wires", ()) or ())
+
+
+def test_a_landing_while_held_keeps_the_programs_mattes_cuts_and_segments(rig):
+    """Plan 39 at integration (38-B3 M-a): a look with a matte, a cut and a
+    segment held; a blank graph lands. Their states and params stay for the
+    program (the held wiring still draws them); the preview's graph has
+    none; a save while held writes none of their ids; Take settles to the
+    live graph and they go."""
+    from hyperspace.params import cut_ids, matte_ids, segment_ids
+
+    reg, hold, gs, r = rig.reg, rig.hold, rig.presets.graph, rig.renderer
+    _land(rig, MASKS)
+    ids = [*matte_ids("matte"), *cut_ids("cut"), *segment_ids("segment")]
+    assert all(i in reg for i in ids)
+    reg["matte.key"].set(0.8)
+    reg["cut.amount"].set(0.4)
+    reg["segment.smooth"].set(0.6)
+    settle(rig)
+    states = _mask_states(reg)
+    kept = {k: states[k][k] for k in MASK_KINDS}
+    assert kept["matte"].key == pytest.approx(0.8)
+    hold.engage()
+    _land(rig, {"frame": "wired"})                       # `new`: nothing wired
+    states = _mask_states(reg)
+    for k in MASK_KINDS:
+        assert states[k][k] is kept[k], k                # the same state, kept
+    assert all(i in reg for i in ids)
+    assert reg["matte.key"].get() == pytest.approx(0.8)
+    assert reg["cut.amount"].get() == pytest.approx(0.4)
+    assert reg["segment.smooth"].get() == pytest.approx(0.6)
+    # the preview's graph has none; the projector's held wiring has all three
+    live = gs.names()
+    assert all(live[k] == [] for k in MASK_KINDS)
+    assert not any(_wired(r.wiring, k) for k in MASK_KINDS)
+    assert all(_wired(hold.wiring, k) for k in MASK_KINDS)
+    with hold.program():
+        assert r.wiring is hold.wiring
+        assert reg["matte.key"].get() == pytest.approx(0.8)
+    # none of them is the preset's: a save while held writes none of their ids
+    assert set(ids) <= hold.program_only()
+    values = rig.presets._values()
+    assert not any(k.startswith(("matte.", "cut.", "segment.")) for k in values)
+    assert hold.take()
+    states = _mask_states(reg)
+    assert not any(i in reg for i in ids)
+    assert all(k not in states[k] for k in MASK_KINDS)
+
+
+def test_a_knob_turned_on_a_held_matte_cut_or_segment_stays_off_the_projector(rig):
+    """Plan 39 at integration: their groups are held (`HELD_GROUPS`), as a
+    resize's — the operator's turn is the preview's, the program draws the
+    value as held."""
+    reg, hold = rig.reg, rig.hold
+    _land(rig, MASKS)
+    reg["matte.key"].set(0.2)
+    reg["cut.amount"].set(1.0)
+    reg["segment.feather"].set(0.0)
+    settle(rig)
+    hold.engage()
+    assert {"matte.key", "cut.amount", "segment.feather"} <= set(hold.values)
+    reg["matte.key"].set(0.9)
+    reg["cut.amount"].set(0.5)
+    reg["segment.feather"].set(4.0)
+    frames(rig)
+    states = _mask_states(reg)
+    with hold.program():
+        assert states["matte"]["matte"].key == pytest.approx(0.2)
+        assert states["cut"]["cut"].amount == pytest.approx(1.0)
+        assert states["segment"]["segment"].feather == pytest.approx(0.0)
+    assert states["matte"]["matte"].key == pytest.approx(0.9)
+    assert states["cut"]["cut"].amount == pytest.approx(0.5)
+    assert states["segment"]["segment"].feather == pytest.approx(4.0)
+
+
+def test_drop_after_a_blank_landing_brings_the_mattes_cuts_and_segments_back(rig):
+    """Plan 39 at integration: Drop lands the hold point — the three nodes,
+    their states and values as the projector ran them."""
+    reg, hold, gs = rig.reg, rig.hold, rig.presets.graph
+    _land(rig, MASKS)
+    reg["matte.key"].set(0.7)
+    reg["segment.smooth"].set(0.3)
+    settle(rig)
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    assert hold.drop()
+    settle(rig)
+    assert all(gs.names()[k] == [k] for k in MASK_KINDS)
+    assert reg["matte.key"].get() == pytest.approx(0.7)
+    assert reg["segment.smooth"].get() == pytest.approx(0.3)
+    states = _mask_states(reg)
+    assert all(k in states[k] for k in MASK_KINDS)
+
+
+def test_every_kind_a_landing_settles_has_its_program_ids(rig):
+    """Plan 39 at integration: `GraphSection.names` (both branches) and
+    `hold.PROGRAM_IDS` name the same kinds — a future kind settled without
+    a table entry would raise in `program_only`, and this says so first.
+    And `program_only` covers every kind, plan 39's three included."""
+    gs, hold = rig.presets.graph, rig.hold
+    assert set(gs.names(None)) == set(H.PROGRAM_IDS)     # nothing landed
+    _land(rig, MASKS)
+    assert set(gs.names()) == set(H.PROGRAM_IDS)         # a spec landed
+    for kind in H.PROGRAM_IDS:
+        if kind != "fx":
+            assert H.PROGRAM_IDS[kind](rig.reg, kind), kind
+    hold.engage()
+    _land(rig, {"frame": "wired"})
+    only = hold.program_only()
+    for kind in MASK_KINDS:
+        assert set(H.PROGRAM_IDS[kind](rig.reg, kind)) <= only, kind
 
 
 def test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole(rig):
