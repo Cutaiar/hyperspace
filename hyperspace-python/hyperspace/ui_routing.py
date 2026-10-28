@@ -137,6 +137,7 @@ from .routing import (
     Router,
     Sub,
     base_refusal,
+    base_sub,
     factory_desk,
 )
 
@@ -1511,8 +1512,8 @@ def macros(panel, router: Router) -> None:
         imgui.same_line()
         if ui.chip("+ base"):
             q = panel.reg.get("view.bright") or base_targets(panel)[0]
-            # from = to = where the param sits: adding it moves nothing
-            _macro(table, p.id).subs.append(Sub(base=q.id, lo=q.norm, hi=q.norm))
+            # from where the param sits to its fader's end (row 537)
+            _macro(table, p.id).subs.append(base_sub(q))
             _macros_edited(table)
         if imgui.is_item_hovered():
             ui.tooltip("A param whose base this knob sets")

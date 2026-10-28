@@ -955,10 +955,13 @@ class Panel:
         while a gamepad is connected, wherever Learn desk is offered — a
         button, the D-pad, a stick or a trigger completes it
         (`gamepad.learn_from`). **Route from ▸** (the owner, 2026-10-24:
-        "there is no Learn option for routing one of the LFOs there"): on
-        a modulatable param that is no trigger, every LFO and envelope of
-        the banks — the one already driving it checked — then new LFO /
-        new envelope; a pick is the cable a drag on GRAPH makes
+        "there is no Learn option for routing one of the LFOs there";
+        2026-10-28: one submenu per kind, the macros among them): on a
+        modulatable param that is no trigger, **LFO ▸** and **envelope ▸**
+        — the bank's voices, the one already driving it checked, then new
+        LFO / new envelope — and on a param a base subscriber may name,
+        **macro ▸** — the rig's knobs by label, one already setting it
+        checked; a pick is the cable a drag on GRAPH makes
         (`ui_graph.route_from_menu`). It sits after the Learn items, before
         Learn sink, and is no Learn: an LFO has no gesture to wait for."""
         lrn = self.learn

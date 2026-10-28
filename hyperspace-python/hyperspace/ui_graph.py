@@ -166,6 +166,7 @@ from .bands import CEIL
 from .graph import Effect
 from .library import LibraryError
 from .params import Kind
+from .routing import base_refusal, is_macro
 from .view import RED as RED_RGB
 
 STATE = "_graph"         # the panel's attribute: survives a reload of this module
@@ -3555,20 +3556,37 @@ def add_voice(panel, scheme: str, at=None):
     return res
 
 
-# ---- the param menu's "Route from ▸" (the owner, 2026-10-24) ----
+# ---- the param menu's "Route from ▸" (the owner, 2026-10-24, 2026-10-28) ----
 #
 # "There is no Learn option for routing one of the LFOs there or any of the
 # envelopes there, and I do want to have that ability." Not a Learn — a
 # Learn arms and waits for a gesture, and an LFO makes none — but a
 # submenu of its own in the one param menu (`Panel._ctx_learn`), so every
-# page has it: each LFO and envelope of the banks, then a new one of
-# either. A pick is exactly the cable a drag on this page makes: the
-# voice's ``out:`` pin into the param's ``mod`` stub through
+# page has it. One submenu per kind of source (the owner, 2026-10-28:
+# "instead of listing all the LFOs and envelopes together, it should have
+# an LFO thing you can mouse over, a macro thing you can mouse over, and
+# an envelope thing … because you can have up to six … we might add more
+# things to route from"): **LFO ▸** and **envelope ▸** hold the bank's
+# voices then a new one; **macro ▸** holds the rig's eight knobs by their
+# labels. A voice pick is exactly the cable a drag on this page makes:
+# the voice's ``out:`` pin into the param's ``mod`` stub through
 # `Edit.connect_value`, its refusal, its Ask (ROUTING's Replace / Keep)
-# and its undo step named as `connect` names it.
+# and its undo step named as `connect` names it. A macro pick is the
+# macro's ``bus:`` pin into the param's ``base`` stub — a base subscriber
+# (`Edit.subscribe`, from where the param sits to its fader's end,
+# `routing.base_sub`) — on a param a base subscriber may name
+# (`routing.base_refusal`: a persisted performance param, never a macro),
+# whether or not a lane may drive it; an idle macro picked gets its label
+# first (`Edit.show_macro`, as the canvas's picker gives it), in the same
+# undo step.
 
 ROUTE_FROM = "Route from"
 NEW_VOICE = "new {what}"
+MACRO = "macro"
+# the submenus, in order, and their titles
+SECTIONS = (*graphview.BANK_SCHEMES, MACRO)
+SECTION_WORDS = {**{s: graphview.BANK_WORDS[s][0] for s in graphview.BANK_SCHEMES},
+                 MACRO: "macro"}
 
 
 def voice_label(router, scheme: str, k: int) -> str:
@@ -3588,27 +3606,54 @@ def voice_pin(router, scheme: str, k: int) -> str:
     return f"out:{addr}"
 
 
-def route_from_items(panel, p) -> list[tuple] | None:
-    """The submenu's items for the real param `p`, or None when it is not
-    offered (no router; a trigger; a param no lane may drive). Each item is
-    ``(label, pin, checked, why)``: a voice by its label and ``out:`` pin,
-    checked when a route from it already lands on `p`; then one
-    ``(label, scheme, False, why)`` per bank for its "new" item, `why` the
-    refusal words that grey it (the bank full, no bank), else None."""
-    router = ui_routing.router_of(panel)
-    if router is None or p is None or not p.modulatable or p.kind is Kind.TRIGGER:
-        return None
+def macro_label(router, mid: str) -> str:
+    """Macro `mid` as ROUTING's strip and the canvas name it: its label,
+    else "macro 3" (what `Edit.show_macro` would give it)."""
+    m = (router.table.macros if router is not None else {}).get(mid)
+    return m.label if m is not None and m.label else f"macro {mid.rpartition('.')[2]}"
+
+
+def _bank_items(panel, router, p, scheme: str) -> list[tuple]:
     on = {router.lane(b.source) for b in router.table.routes_to(p.id)}
-    items: list[tuple] = []
-    for scheme in graphview.BANK_SCHEMES:
-        for k in graphview.bank_ids(router, panel.reg, scheme):
-            items.append((voice_label(router, scheme, k), voice_pin(router, scheme, k),
-                          (scheme, k - 1) in on, None))
-    for scheme in graphview.BANK_SCHEMES:
-        why = add_refusal(panel, scheme)
-        items.append((why or NEW_VOICE.format(what=graphview.BANK_WORDS[scheme][0]),
-                      scheme, False, why))
+    items = [(voice_label(router, scheme, k), voice_pin(router, scheme, k),
+              (scheme, k - 1) in on, None)
+             for k in graphview.bank_ids(router, panel.reg, scheme)]
+    why = add_refusal(panel, scheme)
+    items.append((why or NEW_VOICE.format(what=graphview.BANK_WORDS[scheme][0]),
+                  scheme, False, why))
     return items
+
+
+def _macro_items(router, p, macros) -> list[tuple]:
+    subs = router.table.macros
+    return [(macro_label(router, q.id), f"bus:{q.id}",
+             q.id in subs and any(s.base == p.id for s in subs[q.id].subs), None)
+            for q in macros]
+
+
+def route_from_items(panel, p) -> dict[str, list[tuple]] | None:
+    """The submenus for the real param `p`, ``{section: items}`` in
+    `SECTIONS`' order with only the sections offered, or None when none
+    is (no router; a trigger). "lfo" and "env" come on a param a lane
+    may drive (`modulatable`); "macro" on one a base subscriber may name
+    (`base_refusal` None, not a macro, no text) where the rig has macros.
+    Each item is ``(label, pin, checked, why)``: a voice or a macro by its
+    label and its ``out:`` / ``bus:`` pin, checked when it already lands
+    on `p` (a route from the voice; a base subscriber of the macro); then,
+    in a bank's section, one ``(label, scheme, False, why)`` for its "new"
+    item, `why` the refusal words that grey it (the bank full, no bank),
+    else None."""
+    router = ui_routing.router_of(panel)
+    if router is None or p is None or p.kind in (Kind.TRIGGER, Kind.TEXT):
+        return None
+    out: dict[str, list[tuple]] = {}
+    if p.modulatable:
+        for scheme in graphview.BANK_SCHEMES:
+            out[scheme] = _bank_items(panel, router, p, scheme)
+    macros = list(panel.reg.group(MACRO))
+    if macros and not is_macro(p.id) and base_refusal(p.id, panel.reg) is None:
+        out[MACRO] = _macro_items(router, p, macros)
+    return out or None
 
 
 def _footer_refusal(panel, res):
@@ -3623,16 +3668,28 @@ def _footer_refusal(panel, res):
 
 
 def route_from(panel, src: str, pid: str):
-    """The cable `src` → `pid`'s ``mod`` stub, as a drag on the page
-    makes it (`connect`'s label, refusal and settling) through
-    `Edit.connect_value`: the route, an Ask (the prompt held), or a
-    Refusal said (`_footer_refusal`)."""
+    """The cable `src` → `pid`, as a drag on the page makes it (`connect`'s
+    label, refusal and settling) through `Edit.connect_value`: a voice's
+    ``out:`` pin into the ``mod`` stub (a route), a macro's ``bus:`` pin
+    into the ``base`` stub (a base subscriber; an idle macro labelled
+    first, `Edit.show_macro`, in the one step) — the route, an Ask (the
+    prompt held), or a Refusal said (`_footer_refusal`)."""
     e = edit_of(panel)
     if e is None:
         return None
-    dst = f"mod:{pid}"
+    is_bus = graphview.pin_kind(src) == "bus"
+    dst = f"{graphview.BASE if is_bus else graphview.MOD}:{pid}"
+
+    def make():
+        if is_bus:
+            mid = src.partition(":")[2]
+            m = e.table.macros.get(mid)
+            if m is None or m.empty:
+                e.show_macro(mid)
+        return e.connect_value(src, dst)
+
     res = _act(panel, f"connect {_name(e.view, src)} → {_name(e.view, dst)}",
-               e.refusal(src, dst), lambda: e.connect_value(src, dst))
+               e.refusal(src, dst), make)
     return _footer_refusal(panel, res)
 
 
@@ -3650,22 +3707,29 @@ def route_from_new(panel, scheme: str, pid: str):
 
 def route_from_menu(panel, p) -> None:
     """Draw "Route from ▸" for the real param `p` inside the open param
-    menu (`Panel._ctx_learn`); nothing where it is not offered
-    (`route_from_items`). A checked voice already drives `p`: a click on
-    it does nothing. Every `begin_menu` here is closed here."""
-    items = route_from_items(panel, p)
-    if not items or not imgui.begin_menu(ROUTE_FROM):
+    menu (`Panel._ctx_learn`): one submenu per section offered
+    (`route_from_items`) — LFO ▸, envelope ▸, macro ▸ — nothing where none
+    is. A checked item already lands on `p`: a click on it does nothing.
+    Every `begin_menu` here is closed here."""
+    sections = route_from_items(panel, p)
+    if not sections or not imgui.begin_menu(ROUTE_FROM):
         return
-    voices = [it for it in items if it[1] not in graphview.BANK_SCHEMES]
-    for i, (label, pin, checked, _) in enumerate(voices):
-        clicked, _ = imgui.menu_item(f"{label}##route_from.{i}", "", checked)
-        if clicked and not checked:
-            route_from(panel, pin, p.id)
-    imgui.separator()
-    for label, scheme, _, why in items[len(voices):]:
-        if imgui.menu_item_simple(f"{label}##route_from.new.{scheme}", enabled=why is None) \
-                and why is None:
-            route_from_new(panel, scheme, p.id)
+    for section, items in sections.items():
+        if not imgui.begin_menu(SECTION_WORDS[section]):
+            continue
+        picks = [it for it in items if it[1] not in graphview.BANK_SCHEMES]
+        for i, (label, pin, checked, _) in enumerate(picks):
+            clicked, _ = imgui.menu_item(f"{label}##route_from.{section}.{i}", "", checked)
+            if clicked and not checked:
+                route_from(panel, pin, p.id)
+        news = items[len(picks):]
+        if news:
+            imgui.separator()
+        for label, scheme, _, why in news:
+            if imgui.menu_item_simple(f"{label}##route_from.new.{scheme}", enabled=why is None) \
+                    and why is None:
+                route_from_new(panel, scheme, p.id)
+        imgui.end_menu()
     imgui.end_menu()
 
 

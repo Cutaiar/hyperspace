@@ -398,6 +398,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L192 | A preset that wants a Leap on a rig without one (plan 40) | 1 | laptop (no Leap listed), the copy | 399 |
 | L193 | The fx module presets are gone; the FX page is not (plan 40) | 1 | laptop | 400 |
 | L194 | The same patch twice in one preset (plan 40) | 1 | laptop, the copy | 401 |
+| L195 | A macro wired from the param menu moves the param (row 537) | 1 | laptop | 402 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -4916,6 +4917,29 @@ the plain names and the second gets `.2`.
 the reload.
 
 *(check 401)*
+
+#### L195. A macro wired from the param menu moves the param
+
+**Needs:** laptop.
+
+**Do:** load any preset, open GRAPH and the shape's panel. Right-click the
+4D depth slider → **Route from ▸**, look under **LFO ▸**, **envelope ▸**
+and **macro ▸**, pick **macro 2**. Open the macro 2 node and turn its knob
+0 → 1 → 0. Right-click the slider → Route from ▸ macro ▸ again, then ⌘Z.
+Right-click the look-back's **gap** slider, then the BPM on the audio page.
+
+**Right if:** Route from holds just the three submenus; macro ▸ names the
+eight knobs (a labelled one by its label). The slider follows the knob —
+where it sat at 0, the top of its fader at 1 — and ROUTING's subscriber
+line reads `from <where it sat> to 1.00`. Macro 2 is checked the second
+time and a click does nothing; one ⌘Z takes the cable and the "macro 2"
+label back together. The gap slider (no lane may drive it) offers only
+macro ▸; the BPM has no Route from.
+
+**Wrong if:** a flat list of LFOs and envelopes; `from` equal to `to` on
+the new line; the knob moves nothing; macro ▸ on the BPM.
+
+*(check 402)*
 
 # Part 2 — tests that need hardware
 

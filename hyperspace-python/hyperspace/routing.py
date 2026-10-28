@@ -1389,6 +1389,19 @@ class Sub:
         return cls(base=str(d["base"]), lo=lo, hi=hi)
 
 
+def base_sub(p) -> Sub:
+    """The base subscriber a macro's cable makes on param `p` (the owner,
+    2026-10-28, decision register row 537): `from` where the param sits,
+    `to` the top of its fader — or its bottom when it already sits at the
+    top — so the knob has a throw from the day it lands: at 0 the scene as
+    designed, at 1 the fader's end. (Before: `from = to` where the param
+    sat, "so adding it moves nothing" — and the macro moved nothing ever,
+    until both ends were set by hand.) The ends stay the performer's to
+    edit on ROUTING's subscriber line."""
+    at = float(p.norm)
+    return Sub(base=p.id, lo=at, hi=1.0 if at < 1.0 else 0.0)
+
+
 @dataclass
 class Macro:
     label: str = ""

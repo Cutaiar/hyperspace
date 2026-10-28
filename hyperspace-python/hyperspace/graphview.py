@@ -140,6 +140,7 @@ from .routing import (
     Sub,
     base_refusal,
     base_scheme,
+    base_sub,
     is_continuous,
     is_macro,
     is_session_row,
@@ -3900,13 +3901,12 @@ class Edit:
                      if b.source == addr and b.target == p.id), None)
 
     def subscribe(self, mid: str, kind: str, pid: str) -> Sub:
-        """A macro's cable: into `pid`'s base (a base subscriber, from = to
-        = where the param sits, so adding it moves nothing — ROUTING's
+        """A macro's cable: into `pid`'s base (a base subscriber from where
+        the param sits to its fader's end, `routing.base_sub` — ROUTING's
         "+ base") or onto the depth of the route landing on `pid` (a depth
         subscriber over 0…1 — ROUTING's "+ depth")."""
         if kind == BASE:
-            p = self._param(pid)
-            s = Sub(base=p.id, lo=p.norm, hi=p.norm)
+            s = base_sub(self._param(pid))
         else:
             r = self._route_on(pid)
             s = Sub(depth=(r.source, r.target), lo=0.0, hi=1.0)
