@@ -102,8 +102,9 @@ def test_every_node_starts_collapsed_with_at_most_five_lines(rig):
     # + main's 3D switch, Fit, spacing, depth; plan 32: view.media, and the
     # factory knob 7's row on its alias view.bmp_alpha; plan 33 U: less the
     # pattern's seven (view.pattern*, view.media_*), plus fx.face_map; plan
-    # 33 T7: less view.media (retired: the wire into pattern.media)
-    assert graphview.summary(view.node("render:shape"))[0].startswith("50 params · ")
+    # 33 T7: less view.media (retired: the wire into pattern.media); less the
+    # eight pattern.mod.k, the faces pattern node's since 2026-10-27
+    assert graphview.summary(view.node("render:shape"))[0].startswith("42 params · ")
     assert st["wires"] < len(view.cables) / 3
     # a collapsed node takes its lines' room in the column, not its ports'
     shape = view.node("render:shape")
@@ -174,6 +175,18 @@ def test_a_bundles_hover_and_side_pane_list_its_rows(rig, monkeypatch):
     the first ten, then "+ k more"; selecting it lists its rows in the side
     pane, each route as ROUTING's own row (`ui_routing._row`, the one table)."""
     st = party(rig)
+    # party-trip's eight lane → pattern.mod.k routes end on the faces pattern
+    # node (2026-10-27), so the analyzer → shape bundle is five more routes
+    # onto shape params nothing performs, to pass ten
+    table = rig.router.table
+    taken = {b.target for b in table.bindings}
+    free = [p.param for p in st["view"].node("render:shape").ports
+            if p.param and p.param not in taken and rig.reg[p.param].modulatable
+            and not rig.reg[p.param].alias]
+    for k, pid in enumerate(free[:5]):
+        table.add(Binding(f"lane:{k}", pid, "push", 0.2))
+    frame(rig.panel, "graph")
+    frame(rig.panel, "graph")
     view = st["view"]
     b = st["bundles"]["bundle:analyzer>render:shape"]
     assert b.count > 10 and all(c.kind == "route" for c in b.cables)
@@ -784,6 +797,41 @@ def test_a_big_node_folds_its_groups(rig, monkeypatch):
         assert drawn == (pids if folds[g] else []), g
         flags = [by_param[pid].patched for pid in pids]
         assert flags == sorted(flags, reverse=True), g
+
+
+
+def test_the_faces_pattern_side_pane_shows_every_shader_input(rig, monkeypatch):
+    """The owner, 2026-10-27: the faces pattern node's side pane showed the
+    selector, the mix and the media, not the shader's own inputs. Now every
+    `pattern.mod.k` (scale, glow, warp, speed, colour, sharp …) is a row on
+    the pattern node's pane — after the selector and the mix, before the
+    media — under `patterns.label(k)`; the shape's pane has none of them.
+    party-trip routes the bands onto the eight, so their group is open."""
+    from hyperspace import patterns
+
+    st = party(rig)
+    rows = []
+    one = ui_graph._param_row
+    monkeypatch.setattr(ui_graph, "_param_row", lambda pn, pid: rows.append(pid) or one(pn, pid))
+    pat = pick(rig, st, "render:pattern")
+    mods = [f"pattern.mod.{k}" for k in range(8)]
+    groups = ui_graph.side_groups(rig.panel, pat)
+    assert [g for g, _ in groups] == ["pattern", "media"]
+    head = ["view.pattern", "view.pattern_mix"]
+    assert sorted(groups[0][1]) == sorted(head + mods)    # (patched rows first)
+    # the node's ports: the selector, the mix, the eight in order, the media
+    order = [p.param for p in pat.ports if p.param]
+    assert order[:10] == head + mods
+    assert sorted(order[10:]) == sorted(groups[1][1])
+    assert groups[1][1] and all(pid.startswith("view.media_") for pid in groups[1][1])
+    names = {p.param: p.name for p in pat.ports if p.param}
+    assert [names[pid] for pid in mods] == [patterns.label(k) for k in range(8)]
+    assert all(rig.reg[pid].tip == patterns.tip(k) for k, pid in enumerate(mods))
+    assert set(mods) <= set(rows)                  # drawn: the group is open (patched)
+    shape = st["view"].node("render:shape")
+    assert not any(p.param in mods for p in shape.ports)
+    assert not any(pid in mods for _, pids in ui_graph.side_groups(rig.panel, shape)
+                   for pid in pids)
 
 
 def test_every_nodes_side_panel_draws(rig):

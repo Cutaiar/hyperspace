@@ -742,6 +742,44 @@ def test_graph_has_media_area(rig):
     assert graphview.spec_name("rout:channel.e", g) == ("channel.e", None)  # not in the graph
 
 
+
+def test_the_faces_patterns_eight_inputs_are_the_pattern_nodes(rig):
+    """2026-10-27 (the owner: the face shader's inputs were missing from the
+    pattern node's side pane): `OWNERS["pattern"]` is the pattern node, so
+    every `pattern.mod.k` is a param port on it, named `patterns.label(k)`,
+    and none on the shape; a route onto `pattern.mod.3` is a cable into the
+    pattern node. With no pattern node drawn they fall to their group's
+    node, as every param whose node the section does not name."""
+    from hyperspace import patterns
+    from hyperspace.routing import Binding
+
+    assert graphview.OWNERS["pattern"] == "pattern"
+    spec = G.read_graph({"frame": "wired", "nodes": [],
+                         "wires": [{"from": "shape", "to": "scene.geometry"},
+                                   {"from": "pattern", "to": "shape.faces"},
+                                   {"from": "scene", "to": "output.all.image"}]})
+    assert not spec.notes
+    if not any(b.target == "pattern.mod.3" for b in rig.router.table.bindings):
+        rig.router.table.add(Binding("lane:3", "pattern.mod.3", "push", 0.5))
+    g = G.build_graph(views(Switches()), wired_wiring(spec.wiring()))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    mods = [p.id for p in rig.reg if p.group == "pattern"]
+    assert mods == [f"pattern.mod.{k}" for k in range(8)]
+    for k, pid in enumerate(mods):
+        assert owner_of(view, pid) == "render:pattern", pid
+        assert view.owner(f"mod:{pid}")[1].name == patterns.label(k)
+    shape = view.node("render:shape")
+    assert not any(p.param in mods for p in shape.ports)
+    assert owner_of(view, "view.bright") == "render:shape"
+    assert owner_of(view, "view.pattern") == "render:pattern"
+    cable = next(c for c in view.cables
+                 if c.kind == "route" and c.ref.target == "pattern.mod.3")
+    assert cable.dst_port == "mod:pattern.mod.3" and not cable.off
+    assert view.owner(cable.dst_port)[0].id == "render:pattern"
+    # no render graph: their group's node, never the shape's
+    assert owner_of(build(rig), "pattern.mod.3") == "group:pattern"
+
+
 def test_the_media_area_draws_on_the_page(rig, monkeypatch):
     """The page draws the media area's title and, a bin filled, its node."""
     from test_graph_areas import drawn_ids
