@@ -392,6 +392,20 @@
     "through"
    ]
   },
+  "cut-out": {
+   "file": "tests/fixtures/presets/cut-out.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
+  },
   "delay-faces": {
    "file": "tests/fixtures/presets/delay-faces.json",
    "hands": "present",
@@ -2238,6 +2252,86 @@
      "channel.a",
      "matte",
      "shown(matte(picture))",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "cut-out": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": false,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      },
+      {
+       "kind": "matte"
+      },
+      {
+       "kind": "cut"
+      },
+      {
+       "kind": "composite"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "channel.a",
+       "to": "matte.image"
+      },
+      {
+       "from": "matte",
+       "to": "cut.mask"
+      },
+      {
+       "from": "scene",
+       "to": "kaleido.image"
+      },
+      {
+       "from": "kaleido",
+       "to": "cut.image"
+      },
+      {
+       "from": "cut",
+       "to": "composite.over"
+      },
+      {
+       "from": "scene",
+       "to": "composite.under"
+      },
+      {
+       "from": "composite",
+       "to": "output.all.image"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "channel.a",
+     "matte",
+     "cut",
+     "composite",
+     "shown(composite)",
      "output.1",
      "output.2",
      "output.3",
@@ -12083,6 +12177,110 @@
   },
   {
    "preset": "mask-as-picture",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ec720a1619ff1aa37f27300205a1b16eeaaccb6cd344d06799cff818840fffa9",
+   "png": "png/ec720a1619ff1aa3.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ec720a1619ff1aa37f27300205a1b16eeaaccb6cd344d06799cff818840fffa9",
+   "png": "png/ec720a1619ff1aa3.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ec720a1619ff1aa37f27300205a1b16eeaaccb6cd344d06799cff818840fffa9",
+   "png": "png/ec720a1619ff1aa3.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "ec720a1619ff1aa37f27300205a1b16eeaaccb6cd344d06799cff818840fffa9",
+   "png": "png/ec720a1619ff1aa3.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "cut-out",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "cut-out",
    "hands": "present",
    "state": "through",
    "route": "none",

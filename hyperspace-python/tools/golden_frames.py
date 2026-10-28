@@ -183,11 +183,15 @@ FACTORY_SOURCES = ROOT / "tests" / "fixtures" / "factory-sources" / "presets"
 # wired straight into All outputs, nothing else — no scene pass. Plan 34
 # T4's `resize-crop` (a wired frame, below). Plan 39 T2's `mask-as-picture`
 # (`/7`, a wired frame): channel a's still through a matte (luma, key 0.95,
-# feather 4) wired straight into All outputs — the mask as a picture
+# feather 4) wired straight into All outputs — the mask as a picture. Plan
+# 39 T3's `cut-out` (`/7`, a wired frame): that matte on a `cut`'s mask, the
+# scene through kaleido on its picture, the cut over the scene — the
+# kaleidoscope in the still's disc, the scene elsewhere
 MEDIA_FIXTURES: tuple[str, ...] = ("backdrop-still", "media-to-output-2", "faces-media",
                                    "blend-luma-key", "displace-luma", "media-chain-faces",
                                    "media-chain-backdrop", "branch-two-sizes", "switch-faces",
-                                   "channel-out-only", "resize-crop", "mask-as-picture")
+                                   "channel-out-only", "resize-crop", "mask-as-picture",
+                                   "cut-out")
 # plan 34 T2's two: the scene through a delay onto the faces (the infinite
 # mirror), and a loop of effects through a delay (trails: `delay →
 # zoomblur.2 → composite.under`, `composite → delay.image`) — each drawn
@@ -209,7 +213,7 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
                                    "resize-faces", "resize-crop", "edges-scene",
-                                   "mask-as-picture")
+                                   "mask-as-picture", "cut-out")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
