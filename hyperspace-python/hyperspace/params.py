@@ -94,6 +94,7 @@ from .view import (
     RESIZE_FILTERS,
     RESIZE_FITS,
     RESIZE_SIDES,
+    CutState,
     MatteState,
     ResizeState,
 )
@@ -132,8 +133,10 @@ F_KEYS = 8
 # crop, the preset's, declared while its graph holds the entry (declare_resizes)
 # `matte` (plan 39 T2): each matte node's source, key, edge and feather, the
 # preset's, declared while its graph holds the entry (declare_mattes)
+# `cut` (plan 39 T3): each cut node's invert and amount, the preset's,
+# declared while its graph holds the entry (declare_cuts)
 PERFORMANCE_GROUPS = ("view", "rot", "camera", "pattern", "dream", "fx", "media", "backdrop",
-                      "switch", "resize", "matte", "lfo", "env", "seq", "macro", "mod")
+                      "switch", "resize", "matte", "cut", "lfo", "env", "seq", "macro", "mod")
 SESSION_GROUPS = ("tempo", "hands", "ghost", "band", "master", "scene", "audio", "output",
                   "overlay", "ui", "desk", "eye", "cloud")
 PARTS = {"performance": PERFORMANCE_GROUPS, "session": SESSION_GROUPS}
@@ -1173,6 +1176,79 @@ def declare_mattes(r: Registry, names: Iterable[str]) -> list[str]:
     return changed
 
 
+# ---- plan 39 T3: the cuts' values ----
+CUT_GROUP = "cut"
+_CUT_KEYS = ("invert", "amount")
+_CUT_ID = re.compile(r"cut(?:\.(?:[2-9]|[1-9][0-9]+))?\.(" + "|".join(_CUT_KEYS) + ")")
+
+
+def cut_ids(name: str) -> list[str]:
+    """Cut node `name`'s params (`cut.2` → `cut.2.invert`, `cut.2.amount`)."""
+    return [f"{name}.{k}" for k in _CUT_KEYS]
+
+
+def is_cut_id(pid: str) -> bool:
+    """Is `pid` one of a cut's values — one that exists only while a
+    preset's graph holds that cut (plan 39 T3)? A preset load sorts such ids
+    against the graph it lands, as it does a matte's."""
+    return bool(_CUT_ID.fullmatch(pid))
+
+
+def _cut_state(r: Registry) -> dict[str, CutState]:
+    """The states the cut params write, cut name → `CutState`: the view
+    state's (`ViewState.cuts`), kept by `build_registry` as `r.cut_state`; a
+    dict of the registry's own for one built without a view (as
+    `_matte_state`)."""
+    state = getattr(r, "cut_state", None)
+    if not isinstance(state, dict):
+        state = r.cut_state = {}
+    return state
+
+
+_CUT_TIPS = {
+    "invert": "{name} keeps the hole and cuts the rest: the picture shows where the mask "
+              "does not pass.",
+    "amount": "How far {name} cuts, 0–1: 1 cuts to nothing where the mask does not pass, "
+              "0.5 dims it by half, 0 leaves the picture whole.",
+}
+
+
+def declare_cuts(r: Registry, names: Iterable[str]) -> list[str]:
+    """The cuts' params (plan 39 T3), as `declare_mattes` does the mattes':
+    for each cut `names` holds, `invert` (off) and `amount` 0–1 (1) — group
+    `cut` (a performance group: the preset's), both modulatable — over a
+    `CutState` made when first declared and kept while the name stays;
+    those of every cut no longer named dropped, with their states. Returns
+    the ids that appeared or went."""
+    state = _cut_state(r)
+    want = {n: cut_ids(n) for n in names}
+    keep = {pid for ids in want.values() for pid in ids}
+    changed: list[str] = []
+    for p in [p for p in r if p.group == CUT_GROUP and p.id not in keep]:
+        r.remove(p.id)
+        changed.append(p.id)
+    for name in [n for n in state if n not in want]:
+        del state[name]
+    for name, ids in want.items():
+        st = state.get(name)
+        # (made only when missing — a live state is kept across a hot
+        # reload of `view`, its params bound to it: `declare_mattes`')
+        if st is None:
+            st = state[name] = CutState()
+        for pid, key in zip(ids, _CUT_KEYS, strict=True):
+            if pid in r:
+                continue
+            label = f"{name} {key}"
+            tip = _CUT_TIPS[key].format(name=name)
+            got = _attr(st, key)
+            if key == "invert":
+                r.toggle(pid, label, *got, group=CUT_GROUP, tip=tip)
+            else:
+                r.continuous(pid, label, *got, lo=0.0, hi=1.0, group=CUT_GROUP, tip=tip)
+            changed.append(pid)
+    return changed
+
+
 # ---- plan 36 T4: the extra look-backs' values ----
 # `lookback.<n>` (n ≥ 2) has its own ring and trail: `dream.<n>.<key>` for
 # the look-back's own knobs (`lookback`'s are `dream.<key>`, as ever), in
@@ -1346,6 +1422,15 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         except AttributeError:            # (a view without the field: the registry's own)
             pass
     r.matte_state = mattes
+    # plan 39 T3: the cuts' values likewise (`ViewState.cuts`)
+    cuts = getattr(view, "cuts", None)
+    if not isinstance(cuts, dict):
+        cuts = {}
+        try:
+            view.cuts = cuts
+        except AttributeError:            # (a view without the field: the registry's own)
+            pass
+    r.cut_state = cuts
     # plan 36 T4: the extra look-backs' values likewise (`ViewState.lookback`)
     rings = getattr(view, "lookback", None)
     if not isinstance(rings, dict):

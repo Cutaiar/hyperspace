@@ -99,11 +99,11 @@ FACTORY_KEY = "\0factory"  # …a group's factory names, and every name it index
 # channels and backdrop (plan 32: a channel's values mean nothing without
 # its bin, the preset's media section; the MEDIA page holds them) and (plan
 # 33 S) the switches' picks and (plan 34 Z) the resizes' values and (plan
-# 39 T2) the mattes' (nothing without the preset's graph), and the
-# band strip's scene, the one session module a project names
+# 39 T2) the mattes' and (T3) the cuts' (nothing without the preset's
+# graph), and the band strip's scene, the one session module a project names
 OVERVIEW_GROUPS = (*[g for g in PERFORMANCE_GROUPS
                      if g not in ("macro", "mod", "media", "backdrop", "switch", "resize",
-                                  "matte")],
+                                  "matte", "cut")],
                   "band")
 
 

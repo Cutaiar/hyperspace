@@ -76,6 +76,19 @@ class MatteState:
 
 
 @dataclass
+class CutState:
+    """One cut node's values (plan 39 T3, `cut[.n].*`: params.declare_cuts),
+    read once a frame by the renderer (`ViewState.cuts`, `graph.Frame.cuts`):
+    `invert` keeps the hole and cuts the rest; `amount` how far the cut goes,
+    0–1 — the cut-away part is the picture × (1 − amount): 1 cuts it to
+    nothing, 0.5 dims it by half, 0 leaves the picture whole. The defaults
+    cut fully where the mask does not pass. A value, never a rebuild."""
+
+    invert: bool = False
+    amount: float = 1.0
+
+
+@dataclass
 class ViewState:
     """Mirror of the reference's S object (render-relevant fields)."""
 
@@ -158,6 +171,9 @@ class ViewState:
     # plan 39 T2: each matte node's values (`matte[.n].*`, declared from the
     # preset's graph: params.declare_mattes) — matte name → its state
     mattes: dict[str, MatteState] = field(default_factory=dict)
+    # plan 39 T3: each cut node's values (`cut[.n].*`, declared from the
+    # preset's graph: params.declare_cuts) — cut name → its state
+    cuts: dict[str, CutState] = field(default_factory=dict)
     # plan 36 T4: each extra look-back's values (`dream.<n>.*`, declared from
     # the preset's graph: params.declare_lookbacks) — `lookback.<n>` → its
     # `lookback.DreamState` (`lookback`'s are the renderer's own, `dream.*`)
