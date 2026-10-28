@@ -1,6 +1,18 @@
 # Plan 38 — hold the projector: the program stays up while the next look is built
 
-**Status: first cut built (2026-10-27)** on `output-hold`, cut from
+**Status: built (2026-10-27)** on `plan-38-hold`, rebased by B1 onto
+`plan-37-38-39-integration` (the first cut's commit kept), with B2's
+hand-check tests and B3's review fixes merged (cd56b6f); it lands on the
+integration branch first of plans 37–39. Tests at cd56b6f: the fast tier
+3990 passed, 2 skipped; the full suite (`--all`) 4201 passed, 2 skipped;
+goldens 128 passed, 757 pictures, none moved; `tests/test_hold.py` 32
+tests (4 on GL). D1–D5 taken as recommended and accepted by the
+controller (register rows 430–434), the owner to keep or overturn; the
+build's rulings are rows 435–439 and 461–470. Hand checks 377–383
+(group AI). "What changed in the build" at the end says where the build
+differs from the text above.
+
+**First cut (2026-10-27)** on `output-hold`, cut from
 `graph-quick-wins` (PR #241). It uses #241's GRAPH backdrop
 (`outputs.Preview`) as the operator's monitor, so it lands after #241 or
 with it. It is independent of plan 36 (PR #242, a doc only): it reads the
@@ -70,7 +82,9 @@ mechanism.
   4. The live values are put back, whether or not the draw raised.
 
   A param nobody moved costs one compare. The graph is cached as before:
-  the held wiring never changes, so it never rebuilds.
+  its key is the held wiring and rig, which never change while held; it
+  rebuilds only when a landing changes the effect set (the instances the
+  hold keeps, below), and then without losing a frame.
 - **Modulation rides on both.** The program value of a modulated
   continuous param is the held base plus this frame's offset on the live
   base (`hold.program_value`). So a band driving `view.bright` drives it
@@ -87,6 +101,24 @@ mechanism.
   line, and the program frame is still drawn.
 - **The monitor** is a second `Preview` that output 1 publishes into
   while held, the same way #241's backdrop works when no hold is on.
+- **A landing keeps the program's nodes** (B3, ruling 12). Every
+  `preset.GraphSection` landing — a load, **new**, a GRAPH edit, an undo
+  — settles the effect instances, switch picks, resizes and extra
+  look-backs to its own graph, which would strip the program's. While
+  held, `GraphSection._settle` asks `Hold.keep(kind, names)`, which adds
+  the program's own names (snapshotted at HOLD), so their params, values,
+  picks, states and effect clocks stay for the projector. Take releases
+  the hook and settles to the live graph; Drop releases it before its
+  revert lands the hold point. A save during a hold leaves the kept
+  instances out (`Presets._values` drops `Hold.program_only()`), and an
+  undo mark taken while held records the landed graph's own instances.
+- **A load's delay reset goes to the preview** (B3). `Presets.load`'s
+  reset of the delays and echoes goes through the hold while held: the
+  preview's delays start empty, the projector's trail carries on, and at
+  Take the projector's are reset if a load happened.
+- **The canvas reads the preview** (B3, ruling 13): `hold.canvas_renderer`
+  is the preview renderer while held and drawn, so new nodes get real refs
+  and the dormant and refusal lines describe what TAKE will put up.
 
 ## What is held, and what is shared by both (`hold.HELD_GROUPS`)
 
@@ -98,11 +130,15 @@ during a hold:
 
 | what | why | if it matters |
 |---|---|---|
-| the turn: `rot.*`, speed, planes, the 3D switch | the angles are integrated once a frame, before either draw | D2 |
+| the turn: `rot.*`, `view.speed`, `view.plane.*`, the 3D switch | the angles are integrated once a frame, before either draw | D2 |
 | the media channels (`media.*`) | a channel decodes once for every reader | switch sources after Take |
 | the modulators and routes (`lfo`, `env`, `seq`, `macro`, `mod`) | their offsets are read once per frame | a new route moves the program's param too |
-| an effect instance a newly loaded preset removed (`fx.acid.2`) | `FxState` drops it, so the program's node reads through | Take or Drop soon after loading |
+| the clouds and the effect files on disk | the device registry and the disk, not the look | saving an effect file shows on the projector |
 | a Syphon input read twice a frame | the second read may have no new frame | hand check 6 |
+
+An effect instance, switch pick or resize that a load or a GRAPH edit
+removes is **not** shared: the hold keeps it for the program until Take
+(B3; the first cut's table said it "reads through", which was the bug).
 
 ## Decisions for the owner
 
@@ -126,11 +162,21 @@ during a hold:
   inside the hold, the preview after it (`_draw_preview`), output 1 on
   the monitor. The hold is built beside the output switches, its undo
   handed over, and it and its preview renderer are hot-reload targets.
+- `hyperspace/preset.py` (B3, ruling 12) — `GraphSection.hold`, `names`,
+  `settle`, `_settle` (the land block's declares through `Hold.keep`),
+  the delay reset through the hold, `Presets._values` leaving out the
+  program's instances, `mark` recording the landed graph's own.
+- `hyperspace/ui.py` (B3) — `graph_words` and `dormant_lines` read through
+  `hold.canvas_renderer`.
 - `hyperspace/ui_graph.py` — the head's **hold** / **held · take ·
   drop** chips and red line (`hold_line`), the backdrop forced on while
   held, and the PROJECTOR inset (`monitor_rect`, `_monitor`).
 
 ## Hand checks (need the machine)
+
+Group AI, 377–383, in [`11-hand-checks.md`](11-hand-checks.md) (with the
+tests behind each) and [`../TESTING-GUIDE.md`](../TESTING-GUIDE.md) (in
+plain words). The first cut's list, as written:
 
 1. On the rig, with the projector up: press **hold**, then **new** on the
    PRESET strip. The projector keeps the old look and keeps moving with
@@ -152,3 +198,82 @@ during a hold:
    above).
 7. Hold while a band drives a held param, then move its base on the
    desk: the projector keeps the held base and still pumps with the band.
+
+## What changed in the build
+
+The plan above is the design and the first cut; this is where the build
+(tasks B1–B3, 2026-10-27) differs from it, or chose within it. Each
+ruling has a row in [`DECISION-REGISTER.md`](../DECISION-REGISTER.md)
+(430–439, 461–470), the owner to say keep or overturn.
+
+**B1: the rebase onto plan 36** (e4d3af4, 3e89e0a, 397b7ba; PR #251).
+The first cut's commit cherry-picked onto `plan-37-38-39-integration`;
+only `ui_graph.py`'s import line conflicted. Two fixes the explicit graph
+needed:
+
+- **The hold keeps the rig's bus cables** (row 435). Plan 36 feeds each
+  window through `graph.RigWires`, read from `Renderer.rig_source`; the
+  first cut held only the wiring, so a bus cable cut during a hold reached
+  the projector. `Hold.rig` is captured at HOLD, `program` hands the
+  renderer a `_HeldRig` stand-in and restores the live one, and
+  `rewired()` compares the rig.
+- **The preview reads the show's cables, never a default** (row 436).
+  `mirror` did not pass `rig_source`, so the preview renderer drew every
+  bus cable standing; `MIRRORED` gains it.
+- The hold chips sit first on the head, before plan 36's (row 461).
+  Three tests, one on GL with the app's empty-frame renderer; 19 in all.
+
+**B2: the hand checks as tests** (a4ea685; PR #257). The seven checks
+became group AI; three gained tests: the program drawing the held wiring
+while a GRAPH edit lands (GL, byte for byte against each graph drawn
+alone; mutation-checked), Drop after a whole new look as one undo step
+back and one forward (row 439), and learned desk buttons lighting while
+held. 22 tests.
+
+**B3: the review and its fixes** (b4ebba9, c834e74; PR #259).
+
+- **Critical: a landing stripped the program's nodes** (row 462, ruling
+  12). Every `GraphSection.land` re-settled the effect instances, switches
+  and resizes to the landed graph, so **new**, a load or a delete on GRAPH
+  during a hold took the projector's effects away (a blank graph landed
+  left `fx.specs == []`). Fixed with the `Hold.keep` hook in
+  `GraphSection._settle`, released at Take and Drop; a save leaves the
+  kept instances out (row 463, ruling 12b); an undo mark taken while held
+  records the landed graph's own instances (row 464).
+- **A load's delay reset cut the projector's trails** (row 465): it now
+  goes to the preview while held, the projector's at Take after a load.
+- **The canvas read the projector's graph** (row 466, ruling 13):
+  `hold.canvas_renderer` over five reads in `ui_graph.py` and `ui.py`.
+- `view.speed` and `view.plane.*` out of the held set (row 431); the
+  preview drawn with output 1's switches at full dim (row 467);
+  `rewired()` reads the rig's cuts (`_cut`); the raise test checks undo
+  and the dirty dot too.
+- Recorded, not changed: Drop puts back what the show's mark carries
+  (row 438), the preview renderer's lifetime and hot reload (row 468), the
+  inset on the foreground list (row 469), plan 39's seam (row 470).
+- B1's note that "the program's graph never rebuilds while held" was
+  wrong: it rebuilds when a landing changes the effect set, losslessly.
+  32 tests in `tests/test_hold.py`.
+
+**What plan 39 must add at integration** (so its mattes, cuts and
+segments are kept by a hold and left out of a save): a `matte`, `cut`
+and `segment` key in both branches of `GraphSection.names` and in
+`_settle`'s no-spec dict; the `declare_mattes` / `declare_cuts` /
+`declare_segments` calls inside `_settle` beside `declare_lookbacks`
+(not in `land`); and `hold.PROGRAM_IDS` entries for the three kinds —
+without them `Hold.program_only` raises `KeyError` the first time a held
+matte, cut or segment is deleted, on purpose. Plan 37's thumbnails must
+read through `hold.canvas_renderer` (the controller routes them at the
+37 merge).
+
+**Not verified by any person:** everything on screen (the chips, the red
+line, the inset, the forced backdrop) and everything in checks 377–383:
+trails through a Take, the FPS, Syphon / NDI in the preview, the real
+LEDs, the feel of a pumping held param.
+
+**Known rough edges:** while held, the kept instances' params show on the
+EFFECTS and desk pages (GRAPH does not draw them); an effect deleted and
+re-added during a hold gets the program's values; a desk learn made during
+a hold is undone by Drop (learn before holding); the inset sits over
+canvas popups in its corner; a hot reload of an effect module does not
+reach the preview renderer's sub-objects.
