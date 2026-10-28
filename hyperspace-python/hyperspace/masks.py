@@ -138,7 +138,10 @@ void main() {
 # into the picture: where the promoted picture shows it); where it passes
 # the picture, elsewhere the picture × (1 − amount) — 1 cuts to transparent
 # black, 0.5 dims; `u_invert` keeps the hole and cuts the rest.
-# Premultiplied in and out, so colour and alpha go together
+# Premultiplied in and out, so colour and alpha go together. Plan 39 T3:
+# `u_flip` reads the mask upside down — for a mask whose rows are top first
+# (a CPU array uploaded as it is: T4's segment worker), where every mask a
+# GL pass made has its first row at the bottom
 CUT_FS = """
 #version 330
 in vec2 v_uv;
@@ -147,10 +150,12 @@ uniform sampler2D u_mask;
 uniform vec2 u_scale;
 uniform int u_invert;
 uniform float u_amount;
+uniform int u_flip;
 out vec4 f_color;
 void main() {
     vec2 half_texel = 0.5 / vec2(textureSize(u_mask, 0));
     vec2 uv = clamp(0.5 + (v_uv - 0.5) * u_scale, half_texel, 1.0 - half_texel);
+    if (u_flip != 0) uv.y = 1.0 - uv.y;
     float m = texture(u_mask, uv).r;
     if (u_invert != 0) m = 1.0 - m;
     f_color = texture(u_src, v_uv) * mix(1.0, m, clamp(u_amount, 0.0, 1.0));
@@ -258,15 +263,21 @@ class MaskPasses:
                   u_scale=cover_scale(mask.size, rect[2:]))
 
     def cut(self, src: moderngl.Texture, mask: moderngl.Texture, dst: moderngl.Framebuffer,
-            *, invert: bool = False, amount: float = 1.0) -> None:
+            *, invert: bool = False, amount: float = 1.0, flip: bool = False) -> None:
         """Picture `src` cut by `mask` into `dst`'s viewport (W3, `CUT_FS`):
-        what passes stays, the rest goes to transparent black by `amount`.
-        The mask is fitted into the picture (`dst`'s viewport) by cover, as
-        the promotion fits it. The `cut` node (plan 39 T3) is its caller."""
+        what passes stays, the rest goes to transparent black by `amount`
+        (1 all the way, 0.5 dimmed by half, 0 not at all); `invert` keeps
+        the hole and cuts the rest. `src` is read 1:1 — the picture at
+        `dst`'s size; the mask is fitted into it by cover, as the promotion
+        fits it, sampled bilinearly. `flip`: the mask's rows are top first
+        (a CPU array uploaded as it is — plan 39 T4's segment sets it), so
+        it is read upside down. Callers: the `cut` node (plan 39 T3,
+        `graph.CutNode`), and T4's `segment.fg` / `.bg` (the bg inverted)."""
         rect = tuple(int(v) for v in dst.viewport)
         self._run("cut", dst, rect, (src, mask), u_src=0, u_mask=1,
                   u_scale=cover_scale(mask.size, rect[2:]),
-                  u_invert=int(bool(invert)), u_amount=float(amount))
+                  u_invert=int(bool(invert)), u_amount=float(amount),
+                  u_flip=int(bool(flip)))
 
     def fit(self, mask: moderngl.Texture, key, size: tuple[int, int]) -> moderngl.Texture:
         """Mask `mask` refitted by cover to `size`, one channel (`PROMOTE_FS`

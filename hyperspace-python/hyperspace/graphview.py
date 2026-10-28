@@ -407,6 +407,8 @@ OWNERS: dict[str, str | Callable[[str, _Ctx], str | None]] = {
     "resize": _resize_owner,
     # plan 39 T2: `matte[.<n>].<key>` on its matte's node (the resize's rule)
     "matte": _resize_owner,
+    # plan 39 T3: `cut[.<n>].<key>` on its cut's node (the resize's rule)
+    "cut": _resize_owner,
     "ghost": _hands_owner,
     "cloud": _cloud_owner,
     "dream": rgraph.LOOKBACK,
@@ -766,7 +768,7 @@ LABELS: dict[str, str] = {
     "backdrop": "Backdrop", "lookback": "Look-back", "pattern": "Faces pattern",
     "channel": "Channel", "composite": "Composite", "switch": "Switch", "delay": "Delay",
     "resize": "Resize", "echo": "Echo", "dream": "Dream", "copy": "copy of",
-    "matte": "Matte",
+    "matte": "Matte", "cut": "Cut",
     "output": "Output", rgraph.ALL_OUTPUTS: "All outputs", rgraph.GROUND: "Ground",
 }
 # … and its hover, one line (V's hover column; an effect says its file's
@@ -794,6 +796,8 @@ HOVERS: dict[str, str] = {
     "resize": "A crop at its own size.",
     "matte": ("Makes a mask of its picture — by brightness, coverage or a keyed hue. Wired "
               "where a picture goes, the mask shows white where it passes."),
+    "cut": ("Cuts its picture by a mask: the picture where the mask passes, see-through "
+            "elsewhere. Lay it over another picture to show that one through the hole."),
     "echo": "The k-th newest look-back frame.",
     "dream": "The dream buffer.",
     "output": "A window: shows its picture, the hands over it, the guide over all.",
@@ -1043,7 +1047,7 @@ FRAME_CLASS: dict[str, type] = {
     "pattern": rgraph.PatternNode, "channel": rgraph.MediaNode, "effect": rgraph.Effect,
     "copy": rgraph.Copy, "composite": rgraph.Composite, "switch": rgraph.SwitchNode,
     "delay": rgraph.Delay, "resize": rgraph.ResizeNode, "echo": rgraph.EchoNode,
-    "matte": rgraph.MatteNode,
+    "matte": rgraph.MatteNode, "cut": rgraph.CutNode,
     "dream": rgraph.DreamNode, "output": rgraph.Output, rgraph.ALL_OUTPUTS: rgraph.Output,
     rgraph.GROUND: GroundNode,
 }
@@ -3554,7 +3558,7 @@ PICKER_GROUP: dict[str, str] = {
     "pattern": "pictures", "composite": "pictures", "switch": "pictures",
     "channels": "pictures", "resize": "pictures", "delay": "pictures",
     # plan 39 T2 (W6): the mask nodes' own group (T5 lists them in `picker`)
-    "matte": "masks",
+    "matte": "masks", "cut": "masks",
     "effect": "effects",
     "copy": "copy of",
 }
@@ -3804,7 +3808,7 @@ def _node_name(e: dict) -> str | None:
         return f"echo.{e.get('index')}"
     if kind in rgraph.FRAME_KINDS or kind == "dream":
         return kind
-    if kind in ("composite", "switch", "delay", "resize", "copy", "matte"):
+    if kind in ("composite", "switch", "delay", "resize", "copy", "matte", "cut"):
         return kind if n == 1 else f"{kind}.{n}"
     return None
 
