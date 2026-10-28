@@ -2670,6 +2670,22 @@ def summary(n: VNode) -> list[str]:
     return lines[:SUMMARY_LINES]
 
 
+def picture_hover(n: VNode, gpu_ms: float | None = None) -> str:
+    """What hovering a picture node's thumbnail says (plan 37 C2, P1): its
+    title, then the lines a collapsed text node shows under its title
+    (`summary`: param counts, picture ports, the node's own words, a
+    switch's pick, "reaches nothing"), then the size of the picture its
+    thumbnail was copied from (`VNode.picture`, "1920×1080 picture"), then,
+    for a node the GPU timer times, its time (the SYSTEM page's rolling
+    median, "gpu 0.42 ms"). A line it has nothing for is left out."""
+    lines = [n.label, *summary(n)]
+    if n.picture is not None:
+        lines.append(f"{n.picture[0]}×{n.picture[1]} picture")
+    if gpu_ms is not None:
+        lines.append(f"gpu {gpu_ms:.2f} ms")
+    return "\n".join(lines)
+
+
 def switch_pick(n: VNode) -> str:
     """A switch node's pick in words, from its `select` port's reading
     (the owner, 2026-10-24: the canvas says which input passes): "picks
