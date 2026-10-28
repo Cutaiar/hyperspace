@@ -203,9 +203,9 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
-# `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
-# two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
-# 741 before them are the same list, byte for byte
+# `--names` rewrites recorded node names only, never an entry. The entries
+# of the fixtures named in `GOLDENS_SINCE`, added since the digest, are left
+# out of it: the 741 before them are the same list, byte for byte
 # Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
