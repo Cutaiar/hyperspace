@@ -6290,10 +6290,13 @@ class _Build:
         """Whether `src`'s picture is laid over another picture: wired into
         the backdrop's scene or the `over` of a composite that blends by it
         (over, depth — "add" ignores it: black adds nothing), straight or
-        through effects. A scene laid over clears see-through
+        through effects or cuts. A scene laid over clears see-through
         (`Scene.ground` 0) and the effects between keep that ground
         (`Effect.laid_over`), so the picture covers what is under it only
-        where it draws."""
+        where it draws. Plan 39 T3: a cut's `image` is a picture path like
+        an effect's (its `mask` is not) — `CUT_FS` multiplies the alpha it
+        is given, so the see-through ground passes through it, and where
+        the mask passes the picture is what it would be without the cut."""
         for w in self.wires:
             if w.src != src or w.node in seen:
                 continue
@@ -6301,7 +6304,7 @@ class _Build:
             if (w.dst == "backdrop.scene"
                     or (kind == "composite" and w.port == "over"
                         and self.blends.get(w.node, "over") != "add")
-                    or (kind == "effect" and w.port == "image"
+                    or (kind in ("effect", "cut") and w.port == "image"
                         and self.laid_over(w.node, seen | {w.node}))):
                 return True
         return False

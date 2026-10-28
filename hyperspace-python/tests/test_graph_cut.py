@@ -154,6 +154,29 @@ def test_a_cut_fed_no_picture_is_not_built_and_one_with_no_mask_is():
     assert g.nodes["cut"].inputs["mask"] is None
 
 
+def test_a_cut_is_transparent_to_laid_over_ness():
+    """Review fix: a cut's `image` is a picture path like an effect's —
+    `scene → kaleido → cut → composite.over` lays the scene over (its ground
+    see-through, the kaleido's pass keeping it), so where the mask passes
+    the picture is what it would be without the cut; the `mask` port is no
+    picture path, and a cut straight into an output lays nothing over."""
+    spec = _spec(("scene", "kaleido.image"), ("kaleido", "cut.image"),
+                 ("channel.a", "matte.image"), ("matte", "cut.mask"),
+                 ("cut", "composite.over"), ("channel.b", "composite.under"),
+                 ("composite", "output.2.image"), nodes=(CUT, MATTE, COMPOSITE))
+    g = G.build_graph(_views(), spec.wiring(), (), ("kaleido",))
+    assert g.nodes["scene"].ground == 0.0
+    (kaleido,) = [n for n in g.nodes.values() if isinstance(n, G.Effect)]
+    assert kaleido.laid_over
+    spec = G.read_graph(wired(("scene", "cut.image"), ("channel.a", "matte.image"),
+                              ("matte", "cut.mask"), ("cut", "output.all.image"),
+                              *[p for p in FACTORY_FRAME if p[1] != "output.all.image"],
+                              nodes=[CUT, MATTE]))
+    assert not spec.notes, spec.notes
+    g = G.build_graph(_views(), spec.wiring())
+    assert g.nodes["scene"].ground is None
+
+
 def test_a_mask_whose_rows_are_top_first_is_flagged():
     """The flip flag's shape (T4 sets it): a mask maker's
     `rows_top_first(frame)`; none, False. `native` before `image`."""
@@ -365,6 +388,21 @@ def test_the_under_shows_through_the_hole(ctx):
     left, right = _left_right(_draw(ctx, r, _s()))
     assert tuple(left) == (*BLUE, 255)
     assert tuple(right) == (*COLOUR, 255)
+
+
+def test_the_under_shows_where_a_laid_over_scene_draws_nothing(ctx):
+    """Review fix: the scene (drawing nothing here: no lines, points or
+    faces) cut and laid over channel c — inside the area the mask passes
+    the under shows, as it would with no cut; outside, the hole shows it
+    too."""
+    pairs = [("channel.a", "matte.image"), ("matte", "cut.mask"), ("scene", "cut.image"),
+             ("cut", "composite.over"), ("channel.c", "composite.under"),
+             ("composite", "output.2.image")]
+    r = _renderer(ctx, _sources(), pairs, (CUT, MATTE, COMPOSITE))
+    left, right = _left_right(_draw(ctx, r, _s()))
+    assert tuple(right) == (*BLUE, 255)                  # passes: the scene's empty space
+    assert tuple(left) == (*BLUE, 255)                   # cut away
+    assert r._graph.nodes["scene"].ground == 0.0
 
 
 def test_amount_a_half_dims_the_cut_part_by_half(ctx):
