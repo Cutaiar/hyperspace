@@ -35,6 +35,7 @@ is the owner's own, 2026-10-25: every save on the newest schema, which
 supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
 (on `preset-schema-6`).
 Rows 396–400 (plan 36, the WYSIWYG graph) are the plan's D1–D5, accepted by the owner as recommended on 2026-10-26, before the build; rows 401–416 are the controller's rulings during that build (two of them the owner's words, 409 and 412) and are answered "controller — 2026-10-26" (on `plan-36-build`).
+Rows 417–429 and 460 (plan 37, nodes as pictures and the faces) were written during the 2026-10-27 run, in the owner's absence. 417 is the plan's D1, the list of face patterns that stay, and it is **open** until the owner names the list. 418–421 are D2–D5, "(rec) — accepted by the controller 2026-10-27". 422–429 and 460 are the controller's rulings during the build, answered "controller — 2026-10-27". The plan needed one row more than its thirteen, so it took 460. They are on `plan-37-pictures`.
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -440,6 +441,20 @@ here; overturn → the change, then the same.
 | 414 | The goldens re-recorded in the build: 9 of 757 | 369 | controller — 2026-10-26 |
 | 415 | Plan 37 is nodes as pictures, and the faces | — | owner — 2026-10-26 |
 | 416 | Plan 36's known follow-ups are recorded, not built | — | controller — 2026-10-26 |
+| 417 | D1: the list of face patterns is the owner's; nothing is dropped until he names it (with it: renumber or tombstones; the `preset.py` edit) | 375 | **open** |
+| 418 | D2: the thumbnail is always drawn, collapsed or expanded | 372 | (rec) — accepted by the controller 2026-10-27 |
+| 419 | D3: picture cables are plain red; the tint sits behind a head switch | 370 | (rec) — accepted by the controller 2026-10-27 |
+| 420 | D4: faces per instance come after this plan | — | (rec) — accepted by the controller 2026-10-27 |
+| 421 | D5: the backward wire is fixed by the area rules, not by re-laying the preset | 376 | (rec) — accepted by the controller 2026-10-27 |
+| 422 | A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps | 370 | controller — 2026-10-27 |
+| 423 | A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later | 370, 374 | controller — 2026-10-27 |
+| 424 | How a node that makes no picture shows one: one table (`graphview.THUMBS`) | 370 | controller — 2026-10-27 |
+| 425 | A picture node's box is the node's width at 16:9, whatever the picture's shape | 372 | controller — 2026-10-27 |
+| 426 | What a thumbnail costs, by kind, and how the ask stays out of the frame | 371, 374 | controller — 2026-10-27 |
+| 427 | Hovering a thumbnail gives the node's lines, the picture's size and its GPU time | 373 | controller — 2026-10-27 |
+| 428 | The tint leans red by at most 20°, read asynchronously; its switch is off by default and kept on the page | 370, 371 | controller — 2026-10-27 |
+| 429 | The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it | 376 | controller — 2026-10-27 |
+| 460 | The faces judged from sheets; "nearest kept" a ranked list per mode; the migration map generated and tested | 375 | controller — 2026-10-27 |
 
 "—": no hand check shows it; tests only.
 
@@ -7914,3 +7929,165 @@ Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommen
 - **To reverse.** None.
 - **Rough edge.** None.
 - **Judge it.** —
+
+## Plan 37 — nodes as pictures, and the faces (rows 417–429, 460)
+
+Rows 417–421 are the plan's D1–D5. D1 is **open**: the list of face patterns that stay is the owner's, and nothing is dropped until he names it. The controller accepted D2–D5 as recommended on 2026-10-27, in the owner's absence (the run's ruling 5). Rows 422–429 and 460 are the controller's rulings during the build. The plan was given thirteen rows (417–429) and needed fourteen, so the last one is 460, the first free number after plan 39's range. Built on `plan-37-pictures` ([`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md); hand checks 370–376, group AH). P1 and P3 are built. P2 is a dry run: the sheets and the migration map are in [`plans/assets/37-faces/`](plans/assets/37-faces/), and no shader, preset or golden has changed.
+
+### 417. D1: the list of face patterns is the owner's; nothing is dropped until he names it
+
+- **Answer.** Open: the owner has not answered. Plan 37 D1 asks which of the 17 face patterns stay. The recommendation was to drop nothing until the owner names the list, and that is what was built.
+- **Built.** A dry run (PR #250). `tools/faces_sheets.py` draws every mode on a preset's shape the way a show draws it: `docs/plans/assets/37-faces/sheet.png` is all 17 on `party-faces`' tesseract, `heart-sheet.png` is all 17 on `plasma-heart`'s Heart, and there is one `<NAME>.png` per mode. `migration-map.md` records which presets show each mode and the ranked "nearest kept" for each (row 460). No factory preset or fixture shows PLAID, BLOOM, METER, PULSE, MARBLE, TRUCHET or KALEIDO, so dropping any of those moves no golden and edits no preset. Nothing in `patterns.glsl`, `patterns.MODES`, the FACES page or any preset has changed.
+- **What the owner decides with the list.** Two questions come with it (the run's ruling 10):
+  - **(a) The index.** A preset stores `view.pattern` as an index (`patterns.py`: "appended, never inserted"). Dropping modes either *renumbers*, which rewrites every preset's value through an old-to-new table and makes an older build read the wrong pattern, so both Macs must be on this build and the library migrated with a backup; or keeps the retired indices as *tombstones*, which the enum, the FACES page and the desk knob skip and which a load maps to the nearest kept mode with a note. Tombstones need no schema change. The controller leans to tombstones.
+  - **(b) The `preset.py` edit.** The migration needs `hyperspace/preset.py`, which writes `view_pattern=` for four factory presets, and `tests/fixtures/factory-sources/presets/`. Plan 37's ownership row gives it neither. The controller allows that edit when P2 runs.
+- **Other options.** Drop the seven modes no preset shows without asking; keep all 17.
+- **To reverse.** P2 has not run, so there is nothing to reverse. Once it runs, the steps are listed in the plan's "What changed in the build".
+- **Rough edge.** The sheets are stills, so METER, PULSE and SPEED's motion only shows on the FACES page with music. Three frames in, the tesseract is still nearly face-on.
+- **Judge it.** Check 375.
+
+### 418. D2: the thumbnail is always drawn, collapsed or expanded
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D2: thumbnails always, or only on collapsed nodes. Recommended "always", because the picture is the node's identity.
+- **Built.** Every picture node draws its picture right after the title line. Collapsed, the node is the title and the picture, and its N7 summary lines move into the hover (row 427). Expanded, it is the title, the picture and then the ports. `graphview.height` counts the box both ways, so nothing below it is overlapped.
+- **Other options.** Only on collapsed nodes, with expanded nodes showing ports only.
+- **To reverse.** The order in `ui_graph._node` and the `thumb` term in `graphview.height`.
+- **Rough edge.** A collapsed picture node no longer shows its N7 lines on the canvas. They are only in the hover.
+- **Judge it.** Check 372.
+
+### 419. D3: picture cables are plain red; the tint sits behind a head switch
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D3: tint picture cables by what flows, or keep them plain red. Recommended plain red first, with the tint behind a switch on the head so the owner can judge it by eye.
+- **Built.** The chip `pictures · tint cables` is last on the GRAPH head and off by default (row 428). Lit, each picture cable's red leans by the hue of the picture its maker draws. `ui_graph.COLOURS` is unchanged.
+- **Other options.** Always tint; never tint.
+- **To reverse.** One `setdefault` (lit by default), or delete `_tint_chip`.
+- **Rough edge.** See row 428.
+- **Judge it.** Check 370 (the tint step).
+
+### 420. D4: faces per instance come after this plan
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D4: faces per instance in this plan, or after. Recommended after, because it is a `graph.py` change that collides with plan 39's work there.
+- **Built.** Nothing. `shape.faces` still takes one picture for every drawn instance.
+- **Other options.** A `shape.faces.<k>` port per drawn instance in this plan.
+- **To reverse.** It is a later plan's work.
+- **Rough edge.** A kaleido branch cannot land on copy 1 and the pattern on copy 2.
+- **Judge it.** —
+
+### 421. D5: the backward wire is fixed by the area rules, not by re-laying the preset
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D5: fix the backward wire through the area rules or through the preset. Recommended the rules: "a node whose only consumers are in one area is laid in that area". As built, the rule is extended for a node whose consumers are in several areas (row 429, the run's ruling 11).
+- **Built.** `graphview.laid_areas`, applied in `graphview.build`. In the `acid-scene` fixture, acid.2 now stands in LOOK-BACK, left of the look-back, and every cable out of it runs right. `tests/test_graph_areas.py::test_no_cable_runs_backwards_across_areas` sweeps every factory preset (25) and every graph fixture (22). No preset was edited: `acid-scene` is a test fixture, not a factory preset.
+- **Other options.** Re-lay `acid-scene` by hand.
+- **To reverse.** One function, `graphview.laid_areas`, and its call in `build`.
+- **Rough edge.** See row 429.
+- **Judge it.** Check 376.
+
+### 422. A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps
+
+- **Answer.** controller — 2026-10-27. P1 says "mipmapped". `build_mipmaps` on a frame-owned texture switches its min filter for every later sample of that texture, which is a golden risk, and it would build a full mip chain on a 1080p target per node per frame.
+- **Built.** `outputs.THUMB_PX = 192`, at the picture's own aspect (`thumb_size`). Each node gets one draw of `THUMB_FS`: sixteen bilinear taps over one thumbnail texel's footprint, through a sampler of its own, written opaque (the picture over black). `outputs.PreviewTextures` keeps the textures. It sits beside `Preview` and knows nothing of the graph, importing only `moderngl` and `glsl`. `render.thumb_source` works out what each wanted name's picture is, and `Renderer._thumbnails` calls it last in `_for_the_panel`. The renderer holds one `Renderer.thumbs`, made again after a hot reload, and the page reads it as `panel.renderer.thumbs`.
+- **Other options.** Mipmaps; `copy_framebuffer`, a nearest blit that aliases badly at 10:1; a second, chained half-size pass.
+- **To reverse.** One shader string and one constant in `outputs.py`.
+- **Rough edge.** At 10:1 the coverage can shimmer on fine line art. The picture's alpha is dropped on the thumbnail, so a see-through layer reads as it would on a black window.
+- **Judge it.** Check 370.
+
+### 423. A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `THUMB_DROP_S = 1.0`: a name not wanted for a second is forgotten and its texture freed. `THUMB_BLACK_S = 1.0`. `PreviewTextures.shade` is 1 when the renderer copied the node in the last frame, 0.45 (`DIM`) while the last copy is less than a second old, and 0 after that. The page multiplies the picture by this number; nothing is copied for it. A node that stops drawing (switched off behind a switch, a hand that leaves, unwired) goes grey at once and black after a second. A node panned off screen has its texture freed a second later.
+- **Other options.** Hold the last picture for ever; drop at once, which flickers while panning; keep it longer.
+- **To reverse.** Three constants.
+- **Rough edge.** A node wanted for the first time shows a black box for one frame. Output 1's picture is the page's `Preview`, which has no age, so it never dims (row 424).
+- **Judge it.** Checks 370, 374.
+
+### 424. How a node that makes no picture shows one: one table
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMBS` maps each kind to how its picture is shown:
+  - `picture`: every picture kind (channel, pattern, scene, backdrop, composite, switch, delay, resize, lookback, echo, dream, effect, copy, hands layer, guide).
+  - `scene`: the shape and a cloud show the first scene that draws them, faint (`ui_graph.FAINT_PIC = 0.4`).
+  - `layer`: a hands node shows the first hands layer that draws it, else the scene it is in, not faint.
+  - `window`: output 1 shows the page's existing `Preview`, wanted only while its node is on screen. Any other output shows the `Handoff.frame` its presenter is handed (no readback, the hands not laid on), or a publish-only output's own target.
+
+  All outputs, the camera, the ground and the whole modulation side stay text. A kind the table does not name whose `OUTPUT` is `IMAGE` is a `picture` (`graphview.thumb_of`). That is the seam for plan 39's `segment`, `matte` and `cut`, with no code written for plan 39.
+- **Other options.** Show output N≥2 by the end's frame texture (before the fold); show All outputs as its `image` wire's picture.
+- **To reverse.** The table entries in `graphview.py` and the matching branch in `render.thumb_source`.
+- **Rough edge.** Output 1 never dims. Outputs 2–4 show their window's picture without the hands and the readout laid on.
+- **Judge it.** Check 370.
+
+### 425. A picture node's box is the node's width at 16:9, whatever the picture's shape
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMB_H = 134` canvas units (190 × 1.25 × 9/16). The picture is fitted whole inside and letterboxed on black, so the layout never moves when a picture's size changes.
+- **Other options.** The box at the picture's own aspect. A portrait channel would then push its column down, and the layout would move whenever a window resized.
+- **To reverse.** The `thumb` height in `graphview.height` and in `ui_graph._thumb`.
+- **Rough edge.** Picture nodes laid out automatically moved once, because their height changed. Stored positions did not move. A faint node's title is still faint.
+- **Judge it.** Check 372.
+
+### 426. What a thumbnail costs, by kind, and how the ask stays out of the frame
+
+- **Answer.** controller — 2026-10-27.
+- **Built.**
+  - **One blit** (the 192-texel pass) for a node that already made a texture this frame: the scene, a hands layer, a channel's fit, the pattern, a look-back's trail or a dream bound by a consumer, an effect held for two readers, a composite made into a texture, a window's handoff.
+  - **A full-size repaint, then the blit** for a node that painted straight into its consumer: an effect with one reader, a switch, a delay or echo laid by cover, a resize, a composite or look-back painted direct. Each such node holds a full-size frame target while it is wanted, about 8 MB per node at 1080p RGBA8 and twice that for a half-float one.
+  - **Who is asked.** Only wanted nodes (on screen, drawn). Nothing behind an unpicked switch input: every kind is checked against `Graph.pulled` before anything is read (a review fix). Nothing that reads nothing.
+  - **Out of the frame.** During the asks the GPU timer is muted and the frame's `stats` are restored afterwards. The outputs are byte-identical with every node wanted and with none (tested over delay, look-back, switch, effect and composite chains). When anything was copied, `_thumbnails` flushes the render context (`glFlush`).
+  - **On SYSTEM:** `thumbnails · N copied · K repainted · M kept`.
+- **Other options.** Paint at the thumbnail's size (`Frame.at`). That is cheaper but gives a different picture (a see-through ground).
+- **To reverse.** One branch per kind in `render.thumb_source`.
+- **Rough edge.** A look-back asked after the frame's capture includes this frame's commit. An echo whose slot was just rewritten reads nothing and dims. The cost on the show Mac has not been measured.
+- **Judge it.** Checks 371, 374.
+
+### 427. Hovering a thumbnail gives the node's lines, the picture's size and its GPU time
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.picture_hover`, called from `ui_graph.thumb_tip`, gives these lines in order:
+  1. The node's title.
+  2. `graphview.summary`'s lines: param counts, "N picture ports", the node's `said`, a switch's "picks inK", "reaches nothing".
+  3. `W×H picture`, the size of the last copy (`VNode.picture`; output 1 takes the `Preview`'s size).
+  4. `gpu N.NN ms`, SYSTEM's rolling median, looked up by the render node's name.
+  5. The node's status, when it has one.
+
+  A line with nothing behind it is left out. The tooltip shows only while the pointer is on the picture. On the title, the old hover is unchanged.
+- **Other options.** Hover on the whole node; the summary drawn under the thumbnail, which takes back the room the picture was given.
+- **To reverse.** One branch in `ui_graph._hover`, or the lines in `picture_hover`.
+- **Rough edge.** A geometry shown as its scene's picture has a time line only when it is timed under its own name. An effect that ran no pass this frame has no time line. A faint node's picture says "reaches nothing", but not `FAINT_TIP`'s advice, which its title still gives. That the hover works inside `imgui_node_editor` is only shown headless, through a stand-in.
+- **Judge it.** Check 373.
+
+### 428. The tint leans red by at most 20°, continuously; it is read from the thumbnail asynchronously, and its switch is off by default and kept on the page
+
+- **Answer.** controller — 2026-10-27. Revised in review: the first cut used a blocking `tex.read()`, effectively a `ctx.finish()` on every reading frame, and its linear arc flipped at cyan.
+- **Built.**
+  - **The formula.** `ui_graph.tint(hue, strength)` moves red's hue by `TINT_SPAN` (20°) × sin(2π·(hue − red)) × min(1, strength / `TINT_FULL` (0.25)), keeping red's saturation and value. The yellow-green half leans orange and the blue-violet half leans rose. Red, cyan and grey pictures give no lean. The tint stays more than 10° from the trigger's amber and 60° from the mask's purple.
+  - **The hue.** `outputs.dominant_hue` is a chroma-weighted circular mean. Each frame the switch is lit, `PreviewTextures.begin_frame` first collects the hue started the frame before (a 1 KB pixel buffer), then starts at most one new one: the oldest thumbnail whose hue is at least a second old (`HUE_EVERY_S`) gets one `THUMB_FS` pass into a 16×16 target and `fbo.read_into(buffer)`. No texture is ever `read()`, and that is tested.
+  - **The switch.** `st["tint"]` is page state, like `patched_only` and `backdrop`. It is off by default and saved with neither the preset nor the show (tested). Reads stop the frame it goes off. The chip is last on the head, so plan 38's hold chips land before it in a one-line merge.
+- **Other options.** An RGB mix with the picture's colour (a blue picture would make a purple cable, the mask's colour); the full hue; a preset value or a `config.toml` key for the switch.
+- **To reverse.** Two constants, or `tint` itself; one `setdefault` for the switch.
+- **Rough edge.** A ±20° lean is subtle by design, and a red picture and a cyan one both leave the cable plain red. The hue lags the picture by a frame plus up to a second. The switch has to be lit again after every launch. Bundles (value and trigger) are never tinted.
+- **Judge it.** Checks 370 (the tint step), 371.
+
+### 429. The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it
+
+- **Answer.** controller — 2026-10-27 (the run's ruling 11). The brief's tie-break was "a node with consumers in several areas keeps today's area". That cannot fix P3's own wire: in `acid-scene`, acid.2 feeds the look-back's `image` and `occluder` *and* a composite's `under` in EFFECTS.
+- **Built.** In `graphview.laid_areas`, only EFFECTS-area frame nodes move (an effect, copy, composite or resize). Such a node whose consumers sit left of the effects is laid in the leftmost consumer area that its feeds allow. These do not count as consumers:
+  - a kept cable (into a look-back's or delay's `image`, or an old D1 `after`);
+  - a consumer left of what feeds the node (a return by design);
+  - a consumer of no area.
+
+  A chain moves as a whole. A node whose consumers all sit to its right (the usual case, into OUTPUTS) never moves. When there is one consumer area left of EFFECTS, the result is the same as D5's. The rule names a node's *area*, never its *position*: `layout` skips every saved position, and no layout runs by itself (`test_auto_layout_stacks_each_area_and_keeps_saved_positions`). The reviewer traced that the rule cannot place a node left of its feeders and cannot loop.
+- **Other options.** D5 read literally (one consumer area only), which leaves the wire backwards; move every kind by the rule, which would carry LFOs into the scene.
+- **To reverse.** Restrict `laid_areas` to nodes whose counted consumers share one area, or drop its call in `build`. Cost if wrong: one cable drawn backwards on one fixture.
+- **Rough edge.** A moved effect takes its area's chips and frame with it. A preset saved before plan 37 with an acid.2-style effect placed in the EFFECTS region keeps that position, but its area is now LOOK-BACK, so LOOK-BACK's frame reaches over to it until **tidy**. A moved effect does not wrap in the effects' rows of four.
+- **Judge it.** Check 376.
+
+### 460. The owner judges the faces from sheets; "nearest kept" is a ranked list per mode; the migration map is generated and tested
+
+- **Answer.** controller — 2026-10-27. This is row 417's dry run. Numbered 460 because plan 37's range (417–429) holds thirteen rows.
+- **Built.**
+  - **The sheets.** `tools/faces_sheets.py` is a tool of its own. It is not `tools/preset_shots.py`, which is a hand-pose tool with no mode axis. Each tile is the preset loaded through the real `Presets` over a scratch home (the golden rig), with its own `pattern → shape.faces` wire, the hands absent, `view.pattern` set to the mode, the mix at 1.0, and the eight inputs at the factory depth on plan 22's medium passage. It is read three frames in, and the tile is the middle 480×300 at full resolution. The Heart sheet is lit at `view.bright` 2.5.
+  - **Nearest kept.** `faces_sheets.NEAREST` gives each mode three others, nearest first, each with a reason. They are ranked by structure on the face first (radial, straight lattice, cell lattice, flowing field, band reader), then palette and light, then motion. `nearest_kept(mode, kept)` takes the first kept name in that list, else the first kept mode in `NAMES` order other than FLAT. So any list the owner names answers "dropped → nearest kept" without a second judgement.
+  - **The map.** `docs/plans/assets/37-faces/migration-map.md` is written by `--map`, never by hand. For each mode it gives the presets that show it, split into on screen, faces off and unwired, as every factory preset and fixture lands through the real loader. `tests/test_faces_map.py::test_the_map_matches_every_preset_and_fixture_as_loaded` (fast tier) holds the map to the presets.
+- **Other options.** A pixel distance between tiles, which ranks by colour and misses structure; the owner naming each replacement himself; a hand-written map.
+- **To reverse.** Edit `NEAREST` and re-run `--map`, or the owner names the replacements. Delete the test and the map becomes a snapshot.
+- **Rough edge.** The ranking reflects the controller's eye on the sheets and the shader source, not the owner's. Any preset edit that changes a mode or the faces wire needs a `--map` re-run in the same commit.
+- **Judge it.** Check 375.

@@ -155,6 +155,11 @@ changes brightness or volume instead).
     dream worker, L169 with the TV for two windows), then L173 with both
     Macs on `plan-36-build` last of all, since a `/7` file is refused by
     an older build (it supersedes L168's `/6`).
+21. Plan 37, nodes as pictures and the faces, on `plan-37-pictures`:
+    L174, L176 and L178 on the laptop, and L175 on the show Mac. L177's
+    first half, naming the face patterns to keep, is the owner's and can
+    happen any time. Its second half waits for the build that drops the
+    others.
 
 ## Running the automated tests (tiers)
 
@@ -354,6 +359,11 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L171 | Tracers without the dream; the dream alone; `party-wake` live (plan 36) | 1 | laptop, the copy, the dream worker | 364-366 |
 | L172 | Preset only; the nine re-recorded goldens (plan 36) | 1 | laptop, the gate Mac | 367, 369 |
 | L173 | The libraries migrated to `/7`; both Macs on this build (plan 36) | 1 | two Macs, the shared library | 368 |
+| L174 | Every node shows its picture; the tint switch (plan 37) | 1 | laptop, the copy | 370 |
+| L175 | What the pictures cost; a hidden node stops being made (plan 37) | 1 | the show Mac, the copy | 371, 374 |
+| L176 | Expand and collapse; hover a picture (plan 37) | 1 | laptop, the copy | 372, 373 |
+| L177 | Pick the face patterns to keep; the FACES page after (plan 37) | 1 | laptop, then the show Mac, music | 375 |
+| L178 | `acid-scene` draws forward (plan 37) | 1 | laptop, a scratch home | 376 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -4312,6 +4322,147 @@ changes when saved untouched.
 
 *(check 368)*
 
+## Plan 37: nodes as pictures, and the faces (L174-L178)
+
+On GRAPH, a node that makes a picture is now drawn as that picture: a
+small, live image under its title. The app only makes these images for
+the nodes you can see, so panning or hiding nodes makes them cheaper.
+
+Plan 37's tests: the fast tier is 4,035 passed (2 skipped) and the
+goldens 128 passed, with none of the 757 pictures moved.
+`tests/test_thumbnails.py`, `tests/test_graph_hover.py`,
+`tests/test_graph_areas.py` (the backward-wire sweep) and
+`tests/test_faces_map.py` are its own.
+
+The face patterns are not cut yet. The owner picks which stay (L177),
+and a later build drops the rest. The checks are 370–376 (group AH);
+register rows 417–429 and 460.
+
+#### L174. Every node shows its picture; the tint switch
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. Load `party-trip` and open GRAPH.
+2. Look at each node: the clip or camera, the pattern, the scene, the
+   effects, the composites, the look-back and the outputs.
+3. On FX, move an effect's mix up and down.
+4. Turn on **pictures · tint cables** at the right end of the GRAPH head
+   and wait a second or two. Then turn it off.
+
+**Right if:**
+- Every one of those nodes shows a small moving picture, and an effect's
+  picture changes as you move its mix.
+- The shape node shows the scene, faintly. Output 1 shows the window, and
+  output 2 shows its window without the hands.
+- With the switch on, the red cables lean slightly orange out of
+  yellow-green pictures and slightly pink out of blue-violet ones. They
+  stay plain red out of red, cyan or grey pictures, and every one still
+  reads as red.
+- With the switch off, every picture cable is plain red again.
+
+**Wrong if:** a black box on a node that is clearly drawing, an upside-down
+or frozen picture, or a cable that looks amber (a trigger's colour) or
+purple (a mask's).
+
+*(check 370)*
+
+#### L175. What the pictures cost; a hidden node stops being made
+
+**Needs:** the show Mac; the copy.
+
+**Do:**
+1. With GRAPH closed, note the frame time on SYSTEM.
+2. Open GRAPH and pan until about twenty picture nodes are on screen.
+   Read SYSTEM again: the frame time and the line `thumbnails · N copied ·
+   K repainted · M kept`.
+3. Turn on the tint and read the frame time once more.
+4. Turn **preset only** on (or pan nodes off screen) and read the line
+   again after a second.
+5. On a switch node, pick another input.
+
+**Right if:**
+- The show's frame rate holds with GRAPH open, with the tint on and off.
+- N is about the number of picture nodes you can see, and it falls when
+  nodes are hidden or off screen. M follows within a second.
+- The node behind the input you left greys at once, goes black a second
+  later, and comes back when you pick it again.
+
+**Wrong if:** dropped frames with GRAPH open; a count that does not fall
+when nodes go out of sight; a stutter only while the tint is on.
+
+*(checks 371, 374)*
+
+#### L176. Expand and collapse; hover a picture
+
+**Needs:** laptop; the copy.
+
+**Do:**
+1. On GRAPH, expand an effect node with **+**, then collapse it.
+2. Rest the pointer on the scene node's picture, then on an effect's, then
+   on output 2's.
+3. Rest it on a node's title.
+
+**Right if:**
+- Expanded, the picture sits above the ports. Collapsed, the node is just
+  its title and its picture. Nothing overlaps.
+- On a picture, a tooltip gives the node's lines, its size (such as
+  `1920×1080 picture`) and `gpu … ms`, the same time SYSTEM shows for
+  that node.
+- On the title, the hover is as it was before.
+
+**Wrong if:** the picture vanishes when expanded, nodes overlap, or no
+tooltip appears on the picture.
+
+*(checks 372, 373)*
+
+#### L177. Pick the face patterns to keep; the FACES page after
+
+**Needs:** laptop, then the show Mac; music (for METER, PULSE and SPEED).
+
+**Do:**
+1. Open `docs/plans/assets/37-faces/sheet.png` and `heart-sheet.png`.
+   Each shows all 17 patterns on a shape, as a show draws them.
+2. Play music on the FACES page to see the ones that move.
+3. Name the patterns to keep. Then read `migration-map.md`'s "nearest
+   kept" for the ones you drop, and say whether to renumber the patterns
+   or keep the retired numbers (register row 417).
+4. After the build that drops the others, open FACES, load each preset
+   the map says used a dropped pattern, and turn the desk's pattern knob
+   from end to end.
+
+**Right if:**
+- Before the build: you have a list, and the map's replacements read
+  right to you.
+- After it: FACES shows only the kept patterns, each preset that lost its
+  pattern shows the nearest one and says so in its card, and the knob
+  walks only the kept patterns.
+
+**Wrong if:** a dropped pattern still on FACES, a preset on the wrong
+pattern, or white faces.
+
+*(check 375)*
+
+#### L178. `acid-scene` draws forward
+
+**Needs:** laptop; a scratch home with no `[library]` and no devices.
+
+**Do:**
+1. Copy `tests/fixtures/presets/acid-scene.json` into the scratch home's
+   `presets/`, load it, and open GRAPH.
+2. Follow the effect acid.2 from the scene into the look-back and on to
+   the composite.
+3. Drag acid.2 elsewhere and reload.
+
+**Right if:** acid.2 sits in LOOK-BACK, left of the look-back, and every
+cable out of it runs left to right. After the drag it stays where you put
+it.
+
+**Wrong if:** a cable curls back into the look-back, or a node jumps back
+by itself.
+
+*(check 376)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -7305,6 +7456,9 @@ what you want changed.
 - **The GRAPH page at a distance** — can you hit a pin and read a box on
   the laptop at the control window's normal size? Is the selected route's
   row better under the canvas or beside it? (L111, L113; checks 245, 247)
+- **Pictures on GRAPH** — are the thumbnails big enough to read across
+  the room? Is the tint's ±20° lean too subtle, or should it stay off?
+  (L174, L176; checks 370, 373)
 - **The modifiers' defaults** — a smooth's 0.35 s release, a threshold
   at 0.6 / 0.4, a curve's shape range: do they feel right on music?
   (L107, B43; checks 236, 241)
