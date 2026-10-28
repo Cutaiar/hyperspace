@@ -119,10 +119,11 @@ def test_every_factory_preset_has_every_state_recorded_and_nothing_else():
     # delay onto the faces and the trails' loop; plan 34 T3: + 8, an echo
     # onto the faces; plan 35 T3: + 3 × 8, the three wired frames; plan 34
     # T4: + 2 × 8, the resize into a delay onto the faces and the crop;
-    # plan 39 T2: + 8, a matte wired straight into All outputs)
+    # plan 39 T0: + 8, the scene through edges; plan 39 T2: + 8, a matte
+    # wired straight into All outputs)
     assert len(doc["goldens"]) == (24 * 2 * 9 + 7 * 2 + 1 + 24 * 5 + 2 + 2 * 2 + 8 + 3 * 8
                                    + 2 * 8 + 2 * 8 + 3 * 8 + 3 * 8 + 8 + 2 * 8 + 8 + 3 * 8
-                                   + 2 * 8 + 8)
+                                   + 2 * 8 + 8 + 8)
     # alone, the window's frame is drawn direct: the default state over a
     # shown hand is the scene with the hands over; through an effect, the
     # hands go into the chain
@@ -204,15 +205,16 @@ def test_the_history_wiring_is_recorded_for_every_preset_with_the_look_back_on()
 
 
 # the `goldens` list as T3 left it (sha256 of its JSON): plan 35 T4's
-# `--names` rewrites recorded node names only, never an entry. Plan 34 T4's
-# two fixtures' entries (`GOLDENS_SINCE`) are left out of the digest: the
-# 741 before them are the same list, byte for byte
+# `--names` rewrites recorded node names only, never an entry. The entries
+# of the fixtures named in `GOLDENS_SINCE`, added since the digest, are left
+# out of it: the 741 before them are the same list, byte for byte
 # Plan 36 T1 re-recorded four entries (the stand-down gone, a hands mute
 # inside a through chain: `party-trip`, `party-noita`, `lfo-breathe`
 # absent|hands+through and `through-one-output` present|scene+through) and
 # the route words of those presets' through states
-# (plan 39 T2: and `mask-as-picture`'s, new pictures — none of the 741 moved)
-GOLDENS_SINCE = ("resize-faces", "resize-crop", "mask-as-picture")
+# (plan 39 T0's `edges-scene` and T2's `mask-as-picture`: new pictures —
+# none of the 741 moved)
+GOLDENS_SINCE = ("resize-faces", "resize-crop", "edges-scene", "mask-as-picture")
 # (plan 36 T3: re-pinned for the four goldens re-recorded — palette-glass's
 # scene+hands+through and wired-outputs' scene+hands, scene, scene+through:
 # D1's `into output.N` sat on the window's shown picture, which no wire
@@ -221,7 +223,12 @@ GOLDENS_SINCE = ("resize-faces", "resize-crop", "mask-as-picture")
 # scene+hands+through, 6029 px off by 1/255, mean 0.0029: its `history →
 # acid.2` read the off look-back's copy pass, which no drawn node makes; as
 # `scene → acid.2` the effect folds the scene's own texture)
-GOLDENS_DIGEST = "886d0ce807e1504b546a48adaccd08b1c6bc9fc70f4c7bccccb9e64b6cc704a1"
+# (plan 39 T1: re-pinned for eight goldens re-recorded — backdrop-still's and
+# media-chain-backdrop's present scene, scene+through, scene+hands,
+# scene+hands+through: the cut-through blend is the window's, so the scene
+# laid over the backdrop (zero ground, plan 32 R) no longer squares its alpha
+# and its faces no longer wash toward white; sha256 and png only)
+GOLDENS_DIGEST = "ac516263b005abff61c7cd0fc7cefe9f92bb44616aed1eb1dee3270781dbbd17"
 # the render names the pipelines' graph used, gone in plan 35 T4 (V2: the
 # render nodes are named in the new ids)
 OLD_RENDER_NAMES = ("ghost", "history", "readout", "capture", "cover", "grounded", "fx",

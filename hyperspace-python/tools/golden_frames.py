@@ -205,12 +205,15 @@ FEEDBACK_FIXTURES: tuple[str, ...] = ("delay-faces", "delay-trails", "echo-faces
 # scene made at 64² square, nearest, into a delay onto the faces (`scene →
 # resize → delay → shape.faces`) — and `resize-crop`, channel a's still
 # cropped at 128 through acid.2 onto output 2 alone (a media fixture, above)
+# Plan 39 T0's one (a `/7` wired frame): the scene through `edges` at its
+# defaults into All outputs — the polytope's lines as line art
 WIRED_FIXTURES: tuple[str, ...] = ("blank-frame", "channel-out-only", "through-one-output",
-                                   "resize-faces", "resize-crop", "mask-as-picture")
+                                   "resize-faces", "resize-crop", "edges-scene",
+                                   "mask-as-picture")
 FIXTURE_PRESETS: tuple[str, ...] = ("hands-lines", "palette-hands", "palette-glass",
                                     "acid-scene", "hands-glass-only", "wired-outputs",
                                     *MEDIA_FIXTURES, *FEEDBACK_FIXTURES, "blank-frame",
-                                    "through-one-output", "resize-faces")
+                                    "through-one-output", "resize-faces", "edges-scene")
 MEDIA = ROOT / "tests" / "golden" / "media"
 MEDIA_WAIT_S = 10.0      # the most a rig waits for its stills to decode (the pool)
 

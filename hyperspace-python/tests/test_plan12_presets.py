@@ -426,6 +426,9 @@ EFFECTS_IN_NO_PRESET: dict[str, str] = {
     # input; a factory preset ships no media, so there is nothing to wire
     "displace": "reads its aux input; factory presets wire no media channel",
     "blend": "reads its aux input; factory presets wire no media channel",
+    # plan 39 T0: no preset is edited in plan 39 (the build plan's global
+    # constraints); the edges-scene fixture's goldens hold it
+    "edges": "plan 39 adds no factory preset; tests/fixtures/presets/edges-scene.json holds it",
 }
 
 

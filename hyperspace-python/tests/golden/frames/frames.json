@@ -475,6 +475,20 @@
     "none",
     "through"
    ]
+  },
+  "edges-scene": {
+   "file": "tests/fixtures/presets/edges-scene.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
   }
  },
  "presets": {
@@ -2672,6 +2686,74 @@
      "shown(composite.4)",
      "resize",
      "delay(write)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "edges-scene": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": true,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "edges.image"
+      },
+      {
+       "from": "edges",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "hands.layer",
+     "shown(edges)",
+     "composite",
+     "shown(copy)",
+     "composite.2",
+     "shown(copy.2)",
+     "composite.3",
+     "shown(copy.3)",
+     "composite.4",
+     "shown(copy.4)",
      "output.1",
      "output.2",
      "output.3",
@@ -10771,8 +10853,8 @@
     960,
     600
    ],
-   "sha256": "51e1a9ee04b651240ab42601f9b8bcbb939079b706074cc355d1ae21bb11b2e0",
-   "png": "png/51e1a9ee04b65124.png"
+   "sha256": "dc42b537ae577ce9a9f9d6d9cc875fef602f0cbed723df58e41cd6feaf1918c9",
+   "png": "png/dc42b537ae577ce9.png"
   },
   {
    "preset": "backdrop-still",
@@ -10784,8 +10866,8 @@
     960,
     600
    ],
-   "sha256": "51e1a9ee04b651240ab42601f9b8bcbb939079b706074cc355d1ae21bb11b2e0",
-   "png": "png/51e1a9ee04b65124.png"
+   "sha256": "dc42b537ae577ce9a9f9d6d9cc875fef602f0cbed723df58e41cd6feaf1918c9",
+   "png": "png/dc42b537ae577ce9.png"
   },
   {
    "preset": "backdrop-still",
@@ -10797,8 +10879,8 @@
     960,
     600
    ],
-   "sha256": "201d2eae08ca162b26b4c181ba37f401c808e12995e7067c2cb8b43ab77a76bd",
-   "png": "png/201d2eae08ca162b.png"
+   "sha256": "1f46ad4f0e54436e791e2287b151ba6cf55e5dc900a1f630ecc563c8548536e8",
+   "png": "png/1f46ad4f0e54436e.png"
   },
   {
    "preset": "backdrop-still",
@@ -10810,8 +10892,8 @@
     960,
     600
    ],
-   "sha256": "201d2eae08ca162b26b4c181ba37f401c808e12995e7067c2cb8b43ab77a76bd",
-   "png": "png/201d2eae08ca162b.png"
+   "sha256": "1f46ad4f0e54436e791e2287b151ba6cf55e5dc900a1f630ecc563c8548536e8",
+   "png": "png/1f46ad4f0e54436e.png"
   },
   {
    "preset": "backdrop-still",
@@ -11396,8 +11478,8 @@
     960,
     600
    ],
-   "sha256": "4d8af8575c6df649cd0b14e9154dfe90fe8705ba14d63361771a249a163956b0",
-   "png": "png/4d8af8575c6df649.png"
+   "sha256": "0f835794f9b905db84b11c688bab354432b71116689c2f9097b8d02ba2a83fac",
+   "png": "png/0f835794f9b905db.png"
   },
   {
    "preset": "media-chain-backdrop",
@@ -11409,8 +11491,8 @@
     960,
     600
    ],
-   "sha256": "4d8af8575c6df649cd0b14e9154dfe90fe8705ba14d63361771a249a163956b0",
-   "png": "png/4d8af8575c6df649.png"
+   "sha256": "0f835794f9b905db84b11c688bab354432b71116689c2f9097b8d02ba2a83fac",
+   "png": "png/0f835794f9b905db.png"
   },
   {
    "preset": "media-chain-backdrop",
@@ -11422,8 +11504,8 @@
     960,
     600
    ],
-   "sha256": "bcf89096dc8453bca2b7b2aa4ea0eae5277bcc425e466504af176dda269916b4",
-   "png": "png/bcf89096dc8453bc.png"
+   "sha256": "3a83d7a431b073530fd2cade059de7ca2185a63deda31053567cae6229623af6",
+   "png": "png/3a83d7a431b07353.png"
   },
   {
    "preset": "media-chain-backdrop",
@@ -11435,8 +11517,8 @@
     960,
     600
    ],
-   "sha256": "bcf89096dc8453bca2b7b2aa4ea0eae5277bcc425e466504af176dda269916b4",
-   "png": "png/bcf89096dc8453bc.png"
+   "sha256": "3a83d7a431b073530fd2cade059de7ca2185a63deda31053567cae6229623af6",
+   "png": "png/3a83d7a431b07353.png"
   },
   {
    "preset": "media-chain-backdrop",
@@ -12627,6 +12709,110 @@
   },
   {
    "preset": "resize-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "1bcfe388f60b6ce2f2181b5db3c835e0e16cb7b9007df8800eda8ba75fcaccc5",
+   "png": "png/1bcfe388f60b6ce2.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "979d8120117d878169a2d6c39ff0349a84d931272516c82cc961a9f8815852ad",
+   "png": "png/979d8120117d8781.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "80c41e49e888bf609842b978f2cd16f87058ca39b41d08b8c8db34badf25f305",
+   "png": "png/80c41e49e888bf60.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "80c41e49e888bf609842b978f2cd16f87058ca39b41d08b8c8db34badf25f305",
+   "png": "png/80c41e49e888bf60.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
    "hands": "present",
    "state": "through",
    "route": "none",
