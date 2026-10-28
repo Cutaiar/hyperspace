@@ -1222,7 +1222,7 @@ presets do not), and a preset may re-aim them.
 
 **The modulation patch** (plan 28). `Router.build_modgraph` reads the table
 — the performer rows, their gates and `scale`s, the macros' subscribers,
-each bank voice's knob params (plan 31: the LFOs', the envelopes'), the preset's modifiers — into a `patch.Patch`;
+each bank voice's knob params (plan 31: the LFOs', the envelopes'), the preset's modifiers — into a `modgraph.ModGraph`;
 `modgraph.order` sorts it, `modgraph.cycles` finds the loops, and
 `Router._rebuild_modgraph` cuts each loop through no delay (its last cable
 in table order off, a note for ROUTING's head) and turns the order into

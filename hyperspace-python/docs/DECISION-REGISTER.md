@@ -4440,7 +4440,7 @@ Folds two of D1's drafts: the refusals, and the loops.
   291) for a lights sink (plan 29), and
   an image-in `sample` port on the palette that would set its params
   from a bitmap. No node publishes or reads one (a test walks every
-  `Node` class and the built default graph). `patch.RENDER_VALUE =
+  `Node` class and the built default graph). `modgraph.RENDER_VALUE =
   "value"` names it on the modulation side, as a future source whose id
   is the node's port (`palette:palette`); `modgraph.py` stays a leaf.
   `Node.__init__` already type-checks a wired port, so the first node to

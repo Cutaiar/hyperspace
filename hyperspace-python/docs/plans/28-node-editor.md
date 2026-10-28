@@ -93,7 +93,7 @@ general TouchDesigner.
   `ModNode(id, kind, delay=False)` with kinds `source lfo modifier
   macro param` — a source's, an LFO's or a modifier's id is the address
   a row names (`lane:0`, `lfo:0`, `mod:3`), a param's or a macro's its
-  param id, so the two never meet; `PatchEdge(src, dst, port, cable,
+  param id, so the two never meet; `ModEdge(src, dst, port, cable,
   enabled)` with ports `mod` (a performer row), `when` (its gate),
   `depth` (a `scale` param or a macro's depth subscriber, into the
   cable's target), `base` (a macro's base subscriber: drawn, never

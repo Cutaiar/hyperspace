@@ -360,12 +360,12 @@ one LFO can step inside the evaluation), `hyperspace/app.py:948–954`,
 **Build.**
 
 - `modgraph.py`: `ModNode(id: str, kind: str)` with kinds `source`,
-  `lfo`, `modifier`, `macro`, `param`; `PatchEdge(src: str, dst: str,
+  `lfo`, `modifier`, `macro`, `param`; `ModEdge(src: str, dst: str,
   port: str)` with ports `mod`, `base`, `depth`, `in`, and the LFO knobs
-  (`depth`, `rate`, `phase`); `Patch(nodes, edges)`; `order(patch) ->
-  list[PatchNode]` (a stable topological sort: dependencies first, ties
-  in insertion order, like `Graph._sort`); `cycles(patch) ->
-  list[list[str]]`. Pure data and pure functions; `tests/test_patch.py`
+  (`depth`, `rate`, `phase`); `ModGraph(nodes, edges)`; `order(g) ->
+  list[ModNode]` (a stable topological sort: dependencies first, ties
+  in insertion order, like `Graph._sort`); `cycles(g) ->
+  list[list[str]]`. Pure data and pure functions; `tests/test_modgraph.py`
   proves them without a Router.
 - `Router.build_modgraph()`: from `table.routes()` (a performer row = an
   edge source → param `mod`), `table.macros` (a `Sub` with `base` = macro
