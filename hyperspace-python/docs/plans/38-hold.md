@@ -7,6 +7,15 @@ with it. It is independent of plan 36 (PR #242, a doc only): it reads the
 wiring as plan 35 left it (`Renderer.wiring`, `graph.build_graph`) and
 works the same once plan 36 makes the graph explicit. No preset, schema
 or golden changes. 16 new tests (`tests/test_hold.py`), one of them on GL.
+
+**Rebased onto plan 36 (2026-10-27, task B1)** as `plan-38-hold`, off
+`plan-37-38-39-integration`. Plan 36's explicit graph needed one thing
+more held: the rig's bus cables from All outputs into each window
+(`graph.RigWires`, the open show's, which the renderer reads through its
+`rig_source`). The hold now keeps them with the wiring, so a bus cable cut
+on GRAPH during a hold stays off the projector. The preview renderer reads
+the show's cables too, never a default. Three tests prove it, one on GL
+(19 in all).
 The questions at the end (D1–D5) are the owner's; the build takes the
 recommendation for each.
 
@@ -52,8 +61,8 @@ mechanism.
 
 - **Program** (`hold.Hold.program`, around the one `draw_outputs` in
   `app._draw_render`):
-  1. The app's renderer is handed the held wiring and the held extra
-     hands states.
+  1. The app's renderer is handed the held wiring, the held rig cables
+     (plan 36's bus, `rig_source`) and the held extra hands states.
   2. Each held param whose base the operator has moved is written to its
      object with `Param.put`, never `set`. No base moves, so undo, the
      dirty dot and the desk's lights are unaffected.

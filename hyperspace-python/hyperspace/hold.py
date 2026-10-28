@@ -24,7 +24,9 @@ rig's session params), then the hold lets go. Both are undoable like any
 replacing action.
 
 How the program is drawn (`program`): around the draw, the renderer is
-handed the held wiring (and the held extra hands states), and each held
+handed the held wiring, the held rig cables (plan 36's bus from All
+outputs into each window, `graph.RigWires`, which the renderer reads from
+its `rig_source`) and the held extra hands states, and each held
 param whose base the operator moved is written to its object
 (`Param.put`, never `set`: no base moves, no undo step, no dirty dot) and
 the live value put back after. A param nobody moved costs one compare.
@@ -89,6 +91,7 @@ class Hold:
         self.reg, self.renderer, self.undo, self.make = reg, renderer, undo, make
         self.on = False
         self.wiring = None              # the program's wiring, as engaged
+        self.rig = None                 # …its rig cables (a `graph.RigWires`), as engaged
         self.ghosts: dict = {}          # …and its extra hands nodes' states
         self.values: dict[str, Any] = {}    # held param id → its base when engaged
         self.point = None               # the undo state Drop goes back to
@@ -106,6 +109,7 @@ class Hold:
             return False
         r, reg = self.renderer, self.reg
         self.wiring = getattr(r, "wiring", None)
+        self.rig = _rig(r)
         self.ghosts = dict(getattr(r, "ghost_states", None) or {})
         self.values = {p.id: _copy(p.base) for p in reg if held(p)}
         undo = self.undo
@@ -149,7 +153,7 @@ class Hold:
 
     def _let_go(self) -> None:
         self.on = False
-        self.wiring, self.ghosts, self.values, self.point = None, {}, {}, None
+        self.wiring, self.rig, self.ghosts, self.values, self.point = None, None, {}, {}, None
         self.moved, self.error = 0, ""
 
     # ---- what the program is
@@ -161,14 +165,18 @@ class Hold:
                 if pid in reg and not alike(reg[pid].base, v)]
 
     def rewired(self) -> bool:
-        """Has the graph changed since the hold?"""
-        return self.on and getattr(self.renderer, "wiring", None) != self.wiring
+        """Has the graph changed since the hold — the preset's wires or the
+        rig's bus cables (plan 36: both are drawn on GRAPH)?"""
+        r = self.renderer
+        return self.on and (getattr(r, "wiring", None) != self.wiring or _rig(r) != self.rig)
 
     @contextmanager
     def program(self, renderer=None) -> Iterator[None]:
-        """Around the draw of the outputs: the held wiring and look on
-        `renderer` (the hold's own by default), the live ones back after —
-        whatever the draw raised. Off, nothing changes."""
+        """Around the draw of the outputs: the held wiring, rig cables and
+        look on `renderer` (the hold's own by default), the live ones back
+        after — whatever the draw raised. Off, nothing changes. Plan 36's
+        rule: the held copy is exactly what was landed at the press — no
+        wire is filled in, none is defaulted."""
         if not self.on:
             yield
             return
@@ -176,6 +184,7 @@ class Hold:
         reg = self.reg
         back: list[tuple[Any, Any]] = []
         wiring, ghosts = getattr(r, "wiring", None), getattr(r, "ghost_states", None)
+        source = getattr(r, "rig_source", None)
         try:
             for pid, v in self.values.items():
                 p = reg.get(pid)
@@ -185,10 +194,12 @@ class Hold:
                 p.put(program_value(p, v))
                 back.append((p, live))
             r.wiring = self.wiring
+            r.rig_source = _HeldRig(self.rig)
             r.ghost_states = self.ghosts
             yield
         finally:
             r.wiring = wiring
+            r.rig_source = source
             if ghosts is not None:
                 r.ghost_states = ghosts
             for p, live in reversed(back):
@@ -266,13 +277,17 @@ def preview_size(full: tuple[int, int], cap: tuple[int, int] | None = None) -> t
 
 # the main renderer's inputs the preview renderer reads the same way —
 # handed over every frame, as `app.frame` hands them to the main one
-MIRRORED = ("media", "cloud_source", "bands", "ghost_states", "wiring")
+# (plan 38 B1: and the rig's cables — `rig_source`, plan 36 T1 — so the
+# preview's windows read the bus as the show has it, never every default
+# standing as a renderer with none would)
+MIRRORED = ("media", "cloud_source", "rig_source", "bands", "ghost_states", "wiring")
 
 
 def mirror(main, pr) -> None:
     """The preview renderer `pr` reads what the main one does this frame:
-    the media channels, the clouds, the bands, the hands (their source and
-    the table that lights the guide) and the live wiring — not the dim or
+    the media channels, the clouds, the rig's bus cables, the bands, the
+    hands (their source and the table that lights the guide) and the live
+    wiring — not the dim or
     the window's ground: the preview is the look, not the room."""
     for name in MIRRORED:
         setattr(pr, name, getattr(main, name, None))
@@ -325,6 +340,22 @@ def _preset_part(state, reg):
     keep = {pid: v for pid, v in bases.items()
             if (p := reg.get(pid)) is None or p.group in PERFORMANCE_GROUPS}
     return replace(state, bases=keep)
+
+
+class _HeldRig:
+    """The program's `rig_source` while held: the rig cables as they were
+    at the press (plan 38 B1), in the shape `graph.rig_of` reads (`rig`)."""
+
+    __slots__ = ("rig",)
+
+    def __init__(self, rig):
+        self.rig = rig
+
+
+def _rig(r):
+    """The rig cables `r` draws from — its `rig_source`'s `rig`, read the
+    way `graph.rig_of` does (duck-typed: hold imports no graph)."""
+    return getattr(getattr(r, "rig_source", None), "rig", None)
 
 
 def _copy(v):

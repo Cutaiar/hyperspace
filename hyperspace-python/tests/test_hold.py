@@ -17,6 +17,7 @@ from types import SimpleNamespace
 import pytest
 from test_undo import boot, frames, settle
 
+from hyperspace import graph as G
 from hyperspace import hold as H
 from hyperspace.graph import Wiring
 
@@ -26,7 +27,9 @@ DT = 1 / 60
 @pytest.fixture()
 def rig(tmp_path):
     r = boot(tmp_path / "home")
-    r.renderer = SimpleNamespace(wiring=Wiring(), ghost_states={})
+    # plan 38 B1: the renderer as plan 36 leaves it — the empty frame until
+    # a preset's graph lands one, the open show's rig cables (`rig_source`)
+    r.renderer = SimpleNamespace(wiring=G.EMPTY, ghost_states={}, rig_source=r.lib.project)
     r.presets.graph.attach(r.renderer)
     r.hold = H.Hold(r.reg, r.renderer, undo=r.undo)
     settle(r)
@@ -38,7 +41,9 @@ def test_only_the_looks_render_params_are_held(rig):
     3D switch, the rig, the modulators or a trigger."""
     rig.hold.engage()
     held = set(rig.hold.values)
-    assert {"view.bright", "view.lines", "camera.zoom", "fx.warp.amount",
+    # (plan 36: an effect's own params exist only while a preset wires it —
+    # the startup preset wires none — so the effects' group is `fx.mix`'s)
+    assert {"view.bright", "view.lines", "camera.zoom", "fx.mix",
             "dream.mix", "pattern.mod.1"} <= held
     assert not {p for p in held if p.split(".")[0] in ("lfo", "media", "tempo", "output",
                                                        "hands", "eye", "rot", "macro")}
@@ -80,10 +85,48 @@ def test_the_program_takes_the_held_wiring_and_hands(rig):
     assert r.wiring is blank and set(r.ghost_states) == {"ghost.2"}
 
 
+def test_a_bus_cable_cut_after_the_hold_stays_off_the_projector(rig):
+    """Plan 38 B1 (plan 36's explicit graph): the rig's bus cables are part
+    of what is held. A cable cut on GRAPH after the press — the open show's
+    `RigWires` — is the preview's: the program reads the cables as they
+    stood (by `graph.rig_of`, as `Renderer._graph_for` does), the live ones
+    come back after the draw, `rewired` says the graph moved, and the
+    preview renderer reads the cut, never a default."""
+    r, hold, show = rig.renderer, rig.hold, rig.lib.project
+    assert show.rig == G.RigWires()
+    hold.engage()
+    show.rig = show.rig.cutting(G.bus_wire(1, "image"))
+    assert hold.rewired()
+    with hold.program():
+        assert G.rig_of(r.rig_source) == G.RigWires()
+        assert r.wiring is hold.wiring
+    assert r.rig_source is show and G.rig_of(r.rig_source).cut == {G.bus_wire(1, "image")}
+    pr = SimpleNamespace(ghost=None)
+    H.mirror(r, pr)
+    assert pr.rig_source is show and pr.wiring is r.wiring
+    assert hold.take() and not hold.rewired()
+    with hold.program():
+        assert G.rig_of(r.rig_source).cut == {G.bus_wire(1, "image")}
+
+
+def test_drop_puts_a_bus_cable_cut_during_the_hold_back(rig):
+    """A bus cable cut is a graph edit, so Drop's one undo step stands it
+    again (the show's mark carries the rig's wires, plan 36 T1): the
+    projector, which never saw the cut, still never moves."""
+    show = rig.lib.project
+    rig.hold.engage()
+    show.rig = show.rig.cutting(G.bus_wire(1, "image"))
+    settle(rig)
+    assert rig.hold.drop()
+    settle(rig)
+    assert show.rig == G.RigWires()
+    assert rig.undo.undo() and show.rig.cut == {G.bus_wire(1, "image")}
+
+
 def test_a_modulated_param_rides_its_held_base(rig):
     """The bands and the LFOs drive the program too: its value is the held
     base plus the offset the live base got this frame."""
-    reg, hold, view = rig.reg, rig.hold, rig.view
+    reg, hold = rig.reg, rig.hold
     p = reg["view.bright"]
     p.set(p._value_of_norm(0.5))
     hold.engage()
@@ -117,7 +160,7 @@ def test_take_lets_go_and_the_program_is_what_is_landed(rig):
 def test_drop_goes_back_to_the_hold_point_as_one_undo_step(rig):
     """Drop: the look and the graph as they were at HOLD, the rig's params
     left; one step, and undoing it brings the edits back."""
-    reg, hold, view, r = rig.reg, rig.hold, rig.view, rig.renderer
+    reg, hold, r = rig.reg, rig.hold, rig.renderer
     from hyperspace.graph import read_graph
 
     zoom0, fov0 = reg["camera.zoom"].base, reg["eye.fov"].base
@@ -177,11 +220,12 @@ def test_preview_size_keeps_the_aspect_under_both_caps():
 
 def test_the_preview_renderer_reads_what_the_main_one_does():
     main = SimpleNamespace(media="m", cloud_source="c", bands=(0.5,), ghost_states=None,
-                           wiring="w", ghost=SimpleNamespace(source="hands", router="table"),
+                           wiring="w", rig_source="show", ghost=SimpleNamespace(source="hands", router="table"),
                            max_frame=(10, 10), bg_alpha=0.2, dim=0.3)
     pr = SimpleNamespace(ghost=SimpleNamespace(source=None, router=None))
     H.mirror(main, pr)
     assert (pr.media, pr.cloud_source, pr.bands, pr.wiring) == ("m", "c", (0.5,), "w")
+    assert pr.rig_source == "show"          # plan 38 B1: the bus as the show has it
     assert pr.ghost_states == {} and (pr.ghost.source, pr.ghost.router) == ("hands", "table")
     assert (pr.max_frame, pr.bg_alpha, pr.dim) == (None, 1.0, 1.0)
 
@@ -307,7 +351,8 @@ def test_on_gl_the_projector_keeps_the_held_frame_while_the_preview_shows_the_ed
     held frame byte for byte (as drawn before the hold); the preview is
     black; after Take the outputs are black too."""
     import numpy as np
-    from test_outputs import W, H as HH, fbo, px, scene_view
+    from test_outputs import H as HH
+    from test_outputs import W, fbo, px, scene_view
 
     from hyperspace.control import Control
     from hyperspace.graphmigrate import wiring_of
@@ -346,4 +391,62 @@ def test_on_gl_the_projector_keeps_the_held_frame_while_the_preview_shows_the_ed
     assert px(ctx, pv)[..., :3].max() == 0
     assert hold.take()
     assert program(2.0)[..., :3].max() == 0
+    assert ctx.error == "GL_NO_ERROR"
+
+
+@pytest.mark.empty_frame        # the app's own renderers: nothing until a graph lands
+def test_on_gl_a_bus_cable_cut_after_the_hold_stays_off_the_projector(ctx):
+    """Plan 38 B1, on GL with plan 36's explicit graph: the scene reaches
+    output 1 only by the rig's bus cable from All outputs. Held, the cable
+    is cut on GRAPH: the program draws the held frame byte for byte (the
+    held cables, the held wiring, the same graph), the preview renderer —
+    built on the same context, reading the show's cables — draws the cut
+    (black), and after Take so do the outputs."""
+    import numpy as np
+    from test_outputs import H as HH
+    from test_outputs import W, fbo, px, scene_view
+
+    from hyperspace.control import Control
+    from hyperspace.graphmigrate import wiring_of
+    from hyperspace.outputs import Switches, View
+    from hyperspace.params import build_registry
+    from hyperspace.render import Renderer
+
+    r = Renderer(ctx)
+    assert r.wiring == G.EMPTY and r.rig_source is None      # plan 36: no fill-in
+    r.wiring = wiring_of(r.fx.state)
+    assert G.Wire("scene", "output.all.image") in r.wiring.wires
+    show = SimpleNamespace(rig=G.RigWires())
+    r.rig_source = show
+    s = scene_view()
+    from hyperspace.analysis import Analyser
+    from hyperspace.analyzer import Analyzer
+
+    chain = Analyzer(Analyser())
+    reg = build_registry(s, Control(chain), SimpleNamespace(chain=chain), None,
+                         dream=r.lookback.state, fx=r.fx.state)
+    hold = H.Hold(reg, r, make=lambda: H.preview_renderer(r))
+    out = fbo(ctx)
+
+    def program(t):
+        with hold.program():
+            r.draw_outputs(s, W, HH, 1.0, [View(Switches(), (W, HH), target=out)], t_now=t)
+        return px(ctx, out)
+
+    before = program(2.0)
+    assert before[..., :3].max() > 0
+    graph = r._graph
+    hold.engage()
+    show.rig = show.rig.cutting(G.bus_wire(1, "image"))
+    assert hold.rewired()
+    assert np.array_equal(program(2.0), before) and r._graph is graph
+    assert r.rig_source is show
+    pv = fbo(ctx)
+    assert hold.draw_preview(s, W, HH, (W, HH), pv,
+                             lambda sz, t: View(Switches(), sz, target=t))
+    pr = hold.preview
+    assert pr.rig_source is show and pr._graph.rig == show.rig
+    assert px(ctx, pv)[..., :3].max() == 0
+    assert hold.take()
+    assert program(2.0)[..., :3].max() == 0 and r._graph.rig == show.rig
     assert ctx.error == "GL_NO_ERROR"
