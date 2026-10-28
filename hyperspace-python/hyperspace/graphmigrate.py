@@ -66,6 +66,17 @@ SIX_SCHEMA = "hyperspace.preset/6"
 # read only through the one-way migration to it (`seven`)
 WIRED_SCHEMA = "hyperspace.preset/7"
 SEVEN = 7
+# plan 40 T2 (D4, D7): `/8` is `/7` plus the GRAPH page's groups (`groups`,
+# preset.GROUPS_KEY) — written only by a preset that holds one, so a preset
+# with none writes `/7` byte for byte; nothing is rewritten to it
+GROUPS_SCHEMA = "hyperspace.preset/8"
+GROUPS_KEY = "groups"
+
+
+def groups_of(doc: Any) -> list:
+    """Plan 40 T2, the one step from `/7` to `/8`: the key is absent → no
+    groups (a `/7`, a migrated older file and a `/8` without one alike)."""
+    return list(doc.get(GROUPS_KEY) or []) if isinstance(doc, dict) else []
 # plan 35 M (row 381): `backdrop.history` is the capture wire now
 RETIRED = ("fx.select", "view.media", "backdrop.channel", "backdrop.history")
 # the retired values a wire says now, not a switch (row 381): a row that

@@ -644,6 +644,54 @@ def test_a_patch_cut_from_every_factory_presets_main_run_round_trips():
     assert len(done) >= 6, done
 
 
+# ---------------------------------------------------------------- plan 40 T2: the one classifier
+
+def test_select_is_the_lifts_rule_and_refuses_a_group():
+    """`select` (factored out of `lift` for the GRAPH page's Group): the
+    lift's members and words, and a group named among the ids — no
+    nesting — left out in words."""
+    spec, table, _values, _layout = parts(preset("party-noita"))
+    mem, refused = patches.select(spec, table, ["render:scene", "render:warp", "group.2",
+                                                "macro.3", "env.2", "env.7", "mod.1"])
+    assert mem.render == ("warp",) and mem.macros == (3,) and mem.envs == (7,)
+    assert mem.canvas() == ["render:warp", "env.7", "macro.3"]
+    assert refused == ["scene is the frame's; left out",
+                       "group.2 is a group: a group holds nodes, not groups; left out",
+                       ("env.2 is a sequencer lane's envelope; left out (a patch's envelope "
+                        "spawns as 6 or more)"),
+                       "mod.1: no such node; left out"]
+
+
+def test_crossing_and_the_sides_classify_what_crosses_a_region():
+    """`crossing` says where each wire sits against the region (and
+    `wire_type` what it carries at the edge); `side`, `sub_side` and
+    `input_side` where a row, a macro subscriber and a modifier input sit —
+    the rules `read` and `lift` keep and the group node draws."""
+    spec, table, _values, _layout = parts(preset("party-noita"))
+    mem, _ = patches.select(spec, table, NOITA_CORE)
+    where = {(w.src, w.dst): (at, patches.wire_type(w, at))
+             for w, at in patches.crossing(spec, mem.render)}
+    assert where == {("scene", "warp.image"): (patches.INTO, "image"),
+                     ("warp", "doublevision.image"): (patches.INSIDE, "image"),
+                     ("doublevision", "fractals.image"): (patches.INSIDE, "image"),
+                     ("fractals", "tripcolour.image"): (patches.OUT, "image")}
+    m = patches._Members(("acid",), mods=(2,), lfos=(5,), macros=(1,))
+    assert patches.side(m, "cc:0:48", "fx.acid.speed") == patches.RIG
+    assert patches.side(m, "lfo:0", "fx.acid.speed") == patches.INTO      # a host LFO
+    assert patches.side(m, "lfo:4", "view.bright") == patches.OUT          # its own, out
+    assert patches.side(m, "mod:2", "fx.acid.mix") == patches.INSIDE
+    assert not patches.touches(m, "cc:0:48", "view.bright")
+    assert patches.sub_side(m, "macro.1", "fx.acid.mix") == patches.INSIDE
+    assert patches.sub_side(m, "macro.1", "view.bright") == patches.OUT
+    assert patches.sub_side(m, "macro.4", "fx.acid.mix") == patches.INTO
+    assert patches.sub_side(m, "macro.4", "view.bright") is None
+    assert patches.input_side(m, "mod.2", "lfo:4") == patches.INSIDE
+    assert patches.input_side(m, "mod.2", "hand:right.y") == patches.RIG
+    assert patches.input_side(m, "mod.2", "lfo:0") == patches.INTO
+    assert patches.input_side(m, "mod.7", "lfo:4") == patches.OUT
+    assert patches.input_side(m, "mod.7", "lfo:0") is None
+
+
 # ---------------------------------------------------------------- the library
 
 @pytest.fixture()

@@ -557,23 +557,23 @@ def read(doc: Mapping) -> Patch:
 
     for r in (*routes, *desk):
         src, tgt = r.get("source"), r.get("target")
-        own_src = m.own_lane(src)
-        if not own_src and _lane(src) is None:
+        where = side(m, src, tgt)
+        if where == RIG:
             rig.append(r)                         # a knob, a hand, a band: verbatim
-        elif not own_src:
+        elif where == INTO:
             value_port(to=tgt, was=src, row=r)    # a host lane onto a member
-        elif not m.owns(tgt):
+        elif where == OUT:
             value_port(**{"from": src}, was=tgt, row=r)   # a member lane onto a host param
     for mid, mac in macros.items():
         for s in mac.get("subs") or ():
             base = s.get("base") if isinstance(s, Mapping) else None
-            if isinstance(base, str) and not m.owns(base):
+            if isinstance(base, str) and sub_side(m, mid, base) == OUT:
                 value_port(**{"from": mid}, was=base)
     for mod in mods:
         ins = mod.get("in")
         ins = [ins] if isinstance(ins, str) else list(ins or ())
         for i, a in enumerate(ins):
-            if a and _lane(a) is not None and not m.own_lane(a):
+            if a and input_side(m, mod.get("id"), a) == INTO:
                 value_port(to=f"{mod.get('id')}.in{i + 1}", was=a)
     layout = {}
     for cid, xy in (doc.get("layout") or {}).items():
@@ -727,6 +727,144 @@ def check(doc: Any) -> list[str]:
     return out
 
 
+# ---------------------------------------------------------------- the boundary
+#
+# Plan 40 T2: the one classifier of what crosses a region's edge. `lift`
+# cuts a patch with it and `read` classifies a file's rows with it; the
+# GRAPH page's group node (`graphview.VGroup`) draws a group's boundary
+# with it — so a group folded on the canvas shows exactly the pins and
+# rows a patch saved from it would have as ports and rig rows.
+
+# where a cable sits against a region: both ends inside; from the rig (a
+# knob, a hand, a band) onto a member; from the host onto a member (a host
+# lane, a host macro, a picture into a member's port); from a member out
+# to the host
+INSIDE, RIG, INTO, OUT = "inside", "rig", "into", "out"
+NESTED_WORDS = "{name} is a group: a group holds nodes, not groups; left out"
+
+
+def select(spec: G.GraphSpec | None, table, node_ids: Iterable[str]
+           ) -> tuple[_Members, list[str]]:
+    """The members a region of GRAPH canvas ids may hold, and, in words,
+    every id it may not (P1's rule — `lift`'s, and the GRAPH page's Group):
+    a frame singleton, an output, the camera or a cloud, a media channel,
+    the sequencer, a lane envelope, a node the section lacks, a modifier
+    the table lacks, a copy without its original, a group (no nesting),
+    any other canvas id (a device, the analyzer: the rig's). Pure."""
+    refused: list[str] = []
+    names = spec_names(spec)
+    render: list[str] = []
+    voices: dict[str, list[int]] = {MOD: [], LFO: [], ENV: [], MACRO: []}
+    mods_held = {m.id for m in getattr(table, "modifiers", ())}
+    for nid in dict.fromkeys(node_ids):
+        if nid.startswith("render:"):
+            name = nid[len("render:"):]
+            why = held_words(name)
+            if why is None and name not in names:
+                why = NO_NODE_WORDS.format(name=name)
+            if why is not None:
+                refused.append(why)
+            else:
+                render.append(name)
+            continue
+        vo = _voice(nid)
+        if nid == "seq" or nid.startswith("seq:"):
+            refused.append(SEQ_WORDS)
+        elif re.fullmatch(r"group\.\d+", nid):
+            refused.append(NESTED_WORDS.format(name=nid))
+        elif vo is None:
+            refused.append(RIG_WORDS.format(name=nid))
+        elif vo[0] == ENV and vo[1] in LANE_ENVS:
+            refused.append(LANE_ENV_WORDS.format(name=nid, first=FIRST_ENV))
+        elif vo[0] == MOD and nid not in mods_held:
+            refused.append(NO_NODE_WORDS.format(name=nid))
+        else:
+            voices[vo[0]].append(vo[1])
+    entries = {entry_name(e): e for e in (spec.to_json().get("nodes", []) if spec else [])}
+    for name in list(render):
+        e = entries.get(name)
+        if e is not None and e.get("kind") == "copy" and e.get("of") not in render:
+            refused.append(COPY_WORDS.format(name=name, of=e.get("of")))
+            render.remove(name)
+    return _Members(tuple(render), tuple(sorted(voices[MOD])), tuple(sorted(voices[LFO])),
+                    tuple(sorted(voices[ENV])), tuple(sorted(voices[MACRO]))), refused
+
+
+def crossing(spec: G.GraphSpec | None, render: Iterable[str]
+             ) -> list[tuple[G.Wire, str]]:
+    """Every wire of `spec` with an end on a node of `render`, and where it
+    sits: `INSIDE` (both ends members: one of the patch's own wires),
+    `INTO` (into a member's port from outside: an inlet port) or `OUT`
+    (from a member into a port outside: an outlet port). A pin is its node
+    (`segment.2.fg` is `segment.2`'s)."""
+    held = set(render)
+    out: list[tuple[G.Wire, str]] = []
+    for w in (spec.all_wires() if spec is not None else ()):
+        a, b = _node_of(w.src) in held, w.node in held
+        if a and b:
+            out.append((w, INSIDE))
+        elif b:
+            out.append((w, INTO))
+        elif a:
+            out.append((w, OUT))
+    return out
+
+
+def wire_type(w: G.Wire, where: str) -> str:
+    """The type a crossing wire carries at the region's edge: an inlet's the
+    member port's (`WIRED_TAKES`), an outlet's the member's make."""
+    if where == INTO:
+        return G.WIRED_TAKES.get(_kind(w.node) or "", {}).get(w.port, G.IMAGE)
+    return G.WIRED_MAKES.get(_kind(w.src) or "") or G.IMAGE
+
+
+def touches(members: _Members, source: Any, target: Any) -> bool:
+    """Does a row from `source` onto `target` touch the region — land on a
+    member's param, or leave a member's lane?"""
+    return members.owns(target) or members.own_lane(source)
+
+
+def side(members: _Members, source: Any, target: Any) -> str:
+    """Where a route or desk row sits against the region (`read`'s rule):
+    `RIG` — its source is no lane, the absolute address it is (a knob, a
+    hand axis, an audio band); `INTO` — a lane the region does not hold
+    (a host LFO) onto it; `OUT` — a member's lane onto a param the region
+    does not hold; else `INSIDE`. Ask `touches` first: a row that touches
+    nothing of the region is none of these."""
+    own_src = members.own_lane(source)
+    if not own_src and _lane(source) is None:
+        return RIG
+    if not own_src:
+        return INTO
+    if not members.owns(target):
+        return OUT
+    return INSIDE
+
+
+def sub_side(members: _Members, mid: Any, pid: Any) -> str | None:
+    """Where macro `mid`'s subscriber on param `pid` (a base's param, or
+    the target of the route a depth scales) sits: `INSIDE`, `OUT` (a member
+    macro onto a host param: a host port), `INTO` (a host macro onto a
+    member: the preset's, `HOST_MACRO_WORDS` at a lift); None when it
+    touches nothing of the region."""
+    own_m, own_p = _macro_n(mid) in members.macros, members.owns(pid)
+    if own_m:
+        return INSIDE if own_p else OUT
+    return INTO if own_p else None
+
+
+def input_side(members: _Members, mid: Any, addr: Any) -> str | None:
+    """Where modifier `mid`'s input reading `addr` sits: a member
+    modifier's input from its own lane `INSIDE`, from a rig source `RIG`,
+    from a host lane `INTO`; a host modifier reading a member's lane
+    `OUT`; None when it touches nothing of the region."""
+    own_m = modmod.number(mid) in members.mods
+    own_lane = members.own_lane(addr)
+    if own_m:
+        return INSIDE if own_lane else RIG if _lane(addr) is None else INTO
+    return OUT if own_lane else None
+
+
 # ---------------------------------------------------------------- lift
 
 def _snapshot_entry(m: modmod.Modifier, values: Mapping[str, Any]) -> dict:
@@ -771,41 +909,9 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
     from a host lane onto a member, is kept with the host's end as it is
     (a host port, derived at `read`). `values` holds only the members'
     params (D5)."""
-    refused: list[str] = []
-    names = spec_names(spec)
-    render: list[str] = []
-    voices: dict[str, list[int]] = {MOD: [], LFO: [], ENV: [], MACRO: []}
-    mods_held = {m.id for m in getattr(table, "modifiers", ())}
-    for nid in dict.fromkeys(node_ids):
-        if nid.startswith("render:"):
-            name = nid[len("render:"):]
-            why = held_words(name)
-            if why is None and name not in names:
-                why = NO_NODE_WORDS.format(name=name)
-            if why is not None:
-                refused.append(why)
-            else:
-                render.append(name)
-            continue
-        vo = _voice(nid)
-        if nid == "seq" or nid.startswith("seq:"):
-            refused.append(SEQ_WORDS)
-        elif vo is None:
-            refused.append(RIG_WORDS.format(name=nid))
-        elif vo[0] == ENV and vo[1] in LANE_ENVS:
-            refused.append(LANE_ENV_WORDS.format(name=nid, first=FIRST_ENV))
-        elif vo[0] == MOD and nid not in mods_held:
-            refused.append(NO_NODE_WORDS.format(name=nid))
-        else:
-            voices[vo[0]].append(vo[1])
+    members, refused = select(spec, table, node_ids)
+    render = list(members.render)
     entries = {entry_name(e): e for e in (spec.to_json().get("nodes", []) if spec else [])}
-    for name in list(render):
-        e = entries.get(name)
-        if e is not None and e.get("kind") == "copy" and e.get("of") not in render:
-            refused.append(COPY_WORDS.format(name=name, of=e.get("of")))
-            render.remove(name)
-    members = _Members(tuple(render), tuple(sorted(voices[MOD])), tuple(sorted(voices[LFO])),
-                       tuple(sorted(voices[ENV])), tuple(sorted(voices[MACRO])))
     # the lowest ids, as if the patch were alone
     rn = _Renamer(members)
     by_base: dict[str, list[int]] = {}
@@ -831,24 +937,20 @@ def lift(spec: G.GraphSpec | None, table, values: Mapping[str, Any],
     nodes.sort(key=lambda e: entry_name(e) or "")
     wires, ports = [], []
     ins = outs = 0
-    held = set(render)
-    for w in (spec.all_wires() if spec is not None else ()):
-        a, b = _node_of(w.src) in held, w.node in held
-        if a and b:
+    for w, where in crossing(spec, render):
+        if where == INSIDE:
             wires.append(rn.wire(w.to_json()))
-        elif b:
+        elif where == INTO:
             ins += 1
-            typ = G.WIRED_TAKES.get(_kind(w.node) or "", {}).get(w.port, G.IMAGE)
-            ports.append({"id": _join("in", ins), "type": typ, "to": rn.dst(w.dst),
-                          "was": w.src})
-        elif a:
+            ports.append({"id": _join("in", ins), "type": wire_type(w, where),
+                          "to": rn.dst(w.dst), "was": w.src})
+        else:
             outs += 1
-            typ = G.WIRED_MAKES.get(_kind(w.src) or "") or G.IMAGE
-            ports.append({"id": _join("out", outs), "type": typ, "from": rn.src(w.src),
-                          "was": w.dst})
+            ports.append({"id": _join("out", outs), "type": wire_type(w, where),
+                          "from": rn.src(w.src), "was": w.dst})
     # the rows: every one that touches a member
     routes = [rn.row(b.to_json()) for b in table.routes()
-              if members.owns(b.target) or members.own_lane(b.source)]
+              if touches(members, b.source, b.target)]
     desk = [rn.row(_desk_row(b)) for b in table.desk() if members.owns(b.target)]
     mods = [rn.modifier(_snapshot_entry(m, values)) for m in getattr(table, "modifiers", ())
             if modmod.number(m.id) in members.mods]
@@ -1218,5 +1320,7 @@ def is_rig_source(addr: str) -> bool:
     return _lane(addr) is None
 
 
-__all__ = ["KIND", "SCHEMA", "Conflict", "Host", "Landing", "Patch", "check", "entry_name",
-           "held_words", "is_rig_source", "lift", "read", "slug", "spawn", "spec_names"]
+__all__ = ["INSIDE", "INTO", "KIND", "OUT", "RIG", "SCHEMA", "Conflict", "Host", "Landing",
+           "Patch", "check", "crossing", "entry_name", "held_words", "input_side",
+           "is_rig_source", "lift", "read", "select", "side", "slug", "spawn", "spec_names",
+           "sub_side", "touches", "wire_type"]

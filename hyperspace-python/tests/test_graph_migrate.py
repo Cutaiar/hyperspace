@@ -241,7 +241,7 @@ def test_v6_is_refused_by_the_ladder_below(tmp_path):
     lib = app.lib
     assert lib.read("presets", "six")["schema"] == M.WIRED_SCHEMA
     kinds = lib._kinds
-    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7)
+    assert preset.VERSIONS == (2, 3, 4, 5, 6, 7, 8)   # (plan 40 T2: /8, a /7 with groups)
     try:
         kinds["presets"] = replace(kinds["presets"], versions=(2, 3, 4, 5))
         with pytest.raises(LibraryError, match="is not a hyperspace.preset"):
