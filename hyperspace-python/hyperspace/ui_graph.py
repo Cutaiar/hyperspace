@@ -222,6 +222,12 @@ BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # — and ⌘ with them zooms. GLFW gives a trackpad's scroll as a tenth of
 # its pixels, so 10 px a unit follows the fingers; a mouse's notch is one unit
 PAN_PX = 10.0
+# plan 37 C1 (P1): a picture node's body is the picture it makes — its
+# thumbnail (`outputs.PreviewTextures`) in a box at the node's width
+# (`graphview.THUMB_H` tall), fitted whole; a geometry's scene picture is
+# drawn at `FAINT_PIC` of its brightness (`graphview.THUMB_FAINT`)
+FAINT_PIC = 0.4
+THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
 
 
 # ---------------------------------------------------------------- state and context
@@ -948,6 +954,12 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # what a new preset lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
     st["seen"] = (float(seen.x), float(seen.y))
+    # plan 37 C1: the canvas rect on screen this frame (what a thumbnail
+    # is wanted for), and where the thumbnails come from
+    far = ed.screen_to_canvas(imgui.ImVec2(corner.x + size.x, corner.y + size.y))
+    st["seen_rect"] = (st["seen"], (float(far.x), float(far.y)))
+    st["thumbs"] = getattr(getattr(panel, "renderer", None), "thumbs", None)
+    st["preview"] = getattr(panel, "preview", None)
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     _place(panel, st, view)
     lay = st["auto"][1]
@@ -957,6 +969,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
+    _want_thumbs(st, view)              # plan 37 C1: after the nodes, their sizes known
     _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
         ids = lay.idle.get(area, [])
@@ -1240,8 +1253,11 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     if has_out:
         imgui.same_line(NODE_W - PIN)
         _stub(st, graphview.stub_out(n.id), ed.PinKind.output, n.wires > 0, drawn)
+    if n.thumb is not None:                     # plan 37 C1 (D2): collapsed or not
+        _thumb(st, n)
     if shut:                                    # its title and at most five lines
-        for line in graphview.summary(n):
+        # (a picture node's lines are its hover's: plan 37 P1)
+        for line in (graphview.summary(n) if n.thumb is None else ()):
             imgui.text_disabled(ui.fit_text(line, NODE_W))
         imgui.dummy(imgui.ImVec2(NODE_W, 0))
         imgui.pop_id()
@@ -1270,6 +1286,121 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     imgui.dummy(imgui.ImVec2(NODE_W, 0))
     imgui.pop_id()
     ed.end_node()
+
+
+# ---------------------------------------------------------------- plan 37 C1: the thumbnails
+
+def thumb_name(n: graphview.VNode) -> str:
+    """The render node a canvas node's thumbnail is kept under: its render
+    node's name (a channel's or a copy's own), else the canvas id's."""
+    return getattr(n.ref, "name", None) or n.id.partition(":")[2]
+
+
+def by_preview(n: graphview.VNode) -> bool:
+    """Is node `n`'s picture output 1's — the page's `outputs.Preview`, the
+    backdrop's own tap, not a thumbnail?"""
+    return n.thumb == graphview.WINDOW_PIC and thumb_name(n) == "output.1"
+
+
+def on_screen(rect, pos, size) -> bool:
+    """Does a node at `pos`, `size` big (canvas units) meet `rect`
+    ((left, top), (right, bottom)) — any part of it?"""
+    (x0, y0), (x1, y1) = rect
+    return (pos[0] < x1 and pos[0] + max(size[0], 1.0) > x0
+            and pos[1] < y1 and pos[1] + max(size[1], 1.0) > y0)
+
+
+def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
+    """The thumbnails this frame wants (name → how, `graphview.THUMBS`): every
+    picture node drawn (`drawn_node`: not hidden by **preset only**, not
+    idle off the canvas) and on screen (`on_screen`, `where(node id)` its
+    (position, size)) — output 1 is the page's `Preview`, never one. A node
+    off screen, hidden or collapsed off the canvas is never wanted, so it
+    costs nothing."""
+    rect = st.get("seen_rect")
+    out: dict[str, str] = {}
+    for n in view.nodes:
+        if n.thumb is None or by_preview(n) or not drawn_node(st, n):
+            continue
+        if rect is not None and not on_screen(rect, *where(n.id)):
+            continue
+        out[thumb_name(n)] = n.thumb
+    return out
+
+
+def _where(st: dict, nid: str):
+    k = ed.NodeId(_id(st, "n:" + nid))
+    p, sz = ed.get_node_position(k), ed.get_node_size(k)
+    h = sz.y if sz.y > 0 else graphview.HEAD_H + graphview.THUMB_H
+    return (float(p.x), float(p.y)), (float(sz.x) if sz.x > 0 else NODE_W, float(h))
+
+
+def _want_thumbs(st: dict, view: graphview.View) -> None:
+    """Ask the renderer for this frame's thumbnails (`thumb_wants`), and
+    output 1's picture when its node is on screen; each picture node's
+    `picture` the size its thumbnail was copied from."""
+    th = st.get("thumbs")
+    if th is None:
+        return
+    want = thumb_wants(st, view, lambda nid: _where(st, nid))
+    if want:
+        th.want(want)
+    for n in view.nodes:
+        if n.thumb is not None:
+            n.picture = th.size_of(thumb_name(n))
+    pv = st.get("preview")
+    rect = st.get("seen_rect")
+    if pv is not None and any(by_preview(n) and drawn_node(st, n)
+                              and (rect is None or on_screen(rect, *_where(st, n.id)))
+                              for n in view.nodes):
+        pv.want()
+
+
+def thumb_of(st: dict, n: graphview.VNode):
+    """(the texture, the shade it is drawn at) for node `n`'s body this
+    frame: its thumbnail and `PreviewTextures.shade` (1 fresh, dimmed,
+    0 black) — a geometry's at `FAINT_PIC` of that; output 1's the
+    `Preview`'s picture. (None, 0) with none yet: a black box."""
+    if by_preview(n):
+        pv = st.get("preview")
+        tex = getattr(pv, "tex", None)
+        return (tex, 1.0) if tex is not None else (None, 0.0)
+    th = st.get("thumbs")
+    if th is None:
+        return None, 0.0
+    name = thumb_name(n)
+    k = th.shade(name)
+    if n.thumb in graphview.THUMB_FAINT:
+        k *= FAINT_PIC
+    return th.get(name), k
+
+
+def _thumb(st: dict, n: graphview.VNode) -> None:
+    """Node `n`'s picture as its body: a box at the node's width,
+    `graphview.THUMB_H` tall, black, the thumbnail fitted whole in it
+    (`backdrop_rect`) at its shade; GL's rows, so drawn upside down in v
+    as the backdrop is."""
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(NODE_W, graphview.THUMB_H))
+    p1 = imgui.ImVec2(p0.x + NODE_W, p0.y + graphview.THUMB_H)
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
+    tex, k = thumb_of(st, n)
+    if tex is None or k <= 0.0 or getattr(tex, "glo", 0) == 0:
+        return
+    a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
+    dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+
+
+def thumbnail_line(panel) -> str:
+    """The SYSTEM page's line for the thumbnails (plan 37 C1): "thumbnails ·
+    N copied · M kept" — the copies the last frame made and the nodes
+    held; "" with no renderer that keeps any."""
+    th = getattr(getattr(panel, "renderer", None), "thumbs", None)
+    if th is None or not hasattr(th, "count"):
+        return ""
+    return f"thumbnails · {th.count} copied · {th.kept} kept"
 
 
 def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
