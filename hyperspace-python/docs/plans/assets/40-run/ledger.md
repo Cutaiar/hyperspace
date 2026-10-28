@@ -29,9 +29,9 @@ See `decisions.md`.
 | task | branch | base | status | tests | review | rows / checks |
 |---|---|---|---|---|---|---|
 | T0 the word (D1) | `plan-40-t0` | f10f281 | **merged** 51106e1 (PR #269) | fast 4122/2 skipped, goldens 136 | controller | — |
-| T1 patches.py + DocKind | `plan-40-t1` | 51106e1 | dispatched | | | |
-| T4 devices.wants + arrival | `plan-40-t4` | 51106e1 | dispatched | | | |
-| T5 fx modules retired | `plan-40-t5` | 51106e1 | dispatched | | | |
+| T1 patches.py + DocKind | `plan-40-t1` | 51106e1 | **merged** 44eb753 (PR #274) | fast 4167/2 skipped, goldens 136 | reviewed, 2 Important fixed | 471x–479x drafts, AK.1–4 |
+| T4 devices.wants + arrival | `plan-40-t4` | 51106e1 | **merged** b0b23f3 (PR #272) | fast 4139/2 skipped, goldens 136 | reviewed, 1 Important fixed | 47a–47f drafts |
+| T5 fx modules retired | `plan-40-t5` | 51106e1 | **merged** 3094691 (PR #271) | fast 4097/2 skipped, goldens 136 | controller | rulings 9–11 |
 | T2 the group node | | after T1 and main merged | waiting | | | |
 | T3 save / browse / spawn | | after T2 | waiting | | | |
 | review | | after T5 | waiting | | | |
@@ -64,3 +64,90 @@ See `decisions.md`.
   Pushed. PR #269 closes by the merge.
 - **T1, T4, T5** dispatched in parallel (Opus, own worktrees, branches
   `plan-40-t1` / `plan-40-t4` / `plan-40-t5` off 51106e1).
+- **T5** DONE_WITH_CONCERNS → PR #271 (`plan-40-t5`, 305499a, 6591744).
+  21 files, −712/+159: the six fx files, `Presets._fx_module` /
+  `_watch_fx_modules`, `graphmigrate.module_runs` and its helpers gone;
+  `library.RETIRED_MODULES = ("fx",)`; the FX page's module strip hidden
+  through `ui_presets.strip` (`ui_fx.py` untouched); the party generator's
+  fx values inline (factory presets byte-identical); `tools/fx_shots.py`
+  and an orphan palette fixture outside the list, both justified. Fast
+  4097/2 skipped (−25 removed tests, +2), goldens 136, `--all` 4318 + 1
+  load-flaky (`test_dream::test_end_to_end_offscreen`, passes alone).
+  Rulings 9–11 in `decisions.md`. Merged `--no-ff` as **3094691**;
+  controller's fast tier: see below.
+  Controller's fast tier on 3094691: **4097 passed, 2 skipped** (45 s).
+  Pushed.
+- **T4** DONE_WITH_CONCERNS → PR #272 (`plan-40-t4`, 20aec1a, 6aea053).
+  8 files, +858: `devices.wants` / `Want` / `wants_for` / `want_words`,
+  `SCHEME_ROLE` moved to `devices`, `routing.row_words`, the registry's
+  status-change event + `said` hook (`app.py` 2 lines), the chip on GRAPH
+  and the PRESET strip, the SYSTEM lines; `ui_graph.py` + `graphview.py`
+  34 changed lines; Dylan's files untouched. Fast 4137/2 skipped (+15),
+  goldens 136, `--all` 4358 + 1 timing-flaky (`test_ndi_out_never_blocks`,
+  passes serially). Concerns: with the APC40 unplugged every desk preset
+  shows "1 device missing" on the laptop (correct, constant); the PRESET
+  strip chip may crowd a narrow panel. **Reviewer dispatched**
+  (`briefs/review-t4.md`). Integration branch now 07885a2 with **PR #270
+  open** to `main` (not merged): T2 waits.
+- **T1** DONE_WITH_CONCERNS → PR #274 (`plan-40-t1`, 6677797). 7 files,
+  +1923: `patches.py` (1155 lines: `Patch`, `Landing`, `Host`, `Conflict`,
+  `read`, `check`, `lift` → `(doc, refused)`, `spawn`), the `PATCHES`
+  `DocKind` + `read_patch` / `save_patch`, `hide` / `rename` extended to
+  the kind (`hidden.json` gains a `"patches"` key, written only when one
+  is hidden), `hotreload.MODULES` + `patches`, fixture
+  `tests/fixtures/patches/acid-wash.json` (force-added). Departures from
+  the spec, each reasoned: `mod:1` not `mod:0` in the fixture (a `mod:<n>`
+  lane is `mod.<n>`); patch envelopes start at `env.6`; the "main run"
+  is `run_back` into `output.all.image` (`run_of` is empty in a /7 preset;
+  16 factory presets have no run and are named, 9 round-trip). Fast
+  4163/2 skipped (+41), goldens 136, `--all` 4384 + 1 timing-flaky
+  (`test_ndi_out_never_blocks`, passes alone). Concern: spawning a cut
+  back into its own preset lists every shared hand axis as a conflict
+  (correct by the one-axis-one-param rule; a noisy sheet). **Reviewer
+  dispatched** (`briefs/review-t1.md`).
+- **T4 review** (`reports/t4-review.md`): compliant; Important: `wants`
+  calls `registry.lines()` per call, which rebuilds every MidiDevice's Port
+  layout (0.23 of 0.29 ms); minors (a register row for the extra
+  role-resolution steps, the retry path's per-device `_changed`, two
+  `graphview` comment edits, one empty assert). Sent back to the T4
+  implementer for fixes.
+- **T4 fixes** DONE (5189232): `_rig` reads each device's `status`
+  directly (no Port layouts; 0.29 → 0.060 ms per call), `ui_graph.panel_wants`
+  once a frame shared by the head, the strip and SYSTEM; row 47f for the
+  role-resolution order; the retry path's per-device `_changed` noted; the
+  `graphview` comment block restored; the empty assert dropped; a literal
+  count in the coming-back test. Fast 4139/2 skipped, goldens 136. Merged
+  `--no-ff` as **b0b23f3** (on top of T5's 3094691, clean); controller's
+  fast tier: see below.
+  Controller's fast tier on b0b23f3: **4114 passed, 2 skipped** (4097 +
+  T4's 17). Pushed.
+- **T1 review** (`reports/t1-review.md`): the classifier, renames, D5,
+  the kind and the round trip approved; the four spec departures judged
+  right; **two Important**: (1) `check` let a crossing wire through when a
+  port "covered" it and `spawn` landed it — an automatic attachment (D2);
+  (2) with a full bank a non-spawned voice's lane leaked into modifier
+  inputs and depth subs (the test could not fail). Minors: `Host.of`
+  without `banks`, `room` vs `modbank.MAX_ID`, 474x must say a one-owner
+  source read through a modifier is no conflict (the spec's D3 example),
+  the dormant-row revival sentence, a D5 filter in `spawn`, unused
+  `Host.params`. Sent back to the T1 implementer.
+- **T1 fixes** DONE (4ac3a1d): `check` refuses any wire with an end
+  outside the patch ("wire scene → acid.image crosses the edge: a port
+  says it") and `spawn` lands only the patch's own wires whatever the file
+  says (D2); a voice that does not spawn (bank full or past
+  `modbank.MAX_ID`) reads nothing — its modifier input blanked and named
+  in the note, its subscribers dropped; `Host.of` without banks starts
+  past every voice id the table names; `spawn` keeps only members' values
+  (D5 without `check`); `Host.params` gone; 474x / AK.1 say a hand axis
+  read through a modifier is no conflict (the spec's D3 example, for the
+  owner) and that the lowest-free instance can wake dormant host rows.
+  `patches.py` now also imports `modbank`, `lfo`, `envelope` constants
+  (leaves; the AST test holds). Fast 4167/2 skipped (+45), goldens 136;
+  `--all` not re-run by the implementer — the controller runs it on the
+  merge. Merged `--no-ff` as **44eb753** (clean beside T5's `library.py`).
+  Controller's gates on 44eb753: fast tier **4159 passed, 2 skipped**;
+  `--all` **4379 passed, 2 skipped, 2 failed** — `test_migrate_library::
+  test_the_real_picture_check_passes_an_old_preset` and `test_media_core::
+  test_bad_file_is_an_error`, both pass serially (load-flaky, pre-existing);
+  goldens **136 passed**, none moved. Pushed. T0, T1, T4, T5 are on
+  `plan-40-build`; T2 waits for PR #270 → `main`.

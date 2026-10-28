@@ -40,3 +40,19 @@ reverses it.
    references) and `30-shader-nodes.md` (two `patch.py`) — because the
    common brief forbids editing them outside the docs task. T6's brief
    names them.
+9. **The FX page's module-preset strip is hidden** (T5's 47a). The spec's
+   P5 says nothing on the FX page referred to the module presets; it did
+   (`ui_fx.page` → `_section("effects", "fx")` draws the strip: name ·
+   save · as… · reset). D6 retires the mechanism, D10 keeps the page: the
+   strip *is* the mechanism's UI, so `ui_presets.strip` draws nothing for
+   a retired group and `ui_fx.py` is not edited. *Reverse:* one condition.
+   T6 corrects P5's sentence and says it in "as built".
+10. **A retired module group is named** (`library.RETIRED_MODULES`), not
+    inferred from "no folder" (T5's 47b): `view`, `rot`, `camera` have no
+    factory folder and keep their strips. An old `<library>/fx/` folder on
+    the Drive is ignored, its files untouched. *Reverse:* empty the tuple.
+11. **The party generator keeps the three fx families' values inline**
+    (`preset.ACID_FX` / `MANDALA_FX` / `NOITA_FX`, T5's 47d) so
+    `write_factory` is byte-identical; `party-acid` / `party-mandala`'s
+    notes still say "fx module preset" — preset data, not changed by this
+    run. *Reverse:* reword at the next factory regeneration.
