@@ -5,7 +5,9 @@ who may write a parameter, and which test holds each boundary.
 How to run, tune and change things is in [`ENGINEERING.md`](ENGINEERING.md);
 the reasons behind the calls are in [`DECISIONS.md`](DECISIONS.md) and
 [`DECISION-REGISTER.md`](DECISION-REGISTER.md); what is known to be wrong
-is in [`AUDIT-2026-09.md`](AUDIT-2026-09.md).
+is in [`AUDIT-2026-09.md`](AUDIT-2026-09.md); the shape of the code (types, contracts,
+where the big files split, how far the UI is from decoupled) is in
+[`AUDIT-STRUCTURE-2026-10.md`](AUDIT-STRUCTURE-2026-10.md).
 
 Two questions this file answers on its own:
 
