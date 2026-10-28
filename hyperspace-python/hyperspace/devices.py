@@ -91,6 +91,7 @@ sends (``n sinks``) before its last message.
 
 from __future__ import annotations
 
+import functools
 import math
 import sys
 import time
@@ -111,6 +112,17 @@ STATUSES = ("connected", "lost", "off")     # …and "error: <why>"
 # fed by the analyzer, the LFOs, the envelopes and the sequencer (plan 31),
 # not a device
 BUILTIN_SCHEMES = ("lane", "lfo", "env", "seq")
+# plan 40 T4: the schemes no device feeds, which `wants` never names — the
+# built-in lanes, the modifiers' outputs (modifiers.SCHEME, restated: this
+# module imports nothing of the app at its top) and the keyboard
+NO_DEVICE_SCHEMES = (*BUILTIN_SCHEMES, "mod", "key")
+# a role-less row's role when no listed device publishes its scheme: the
+# rig's usual name for the kind behind it (config.py's example list); a
+# scheme not here is a role of its own (an OSC device's scheme is its
+# role). Plan 28 N5's table, moved here from graphview by plan 40 T4
+# (graphview reads it from here: the placeholder node keeps its words)
+SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
+               "cc": "apc40", "note": "apc40", "pitch": "apc40"}
 
 
 def retry_after(misses: int) -> float:
@@ -1285,7 +1297,19 @@ class DeviceRegistry:
     `path` is the config.toml to watch, `clock` the retry clock
     (monotonic, as midi.Ports'). `listeners` are called after any open
     or close, so the host can re-point what holds an adapter (the panel,
-    the ghost renderer)."""
+    the ghost renderer).
+
+    Plan 40 T4, the arrival: `poll` compares each device's `status` with
+    last frame's; on a change it calls the listeners once for the frame
+    and `said(role, before, after)` once per device that changed — a hook
+    the app sets to the footer line (`arrival`: "apc40 connected — 6
+    controls live"), a no-op here. `apply` says an added device the same
+    way. The status is only read: the hardware is polled once, by its
+    device, as before."""
+
+    def said(self, role: str, before: str | None, after: str) -> None:
+        """The status-change hook (plan 40 T4): a no-op until the app sets
+        an instance's own (`rig.said = …`, app.py)."""
 
     def __init__(self, entries: list[dict] | None = None, ctx: Context | None = None, *,
                  devices: list | None = None, path: Path | None = None,
@@ -1308,6 +1332,9 @@ class DeviceRegistry:
         self._retry: dict[str, tuple[int, float]] = {}   # role → (misses, next try)
         self._frames = 0
         self._mtime: float | None = self._stat()
+        # plan 40 T4: role → the status last seen (`_statuses`); a role first
+        # seen is stored without a word — the launch says nothing
+        self._status: dict[str, str] = {}
 
     # ---- the list ----
 
@@ -1580,6 +1607,7 @@ class DeviceRegistry:
         fails is a note and `error: …`, the rest open."""
         for d in self.devices:
             self._open(d)
+        self._statuses(say=False)        # plan 40 T4: the launch is no change
         self._changed()
 
     def _close(self, d) -> None:
@@ -1626,18 +1654,76 @@ class DeviceRegistry:
         self._frames += 1
         if self._frames % WATCH_FRAMES == 0:
             self.watch()
+        told = False                    # plan 40 T4: the listeners, once a frame at most
         for d in list(self.devices):
             if d.role not in self._opened:
                 misses, at = self._retry.get(d.role, (0, 0.0))
                 if not (misses and self.clock() >= at and self._open(d)):
                     continue
                 self._changed()         # back: polled from this very frame
+                told = True
             if not self._guard(d, lambda d=d: d.poll(dt, now), clear=True):
                 continue                # a poll that raised delivers no rows this frame
             if learn is not None:
                 self._guard(d, lambda d=d: d.learn(learn))
             if router is not None:
                 self._guard(d, lambda d=d: d.act(router))
+        # plan 40 T4: after every device's poll, what changed is said; a
+        # hardware that came back inside its adapter (midi.Ports.retry →
+        # MidiIO._connected, which relit the desk already) tells the
+        # listeners here, once — or not again, when an open that succeeded
+        # above has told them this frame
+        if self._statuses() and not told:
+            self._changed()
+
+    def _statuses(self, say: bool = True) -> bool:
+        """Each listed device's `status` against the last seen (plan 40
+        T4): a change is stored and, with `say`, handed to `said` — True
+        when any role's changed. A role seen for the first time is stored
+        silently; a role no longer listed is forgotten (`_word`: an error
+        is no coming or going)."""
+        seen = self.__dict__.setdefault("_status", {})   # (a registry from before a hot reload)
+        changed = False
+        roles = set()
+        for d in list(self.devices):
+            roles.add(d.role)
+            now = self._word(d)
+            before = seen.get(d.role)
+            if now is None or before == now:
+                continue
+            seen[d.role] = now
+            if before is None:
+                continue
+            changed = True
+            if say:
+                self._say(d.role, before, now)
+        for role in [r for r in seen if r not in roles]:
+            del seen[role]
+        return changed
+
+    def _word(self, d) -> str | None:
+        """The status `_statuses` compares (plan 40 T4): ``connected``,
+        ``lost``, ``off`` as the device says them; an error on a device that
+        is open (a poll that raised, an adapter's own error) None — its
+        error line says it, and a step that raises every other frame must
+        not flap the listeners or the footer; an error on one that would
+        not open ``lost`` — the hardware is not there for the rows, and the
+        open that finally succeeds is then said as a connection."""
+        try:
+            st = str(d.status)
+        except Exception:  # noqa: BLE001 — a status never stops the frame
+            st = "error"
+        if not st.startswith("error"):
+            return st
+        return None if d.role in self._opened else LOST
+
+    def _say(self, role: str, before: str | None, after: str) -> None:
+        """`said`, behind a guard: the hook is the app's, and a broken one
+        is a note, never the frame's end."""
+        try:
+            self.said(role, before, after)
+        except Exception as e:  # noqa: BLE001
+            self._note(_err("devices", e))
 
     def feed(self, router) -> None:
         """The feed slot: every open device publishes its vectors."""
@@ -1689,6 +1775,7 @@ class DeviceRegistry:
         fresh = {d.role: d for d in make_all(new, self.ctx)}
         changed = False
         devices = []
+        arrived: list[str] = []         # plan 40 T4: added or reopened, said below
         for e in new:
             role = e["role"]
             kept = have.get(role)
@@ -1706,6 +1793,7 @@ class DeviceRegistry:
             else:
                 self._note(f"devices: {role} added")
             devices.append(fresh[role])
+            arrived.append(role)
             changed = True
         for role, d in have.items():
             self._close(d)
@@ -1719,5 +1807,267 @@ class DeviceRegistry:
             for d in devices:
                 if d.role not in self._opened:
                     self._open(d)
+            # plan 40 T4: an added device says what it brings, as hardware
+            # that comes back does ("leap connected — 3 rows live"); a
+            # reopened one only when its status moved
+            seen = self.__dict__.setdefault("_status", {})
+            for d in devices:
+                if d.role in arrived:
+                    before, after = seen.get(d.role), self._word(d)
+                    if after is None:
+                        continue
+                    seen[d.role] = after
+                    if before != after:
+                        self._say(d.role, before, after)
+            self._statuses(say=False)            # a role that left is forgotten
             self._changed()
         return changed
+
+
+# ---- what the loaded preset wants, and the arrival (plan 40 T4) ----
+#
+# The bindings on a device the rig lacks were never dropped (decision 11:
+# a performer row on a scheme no device feeds waits; a preset-layer desk
+# row is kept whatever is plugged in, and the desk relights from the table
+# when its port comes back). What was missing is the *saying*: which
+# devices the loaded preset wants and does not have, and a word when one
+# arrives. `wants` is that answer, pure over the table and the registry;
+# the GRAPH head's and the PRESET strip's chip, the SYSTEM page's lines,
+# a group node's status line (T2) and a spawn's notes (T3) all read it.
+
+CONNECTED, LOST, OFF, MISSING = "connected", "lost", "off", "missing"
+WANT_STATES = (CONNECTED, LOST, OFF, MISSING)
+# a want's state as a sentence says it ("apc40 (lost)", "leap (not in this rig)")
+STATE_WORDS = {CONNECTED: "connected", LOST: "lost", OFF: "off", MISSING: "not in this rig"}
+_MIDI = ("cc", "note", "pitch")             # routing.MIDI_SCHEMES, restated (no app import)
+WANT_ROWS_SHOWN = 8         # a line names this many rows, then "+ k more"
+
+
+@dataclass(frozen=True)
+class Want:
+    """One device role the loaded preset's rows name (plan 40 T4): `state`
+    is the registry's view this frame — ``connected`` (listed, live),
+    ``lost`` (listed, the hardware away, or in error), ``off`` (listed,
+    ``enabled = false``) or ``missing`` (no entry for the role: "not in this
+    rig"); `scheme` the first scheme a row of it names (``cc``, ``hand``);
+    `rows` those rows' sources in words, each once, in table order
+    ("K1", "right hand y" — routing.row_words)."""
+
+    role: str
+    state: str
+    scheme: str
+    rows: tuple[str, ...]
+
+    @property
+    def lacking(self) -> bool:
+        """Is the device not there to read the rows (any state but
+        ``connected``)?"""
+        return self.state != CONNECTED
+
+    @property
+    def count(self) -> str:
+        """"6 controls" for a MIDI desk, "3 rows" for anything else."""
+        n = len(self.rows)
+        noun = "control" if self.scheme in _MIDI else "row"
+        return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+@functools.lru_cache(maxsize=1024)
+def _desk_glyph(source: str) -> str | None:
+    """The APC40's glyph for a bare MIDI source ("cc:0:48" → "K1"), or None
+    — the on-screen desk's name, which every MIDI row of the APC40's
+    profile is given in words (cached: the chip asks every frame)."""
+    from . import apc40  # pure data (routing imports it too); no port is opened
+    return apc40.glyph(source)
+
+
+def _rig(registry, table) -> tuple[dict[str, str], str, dict[str, str], dict[str, str],
+                                   dict[str, str]]:
+    """What `wants` reads of the registry, once a call: role → status (its
+    `lines()`), the first MIDI role, the primaries, scheme → the first
+    listed device publishing it (off ones too), role → MIDI profile."""
+    if registry is None:
+        return {}, "", {}, {}, {}
+    status = {role: st for role, _kind, st, _n, _last in registry.lines()}
+    midi_roles = registry.midi_roles()
+    prim = registry.primaries()
+    listed: dict[str, str] = {}
+    profile: dict[str, str] = {}
+    for d in registry:
+        for s in getattr(d, "schemes", ()) or ():
+            listed.setdefault(s, d.role)
+        if getattr(d, "kind", "") == "midi":
+            profile[d.role] = str(getattr(d, "entry", {}).get("profile") or "apc40")
+    return status, midi_roles[0] if midi_roles else "", prim, listed, profile
+
+
+def _rows_of(table) -> list[tuple[str, str]]:
+    """(source, where it lands) for each row the loaded preset names a
+    device by: its enabled performer routes (target: the param), its
+    enabled preset-layer desk rows (the param) and its modifiers' inputs
+    (the modifier's id) — never a session row, which is the rig's."""
+    out: list[tuple[str, str]] = []
+    for b in getattr(table, "bindings", ()) or ():
+        if not b.enabled:
+            continue
+        if b.op in ("push", "position") or (b.is_midi and b.layer == "preset"):
+            out.append((b.source, b.target))
+    for m in getattr(table, "modifiers", ()) or ():
+        for src in m.inputs:
+            if src:
+                out.append((src, m.id))
+    return out
+
+
+def _lands(where: str, only) -> bool:
+    if only is None:
+        return True
+    if where in only:
+        return True
+    return any(where.startswith(f"{p}.") for p in only)
+
+
+def wants(table, registry, only=None) -> list[Want]:
+    """Every device role the loaded preset's rows name (plan 40 T4), in
+    table order, each with its state this frame and its rows in words.
+    A row's role is its ``@role`` qualifier; else, for ``cc:`` / ``note:``
+    / ``pitch:``, the first MIDI role (`DeviceRegistry.midi_roles`, the
+    table's `primary_role`, else ``apc40``); else the scheme's primary
+    (`primaries`), the first listed device publishing it (an off one
+    too), else `SCHEME_ROLE`'s usual name — the grey placeholder's rule
+    (graphview). A built-in scheme (`NO_DEVICE_SCHEMES`: ``lane``,
+    ``lfo``, ``env``, ``seq``, ``mod``, the keys) is no device's and never
+    named. `only`, when given, keeps the rows that land on those ids — a
+    param id, a modifier id, or an id a landing starts with (``fx.acid.2``
+    covers ``fx.acid.2.speed``): `wants_for`. Pure: reads the table and
+    the registry (`registry` None: a rig with nothing listed).
+
+    >>> [(w.role, w.state, w.rows) for w in wants(table, rig)]   # doctest: +SKIP
+    [('apc40', 'lost', ('K1', 'K2')), ('leap', 'missing', ('right hand y',))]
+    """
+    from .routing import base_scheme, row_words
+    status, midi_first, prim, listed, profile = _rig(registry, table)
+    table_profile = str(getattr(table, "profile", "") or "apc40")
+    by_role: dict[str, tuple[str, list[str]]] = {}
+    for source, where in _rows_of(table):
+        if not _lands(where, only):
+            continue
+        head = source.partition(":")[0]
+        scheme = base_scheme(head)
+        if scheme in NO_DEVICE_SCHEMES:
+            continue
+        _, at, q = head.partition("@")
+        if at and q:
+            role = q
+        elif scheme in _MIDI:
+            role = (midi_first or getattr(table, "primary_role", lambda: "")()
+                    or SCHEME_ROLE["cc"])
+        else:
+            role = prim.get(scheme) or listed.get(scheme) or SCHEME_ROLE.get(scheme, scheme)
+        # the desk's glyphs for an APC40's rows: a listed desk's own profile;
+        # a desk the rig lacks is the table's profile only when it is the
+        # first role (an unqualified row) — a qualified one's is unknown
+        prof = profile.get(role) if role in status else (
+            table_profile if not (at and q) else "")
+        names = _desk_glyph if scheme in _MIDI and prof == "apc40" else None
+        words = row_words(source, names)
+        got = by_role.get(role)
+        if got is None:
+            by_role[role] = (scheme, [words])
+        elif words not in got[1]:
+            got[1].append(words)
+    out = []
+    for role, (scheme, rows) in by_role.items():
+        st = status.get(role)
+        state = (MISSING if st is None else OFF if st == "off"
+                 else CONNECTED if st == "connected" else LOST)
+        out.append(Want(role, state, scheme, tuple(rows)))
+    return out
+
+
+def wants_for(table, registry, ids) -> list[Want]:
+    """The wants whose rows land on `ids` (plan 40 T4, for a group node,
+    T2): a collection of param ids and modifier ids, each covering the
+    ids under it — `wants(table, registry, only=ids)`.
+
+    >>> wants_for(table, rig, ["fx.acid.2", "mod.3"])            # doctest: +SKIP
+    [Want(role='apc40', state='lost', scheme='cc', rows=('K1', 'K2'))]
+    """
+    return wants(table, registry, only=frozenset(ids))
+
+
+def want_lines(ws, limit: int = WANT_ROWS_SHOWN) -> list[str]:
+    """One line per want whose device is not there: "apc40 (lost): K1, K2",
+    "leap (not in this rig): right hand y" — the first `limit` rows, then
+    "+ k more". Nothing for a connected want."""
+    out = []
+    for w in ws:
+        if not w.lacking:
+            continue
+        rows = list(w.rows[:limit])
+        more = len(w.rows) - len(rows)
+        said = ", ".join(rows) + (f", + {more} more" if more > 0 else "")
+        out.append(f"{w.role} ({STATE_WORDS[w.state]}): {said}")
+    return out
+
+
+def want_words(ws, limit: int = WANT_ROWS_SHOWN) -> str:
+    """The wants as a group node's status line says them (plan 40 T4):
+    "waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand
+    y"; "" when every device is there.
+
+    >>> want_words([Want("apc40", "lost", "cc", ("K1", "K2")),
+    ...             Want("leap", "missing", "hand", ("right hand y",))])
+    'waits for apc40 (lost): K1, K2 · leap (not in this rig): right hand y'
+    """
+    lines = want_lines(ws, limit)
+    return "waits for " + " · ".join(lines) if lines else ""
+
+
+def missing_chip(ws) -> str | None:
+    """The GRAPH head's and the PRESET strip's chip (plan 40 T4): "1 device
+    missing", "2 devices missing"; None when every wanted device is there."""
+    n = sum(1 for w in ws if w.lacking)
+    if not n:
+        return None
+    return f"{n} device{'' if n == 1 else 's'} missing"
+
+
+def wanted_lines(ws) -> list[str]:
+    """The SYSTEM page's lines under the device lines (plan 40 T4), one per
+    wanted role the rig lacks: "wanted by the preset: leap — not in this
+    rig; 3 rows wait", "wanted by the preset: apc40 — lost; 6 controls
+    wait". Nothing for a connected role, nothing when the preset wants
+    nothing."""
+    return [f"wanted by the preset: {w.role} — {STATE_WORDS[w.state]}; {w.count} wait"
+            for w in ws if w.lacking]
+
+
+def said_words(role: str, before: str | None, after: str, ws=()) -> str:
+    """The footer's line when `role`'s status moved from `before` to
+    `after` (plan 40 T4; `before` None: a device just added to
+    config.toml), counted from the wants `ws`:
+
+      lost → connected   "apc40 connected — 6 controls live"
+      off → connected    "leap on — 3 rows live"
+      → lost             "apc40 lost — 6 controls wait"
+      → off              "leap off"
+
+    No rows wanted: the connection alone ("apc40 connected"). A move into
+    an error says nothing here (the registry's note already does): ""."""
+    w = next((w for w in ws if w.role == role), None)
+    rows = w.count if w is not None and w.rows else ""
+    if after == CONNECTED:
+        head = f"{role} on" if before == OFF else f"{role} connected"
+        return f"{head} — {rows} live" if rows else head
+    if after == LOST:
+        return f"{role} lost — {rows} wait" if rows else f"{role} lost"
+    if after == OFF:
+        return f"{role} off"
+    return ""
+
+
+def arrival(table, registry, role: str, before: str | None, after: str) -> str:
+    """`said_words` with the wants of the moment (plan 40 T4): what the
+    app's `DeviceRegistry.said` hook hands the footer (app.py)."""
+    return said_words(role, before, after, wants(table, registry))

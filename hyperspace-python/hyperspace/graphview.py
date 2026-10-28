@@ -109,7 +109,7 @@ its place that expands to show them.
 Imports `routing`, `params`, `graph`, `modgraph`, `modifiers` — the device
 registry is handed in and read through `devices.Device`'s protocol
 (`role`, `kind`, `status`, `sources`, `schemes`), so nothing of
-`devices.py` is imported — and never imgui (tests/test_graphview.py
+`devices.py` is imported but its `SCHEME_ROLE` — and never imgui (tests/test_graphview.py
 holds it)."""
 
 from __future__ import annotations
@@ -127,6 +127,7 @@ from . import graphmigrate, modbank, modgraph
 from . import learn as learnmod
 from . import modifiers as modmod
 from . import sequencer as seqmod
+from .devices import SCHEME_ROLE  # plan 40 T4: the table lives in devices; read here
 from .params import PERFORMANCE_GROUPS, Kind, Param, Registry
 from .routing import (
     MOD_OPS,
@@ -142,6 +143,7 @@ from .routing import (
     is_continuous,
     is_macro,
     is_session_row,
+    row_words,
 )
 
 # signal kinds a port and a cable carry (decision 10: values and triggers;
@@ -634,11 +636,8 @@ LAYER_LABEL = {GLOBAL_LAYER: "SHIFT"}
 INVARIANT = "invariant"
 DESK_GROUPS = (INVARIANT, "track knobs", "device knobs", "knobs", "faders", "clip grid",
                "buttons")
-# a role-less row's role when no listed device publishes its scheme: the
-# rig's usual name for the kind behind it (config.py's example list); a
-# scheme not here is a role of its own (an OSC device's scheme is its role)
-SCHEME_ROLE = {"hand": "leap", "hands": "leap", "axis": "pad", "pad": "pad", "hat": "pad",
-               "cc": "apc40", "note": "apc40", "pitch": "apc40"}
+# a role-less row's role when no listed device publishes its scheme is
+# `SCHEME_ROLE`, devices.py's since plan 40 T4 (imported above)
 # schemes that are no device's: the keyboard, the built-in lanes, the modifiers
 NO_DEVICE = ("key", "lane", "lfo", "env", SEQ, modmod.SCHEME)
 PLACEHOLDER_STATUS = "not in this rig: its cables wait for it"
@@ -2644,7 +2643,8 @@ def readings(bundles: Iterable[VBundle]) -> None:
 def cable_words(view: View, c: VCable) -> str:
     """One cable as a bundle's hover lists it: "<source port> → <param>"."""
     src, dst = view.owner(c.src_port), view.owner(c.dst_port)
-    a = src[1].name if src and src[1] else (c.addr or c.src_port)
+    port = src[1] if src and src[1] else None     # plan 40 T4: the row's words, the port's first
+    a = row_words(c.addr or c.src_port, lambda _s: port.name if port is not None else None)
     b = (dst[1].param or dst[1].name) if dst and dst[1] else c.dst_port.partition(":")[2]
     return f"{a} → {b}"
 
