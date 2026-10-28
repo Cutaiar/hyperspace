@@ -752,8 +752,8 @@
         <div class="chip c-base">Base</div>
       </div>
       <div class="rrow">
-        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog</div></div>
-        <div class="what">Construction order, the one frame loop, the windows, the reload watch list. Builds the device registry and the dream worker; importing it pulls in no gated adapter.</div>
+        <div><div class="name">Host</div><div class="mods">app · hotreload · placement · watchdog · hold</div></div>
+        <div class="what">Construction order, the one frame loop, the windows, the hold (plan 38: the projector kept on its held look while the next is built as a preview behind GRAPH), the reload watch list. Builds the device registry and the dream worker; importing it pulls in no gated adapter.</div>
         <div class="chip c-read">Builds</div>
       </div>
     </div>
@@ -792,7 +792,7 @@
       <div class="step mark"><div class="n">11</div><div class="d"><b>reg.apply()</b> — base plus offsets onto every live object</div><div class="chip c-read">objects</div></div>
       <div class="step"><div class="n">12</div><div class="d">Devices send — <b>devices.send()</b>: the sinks send this frame's effective values out (the bridge, the hands' DAW port)</div><div class="chip c-read">out</div></div>
       <div class="step"><div class="n">13</div><div class="d"><b>view.integrate()</b> — the angle advances by rate × dt</div><div class="chip c-read">direct</div></div>
-      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here</div><div class="chip c-read">screen</div></div>
+      <div class="step"><div class="n">14</div><div class="d">Hand the renderer the bands, read only; evaluate the render graph, every render output — a 3D shape's W angles are dropped here. While the projector is held (plan 38), the outputs draw inside the hold, from the held wiring, rig cables and look (written with <code>Param.put</code>, never <code>set</code>, and put back after); then, only while GRAPH shows it, a second renderer draws the live wiring as the preview</div><div class="chip c-read">screen</div></div>
       <div class="step"><div class="n">15</div><div class="d">Draw the control panel</div><div class="chip c-base">base</div></div>
     </div>
 

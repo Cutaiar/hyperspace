@@ -75,6 +75,7 @@ from .graph import (
     wire_words,
 )
 from .hands import panel as ui_hands
+from .hold import canvas_renderer
 from .media import publish
 from .params import PLANES, Kind, Param, Registry, build_registry
 from .view import RED as RED_RGB
@@ -1926,7 +1927,7 @@ class Panel:
         wiring, spec = self.graph_now()
         rig = self.rig_now()
         frame = graphview.page_spec(spec)
-        said = graph_words(spec, getattr(getattr(self.renderer, "_graph", None),
+        said = graph_words(spec, getattr(getattr(canvas_renderer(self), "_graph", None),
                                          "dormant", None))
         # (the blocks' rows closer together: four windows of four rows each,
         # and All outputs', fit the page unscrolled — popped after the loop)
@@ -2027,7 +2028,7 @@ class Panel:
                 self._check(pid, t)
         imgui.pop_style_var()
         # plan 30 D1: a placed effect that runs nowhere this frame, and why
-        for line in dormant_lines(getattr(self.renderer, "_graph", None)):
+        for line in dormant_lines(getattr(canvas_renderer(self), "_graph", None)):
             imgui.text_colored(FAINT, fit_text(line, imgui.get_content_region_avail().x))
             if imgui.is_item_hovered():
                 tooltip(line)

@@ -322,6 +322,16 @@ replaces a row, rewrite that row instead of adding a new one.
 | **"Preset only"** hides every node not in the preset's section or cabled to one (an uncabled controller, modulation or macro, a group node and the camera hide), on by default for every preset. | `graphview.preset_only`, `ui_graph.PRESET_ONLY` | rows 399, 413 (D4) |
 | Dream fidelity, deferred: the migrated dream dreams the occluded trail; a dream `submit` port and an occluder after the dream would restore the old look. | — | row 412 (owner) |
 
+## Hold the projector (plan 38)
+
+| Decision | Where | Who |
+|---|---|---|
+| **Take is a hard cut**, not a crossfade; the look-back's trails carry on through it. | `hold.Hold.take` | row 430 (D1, rec) |
+| **The turn is one for both**: `rot.*`, the 3D switch, speed and the planes are integrated once a frame and never held. | `hold.ONE_FOR_BOTH`, `ONE_FOR_BOTH_PREFIXES` | row 431 (D2, rec) |
+| **Drop puts back the preset's part**, as one undo step to the hold point (the look, the graph and the show's cables, the routes, the desk's preset layer, the macros, the name and dot); the rig's params stay. | `hold._preset_part`, `undo.Undo.revert` | rows 432 (D3, rec), 438, 439 |
+| **The preview shows only behind GRAPH**, drawn only on frames the page shows it. | `ui_graph._backdrop`, `app._draw_preview` | row 433 (D4, rec) |
+| **A hold holds every output**; the PROJECTOR inset is the laptop's view of the room. | `app._draw_render`, `hold.Hold.program` | row 434 (D5, rec) |
+
 ## Face patterns
 
 | Decision | Where | Who |

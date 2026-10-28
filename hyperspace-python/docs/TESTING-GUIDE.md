@@ -53,6 +53,8 @@ explained in the [glossary](#glossary) at the end.
    A graph with a delay, resize, echo or dream saves `/5` where its frame
    round-trips, which a plan 33 build reads with a note, so both Macs must
    run that build before L167.
+   The hold entries (L174–L176, A48) are plan 38's: use branch
+   `plan-38-hold`, then `plan-37-38-39-integration`, until it is merged.
    Two windows open: the picture (the *render window*) and the *control
    window*. **Esc** quits.
 3. **Use the copy instead of the real home folder:** in the terminal,
@@ -354,6 +356,9 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | L171 | Tracers without the dream; the dream alone; `party-wake` live (plan 36) | 1 | laptop, the copy, the dream worker | 364-366 |
 | L172 | Preset only; the nine re-recorded goldens (plan 36) | 1 | laptop, the gate Mac | 367, 369 |
 | L173 | The libraries migrated to `/7`; both Macs on this build (plan 36) | 1 | two Macs, the shared library | 368 |
+| L174 | Hold, then build a new look behind GRAPH (plan 38) | 1 | laptop, a second screen, the copy, music | 377, 378 |
+| L175 | Take and drop (plan 38) | 1 | laptop, a second screen, the copy | 379, 380 |
+| L176 | What a hold costs; a band on a held setting (plan 38) | 1 | the show Mac, music, a Syphon or NDI source | 382, 383 |
 | A1 | Knobs follow the app when it changes a value | 2a | APC40 | 31 |
 | A2 | The desk wakes up; knobs, rings, faders | 2a | APC40 | 10 |
 | A3 | SHIFT latches and lights | 2a | APC40 | 34 |
@@ -401,6 +406,7 @@ second or more goes in the tables at the top of `tests/conftest.py`.
 | A45 | Switch the desk off and on with the pattern up | 2a | APC40, `plan-31-a1` | 294 |
 | A46 | SEND A after the desk fell back to Generic mode | 2a | APC40, `plan-31-a1` | 295 |
 | A47 | A switch over three channels on a knob, into the faces | 2a | APC40, the copy | 319 |
+| A48 | Hold and take on two desk buttons (plan 38) | 2a | APC40, the copy | 381 |
 | B1 | Calibrate, and the box it draws | 2b | hand camera | 72, 15 |
 | B2 | The probe sees both hands | 2b | hand camera | 13 |
 | B3 | The HANDS page and which way is up | 2b | hand camera | 14, 4 |
@@ -4312,6 +4318,87 @@ changes when saved untouched.
 
 *(check 368)*
 
+## Plan 38: hold the projector (L174-L176)
+
+Plan 38 lets the person at the laptop build the next look without the
+room watching it being built. **hold** (the first chip on GRAPH's head)
+freezes what every screen shows: the projector keeps the look it had,
+still moving with the music, while everything you do afterwards appears
+only behind GRAPH's nodes (the *preview*). A small red-framed **PROJECTOR**
+picture in the canvas's corner shows what the room sees. **take** puts the
+preview on the projector; **drop** throws it away. Its tests are in
+`tests/test_hold.py` (32; the fast tier 3,990 passed, 2 skipped; no golden
+moved). The checks are 377-383 (group AI); the desk buttons are A48 in
+Part 2. These are best run with the projector or the TV as a second
+screen, so you can see the room's picture and the laptop's at once.
+
+#### L174. Hold, then build a new look behind GRAPH
+
+**Needs:** laptop; the TV or the projector as a second window; the copy;
+music.
+
+**Do:** load `party-trip`, open GRAPH, press **hold**, then press **new**
+on the PRESET strip. Wire shape → scene → All outputs, add an effect,
+delete one of the old look's effects, and cut the cable from All outputs
+into window 2. Open the node picker near the top-right corner. Save the
+preview as a new preset.
+
+**Right if:** the second screen keeps the `party-trip` look, effects and
+all, moving with the music, the whole time; behind GRAPH's nodes you see
+only your new look; the PROJECTOR inset shows the old look; the red
+`HELD 0:0x …` line counts your changes and says "the graph changed".
+(The inset covers the picker in its corner: that is known, say whether it
+is in the way.)
+
+**Wrong if:** the second screen changes at any step, goes black at
+**new**, or loses an effect when you delete one on GRAPH.
+
+*(checks 377, 378)*
+
+#### L175. Take and drop
+
+**Needs:** as L174, with the look-back on (trails).
+
+**Do:** after L174 press **take**. Then note the preset's name and dot,
+press **hold**, turn some knobs, rewire, load another preset and turn a
+knob on it, dim the room, and press **drop**; then ⌘Z once. Last, hold a
+look with an echo, load another preset, and press **take**.
+
+**Right if:** **take** cuts the second screen to the new look in one
+frame, with the trails carrying on. After **drop** the knobs, the canvas
+and the preset's name and dot are back to what the projector shows, the
+projector never changed, and the dim stayed; one ⌘Z brings the dropped
+work back. The echo keeps trailing through the load and starts empty at
+**take**. Say whether the cut feels harsh.
+
+**Wrong if:** a black frame or a flash at **take**, a knob that stays
+moved after **drop**, the dim undone by **drop**, ⌘Z needing two presses,
+or the echo cut at the load.
+
+*(checks 379, 380)*
+
+#### L176. What a hold costs; a band on a held setting
+
+**Needs:** the show Mac; music; a Syphon or NDI source if you have one.
+
+**Do:** route a band to the brightness (`view.bright`). Press **hold**,
+move the brightness on the panel, and turn the speed. Read the frame rate
+on the SYSTEM page with GRAPH open and with it closed. Wire a Syphon or
+NDI input into the preview.
+
+**Right if:** the projector keeps its brightness and still pumps with the
+band, the preview shows the new brightness pumping too; the speed turns
+both (that is by design) and is not counted on the red line. The frame
+rate drops a little with GRAPH open and not at all with it closed. The
+live input shows in the preview (a stutter is fine) and stays smooth on
+the projector.
+
+**Wrong if:** the projector stops pumping or jumps to the new
+brightness, the frame rate falls with GRAPH closed, or the projector's
+live input stutters.
+
+*(checks 382, 383)*
+
 # Part 2 — tests that need hardware
 
 ## (a) The APC40
@@ -5320,6 +5407,24 @@ continuous knob are easy to land on.
 unpicked channel still uploading.
 
 *(check 319)*
+
+#### A48. Hold and take on two desk buttons
+
+**Needs:** the APC40; the copy; branch `plan-38-hold` (plan 38).
+
+**Do:** with no hold on, learn `output.hold` and `output.take` onto two
+free buttons. Press the hold button, then the take button. Hold again and
+press **drop** on GRAPH.
+
+**Right if:** both buttons light while held and go dark after take and
+after drop; the press that learns a button does not start a hold. Learn
+the buttons *before* holding: a button learned during a hold is unlearned
+by **drop** (register row 438).
+
+**Wrong if:** the take button stays dark while held, or a learning press
+starts a hold.
+
+*(check 381)*
 
 ## (b) The hand camera
 

@@ -152,6 +152,7 @@ from imgui_bundle import imgui_node_editor as ed
 
 from . import graph as rgraph
 from . import graphview, modifiers, params, pinch, ui, ui_fx, ui_pad, ui_routing, undo
+from . import hold as holdmod
 from .bands import CEIL
 from .graph import Effect
 from .library import LibraryError
@@ -222,6 +223,10 @@ BACKDROP_ALPHA = 0.35    # how strongly it shows by default
 # — and ⌘ with them zooms. GLFW gives a trackpad's scroll as a tenth of
 # its pixels, so 10 px a unit follows the fingers; a mouse's notch is one unit
 PAN_PX = 10.0
+# plan 38: while the projector is held, the projector's own picture in the
+# canvas's top-right corner, this share of the canvas's width, framed red
+MONITOR_W = 0.22
+MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview behind the nodes there."
 
 
 # ---------------------------------------------------------------- state and context
@@ -328,7 +333,8 @@ def view_of(panel) -> graphview.View | None:
     st = _state(panel)
     reg, table = panel.reg, router.table
     devices = getattr(panel, "devices", None)
-    rgraph = getattr(getattr(panel, "renderer", None), "_graph", None)
+    # (plan 38 B3: while held, the preview's graph — the edited one)
+    rgraph = getattr(holdmod.canvas_renderer(panel), "_graph", None)
     gs = getattr(getattr(getattr(panel, "library", None), "presets", None), "graph", None)
     # (plan 35 G: the wired frame itself, in the new ids)
     spec = getattr(gs, "spec", None)
@@ -564,6 +570,7 @@ def page(panel, dt: float) -> None:
     shown = _backdrop(panel, st, (origin.x, origin.y), (canvas.x, canvas.y))
     _scroll(st, (origin.x, origin.y), (canvas.x, canvas.y))
     _canvas(panel, st, view, canvas, st["backdrop_alpha"] if shown else 0.0)
+    _monitor(panel, (origin.x, origin.y), (canvas.x, canvas.y))
     if sel:                             # its bottom is the canvas's: the page ends where it did
         imgui.set_cursor_screen_pos(imgui.ImVec2(*pos))
         imgui.push_style_color(imgui.Col_.child_bg, imgui.get_style_color_vec4(imgui.Col_.window_bg))
@@ -752,6 +759,8 @@ def head_line(st: dict, view: graphview.View) -> str:
 
 def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None:
     width = imgui.get_content_region_avail().x
+    if _hold_chips(panel):
+        imgui.same_line()
     any_open = bool(st["open"])
     if ui.chip("collapse all##graph" if any_open else "expand all##graph"):
         expand_all(st, view, not any_open)
@@ -789,12 +798,62 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
     if imgui.is_item_hovered():
         ui.tooltip(line)
     _area_chips(st)
+    hold = getattr(panel, "hold", None)
+    if hold is not None and hold.on:        # plan 38: first, in red, while it lasts
+        imgui.text_colored(ui.WARN, hold_line(hold, time.perf_counter()))
     if st["note"]:
         imgui.text_colored(ui.WARN, st["note"])
     elif st["said"]:                        # plan 28 N4: the last render edit
         imgui.text_disabled(st["said"])
     else:
         imgui.text_disabled(EDIT_HINT)
+
+
+def _hold_chips(panel) -> bool:
+    """Plan 38, first on the head: **hold** — or, held, a lit **held** and
+    **take** · **drop**. False with no hold (a panel from a test)."""
+    hold = getattr(panel, "hold", None)
+    if hold is None:
+        return False
+    if not hold.on:
+        if ui.chip("hold##graph"):
+            hold.engage(time.perf_counter())
+        if imgui.is_item_hovered():
+            ui.tooltip(holdmod.ENGAGE_TIP)
+        return True
+    ui.lit_chip("held##graph", True)
+    if imgui.is_item_hovered():
+        ui.tooltip(holdmod.ENGAGE_TIP)
+    imgui.same_line()
+    if ui.chip("take##graph"):
+        hold.take()
+    if imgui.is_item_hovered():
+        ui.tooltip(holdmod.TAKE_TIP)
+    imgui.same_line()
+    if ui.chip("drop##graph"):
+        hold.drop()
+    if imgui.is_item_hovered():
+        ui.tooltip(holdmod.DROP_TIP)
+    return True
+
+
+def hold_line(hold, now: float) -> str:
+    """The head's red line while the projector is held (plan 38): for how
+    long, what the canvas's backdrop is, and what the preview has that the
+    projector has not."""
+    t = max(int(now - hold.since), 0)
+    what = []
+    n = len(hold.changed())
+    if n:
+        what.append(f"{n} setting{'s' if n != 1 else ''} changed")
+    if hold.rewired():
+        what.append("the graph changed")
+    line = (f"HELD {t // 60}:{t % 60:02d} — the projector keeps its look; behind the nodes "
+            "is the preview, what TAKE puts on it")
+    line += " · " + " · ".join(what) if what else " · nothing changed yet"
+    if hold.error:
+        line += f" · preview: {hold.error}"
+    return line
 
 
 def _backdrop_chips(st: dict) -> None:
@@ -831,7 +890,9 @@ def _backdrop(panel, st: dict, origin, avail) -> bool:
     the editor's ground — faded by `_canvas` — and every node lie over it.
     True when it was drawn."""
     pv = getattr(panel, "preview", None)
-    if not st["backdrop"] or pv is None:
+    hold = getattr(panel, "hold", None)
+    held = hold is not None and hold.on          # plan 38: the preview is the point of it
+    if not (st["backdrop"] or held) or pv is None:
         return False
     pv.want()
     tex = pv.tex
@@ -842,6 +903,39 @@ def _backdrop(panel, st: dict, origin, avail) -> bool:
     imgui.get_window_draw_list().add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a),
                                            imgui.ImVec2(*b), imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
     return True
+
+
+def monitor_rect(origin: tuple[float, float], avail: tuple[float, float],
+                 pic: tuple[int, int]) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Where the projector's inset lies (plan 38): `MONITOR_W` of the
+    canvas's width at its top-right corner, a margin in, the picture's
+    aspect kept — (top-left, bottom-right), screen pixels."""
+    pad = 8.0
+    w = max(avail[0] * MONITOR_W, 32.0)
+    h = w * max(pic[1], 1) / max(pic[0], 1)
+    x, y = origin[0] + avail[0] - w - pad, origin[1] + pad
+    return (x, y), (x + w, y + h)
+
+
+def _monitor(panel, origin, avail) -> None:
+    """While the projector is held, its picture in the canvas's corner —
+    over the nodes, framed red — and asked for again next frame."""
+    hold, mon = getattr(panel, "hold", None), getattr(panel, "monitor", None)
+    if hold is None or not hold.on or mon is None:
+        return
+    mon.want()
+    tex = mon.tex
+    if tex is None or getattr(tex, "glo", 0) == 0:
+        return
+    a, b = monitor_rect(origin, avail, tuple(tex.size))
+    dl = imgui.get_foreground_draw_list()
+    dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0))
+    dl.add_rect(imgui.ImVec2(*a), imgui.ImVec2(*b), imgui.get_color_u32(ui.RED), 0.0, 0, 2.0)
+    dl.add_text(imgui.ImVec2(a[0] + 4, a[1] + 2), imgui.get_color_u32(ui.RED), "PROJECTOR")
+    m = imgui.get_mouse_pos()
+    if a[0] <= m.x < b[0] and a[1] <= m.y < b[1]:
+        ui.tooltip(MONITOR_TIP)
 
 
 def _area_chips(st: dict) -> None:
@@ -1399,7 +1493,7 @@ def render_edit(panel) -> graphview.Edit:
     pins named through the renderer's last graph, one undo step each."""
     lib = getattr(panel, "library", None)
     gs = getattr(getattr(lib, "presets", None), "graph", None)
-    rg = getattr(getattr(panel, "renderer", None), "_graph", None)
+    rg = getattr(holdmod.canvas_renderer(panel), "_graph", None)      # (plan 38 B3)
     e = graphview.Edit(graph=gs, render=rg, push=lambda label: undo.push(label, load=True))
     e.slots = getattr(panel, "outputs", None) or ()     # (plan 35 G: a window's name)
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
@@ -2019,7 +2113,7 @@ def edit_of(panel, view: graphview.View | None = None) -> graphview.Edit | None:
     lib = getattr(panel, "library", None)
     e = graphview.Edit(table, panel.reg, router, view, profile,
                        graph=getattr(getattr(lib, "presets", None), "graph", None),
-                       render=getattr(getattr(panel, "renderer", None), "_graph", None))
+                       render=getattr(holdmod.canvas_renderer(panel), "_graph", None))
     e.show = getattr(lib, "project", None)              # (plan 36 T1: the rig's wires)
     return e
 
