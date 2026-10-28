@@ -18,7 +18,7 @@ are listed in [`ENGINEERING.md`](ENGINEERING.md) §5.
 ```bash
 git clone <repo> hyperspace
 cd hyperspace/hyperspace-python
-uv sync               # everything, including torch for the dream and the dev tools
+uv sync               # everything, including torch for the dream, Apple Vision for the segment, and the dev tools
 uv run hyperspace     # opens the render window and the control window
 ```
 
@@ -48,6 +48,28 @@ turn it off:
 ```toml
 [dream]
 enabled = false
+```
+
+## The segment (plan 39)
+
+`uv sync` on macOS also installs `pyobjc-framework-vision` (and
+`pyobjc-framework-coreml`), which the `segment` node's person mode uses:
+Apple Vision on the Neural Engine. It is imported only when a segment first
+needs it, inside the worker's first job. Run `uv sync` on both Macs after
+pulling this build. The first time a camera is opened macOS asks whether
+the terminal may use the camera: allow it (System Settings → Privacy &
+Security → Camera if you denied it); without it the node says `no frame on
+channel a`. With `[segment] backend = "torch"` (or on a machine without
+Vision) the fallback is torchvision's LR-ASPP: the first time it runs it
+downloads its weights (`lraspp_mobilenet_v3_large`, 13 MB) into
+`~/Hyperspace/weights` unless they are already there or in torch's hub
+cache, as the dream's are. Nothing to set by default:
+
+```toml
+[segment]
+backend = "auto"     # "auto" (Vision on macOS, else torch), "vision", "torch"
+weights_dir = ""     # the torch backend's weights; "" = <library home>/weights
+# device = "auto"    # the torch backend's device: "auto" is MPS when there, else CPU
 ```
 
 ## Capturing the Mac's own sound
