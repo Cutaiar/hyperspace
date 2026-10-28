@@ -66,59 +66,80 @@ clean, and 596 golden frames match on the gate Mac, every one recorded
 before unchanged. No preset was edited or added; `apc40.py` and
 `midi.py` (Dylan's desk work) untouched.
 
-**Plan 38, hold the projector, is built** on `plan-38-hold`, to merge
-first into `plan-37-38-39-integration` (then the run's final PR to
-`main`) ([`plans/38-hold.md`](plans/38-hold.md)). **hold** keeps every
-output on the wiring, the rig's bus cables and the look as they were at
-the press, still live under the bands and LFOs, while every edit (a
-GRAPH change, **new**, a load) lands as the preview behind GRAPH's
-nodes, drawn by a second renderer only while the page shows it, with a
-PROJECTOR inset of what the room sees; **take** cuts to the preview,
-**drop** goes back to the hold point as one undo step (the preset's
-part, not the rig). A landing during a hold keeps the projector's
-effects, switches and resizes; a load's delay reset goes to the
-preview. Fast tier 3990 passed, full suite 4201 passed (2 skipped),
-goldens unmoved; no schema, preset or golden change.
-**Plan 39, vision, is built** on `plan-39-vision`
-([`plans/39-vision.md`](plans/39-vision.md), 2026-10-27, every decision
-the owner's), run in parallel with plans 37 and 38 and merged with plan 38
-into `plan-37-38-39-integration`, which goes to `main` in one final PR the
-owner merges. `segment` takes any picture and puts out its foreground, its
-background and its mask (Apple Vision on the Neural Engine on a worker
-thread, torchvision behind it, a motion mode with no model); `matte`
-(picture → mask) and `cut` (picture + mask → picture); the mask its own
-purple wire that never rides in alpha, readable as a white-on-black picture
-wherever a picture is taken; `edges` an effect file; the cut-through blend
-made honest (eight backdrop fixture goldens re-recorded for it); on GRAPH a
-media ▸ and a masks ▸ group and a cut-out starter. Fast tier 4105 passed,
-2 skipped; goldens 136 passed over 789 pictures. `uv sync` on both Macs
-(`pyobjc-framework-vision`), and **both Macs on this build before a preset
-with `segment`, `matte` or `cut` is shared**: an older build reads such a
-section as black. No preset was edited or added.
+**Plans 37, 38 and 39 are built** and integrated on
+`plan-37-38-39-integration` (2026-10-27: plan 38 first, then plan 39,
+then plan 37), which goes to `main` in one final PR the owner merges.
+They ran in parallel, one branch each.
+
+- **Plan 38, hold the projector** ([`plans/38-hold.md`](plans/38-hold.md)).
+  **hold** keeps every output on the wiring, the rig's bus cables and the
+  look as they were at the press, still live under the bands and LFOs,
+  while every edit (a GRAPH change, **new**, a load) lands as the preview
+  behind GRAPH's nodes, drawn by a second renderer only while the page
+  shows it, with a PROJECTOR inset of what the room sees. **take** cuts
+  to the preview; **drop** goes back to the hold point as one undo step
+  (the preset's part, not the rig). A landing during a hold keeps the
+  projector's effects, switches, resizes, mattes, cuts and segments; a
+  load's delay reset goes to the preview.
+- **Plan 39, vision** ([`plans/39-vision.md`](plans/39-vision.md), every
+  decision the owner's). `segment` takes any picture and puts out its
+  foreground, its background and its mask (Apple Vision on the Neural
+  Engine on a worker thread, torchvision behind it, a motion mode with no
+  model); `matte` (picture → mask) and `cut` (picture + mask → picture);
+  the mask its own purple wire that never rides in alpha, readable as a
+  white-on-black picture wherever a picture is taken; `edges` an effect
+  file; the cut-through blend made honest (eight backdrop fixture goldens
+  re-recorded for it); on GRAPH a media ▸ and a masks ▸ group and a
+  cut-out starter. The hold's preview runs no segment worker.
+- **Plan 37, nodes as pictures and the faces**
+  ([`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md)).
+  Every node that makes a picture is drawn as it on GRAPH, a thumbnail
+  made at the frame's end only for nodes on screen, moving no output
+  pixel; hovering it gives the node's lines, the size and the GPU time.
+  While the projector is held the thumbnails are the preview's, and
+  output 1's node shows the program's picture. A head chip, `pictures ·
+  tint cables`, is off by default and leans each picture cable's red by
+  what flows. An effect is laid in the area of its consumers, so
+  `acid-scene` draws forward. The faces are a dry run: sheets of all 17
+  modes and a generated migration map are in
+  [`plans/assets/37-faces/`](plans/assets/37-faces/); nothing is dropped
+  until the owner names the list.
+
+At the integration head the fast tier is 4227 passed, 2 skipped, the full suite 4450 passed,
+2 skipped (one load-flaky media test passes serially),
+and the goldens 136 passed over 789 pictures, none moved beyond the eight
+backdrop frames plan 39 re-recorded. `uv sync` on both Macs
+(`pyobjc-framework-vision`), and **both Macs on this build before a
+preset with `segment`, `matte` or `cut` is shared**: an older build reads
+such a section as black. No preset was edited or added.
 
 ## What is left
 
+- **Plan 37: the owner's list of face patterns** (register row 417, D1).
+  The sheets are in `plans/assets/37-faces/`. With the list, the owner
+  also says whether to renumber `view.pattern` or keep tombstones, and the
+  controller allows the `preset.py` edit. Then P2 runs: shaders and modes
+  dropped, presets migrated to their nearest kept mode with a note, and
+  only those presets' goldens re-recorded. Only the second half of check
+  375 waits for P2.
 - **The hand checks.** None has been run by a person. Start from
   [`TESTING-GUIDE.md`](TESTING-GUIDE.md), on a copy of `~/Hyperspace`;
   plans 24, 26 and 27 add checks 144–218, plans 30 and 28 checks
   220–276 (N8's palette as compression 267–271, N9's graph by concern
   272–276). Above all: a cable dragged on the GRAPH page (247), which no
-  test can do.
-  Plan 38 adds checks 377–383 (group AI, hold the projector): the hold
-  on the rig with the projector up, take, drop, the desk buttons, the
-  preview's cost.
-- **The owner's keep or overturn** on register rows 34–310 (the answer
-  sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
-  plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
-  299–310); plan 38's are rows 430–439 (its D1–D5 are 430–434, taken
-  as recommended) and 461–470.
-  test can do. Plan 39 adds group AJ, checks 384–393: the camera, a
+  test can do. Plans 37, 38 and 39 add groups AH (370–376: the pictures
+  on GRAPH, their cost, the hover, the faces sheets, `acid-scene`), AI
+  (377–383: the hold on the rig with the projector up, take, drop, the
+  desk buttons, the preview's cost) and AJ (384–393: the camera, a
   dancer, the party light, two cameras, an unplugged camera, and the
-  honest cut-through by eye.
+  honest cut-through by eye).
 - **The owner's keep or overturn** on register rows 34–310 (the answer
   sheet at the top of [`DECISION-REGISTER.md`](DECISION-REGISTER.md)),
   plans 30 and 28's being rows 214–310 (N7's 278–290, N8's 291–298, N9's
-  299–310); plan 39's are rows 440–459 and 471–497.
+  299–310); and on rows 417–500, plans 37, 38 and 39's: plan 37's
+  417–429 and 460 (D1, 417, still open), plan 38's 430–439 (its D1–D5
+  are 430–434, taken as recommended) and 461–470, plan 39's 440–459 and
+  471–497 (440–447 the owner's own), and the integrator's 498–500.
 - **Both Macs on this build before sharing presets**: an older build
   drops a preset's modifiers and positions when it saves (row 277).
 - **The owner's creative pass** on the new mechanisms, which no factory

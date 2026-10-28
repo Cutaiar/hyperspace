@@ -190,12 +190,10 @@ def test_every_node_has_one_area_and_the_three_concerns_are_separate(rig):
             others = set().union(*(columns(view, b) for b in graphview.AREAS if b != a))
             assert not columns(view, a) & others, (name, a)
         # (plan 36 T3: acid-scene's `after: scene` is the wires it stood
-        # for — an effect between the scene and the look-back, in the
-        # effects' area, so its cable into the look-back runs back: a
-        # layout the areas do not yet place, noted for T5/T6)
-        back = {"wire:acid.2>lookback/image"} if fixture == "acid-scene" else set()
-        assert set(back_wires(view)) <= back, (name, fixture)
-        assert set(back_wires(view, graphview.AREAS)) <= back, (name, fixture)
+        # for — an effect between the scene and the look-back; plan 37 C3:
+        # laid in the look-back's area, `laid_areas`, so nothing runs back)
+        assert back_wires(view) == [], (name, fixture)
+        assert back_wires(view, graphview.AREAS) == [], (name, fixture)
     # what lands where, on party-trip's graph
     view = load(rig, "party-trip")["view"]
     area = {n.id: n.area for n in view.nodes}
@@ -623,6 +621,94 @@ def test_area_titles_draw(rig, monkeypatch):
     assert size * 35.0 / 13.0 <= 244.0 + 1e-6
     assert fit("CONTROLLERS", "CTRL", 10.0, 6.0, 13.0, 100.0, 35.0) == (
         "CTRL", ui_graph.TITLE_FLOOR * 6.0)
+
+
+# ---------------------------------------------------------------- plan 37 P3
+
+def area_column(area):
+    """An area's place left to right on the canvas (`AREAS`; *other* in the
+    audio's column, `SHARES`)."""
+    return graphview.AREAS.index(graphview.SHARES.get(area, area))
+
+
+def backward_across_areas(view):
+    """The cables whose two ends sit in different areas, the maker's area
+    not left of the taker's — less the loops by design (`graphview.returns`:
+    what is kept for the next frame, into a look-back's or a delay's
+    `image`; a picture the scene made, taken back into the faces, the
+    pattern, the backdrop or a switch — `echo-faces`' look-back into
+    `shape.faces`)."""
+    by_design = graphview.returns(view, graphview.layout(view, collapsed=lambda nid: True))
+    out = []
+    for c in view.cables:
+        a = view.node(graphview.node_of(view, c.src_port))
+        b = view.node(graphview.node_of(view, c.dst_port))
+        if a is None or b is None or a.area == b.area or c.id in by_design:
+            continue
+        if area_column(a.area) >= area_column(b.area):
+            out.append(c.id)
+    return out
+
+
+@pytest.mark.parametrize("name", [*(("factory", n) for n in FACTORY),
+                                  *(("fixture", n) for n in WIRED)],
+                         ids=lambda t: f"{t[0]}:{t[1]}")
+def test_no_cable_runs_backwards_across_areas(rig, name):
+    """Plan 37 P3, D5 (the rules): every factory preset, and every graph
+    fixture, loaded as the preset on a fresh canvas (none carries a saved
+    position): no cable runs from an area into one left of it. Before C3,
+    `acid-scene` drew `wire:acid.2>lookback/occluder` from EFFECTS back
+    into LOOK-BACK — acid.2 sits between the scene and the look-back."""
+    where, preset = name
+    view = (load(rig, preset) if where == "factory" else load_fixture(rig, preset))["view"]
+    assert backward_across_areas(view) == [], preset
+
+
+def test_a_node_is_laid_where_its_consumers_are(rig):
+    """Plan 37 C3: an effect whose consumers sit left of the effects is laid
+    in the leftmost of their areas that is not left of what feeds it —
+    acid.2 (the scene's picture, into the look-back and on into a
+    composite) in LOOK-BACK, at its first column; an effect fed by nothing
+    into the faces in SCENE; a chain of two into the look-back both in
+    LOOK-BACK; one fed by the look-back and kept into it (a loop by design)
+    stays with the effects. A saved position still wins (`layout`), and a
+    tidy lays it out by the same rule."""
+    st = load_fixture(rig, "acid-scene")
+    view = st["view"]
+    acid = view.node("render:acid.2")
+    assert acid.area == graphview.LOOKBACK_AREA
+    assert graphview.area_of(acid) == graphview.EFFECTS_AREA      # the table's is unchanged
+    assert acid.column < view.node("render:lookback").column
+    assert back_wires(view) == []
+    lay = ui_graph.areas_of(st, view)
+    assert lay.nodes["render:acid.2"][0] < lay.nodes["render:lookback"][0]
+    # a saved position wins: the rule names an area, it moves no placed node
+    rig.lib.presets.layout["render:acid.2"] = [4000, 4000]
+    frame(rig.panel, "graph")
+    assert st["applied"]["render:acid.2"] == (4000.0, 4000.0)
+
+    spec = G.read_graph({
+        "frame": "wired",
+        "nodes": [{"kind": "effect", "file": "acid", "instance": 2},
+                  {"kind": "effect", "file": "warp", "instance": 2},
+                  {"kind": "effect", "file": "palette", "instance": 2},
+                  {"kind": "effect", "file": "kaleido", "instance": 2}],
+        "wires": [{"from": "shape", "to": "scene.geometry"},
+                  {"from": "acid.2", "to": "shape.faces"},              # fed by nothing
+                  {"from": "scene", "to": "warp.2.image"},              # a chain of two
+                  {"from": "warp.2", "to": "palette.2.image"},
+                  {"from": "palette.2", "to": "lookback.occluder"},
+                  {"from": "lookback", "to": "kaleido.2.image"},        # kept: a loop
+                  {"from": "kaleido.2", "to": "lookback.image"},
+                  {"from": "kaleido.2", "to": "output.all.image"}]})
+    g = G.build_graph(views(Switches(), Switches()), spec.wiring(),
+                      effects=(*REAL, "acid.2", "warp.2", "palette.2", "kaleido.2"))
+    view = graphview.build(rig.router.table, rig.reg, rig.router, None, g, spec)
+    area = {n.id: n.area for n in view.nodes}
+    assert area["render:acid.2"] == graphview.SCENE_AREA
+    assert area["render:warp.2"] == area["render:palette.2"] == graphview.LOOKBACK_AREA
+    assert area["render:kaleido.2"] == graphview.EFFECTS_AREA
+    assert not spec.notes and backward_across_areas(view) == []
 
 
 def test_the_areas_run_by_primitive(rig):

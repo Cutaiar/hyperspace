@@ -269,7 +269,8 @@ mutes and flips at full dim; output 1 publishes into a second `Preview`
 program's effect instances, switches, resizes and look-backs
 (`Hold.keep`, consulted by `GraphSection._settle`); a load's delay reset
 goes to the preview; the canvas reads the preview's graph
-(`hold.canvas_renderer`). Take releases and settles to the live graph;
+(`hold.canvas_renderer`), and its node pictures through it
+(`ui_graph.picture_sources`). Take releases and settles to the live graph;
 Drop is one `Undo.revert` to the hold point, the preset's part only
 (`tests/test_hold.py`; plan 38, register rows 430–439, 461–470).
 
@@ -1242,18 +1243,18 @@ docstring has the rest.
 | `view.py` | `ViewState`, the live object the view, rotation and camera params write | `ViewState` (`integrate`, `instances`, `inst_layout`), `RED` | imports only `geometry`; no GL, so the registry and tests can hold a view |
 | `field.py` | the instance field: where each copy goes — the flat layouts, the six 3D lattices, the fit to the screen and its snapped zoom and pan, the painter's order between copies, the cull | `field` (per frame: a row of centre, scale, alpha per drawn copy), `lattice`, `inst_positions`, `fit_dims`, `NAMES`, `LAYOUTS_3D` | pure numpy, imports only `geometry`; no GL, no state but caches (`tests/test_field.py`) |
 | `graph.py` | the render graph (§2): node kinds and ports (`IMAGE`, `MASK`, `GEOMETRY`, `VALUE`), evaluation in dependency order, the wired frame built from the `Wiring` alone (`build_graph`: only what a wire reaches; each window's ports its own wire else All outputs' by its bus cable, `window_ports`), the effect nodes, the look-back and the dream as two nodes, the hands node, the point-cloud node, the preset's `graph` section, the wiring in words (plan 30 placements read only for the migration) | `Node`, `Graph` (`order`, `evaluate`, `pulled`, `timed`, `timed_in`, `pool`, `dormant`), `Frame`, `Shape`, `Hands`, `PointCloud`, `Scene`, `Cover`, `HandsLayer`, `Readout`, `Composite`, `Effect`, `Copy`, `Shown`, `History`, `Capture`, `Output`, `Wiring`, `PatternNode`, `BackdropNode`, `SwitchNode`, `Delay`, `DelayWrite` (z⁻¹, plan 34), `EchoNode`, `DreamNode`, `ResizeNode` (own size, `Node.own_size`, built by `_Build._make`), `MatteNode`, `MaskPicture`, `CutNode`, `SegmentNode`, `SegmentPin`, `MatteAt`, `CutAt`, `SegmentAt`, `mask_of`, `mask_port`, `segment_pin`, `SEGMENT_PINS`, `PICTURE_INTO_MASK` (plan 39), `DelayAt`, `ResizeAt`, `EchoAt`, `DreamAt`, `LookbackAt`, `RigWires`, `BUS_PORTS`, `bus_wire`, `window_ports`, `wire_loops`, `loop_words`, `build_graph`, `graph_key`, `GraphSpec`, `EffectAt`, `CompositeAt`, `SwitchAt`, `Wire`, `wire_error`, `read_graph`, `run_of`, `reaches`, `SINKS`, `RESERVED`, `source_into`, `channel_into`, `placement_words`, `NODE_KINDS`, `PORT_TYPES`, `cloud_roles` | imports the render stack only and names no write (`tests/test_graph.py`); a preset's graph it cannot read is a note and is not read — black, nothing filled in (`tests/test_graph_json.py`) |
-| `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches; the scene's instanced draws (one 3D pass, one vec4 a copy) | `Renderer` (`draw`, `draw_outputs`, `mask_passes`, `segmenter`, `motion_pair`, `media_now` (plan 39), `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `pool_at`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions` (re-exported from `field`), `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
+| `render.py` | the passes the graph's nodes call: face picture, scene (with depth), cover, the hands' lay, composite, outputs, dim; the GPU timer; the patterns' clock and the FACES page's swatches; the scene's instanced draws (one 3D pass, one vec4 a copy) | `Renderer` (`draw`, `draw_outputs`, `thumbs` (GRAPH's thumbnails, plan 37; the module's `thumb_source` resolves them), `mask_passes`, `segmenter`, `motion_pair`, `media_now` (plan 39), `_graph_for`, `wiring`, `ghost_of`, `cloud_source`, `lay`, `dim_pass`, `pool_at`, `stats`, `timer`, `now`, `bands`, `_pattern_clock`, `want_swatches`, `swatch`, `pattern_tile`), `PassTimer`, `SceneTarget`, `DEPTH_ALPHA`, `LAYER_DEPTH_BIAS`, `CELL`, `FaceTarget`, `inst_positions` (re-exported from `field`), `render_offscreen` | imports no registry (`tests/test_render.py::test_the_render_stack_imports_no_registry`); §2's draw guarantees (`tests/test_render.py`, `tests/test_camera.py`, `tests/test_golden_frames.py`) |
 | `fx.py` + `shaders/fx/` | post effects as GLSL files whose `// @param` uniforms become params; one effect's pass for a graph node (every effect is a `graph.Effect` node where the graph wires it) | `FxState` (`names`, `live`, `advance_to`, `face_map`), `FxChain` (`run_one`, `pool`, `fit_pool`, `ready`), `FACE_MAPS`, `declare` | an effect is never defined in Python; a broken edit keeps the last good spec; off is bit-identical; `@order` is parsed and read only by `graphmigrate`; `fx.face_map` is modulatable (`tests/test_fx.py`) |
 | `lookback.py` + `dream.py` | the frame history and its age-weighted composite; the torch worker that dreams on it | `Lookback`, `DreamState`, `DreamWorker` | torch only in `dream.py`; nothing in the core imports `dream`; `submit` never blocks the frame (`tests/test_dream.py`, `tests/test_lookback.py`) |
 | `masks.py` | the mask passes (plan 39): a picture → a mask (luma, alpha, chroma), the separable feather, the promotion (white / black by cover), the cut, the motion matte and its background learn, the worker's downsample | `MaskPasses` (`matte`, `feather`, `promote`, `fit`, `cut`, `motion`, `learn`, `readback`), `MATTE_FS`, `BLUR_FS`, `PROMOTE_FS`, `CUT_FS`, `MOTION_FS`, `LEARN_FS`, `DOWN_FS`, `cover_scale`, `MOTION_SOFT` | imports `moderngl`, `numpy` and `glsl` only (`tests/test_graph_masks.py::test_masks_is_a_leaf`); `cover_scale` equals `media_tex.fit_scale(COVER)` (a test); hot-reloadable, before `render` |
 | `segment.py` | the segment worker (plan 39): a person matte off the frame thread, one worker per node on the dream's pattern; Apple Vision and torchvision behind one backend shape | `SegmentWorker` (`submit`, `latest`, `wants`, `said`, `stop`, `close`), `VisionBackend`, `TorchBackend`, `pick_backend`, `make_worker`, `find_weights`, `QUALITIES` | imported only by `Renderer.segmenter`; top level numpy and the standard library only, Vision / Quartz / torch inside `open()` and `run()` (`tests/test_app_boundary.py`, `tests/test_dream.py::test_core_does_not_import_the_worker`); `submit` never blocks, `close` joins within 1 s (`tests/test_segment.py`); cold for hot reload (live threads) |
 | `ghost.py` | the ghost hands — a display, not a source: drawn in the shared camera (the eye and the Leap calibration), as their own layer or solid in the scene | `Ghost` (`settle`, `layer`, `draw_solid`, `composite`, `readout`, `composite_readout`, `depth`, `error`), `GhostState`, `Geometry`, `HandPose`, `STYLES`, `PARTS`, `box_of`, `calibration`, `shared_camera`, `CAL_ASPECT`, `prefix`, `register` | writes no param; off or with no hand it touches no GL state; in the history only when the graph wires it there; `ghost.style` / `.mirror` / `.guide` / `.tethers` not modulatable (`tests/test_ghost.py`, `tests/test_hands_node.py`) |
-| `outputs.py` | the render outputs as the renderer sees them | `Switches`, `route`, `fit`, `View`, `Handoff`, `Slot`, `Presenter`, `PIPELINES`, `MAX_OUTPUTS` | imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `route` and `fit` are pure |
+| `outputs.py` | the render outputs as the renderer sees them; the control window's taps on them: output 1's `Preview` and the GRAPH page's node thumbnails (plan 37) | `Switches`, `route`, `fit`, `View`, `Handoff`, `Slot`, `Presenter`, `PIPELINES`, `MAX_OUTPUTS`, `Preview`, `PreviewTextures`, `THUMB_PX`, `thumb_size`, `dominant_hue` | imports `moderngl` and `glsl` only (`tests/test_outputs.py::test_outputs_imports_nothing_from_app_ui_or_params`); `route` and `fit` are pure |
 | `glsl.py` + `shaders/_common.glsl` | the GLSL every shader shares | `QUAD_VS`, `common`, `FALLBACK` | a helper is defined once; a broken edit falls back to `FALLBACK` (`tests/test_fx.py::test_the_shared_helpers_are_written_once`) |
 | `overlay.py` | where output 1 is and how it looks (window, fullscreen, overlay); the master dim; the per-output switches | `Output` (`register`, `apply`, `allowed`, `dim`), `register_switches` | touches the window system only in `apply()`; rig settings never persist or modulate; overlay only when the config allows (`tests/test_overlay.py`) |
 | `ui.py` + `ui_*.py` + `hands/panel.py` | the control window: sixteen pages (`ui.PAGES`), widgets as views onto params, the right-click menu, the modal, the on-screen desk (`ui_desk.py`) and gamepad (`ui_pad.py`); the FACES page is `ui_patterns.py` (`page`, `drivers`, `suggest`, `neutral_all`) | `Panel`, `PAGES`; each page's `page(panel)`; `ui_routing.modal`; `ui_desk.click` | a widget writes only bases; nothing here calls `modulate`; no page scrolls at the control size (`tests/test_ui_shell.py::test_every_page_fits_the_control_window`); no conflicting imgui ids (`tests/test_ui_routing.py`, `tests/test_ui_lfo.py`, `tests/test_ui_seq.py`) |
 | `ui_seq.py` | the SEQ page (plan 31): the transport, the 5 × 8 step grid in the APC40's LED palette (the playhead column in the one red, columns past `length` dimmed and inert), each lane's select, mute and envelope picker, and a strip per envelope (one open, the rest folded) | `page`, `toggle_step`, `cell_state`, `fill`, `select_lane`, `open_env`, `add_env`, `remove_env` | a function over the Panel; every cell and knob an ordinary param write; envelopes 1–5 never removed; the default page fits the control window (`tests/test_ui_seq.py`) |
-| `graphview.py` + `ui_graph.py` | the GRAPH page (plan 28): the model of both graphs as nodes, ports and cables (since plan 31 a node per LFO and envelope by id, the sequencer's node with five trigger outs, and its `lane` cables — a lane's envelope binding, rebound by a drag, never deleted), its layout and its edits (`graphview`, no imgui); the canvas on `imgui_node_editor`, its menus and the drag / delete dispatch (`ui_graph`) | `View`, `VNode`, `VPort`, `VCable`, `build`, `refresh`, `key`, `OWNERS`, `auto_layout`, `home`, `device_nodes`, `Edit` (`connect`, `move`, `disconnect`, `insert_modifier`, `wire`, `unwire`, `add_node`, `drop_node`, `set_node`), `Refusal`, `Ask`, `cable_near`; `ui_graph.page`, `editor`, `close`, `CREATE`, `DELETE`, `DELETE_NODE`, `picker`, `render_edit` | `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`); one table for ROUTING and GRAPH (`::test_the_routing_page_and_the_graph_page_show_one_table`); every edit through the table's own calls or a `graph` section read back (`tests/test_graph_edit.py`, `tests/test_graph_wires.py`); the APC40 drawn, never changed (`tests/test_graphview_devices.py`) |
+| `graphview.py` + `ui_graph.py` | the GRAPH page (plan 28): the model of both graphs as nodes, ports and cables (since plan 31 a node per LFO and envelope by id, the sequencer's node with five trigger outs, and its `lane` cables — a lane's envelope binding, rebound by a drag, never deleted), its layout and its edits (`graphview`, no imgui); the canvas on `imgui_node_editor`, its menus and the drag / delete dispatch (`ui_graph`); since plan 37 every picture node drawn as its picture, its hover and the tint switch | `View`, `VNode`, `VPort`, `VCable`, `build`, `refresh`, `key`, `OWNERS`, `auto_layout`, `home`, `device_nodes`, `Edit` (`connect`, `move`, `disconnect`, `insert_modifier`, `wire`, `unwire`, `add_node`, `drop_node`, `set_node`), `Refusal`, `Ask`, `cable_near`, `THUMBS`, `thumb_of`, `THUMB_H`, `picture_hover`, `laid_areas`; `ui_graph.page`, `editor`, `close`, `CREATE`, `DELETE`, `DELETE_NODE`, `picker`, `render_edit`, `thumb_wants`, `tint`, `cable_tints` | `graphview` imports no imgui (`tests/test_graphview.py::test_graphview_imports_no_imgui`); one table for ROUTING and GRAPH (`::test_the_routing_page_and_the_graph_page_show_one_table`); every edit through the table's own calls or a `graph` section read back (`tests/test_graph_edit.py`, `tests/test_graph_wires.py`); the APC40 drawn, never changed (`tests/test_graphview_devices.py`); a thumbnail is made only for a wanted node and moves no output pixel (`tests/test_thumbnails.py`); no cable runs backwards across areas (`tests/test_graph_areas.py`) |
 | `control.py` | the headless half of the analyzer page: band selection, scenes, reset | `Control`, `SCENES` | reset goes to the selected scene and never changes the layout (`tests/test_control.py::test_reset_resolves_to_selected_scene`) |
 | `library.py` | the library root (`Library.home`) and the machine home (`Library.machine`), document kinds, module presets, shows, the bank, the trash, `hidden.json` | `Library`, `Project`, `Marks`, `SLOTS`, `to_trash`, `next_name`, `bank_doc` | never writes a factory file; a user file is copied to the trash before it is overwritten or deleted; a load never rewrites a show; every write is atomic; a shared library missing at launch is never created and refuses every write; never imports `config` (`tests/test_library.py`, `tests/test_presets.py`, `tests/test_shared_library.py`) |
 | `preset.py` | the preset document kind: values, routes, desk, macros, module labels, the `graph` section (nodes and wires), the modifiers, the banks' membership (`lfos`, `envs`), the GRAPH page's layout; `hyperspace.preset/3` only when a preset uses the sequencer, the envelopes or N ≠ 4 LFOs, else `/2`; the factory generator; the first-launch migration | `Presets` (`load`, `load_doc`, `document`, `signature`, `layout`, `template_at_load`), `schema_of`, `SCHEMA_V3`, `VERSIONS`, `GraphSection`, `GRAPH_KEY`, `MODIFIERS_KEY`, `LAYOUT_KEY`, `merge_modifiers`, `FACTORY_PRESETS`, `write_factory`, `migrate_home` | a load lands every performance base and replaces every performer row, never a session param; a route onto a non-modulatable param is dropped with a note (`tests/test_presets.py`, `tests/test_migration.py`) |
@@ -1322,8 +1323,63 @@ session / preset split are the table's; an image cable becomes a new
 `graph` section, read back through `read_graph` and landed by
 `GraphSection.land` (one undo step, the renderer rebuilt). Positions
 live in the preset's `layout` (the look's nodes) and the show's (the
-rig's). The page writes no param but through those calls and draws
-nothing of the render (it reads `Renderer._graph`).
+rig's). The page writes no param but through those calls. Apart from
+output 1's backdrop and the node thumbnails below, it draws nothing of the
+render (it reads `Renderer._graph`).
+
+**Nodes as pictures** (plan 37). On the GRAPH page, every node that makes
+a picture is drawn as that picture, collapsed or expanded: a thumbnail in a
+16:9 box at the node's width, under the title line.
+
+- **What is shown.** `graphview.THUMBS` (with `thumb_of` for any kind
+  whose `OUTPUT` is `IMAGE`) says how each kind shows a picture:
+  - its own picture;
+  - for a shape or a cloud, its scene's picture, faint;
+  - for a hands node, its layer;
+  - for an output, its window: output 1 is the page's existing `Preview`,
+    outputs 2–4 are their `Handoff.frame`.
+
+  The modulation side stays text.
+- **Wanted only on screen.** Each frame, the page `want`s the nodes that
+  are drawn (not hidden by **preset only**) and that overlap the
+  editor's visible canvas rect (`ui_graph.thumb_wants`).
+- **Made at the frame's end.** `Renderer._thumbnails`, called last in
+  `_for_the_panel`, asks each wanted node's picture through
+  `render.thumb_source`, which goes over `graph.picture`. It never reads a
+  node outside `Graph.pulled`. It copies each picture into
+  `outputs.PreviewTextures`, a texture keeper beside `Preview` that knows
+  nothing of the graph: one 16-tap downsample pass to `THUMB_PX` = 192
+  on the long side.
+  - While it asks, the GPU timer is muted and the frame's `stats` are
+    restored, so the outputs and SYSTEM's per-node lines are the frame's
+    own.
+  - It flushes the context when it copied anything.
+- **Lifetime.** A name unwanted for a second is dropped. A node that made
+  nothing is dimmed, then black a second later. SYSTEM reports
+  `thumbnails · N copied · K repainted · M kept`. A node that painted
+  straight into its consumer is repainted at full size for its thumbnail,
+  which costs more.
+- **While the projector is held** (plan 38). The thumbnails come from the
+  renderer the canvas reads (`ui_graph.picture_sources` over
+  `hold.canvas_renderer`): the preview renderer, with its own
+  `PreviewTextures`, once the preview has been drawn, so every node shows
+  what TAKE would put up and the main renderer copies none. Output 1's
+  node shows the program's picture, `panel.monitor` (the PROJECTOR inset).
+  With GRAPH closed nothing is wanted and nothing is made (register rows
+  498, 499).
+- **The hover.** On the picture, the hover is `graphview.picture_hover`:
+  the title, `summary`'s lines, `W×H picture`, and `gpu N.NN ms` from
+  `Renderer.stats["gpu_ms"]`.
+- **The tint switch.** The head's last chip, **pictures · tint cables**,
+  is off by default and is page state only. Lit,
+  `PreviewTextures.want_hues` reads one thumbnail's dominant hue a frame,
+  asynchronously (a 16×16 pass into a pixel buffer, collected next frame,
+  each node once a second). `ui_graph.tint` then leans each picture
+  cable's red by at most 20° toward that hue, and `COLOURS` is unchanged.
+- **The area rule.** `graphview.laid_areas` puts an effect-area node whose
+  consumers sit left of the effects in the leftmost consumer area not left
+  of what feeds it. It names the area only, never a position, so no cable
+  runs backwards across areas (`tests/test_graph_areas.py`).
 
 **Shapes: polytopes, surfaces, 3D and 4D.** `geometry.SHAPES` holds 99
 shapes, append-only. Three fields say what each one is:

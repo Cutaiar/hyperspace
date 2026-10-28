@@ -17,6 +17,8 @@ behaviour in [`ENGINEERING.md`](ENGINEERING.md).
   (the step sequencer, 2026-10-22) say "owner (plan 31 decision N)": the
   owner accepted all ten recommendations before the build, and register
   rows 311–320 record what was built against each.
+  Plan 37's rows (417–429 and 460, 2026-10-27) were the controller's,
+  in the owner's absence.
   The owner
   has still to confirm or overturn it in
   [`DECISION-REGISTER.md`](DECISION-REGISTER.md) under that row number.
@@ -323,6 +325,17 @@ replaces a row, rewrite that row instead of adding a new one.
 | **"Preset only"** hides every node not in the preset's section or cabled to one (an uncabled controller, modulation or macro, a group node and the camera hide), on by default for every preset. | `graphview.preset_only`, `ui_graph.PRESET_ONLY` | rows 399, 413 (D4) |
 | Dream fidelity, deferred: the migrated dream dreams the occluded trail; a dream `submit` port and an occluder after the dream would restore the old look. | — | row 412 (owner) |
 
+## Nodes as pictures (plan 37)
+
+| Decision | Where | Who |
+|---|---|---|
+| **A picture node on GRAPH is drawn as the picture it makes.** A thumbnail is made only for the nodes the page has on screen and drawn. The renderer copies each one at the frame's end, in `_for_the_panel`, through `graph.picture`, into a small texture: 192 texels on the long side, one 16-tap downsample pass, not mipmaps. It is dropped after a second unwanted. A node that made nothing is dimmed, then black a second later. Nothing behind an unpicked switch input is read, and the outputs are byte-identical with or without thumbnails. A shape shows its scene faint, a hands node its layer, and an output its window. The modulation side stays text. A kind whose output is a picture and that the table does not name gets a thumbnail too. | `outputs.PreviewTextures`, `render.thumb_source`, `Renderer._thumbnails`, `graphview.THUMBS`, `thumb_of` | rows 422–426 |
+| **The thumbnail is always drawn**, collapsed or expanded, in a 16:9 box at the node's width with the picture letterboxed inside. Collapsed, the node is its title and its picture. Hovering the picture gives the node's summary lines, the picture's size and its GPU time. | `ui_graph._node`, `_thumb`, `graphview.picture_hover`, `THUMB_H` | rows 418 (D2), 425, 427 |
+| **Picture cables are plain red.** The tint is behind the head chip `pictures · tint cables`, off by default and kept on the page, never in the preset or the show. Lit, red leans at most 20° toward the picture's hue, which is read asynchronously, one node a frame. `COLOURS` is unchanged. | `ui_graph.tint`, `_tint_chip`, `outputs.dominant_hue` | rows 419 (D3), 428 |
+| **An effect is laid in the area of its consumers** when they sit left of the effects: the leftmost consumer area not left of what feeds it. Only effect-area nodes move, and a saved position never moves. No factory preset or graph fixture draws a cable backwards across areas. | `graphview.laid_areas` | rows 421 (D5), 429 |
+| The face patterns that stay are the owner's list, and it is **pending**: nothing is dropped until he names it. The sheets and the migration map ("nearest kept", ranked by structure, then palette, then motion) are ready in `docs/plans/assets/37-faces/`. With the list he also decides renumber or tombstones for `view.pattern`'s index. Until P2 runs, "appended, never inserted" (Face patterns, row 105) stands. | `tools/faces_sheets.py`, `tests/test_faces_map.py` | rows 417 (D1, open), 460 |
+| Faces per instance (`shape.faces.<k>`) come after this plan. | — | row 420 (D4) |
+
 ## Hold the projector (plan 38)
 
 | Decision | Where | Who |
@@ -332,6 +345,8 @@ replaces a row, rewrite that row instead of adding a new one.
 | **Drop puts back the preset's part**, as one undo step to the hold point (the look, the graph and the show's cables, the routes, the desk's preset layer, the macros, the name and dot); the rig's params stay. | `hold._preset_part`, `undo.Undo.revert` | rows 432 (D3, rec), 438, 439 |
 | **The preview shows only behind GRAPH**, drawn only on frames the page shows it. | `ui_graph._backdrop`, `app._draw_preview` | row 433 (D4, rec) |
 | **A hold holds every output**; the PROJECTOR inset is the laptop's view of the room. | `app._draw_render`, `hold.Hold.program` | row 434 (D5, rec) |
+| **While held, GRAPH's node pictures are the preview's**: the thumbnails, their hues and the hover's GPU times come from the renderer the canvas reads; output 1's node shows the program's picture, the PROJECTOR inset's. | `ui_graph.picture_sources`, `hold.canvas_renderer` | rows 498, 499 |
+
 ## Masks are their own wire (plan 39)
 
 The owner's two sentences (2026-10-27), which the plan builds on:

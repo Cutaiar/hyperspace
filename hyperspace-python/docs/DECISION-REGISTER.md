@@ -35,8 +35,10 @@ is the owner's own, 2026-10-25: every save on the newest schema, which
 supersedes the save side of rows 319, 340, 347 and 385 and ruling R10
 (on `preset-schema-6`).
 Rows 396–400 (plan 36, the WYSIWYG graph) are the plan's D1–D5, accepted by the owner as recommended on 2026-10-26, before the build; rows 401–416 are the controller's rulings during that build (two of them the owner's words, 409 and 412) and are answered "controller — 2026-10-26" (on `plan-36-build`).
+Rows 417–500 are plans 37, 38 and 39's, run in parallel on 2026-10-27 and integrated on `plan-37-38-39-integration` (one final PR into `main`): plan 37 took 417–429 and 460, plan 38 430–439 and 461–470, plan 39 440–459 and 471–497, each overflowing its assigned range into the first free numbers; 498–500 are the integrator's, taken at the plan 37 merge.
+Rows 417–429 and 460 (plan 37, nodes as pictures and the faces) were written during the 2026-10-27 run, in the owner's absence. 417 is the plan's D1, the list of face patterns that stay, and it is **open** until the owner names the list. 418–421 are D2–D5, "(rec) — accepted by the controller 2026-10-27". 422–429 and 460 are the controller's rulings during the build, answered "controller — 2026-10-27". The plan needed one row more than its thirteen, so it took 460. They were built on `plan-37-pictures`.
 Rows 430–439 and 461–470 (plan 38, hold the projector) are the plan's D1–D5 (430–434), taken as recommended and accepted by the controller on 2026-10-27 for the owner to keep or overturn, then the controller's rulings during its build (on `plan-38-hold`); the plan overflowed its ten rows into 461–470.
-Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the owner's on 2026-10-27, before the build; rows 448–459 and 471–497 are the controller's rulings during that build, answered "controller — 2026-10-27" (twenty rows were assigned, 440–459; the overflow starts at 471, after plan 37's 460 and plan 38's 461–470; on `plan-39-vision`, three of them, 459, 495 and 496, taken at its merge into `plan-37-38-39-integration`).
+Rows 440–447 (plan 39, vision) are the plan's eight decisions, every one the owner's on 2026-10-27, before the build; rows 448–459 and 471–497 are the controller's rulings during that build, answered "controller — 2026-10-27" (twenty rows were assigned, 440–459; the overflow starts at 471, after plan 37's 460 and plan 38's 461–470; on `plan-39-vision`; three of them, 459, 495 and 496, are the seams with plan 38's hold, settled on `plan-37-38-39-integration`).
 Every other one is in the app now (rows 110–213
 on `plan-24-26-27-integration`, rows from 214 on `plan-28-30-integration`,
 until the owner merges them) and waits
@@ -442,6 +444,19 @@ here; overturn → the change, then the same.
 | 414 | The goldens re-recorded in the build: 9 of 757 | 369 | controller — 2026-10-26 |
 | 415 | Plan 37 is nodes as pictures, and the faces | — | owner — 2026-10-26 |
 | 416 | Plan 36's known follow-ups are recorded, not built | — | controller — 2026-10-26 |
+| 417 | Plan 37 D1: the list of face patterns is the owner's; nothing is dropped until he names it (with it: renumber or tombstones; the `preset.py` edit) | 375 | **open** |
+| 418 | Plan 37 D2: the thumbnail is always drawn, collapsed or expanded | 372 | (rec) — accepted by the controller 2026-10-27 |
+| 419 | Plan 37 D3: picture cables are plain red; the tint sits behind a head switch | 370 | (rec) — accepted by the controller 2026-10-27 |
+| 420 | Plan 37 D4: faces per instance come after this plan | — | (rec) — accepted by the controller 2026-10-27 |
+| 421 | Plan 37 D5: the backward wire is fixed by the area rules, not by re-laying the preset | 376 | (rec) — accepted by the controller 2026-10-27 |
+| 422 | A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps | 370 | controller — 2026-10-27 |
+| 423 | A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later | 370, 374 | controller — 2026-10-27 |
+| 424 | How a node that makes no picture shows one: one table (`graphview.THUMBS`) | 370 | controller — 2026-10-27 |
+| 425 | A picture node's box is the node's width at 16:9, whatever the picture's shape | 372 | controller — 2026-10-27 |
+| 426 | What a thumbnail costs, by kind, and how the ask stays out of the frame | 371, 374 | controller — 2026-10-27 |
+| 427 | Hovering a thumbnail gives the node's lines, the picture's size and its GPU time | 373 | controller — 2026-10-27 |
+| 428 | The tint leans red by at most 20°, read asynchronously; its switch is off by default and kept on the page | 370, 371 | controller — 2026-10-27 |
+| 429 | The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it | 376 | controller — 2026-10-27 |
 | 430 | Plan 38 D1: Take is a hard cut, not a crossfade | 379 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
 | 431 | Plan 38 D2: the turn is one for both; speed and the planes are not held | 377, 383 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
 | 432 | Plan 38 D3: Drop puts back the preset's part, not the rig | 380 | (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn |
@@ -452,24 +467,14 @@ here; overturn → the change, then the same.
 | 437 | Clouds and the effect files present are one for both | 382 | controller — 2026-10-27 |
 | 438 | Drop also puts back what the show's mark carries, a desk learn among it | 380, 381 | controller — 2026-10-27 |
 | 439 | What Drop's one undo step puts back, and what it leaves | 380 | controller — 2026-10-27 |
-| 461 | The hold chips sit first on GRAPH's head | 377, 378 | controller — 2026-10-27 |
-| 462 | A landing while held keeps the held program's nodes | 377, 378 | controller — 2026-10-27 |
-| 463 | The program's kept params are not the preset's | 378 | controller — 2026-10-27 |
-| 464 | An undo mark made while held records the landed graph's own instances | 380 | controller — 2026-10-27 |
-| 465 | A load's delay reset while held is the preview's | 379 | controller — 2026-10-27 |
-| 466 | The canvas reads the preview's graph while held | 378 | controller — 2026-10-27 |
-| 467 | The preview is drawn with output 1's switches, at full dim | 377 | controller — 2026-10-27 |
-| 468 | The preview renderer lives for the session; its sub-objects are not hot-reload targets | 382 | controller — 2026-10-27 |
-| 469 | The PROJECTOR inset draws on imgui's foreground list | 377 | controller — 2026-10-27 |
-| 470 | The plan 39 seam: no segment workers in the preview | — | controller — 2026-10-27 |
-| 440 | D1: a mask is its own wire, with converters `matte` (picture → mask) and `cut` (picture + mask → picture); never in alpha | 388, 389 | owner — 2026-10-27: "Alpha is: how transparent is this thing? A mask means that I have a pattern here" |
-| 441 | D2: a mask wired where a picture is taken reads white where it passes, black elsewhere; one-way | 389 | owner — 2026-10-27 |
-| 442 | D3: `segment` makes two pictures, `fg` and `bg`, and its matte as `segment.mask`; picture → mask is `matte` | 384 | owner — 2026-10-27: "have those two things come out of that node as two bitmaps" |
-| 443 | D4: Apple Vision first, torchvision behind the same node | 384, 385 | owner — 2026-10-27 |
-| 444 | D5: person and motion in this build; subject after | 384, 387 | owner — 2026-10-27 |
-| 445 | D6: `cut` first; no `mask` port on `composite` until the machine asks | 388 | owner — 2026-10-27 |
-| 446 | D7: `edges` an effect file, ahead of the plan | 390 | owner — 2026-10-27 |
-| 447 | D8: plan 39 in parallel with plans 37 and 38 | — | owner — 2026-10-27 |
+| 440 | Plan 39 D1: a mask is its own wire, with converters `matte` (picture → mask) and `cut` (picture + mask → picture); never in alpha | 388, 389 | owner — 2026-10-27: "Alpha is: how transparent is this thing? A mask means that I have a pattern here" |
+| 441 | Plan 39 D2: a mask wired where a picture is taken reads white where it passes, black elsewhere; one-way | 389 | owner — 2026-10-27 |
+| 442 | Plan 39 D3: `segment` makes two pictures, `fg` and `bg`, and its matte as `segment.mask`; picture → mask is `matte` | 384 | owner — 2026-10-27: "have those two things come out of that node as two bitmaps" |
+| 443 | Plan 39 D4: Apple Vision first, torchvision behind the same node | 384, 385 | owner — 2026-10-27 |
+| 444 | Plan 39 D5: person and motion in this build; subject after | 384, 387 | owner — 2026-10-27 |
+| 445 | Plan 39 D6: `cut` first; no `mask` port on `composite` until the machine asks | 388 | owner — 2026-10-27 |
+| 446 | Plan 39 D7: `edges` an effect file, ahead of the plan | 390 | owner — 2026-10-27 |
+| 447 | Plan 39 D8: plan 39 in parallel with plans 37 and 38 | — | owner — 2026-10-27 |
 | 448 | The cut-through blend is a window's, not a laid-over ground's; eight backdrop goldens re-recorded | 393 | controller — 2026-10-27 |
 | 449 | `edges`: Sobel on luma, threshold a ramp, glow a second ring, direction a full-angle hue | 390 | controller — 2026-10-27 |
 | 450 | `edges` source mode keeps the source's alpha (`src × m`) | 390 | controller — 2026-10-27 |
@@ -482,6 +487,17 @@ here; overturn → the change, then the same.
 | 457 | `scene.cover` is not promoted | — | controller — 2026-10-27 |
 | 458 | The picture → mask refusal names the matte | — | controller — 2026-10-27 |
 | 459 | `masks` hot for hot reload; `segment` cold | 389 | controller — 2026-10-27 |
+| 460 | The faces judged from sheets; "nearest kept" a ranked list per mode; the migration map generated and tested | 375 | controller — 2026-10-27 |
+| 461 | The hold chips sit first on GRAPH's head | 377, 378 | controller — 2026-10-27 |
+| 462 | A landing while held keeps the held program's nodes | 377, 378 | controller — 2026-10-27 |
+| 463 | The program's kept params are not the preset's | 378 | controller — 2026-10-27 |
+| 464 | An undo mark made while held records the landed graph's own instances | 380 | controller — 2026-10-27 |
+| 465 | A load's delay reset while held is the preview's | 379 | controller — 2026-10-27 |
+| 466 | The canvas reads the preview's graph while held | 378 | controller — 2026-10-27 |
+| 467 | The preview is drawn with output 1's switches, at full dim | 377 | controller — 2026-10-27 |
+| 468 | The preview renderer lives for the session; its sub-objects are not hot-reload targets | 382 | controller — 2026-10-27 |
+| 469 | The PROJECTOR inset draws on imgui's foreground list | 377 | controller — 2026-10-27 |
+| 470 | The plan 39 seam: no segment workers in the preview | — | controller — 2026-10-27 |
 | 471 | Wired fixtures get goldens and no frame-signature case (`edges-scene`, `mask-as-picture`, `cut-out`, `segment-motion`) | — | controller — 2026-10-27 |
 | 472 | `matte`, `cut`, `segment` are their own performance groups, out of the module overview | — | controller — 2026-10-27 |
 | 473 | `cut.amount` scales the cut-away part, colour and alpha together | 388 | controller — 2026-10-27 |
@@ -509,6 +525,9 @@ here; overturn → the change, then the same.
 | 495 | The three declares settle through the hold (`_settle`, `hold.keep`, `PROGRAM_IDS`) | 384 | controller — 2026-10-27 |
 | 496 | A held matte, cut or segment keeps its knobs for the projector (`HELD_GROUPS`) | 384 | controller — 2026-10-27 |
 | 497 | A removed segment's worker is stopped without waiting; one exit deadline | 392 | controller — 2026-10-27 |
+| 498 | While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's | 378 | controller — 2026-10-27 |
+| 499 | While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's | 378 | controller — 2026-10-27 |
+| 500 | A cut shows its picture on GRAPH; a matte and a segment stay text | — | controller — 2026-10-27 |
 
 "—": no hand check shows it; tests only.
 
@@ -7984,11 +8003,165 @@ Rows 396–400 are the plan's D1–D5, put to the owner and accepted as recommen
 - **Rough edge.** None.
 - **Judge it.** —
 
-## Plan 38 — hold the projector (rows 430–439, 461–470)
+## Plans 37, 38 and 39 — pictures, the hold, vision (rows 417–500)
 
-Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; the owner did not see them before the build, so each is "(rec) — accepted by the controller 2026-10-27" and is the owner's to keep or overturn. Rows 435–439 and 461–470 are the controller's rulings during the build (tasks B1–B3); the plan needed more than its ten rows, so it took 461 onward (after plan 39's range, 440–459, and plan 37's overflow row 460). Built on `plan-38-hold` ([`plans/38-hold.md`](plans/38-hold.md); hand checks 377–383, group AI).
+The three plans ran in parallel on 2026-10-27, each on its own branch, and were integrated on `plan-37-38-39-integration` (plan 38, then plan 39, then plan 37). Their rows are in numeric order below; each plan's own note first.
 
-### 430. D1: Take is a hard cut, not a crossfade
+**Plan 37 — nodes as pictures, and the faces (rows 417–429, 460).** Rows 417–421 are the plan's D1–D5. D1 is **open**: the list of face patterns that stay is the owner's, and nothing is dropped until he names it. The controller accepted D2–D5 as recommended on 2026-10-27, in the owner's absence (the run's ruling 5). Rows 422–429 and 460 are the controller's rulings during the build. The plan was given thirteen rows (417–429) and needed fourteen, so the last one is 460, the first free number after plan 39's range. Built on `plan-37-pictures` ([`plans/37-pictures-and-faces.md`](plans/37-pictures-and-faces.md); hand checks 370–376, group AH). P1 and P3 are built. P2 is a dry run: the sheets and the migration map are in [`plans/assets/37-faces/`](plans/assets/37-faces/), and no shader, preset or golden has changed.
+
+**Plan 38 — hold the projector (rows 430–439, 461–470).** Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; the owner did not see them before the build, so each is "(rec) — accepted by the controller 2026-10-27" and is the owner's to keep or overturn. Rows 435–439 and 461–470 are the controller's rulings during the build (tasks B1–B3); the plan needed more than its ten rows, so it took 461 onward (after plan 39's range, 440–459, and plan 37's overflow row 460). Built on `plan-38-hold` ([`plans/38-hold.md`](plans/38-hold.md); hand checks 377–383, group AI).
+
+**Plan 39 — vision (rows 440–459, 471–497).** Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-27**, before the build ([`plans/39-vision.md`](plans/39-vision.md)); each says what was built against it. Rows 448–459 and 471–497 are the controller's rulings during the build (twenty rows were assigned; the overflow starts at 471 because plan 37 took 460 and plan 38 461–470). Built on `plan-39-vision` (tasks T0–T5, PRs #254, #252, #256, #260, #265, #267); rows 459, 495 and 496 are the seams where plan 38's hold met plan 39's nodes, settled on `plan-37-38-39-integration` (2b185ea). Hand checks 384–393, group AJ.
+
+**The integration (rows 498–500).** Taken by the integrator at the plan 37 merge, where plan 37's thumbnails met plan 38's preview renderer (498, 499) and plan 39's kinds (500).
+
+### 417. Plan 37 D1: the list of face patterns is the owner's; nothing is dropped until he names it
+
+- **Answer.** Open: the owner has not answered. Plan 37 D1 asks which of the 17 face patterns stay. The recommendation was to drop nothing until the owner names the list, and that is what was built.
+- **Built.** A dry run (PR #250). `tools/faces_sheets.py` draws every mode on a preset's shape the way a show draws it: `docs/plans/assets/37-faces/sheet.png` is all 17 on `party-faces`' tesseract, `heart-sheet.png` is all 17 on `plasma-heart`'s Heart, and there is one `<NAME>.png` per mode. `migration-map.md` records which presets show each mode and the ranked "nearest kept" for each (row 460). No factory preset or fixture shows PLAID, BLOOM, METER, PULSE, MARBLE, TRUCHET or KALEIDO, so dropping any of those moves no golden and edits no preset. Nothing in `patterns.glsl`, `patterns.MODES`, the FACES page or any preset has changed.
+- **What the owner decides with the list.** Two questions come with it (the run's ruling 10):
+  - **(a) The index.** A preset stores `view.pattern` as an index (`patterns.py`: "appended, never inserted"). Dropping modes either *renumbers*, which rewrites every preset's value through an old-to-new table and makes an older build read the wrong pattern, so both Macs must be on this build and the library migrated with a backup; or keeps the retired indices as *tombstones*, which the enum, the FACES page and the desk knob skip and which a load maps to the nearest kept mode with a note. Tombstones need no schema change. The controller leans to tombstones.
+  - **(b) The `preset.py` edit.** The migration needs `hyperspace/preset.py`, which writes `view_pattern=` for four factory presets, and `tests/fixtures/factory-sources/presets/`. Plan 37's ownership row gives it neither. The controller allows that edit when P2 runs.
+- **Other options.** Drop the seven modes no preset shows without asking; keep all 17.
+- **To reverse.** P2 has not run, so there is nothing to reverse. Once it runs, the steps are listed in the plan's "What changed in the build".
+- **Rough edge.** The sheets are stills, so METER, PULSE and SPEED's motion only shows on the FACES page with music. Three frames in, the tesseract is still nearly face-on.
+- **Judge it.** Check 375.
+
+### 418. Plan 37 D2: the thumbnail is always drawn, collapsed or expanded
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D2: thumbnails always, or only on collapsed nodes. Recommended "always", because the picture is the node's identity.
+- **Built.** Every picture node draws its picture right after the title line. Collapsed, the node is the title and the picture, and its N7 summary lines move into the hover (row 427). Expanded, it is the title, the picture and then the ports. `graphview.height` counts the box both ways, so nothing below it is overlapped.
+- **Other options.** Only on collapsed nodes, with expanded nodes showing ports only.
+- **To reverse.** The order in `ui_graph._node` and the `thumb` term in `graphview.height`.
+- **Rough edge.** A collapsed picture node no longer shows its N7 lines on the canvas. They are only in the hover.
+- **Judge it.** Check 372.
+
+### 419. Plan 37 D3: picture cables are plain red; the tint sits behind a head switch
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D3: tint picture cables by what flows, or keep them plain red. Recommended plain red first, with the tint behind a switch on the head so the owner can judge it by eye.
+- **Built.** The chip `pictures · tint cables` is last on the GRAPH head and off by default (row 428). Lit, each picture cable's red leans by the hue of the picture its maker draws. `ui_graph.COLOURS` is unchanged.
+- **Other options.** Always tint; never tint.
+- **To reverse.** One `setdefault` (lit by default), or delete `_tint_chip`.
+- **Rough edge.** See row 428.
+- **Judge it.** Check 370 (the tint step).
+
+### 420. Plan 37 D4: faces per instance come after this plan
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D4: faces per instance in this plan, or after. Recommended after, because it is a `graph.py` change that collides with plan 39's work there.
+- **Built.** Nothing. `shape.faces` still takes one picture for every drawn instance.
+- **Other options.** A `shape.faces.<k>` port per drawn instance in this plan.
+- **To reverse.** It is a later plan's work.
+- **Rough edge.** A kaleido branch cannot land on copy 1 and the pattern on copy 2.
+- **Judge it.** —
+
+### 421. Plan 37 D5: the backward wire is fixed by the area rules, not by re-laying the preset
+
+- **Answer.** (rec) — accepted by the controller 2026-10-27. Asked in plan 37 D5: fix the backward wire through the area rules or through the preset. Recommended the rules: "a node whose only consumers are in one area is laid in that area". As built, the rule is extended for a node whose consumers are in several areas (row 429, the run's ruling 11).
+- **Built.** `graphview.laid_areas`, applied in `graphview.build`. In the `acid-scene` fixture, acid.2 now stands in LOOK-BACK, left of the look-back, and every cable out of it runs right. `tests/test_graph_areas.py::test_no_cable_runs_backwards_across_areas` sweeps every factory preset (25) and every graph fixture (22). No preset was edited: `acid-scene` is a test fixture, not a factory preset.
+- **Other options.** Re-lay `acid-scene` by hand.
+- **To reverse.** One function, `graphview.laid_areas`, and its call in `build`.
+- **Rough edge.** See row 429.
+- **Judge it.** Check 376.
+
+### 422. A thumbnail is 192 texels on its long side, made by one 4×4-tap downsample pass, not mipmaps
+
+- **Answer.** controller — 2026-10-27. P1 says "mipmapped". `build_mipmaps` on a frame-owned texture switches its min filter for every later sample of that texture, which is a golden risk, and it would build a full mip chain on a 1080p target per node per frame.
+- **Built.** `outputs.THUMB_PX = 192`, at the picture's own aspect (`thumb_size`). Each node gets one draw of `THUMB_FS`: sixteen bilinear taps over one thumbnail texel's footprint, through a sampler of its own, written opaque (the picture over black). `outputs.PreviewTextures` keeps the textures. It sits beside `Preview` and knows nothing of the graph, importing only `moderngl` and `glsl`. `render.thumb_source` works out what each wanted name's picture is, and `Renderer._thumbnails` calls it last in `_for_the_panel`. The renderer holds one `Renderer.thumbs`, made again after a hot reload, and the page reads it as `panel.renderer.thumbs`.
+- **Other options.** Mipmaps; `copy_framebuffer`, a nearest blit that aliases badly at 10:1; a second, chained half-size pass.
+- **To reverse.** One shader string and one constant in `outputs.py`.
+- **Rough edge.** At 10:1 the coverage can shimmer on fine line art. The picture's alpha is dropped on the thumbnail, so a see-through layer reads as it would on a black window.
+- **Judge it.** Check 370.
+
+### 423. A thumbnail is dropped after a second unwanted; a node that made nothing is dimmed, then black a second later
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `THUMB_DROP_S = 1.0`: a name not wanted for a second is forgotten and its texture freed. `THUMB_BLACK_S = 1.0`. `PreviewTextures.shade` is 1 when the renderer copied the node in the last frame, 0.45 (`DIM`) while the last copy is less than a second old, and 0 after that. The page multiplies the picture by this number; nothing is copied for it. A node that stops drawing (switched off behind a switch, a hand that leaves, unwired) goes grey at once and black after a second. A node panned off screen has its texture freed a second later.
+- **Other options.** Hold the last picture for ever; drop at once, which flickers while panning; keep it longer.
+- **To reverse.** Three constants.
+- **Rough edge.** A node wanted for the first time shows a black box for one frame. Output 1's picture is the page's `Preview`, which has no age, so it never dims (row 424).
+- **Judge it.** Checks 370, 374.
+
+### 424. How a node that makes no picture shows one: one table
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMBS` maps each kind to how its picture is shown:
+  - `picture`: every picture kind (channel, pattern, scene, backdrop, composite, switch, delay, resize, lookback, echo, dream, effect, copy, hands layer, guide).
+  - `scene`: the shape and a cloud show the first scene that draws them, faint (`ui_graph.FAINT_PIC = 0.4`).
+  - `layer`: a hands node shows the first hands layer that draws it, else the scene it is in, not faint.
+  - `window`: output 1 shows the page's existing `Preview`, wanted only while its node is on screen. Any other output shows the `Handoff.frame` its presenter is handed (no readback, the hands not laid on), or a publish-only output's own target.
+
+  All outputs, the camera, the ground and the whole modulation side stay text. A kind the table does not name whose `OUTPUT` is `IMAGE` is a `picture` (`graphview.thumb_of`). That is the seam for plan 39's `segment`, `matte` and `cut`, with no code written for plan 39.
+- **Other options.** Show output N≥2 by the end's frame texture (before the fold); show All outputs as its `image` wire's picture.
+- **To reverse.** The table entries in `graphview.py` and the matching branch in `render.thumb_source`.
+- **Rough edge.** Output 1 never dims. Outputs 2–4 show their window's picture without the hands and the readout laid on.
+- **Judge it.** Check 370.
+
+### 425. A picture node's box is the node's width at 16:9, whatever the picture's shape
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.THUMB_H = 134` canvas units (190 × 1.25 × 9/16). The picture is fitted whole inside and letterboxed on black, so the layout never moves when a picture's size changes.
+- **Other options.** The box at the picture's own aspect. A portrait channel would then push its column down, and the layout would move whenever a window resized.
+- **To reverse.** The `thumb` height in `graphview.height` and in `ui_graph._thumb`.
+- **Rough edge.** Picture nodes laid out automatically moved once, because their height changed. Stored positions did not move. A faint node's title is still faint.
+- **Judge it.** Check 372.
+
+### 426. What a thumbnail costs, by kind, and how the ask stays out of the frame
+
+- **Answer.** controller — 2026-10-27.
+- **Built.**
+  - **One blit** (the 192-texel pass) for a node that already made a texture this frame: the scene, a hands layer, a channel's fit, the pattern, a look-back's trail or a dream bound by a consumer, an effect held for two readers, a composite made into a texture, a window's handoff.
+  - **A full-size repaint, then the blit** for a node that painted straight into its consumer: an effect with one reader, a switch, a delay or echo laid by cover, a resize, a composite or look-back painted direct. Each such node holds a full-size frame target while it is wanted, about 8 MB per node at 1080p RGBA8 and twice that for a half-float one.
+  - **Who is asked.** Only wanted nodes (on screen, drawn). Nothing behind an unpicked switch input: every kind is checked against `Graph.pulled` before anything is read (a review fix). Nothing that reads nothing.
+  - **Out of the frame.** During the asks the GPU timer is muted and the frame's `stats` are restored afterwards. The outputs are byte-identical with every node wanted and with none (tested over delay, look-back, switch, effect and composite chains). When anything was copied, `_thumbnails` flushes the render context (`glFlush`).
+  - **On SYSTEM:** `thumbnails · N copied · K repainted · M kept`.
+- **Other options.** Paint at the thumbnail's size (`Frame.at`). That is cheaper but gives a different picture (a see-through ground).
+- **To reverse.** One branch per kind in `render.thumb_source`.
+- **Rough edge.** A look-back asked after the frame's capture includes this frame's commit. An echo whose slot was just rewritten reads nothing and dims. The cost on the show Mac has not been measured.
+- **Judge it.** Checks 371, 374.
+
+### 427. Hovering a thumbnail gives the node's lines, the picture's size and its GPU time
+
+- **Answer.** controller — 2026-10-27.
+- **Built.** `graphview.picture_hover`, called from `ui_graph.thumb_tip`, gives these lines in order:
+  1. The node's title.
+  2. `graphview.summary`'s lines: param counts, "N picture ports", the node's `said`, a switch's "picks inK", "reaches nothing".
+  3. `W×H picture`, the size of the last copy (`VNode.picture`; output 1 takes the `Preview`'s size).
+  4. `gpu N.NN ms`, SYSTEM's rolling median, looked up by the render node's name.
+  5. The node's status, when it has one.
+
+  A line with nothing behind it is left out. The tooltip shows only while the pointer is on the picture. On the title, the old hover is unchanged.
+- **Other options.** Hover on the whole node; the summary drawn under the thumbnail, which takes back the room the picture was given.
+- **To reverse.** One branch in `ui_graph._hover`, or the lines in `picture_hover`.
+- **Rough edge.** A geometry shown as its scene's picture has a time line only when it is timed under its own name. An effect that ran no pass this frame has no time line. A faint node's picture says "reaches nothing", but not `FAINT_TIP`'s advice, which its title still gives. That the hover works inside `imgui_node_editor` is only shown headless, through a stand-in.
+- **Judge it.** Check 373.
+
+### 428. The tint leans red by at most 20°, continuously; it is read from the thumbnail asynchronously, and its switch is off by default and kept on the page
+
+- **Answer.** controller — 2026-10-27. Revised in review: the first cut used a blocking `tex.read()`, effectively a `ctx.finish()` on every reading frame, and its linear arc flipped at cyan.
+- **Built.**
+  - **The formula.** `ui_graph.tint(hue, strength)` moves red's hue by `TINT_SPAN` (20°) × sin(2π·(hue − red)) × min(1, strength / `TINT_FULL` (0.25)), keeping red's saturation and value. The yellow-green half leans orange and the blue-violet half leans rose. Red, cyan and grey pictures give no lean. The tint stays more than 10° from the trigger's amber and 60° from the mask's purple.
+  - **The hue.** `outputs.dominant_hue` is a chroma-weighted circular mean. Each frame the switch is lit, `PreviewTextures.begin_frame` first collects the hue started the frame before (a 1 KB pixel buffer), then starts at most one new one: the oldest thumbnail whose hue is at least a second old (`HUE_EVERY_S`) gets one `THUMB_FS` pass into a 16×16 target and `fbo.read_into(buffer)`. No texture is ever `read()`, and that is tested.
+  - **The switch.** `st["tint"]` is page state, like `patched_only` and `backdrop`. It is off by default and saved with neither the preset nor the show (tested). Reads stop the frame it goes off. The chip is last on the head, so plan 38's hold chips land before it in a one-line merge.
+- **Other options.** An RGB mix with the picture's colour (a blue picture would make a purple cable, the mask's colour); the full hue; a preset value or a `config.toml` key for the switch.
+- **To reverse.** Two constants, or `tint` itself; one `setdefault` for the switch.
+- **Rough edge.** A ±20° lean is subtle by design, and a red picture and a cyan one both leave the cable plain red. The hue lags the picture by a frame plus up to a second. The switch has to be lit again after every launch. Bundles (value and trigger) are never tinted.
+- **Judge it.** Checks 370 (the tint step), 371.
+
+### 429. The area rule: an effect is laid in the leftmost area of its consumers that is not left of what feeds it
+
+- **Answer.** controller — 2026-10-27 (the run's ruling 11). The brief's tie-break was "a node with consumers in several areas keeps today's area". That cannot fix P3's own wire: in `acid-scene`, acid.2 feeds the look-back's `image` and `occluder` *and* a composite's `under` in EFFECTS.
+- **Built.** In `graphview.laid_areas`, only EFFECTS-area frame nodes move (an effect, copy, composite or resize). Such a node whose consumers sit left of the effects is laid in the leftmost consumer area that its feeds allow. These do not count as consumers:
+  - a kept cable (into a look-back's or delay's `image`, or an old D1 `after`);
+  - a consumer left of what feeds the node (a return by design);
+  - a consumer of no area.
+
+  A chain moves as a whole. A node whose consumers all sit to its right (the usual case, into OUTPUTS) never moves. When there is one consumer area left of EFFECTS, the result is the same as D5's. The rule names a node's *area*, never its *position*: `layout` skips every saved position, and no layout runs by itself (`test_auto_layout_stacks_each_area_and_keeps_saved_positions`). The reviewer traced that the rule cannot place a node left of its feeders and cannot loop.
+- **Other options.** D5 read literally (one consumer area only), which leaves the wire backwards; move every kind by the rule, which would carry LFOs into the scene.
+- **To reverse.** Restrict `laid_areas` to nodes whose counted consumers share one area, or drop its call in `build`. Cost if wrong: one cable drawn backwards on one fixture.
+- **Rough edge.** A moved effect takes its area's chips and frame with it. A preset saved before plan 37 with an acid.2-style effect placed in the EFFECTS region keeps that position, but its area is now LOOK-BACK, so LOOK-BACK's frame reaches over to it until **tidy**. A moved effect does not wrap in the effects' rows of four.
+- **Judge it.** Check 376.
+
+### 430. Plan 38 D1: Take is a hard cut, not a crossfade
 
 - **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D1: a cut, or a crossfade over `output.take_fade` seconds.
 - **Built.** **take** (the chip, or `output.take` on a desk button) lets the hold go and the next frame draws every output from what is landed. The look-back's trails carry on through the cut, because they belong to the program's renderer.
@@ -7997,7 +8170,7 @@ Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; t
 - **Rough edge.** A cut between two very different looks can read as harsh in the room.
 - **Judge it.** Check 379.
 
-### 431. D2: the turn is one for both; speed and the planes are not held
+### 431. Plan 38 D2: the turn is one for both; speed and the planes are not held
 
 - **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D2: hold the turn as well (a second integrator for the program).
 - **Built.** `rot.*`, `view.three_d`, `view.speed` and `view.plane.*` are out of the held set (`hold.ONE_FOR_BOTH`, `ONE_FOR_BOTH_PREFIXES`). The angles are integrated once a frame, before either draw, so turning speed or a plane knob during a hold changes the projector's turn too, and does not count on the red `HELD` line. (Speed and the planes were held in the first cut; B3's review moved them out: they are the integrator's, not the look's.)
@@ -8006,7 +8179,7 @@ Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; t
 - **Rough edge.** A speed or plane change made while building the next look is seen in the room at once.
 - **Judge it.** Checks 377, 383.
 
-### 432. D3: Drop puts back the preset's part, not the rig
+### 432. Plan 38 D3: Drop puts back the preset's part, not the rig
 
 - **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D3: Drop restores the preset's part only, or everything since HOLD, rig included.
 - **Built.** Drop is one `Undo.revert` to the hold point, cut down by `hold._preset_part` to the performance groups: the rig's params (`eye.*`, output, hands feel, tempo) stay as they are now. Row 439 lists what is put back.
@@ -8015,7 +8188,7 @@ Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; t
 - **Rough edge.** The rig's drawn cables are part of "the graph", not the rig's params, so Drop puts them back (row 438).
 - **Judge it.** Check 380.
 
-### 433. D4: the preview shows only behind GRAPH
+### 433. Plan 38 D4: the preview shows only behind GRAPH
 
 - **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D4: preview only behind GRAPH, or also on its own window or screen.
 - **Built.** The preview is drawn only on frames where the GRAPH page shows it (`preview.want()` comes only from `ui_graph._backdrop`, which a hold forces on). With the page closed a hold costs one compare per held param.
@@ -8024,7 +8197,7 @@ Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; t
 - **Rough edge.** The operator has to be on GRAPH to see what TAKE will put up.
 - **Judge it.** Checks 377, 382.
 
-### 434. D5: a hold holds every output
+### 434. Plan 38 D5: a hold holds every output
 
 - **Answer.** (rec) — accepted by the controller 2026-10-27; the owner to keep or overturn. Asked in plan 38 D5: every output, or per output (the laptop's output 1 follows the edits while the projector holds).
 - **Built.** One `draw_outputs` runs inside `Hold.program`, so every window and every publish-only output (Syphon, NDI) shows the program. The PROJECTOR inset on GRAPH is the laptop's view of the room.
@@ -8078,100 +8251,7 @@ Rows 430–434 are the plan's D1–D5, answered by the build's recommendation; t
 - **Rough edge.** Row 438's learn.
 - **Judge it.** Check 380.
 
-### 461. The hold chips sit first on GRAPH's head
-
-- **Answer.** controller — 2026-10-27 (B1). First on the head, before plan 36's chips: **hold**, or while held a lit **held** then **take** · **drop**; after them collapse/expand, patched only, tidy, **preset only** and output behind. The red `HELD m:ss — …` line goes under the area chips, above the note / last edit / hint line.
-- **Built.** A hold is the first thing the eye meets on GRAPH; plan 36's chips keep their order and `· N hidden` stays in the counts.
-- **Other options.** After **preset only**, or on their own line above the head.
-- **To reverse.** Cheap: one `_hold_chips(panel)` call in `ui_graph._head`.
-- **Rough edge.** On a narrow page three more chips push the counts text right, where `ui.fit_text` cuts it.
-- **Judge it.** Checks 377, 378.
-
-### 462. A landing while held keeps the held program's nodes
-
-- **Answer.** controller — 2026-10-27 (B3's Critical; ruling 12). Every `GraphSection` landing (a load, a GRAPH edit, an undo) settles the effect instances, switch picks, resizes and extra look-backs to its graph, which stripped the program's. Now `GraphSection._settle` asks the hold's `keep(kind, names)` for each kind; while held that returns the landed names plus the program's, snapshotted at engage (`GraphSection.names()`). Take releases the hook and settles to the live graph; Drop releases it before its revert lands the hold point. Ruling 12 allowed plan 38 this edit to `preset.py`'s land block.
-- **Built.** With the projector held, **new**, loading another preset, deleting an effect or switch on GRAPH, or ⌘Z leave the projector's look whole: effects still drawn, switch picks kept, effect clocks running on. After Take the program's effects are gone if the new look lacks them; if it has them, their clocks carry on mid-stride. Tests: `test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`, `test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`, `test_an_effects_clock_runs_on_through_hold_land_and_take`, `test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`.
-- **Other options.** A second `FxState` and registry slice for the program (large); refuse landings while held (defeats the point).
-- **To reverse.** Cheap: the hook defaults to none, and removing the hold removes it.
-- **Rough edge.** While held, the kept instances' params still exist in the registry, so they show on the EFFECTS and desk pages and can be learned; GRAPH does not draw them. An effect deleted during the hold and added again before Take gets the program's kept values, not its defaults. The program graph rebuilds (losslessly) whenever a landing changes the effect set, which corrects B1's note that it "never rebuilds while held". Plan 39's mattes, cuts and segments must join the same hook at integration (the list is in `plans/38-hold.md`).
-- **Judge it.** Checks 377, 378.
-
-### 463. The program's kept params are not the preset's
-
-- **Answer.** controller — 2026-10-27 (B3; ruling 12b). `Presets._values` leaves out `Hold.program_only()`, the kept instances the live graph lacks; `program_only` reads `hold.PROGRAM_IDS` (kind → ids) and raises `KeyError` for a kind it does not know, so a new kind cannot slip into a save silently.
-- **Built.** Saving during a hold writes only the live graph's values; the dirty dot does not light, or go out, for the projector's leftovers, nor change at Take.
-- **Other options.** Let a save write them: the next load would carry values for nodes the graph lacks, dead ids in the owner's library.
-- **To reverse.** Cheap: drop the filter.
-- **Rough edge.** None known.
-- **Judge it.** Check 378 (save during a hold, then reload).
-
-### 464. An undo mark made while held records the landed graph's own instances
-
-- **Answer.** controller — 2026-10-27 (B3's verification). `GraphSection.mark()` records `spec.effect_names()` while a hold is on and a spec has landed, not `FxState.held` (which then includes the program's kept instances). Unheld the two are equal (plan 36 T3).
-- **Built.** After Take, ⌘Z of a step made during the hold lands exactly that step's graph; no program-only effect comes back, and a save carries no dead id. Test: `test_an_undo_after_take_brings_no_program_only_instance_back`.
-- **Other options.** Have `put` clip the mark to the landed spec's names when no hold is on (equivalent).
-- **To reverse.** Cheap.
-- **Rough edge.** None known.
-- **Judge it.** Check 380.
-
-### 465. A load's delay reset while held is the preview's
-
-- **Answer.** controller — 2026-10-27 (B3; ruling 12). `Presets.load`'s delay reset (R19) goes to the hold while held (`GraphSection.hold.reset_delays`): the preview renderer's delays are reset and the hold marks itself "loaded". At Take, if a load happened, the projector's renderer is reset.
-- **Built.** Loading during a hold no longer cuts the projector's echo or delay trails; the preview starts empty, as a load should. Take after a load starts the projector's delays empty; Take without one keeps them. Test: `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
-- **Other options.** Never reset at Take: the old preset's trail would bleed into the new look.
-- **To reverse.** Cheap.
-- **Rough edge.** A load made before the preview renderer exists (GRAPH never opened) resets nothing until Take.
-- **Judge it.** Check 379.
-
-### 466. The canvas reads the preview's graph while held
-
-- **Answer.** controller — 2026-10-27 (B3; ruling 13). `hold.canvas_renderer(panel)` returns the preview renderer while held and drawn, otherwise the panel's own; `ui_graph`'s `view_of`, `render_edit` and `_edit` and `ui.py`'s `graph_words` and `dormant_lines` read `_graph` through it.
-- **Built.** While held, nodes added on GRAPH get real refs, and the dormant and refusal lines describe the preview (what TAKE puts up), not the projector. Test: `test_the_canvas_reads_the_previews_graph_while_held`.
-- **Other options.** None worth it.
-- **To reverse.** Cheap.
-- **Rough edge.** Until the preview has been drawn once (the first frame with GRAPH showing) the canvas reads the held graph. Plan 37's thumbnails (`thumbs.want`, the timing line) must read through the same helper; the controller routes them at the plan 37 merge.
-- **Judge it.** Check 378.
-
-### 467. The preview is drawn with output 1's switches, at full dim
-
-- **Answer.** controller — 2026-10-27 (B3). `app._draw_preview` passes output 1's mutes and flips, with dim forced to 1.0 (the first cut used `Switches()` defaults).
-- **Built.** The backdrop while held is oriented and muted like the unheld backdrop (output 1), without the room's dim.
-- **Other options.** `Switches()` defaults, or output 1's dim too.
-- **To reverse.** One line in `app._draw_preview`.
-- **Rough edge.** A flip set for a Pepper's Ghost glass shows mirrored on the laptop; the unheld backdrop already does this.
-- **Judge it.** Check 377.
-
-### 468. The preview renderer lives for the session; its sub-objects are not hot-reload targets
-
-- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). The preview renderer is made on first use and kept after Take (its GL objects stay). It joins the hot-reload targets once made, but its sub-objects (its `Fx` chain, look-back, ghosts) are not targets, so a reload of `fx.py` updates them only on the main renderer.
-- **Built.** Nothing new: the first cut's behaviour.
-- **Other options.** Release it at Take or Drop, or add its sub-objects to the targets list (small).
-- **To reverse.** Small.
-- **Rough edge.** After a hot reload of an effect module during a hold, the preview may draw the old code until restart.
-- **Judge it.** Check 382.
-
-### 469. The PROJECTOR inset draws on imgui's foreground list
-
-- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). `ui_graph._monitor` draws on the foreground draw list, so the inset sits over popups and menus opened on the canvas (the node picker, context menus) in its corner. The window's draw list would put it under the node editor's child canvas.
-- **Built.** The inset is always visible while held, over anything in the top-right corner.
-- **Other options.** Draw it inside the editor's canvas as a suspended overlay (moderate).
-- **To reverse.** Moderate.
-- **Rough edge.** A picker opened near the top right while held is partly hidden.
-- **Judge it.** Check 377 (open the node picker near the top right while held).
-
-### 470. The plan 39 seam: no segment workers in the preview
-
-- **Answer.** controller — 2026-10-27 (ruling 13). The preview renderer gets no segment workers: a `segment` node in the preview passes through and says "no worker in the preview". `Renderer.close` closes only the workers it made (the preview shares media, hands, look-back and fx state with the main renderer), and the app's close list adds the preview's close. Plan 39 T4 builds this; plan 38 changes nothing for it.
-- **Built.** Nothing in plan 38.
-- **Other options.** A second worker for the preview (twice the GPU cost).
-- **To reverse.** Plan 39's.
-- **Rough edge.** A segment-based look shows unsegmented in the preview until Take.
-- **Judge it.** Plan 39's AJ checks, with a hold on.
-## Plan 39 — vision (rows 440–459, 471–497)
-
-Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-27**, before the build ([`plans/39-vision.md`](plans/39-vision.md)); each says what was built against it. Rows 448–459 and 471–497 are the controller's rulings during the build (twenty rows were assigned; the overflow starts at 471 because plan 37 took 460 and plan 38 461–470). Built on `plan-39-vision` (tasks T0–T5, PRs #254, #252, #256, #260, #265, #267); rows 459, 495 and 496 were taken at the plan 39 integration merge into `plan-37-38-39-integration` (2b185ea), where plan 38's hold met plan 39's nodes. Hand checks 384–393, group AJ.
-
-### 440. D1: a mask is its own wire (`mask`), with explicit converters — `matte` (picture → mask) and `cut` (picture + mask → picture); a mask never rides in alpha
+### 440. Plan 39 D1: a mask is its own wire (`mask`), with explicit converters — `matte` (picture → mask) and `cut` (picture + mask → picture); a mask never rides in alpha
 
 - **Answer.** owner — 2026-10-27: "Alpha is: how transparent is this thing? A mask means that I have a pattern here … Either the pixel passes, or it doesn't. I don't necessarily want to ride on alpha to make that happen."
 - **Built.** `graph.MASK` is a one-channel 8-bit (R8) texture at its maker's size: 1 passes, 0 does not, a value between only at an edge a feather or softness asked for. Its makers: `matte[.n]`, `segment[.n].mask`, `scene.cover`. Its takers: `cut[.n].mask`, `lookback.cover`, and any picture port through the promotion (row 441). No pass writes a mask into a picture's alpha except `cut` and `segment.fg`/`.bg`, whose job that is. `hyperspace/masks.py` holds the passes (`MATTE_FS`, `BLUR_FS`, `PROMOTE_FS`, `CUT_FS`, `MOTION_FS`, `LEARN_FS`, `DOWN_FS`, `MaskPasses`). Tests: `tests/test_graph_masks.py`, `tests/test_graph_cut.py`.
@@ -8180,7 +8260,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** Two nodes (`cut` then `composite`) where one might do (row 445).
 - **Judge it.** Checks 388, 389.
 
-### 441. D2: a mask may be wired where a picture is taken — white where it passes, black elsewhere; one-way, the reverse is always a `matte`
+### 441. Plan 39 D2: a mask may be wired where a picture is taken — white where it passes, black elsewhere; one-way, the reverse is always a `matte`
 
 - **Answer.** owner — 2026-10-27: yes.
 - **Built.** `_wired_error` accepts a mask maker into any `image` port; a picture into a mask port is refused in words that name the converter (row 458). The consumer reads the mask through one `graph.MaskPicture` per mask node (row 453): opaque white where it passes, opaque black elsewhere, fitted by cover at the consumer's size. A mask port (`lookback.cover`, `cut.mask`) takes the mask itself, never the promoted picture.
@@ -8189,7 +8269,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** A promoted mask wired into `composite.over` or `lookback.occluder` is an opaque picture everywhere, so it covers what is under it: it is not a cut. To cut, wire the mask into `cut.mask`.
 - **Judge it.** Check 389.
 
-### 442. D3: `segment` takes any picture and makes two, `segment.fg` and `segment.bg`; its matte is a third pin, `segment.mask`; picture → mask is the separate `matte`
+### 442. Plan 39 D3: `segment` takes any picture and makes two, `segment.fg` and `segment.bg`; its matte is a third pin, `segment.mask`; picture → mask is the separate `matte`
 
 - **Answer.** owner — 2026-10-27: "I can take an arbitrary bitmap and do foreground/background segmentation on that, and then have those two things come out of that node as two bitmaps. A separate node could handle the conversion of a bitmap into a mask."
 - **Built.** `segment[.n]` (`graph.SegmentAt`, `SegmentNode`, `SegmentPin`): one `image` in; pins `fg` and `bg` (pictures, each one `CUT_FS` pass over the input by the matte, made at the frame's size: row 487) and `mask` (the matte at the model's size). The bare `segment` is not a source: a wire from it is refused in its pins' words. `segment.N`'s pins are matched by `graph.segment_pin` and drawn on GRAPH for every instance (row 493). Several segments are several workers.
@@ -8198,7 +8278,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** Before the first matte, `fg` is the input whole and `bg` reads nothing.
 - **Judge it.** Check 384.
 
-### 443. D4: the backend is Apple Vision first (the Neural Engine); torchvision behind the same node as the fallback
+### 443. Plan 39 D4: the backend is Apple Vision first (the Neural Engine); torchvision behind the same node as the fallback
 
 - **Answer.** owner — 2026-10-27: yes.
 - **Built.** `segment.pick_backend(cfg)` reads `[segment] backend` (`"auto"`: Vision on macOS, else torch; `"vision"`; `"torch"`), finding the library with `find_spec` without importing it; a missing library is a reason string on the node and starts no thread. `VisionBackend`: `VNGeneratePersonSegmentationRequest` through pyobjc, one request per quality level, the `L008` pixel buffer read into numpy (resampled to the frame's aspect: row 480). `TorchBackend`: LR-ASPP MobileNetV3, class 15, fp16 on MPS, one model shared per device and dtype (weights: row 485). New dependency `pyobjc-framework-vision>=12.2 ; sys_platform == 'darwin'` (it pulls in `pyobjc-framework-coreml`): `uv sync` on both Macs.
@@ -8207,7 +8287,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** The live tests run each backend once on a synthetic frame; no real person has been segmented.
 - **Judge it.** Checks 384, 385.
 
-### 444. D5: the modes in this build are person and motion (a background model); subject after
+### 444. Plan 39 D5: the modes in this build are person and motion (a background model); subject after
 
 - **Answer.** owner — 2026-10-27: yes.
 - **Built.** `segment.mode` is a choice person / motion / subject, not modulatable. Person runs the worker; motion is two GLSL passes on the frame thread with no model (row 482); subject is declared and refused in words (row 486).
@@ -8216,7 +8296,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** Motion keys shadows and the projector's own light.
 - **Judge it.** Checks 384, 387.
 
-### 445. D6: `cut` first; a `mask` port on `composite` only if the two-node wiring feels like one too many at the machine
+### 445. Plan 39 D6: `cut` first; a `mask` port on `composite` only if the two-node wiring feels like one too many at the machine
 
 - **Answer.** owner — 2026-10-27: cut first.
 - **Built.** `cut[.n]` (`graph.CutAt`, `CutNode`): `image` and `mask` in, a picture out. `composite` is unchanged. The owner's case is `fg → cut.image`, `mask → cut.mask`, `cut → composite.over`, `bg → composite.under`; the cut-out starter (row 490) wires the shorter `segment.fg → composite.over`.
@@ -8225,7 +8305,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** Cutting a picture onto another takes two nodes.
 - **Judge it.** Check 388.
 
-### 446. D7: `edges` is an effect file, ahead of the plan
+### 446. Plan 39 D7: `edges` is an effect file, ahead of the plan
 
 - **Answer.** owner — 2026-10-27: yes (T0).
 - **Built.** `hyperspace/shaders/fx/edges.glsl`: no Python; on the FX page and in the picker like any effect, off until switched on. Rows 449–451 are its build. Fixture `edges-scene` (8 goldens). T0 stands alone and may go to `main` on its own.
@@ -8234,7 +8314,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **Rough edge.** A thin line gives two edges (a doubled outline).
 - **Judge it.** Check 390.
 
-### 447. D8: plan 39 runs in parallel with plans 37 and 38, each on its own branch
+### 447. Plan 39 D8: plan 39 runs in parallel with plans 37 and 38, each on its own branch
 
 - **Answer.** owner — 2026-10-27: parallel (it was "before plans 37 and 38").
 - **Built.** `plan-39-vision`, merged into `plan-37-38-39-integration` second (after plan 38, before plan 37), under the file-ownership table in [`plans/37-38-39-orchestrator-prompt.md`](plans/37-38-39-orchestrator-prompt.md).
@@ -8344,12 +8424,114 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 
 ### 459. `masks` is hot for hot reload; `segment` stays cold
 
-- **Answer.** controller — 2026-10-27, at the integration merge (ruling 14; T2 left `masks` cold because `hotreload.py` is plan 38's file).
+- **Answer.** controller — 2026-10-27 (ruling 14; T2 left `masks` cold because `hotreload.py` is plan 38's file).
 - **Built.** `hotreload.MODULES` holds `"masks"` after `glsl` and before `render`; `Renderer.on_reload` releases the cached `MaskPasses`, so a saved `masks.py` takes effect on the next frame. `segment` is left off, like `app`: its worker threads outlive a reload, so a re-executed copy would be a second module beside the live workers. `tests/test_hotreload.py`'s `cold` lists `segment` with that reason.
 - **Other options.** `segment` on `MODULES` (the workers keep their old class while new nodes use the new one).
 - **To reverse.** One line in each of two files.
 - **Rough edge.** An edit to `segment.py` needs a restart.
 - **Judge it.** Check 389 (the last step).
+
+### 460. The owner judges the faces from sheets; "nearest kept" is a ranked list per mode; the migration map is generated and tested
+
+- **Answer.** controller — 2026-10-27. This is row 417's dry run. Numbered 460 because plan 37's range (417–429) holds thirteen rows.
+- **Built.**
+  - **The sheets.** `tools/faces_sheets.py` is a tool of its own. It is not `tools/preset_shots.py`, which is a hand-pose tool with no mode axis. Each tile is the preset loaded through the real `Presets` over a scratch home (the golden rig), with its own `pattern → shape.faces` wire, the hands absent, `view.pattern` set to the mode, the mix at 1.0, and the eight inputs at the factory depth on plan 22's medium passage. It is read three frames in, and the tile is the middle 480×300 at full resolution. The Heart sheet is lit at `view.bright` 2.5.
+  - **Nearest kept.** `faces_sheets.NEAREST` gives each mode three others, nearest first, each with a reason. They are ranked by structure on the face first (radial, straight lattice, cell lattice, flowing field, band reader), then palette and light, then motion. `nearest_kept(mode, kept)` takes the first kept name in that list, else the first kept mode in `NAMES` order other than FLAT. So any list the owner names answers "dropped → nearest kept" without a second judgement.
+  - **The map.** `docs/plans/assets/37-faces/migration-map.md` is written by `--map`, never by hand. For each mode it gives the presets that show it, split into on screen, faces off and unwired, as every factory preset and fixture lands through the real loader. `tests/test_faces_map.py::test_the_map_matches_every_preset_and_fixture_as_loaded` (fast tier) holds the map to the presets.
+- **Other options.** A pixel distance between tiles, which ranks by colour and misses structure; the owner naming each replacement himself; a hand-written map.
+- **To reverse.** Edit `NEAREST` and re-run `--map`, or the owner names the replacements. Delete the test and the map becomes a snapshot.
+- **Rough edge.** The ranking reflects the controller's eye on the sheets and the shader source, not the owner's. Any preset edit that changes a mode or the faces wire needs a `--map` re-run in the same commit.
+- **Judge it.** Check 375.
+
+### 461. The hold chips sit first on GRAPH's head
+
+- **Answer.** controller — 2026-10-27 (B1). First on the head, before plan 36's chips: **hold**, or while held a lit **held** then **take** · **drop**; after them collapse/expand, patched only, tidy, **preset only** and output behind. The red `HELD m:ss — …` line goes under the area chips, above the note / last edit / hint line.
+- **Built.** A hold is the first thing the eye meets on GRAPH; plan 36's chips keep their order and `· N hidden` stays in the counts.
+- **Other options.** After **preset only**, or on their own line above the head.
+- **To reverse.** Cheap: one `_hold_chips(panel)` call in `ui_graph._head`.
+- **Rough edge.** On a narrow page three more chips push the counts text right, where `ui.fit_text` cuts it.
+- **Judge it.** Checks 377, 378.
+
+### 462. A landing while held keeps the held program's nodes
+
+- **Answer.** controller — 2026-10-27 (B3's Critical; ruling 12). Every `GraphSection` landing (a load, a GRAPH edit, an undo) settles the effect instances, switch picks, resizes and extra look-backs to its graph, which stripped the program's. Now `GraphSection._settle` asks the hold's `keep(kind, names)` for each kind; while held that returns the landed names plus the program's, snapshotted at engage (`GraphSection.names()`). Take releases the hook and settles to the live graph; Drop releases it before its revert lands the hold point. Ruling 12 allowed plan 38 this edit to `preset.py`'s land block.
+- **Built.** With the projector held, **new**, loading another preset, deleting an effect or switch on GRAPH, or ⌘Z leave the projector's look whole: effects still drawn, switch picks kept, effect clocks running on. After Take the program's effects are gone if the new look lacks them; if it has them, their clocks carry on mid-stride. Tests: `test_a_landing_while_held_keeps_the_programs_effects_switches_and_resizes`, `test_on_gl_a_blank_graph_landed_while_held_leaves_the_projector_whole`, `test_an_effects_clock_runs_on_through_hold_land_and_take`, `test_drop_after_a_landing_while_held_brings_the_programs_nodes_back_whole`.
+- **Other options.** A second `FxState` and registry slice for the program (large); refuse landings while held (defeats the point).
+- **To reverse.** Cheap: the hook defaults to none, and removing the hold removes it.
+- **Rough edge.** While held, the kept instances' params still exist in the registry, so they show on the EFFECTS and desk pages and can be learned; GRAPH does not draw them. An effect deleted during the hold and added again before Take gets the program's kept values, not its defaults. The program graph rebuilds (losslessly) whenever a landing changes the effect set, which corrects B1's note that it "never rebuilds while held". Plan 39's mattes, cuts and segments must join the same hook at integration (the list is in `plans/38-hold.md`).
+- **Judge it.** Checks 377, 378.
+
+### 463. The program's kept params are not the preset's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12b). `Presets._values` leaves out `Hold.program_only()`, the kept instances the live graph lacks; `program_only` reads `hold.PROGRAM_IDS` (kind → ids) and raises `KeyError` for a kind it does not know, so a new kind cannot slip into a save silently.
+- **Built.** Saving during a hold writes only the live graph's values; the dirty dot does not light, or go out, for the projector's leftovers, nor change at Take.
+- **Other options.** Let a save write them: the next load would carry values for nodes the graph lacks, dead ids in the owner's library.
+- **To reverse.** Cheap: drop the filter.
+- **Rough edge.** None known.
+- **Judge it.** Check 378 (save during a hold, then reload).
+
+### 464. An undo mark made while held records the landed graph's own instances
+
+- **Answer.** controller — 2026-10-27 (B3's verification). `GraphSection.mark()` records `spec.effect_names()` while a hold is on and a spec has landed, not `FxState.held` (which then includes the program's kept instances). Unheld the two are equal (plan 36 T3).
+- **Built.** After Take, ⌘Z of a step made during the hold lands exactly that step's graph; no program-only effect comes back, and a save carries no dead id. Test: `test_an_undo_after_take_brings_no_program_only_instance_back`.
+- **Other options.** Have `put` clip the mark to the landed spec's names when no hold is on (equivalent).
+- **To reverse.** Cheap.
+- **Rough edge.** None known.
+- **Judge it.** Check 380.
+
+### 465. A load's delay reset while held is the preview's
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 12). `Presets.load`'s delay reset (R19) goes to the hold while held (`GraphSection.hold.reset_delays`): the preview renderer's delays are reset and the hold marks itself "loaded". At Take, if a load happened, the projector's renderer is reset.
+- **Built.** Loading during a hold no longer cuts the projector's echo or delay trails; the preview starts empty, as a load should. Take after a load starts the projector's delays empty; Take without one keeps them. Test: `test_a_load_while_held_resets_the_previews_delays_and_the_projectors_at_take`.
+- **Other options.** Never reset at Take: the old preset's trail would bleed into the new look.
+- **To reverse.** Cheap.
+- **Rough edge.** A load made before the preview renderer exists (GRAPH never opened) resets nothing until Take.
+- **Judge it.** Check 379.
+
+### 466. The canvas reads the preview's graph while held
+
+- **Answer.** controller — 2026-10-27 (B3; ruling 13). `hold.canvas_renderer(panel)` returns the preview renderer while held and drawn, otherwise the panel's own; `ui_graph`'s `view_of`, `render_edit` and `_edit` and `ui.py`'s `graph_words` and `dormant_lines` read `_graph` through it.
+- **Built.** While held, nodes added on GRAPH get real refs, and the dormant and refusal lines describe the preview (what TAKE puts up), not the projector. Test: `test_the_canvas_reads_the_previews_graph_while_held`.
+- **Other options.** None worth it.
+- **To reverse.** Cheap.
+- **Rough edge.** Until the preview has been drawn once (the first frame with GRAPH showing) the canvas reads the held graph. Plan 37's thumbnails read through the same helper since the plan 37 merge (row 498).
+- **Judge it.** Check 378.
+
+### 467. The preview is drawn with output 1's switches, at full dim
+
+- **Answer.** controller — 2026-10-27 (B3). `app._draw_preview` passes output 1's mutes and flips, with dim forced to 1.0 (the first cut used `Switches()` defaults).
+- **Built.** The backdrop while held is oriented and muted like the unheld backdrop (output 1), without the room's dim.
+- **Other options.** `Switches()` defaults, or output 1's dim too.
+- **To reverse.** One line in `app._draw_preview`.
+- **Rough edge.** A flip set for a Pepper's Ghost glass shows mirrored on the laptop; the unheld backdrop already does this.
+- **Judge it.** Check 377.
+
+### 468. The preview renderer lives for the session; its sub-objects are not hot-reload targets
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). The preview renderer is made on first use and kept after Take (its GL objects stay). It joins the hot-reload targets once made, but its sub-objects (its `Fx` chain, look-back, ghosts) are not targets, so a reload of `fx.py` updates them only on the main renderer.
+- **Built.** Nothing new: the first cut's behaviour.
+- **Other options.** Release it at Take or Drop, or add its sub-objects to the targets list (small).
+- **To reverse.** Small.
+- **Rough edge.** After a hot reload of an effect module during a hold, the preview may draw the old code until restart.
+- **Judge it.** Check 382.
+
+### 469. The PROJECTOR inset draws on imgui's foreground list
+
+- **Answer.** controller — 2026-10-27 (B3, recorded, not changed). `ui_graph._monitor` draws on the foreground draw list, so the inset sits over popups and menus opened on the canvas (the node picker, context menus) in its corner. The window's draw list would put it under the node editor's child canvas.
+- **Built.** The inset is always visible while held, over anything in the top-right corner.
+- **Other options.** Draw it inside the editor's canvas as a suspended overlay (moderate).
+- **To reverse.** Moderate.
+- **Rough edge.** A picker opened near the top right while held is partly hidden.
+- **Judge it.** Check 377 (open the node picker near the top right while held).
+
+### 470. The plan 39 seam: no segment workers in the preview
+
+- **Answer.** controller — 2026-10-27 (ruling 13). The preview renderer gets no segment workers: a `segment` node in the preview passes through and says "no worker in the preview". `Renderer.close` closes only the workers it made (the preview shares media, hands, look-back and fx state with the main renderer), and the app's close list adds the preview's close. Plan 39 T4 builds this; plan 38 changes nothing for it.
+- **Built.** Nothing in plan 38.
+- **Other options.** A second worker for the preview (twice the GPU cost).
+- **To reverse.** Plan 39's.
+- **Rough edge.** A segment-based look shows unsegmented in the preview until Take.
+- **Judge it.** Plan 39's AJ checks, with a hold on.
 
 ### 471. A wired fixture gets goldens and no frame-signature case: `edges-scene`, `mask-as-picture`, `cut-out`, `segment-motion`
 
@@ -8569,7 +8751,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 
 ### 495. The three declares settle through the hold: `_settle`, `hold.keep`, `PROGRAM_IDS`
 
-- **Answer.** controller — 2026-10-27, at the integration merge (rulings 12 and 12b of the run: plan 38 moved every settling into `GraphSection._settle` through `hold.keep`).
+- **Answer.** controller — 2026-10-27 (rulings 12 and 12b of the run: plan 38 moved every settling into `GraphSection._settle` through `hold.keep`).
 - **Built.** `GraphSection.land` calls only `_settle(spec)`; `declare_mattes`, `declare_cuts` and `declare_segments` run there after `declare_resizes`, each reading `names["matte"|"cut"|"segment"]` after `hold.keep`, so a load or a GRAPH edit while held keeps the program's nodes. `hold.PROGRAM_IDS` gains `matte_ids`, `cut_ids`, `segment_ids`, so a save while held writes none of the ids kept only for the projector. Tests in `tests/test_hold.py` (a blank landing while held keeps the three; Drop brings them back; every kind `names()` settles has its program ids).
 - **Other options.** None that keeps the hold whole.
 - **To reverse.** With the hold.
@@ -8578,7 +8760,7 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 
 ### 496. A held matte, cut or segment keeps its knobs for the projector (`HELD_GROUPS`)
 
-- **Answer.** controller — 2026-10-27, at the integration merge (ruling 14; the integrator's own, the brief did not name it).
+- **Answer.** controller — 2026-10-27 (ruling 14; the integrator's own, the brief did not name it).
 - **Built.** `hold.HELD_GROUPS` gains `matte`, `cut`, `segment`, as `resize` was: while held, a key, amount, feather or smooth turned on a node the program shows changes only the preview; the head's red line counts them as changed. Test: `test_a_knob_turned_on_a_held_matte_cut_or_segment_stays_off_the_projector`.
 - **Other options.** One value for both (a knob turned while held moves the projector).
 - **To reverse.** Drop the three names.
@@ -8593,3 +8775,30 @@ Rows 440–447 are the plan's eight decisions, every one **the owner's, 2026-10-
 - **To reverse.** `_tend_segments` calls `close`.
 - **Rough edge.** None known.
 - **Judge it.** Check 392.
+
+### 498. While held, the GRAPH page's thumbnails, their hues and their GPU times are the preview renderer's
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge (B3's I2, ruling 13: plan 37's thumbnails read through `hold.canvas_renderer`).
+- **Built.** `ui_graph.picture_sources(panel)` gives the canvas its thumbnails, output 1's picture and the hover's GPU medians, all from `hold.canvas_renderer(panel)`. While the projector is held and the preview has been drawn, the page wants its nodes from the preview renderer's own `PreviewTextures` (made by its constructor; `hold.MIRRORED` hands no `thumbs` over), so each node shows what TAKE would put up; the main renderer copies none, and its old thumbnails drop after a second unwanted. The tint's hue reads and SYSTEM's `thumbnails · …` line follow the same renderer. After Take or Drop the main renderer's come back. A hold with GRAPH closed draws no preview and makes no thumbnail. Tests: `tests/test_hold_thumbnails.py` (headless and on GL).
+- **Other options.** Keep the main renderer's thumbnails while held (every node would show the projector, the opposite of the graph drawn on the canvas).
+- **To reverse.** One line in `picture_sources`.
+- **Rough edge.** The first frame after HOLD, before the preview has been drawn, still reads the main renderer (row 466's edge); the preview renderer's thumbnails stay allocated after Take until a second unwanted. While held two sets of thumbnails can exist for that second.
+- **Judge it.** Check 378 (step 5).
+
+### 499. While held, output 1's thumbnail is the program's picture (the PROJECTOR inset's), not the preview's
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge.
+- **Built.** Output 1's node draws `panel.preview` when nothing is held (the backdrop's picture, plan 37 C1). While held, `panel.preview` carries the preview, so output 1's node draws `panel.monitor` instead: the picture the PROJECTOR inset shows, which is what output 1 (the projector) is showing. Every other node shows the preview's picture (row 498). Test: `test_the_picture_sources_follow_the_canvas_renderer`.
+- **Other options.** Output 1's node showing the preview like every other node (it would claim the projector shows what it does not).
+- **To reverse.** One line in `picture_sources`.
+- **Rough edge.** Outputs 2–4's nodes show their `Handoff.frame` from the canvas's renderer, so while held they show the preview's frame, not what their screens show; only output 1 has a program picture on the page.
+- **Judge it.** Check 378 (step 5).
+
+### 500. A cut shows its picture on GRAPH; a matte and a segment stay text
+
+- **Answer.** controller — 2026-10-27, at the plan 37 merge (plan 37's thumbnail table met plan 39's three kinds).
+- **Built.** `graphview.THUMBS` names `cut` (its picture). A `matte` makes a mask and a `segment`'s own output is its matte (`SegmentNode.OUTPUT` is `MASK`; its `fg` and `bg` are pins on the one node), so both stay text, with their said lines, as `thumb_of`'s fallback already gave. `test_every_picture_kind_has_a_thumbnail_and_the_modulation_side_none` skips the segment's pins as it skips the scene's depth pin, and asserts the two text kinds.
+- **Other options.** A segment drawn as its foreground (`segment.fg`'s picture), a matte as its mask in white on black (each a `THUMBS` entry and a `render.thumb_source` case; nothing else changes).
+- **To reverse.** One table entry each.
+- **Rough edge.** The node that cuts a dancer out shows no picture on GRAPH; its fg and bg are seen only where they are wired.
+- **Judge it.** —

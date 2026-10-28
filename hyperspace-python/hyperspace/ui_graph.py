@@ -144,6 +144,7 @@ the preset's and the show's, never a NodeEditor.json beside the app.
 
 from __future__ import annotations
 
+import colorsys
 import math
 import time
 
@@ -227,6 +228,27 @@ PAN_PX = 10.0
 # canvas's top-right corner, this share of the canvas's width, framed red
 MONITOR_W = 0.22
 MONITOR_TIP = "What the projector shows: the held look. TAKE puts the preview behind the nodes there."
+# plan 37 C1 (P1): a picture node's body is the picture it makes — its
+# thumbnail (`outputs.PreviewTextures`) in a box at the node's width
+# (`graphview.THUMB_H` tall), fitted whole; a geometry's scene picture is
+# drawn at `FAINT_PIC` of its brightness (`graphview.THUMB_FAINT`)
+FAINT_PIC = 0.4
+THUMB_GROUND = (0.0, 0.0, 0.0, 1.0)    # the box before (or without) a picture
+# plan 37 C2 (D3): the head's **pictures · tint cables** switch, off by
+# default (plain red), page state only — never the preset's or the show's.
+# Lit, a picture cable's red leans by its maker's dominant hue
+# (`PreviewTextures.hue`), at most `TINT_SPAN` turns either side of red
+# (`tint`): red stays the colour of a picture cable, its lean says what
+# flows; a picture with hue strength `TINT_FULL` or more leans all the way,
+# a grey one not at all
+TINT_LABEL = "pictures · tint cables##graph"
+TINT_TIP = ("Lit: each picture cable's red leans by the colour of the picture it "
+            "carries — toward orange for yellow-green pictures, toward rose for "
+            "blue-violet ones; red, cyan and grey pictures leave it red — read from its "
+            "maker's thumbnail once a second. Off: plain red. A view setting: not saved "
+            "with the preset or the show")
+TINT_SPAN = 20.0 / 360.0
+TINT_FULL = 0.25
 
 
 # ---------------------------------------------------------------- state and context
@@ -256,6 +278,9 @@ def _state(panel) -> dict:
     st.setdefault("pan", (0.0, 0.0))        # canvas units every position is moved by
     st.setdefault("preset_only", PRESET_ONLY)     # plan 36 T6 (D4): on for every preset, kept across loads
     st.setdefault("hide", frozenset())      # the node ids that view leaves off this frame
+    st.setdefault("tint", False)            # plan 37 C2 (D3): plain red until lit
+    st.setdefault("thumb_hover", None)      # the node whose thumbnail the pointer is on
+    st.setdefault("tints", {})              # cable id → its tinted colour, this frame
     return st
 
 
@@ -791,6 +816,7 @@ def _head(panel, st: dict, view: graphview.View, selected: bool = False) -> None
             st["beside"] = not st["beside"]
         if imgui.is_item_hovered():
             ui.tooltip(BESIDE_TIP)
+    _tint_chip(st)                          # plan 37 C2 (D3): last among the chips
     # the counts after the chips, cut to what is left of the line
     imgui.same_line()
     line = head_line(st, view)
@@ -854,6 +880,50 @@ def hold_line(hold, now: float) -> str:
     if hold.error:
         line += f" · preview: {hold.error}"
     return line
+def _tint_chip(st: dict) -> None:
+    """The head's **pictures · tint cables** chip (plan 37 C2, D3): off by
+    default; lit, the picture cables are tinted (`tint`)."""
+    imgui.same_line()
+    if ui.lit_chip(TINT_LABEL, st["tint"]):
+        st["tint"] = not st["tint"]
+    if imgui.is_item_hovered():
+        ui.tooltip(TINT_TIP)
+
+
+def tint(hue: float, strength: float) -> tuple[float, float, float]:
+    """A picture cable's colour with its picture's dominant `hue` (turns)
+    bled into its red (plan 37 C2, D3): red's hue moved by `TINT_SPAN` ×
+    sin(2π (hue − red)) — a lean that is continuous all the way round: the
+    yellow-green half leans toward orange (most at chartreuse, 90°), the
+    blue-violet half toward rose (most at violet, 270°), and red and cyan,
+    on the axis, not at all (so a cyan-ish moving picture never flips from
+    one end to the other) — times how strongly the picture has a hue
+    (`strength` over `TINT_FULL`, at most 1). Red's saturation and value
+    are kept, so the cable is always a red."""
+    h0, s0, v0 = colorsys.rgb_to_hsv(*RED_RGB)
+    k = max(0.0, min(1.0, strength / TINT_FULL))
+    lean = TINT_SPAN * math.sin(2.0 * math.pi * (hue - h0)) * k
+    return colorsys.hsv_to_rgb((h0 + lean) % 1.0, s0, v0)
+
+
+def cable_tints(st: dict, view: graphview.View) -> dict[str, imgui.ImVec4]:
+    """This frame's tinted picture cables (cable id → colour) while the
+    switch is lit: each picture cable whose maker has a hue read
+    (`PreviewTextures.hue` of its source node's thumbnail). Empty while it
+    is off, or with no thumbnails: every cable plain red."""
+    th = st.get("thumbs")
+    if not st.get("tint") or th is None or not hasattr(th, "hue"):
+        return {}
+    out: dict[str, imgui.ImVec4] = {}
+    cables = list(view.cables) + list(st.get("throughs", {}).values())
+    for c in cables:
+        if c.type != graphview.IMAGE:
+            continue
+        hit = view.owner(c.src_port)
+        got = th.hue(thumb_name(hit[0])) if hit is not None else None
+        if got is not None:
+            out[c.id] = imgui.ImVec4(*tint(*got), 1.0)
+    return out
 
 
 def _backdrop_chips(st: dict) -> None:
@@ -1042,6 +1112,14 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     # what a new preset lays out where you are looking (`in_view`)
     seen = ed.screen_to_canvas(corner)
     st["seen"] = (float(seen.x), float(seen.y))
+    # plan 37 C1: the canvas rect on screen this frame (what a thumbnail
+    # is wanted for), and where the thumbnails come from
+    far = ed.screen_to_canvas(imgui.ImVec2(corner.x + size.x, corner.y + size.y))
+    st["seen_rect"] = (st["seen"], (float(far.x), float(far.y)))
+    # (plan 37 C2: the SYSTEM page's GPU medians, for a thumbnail's hover;
+    # all three from the renderer the canvas reads: `picture_sources`)
+    st["thumbs"], st["preview"], st["gpu_ms"] = picture_sources(panel)
+    st["thumb_hover"] = None
     imgui.push_font(None, ui.FONT_BASE * graphview.SCALE)    # the canvas's own text size
     _place(panel, st, view)
     lay = st["auto"][1]
@@ -1051,6 +1129,13 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
     for n in view.nodes:
         if drawn_node(st, n):
             _node(st, n, drawn)
+    _want_thumbs(st, view)              # plan 37 C1: after the nodes, their sizes known
+    if st["thumbs"] is not None and hasattr(st["thumbs"], "want_hues"):
+        # plan 37 C2: the hues while the switch is lit, none from the frame it goes off
+        if st["tint"]:
+            st["thumbs"].want_hues()
+        else:
+            st["thumbs"].stop_hues()
     _select(st, view)                   # plan 33 U: the FX page's selection, here too
     for area in lay.lines:
         ids = lay.idle.get(area, [])
@@ -1059,6 +1144,7 @@ def _canvas(panel, st: dict, view: graphview.View, size: imgui.ImVec2,
         _idle_line(st, view, area, ids)
     # plan 28 N7: one wire per node pair while either end is collapsed
     singles, bundles = _wiring(st, view)
+    st["tints"] = cable_tints(st, view)     # plan 37 C2: the through wires known
     wires = 0
     for c, a, b in singles:
         if a in drawn and b in drawn:
@@ -1334,8 +1420,11 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     if has_out:
         imgui.same_line(NODE_W - PIN)
         _stub(st, graphview.stub_out(n.id), ed.PinKind.output, n.wires > 0, drawn)
+    if n.thumb is not None:                     # plan 37 C1 (D2): collapsed or not
+        _thumb(st, n)
     if shut:                                    # its title and at most five lines
-        for line in graphview.summary(n):
+        # (a picture node's lines are its hover's: plan 37 P1)
+        for line in (graphview.summary(n) if n.thumb is None else ()):
             imgui.text_disabled(ui.fit_text(line, NODE_W))
         imgui.dummy(imgui.ImVec2(NODE_W, 0))
         imgui.pop_id()
@@ -1366,6 +1455,163 @@ def _node(st: dict, n: graphview.VNode, drawn: set[str]) -> None:
     ed.end_node()
 
 
+# ---------------------------------------------------------------- plan 37 C1: the thumbnails
+
+def thumb_name(n: graphview.VNode) -> str:
+    """The render node a canvas node's thumbnail is kept under: its render
+    node's name (a channel's or a copy's own), else the canvas id's."""
+    return getattr(n.ref, "name", None) or n.id.partition(":")[2]
+
+
+def by_preview(n: graphview.VNode) -> bool:
+    """Is node `n`'s picture output 1's — the page's `outputs.Preview`, the
+    backdrop's own tap, not a thumbnail?"""
+    return n.thumb == graphview.WINDOW_PIC and thumb_name(n) == "output.1"
+
+
+def on_screen(rect, pos, size) -> bool:
+    """Does a node at `pos`, `size` big (canvas units) meet `rect`
+    ((left, top), (right, bottom)) — any part of it?"""
+    (x0, y0), (x1, y1) = rect
+    return (pos[0] < x1 and pos[0] + max(size[0], 1.0) > x0
+            and pos[1] < y1 and pos[1] + max(size[1], 1.0) > y0)
+
+
+def thumb_wants(st: dict, view: graphview.View, where) -> dict[str, str]:
+    """The thumbnails this frame wants (name → how, `graphview.THUMBS`): every
+    picture node drawn (`drawn_node`: not hidden by **preset only**, not
+    idle off the canvas) and on screen (`on_screen`, `where(node id)` its
+    (position, size)) — output 1 is the page's `Preview`, never one. A node
+    off screen, hidden or collapsed off the canvas is never wanted, so it
+    costs nothing."""
+    rect = st.get("seen_rect")
+    out: dict[str, str] = {}
+    for n in view.nodes:
+        if n.thumb is None or by_preview(n) or not drawn_node(st, n):
+            continue
+        if rect is not None and not on_screen(rect, *where(n.id)):
+            continue
+        out[thumb_name(n)] = n.thumb
+    return out
+
+
+def _where(st: dict, nid: str):
+    k = ed.NodeId(_id(st, "n:" + nid))
+    p, sz = ed.get_node_position(k), ed.get_node_size(k)
+    h = sz.y if sz.y > 0 else graphview.HEAD_H + graphview.THUMB_H
+    return (float(p.x), float(p.y)), (float(sz.x) if sz.x > 0 else NODE_W, float(h))
+
+
+def _want_thumbs(st: dict, view: graphview.View) -> None:
+    """Ask the renderer for this frame's thumbnails (`thumb_wants`), and
+    output 1's picture when its node is on screen; each picture node's
+    `picture` the size its thumbnail was copied from."""
+    th = st.get("thumbs")
+    if th is None:
+        return
+    want = thumb_wants(st, view, lambda nid: _where(st, nid))
+    if want:
+        th.want(want)
+    pv = st.get("preview")
+    for n in view.nodes:
+        if n.thumb is not None:
+            n.picture = th.size_of(thumb_name(n))
+            if by_preview(n) and getattr(pv, "tex", None) is not None:
+                n.picture = tuple(int(v) for v in pv.tex.size)    # plan 37 C2: its size
+    rect = st.get("seen_rect")
+    if pv is not None and any(by_preview(n) and drawn_node(st, n)
+                              and (rect is None or on_screen(rect, *_where(st, n.id)))
+                              for n in view.nodes):
+        pv.want()
+
+
+def _body_of(st: dict, n: graphview.VNode):
+    """(the texture, the shade it is drawn at) for node `n`'s body this
+    frame: its thumbnail and `PreviewTextures.shade` (1 fresh, dimmed,
+    0 black) — a geometry's at `FAINT_PIC` of that; output 1's the
+    `Preview`'s picture, always at 1 (it has no age: a frame that fails
+    leaves its last picture lit). (None, 0) with none yet: a black box."""
+    if by_preview(n):
+        pv = st.get("preview")
+        tex = getattr(pv, "tex", None)
+        return (tex, 1.0) if tex is not None else (None, 0.0)
+    th = st.get("thumbs")
+    if th is None:
+        return None, 0.0
+    name = thumb_name(n)
+    k = th.shade(name)
+    if n.thumb in graphview.THUMB_FAINT:
+        k *= FAINT_PIC
+    return th.get(name), k
+
+
+def _thumb(st: dict, n: graphview.VNode) -> None:
+    """Node `n`'s picture as its body: a box at the node's width,
+    `graphview.THUMB_H` tall, black, the thumbnail fitted whole in it
+    (`backdrop_rect`) at its shade; GL's rows, so drawn upside down in v
+    as the backdrop is."""
+    p0 = imgui.get_cursor_screen_pos()
+    imgui.dummy(imgui.ImVec2(NODE_W, graphview.THUMB_H))
+    if imgui.is_item_hovered():                 # plan 37 C2: the hover gives details
+        st["thumb_hover"] = n.id
+    p1 = imgui.ImVec2(p0.x + NODE_W, p0.y + graphview.THUMB_H)
+    dl = imgui.get_window_draw_list()
+    dl.add_rect_filled(p0, p1, ui.u32(imgui.ImVec4(*THUMB_GROUND)))
+    tex, k = _body_of(st, n)
+    if tex is None or k <= 0.0 or getattr(tex, "glo", 0) == 0:
+        return
+    a, b = backdrop_rect((p0.x, p0.y), (NODE_W, graphview.THUMB_H), tuple(tex.size))
+    dl.add_image(imgui.ImTextureRef(tex.glo), imgui.ImVec2(*a), imgui.ImVec2(*b),
+                 imgui.ImVec2(0, 1), imgui.ImVec2(1, 0), ui.u32(imgui.ImVec4(k, k, k, 1.0)))
+
+
+def thumb_tip(st: dict, n: graphview.VNode) -> str:
+    """Hovering node `n`'s thumbnail (plan 37 C2, P1): `graphview.picture_hover`
+    with its GPU time from the SYSTEM page's medians (`st["gpu_ms"]`, by its
+    render node's name), and its status when it has one."""
+    tip = graphview.picture_hover(n, st.get("gpu_ms", {}).get(thumb_name(n)))
+    return tip + (f"\n{n.status}" if n.status else "")
+
+
+def picture_sources(panel):
+    """(the thumbnails, output 1's picture, the GPU medians) the canvas
+    reads this frame: plan 37's thumbnails through plan 38's
+    `hold.canvas_renderer` — the renderer whose graph the canvas draws.
+    Held, with the preview drawn, that is the preview renderer: the page
+    wants its nodes from the preview's own `PreviewTextures` (never shared
+    with the main renderer's: `hold.MIRRORED` hands over no `thumbs`), the
+    main renderer copies none, the hue read and the hover's GPU times are
+    the preview's. Unheld (and after Take or Drop) it is the main one again.
+
+    Output 1's thumbnail is the exception: while held it stays the
+    **program's** picture, `panel.monitor` (what the PROJECTOR inset
+    shows), because output 1 is the projector — what output 1 shows,
+    not what TAKE would put on it. Unheld it is `panel.preview`, the
+    backdrop's picture (plan 37 C1)."""
+    r = holdmod.canvas_renderer(panel)
+    stats = getattr(r, "stats", None) or {}
+    hold = getattr(panel, "hold", None)
+    held = hold is not None and bool(getattr(hold, "on", False))
+    pv = getattr(panel, "monitor", None) if held else None
+    if pv is None:
+        pv = getattr(panel, "preview", None)
+    return getattr(r, "thumbs", None), pv, stats.get("gpu_ms") or {}
+
+
+def thumbnail_line(panel) -> str:
+    """The SYSTEM page's line for the thumbnails (plan 37 C1): "thumbnails ·
+    N copied · K repainted · M kept" — the copies the last frame made, how
+    many of those painted a node again at the frame's size (one that paints
+    into its consumer: the cost AH.2 reads), and the thumbnails held; ""
+    with no renderer that keeps any. Held, the preview renderer's while
+    the canvas reads it (`picture_sources`)."""
+    th = getattr(holdmod.canvas_renderer(panel), "thumbs", None)
+    if th is None or not hasattr(th, "count"):
+        return ""
+    return (f"thumbnails · {th.count} copied · {getattr(th, 'repainted', 0)} repainted · "
+            f"{th.kept} kept")
+
+
 def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
     text = ui.fit_text(port.name, NODE_W - 4 * PIN - 40)
     if port.direction == graphview.OUT:
@@ -1384,7 +1630,9 @@ def _port(st: dict, port: graphview.VPort, drawn: set[str]) -> None:
 def _cable(st: dict, c: graphview.VCable, a: str | None = None, b: str | None = None) -> None:
     """One cable, from pin `a` to pin `b` (its own ends, or a collapsed
     node's stub for a render cable: plan 28 N7)."""
-    k = COLOURS.get(c.type, ui.DIM)
+    k = st.get("tints", {}).get(c.id)          # plan 37 C2: tinted while the switch is lit
+    if k is None:
+        k = COLOURS.get(c.type, ui.DIM)
     col = imgui.ImVec4(k.x, k.y, k.z, DORMANT_ALPHA if c.dormant else
                        THROUGH_ALPHA if c.kind == graphview.THROUGH else k.w)
     if c.type == graphview.VALUE:
@@ -1466,6 +1714,8 @@ def _hover(st: dict, view: graphview.View) -> None:
         err = st.get("errors", {}).get(n.id) if n is not None else None
         if err:                             # plan 33 U: a compile error is its hover
             tip = f"{n.label}\n{err}"
+        elif n is not None and n.thumb is not None and st.get("thumb_hover") == n.id:
+            tip = thumb_tip(st, n)          # plan 37 C2: on its picture
         elif n is not None and n.faint:
             tip = f"{n.label}\n{FAINT_TIP}" + (f"\n{n.status}" if n.status else "")
         elif n is not None and n.status:
