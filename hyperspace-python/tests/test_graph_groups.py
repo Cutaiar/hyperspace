@@ -103,6 +103,22 @@ def test_the_schema_is_eight_and_the_key_absent_is_no_groups():
     assert graphmigrate.groups_of(None) == []
 
 
+def test_one_rule_reads_a_group_number_for_the_load_and_for_group():
+    """`graphmigrate.group_number` (a leaf both import) is the preset's and
+    GRAPH's: a group landed after `group.0` and a hand-edited `group.x`
+    is `group.1`, after `group.7` is `group.8`."""
+    gn = graphmigrate.group_number
+    assert preset.group_number is gn and not hasattr(graphview, "_group_n")
+    assert [gn(x) for x in ("group.3", "group.0", "group.x", "mod.3", 3, None)] == [
+        3, 0, 0, 0, 0, 0]
+    from types import SimpleNamespace
+    e = graphview.Edit()
+    e.presets = SimpleNamespace(groups=[{"id": "group.0"}, {"id": "group.x"}])
+    assert e.land_group({"nodes": ["render:warp"]})["id"] == "group.1"
+    e.presets.groups.append({"id": "group.7"})
+    assert e.land_group({"nodes": ["render:acid"]})["id"] == "group.8"
+
+
 def test_a_preset_with_groups_round_trips_through_document_and_load_doc(tmp_path):
     app = headless.make_app(tmp_path)
     app.lib.load("presets", "party-noita")

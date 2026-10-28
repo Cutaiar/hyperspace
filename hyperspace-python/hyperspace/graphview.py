@@ -3012,12 +3012,6 @@ PATCH_EXISTS = "a patch named {name} exists — Update patch, or another name"
 RIG_KINDS = ("output", "channel", "camera", "cloud")   # always there: the rig's own nodes
 
 
-def _group_n(gid: Any) -> int:
-    """`group.3` → 3; 0 for anything else."""
-    head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
-    return int(n) if head == "group" and dot and n.isdecimal() else 0
-
-
 def group_pin(gid: str, direction: str, key: str) -> str:
     """A group node's boundary pin: ``gin:group.1/<key>`` (into the group:
     a member's port, a param row, a modifier input), ``gout:group.1/<key>``
@@ -4180,7 +4174,7 @@ class Edit:
         groups = self._groups()
         if groups is None:
             raise ValueError(NO_PRESET_GROUPS)
-        n = max((_group_n(g.get("id")) for g in groups), default=0) + 1
+        n = max((graphmigrate.group_number(g.get("id")) for g in groups), default=0) + 1
         g = {"id": f"group.{n}", "name": str(entry.get("name") or f"group {n}")}
         if entry.get("patch"):
             g["patch"] = str(entry["patch"])

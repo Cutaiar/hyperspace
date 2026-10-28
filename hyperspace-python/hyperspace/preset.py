@@ -647,10 +647,7 @@ NO_MODULE = ("macro", modifiers.GROUP, SWITCH_GROUP, RESIZE_GROUP, MATTE_GROUP, 
 # drops it (`NO_MODULE`)
 
 
-def group_number(gid) -> int:
-    """`group.3` → 3; 0 for anything else."""
-    head, dot, n = gid.partition(".") if isinstance(gid, str) else ("", "", "")
-    return int(n) if head == "group" and dot and n.isdecimal() and int(n) >= 1 else 0
+group_number = graphmigrate.group_number    # `group.3` → 3 (the one rule, GRAPH's too)
 
 
 def group_entry(g: dict) -> dict:
