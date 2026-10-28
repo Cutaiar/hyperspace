@@ -173,8 +173,8 @@ downsample-and-readback; reading the camera's numpy frame instead is a shortcut 
 | Node | In → out | Params (modulatable unless said) | Notes |
 |---|---|---|---|
 | `segment[.n]` | `image` → two pictures: `segment.fg` and `segment.bg` (pins, like `scene.depth`); optionally `segment.mask` | `mode` person / subject / motion (choice); `quality` fast / balanced / accurate; `feather`; `smooth`; `on` | the owner's casting (2026-10-27): any bitmap in, the foreground and the background out as bitmaps, each the input with its alpha cut by the matte (premultiplied), so either lands straight on a `composite.over`, the faces or an effect; the matte itself is internal unless the `mask` pin is wired. The mask is made at the model's own size and sampled bilinearly at the input's; one worker per node; `said` carries "256×192 · Vision fast · a frame or two late"; `on` off: `fg` is the input whole, `bg` nothing |
-| `matte[.n]` | `image` → mask | `from` luma / alpha / chroma; `key`; `soft`; `invert`; `feather` | one GLSL pass; the general picture → mask |
-| `cut[.n]` | `image`, `mask` → image | `invert`, `amount` | one GLSL pass; alpha ← mask, premultiplied; no mask wired = the picture through |
+| `matte[.n]` | `image` → mask | `from` luma / alpha / chroma; `key`; `soft`; `invert`; `feather` | one GLSL pass; the general picture → mask; `key` is where a pixel starts to pass, `soft` and `feather` the only departures from 0 or 1 |
+| `cut[.n]` | `image`, `mask` → image | `invert`, `amount` | one GLSL pass; where the mask passes the picture stays, elsewhere it is cut away (transparent, premultiplied), so what is under it on a composite shines through; no mask wired = the picture through |
 | `edges` | an effect file | `threshold`, `glow`, `colour`/`hue by direction` | needs no Python; its picture becomes a mask through `matte` |
 | `composite.mask` | an optional `mask` port on `composite` | — | the familiar matte-on-the-layer; optional, `cut → over` does the same |
 
@@ -195,24 +195,31 @@ downsample-and-readback; reading the camera's numpy frame instead is a shortcut 
 - **Effects stay at two inputs and one pass.** Masking is a node's business (`cut`, `composite.mask`), not
   a third effect input; a blur is two chained files.
 
-## 4. Decisions for the owner before the plan
+## 4. Decisions (answered by the owner 2026-10-27, item 6 pending)
 
-1. **Mask as a wire type with explicit converters** (`matte`, `cut`) vs masks riding in alpha only. The
-   proposal is the type: the purple wire exists, it keeps "what is a mask here" visible on GRAPH, and alpha
-   stays what it is today (coverage of a picture).
-2. **A mask may be wired as a picture** (one-way promotion) — yes/no.
-3. **Settled by the owner (2026-10-27): `segment` takes any bitmap and makes two bitmaps, the foreground and
-   the background**, each the input with its alpha cut; bitmap → mask is a separate node (`matte`). Left
-   open: whether the node also exposes its matte as a `segment.mask` pin (cheap; saves a `matte` in the
-   common case) — the proposal is yes.
-4. **Backend**: Apple Vision first (Neural Engine, 3.6 ms, one small pyobjc wheel, macOS-only), torchvision
-   second; or torchvision only (no new dependency, shares the GPU). Both can live behind one node.
-5. **Modes in the first build**: person; subject; motion (background model). Person and motion first?
-6. **`composite.mask` port** in the first build, or `cut` only.
-7. **`edges` as an effect file now** (no plan needed) — fine to land ahead of the plan as a quick win,
-   with `blend`'s luma key as the interim matte.
-8. **Order against plans 37 and 38**: plan 37's per-node pictures would carry the mask previews; output
-   hold touches the outputs only. This plan can go before or after either.
+**The owner's definition of a mask**, which the plan builds on: *alpha is how transparent a thing is; a mask
+is a pattern — a pixel passes or it doesn't.* A mask is not carried in alpha. The use case: an image as the
+foreground, a mask over it that cuts part of it out, and the background shines through where it was cut.
+So the `mask` wire carries 0 or 1 per pixel (soft only at an edge the feather asks for), `cut` is the
+operation that applies it to a picture, and alpha stays what it is today.
+
+1. **Mask as a wire type with explicit converters** (`matte`, `cut`), not masks riding in alpha —
+   **yes** (the owner: alpha is a different thing from a mask).
+2. **A mask may be wired as a picture** (one-way promotion, read as white where it passes) — **yes**.
+3. **`segment` takes any bitmap and makes two bitmaps, the foreground and the background**; bitmap → mask
+   is the separate `matte` node; `segment.mask` also exposed as a pin — **yes**.
+4. **Backend**: Apple Vision first (Neural Engine), torchvision as the fallback behind the same node —
+   **yes**.
+5. **Modes in the first build**: person and motion first, subject after — **yes**.
+6. **`composite.mask` port** beside `cut` — **open** (explained to the owner; see below).
+7. **`edges` as an effect file now**, ahead of the plan — **yes**.
+8. **Order**: **before plans 37 and 38**.
+
+On 6: the use case above is two nodes with `cut` — `fg → cut.image`, `mask → cut.mask`, `cut → composite.over`,
+`bg → composite.under` — or one node if `composite` itself takes the mask on a third port and applies it to
+its `over`. `cut` is needed either way (a cut picture also goes to the faces, an effect, an output);
+`composite.mask` is a convenience that saves one node in the most common wiring. The proposal: build `cut`
+first, add `composite.mask` if the two-node wiring feels like one too many at the machine.
 
 ## 5. Quick wins that need no plan
 
