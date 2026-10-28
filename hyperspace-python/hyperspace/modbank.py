@@ -19,7 +19,7 @@ What the bank owns, and what a kind supplies:
                `bind`): a voice added drops ``<scheme>.<n>.`` and
                declares it afresh, one removed drops it. Every add and
                remove moves `reg.serial`, which is what rebuilds the
-               router's patch (`Router._patch_key`) — no other hook
+               router's patch (`Router._modgraph_key`) — no other hook
   the frame    `begin` (a held global gesture lands, the frame's output
                list made), `step_one` per voice at its patch node,
                `step` for a caller with no router

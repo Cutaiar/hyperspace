@@ -965,7 +965,7 @@ def head(panel, router: Router) -> None:
     for note in table.notes:
         imgui.text_disabled(note)
     # a loop no delay breaks (plan 28 N0): the cable the patch keeps off, while it stands
-    for note in getattr(router, "patch_notes", ()):
+    for note in getattr(router, "modgraph_notes", ()):
         imgui.text_colored(ui.WARN, note)
 
 

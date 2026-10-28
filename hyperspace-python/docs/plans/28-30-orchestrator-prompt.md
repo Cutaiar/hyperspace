@@ -258,7 +258,7 @@ param's tip). Tests in `tests/test_fx.py` and `tests/test_graph_effects.py`.
   palette's value out (centre, width, sat and val ranges, the ramp
   anchors) for a lights sink (plan 29), and an image-in `sample` port
   that would set a palette's params from a bitmap — **and no node
-  publishes or reads one in this plan**. Stream N's `patch.py` is told
+  publishes or reads one in this plan**. Stream N's `modgraph.py` is told
   the type name so a `VALUE` port can be a modulation source later.
 - `fx.<name>.target`'s tip says the faces target still runs inside the
   shape's face drawing and is the one shader run the graph does not
@@ -345,10 +345,10 @@ N6. Branches `plan-28-n0-patch`, `plan-28-n1-modifiers`,
 
 ### N0 — the modulation graph in dependency order
 
-**Files.** Create `hyperspace/patch.py` (a **leaf**: imports nothing
+**Files.** Create `hyperspace/modgraph.py` (a **leaf**: imports nothing
 from the package but `motion` and `tapers`; add it to
-`hotreload.MODULES` before `routing`), `tests/test_patch.py`. Modify
-`hyperspace/routing.py` (`Router.modulate`, a `Router.patch` cache
+`hotreload.MODULES` before `routing`), `tests/test_modgraph.py`. Modify
+`hyperspace/routing.py` (`Router.modulate`, a `Router.modgraph` cache
 rebuilt when the table, the LFO list or the registry's modulatable set
 changes), `hyperspace/params.py` (`Param.apply` idempotent within a
 frame — below), `hyperspace/lfo.py` (`LFOs.step_one` or equivalent so
@@ -359,15 +359,15 @@ one LFO can step inside the evaluation), `hyperspace/app.py:948–954`,
 
 **Build.**
 
-- `patch.py`: `PatchNode(id: str, kind: str)` with kinds `source`,
-  `lfo`, `modifier`, `macro`, `param`; `PatchEdge(src: str, dst: str,
+- `modgraph.py`: `ModNode(id: str, kind: str)` with kinds `source`,
+  `lfo`, `modifier`, `macro`, `param`; `ModEdge(src: str, dst: str,
   port: str)` with ports `mod`, `base`, `depth`, `in`, and the LFO knobs
-  (`depth`, `rate`, `phase`); `Patch(nodes, edges)`; `order(patch) ->
-  list[PatchNode]` (a stable topological sort: dependencies first, ties
-  in insertion order, like `Graph._sort`); `cycles(patch) ->
-  list[list[str]]`. Pure data and pure functions; `tests/test_patch.py`
+  (`depth`, `rate`, `phase`); `ModGraph(nodes, edges)`; `order(g) ->
+  list[ModNode]` (a stable topological sort: dependencies first, ties
+  in insertion order, like `Graph._sort`); `cycles(g) ->
+  list[list[str]]`. Pure data and pure functions; `tests/test_modgraph.py`
   proves them without a Router.
-- `Router.build_patch()`: from `table.routes()` (a performer row = an
+- `Router.build_modgraph()`: from `table.routes()` (a performer row = an
   edge source → param `mod`), `table.macros` (a `Sub` with `base` = macro
   → param `base`; with `depth` = macro → that cable's `depth`), a row's
   `scale` (param → cable `depth`), each LFO's knob params (param → LFO),
@@ -397,7 +397,7 @@ one LFO can step inside the evaluation), `hyperspace/app.py:948–954`,
   `…scales_a_lanes_push_the_same_frame`), each change named in the PR
   body with decision 7.
 
-**Tests.** `tests/test_patch.py`: `test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties`,
+**Tests.** `tests/test_modgraph.py`: `test_order_puts_dependencies_first_and_keeps_insertion_order_for_ties`,
 `test_cycles_finds_every_loop_and_none_through_a_delay`,
 `test_a_route_a_macro_sub_and_a_scale_are_the_edges_the_design_names`.
 In `tests/test_routing.py`: `test_every_factory_preset_lands_the_same_values_one_frame_earlier`
@@ -726,7 +726,7 @@ When the docs WPs record these, they go into `DECISIONS.md` with
 Anything the designs leave open: the placement keys' final form (`after`
 / `into`, or one); the pipeline-end node's name; how an off effect is
 read through; the texture pool's size; whether the faces image becomes an
-edge (default: no); the `VALUE` port's shape; `patch.py`'s exact types;
+edge (default: no); the `VALUE` port's shape; `modgraph.py`'s exact types;
 how `Param.apply` is made idempotent within a frame; the cycle note's
 words; each modifier kind's exact params and curves; the `mod` scheme's
 address form; the `layout` map's shape and where session nodes'
@@ -789,7 +789,7 @@ yourself except the sixteen above.
   `modifiers`, N2's `layout`, N4's `wires` — three keys, three WPs, no
   shared lines); `ui.py` (N2's page tuple and `_page_graph`; D0's SYSTEM
   lines; D1/N4's OUTPUT words); `hotreload.MODULES` and its test (N0
-  `patch`, N1 `modifiers`, N2 `graphview` and `ui_graph`, in import
+  `modgraph`, N1 `modifiers`, N2 `graphview` and `ui_graph`, in import
   order); `tools/golden_frames.py` / `tests/test_golden_frames.py`
   (D1 and N4 both add fixtures: the completeness count is the sum).
   Anything else colliding means a WP is mis-scoped: stop and re-cut it.
@@ -865,7 +865,7 @@ These must keep passing **untouched**:
   device's ports from `hands/device.py`, touching nothing in the
   package).
 - `tests/test_routing_boundary.py` (`ABOVE` and `LAZY` as they are;
-  `patch.py` and `modifiers.py` are leaves below `routing`).
+  `modgraph.py` and `modifiers.py` are leaves below `routing`).
 - `tests/test_bridge.py::test_core_does_not_import_the_bridge`,
   `tests/test_dream.py::test_core_does_not_import_the_worker`.
 - `tests/test_golden.py`, `tests/test_core.py`, `tests/test_shapes4d.py`.
@@ -880,7 +880,7 @@ PR body:
   tests become "the same frame" (N0, decision 7).
 - `tests/test_app_boundary.py:393` `ORDER`: only the LFOs' step moving
   inside `router.modulate` (N0).
-- `tests/test_hotreload.py`: `patch`, `modifiers`, `graphview`,
+- `tests/test_hotreload.py`: `modgraph`, `modifiers`, `graphview`,
   `ui_graph` added to the watched list in import order (N0, N1, N2).
 - `tests/test_golden_frames.py`: the completeness count grows by the
   five fixtures' states (D1, N4); no hash re-recorded.
@@ -917,7 +917,7 @@ whichever lands later, on the integration branch.
   exception restated), §2's drawing subsection (the effect nodes, the
   pipeline end, placement), the line at `:208` ("*modulation* is not a
   graph") removed, §3's control model (modifiers, the `mod` scheme, the
-  patch), §5's subsystems (`patch`, `modifiers`, `graphview`,
+  patch), §5's subsystems (`modgraph`, `modifiers`, `graphview`,
   `ui_graph`); the masthead counts re-measured.
 - `docs/ENGINEERING.md`: §2 Rendering (the effect node, the chain as a
   run, placement, the wire list, outputs as nodes, the goldens and the
