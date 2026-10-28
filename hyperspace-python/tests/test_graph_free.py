@@ -175,9 +175,11 @@ V5_SAVES = ROOT / "tests" / "fixtures" / "plan35-v5-saves"
 
 
 def test_every_schema_is_among_the_sources():
-    """The sources cover the whole ladder a load still reads: `/2` to `/6`."""
+    """The sources cover the whole ladder a load still reads: `/2` to `/6`
+    (plan 39 T0: and a `/7` fixture, written in today's schema — a fixed
+    point like any save)."""
     schemas = {json.loads(p.read_text())["schema"] for _, p in old_sources()}
-    assert schemas == {f"hyperspace.preset/{n}" for n in (2, 3, 4, 5, 6)}
+    assert schemas - {"hyperspace.preset/7"} == {f"hyperspace.preset/{n}" for n in (2, 3, 4, 5, 6)}
     assert len(old_sources()) >= 95
 
 

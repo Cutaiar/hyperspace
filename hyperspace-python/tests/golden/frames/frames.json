@@ -461,6 +461,20 @@
     "none",
     "through"
    ]
+  },
+  "edges-scene": {
+   "file": "tests/fixtures/presets/edges-scene.json",
+   "hands": "present",
+   "states": [
+    "scene+hands",
+    "scene+hands+through",
+    "scene",
+    "scene+through",
+    "hands",
+    "hands+through",
+    "none",
+    "through"
+   ]
   }
  },
  "presets": {
@@ -2615,6 +2629,74 @@
      "shown(composite.4)",
      "resize",
      "delay(write)",
+     "output.1",
+     "output.2",
+     "output.3",
+     "output.4",
+     "output.5",
+     "output.6",
+     "output.7",
+     "output.8"
+    ]
+   }
+  },
+  "edges-scene": {
+   "present": {
+    "missing": [],
+    "notes": [],
+    "effects_on": true,
+    "hands_shown": true,
+    "graph": {
+     "frame": "wired",
+     "nodes": [
+      {
+       "kind": "hands",
+       "laid": "over"
+      }
+     ],
+     "wires": [
+      {
+       "from": "shape",
+       "to": "scene.geometry"
+      },
+      {
+       "from": "scene",
+       "to": "edges.image"
+      },
+      {
+       "from": "edges",
+       "to": "output.all.image"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.hands"
+      },
+      {
+       "from": "hands.layer",
+       "to": "output.all.guide"
+      },
+      {
+       "from": "pattern",
+       "to": "shape.faces"
+      },
+      {
+       "from": "hands",
+       "to": "hands.layer.hands"
+      }
+     ]
+    },
+    "nodes": [
+     "scene",
+     "hands.layer",
+     "shown(edges)",
+     "composite",
+     "shown(copy)",
+     "composite.2",
+     "shown(copy.2)",
+     "composite.3",
+     "shown(copy.3)",
+     "composite.4",
+     "shown(copy.4)",
      "output.1",
      "output.2",
      "output.3",
@@ -12466,6 +12548,110 @@
   },
   {
    "preset": "resize-faces",
+   "hands": "present",
+   "state": "through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+hands",
+   "route": "SCENE",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "1bcfe388f60b6ce2f2181b5db3c835e0e16cb7b9007df8800eda8ba75fcaccc5",
+   "png": "png/1bcfe388f60b6ce2.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+hands+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "979d8120117d878169a2d6c39ff0349a84d931272516c82cc961a9f8815852ad",
+   "png": "png/979d8120117d8781.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene",
+   "route": "SCENE",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "80c41e49e888bf609842b978f2cd16f87058ca39b41d08b8c8db34badf25f305",
+   "png": "png/80c41e49e888bf60.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "scene+through",
+   "route": "SCENE+HANDS",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "80c41e49e888bf609842b978f2cd16f87058ca39b41d08b8c8db34badf25f305",
+   "png": "png/80c41e49e888bf60.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "hands",
+   "route": "none",
+   "hands_over": true,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "fe8f34697bec5ff8050a624adfe94cddee4ffd5c1007f2c578a2a112c57aedff",
+   "png": "png/fe8f34697bec5ff8.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "hands+through",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
+   "hands": "present",
+   "state": "none",
+   "route": "none",
+   "hands_over": false,
+   "size": [
+    960,
+    600
+   ],
+   "sha256": "b6783b14bd504ef174425dc8a4f9fb5d028decbaeb2b37de22f29318baa46d05",
+   "png": "png/b6783b14bd504ef1.png"
+  },
+  {
+   "preset": "edges-scene",
    "hands": "present",
    "state": "through",
    "route": "none",
