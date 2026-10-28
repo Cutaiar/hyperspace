@@ -28,6 +28,7 @@ moderngl and glsl at most — never app, ui or params — and the
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -359,6 +360,49 @@ void main() {
 """
 
 
+# plan 37 C2 (D3): a thumbnail's dominant hue, for the GRAPH head's
+# **pictures · tint cables** switch — read from the thumbnail (never the
+# full picture) at most once a second a node, at most one node a frame,
+# only while the page asks (`want_hues`): the thumbnail downsampled to
+# `HUE_GRID` × `HUE_GRID` by `THUMB_FS`, copied into a pixel buffer, read
+# from it the next frame (never a stall on the GPU) and weighed
+HUE_EVERY_S = 1.0
+HUE_GRID = 16
+
+
+def dominant_hue(data: bytes, size: tuple[int, int], grid: int = HUE_GRID
+                 ) -> tuple[float, float]:
+    """The dominant hue of an RGBA8 picture (`data`, rows of `size` (w, h)
+    texels): (hue in turns, 0 red · ⅓ green · ⅔ blue; how strongly, 0–1).
+    Each texel of a strided `grid` × `grid` sample is a vector in the hue
+    plane (x = r − (g + b)/2, y = √3/2 (g − b): its length is its chroma),
+    and the hue is their sum's angle — a mean weighted by chroma, so grey,
+    black and white texels weigh nothing. How strongly is the sum's length
+    over the texels weighed: 0 for a grey picture (no hue: the cable stays
+    plain red), up to 1 for one pure colour."""
+    w, h = max(int(size[0]), 1), max(int(size[1]), 1)
+    sx, sy = max(1, w // grid), max(1, h // grid)
+    x = y = 0.0
+    n = 0
+    k = math.sqrt(3.0) / 2.0
+    for row in range(sy // 2, h, sy):
+        base = row * w * 4
+        for col in range(sx // 2, w, sx):
+            i = base + col * 4
+            if i + 2 >= len(data):
+                break
+            r, g, b = data[i] / 255.0, data[i + 1] / 255.0, data[i + 2] / 255.0
+            x += r - (g + b) / 2.0
+            y += k * (g - b)
+            n += 1
+    if n == 0:
+        return 0.0, 0.0
+    strength = math.hypot(x, y) / n
+    if strength < 1e-6:
+        return 0.0, 0.0
+    return (math.atan2(y, x) / (2.0 * math.pi)) % 1.0, min(1.0, strength)
+
+
 def thumb_size(src: tuple[int, int], px: int = THUMB_PX) -> tuple[int, int]:
     """A thumbnail's size for a picture of size `src`: its long side `px`,
     the picture's aspect (never under one texel, never above the source)."""
@@ -406,6 +450,14 @@ class PreviewTextures:
         self.repainted = 0
         self.error = ""
         self._prog = self._vao = self._sampler = None
+        # plan 37 C2: each name's dominant hue (`dominant_hue`) and when it
+        # was read; when the page last asked for hues (`want_hues`)
+        self.hues: dict[str, tuple[float, float]] = {}
+        self.hue_at: dict[str, float] = {}
+        self.hue_asked: float | None = None
+        self.hue_reads = 0
+        self._hue_pending = None                # (name, pixel buffer) started last frame
+        self._hue_target = self._hue_buf = None
 
     # ---- the page's side
 
@@ -443,6 +495,21 @@ class PreviewTextures:
         size each — a node copied at least once and not dropped)."""
         return len(self.tex) if self.ctx is not None else len(self.sizes)
 
+    def want_hues(self) -> None:
+        """The page tints its picture cables (plan 37 C2): keep reading the
+        thumbnails' hues — one a frame, each at most once a second — until
+        it has not asked for `THUMB_DROP_S`."""
+        self.hue_asked = self.clock()
+
+    def stop_hues(self) -> None:
+        """The switch went off: no hue started from the next frame on."""
+        self.hue_asked = None
+
+    def hue(self, name: str) -> tuple[float, float] | None:
+        """`name`'s dominant hue as last read ((hue, strength): `dominant_hue`),
+        or None: never read, or dropped."""
+        return self.hues.get(name)
+
     # ---- the renderer's side
 
     def take(self) -> dict[str, str]:
@@ -454,6 +521,60 @@ class PreviewTextures:
         """A frame's copies start: none counted yet."""
         self.frame += 1
         self.count = self.repainted = 0
+        self._read_hue()
+
+    def _read_hue(self) -> None:
+        """Plan 37 C2: the thumbnails' hues, read without waiting on the
+        GPU. First the hue started last frame is collected: its 16×16
+        downsample, copied into a pixel buffer (`read_into`, asynchronous)
+        a frame ago, is read from that buffer — long since filled — and
+        weighed (`dominant_hue`). Then, while the page asks (`want_hues`),
+        the one thumbnail whose hue is oldest, and at least `HUE_EVERY_S`
+        old, is started: one `THUMB_FS` pass into a `HUE_GRID`² target and
+        its `read_into` the buffer. Never a texture's `read()` (that would
+        stall the frame on the GPU's work). Never raises."""
+        try:
+            self._hue_collect()
+        except Exception as e:  # noqa: BLE001 — a hue is a nicety
+            self.error = f"hue: {type(e).__name__}: {e}"[:120]
+        if self.hue_asked is None or self.clock() - self.hue_asked >= THUMB_DROP_S:
+            return
+        now = self.clock()
+        due = [(self.hue_at.get(n, -math.inf), n) for n in self.tex
+               if now - self.hue_at.get(n, -math.inf) >= HUE_EVERY_S]
+        if not due:
+            return
+        _, name = min(due)
+        self.hue_at[name] = now
+        try:
+            self._hue_start(name)
+        except Exception as e:  # noqa: BLE001 — a hue is a nicety
+            self.error = f"hue {name}: {type(e).__name__}: {e}"[:120]
+
+    def _hue_collect(self) -> None:
+        """The hue started last frame, read from its pixel buffer."""
+        got, self._hue_pending = self._hue_pending, None
+        if got is None:
+            return
+        name, buf = got
+        data = buf.read()
+        if name in self.tex:                    # (not dropped since)
+            self.hues[name] = dominant_hue(data, (HUE_GRID, HUE_GRID))
+        self.hue_reads += 1
+
+    def _hue_start(self, name: str) -> None:
+        """`name`'s thumbnail downsampled to `HUE_GRID`² and copied into the
+        pixel buffer, asynchronously: collected next frame."""
+        if self.ctx is None:
+            return
+        if self._hue_target is None:
+            tex = self.ctx.texture((HUE_GRID, HUE_GRID), 4)
+            self._hue_target = (tex, self.ctx.framebuffer(color_attachments=[tex]))
+            self._hue_buf = self.ctx.buffer(reserve=HUE_GRID * HUE_GRID * 4)
+        tex, fbo = self._hue_target
+        self._pass(self.tex[name][0], tex, fbo)
+        fbo.read_into(self._hue_buf, components=4)
+        self._hue_pending = (name, self._hue_buf)
 
     def put(self, name: str, src, repainted: bool = False) -> bool:
         """`src` (a texture of the render context) copied into `name`'s
@@ -481,7 +602,8 @@ class PreviewTextures:
             self.drop(name)
 
     def drop(self, name: str) -> None:
-        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted):
+        for d in (self.asked, self.made, self.sizes, self.made_in, self.wanted,
+                  self.hues, self.hue_at):
             d.pop(name, None)
         got = self.tex.pop(name, None)
         if got is not None:
@@ -494,7 +616,9 @@ class PreviewTextures:
     def close(self) -> None:
         for name in list(self.tex) + list(self.asked):
             self.drop(name)
-        for res in (self._vao, self._prog, self._sampler):
+        held = (*reversed(self._hue_target or ()), self._hue_buf)
+        self._hue_target = self._hue_buf = self._hue_pending = None
+        for res in (self._vao, self._prog, self._sampler, *held):
             if res is not None:
                 try:
                     res.release()
@@ -523,6 +647,11 @@ class PreviewTextures:
         return got
 
     def _copy(self, name: str, src, size: tuple[int, int]) -> None:
+        tex, fbo = self._target(name, size)
+        self._pass(src, tex, fbo)
+
+    def _pass(self, src, tex, fbo) -> None:
+        """One `THUMB_FS` pass: `src` downsampled into `tex` (`fbo`'s)."""
         ctx = self.ctx
         if self._prog is None:
             self._prog = ctx.program(vertex_shader=QUAD_VS, fragment_shader=THUMB_FS)
@@ -531,7 +660,6 @@ class PreviewTextures:
             # texelFetch target) is never changed, and taps blend
             self._sampler = ctx.sampler(filter=(moderngl.LINEAR, moderngl.LINEAR),
                                         repeat_x=False, repeat_y=False)
-        tex, fbo = self._target(name, size)
         fbo.use()
         ctx.viewport = (0, 0, *tex.size)
         blend = moderngl.BLEND
