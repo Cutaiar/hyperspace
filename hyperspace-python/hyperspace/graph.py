@@ -4580,17 +4580,17 @@ class MatteNode(Node):
             return tuple(own) if own is not None else tuple(frame.root.size)
         return super().size_for(port, frame)
 
-    def own_size(self, frame: Frame) -> tuple[int, int] | None:
-        """Its mask's size: its input's (W2)."""
-        return self.size_for("image", frame)
+    # (no `own_size`: the mask is at its input's size — `size_for` — but no
+    # consumer fits it by `OWN_FIT`: a mask port binds it as it is, and a
+    # picture port reads it through `MaskPicture`, at the consumer's size)
 
     def reads(self, frame: Frame) -> bool:
         src = self.inputs["image"]
         return src is not None and src.reads(frame)
 
     def made(self, frame: Frame) -> moderngl.Texture | None:
-        """The mask, made once a frame (the root's data) — None while the
-        input reads nothing."""
+        """The mask, made once a frame (the root's data) at its input's
+        size (`size_for`) — None while the input reads nothing."""
         root = frame.root
         key = self.name + "#mask"
         if key in root.data:
@@ -4627,7 +4627,7 @@ class MatteNode(Node):
             self.said = "its input reads nothing: no mask"
             return
         st = self.state(frame)
-        w, h = self.own_size(frame)
+        w, h = self.size_for("image", frame)
         said = f"{w}×{h} mask · {_pick(MATTE_FROM, st.source)} at {float(st.key):.2f}"
         if float(st.soft) > 0.0:
             said += f" ± {float(st.soft):.2f}"
