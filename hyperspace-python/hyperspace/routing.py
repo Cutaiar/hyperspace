@@ -234,8 +234,8 @@ stand, each change noted. A changed file is backed up (`backup`) and
 written back once — except a file that still holds a preset's part
 (every file before plan 13 WP5: performer rows, preset-layer rows,
 `macros`, `values`), which keeps that part in `Bindings.carried` and is
-left for the first-launch migration (`preset.migrate_home`) to move into
-presets and only then rewrite. A schema this code doesn't know is left
+not rewritten on the read (plan 13 §6's first-launch migration moved that part into
+presets; it is retired since 2026-10-28, so the next write drops it). A schema this code doesn't know is left
 alone and reported, like a file that won't parse. `bindings_path(home)`
 says where the file lives; the app always passes the library home, and
 the working-directory default is for tests.
@@ -1758,8 +1758,8 @@ class Carried:
     §6): its performer rows (the referee's refusals after them, so nothing
     is lost and the first still wins), its preset-layer MIDI rows (None:
     the file had none), its macros and its `values`. `Bindings.load` keeps
-    it; `preset.migrate_home` moves it into presets and then rewrites the
-    file without it."""
+    it in memory; nothing reads it since 2026-10-28 (plan 13 §6's migration
+    is retired), and the next write leaves it out."""
     routes: list[dict]
     desk: list[dict] | None
     macros: dict
@@ -1903,9 +1903,9 @@ class Bindings:
         A file that still holds a preset's part — performer rows,
         preset-layer MIDI rows, `macros`, `values` (every file before plan
         13 WP5) — keeps it in memory and in `carried`, and is **not**
-        rewritten here, whatever else changed: `preset.migrate_home` moves
-        that part into presets first and only then backs the file up and
-        rewrites it, so a crash in between loses nothing."""
+        rewritten here, whatever else changed (plan 13 §6's migration moved
+        that part into presets first; retired since 2026-10-28, the next write
+        drops it)."""
         if path is not None and path.exists():
             try:
                 data = json.loads(path.read_text())
@@ -1922,7 +1922,7 @@ class Bindings:
                 desk=[b.to_json() for b in t.desk()] or None,
                 macros=t.macros_doc(), values=dict(data.get("values") or {}))
             if not carried.empty or "values" in data or "macros" in data:
-                t.carried = carried              # preset.migrate_home writes the file
+                t.carried = carried              # kept in memory; the next write drops it
             elif t.migrated or t.changed or remapped:
                 bak = backup(path, t.read_at)
                 if bak is None:                          # no backup, no rewrite

@@ -2365,21 +2365,15 @@ class Panel:
         ui_hands.page(self, dt)
 
     def _page_presets(self, dt: float) -> None:
-        """Plan 14 WP4, top to bottom: the show (its name, show ▾ · save ·
-        save as · new), starts on ▾, the eight preset buttons, the preset
-        strip, and "more" folded over the module presets (ui_presets)."""
-        self._section("show")
+        """2026-10-28, top to bottom (ui_presets.page): the preset strip —
+        ◀ name ● ▶ · new · save · as… — then every preset as a list that
+        fills the page, its trash at the foot, the patches fold, one line
+        for the show, and the library's notes."""
         if self.library is None:
+            self._section("presets")
             imgui.text_disabled("no library attached")
-        else:
-            ui_presets.show_block(self)
-            ui_presets.starts_on(self)
-            imgui.spacing()
-        ui_presets.preset_bank(self)
-        imgui.spacing()
-        ui_presets.preset_strip(self)
-        imgui.separator()
-        ui_presets.overview(self)
+            return
+        ui_presets.page(self)
 
     def library_lines(self) -> list[tuple[str, bool]]:
         """The SYSTEM page's library lines (plan 25), each with whether it

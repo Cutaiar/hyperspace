@@ -2106,11 +2106,12 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
                # SAVE held and a pad tapped (plan 24 C1): a new preset into
                # that slot, filled or empty; the old preset stays listed
                save_into=bank.save_into,
-               tip="The show's twenty-four presets: F1–F8, then the desk's clip rows "
-                   "1, 4 and 5. Each one is the whole performance — the look, its "
-                   "routes, its LFOs and macros. Never the tempo, the hands or the "
-                   "analyzer. Hold SAVE (track 8's clip stop) and tap a pad to save the "
-                   "live state into it as a new preset, or hold an empty pad.")
+               tip="The show's twenty-four pads: the desk's clip rows 1, 4 and 5, the "
+                   "first eight on F1–F8. Each one points at a preset — the whole "
+                   "performance: the look, its routes, its LFOs and macros, never the "
+                   "tempo, the hands or the analyzer. Hold SAVE (track 8's clip stop) "
+                   "and tap a pad to save the live state into it as a new preset, or "
+                   "hold an empty pad.")
         # the F-keys' slots have a load and a save trigger each; slots past
         # them are reached through `preset.select` and the page (plan 19
         # fork 1: no params added)
@@ -2124,27 +2125,27 @@ def build_registry(view, control, audio, bank=None, dream=None, fx=None,
         r.trigger("preset.save_new", "Save as a new preset", bank.save_new,
                   group=g, modulatable=False,
                   tip="Save the live state as a new preset, named from the loaded "
-                      "one (TRIP → TRIP 2), into the next empty slot. It never "
+                      "one (moo → moo 2), into the next empty pad. It never "
                       "overwrites a preset. On the desk, hold SAVE (track 8's clip "
-                      "stop) and tap a pad instead to choose the slot.")
+                      "stop) and tap a pad instead to choose the pad.")
         r.trigger("preset.next", "Next preset", lambda: bank.cycle(1), group=g)
         r.trigger("preset.prev", "Previous preset", lambda: bank.cycle(-1), group=g)
         # the preset list, not the bank (2026-10-14): the pad's B / X step
-        # what the PRESETS page's drop-down lists, saved ones included
+        # what the PRESETS page lists, saved ones included
         r.trigger("preset.list.next", "Next preset in the list", lambda: bank.walk(1),
                   group=g,
-                  tip="Load the next preset of the PRESETS page's list — every saved "
+                  tip="Load the next preset of the PRESETS page's list — every "
                       "preset by name, a new one included — wrapping at the end. "
-                      "The pad's B. The desk's QUANT walks the bank instead.")
+                      "The pad's B. The desk's QUANT walks the pads instead.")
         r.trigger("preset.list.prev", "Previous preset in the list", lambda: bank.walk(-1),
                   group=g,
                   tip="Load the previous preset of the PRESETS page's list, wrapping "
                       "at the start. The pad's X.")
-        # home (plan 15 WP2, decision 27): the preset the show starts on.
-        # Lit while the show names one — the light the desk's OVERDUB shows
+        # home (plan 15 WP2, decision 27): the show's startup preset. Lit
+        # while the show names one — the light the desk's OVERDUB shows
         r.trigger("preset.home", "Home", bank.home, group=g,
                   lit=lambda: bool(bank.startup),
-                  tip="Home: load the preset this show starts on — the Home key "
+                  tip="Home: load this show's startup preset — the Home key "
                       "(fn ← on a laptop) and OVERDUB (B11) on the desk. "
                       "Undo brings back what was up.")
 
